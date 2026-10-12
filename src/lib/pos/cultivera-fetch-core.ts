@@ -330,6 +330,8 @@ export type GoNoGoInput = {
   inventoryNamesWithoutProduct: number;
   elapsedMs: number;
   budgetMs: number;
+  /** Control totals (list vs rows). Optional so older callers keep 7 checks; the button always passes it. */
+  reconcile?: ReconcileReport;
 };
 
 export type GoNoGoCheck = { id: string; pass: boolean; detail: string };
@@ -349,7 +351,66 @@ export function goNoGo(i: GoNoGoInput): { go: boolean; checks: GoNoGoCheck[] } {
     { id: "no_card_hidden_for_missing_master", pass: i.hiddenForMissingMaster === 0 && i.inventoryNamesWithoutProduct === 0, detail: `${i.hiddenForMissingMaster} hidden, ${i.inventoryNamesWithoutProduct} names without a product row` },
     { id: "time_budget", pass: i.elapsedMs <= i.budgetMs, detail: `${Math.round(i.elapsedMs / 1000)} s of ${Math.round(i.budgetMs / 1000)} s` },
   ];
+  if (i.reconcile) {
+    const r = i.reconcile;
+    checks.push({ id: "control_totals", pass: r.ok, detail: `units ${r.unitsRows} / ${r.unitsList}, cost value ${r.costValueRowsCents} / ${r.costValueListCents} cents, ${r.mismatches.length} lot mismatches` });
+  }
   return { go: checks.every((x) => x.pass), checks };
+}
+
+/** Money-like cell → integer cents ("$1,234.50" | 1234.5 | "" → 123450 | 123450 | null). Never floats. */
+export function toCents(v: CellValue): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+function toUnits(v: CellValue): number {
+  const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+export type ReconcileReport = {
+  /** Σ UnitsInStock over list lots vs over the final rows (same barcodes). */
+  unitsList: number;
+  unitsRows: number;
+  /** Σ UnitsInStock × UnitCost in cents (inventory value at cost). */
+  costValueListCents: number;
+  costValueRowsCents: number;
+  /** Barcodes whose units or unit cost differ between list and final row (the export is a snapshot). */
+  mismatches: { barcode: string; field: "units" | "cost"; list: number | null; row: number | null }[];
+  ok: boolean;
+};
+
+/**
+ * Control totals (the "balances match to the cent" gate of an enterprise cutover):
+ * the list API is the inventory of record, so every lot's on-hand units and unit
+ * cost in the rows we import must equal the list. A sale between the export and
+ * the list call shows up here — the fix is to re-run, never to "accept".
+ */
+export function reconcileControlTotals(listLots: ListLot[], rows: SheetRow[]): ReconcileReport {
+  const byBarcode = new Map<string, SheetRow>();
+  for (const r of rows) byBarcode.set(String(r.Barcode ?? "").trim(), r);
+  let unitsList = 0, unitsRows = 0, costList = 0, costRows = 0;
+  const mismatches: ReconcileReport["mismatches"] = [];
+  for (const l of listLots) {
+    const bc = String(l.Barcode ?? "").trim();
+    const r = byBarcode.get(bc);
+    const lu = toUnits(l.UnitsInStock ?? 0);
+    const lc = toCents(l.UnitCost ?? null);
+    unitsList += lu;
+    costList += Math.round(lu * (lc ?? 0));
+    if (!r) continue; // missing rows are checkCompleteness's job
+    const ru = toUnits(r["Units In Stock"]);
+    const rc = toCents(r.Cost);
+    unitsRows += ru;
+    costRows += Math.round(ru * (rc ?? 0));
+    if (ru !== lu) mismatches.push({ barcode: bc, field: "units", list: lu, row: ru });
+    if ((rc ?? 0) !== (lc ?? 0)) mismatches.push({ barcode: bc, field: "cost", list: lc, row: rc });
+  }
+  mismatches.sort((a, b) => (a.barcode < b.barcode ? -1 : a.barcode > b.barcode ? 1 : a.field < b.field ? -1 : 1));
+  return { unitsList, unitsRows, costValueListCents: costList, costValueRowsCents: costRows, mismatches,
+    ok: mismatches.length === 0 && unitsList === unitsRows && costList === costRows };
 }
 
 /* ------------------------------------------------------------------ *
@@ -484,11 +545,34 @@ export function __runCultiveraFetchCoreTests(): { passed: number; failed: number
   ok(!goNoGo({ ...base, transformErrors: 1 }).go, "transform error → no-go");
   ok(!goNoGo({ ...base, hiddenForMissingMaster: 1 }).go && !goNoGo({ ...base, inventoryNamesWithoutProduct: 1 }).go, "a hidden card → no-go");
   ok(!goNoGo({ ...base, elapsedMs: 3_600_001 }).go && goNoGo({ ...base, elapsedMs: 3_600_000 }).go, "budget boundary inclusive");
+  {
+    const rOk: ReconcileReport = { unitsList: 1, unitsRows: 1, costValueListCents: 5, costValueRowsCents: 5, mismatches: [], ok: true };
+    ok(goNoGo({ ...base, reconcile: rOk }).go && goNoGo({ ...base, reconcile: rOk }).checks.length === 8, "control totals pass → 8 checks, go");
+    ok(!goNoGo({ ...base, reconcile: { ...rOk, ok: false } }).go, "control totals fail → no-go");
+  }
 
   // --- request bodies are the measured ones ---
   ok(PRODUCT_EXPORT_FILTER.ShowNonCannabis === false && PRODUCT_EXPORT_FILTER.HideMasterProduct === false && PRODUCT_EXPORT_FILTER.HideOutOfStock === false && PRODUCT_EXPORT_FILTER.HideDiscontinued === false && PRODUCT_EXPORT_FILTER.HideNotAvailable === false, "product export body = full-coverage variant");
   ok(INVENTORY_EXPORT_FILTER.HideUnavailable === false && INVENTORY_EXPORT_FILTER.HideInactive === false && INVENTORY_EXPORT_FILTER.ShowOnlySamples === false && INVENTORY_EXPORT_FILTER.HideNonCannabis === false, "inventory export body = every filter off");
   ok(INVENTORY_EXPORT_COLUMNS.length === 32 && PRODUCT_EXPORT_COLUMNS.length === 19, "column counts");
+
+  // ---- toCents / reconcileControlTotals ----
+  ok(toCents("$1,234.50") === 123450 && toCents(1234.5) === 123450 && toCents("") === null && toCents(null) === null, "toCents parses money text and numbers");
+  ok(toCents(0.1 + 0.2) === 30 && toCents("4") === 400 && toCents("abc") === null, "toCents rounds float noise, refuses junk");
+  {
+    const L: ListLot[] = [
+      { Id: 1, Barcode: "A", ProductName: "x", UnitsInStock: 3, UnitCost: 4.25 },
+      { Id: 2, Barcode: " B ", ProductName: "y", UnitsInStock: 10, UnitCost: 1 },
+    ];
+    const good = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 3, Cost: "$4.25" }, { Barcode: "B", "Units In Stock": "10", Cost: 1 }]);
+    ok(good.ok && good.unitsList === 13 && good.unitsRows === 13 && good.costValueListCents === 2275 && good.costValueRowsCents === 2275, "reconcile: equal → ok with cent totals");
+    const sold = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 2, Cost: 4.25 }, { Barcode: "B", "Units In Stock": 10, Cost: 1 }]);
+    ok(!sold.ok && sold.mismatches.length === 1 && sold.mismatches[0].field === "units" && sold.mismatches[0].list === 3 && sold.mismatches[0].row === 2, "reconcile: a sale between calls is caught");
+    const cost = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 3, Cost: 4.26 }, { Barcode: "B", "Units In Stock": 10, Cost: 1 }]);
+    ok(!cost.ok && cost.mismatches[0].field === "cost" && cost.mismatches[0].list === 425 && cost.mismatches[0].row === 426, "reconcile: one cent of cost is caught");
+    const miss = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 3, Cost: 4.25 }]);
+    ok(!miss.ok && miss.mismatches.length === 0 && miss.unitsRows === 3, "reconcile: a missing row breaks the totals");
+  }
 
   return { passed, failed: 0 };
 }
