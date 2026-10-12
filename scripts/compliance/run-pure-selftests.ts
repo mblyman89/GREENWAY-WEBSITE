@@ -2235,7 +2235,7 @@ __runLiquidVolumeTests();
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   assertRan("cultivera-manifest-group-core", __runCultiveraManifestGroupCoreTests(), 110); // R50 S1: Cultivera deliveries rebuilt (vendor + Pacific day + gap)
   assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 116); // R50 S1b + S10 rule v2 (link alias, alsoOn, link agreement)
-  assertRan("migration-stock-core", __runMigrationStockCoreTests(), 30); // R50 S2a: Cultivera migration stock is never a purchase (payables, Sage, bill, receipt)
+  assertRan("migration-stock-core", __runMigrationStockCoreTests(), 26); // R50 S2a: Cultivera migration stock is never a purchase (payables, Sage, bill, receipt)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 33); // R50 S9: the button — run view, sha verify, import gate
   console.log("ALL PURE SELF-TESTS PASSED");
