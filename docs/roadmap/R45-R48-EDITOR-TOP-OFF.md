@@ -17,9 +17,9 @@ The scope source is `R44-EDITOR-STRATEGY-ROADMAP.md`, §6 and §7.
 |---|---|---|
 | R45-S1 | Carousel accessibility (WCAG 2.2.2 + Baymard) | done, awaiting owner test |
 | R45-S2 | Upload hardening + AVIF + blur previews + edit-conflict protection | done, awaiting owner test (migration 0266 to apply) |
-| R46-S1 | Scheduled publish/unpublish (migration + Vercel cron) | next |
-| R46-S2 | Releases (group several edits, publish together) | planned |
-| R47-S1 | Publish-time accessibility + WAC 314-55-155 lint | planned |
+| R46-S1 | Scheduled publish/unpublish (migration 0267 + 5-min Vercel cron) | done, awaiting owner test (migration 0267 to apply) |
+| R46-S2 | Releases (group several edits, publish together) + SEO Editor wired to public pages and sitemap | done, awaiting owner test |
+| R47-S1 | Publish-time accessibility + WAC 314-55-155 lint | next |
 | R47-S2 | CTA click analytics (first-party + GA4 select_promotion) + Reports > Website tab | planned |
 | R48-S1 | Playwright + axe in CI | planned |
 | R48-S2 | Approvals + holiday hours feeding the LocalBusiness schema | planned |
@@ -90,3 +90,50 @@ brand registry; Next 16 `next/image` docs (`formats`, `placeholder`,
   to `seo_entries`, but no public page reads that table. Every page uses a
   hard-coded `pageMetadata(...)`, so the owner's saved titles, descriptions,
   noindex and sitemap choices had no effect on Google. R46-S2 fixes this.
+
+## R46-S1: scheduled publish / unpublish (done)
+
+Sources: Contentful Scheduled actions; Sanity Scheduled drafts; Vercel cron
+docs (Pro: per-minute precision, best-effort delivery, may double-fire).
+
+- Migration 0267: `content_schedule` (one row per scheduled change) and
+  `content_releases`. Staff-only RLS. Rollback in `supabase/rollbacks/`.
+- `content-schedule-core.ts` (61 tests): Pacific wall time to UTC
+  (AGENTS rule 9), a 5-minute grid, due selection, stale-claim recovery and
+  3 attempts.
+- `content-schedule-server.ts`:
+  - claims each row with a compare-and-swap (AGENTS rule 12);
+  - runs the SAME publish functions as the editors' Publish buttons;
+  - "come down" sets `enabled=false`;
+  - every change is audited (`schedule.publish`, `schedule.unpublish`).
+- `/api/cron/content-schedule` runs every 5 minutes, protected by CRON_SECRET.
+- UI: a Schedule strip under every home slide, Shop banner slide, page
+  section and FAQ question. The new **Website > Schedule & Releases** page
+  shows what's coming up, a picker for any item (including page wording),
+  and 14 days of history.
+- Locked sections, locked FAQ items and home.settings are never scheduled.
+
+## R46-S2: Releases + SEO wiring (done)
+
+- **Releases** (`content-release-core.ts`, 30 tests): a named group of
+  changes.
+  - Draft: items are held.
+  - Scheduled: items are pending at one time and run by the same cron.
+  - Publish now: each item is claimed with a CAS, then applied.
+  - Published: set once nothing is left open.
+  - Cancel: open items are cancelled.
+  - Adding the opposite action for the same item replaces it. A release
+    holds at most 40 items.
+- **SEO** (`seo-override-core.ts`, 32 tests; `seo-entries-server.ts`):
+  - 14 public pages use `generateMetadata` and apply the saved title,
+    description, canonical, no-index and share image. The code values stay
+    as the defaults.
+  - A title that already names "Greenway" skips the "| Greenway Marijuana"
+    suffix, so the brand never appears twice.
+  - Canonical values that point off-site are refused at save time and
+    ignored at render time.
+  - No-index renders as "noindex, follow".
+  - The sitemap leaves out pages that are No-index or have "In sitemap"
+    switched off.
+  - The editor preview shows the real title, and now also covers
+    /medical and the three legal pages.
