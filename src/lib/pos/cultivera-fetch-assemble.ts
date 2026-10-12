@@ -22,12 +22,14 @@ import {
   filterProductsToInventory,
   checkCompleteness,
   goNoGo,
+  reconcileControlTotals,
   INVENTORY_EXPORT_COLUMNS,
   PRODUCT_EXPORT_COLUMNS,
   type ListLot,
   type SheetRow,
   type GoNoGoCheck,
   type SupplementedLot,
+  type ReconcileReport,
 } from "@/lib/pos/cultivera-fetch-core";
 import { transformWorkbooks } from "@/lib/pos/transform";
 
@@ -73,6 +75,7 @@ export type AssembleReport = {
   inventoryNamesWithoutProduct: string[];
   missingBarcodes: string[];
   hiddenReasons: Record<string, number>;
+  reconcile: ReconcileReport;
 };
 
 export type AssembleResult = {
@@ -140,7 +143,9 @@ export function assembleFromRun(input: AssembleInput): AssembleResult {
   });
   const hidden = t.diagnostics.filter((d) => d.code === "inventory_without_product_master").length;
   const completeness = checkCompleteness(input.listLots, supp.rows, supp.supplemented.length, supp.exportOnly.length);
+  const reconcile = reconcileControlTotals(input.listLots, supp.rows);
   const gate = goNoGo({
+    reconcile,
     loginOk: true,
     inventoryColumns: inv.columns,
     productColumns: prod.columns,
@@ -179,6 +184,7 @@ export function assembleFromRun(input: AssembleInput): AssembleResult {
       inventoryNamesWithoutProduct: filtered.inventoryNamesWithoutProduct,
       missingBarcodes: completeness.missingBarcodes,
       hiddenReasons: t.summary.output.hiddenReasons,
+      reconcile,
     },
   };
 }
