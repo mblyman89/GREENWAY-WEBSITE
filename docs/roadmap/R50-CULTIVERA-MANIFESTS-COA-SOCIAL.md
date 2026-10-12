@@ -299,7 +299,166 @@ Use a dedicated business account, not a personal one.
 | **S5** | Crawler: Cultivera POS back-office login (cached token with JWT exp, 401 re-login, human pace), harvester: inventories → batches → COA PDFs into a folder + `harvest.json`/`harvest.csv` (barcode, batch id, batch number, product, vendor, received, transfer #, lab, COA file, sha256), optional upload to the private `coa` bucket; incoming transfers recorded too | pytest (pure + mocked HTTP) |
 | **S6** | Onboarding "Attach harvested COAs": read the harvest (storage folder or uploaded files), marry by §2.7 rank, LlamaParse/unpdf read through the existing COA readers, create `lab_results` + link lots where none is linked, then the existing lab-facts attach | pure matcher tests on the 35 real fixtures |
 | **S7** | Crawler logged-in social reader: `storageState` capture script (headed, owner logs in by hand), session cache + validation + expiry, login-wall detection, profile/post extraction, drafts-only; `/research-social` falls back to it when no Graph token | pytest |
+| **S9** | The cutover button (§3b): Railway `cultivera_pos` job (Phase A/B, resumable, read-only guard) + supplemented workbook builder + link-first manifest plan + progress page on `/admin/menu-imports` with the go/no-go report; manual upload kept as fallback | pure cores + pytest + rehearsals #2–#4 pass §3b.6 |
 | **S8** | Railway steps doc, final report + test strategy PDFs | delivered |
+
+## 3b. The cutover button: "Fetch It All, Fuck Cultivera" (owner's request, 2026-10-12)
+
+**What the owner asked for (paraphrased; the credentials stay out of the repo):** on 2026-11-01, before opening at
+08:00 PT, the first job is moving the Cultivera products into our system. He wants ONE button on
+`/admin/menu-imports`, labelled **Fetch It All, Fuck Cultivera**, in place of the two upload boxes.
+
+* The system logs into his Cultivera account and fetches everything, at a pace that finishes in time.
+* It cleans the data to Greenway conventions and runs it through intake **grouped by the original manifest**.
+* Enrichment works exactly as it does for native intake, and **nothing in this path may keep a product off the
+  menu or the register while it is being enriched**.
+* Every one of these manifests is already paid, so none of it creates a payment obligation.
+* Rehearse it for real in the weeks before cutover, then do it for real on 11/01. Data taken now is rehearsal
+  data and is re-taken on the day.
+
+### 3b.1 Measured on rehearsal #1 (2026-10-12, live account, read-only, query host only)
+
+| Step | Measured | Notes |
+|---|---|---|
+| Login | 1 call, 200 | Bearer JWT; the client re-logs in on a 401 |
+| Inventory export (`POST inventories/export-inventories-to-excel` → CDN xlsx) | 3,835 rows, 649 KB, same 32 columns as the committed INVENTORIES export | Cultivera's own Excel export, the file the upload box takes today |
+| Product export (`POST products/export-products`, every Hide flag false, ShowNonCannabis false) | 17,266 rows, 1.3 MB, same 19 columns as PRODUCTS | Covers 3,289 / 3,289 product names on the inventory export. ShowNonCannabis true returns only 187 non-cannabis rows; the UI default returns 3,211 rows and covers only 2,526 names, so the defaults are **not** used |
+| Lists (inventories 3,858, depleted 25,280, vendors, categories, strains) | 102.7 s | kendo bodies |
+| Lists2 (transfers 1,164, brands 436, master products 17,268, inbound report 103) | 33.5 s | the body shapes the Cultivera client itself sends |
+| Transfer details (`GET transfers/incoming/{id}/detail`) | 1,164 in 779.5 s (0.67 / s at a 0.6 s pace) | only 654 are referenced by live lots |
+| `normalize_cultivera.py` on the exports | 5 s | see 3b.3 for why it does not run before the transform |
+| `transformWorkbooks` (raw inventory export + products filtered to inventory names) | 1.7 s, **0 errors, 2,906 cards, 2,906 visible**, 3,835 lot sources | |
+| S1b plan on that live export | 1.6 s | |
+| Memory | transform peak RSS 233–336 MB; sandbox total under 0.8 GB | the 3.9 GB box is never close |
+
+### 3b.2 Completeness: Cultivera's export is NOT complete (found in rehearsal #1)
+
+The inventory **list API** returns 3,858 lots. The **Excel export** returns 3,835. Every export Id is in the list
+(0 extra), but **23 list lots are missing from the export**. All 23 are active, in stock (`UnitsInStock` > 0) and
+not deleted, and all 23 come from one vendor, **BOTANICAL ARTS**. That same vendor has 24 other lots that the
+export does include. I have not found the cause: none of the 12 flags I compared (active, available, sample, medical, storage, sales floor, deleted and so on) separates the 23 from the lots that were exported. Taking the export at its
+word would have left 23 sellable lots off our menu on day one.
+
+On the 3,835 shared lots the two sources agree exactly on barcode, product name, vendor, units on hold,
+Thc/Thca/Cbd/Cbda/Total/terpenes, storage, location and cost. They disagree on available units for 32 lots and
+on units in stock for 2: the reads were minutes apart during trading hours. Is Medical and Is Sample are written
+`"False"` in the export and `false` in the API, which is a formatting difference only.
+
+**Rule:** the button treats the **list API as the inventory of record** and the export as the column source. A
+lot in the list but not in the export gets a row built from the list record plus `GET products/{ProductId}`,
+which carries Brand, Category, InventoryType, Strain, Uom, PackageSize and UnitPrice (verified fields). The row
+is flagged `supplemented: list-only` in the run report. The run's go/no-go gate (3b.6) requires
+**list lots = rows imported**, with every difference named.
+
+### 3b.3 Clean to Greenway conventions without breaking the join
+
+* The transform joins inventory to products **by product name**.
+* `scripts/naming/normalize_cultivera.py` (Slice E) renames each workbook from its own columns. The two
+  workbooks carry different columns (PRODUCTS has no Vendor column), so the same product gets different new
+  names on each side.
+* Measured on the live pair, after normalising: **3,278 inventory names find no product row**, producing
+  3,278 hidden "no product master" cards and only 494 visible cards.
+* The committed normalized pair has the same problem: 3,807 inventory rows with no product master and 488
+  visible cards.
+* The **raw** pair joins completely: 0 missing and 2,906 visible.
+
+**Rule:** the button transforms the **raw** exports, so the join is intact and every lot is on the menu. The
+Greenway conventions come from the transform's own display naming and categories (the same code native intake
+uses). The normalizer's proposed names, keyed by inventory `Id`, are kept in the run report for review. They are
+not applied before the join.
+
+Strain type (Indica/Sativa/Hybrid) is blank in Cultivera:
+
+* blank on 3,279 of the 3,295 matching product rows;
+* `strains` has no type field;
+* `GET products/{id}` has no type field.
+
+It cannot be fetched. Enrichment fills it, exactly as for native intake.
+
+### 3b.4 Grouping by the original manifest: use Cultivera's own link first
+
+Each live lot in the list API carries `IncomingTransferId`. **3,710 of 3,858 lots** have one, every one of those
+transfers is in the detail harvest, and the lot's barcode is on that transfer's lines in **3,710 / 3,710** cases.
+
+Against that truth, S1b's evidence-only match on the live export:
+
+| S1b outcome | Lots |
+|---|---|
+| Assigned to the same transfer as Cultivera's link | **3,459** |
+| Assigned to a different transfer | **0** |
+| Left unmatched although Cultivera knows the transfer: received time absent | 143 |
+| Left unmatched although Cultivera knows the transfer: vendor name differs | 24 |
+| No link, and S1b also unmatched | 147 |
+
+**Rule (ranked evidence, like the COA rule 7):**
+
+1. Cultivera's `IncomingTransferId`, accepted only when the barcode is on that transfer's lines.
+2. S1b receipt timing.
+3. S1 sessions / undated, for the rest.
+
+The S1b ⇔ link agreement (3,459 / 0) is pinned as a cross-validation on every run. A disagreement stops the run
+for review instead of picking a side. The 148 lots without a link are mostly "Default Vendor" (26), MAMA JS (13),
+CANNA ORGANIX (11) and FIRELINE CANNABIS (9); they go to S1's groups.
+
+### 3b.5 Architecture (one click, no browser waiting)
+
+1. **Button (Vercel, `menu.import` permission).** It refuses after cutover is done (the existing S18
+   `refuseUpload` guard). A **test-mode** checkbox keeps rehearsals separate. It starts a Railway job and shows a
+   live progress page that polls the job.
+2. **Railway crawler job `cultivera_pos`** (new module, the `harvest.py` job pattern: one asyncio lock,
+   crash-safe job JSON, resume, cancel):
+   * Uses the username and password from Railway env vars only (S8 documents them).
+   * Is read-only by construction: GET/POST to the query host's read endpoints and GET from the CDN. Every
+     other URL or method raises an error.
+   * Paces itself and logs every action without the token.
+   * Phase A (critical path): login → both exports → inventory list → the transfer details referenced by live
+     lots → `products/{id}` for list-only lots. Transfer details are immutable once accepted, so details
+     fetched in a rehearsal are reused and only new or pending transfers are fetched again.
+   * Phase B (after opening, never blocking): batches → COA catalog → WCIA files → lab JSON.
+   * Writes each artifact with its SHA-256 to the private storage bucket.
+3. **Import (Vercel, from storage).**
+   * Builds the supplemented inventory workbook, then runs the existing `runImport` / `transformWorkbooks` (about
+     2 s) and stages the version.
+   * The manager publishes, and every lot is on the menu and the register.
+   * Then the S2 executor files lots under their real manifests (3b.4). This touches only
+     `inventory_lots.manifest_id`, per rule 1.
+4. **Enrichment.** S3 seeds onboarding drafts for every reconstructed manifest in `reonboard` mode: "already on
+   the menu", and approval never changes visibility. Enrichment, facts, COAs (S6) and KB then run exactly as for
+   native intake.
+5. **Accounting.** Reconstructed manifests are accounting-inert (rule 6, §1.4). There are no payables, purchases
+   or vendor-pay rows, because all of this stock is paid.
+
+### 3b.6 Go / no-go (written before rehearsal #2; every item is a number the run report prints)
+
+* Login ok. Both exports downloaded, SHA-256 recorded, and the column sets equal to `INVENTORIES_REQUIRED_COLUMNS`
+  / `PRODUCTS_REQUIRED_COLUMNS` (with Description added empty).
+* List lots = imported lots. Each list-only lot is supplemented and named; there are 0 unexplained.
+* Transform: 0 errors. Visible cards = cards with stock. No lot is hidden because of a missing product master.
+* Manifest plan: every lot is on exactly one manifest, vendors are never mixed, and link ⇔ S1b disagreements = 0.
+* The run fits its time budget (3b.7). Phase B failures never block go.
+* **No-go fallback:** the two upload boxes stay on the page, collapsed under "manual upload". The owner can export
+  the two files from Cultivera by hand and upload them as today.
+
+### 3b.7 Time budget (from 3b.1)
+
+The critical path is login + 2 exports + inventory list + about 654 transfer details. That is about 654 × 0.67 s
+≈ 7.3 min of details, plus about 2 min for the rest. **The estimate is about 10 min**; it becomes a measurement in
+rehearsal #2.
+
+With details reused from the 10/31 dry run, only new transfers are fetched on the day, so the real figure should
+be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (COAs) runs during the day.
+
+### 3b.8 Rehearsals (test-mode imports; production data is never published from a rehearsal)
+
+| # | When | Goal |
+|---|---|---|
+| 1 | 2026-10-12 (done) | live API map, exports found, completeness gap found, link ⇔ S1b agreement measured |
+| 2 | week of 10/19 | crawler module + button end-to-end in test mode; time every phase; go/no-go printed |
+| 3 | week of 10/26 | full run including S2 + S3 in test mode, then clean-slate test data; kill the job halfway and resume |
+| 4 | 10/31 evening | dry run on the day-before data; the transfer details cached from it are reused on 11/01 |
+| Live | 11/01 06:00 PT | real run → publish → open 08:00 → Phase B + enrichment during the day; then the owner changes the Cultivera password |
+
+---
 
 ## 4. Status log
 
@@ -347,3 +506,8 @@ Use a dedicated business account, not a personal one.
   manifest's (id, number, accepted time, vendor, status, lots) (`00339dd8…7e74`), and all 8 mutants are killed.
   A first mutant that dropped the BIGGEST transfer tripped only the guard. That was correct: none of its 104
   barcodes is a lot in the committed export, which I checked before accepting it.
+* 2026-10-12 — **§3b written (the cutover button).** Rehearsal #1 measured it, and found two things that change
+  the design. (1) Cultivera's own inventory export drops 23 in-stock lots, all from BOTANICAL ARTS, so the list
+  API becomes the inventory of record. (2) Each lot's `IncomingTransferId` agrees with S1b on 3,459 / 3,459
+  lots, so it becomes the first-rank manifest evidence. Normalising before the join hides about 3,300 cards, so
+  the raw exports are transformed and naming comes from the transform.
