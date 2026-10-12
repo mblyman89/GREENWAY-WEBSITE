@@ -14,6 +14,48 @@
  * card and the tile grid hides.
  */
 import { checkHref } from "@/lib/cms/link-target-core";
+import {
+  IMAGE_FOCUSES,
+  isHeroColor,
+  isHeroFont,
+  isImageFocus,
+  type ImageFocus,
+} from "@/lib/loyalty/loyalty-hero-core";
+
+export { IMAGE_FOCUSES };
+
+/** R47: how the name sits on the card. */
+export const TYPE_CARD_TEXT_STYLES = ["bar", "overlay", "hidden"] as const;
+export type TypeCardTextStyle = (typeof TYPE_CARD_TEXT_STYLES)[number];
+
+/**
+ * R47 (owner: "advanced features for the category cards"). Every field is
+ * optional; a card with no advanced settings stores NO `adv` key at all, so
+ * saved lists and the public tile stay byte-identical to R41.
+ */
+export type TypeCardAdvanced = {
+  /** Separate phone picture / video ("" = use the main one). */
+  imageMobile?: string;
+  /** Picture focus (5-way). Absent = centre (the classic object-cover). */
+  imageFocus?: ImageFocus;
+  imageFocusMobile?: ImageFocus;
+  /** Picture zoom 100–200 (%). */
+  zoom?: number;
+  /** Darken the picture 0–80 (%), for legibility. */
+  dim?: number;
+  /** Hero font id for the card name (HERO_FONTS). */
+  labelFont?: string;
+  /** Hero colour ids for the name and the small line. */
+  labelColor?: string;
+  ctaColor?: string;
+  /** "bar" (classic bottom bar) | "overlay" (text on the picture) | "hidden". */
+  textStyle?: TypeCardTextStyle;
+  /** Open the link in a new tab. */
+  newTab?: boolean;
+  /** Optional show window (ISO). */
+  scheduleStart?: string;
+  scheduleEnd?: string;
+};
 
 export const TYPE_CARDS_KEY = "typeCards";
 export const MAX_TYPE_CARDS = 12;
@@ -35,6 +77,8 @@ export type TypeCard = {
   /** Small line under the name. */
   cta: string;
   enabled: boolean;
+  /** R47: optional advanced look (absent = classic tile). */
+  adv?: TypeCardAdvanced;
 };
 
 /**
@@ -101,6 +145,56 @@ export function cleanImage(v: unknown): string {
   return "";
 }
 
+function cleanIso(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t && Number.isFinite(Date.parse(t)) ? t : undefined;
+}
+
+function clampInt(v: unknown, lo: number, hi: number): number | undefined {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(hi, Math.max(lo, Math.round(n)));
+}
+
+/**
+ * R47: normalize the optional advanced block. Default values are DROPPED, and
+ * an all-default block returns undefined (so no `adv` key is stored).
+ */
+export function normalizeTypeCardAdvanced(raw: unknown): TypeCardAdvanced | undefined {
+  if (!isObj(raw)) return undefined;
+  const out: TypeCardAdvanced = {};
+  const im = cleanImage(raw.imageMobile);
+  if (im) out.imageMobile = im;
+  if (isImageFocus(raw.imageFocus) && raw.imageFocus !== "center") out.imageFocus = raw.imageFocus;
+  if (isImageFocus(raw.imageFocusMobile)) out.imageFocusMobile = raw.imageFocusMobile;
+  const zoom = clampInt(raw.zoom, 100, 200);
+  if (zoom !== undefined && zoom !== 100) out.zoom = zoom;
+  const dim = clampInt(raw.dim, 0, 80);
+  if (dim !== undefined && dim !== 0) out.dim = dim;
+  if (isHeroFont(raw.labelFont)) out.labelFont = raw.labelFont as string;
+  if (isHeroColor(raw.labelColor)) out.labelColor = raw.labelColor as string;
+  if (isHeroColor(raw.ctaColor)) out.ctaColor = raw.ctaColor as string;
+  if (raw.textStyle === "overlay" || raw.textStyle === "hidden") out.textStyle = raw.textStyle;
+  if (raw.newTab === true) out.newTab = true;
+  const ss = cleanIso(raw.scheduleStart);
+  if (ss) out.scheduleStart = ss;
+  const se = cleanIso(raw.scheduleEnd);
+  if (se) out.scheduleEnd = se;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** R47: is the card inside its optional show window? Bad / absent dates = open. */
+export function isTypeCardLiveAt(card: TypeCard, whenMs: number): boolean {
+  const a = card.adv;
+  if (!a) return true;
+  const s = a.scheduleStart ? Date.parse(a.scheduleStart) : NaN;
+  const e = a.scheduleEnd ? Date.parse(a.scheduleEnd) : NaN;
+  if (Number.isFinite(s) && whenMs < s) return false;
+  if (Number.isFinite(e) && whenMs > e) return false;
+  return true;
+}
+
 /** A card must link somewhere safe; blank or blocked → /menu. */
 export function cleanCardHref(v: unknown): string {
   const s = typeof v === "string" ? v.trim() : "";
@@ -141,6 +235,8 @@ export function normalizeTypeCards(raw: unknown): TypeCard[] {
       cta: "cta" in item ? cleanCta(item.cta) : DEFAULT_TYPE_CARD_CTA,
       enabled: item.enabled !== false,
     });
+    const adv = normalizeTypeCardAdvanced(item.adv);
+    if (adv) out[out.length - 1].adv = adv;
   }
   return out;
 }
@@ -168,9 +264,12 @@ export function readTypeCards(
   return defaultTypeCards(images);
 }
 
-/** Cards that actually show on the live site. */
-export function visibleTypeCards(cards: TypeCard[]): TypeCard[] {
-  return cards.filter((c) => c.enabled);
+/**
+ * Cards that actually show on the live site. R47: a card outside its optional
+ * show window is hidden too (pass `whenMs`; omitted = ignore the window).
+ */
+export function visibleTypeCards(cards: TypeCard[], whenMs?: number): TypeCard[] {
+  return cards.filter((c) => c.enabled && (whenMs === undefined || isTypeCardLiveAt(c, whenMs)));
 }
 
 /**
@@ -318,6 +417,39 @@ export function __runTypeCardsTests(): { passed: number; failed: number } {
   );
   ok(typeCardGridClass(9).endsWith("lg:grid-cols-6"), ">6 wraps at 6");
   ok(typeCardGridClass(4).includes("lg:grid-cols-4"), "four columns");
+
+  // R47: advanced options
+  ok(!("adv" in normalizeTypeCards([{ id: "x", label: "X" }])[0]), "no adv key by default");
+  ok(!("adv" in normalizeTypeCards([{ id: "x", label: "X", adv: { zoom: 100, dim: 0, imageFocus: "center" } }])[0]), "all-default adv dropped");
+  const av = normalizeTypeCards([
+    {
+      id: "x",
+      label: "X",
+      adv: {
+        imageMobile: "/media/p.mp4",
+        imageFocus: "top",
+        imageFocusMobile: "left",
+        zoom: 999,
+        dim: -5,
+        labelFont: "nope",
+        textStyle: "overlay",
+        newTab: true,
+        scheduleStart: "2026-01-01T00:00:00Z",
+        scheduleEnd: "garbage",
+      },
+    },
+  ])[0].adv;
+  ok(!!av && av.imageMobile === "/media/p.mp4" && av.imageFocus === "top" && av.imageFocusMobile === "left", "adv picture + focus kept");
+  ok(!!av && av.zoom === 200 && av.dim === undefined, "zoom clamped, dim 0 dropped");
+  ok(!!av && av.labelFont === undefined && av.textStyle === "overlay" && av.newTab === true, "bad font dropped, style kept");
+  ok(!!av && av.scheduleStart === "2026-01-01T00:00:00Z" && av.scheduleEnd === undefined, "schedule cleaned");
+  ok(normalizeTypeCardAdvanced({ imageMobile: "javascript:x" }) === undefined, "unsafe phone picture dropped");
+  const sc: TypeCard = { ...d[0], adv: { scheduleStart: "2026-06-01T00:00:00Z", scheduleEnd: "2026-06-30T00:00:00Z" } };
+  ok(!isTypeCardLiveAt(sc, Date.parse("2026-05-31T00:00:00Z")), "before window hidden");
+  ok(isTypeCardLiveAt(sc, Date.parse("2026-06-10T00:00:00Z")), "inside window shown");
+  ok(!isTypeCardLiveAt(sc, Date.parse("2026-07-01T00:00:00Z")), "after window hidden");
+  ok(visibleTypeCards([sc], Date.parse("2026-07-01T00:00:00Z")).length === 0, "visible honours window");
+  ok(visibleTypeCards([sc]).length === 1, "visible without time ignores window");
 
   return { passed, failed };
 }
