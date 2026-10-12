@@ -2200,7 +2200,7 @@ __runLiquidVolumeTests();
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 28); // R47: home carousel advanced options
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
-  assertRan("design-move-core", __runDesignMoveCoreTests(), 46); // R41 S7: hub preview Move-mode owners + per-owner movers
+  assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers
   assertRan("design-drag-core", __runDesignDragCoreTests(), 16); // R41 S7: preview drag geometry (top-left %, container-query device, nudge)
   assertRan("banner-ai-core", __runBannerAiCoreTests(), 38); // R41 S8: AI placement reply parser + apply (drafts only)
   assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets

@@ -17,13 +17,13 @@ const U = "123e4567-e89b-12d3-a456-426614174000";
 
 describe("R41 S7 pure cores", () => {
   it("design-move-core self-tests pass", () => {
-    expect(__runDesignMoveCoreTests().passed).toBeGreaterThanOrEqual(46);
+    expect(__runDesignMoveCoreTests().passed).toBeGreaterThanOrEqual(58);
   });
   it("design-drag-core self-tests pass", () => {
     expect(__runDesignDragCoreTests().passed).toBeGreaterThanOrEqual(16);
   });
   it("owner parsing matches parseMoveMessage's allow-list", () => {
-    for (const o of [`section:${U}`, `shop-slide:${U}`, "specials:hero", "specials:todays", "loyalty:hero"]) {
+    for (const o of [`section:${U}`, `shop-slide:${U}`, `home-slide:${U}`, "specials:hero", "specials:todays", "loyalty:hero"]) {
       expect(parseDesignOwner(o)).not.toBeNull();
       expect(parseMoveMessage({ type: "gw-design-move", owner: o, target: "box", id: "headline", x: 1, y: 2, device: "desktop" })).not.toBeNull();
     }
@@ -120,5 +120,19 @@ describe("R41 S7 Draft-Mode-only hooks on every banner", () => {
     expect(d).toContain('editable && owner ? { "data-gw-design-frame": "true", "data-gw-design-owner": owner }');
     expect(d).toContain('editable ? { "data-gw-design-box": b.id }');
     expect(d).toContain('editable ? { "data-gw-design-button": btn.id }');
+  });
+});
+
+describe("R48 Home slide Move mode", () => {
+  it("Hero passes a home-slide owner to DesignedBanner only in preview", () => {
+    const hero = read("src/components/home/Hero.tsx");
+    expect(hero).toContain("designOwner={editable && slide.id ? `home-slide:${slide.id}` : undefined}");
+    expect(hero).toContain("editable={!!designOwner}");
+  });
+  it("the action saves home slides as a DRAFT via saveCarouselDraft", () => {
+    const act = read("src/app/admin/website-sync/design-actions.ts");
+    expect(act).toContain('case "home-slide"');
+    expect(act).toContain("saveCarouselDraft(owner.id, { advanced: serializeHomeSlideAdvanced(r.value) }, session.userId)");
+    expect(act).not.toContain("publishCarouselSlide");
   });
 });
