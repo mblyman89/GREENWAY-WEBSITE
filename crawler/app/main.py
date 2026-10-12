@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -32,6 +33,7 @@ from .growflow_api import GrowflowApiError, GrowflowApiResult, GrowflowClient
 from .growflow_auth import GrowflowAuthError
 from .leaflink_api import LeaflinkApiError, LeaflinkApiResult, LeaflinkClient
 from .leaflink_auth import LeaflinkAuthError
+from . import cultivera_pos_jobs as pos_jobs
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
@@ -799,3 +801,69 @@ async def leaflink_menu(
     except LeaflinkAuthError as exc:
         raise HTTPException(status_code=502, detail=f"LeafLink login failed: {exc}") from exc
     return _leaflink_result_out(result)
+
+
+# ---------------------------------------------------------------------------
+# R50 S9 — "Fetch It All, Fuck Cultivera": the Cultivera POS cutover harvest.
+# READ-ONLY against Cultivera (crawler/app/cultivera_pos.py guards every call).
+# ---------------------------------------------------------------------------
+
+
+class CultiveraPosStartRequest(BaseModel):
+    fresh: bool = Field(default=False, description="Ignore an unfinished run and start a new harvest.")
+
+
+@app.post("/cultivera-pos/runs", status_code=202)
+def cultivera_pos_start(
+    req: CultiveraPosStartRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> dict:
+    """Start the Phase A harvest, or resume the newest unfinished run. 202 + run id; poll GET."""
+    _require_secret(x_crawler_secret)
+    try:
+        out = pos_jobs.start_or_resume(fresh=req.fresh)
+    except RuntimeError as exc:
+        if str(exc) == "busy":
+            raise HTTPException(status_code=409, detail="A Cultivera POS harvest is already running.") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera POS harvest disabled (set CULTIVERA_POS_USERNAME / CULTIVERA_POS_PASSWORD).",
+        ) from exc
+    log.info("cultivera-pos run %s %s", out["runId"], "resumed" if out["resumed"] else "started")
+    return {"ok": True, **out}
+
+
+@app.get("/cultivera-pos/runs")
+def cultivera_pos_list(x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "runs": pos_jobs.list_runs()[:20]}
+
+
+def _pos_run_id(run_id: str) -> str:
+    if not pos_jobs.valid_run_id(run_id):
+        raise HTTPException(status_code=404, detail="Unknown run id.")
+    return run_id
+
+
+@app.get("/cultivera-pos/runs/{run_id}")
+def cultivera_pos_status(run_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    st = pos_jobs.read_state(_pos_run_id(run_id))
+    if st is None:
+        raise HTTPException(status_code=404, detail="Unknown run id.")
+    return {"ok": True, **st}
+
+
+@app.post("/cultivera-pos/runs/{run_id}/cancel")
+def cultivera_pos_cancel(run_id: str, x_crawler_secret: str | None = Header(default=None)) -> dict:
+    _require_secret(x_crawler_secret)
+    return {"ok": True, "cancelRequested": pos_jobs.request_cancel(_pos_run_id(run_id))}
+
+
+@app.get("/cultivera-pos/runs/{run_id}/files/{name}")
+def cultivera_pos_file(run_id: str, name: str, x_crawler_secret: str | None = Header(default=None)):
+    _require_secret(x_crawler_secret)
+    p = pos_jobs.file_path(_pos_run_id(run_id), name)
+    if p is None:
+        raise HTTPException(status_code=404, detail="No such file in this run.")
+    return FileResponse(p, filename=name)
