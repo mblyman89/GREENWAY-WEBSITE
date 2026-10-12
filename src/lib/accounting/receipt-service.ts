@@ -69,6 +69,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { buildReceiptJournal, type ReceiptLineInput } from "./receipt-journal-core";
 import { mapReceiptCategory } from "./receipt-category-core";
 import { submitJournal } from "./posting-service";
+import { PAYLOAD_KIND_SELECT, isMigrationKind, migrationStockRefusal } from "./migration-stock-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * 1) SHAPES
@@ -93,6 +94,8 @@ export const RECEIPT_SERVICE_CODES = [
   "RECEIPT_POST_FAILED",
   "RECEIPT_COST_STAMP_FAILED",
   "RECEIPT_READ_FAILED",
+  // R50 S2a (§1.4): Cultivera migration stock is in the opening balance.
+  "RECEIPT_MIGRATION_STOCK",
 ] as const;
 export type ReceiptServiceCode = (typeof RECEIPT_SERVICE_CODES)[number];
 
@@ -252,7 +255,7 @@ export async function postManifestReceipt(
 
   const { data: manifest, error: mErr } = await admin
     .from("inbound_manifests")
-    .select("id, manifest_number, vendor_label")
+    .select(`id, manifest_number, vendor_label, ${PAYLOAD_KIND_SELECT}`)
     .eq("id", manifestId)
     .maybeSingle();
 
@@ -264,6 +267,11 @@ export async function postManifestReceipt(
       "RECEIPT_MANIFEST_NOT_FOUND",
       "That delivery could not be found, so nothing was posted to the books.",
     );
+  }
+  // R50 S2a (§1.4): stock moved over from Cultivera is counted once, by the
+  // cut-over opening balance. Capitalising it here would count it twice.
+  if (isMigrationKind((manifest as { payload_kind?: unknown }).payload_kind)) {
+    return fail("RECEIPT_MIGRATION_STOCK", migrationStockRefusal("receipt", manifest.manifest_number));
   }
 
   const { data: lotRows, error: lErr } = await admin

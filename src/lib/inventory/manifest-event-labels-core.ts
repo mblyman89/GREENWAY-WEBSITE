@@ -9,6 +9,7 @@
  *
  * Writers (verified by grep, pinned by tests/compliance/s29-accounting-tab):
  *   intake/actions.ts             vendor_bill_posted/refused/skipped,
+ *                                 vendor_bill_migration_stock, receipt_migration_stock (R50 S2a),
  *                                 sample_cap_vendor_notified,
  *                                 receipt_posted/receipt_refused (S29)
  *   intake-store.ts               rejected, vendor_link, sample_cap_block,
@@ -87,7 +88,13 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   vendor_bill_posted: { label: "Books \u00b7 vendor bill recorded", group: "accounting", problem: false },
   vendor_bill_refused: { label: "Books \u00b7 vendor bill not posted", group: "accounting", problem: true },
   vendor_bill_skipped: { label: "Books \u00b7 no vendor bill (nothing activated)", group: "accounting", problem: false },
+  // R50 S2a (§1.4): Cultivera migration stock is in the opening balance, never a purchase.
+  receipt_migration_stock: { label: "Books \u00b7 no goods receipt (stock moved from Cultivera)", group: "accounting", problem: false },
+  vendor_bill_migration_stock: { label: "Books \u00b7 no vendor bill (stock moved from Cultivera, already paid)", group: "accounting", problem: false },
 };
+
+/** Service codes that mean "this is migration stock" (receipt-service / vendor-bill-service). */
+export const MIGRATION_STOCK_CODES: readonly string[] = Object.freeze(["RECEIPT_MIGRATION_STOCK", "BILL_MIGRATION_STOCK"]);
 
 /** The old rendering, kept as the fallback for an unknown type. */
 function humanise(eventType: string): string {
@@ -142,12 +149,15 @@ export function accountingEvents<E extends { event_type: string }>(events: reado
  */
 export function receiptEventFor(
   booked: { ok: boolean; code: string; message: string } | { thrown: string },
-): { eventType: "receipt_posted" | "receipt_refused"; note: string } {
+): { eventType: "receipt_posted" | "receipt_refused" | "receipt_migration_stock"; note: string } {
   if ("thrown" in booked) {
     return {
       eventType: "receipt_refused",
       note: `The delivery was marked received, but the books could not be updated: ${booked.thrown}`.slice(0, 2000),
     };
+  }
+  if (!booked.ok && booked.code === "RECEIPT_MIGRATION_STOCK") {
+    return { eventType: "receipt_migration_stock", note: `${booked.code}: ${booked.message}`.slice(0, 2000) };
   }
   return {
     eventType: booked.ok ? "receipt_posted" : "receipt_refused",
@@ -155,7 +165,12 @@ export function receiptEventFor(
   };
 }
 
-export type BooksStepState = "none" | "posted" | "refused" | "skipped";
+export type BooksStepState = "none" | "posted" | "refused" | "skipped" | "migration";
+
+/** True when a books result is the migration-stock refusal (not a problem, nothing to retry). */
+export function isMigrationStockResult(r: { ok: boolean; code: string }): boolean {
+  return !r.ok && MIGRATION_STOCK_CODES.includes(r.code);
+}
 
 /**
  * Where each books step stands for this delivery, from the durable timeline
@@ -175,6 +190,8 @@ export function accountingStatus(
     else if (e.event_type === "vendor_bill_posted") bill = "posted";
     else if (e.event_type === "vendor_bill_refused") bill = "refused";
     else if (e.event_type === "vendor_bill_skipped") bill = "skipped";
+    else if (e.event_type === "receipt_migration_stock") receipt = "migration";
+    else if (e.event_type === "vendor_bill_migration_stock") bill = "migration";
   }
   const open = (receipt === "refused" ? 1 : 0) + (bill === "refused" ? 1 : 0);
   return { receipt, bill, open };
@@ -202,6 +219,11 @@ export function booksStepText(step: "receipt" | "bill", state: BooksStepState): 
   if (state === "posted") return `${name}: recorded in the books (it may be waiting as a draft for the owner).`;
   if (state === "refused") return `${name}: not recorded yet \u2014 see the reason below.`;
   if (state === "skipped") return `${name}: none needed \u2014 nothing was activated, so nothing is owed.`;
+  if (state === "migration") {
+    return step === "receipt"
+      ? `${name}: none needed \u2014 this stock moved over from Cultivera and is counted once, in the opening inventory balance.`
+      : `${name}: none needed \u2014 this stock moved over from Cultivera and was paid for before the switch.`;
+  }
   return step === "receipt"
     ? `${name}: not attempted yet \u2014 it is recorded when the delivery is finalized (R31: finalize also marks it received).`
     : `${name}: not attempted yet \u2014 it is recorded when the delivery is finalized.`;
@@ -217,6 +239,9 @@ export function booksResultText(code: string): string {
   }
   if (code === "BILL_OK") {
     return "Books: vendor bill recorded for this delivery. It is keyed to this manifest, so it can never be recorded twice.";
+  }
+  if (code === "RECEIPT_MIGRATION_STOCK" || code === "BILL_MIGRATION_STOCK") {
+    return "Books: nothing recorded, on purpose. This stock moved over from Cultivera; it was paid for before the switch and is counted once, in the opening inventory balance.";
   }
   return "Books: recorded for this delivery.";
 }
@@ -272,7 +297,7 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   // R26 pin update (on purpose): +invoice_number_detected (migration 0245 writer).
   // R27 pin update (on purpose): +menu_published_some_withheld (intake-menu-staging writer).
   // R36 pin update (on purpose): +dismissed_duplicate, +duplicate_merged (0255 SQL writer).
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 35, "35 known types (R36 adds dismissed_duplicate + duplicate_merged)");
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 37, "37 known types (R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows)");
   ok(isKnownEventType("dismissed_duplicate") && isKnownEventType("duplicate_merged") && !labelForEvent("dismissed_duplicate").problem, "R36 dismiss events are known, non-problem delivery labels");
   ok(labelForEvent("menu_published_some_withheld").group === "menu" && labelForEvent("menu_published_some_withheld").problem, "R27 withheld publish is a menu problem (products still need facts)");
   ok(isKnownEventType("invoice_number_detected") && labelForEvent("invoice_number_detected").label === "Invoice # found in the documents" && labelForEvent("invoice_number_detected").group === "delivery" && !labelForEvent("invoice_number_detected").problem, "R26 invoice # found is a known delivery, non-problem label");
@@ -327,6 +352,21 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   ok(booksResultText("WHATEVER") === "Books: recorded for this delivery.", "unknown code generic");
   ok(booksRefusalNextStep(true).includes("then finalize") && !booksRefusalNextStep(true).includes("Mark received"), "in progress retry is the finalize (R31)");
   ok(!/finali[sz]e again|re-?finali/i.test(booksRefusalNextStep(false)), "no false re-finalize promise");
+
+  // R50 S2a: migration stock is its own quiet state, never an open refusal.
+  const m1 = receiptEventFor({ ok: false, code: "RECEIPT_MIGRATION_STOCK", message: "Opening balance." });
+  ok(m1.eventType === "receipt_migration_stock" && m1.note === "RECEIPT_MIGRATION_STOCK: Opening balance.", "migration receipt event");
+  ok(receiptEventFor({ ok: true, code: "RECEIPT_MIGRATION_STOCK", message: "x" }).eventType === "receipt_posted", "ok wins over code");
+  ok(receiptEventFor({ ok: false, code: "BILL_MIGRATION_STOCK", message: "x" }).eventType === "receipt_refused", "bill code is not a receipt migration");
+  ok(isMigrationStockResult({ ok: false, code: "BILL_MIGRATION_STOCK" }) && isMigrationStockResult({ ok: false, code: "RECEIPT_MIGRATION_STOCK" }), "migration result both");
+  ok(!isMigrationStockResult({ ok: true, code: "BILL_MIGRATION_STOCK" }) && !isMigrationStockResult({ ok: false, code: "BILL_POST_FAILED" }), "not migration result");
+  const sm = accountingStatus([{ event_type: "receipt_migration_stock" }, { event_type: "vendor_bill_migration_stock" }]);
+  ok(sm.receipt === "migration" && sm.bill === "migration" && sm.open === 0, "migration states not open");
+  ok(labelForEvent("receipt_migration_stock").group === "accounting" && !labelForEvent("receipt_migration_stock").problem, "migration receipt label quiet");
+  ok(labelForEvent("vendor_bill_migration_stock").group === "accounting" && !labelForEvent("vendor_bill_migration_stock").problem, "migration bill label quiet");
+  ok(booksStepText("receipt", "migration").includes("opening inventory balance"), "migration receipt step text");
+  ok(booksStepText("bill", "migration").includes("paid for before the switch"), "migration bill step text");
+  ok(booksResultText("RECEIPT_MIGRATION_STOCK").startsWith("Books: nothing recorded, on purpose.") && booksResultText("BILL_MIGRATION_STOCK") === booksResultText("RECEIPT_MIGRATION_STOCK"), "migration banner never says recorded");
 
   // R19: booksNeedsAttention
   ok(booksNeedsAttention(0, undefined) === false, "attention: nothing open, no error");

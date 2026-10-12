@@ -115,14 +115,17 @@ beforeEach(() => {
 });
 
 describe("1. manifest-event-labels-core self-tests", () => {
-  it("pins the embedded self-test count (42) with zero failures", () => {
+  it("pins the embedded self-test count (63) with zero failures", () => {
     // R26 pin update (on purpose): 49 -> 50 — one assertion added for the new
     // invoice_number_detected event label (migration 0245 writer).
     // R27 pin update (on purpose): 50 -> 51 - one assertion added for the
     // menu_published_some_withheld event label (per-product withhold).
     // R36 pin update (on purpose): 51 -> 52 - one assertion added for the
     // dismissed_duplicate / duplicate_merged labels (Dismiss duplicate).
-    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 52, failed: 0 });
+    // R50 S2a pin update (on purpose): 52 -> 63 - eleven assertions for the
+    // Cultivera migration-stock states (receipt_migration_stock /
+    // vendor_bill_migration_stock, isMigrationStockResult, banner + step text).
+    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 63, failed: 0 });
   });
   it("is registered in run-pure-selftests (import AND run)", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
@@ -165,7 +168,7 @@ describe("2. every event a writer logs has a human label (bible S29.5)", () => {
 
   it("finds the literals it should (the grep itself is tested)", () => {
     const all = WRITERS.flatMap((f) => literalTypes(read(f)));
-    for (const t of ["vendor_bill_posted", "vendor_bill_refused", "vendor_bill_skipped", "sample_cap_vendor_notified", "rejected", "vendor_link", "sample_cap_block", "draft_seed_error", "menu_auto_carry", "note", "transport", "invoice_number_override", "po_auto_receive", "po_link", "accepted", "menu_publish_held_for_fact_review", "menu_auto_publish_failed", "menu_auto_publish", "vendor_goldminer", "kb_writeback"]) {
+    for (const t of ["vendor_bill_posted", "vendor_bill_refused", "vendor_bill_skipped", "vendor_bill_migration_stock", "sample_cap_vendor_notified", "rejected", "vendor_link", "sample_cap_block", "draft_seed_error", "menu_auto_carry", "note", "transport", "invoice_number_override", "po_auto_receive", "po_link", "accepted", "menu_publish_held_for_fact_review", "menu_auto_publish_failed", "menu_auto_publish", "vendor_goldminer", "kb_writeback"]) {
       expect(all).toContain(t);
     }
   });
