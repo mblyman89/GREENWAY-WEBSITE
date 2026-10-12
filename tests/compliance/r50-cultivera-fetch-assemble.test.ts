@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
-import { assembleFromRun, readFirstSheet, receivedUtcByBarcode } from "@/lib/pos/cultivera-fetch-assemble";
+import { assembleFromRun, readFirstSheet, receivedUtcByLotId } from "@/lib/pos/cultivera-fetch-assemble";
 import { INVENTORY_EXPORT_COLUMNS, PRODUCT_EXPORT_COLUMNS, type ListLot, type SheetRow } from "@/lib/pos/cultivera-fetch-core";
 import { transformWorkbooks } from "@/lib/pos/transform";
 
@@ -111,7 +111,7 @@ describe("R50 S9: assembleFromRun", () => {
     const r = assembleFromRun({ inventoryExport: inv, productExport: prod, listLots: sold, batches, harvestSeconds: 600 }).report;
     expect(r.go).toBe(false);
     expect(r.checks.find((c) => c.id === "control_totals")!.pass).toBe(false);
-    expect(r.reconcile.mismatches).toEqual([{ barcode: "90000000000000000", field: "units", list: 3, row: 4 }]);
+    expect(r.reconcile.mismatches).toEqual([{ id: 1000, barcode: "90000000000000000", field: "units", list: 3, row: 4 }]);
   });
 
   it("NO-GO when an inventory name has no product row (would be a hidden card)", () => {
@@ -128,7 +128,14 @@ describe("R50 S9: assembleFromRun", () => {
     expect(r.ambiguousProductMatches.map((s) => s.barcode)).toEqual(["90000000000000002"]);
   });
 
-  it("receivedUtcByBarcode joins lot.BatchId → batch.Id only", () => {
-    expect(receivedUtcByBarcode(listLots, [{ Id: 77, ReceivedDate: "x" }, { Id: 999, ReceivedDate: "y" }])).toEqual({ "90000000000000000": "x" });
+  it("receivedUtcByLotId joins lot.BatchId → batch.Id only", () => {
+    expect(receivedUtcByLotId(listLots, [{ Id: 77, ReceivedDate: "x" }, { Id: 999, ReceivedDate: "y" }])).toEqual({ 1000: "x" });
+  });
+  it("twin lots (one barcode, two batches) each get their own received date", () => {
+    const twins = [
+      { ...listLots[0], Id: 1, BatchId: 10 },
+      { ...listLots[0], Id: 2, BatchId: 11 },
+    ];
+    expect(receivedUtcByLotId(twins, [{ Id: 10, ReceivedDate: "a" }, { Id: 11, ReceivedDate: "b" }])).toEqual({ 1: "a", 2: "b" });
   });
 });

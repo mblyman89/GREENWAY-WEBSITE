@@ -105,14 +105,15 @@ export function writeSheet(rows: SheetRow[], columns: readonly string[], sheet: 
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-/** Batch ReceivedDate by lot barcode (lot.BatchId → batch.Id). */
-export function receivedUtcByBarcode(lots: ListLot[], batches: BatchRecord[]): Record<string, string | null> {
+/** Batch ReceivedDate by lot Id (lot.BatchId → batch.Id). Keyed by lot, not barcode:
+ *  live data has barcodes shared by several lots with different batches. */
+export function receivedUtcByLotId(lots: ListLot[], batches: BatchRecord[]): Record<number, string | null> {
   const byId = new Map(batches.map((b) => [Number(b.Id), b]));
-  const out: Record<string, string | null> = {};
+  const out: Record<number, string | null> = {};
   for (const l of lots) {
     const bid = Number((l as ListLot & { BatchId?: number | null }).BatchId);
     const b = Number.isFinite(bid) ? byId.get(bid) : undefined;
-    if (b) out[String(l.Barcode).trim()] = (b.ReceivedDate as string | null | undefined) ?? null;
+    if (b) out[l.Id] = (b.ReceivedDate as string | null | undefined) ?? null;
   }
   return out;
 }
@@ -126,7 +127,7 @@ export function assembleFromRun(input: AssembleInput): AssembleResult {
     exportRows: dates.rows,
     listLots: input.listLots,
     productRows: prod.rows,
-    receivedUtcByBarcode: receivedUtcByBarcode(input.listLots, input.batches),
+    receivedUtcById: receivedUtcByLotId(input.listLots, input.batches),
   });
   const filtered = filterProductsToInventory(prod.rows, supp.rows);
   const productColumns = [...PRODUCT_EXPORT_COLUMNS, "Description"];
