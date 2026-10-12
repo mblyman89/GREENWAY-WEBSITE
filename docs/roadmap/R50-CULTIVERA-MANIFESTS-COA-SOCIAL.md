@@ -643,7 +643,7 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     * The fake-crawler client test went from 8 to 12 cases: details served, missing details refused, a torn
       line, a link to a transfer that lacks the barcode (NO-GO), and the old no-link path.
 
-- **2026-10-12, S2a: Cultivera migration stock never reaches payables or the books (\u00a71.4).**
+- **2026-10-12, S2a: Cultivera migration stock never reaches payables or the books (§1.4).**
   * `src/lib/accounting/migration-stock-core.ts` (pure, 26 self-tests, runner floor 26) is the one predicate
     for both migration kinds. It also holds the PostgREST filter string and the plain-English messages.
   * **Payables** filter on the server and in code. The server filter is the null-safe
@@ -683,5 +683,5 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
       inverted filter, a loose match, the label marked as a problem, and the intake banner or event changed).
     * 25 related suites pass (785 tests). The S29 count pin is now 63 on purpose; the original D-71 regexes
       still hold. eslint 0, scoped tsc 0, all pure self-tests pass.
-  * Next is **S2b**: the \u00a71.3 readers must follow moved lots by import id, not by the `POS-IMPORT-<id8>`
+  * Next is **S2b**: the §1.3 readers must follow moved lots by import id, not by the `POS-IMPORT-<id8>`
     number. That has to land before the S2c executor moves any lot.
