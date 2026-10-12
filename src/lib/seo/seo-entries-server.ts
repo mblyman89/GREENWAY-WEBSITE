@@ -49,7 +49,14 @@ export const getSeoOverride = cache(async (path: string): Promise<SeoOverride> =
 export async function getSitemapExclusions(): Promise<Set<string>> {
   if (!isSupabaseServiceConfigured) return new Set();
   try {
-    const { data, error } = await createSupabaseAdminClient().from("seo_entries").select(COLS).eq("status", "published").limit(1000);
+    // Only rows that actually exclude a page (a handful), well under the
+    // PostgREST 1,000-row response cap.
+    const { data, error } = await createSupabaseAdminClient()
+      .from("seo_entries")
+      .select(COLS)
+      .eq("status", "published")
+      .or("noindex.eq.true,sitemap_include.eq.false")
+      .limit(500);
     if (error || !data) return new Set();
     return sitemapExclusions(data as SeoEntryLite[]);
   } catch {

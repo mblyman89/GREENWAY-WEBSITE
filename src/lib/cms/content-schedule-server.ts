@@ -426,7 +426,7 @@ export async function listScheduleTargets(): Promise<ScheduleTargetOption[]> {
       admin.from("shop_carousel_slides").select("id,slide_key,draft_presentation,presentation,sort_order").order("sort_order").limit(50),
       admin.from("page_sections").select("id,page_slug,section_key,draft_title,title,locked,sort_order").order("page_slug").order("sort_order").limit(300),
       admin.from("faq_items").select("id,draft_question,question,locked,sort_order").order("sort_order").limit(300),
-      admin.from("content_blocks").select("block_key,page,label").order("page").order("block_key").limit(1000),
+      admin.from("content_blocks").select("block_key,page,label").order("page").order("block_key").limit(500),
     ]);
     for (const r of (home.data ?? []) as { id: string; draft_title: string | null; title: string | null }[])
       out.push({ kind: "carousel_slide", key: r.id, label: first(r.draft_title || r.title) || "(untitled slide)", group: "Home carousel" });
