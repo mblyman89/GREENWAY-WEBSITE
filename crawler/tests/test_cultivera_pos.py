@@ -380,3 +380,118 @@ def test_budget_flag(tmp_path):
     m = cp.run_phase_a(c, clock=lambda: float(next(t)), budget_seconds=60)
     assert c.run.read_json("state.json")["withinBudget"] is False
     assert m["status"] == "done"
+
+
+# ------------------------------------------------------------------ hardening (from mutation survivors)
+
+
+def _with(tmp_path, fake, override):
+    orig = fake.handler
+
+    def h(req):
+        r = override(req)
+        if r is not None:
+            fake.requests.append(req)
+            return r
+        return orig(req)
+
+    return cp.PosClient(username="owner@example.com", password=PASSWORD, run=cp.RunDir(tmp_path / "run"),
+                        transport=httpx.MockTransport(h), pace_seconds=0, sleep=lambda s: None)
+
+
+def test_budget_within(tmp_path):
+    c = _client(tmp_path, FakeCultivera())
+    cp.run_phase_a(c, clock=lambda: 1000.0, budget_seconds=60)
+    assert c.run.read_json("state.json")["withinBudget"] is True
+
+
+def test_action_log_redacts_even_if_a_caller_passes_secrets(tmp_path):
+    c = _client(tmp_path, FakeCultivera())
+    c.log(action="x", password=PASSWORD, body={"Token": TOKEN})
+    raw = c.run.p("actions.jsonl").read_text()
+    assert PASSWORD not in raw and TOKEN not in raw and "[redacted]" in raw
+
+
+def test_login_http_error_message(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(403, json={"Token": "t"}) if str(r.url) == cp.LOGIN_URL else None)
+    cp.run_phase_a(c)
+    assert "login failed: HTTP 403" in c.run.read_json("state.json")["error"]
+
+
+def test_export_http_404_is_a_recorded_failure(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(404, text="nope") if str(r.url).endswith("export-inventories-to-excel") else None)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "failed"
+    assert "HTTP 404" in c.run.read_json("state.json")["error"]
+
+
+def test_non_json_is_a_recorded_failure_not_a_crash(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(200, text="<html>") if str(r.url) == cp.Q + "inventories" else None)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "failed"
+    assert c.run.read_json("state.json")["error"].startswith("unexpected")
+
+
+def test_cdn_redirect_to_foreign_host_refused(tmp_path):
+    def ov(r):
+        u = str(r.url)
+        if u.endswith("/inv.xlsx"):
+            return httpx.Response(302, headers={"Location": "https://evil.example/payload"})
+        if u.startswith("https://evil.example/"):
+            return httpx.Response(200, content=b"PK\x03\x04evil")
+        return None
+
+    fake = FakeCultivera()
+    c = _with(tmp_path, fake, ov)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "failed"
+    assert "refused CDN url: https://evil.example/payload" in c.run.read_json("state.json")["error"]
+    assert not any(str(r.url).startswith("https://evil.example/") for r in fake.requests)  # never requested
+    assert not c.run.p("export_inventories.xlsx").exists()
+
+
+def test_detail_with_wrong_id_is_not_saved(tmp_path):
+    def ov(r):
+        if str(r.url).endswith("incoming/12/detail"):
+            return httpx.Response(200, json={"Id": 99})
+        return None
+
+    c = _with(tmp_path, FakeCultivera(), ov)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "failed"
+    st = c.run.read_json("state.json")["stages"]["transfer_details"]
+    assert st["status"] == "incomplete" and st["missing"] == [12]
+    assert [r["Id"] for r in c.run.read_jsonl("transfer_details.jsonl")] == [11]
+
+
+def test_detail_404_marks_stage_incomplete_and_stops(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(404) if str(r.url).endswith("incoming/11/detail") else None)
+    m = cp.run_phase_a(c)
+    st = c.run.read_json("state.json")
+    assert m["status"] == "failed"
+    assert st["stages"]["transfer_details"]["status"] == "incomplete"
+    assert "batches" not in st["stages"]  # never runs past an incomplete stage
+    assert c.run.read_jsonl("errors.jsonl")[0] == {"stage": "transfer_details", "id": 11, "status": 404}
+
+
+def test_cancel_inside_transfer_details(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    state = {"details": 0}
+
+    def cancelled():
+        state["details"] = sum("/detail" in str(r.url) for r in fake.requests)
+        return state["details"] >= 1
+
+    m = cp.run_phase_a(c, cancelled=cancelled)
+    assert m["status"] == "cancelled"
+    assert state["details"] == 1  # stopped after the first detail, before the second
+
+
+def test_manifest_hashes_are_real(tmp_path):
+    import hashlib
+
+    c = _client(tmp_path, FakeCultivera())
+    m = cp.run_phase_a(c)
+    for f in m["files"]:
+        assert f["sha256"] == hashlib.sha256(c.run.p(f["name"]).read_bytes()).hexdigest()

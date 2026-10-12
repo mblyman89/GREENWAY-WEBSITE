@@ -268,8 +268,11 @@ class PosClient:
     def __post_init__(self) -> None:
         self._http = httpx.Client(transport=self.transport, headers=BASE_HEADERS, timeout=60.0,
                                   follow_redirects=False)
+        # Every hop of a CDN redirect chain is guarded BEFORE it is requested (event hook), so a
+        # redirect can never send us to a non-Cultivera host — not even for one request.
         self._cdn = httpx.Client(transport=self.transport, timeout=120.0, follow_redirects=True,
-                                 headers={"User-Agent": BASE_HEADERS["User-Agent"]})
+                                 max_redirects=5, headers={"User-Agent": BASE_HEADERS["User-Agent"]},
+                                 event_hooks={"request": [lambda req: guard_cdn_url(str(req.url)) and None]})
 
     def close(self) -> None:
         self._http.close()
@@ -419,8 +422,11 @@ def _fetch_each(client: PosClient, ids: list[int], url_for: Callable[[int], str]
             errors += 1
             client.run.append_jsonl("errors.jsonl", {"stage": stage, "id": i, "status": r.status_code})
             continue
-        rec = r.json()
-        if str(rec.get("Id")) != str(i):
+        try:
+            rec = r.json()
+        except ValueError:
+            rec = {}
+        if not isinstance(rec, dict) or str(rec.get("Id")) != str(i):
             errors += 1
             client.run.append_jsonl("errors.jsonl", {"stage": stage, "id": i, "error": "Id mismatch"})
             continue
@@ -530,6 +536,9 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
     except (CultiveraPosError, CultiveraPosRefused) as e:
         state["status"] = "failed"
         state["error"] = str(e)[:500]
+    except Exception as e:  # noqa: BLE001 — anything unexpected (bad JSON, disk) is a recorded failure,
+        state["status"] = "failed"  # never a half-written state the button cannot read or resume.
+        state["error"] = f"unexpected {type(e).__name__}: {str(e)[:400]}"
     state["finishedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock()))
     state["seconds"] = round(clock() - t0, 1)
     state["withinBudget"] = remaining_budget_ok(t0, clock(), budget_seconds)
