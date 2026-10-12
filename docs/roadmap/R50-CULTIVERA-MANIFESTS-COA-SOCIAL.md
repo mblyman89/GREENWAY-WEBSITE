@@ -65,6 +65,13 @@ Groups produced by "same vendor AND same Pacific day AND gap ≤ G minutes":
 | 120 | 651 | 137 | 71 |
 | 240 | 651 | 137 | 71 |
 
+> **Correction (S1, measured through the executor's own path, `tests/compliance/r50-cultivera-manifest-groups.test.ts`):**
+> the table above counted ROWS. Grouping runs on LOTS (one per barcode, earliest row's date, first row's vendor -
+> exactly `planImportLots`). Per lot: **4,256 lots; 3,987 timed; 269 undated across 53 vendors (270 rows - one
+> undated barcode has two rows); 124 vendors; sessions at G = 10/30/60/120/240 min = 654/652/649/649/649;
+> singletons 138/138/137/137/137; largest 71 (TTL HOLDINGS LLC 2026-06-26 08:23).** Total manifests at the default
+> = 649 sessions + 53 undated = **702**. No barcode's rows disagree on vendor; no barcode mixes dated and undated rows.
+
 Only ONE same-day pair is more than 60 min apart (AGRO COUTURE 2025-07-09 11:45 → 20:33): two deliveries on
 one day, correctly split. The result is stable from 60 min upward, so 60 is the default and it is configurable.
 
@@ -72,7 +79,12 @@ one day, correctly split. The result is stable from 60 min upward, so 60 is the 
 
 * `transformWorkbooks` reads with `cellDates:false, raw:false`; SheetJS returns the cell's text verbatim
   (`"2026-07-02 09:32:07.787000"`, probed with the repo's own `xlsx`).
-* **`parseUsDate` accepts only `M/D/YYYY` or `YYYY-MM-DD`, so it returns `null` for this timestamp format**
+* **FIXED in S1:** `parseUsDate` now delegates unknown shapes to the shared R50 parser, so the export's
+  timestamps (and SheetJS date-cell texts `7/2/26`, `7/2/26 9:32`) give the Pacific day. Probed through
+  `transformWorkbooks → planImportLots` on the real export: 0 of 4,256 lots had a `receivedOn` before, 3,987 after.
+  The existing fill-only "fill lot facts" backfill (`fillImportLotFacts`, `received_on IS NULL` guard) can now
+  date the live lots without overwriting anything.
+* (Pre-S1 finding) **`parseUsDate` accepts only `M/D/YYYY` or `YYYY-MM-DD`, so it returns `null` for this timestamp format**
   (probed: `"2026-07-02 09:32:07.787000" → null`). The live import only got dates because the export it
   stored used a format that parser accepts. Never assume which format is stored: the R50 parser accepts all
   three shapes and reports the ones it cannot read.
@@ -167,7 +179,7 @@ Use a dedicated business account, not a personal one.
 
 | Slice | What | Done when |
 |---|---|---|
-| **S1** | `cultivera-manifest-group-core.ts`: timestamp parser (3 shapes, Pacific), per-vendor sessions (same Pacific day + gap ≤ G), undated bucket, earliest-row-per-barcode, stable group keys + manifest numbers; `isReconstructedManifest` predicate | self-tests + vitest on the REAL export reproduce §1.1 numbers (651 / 137 / 71 / 53) |
+| **S1** | `cultivera-manifest-group-core.ts`: timestamp parser (ISO date-time ± fraction, ISO date, US date ± time, Pacific), per-vendor sessions (same Pacific day + gap ≤ G), day-only groups, undated bucket, earliest-row-per-barcode, stable group keys + manifest numbers; `isReconstructedManifest` / `isMigrationManifest` predicates; lineage | self-tests + vitest on the REAL export reproduce the corrected §1.1 numbers (649 / 137 / 71 / 269 lots / 53 vendors) |
 | **S2** | Reconstruct executor (re-read stored workbook → plan → create manifests idempotently → move lots guarded on source manifest → events + audit); Menu Imports panel: preview (counts, biggest, examples, gap choice) + Apply; every `POS-IMPORT` reader follows the lots (§1.3); accounting exclusion (§1.4) | tests; reruns are no-ops |
 | **S3** | Onboarding for reconstructed manifests: seed drafts even when the key is live (`reonboard` mode, flagged "already on the menu"); a "Cultivera manifests" section in the onboarding picker; approval never touches the live card's visibility | planner tests; picker lists them |
 | **S4** | Intake suggestion: on a receiving line, "Looks like Cultivera product X" from the imported history (same vendor via the shared vendor/brand keys, token similarity on the product family + size), shown as a suggestion with evidence, never applied automatically | pure scorer tests incl. real naming variants |
@@ -179,3 +191,12 @@ Use a dedicated business account, not a personal one.
 ## 4. Status log
 
 * 2026-10-12 — recon complete, bible written (this commit). No code yet.
+* 2026-10-12 — **S1 done.** `src/lib/inventory/cultivera-manifest-group-core.ts` (pure; 110 self-test
+  assertions, registered in the runner with floor 110). The pre-existing `parseUsDate` bug is fixed: it read 0 of
+  4,256 export lots and now reads 3,987, plus the SheetJS date-cell texts `7/2/26` and `7/2/26 9:32`. It has
+  75 self-test assertions. `tests/compliance/r50-cultivera-manifest-groups.test.ts` (15 tests) runs the REAL committed
+  export through `transformWorkbooks` and pins every §1.1 number at G = 10/30/60/120/240. Those pins include an
+  independent oracle, a partition check, vendor/day purity, agreement with `planImportLots`, four known real
+  deliveries, determinism, and unique numbers and dedupe keys. Testing the tests: 32/32 mutants were killed, and
+  reverting the parseUsDate fix makes 3 tests fail. Full vitest: 856 files and 22,522 tests passed. eslint 0,
+  scoped tsc 0.
