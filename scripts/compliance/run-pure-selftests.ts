@@ -579,6 +579,7 @@ import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/
 import { __runCultiveraManifestGroupCoreTests } from "../../src/lib/inventory/cultivera-manifest-group-core";
 import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cultivera-transfer-match-core";
 import { __runCultiveraFetchCoreTests } from "../../src/lib/pos/cultivera-fetch-core";
+import { __runCultiveraFetchButtonCoreTests } from "../../src/lib/pos/cultivera-fetch-button-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
 import { __runCultiveraStrainFixCoreTests } from "../../src/lib/pos/cultivera-strain-fix-core";
 import { __runLegacyLotRemovalCoreTests } from "../../src/lib/pos/legacy-lot-removal-core";
@@ -2234,6 +2235,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-manifest-group-core", __runCultiveraManifestGroupCoreTests(), 110); // R50 S1: Cultivera deliveries rebuilt (vendor + Pacific day + gap)
   assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 72); // R50 S1b: lots married to the REAL Cultivera transfers
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
+  assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 33); // R50 S9: the button — run view, sha verify, import gate
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
