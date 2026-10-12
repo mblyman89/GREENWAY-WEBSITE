@@ -314,6 +314,11 @@ export type UpsertSeoInput = {
   canonical?: string | null;
   noindex?: boolean;
   sitemap_include?: boolean;
+  /**
+   * R47: social-share picture (media_assets id). undefined = leave the saved
+   * value alone; null = clear it.
+   */
+  og_media_id?: string | null;
   updatedBy: string | null;
 };
 
@@ -330,6 +335,7 @@ export async function upsertSeoEntry(input: UpsertSeoInput): Promise<void> {
       sitemap_include: input.sitemap_include ?? true,
       status: "published" as PostStatus,
       updated_by: input.updatedBy,
+      ...(input.og_media_id !== undefined ? { og_media_id: input.og_media_id } : {}),
     },
     { onConflict: "path" },
   );

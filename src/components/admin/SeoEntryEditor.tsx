@@ -26,11 +26,24 @@ export type SeoEntryDraft = {
   canonical: string;
   noindex: boolean;
   sitemap_include: boolean;
+  /** R47: social-share picture (media_assets id) or null for the default. */
+  og_media_id?: string | null;
+};
+
+/** R47: a published still image the owner can use as the share picture. */
+export type SeoImageChoice = {
+  id: string;
+  url: string;
+  title: string;
+  width: number | null;
+  height: number | null;
 };
 
 type Props = {
   entry: SeoEntryDraft;
   aiEnabled: boolean;
+  /** R47: Media Library still images for the share-picture picker. */
+  imageChoices?: SeoImageChoice[];
   /** Server action passed in so this stays a pure client component. */
   saveAction: (formData: FormData) => void;
 };
@@ -46,8 +59,15 @@ function counterTone(len: number, max: number): string {
   return "text-white/35";
 }
 
-export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
+export function SeoEntryEditor({ entry, aiEnabled, saveAction, imageChoices = [] }: Props) {
   const { toast } = useToast();
+  const [ogId, setOgId] = useState<string>(entry.og_media_id ?? "");
+  const [picking, setPicking] = useState(false);
+  const [filter, setFilter] = useState("");
+  const ogChoice = imageChoices.find((c) => c.id === ogId) ?? null;
+  const shownChoices = filter.trim()
+    ? imageChoices.filter((c) => c.title.toLowerCase().includes(filter.trim().toLowerCase()))
+    : imageChoices;
   const [title, setTitle] = useState(entry.seo_title);
   const [desc, setDesc] = useState(entry.seo_description);
   const [aiOpen, setAiOpen] = useState(false);
@@ -242,6 +262,104 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             />
             In sitemap
           </label>
+        </div>
+
+        {/* R47: social-share picture picker (stored as og_media_id) */}
+        <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+          <input type="hidden" name="og_media_id" value={ogId} />
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="flex h-[84px] w-[160px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/15 bg-black">
+              {ogChoice ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={ogChoice.url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="px-2 text-center text-[0.65rem] text-white/40">
+                  {ogId ? "Picture not found in the Media Library" : "Site default picture"}
+                </span>
+              )}
+            </div>
+            <div className="min-w-[12rem] flex-1">
+              <div className="text-xs font-semibold text-white/60">Share picture (optional)</div>
+              <p className="mt-0.5 text-[0.7rem] text-white/40">
+                The picture shown when someone shares this page on Facebook, in a text message, or on
+                X. Best size: 1200 × 630 pixels (wide). Leave it on the default to use the
+                page&apos;s built-in picture.
+              </p>
+              {ogChoice && ogChoice.width && ogChoice.height ? (
+                <p
+                  className={`mt-1 text-[0.7rem] ${
+                    ogChoice.width < 600 || ogChoice.height < 315 ? "text-[var(--admin-gold)]" : "text-white/40"
+                  }`}
+                >
+                  This picture is {ogChoice.width} × {ogChoice.height}.
+                  {ogChoice.width < 600 || ogChoice.height < 315
+                    ? " That is small, so it may look blurry or be skipped. 1200 × 630 is best."
+                    : ""}
+                </p>
+              ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button type="button" variant="neutral" size="sm" onClick={() => setPicking((p) => !p)}>
+                  {picking ? "Close picker" : ogId ? "Change picture" : "Choose picture"}
+                </Button>
+                <a
+                  href="/admin/media"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="self-center text-[0.7rem] text-white/50 underline hover:text-white"
+                >
+                  + Upload in Media Library ↗
+                </a>
+                {ogId ? (
+                  <Button type="button" variant="neutral" size="sm" onClick={() => setOgId("")}>
+                    Use site default
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          {picking && (
+            <div className="mt-3">
+              {imageChoices.length === 0 ? (
+                <p className="text-xs text-white/45">
+                  No published pictures yet.{" "}
+                  <a href="/admin/media" target="_blank" rel="noreferrer" className="underline">
+                    Upload one in the Media Library ↗
+                  </a>
+                  , publish it, then reload this page.
+                </p>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    placeholder="Search pictures by name"
+                    className="mb-2 w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
+                  />
+                  <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
+                    {shownChoices.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setOgId(c.id);
+                          setPicking(false);
+                        }}
+                        className={`overflow-hidden rounded-md border text-left ${
+                          c.id === ogId ? "border-[var(--admin-accent)]" : "border-white/10 hover:border-white/40"
+                        }`}
+                        title={c.title}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.url} alt="" loading="lazy" className="aspect-[1200/630] w-full object-cover" />
+                        <span className="block truncate px-1 py-0.5 text-[0.6rem] text-white/55">{c.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Live Google-style preview */}
