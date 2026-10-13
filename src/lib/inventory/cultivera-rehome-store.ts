@@ -166,6 +166,8 @@ export type RehomeApplyResult = {
   /** Lots a guarded UPDATE did not move (someone changed them meanwhile). */
   skippedByGuard: number;
   eventsLogged: number;
+  /** Timeline rows that could not be written (moves are unaffected; shown, never hidden). */
+  warnings: string[];
   problems: string[];
   plan: RehomePlan;
   manifestIdByKey: Map<string, string>;
@@ -209,6 +211,7 @@ export async function applyRehome(
 
   // 2. Timeline events for the new manifests (same lifecycle fingerprint as a native accept).
   let eventsLogged = 0;
+  const warnings: string[] = [];
   const byId = new Map(toCreate.map((m) => [manifestIdByKey.get(m.dedupeKey)!, m]));
   for (let i = 0; i < createdIds.length; i += 200) {
     const rows = createdIds.slice(i, i + 200).map((id) => {
@@ -221,7 +224,8 @@ export async function applyRehome(
       };
     });
     const { error } = await admin.from("manifest_events").insert(rows);
-    if (!error) eventsLogged += rows.length;
+    if (error) warnings.push(`${rows.length} timeline event(s) could not be written (${error.message}); the manifests and moves are unaffected.`);
+    else eventsLogged += rows.length;
   }
 
   // 3. Guarded moves.
@@ -256,6 +260,7 @@ export async function applyRehome(
     moved,
     skippedByGuard,
     eventsLogged,
+    warnings,
     problems,
     plan,
     manifestIdByKey,
