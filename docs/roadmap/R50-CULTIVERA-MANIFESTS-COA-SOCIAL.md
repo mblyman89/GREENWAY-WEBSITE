@@ -191,6 +191,57 @@ Cultivera lot IS on the menu, so none of them ever reaches Onboarding. Approving
 harmless to the menu: the staging planner treats live keys as existing (`draft_superseded_by_pos`, the live
 row wins). So a re-onboarding draft cannot create a duplicate card and cannot hide the live one.
 
+### 1.5b S3 research: the native chain a Cultivera manifest reuses (2026-10-13, read in code + measured)
+
+**What native finalize already does** (`intake-store.ts` finalize, after the lots activate):
+1. `seedDraftsForManifest` (drafts; identity stamps; price floor + suggestion);
+2. `archiveCoasForManifest` → `extractCoasForManifest` (the COA PDF and the WCIA lab JSON behind
+   `lab_results.wcia_json_url`, read by `wcia-lab-json-core.ts`);
+3. `promoteManifestToKb` (`lotToWritebackFacts`: name, key, brand, category, strain, size → KB drafts,
+   non-destructive merge, confidence 0.95);
+4. `linkKbProductsToDrafts` (lots + drafts → `kb_products` by the natural key);
+5. `attachLabFactsToManifestDrafts` (terpenes, potency, cannabinoids, serving mg → `attached_facts`, source
+   `coa`; flower terpenes taught to `kb_strains`, fill-only).
+
+Approval (`approveDraftWithPrice`) then adds: the classification gates, the lot mirrors (classification provenance,
+strain type), `attachOnApproval` (the `kb_products` golden record + `kb_product_id` links, fill-only), and the
+onboarding memory that pre-fills the next delivery of the same product (`recallOnboardingPicks`). A finished
+Cultivera manifest therefore teaches every later manifest and every later native delivery of the same product.
+
+**Measured on the real export** (`scripts/recon/r50-s3-keys.ts`, through `transformWorkbooks → planImportLots`):
+4,256 lots on 3,435 card keys (2,873 keys with one lot, 392 with 2, 116 with 3, the largest has 17); 562 keys
+carry more than one product name (sizes); every lot has a strain name, brand, size and cost; 3,764 have a
+THC/CBD figure; only **60** have a strain type; 0 carry minor cannabinoids. Of 5,385 menu items, 488 are visible.
+
+**Why nothing reaches Onboarding today:** `planDraftSeeding` returns `match` for a key on the published menu,
+and every Cultivera key is on it (hidden cards included: `publishedKeys` reads `menu_items` regardless of
+`hidden`). The open-draft unique index is per key, so the onboarding unit is **one draft per card key**.
+
+**Approval safety, verified line by line:**
+* `buildDraftInjectionPlan` skips a live key (`draft_superseded_by_pos`) BEFORE `injection.items`, and
+  `lotFactsByKey` is built only from `injection.items`, so a superseded draft writes no lot facts and no card.
+* The one exposure: a key that is NOT on the published menu at approval time would be injected as a new card.
+  **S3 rule:** staging skips a rebuilt manifest outright (`migration-manifest`), and a failed manifest read skips
+  too (fail closed, the S19 doctrine). Approval of a rebuilt-manifest draft can never stage a menu version.
+* Price: the 2× floor would refuse Cultivera-era prices, and a typed price could never reach the live card.
+  **S3 rule:** on a rebuilt manifest the server records the live card's price (only when every variant of the
+  card has the same price; otherwise null, never a guess), ignores the form's price and skips the floor. The
+  live card's price, visibility and the lot's status, qty, cost and CCRS fields are never written.
+* `mirrorIntakeFixToLive` (R27) stays the one door by which a reviewer's fact fix reaches a live card (facts
+  only, never `hidden`).
+
+**Fact assist sources, honest about what S3 can and cannot read:**
+
+| Source | S3 | How |
+|---|---|---|
+| Lot row (name, brand, vendor, category, type, strain, strain type, size, cost, lot code) | yes | native seeding + identity stamp |
+| Product name | yes | native resolvers: category heuristic, type labeler, strain-type name parse, volume |
+| Cultivera THC/CBD (`pos_*` columns) | yes | `potency` attached fact, source `cultivera`: shown, never counted (fact-chips rule) |
+| Live card price | yes | recorded on approval (above) |
+| Onboarding memory + KB | yes | native recall + KB link: the second manifest of a product pre-fills from the first |
+| Vendor WCIA transfer JSON / lab JSON | S6/S9 | 619 of 644 transfers name a `JsonFile`; the crawler does not download it yet. Once a lab result is linked, "Re-read lab certificates" runs the native read + attach |
+| COA PDF | S6 | batch `ImagePath` |
+
 ### 1.6 Cultivera POS back office (from the PUBLIC client code only; no login was attempted)
 
 Sources: `https://wa.cultiverapos.com/scripts/app.bundle.js`, `/scripts/cbo-app.bundle.js`,
@@ -333,7 +384,7 @@ Use a dedicated business account, not a personal one.
 | **S1** | `cultivera-manifest-group-core.ts`: timestamp parser (ISO date-time ± fraction, ISO date, US date ± time, Pacific), per-vendor sessions (same Pacific day + gap ≤ G), day-only groups, undated bucket, earliest-row-per-barcode, stable group keys + manifest numbers; `isReconstructedManifest` / `isMigrationManifest` predicates; lineage | self-tests + vitest on the REAL export reproduce the corrected §1.1 numbers (649 / 137 / 71 / 269 lots / 53 vendors) |
 | **S1b** | `cultivera-transfer-match-core.ts`: marry lots to the REAL transfers (§1.9) from the committed `TRANSFERS_INDEX.json`; S1 only for what no transfer claims | real-data pins + oracle SHA + mutants |
 | **S2** | Reconstruct executor (re-read stored workbook → **S1b plan (real transfers first, S1 fallback)** → create manifests idempotently → move lots guarded on source manifest → events + audit); Menu Imports panel: preview (counts, biggest, examples, gap choice) + Apply; every `POS-IMPORT` reader follows the lots (§1.3); accounting exclusion (§1.4) | tests; reruns are no-ops |
-| **S3** | Onboarding for reconstructed manifests: seed drafts even when the key is live (`reonboard` mode, flagged "already on the menu"); a "Cultivera manifests" section in the onboarding picker; approval never touches the live card's visibility | planner tests; picker lists them |
+| **S3** | Onboarding for reconstructed manifests (§1.5b): `reonboard` seeding (one draft per card key, flagged "already on the menu", skips keys already onboarded); a "Cultivera manifests" section on Product Onboarding with Start per manifest, which runs the native chain (drafts → COA read → KB promote → KB link → lab facts → Cultivera potency fact); staging skips rebuilt manifests; approval records the live price and never touches the live card | planner + fact + price self-tests; vitest over the shared fake; real-DB probe; mutants |
 | **S4** | Intake suggestion: on a receiving line, "Looks like Cultivera product X" from the imported history (same vendor via the shared vendor/brand keys, token similarity on the product family + size), shown as a suggestion with evidence, never applied automatically | pure scorer tests incl. real naming variants |
 | **S5** | Crawler: Cultivera POS back-office login (cached token with JWT exp, 401 re-login, human pace), harvester: inventories → batches → COA PDFs into a folder + `harvest.json`/`harvest.csv` (barcode, batch id, batch number, product, vendor, received, transfer #, lab, COA file, sha256), optional upload to the private `coa` bucket; incoming transfers recorded too | pytest (pure + mocked HTTP) |
 | **S6** | Onboarding "Attach harvested COAs": read the harvest (storage folder or uploaded files), marry by §2.7 rank, LlamaParse/unpdf read through the existing COA readers, create `lab_results` + link lots where none is linked, then the existing lab-facts attach | pure matcher tests on the 35 real fixtures |
