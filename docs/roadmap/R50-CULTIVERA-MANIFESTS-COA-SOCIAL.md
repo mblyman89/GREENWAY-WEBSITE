@@ -1244,3 +1244,57 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     resolution strategies, documented exclusions with sign-off, and item-by-item inventory reconciliation.
     **Applied here:** S10c groups rows by route and by reason with a resolution link. D-15 is the recorded
     sign-off for the clean-up.
+- **2026-10-13, S11: the Oct 30 shelf count (owner follow-up #6, clarifications #2–#4; D-16; U-47–U-53).**
+  * **The owner's flow:** download one workbook per counter → point-scan → upload them all → preview → confirm.
+    The page is `/admin/menu-imports/count`, and the guide gains step 6, "Apply the Oct 30 shelf count" (now
+    10 steps).
+  * **Workbook** (`cultivera-count-workbook.ts`, exceljs).
+    - Its lot list comes from the latest verified harvest's `inventories.json` (`loadRunLotList`). Real lots
+      do not exist until the cutover import.
+    - The count is blind: the workbook never shows Cultivera's quantity.
+    - The scan column is text-only and the sheet is protected. Downloads are audited
+      (`cultivera_count.workbook_downloaded`, with the inventories sha256).
+  * **Sales** (crawler stage `sales`, the owner's page `#/rpt/sales-details`).
+    - It runs only when the fetch form has a count date. It reads every Sales Details line from the sales day
+      (count date + 1) through today, with safe fields only (no employee, customer or payment fields).
+    - It is Count-verified, and the row sums must equal Cultivera's own summary, or the run is marked
+      "partial".
+    - It is an enrichment stage: a sales miss never blocks the cutover import. Instead, the count page refuses
+      to apply.
+    - At import, the sales files are saved, with their sha256s re-checked, to `pos-raw/count/<importId>/`.
+  * **Core** (`cultivera-count-core.ts`, pure, 65 self-tests).
+    - The formula is `rolled = counted − (Units − ReturnUnits on 10/31)` and `delta = rolled − Cultivera
+      on hand`, per barcode.
+    - **Refused outright:**
+      - workbooks with mixed count dates;
+      - the same workbook uploaded twice;
+      - an unreconciled sales summary, or one for the wrong day or with the wrong line count;
+      - any 10/31 sale at or after the harvest snapshot;
+      - any sale after 10/31;
+      - a harvest with no snapshot time.
+    - **Flagged and left alone, per lot:**
+      - unknown barcode;
+      - uncounted lot ("leave" policy; "zero" is an explicit choice);
+      - ambiguous barcode;
+      - unknown order status;
+      - a lot that moved after the import (`moved_since_import`).
+    - A re-apply is a no-op. A corrected re-upload moves only the difference.
+  * **Apply** (`cultivera-count-store.ts`).
+    - It uses the R15b pattern: an `inventory_adjustments` row (reason `count` = CCRS Reconciliation
+      `[G L1142]`), then a strict `applyLotDelta`. The row is removed if the write is refused.
+    - The server rebuilds the preview and refuses the apply if the plan digest changed since the owner looked.
+    - Uploads are stored with their sha256s and re-checked on read. Every step is audited.
+  * **Accounting** (D-16). The Sage adjustments export leaves out count rows, which are opening inventory, and
+    prints a warning line. CCRS, vendor pay and bills are unchanged.
+  * **Tests.**
+    - vitest: count 7, fetch-client 17, migration-stock 18 and guide 13.
+    - The crawler pytest passes 94.
+    - Dependent suites pass: slice5c, sage-exports-core, s16, s10b, rehome, receiving, s21, s15, s18, r13a,
+      intake-version-copy-core and fetch-pipeline.
+    - Mutants: store 19/19, core + migration 14/14, guide 3/3, fetch-button 6/6 and crawler 12/12. Two
+      survivors were found and pinned: the digest ignoring a field, and the summary `dateFrom` check.
+  * **Before 10/30 (rehearsal #3), the owner:**
+    - scans 3 items per scanner (U-47);
+    - rings a test sale and return (U-48, U-49);
+    - opens a workbook in Excel on a store PC (U-53).
+  * **On 10/31:** fetch after the close and before the 11/01 open (U-50), with the count date set to 10/30.
