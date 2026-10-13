@@ -813,7 +813,7 @@ class CultiveraPosStartRequest(BaseModel):
     fresh: bool = Field(default=False, description="Ignore an unfinished run and start a new harvest.")
     sales_from: str | None = Field(
         default=None, alias="salesFrom", pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="R50 S11: the count date (YYYY-MM-DD). Also scrape Cultivera Sales Details from then to today.")
+        description="R50 S11: the sales day after the count (YYYY-MM-DD). Also scrape Cultivera Sales Details from then to today.")
 
 
 @app.post("/cultivera-pos/runs", status_code=202)

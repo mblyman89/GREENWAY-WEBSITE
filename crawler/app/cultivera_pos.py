@@ -580,16 +580,17 @@ def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool],
 
 
 def stage_sales(client: PosClient, sales_from: str | None, now_epoch: float) -> dict[str, Any]:
-    """R50 S11 - the Oct 30 count roll-forward: every Sales Details line from the count day through
-    today (Pacific), read-only, Count-verified, safe fields only -> sales.jsonl, plus Cultivera's own
-    totals for the same window -> sales_summary.json. Row sums must equal the summary (measured equal
-    on 10/12 and on 9/28-10/11); a difference is recorded as "partial" and the count page refuses it.
-    No count date on the run -> nothing is fetched (the cutover import never needs sales)."""
+    """R50 S11 - the Oct 30 count roll-forward. The owner's page #/rpt/sales-details (bible §0.6
+    clarification #4). Every Sales Details line from the sales day (10/31, the day after the count)
+    through today (Pacific), read-only, Count-verified, safe fields only -> sales.jsonl, plus
+    Cultivera's own totals for the same dates -> sales_summary.json. Row sums must equal the summary
+    (measured equal on 10/12 and on 9/28-10/11); a difference is recorded as "partial" and the count
+    page refuses it. No sales day on the run -> nothing is fetched (the cutover import never needs it)."""
     if not valid_sales_from(sales_from):
         return {"skipped": "no count date on this run"}
     date_to = pacific_wall(now_epoch)[:10]
     if str(sales_from) > date_to:
-        raise CultiveraPosError(f"sales: count date {sales_from} is after today ({date_to})")
+        raise CultiveraPosError(f"sales: sales day {sales_from} is after today ({date_to})")
     rows, count = _page_all(client, SALES_ENDPOINT, sales_body(str(sales_from), date_to))
     safe = [safe_sale(r) for r in rows]
     client.run.write_atomic("sales.jsonl", "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in safe).encode())
@@ -668,8 +669,9 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
     """Run (or resume) Phase A. Returns the manifest. Never raises for a stage error — it is recorded
     in state.json with status "failed" so the button can show it and a rerun resumes.
 
-    `sales_from` (YYYY-MM-DD, R50 S11): the count date. When set, the sales stage scrapes Cultivera's
-    Sales Details from that day through today; a different date on a resume refetches the sales."""
+    `sales_from` (YYYY-MM-DD, R50 S11): the sales day of the count (10/31 for the 10/30 count). When set,
+    the sales stage scrapes Cultivera's Sales Details from that day through today; a different date on a
+    resume refetches the sales."""
     if sales_from is not None and not valid_sales_from(sales_from):
         raise ValueError("sales_from must be YYYY-MM-DD")
     run = client.run
