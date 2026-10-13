@@ -110,7 +110,7 @@ export default async function MastersPage({
   }
 
   const facets = parseMastersFilter(sp);
-  const [masters, suggestions, mastered, memberRead, manifestRows, manifestLots] = await Promise.all([
+  const [masters, suggestions, mastered, memberRead, manifestRead, manifestLots] = await Promise.all([
     listMasters(),
     listSuggestions({ status: "pending" }),
     loadMasteredMenu(),
@@ -119,6 +119,7 @@ export default async function MastersPage({
     facets.manifest ? loadManifestLotKeys(facets.manifest) : Promise.resolve(null),
   ]);
 
+  const manifestRows = manifestRead.manifests;
   const allCards: MasteredCard[] = mastered.ok ? mastered.cards : [];
   // R23 fix 7: facets narrow first (AND); a manifest whose lots could not be
   // read shows nothing and says so — never silently "all".
@@ -278,6 +279,7 @@ export default async function MastersPage({
                 : null
             }
             manifestReadFailed={manifestReadFailed}
+            manifestListIncomplete={!manifestRead.complete}
           />
         )}
 
@@ -503,6 +505,7 @@ function MastersFacetForm({
   manifestOpts,
   summary,
   manifestReadFailed,
+  manifestListIncomplete,
 }: {
   tab: string;
   back: string | undefined;
@@ -511,6 +514,7 @@ function MastersFacetForm({
   manifestOpts: { id: string; label: string }[];
   summary: string | null;
   manifestReadFailed: boolean;
+  manifestListIncomplete: boolean;
 }) {
   const selectCls =
     "min-w-48 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)]";
@@ -557,6 +561,11 @@ function MastersFacetForm({
           </Link>
         )}
       </form>
+      {manifestListIncomplete && (
+        <p className="text-xs text-[var(--admin-orange)]" data-testid="masters-manifest-list-incomplete">
+          Not every delivery could be read for the Manifest list, so some may be missing. Reload the page; if it persists, check the database connection.
+        </p>
+      )}
       {manifestReadFailed ? (
         <p className="text-xs text-[var(--admin-orange)]" data-testid="masters-manifest-read-failed">
           The lots on that manifest could not be read, so no card is shown. Reload the page; if it persists, check the database connection.
