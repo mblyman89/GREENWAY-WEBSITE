@@ -159,6 +159,13 @@ Clarification #2 (verbatim, same day; this **replaces** the scope above):
 > The system takes care of the rest. The barcode is the products lot#. Please build it in this way. Make sure the
 > spreadsheet is smart, intelligent, easy to use. Enterprise grade spreadsheet. Plead continue. Thank you.
 
+Clarification #3 (verbatim, same day):
+
+> I feel like I keep needing to stop you because you aren't figuring this out. Stop drifting. We are talking
+> about the Cultivera menu upload. The sales I'm talking about obviously come from Cultivera. Our system has no
+> idea what's going on in Cultivera until the web crawler logs into my Cultivera back office and scrapes the data
+> to use. We are building a Cultivera menu upload pipeline. Please stop drifting! Please continue.
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
