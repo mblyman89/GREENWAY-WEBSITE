@@ -281,8 +281,10 @@ describe("R50 S11: the Oct 30 count end to end", () => {
     const { countPlanDigest } = await import("@/lib/pos/cultivera-count-store");
     const base = { lines: [], summary: {} as never, blocked: false };
     const a = countPlanDigest({ ...base, adjustments: [{ lotId: "L1", lotCode: "x", delta: -1, onHand: 10, rolled: 9, counted: 9, netSold: 0 }] });
-    const b = countPlanDigest({ ...base, adjustments: [{ lotId: "L1", lotCode: "x", delta: -2, onHand: 10, rolled: 8, counted: 8, netSold: 0 }] });
-    expect(a).not.toBe(b);
+    const one = (o: Partial<{ lotId: string; delta: number; onHand: number; counted: number; netSold: number }>) =>
+      countPlanDigest({ ...base, adjustments: [{ lotId: "L1", lotCode: "x", delta: -1, onHand: 10, rolled: 9, counted: 9, netSold: 0, ...o }] });
+    expect(one({})).toBe(a);
+    for (const o of [{ lotId: "L2" }, { delta: -2 }, { onHand: 11 }, { counted: 8 }, { netSold: 1 }]) expect(one(o), JSON.stringify(o)).not.toBe(a);
     expect(a).toMatch(/^[0-9a-f]{32}$/);
   });
 });
