@@ -148,6 +148,17 @@ Clarification (verbatim, same day):
 > intention for the inventory audit being done right before cutover is meant to help the cultivera upload
 > process. please continue. thank you
 
+Clarification #2 (verbatim, same day; this **replaces** the scope above):
+
+> Sorry to stop you. I decided, to make this simpler, all I want you to do is build a super intelligent excel
+> spreadsheet, something with advanced logic and formulas and such. I want to connect the scanner to a computer,
+> download and open the spreadsheet on the computer, point scan, rapid fire. We have Tera and socket scanners. At
+> the end, I will upload the 8-9 spreadsheets, one from each of us counters. Since this upload happens on the
+> 30th, I need the web crawler to scrape October 31st sales and cogs and other sales data to then reconcile the
+> October 30th count we did. All I want to have to do is, download the spreadsheet, scan, upload the spreadsheet.
+> The system takes care of the rest. The barcode is the products lot#. Please build it in this way. Make sure the
+> spreadsheet is smart, intelligent, easy to use. Enterprise grade spreadsheet. Plead continue. Thank you.
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
