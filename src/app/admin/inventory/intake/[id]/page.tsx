@@ -60,6 +60,8 @@ import { menuStep } from "@/lib/inventory/menu-live-step-core";
 import { intakeMenuStepSnapshot } from "@/lib/pos/intake-menu-staging";
 import { getManifestPoLinkState } from "@/lib/inventory/po-link-store";
 import { ManifestPoLinkPanel } from "@/components/admin/inventory/ManifestPoLinkPanel";
+import { isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
+import { draftsForManifestHref } from "@/lib/catalog/draft-deep-link-core";
 import {
   rejectManifestAction,
   updateManifestTransportAction,
@@ -170,6 +172,16 @@ export default async function ManifestReviewPage({
 
   const manifest = await getManifestById(id);
   if (!manifest) notFound();
+  // R50 S10a: a manifest rebuilt from the Cultivera export opens on this same
+  // page (owner: "I can open the manifest like ones we intake"). It is
+  // accepted history and accounting-inert (R50 §1.4), so it shows a short
+  // banner and no PO link; finalize / reject are already hidden (status
+  // accepted).
+  const rebuilt = isRebuiltKind(
+    manifest.raw_payload && typeof manifest.raw_payload === "object"
+      ? (manifest.raw_payload as { kind?: unknown }).kind
+      : undefined,
+  );
 
   // E7: auto-fill the manifest origin-license fields (WAC 314-55-085) from the
   // linked vendor record so staff don't retype them each delivery. The manifest's
@@ -775,6 +787,23 @@ export default async function ManifestReviewPage({
 
         {activeTab === "delivery" && (
           <>
+        {rebuilt && (
+          <div
+            data-testid="rebuilt-manifest-banner"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-text)]"
+          >
+            <strong>Moved from Cultivera.</strong> This manifest was rebuilt from the Cultivera export. Its products
+            are already on the menu and can be sold while you onboard them. There is nothing to accept here, and it
+            never creates a bill or a payment.{" "}
+            <Link href={draftsForManifestHref(id)} className="font-semibold text-[var(--admin-accent)] hover:underline">
+              Open its products in Product Onboarding
+            </Link>
+            {" \u00b7 "}
+            <Link href="/admin/inventory/intake?view=cultivera" className="font-semibold text-[var(--admin-accent)] hover:underline">
+              All Cultivera manifests
+            </Link>
+          </div>
+        )}
         {/* S28 (D-R2-2): at most ONE line, only when something blocks. */}
         <IssuesSummaryLine summary={issueSummary} href={tabHref(pageBase, "issues", {}, [])} />
 
@@ -855,7 +884,7 @@ export default async function ManifestReviewPage({
 
         {/* W5: which order is this delivery for? (suggest-and-confirm; hidden
             entirely until migration 0102 is applied) */}
-        {poLink.available && <ManifestPoLinkPanel state={poLink} linkAction={poLinkAction} />}
+        {poLink.available && !rebuilt && <ManifestPoLinkPanel state={poLink} linkAction={poLinkAction} />}
 
         {/* R31: the five stat cards became ONE quiet line — the walk is the lines. */}
         <p

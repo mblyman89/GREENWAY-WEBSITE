@@ -142,8 +142,14 @@ describe("SLICE 101 — wiring pins (str_replace hazard)", () => {
     const page = repoFile("src/app/admin/inventory/intake/page.tsx");
     expect(page).toContain("applyIntakeView(manifests, intakeView)");
     expect(page).toContain("countProcessedRows(manifests)");
-    const table = repoFile("src/components/admin/inventory/EmailIntakeTable.tsx");
-    expect(table).toContain("Needs attention");
-    expect(table).toContain('href="/admin/inventory/intake?view=all"');
+    // R50 S10a: the Needs attention / All toggle moved into the shared
+    // ReceivingFilterBar (beside the new Cultivera manifests view); its links
+    // come from receiving-table-core and keep the same two URLs.
+    const bar = repoFile("src/components/admin/inventory/ReceivingFilterBar.tsx");
+    expect(bar).toContain("viewLinks.map((l) =>");
+    expect(page).toContain("<ReceivingFilterBar");
+    const core = repoFile("src/lib/inventory/receiving-table-core.ts");
+    expect(core).toContain('label: "Needs attention"');
+    expect(core).toContain('if (n.view !== "action") qs.set("view", n.view);');
   });
 });
