@@ -261,6 +261,13 @@ export default async function IntakePage({
           <StatCard label={stageMeta("accepted").label} value={counts.accepted} accent="green" />
           <StatCard label={stageMeta("rejected").label} value={counts.rejected} accent="muted" />
         </div>
+        {counts.migrated > 0 ? (
+          <p className="text-xs text-[var(--admin-text-faint)]" data-testid="intake-migrated-note">
+            Moved from Cultivera: {counts.migrated.toLocaleString("en-US")} rebuilt manifest
+            {counts.migrated === 1 ? "" : "s"} (history, not work, so they are not counted above or listed
+            below). The full intake export includes them.
+          </p>
+        ) : null}
 
         {/* Export: full intake picture (manifests + every lot line) */}
         <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm">

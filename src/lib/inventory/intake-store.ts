@@ -29,6 +29,8 @@
  * On reject: manifest → 'rejected', its lots → 'destroyed' (never sellable).
  */
 import "server-only";
+import { PAYLOAD_KIND_SELECT } from "@/lib/accounting/migration-stock-core";
+import { NOT_REBUILT_OR, isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import type { ParsedManifest, ParsedTransport } from "@/lib/inventory/intake-parser";
@@ -162,9 +164,17 @@ const BRAND_SCAN_MAX_ROWS = 50_000;
 /** Memory ceiling for a full inbound_manifests scan (stage counts). */
 const MANIFEST_SCAN_MAX_ROWS = 100_000;
 
+/**
+ * The Receiving work queue (newest first). R50 S2c (bible §1.3b): the ~700
+ * manifests rebuilt from Cultivera's transfers are history, not work, so they
+ * are left out unless `includeMigration` (the full intake export). The single
+ * POS-IMPORT manifest is unchanged (SLICE 58). Null-safe server filter + the
+ * same rule in code.
+ */
 export async function listManifests(opts?: {
   status?: string;
   limit?: number;
+  includeMigration?: boolean;
 }): Promise<InboundManifest[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
@@ -174,8 +184,15 @@ export async function listManifests(opts?: {
     .order("created_at", { ascending: false })
     .limit(opts?.limit ?? 200);
   if (opts?.status && opts.status !== "all") q = q.eq("status", opts.status);
+  if (!opts?.includeMigration) q = q.or(NOT_REBUILT_OR);
   const { data } = await q;
-  return (data as InboundManifest[] | null) ?? [];
+  const rows = (data as InboundManifest[] | null) ?? [];
+  return opts?.includeMigration ? rows : rows.filter((m) => !isRebuiltKind(payloadKindOf(m)));
+}
+
+function payloadKindOf(m: { raw_payload?: unknown }): unknown {
+  const p = m.raw_payload;
+  return p && typeof p === "object" ? (p as { kind?: unknown }).kind : undefined;
 }
 
 /**
@@ -194,20 +211,23 @@ export async function countManifestsByStatus(): Promise<StageCounts> {
   // through normalizeStage() (manifest-pipeline-core.ts:135-144), so counting
   // only the known enum values would silently drop rows. Reading the statuses
   // and rolling them up preserves that behaviour exactly.
-  const { rows } = await pagedAllChecked<{ id: string; status: string }>(
+  const { rows } = await pagedAllChecked<{ id: string; status: string; payload_kind: string | null }>(
     async (from, to) => {
       const { data, error } = await admin
         .from("inbound_manifests")
-        .select("id, status")
+        .select(`id, status, ${PAYLOAD_KIND_SELECT}`)
         // Stable UNIQUE ordering — REQUIRED for deterministic paging.
         .order("id", { ascending: true })
         .range(from, to);
       if (error) return { rows: [], ok: false };
-      return { rows: (data as { id: string; status: string }[] | null) ?? [], ok: true };
+      return { rows: (data as unknown as { id: string; status: string; payload_kind: string | null }[] | null) ?? [], ok: true };
     },
     { maxRows: MANIFEST_SCAN_MAX_ROWS },
   );
-  return countStages(rows.map((r) => r.status));
+  // R50 S2c: manifests rebuilt from Cultivera are counted apart ("moved from Cultivera"),
+  // never in the Accepted stage or the intake queue.
+  const native = rows.filter((r) => !isRebuiltKind(r.payload_kind));
+  return { ...countStages(native.map((r) => r.status)), migrated: rows.length - native.length };
 }
 
 /**

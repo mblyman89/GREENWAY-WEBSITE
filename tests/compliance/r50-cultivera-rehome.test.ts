@@ -55,7 +55,7 @@ describe("cultivera-rehome core", () => {
   it("passes its own self-tests (floor = measured count)", () => {
     const r = __runCultiveraRehomeCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(67);
+    expect(r.passed).toBeGreaterThanOrEqual(69);
   });
   it("maps only Accepted / Partially Accepted; anything else is refused", () => {
     expect(mapCultiveraStatus("Accepted")).toBe("accepted");
@@ -551,6 +551,6 @@ describe("cultivera-rehome wiring", () => {
     expect(src("src/lib/pos/import-service.ts")).toMatch(/productsSheet: "Sheet1",\s*inventoriesSheet: "Inventories"/);
   });
   it("is registered in the pure self-test runner at the measured floor", () => {
-    expect(src("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-rehome-core", __runCultiveraRehomeCoreTests\(\), 67\)/);
+    expect(src("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-rehome-core", __runCultiveraRehomeCoreTests\(\), 69\)/);
   });
 });

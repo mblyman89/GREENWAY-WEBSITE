@@ -217,6 +217,11 @@ export type ExistingManifest = {
 };
 
 /** Flat projection: never pulls the (large) raw_payload. */
+/** PostgREST `.or()` keeping every manifest that is NOT rebuilt from Cultivera (null-safe: a bare `neq` drops kind-less rows). */
+export const NOT_REBUILT_OR = `raw_payload->>kind.is.null,raw_payload->>kind.neq.${RECONSTRUCTED_MANIFEST_KIND}`;
+export function isRebuiltKind(kind: unknown): boolean {
+  return kind === RECONSTRUCTED_MANIFEST_KIND;
+}
 export const REHOME_EXISTING_SELECT = "id, dedupe_key, payload_kind:raw_payload->>kind, payload_import_id:raw_payload->>import_id";
 
 export type RehomeInput = {
@@ -825,5 +830,7 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   const pfSkip = planFromSources(src, inputs.transfers, new Map(inputs.links), inputs.pacificToday, inputs.indexSkipped);
   ok(!pfSkip.gate.pass && pfSkip.gate.problems.some((x) => x.includes("without an id")), "skipped transfer records fail the gate");
 
+  ok(NOT_REBUILT_OR === "raw_payload->>kind.is.null,raw_payload->>kind.neq.cultivera-reconstructed", "null-safe rebuilt filter");
+  ok(isRebuiltKind(RECONSTRUCTED_MANIFEST_KIND) && !isRebuiltKind("pos-import-migration") && !isRebuiltKind(null), "rebuilt kind only");
   return { passed, failed };
 }

@@ -129,6 +129,8 @@ export type StageCounts = {
   open: number;
   /** Convenience: received-but-not-accepted (the intake queue). */
   awaitingIntake: number;
+  /** R50 S2c: manifests rebuilt from Cultivera, never in any stage above. */
+  migrated: number;
 };
 
 export function emptyStageCounts(): StageCounts {
@@ -142,6 +144,7 @@ export function emptyStageCounts(): StageCounts {
     dismissed: 0,
     open: 0,
     awaitingIntake: 0,
+    migrated: 0,
   };
 }
 
