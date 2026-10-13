@@ -53,9 +53,9 @@ describe("migration-stock-core (pure)", () => {
   it("self-tests all pass and meet the registered floor", () => {
     const r = __runMigrationStockCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(26);
+    expect(r.passed).toBeGreaterThanOrEqual(31);
     expect(src("scripts/compliance/run-pure-selftests.ts")).toMatch(
-      /assertRan\("migration-stock-core", __runMigrationStockCoreTests\(\), 26\)/,
+      /assertRan\("migration-stock-core", __runMigrationStockCoreTests\(\), 31\)/,
     );
   });
 
@@ -162,6 +162,16 @@ describe("wiring: every money door excludes migration stock", () => {
     expect(s).toMatch(/const manifests = withoutMigrationManifests\(manifestsAll\);/);
     expect(s).toMatch(/if \(migrationNote\) empty\.warnings\.push\(migrationNote\);/);
     expect(s).toMatch(/if \(migrationNote\) result\.warnings\.push\(migrationNote\);/);
+  });
+
+  it("R50 S11: Sage adjustments export leaves the Oct 30 count on migration stock out and says so in both paths", () => {
+    const s = src("src/lib/accounting/sage-exports.ts");
+    expect(s).toMatch(/const adjustments = adjustmentsAll\.filter\(\(a\) => !isMigrationCountAdjustment\(a\)\);/);
+    expect(s).toMatch(/if \(countNote\) empty\.warnings\.push\(countNote\);/);
+    expect(s).toMatch(/if \(countNote\) result\.warnings\.push\(countNote\);/);
+    // The writer of those notes is the count core; the exclusion matches exactly its shape.
+    const core = src("src/lib/pos/cultivera-count-core.ts");
+    expect(core).toContain("return `R50 Oct-30 count ${sessionId}: barcode ${line.lotCode} counted");
   });
 
   for (const [file, code, door] of [
