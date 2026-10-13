@@ -29,6 +29,7 @@ export const PHASE_A_STAGES = [
   "transfers_list",
   "transfer_details",
   "batches",
+  "sales",
   "wcia_json",
 ] as const;
 export type PhaseAStage = (typeof PHASE_A_STAGES)[number];
@@ -41,6 +42,7 @@ export const STAGE_LABEL: Record<PhaseAStage, string> = {
   transfers_list: "Incoming transfers list",
   transfer_details: "Manifest details (one per delivery)",
   batches: "Batch dates for lots the export drops",
+  sales: "Sales since the count (Oct 30 count only)",
   wcia_json: "Vendor transfer files (lab results; optional)",
 };
 
@@ -48,17 +50,31 @@ export const STAGE_LABEL: Record<PhaseAStage, string> = {
  * R50 S3b: stages the cutover never waits on (the crawler's ENRICHMENT_STAGES). The crawler marks a
  * miss "partial" and still finishes the run; here a partial enrichment stage still allows Import.
  */
-export const ENRICHMENT_STAGES: ReadonlySet<PhaseAStage> = new Set<PhaseAStage>(["wcia_json"]);
+export const ENRICHMENT_STAGES: ReadonlySet<PhaseAStage> = new Set<PhaseAStage>(["sales", "wcia_json"]);
 
 /** Files the importer downloads from a finished run (all must verify). */
 export const REQUIRED_FILES = ["export_inventories.xlsx", "export_products.xlsx", "inventories.json", "state.json", "manifest.json"] as const;
 /** Present only when the stage had work; verified when listed in the manifest. */
-export const OPTIONAL_FILES = ["batches.jsonl", "transfer_details.jsonl", "transfers.json", "wcia_json.jsonl"] as const;
+export const OPTIONAL_FILES = ["batches.jsonl", "transfer_details.jsonl", "transfers.json", "wcia_json.jsonl", "sales.jsonl", "sales_summary.json"] as const;
 
 /** A real import must use a harvest at most this old (a stale snapshot misses today's sales). */
 export const MAX_HARVEST_AGE_MINUTES = 90;
 
-export type CrawlerStage = { status?: string; seconds?: number; missing?: unknown[]; wanted?: number; fetched_now?: number; rows?: number; bytes?: number; errors?: number };
+export type CrawlerStage = {
+  status?: string;
+  seconds?: number;
+  missing?: unknown[];
+  wanted?: number;
+  fetched_now?: number;
+  rows?: number;
+  bytes?: number;
+  errors?: number;
+  /** R50 S11: sales stage with no count date on the run. */
+  skipped?: string;
+  /** R50 S11: Pacific wall clock of the stage (crawler pacific_wall). */
+  startedPacific?: string;
+  endedPacific?: string;
+};
 export type CrawlerState = {
   status?: string;
   error?: string;
@@ -93,6 +109,7 @@ const KNOWN = new Set(["running", "done", "failed", "cancelled"]);
 
 function stageDetail(s: CrawlerStage): string {
   const parts: string[] = [];
+  if (typeof s.skipped === "string" && s.skipped) return "not needed (no count date)";
   if (typeof s.rows === "number") parts.push(`${s.rows.toLocaleString("en-US")} rows`);
   if (typeof s.bytes === "number") parts.push(`${Math.round(s.bytes / 1024).toLocaleString("en-US")} KB`);
   if (typeof s.wanted === "number") parts.push(`${s.wanted - (s.missing?.length ?? 0)} / ${s.wanted}`);
@@ -111,12 +128,15 @@ export function runView(run: CrawlerRun): RunView {
     const s = st.stages?.[stage];
     let rowStatus: StageRow["status"];
     if (s?.status === "done") rowStatus = "done";
+    // R50 S11: a crawler deployed before the sales stage existed finishes without a "sales" record.
+    // Sales are only for the Oct 30 count, so that run still imports (shown as not needed).
+    else if (!s && stage === "sales" && status === "done") rowStatus = "done";
     else if (s?.status === "partial" && ENRICHMENT_STAGES.has(stage)) rowStatus = "partial";
     else if (s?.status === "incomplete") rowStatus = "incomplete";
     else if (status === "running" && firstOpen) rowStatus = "running";
     else rowStatus = "pending";
     if (rowStatus !== "done") firstOpen = false;
-    return { stage, label: STAGE_LABEL[stage], status: rowStatus, seconds: typeof s?.seconds === "number" ? s.seconds : null, detail: s ? stageDetail(s) : "" };
+    return { stage, label: STAGE_LABEL[stage], status: rowStatus, seconds: typeof s?.seconds === "number" ? s.seconds : null, detail: s ? stageDetail(s) : stage === "sales" && rowStatus === "done" ? "not needed (no count date)" : "" };
   });
   const doneStages = rows.filter((r) => r.status === "done" || r.status === "partial").length;
   return {
@@ -224,16 +244,16 @@ export function __runCultiveraFetchButtonCoreTests(): { passed: number; failed: 
   // ---- runView ----
   const doneStages = Object.fromEntries(PHASE_A_STAGES.map((s) => [s, { status: "done", seconds: 1 }]));
   const done = runView({ runId: "r", active: false, state: { status: "done", stages: doneStages, seconds: 478.3, withinBudget: true } });
-  ok(done.status === "done" && done.doneStages === 8 && done.percent === 100 && done.canImport && !done.canCancel && !done.canResume && !done.poll, "done run → import enabled, no poll");
+  ok(done.status === "done" && done.doneStages === 9 && done.percent === 100 && done.canImport && !done.canCancel && !done.canResume && !done.poll, "done run → import enabled, no poll");
   ok(done.rows.every((r) => r.status === "done") && done.seconds === 478.3 && done.withinBudget === true, "done rows + seconds + budget");
 
   const mid = runView({ runId: "r", active: true, state: { status: "running", stages: { login: { status: "done" }, export_inventories: { status: "done", bytes: 647118 } } } });
   ok(mid.status === "running" && mid.poll && mid.canCancel && !mid.canImport && !mid.canResume, "active run → poll + cancel only");
   ok(mid.rows[2].status === "running" && mid.rows[3].status === "pending" && mid.rows[1].detail === "632 KB", "first open stage is running, later pending, bytes shown");
-  ok(mid.doneStages === 2 && mid.percent === 25, "2 of 8 stages = 25%");
+  ok(mid.doneStages === 2 && mid.percent === 22, "2 of 9 stages = 22%");
   // R50 S3b: a partial enrichment stage still imports; a partial CORE stage never counts.
   const partial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, wcia_json: { status: "partial", wanted: 619, missing: [1] } } } });
-  ok(partial.canImport && partial.rows[7].status === "partial" && partial.rows[7].detail === "618 / 619 · 1 not fetched", "partial vendor files still import");
+  ok(partial.canImport && partial.rows[8].status === "partial" && partial.rows[8].detail === "618 / 619 · 1 not fetched", "partial vendor files still import");
   const corePartial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, batches: { status: "partial" } } } });
   ok(!corePartial.canImport && corePartial.rows[6].status === "pending", "\"partial\" on a core stage is not accepted");
   ok(optionalFilesToFetch({ files: [{ name: "wcia_json.jsonl", bytes: 1, sha256: "x" }] }).join() === "wcia_json.jsonl", "vendor files fetched when listed");
@@ -253,6 +273,17 @@ export function __runCultiveraFetchButtonCoreTests(): { passed: number; failed: 
   ok(nullState.status === "unknown" && nullState.doneStages === 0, "missing state is unknown");
   const doneButShort = runView({ runId: "r", active: false, state: { status: "done", stages: { login: { status: "done" } } } });
   ok(!doneButShort.canImport, "done with a stage missing never imports");
+  // R50 S11: sales stage — skipped (no count date) and absent (older crawler) both still import.
+  const noSales = Object.fromEntries(Object.entries(doneStages).filter(([k]) => k !== "sales"));
+  const oldCrawler = runView({ runId: "r", active: false, state: { status: "done", stages: noSales } });
+  ok(oldCrawler.canImport && oldCrawler.rows[7].stage === "sales" && oldCrawler.rows[7].detail === "not needed (no count date)", "a crawler without the sales stage still imports");
+  const oldRunning = runView({ runId: "r", active: true, state: { status: "running", stages: noSales } });
+  ok(oldRunning.rows[7].status === "running" && !oldRunning.canImport, "an active run never treats sales as done early");
+  const skipped = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, sales: { status: "done", skipped: "no count date on this run" } } } });
+  ok(skipped.canImport && skipped.rows[7].detail === "not needed (no count date)", "skipped sales shown as not needed");
+  const salesPartial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, sales: { status: "partial", rows: 4577, missing: ["x"] } } } });
+  ok(salesPartial.canImport && salesPartial.rows[7].status === "partial", "a sales miss never blocks the cutover import (count page refuses it instead)");
+  ok(optionalFilesToFetch({ files: [{ name: "sales.jsonl", bytes: 1, sha256: "x" }, { name: "sales_summary.json", bytes: 1, sha256: "y" }] }).join() === "sales.jsonl,sales_summary.json", "sales files fetched when listed");
   const rows = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, inventory_list: { status: "done", rows: 3824 } } } });
   ok(rows.rows[3].detail === "3,824 rows", "row count formatted");
 
