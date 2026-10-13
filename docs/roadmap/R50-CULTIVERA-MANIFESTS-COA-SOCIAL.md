@@ -66,6 +66,25 @@ session token likewise. The action log records URLs, bodies, status and byte cou
 Railway they go in env vars (§S8). **The owner should change the Cultivera password once the harvest is done**,
 because it was shared in a chat transcript.
 
+
+### 0.3 Owner's follow-up #3 (verbatim, 2026-10-13)
+
+> Please continue. I want to reiterate that we need to scape everything from Cultivera, json, manifest, coa,
+> inventory, products, etc. the purpose of sending all the re created manifests through our onboarding process
+> onward is to be able to run Gemini on them, assign facts automatically, read the manifests and coas for all
+> their data, convert the name to our conventions, convert their type and category to our systems versions as
+> best you can. Map everything you can for me. I'll go through one manifest at a time and validate everything
+> before pushing it to enrichment. I want to lean heavily on the kb, and make certain these products go into the
+> kb in a way we can re use them. I want these products to be treated like we received them. Everything should
+> be attached at onboarding as we can using all of the Cultivera data we can use to automate the process. This
+> includes mastering. We have an awesome mastering system, I want it to be used effectively here too. Again,
+> nothing blocks it from the menu and sales while we onboard them. So we need a way to track which manifests
+> we're Cultivera's. And a way to make the process not overloaded with manifests. It should be organized very
+> well to make the process easier. Follow the standing rules and never guess, never assume. Keep going above and
+> beyond for me. Keep researching the internet for enterprise grade solutions to use and implement. Commit work
+> often, the sandbox is very unstable. Please protect the work as best as possible. Test it, test the tests.
+> Thank you!
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
