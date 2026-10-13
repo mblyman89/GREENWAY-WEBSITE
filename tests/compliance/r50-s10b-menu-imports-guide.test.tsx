@@ -7,7 +7,7 @@
  * significantly enhanced to make it easy to read and follow the steps."
  *
  * Pins:
- *   1. the pure guide core runs at its measured self-test count (56);
+ *   1. the pure guide core runs at its measured self-test count (70);
  *   2. the rendered guide shows progress, the one "next" step, real links, and
  *      never claims "Done" for a step the page cannot prove;
  *   3. every guide href is a real admin route in this repo;
@@ -37,7 +37,7 @@ const statusOf = (html: string, key: string) => html.match(new RegExp(`data-test
 
 describe("R50 S10b guide core", () => {
   it("runs at its measured self-test count", () => {
-    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 56, failed: 0 });
+    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 70, failed: 0 });
   });
 });
 
@@ -131,6 +131,18 @@ describe("R50 S10b page wiring", () => {
   });
   it("is registered in the pure runner", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 56);');
+    expect(runner).toContain('assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 70);');
+  });
+});
+
+describe("R50 S10b fetch run page", () => {
+  const run = read("src/app/admin/menu-imports/fetch/[runId]/page.tsx");
+  it("shows the what-to-do-now line from the page's own facts", () => {
+    expect(run).toContain('data-testid="fetch-run-next"');
+    expect(run).toMatch(/checked: loaded !== null,/);
+    expect(run).toMatch(/go: loaded \? Boolean\(report\?\.go\) : null,/);
+    expect(run).toMatch(/realAllowed: realDecision \? realDecision\.allowed : null,/);
+    expect(run).toContain('href="/admin/menu-imports#migration-guide"');
+    expect(run.indexOf('data-testid="fetch-run-next"')).toBeLessThan(run.indexOf("{view && ("));
   });
 });

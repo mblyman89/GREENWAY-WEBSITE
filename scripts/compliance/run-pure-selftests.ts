@@ -1538,7 +1538,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   assertRan("receiving-table-core", __runReceivingTableCoreTests(), 88); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
   assertRan("ccrs-migration-garbage-core", __runCcrsMigrationGarbageCoreTests(), 53); // R50 S10c (D-15): migrated garbage → CCRS clean-up
-  assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 56); // R50 S10b: Menu Imports step-by-step migration guide
+  assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 70); // R50 S10b: Menu Imports step-by-step migration guide
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();

@@ -272,6 +272,43 @@ export const MENU_IMPORTS_HELP_STEPS: readonly string[] = [
   "Day to day: receive and approve each product with a price. That publishes it automatically, with no upload and no Publish click.",
 ];
 
+// ─── fetch run page: one plain "what to do now" line ─────────────────────────
+export type FetchRunNextInput = {
+  /** runView(...) facts, or null when the run could not be read. */
+  view: { status: "running" | "done" | "failed" | "cancelled" | "unknown"; canImport: boolean } | null;
+  loadError: string | null;
+  checkError: string | null;
+  /** The go/no-go report was computed (loadRunForImport succeeded). */
+  checked: boolean;
+  go: boolean | null;
+  /** importDecision(...).allowed for a REAL import, or null when not computed. */
+  realAllowed: boolean | null;
+};
+export type FetchRunNext = { tone: "wait" | "go" | "fix"; text: string };
+
+export function fetchRunNextStep(i: FetchRunNextInput): FetchRunNext {
+  if (i.loadError || !i.view)
+    return { tone: "fix", text: "We couldn't reach the crawler just now. Reload in a minute. A running harvest keeps going on its own." };
+  const v = i.view;
+  if (v.status === "running")
+    return { tone: "wait", text: "The harvest is running. This page refreshes itself, so you can leave and come back. Nothing to do yet." };
+  if (v.status === "failed" || v.status === "cancelled")
+    return { tone: "fix", text: "The harvest stopped before it finished. Press \u201cResume this harvest\u201d. It picks up where it stopped." };
+  if (v.status === "unknown")
+    return { tone: "fix", text: "The crawler reported a status we don't recognize. Go back to Menu Imports and start a fresh fetch." };
+  if (!v.canImport)
+    return { tone: "fix", text: "The harvest says done, but a required stage is missing. Go back to Menu Imports and start a fresh fetch." };
+  if (i.checkError)
+    return { tone: "fix", text: "The harvest finished, but checking its files failed. Reload. If it happens again, start a fresh fetch." };
+  if (!i.checked || i.go === null || i.realAllowed === null)
+    return { tone: "fix", text: "The go / no-go check has not run. Reload this page." };
+  if (i.go && i.realAllowed)
+    return { tone: "go", text: "GO. Leave Test mode off and press \u201cStage this harvest for review\u201d. Then open the import, work Fact Review, and publish." };
+  if (i.go)
+    return { tone: "fix", text: "GO, but a real import is refused for the reason listed below. Test mode is on, so staging now makes a rehearsal import only." };
+  return { tone: "fix", text: "NO-GO. The report below names what didn't match. Fix it in Cultivera, or fetch again. You can still stage a rehearsal (Test mode)." };
+}
+
 // ─── self-tests ─────────────────────────────────────────────────────────────
 export function __runMenuImportsGuideCoreTests(): { passed: number; failed: number } {
   let n = 0;
@@ -373,6 +410,24 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(MENU_IMPORTS_HELP_STEPS.some((s) => s.includes("Publish Cultivera first, then receive")), "help keeps runbook rule");
   ok(!MENU_IMPORTS_HELP_STEPS.some((s) => /\bDelete\b/.test(s)), "help never says Delete");
   ok(st(g0, "ccrs_cleanup").body.includes("never sent as a Delete"), "ccrs step says never Delete");
+
+  // fetch run next step
+  const fr = (o: Partial<FetchRunNextInput>): FetchRunNext =>
+    fetchRunNextStep({ view: { status: "done", canImport: true }, loadError: null, checkError: null, checked: true, go: true, realAllowed: true, ...o });
+  ok(fr({}).tone === "go" && fr({}).text.startsWith("GO. Leave Test mode off"), "go + allowed");
+  ok(fr({ realAllowed: false }).tone === "fix" && fr({ realAllowed: false }).text.includes("rehearsal import only"), "go but refused");
+  ok(fr({ go: false }).text.startsWith("NO-GO"), "no-go");
+  ok(fr({ go: false, realAllowed: true }).text.startsWith("NO-GO"), "no-go wins even if allowed");
+  ok(fr({ loadError: "x" }).tone === "fix" && fr({ view: null }).text.includes("couldn't reach"), "unreachable");
+  ok(fr({ view: { status: "running", canImport: false } }).tone === "wait", "running waits");
+  ok(fr({ view: { status: "failed", canImport: false } }).text.includes("Resume"), "failed resumes");
+  ok(fr({ view: { status: "cancelled", canImport: false } }).text.includes("Resume"), "cancelled resumes");
+  ok(fr({ view: { status: "unknown", canImport: false } }).text.includes("fresh fetch"), "unknown → fresh");
+  ok(fr({ view: { status: "done", canImport: false } }).text.includes("required stage is missing"), "done short → fresh");
+  ok(fr({ checkError: "boom" }).text.includes("checking its files failed"), "check error");
+  ok(fr({ checked: false }).text.includes("has not run"), "unchecked never says GO");
+  ok(fr({ go: null }).tone === "fix" && fr({ realAllowed: null }).tone === "fix", "nulls never say GO");
+  ok(fr({ view: { status: "running", canImport: true } }).tone === "wait", "running wins over canImport");
 
   return { passed: n, failed: 0 };
 }
