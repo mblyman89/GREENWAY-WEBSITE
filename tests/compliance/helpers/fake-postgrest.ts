@@ -209,6 +209,20 @@ function parseFilters(url: URL): Array<(r: Row) => boolean> {
   const out: Array<(r: Row) => boolean> = [];
   for (const [col, raw] of url.searchParams.entries()) {
     if (RESERVED.has(col)) continue;
+    if (col === "or") {
+      // R50 S2c: or=(a.op.v,b.op.v) - each branch is one simple filter (no nesting).
+      const branches = parseList(raw).map((b) => {
+        const d1 = b.indexOf(".");
+        const sub = new URLSearchParams();
+        sub.append(b.slice(0, d1), b.slice(d1 + 1));
+        const u = new URL("http://x/");
+        u.search = sub.toString();
+        const fs = parseFilters(u);
+        return (r: Row) => fs.every((f) => f(r));
+      });
+      out.push((r) => branches.some((f) => f(r)));
+      continue;
+    }
     const dot = raw.indexOf(".");
     const op = raw.slice(0, dot);
     const val = raw.slice(dot + 1);
@@ -223,6 +237,9 @@ function parseFilters(url: URL): Array<(r: Row) => boolean> {
         return v === undefined || v === null ? null : typeof v === "object" ? JSON.stringify(v) : String(v);
       };
       if (op === "eq") out.push((r) => get(r) !== null && get(r) === val);
+      // R50 S2c: SQL semantics - NULL <> 'x' is NULL (not kept); is.null keeps missing keys.
+      else if (op === "neq") out.push((r) => get(r) !== null && get(r) !== val);
+      else if (op === "is" && val === "null") out.push((r) => get(r) === null);
       else throw new Error(`json filter ${op} not emulated (column ${col})`);
       continue;
     }
@@ -279,6 +296,16 @@ function sortRows(rows: Row[], order: string | null): Row[] {
 function pick(r: Row, select: string | null): Row {
   if (!select || select === "*") return { ...r };
   const out: Row = {};
-  for (const c of select.split(",").map((s) => s.trim()).filter(Boolean)) out[c] = r[c] ?? null;
+  for (const c of select.split(",").map((s) => s.trim()).filter(Boolean)) {
+    // R50 S2c: alias:col->>key (JSON text path), as PostgREST.
+    const al = /^([a-z_][a-z0-9_]*):([a-z_][a-z0-9_]*)->>([A-Za-z0-9_]+)$/.exec(c);
+    if (al) {
+      const o = r[al[2]];
+      const v = o && typeof o === "object" ? (o as Record<string, unknown>)[al[3]] : undefined;
+      out[al[1]] = v === undefined || v === null ? null : typeof v === "object" ? JSON.stringify(v) : String(v);
+      continue;
+    }
+    out[c] = r[c] ?? null;
+  }
   return out;
 }

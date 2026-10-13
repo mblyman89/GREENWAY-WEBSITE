@@ -14,6 +14,8 @@
  * an unconfigured DB returns null and the hub simply hides the card.
  */
 import "server-only";
+import { PAYLOAD_KIND_SELECT } from "@/lib/accounting/migration-stock-core";
+import { NOT_REBUILT_OR, isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
@@ -33,13 +35,16 @@ export async function getDockToShelfMetrics(): Promise<DockToShelfMetrics | null
     // Hop 1 — manifests with both stamps in the window.
     const { data: manifests } = await admin
       .from("inbound_manifests")
-      .select("id, received_at, accepted_at")
+      .select(`id, received_at, accepted_at, ${PAYLOAD_KIND_SELECT}`)
       .not("received_at", "is", null)
       .not("accepted_at", "is", null)
       .gte("accepted_at", sinceIso)
+      // R50 S2c: rebuilt Cultivera manifests have received_at = accepted_at (a fake 0-minute dock time).
+      .or(NOT_REBUILT_OR)
       .limit(500);
-    const mRows =
-      (manifests as { id: string; received_at: string; accepted_at: string }[] | null) ?? [];
+    const mRows = (
+      (manifests as unknown as { id: string; received_at: string; accepted_at: string; payload_kind: string | null }[] | null) ?? []
+    ).filter((m) => !isRebuiltKind(m.payload_kind));
     const manifestPairs: StampPair[] = mRows.map((m) => ({
       startIso: m.received_at,
       endIso: m.accepted_at,

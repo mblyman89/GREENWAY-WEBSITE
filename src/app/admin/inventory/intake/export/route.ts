@@ -101,7 +101,8 @@ export async function GET(request: Request) {
   const status = url.searchParams.get("status") ?? "all";
 
   const [manifests, lots] = await Promise.all([
-    listManifests({ status, limit: 2000 }),
+    // The export promises EVERY manifest, so it keeps the Cultivera migration ones (R50 S2c).
+    listManifests({ status, limit: 2000, includeMigration: true }),
     listAllManifestLotsForExport(),
   ]);
 
