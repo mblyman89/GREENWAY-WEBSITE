@@ -181,6 +181,17 @@ Recorded consequences:
 
 Bible v2 (analysis3 Part 08) reused the number D-03 for "which Area set survives". The code calls it D-03 because the slice plan does. Recommendation: keep `C1100011`–`14`, retire `C1-11021100011`–`14` + `A65303` `[BRIAN A11]`. The owner accepted "all of your recommendations". The summary line he saw read "most-recently-dated Sales Floor set", and both sets share CreatedDate 2024-08-22. **Status: production runs Update-only (no Delete) until (1) PREprod P-02 answers U-31 and (2) the owner explicitly confirms set C.** The plan is a reviewed code constant (`PROD_AREA_PLAN` in `ccrs-area-core.ts`), not a `license_settings` column.
 
+## D-15 — Examiner green light: migrated garbage is flagged for removal from CCRS at the first upload (2026-10-13, R50 S10c)
+
+Owner, verbatim (follow-up #5): *"There will be several items that we end up migrating to our system that we know are broken and the system won't like. The LCB examiners office has given me the green light to clean up my CCRS account so all the dead broken non existent products we migrate will end up immediately being flagged to be removed from CCRS. … I want the system to know, when we migrate, it's going to be intaking some garbage, and I want the system to recognize this and help me remove them from the system when I comes time to do our first CCRS upload."*
+
+Recorded consequences:
+
+1. This is the same direction as D-14 ("clean it all out"). It adds no new CCRS mechanism. The target is still **CCRS QoH = our QoH**. A dead record is "removed" when its lot is zeroed by a **Reconciliation** adjustment ("Balance inventory → Reconciliation" `[G L1142]`), which is the existing R15b path (`legacy-lot-removal-core.ts`). Whether that zero reaches CCRS through Inventory Update or InventoryAdjustment is still settled by P-01 (D-02, D-14 item 3).
+2. **No Inventory `Delete` is sent** for a migrated lot. The guide defines Delete as "delete a record indicated by external identifier" `[G L0248]`, but nothing pinned says what CCRS does with a Delete of a Cultivera-filed lot that has sales and transfers behind it (new **U-46**, Part 12). The ledger's `routeOperation(..., "delete")` already refuses any id not on file.
+3. "Garbage" is evidence-based and never guessed. **Dead** means the product is missing from the Cultivera Products export (`no_product_master`) or the lot has no filed barcode (`import_lot_missing_barcode`, a synthetic id CCRS never held). **Broken but fixable** (cost, potency, size, dates, COA) is listed for fixing, not removal.
+4. Each dead lot is routed by the ledger: on file → zero it out; not on file / never filed → local-only removal (nothing to remove in CCRS, and a reference would be rejected as an invalid id); uncertain / unknown / deleted → hold and reconcile first; ledger not loaded → unknown, so no action is offered.
+
 ## Decisions that are still the owner's to make (do NOT decide these for him)
 
 | Ref | Decision | Why it is his |
