@@ -1,0 +1,7 @@
+[
+ {"name":"rollback delete unguarded by import","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"      .eq(\"id\", m.id)\n      .eq(\"raw_payload->>kind\", RECONSTRUCTED_MANIFEST_KIND)\n      .eq(\"raw_payload->>import_id\", importId)\n      .select(\"id\");","new":"      .eq(\"id\", m.id)\n      .select(\"id\");"},
+ {"name":"rollback ignores non-empty","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"    if ((count ?? 0) > 0) {\n      keptNonEmpty","new":"    if ((count ?? 0) > 99) {\n      keptNonEmpty"},
+ {"name":"rollback moves hand-placed lots","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"read.rows.filter((l) => l.ccrs_inventory_external_id != null && ours.has(l.ccrs_inventory_external_id))","new":"read.rows.filter((l) => l.ccrs_inventory_external_id != null || true)"},
+ {"name":"no progress recheck","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"      if ((count ?? 0) > 0) throw new Error(`Rollback is not making progress","new":"      if ((count ?? 0) > 9999) throw new Error(`Rollback is not making progress"},
+ {"name":"lineage missing tolerated","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"  if (!Array.isArray(raw)) throw","new":"  if (!Array.isArray(raw)) return new Set(); if (false) throw"}
+]
