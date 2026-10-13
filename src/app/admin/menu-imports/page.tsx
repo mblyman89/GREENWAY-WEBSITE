@@ -28,6 +28,9 @@ import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 import { startFetchAction } from "./fetch-actions";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import { listPosRuns } from "@/lib/pos/cultivera-fetch-client";
+// R50 S10b: the step-by-step migration guide (status only from facts this page reads).
+import { buildMenuImportsGuide, MENU_IMPORTS_HELP_STEPS, GUIDE_HREF } from "@/lib/pos/menu-imports-guide-core";
+import { MenuImportsGuide } from "@/components/admin/catalog/MenuImportsGuide";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +103,15 @@ export default async function MenuImportsPage({
   ]);
   // R50 S9: recent fetch runs (a crawler outage never breaks the page).
   const recentRuns: string[] = isCrawlerConfigured() ? await listPosRuns().catch(() => []) : [];
+  // R50 S10b: the guide. An unknown cutover read never claims progress (every step = "check").
+  const guideSteps = buildMenuImportsGuide({
+    cutover: cutover.done
+      ? { done: true, first: { importId: cutover.first.importId, publishedAt: cutover.first.publishedAt } }
+      : { done: false, unknown: cutover.unknown || loadError !== null },
+    crawlerConfigured: isCrawlerConfigured(),
+    recentRuns,
+    imports,
+  });
 
   return (
     <div>
@@ -110,19 +122,22 @@ export default async function MenuImportsPage({
         help={
           <HelpPanel
             id="menu-imports"
-            title="How your menu gets published"
-            steps={[
-              "Day to day: receive products and approve each one with a price on Product Onboarding. That approval publishes it to the website and the register automatically — no upload, no Publish click.",
-              "Rarely, an update waits instead: a product has a fact that needs a second look, or the automatic publish didn't finish. It shows under 'Menu drafts from receiving' below (and under Admin → Publish Menu) with exactly what to check.",
-              "Open a waiting draft, fix what it names, then press Publish there.",
-              "One time only: the 'Fetch It All' button below does your initial Cultivera import. It harvests Cultivera POS, checks the data, and stages it for review. A manual PRODUCTS + INVENTORIES upload is the fallback. You will not need either after that.",
-            ]}
+            title="How the Cultivera migration works"
+            steps={[...MENU_IMPORTS_HELP_STEPS]}
           >
             <p>
-              After the initial Cultivera import, your menu is built from what you
-              receive and approve — no more spreadsheet uploads. Prices come from
-              your invoices, manifests, and COAs at approval, and stock comes from
-              the quantity you received.
+              This page does the one-time move from Cultivera. The step-by-step guide below shows where you are and
+              links straight to each next screen. After the import is live, your menu is built from what you receive
+              and approve, with no more spreadsheet uploads. Prices come from your invoices, manifests and COAs at
+              approval, and stock comes from the quantity you received.
+            </p>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              Migrated lots that are dead in Cultivera (no product master, no barcode) are expected. They are flagged
+              on the{" "}
+              <Link href={GUIDE_HREF.ccrsCleanup} className="text-[var(--admin-accent)] hover:underline">
+                CCRS migration clean-up panel
+              </Link>{" "}
+              and zeroed out by Reconciliation in your first CCRS upload. Nothing is ever sent as a Delete.
             </p>
             <p className="text-xs text-[var(--admin-text-muted)]">
               Doing the one-time Cultivera upload?{" "}
@@ -164,7 +179,8 @@ export default async function MenuImportsPage({
         )}
         {params.staged && (
           <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-orange)]">
-            Import staged for review. Check the diagnostics and diff below, then publish.
+            Import staged for review. Open it from Import history below, work Fact Review and the warnings, then
+            publish. The guide above shows the next step.
           </div>
         )}
         {params.cleaned && (
@@ -172,6 +188,9 @@ export default async function MenuImportsPage({
             Clean Slate complete — {decodeURIComponent(params.cleaned)} Real data and your knowledge base were untouched.
           </div>
         )}
+
+        {/* R50 S10b: where you are in the migration, and the next screen to open. */}
+        <MenuImportsGuide steps={guideSteps} importLive={cutover.done} />
 
         {/* Live status */}
         <div className="grid gap-4 sm:grid-cols-3">
@@ -280,6 +299,7 @@ export default async function MenuImportsPage({
         </section>
 
         {/* Upload (S21: behind "Show one-time import tools" once the import went live) */}
+        <div id="fetch-cultivera" className="scroll-mt-6">
         <OneTimeImportTools cutover={cutover} refused={uploadRefused}>
         {/* R50 S9: the one button. Logs in to Cultivera POS (read-only), harvests everything, and checks it before staging. */}
         <section className="rounded-xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5 p-5">
@@ -290,6 +310,11 @@ export default async function MenuImportsPage({
             present, units and cost matching to the cent, nothing hidden. Then you stage it for review, the same
             way a manual upload works. Nothing publishes on its own. It takes about 8 minutes.
           </p>
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-white/60" data-testid="fetch-what-next">
+            <li>Press the button. You land on the run page, which shows live progress. You can leave and come back.</li>
+            <li>When it finishes, read the go / no-go report. GO means every lot, unit and cent matched.</li>
+            <li>On a GO, press &ldquo;Stage this harvest for review&rdquo;. On a NO-GO, fix what it names and fetch again.</li>
+          </ol>
           {isCrawlerConfigured() ? (
             <form action={startFetchAction} className="mt-4 flex flex-wrap items-center gap-4">
               <Button type="submit" variant="primary">Fetch It All, Fuck Cultivera</Button>
@@ -306,7 +331,7 @@ export default async function MenuImportsPage({
           )}
           {recentRuns.length > 0 && (
             <p className="mt-3 text-xs text-white/40">
-              Recent fetches:{" "}
+              Recent fetches (newest first, open one to see its go / no-go):{" "}
               {recentRuns.slice(0, 5).map((r, i) => (
                 <span key={r}>
                   {i > 0 && " · "}
@@ -371,6 +396,7 @@ export default async function MenuImportsPage({
         </section>
         </details>
         </OneTimeImportTools>
+        </div>
 
         {/* Clean Slate — remove only test data */}
         {canPublish && (
@@ -480,7 +506,7 @@ export default async function MenuImportsPage({
             })}
             {imports.length === 0 && (
               <p className="px-5 py-8 text-sm text-[var(--admin-text-faint)]">
-                No imports yet. Upload your first POS export above to stage a menu.
+                No imports yet. Press Fetch above (step 1 of the guide) to stage your Cultivera menu.
               </p>
             )}
           </div>
