@@ -26,6 +26,8 @@ import {
   PAYLOAD_KIND_SELECT,
   migrationManifestCount,
   migrationSkippedWarning,
+  isMigrationCountAdjustment,
+  migrationCountSkippedWarning,
   withoutMigrationManifests,
 } from "@/lib/accounting/migration-stock-core";
 import {
@@ -643,7 +645,7 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
 
   // S-7: paged past the PostgREST per-response row cap.
   type AdjRow = { lot_id: string; qty_delta: number; reason: string; note: string | null; created_at: string };
-  const adjustments = await pagedAll<AdjRow>(async (from, to) => {
+  const adjustmentsAll = await pagedAll<AdjRow>(async (from, to) => {
     const { data } = await admin
       .from("inventory_adjustments")
       .select("lot_id, qty_delta, reason, note, created_at, id")
@@ -655,7 +657,13 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
       .range(from, to);
     return (data as AdjRow[] | null) ?? [];
   });
+  // R50 S11: the Oct 30 count's adjustments on migration stock are opening inventory (§1.4), left out
+  // in code (the read is fully paged) and counted in a warning line.
+  const countSkipped = adjustmentsAll.filter(isMigrationCountAdjustment).length;
+  const adjustments = adjustmentsAll.filter((a) => !isMigrationCountAdjustment(a));
+  const countNote = countSkipped > 0 ? migrationCountSkippedWarning(countSkipped) : null;
   if (adjustments.length === 0) {
+    if (countNote) empty.warnings.push(countNote);
     empty.warnings.push("No inventory adjustments (excluding receives) in the selected range.");
     return empty;
   }
@@ -702,6 +710,7 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
   }
 
   const result = buildAdjustmentsGjCsv(entries);
+  if (countNote) result.warnings.push(countNote);
   if (unmapped.size > 0) {
     result.warnings.push(`Adjustment categories not mapped to a Sage bucket: ${[...unmapped].sort().join(", ")}.`);
   }
