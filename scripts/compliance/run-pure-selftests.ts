@@ -2259,7 +2259,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 41); // R50 S9: the button — run view, sha verify, import gate
-  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 58); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode
+  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 65); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
