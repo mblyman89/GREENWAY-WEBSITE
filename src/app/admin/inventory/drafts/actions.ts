@@ -61,10 +61,16 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   // Price arrives in DOLLARS from the form; convert to minor units (cents).
   const raw = (formData.get("price") as string | null)?.trim() ?? "";
   const dollars = Number(raw);
-  if (!raw || Number.isNaN(dollars) || dollars <= 0) {
+  // R50 S3: a product already selling (Cultivera re-onboarding) has no price
+  // field - the server records the LIVE price itself and ignores any typed
+  // one. The flag only lets a blank field through; approveDraftWithPrice
+  // re-derives the rule from the delivery and refuses a non-positive price
+  // on any ordinary draft, so the flag can never approve at $0.
+  const reonboardForm = formData.get("reonboard") === "1";
+  if (!(reonboardForm && !raw) && (!raw || Number.isNaN(dollars) || dollars <= 0)) {
     redirect(backTo(formData, { error: "price" }, draftId));
   }
-  const priceMinor = Math.round(dollars * 100);
+  const priceMinor = reonboardForm && !raw ? 0 : Math.round(dollars * 100);
   // SLICE 64: the approver's classification picks. The server re-derives what
   // was actually REQUIRED (resolver + labeler) and validates every pick
   // against the closed vocabularies inside approveDraftWithPrice - the form
