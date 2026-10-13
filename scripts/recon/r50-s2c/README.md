@@ -48,3 +48,29 @@ The other files are:
 - Rollback deletes only empty rebuilt manifests of this import. It never deletes a manifest that has work attached:
   drafts, fact reviews, documents or vendor payments. `vendor_manifest_payments` is a RESTRICT FK, so accounting is never touched.
 - Batches stay within PostgREST's 8000-char URL limit. Moves go in batches of 150 ids, key reads in 100, inserts in 50.
+
+## Rollback hardening (lineage-only move-back)
+
+The mutation testing turned up two things:
+
+- A no-op move-back could make the rollback loop spin forever.
+- A blanket move-back would also have pulled hand-placed lots off a rebuilt manifest.
+
+Rollback now works like this:
+
+- It reads each rebuilt manifest's `raw_payload->barcodes` lineage, and refuses if that lineage is missing.
+- It pages every lot on the manifest and moves back only the lots whose barcode is in the lineage, in guarded batches of 150.
+- It re-checks that each moved batch actually left the manifest. If not, it stops loudly with "not making progress".
+- Its final delete is still guarded by kind + import_id.
+
+The measured run is `hand-placed-rollback.sh`:
+
+| Step | Result |
+|---|---|
+| Apply | created 679, moved 3,762, 679 events, ok (3.0 s) |
+| Native lot hand-placed on one rebuilt manifest, then rollback | movedBack 3,762, deleted 678, **keptNonEmpty 1**; the native lot stayed where the person put it |
+| Native lot returned by hand, rollback again | movedBack 0, deleted 1 |
+| Final snapshot vs before | identical except the native lot's `updated_at`, which was bumped by the two manual SQL updates in the script (trigger), not by the code |
+
+The vitest suite (`tests/compliance/r50-cultivera-rehome.test.ts`, 22 tests) killed 23 of 23 mutants
+(`mutants-1/2/3.json`, run with `/workspace/r50/mutate.py`).
