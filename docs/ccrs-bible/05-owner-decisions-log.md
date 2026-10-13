@@ -192,6 +192,17 @@ Recorded consequences:
 3. "Garbage" is evidence-based and never guessed. **Dead** means the product is missing from the Cultivera Products export (`no_product_master`) or the lot has no filed barcode (`import_lot_missing_barcode`, a synthetic id CCRS never held). **Broken but fixable** (cost, potency, size, dates, COA) is listed for fixing, not removal.
 4. Each dead lot is routed by the ledger: on file → zero it out; not on file / never filed → local-only removal (nothing to remove in CCRS, and a reference would be rejected as an invalid id); uncertain / unknown / deleted → hold and reconcile first; ledger not loaded → unknown, so no action is offered.
 
+## D-16 — The Oct 30 count is opening inventory: Sage adjustments export leaves it out; CCRS gets it as Reconciliation (2026-10-13, R50 S11)
+
+Owner, verbatim (follow-up #6 clarification #2): *"the system will then take those counts, and update all of the lots we intake from cultivera with the accurate ones"*; standing rule: do not disturb accounting or vendor pay.
+
+Recorded consequences:
+
+1. Each count move is an `inventory_adjustments` row with reason `count` and the note `R50 Oct-30 count <importId>: barcode …`, applied through R15b (`applyLotDelta`, strict). CCRS reads it like any other adjustment: Reconciliation, "Balance inventory" `[G L1142]`. The CCRS export is unchanged.
+2. Migration stock is opening inventory, never a purchase (R50 §1.4, S2a). The count corrects that opening figure, so the Sage adjustments export **leaves these rows out** (`isMigrationCountAdjustment`: reason `count` plus that note prefix) and prints a warning line with the number left out. Shrink and loss adjustments are not affected.
+3. Nothing about vendor pay, bills or receipts changes. A count row never creates a payable.
+4. The count is never applied over a lot that moved after the import (`moved_since_import`), and it is never applied while any 10/31 sale is missing from the harvest (U-50, U-51).
+
 ## Decisions that are still the owner's to make (do NOT decide these for him)
 
 | Ref | Decision | Why it is his |
