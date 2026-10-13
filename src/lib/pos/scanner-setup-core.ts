@@ -77,6 +77,9 @@ export const HARMFUL_PAYLOADS: Readonly<Record<string, string>> = {
   "#FNB00F507C60408FFEB000000#": "Socket Data As Is (no Enter)",
 };
 
+/** How the page draws every setup barcode (code128Svg options). The round-trip fixture pins it. */
+export const SCANNER_BARCODE_DRAW = { moduleWidth: 2, height: 56, quietModules: 12 } as const;
+
 export function commandById(id: string): CommandBarcode | null {
   return SCANNER_COMMANDS.find((c) => c.id === id) ?? null;
 }

@@ -1031,6 +1031,7 @@ import { __runExpiryResearchCoreTests } from "../../src/lib/inventory/expiry-res
 import { __runExpiryRulesCoreTests } from "../../src/lib/inventory/expiry-rules-core";
 import { __runTestingLabsCoreTests } from "../../src/lib/inventory/testing-labs-core";
 import { __runExpiryReportExportTests } from "../../src/lib/inventory/expiry-report-export";
+import { __runScannerSetupCoreTests } from "../../src/lib/pos/scanner-setup-core";
 import { websiteCategoryDefinitions as __r34Categories } from "../../src/lib/pos/category-taxonomy";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
@@ -2259,7 +2260,8 @@ __runLiquidVolumeTests();
   assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 41); // R50 S9: the button — run view, sha verify, import gate
-  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 65); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode
+  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 68); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode (+S11b scanner text)
+  assertRan("scanner-setup-core", __runScannerSetupCoreTests(), 48); // R50 S11b: Tera D5100 + DuraScan D760 setup barcodes, guides, test box
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -10,6 +10,7 @@ import { isSafeImportId } from "@/lib/inventory/import-lineage-core";
 import { listPosRuns } from "@/lib/pos/cultivera-fetch-client";
 import { buildCountPreview, isCountBatchId, type CountPreview } from "@/lib/pos/cultivera-count-store";
 import type { UncountedPolicy } from "@/lib/pos/cultivera-count-core";
+import { ScannerSetupSection } from "@/components/admin/ScannerSetupSection";
 import { applyCountAction, uploadCountAction } from "./actions";
 
 /**
@@ -89,13 +90,15 @@ export default async function CountPage({
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="count-steps">
           <h2 className="text-sm font-semibold text-white">How the count works</h2>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-white/60">
-            <li>Before 10/30: download one workbook per counter (step 1). Each counter gets their own file. Never copy one.</li>
+            <li>Before 10/30: set up and test every scanner (step 0). Then download one workbook per counter (step 1). Each counter gets their own file. Never copy one.</li>
             <li>10/30: count the back stock while open (nothing is pulled from it) and finish before 6 pm. Close at 6 pm and count the floor.</li>
             <li>Scan each item once per unit into the Scan sheet. Items with no barcode go on the Hand Count sheet with a quantity.</li>
             <li>After closing on 10/31 and before opening on 11/01: on Menu Imports, set the count date to 10/30 and press Fetch. Stage that harvest.</li>
             <li>Pick that import here, upload every workbook at once (step 2), read the preview, then apply.</li>
           </ol>
         </section>
+
+        <ScannerSetupSection />
 
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <h2 className="text-sm font-semibold text-white">1. Download a scan workbook (one per counter)</h2>
