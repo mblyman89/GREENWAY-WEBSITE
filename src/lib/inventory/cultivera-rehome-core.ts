@@ -40,8 +40,8 @@ import {
 } from "@/lib/inventory/cultivera-transfer-match-core";
 
 export const REHOME_RULE_VERSION = 1;
-/** Lots per guarded UPDATE (keeps every `.in()` URL far below PostgREST limits; chunkedIn uses 200). */
-export const REHOME_MOVE_BATCH = 200;
+/** Lots per guarded UPDATE: 150 uuids keep the PATCH URL under ~6 KB (same budget as LINEAGE_MANIFEST_CHUNK). */
+export const REHOME_MOVE_BATCH = 150;
 /** The manifest_events type written on each rebuilt manifest. */
 export const REHOME_EVENT_TYPE = "accepted";
 
@@ -212,8 +212,12 @@ export const REHOME_LOT_SELECT =
 export type ExistingManifest = {
   id: string;
   dedupe_key: string | null;
-  raw_payload: unknown;
+  payload_kind: string | null;
+  payload_import_id: string | null;
 };
+
+/** Flat projection: never pulls the (large) raw_payload. */
+export const REHOME_EXISTING_SELECT = "id, dedupe_key, payload_kind:raw_payload->>kind, payload_import_id:raw_payload->>import_id";
 
 export type RehomeInput = {
   importId: string;
@@ -406,12 +410,6 @@ function fallbackRow(input: RehomeInput, g: ReconstructedGroup, vendorId: string
   };
 }
 
-function payloadOf(m: ExistingManifest): Record<string, unknown> | null {
-  return m.raw_payload && typeof m.raw_payload === "object" && !Array.isArray(m.raw_payload)
-    ? (m.raw_payload as Record<string, unknown>)
-    : null;
-}
-
 /**
  * Build the whole Apply from facts. PURE and deterministic. Re-running it after
  * a partial Apply yields only the remaining work (idempotent / resumable).
@@ -477,8 +475,7 @@ export function planRehome(input: RehomeInput): RehomePlan {
     const ex = existingByKey.get(pm.dedupeKey);
     let existingId: string | null = null;
     if (ex) {
-      const p = payloadOf(ex);
-      if (!p || p.kind !== RECONSTRUCTED_MANIFEST_KIND || p.import_id !== input.importId) {
+      if (ex.payload_kind !== RECONSTRUCTED_MANIFEST_KIND || ex.payload_import_id !== input.importId) {
         refusals.push(`manifest ${ex.id} already holds the key ${pm.dedupeKey} but is not this import's rebuilt manifest`);
         return;
       }
@@ -752,11 +749,11 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   ok(!planRehome(base({ plan: plan([], [fg({ startUtcIso: "nope" })]) })).ok, "session without start refuses");
   ok(!planRehome(base({ lots: [lot("1", "A", "elsewhere", 1, 1)] })).ok, "lot on a foreign manifest refuses");
   ok(
-    !planRehome(base({ existing: [{ id: "m-x", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", raw_payload: { kind: "other" } }] })).ok,
+    !planRehome(base({ existing: [{ id: "m-x", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", payload_kind: "other", payload_import_id: "imp-1" }] })).ok,
     "existing key owned by someone else refuses",
   );
   ok(
-    !planRehome(base({ existing: [{ id: "m-x", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", raw_payload: { kind: RECONSTRUCTED_MANIFEST_KIND, import_id: "imp-2" } }] })).ok,
+    !planRehome(base({ existing: [{ id: "m-x", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", payload_kind: RECONSTRUCTED_MANIFEST_KIND, payload_import_id: "imp-2" }] })).ok,
     "existing key from another import refuses",
   );
 
@@ -773,7 +770,7 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   ok(late.summary.exceptionCounts.transfer_date_after_acceptance === 1 && late.manifests[0].row.transfer_date === "2024-09-02", "late transfer date logged, kept as recorded");
 
   // Resume: manifest already created, one lot already moved
-  const existing = [{ id: "m-t", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", raw_payload: { kind: RECONSTRUCTED_MANIFEST_KIND, import_id: "imp-1" } }];
+  const existing = [{ id: "m-t", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", payload_kind: RECONSTRUCTED_MANIFEST_KIND, payload_import_id: "imp-1" }];
   const resumed = planRehome(base({ existing, lots: [lot("1", "A", "m-t", 3, 250), lot("2", "B", "src", 2, 100)], plan: plan([tg({})], []) }));
   ok(resumed.ok && resumed.summary.manifestsToCreate === 0 && resumed.summary.manifestsAlreadyCreated === 1, "resume: manifest reused");
   ok(resumed.summary.lotsAlreadyHome === 1 && resumed.summary.lotsToMove === 1 && resumed.moves[0].lotIds.join() === "2", "resume: only the remaining lot moves");
@@ -783,7 +780,7 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   // Batching
   const many = Array.from({ length: 450 }, (_, i) => `B${String(i).padStart(4, "0")}`);
   const big = planRehome(base({ plan: plan([tg({ barcodes: many })], []), lots: many.map((b, i) => lot(`L${String(i).padStart(4, "0")}`, b, "src", 1, 1)) }));
-  ok(big.moves.length === 3 && big.moves.every((m) => m.lotIds.length <= REHOME_MOVE_BATCH) && big.moves.reduce((n, m) => n + m.lotIds.length, 0) === 450, "batches ≤ 200 and complete");
+  ok(big.moves.length === 3 && big.moves.every((m) => m.lotIds.length <= REHOME_MOVE_BATCH) && big.moves.reduce((n, m) => n + m.lotIds.length, 0) === 450, "batches ≤ 150 and complete");
 
   // Totals + verification
   ok(compareTotals(p.totals, { ...p.totals }).length === 0, "identical totals pass");
