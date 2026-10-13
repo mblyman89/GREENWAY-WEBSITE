@@ -26,8 +26,20 @@
  *
  * Pure: no I/O. Self-tests at the bottom (run-pure-selftests.ts).
  */
-import type { StagedSnapshotItem } from "@/lib/pos/intake-menu-staging-core";
-import type { PlannedInjectedItem, InjectionDiagnostic } from "@/lib/pos/draft-injection-core";
+import {
+  buildIntakeStagedVersionPlan,
+  type CarryForwardItem,
+  type IntakeStagingPlan,
+  type StagedSnapshotItem,
+} from "@/lib/pos/intake-menu-staging-core";
+import {
+  buildDraftInjectionPlan,
+  type ApprovedDraftForInjection,
+  type DraftEnrichment,
+  type PlannedInjectedItem,
+  type InjectionDiagnostic,
+} from "@/lib/pos/draft-injection-core";
+import { intakeDisplayName, lotFactsFromInjected } from "@/lib/pos/intake-mastering-core";
 import { boilerplateDescription, isBoilerplateDescription } from "@/lib/catalog/golden-record-core";
 
 /** Kill switch: `off` restores the S3 behaviour (approval catalogues only, no card refresh). */
@@ -35,6 +47,164 @@ export const CARD_REFRESH_ENV = "CULTIVERA_CARD_REFRESH";
 export function cardRefreshEnabled(raw: string | undefined | null): boolean {
   const v = String(raw ?? "").trim().toLowerCase();
   return !(v === "off" || v === "false" || v === "0" || v === "no");
+}
+
+/** The manifest kind whose approvals refresh live cards (the rebuilt Cultivera manifests only). */
+export const REFRESH_MANIFEST_KIND = "cultivera-reconstructed";
+
+/**
+ * True when approving a draft on a manifest of `kind` should run the staging
+ * pipeline in refresh mode. Only a manifest rebuilt from the Cultivera export,
+ * and only while the switch is on. The POS-import migration manifest keeps the
+ * S3 rule (catalogue only).
+ */
+export function refreshStagingForKind(kind: unknown, envRaw: string | undefined | null): boolean {
+  return kind === REFRESH_MANIFEST_KIND && cardRefreshEnabled(envRaw);
+}
+
+/**
+ * The native builder refuses a draft with no approved price (an ordinary
+ * product cannot go live unpriced). A rebuilt draft may be approved with no
+ * price, because its card's sizes have different live prices (S3 rule). The
+ * refresh never reads a price: price, label and sizes are PROTECTED_FIELDS and
+ * stay the live ones. So the builder is given this placeholder only to get
+ * past its price check, and the placeholder can never reach a card.
+ */
+export const REFRESH_PRICE_PLACEHOLDER = 1;
+
+export type RebuiltRefreshStagingPlan = IntakeStagingPlan & { refresh: CardRefreshPlan };
+
+/**
+ * The staging plan for a rebuilt manifest ("refresh, never inject"):
+ *   1. carry the WHOLE live menu forward (the native carry step, no drafts);
+ *   2. build our card for every approved draft with the native builder
+ *      (`buildDraftInjectionPlan`, with no existing keys so every draft is
+ *      built, and every diagnostic it raises passes through: fact flags,
+ *      caps, unmapped category);
+ *   3. overlay each built card onto its live card (`planRebuiltCardRefresh`).
+ *      No new cards and no mastering merges;
+ *   4. lot facts: the same golden-record bundle as mastering (`lotFactsFromInjected`).
+ * hasChanges = at least one live card actually changed.
+ */
+export function buildRebuiltRefreshStagingPlan(inputs: {
+  publishedItems: CarryForwardItem[];
+  approvedDrafts: ApprovedDraftForInjection[];
+  enrichmentByDraftId: Map<string, DraftEnrichment>;
+}): RebuiltRefreshStagingPlan {
+  const base = buildIntakeStagedVersionPlan({
+    publishedItems: inputs.publishedItems,
+    approvedDrafts: [],
+    enrichmentByDraftId: inputs.enrichmentByDraftId,
+  });
+  const injection = buildDraftInjectionPlan({
+    drafts: inputs.approvedDrafts.map((d) =>
+      d.price_minor_units != null && d.price_minor_units > 0 ? d : { ...d, price_minor_units: REFRESH_PRICE_PLACEHOLDER },
+    ),
+    existingKeys: new Set<string>(),
+    enrichmentByDraftId: inputs.enrichmentByDraftId,
+    baseSortOrder: 0,
+  });
+  const refresh = planRebuiltCardRefresh({
+    items: base.items,
+    ours: injection.items,
+    displayNameOf: (it) => intakeDisplayName(it),
+  });
+  return {
+    items: base.items,
+    carriedCount: base.carriedCount,
+    addedCount: 0,
+    mergedCount: 0,
+    hasChanges: refresh.refreshed.length > 0,
+    diagnostics: [...injection.diagnostics, ...refresh.diagnostics],
+    lotFactsByKey: lotFactsFromInjected(injection.items),
+    refresh,
+  };
+}
+
+/** manifest_events.event_type when approvals rebuilt live Cultivera cards. */
+export const REFRESH_EVENT = "cultivera_cards_refreshed";
+
+/** The timeline note for a refresh (what changed, what did not, plainly). */
+export function refreshEventNote(p: { refreshed: number; notLive: number; published: boolean }): string {
+  const n = Math.max(0, Math.floor(p.refreshed));
+  const what = n === 1 ? "1 live card was" : `${n} live cards were`;
+  const where = p.published ? "The update is live." : "The update is waiting on Admin \u2192 Publish Menu.";
+  const missing =
+    p.notLive > 0
+      ? ` ${p.notLive === 1 ? "1 approved product is" : `${p.notLive} approved products are`} not on the live menu, so nothing was added for ${p.notLive === 1 ? "it" : "them"}.`
+      : "";
+  return `${what} rebuilt from your onboarding (received via Cultivera): name, type, strain and verified facts now come from our records. Prices, sizes, stock and visibility did not change. ${where}${missing}`;
+}
+
+/**
+ * The timeline note when a product's refresh was withheld. Unlike a received
+ * delivery (where the product is kept OFF the menu), a Cultivera card is
+ * already selling, so it simply keeps its current card.
+ */
+export function refreshWithheldNote(n: number): string {
+  const count = Math.max(0, Math.floor(Number.isFinite(n) ? n : 0));
+  const what = count === 1 ? "1 product from Cultivera keeps" : `${count} products from Cultivera keep`;
+  return `The menu update published. ${what} its current card (still on sale) because a fact could not be verified \u2014 set the facts on Product Onboarding \u2192 Approved and the card is rebuilt.`;
+}
+
+/** The lot fact columns the staging writes (LotFactBundle, minus provenance). */
+export const LOT_FACT_COLUMNS = [
+  "servings_per_pack",
+  "mg_per_serving",
+  "package_thc_mg",
+  "package_cbd_mg",
+  "ratio_label",
+  "net_weight_grams",
+  "net_volume_ml",
+] as const;
+
+/**
+ * The inventory_lots update for a rebuilt lot, by the same survivorship rule
+ * as the card: only NON-null facts are written (a null never wipes a fact the
+ * import, a COA or a person set), minors only when present, and provenance is
+ * merged onto the lot's existing provenance (ours on top). Returns null when
+ * there is nothing to write. Never names status, qty, cost or CCRS columns.
+ */
+export function refreshLotFactPatch(
+  bundle: {
+    servings_per_pack: number | null;
+    mg_per_serving: number | null;
+    package_thc_mg: number | null;
+    package_cbd_mg: number | null;
+    ratio_label: string | null;
+    net_weight_grams: number | null;
+    net_volume_ml: number | null;
+    fact_provenance: Record<string, string>;
+    minor_cannabinoids_json?: unknown[];
+  },
+  existingProvenance: unknown,
+): Record<string, unknown> | null {
+  const patch: Record<string, unknown> = {};
+  const src = bundle as unknown as Record<string, unknown>;
+  for (const c of LOT_FACT_COLUMNS) {
+    if (src[c] !== null && src[c] !== undefined) patch[c] = src[c];
+  }
+  if (Array.isArray(bundle.minor_cannabinoids_json) && bundle.minor_cannabinoids_json.length > 0) {
+    patch.minor_cannabinoids_json = bundle.minor_cannabinoids_json;
+  }
+  if (Object.keys(patch).length === 0) return null;
+  const prior =
+    existingProvenance && typeof existingProvenance === "object" && !Array.isArray(existingProvenance)
+      ? (existingProvenance as Record<string, unknown>)
+      : {};
+  const ours: Record<string, unknown> = {};
+  for (const k of Object.keys(patch)) {
+    if (bundle.fact_provenance && bundle.fact_provenance[k] !== undefined) ours[k] = bundle.fact_provenance[k];
+  }
+  patch.fact_provenance = { ...prior, ...ours };
+  return patch;
+}
+
+/** The version-notes suffix: how many live cards were rebuilt. */
+export function refreshNotesSuffix(refreshed: number): string {
+  const n = Math.max(0, Math.floor(Number.isFinite(refreshed) ? refreshed : 0));
+  if (n === 0) return "";
+  return ` ${n === 1 ? "1 live card" : `${n} live cards`} rebuilt from onboarding (received via Cultivera); prices, sizes and visibility unchanged.`;
 }
 
 /** The fields the refresh may write, by rule (exported so tests pin the list). */
@@ -113,6 +283,8 @@ export function refreshLiveCard(live: StagedSnapshotItem, ours: PlannedInjectedI
     target[field] = value;
   };
 
+  // The live card's OLD primary shelf (Cultivera's guess) is never kept as an "extra".
+  const oldCategory = live.category;
   for (const f of CATALOGUE_TEXT_FIELDS) {
     const v = f === "name" ? (displayName ?? ours.name) : src[f];
     if (!blank(v)) set(f, typeof v === "string" ? v.trim() : v);
@@ -120,7 +292,7 @@ export function refreshLiveCard(live: StagedSnapshotItem, ours: PlannedInjectedI
   if (Array.isArray(ours.filter_categories) && ours.filter_categories.length > 0 && !blank(ours.category)) {
     // Keep any extra shelf the live card already had (e.g. a merged pack size), ours first.
     const merged = [...ours.filter_categories];
-    for (const c of live.filter_categories ?? []) if (c && c !== live.category && !merged.includes(c)) merged.push(c);
+    for (const c of live.filter_categories ?? []) if (c && c !== live.category && c !== oldCategory && !merged.includes(c)) merged.push(c);
     set("filter_categories", merged);
   }
   if (knownStrainType(ours.strain_type)) set("strain_type", ours.strain_type);
@@ -375,6 +547,120 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
   const dupItems = [live({ name: "first" }), live({ name: "second" })];
   planRebuiltCardRefresh({ items: dupItems, ours: [ours()], displayNameOf: () => "X" });
   ok(dupItems[0].name === "X" && dupItems[1].name === "second", "first duplicate refreshed only");
+
+  // Old Cultivera primary shelf is never kept as an extra
+  const l11 = live({ category: "preroll", filter_categories: ["preroll", "preroll-pack"] });
+  refreshLiveCard(l11, ours({ category: "flower", filter_categories: ["flower"] }), null);
+  ok(JSON.stringify(l11.filter_categories) === '["flower","preroll-pack"]', "old primary shelf dropped, extra shelf kept");
+
+  // Kind + switch
+  ok(refreshStagingForKind("cultivera-reconstructed", undefined), "rebuilt manifest refreshes by default");
+  ok(!refreshStagingForKind("cultivera-reconstructed", "off"), "switch off = S3 behaviour");
+  ok(!refreshStagingForKind("pos-import-migration", undefined), "POS-import migration manifest keeps S3 rule");
+  ok(!refreshStagingForKind("wcia", undefined) && !refreshStagingForKind(null, undefined), "ordinary kinds never refresh");
+  ok(refreshNotesSuffix(0) === "" && /^ 2 live cards rebuilt/.test(refreshNotesSuffix(2)) && /^ 1 live card rebuilt/.test(refreshNotesSuffix(1)), "notes suffix");
+
+  // End to end through the NATIVE builder (no mocks)
+  const carried = (key: string, over: Partial<CarryForwardItem> = {}): CarryForwardItem => ({
+    source_item_id: key,
+    name: "BLUE DREAM 3.5G FW",
+    product_name: "BLUE DREAM 3.5G FW",
+    brand_name: "FW",
+    vendor_name: "Fairwinds",
+    category: "flower",
+    filter_categories: [],
+    pos_inventory_type: "Usable Marijuana",
+    pos_inventory_category: null,
+    strain_type: "unknown",
+    strain_name: null,
+    thc: "19%",
+    cbd: null,
+    total_thc_json: { type: "thc", value: "19", unit: "%" },
+    total_cbd_json: null,
+    compounds_json: [],
+    description: "Cultivera text",
+    price_label: "$30",
+    price_minor_units: 3000,
+    inventory_status: "available",
+    hidden: false,
+    hidden_reason: null,
+    variants: [{ source_variant_id: `${key}-v1`, label: "3.5g", price_minor_units: 3000, inventory_level: 12, medical: false }],
+    ...over,
+  });
+  const draft = (key: string | null, over: Partial<ApprovedDraftForInjection> = {}): ApprovedDraftForInjection => ({
+    id: `d-${key}`,
+    pos_product_key: key,
+    name: "Blue Dream 3.5g",
+    brand_name: "Fairwinds",
+    vendor_name: "Fairwinds",
+    strain_name: "Blue Dream",
+    thc_pct: 24.1,
+    cbd_pct: null,
+    total_thc_pct: 24.1,
+    potency_json: null,
+    price_minor_units: null,
+    updated_at: "2026-10-13T00:00:00Z",
+    inventory_type: "Usable Marijuana",
+    ...over,
+  });
+  const enrich = new Map<string, DraftEnrichment>([
+    ["d-A", { websiteCategory: "flower", strainType: "hybrid", onHandQty: 12, packageLabel: "3.5g" }],
+    ["d-NEW", { websiteCategory: "flower", strainType: null, onHandQty: 5, packageLabel: "1g" }],
+    ["d-null", { websiteCategory: "flower", strainType: null, onHandQty: 1, packageLabel: null }],
+  ]);
+  const pub = [carried("A"), carried("B", { name: "Other card" })];
+  const pubBefore = JSON.stringify(pub);
+  const e2e = buildRebuiltRefreshStagingPlan({
+    publishedItems: pub,
+    approvedDrafts: [draft("A"), draft("NEW"), draft(null)],
+    enrichmentByDraftId: enrich,
+  });
+  ok(JSON.stringify(pub) === pubBefore, "e2e: published input never mutated");
+  ok(e2e.items.length === 2 && e2e.carriedCount === 2 && e2e.addedCount === 0 && e2e.mergedCount === 0, "e2e: no new cards, no merges");
+  ok(e2e.hasChanges && e2e.refresh.refreshed[0] === "A", "e2e: the approved card refreshed");
+  const a = e2e.items.find((i) => i.source_item_id === "A")!;
+  ok(a.thc !== "19%" && a.thc !== null && /24/.test(String(a.thc)), "e2e: our potency replaces Cultivera's");
+  ok(a.strain_type === "hybrid" && a.strain_name === "Blue Dream", "e2e: strain facts ours");
+  ok(a.vendor_name === "Fairwinds" && a.brand_name === "Fairwinds", "e2e: brand ours");
+  ok(a.description === "Cultivera text", "e2e: boilerplate never replaces copy");
+  ok(a.price_minor_units === 3000 && a.price_label === "$30", "e2e: live price kept (placeholder never reaches the card)");
+  ok(JSON.stringify(a.variants) === JSON.stringify([{ source_variant_id: "A-v1", label: "3.5g", price_minor_units: 3000, inventory_level: 12, medical: false, sort_order: 0 }]), "e2e: sizes untouched");
+  ok(a.hidden === false && a.inventory_status === "available" && a.origin === "carried" && a.sort_order === 0, "e2e: visibility, stock, order, origin untouched");
+  ok(JSON.stringify(e2e.items[1]) === JSON.stringify(buildIntakeStagedVersionPlan({ publishedItems: [pub[1]], approvedDrafts: [], enrichmentByDraftId: new Map() }).items[0]).replace('"sort_order":0,"variants"', '"sort_order":1,"variants"'), "e2e: other card identical to a plain carry");
+  ok(e2e.refresh.notLive.includes("NEW"), "e2e: a key not live is reported");
+  ok(e2e.diagnostics.some((d) => d.code === "draft_inject_no_pos_key"), "e2e: native diagnostics pass through");
+  ok(!e2e.items.some((i) => i.price_minor_units === REFRESH_PRICE_PLACEHOLDER), "e2e: placeholder price on no card");
+  const none = buildRebuiltRefreshStagingPlan({ publishedItems: e2e.items as unknown as CarryForwardItem[], approvedDrafts: [draft("A")], enrichmentByDraftId: enrich });
+  ok(!none.hasChanges && none.refresh.unchanged[0] === "A", "e2e: re-staging an already refreshed card = no changes");
+  const priced = buildRebuiltRefreshStagingPlan({ publishedItems: pub, approvedDrafts: [draft("A", { price_minor_units: 9999 })], enrichmentByDraftId: enrich });
+  ok(priced.items[0].price_minor_units === 3000, "e2e: a recorded price never re-prices the live card");
+
+  // Lot fact patch (survivorship on the golden record)
+  const bundle = {
+    servings_per_pack: 10,
+    mg_per_serving: null,
+    package_thc_mg: 100,
+    package_cbd_mg: null,
+    ratio_label: null,
+    net_weight_grams: null,
+    net_volume_ml: null,
+    fact_provenance: { servings_per_pack: "manifest", package_thc_mg: "coa", mg_per_serving: "engine" },
+  };
+  const lp = refreshLotFactPatch(bundle, { net_weight_grams: "cultivera", package_thc_mg: "old" })!;
+  ok(lp.servings_per_pack === 10 && lp.package_thc_mg === 100, "lot patch: verified facts written");
+  ok(!("mg_per_serving" in lp) && !("net_weight_grams" in lp) && !("ratio_label" in lp), "lot patch: null never wipes");
+  const lprov = lp.fact_provenance as Record<string, string>;
+  ok(lprov.net_weight_grams === "cultivera" && lprov.package_thc_mg === "coa" && lprov.servings_per_pack === "manifest", "lot patch: provenance merged, ours on top");
+  ok(!("mg_per_serving" in lprov), "lot patch: no provenance for an unwritten field");
+  ok(!Object.keys(lp).some((k) => /status|qty|cost|ccrs/.test(k)), "lot patch: never stock, cost or CCRS");
+  ok(refreshLotFactPatch({ ...bundle, servings_per_pack: null, package_thc_mg: null }, null) === null, "lot patch: nothing to write = null");
+  const lm = refreshLotFactPatch({ ...bundle, servings_per_pack: null, package_thc_mg: null, minor_cannabinoids_json: [{ type: "cbg", value: "5", unit: "mg" }] }, "garbage")!;
+  ok(Array.isArray(lm.minor_cannabinoids_json) && JSON.stringify(lm.fact_provenance) === "{}", "lot patch: minors alone; bad prior provenance ignored");
+
+  // Notes
+  ok(/^1 live card was rebuilt/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true })) && /Prices, sizes, stock and visibility did not change/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true })), "event note");
+  ok(/waiting on Admin/.test(refreshEventNote({ refreshed: 2, notLive: 1, published: false })) && /1 approved product is not on the live menu/.test(refreshEventNote({ refreshed: 2, notLive: 1, published: false })), "event note: waiting + not live");
+  ok(/still on sale/.test(refreshWithheldNote(1)) && !/kept off/.test(refreshWithheldNote(3)), "withheld note never says kept off");
 
   return { passed, failed };
 }

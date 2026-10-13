@@ -854,29 +854,13 @@ export function buildVendorIdInputs(input: {
 }
 
 /**
- * Plan the mastering pass. Deterministic and pure:
- *  1. `buildDraftInjectionPlan` decides eligibility exactly as before (its
- *     diagnostics pass through untouched).
- *  2. Lots already live as a VARIANT on a live card are dropped (info).
- *  3. Eligible items are grouped by vendor|websiteCategory|family; unconfident
- *     family or blank vendor → standalone card + warning (never auto-merge).
- *  4. A group matching exactly ONE live card merges into it (restock); more
- *     than one match → new card + warning; no match → new card.
+ * SLICE 62: the verified per-lot facts of planned items (shared by mastering
+ * and the R50 S3c Cultivera card refresh, so both write the SAME golden-record
+ * bundle to inventory_lots).
  */
-export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeMasteringPlan {
-  const injection = buildDraftInjectionPlan({
-    drafts: inputs.drafts,
-    existingKeys: inputs.existingKeys,
-    enrichmentByDraftId: inputs.enrichmentByDraftId,
-    baseSortOrder: 0, // the snapshot composer reassigns sort orders
-  });
-  const diagnostics: InjectionDiagnostic[] = [...injection.diagnostics];
-
-  // SLICE 62: collect the verified per-lot facts BEFORE grouping — grouped
-  // cards keep only the base item's fields, but every lot's facts must reach
-  // inventory_lots regardless of how its card was mastered.
+export function lotFactsFromInjected(items: readonly PlannedInjectedItem[]): Map<string, LotFactBundle> {
   const lotFactsByKey = new Map<string, LotFactBundle>();
-  for (const it of injection.items) {
+  for (const it of items) {
     // R29: the card's mg rows for every cannabinoid other than THC / CBD (and
     // their acids) are the lot's minors - same {type,value,unit} shape.
     const minors = it.compounds_json.filter((c) => c.unit === "mg" && !["thc", "thca", "cbd", "cbda"].includes(c.type));
@@ -905,6 +889,32 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       });
     }
   }
+  return lotFactsByKey;
+}
+
+/**
+ * Plan the mastering pass. Deterministic and pure:
+ *  1. `buildDraftInjectionPlan` decides eligibility exactly as before (its
+ *     diagnostics pass through untouched).
+ *  2. Lots already live as a VARIANT on a live card are dropped (info).
+ *  3. Eligible items are grouped by vendor|websiteCategory|family; unconfident
+ *     family or blank vendor → standalone card + warning (never auto-merge).
+ *  4. A group matching exactly ONE live card merges into it (restock); more
+ *     than one match → new card + warning; no match → new card.
+ */
+export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeMasteringPlan {
+  const injection = buildDraftInjectionPlan({
+    drafts: inputs.drafts,
+    existingKeys: inputs.existingKeys,
+    enrichmentByDraftId: inputs.enrichmentByDraftId,
+    baseSortOrder: 0, // the snapshot composer reassigns sort orders
+  });
+  const diagnostics: InjectionDiagnostic[] = [...injection.diagnostics];
+
+  // SLICE 62: collect the verified per-lot facts BEFORE grouping — grouped
+  // cards keep only the base item's fields, but every lot's facts must reach
+  // inventory_lots regardless of how its card was mastered.
+  const lotFactsByKey = lotFactsFromInjected(injection.items);
 
   // Lot keys already selling as a variant on some live card, and the live
   // merge candidates by identity (S19: plus by vendor id) - ONE index, shared
