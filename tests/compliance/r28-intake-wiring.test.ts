@@ -50,7 +50,9 @@ describe("R28 intake-store wiring (source pins)", () => {
   const s = read("src/lib/inventory/intake-store.ts");
 
   it("the link is saved with the lab row and dropped ONCE (not fatally) when 0252 is missing", () => {
-    expect(s).toContain("if (line.lab.wcia_json_url && !labJsonUrlColumnMissing) labRow.wcia_json_url = line.lab.wcia_json_url;");
+    // R50 S3b: the row comes from the ONE shared builder (cultivera-wcia-core nativeLabRow, whose
+    // self-tests pin "json url only when given" and "dropped when unmigrated").
+    expect(s).toContain("const labRow = nativeLabRow(line.lab, parsed.source_format, actorId, { withJsonUrl: !labJsonUrlColumnMissing });");
     expect(s).toContain('if (lErr && "wcia_json_url" in labRow && isMissingColumnError(lErr)) {');
     expect(s).toContain("labJsonUrlColumnMissing = true;");
     expect(s).toContain("delete labRow.wcia_json_url;");

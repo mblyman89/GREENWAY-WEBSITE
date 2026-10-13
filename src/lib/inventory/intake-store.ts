@@ -29,6 +29,7 @@
  * On reject: manifest → 'rejected', its lots → 'destroyed' (never sellable).
  */
 import "server-only";
+import { nativeLabRow } from "@/lib/inventory/cultivera-wcia-core";
 import { PAYLOAD_KIND_SELECT } from "@/lib/accounting/migration-stock-core";
 import { NOT_REBUILT_OR, isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -793,38 +794,12 @@ export async function stageManifest(
       if (extId && labIdCache.has(extId)) {
         labId = labIdCache.get(extId)!;
       } else {
-        const labRow: Record<string, unknown> = {
-            labtest_external_identifier: extId,
-            lab_name: line.lab.lab_name,
-            tested_on: line.lab.tested_on,
-            thc_pct: line.lab.thc_pct,
-            cbd_pct: line.lab.cbd_pct,
-            thca_pct: line.lab.thca_pct,
-            cbda_pct: line.lab.cbda_pct,
-            total_thc_pct: line.lab.total_thc_pct,
-            total_cbd_pct: line.lab.total_cbd_pct,
-            total_cannabinoids_pct: line.lab.total_cannabinoids_pct,
-            potency_json: line.lab.potency_json,
-            terpenes_json: line.lab.terpenes_json,
-            analytes_json: line.lab.analytes_json,
-            passed: line.lab.passed,
-            source:
-              parsed.source_format === "wcia"
-                ? "wcia-transfer"
-                : parsed.source_format === "ccrs-csv"
-                  ? "ccrs-manifest-csv"
-                  : "vendor-json",
-            coa_url: line.lab.coa_url,
-            coa_release_date: line.lab.coa_release_date,
-            coa_expire_date: line.lab.coa_expire_date,
-            raw_payload: line.lab.raw,
-            created_by: actorId,
-            updated_by: actorId,
-          };
-        // R28: keep the transfer's lab_result_link (the lab JSON) so the
-        // certificate reader can follow it. Sent only when present, and
-        // dropped once if the database predates 0252 (missing column).
-        if (line.lab.wcia_json_url && !labJsonUrlColumnMissing) labRow.wcia_json_url = line.lab.wcia_json_url;
+        // R50 S3b: the ONE native row builder (shared with the Cultivera
+        // transfer-file attach, cultivera-wcia-core.ts). R28: it keeps the
+        // transfer's lab_result_link (the lab JSON) so the certificate reader
+        // can follow it - sent only when present, and dropped once if the
+        // database predates 0252 (missing column).
+        const labRow = nativeLabRow(line.lab, parsed.source_format, actorId, { withJsonUrl: !labJsonUrlColumnMissing });
         let { data: lData, error: lErr } = await admin.from("lab_results").insert(labRow).select("id").single();
         if (lErr && "wcia_json_url" in labRow && isMissingColumnError(lErr)) {
           labJsonUrlColumnMissing = true;
