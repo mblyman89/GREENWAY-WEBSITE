@@ -261,6 +261,54 @@ and every Cultivera key is on it (hidden cards included: `publishedKeys` reads `
 | Vendor WCIA transfer JSON / lab JSON | S6/S9 | 619 of 644 transfers name a `JsonFile`; the crawler does not download it yet. Once a lab result is linked, "Re-read lab certificates" runs the native read + attach |
 | COA PDF | S6 | batch `ImagePath` |
 
+### 1.5c S3b research: the vendors' own WCIA transfer files are in Cultivera (2026-10-13, measured)
+
+**Found.** Every Cultivera transfer detail has `JsonFile` (a relative path such as `wa_pos/4355`) and
+`HasJsonFile`. The back office shows it with "Show Json", which calls the READ-ONLY query endpoint
+`POST data-api/transfers/incoming-load-wcia-json {Url: JsonFile}` (read in `cbo-app.bundle.js`,
+`transferService.getWciaJson`). It returns `{JsonFile: "<the vendor's WCIA transfer document, as text>"}`.
+This is the same document a vendor emails us on a native delivery, and the native parser
+(`intake-parser.ts parseVendorJson`) reads it unchanged.
+
+**Harvested** (owner's login, query host only, 0.6 s pace): 619 of 619 transfers that name a file, 620 calls
+(1 login), 0 errors, about 12 minutes. The files are kept outside the repo.
+
+| Measured | Value |
+|---|---|
+| Schema versions | 2.0.0 ×45, 2.1.0 ×365, 2.2.0 ×209 |
+| Lines | 15,451. On **619 of 619** files the WCIA line set equals Cultivera's transfer line set (barcode = WCIA `inventory_id`) |
+| Lines with lab data / COA PDF / lab JSON | 15,429 / 15,224 / 13,226 |
+| Distinct lab result ids / COA PDFs / lab JSONs | 8,400 / 8,580 / 7,564 |
+| Lab results marked failed | 1 |
+| Potency entries | thc, thca, cbd, cbda, total-cannabinoids on almost every line; `total-thc`/`total-cbd` on 7,175; minor cannabinoids (cbg, cbn, cbc, cbdv, thcv, cbga) and 52 named terpenes on 105 / 58 lines; heavy metals on 299 |
+| Also on the line | `strain_name` 15,370; `unit_weight` + uom; `serving_weight` 6,784; `product_sku` 5,862; `sample_collection_date` 5,205; `is_medical`, `is_sample`, `inventory_type` |
+| **Export lots (r2a) with a WCIA line** | **3,388 of 3,762**. Of those, 3,369 have lab data, 3,271 a COA PDF and 2,809 a lab JSON |
+| …whose COA or lab JSON is on a built-in COA host | 2,564 (COA 2,398, JSON 2,271). The rest are on 4 other lab hosts (growflow, googleapis, openthc, treeline) that the owner can allow in Testing labs (R36) |
+| Barcodes on more than one WCIA file | 385 (re-deliveries, §1.9) |
+
+**Join (measured, not assumed).** A rebuilt manifest carries `raw_payload.cultivera_transfer_id`. Its lots
+carry `lot_code` = Cultivera Barcode = WCIA `inventory_id` (probed on the harness: `lot_code` equals
+`ccrs_inventory_external_id` for import lots). So each lot gets **the line of its own transfer**, never a
+same-barcode line from a re-delivery.
+
+**What S3b does with it (the native shape, nothing new):**
+1. The crawler gains a `wcia_json` stage. It runs only for transfers a live lot references, is resumable
+   per id and pinned to the same guards. The importer persists one file per rebuilt manifest's transfer next
+   to the plan inputs (`pos-raw/rehome/<import>/wcia/<transferId>.json`, private bucket).
+2. **Start** first runs "attach the vendor's lab results". It parses the stored WCIA document with the
+   native parser, builds `lab_results` rows exactly as native intake does (`source "wcia-transfer"`,
+   potency, COA URL, release/expiry, `wcia_json_url`, deduped by lab id), and **fills `lab_result_id` only
+   where it is empty**. That is the guarded compare-and-set of `linkLotLabResult` (S37: never replaces a COA,
+   never on a destroyed lot). It writes no other lot column.
+3. Then the existing chain runs unchanged: seeding carries the lab potency onto the draft; COA archive →
+   LlamaParse/WCIA-JSON extract; lab facts (terpenes, cannabinoids, serving mg) → `attached_facts`; flower
+   terpenes → `kb_strains` (fill-only); KB promote + link; and on approval the golden record and the
+   onboarding memory.
+4. **Sellable stays sellable (verified in code):** lab pass/fail is read only by native finalize/activation
+   of a delivery that is not yet accepted (`finalize-label-core`, `lot-activation-gate-core`). A live lot's
+   `status` is never derived from it, and the menu never reads `lab_results.passed`. The inventory table
+   will show the COA ✅ and lab, which is now true.
+
 ### 1.6 Cultivera POS back office (from the PUBLIC client code only; no login was attempted)
 
 Sources: `https://wa.cultiverapos.com/scripts/app.bundle.js`, `/scripts/cbo-app.bundle.js`,
