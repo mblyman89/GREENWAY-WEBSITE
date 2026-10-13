@@ -219,7 +219,30 @@ export async function loadRehomeState(admin: Admin, importId: string, plannedKey
   return { importId, source, lots, existing: [...byId.values()] };
 }
 
-export type RehomePreview = { plan: RehomePlan; gate: ManifestPlanGate; state: RehomeState };
+export type RehomePreview = { plan: RehomePlan; gate: ManifestPlanGate; state: RehomeState; digest: string };
+
+/**
+ * Fingerprint of exactly what Apply would write: every planned manifest (key,
+ * reuse, row, lots), every move, the control totals and the refusals. The
+ * screen carries it from Preview to Apply; Apply refuses if the plan it
+ * recomputes is not the plan the manager approved.
+ */
+export function rehomePlanDigest(plan: RehomePlan): string {
+  const body = JSON.stringify({
+    ok: plan.ok,
+    refusals: plan.refusals,
+    totals: plan.totals,
+    // created_by / updated_by are who presses the button, not what is written about the stock.
+    manifests: plan.manifests.map((m) => {
+      const { created_by: _c, updated_by: _u, ...row } = m.row;
+      void _c;
+      void _u;
+      return [m.dedupeKey, m.existingId, row, [...m.lotIds].sort()];
+    }),
+    moves: plan.moves.map((b) => [b.targetDedupeKey, [...b.lotIds].sort()]),
+  });
+  return crypto.createHash("sha256").update(body).digest("hex");
+}
 
 /** Read-only: what Apply would do right now. */
 export async function previewRehome(
@@ -240,7 +263,7 @@ export async function previewRehome(
     gateProblems: gate.problems,
     actorId: opts.actorId ?? null,
   });
-  return { plan, gate, state };
+  return { plan, gate, state, digest: rehomePlanDigest(plan) };
 }
 
 export type RehomeApplyResult = {
@@ -268,10 +291,13 @@ export async function applyRehome(
   admin: Admin,
   importId: string,
   sources: RehomeSources,
-  opts: { actorId?: string | null } = {},
+  opts: { actorId?: string | null; expectedDigest?: string } = {},
 ): Promise<RehomeApplyResult> {
-  const { plan, state } = await previewRehome(admin, importId, sources, opts);
+  const { plan, state, digest } = await previewRehome(admin, importId, sources, opts);
   if (!plan.ok) throw new Error(`Re-home refused: ${plan.refusals.join("; ")}`);
+  if (opts.expectedDigest !== undefined && opts.expectedDigest !== digest) {
+    throw new Error("The plan changed since you previewed it (someone moved lots or created manifests). Nothing was written; review the new preview and apply again.");
+  }
   const actorId = opts.actorId ?? null;
 
   const manifestIdByKey = new Map<string, string>();
