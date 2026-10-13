@@ -24,6 +24,7 @@ const st = vi.hoisted(() => ({
   files: {} as Record<string, Buffer>,
   uploadFail: null as string | null,
   downloadFail: null as string | null,
+  attachThrow: false,
   audits: [] as Record<string, unknown>[],
   calls: [] as string[],
   labLinksAtSeed: -1,
@@ -82,6 +83,15 @@ vi.mock("@/lib/inventory/manifest-kb-bridge", () => ({
   promoteManifestToKb: async () => ({ ok: true, outcome: { promoted: 0, skipped: 0, strainsEnriched: 0, vendorLicenseFilled: false } }),
 }));
 vi.mock("@/lib/inventory/kb-link-store", () => ({ linkKbProductsToDrafts: async () => ({ status: "skipped" }) }));
+// Wraps the real store so one test can make it reject outright (Start must still go on).
+vi.mock("@/lib/inventory/cultivera-wcia-store", async (orig) => {
+  const real = (await orig()) as typeof import("@/lib/inventory/cultivera-wcia-store");
+  return {
+    ...real,
+    attachWciaLabResults: (...a: Parameters<typeof real.attachWciaLabResults>) =>
+      st.attachThrow ? Promise.reject(new Error("socket hang up")) : real.attachWciaLabResults(...a),
+  };
+});
 vi.mock("@/lib/catalog/lab-facts-attach", () => ({
   attachLabFactsToManifestDrafts: async () => ({ drafts: 0, attached: 0, facts: 0, noPanel: 0, kept: 0, strainsUpdated: 0, strainTerpenesAdded: 0, unmigrated: false, errors: [] }),
 }));
@@ -163,6 +173,7 @@ beforeEach(() => {
   st.files = {};
   st.uploadFail = null;
   st.downloadFail = null;
+  st.attachThrow = false;
   st.audits = [];
   st.calls = [];
   st.labLinksAtSeed = -1;
@@ -381,6 +392,25 @@ describe("C. Start runs it first", () => {
     expect(r.ok).toBe(true);
     expect(st.db.rows("manifest_events").some((e) => e.event_type === core.CULTIVERA_WCIA_EVENT)).toBe(false);
     if (r.ok) expect(r.note).not.toContain("Problems");
+  });
+
+  it("a thrown store failure is caught: Start still seeds and reports it", async () => {
+    putDoc([item("B1", "L1")]);
+    st.attachThrow = true;
+    st.db.rows("inventory_lots").push(lot(1, "B1"));
+    const r = await startCultiveraManifestOnboarding(M, ACTOR);
+    st.attachThrow = false;
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.note).toContain("vendor lab results: socket hang up");
+    expect(st.calls).toContain("seed");
+  });
+
+  it("a lot code with stray spaces still matches its transfer line", async () => {
+    putDoc([item("B1", "L1")]);
+    st.db.rows("inventory_lots").push(lot(1, " B1 "));
+    const r = await attachWciaLabResults(admin(), M, lineage, ACTOR);
+    expect(r.status).toBe("attached");
+    expect(r.linked).toBe(1);
   });
 
   it("an unreadable file is a reported problem, never a refused Start", async () => {
