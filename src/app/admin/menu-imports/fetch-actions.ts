@@ -22,6 +22,7 @@ import { cancelPosRun, isValidRunId, loadRunForImport, startPosRun } from "@/lib
 import { importDecision } from "@/lib/pos/cultivera-fetch-button-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { savePlanInputs } from "@/lib/inventory/cultivera-rehome-store";
+import { saveWciaFiles } from "@/lib/inventory/cultivera-wcia-store";
 
 const runHref = (id: string, q = "") => `/admin/menu-imports/fetch/${id}${q}`;
 const err = (m: string) => "?error=" + encodeURIComponent(m);
@@ -114,6 +115,19 @@ export async function importFetchAction(formData: FormData): Promise<void> {
       }
     }
 
+    // R50 S3b: the vendors' WCIA transfer files, one per transfer, for "Start" on each rebuilt
+    // manifest (lab results + certificates). Enrichment only: a failure is audited, never fatal.
+    let vendorFiles: Record<string, unknown> | null = null;
+    if (!isTest && (loaded.wcia.records.length > 0 || loaded.wcia.problem)) {
+      try {
+        const saved = loaded.wcia.records.length > 0 ? await saveWciaFiles(createSupabaseAdminClient(), importId, loaded.wcia.records) : null;
+        vendorFiles = { ...(saved ?? {}), problem: loaded.wcia.problem, file: loaded.wcia.file };
+      } catch (e) {
+        vendorFiles = { error: e instanceof Error ? e.message : String(e), problem: loaded.wcia.problem };
+        console.error("[menu-imports] could not save vendor transfer files:", e);
+      }
+    }
+
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -144,6 +158,7 @@ export async function importFetchAction(formData: FormData): Promise<void> {
             }
           : null,
         planInputs,
+        vendorFiles,
         items: result.version.item_count,
         variants: result.version.variant_count,
         errors: result.transform.diagnosticCounts.errors,

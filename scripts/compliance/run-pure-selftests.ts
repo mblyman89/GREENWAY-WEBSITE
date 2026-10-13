@@ -1528,7 +1528,7 @@ __runLiquidVolumeTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
-  assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 32);
+  assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
@@ -2247,7 +2247,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-rehome-core", __runCultiveraRehomeCoreTests(), 69); // R50 S2c: rebuild manifests + re-home lots (idempotent, guarded, control totals)
   assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
-  assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 33); // R50 S9: the button — run view, sha verify, import gate
+  assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 36); // R50 S9: the button — run view, sha verify, import gate
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

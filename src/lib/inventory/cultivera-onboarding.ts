@@ -11,6 +11,8 @@
  * with one difference - drafts are seeded in re-onboarding mode (one per live
  * card key; live price, no floor):
  *
+ *   0. attachWciaLabResults (R50 S3b): the vendor's lab results from the
+ *      manifest's own Cultivera transfer file, fill-only lab links.
  *   1. seedDraftsForManifest(..., { reonboard: true })   (concurrently with)
  *      archiveCoasForManifest -> extractCoasForManifest  (no-op until S6
  *                                                          links certificates)
@@ -52,6 +54,8 @@ import {
 } from "@/lib/catalog/attach-facts-core";
 import { identityForDraft } from "@/lib/catalog/product-identity-core";
 import { RECONSTRUCTED_MANIFEST_KIND } from "@/lib/inventory/cultivera-manifest-group-core";
+import { attachWciaLabResults } from "@/lib/inventory/cultivera-wcia-store";
+import { CULTIVERA_WCIA_EVENT, emptyWciaResult, wciaAttachNote, type WciaAttachResult } from "@/lib/inventory/cultivera-wcia-core";
 import {
   CULTIVERA_ONBOARDING_AUDIT,
   CULTIVERA_ONBOARDING_EVENT,
@@ -106,17 +110,33 @@ export async function startCultiveraManifestOnboarding(
   //    delivery at all. Unreadable = refuse (never guess which rules apply).
   const { data: mRow, error: mErr } = await admin
     .from("inbound_manifests")
-    .select("id, status, payload_kind:raw_payload->>kind")
+    .select("id, status, payload_kind:raw_payload->>kind, import_id:raw_payload->>import_id, cultivera_transfer_id:raw_payload->>cultivera_transfer_id")
     .eq("id", manifestId)
     .maybeSingle();
   if (mErr) return { ok: false, error: `The manifest could not be read: ${short(mErr)}` };
-  const m = mRow as { id: string; status: string | null; payload_kind: string | null } | null;
+  const m = mRow as {
+    id: string;
+    status: string | null;
+    payload_kind: string | null;
+    import_id?: string | null;
+    cultivera_transfer_id?: string | null;
+  } | null;
   if (!m) return { ok: false, error: "That manifest does not exist." };
   if (m.payload_kind !== RECONSTRUCTED_MANIFEST_KIND) {
     return { ok: false, error: "Only manifests rebuilt from the Cultivera export can be started here." };
   }
 
   const errors: string[] = [];
+
+  // 0b. R50 S3b: the vendor's own lab results, from the manifest's OWN Cultivera transfer file,
+  //     BEFORE the chain - so seeding, the certificate archive/read and the lab facts below see the
+  //     lab links exactly as on a received delivery. Fill-only; never throws (errors are reported).
+  const wcia = await attachWciaLabResults(admin, manifestId, m, actorId).catch(
+    (reason: unknown): WciaAttachResult => emptyWciaResult("error", [short(reason)]),
+  );
+  errors.push(...wcia.errors.map((e) => `vendor lab results: ${e}`));
+  const wciaNote = wciaAttachNote(wcia);
+  if (wciaNote) await logEvent(admin, manifestId, CULTIVERA_WCIA_EVENT, wciaNote, actorId);
 
   // 1. The native fan-out (same chores, same isolation as a finalize).
   const [draftsRes, coasRes, kbRes] = await Promise.allSettled([
@@ -193,6 +213,7 @@ export async function startCultiveraManifestOnboarding(
     kbLinked,
     labFacts,
     cultiveraFacts: cv.facts,
+    vendorLabLinked: wcia.linked,
     errors,
   });
   await logEvent(admin, manifestId, CULTIVERA_ONBOARDING_EVENT, note, actorId);
@@ -210,6 +231,14 @@ export async function startCultiveraManifestOnboarding(
       kb_linked: kbLinked,
       lab_facts: labFacts,
       cultivera_facts: cv.facts,
+      vendor_lab: {
+        status: wcia.status,
+        linked: wcia.linked,
+        created: wcia.created,
+        reused: wcia.reused,
+        skipped_changed: wcia.skippedChanged,
+        outcomes: wcia.outcomes,
+      },
       errors: errors.slice(0, 10),
       live_menu_changed: false,
     },
