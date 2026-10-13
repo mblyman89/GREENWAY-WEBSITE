@@ -157,9 +157,9 @@ read `inbound_manifests` were reviewed. The ones a rebuilt manifest would change
 
 | Reader | What would happen | S2c rule |
 |---|---|---|
-| Receiving list `listManifests` (newest 200 by `created_at`) | ~700 rows created at the run instant push every native delivery off the page on 11/01 | rebuilt manifests are left out of the Receiving work queue (null-safe kind filter); they are history, not work |
-| Stage counts `countManifestsByStatus` | "Accepted" jumps by ~700 | counted separately as "moved from Cultivera" |
-| Dock-to-shelf metric (`received_at` → `accepted_at`, last 90 days) | rebuilt rows would add fake 0-minute dock times | migration kinds excluded |
+| Receiving list `listManifests` (newest 200 by `created_at`) | ~700 rows created at the run instant push every native delivery off the page on 11/01 | **done (S2c)**: rebuilt manifests are left out of the Receiving work queue (null-safe kind filter); they are history, not work; the full intake export still includes them |
+| Stage counts `countManifestsByStatus` | "Accepted" jumps by ~700 | **done (S2c)**: counted separately (`migrated`), shown as "Moved from Cultivera" |
+| Dock-to-shelf metric (`received_at` → `accepted_at`, last 90 days) | rebuilt rows would add fake 0-minute dock times | **done (S2c)**: the rebuilt kind is excluded |
 | Onboarding picker (accepted in last 30 days) | the recent rebuilt manifests appear | WANTED (S3 enrichment through the native flow); S3 adds the "Cultivera manifests" section |
 | Payables, Sage, bill, receipt | money | already excluded (S2a) |
 | Per-manifest readers (`.eq("id", …)`: PO link, KB bridge, goldminer, brand) | only when someone opens that manifest | unchanged |
@@ -746,3 +746,48 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     shared predicate.
   * Migration 0244 is unchanged (see §1.3, which also records the S2c precondition).
   * Next is **S2c**: the executor that rebuilds manifests and re-homes lots.
+
+- **2026-10-13, S2c: rebuild the Cultivera manifests and re-home the lots (§1.3b).**
+  * **Executor.**
+    * The pure `cultivera-rehome-core.ts` (69 self-tests, runner floor 69) and the server `cultivera-rehome-store.ts`.
+    * Preview is read-only. Apply changes only `inventory_lots.manifest_id`, and every move is guarded by
+      `.eq("manifest_id", source.id)`. Manifest inserts are idempotent by `dedupe_key`.
+    * Control totals (lots, on-hand units, received units, cost value) are re-read after Apply. Event-insert
+      failures come back as `warnings`; they are never swallowed.
+  * **Apply runs only the plan you previewed.**
+    * `rehomePlanDigest` is a sha256 over the plan, independent of who runs it. Apply refuses if the plan changed.
+    * A manifest from elsewhere that already holds a planned key is caught in **preview** (`readManifestsByKeys`),
+      not at insert time.
+  * **Plan inputs persisted at import.**
+    * Fetch It All saves `pos-raw/rehome/<import>/plan-inputs.json` for real imports. It holds no prices and uses
+      the same harvest day as lot creation.
+    * Apply rebuilds its sources from the import's stored workbooks, with the same transform and sheet names as
+      lot creation. A missing or mismatched input fails closed.
+  * **Rollback.**
+    * It moves back only the barcodes in each manifest's `raw_payload->barcodes` lineage, in guarded batches of
+      150. It checks that every batch made progress, and refuses when lineage is missing.
+    * It deletes only empty rebuilt manifests of this import that have no work attached.
+  * **Screen.** `/admin/menu-imports/<id>/manifests` (`cultivera-rehome-ui-core.ts`, 13 self-tests) shows:
+    * stat cards, control totals, refusals and each exception code explained in plain words, and the largest
+      manifests;
+    * Apply/Resume and Rollback, both attested and audited (`cultivera_rehome.*`).
+    * The import page links to it.
+  * **Native readers (§1.3b), all done.** Rebuilt manifests are left out of:
+    * the Receiving queue (`listManifests`, unless `includeMigration`, which the full intake export sets);
+    * the stage counts, which gain `migrated`, shown on the intake page as "Moved from Cultivera";
+    * dock-to-shelf.
+
+    Each reader uses the null-safe server filter `NOT_REBUILT_OR` plus the same rule in code. The POS-IMPORT
+    manifest is unchanged (SLICE 58).
+  * **Measured on a real database** (PG15 + PostgREST, 3,762 lots, 679 rebuilt manifests; `scripts/recon/r50-s2c`):
+    * Apply: 679 created, 3,762 moved, about 3.0 s. Re-Apply is a no-op.
+    * Rollback restores the snapshot exactly.
+    * Crash and resume converge.
+    * A hand-placed native lot is kept (keptNonEmpty 1).
+    * Readers: the queue shows 3 of 682 rows, the export 682; counts are received 1, accepted 2, migrated 679.
+  * **Testing the tests:** `r50-cultivera-rehome.test.ts` (29) + `r50-rehome-readers.test.ts` (9, the real
+    PostgrestClient over the shared fake, which now emulates `or=`, JSON `neq`/`is.null` and `alias:col->>key`).
+    **23 / 23 mutants killed.** 32 suites that use the shared fake pass (851 tests), eslint 0, scoped tsc 0, all
+    pure self-tests pass.
+  * **Precondition (owner):** confirm migration 0244 is applied in production before the first Apply (§1.3).
+  * Next is **S3**: the onboarding "Cultivera manifests" section and `reonboard` drafts.

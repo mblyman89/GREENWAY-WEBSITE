@@ -74,3 +74,16 @@ The measured run is `hand-placed-rollback.sh`:
 
 The vitest suite (`tests/compliance/r50-cultivera-rehome.test.ts`, 22 tests) killed 23 of 23 mutants
 (`mutants-1/2/3.json`, run with `/workspace/r50/mutate.py`).
+
+## Native readers (§1.3b)
+
+`readers-probe.ts` calls the shipped `listManifests` and `countManifestsByStatus` against the applied harness
+(679 rebuilt manifests, plus one null-kind native manifest added for the probe and deleted afterwards).
+
+| Reader | Result |
+|---|---|
+| Receiving queue `listManifests()` | 3 rows: NOKIND-1, POS-IMPORT-5c2c0000, WCIA-NATIVE-1 (null kind kept, POS-IMPORT kept) |
+| Full export `listManifests({includeMigration})` | 682 rows |
+| `countManifestsByStatus()` | received 1, accepted 2, **migrated 679** |
+
+After the probe, the extra manifest was deleted and `rollback-probe.ts` restored the baseline (movedBack 3,762, deleted 679).
