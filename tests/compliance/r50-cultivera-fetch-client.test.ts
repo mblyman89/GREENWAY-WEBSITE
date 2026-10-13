@@ -49,7 +49,7 @@ const TRANSFER_5 = { Id: 5, TransferNumber: "M-5", FromVendor: "ACME LLC", Vendo
   DateAccepted: "2026-10-05T17:31:00Z", StatusDisplay: "Accepted", Details: [{ Barcode: "90000000000000000", AcceptedQuantity: 4, Quantity: 4, IsSample: false }] };
 const DETAILS = JSON.stringify(TRANSFER_5) + "\n";
 
-function makeRun(opts: { status?: string; finishedAt?: string; batches?: string; inventories?: string; details?: string | null } = {}): Files {
+function makeRun(opts: { status?: string; finishedAt?: string; batches?: string; inventories?: string; details?: string | null; sales?: string; salesSummary?: string } = {}): Files {
   const status = opts.status ?? "done";
   const finishedAt = opts.finishedAt ?? new Date(Date.now() - 10 * 60000).toISOString().replace(/\.\d+Z$/, "Z");
   const data: Files = {
@@ -59,6 +59,8 @@ function makeRun(opts: { status?: string; finishedAt?: string; batches?: string;
   };
   if (opts.batches !== undefined) data["batches.jsonl"] = Buffer.from(opts.batches);
   if (opts.details !== null) data["transfer_details.jsonl"] = Buffer.from(opts.details ?? DETAILS);
+  if (opts.sales !== undefined) data["sales.jsonl"] = Buffer.from(opts.sales);
+  if (opts.salesSummary !== undefined) data["sales_summary.json"] = Buffer.from(opts.salesSummary);
   const state = { status, finishedAt, seconds: 478.3, withinBudget: true, stages: {} };
   const manifest = { kind: "cultivera_pos_phase_a", status, finishedAt,
     files: Object.entries(data).sort().map(([name, b]) => ({ name, bytes: b.length, sha256: sha(b) })) };
@@ -192,10 +194,76 @@ describe("R50 S9: loadRunForImport against a fake crawler", () => {
     expect(r.assembled?.report.go).toBe(true);
   });
 
+  it("R50 S11: sales files listed → fetched, verified, raw bytes kept; never part of the import gate", async () => {
+    const sales = '{"Id":1,"Tsid":"90000000000000000","Units":1}\n';
+    const summary = JSON.stringify({ dateFrom: "2026-10-31", rows: 1, reconciled: true });
+    served = makeRun({ sales, salesSummary: summary });
+    const r = await load();
+    expect(r.verified).toBe(true);
+    expect(r.sales.problem).toBeNull();
+    expect(r.sales.lines?.toString()).toBe(sales);
+    expect(r.sales.summary?.toString()).toBe(summary);
+    expect(r.sales.files.map((f) => f.name)).toEqual(["sales.jsonl", "sales_summary.json"]);
+    expect(r.files.map((f) => f.name)).not.toContain("sales.jsonl");
+  });
+
+  it("R50 S11: a changed sales byte → sales refused with the reason, the import still verifies", async () => {
+    served = makeRun({ sales: '{"Id":1}\n', salesSummary: "{}" });
+    served["sales.jsonl"] = Buffer.from('{"Id":2}\n');
+    const r = await load();
+    expect(r.verified).toBe(true);
+    expect(r.sales.lines).toBeNull();
+    expect(r.sales.problem).toContain("sales.jsonl: checksum differs");
+  });
+
+  it("R50 S11: one sales file without its partner → refused; no sales files → nothing, no problem", async () => {
+    served = makeRun({ sales: '{"Id":1}\n' });
+    const r = await load();
+    expect(r.sales.lines).toBeNull();
+    expect(r.sales.problem).toContain("without its partner");
+    served = makeRun();
+    const r2 = await load();
+    expect(r2.sales).toEqual({ lines: null, summary: null, problem: null, files: [] });
+  });
+
+  it("R50 S11: loadRunLotList returns the verified list; a changed byte or an unfinished run throws", async () => {
+    const mod = await import("@/lib/pos/cultivera-fetch-client");
+    served = makeRun();
+    const ok = await mod.loadRunLotList(RID);
+    expect(ok.lots.map((l) => l.Barcode)).toEqual(["90000000000000000"]);
+    expect(ok.sha256).toBe(sha(served["inventories.json"]));
+    const b = Buffer.from(served["inventories.json"]);
+    b[b.length - 2] ^= 0x01;
+    served["inventories.json"] = b;
+    await expect(mod.loadRunLotList(RID)).rejects.toThrow("checksum differs");
+    served = makeRun({ status: "failed" });
+    await expect(mod.loadRunLotList(RID)).rejects.toThrow("not done");
+    served = makeRun({ inventories: JSON.stringify({ data: [] }) });
+    await expect(mod.loadRunLotList(RID)).rejects.toThrow("no lots");
+  });
+
   it("an invalid run id never reaches the crawler", async () => {
     const mod = await import("@/lib/pos/cultivera-fetch-client");
     await expect(mod.loadRunForImport("../../etc/passwd")).rejects.toThrow("Invalid run id");
     expect(await mod.getPosRun("x/../y")).toBeNull();
     expect(seen.length).toBe(0);
+  });
+});
+
+describe("R50 S11: startPosRun sends the sales day only when given", () => {
+  const bodies: unknown[] = [];
+  beforeEach(() => {
+    bodies.length = 0;
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body ?? "null")));
+      return new Response(JSON.stringify({ runId: RID, resumed: false }), { status: 202 });
+    });
+  });
+  it("fresh only / fresh + salesFrom / bad date never sent", async () => {
+    const mod = await import("@/lib/pos/cultivera-fetch-client");
+    await mod.startPosRun(true);
+    await mod.startPosRun(false, "2026-10-31");
+    await expect(mod.startPosRun(true, "10/31/2026")).rejects.toThrow("YYYY-MM-DD");
+    expect(bodies).toEqual([{ fresh: true }, { fresh: false, salesFrom: "2026-10-31" }]);
   });
 });
