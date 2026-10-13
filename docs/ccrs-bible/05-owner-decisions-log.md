@@ -212,3 +212,17 @@ Recorded consequences:
 | OD-3 | Approve the N-01 Area change (Quarantine→Hold FALSE) after examiner reply | changes what LCB sees |
 | OD-4 | Flip medical (Part 10) | licensing |
 | OD-5 | Who holds the PREprod / prod credentials and receives the LCB error email (the uploader is the only recipient `[FAQ L0102]`) | staffing |
+
+## D-17 — Sage will not be used; no accounting work now; POS readiness first (2026-10-13, R50 follow-up #7)
+
+(Appended after the open-decisions table because this log is append-only.)
+
+Owner, verbatim: *"As for the Sage decision, that's fine with me. Since we built our own books and accounting branch, I won't be using Sage going forward. So long as our bookkeeping and accounting system can manage them is all I need. But it's not ready for that yet, the books aren't ready yet, so I don't want to spend time on that right now. We need to make sure the pos system is ready to and working properly."*
+
+Recorded consequences:
+
+1. No new Sage export work. The existing Sage exports are left exactly as they are (standing rule: do not disturb accounting), including D-16's count exclusion.
+2. Accounting for migrated stock and the Oct 30 count moves to Greenway's own books when they are ready. Nothing is built for that now.
+3. Priority is the POS and the Cultivera menu upload pipeline for the 11/01 go-live.
+
+Owner, verbatim, same message: *"We currently use Cultivera for sales and returns. My Cultivera has both of these in the same sales file you will scrape with the crawler."* Recorded against U-48 (Part 12). It supports, but does not close, the reading of `ReturnUnits`.

@@ -221,7 +221,8 @@ function show(t: string): string {
 export function classifyTestScan(input: TestScanInput): TestScanVerdict {
   // Control characters never reach a text box from a keyboard-mode scanner. Drop them defensively.
   const text = String(input.text ?? "").replace(/[\u0000-\u001f\u007f]/g, "");
-  const extra = Math.max(0, Math.floor(input.extraEnters ?? 0));
+  // Only `extra > 0` matters, so a negative or NaN count simply means "no extra Enter".
+  const extra = Math.floor(input.extraEnters ?? 0);
 
   if (text.trim() === "") {
     return {
