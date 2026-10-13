@@ -41,6 +41,7 @@ import {
   savePlanInputs,
   previewRehome,
   readManifestsByKeys,
+  rehomePlanDigest,
   rollbackRehome,
   type RehomeSources,
 } from "../../src/lib/inventory/cultivera-rehome-store";
@@ -290,6 +291,23 @@ describe("cultivera-rehome store", () => {
     expect(a2.created).toBe(0);
     expect(a2.moved).toBe(0);
     expect(a2.reused).toBe(a.created);
+  });
+
+  it("Apply runs only the plan the manager previewed (digest); a changed plan writes nothing", async () => {
+    const { db, sources } = seed();
+    const p = await previewRehome(fakeAdmin(db), IMP, sources, { actorId: "u-1" });
+    expect(p.digest).toMatch(/^[0-9a-f]{64}$/);
+    expect((await previewRehome(fakeAdmin(db), IMP, sources, { actorId: "u-2" })).digest).toBe(p.digest);
+    // someone hand-moves a lot after the preview
+    db.inventory_lots.find((l) => l.id === "lot-c")!.manifest_id = "native-1";
+    const before = JSON.stringify(db);
+    await expect(applyRehome(fakeAdmin(db), IMP, sources, { expectedDigest: p.digest })).rejects.toThrow(/plan changed since you previewed/);
+    expect(JSON.stringify(db)).toBe(before);
+    const p2 = await previewRehome(fakeAdmin(db), IMP, sources);
+    expect(p2.digest).not.toBe(p.digest);
+    expect(rehomePlanDigest(p2.plan)).toBe(p2.digest);
+    const a = await applyRehome(fakeAdmin(db), IMP, sources, { expectedDigest: p2.digest });
+    expect(a.ok).toBe(true);
   });
 
   it("a manifest from elsewhere holding a planned dedupe key refuses in PREVIEW (nothing written)", async () => {
