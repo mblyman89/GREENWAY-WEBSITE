@@ -384,3 +384,28 @@ export async function loadCultiveraManifestSection(page: number): Promise<Cultiv
     pageCount: Math.max(1, Math.ceil(total / size)),
   };
 }
+
+/**
+ * Which of these manifests were rebuilt from the Cultivera export (their
+ * onboarding rows are already-selling cards: no price field, live price).
+ * On a read failure returns null - the page then shows the ordinary row, and
+ * the server still applies the right rule at approval (it re-reads the kind).
+ */
+export async function loadRebuiltManifestIds(ids: readonly (string | null)[]): Promise<Set<string> | null> {
+  const unique = Array.from(new Set(ids.filter((v): v is string => Boolean(v))));
+  const out = new Set<string>();
+  if (unique.length === 0 || !isSupabaseServiceConfigured) return out;
+  const admin = createSupabaseAdminClient();
+  const CHUNK = 150;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const { data, error } = await admin
+      .from("inbound_manifests")
+      .select("id, payload_kind:raw_payload->>kind")
+      .in("id", unique.slice(i, i + CHUNK));
+    if (error) return null;
+    for (const r of (data as { id: string; payload_kind: string | null }[] | null) ?? []) {
+      if (r.payload_kind === RECONSTRUCTED_MANIFEST_KIND) out.add(r.id);
+    }
+  }
+  return out;
+}

@@ -55,7 +55,9 @@ import {
 } from "@/lib/catalog/approved-row-core";
 import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { loadCultiveraManifestSection, loadRebuiltManifestIds } from "@/lib/inventory/cultivera-onboarding";
+import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
+import { startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -220,7 +222,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -269,6 +271,15 @@ export default async function CatalogDraftsPage({
   const pinned = focus.draftId ? listed.find((d) => d.id === focus.draftId) ?? null : null;
   const view = effectiveDraftView(focus, pinned);
   const drafts = listed.filter((d) => d.status === view);
+  // R50 S3: rows whose delivery was rebuilt from the Cultivera export (cards
+  // already selling) + the "Cultivera manifests" section. Both best-effort:
+  // a failed read shows the ordinary row / an honest error, and the server
+  // re-derives the rule at approval either way.
+  const [rebuiltIds, cvSection] = await Promise.all([
+    loadRebuiltManifestIds([...drafts.map((d) => d.manifest_id), focus.manifestId]),
+    focus.draftId ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
+  ]);
+  const focusIsRebuilt = Boolean(focus.manifestId && rebuiltIds?.has(focus.manifestId));
   // R32 (T-328): the CURRENT markup setting, so the price fine print is
   // recomputed live (never a stale frozen sentence) and drift is flagged.
   const pricingSettings = await getPricingSettings();
@@ -1076,6 +1087,112 @@ export default async function CatalogDraftsPage({
           </div>
         )}
 
+        {/* R50 S3: start a Cultivera-rebuilt manifest through Onboarding. */}
+        {sp.cv && (
+          <div
+            className={`rounded-[var(--admin-radius)] border px-4 py-2 text-sm ${
+              sp.cv === "ok"
+                ? "border-[var(--admin-accent)]/40 bg-[var(--admin-surface-2)] text-[var(--admin-text)]"
+                : "border-red-500/40 bg-red-500/10 text-red-300"
+            }`}
+            role="status"
+            data-testid="cultivera-onboarding-banner"
+          >
+            {sp.cv === "ok" ? "" : "Could not start this Cultivera manifest: "}
+            {(sp.cv_msg ?? "").slice(0, 600)}
+          </div>
+        )}
+        {focusIsRebuilt && focus.manifestId && (
+          <form
+            action={startCultiveraOnboardingAction.bind(null, focus.manifestId)}
+            className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-xs text-[var(--admin-text-muted)]"
+            data-testid="cultivera-focus-start"
+          >
+            <Button type="submit" variant="neutral" size="sm" data-testid="cultivera-focus-start-button">
+              Start / run again
+            </Button>
+            <span>
+              This manifest was rebuilt from the Cultivera export. Running it again adds any product not yet in
+              Onboarding and refreshes the knowledge base and facts. The live menu is never changed.
+            </span>
+          </form>
+        )}
+        {cvSection && (
+          <details
+            className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3 text-sm"
+            data-testid="cultivera-manifests"
+            open={Boolean(sp.cv_page)}
+          >
+            <summary className="cursor-pointer font-semibold">
+              Cultivera manifests{cvSection.ok ? ` (${cvSection.total})` : ""}
+            </summary>
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{CULTIVERA_SECTION_HELP}</p>
+            {!cvSection.ok ? (
+              <p className="mt-2 text-xs text-red-300" data-testid="cultivera-manifests-error">
+                The Cultivera manifests could not be read: {cvSection.error}
+              </p>
+            ) : cvSection.rows.length === 0 ? (
+              <p className="mt-2 text-xs text-[var(--admin-text-muted)]" data-testid="cultivera-manifests-empty">
+                No manifests have been rebuilt from the Cultivera export yet.
+              </p>
+            ) : (
+              <>
+                <table className="mt-2 w-full text-xs">
+                  <thead className="text-left text-[var(--admin-text-faint)]">
+                    <tr>
+                      <th className="py-1 pr-2">Manifest</th>
+                      <th className="py-1 pr-2">Vendor</th>
+                      <th className="py-1 pr-2">Received</th>
+                      <th className="py-1 pr-2">Lots</th>
+                      <th className="py-1 pr-2">Onboarding</th>
+                      <th className="py-1" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--admin-border)]">
+                    {cvSection.rows.map((r) => (
+                      <tr key={r.id} data-testid="cultivera-manifest-row" data-state={r.state}>
+                        <td className="py-1 pr-2 font-mono">
+                          <Link href={draftsHref({ manifestId: r.id })} className="underline">
+                            {r.number}
+                          </Link>
+                        </td>
+                        <td className="py-1 pr-2">{r.vendor}</td>
+                        <td className="py-1 pr-2">{r.day ?? "\u2014"}</td>
+                        <td className="py-1 pr-2">{r.lots}</td>
+                        <td className="py-1 pr-2">{r.stateLabel}</td>
+                        <td className="py-1 text-right">
+                          <form action={startCultiveraOnboardingAction.bind(null, r.id)}>
+                            <Button type="submit" variant="neutral" size="sm" data-testid="cultivera-start-button">
+                              {r.state === "not_started" ? "Start" : "Run again"}
+                            </Button>
+                          </form>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {cvSection.pageCount > 1 && (
+                  <nav className="mt-2 flex items-center gap-3 text-xs text-[var(--admin-text-muted)]" aria-label="Cultivera manifest pages">
+                    {cvSection.page > 1 && (
+                      <Link href={draftsHref({ extra: { cv_page: String(cvSection.page - 1) } })} className="underline">
+                        Previous
+                      </Link>
+                    )}
+                    <span>
+                      Page {cvSection.page} of {cvSection.pageCount}
+                    </span>
+                    {cvSection.page < cvSection.pageCount && (
+                      <Link href={draftsHref({ extra: { cv_page: String(cvSection.page + 1) } })} className="underline">
+                        Next
+                      </Link>
+                    )}
+                  </nav>
+                )}
+              </>
+            )}
+          </details>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-2 text-sm">
           {(["draft", "approved", "dismissed"] as const).map((s) => (
@@ -1224,6 +1341,8 @@ export default async function CatalogDraftsPage({
                   const defaultPrice =
                     (d.price_minor_units ?? d.suggested_price_minor_units ?? d.price_floor_minor_units ?? 0) / 100;
                   const floorDollars = d.price_floor_minor_units != null ? d.price_floor_minor_units / 100 : undefined;
+                  // R50 S3: a card already selling (Cultivera-rebuilt delivery).
+                  const rowRebuilt = Boolean(d.manifest_id && rebuiltIds?.has(d.manifest_id));
                   // SLICE 64: OUR classification verdict for this row. The
                   // approver's own picks (approved rows) outrank the machine.
                   const a = assessments.get(d.id);
@@ -1692,6 +1811,18 @@ export default async function CatalogDraftsPage({
                                 {/* T-314 lookup: inside the form only on the previous row
                                     (ONBOARDING_V2_ROW=off); S11 mounts it above the form. */}
                                 {!v2Row && lookupPanel}
+                                {rowRebuilt ? (
+                                  <div className="flex flex-wrap items-center gap-2" data-testid="cultivera-approve">
+                                    <input type="hidden" name="reonboard" value="1" />
+                                    <span className="rounded-full bg-[var(--admin-surface-2)] px-2 py-0.5 text-xs font-semibold" data-testid="cultivera-row-badge">
+                                      {CULTIVERA_ROW_BADGE}
+                                    </span>
+                                    <span className="text-xs text-[var(--admin-text-muted)]">
+                                      Live price {d.suggested_price_minor_units != null ? fmtMoney(d.suggested_price_minor_units) : "differs by size"}; approving keeps it and does not change the menu.
+                                    </span>
+                                    <Button type="submit" variant="save" size="sm">{"\u2713"} Approve</Button>
+                                  </div>
+                                ) : (<>
                                 <FieldLabel on={v2Row} htmlFor={`price-${d.id}`}>Menu price</FieldLabel>
                                 <div className={v2Row ? "flex flex-wrap items-center gap-2" : "flex items-center gap-2"}>
                                   <div className="flex items-center gap-1">
@@ -1713,6 +1844,7 @@ export default async function CatalogDraftsPage({
                                     Floor {fmtMoney(d.price_floor_minor_units)} {"\u00b7"} AI suggests {fmtMoney(d.suggested_price_minor_units)}
                                   </p>
                                 )}
+                                </>)}
                               </form>
                   );
                   return (
