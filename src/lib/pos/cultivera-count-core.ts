@@ -30,6 +30,12 @@
  */
 
 import { normalizeScan } from "@/lib/inventory/cycle-count-scan-core";
+import { TEST_BARCODE, isScannerCommandText } from "@/lib/pos/scanner-setup-core";
+
+/** A scanner setup command, or the count page's TEST barcode (R50 S11b). Never a product. */
+export function isScannerSetupText(code: string): boolean {
+  return code === TEST_BARCODE || isScannerCommandText(code);
+}
 
 // ---------------------------------------------------------------------------
 // Workbook spec (shared by the generator and the parser — one source of truth)
@@ -73,7 +79,8 @@ export type CountProblem = {
     | "hand_missing_barcode"
     | "duplicate_workbook"
     | "duplicate_file"
-    | "mixed_count_date";
+    | "mixed_count_date"
+    | "scanner_text";
   sheet?: string;
   row?: number; // 1-based spreadsheet row
   value?: string;
@@ -167,6 +174,18 @@ export function parseCountWorkbook(input: { fileName: string; sha256: string; ce
           row: r + 1,
           value: code,
           message: `${input.fileName} Scan row ${r + 1}: "${code}" is not a barcode any more (Excel turned it into a number). Re-scan that item.`,
+        });
+        continue;
+      }
+      if (isScannerSetupText(code)) {
+        // R50 S11b: a setup barcode or the page's TEST barcode typed into the sheet is never a unit.
+        out.problems.push({
+          severity: "warning",
+          code: "scanner_text",
+          sheet: S.scanSheet,
+          row: r + 1,
+          value: code,
+          message: `${input.fileName} Scan row ${r + 1}: "${code}" is a scanner setup or TEST barcode, not a product. It was not counted.`,
         });
         continue;
       }
@@ -709,6 +728,11 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(isMangledScan("8.71E+18") && isMangledScan("1.23457e+16") && !isMangledScan("12E3") && !isMangledScan("1E5") && isMangledScan("1,234,567") && !isMangledScan("8710000000000001234") && !isMangledScan("1E5X"), "mangled detection");
   const m = book("wb-m", "C", ["8.71E+18"]);
   ok(m.problems.length === 1 && m.problems[0].code === "scan_mangled" && m.problems[0].row === 2 && m.scanCount === 0, "mangled scan is blocking, row reported, not counted");
+  // R50 S11b: a TEST barcode or a setup command typed into the Scan sheet is a warning and never a unit.
+  const st = book("wb-st", "C", ["GWtest-0123456789", "%%SpecCode9C", "#FNB00F40001#", "8710000000000001234", "GWtest-01234567890"]);
+  ok(st.scanCount === 2 && st.scans.get("8710000000000001234") === 1 && st.scans.get("GWtest-01234567890") === 1, "setup/TEST text not counted; look-alikes are");
+  ok(st.problems.length === 3 && st.problems.every((p) => p.code === "scanner_text" && p.severity === "warning") && st.problems[0].row === 2, "setup/TEST text is a warning with its row");
+  ok(isScannerSetupText("GWtest-0123456789") && isScannerSetupText("%%SpecCodeA8") && !isScannerSetupText("8710000000000001234"), "isScannerSetupText");
   const badQty = book("wb-q", "C", [], [["x", "1.5"], ["", "2"], ["y", "-1"], ["z", "0"]]);
   ok(badQty.problems.filter((p) => p.code === "hand_bad_qty").length === 2 && badQty.problems.some((p) => p.code === "hand_missing_barcode") && badQty.hand.get("z") === 0, "hand qty must be whole ≥0; qty without barcode refused; 0 allowed");
   const foreign = parseCountWorkbook({ fileName: "x.xlsx", sha256: "s", cells: { sheets: { Sheet1: [["a"]] } } });
