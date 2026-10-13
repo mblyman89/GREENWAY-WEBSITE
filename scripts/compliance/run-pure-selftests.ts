@@ -728,6 +728,7 @@ import { __runCultiveraKbLinkCoreTests } from "../../src/lib/purchasing/cultiver
 import { __runGrowflowMenuUiCoreTests } from "../../src/lib/purchasing/growflow-menu-ui-core";
 import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-autosave-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
+import { __runCultiveraOnboardingCoreTests } from "../../src/lib/inventory/cultivera-onboarding-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
 import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
@@ -1525,6 +1526,7 @@ __runLiquidVolumeTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
+  assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 50);
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
