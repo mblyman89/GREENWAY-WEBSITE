@@ -35,16 +35,14 @@ import {
   type ReconcileReport,
 } from "@/lib/pos/cultivera-fetch-core";
 import { transformWorkbooks } from "@/lib/pos/transform";
-import { cultiveraVendorKey } from "@/lib/inventory/cultivera-manifest-group-core";
 import {
-  planTransferManifests,
   transferIndexFromDetails,
   linksFromListLots,
-  manifestPlanGate,
   type TransferMatchPlan,
   type ManifestPlanGate,
 } from "@/lib/inventory/cultivera-transfer-match-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { planFromSources } from "@/lib/inventory/cultivera-rehome-core";
 
 export const ASSEMBLED_INVENTORY_SHEET = "Inventories";
 export const ASSEMBLED_PRODUCT_SHEET = "Sheet1";
@@ -236,25 +234,10 @@ export function buildManifestPlanReport(
   transferDetails: readonly unknown[],
   pacificToday: string,
 ): ManifestPlanReport {
-  const rows = lotSources.map((s) => ({
-    barcode: s.barcode,
-    vendor: s.vendor,
-    receivedDateRaw: s.receivedDateRaw,
-    units: s.units,
-    productName: s.productName,
-  }));
   const idx = transferIndexFromDetails(transferDetails);
   const links = linksFromListLots(listLots);
-  const plan = planTransferManifests(rows, idx.transfers, { pacificToday, links });
-  const vendorOf = new Map<string, string>();
-  for (const r of rows) {
-    const b = (r.barcode ?? "").trim();
-    if (b && !vendorOf.has(b)) vendorOf.set(b, cultiveraVendorKey(r.vendor));
-  }
-  const gate = manifestPlanGate(plan, vendorOf, links);
-  const problems = [...gate.problems];
-  if (idx.skipped > 0) problems.push(`${idx.skipped} transfer records without an id`);
-  const finalGate = problems.length === gate.problems.length ? gate : { ...gate, pass: false, problems, detail: `${gate.detail}; ${idx.skipped} transfer records without an id` };
+  // R50 S2c: ONE planner for the preview and Apply (cultivera-rehome-core planFromSources).
+  const { plan, gate: finalGate } = planFromSources(lotSources, idx.transfers, links, pacificToday, idx.skipped);
   const biggest = [...plan.transferGroups]
     .sort((a, b) => b.barcodes.length - a.barcodes.length || a.transferId - b.transferId)
     .slice(0, 10)

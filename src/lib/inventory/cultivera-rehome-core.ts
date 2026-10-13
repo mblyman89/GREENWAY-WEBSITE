@@ -21,14 +21,21 @@ import {
   DEFAULT_GAP_MINUTES,
   RECONSTRUCTED_MANIFEST_KIND,
   buildReconstructedLineage,
+  cultiveraVendorKey,
   reconstructedDedupeKey,
   reconstructedGroupTitle,
   type ReconstructedGroup,
 } from "@/lib/inventory/cultivera-manifest-group-core";
 import {
   buildTransferLineage,
+  linksFromListLots,
+  manifestPlanGate,
+  planTransferManifests,
   transferDedupeKey,
+  transferIndexFromDetails,
+  type ManifestPlanGate,
   type TransferGroup,
+  type TransferIndexEntry,
   type TransferMatchPlan,
 } from "@/lib/inventory/cultivera-transfer-match-core";
 
@@ -90,6 +97,96 @@ export function transferDateDay(raw: string | null | undefined): string | null {
   }
   const iso = normalizeUtcInstant(s);
   return iso ? pacificDayOfInstant(iso) : null;
+}
+
+/* ------------------------------------------------------------------ *
+ * The plan, from the same sources the import used
+ * ------------------------------------------------------------------ */
+
+/** The lot-source fields the plan reads (transform.ts `lotSources`). */
+export type PlanLotSource = { barcode: string; vendor: string; receivedDateRaw: string | null; units: number; productName: string };
+
+/**
+ * The plan's non-workbook inputs, persisted at import time so Apply can run
+ * after the crawler prunes the run (it keeps 12). No prices: the transfer
+ * index carries barcodes, quantities and dates only (same as TRANSFERS_INDEX).
+ */
+export type RehomePlanInputs = {
+  version: 1;
+  importId: string;
+  runId: string;
+  pacificToday: string;
+  transfers: TransferIndexEntry[];
+  /** [barcode, IncomingTransferId[]] from the list API. */
+  links: [string, number[]][];
+  indexSkipped: number;
+  indexDuplicates: number;
+};
+
+export function buildPlanInputs(args: {
+  importId: string;
+  runId: string;
+  pacificToday: string;
+  transferDetails: readonly unknown[];
+  listLots: readonly { Barcode?: unknown; IncomingTransferId?: unknown }[];
+}): RehomePlanInputs {
+  const idx = transferIndexFromDetails(args.transferDetails);
+  const links = [...linksFromListLots(args.listLots).entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return {
+    version: 1,
+    importId: args.importId,
+    runId: args.runId,
+    pacificToday: args.pacificToday,
+    transfers: idx.transfers,
+    links,
+    indexSkipped: idx.skipped,
+    indexDuplicates: idx.duplicates,
+  };
+}
+
+/** Problems with a persisted inputs file (empty = usable for this import). */
+export function checkPlanInputs(raw: unknown, importId: string): string[] {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Partial<RehomePlanInputs>;
+  const out: string[] = [];
+  if (o.version !== 1) out.push("unknown plan-inputs version");
+  if (o.importId !== importId) out.push("the saved plan inputs belong to another import");
+  if (typeof o.pacificToday !== "string" || !DAY_RE.test(o.pacificToday)) out.push("the saved plan inputs have no harvest day");
+  if (!Array.isArray(o.transfers)) out.push("the saved plan inputs have no transfers");
+  if (!Array.isArray(o.links)) out.push("the saved plan inputs have no links");
+  return out;
+}
+
+export type PlanFromSources = { plan: TransferMatchPlan; gate: ManifestPlanGate };
+
+/**
+ * THE plan: planTransferManifests + manifestPlanGate over the transform's
+ * lot sources. The Fetch It All preview (buildManifestPlanReport) and Apply
+ * both call this, so what the manager approved is what runs.
+ */
+export function planFromSources(
+  lotSources: readonly PlanLotSource[],
+  transfers: readonly TransferIndexEntry[],
+  links: ReadonlyMap<string, readonly number[]>,
+  pacificToday: string,
+  indexSkipped = 0,
+): PlanFromSources {
+  const rows = lotSources.map((s) => ({
+    barcode: s.barcode,
+    vendor: s.vendor,
+    receivedDateRaw: s.receivedDateRaw,
+    units: s.units,
+    productName: s.productName,
+  }));
+  const plan = planTransferManifests(rows, transfers, { pacificToday, links });
+  const vendorOf = new Map<string, string>();
+  for (const r of rows) {
+    const b = (r.barcode ?? "").trim();
+    if (b && !vendorOf.has(b)) vendorOf.set(b, cultiveraVendorKey(r.vendor));
+  }
+  const gate = manifestPlanGate(plan, vendorOf, links);
+  if (indexSkipped <= 0) return { plan, gate };
+  const problems = [...gate.problems, `${indexSkipped} transfer records without an id`];
+  return { plan, gate: { ...gate, pass: false, problems, detail: `${gate.detail}; ${indexSkipped} transfer records without an id` } };
 }
 
 /* ------------------------------------------------------------------ *
@@ -701,6 +798,22 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   ok(verifyRehome({ before: p.totals, afterLots: base().lots, manifestIdByKey: ids, plan: p, sourceId: "src" }).some((x) => x.includes("not on their planned")), "verify catches unmoved lots");
   ok(verifyRehome({ before: p.totals, afterLots: after.slice(1), manifestIdByKey: ids, plan: p, sourceId: "src" }).some((x) => x.includes("lot count")), "verify catches a lost lot");
   ok(verifyRehome({ before: p.totals, afterLots: after, manifestIdByKey: new Map(), plan: p, sourceId: "src" }).some((x) => x.includes("was not created")), "verify catches a missing manifest");
+
+  // Plan inputs (persisted for Apply) + the shared planner
+  const details = [
+    { Id: 11, TransferNumber: "0001234567", FromVendor: "Grow  Co", TransferDate: "2024-08-30T15:00:00Z", DateAccepted: "2024-08-30T18:56:03.507Z", StatusDisplay: "Accepted", Details: [{ Barcode: "A", AcceptedQuantity: 5, Quantity: 5, UnitPrice: 9.99 }] },
+    { TransferNumber: "no id" },
+  ];
+  const inputs = buildPlanInputs({ importId: "imp-1", runId: "r1", pacificToday: "2024-09-01", transferDetails: details, listLots: [{ Barcode: "A", IncomingTransferId: 11 }, { Barcode: "B" }] });
+  ok(inputs.transfers.length === 1 && inputs.indexSkipped === 1 && inputs.links.length === 1 && inputs.links[0][0] === "A", "plan inputs: transfers, skipped, links");
+  ok(!JSON.stringify(inputs).includes("9.99") && !JSON.stringify(inputs).includes("UnitPrice"), "plan inputs carry no prices");
+  ok(checkPlanInputs(inputs, "imp-1").length === 0, "plan inputs valid for own import");
+  ok(checkPlanInputs(inputs, "imp-2").length === 1 && checkPlanInputs(null, "imp-1").length === 5, "plan inputs refused for other import / garbage");
+  const src = [{ barcode: "A", vendor: "Grow Co", receivedDateRaw: "2024-08-30 12:00:00.000", units: 5, productName: "Thing" }];
+  const pf = planFromSources(src, inputs.transfers, new Map(inputs.links), inputs.pacificToday);
+  ok(pf.plan.transferGroups.length === 1 && pf.plan.transferGroups[0].barcodes.join() === "A" && pf.gate.pass, "planFromSources matches the transfer and passes");
+  const pfSkip = planFromSources(src, inputs.transfers, new Map(inputs.links), inputs.pacificToday, inputs.indexSkipped);
+  ok(!pfSkip.gate.pass && pfSkip.gate.problems.some((x) => x.includes("without an id")), "skipped transfer records fail the gate");
 
   return { passed, failed };
 }
