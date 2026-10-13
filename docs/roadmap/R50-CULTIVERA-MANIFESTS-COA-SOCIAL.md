@@ -166,6 +166,37 @@ Clarification #3 (verbatim, same day):
 > idea what's going on in Cultivera until the web crawler logs into my Cultivera back office and scrapes the data
 > to use. We are building a Cultivera menu upload pipeline. Please stop drifting! Please continue.
 
+Clarification #4 (verbatim, 2026-10-13):
+
+> Sorry to stop you. I don't need you over thinking the sales interfering counts. We will count the back stock
+> inventory while we are open, no pulling inventory during this period, so nothing leaves the back inventory stock
+> room on the 30th. We will have the back stock room counted before 6pm. We will close early at 6pm and then proceed
+> to count the front sales floor. There will be no offsetting needed or logic regarding that. There will be no
+> collisions between counts and sales. We only need to reconcile for the sales done on the 31st. Also to help you
+> find where the sales data is on Cultivera's back office, the url for it is, wa.cultivera.com/cbo/#/rpt/sales-details.
+> The url for finding the COAs is wa.cultivera.com/cbo/#/inv/incoming-transfers/inbound transfer id goes here/detail.
+> The "inbound transfer id" is just a number, no spaces or other characters. The products can be found at,
+> wa.cultivera.com/cbo/#/inv/products, and inventories at, wa.cultivera.com/cbo/#/inv/inventorie, So please record
+> those URLs for the crawler. Then continue with building without worrying about adjusting quantity while selling.
+> I will make it as simple as possible to avoid accidents. I want pristine data and absolute accuracy. Follow the
+> standing rules and never guess, never assume. Push work often, the sandbox is very unstable. Protect it at all costs.
+
+What this decides (S11): the count is final when the floor count ends on 10/30 (back stock is frozen while it is
+counted; the floor is counted after the 6 pm close). The ONLY roll-forward is Cultivera's 10/31 sales: rolled =
+counted − net sold on 10/31. No during-count or in-flight logic.
+
+The owner's back-office pages → the read-only data calls the crawler makes for them (measured in
+`cbo-app.bundle.js`, 2026-10-13: route → controller → service → endpoint). DNS note, measured the same day: the
+host `wa.cultivera.com` does not resolve from the sandbox; the back office answers at `https://wa.cultiverapos.com/cbo/`
+(the same app; its data host is `api-wa.cultiverapos.com`). The owner's paths are recorded exactly as given:
+
+| Owner's page (`#/` route) | Route in the bundle | Controller | Data call the crawler makes (stage) |
+|---|---|---|---|
+| `cbo/#/rpt/sales-details` | `/rpt/sales-details/:dateFrom?/:dateTo?/:inventoryTypeId?/:categoryId?` | `salesDailyDetailsController` | POST `data-api/reports/daily-sales-detail` (grid) + POST `data-api/reports/sales-details-summary` (totals) — stage `sales` |
+| `cbo/#/inv/incoming-transfers/<id>/detail` (id = digits only) | `/inv/incoming-transfers/:incomingId/detail` | `incomingDetailController` | GET `data-api/transfers/incoming/<id>/detail` (stage `transfer_details`) + POST `data-api/transfers/incoming-load-wcia-json` `{Url: JsonFile}` (stage `wcia_json`, the COA/lab file) |
+| `cbo/#/inv/products` | `/inv/products` | `productsController` | POST `data-api/products/export-products` (stage `export_products`) |
+| `cbo/#/inv/inventorie[s]` | `/inv/inventories/:inboundTransferId?` | `inventoriesController` | POST `data-api/inventories/export-inventories-to-excel` (stage `export_inventories`) + POST `data-api/inventories` (stage `inventory_list`) |
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
