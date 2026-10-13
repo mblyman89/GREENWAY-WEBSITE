@@ -92,6 +92,16 @@ import { __runReceivingTableCoreTests } from "../../src/lib/inventory/receiving-
 import { loadReceivingCultiveraRows } from "../../src/lib/inventory/receiving-cultivera-store";
 import { RECONSTRUCTED_MANIFEST_KIND } from "../../src/lib/inventory/cultivera-manifest-group-core";
 import { setManifestPoLink } from "../../src/lib/inventory/po-link-store";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ReceivingFilterBar } from "@/components/admin/inventory/ReceivingFilterBar";
+import { CultiveraManifestTable } from "@/components/admin/inventory/CultiveraManifestTable";
+import {
+  parseReceivingFilters,
+  receivingViewLinks,
+  cultiveraTableRows,
+  summarizeCultivera,
+} from "../../src/lib/inventory/receiving-table-core";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -236,5 +246,83 @@ describe("R50 S10a — a rebuilt manifest opens safely", () => {
     const r = await setManifestPoLink("m1", "po1", "u1");
     expect(r).toEqual({ ok: true });
     expect(st.updates).toEqual([{ purchase_order_id: "po1", updated_by: "u1" }]);
+  });
+});
+
+describe("R50 S10a — rendered HTML", () => {
+  const f = parseReceivingFilters({ view: "cultivera", status: "not_complete", vendor: "Ace" });
+  const links = receivingViewLinks(f, { processed: 2, cultivera: 3 });
+
+  it("the filter bar renders three views, the Cultivera status choices, and keeps the view in the form", () => {
+    const html = renderToStaticMarkup(
+      createElement(ReceivingFilterBar, { filters: f, viewLinks: links, vendors: ["Ace", "Zed"], summary: "Showing 1 of 3.", capNote: null }),
+    );
+    expect(html).toContain('href="/admin/inventory/intake"');
+    expect(html).toContain('href="/admin/inventory/intake?view=all"');
+    expect(html).toContain('href="/admin/inventory/intake?view=cultivera"');
+    expect(html).toMatch(/data-testid="receiving-view-cultivera"[^>]*aria-current="page"|aria-current="page"[^>]*data-testid="receiving-view-cultivera"/);
+    expect(html).toContain('<input type="hidden" name="view" value="cultivera"/>');
+    expect(html).toContain("Not complete (needs attention)");
+    expect(html).not.toContain("In transit, past ETA");
+    expect(html).not.toContain("ETA (soonest first)");
+    expect(html).toContain('<option value="not_complete" selected="">');
+    expect(html).toContain('<option value="Ace" selected="">');
+    expect(html).toContain("Clear filters");
+  });
+
+  it("the native view hides the view input and offers the delivery statuses", () => {
+    const nf = parseReceivingFilters({});
+    const html = renderToStaticMarkup(
+      createElement(ReceivingFilterBar, { filters: nf, viewLinks: receivingViewLinks(nf, { processed: 0, cultivera: null }), vendors: [], summary: null, capNote: "cap!" }),
+    );
+    expect(html).not.toContain('name="view"');
+    expect(html).toContain("In transit, past ETA");
+    expect(html).not.toContain("Clear filters");
+    expect(html).toContain("cap!");
+  });
+
+  it("the Cultivera table shows Complete / Needs attention / Unknown and opens the manifest page", () => {
+    const base = { stateLabel: "x", inReview: 0, approved: 0, day: "Jul 1, 2024", lots: 4 } as const;
+    const rows = cultiveraTableRows(
+      [
+        { ...base, id: "11111111-1111-4111-8111-111111111111", number: "CV-1", vendor: "Ace", state: "done" },
+        { ...base, id: "22222222-2222-4222-8222-222222222222", number: "CV-2", vendor: "Ace", state: "not_started" },
+      ],
+      new Map(),
+      true,
+    );
+    const html = renderToStaticMarkup(
+      createElement(CultiveraManifestTable, {
+        load: { ok: true, rows, tallyRead: true, truncated: false },
+        rows,
+        summary: summarizeCultivera(rows),
+        filters: f,
+        page: 1,
+        pageCount: 2,
+      }),
+    );
+    expect(html).toContain('data-completion="complete"');
+    expect(html).toContain('data-completion="not_complete"');
+    expect(html).toContain("Needs attention");
+    expect(html).toContain('href="/admin/inventory/intake/11111111-1111-4111-8111-111111111111"');
+    expect(html).toContain("manifest=22222222-2222-4222-8222-222222222222");
+    expect(html).toContain("Start onboarding");
+    expect(html).toContain("1 need attention");
+    expect(html).toContain("1 complete");
+    expect(html).toContain("page=2");
+  });
+
+  it("an unread tally renders Unknown and the warning; a failed read renders the error", () => {
+    const rows = cultiveraTableRows([{ stateLabel: "u", inReview: 0, approved: 0, day: null, lots: null, id: "a", number: "CV-9", vendor: "V", state: "not_started" }], new Map(), false);
+    const html = renderToStaticMarkup(
+      createElement(CultiveraManifestTable, { load: { ok: true, rows, tallyRead: false, truncated: false }, rows, summary: summarizeCultivera(rows), filters: f, page: 1, pageCount: 1 }),
+    );
+    expect(html).toContain('data-completion="unknown"');
+    expect(html).toContain("cultivera-receiving-tally-error");
+    expect(html).not.toContain("Needs attention</span>");
+    const err = renderToStaticMarkup(
+      createElement(CultiveraManifestTable, { load: { ok: false, error: "boom" }, rows: [], summary: null, filters: f, page: 1, pageCount: 1 }),
+    );
+    expect(err).toContain("could not be read: boom");
   });
 });
