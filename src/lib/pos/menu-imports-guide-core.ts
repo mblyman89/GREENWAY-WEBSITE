@@ -422,7 +422,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(fr({ view: { status: "running", canImport: false } }).tone === "wait", "running waits");
   ok(fr({ view: { status: "failed", canImport: false } }).text.includes("Resume"), "failed resumes");
   ok(fr({ view: { status: "cancelled", canImport: false } }).text.includes("Resume"), "cancelled resumes");
-  ok(fr({ view: { status: "unknown", canImport: false } }).text.includes("fresh fetch"), "unknown → fresh");
+  ok(fr({ view: { status: "unknown", canImport: false } }).text.includes("status we don't recognize"), "unknown → own wording");
   ok(fr({ view: { status: "done", canImport: false } }).text.includes("required stage is missing"), "done short → fresh");
   ok(fr({ checkError: "boom" }).text.includes("checking its files failed"), "check error");
   ok(fr({ checked: false }).text.includes("has not run"), "unchecked never says GO");
