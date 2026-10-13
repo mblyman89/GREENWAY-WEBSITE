@@ -733,6 +733,7 @@ import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-w
 import { __runCultiveraCardRefreshCoreTests } from "../../src/lib/inventory/cultivera-card-refresh-core";
 import { __runCultiveraReceivedFlagCoreTests } from "../../src/lib/inventory/cultivera-received-flag-core";
 import { __runReceivingTableCoreTests } from "../../src/lib/inventory/receiving-table-core";
+import { __runCcrsMigrationGarbageCoreTests } from "../../src/lib/compliance/ccrs-migration-garbage-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
 import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
@@ -1535,6 +1536,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   assertRan("receiving-table-core", __runReceivingTableCoreTests(), 88); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
+  assertRan("ccrs-migration-garbage-core", __runCcrsMigrationGarbageCoreTests(), 52); // R50 S10c (D-15): migrated garbage → CCRS clean-up
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
