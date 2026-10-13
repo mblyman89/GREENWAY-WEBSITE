@@ -1,0 +1,9 @@
+R50 S3 real-DB probe (harness PG15 + PostgREST, rebuilt manifest CV-S3-PROBE, 5 borrowed lots)
+START#1 ok seeded=3 (1 more lot of the same card), 3 saved to KB, 3 linked, 3 Cultivera potency facts, 339 ms, live menu not changed
+START#2 ok seeded=0 (3 already waiting in review) -> idempotent
+START-NATIVE refused: "Only manifests rebuilt from the Cultivera export can be started here."
+APPROVE a/b/c ok; recorded prices a=2500 (live), b=null (two live prices -> none recorded), c=1500 (live); kb_product_id set on all
+STAGE staged=false reason=migration-manifest (live menu never staged from a rebuilt manifest)
+SECTION "Done: 3 approved"
+PROV 3 provenance rows (source cultivera)
+After undo.sql: inventory_lots md5 9fc9c2dcbd8e3b66eafe38d612ff3d69 (== before), kb_strains md5 unchanged, kb_products 0
