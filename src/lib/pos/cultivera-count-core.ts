@@ -322,16 +322,34 @@ export function parseSaleLine(raw: Record<string, unknown>): { ok: true; line: C
 }
 
 export type SalesWindow = {
-  /** Sales strictly AFTER this Pacific wall time happened after the count. */
+  /**
+   * When the counting started (Pacific wall). A sale in (countStarted, after] happened WHILE the
+   * shelves were being scanned — counted or not is unknowable, so that barcode is flagged.
+   * Omitted = the count happened with the store closed.
+   */
+  countStarted?: string;
+  /** Sales strictly AFTER this Pacific wall time (the count finished) happened after the count. */
   after: string;
-  /** …and up to (inclusive) this one — the harvest's inventory snapshot. */
+  /** …and up to (inclusive) this one — when the harvest started reading Cultivera's inventory. */
   through: string;
+  /**
+   * When the harvest finished reading Cultivera's inventory (inventory list end). A sale in
+   * (through, inFlightUntil] may or may not be in the imported qty — that barcode is flagged,
+   * never guessed. Omitted = through (no in-flight span).
+   */
+  inFlightUntil?: string;
 };
 
 export type SalesRollup = {
   /** canonical barcode → net units sold in the window */
   netSold: Map<string, { units: number; cogs: number; lines: number; unknownStatus: number }>;
+  /** canonical barcodes with a sale while the harvest was reading the inventory */
+  inFlight: Set<string>;
+  /** canonical barcodes with a sale while the count was going on */
+  duringCount: Set<string>;
+  linesDuringCount: number;
   linesInWindow: number;
+  linesInFlight: number;
   linesBefore: number;
   linesAfterCutoff: number;
   duplicateIds: number;
@@ -345,7 +363,11 @@ export type SalesRollup = {
 export function rollupSales(rawLines: Record<string, unknown>[], window: SalesWindow): SalesRollup {
   const r: SalesRollup = {
     netSold: new Map(),
+    inFlight: new Set(),
+    duringCount: new Set(),
+    linesDuringCount: 0,
     linesInWindow: 0,
+    linesInFlight: 0,
     linesBefore: 0,
     linesAfterCutoff: 0,
     duplicateIds: 0,
@@ -369,11 +391,17 @@ export function rollupSales(rawLines: Record<string, unknown>[], window: SalesWi
     }
     seen.add(l.id);
     if (l.createdAt <= window.after) {
-      r.linesBefore += 1;
+      if (window.countStarted && l.createdAt > window.countStarted) {
+        r.linesDuringCount += 1;
+        if (l.barcode !== "") r.duringCount.add(l.barcode.toLowerCase());
+      } else r.linesBefore += 1;
       continue;
     }
     if (l.createdAt > window.through) {
-      r.linesAfterCutoff += 1;
+      if (window.inFlightUntil && l.createdAt <= window.inFlightUntil) {
+        r.linesInFlight += 1;
+        if (l.barcode !== "") r.inFlight.add(l.barcode.toLowerCase());
+      } else r.linesAfterCutoff += 1;
       continue;
     }
     r.linesInWindow += 1;
@@ -405,7 +433,13 @@ export type CountLot = {
   lotId: string;
   lotCode: string; // the Cultivera barcode, verbatim
   productName: string;
+  /** Cultivera's qty at the harvest = the imported lot's received_qty (import sets both from it). */
   onHand: number;
+  /**
+   * Σ qty_delta of earlier count adjustments for this import on this lot. Re-applying the same
+   * count is then a no-op, and a corrected re-upload only moves the difference.
+   */
+  priorCountDelta?: number;
 };
 
 export type CountException =
@@ -413,6 +447,8 @@ export type CountException =
   | "ambiguous_barcode" // two imported lots share it (case-insensitively)
   | "negative_rolled" // more sold after the count than were counted
   | "unknown_order_status" // a sale line with an OrderStatus we have never measured
+  | "sale_during_harvest" // sold while the harvest read Cultivera's inventory — imported qty uncertain
+  | "sale_during_count" // sold while the shelves were being counted — counted or not is unknowable
   | "uncounted"; // an imported lot with stock that nobody scanned
 
 export type CountPlanLine = {
@@ -423,6 +459,8 @@ export type CountPlanLine = {
   netSold: number;
   rolled: number;
   onHand: number | null;
+  /** earlier count adjustments already applied to this lot (same import) */
+  priorCountDelta: number;
   delta: number;
   byCounter: Record<string, number>;
   exception: CountException | null;
@@ -434,7 +472,7 @@ export type UncountedPolicy = "leave" | "zero";
 
 export type CountPlan = {
   lines: CountPlanLine[];
-  adjustments: { lotId: string; lotCode: string; delta: number; onHand: number; rolled: number }[];
+  adjustments: { lotId: string; lotCode: string; delta: number; onHand: number; rolled: number; counted: number; netSold: number }[];
   summary: {
     lots: number;
     countedLots: number;
@@ -449,6 +487,8 @@ export type CountPlan = {
     ambiguous: number;
     negativeRolled: number;
     unknownStatus: number;
+    saleDuringHarvest: number;
+    saleDuringCount: number;
     uncountedLots: number;
     uncountedUnits: number;
     salesUnitsNet: number;
@@ -495,6 +535,7 @@ export function planCount(input: {
         netSold,
         rolled: (c?.units ?? 0) - netSold,
         onHand: null,
+        priorCountDelta: 0,
         delta: 0,
         byCounter: c?.byCounter ?? {},
         exception: "unknown_barcode",
@@ -504,7 +545,7 @@ export function planCount(input: {
     }
     if (lotsHere.length > 1) {
       for (const l of lotsHere) {
-        lines.push({ lotId: l.lotId, lotCode: l.lotCode, productName: l.productName, counted: c?.units ?? 0, netSold, rolled: 0, onHand: l.onHand, delta: 0, byCounter: c?.byCounter ?? {}, exception: "ambiguous_barcode", adjust: false });
+        lines.push({ lotId: l.lotId, lotCode: l.lotCode, productName: l.productName, counted: c?.units ?? 0, netSold, rolled: 0, onHand: l.onHand, priorCountDelta: l.priorCountDelta ?? 0, delta: 0, byCounter: c?.byCounter ?? {}, exception: "ambiguous_barcode", adjust: false });
       }
       continue;
     }
@@ -512,12 +553,16 @@ export function planCount(input: {
     const wasCounted = c != null;
     const counted = c?.units ?? 0;
     const rolled = counted - netSold;
+    const prior = lot.priorCountDelta ?? 0;
     let exception: CountException | null = null;
     if (!wasCounted && policy === "leave") exception = lot.onHand > 0 || netSold !== 0 ? "uncounted" : null;
+    else if (input.sales.inFlight.has(k)) exception = "sale_during_harvest";
+    else if (input.sales.duringCount.has(k)) exception = "sale_during_count";
     else if (s && s.unknownStatus > 0) exception = "unknown_order_status";
     else if (rolled < 0) exception = "negative_rolled";
     const leaveAlone = exception != null || (!wasCounted && policy === "leave");
-    const delta = leaveAlone ? 0 : rolled - lot.onHand;
+    // Target = rolled; the lot already moved by `prior` from earlier applies of this count.
+    const delta = leaveAlone ? 0 : rolled - (lot.onHand + prior);
     lines.push({
       lotId: lot.lotId,
       lotCode: lot.lotCode,
@@ -526,6 +571,7 @@ export function planCount(input: {
       netSold,
       rolled,
       onHand: lot.onHand,
+      priorCountDelta: prior,
       delta,
       byCounter: c?.byCounter ?? {},
       exception,
@@ -535,7 +581,7 @@ export function planCount(input: {
 
   const adjustments = lines
     .filter((l) => l.adjust && l.lotId)
-    .map((l) => ({ lotId: l.lotId as string, lotCode: l.lotCode, delta: l.delta, onHand: l.onHand as number, rolled: l.rolled }));
+    .map((l) => ({ lotId: l.lotId as string, lotCode: l.lotCode, delta: l.delta, onHand: l.onHand as number, rolled: l.rolled, counted: l.counted, netSold: l.netSold }));
   const ex = (e: CountException) => lines.filter((l) => l.exception === e);
   let salesUnitsNotOnAnyLot = 0;
   for (const [k, v] of input.sales.netSold) if (!byCode.has(k)) salesUnitsNotOnAnyLot += v.units;
@@ -554,6 +600,8 @@ export function planCount(input: {
     ambiguous: ex("ambiguous_barcode").length,
     negativeRolled: ex("negative_rolled").length,
     unknownStatus: ex("unknown_order_status").length,
+    saleDuringHarvest: ex("sale_during_harvest").length,
+    saleDuringCount: ex("sale_during_count").length,
     uncountedLots: ex("uncounted").length,
     uncountedUnits: ex("uncounted").reduce((a, v) => a + (v.onHand ?? 0), 0),
     salesUnitsNet: [...input.sales.netSold.values()].reduce((a, v) => a + v.units, 0),
@@ -707,6 +755,27 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(planCount({ lots, counted, sales, problems: [{ severity: "blocking", code: "scan_mangled", message: "" }] }).blocked, "blocking problem blocks apply");
   ok(planCount({ lots, counted, sales: bad, problems: [] }).blocked, "unusable sales lines block apply");
   ok(!planCount({ lots, counted, sales, problems: [{ severity: "warning", code: "scan_mangled", message: "" }] }).blocked, "warnings do not block");
+
+  // ---- re-apply is idempotent; a corrected re-upload moves only the difference ----
+  const once = planCount({ lots: [{ lotId: "R", lotCode: "R1", productName: "", onHand: 10, priorCountDelta: -3 }], counted: new Map([["r1", { code: "R1", units: 7, byCounter: {} }]]), sales: rollupSales([], W), problems: [] });
+  ok(once.adjustments.length === 0 && once.lines[0].delta === 0 && once.lines[0].priorCountDelta === -3, "same count applied twice → nothing the second time");
+  const fix = planCount({ lots: [{ lotId: "R", lotCode: "R1", productName: "", onHand: 10, priorCountDelta: -3 }], counted: new Map([["r1", { code: "R1", units: 8, byCounter: {} }]]), sales: rollupSales([], W), problems: [] });
+  ok(fix.adjustments[0]?.delta === 1, "corrected count (+1 found) moves only the difference");
+
+  // ---- a sale while the harvest read the inventory → that barcode is flagged ----
+  const WF: SalesWindow = { after: "2026-10-30T23:59:59", through: "2026-10-31T23:00:00", inFlightUntil: "2026-10-31T23:10:00" };
+  const fl = rollupSales([sale(30, "F1", 1, "2026-10-31T22:00:00"), sale(31, "F1", 1, "2026-10-31T23:05:00"), sale(32, "F2", 1, "2026-10-31T23:30:00")], WF);
+  ok(fl.inFlight.has("f1") && !fl.inFlight.has("f2") && fl.linesInFlight === 1 && fl.linesAfterCutoff === 1 && fl.netSold.get("f1")?.units === 1, "in-flight span separated from the window and from after-cutoff");
+  const flp = planCount({ lots: [{ lotId: "F", lotCode: "F1", productName: "", onHand: 3 }], counted: new Map([["f1", { code: "F1", units: 5, byCounter: {} }]]), sales: fl, problems: [] });
+  ok(flp.lines[0].exception === "sale_during_harvest" && flp.adjustments.length === 0 && flp.summary.saleDuringHarvest === 1, "in-flight barcode never adjusted");
+  ok(rollupSales([sale(33, "F1", 1, "2026-10-31T23:05:00")], { after: WF.after, through: WF.through }).linesAfterCutoff === 1, "no inFlightUntil → after the snapshot is simply excluded");
+
+  // ---- a sale while the count was going on → that barcode is flagged ----
+  const WC: SalesWindow = { countStarted: "2026-10-30T18:00:00", after: "2026-10-30T22:00:00", through: "2026-10-31T23:00:00" };
+  const dc = rollupSales([sale(40, "C1", 1, "2026-10-30T17:59:59"), sale(41, "C1", 1, "2026-10-30T18:30:00"), sale(42, "C2", 1, "2026-10-30T22:00:00"), sale(43, "C2", 1, "2026-10-30T22:00:01")], WC);
+  ok(dc.duringCount.has("c1") && dc.duringCount.has("c2") && dc.linesDuringCount === 2 && dc.linesBefore === 1 && dc.netSold.get("c2")?.units === 1 && !dc.netSold.has("c1"), "sales during the count separated (edges: start exclusive, finish inclusive)");
+  const dcp = planCount({ lots: [{ lotId: "C", lotCode: "C1", productName: "", onHand: 2 }], counted: new Map([["c1", { code: "C1", units: 1, byCounter: {} }]]), sales: dc, problems: [] });
+  ok(dcp.lines[0].exception === "sale_during_count" && dcp.adjustments.length === 0 && dcp.summary.saleDuringCount === 1, "during-count barcode never adjusted");
 
   // ---- notes / window ----
   const note = countAdjustmentNote("S1", { lotCode: "8710000000000001234", counted: 3, netSold: 2, onHand: 4 });
