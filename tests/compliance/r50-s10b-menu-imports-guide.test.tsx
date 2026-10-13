@@ -7,7 +7,7 @@
  * significantly enhanced to make it easy to read and follow the steps."
  *
  * Pins:
- *   1. the pure guide core runs at its measured self-test count (53);
+ *   1. the pure guide core runs at its measured self-test count (56);
  *   2. the rendered guide shows progress, the one "next" step, real links, and
  *      never claims "Done" for a step the page cannot prove;
  *   3. every guide href is a real admin route in this repo;
@@ -37,7 +37,7 @@ const statusOf = (html: string, key: string) => html.match(new RegExp(`data-test
 
 describe("R50 S10b guide core", () => {
   it("runs at its measured self-test count", () => {
-    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 53, failed: 0 });
+    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 56, failed: 0 });
   });
 });
 
@@ -131,6 +131,6 @@ describe("R50 S10b page wiring", () => {
   });
   it("is registered in the pure runner", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 53);');
+    expect(runner).toContain('assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 56);');
   });
 });
