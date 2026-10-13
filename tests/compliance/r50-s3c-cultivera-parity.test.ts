@@ -355,7 +355,7 @@ describe("R50 S3c parity: a rebuilt Cultivera manifest's cards == a received del
     const s = summary();
     expect(s.summary_json.origin).toBe("intake");
     expect(s.summary_json.cultivera_refresh).toEqual({ refreshed: ["LOT-12"], unchanged: [], not_live: [] });
-    expect(s.notes).toMatch(/^1 live card rebuilt from onboarding \(received via Cultivera\)/);
+    expect(s.notes).toMatch(/no new products, 2 live items carried\. 1 live card rebuilt from onboarding \(received via Cultivera\); prices, sizes and visibility unchanged\.$/);
     const ev = events().find((e) => e.event_type === "cultivera_cards_refreshed")!;
     expect(ev.note).toContain("Prices, sizes, stock and visibility did not change.");
     expect(ev.note).toContain("The update is live.");

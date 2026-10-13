@@ -1530,7 +1530,7 @@ __runLiquidVolumeTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
-  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 77); // R50 S3c: rebuilt card refresh by survivorship
+  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 80); // R50 S3c: rebuilt card refresh by survivorship
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
