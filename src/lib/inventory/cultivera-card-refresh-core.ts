@@ -47,7 +47,7 @@ import { boilerplateDescription, isBoilerplateDescription } from "@/lib/catalog/
 export const CARD_REFRESH_ENV = "CULTIVERA_CARD_REFRESH";
 export function cardRefreshEnabled(raw: string | undefined | null): boolean {
   const v = String(raw ?? "").trim().toLowerCase();
-  return !(v === "off" || v === "false" || v === "0" || v === "no");
+  return !(v === "off" || v === "false" || v === "0" || v === "no" || v === "disabled");
 }
 
 /**
@@ -505,6 +505,7 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
   // Kill switch
   ok(cardRefreshEnabled(undefined) && cardRefreshEnabled("on") && cardRefreshEnabled(""), "on by default");
   ok(!cardRefreshEnabled("off") && !cardRefreshEnabled(" OFF ") && !cardRefreshEnabled("0") && !cardRefreshEnabled("false") && !cardRefreshEnabled("no"), "off words");
+  ok(!cardRefreshEnabled("disabled") && !cardRefreshEnabled(" Disabled "), "off word disabled (ledger convention)");
 
   // Catalogue fields, mastering name
   const l1 = live();
