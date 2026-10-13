@@ -23,6 +23,8 @@ import { importDecision } from "@/lib/pos/cultivera-fetch-button-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { savePlanInputs } from "@/lib/inventory/cultivera-rehome-store";
 import { saveWciaFiles } from "@/lib/inventory/cultivera-wcia-store";
+import { saveCountSales } from "@/lib/pos/cultivera-count-store";
+import { harvestSnapshotPacific, salesDayAfter } from "@/lib/pos/cultivera-count-core";
 
 const runHref = (id: string, q = "") => `/admin/menu-imports/fetch/${id}${q}`;
 const err = (m: string) => "?error=" + encodeURIComponent(m);
@@ -30,9 +32,17 @@ const err = (m: string) => "?error=" + encodeURIComponent(m);
 export async function startFetchAction(formData: FormData): Promise<void> {
   const session = await requirePermission("menu.import");
   const fresh = String(formData.get("fresh") ?? "") === "on";
+  // R50 S11: the Oct 30 count date (optional). The crawler then also reads Cultivera's Sales Details
+  // from the day after it (the only roll-forward, owner clarification #4).
+  const countDate = String(formData.get("count_date") ?? "").trim();
+  let salesFrom: string | null = null;
+  if (countDate) {
+    salesFrom = salesDayAfter(countDate);
+    if (!salesFrom) redirect("/admin/menu-imports" + err("The count date is not a real date (YYYY-MM-DD)."));
+  }
   let runId = "";
   try {
-    const out = await startPosRun(fresh);
+    const out = await startPosRun(fresh, salesFrom);
     runId = out.runId;
     await recordAudit({
       actorId: session.userId,
@@ -40,7 +50,7 @@ export async function startFetchAction(formData: FormData): Promise<void> {
       action: out.resumed ? "cultivera_pos.fetch_resumed" : "cultivera_pos.fetch_started",
       entityType: "cultivera_pos_run",
       entityId: runId,
-      after: { fresh },
+      after: { fresh, countDate: countDate || null, salesFrom },
     });
   } catch (e) {
     const m = e instanceof Error ? e.message : "Could not start the fetch.";
@@ -128,6 +138,20 @@ export async function importFetchAction(formData: FormData): Promise<void> {
       }
     }
 
+    // R50 S11: the Oct 30 count's Cultivera sales (when the run read them), kept byte for byte for the
+    // count page. Enrichment only: a failure is audited, the count page then refuses with the reason.
+    let countSales: Record<string, unknown> | null = null;
+    if (!isTest && (loaded.sales.lines || loaded.sales.problem)) {
+      try {
+        countSales = loaded.sales.lines
+          ? { saved: true, ...(await saveCountSales(createSupabaseAdminClient(), importId, runId, loaded.sales, harvestSnapshotPacific(loaded.state.stages))) }
+          : { saved: false, problem: loaded.sales.problem, files: loaded.sales.files };
+      } catch (e) {
+        countSales = { saved: false, error: e instanceof Error ? e.message : String(e) };
+        console.error("[menu-imports] could not save the count sales:", e);
+      }
+    }
+
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -159,6 +183,7 @@ export async function importFetchAction(formData: FormData): Promise<void> {
           : null,
         planInputs,
         vendorFiles,
+        countSales,
         items: result.version.item_count,
         variants: result.version.variant_count,
         errors: result.transform.diagnosticCounts.errors,
