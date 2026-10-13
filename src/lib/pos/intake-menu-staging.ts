@@ -571,8 +571,11 @@ export async function stageIntakeMenuVersionForManifest(
     if (factPartition.unresolved.length > 0) {
       const enabled = factWithholdEnabled(process.env[FACT_WITHHOLD_ENV]);
       const wp = planFactWithhold({ unresolved: factPartition.unresolved, drafts });
+      // R50 S3c: in refresh mode a flagged product's live card keeps selling
+      // unchanged, so withholding ITS refresh is always safe - even when it
+      // was the only change (then nothing is staged; the card is untouched).
       const replan =
-        enabled && wp.unkeyed === 0 && wp.keepDrafts.length > 0
+        enabled && wp.unkeyed === 0 && (refreshMode || wp.keepDrafts.length > 0)
           ? refreshMode
             ? buildRebuiltRefreshStagingPlan({ publishedItems, approvedDrafts: wp.keepDrafts, enrichmentByDraftId })
             : buildIntakeStagedVersionPlan({
@@ -588,7 +591,7 @@ export async function stageIntakeMenuVersionForManifest(
         unresolvedCount: factPartition.unresolved.length,
         enabled,
         unkeyed: wp.unkeyed,
-        replanHasChanges: replan?.hasChanges ?? false,
+        replanHasChanges: refreshMode ? replan !== null : (replan?.hasChanges ?? false),
         replanUnresolved: replanPartition?.unresolved.length ?? 0,
       });
       if (verdict.kind === "withhold" && replan && replanPartition) {
@@ -682,7 +685,22 @@ export async function stageIntakeMenuVersionForManifest(
     // Nothing NEW to carry (every approved draft was superseded/skipped): do not
     // create a redundant staged version. The diagnostics still tell the human why
     // via the timeline note in the caller.
-    if (!plan.hasChanges) return skip("no-new-items");
+    if (!plan.hasChanges) {
+      // R50 S3c: every remaining refresh was withheld - say so (nothing published).
+      if (refreshMode && withheldFlags.length > 0) {
+        try {
+          await admin.from("manifest_events").insert({
+            manifest_id: manifestId,
+            event_type: WITHHELD_EVENT,
+            note: refreshWithheldNote(withheldFlags.length, false),
+            actor_id: actorId,
+          });
+        } catch (err) {
+          console.error("[intake-menu-staging] refresh withheld event insert failed:", err);
+        }
+      }
+      return skip("no-new-items");
+    }
 
     // S01: the manifest header (who / which invoice / when) so every surface
     //    can say "From Acme Farms · manifest 1234 · received Sep 26" instead
@@ -883,7 +901,7 @@ export async function stageIntakeMenuVersionForManifest(
         await admin.from("manifest_events").insert({
           manifest_id: manifestId,
           event_type: WITHHELD_EVENT,
-          note: refreshMode ? refreshWithheldNote(withheldFlags.length) : withheldNote(withheldFlags.length),
+          note: refreshMode ? refreshWithheldNote(withheldFlags.length, true) : withheldNote(withheldFlags.length),
           actor_id: actorId,
         });
       } catch (err) {
