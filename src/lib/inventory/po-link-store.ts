@@ -14,6 +14,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { listPurchaseOrders, getPurchaseOrder } from "@/lib/purchasing/po-store";
 import { logManifestEvent } from "@/lib/inventory/intake-store";
+import { isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
 import {
   suggestPoMatches,
   LINKABLE_PO_STATUSES,
@@ -129,6 +130,21 @@ export async function setManifestPoLink(
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
+
+  // R50 S10a: a manifest rebuilt from the Cultivera export is history and
+  // accounting-inert (R50 §1.4). It is never linked to a purchase order
+  // (a link would let a later bill settle stamp that PO). Unreadable = refuse.
+  if (poId) {
+    const { data: kRow, error: kErr } = await admin
+      .from("inbound_manifests")
+      .select("id, payload_kind:raw_payload->>kind")
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (kErr) return { ok: false, error: `The manifest could not be read: ${kErr.message}` };
+    if (isRebuiltKind((kRow as { payload_kind?: unknown } | null)?.payload_kind)) {
+      return { ok: false, error: "This manifest was rebuilt from the Cultivera export; it is history and is not linked to a purchase order." };
+    }
+  }
 
   // Validate target PO when linking (must exist; suggest-and-confirm means a
   // human chose it, but we still refuse dangling ids).
