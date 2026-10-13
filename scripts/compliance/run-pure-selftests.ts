@@ -1531,7 +1531,7 @@ __runLiquidVolumeTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
-  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 82); // R50 S3c: rebuilt card refresh by survivorship
+  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
