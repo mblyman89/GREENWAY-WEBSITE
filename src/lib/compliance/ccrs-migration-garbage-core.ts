@@ -359,6 +359,8 @@ export function __runCcrsMigrationGarbageCoreTests(): { passed: number; failed: 
   ok(rep.ledgerLoaded, "ledger loaded flag");
   ok(rep.rows.find((r) => r.lotId === "E")?.ccrsId === "K2-NOBARCODE-1", "synthetic id shown");
   ok(rep.rows.find((r) => r.lotId === "E")?.lotCode === null, "blank lot code is null");
+  const neg = buildGarbageReport({ items, lots: [lot({ id: "N", onHandQty: -4 }), lot({ id: "P", onHandQty: 2 })], diagnostics: [], view });
+  ok(neg.units === 2 && neg.rows[0].qty === 2, "a negative count never shrinks the unit total");
 
   const noLedger = buildGarbageReport({ items, lots, diagnostics: [], view: null });
   ok(noLedger.byRoute.unknown === 5 && noLedger.open === 5 && !noLedger.ledgerLoaded, "no ledger → all unknown and open");
