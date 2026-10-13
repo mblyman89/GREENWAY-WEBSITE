@@ -61,6 +61,8 @@ import {
 import { getObligationContext, listRecentWaivers } from "@/lib/compliance/obligation-waiver-store";
 import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obligation-waiver-core";
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
+import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
 import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
 import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
@@ -232,6 +234,8 @@ export default async function CcrsCommandCenterPage({
   const ccrsFiles = isSupabaseServiceConfigured
     ? await listCcrsFiles(createSupabaseAdminClient(), env)
     : { available: false, files: [], issues: [], error: null };
+  // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
+  const migrationGarbage = isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null;
 
   // ── DOH / medical evidence for the week ────────────────────────────────────
   const EXEMPT_SCAN_MAX_ROWS = 100_000;
@@ -599,6 +603,9 @@ export default async function CcrsCommandCenterPage({
           }}
         />
       ) : null}
+
+      {/* R50 S10c: migration clean-up (D-15) */}
+      {migrationGarbage ? <MigrationGarbagePanel load={migrationGarbage} /> : null}
 
       {/* 5) Record the week */}
       <Section
