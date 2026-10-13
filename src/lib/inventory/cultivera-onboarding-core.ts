@@ -325,10 +325,13 @@ export function cultiveraOnboardingNote(r: {
   kbLinked: number | null;
   labFacts: number;
   cultiveraFacts: number;
+  /** R50 S3b: lots newly linked to the vendor's lab result (optional for older callers). */
+  vendorLabLinked?: number;
   errors: readonly string[];
 }): string {
   const parts = [
     `${r.seeded} product${r.seeded === 1 ? "" : "s"} added to Onboarding`,
+    (r.vendorLabLinked ?? 0) > 0 ? `${r.vendorLabLinked} lot${r.vendorLabLinked === 1 ? "" : "s"} linked to the vendor's lab result` : "",
     r.skippedOpen > 0 ? `${r.skippedOpen} already waiting in review` : "",
     r.skippedOnboarded > 0 ? `${r.skippedOnboarded} already onboarded` : "",
     r.sameCard > 0 ? `${r.sameCard} more lot${r.sameCard === 1 ? "" : "s"} of the same cards` : "",

@@ -571,21 +571,76 @@ def test_wcia_refused_path_is_never_sent(tmp_path):
     httpx.Response(200, json=["x"]),
     httpx.Response(200, content=b"not json"),
 ])
-def test_wcia_bad_reply_not_saved_and_stops(tmp_path, reply):
+def test_wcia_bad_reply_not_saved_and_never_fails_the_run(tmp_path, reply):
     c = _with(tmp_path, FakeCultivera(), lambda r: reply if "load-wcia" in str(r.url) else None)
     m = cp.run_phase_a(c)
-    assert m["status"] == "failed"
+    assert m["status"] == "done"  # enrichment: the cutover import never waits on it
     st = c.run.read_json("state.json")["stages"]
-    assert st["wcia_json"]["status"] == "incomplete" and st["wcia_json"]["missing"] == [11]
-    assert "batches" not in st
+    assert st["wcia_json"]["status"] == "partial" and st["wcia_json"]["missing"] == [11]
+    assert st["batches"]["status"] == "done"
     assert c.run.read_jsonl("wcia_json.jsonl") == []
     assert {"stage": "wcia_json", "id": 11, "error": "not a WCIA document"} in c.run.read_jsonl("errors.jsonl")
 
 
 def test_wcia_http_error_recorded(tmp_path):
     c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(404) if "load-wcia" in str(r.url) else None)
-    assert cp.run_phase_a(c)["status"] == "failed"
+    assert cp.run_phase_a(c)["status"] == "done"
+    assert c.run.read_json("state.json")["stages"]["wcia_json"]["status"] == "partial"
     assert {"stage": "wcia_json", "id": 11, "status": 404} in c.run.read_jsonl("errors.jsonl")
+
+
+def test_wcia_exhausted_retries_is_partial_not_failed(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(503) if "load-wcia" in str(r.url) else None)
+    c.retries = 2
+    assert cp.run_phase_a(c)["status"] == "done"
+    st = c.run.read_json("state.json")["stages"]["wcia_json"]
+    assert st["status"] == "partial" and "failed after 2 tries" in st["error"]
+
+
+def test_a_core_stage_miss_still_fails_the_run(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(404) if "inventory-batch" in str(r.url) else None)
+    assert cp.run_phase_a(c)["status"] == "failed"
+    st = c.run.read_json("state.json")["stages"]
+    assert st["batches"]["status"] == "incomplete" and "wcia_json" not in st
+
+
+def test_wcia_stops_before_the_time_budget(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    t = {"now": 0.0}
+
+    def clock():
+        return t["now"]
+
+    orig = fake.handler
+
+    def h(req):  # every call costs 100 s of the 1,800 s budget
+        t["now"] += 100.0
+        return orig(req)
+
+    c2 = cp.PosClient(username="owner@example.com", password=PASSWORD, run=cp.RunDir(tmp_path / "run"),
+                      transport=httpx.MockTransport(h), pace_seconds=0, sleep=lambda s: None)
+    m = cp.run_phase_a(c2, clock=clock, budget_seconds=1800.0)
+    st = c2.run.read_json("state.json")
+    used = t["now"]
+    assert m["status"] == "done" and st["stages"]["wcia_json"]["status"] == "done"  # time to spare: fetched
+    # Same harvest, budget = time already spent before the stage + less than the margin -> no call made.
+    fake2 = FakeCultivera()
+    t["now"] = 0.0
+    orig2 = fake2.handler
+
+    def h2(req):
+        t["now"] += 100.0
+        return orig2(req)
+
+    c3 = cp.PosClient(username="owner@example.com", password=PASSWORD, run=cp.RunDir(tmp_path / "run2"),
+                      transport=httpx.MockTransport(h2), pace_seconds=0, sleep=lambda s: None)
+    m3 = cp.run_phase_a(c3, clock=clock, budget_seconds=used - 100.0 + cp.ENRICHMENT_MARGIN_SECONDS - 1)
+    st3 = c3.run.read_json("state.json")
+    assert m3["status"] == "done"
+    assert st3["stages"]["wcia_json"]["status"] == "partial" and st3["stages"]["wcia_json"]["missing"] == [11]
+    assert fake2.wcia_bodies == []  # never started a call it had no time for
+    assert st3["withinBudget"] is True
 
 
 def test_wcia_resume_does_not_refetch(tmp_path):
@@ -619,7 +674,8 @@ def test_wcia_cancel_inside_the_loop(tmp_path):
 
 def test_wcia_stage_order():
     s = list(cp.STAGES_PHASE_A)
-    assert s.index("transfer_details") < s.index("wcia_json") < s.index("batches")
+    assert s.index("transfer_details") < s.index("batches") < s.index("wcia_json") == len(s) - 1
+    assert cp.ENRICHMENT_STAGES == frozenset({"wcia_json"})
 
 
 def test_wcia_downloadable():

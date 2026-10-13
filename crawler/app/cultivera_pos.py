@@ -85,9 +85,15 @@ STAGES_PHASE_A = (
     "inventory_list",
     "transfers_list",
     "transfer_details",
-    "wcia_json",
     "batches",
+    "wcia_json",
 )
+
+# Enrichment stages (R50 S3b): the cutover import never waits on them. They run last, stop before the
+# time budget is spent, and a miss or an error is recorded as "partial" - never a failed run.
+ENRICHMENT_STAGES = frozenset({"wcia_json"})
+# Seconds of the budget an enrichment stage leaves unused (the import's go/no-go has a time check).
+ENRICHMENT_MARGIN_SECONDS = 120.0
 
 _SECRET_KEYS = re.compile(r"(pass(word)?|token|authorization|secret|cookie)", re.I)
 _CDN_HOST = re.compile(r"^cdn(-[a-z0-9]+)?\.cultivera\.com$")
@@ -482,9 +488,11 @@ def stage_transfer_details(client: PosClient, cancelled: Callable[[], bool]) -> 
                        "transfer_details.jsonl", "transfer_details", cancelled)
 
 
-def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool]) -> dict[str, Any]:
+def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool],
+                    out_of_time: Callable[[], bool] = lambda: False) -> dict[str, Any]:
     """The vendor's WCIA transfer file per transfer (§1.5c): lab ids, potency, COA links per line.
-    Read-only POST (Cultivera's own viewer call). Resumable per transfer id."""
+    Read-only POST (Cultivera's own viewer call). Resumable per transfer id. Stops (leaving the rest
+    missing, fetched on the next run) once `out_of_time()` says the run's budget is nearly spent."""
     details = client.run.read_jsonl("transfer_details.jsonl")
     targets, skipped = wcia_targets(details)
     for sk in skipped:
@@ -497,6 +505,8 @@ def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool]) -> dict[st
             continue
         if cancelled():
             raise StageCancelled("wcia_json")
+        if out_of_time():
+            break
         r = client.call("POST", Q + "transfers/incoming-load-wcia-json", {"Url": url})
         if r.status_code != 200:
             errors += 1
@@ -597,14 +607,19 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
             elif stage == "transfer_details":
                 result = stage_transfer_details(client, cancelled)
             elif stage == "wcia_json":
-                result = stage_wcia_json(client, cancelled)
+                try:
+                    result = stage_wcia_json(client, cancelled, lambda: not remaining_budget_ok(
+                        t0, clock() + ENRICHMENT_MARGIN_SECONDS, budget_seconds))
+                except (CultiveraPosError, CultiveraPosRefused) as e:  # enrichment never fails the run
+                    result = {"error": str(e)[:300], "missing": ["?"]}
             else:
                 result = stage_batches(client, cancelled)
             incomplete = bool(result.get("missing"))
-            state["stages"][stage] = {"status": "incomplete" if incomplete else "done",
+            enrichment = stage in ENRICHMENT_STAGES
+            state["stages"][stage] = {"status": ("partial" if enrichment else "incomplete") if incomplete else "done",
                                       "seconds": round(clock() - s0, 1), **result}
             run.write_json("state.json", state)
-            if incomplete:
+            if incomplete and not enrichment:
                 raise CultiveraPosError(f"{stage}: {len(result['missing'])} ids not fetched")
         state["status"] = "done"
     except StageCancelled as e:

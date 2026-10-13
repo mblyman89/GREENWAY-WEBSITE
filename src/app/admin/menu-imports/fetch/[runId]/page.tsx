@@ -22,6 +22,7 @@ export const maxDuration = 300;
 const ROW_TONE: Record<string, string> = {
   done: "text-[var(--admin-accent)]",
   running: "text-[var(--admin-orange)]",
+  partial: "text-[var(--admin-orange)]",
   incomplete: "text-red-300",
   pending: "text-white/40",
 };

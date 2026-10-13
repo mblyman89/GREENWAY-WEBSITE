@@ -34,6 +34,17 @@ export function isTransferId(v: unknown): v is number {
   return typeof v === "number" && Number.isSafeInteger(v) && v > 0;
 }
 
+/**
+ * A transfer id read back from `raw_payload->>cultivera_transfer_id` (PostgREST
+ * returns JSON-path selects as text) or as a number. Digits only; else null.
+ */
+export function parseTransferId(v: unknown): number | null {
+  if (isTransferId(v)) return v;
+  if (typeof v !== "string" || !/^[1-9][0-9]{0,15}$/.test(v)) return null;
+  const n = Number(v);
+  return isTransferId(n) ? n : null;
+}
+
 /** `rehome/<import>/wcia/<transferId>.json`, or null when either id is not safe for a key. */
 export function wciaStorageKey(importId: unknown, transferId: unknown): string | null {
   if (typeof importId !== "string" || !UUID_RE.test(importId)) return null;
@@ -249,7 +260,10 @@ export function pickExistingLabs(
   return new Map([...best].map(([k, v]) => [k, v.id]));
 }
 
-// --- 4. Result + note ------------------------------------------------------------
+// --- 4. Result + note ---------------------------------------------------------
+
+/** manifest_events.event_type of the vendor-lab-results note. */
+export const CULTIVERA_WCIA_EVENT = "cultivera_vendor_lab_results";
 
 export type WciaAttachStatus = "attached" | "no-transfer" | "no-document" | "unreadable" | "error";
 
@@ -304,6 +318,9 @@ export function __runCultiveraWciaCoreTests(): { passed: number; failed: number 
   ok(wciaStorageKey("../x", 11) === null && wciaStorageKey(IMP, 0) === null && wciaStorageKey(IMP, -1) === null, "unsafe ids refused");
   ok(wciaStorageKey(IMP, 1.5) === null && wciaStorageKey(IMP, "11") === null && wciaStorageKey(null, 11) === null, "non-integer ids refused");
   ok(isTransferId(5) && !isTransferId(Number.MAX_SAFE_INTEGER + 1) && !isTransferId(NaN), "transfer id");
+  ok(parseTransferId("4355") === 4355 && parseTransferId(4355) === 4355, "transfer id from text or number");
+  ok(parseTransferId("0") === null && parseTransferId("012") === null && parseTransferId("1.5") === null && parseTransferId(" 1") === null, "junk text refused");
+  ok(parseTransferId("99999999999999999") === null && parseTransferId(null) === null && parseTransferId("") === null, "too big / empty refused");
 
   // Document text.
   ok(isWciaDocumentText('{"inventory_transfer_items":[]}'), "doc ok");

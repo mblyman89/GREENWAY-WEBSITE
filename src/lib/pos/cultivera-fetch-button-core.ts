@@ -29,6 +29,7 @@ export const PHASE_A_STAGES = [
   "transfers_list",
   "transfer_details",
   "batches",
+  "wcia_json",
 ] as const;
 export type PhaseAStage = (typeof PHASE_A_STAGES)[number];
 
@@ -40,12 +41,19 @@ export const STAGE_LABEL: Record<PhaseAStage, string> = {
   transfers_list: "Incoming transfers list",
   transfer_details: "Manifest details (one per delivery)",
   batches: "Batch dates for lots the export drops",
+  wcia_json: "Vendor transfer files (lab results; optional)",
 };
+
+/**
+ * R50 S3b: stages the cutover never waits on (the crawler's ENRICHMENT_STAGES). The crawler marks a
+ * miss "partial" and still finishes the run; here a partial enrichment stage still allows Import.
+ */
+export const ENRICHMENT_STAGES: ReadonlySet<PhaseAStage> = new Set<PhaseAStage>(["wcia_json"]);
 
 /** Files the importer downloads from a finished run (all must verify). */
 export const REQUIRED_FILES = ["export_inventories.xlsx", "export_products.xlsx", "inventories.json", "state.json", "manifest.json"] as const;
 /** Present only when the stage had work; verified when listed in the manifest. */
-export const OPTIONAL_FILES = ["batches.jsonl", "transfer_details.jsonl", "transfers.json"] as const;
+export const OPTIONAL_FILES = ["batches.jsonl", "transfer_details.jsonl", "transfers.json", "wcia_json.jsonl"] as const;
 
 /** A real import must use a harvest at most this old (a stale snapshot misses today's sales). */
 export const MAX_HARVEST_AGE_MINUTES = 90;
@@ -62,7 +70,7 @@ export type CrawlerState = {
 };
 export type CrawlerRun = { runId: string; active: boolean; state: CrawlerState | null };
 
-export type StageRow = { stage: PhaseAStage; label: string; status: "done" | "incomplete" | "pending" | "running"; seconds: number | null; detail: string };
+export type StageRow = { stage: PhaseAStage; label: string; status: "done" | "partial" | "incomplete" | "pending" | "running"; seconds: number | null; detail: string };
 
 export type RunView = {
   runId: string;
@@ -103,13 +111,14 @@ export function runView(run: CrawlerRun): RunView {
     const s = st.stages?.[stage];
     let rowStatus: StageRow["status"];
     if (s?.status === "done") rowStatus = "done";
+    else if (s?.status === "partial" && ENRICHMENT_STAGES.has(stage)) rowStatus = "partial";
     else if (s?.status === "incomplete") rowStatus = "incomplete";
     else if (status === "running" && firstOpen) rowStatus = "running";
     else rowStatus = "pending";
     if (rowStatus !== "done") firstOpen = false;
     return { stage, label: STAGE_LABEL[stage], status: rowStatus, seconds: typeof s?.seconds === "number" ? s.seconds : null, detail: s ? stageDetail(s) : "" };
   });
-  const doneStages = rows.filter((r) => r.status === "done").length;
+  const doneStages = rows.filter((r) => r.status === "done" || r.status === "partial").length;
   return {
     runId: run.runId,
     status,
@@ -215,13 +224,19 @@ export function __runCultiveraFetchButtonCoreTests(): { passed: number; failed: 
   // ---- runView ----
   const doneStages = Object.fromEntries(PHASE_A_STAGES.map((s) => [s, { status: "done", seconds: 1 }]));
   const done = runView({ runId: "r", active: false, state: { status: "done", stages: doneStages, seconds: 478.3, withinBudget: true } });
-  ok(done.status === "done" && done.doneStages === 7 && done.percent === 100 && done.canImport && !done.canCancel && !done.canResume && !done.poll, "done run → import enabled, no poll");
+  ok(done.status === "done" && done.doneStages === 8 && done.percent === 100 && done.canImport && !done.canCancel && !done.canResume && !done.poll, "done run → import enabled, no poll");
   ok(done.rows.every((r) => r.status === "done") && done.seconds === 478.3 && done.withinBudget === true, "done rows + seconds + budget");
 
   const mid = runView({ runId: "r", active: true, state: { status: "running", stages: { login: { status: "done" }, export_inventories: { status: "done", bytes: 647118 } } } });
   ok(mid.status === "running" && mid.poll && mid.canCancel && !mid.canImport && !mid.canResume, "active run → poll + cancel only");
   ok(mid.rows[2].status === "running" && mid.rows[3].status === "pending" && mid.rows[1].detail === "632 KB", "first open stage is running, later pending, bytes shown");
-  ok(mid.doneStages === 2 && mid.percent === 28, "2 of 7 stages = 28% (floored)");
+  ok(mid.doneStages === 2 && mid.percent === 25, "2 of 8 stages = 25%");
+  // R50 S3b: a partial enrichment stage still imports; a partial CORE stage never counts.
+  const partial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, wcia_json: { status: "partial", wanted: 619, missing: [1] } } } });
+  ok(partial.canImport && partial.rows[7].status === "partial" && partial.rows[7].detail === "618 / 619 · 1 not fetched", "partial vendor files still import");
+  const corePartial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, batches: { status: "partial" } } } });
+  ok(!corePartial.canImport && corePartial.rows[6].status === "pending", "\"partial\" on a core stage is not accepted");
+  ok(optionalFilesToFetch({ files: [{ name: "wcia_json.jsonl", bytes: 1, sha256: "x" }] }).join() === "wcia_json.jsonl", "vendor files fetched when listed");
 
   const staleActive = runView({ runId: "r", active: true, state: { status: "done", stages: doneStages } });
   ok(staleActive.status === "running" && !staleActive.canImport, "active wins over a done state.json (resume in flight)");

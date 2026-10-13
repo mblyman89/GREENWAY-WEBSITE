@@ -17,6 +17,7 @@ import { assembleFromRun, type AssembleResult, type BatchRecord } from "@/lib/po
 import type { ListLot } from "@/lib/pos/cultivera-fetch-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { buildPlanInputs, type RehomePlanInputs } from "@/lib/inventory/cultivera-rehome-core";
+import type { WciaRunRecord } from "@/lib/inventory/cultivera-wcia-core";
 import {
   REQUIRED_FILES,
   harvestAgeMinutes,
@@ -117,6 +118,11 @@ export type LoadedRun = {
    * import time so Apply still works after the crawler prunes the run.
    */
   planInputsFor: ((importId: string) => RehomePlanInputs) | null;
+  /**
+   * R50 S3b: the vendors' WCIA transfer files (wcia_json.jsonl), verified on their own. Enrichment
+   * only: a missing or unverifiable file is reported here and NEVER refuses the import.
+   */
+  wcia: { records: WciaRunRecord[]; problem: string | null; file: { name: string; bytes: number; sha256: string } | null };
 };
 
 /**
@@ -142,6 +148,24 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
     if (!v.ok) problems.push(v.reason);
     files.push({ name, bytes: b.length, sha256: h });
     bufs[name] = b;
+  }
+  // R50 S3b: the vendor transfer files are verified apart from the gate's files.
+  const wcia: LoadedRun["wcia"] = { records: [], problem: null, file: null };
+  if (optionalFilesToFetch(manifest).includes("wcia_json.jsonl")) {
+    try {
+      const b = await getFile(runId, "wcia_json.jsonl");
+      const h = sha(b);
+      const v = verifyFile(manifest, "wcia_json.jsonl", b.length, h);
+      wcia.file = { name: "wcia_json.jsonl", bytes: b.length, sha256: h };
+      if (!v.ok) wcia.problem = v.reason;
+      else {
+        const pj = parseJsonl<WciaRunRecord>(b.toString("utf8"));
+        wcia.records = pj.records;
+        if (pj.bad > 0) wcia.problem = `wcia_json.jsonl has ${pj.bad} unreadable lines (the readable ones are kept).`;
+      }
+    } catch (e) {
+      wcia.problem = `wcia_json.jsonl could not be downloaded: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
   if (manifest.status !== "done" || state.status !== "done") problems.push(`The harvest status is "${state.status ?? "unknown"}", not done.`);
 
@@ -190,5 +214,5 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
     transferDetails && problems.length === 0
       ? (importId: string) => buildPlanInputs({ importId, runId, pacificToday: harvestDay, transferDetails: transferDetails!, listLots })
       : null;
-  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor };
+  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor, wcia };
 }
