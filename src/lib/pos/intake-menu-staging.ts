@@ -50,6 +50,19 @@ import {
 // the flags that would otherwise hold this update.
 import { listIntakeFactReviewsResult } from "@/lib/pos/fact-review-store";
 import { stagingSkipForManifestKind } from "@/lib/inventory/cultivera-onboarding-core";
+// R50 S3c: a manifest rebuilt from Cultivera refreshes its live cards ("refresh, never inject").
+import {
+  CARD_REFRESH_ENV,
+  type CardRefreshPlan,
+  type RebuiltRefreshStagingPlan,
+  REFRESH_EVENT,
+  buildRebuiltRefreshStagingPlan,
+  refreshEventNote,
+  refreshLotFactPatch,
+  refreshNotesSuffix,
+  refreshStagingForKind,
+  refreshWithheldNote,
+} from "@/lib/inventory/cultivera-card-refresh-core";
 import {
   FACT_FLAG_CODE,
   RETIRED_REASON_PREFIX,
@@ -158,16 +171,25 @@ export type IntakeStagingOptions = { batchCount?: number };
 const ITEM_BATCH = 250;
 const VARIANT_BATCH = 500;
 
+/** R50 S3c: the refresh summary a refresh-mode plan carries (null otherwise). */
+function refreshOfPlan(p: object): CardRefreshPlan | null {
+  return (p as Partial<RebuiltRefreshStagingPlan>).refresh ?? null;
+}
+
 /**
  * R50 S3: the manifest-kind guard (kept OUT of the staging body so the S01 pin
  * "one manifest HEADER read, after the no-changes return" still describes the
- * header read). Returns a skip reason, or null when staging may proceed.
+ * header read). `skip` = a skip reason, or null when staging may proceed.
  * Fails closed: an unreadable kind is "manifest-kind-read-failed".
+ * R50 S3c: the same single kind read also says whether this manifest's
+ * approvals REFRESH live cards (a manifest rebuilt from Cultivera, switch on).
+ * refresh=true always comes with skip=null; an unreadable kind is still
+ * skip="manifest-kind-read-failed" (fail closed), never a refresh.
  */
-async function readMigrationKindSkip(
+async function readMigrationKindMode(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   manifestId: string,
-): Promise<string | null> {
+): Promise<{ skip: string | null; refresh: boolean }> {
   try {
     const { data: kindRow, error: kindErr } = await admin
       .from("inbound_manifests")
@@ -176,14 +198,14 @@ async function readMigrationKindSkip(
       .maybeSingle();
     if (kindErr) {
       console.error("[intake-menu-staging] manifest kind read failed:", kindErr.message);
-      return "manifest-kind-read-failed";
+      return { skip: "manifest-kind-read-failed", refresh: false };
     }
-    return stagingSkipForManifestKind(
-      (kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null,
-    );
+    const kind = (kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null;
+    if (refreshStagingForKind(kind, process.env[CARD_REFRESH_ENV])) return { skip: null, refresh: true };
+    return { skip: stagingSkipForManifestKind(kind), refresh: false };
   } catch (err) {
     console.error("[intake-menu-staging] manifest kind read threw:", err);
-    return "manifest-kind-read-failed";
+    return { skip: "manifest-kind-read-failed", refresh: false };
   }
 }
 
@@ -233,8 +255,16 @@ export async function stageIntakeMenuVersionForManifest(
   // missing from the published menu would be injected as a NEW card. If the
   // manifest's kind cannot be read we cannot rule that out: build nothing
   // (fail closed; approvals stay saved, the live menu is untouched).
-  const kindSkip = await readMigrationKindSkip(admin, manifestId);
-  if (kindSkip) return skip(kindSkip);
+  // R50 S3c (owner follow-up #4: "every manifest created by the migration
+  // behaves like it was received by us"): a manifest REBUILT from Cultivera
+  // now runs this SAME pipeline in refresh mode - its approved products
+  // rebuild their live cards by field survivorship (cultivera-card-refresh-
+  // core), never a new card, never a price/size/visibility change. The POS-
+  // import migration manifest, CULTIVERA_CARD_REFRESH=off, and an unreadable
+  // kind keep the S3 rule above.
+  const kindMode = await readMigrationKindMode(admin, manifestId);
+  if (kindMode.skip) return skip(kindMode.skip);
+  const refreshMode = kindMode.refresh;
 
   try {
     // 1) APPROVED onboarding drafts for THIS manifest. Only human-approved,
@@ -455,7 +485,7 @@ export async function stageIntakeMenuVersionForManifest(
     // something is live; ONLY the lots that could change a match are read
     // (planVendorIdLookup); any failed read = no ids = the name rule.
     const vendorIds =
-      publishedItems.length > 0 && vendorIdIdentityEnabled(process.env[VENDOR_ID_IDENTITY_ENV])
+      !refreshMode && publishedItems.length > 0 && vendorIdIdentityEnabled(process.env[VENDOR_ID_IDENTITY_ENV])
         ? await loadVendorIdInputs(admin, {
             drafts: drafts.map((d, i) => ({
               id: d.id,
@@ -479,20 +509,25 @@ export async function stageIntakeMenuVersionForManifest(
           })
         : undefined;
 
-    // 4) Pure plan.
-    const firstPlan = buildIntakeStagedVersionPlan({
-      publishedItems,
-      approvedDrafts: drafts,
-      enrichmentByDraftId,
-      vendorIds,
-    });
+    // 4) Pure plan. R50 S3c: a rebuilt manifest refreshes the carried live
+    //    cards instead (no new cards, no merges, so no merge answers apply).
+    const firstPlan = refreshMode
+      ? buildRebuiltRefreshStagingPlan({ publishedItems, approvedDrafts: drafts, enrichmentByDraftId })
+      : buildIntakeStagedVersionPlan({
+          publishedItems,
+          approvedDrafts: drafts,
+          enrichmentByDraftId,
+          vendorIds,
+        });
+
     // S32: a remembered "join card X" / "keep separate" answer can only apply
     // where the planner raised merge_ambiguous (2+ live matches), so read the
     // saved answers for exactly those identities - zero reads otherwise - and
     // plan again with them. Any failed read (or 0239 not applied) = no
     // answers = the first plan, byte for byte. A stale answer is never
     // applied (intake-mastering-core mergeDecisionVerdict).
-    const ambiguousIdentities = mergeAmbiguousIdentities(firstPlan.diagnostics);
+    // (R50 S3c: a refresh plan never merges, so it never raises merge_ambiguous.)
+    const ambiguousIdentities = refreshMode ? [] : mergeAmbiguousIdentities(firstPlan.diagnostics);
     const mergeDecisions =
       ambiguousIdentities.length > 0 ? await loadMergeDecisions(ambiguousIdentities) : new Map<string, MergeDecision>();
     let plan =
@@ -538,13 +573,15 @@ export async function stageIntakeMenuVersionForManifest(
       const wp = planFactWithhold({ unresolved: factPartition.unresolved, drafts });
       const replan =
         enabled && wp.unkeyed === 0 && wp.keepDrafts.length > 0
-          ? buildIntakeStagedVersionPlan({
-              publishedItems,
-              approvedDrafts: wp.keepDrafts,
-              enrichmentByDraftId,
-              vendorIds,
-              mergeDecisions,
-            })
+          ? refreshMode
+            ? buildRebuiltRefreshStagingPlan({ publishedItems, approvedDrafts: wp.keepDrafts, enrichmentByDraftId })
+            : buildIntakeStagedVersionPlan({
+                publishedItems,
+                approvedDrafts: wp.keepDrafts,
+                enrichmentByDraftId,
+                vendorIds,
+                mergeDecisions,
+              })
           : null;
       const replanPartition = replan ? partitionFactFlags(replan.diagnostics, factReviews) : null;
       const verdict = decideWithhold({
@@ -580,6 +617,9 @@ export async function stageIntakeMenuVersionForManifest(
       applyFactDecisions(plan.items, plan.lotFactsByKey, savedExtra);
     }
 
+    // R50 S3c: what the refresh changed, from the FINAL plan (after any withhold re-plan).
+    const refreshPlan = refreshMode ? refreshOfPlan(plan) : null;
+
     // SLICE 62: persist the VERIFIED extraction facts on the source lots —
     // the golden record lives on inventory_lots (migration 0138 columns), so
     // COAs, audits, and future re-processing see the same facts the menu
@@ -589,9 +629,31 @@ export async function stageIntakeMenuVersionForManifest(
       for (const d of drafts) {
         if (d.pos_product_key && d.lot_id) lotIdByKey.set(d.pos_product_key, d.lot_id);
       }
+      // R50 S3c: a rebuilt lot already has facts from the import (and maybe a
+      // person); refresh mode writes only NON-null facts and merges provenance
+      // (refreshLotFactPatch). One bounded read of the lots' provenance.
+      const priorLotProvenance = new Map<string, unknown>();
+      if (refreshMode) {
+        const ids = Array.from(new Set(Array.from(lotIdByKey.values())));
+        const { data: provRows, error: provErr } = await admin
+          .from("inventory_lots")
+          .select("id, fact_provenance")
+          .in("id", ids);
+        if (provErr) console.error("[intake-menu-staging] lot provenance read failed:", provErr.message);
+        for (const r of (provRows as { id: string; fact_provenance: unknown }[] | null) ?? []) {
+          priorLotProvenance.set(r.id, r.fact_provenance);
+        }
+      }
       for (const [key, facts] of plan.lotFactsByKey) {
         const lotId = lotIdByKey.get(key);
         if (!lotId) continue;
+        if (refreshMode) {
+          const patch = refreshLotFactPatch(facts, priorLotProvenance.get(lotId));
+          if (!patch) continue;
+          const { error: rfErr } = await admin.from("inventory_lots").update(patch).eq("id", lotId);
+          if (rfErr) console.error(`[intake-menu-staging] lot fact refresh failed for ${lotId}:`, rfErr.message);
+          continue;
+        }
         const { error: lfErr } = await admin
           .from("inventory_lots")
           .update({
@@ -700,8 +762,19 @@ export async function stageIntakeMenuVersionForManifest(
           // not be verified) - listed on the Publish page, never dropped.
           ...(withheldDraftIds.length > 0 ? { withheld_draft_ids: draftIdList(withheldDraftIds) } : {}),
           ...(opts.batchCount && opts.batchCount > 1 ? { batch_count: opts.batchCount } : {}),
+          // R50 S3c: which live cards this update rebuilt (received via Cultivera).
+          ...(refreshPlan
+            ? {
+                cultivera_refresh: {
+                  refreshed: refreshPlan.refreshed,
+                  unchanged: refreshPlan.unchanged,
+                  not_live: refreshPlan.notLive,
+                },
+              }
+            : {}),
         },
         notes:
+          (refreshPlan ? refreshNotesSuffix(refreshPlan.refreshed.length).trim() + " " : "") +
           buildIntakeVersionNotes({
             manifest: manifestHeader,
             added: plan.addedCount,
@@ -810,11 +883,29 @@ export async function stageIntakeMenuVersionForManifest(
         await admin.from("manifest_events").insert({
           manifest_id: manifestId,
           event_type: WITHHELD_EVENT,
-          note: withheldNote(withheldFlags.length),
+          note: refreshMode ? refreshWithheldNote(withheldFlags.length) : withheldNote(withheldFlags.length),
           actor_id: actorId,
         });
       } catch (err) {
         console.error("[intake-menu-staging] withheld event insert failed:", err);
+      }
+    }
+
+    // R50 S3c: say on the delivery's timeline which live cards were rebuilt.
+    if (refreshPlan && refreshPlan.refreshed.length > 0) {
+      try {
+        await admin.from("manifest_events").insert({
+          manifest_id: manifestId,
+          event_type: REFRESH_EVENT,
+          note: refreshEventNote({
+            refreshed: refreshPlan.refreshed.length,
+            notLive: refreshPlan.notLive.length,
+            published: publishedOk,
+          }),
+          actor_id: actorId,
+        });
+      } catch (err) {
+        console.error("[intake-menu-staging] card refresh event insert failed:", err);
       }
     }
 

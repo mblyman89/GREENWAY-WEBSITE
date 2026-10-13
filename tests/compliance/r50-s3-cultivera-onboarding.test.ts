@@ -234,6 +234,7 @@ beforeEach(() => {
   st.stageCalls = [];
   st.published = { id: V };
   delete process.env.INTAKE_IDENTITY_STAMP;
+  delete process.env.CULTIVERA_CARD_REFRESH;
   seedWorld();
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -299,7 +300,11 @@ describe("A. re-onboarding seed", () => {
 });
 
 describe("B. staging guard", () => {
-  it("a rebuilt manifest never builds a menu version (no draft read, no write)", async () => {
+  // R50 S3c (pin updated on purpose, owner follow-up #4): a rebuilt manifest
+  // now stages in REFRESH mode by default (tests/compliance/r50-s3c-*.test.ts).
+  // The S3 rule is still what CULTIVERA_CARD_REFRESH=off gives, pinned here.
+  it("switch off: a rebuilt manifest never builds a menu version (no draft read, no write)", async () => {
+    process.env.CULTIVERA_CARD_REFRESH = "off";
     const before = menuSnapshot();
     const out = await realStaging.stageIntakeMenuVersionForManifest(M, ACTOR);
     expect(out.staged).toBe(false);
@@ -328,6 +333,12 @@ describe("B. staging guard", () => {
     st.throwOnTable = null;
     expect(out.reason).toBe("manifest-kind-read-failed");
     expect(st.db.log.some((r) => r.table === "catalog_product_drafts")).toBe(false);
+  });
+
+  it("switch on (default): a rebuilt manifest goes on to read its approved drafts (refresh mode)", async () => {
+    const out = await realStaging.stageIntakeMenuVersionForManifest(M, ACTOR);
+    expect(out.reason).toBe("no-approved-drafts");
+    expect(st.db.log.some((r) => r.table === "catalog_product_drafts" && r.url.searchParams.get("manifest_id") === `eq.${M}`)).toBe(true);
   });
 
   it("an ordinary delivery goes on to read its approved drafts", async () => {
@@ -414,7 +425,8 @@ describe("D. approval of an already-selling card", () => {
     return newDrafts().find((d) => d.pos_product_key === key)!;
   }
 
-  it("records the LIVE price (not the form's), skips the floor, never stages", async () => {
+  it("switch off: records the LIVE price (not the form's), skips the floor, never stages", async () => {
+    process.env.CULTIVERA_CARD_REFRESH = "off";
     const d = await seededDraft("pos-a");
     // a live price change since seeding: the approval re-reads it
     st.db.rows("menu_variants").forEach((v) => {
@@ -429,12 +441,32 @@ describe("D. approval of an already-selling card", () => {
     expect(menuSnapshot()).toBe(menuBefore);
   });
 
-  it("a card whose sizes differ is approved with no price recorded", async () => {
+  it("switch off: a card whose sizes differ is approved with no price recorded", async () => {
+    process.env.CULTIVERA_CARD_REFRESH = "off";
     const d = await seededDraft("pos-b");
     const res = await approveDraftWithPrice(d.id as string, 0, ACTOR);
     expect(res.ok).toBe(true);
     expect(d.price_minor_units).toBeNull();
     expect(st.stageCalls).toEqual([]);
+  });
+
+  it("switch on (default): the LIVE price is still recorded, the floor skipped, and the card refresh is staged", async () => {
+    const d = await seededDraft("pos-a");
+    st.db.rows("menu_variants").forEach((v) => {
+      if (v.menu_item_id === "i-a") v.price_minor_units = 2700;
+    });
+    const res = await approveDraftWithPrice(d.id as string, 1, ACTOR);
+    expect(res).toEqual({ ok: true });
+    expect(d.price_minor_units).toBe(2700);
+    expect(st.stageCalls).toEqual([M]);
+  });
+
+  it("switch on: a sizes-differ card is approved with no price and still staged", async () => {
+    const d = await seededDraft("pos-b");
+    const res = await approveDraftWithPrice(d.id as string, 0, ACTOR);
+    expect(res.ok).toBe(true);
+    expect(d.price_minor_units).toBeNull();
+    expect(st.stageCalls).toEqual([M]);
   });
 
   it("an unreadable delivery kind refuses the approval (fail closed)", async () => {
