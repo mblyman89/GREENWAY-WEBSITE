@@ -25,7 +25,22 @@ import { isSafeImportId } from "@/lib/inventory/import-lineage-core";
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import { parseJsonl } from "@/lib/pos/cultivera-fetch-button-core";
 import type { SalesFiles } from "@/lib/pos/cultivera-fetch-client";
-import { countAdjustmentNote, countSessionPrefix, type CountLot, type CountPlan } from "@/lib/pos/cultivera-count-core";
+import { workbookCells } from "@/lib/pos/cultivera-count-workbook";
+import {
+  checkSalesSummary,
+  countAdjustmentNote,
+  countSessionPrefix,
+  mergeCountWorkbooks,
+  parseCountWorkbook,
+  planCount,
+  rollupSales,
+  salesDayAfter,
+  type CountLot,
+  type CountPlan,
+  type CountProblem,
+  type SalesRollup,
+  type UncountedPolicy,
+} from "@/lib/pos/cultivera-count-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -283,4 +298,84 @@ export async function applyCountPlan(admin: Admin, importId: string, plan: Count
   };
   await Promise.all(Array.from({ length: Math.min(6, queue.length) }, () => worker()));
   return out;
+}
+
+/* ---------------- preview (the page and the apply build the SAME thing) ---------------- */
+
+export type CountPreview = {
+  importId: string;
+  batchId: string;
+  countDate: string | null;
+  salesDay: string | null;
+  books: { fileName: string; counter: string; workbookId: string; scans: number; handUnits: number; harvest: string }[];
+  problems: CountProblem[];
+  sales: { ok: boolean; problems: string[]; runId: string | null; snapshotPacific: string | null; dateTo: string | null; fetchedAtPacific: string | null; rollup: SalesRollup | null };
+  lotsLoad: { lots: number; skipped: CountLotsLoad["skipped"]; manifests: number; priorAdjustments: number };
+  plan: CountPlan | null;
+  /** Reasons the count cannot be applied (besides plan.blocked). */
+  refusals: string[];
+  canApply: boolean;
+  digest: string | null;
+};
+
+export async function buildCountPreview(admin: Admin, importId: string, batchId: string, policy: UncountedPolicy): Promise<CountPreview> {
+  const refusals: string[] = [];
+  const { files } = await loadCountUpload(admin, importId, batchId);
+  const parsed = [];
+  for (const f of files) parsed.push(parseCountWorkbook({ fileName: f.name, sha256: f.sha256, cells: await workbookCells(f.buffer) }));
+  const merged = mergeCountWorkbooks(parsed);
+  const countDate = merged.accepted[0]?.meta?.countDate ?? null;
+  const salesDay = countDate ? salesDayAfter(countDate) : null;
+  if (merged.accepted.length === 0) refusals.push("No usable count workbook in this upload.");
+  else if (!salesDay) refusals.push(`The workbooks' count date "${countDate}" is not a real date.`);
+
+  const sales: CountPreview["sales"] = { ok: false, problems: [], runId: null, snapshotPacific: null, dateTo: null, fetchedAtPacific: null, rollup: null };
+  const ls = await loadCountSales(admin, importId);
+  if (!ls.ok) sales.problems.push(ls.problem);
+  else {
+    sales.runId = ls.record.runId;
+    sales.snapshotPacific = ls.record.snapshotPacific;
+    if (ls.badLines > 0) sales.problems.push(`sales.jsonl has ${ls.badLines} unreadable lines.`);
+    if (!ls.record.snapshotPacific) sales.problems.push("The harvest has no stage start times (older crawler), so a sale after the quantities were read cannot be ruled out. Fetch again.");
+    if (salesDay) {
+      const chk = checkSalesSummary(ls.summary, salesDay, ls.lines.length);
+      sales.problems.push(...chk.problems);
+      sales.dateTo = chk.dateTo;
+      sales.fetchedAtPacific = chk.fetchedAtPacific;
+      sales.rollup = rollupSales(ls.lines, { salesDay, snapshotPacific: ls.record.snapshotPacific ?? undefined });
+    }
+    sales.ok = sales.problems.length === 0 && sales.rollup != null;
+  }
+  if (!sales.ok) refusals.push(...(sales.problems.length ? sales.problems : ["The Cultivera sales could not be checked."]));
+
+  const lotsLoad = await loadCountLots(admin, importId);
+  if (lotsLoad.lots.length === 0) refusals.push("This import has no Cultivera lots (a test import, or the wrong import).");
+  if (lotsLoad.skipped.length > 0) refusals.push(`${lotsLoad.skipped.length} of this import's lots have no lot code or a fractional quantity; see the list.`);
+
+  const plan =
+    sales.rollup && merged.accepted.length > 0
+      ? planCount({ lots: lotsLoad.lots, counted: merged.counted, sales: sales.rollup, problems: merged.problems, uncountedPolicy: policy })
+      : null;
+  const canApply = plan != null && !plan.blocked && refusals.length === 0 && plan.adjustments.length > 0;
+  return {
+    importId,
+    batchId,
+    countDate,
+    salesDay,
+    books: merged.accepted.map((b) => ({
+      fileName: b.fileName,
+      counter: b.meta?.counter ?? "",
+      workbookId: b.meta?.workbookId ?? "",
+      scans: b.scanCount,
+      handUnits: b.handUnits,
+      harvest: b.meta?.lotsFromImport ?? "",
+    })),
+    problems: merged.problems,
+    sales,
+    lotsLoad: { lots: lotsLoad.lots.length, skipped: lotsLoad.skipped, manifests: lotsLoad.manifests, priorAdjustments: lotsLoad.priorAdjustments },
+    plan,
+    refusals,
+    canApply,
+    digest: plan ? countPlanDigest(plan) : null,
+  };
 }
