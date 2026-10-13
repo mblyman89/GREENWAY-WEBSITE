@@ -1526,7 +1526,7 @@ __runLiquidVolumeTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
-  assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 50);
+  assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 51);
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();

@@ -56,6 +56,10 @@ export const NO_LIVE_PRICE_RATIONALE =
   "The live card has no single price (its sizes differ, or it is not on the published menu), so none is recorded. The live card is not changed.";
 /** Rows per page of the "Cultivera manifests" section. */
 export const CULTIVERA_SECTION_PAGE_SIZE = 25;
+/** The badge on an onboarding row whose card is already selling. */
+export const CULTIVERA_ROW_BADGE = "Already on the menu";
+export const CULTIVERA_SECTION_HELP =
+  "Manifests rebuilt from the Cultivera export. Start one to catalogue its products the way a delivery is catalogued: one onboarding row per menu card, saved to the knowledge base, with the facts the system can find (name, Cultivera potency, lab certificates once linked). The live menu, prices and stock are never changed.";
 
 // --- 2. Seeding -----------------------------------------------------------------
 
@@ -382,6 +386,7 @@ export function __runCultiveraOnboardingCoreTests(): { passed: number; failed: n
   ok(livePriceForCard([2500, 3000]) === null, "sizes differ -> null");
   ok(livePriceForCard([]) === null && livePriceForCard(null) === null && livePriceForCard(undefined) === null, "no variants");
   ok(livePriceForCard([0]) === null && livePriceForCard([-5]) === null, "non-positive");
+  ok(CULTIVERA_ROW_BADGE === "Already on the menu" && CULTIVERA_SECTION_HELP.includes("never changed"), "copy");
   ok(livePriceForCard([25.5]) === null, "non-integer cents");
   ok(livePriceForCard(["2500"]) === 2500 && livePriceForCard([""]) === null && livePriceForCard([null]) === null && livePriceForCard(["x"]) === null, "string / blank / null / junk");
   ok(livePriceForCard([2500, null]) === null, "one bad variant poisons the card");

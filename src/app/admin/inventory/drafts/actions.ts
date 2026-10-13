@@ -590,3 +590,27 @@ export async function setDraftBrandAction(draftId: string, formData?: FormData) 
   const raw = formData?.get("return_manifest");
   redirect(draftsHref({ manifestId: typeof raw === "string" && raw ? raw : run.manifestId ?? null, draftId: anchor, extra: core.deliveryBrandParams(run) }));
 }
+
+/**
+ * R50 S3 - "Start" on a Cultivera manifest (Product Onboarding). Runs the
+ * native intake chain for one manifest rebuilt from the Cultivera export:
+ * onboarding rows (one per live card, live price), KB write-back + link, lab
+ * facts, the Cultivera potency as a shown-not-counted fact. Never changes the
+ * live menu or any lot's status, quantity or cost. Lands on that manifest's
+ * rows with a banner; the full outcome is on the manifest timeline.
+ */
+export async function startCultiveraOnboardingAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+  if (!isUuid(manifestId)) redirect(draftsHref({ extra: { cv: "error", cv_msg: "That manifest link is not valid." } }));
+  const { startCultiveraManifestOnboarding } = await import("@/lib/inventory/cultivera-onboarding");
+  let extra: Record<string, string>;
+  try {
+    const res = await startCultiveraManifestOnboarding(manifestId, session.userId);
+    extra = res.ok ? { cv: "ok", cv_msg: res.note.slice(0, 600) } : { cv: "error", cv_msg: res.error.slice(0, 300) };
+  } catch (err) {
+    console.error("[drafts] cultivera onboarding start failed:", err);
+    extra = { cv: "error", cv_msg: (err instanceof Error ? err.message : String(err)).slice(0, 300) };
+  }
+  revalidatePath("/admin/inventory/drafts");
+  redirect(draftsHref({ manifestId, extra }));
+}
