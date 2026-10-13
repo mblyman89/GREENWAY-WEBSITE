@@ -49,6 +49,7 @@ import {
 // S30: receiving fact review - saved decisions resolve (and are applied to)
 // the flags that would otherwise hold this update.
 import { listIntakeFactReviewsResult } from "@/lib/pos/fact-review-store";
+import { stagingSkipForManifestKind } from "@/lib/inventory/cultivera-onboarding-core";
 import {
   FACT_FLAG_CODE,
   RETIRED_REASON_PREFIX,
@@ -195,6 +196,32 @@ export async function stageIntakeMenuVersionForManifest(
     }
     return skip(CARRY_FORWARD_INCOMPLETE_REASON);
   };
+
+  // R50 S3: a manifest REBUILT from the Cultivera export (or the POS import
+  // migration manifest) describes stock that is ALREADY on the live menu.
+  // Approving its products at Onboarding catalogues them (KB, facts, golden
+  // record) - it must never build a menu version, because an approved key
+  // missing from the published menu would be injected as a NEW card. If the
+  // manifest's kind cannot be read we cannot rule that out: build nothing
+  // (fail closed; approvals stay saved, the live menu is untouched).
+  try {
+    const { data: kindRow, error: kindErr } = await admin
+      .from("inbound_manifests")
+      .select("id, payload_kind:raw_payload->>kind")
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (kindErr) {
+      console.error("[intake-menu-staging] manifest kind read failed:", kindErr.message);
+      return skip("manifest-kind-read-failed");
+    }
+    const migrationSkip = stagingSkipForManifestKind(
+      (kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null,
+    );
+    if (migrationSkip) return skip(migrationSkip);
+  } catch (err) {
+    console.error("[intake-menu-staging] manifest kind read threw:", err);
+    return skip("manifest-kind-read-failed");
+  }
 
   try {
     // 1) APPROVED onboarding drafts for THIS manifest. Only human-approved,
