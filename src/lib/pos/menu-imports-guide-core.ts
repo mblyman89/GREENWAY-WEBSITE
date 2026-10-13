@@ -313,6 +313,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(st(gRun, "go_no_go").links[0].href === "/admin/menu-imports/fetch/r2", "run: newest run linked");
   ok(st(gRun, "stage").links[0]?.href === "/admin/menu-imports/fetch/r2", "run: stage link to run");
   ok(nexts(gRun).length === 1, "exactly one next");
+  ok(st(gRun, "stage").status === "todo", "run but nothing staged: stage is not done");
   const gBlank = buildMenuImportsGuide({ ...base, recentRuns: ["  ", ""] });
   ok(st(gBlank, "fetch").status === "next", "blank run ids ignored");
   ok(GUIDE_HREF.fetchRun("a b") === "/admin/menu-imports/fetch/a%20b", "run id encoded");
@@ -330,6 +331,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(st(gSt, "review").links[2].href === "/admin/menu-imports/new#diagnostics", "diagnostics link");
   ok(st(gSt, "publish").links[0].href === "/admin/menu-imports/new#publish", "publish link");
   ok(st(gSt, "stage").links.length === 0, "staged: no stage link");
+  ok(st(gSt, "manifests").links.length === 0 && st(gSt, "manifests").status === "todo", "staged (not live): no rehome link yet");
   ok(latestRealStaged([imp("", "staged", "z")]) === null, "blank id ignored");
   ok(latestRealStaged([imp("x", "published", "z")]) === null, "published is not staged");
   const gTestOnly = buildMenuImportsGuide({ ...base, imports: [imp("t", "staged", "z", true)] });
@@ -362,6 +364,8 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(guideSummary(gUnk).done === 0, "unknown: zero done");
 
   // summary
+  const mixed = buildMenuImportsGuide(base).map((x, i) => ({ ...x, status: (i === 0 ? "done" : "check") as GuideStatus }));
+  ok(guideSummary(mixed).headline === "Check each step below.", "partly done, no next: never says live");
   ok(guideSummary(g0).headline === `Step 1 of 9: ${st(g0, "fetch").title}.`, "fresh headline");
   ok(guideSummary(gSt).headline.startsWith("Step 4 of 9"), "staged headline");
   ok(Object.keys(GUIDE_STATUS_LABEL).length === 5, "five labels");
