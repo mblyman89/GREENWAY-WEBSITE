@@ -1,0 +1,36 @@
+R50 S3c/S3d real-DB probe (2026-10-13; harness PG15 + PostgREST 12.2.3; rebuilt manifest CV-S3-PROBE; 5 borrowed lots, 3 live cards)
+
+START ok. APPROVE ×3 ok. Each approval staged and auto-published one version, the same per-approval rule
+as a received delivery. Result: 4 versions in total, 3 archived and 1 published.
+summary_json.cultivera_refresh per version:
+  v1 {refreshed:[a]}
+  v2 {refreshed:[b], unchanged:[a]}
+  v3 {refreshed:[c], unchanged:[a,b]}
+Notes (every version): "From Phat Panda · manifest CV-S3-PROBE: no new products, 3 live items carried. 1 live card rebuilt from onboarding (received via Cultivera); prices, sizes and visibility unchanged."
+
+Cards, Cultivera data -> ours:
+  pos-s3-a  name "PHAT PANDA BLUE DREAM 3.5G FLWR" -> "Blue Dream"; brand "" -> "Phat Panda";
+            pos_inventory_category "Usable Marijuana" -> "Flower"; description "" -> the native placeholder
+            ("Blue Dream from Phat Panda. Browse current availability ...")
+  pos-s3-b  name "PP GELATO 1G" -> "Gelato"; brand "" -> "Phat Panda"; type label -> "Flower";
+            the staff's REAL description was kept (survivorship: a placeholder never replaces real copy)
+  pos-s3-c  name "lemon haze 1g" -> "Lemon Haze"; brand -> "Phat Panda"; type label null -> "Flower";
+            description -> placeholder
+  All three: product_name, strain_name, filter_categories ["flower"] and pos_inventory_type now come from our records.
+  thc/cbd stay null. The only potency available was Cultivera's, which is shown at onboarding and never counted
+  (S3 rule); no COA was seeded. A null never wipes a value, and unverified potency is never published.
+
+PROTECTED-EQUAL true: these are byte-identical before and after on every card:
+  source key, price_label, price, hidden, inventory_status, sort_order, and every variant (id, label, price).
+Lots: status, on-hand, received qty, cost, CCRS id, vendor and received_on unchanged on 5/5.
+Events: kb_writeback, kb_link (3 of 3 linked), cultivera_onboarding, then 3 × (menu_auto_publish + cultivera_cards_refreshed).
+
+S3d flag on the real rows:
+  loadCultiveraManifestIds -> [the rebuilt manifest only]
+  the 5 rebuilt lots -> flagged
+  the native WCIA lot -> not flagged
+
+After undo.sql, after-undo.txt == before.txt:
+  inventory_lots md5 de5c7096ab85ad885435190afb410e5f, kb_products 0, menu_versions 0.
+(Outside Next, `revalidatePath` throws "static generation store missing". Staging catches it and logs
+"revalidate failed". This is expected for a script and is not a product error.)
