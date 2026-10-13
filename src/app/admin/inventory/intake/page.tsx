@@ -42,10 +42,25 @@ import {
 import { listManifestDocLinks } from "@/lib/inventory/manifest-docs";
 import { ReceivingTabs } from "@/components/admin/inventory/ReceivingTabs";
 import {
-  resolveIntakeView,
   applyIntakeView,
   countProcessedRows,
+  invoiceNumberForRow,
 } from "@/lib/inventory/manifest-table-core";
+import {
+  parseReceivingFilters,
+  hasActiveFilters,
+  applyNativeFilters,
+  applyCultiveraFilters,
+  receivingViewLinks,
+  vendorOptions,
+  filterSummary,
+  summarizeCultivera,
+  pageSlice,
+  CULTIVERA_TABLE_PAGE_SIZE,
+} from "@/lib/inventory/receiving-table-core";
+import { loadReceivingCultiveraRows } from "@/lib/inventory/receiving-cultivera-store";
+import { ReceivingFilterBar } from "@/components/admin/inventory/ReceivingFilterBar";
+import { CultiveraManifestTable } from "@/components/admin/inventory/CultiveraManifestTable";
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
 export const dynamic = "force-dynamic";
@@ -69,9 +84,18 @@ export default async function IntakePage({
     /** R36: the Dismiss duplicate result (summary) or refusal (message). */
     dismissed?: string;
     dismisserr?: string;
+    /** R50 S10a: table filters + sorting (receiving-table-core). */
+    q?: string;
+    vendor?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    sort?: string;
+    page?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
+  const sp = await searchParams;
   const {
     error,
     kbdone,
@@ -87,12 +111,16 @@ export default async function IntakePage({
     invoice,
     dismissed,
     dismisserr,
-  } = await searchParams;
+  } = sp;
 
   // SLICE 101 — the owner's table filter: default hides accepted + partially
   // accepted rows (done processing) so the manifests still needing attention
   // are what staff see first; ?view=all shows everything, open rows first.
-  const intakeView = resolveIntakeView(view);
+  // R50 S10a: a third view lists the manifests rebuilt from Cultivera, and
+  // every view gets filters + sorting (all parsed by receiving-table-core).
+  const filters = parseReceivingFilters({ ...sp, view });
+  const intakeView = filters.view === "all" ? "all" : "action";
+  const isCultiveraView = filters.view === "cultivera";
 
   // H15d — which tab is showing. Explicit ?tab= wins; a manual-form error
   // redirect (or a KB-backfill result banner) auto-opens Manual tools so its
@@ -123,17 +151,41 @@ export default async function IntakePage({
     );
   }
 
-  const [manifests, counts, inboundEmails] = await Promise.all([
-    listManifests(),
+  // R50 S10a: with a filter active the native list reads deeper (newest
+  // 1,000 instead of 200) so a vendor or date filter can reach older
+  // deliveries; the table still renders at most NATIVE_DISPLAY_CAP rows.
+  const NATIVE_DISPLAY_CAP = 200;
+  const nativeLimit = !isCultiveraView && hasActiveFilters(filters) ? 1000 : 200;
+  const [manifests, counts, inboundEmails, cultivera] = await Promise.all([
+    listManifests({ limit: nativeLimit }),
     countManifestsByStatus(),
     listInboundEmails(15),
+    isCultiveraView ? loadReceivingCultiveraRows() : Promise.resolve(null),
   ]);
+
+  // The rows the native table shows: view (open/all) -> filters -> sort -> cap.
+  const viewRows = applyIntakeView(manifests, intakeView);
+  const filteredNative = applyNativeFilters(
+    viewRows.map((m) => ({ ...m, invoice: invoiceNumberForRow(m) })),
+    filters,
+  );
+  const tableRows = isCultiveraView ? [] : filteredNative.slice(0, NATIVE_DISPLAY_CAP);
+  const nativeVendors = vendorOptions(viewRows.map((m) => m.vendor_label));
+
+  // The Cultivera view: every rebuilt manifest, filtered, sorted, paged.
+  const cultiveraFiltered = cultivera && cultivera.ok ? applyCultiveraFilters(cultivera.rows, filters) : [];
+  const cultiveraPage = pageSlice(cultiveraFiltered, filters.page, CULTIVERA_TABLE_PAGE_SIZE);
+  const cultiveraSummary = cultivera && cultivera.ok ? summarizeCultivera(cultivera.rows) : null;
+  const viewLinks = receivingViewLinks(filters, {
+    processed: countProcessedRows(manifests),
+    cultivera: counts.migrated,
+  });
 
   // R36 #2 - rows that are a second copy of the same manifest (same manifest
   // # + vendor, both live): flagged "Duplicate" with a Dismiss button. Looked
-  // up across ALL rows with those numbers, not just the 200 listed.
+  // up across ALL rows with those numbers, not just the rows listed.
   const twinsById = await findDuplicateTwinsFor(
-    manifests.filter((m) => m.status !== "dismissed"),
+    tableRows.filter((m) => m.status !== "dismissed"),
   );
 
   // Overdue in-transit manifests bubble up as a banner (the one summary the
@@ -145,7 +197,7 @@ export default async function IntakePage({
   // PR-A — document-AI parse status per manifest (llama / FB) for the "AI"
   // column. Read-only over the ai_usage ledger; keyed by manifest_number.
   const parseStatusByManifest = await getParseStatusByManifestNumber(
-    manifests.map((m) => m.manifest_number),
+    tableRows.map((m) => m.manifest_number),
   );
 
   // H15c — join the email fetch trail's download links (manifest/invoice PDFs)
@@ -163,7 +215,7 @@ export default async function IntakePage({
   // (private bucket, signed URLs). Preferred over the vendor's links above,
   // which expire within hours; these buttons work for EVERY row, forever.
   const docsByManifestId: Map<string, ArchivedDocLink[]> = await listManifestDocLinks(
-    manifests.map((m) => m.id),
+    tableRows.map((m) => m.id),
   );
 
   const errorMsg =
@@ -264,8 +316,12 @@ export default async function IntakePage({
         {counts.migrated > 0 ? (
           <p className="text-xs text-[var(--admin-text-faint)]" data-testid="intake-migrated-note">
             Moved from Cultivera: {counts.migrated.toLocaleString("en-US")} rebuilt manifest
-            {counts.migrated === 1 ? "" : "s"} (history, not work, so they are not counted above or listed
-            below). The full intake export includes them.
+            {counts.migrated === 1 ? "" : "s"}. They are history, not deliveries, so the counts above leave
+            them out. See them all, with Complete / Needs attention, under{" "}
+            <Link href={viewLinks[2].href} className="font-semibold text-[var(--admin-accent)] hover:underline">
+              Cultivera manifests
+            </Link>
+            . The full intake export includes them.
           </p>
         ) : null}
 
@@ -371,8 +427,39 @@ export default async function IntakePage({
         {/* H15c — the hero table: one row per real manifest, moving badge,
             invoice # + downloads. The strict H15b gate guarantees only real
             manifests appear here. */}
+        {/* R50 S10a: one filter bar for all three views (GET form, so a
+            filtered list can be bookmarked and Back works). */}
+        <ReceivingFilterBar
+          filters={filters}
+          viewLinks={viewLinks}
+          vendors={isCultiveraView ? vendorOptions(cultivera && cultivera.ok ? cultivera.rows.map((r) => r.vendor) : []) : nativeVendors}
+          summary={
+            isCultiveraView
+              ? cultivera && cultivera.ok
+                ? filterSummary(filters, cultiveraFiltered.length, cultivera.rows.length)
+                : null
+              : filterSummary(filters, tableRows.length, viewRows.length)
+          }
+          capNote={
+            !isCultiveraView && filteredNative.length > tableRows.length
+              ? `Only the first ${NATIVE_DISPLAY_CAP} matches are shown. Narrow the filters to see the rest.`
+              : !isCultiveraView && hasActiveFilters(filters) && manifests.length >= nativeLimit
+                ? `Filters search the newest ${nativeLimit.toLocaleString("en-US")} deliveries.`
+                : null
+          }
+        />
+        {isCultiveraView ? (
+          <CultiveraManifestTable
+            load={cultivera}
+            rows={cultiveraPage.rows}
+            summary={cultiveraSummary}
+            filters={filters}
+            page={cultiveraPage.page}
+            pageCount={cultiveraPage.pageCount}
+          />
+        ) : (
         <EmailIntakeTable
-          rows={applyIntakeView(manifests, intakeView)}
+          rows={tableRows}
           linksByManifestId={linksByManifestId}
           docsByManifestId={docsByManifestId}
           parseStatusByManifest={parseStatusByManifest}
@@ -381,14 +468,16 @@ export default async function IntakePage({
           processedCount={countProcessedRows(manifests)}
           twinsById={twinsById}
           dismissAction={dismissDuplicateManifestAction}
+          filtered={hasActiveFilters(filters)}
         />
+        )}
 
         {/* The single "Incoming (email)" table above is the one source of
             truth — one row per manifest with a moving status badge, and the
             stat cards at the top give the per-status counts. The old
             status-grouped queue tables listed the very same manifests again,
             so they were removed as redundant (owner request). */}
-        {manifests.length === 0 ? (
+        {manifests.length === 0 && !isCultiveraView ? (
           <EmptyState
             icon="📥"
             title="No imports yet"

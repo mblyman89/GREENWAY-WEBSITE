@@ -66,6 +66,7 @@ export function EmailIntakeTable({
   processedCount = 0,
   twinsById,
   dismissAction,
+  filtered = false,
 }: {
   rows: InboundManifest[];
   /**
@@ -107,6 +108,8 @@ export function EmailIntakeTable({
     back: "list" | "detail",
     formData: FormData,
   ) => void | Promise<void>;
+  /** R50 S10a: a filter is narrowing the rows (changes the empty message). */
+  filtered?: boolean;
 }) {
   return (
     <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)]">
@@ -116,41 +119,20 @@ export function EmailIntakeTable({
             Incoming <span className="text-[var(--admin-accent)]">(email)</span>
           </h2>
           <p className="text-xs text-[var(--admin-text-muted)]">
-            Every real manifest, newest first — the badge moves as it does (🟡 in transit → 🔵 received →
+            Every real delivery, newest first unless you sort it — the badge moves as it does (🟡 in transit → 🔵 received →
             🟢 accepted) and turns red past its ETA. Open a row to review and accept. Drafts only —
             nothing activates until you accept it.
           </p>
         </div>
-        {/* SLICE 101 — the filter toggle. Plain links (server component): the
-            page re-renders with the chosen view; needs-attention is default. */}
-        <div className="flex shrink-0 items-center gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-0.5 text-xs">
-          <Link
-            href="/admin/inventory/intake"
-            className={`rounded px-2.5 py-1 font-semibold transition ${
-              view === "action"
-                ? "bg-[var(--admin-accent)] text-black"
-                : "text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
-            }`}
-            title="Hide manifests already accepted, partially accepted, or rejected — only rows that still need attention."
-          >
-            Needs attention
-          </Link>
-          <Link
-            href="/admin/inventory/intake?view=all"
-            className={`rounded px-2.5 py-1 font-semibold transition ${
-              view === "all"
-                ? "bg-[var(--admin-accent)] text-black"
-                : "text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
-            }`}
-            title="Show every manifest — open rows first, then accepted / partially accepted / rejected."
-          >
-            All{processedCount > 0 ? ` (+${processedCount} processed)` : ""}
-          </Link>
-        </div>
+        {/* SLICE 101's Needs attention / All toggle now lives in the shared
+            ReceivingFilterBar above the table (R50 S10a), next to the third
+            view (Cultivera manifests), the filters and the sort. */}
       </div>
       {rows.length === 0 ? (
         <div className="px-4 py-6 text-sm text-[var(--admin-text-faint)]">
-          {view === "action" && processedCount > 0
+          {filtered
+            ? "No manifests match these filters. Clear them to see the whole list."
+            : view === "action" && processedCount > 0
             ? `Nothing needs attention — ${processedCount} processed manifest${
                 processedCount === 1 ? " is" : "s are"
               } hidden. Switch to "All" to see them.`
