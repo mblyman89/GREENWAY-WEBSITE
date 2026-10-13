@@ -135,7 +135,7 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
   }
   scan.addConditionalFormatting({
     ref: `B2:B${scanLast}`,
-    rules: [{ type: "beginsWith", operator: "beginsWith", text: "NOT IN CULTIVERA", priority: 1, style: { font: { bold: true, color: { argb: "FFC00000" } } } } as ExcelJS.ConditionalFormattingRule],
+    rules: [{ type: "beginsWith", operator: "beginsWith", text: "NOT IN CULTIVERA", priority: 1, style: { font: { bold: true, color: { argb: "FFC00000" } } } } as unknown as ExcelJS.ConditionalFormattingRule],
   });
   await scan.protect("", { selectLockedCells: true, selectUnlockedCells: true });
 
@@ -160,7 +160,8 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
       formula: `IF(A${r}="","",IFERROR(INDEX(${lotsRange("B")},MATCH(A${r},${lotsRange("A")},0)),"NOT IN CULTIVERA — set aside"))`,
     };
   }
-  hand.dataValidations.add(`B2:B${handLast}`, {
+  // exceljs has dataValidations at runtime (verified in the LibreOffice round-trip) but not in its .d.ts.
+  (hand as unknown as { dataValidations: { add(ref: string, v: ExcelJS.DataValidation): void } }).dataValidations.add(`B2:B${handLast}`, {
     type: "whole",
     operator: "between",
     allowBlank: true,

@@ -123,7 +123,7 @@ export default async function CountPage({
                 <span>Count date</span>
                 <input type="date" name="date" required defaultValue="2026-10-30" className="rounded border border-white/20 bg-black px-2 py-1 text-white" />
               </label>
-              <Button type="submit" variant="secondary">Download workbook</Button>
+              <Button type="submit" variant="neutral">Download workbook</Button>
             </form>
           )}
           <p className="mt-2 text-xs text-white/40">
@@ -223,7 +223,7 @@ export default async function CountPage({
                   <option value="zero">is set to 0 (only if the count covered every shelf)</option>
                 </select>
               </label>
-              <Button type="submit" variant="secondary">Recheck</Button>
+              <Button type="submit" variant="neutral">Recheck</Button>
             </form>
 
             {flagged.length > 0 && (
@@ -264,7 +264,7 @@ export default async function CountPage({
                   <input type="checkbox" name="confirm" />
                   <span>I checked the preview. Set {s?.adjustedLots} lots to the shelf count.</span>
                 </label>
-                <Button type="submit" variant="primary">Apply the count</Button>
+                <Button type="submit" variant="confirm">Apply the count</Button>
               </form>
             ) : (
               <p className="border-t border-white/10 pt-4 text-xs text-white/50">
