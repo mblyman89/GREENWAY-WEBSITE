@@ -731,6 +731,7 @@ import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core
 import { __runCultiveraOnboardingCoreTests } from "../../src/lib/inventory/cultivera-onboarding-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCultiveraCardRefreshCoreTests } from "../../src/lib/inventory/cultivera-card-refresh-core";
+import { __runCultiveraReceivedFlagCoreTests } from "../../src/lib/inventory/cultivera-received-flag-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
 import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
@@ -1531,6 +1532,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 80); // R50 S3c: rebuilt card refresh by survivorship
+  assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();

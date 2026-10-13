@@ -66,6 +66,9 @@ import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
 // Owner request: a LEAFLY badge in the Status column for products on Leafly.
 import { isLotOnLeafly } from "@/lib/inventory/leafly-badge-core";
 import { loadLeaflyBadgeData } from "@/lib/inventory/leafly-badge-server";
+// R50 S3d: the one difference a migrated lot shows - a "via Cultivera" flag.
+import { CULTIVERA_FLAG_LABEL, CULTIVERA_FLAG_TITLE, lotFlaggedCultivera } from "@/lib/inventory/cultivera-received-flag-core";
+import { loadCultiveraManifestIds } from "@/lib/inventory/cultivera-received-flag-server";
 // R32 (T-328): what Product Onboarding decided, joined onto every lot.
 import { loadLotOnboardingIndex } from "@/lib/inventory/lot-onboarding-server";
 import { attachLotOnboarding, fmtLotMoney, fmtLotMargin } from "@/lib/inventory/lot-onboarding-core";
@@ -107,6 +110,23 @@ function LeaflyBadge({ title }: { title: string }) {
       className="rounded bg-[var(--admin-purple-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-purple)]"
     >
       leafly
+    </span>
+  );
+}
+
+/**
+ * R50 S3d: same badge shape as LEAFLY, neutral outline. Shown only when the
+ * lot's manifest is a Cultivera migration manifest or the lot carries the
+ * import marker (cultivera-received-flag-core.ts). Nothing else differs.
+ */
+function CultiveraBadge() {
+  return (
+    <span
+      data-testid="inventory-cultivera-flag"
+      title={CULTIVERA_FLAG_TITLE}
+      className="rounded border border-[var(--admin-border)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-text-muted)]"
+    >
+      {CULTIVERA_FLAG_LABEL}
     </span>
   );
 }
@@ -252,6 +272,9 @@ export default async function InventoryPage({
     getRegisterSellabilityReport(),
     loadLeaflyBadgeData(),
   ]);
+  // R50 S3d: which manifests are Cultivera migration manifests (fails soft to
+  // the notes marker; started now, awaited before render).
+  const cultiveraManifestsPromise = loadCultiveraManifestIds(allLots);
   const onboardingIndex = await onboardingPromise;
   // R32: every lot carries its onboarding decision (type, strain type,
   // website category, approved price, margin, KB + draft links) so the new
@@ -361,6 +384,7 @@ export default async function InventoryPage({
   // row disappears as soon as its cause is fixed — never because a banner
   // was dismissed.
   const taxSettings = await taxSettingsPromise;
+  const cultiveraManifestIds = await cultiveraManifestsPromise;
   const intelIssues = buildIntelIssues(intel.center, {
     today,
     lots: intel.lots,
@@ -822,6 +846,12 @@ export default async function InventoryPage({
                           {l.lot_code ?? "no lot code"}
                           {!l.pos_product_key && (
                             <span className="ml-2 text-[var(--admin-orange)]">· unlinked</span>
+                          )}
+                          {/* R50 S3d: always-visible column, so the flag shows in every view. */}
+                          {lotFlaggedCultivera(l, cultiveraManifestIds) && (
+                            <span className="ml-2 align-middle">
+                              <CultiveraBadge />
+                            </span>
                           )}
                         </div>
                         {/* R32: one click to the product's identity (KB) and to the

@@ -86,6 +86,8 @@ import {
 } from "@/lib/inventory/received-date-core";
 import { pacificToday } from "@/lib/reports/timezone";
 import { migrationLotCallout, lotManifestHref } from "@/lib/inventory/migration-lot-fix-core";
+// R50 S3d: the one difference a migrated lot shows - a "Received via Cultivera" flag.
+import { CULTIVERA_FLAG_TITLE, isReceivedViaCultivera, manifestPayloadKind } from "@/lib/inventory/cultivera-received-flag-core";
 
 export const dynamic = "force-dynamic";
 // R28: "Re-read lab certificate" runs LlamaParse (up to 90 s) on this page.
@@ -172,6 +174,11 @@ export default async function LotDetailPage({
     ]);
   // Round 12: Cultivera-upload lots get a callout pointing at Bulk fill.
   const migrationCallout = migrationLotCallout(lot);
+  // R50 S3d: same rule as the Inventory list (manifest kind, or the import marker).
+  const receivedViaCultivera = isReceivedViaCultivera(
+    lot,
+    manifest ? { manifest_number: manifest.manifest_number, payload_kind: manifestPayloadKind(manifest.raw_payload) } : null,
+  );
   // S26 (F-101): is this product's card on the PUBLISHED menu? The product
   // page 404s otherwise, so the enrichment button falls back to a search.
   const isLive = lot.pos_product_key
@@ -592,10 +599,19 @@ export default async function LotDetailPage({
                     >
                       {manifest?.manifest_number ?? lot.manifest_id}
                     </Link>
+                    {receivedViaCultivera ? (
+                      <span
+                        data-testid="lot-cultivera-flag"
+                        title={CULTIVERA_FLAG_TITLE}
+                        className="ml-2 rounded border border-[var(--admin-border)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-text-muted)]"
+                      >
+                        Received via Cultivera
+                      </span>
+                    ) : null}
                   </dd>
                 </div>
               ) : (
-                <Row label="Manifest" value={"—"} />
+                <Row label="Manifest" value={receivedViaCultivera ? "Received via Cultivera" : "—"} />
               )}
               {lot.notes && <Row label="Notes" value={lot.notes} />}
             </dl>
