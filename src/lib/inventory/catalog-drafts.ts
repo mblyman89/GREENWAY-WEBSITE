@@ -127,6 +127,7 @@ import {
   reonboardApproval,
   stagingSkipForManifestKind,
 } from "@/lib/inventory/cultivera-onboarding-core";
+import { CARD_REFRESH_ENV, refreshStagingForKind } from "@/lib/inventory/cultivera-card-refresh-core";
 // SLICE 18F: the onboarding memory. This module only SUPPLIES rows to it.
 import {
   recallClassification,
@@ -1280,6 +1281,7 @@ export async function approveDraftWithPrice(
   // the card agrees; otherwise none. If the manifest kind cannot be read the
   // approval is refused - we cannot tell which rules apply (fail closed).
   let reonboarding = false;
+  let refreshesCard = false;
   let recordedPrice: number | null = priceMinor;
   if (row?.manifest_id) {
     const { data: kindRow, error: kindErr } = await admin
@@ -1290,8 +1292,13 @@ export async function approveDraftWithPrice(
     if (kindErr) {
       return { ok: false, error: "Could not read this product's delivery, so it was not approved. Try again." };
     }
-    reonboarding =
-      stagingSkipForManifestKind((kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null) !== null;
+    const kind = (kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null;
+    reonboarding = stagingSkipForManifestKind(kind) !== null;
+    // R50 S3c: a manifest rebuilt from Cultivera now STAGES on approval in
+    // refresh mode (the live card is rebuilt from our records; its price,
+    // sizes and visibility never change). CULTIVERA_CARD_REFRESH=off and the
+    // POS-import migration manifest keep the S3 rule (no staging).
+    refreshesCard = refreshStagingForKind(kind, process.env[CARD_REFRESH_ENV]);
   }
   if (reonboarding) {
     let live: number | null = null;
@@ -1306,7 +1313,8 @@ export async function approveDraftWithPrice(
     }
     const plan = reonboardApproval(live);
     recordedPrice = plan.priceMinor; // null = no single live price; nothing recorded
-    opts = { ...opts, skipStaging: plan.skipStaging };
+    // A batch caller's skipStaging is always kept (it stages once itself).
+    opts = { ...opts, skipStaging: opts.skipStaging || (plan.skipStaging && !refreshesCard) };
   } else {
     // R50 S3: only a re-onboarding may approve without a price; an ordinary
     // draft always needs a positive whole-cent price (validatePrice allows
