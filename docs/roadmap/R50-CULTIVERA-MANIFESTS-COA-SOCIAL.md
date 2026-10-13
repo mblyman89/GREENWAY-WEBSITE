@@ -842,3 +842,30 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     pure self-tests pass.
   * **Precondition (owner):** confirm migration 0244 is applied in production before the first Apply (§1.3).
   * Next is **S3**: the onboarding "Cultivera manifests" section and `reonboard` drafts.
+
+- **2026-10-13, S3: Cultivera manifests through Product Onboarding (§1.5b).**
+  * **Executor.** `cultivera-onboarding-core.ts` (pure, 55 self-tests, runner floor 55) and the server
+    `cultivera-onboarding.ts`. "Start" on a rebuilt manifest runs the NATIVE chain, nothing new:
+    `seedDraftsForManifest(…, {reonboard:true})` → COA archive → extract (60 s budget) → `promoteManifestToKb` →
+    `linkKbProductsToDrafts` → `attachLabFactsToManifestDrafts` → Cultivera THC/CBD as a `potency` fact
+    (source `cultivera`, shown, never counted) with provenance rows. One `manifest_events` note + one audit row
+    (`live_menu_changed:false`). Start refuses any manifest that is not `cultivera-reconstructed`.
+  * **Reonboard seeding.** One draft per card key, flagged "Already on the menu"; keys already waiting in review or
+    already approved are skipped (reruns are no-ops); the suggestion is the live card's price only when every
+    variant agrees, otherwise none.
+  * **Rules (sellable stays sellable).** Staging skips a rebuilt manifest (`migration-manifest`) and fails closed
+    on a manifest read error (`manifest-kind-read-failed`). Approval of a rebuilt-manifest draft re-reads the live
+    price on the server, ignores the form, skips the floor and can never stage a menu version. Verified: approval
+    writes only fact columns on the lot (classification mirror, strain type, `kb_product_id`); status, qty, cost,
+    CCRS, card visibility and price are never written.
+  * **Screen.** Product Onboarding gains a collapsible "Cultivera manifests" section (paged, newest first, state per
+    manifest: Not started / In review / Done), a Start / Run again button, a result banner (closed set), and on
+    rebuilt rows the badge, the live price and Approve without a price box.
+  * **Measured on a real database** (`scripts/recon/r50-s3`): START#1 seeded 3 (1 same card), 3 saved to the KB,
+    3 linked, 3 potency facts, 339 ms; START#2 seeded 0; native manifest refused; approvals recorded 2500 / null /
+    1500 with `kb_product_id`; staging reason `migration-manifest`; section "Done: 3 approved"; 3 provenance rows.
+    After `undo.sql` the lot md5 and the `kb_strains` md5 are byte-identical to before.
+  * **Testing the tests:** `r50-s3-cultivera-onboarding.test.ts` (23, real PostgrestClient over the shared fake).
+    **22 / 22 mutants killed.** 40 related suites pass (1,087 tests), eslint 0, scoped tsc 0, all pure self-tests
+    pass. Pins changed on purpose: s13 permission count 7, S31 allowlist `cvBanner.tone`, s11 header row in tbody.
+  * Next is **S3b** (owner's follow-up #3): the full Cultivera fact harvest at onboarding (§0.3).
