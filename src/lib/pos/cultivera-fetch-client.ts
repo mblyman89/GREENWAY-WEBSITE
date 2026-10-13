@@ -16,6 +16,7 @@ import { crawlerBaseUrl, isCrawlerConfigured, CrawlerNotConfiguredError } from "
 import { assembleFromRun, type AssembleResult, type BatchRecord } from "@/lib/pos/cultivera-fetch-assemble";
 import type { ListLot } from "@/lib/pos/cultivera-fetch-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { buildPlanInputs, type RehomePlanInputs } from "@/lib/inventory/cultivera-rehome-core";
 import {
   REQUIRED_FILES,
   harvestAgeMinutes,
@@ -110,6 +111,12 @@ export type LoadedRun = {
   ageMinutes: number | null;
   /** sha256 of every verified file — recorded in the audit row. */
   files: { name: string; bytes: number; sha256: string }[];
+  /**
+   * R50 S2c: the manifest plan's non-workbook inputs for the import this run
+   * becomes (no prices). null when the run has no transfer details. Persisted at
+   * import time so Apply still works after the crawler prunes the run.
+   */
+  planInputsFor: ((importId: string) => RehomePlanInputs) | null;
 };
 
 /**
@@ -164,6 +171,8 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
     problems.push("Lots link to Cultivera transfers but the run has no transfer_details.jsonl.");
   }
 
+  // One harvest day for the preview plan AND the persisted plan inputs (never two clocks).
+  const harvestDay = pacificDayKey(state.finishedAt ?? new Date());
   let assembled: AssembleResult | null = null;
   if (problems.length === 0) {
     assembled = assembleFromRun({
@@ -173,9 +182,13 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
       batches,
       harvestSeconds: typeof state.seconds === "number" ? state.seconds : Number.POSITIVE_INFINITY,
       transferDetails,
-      pacificToday: pacificDayKey(state.finishedAt ?? new Date()),
+      pacificToday: harvestDay,
     });
   }
   const ageMinutes = harvestAgeMinutes(state.finishedAt, Date.now());
-  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes };
+  const planInputsFor =
+    transferDetails && problems.length === 0
+      ? (importId: string) => buildPlanInputs({ importId, runId, pacificToday: harvestDay, transferDetails: transferDetails!, listLots })
+      : null;
+  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor };
 }

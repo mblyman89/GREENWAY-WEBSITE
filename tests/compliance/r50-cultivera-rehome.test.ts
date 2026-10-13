@@ -35,6 +35,10 @@ import { posImportManifestNumber } from "../../src/lib/inventory/import-lineage-
 import {
   REHOME_KEY_CHUNK,
   applyRehome,
+  loadPlanInputs,
+  loadRehomeSources,
+  rehomeInputsKey,
+  savePlanInputs,
   previewRehome,
   readManifestsByKeys,
   rollbackRehome,
@@ -429,6 +433,78 @@ describe("cultivera-rehome store", () => {
   });
 });
 
+/* ---------------- 2b. persisted plan inputs ---------------- */
+
+function fakeStorage(files: Record<string, Buffer>, failUpload = false) {
+  return {
+    storage: {
+      from(bucket: string) {
+        return {
+          async upload(key: string, body: Buffer, o: { upsert?: boolean }) {
+            if (failUpload) return { error: { message: "denied" } };
+            expect(bucket).toBe("pos-raw");
+            expect(o.upsert).toBe(true);
+            files[key] = body;
+            return { error: null };
+          },
+          async download(key: string) {
+            const b = files[key];
+            return b ? { data: new Blob([new Uint8Array(b)]), error: null } : { data: null, error: { message: "Object not found" } };
+          },
+        };
+      },
+    },
+  };
+}
+
+describe("cultivera-rehome plan inputs", () => {
+  const inputs = () =>
+    buildPlanInputs({
+      importId: IMP,
+      runId: "run-1",
+      pacificToday: "2024-09-10",
+      transferDetails: [{ Id: 11, TransferNumber: "0001234567", FromVendor: "Grow Co", DateAccepted: "2024-08-30T18:56:03.507Z", StatusDisplay: "Accepted", Details: [{ Barcode: "A", AcceptedQuantity: 5, Quantity: 5, UnitPrice: 4.5 }] }],
+      listLots: [{ Barcode: "A", IncomingTransferId: 11 }],
+    });
+
+  it("round-trips through the private pos-raw bucket, keyed by import, with no prices", async () => {
+    const files: Record<string, Buffer> = {};
+    const admin = fakeStorage(files) as never;
+    const saved = await savePlanInputs(admin, inputs());
+    expect(saved.key).toBe(rehomeInputsKey(IMP));
+    expect(saved.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(files[saved.key].toString()).not.toMatch(/UnitPrice|4\.5/);
+    expect(await loadPlanInputs(admin, IMP)).toEqual(inputs());
+  });
+
+  it("refuses to save garbage, and surfaces an upload failure", async () => {
+    await expect(savePlanInputs(fakeStorage({}) as never, { ...inputs(), pacificToday: "soon" })).rejects.toThrow(/not saved/);
+    await expect(savePlanInputs(fakeStorage({}, true) as never, inputs())).rejects.toThrow(/denied/);
+  });
+
+  it("refuses inputs that are missing, unreadable, or belong to another import", async () => {
+    await expect(loadPlanInputs(fakeStorage({}) as never, IMP)).rejects.toThrow(/no saved manifest plan inputs/);
+    await expect(loadPlanInputs(fakeStorage({ [rehomeInputsKey(IMP)]: Buffer.from("{oops") }) as never, IMP)).rejects.toThrow(/not valid JSON/);
+    const other = Buffer.from(JSON.stringify({ ...inputs(), importId: "5c2c0000-0000-4000-8000-00000000000b" }));
+    await expect(loadPlanInputs(fakeStorage({ [rehomeInputsKey(IMP)]: other }) as never, IMP)).rejects.toThrow(/another import/);
+  });
+
+  it("loadRehomeSources refuses test imports and imports without raw workbooks (before touching storage)", async () => {
+    const mk = (row: Row | null) =>
+      ({
+        ...fakeStorage({}),
+        from: () => {
+          const b = { select: () => b, eq: () => b, limit: async () => ({ data: row ? [row] : [], error: null }) };
+          return b;
+        },
+      }) as never;
+    await expect(loadRehomeSources(mk(null), IMP)).rejects.toThrow(/does not exist/);
+    await expect(loadRehomeSources(mk({ id: IMP, is_test: true, products_storage_key: "p", inventories_storage_key: "i" }), IMP)).rejects.toThrow(/test import/);
+    await expect(loadRehomeSources(mk({ id: IMP, is_test: false, products_storage_key: null, inventories_storage_key: "i" }), IMP)).rejects.toThrow(/no stored raw workbook/);
+    await expect(loadRehomeSources(mk({ id: IMP, is_test: false, products_storage_key: "p", inventories_storage_key: "i" }), IMP)).rejects.toThrow(/re-read the import's raw workbooks/);
+  });
+});
+
 /* ---------------- 3. wiring ---------------- */
 
 describe("cultivera-rehome wiring", () => {
@@ -440,6 +516,21 @@ describe("cultivera-rehome wiring", () => {
     const s = src("src/lib/inventory/cultivera-rehome-store.ts");
     expect(s).toMatch(/\.update\(\{ manifest_id: target \}\)\s*\.in\("id", b\.lotIds\)\s*\.eq\("manifest_id", state\.source\.id\)/);
     expect(s).not.toMatch(/\.update\(\{[^}]*(on_hand_qty|unit_cost|status|vendor_id)/);
+  });
+  it("Fetch It All saves the plan inputs for real (non-test) imports, built from the SAME harvest day, and audits the result", () => {
+    const a = src("src/app/admin/menu-imports/fetch-actions.ts");
+    expect(a).toMatch(/if \(!isTest && loaded\.planInputsFor\)/);
+    expect(a).toMatch(/savePlanInputs\(createSupabaseAdminClient\(\), loaded\.planInputsFor\(importId\)\)/);
+    expect(a).toMatch(/\n\s+planInputs,\n/);
+    const c = src("src/lib/pos/cultivera-fetch-client.ts");
+    expect(c).toMatch(/pacificToday: harvestDay,/);
+    expect(c).toMatch(/pacificToday: harvestDay, transferDetails/);
+    expect(c).not.toMatch(/pacificToday: pacificDayKey\(/);
+  });
+  it("Apply re-plans from the import's stored raw workbooks with the same transform + sheet names as lot creation", () => {
+    const s = src("src/lib/inventory/cultivera-rehome-store.ts");
+    expect(s).toMatch(/productsSheet: "Sheet1",\s*inventoriesSheet: "Inventories"/);
+    expect(src("src/lib/pos/import-service.ts")).toMatch(/productsSheet: "Sheet1",\s*inventoriesSheet: "Inventories"/);
   });
   it("is registered in the pure self-test runner at the measured floor", () => {
     expect(src("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-rehome-core", __runCultiveraRehomeCoreTests\(\), 67\)/);
