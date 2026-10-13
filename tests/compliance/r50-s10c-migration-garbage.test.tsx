@@ -7,7 +7,7 @@
  * upload."
  *
  * Pins:
- *   1. the pure core runs at its measured self-test count (52);
+ *   1. the pure core runs at its measured self-test count (53);
  *   2. the store reads the one-time Cultivera import end to end and routes by
  *      the CCRS ledger; every short read is an error, never a partial list;
  *   3. the panel renders the headline, the routes, R15b links, and never offers
@@ -142,7 +142,7 @@ async function load() {
 describe("R50 S10c — core", () => {
   it("self-tests run at the measured count", async () => {
     const m = await import("@/lib/compliance/ccrs-migration-garbage-core");
-    expect(m.__runCcrsMigrationGarbageCoreTests()).toEqual({ passed: 52, failed: 0 });
+    expect(m.__runCcrsMigrationGarbageCoreTests()).toEqual({ passed: 53, failed: 0 });
   });
 });
 
