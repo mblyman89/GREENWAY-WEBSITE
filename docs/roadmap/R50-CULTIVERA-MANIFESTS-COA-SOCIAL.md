@@ -85,6 +85,25 @@ because it was shared in a chat transcript.
 > often, the sandbox is very unstable. Please protect the work as best as possible. Test it, test the tests.
 > Thank you!
 
+### 0.4 Owner's follow-up #4 (verbatim, 2026-10-13)
+
+> Please continue building this enhanced and far superior pipeline for transferring all Cultivera data to our
+> system. The plan is to scrape everything, document and record everything, make certain that every manifest
+> created by the migration behaves like it was received by us. I need to be able to onboard the manifests and
+> utilize every tool we built for receiving products. We need to make certain that every product gets enriched
+> the same way our intake process does it. The system needs to catalog the products in the exact same way,
+> master them the same, the inventory page should show them as being the same with the exception of having a
+> flag set to them saying they were received by Cultivera. Their inventory detail page should be identical to
+> ones we received. The products should be attached to the vendors the same way, and show up on the menu in the
+> same way. The point is for these products to be completely rebuilt by our superior system so they can be
+> displayed on the menu without shame or disappointment about them being inaccurate and full of garbage data.
+> The only difference about these recreated manifests is they can be sold while they are still being onboarded.
+> Keep going above and beyond as you have been doing for me, it's working. Keep researching the internet for
+> enterprise grade solutions to use and implement. I need you to keep looking for enterprise grade migration
+> solutions, expert and professional solutions that are well established and widely used. We shouldn't reinvent
+> the wheel, just improve upon it. Follow the standing rules and never guess, never assume. Test it, test the
+> tests. Thank you!
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
