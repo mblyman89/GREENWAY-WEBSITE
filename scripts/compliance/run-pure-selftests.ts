@@ -581,6 +581,7 @@ import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cu
 import { __runMigrationStockCoreTests } from "../../src/lib/accounting/migration-stock-core";
 import { __runImportLineageCoreTests } from "../../src/lib/inventory/import-lineage-core";
 import { __runCultiveraRehomeCoreTests } from "../../src/lib/inventory/cultivera-rehome-core";
+import { __runCultiveraRehomeUiCoreTests } from "../../src/lib/inventory/cultivera-rehome-ui-core";
 import { __runCultiveraFetchCoreTests } from "../../src/lib/pos/cultivera-fetch-core";
 import { __runCultiveraFetchButtonCoreTests } from "../../src/lib/pos/cultivera-fetch-button-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
@@ -2240,6 +2241,7 @@ __runLiquidVolumeTests();
   assertRan("migration-stock-core", __runMigrationStockCoreTests(), 26); // R50 S2a: Cultivera migration stock is never a purchase (payables, Sage, bill, receipt)
   assertRan("import-lineage-core", __runImportLineageCoreTests(), 30); // R50 S2b: an import's lots are found by import id (POS-IMPORT + rebuilt manifests)
   assertRan("cultivera-rehome-core", __runCultiveraRehomeCoreTests(), 67); // R50 S2c: rebuild manifests + re-home lots (idempotent, guarded, control totals)
+  assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 33); // R50 S9: the button — run view, sha verify, import gate
   console.log("ALL PURE SELF-TESTS PASSED");

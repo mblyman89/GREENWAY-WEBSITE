@@ -37,6 +37,7 @@ import { bulkRefileFromTypeCheck } from "../fix-actions";
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { isValidWebsiteCategory } from "@/lib/menu/menu-category-override-core";
 import Link from "next/link";
+import { rehomeHref } from "@/lib/inventory/cultivera-rehome-ui-core";
 import {
   posImportFixFor,
   posDiagnosticRowLink,
@@ -686,6 +687,18 @@ export default async function ImportReviewPage({
                   you already typed is never overwritten.
                 </p>
               </form>
+            ) : null}
+            {/* R50 S2c: put the lots back on the real Cultivera deliveries (opens a read-only preview first). */}
+            {hasCreatedLots && !imp.is_test ? (
+              <div className="mt-3" data-testid="lot-plan-rebuild-manifests">
+                <Button href={rehomeHref(imp.id)} variant="neutral" size="sm">
+                  Rebuild Cultivera manifests (preview first) →
+                </Button>
+                <p className="mt-1 text-xs text-white/45">
+                  Moves each lot from the import manifest onto the real delivery it arrived on, so these products show up in
+                  Onboarding and get enriched like a native delivery. Only the manifest changes; you review the plan before anything is written.
+                </p>
+              </div>
             ) : null}
             {!hasCreatedLots && (
               <p className="mt-3 text-xs text-white/50" data-testid="lot-plan-not-yet">
