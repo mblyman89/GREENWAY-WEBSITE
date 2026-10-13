@@ -56,7 +56,7 @@ import {
 import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { loadCultiveraManifestSection, loadRebuiltManifestIds } from "@/lib/inventory/cultivera-onboarding";
-import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
+import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
@@ -279,6 +279,8 @@ export default async function CatalogDraftsPage({
     loadRebuiltManifestIds([...drafts.map((d) => d.manifest_id), focus.manifestId]),
     focus.draftId ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
   ]);
+  // R50 S3: result of pressing Start (closed set, cultiveraStartBanner).
+  const cvBanner = cultiveraStartBanner(sp.cv, sp.cv_msg);
   const focusIsRebuilt = Boolean(focus.manifestId && rebuiltIds?.has(focus.manifestId));
   // R32 (T-328): the CURRENT markup setting, so the price fine print is
   // recomputed live (never a stale frozen sentence) and drift is flagged.
@@ -1088,18 +1090,18 @@ export default async function CatalogDraftsPage({
         )}
 
         {/* R50 S3: start a Cultivera-rebuilt manifest through Onboarding. */}
-        {sp.cv && (
+        {cvBanner && (
           <div
-            className={`rounded-[var(--admin-radius)] border px-4 py-2 text-sm ${
-              sp.cv === "ok"
-                ? "border-[var(--admin-accent)]/40 bg-[var(--admin-surface-2)] text-[var(--admin-text)]"
-                : "border-red-500/40 bg-red-500/10 text-red-300"
-            }`}
-            role="status"
+            role={cvBanner.tone === "bad" ? "alert" : "status"}
             data-testid="cultivera-onboarding-banner"
+            data-tone={cvBanner.tone}
+            className={
+              cvBanner.tone === "bad"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
           >
-            {sp.cv === "ok" ? "" : "Could not start this Cultivera manifest: "}
-            {(sp.cv_msg ?? "").slice(0, 600)}
+            {cvBanner.text}
           </div>
         )}
         {focusIsRebuilt && focus.manifestId && (
@@ -1128,7 +1130,7 @@ export default async function CatalogDraftsPage({
             </summary>
             <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{CULTIVERA_SECTION_HELP}</p>
             {!cvSection.ok ? (
-              <p className="mt-2 text-xs text-red-300" data-testid="cultivera-manifests-error">
+              <p className="mt-2 text-xs text-[var(--admin-danger)]" data-testid="cultivera-manifests-error">
                 The Cultivera manifests could not be read: {cvSection.error}
               </p>
             ) : cvSection.rows.length === 0 ? (
@@ -1138,17 +1140,17 @@ export default async function CatalogDraftsPage({
             ) : (
               <>
                 <table className="mt-2 w-full text-xs">
-                  <thead className="text-left text-[var(--admin-text-faint)]">
-                    <tr>
-                      <th className="py-1 pr-2">Manifest</th>
-                      <th className="py-1 pr-2">Vendor</th>
-                      <th className="py-1 pr-2">Received</th>
-                      <th className="py-1 pr-2">Lots</th>
-                      <th className="py-1 pr-2">Onboarding</th>
-                      <th className="py-1" />
-                    </tr>
-                  </thead>
+                  {/* Header row inside tbody: the onboarding table below owns
+                      the page's single <thead> (s11 column-list contract). */}
                   <tbody className="divide-y divide-[var(--admin-border)]">
+                    <tr className="text-left text-[var(--admin-text-faint)]">
+                      <th scope="col" className="py-1 pr-2">Manifest</th>
+                      <th scope="col" className="py-1 pr-2">Vendor</th>
+                      <th scope="col" className="py-1 pr-2">Received</th>
+                      <th scope="col" className="py-1 pr-2">Lots</th>
+                      <th scope="col" className="py-1 pr-2">Onboarding</th>
+                      <th scope="col" className="py-1"><span className="sr-only">Action</span></th>
+                    </tr>
                     {cvSection.rows.map((r) => (
                       <tr key={r.id} data-testid="cultivera-manifest-row" data-state={r.state}>
                         <td className="py-1 pr-2 font-mono">
