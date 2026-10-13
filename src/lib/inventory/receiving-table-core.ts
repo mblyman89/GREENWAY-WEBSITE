@@ -560,6 +560,8 @@ export function __runReceivingTableCoreTests(): { passed: number; failed: number
   ok(ids(applyNativeFilters(rows, P({ vendor: "Alp" }), today)) === "", "vendor facet is not a substring match");
   ok(ids(applyNativeFilters(rows, P({ status: "overdue" }), today)) === "1", "overdue = in transit past ETA");
   ok(ids(applyNativeFilters(rows, P({ status: "in_transit" }), today)) === "1,4", "stage facet");
+  const acceptedLate: NativeRow = { id: "9", manifest_number: "M-9", vendor_label: "x", status: "accepted", eta_date: "2026-09-01", created_at: null };
+  ok(ids(applyNativeFilters([acceptedLate], P({ status: "overdue" }), today)) === "", "an accepted delivery past its ETA is not overdue");
   ok(ids(applyNativeFilters(rows, P({ q: "inv-77" }), today)) === "1", "search reaches the invoice #");
   ok(ids(applyNativeFilters(rows, P({ q: "m-1" }), today)) === "1,3", "search is a substring on the number");
   // 2026-10-01T06:30Z is Sep 30 in Pacific.

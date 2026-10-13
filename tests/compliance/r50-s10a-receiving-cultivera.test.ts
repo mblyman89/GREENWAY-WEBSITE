@@ -27,7 +27,9 @@ const st: {
   failManifests: boolean;
   failDraftsOnCall: number;
   queries: Q[];
-} = { manifests: [], drafts: [], failManifests: false, failDraftsOnCall: 0, queries: [] };
+  kind: string | null;
+  updates: Record<string, unknown>[];
+} = { manifests: [], drafts: [], failManifests: false, failDraftsOnCall: 0, queries: [], kind: null, updates: [] };
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/env", async (orig) => ({
@@ -53,6 +55,13 @@ vi.mock("@/lib/supabase/admin", () => ({
         order() {
           return b;
         },
+        maybeSingle() {
+          return Promise.resolve({ data: { id: "m1", payload_kind: st.kind }, error: null });
+        },
+        update(row: Record<string, unknown>) {
+          st.updates.push(row);
+          return { eq: () => Promise.resolve({ error: null }) };
+        },
         range(from: number, to: number) {
           q.range = [from, to];
           st.queries.push(q);
@@ -73,9 +82,16 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
+vi.mock("@/lib/purchasing/po-store", () => ({
+  listPurchaseOrders: async () => [],
+  getPurchaseOrder: async () => ({ id: "po1", po_number: "PO-1" }),
+}));
+vi.mock("@/lib/inventory/intake-store", () => ({ logManifestEvent: async () => undefined }));
+
 import { __runReceivingTableCoreTests } from "../../src/lib/inventory/receiving-table-core";
 import { loadReceivingCultiveraRows } from "../../src/lib/inventory/receiving-cultivera-store";
 import { RECONSTRUCTED_MANIFEST_KIND } from "../../src/lib/inventory/cultivera-manifest-group-core";
+import { setManifestPoLink } from "../../src/lib/inventory/po-link-store";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -96,13 +112,15 @@ beforeEach(() => {
   st.failManifests = false;
   st.failDraftsOnCall = 0;
   st.queries = [];
+  st.kind = null;
+  st.updates = [];
 });
 
 describe("R50 S10a — the pure core", () => {
-  it("self-tests run at the measured 87", () => {
+  it("self-tests run at the measured 88", () => {
     const r = __runReceivingTableCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(87);
+    expect(r.passed).toBe(88);
   });
 });
 
@@ -175,7 +193,8 @@ describe("R50 S10a — the Receiving page", () => {
 
   it("the Cultivera view loads only when chosen, and the table opens the same manifest page", () => {
     expect(page).toContain("isCultiveraView ? loadReceivingCultiveraRows() : Promise.resolve(null)");
-    expect(table).toContain("href={`/admin/inventory/intake/${r.id}`}");
+    // Both the manifest # and the Open button go to the manifest page.
+    expect(table.match(/href=\{`\/admin\/inventory\/intake\/\$\{r\.id\}`\}/g)?.length).toBe(2);
     expect(table).toContain("draftsForManifestHref(r.id)");
     expect(table).toContain("COMPLETION_LABEL[r.completion]");
   });
@@ -198,9 +217,24 @@ describe("R50 S10a — the Receiving page", () => {
 describe("R50 S10a — a rebuilt manifest opens safely", () => {
   const detail = read("src/app/admin/inventory/intake/[id]/page.tsx");
   const store = read("src/lib/inventory/po-link-store.ts");
-  it("the PO link panel is hidden for a rebuilt manifest and the store refuses the link", () => {
+  it("the PO link panel is hidden for a rebuilt manifest", () => {
     expect(detail).toContain("poLink.available && !rebuilt &&");
+    expect(detail).toContain('data-testid="rebuilt-manifest-banner"');
     expect(store).toContain("isRebuiltKind(");
-    expect(store).toContain("rebuilt from the Cultivera export");
+  });
+
+  it("the store refuses to link a rebuilt manifest to a PO, and writes nothing", async () => {
+    st.kind = RECONSTRUCTED_MANIFEST_KIND;
+    const r = await setManifestPoLink("m1", "po1", "u1");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("rebuilt from the Cultivera export");
+    expect(st.updates).toEqual([]);
+  });
+
+  it("a real delivery still links (the guard is narrow)", async () => {
+    st.kind = null;
+    const r = await setManifestPoLink("m1", "po1", "u1");
+    expect(r).toEqual({ ok: true });
+    expect(st.updates).toEqual([{ purchase_order_id: "po1", updated_by: "u1" }]);
   });
 });

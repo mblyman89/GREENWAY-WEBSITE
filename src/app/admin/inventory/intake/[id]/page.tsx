@@ -61,7 +61,6 @@ import { intakeMenuStepSnapshot } from "@/lib/pos/intake-menu-staging";
 import { getManifestPoLinkState } from "@/lib/inventory/po-link-store";
 import { ManifestPoLinkPanel } from "@/components/admin/inventory/ManifestPoLinkPanel";
 import { isRebuiltKind } from "@/lib/inventory/cultivera-rehome-core";
-import { draftsForManifestHref } from "@/lib/catalog/draft-deep-link-core";
 import {
   rejectManifestAction,
   updateManifestTransportAction,
