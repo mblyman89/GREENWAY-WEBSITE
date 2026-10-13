@@ -999,3 +999,90 @@ describe("S13 wiring", () => {
     expect(rb).toMatch(/drop table if exists public\.lookup_jobs/);
   });
 });
+
+// === R50 S12: the batch lookup on a manifest REBUILT from the Cultivera export ===
+// Owner follow-up #3/#7: Gemini must run on recreated manifests too. The roadmap's
+// S3c parity table says "same code, same gates". These pin that: nothing in the
+// enqueue or the tick reads the manifest's kind (so a rebuilt delivery is never
+// refused or treated differently), and nothing in the lookup path writes a live
+// menu card, a price, a quantity or the manifest itself.
+describe("R50 S12 — batch lookup parity on a Cultivera-rebuilt manifest", () => {
+  const REBUILT = "aaaaaaaa-0000-4000-8000-0000000000c5";
+  function seedRebuilt(db: FakePostgrest, n: number): string[] {
+    db.rows("inbound_manifests").push({
+      id: REBUILT,
+      status: "accepted",
+      raw_payload: { kind: "cultivera-reconstructed", cultivera_transfer_id: "T-1" },
+    });
+    return seedDrafts(db, n, { manifest: REBUILT, from: 200 });
+  }
+
+  it("the kind constant these tests use is the real one", async () => {
+    const core = await import("@/lib/inventory/cultivera-manifest-group-core");
+    expect(core.RECONSTRUCTED_MANIFEST_KIND).toBe("cultivera-reconstructed");
+  });
+
+  it("enqueue on a rebuilt manifest creates the job exactly like a received delivery, and never reads the manifest row", async () => {
+    const db = state.db;
+    const ids = seedRebuilt(db, 4);
+    const r = await enqueue(REBUILT);
+    expect(r).toMatchObject({ ok: true, kind: "created", total: 4 });
+    expect(items(db).map((i) => i.draft_id)).toEqual(ids);
+    expect(db.log.some((q) => q.table === "inbound_manifests")).toBe(false);
+  });
+
+  it("the tick works every product on the rebuilt manifest; writes touch ONLY the job tables", async () => {
+    const db = state.db;
+    const ids = seedRebuilt(db, 3);
+    await enqueue(REBUILT);
+    const r0 = runner();
+    const r = await runLookupJobsTick({ admin: admin(), runItem: r0.fn, now: () => T0, token: "11111111-0000-4000-8000-0000000000c5" });
+    expect(r).toMatchObject({ ok: true, done: 3, failed: 0, finished: true });
+    expect(r0.ran).toEqual(ids);
+    const writeTables = new Set(db.log.filter((q) => q.method !== "GET" && q.method !== "HEAD").map((q) => q.table));
+    expect([...writeTables].sort()).toEqual(["lookup_job_items", "lookup_jobs"]);
+    expect(db.rows("inbound_manifests")[0]).toMatchObject({ status: "accepted" });
+  });
+
+  it("one item on a rebuilt manifest goes through the SAME attach door (draft context, onboarding source)", async () => {
+    const db = state.db;
+    seedRebuilt(db, 1);
+    state.lookup = async () => ({ result: { found: true, hasAnyFindings: true }, sources: ["https://example.test/r"], model: "gemini-2.5-flash", usedWebSearch: true, facts: null });
+    state.attach = async () => ({ ok: true, receipt: { attached: [{ field: "thc" }], queued: [] }, sentence: "Saved." });
+    const r = await runOneItem(admin(), draftId(200), { userId: USER, email: null });
+    expect(r.aiCalls).toBe(1);
+    expect(r.result).toMatchObject({ outcome: "attached", attached: 1 });
+    const a = state.attachArgs[0] as { context: unknown; suggestionSource: string };
+    expect(a.context).toEqual({ kind: "draft", draftId: draftId(200) });
+    expect(a.suggestionSource).toBe("model:onboarding-lookup");
+    const writes = db.log.filter((q) => q.method !== "GET" && q.method !== "HEAD");
+    expect(writes.some((q) => q.table === "menu_items" || q.table === "inbound_manifests")).toBe(false);
+  });
+
+  it("static guard: the lookup + attach code never names a live card / price / manifest-write table; the lot write is fill-only", () => {
+    const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const server = strip(read("src/lib/catalog/lookup-job-server.ts"));
+    const attach = strip(read("src/lib/catalog/attach-facts.ts"));
+    for (const [name, src] of [["lookup-job-server", server], ["attach-facts", attach]] as const) {
+      for (const t of ["menu_items", "menu_item_prices", "inbound_manifests", "pos_sales", "inventory_adjustments"]) {
+        expect(src, `${name} names ${t}`).not.toMatch(new RegExp(`from\\(\\s*"${t}"\\s*\\)`));
+      }
+      expect(src, `${name} reads the manifest kind`).not.toMatch(/raw_payload|RECONSTRUCTED_MANIFEST_KIND|cultivera-reconstructed/);
+    }
+    // Every inventory_lots UPDATE in attach is gated on a blank kb_product_id.
+    const lotUpdates = attach.split('.from("inventory_lots")').slice(1).filter((chunk) => /^\s*\.update\(/.test(chunk));
+    expect(lotUpdates.length).toBeGreaterThan(0);
+    for (const chunk of lotUpdates) {
+      const head = chunk.slice(0, 300);
+      expect(head).toMatch(/\.update\(\{\s*kb_product_id:[^}]*\}\)/);
+      expect(head).toMatch(/\.is\("kb_product_id", null\)/);
+    }
+  });
+
+  it("the drafts page shows the batch lookup for a rebuilt manifest: its switch does not depend on the rebuilt flag", () => {
+    const page = read("src/app/admin/inventory/drafts/page.tsx");
+    const line = page.split("\n").find((l) => /const batchLookupOn\s*=/.test(l)) ?? "";
+    expect(line).toMatch(/focus\.manifestId/);
+    expect(line).not.toMatch(/Rebuilt|rebuilt/);
+  });
+});
