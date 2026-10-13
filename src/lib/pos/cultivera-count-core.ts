@@ -72,7 +72,8 @@ export type CountProblem = {
     | "hand_bad_qty"
     | "hand_missing_barcode"
     | "duplicate_workbook"
-    | "duplicate_file";
+    | "duplicate_file"
+    | "mixed_count_date";
   sheet?: string;
   row?: number; // 1-based spreadsheet row
   value?: string;
@@ -240,6 +241,16 @@ export function mergeCountWorkbooks(books: ParsedCountWorkbook[]): {
         code: "duplicate_workbook",
         value: b.fileName,
         message: `${b.fileName} is a copy of the same downloaded workbook as ${prevId} (workbook ${b.meta.workbookId}). Every counter needs their own downloaded workbook.`,
+      });
+      continue;
+    }
+    const first = accepted[0]?.meta;
+    if (first && b.meta.countDate !== first.countDate) {
+      problems.push({
+        severity: "blocking",
+        code: "mixed_count_date",
+        value: b.fileName,
+        message: `${b.fileName} is for the count on ${b.meta.countDate || "(no date)"}, but ${accepted[0].fileName} is for ${first.countDate}. One count date per upload.`,
       });
       continue;
     }
@@ -691,6 +702,13 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(c1?.units === 3 && c1.byCounter["Counter 1"] === 2 && c1.byCounter["Counter 2"] === 1, "units summed across counters, per-counter kept");
   ok(merged.counted.get("abc def")?.units === 2, "case-insensitive merge across counters");
   ok(!merged.counted.has("zzz") && !merged.counted.has("q"), "refused workbooks contribute nothing");
+  const otherDay = parseCountWorkbook({
+    fileName: "late.xlsx",
+    sha256: "late",
+    cells: { sheets: { [S.metaSheet]: metaRows("wb-late", "C9").map((r) => (r[0] === "count_date" ? ["count_date", "2026-10-29"] : r)), [S.scanSheet]: [["Barcode"], ["late1"]], [S.handSheet]: [["Barcode", "Qty"]] } },
+  });
+  const mixed = mergeCountWorkbooks([a, otherDay]);
+  ok(mixed.accepted.length === 1 && mixed.problems.some((p) => p.code === "mixed_count_date" && p.severity === "blocking") && !mixed.counted.has("late1"), "workbooks from another count date refused");
 
   // ---- sales ----
   const W: SalesWindow = { salesDay: "2026-10-31" };

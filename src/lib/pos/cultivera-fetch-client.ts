@@ -260,3 +260,22 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
       : null;
   return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor, wcia, sales };
 }
+
+/**
+ * R50 S11: the Cultivera lot list behind the Oct 30 count workbooks (the workbooks are downloaded
+ * before the cutover import exists). Only a finished harvest, and only an inventories.json whose
+ * bytes + sha256 equal its manifest entry, is used. Throws with the reason otherwise.
+ */
+export async function loadRunLotList(runId: string): Promise<{ lots: ListLot[]; sha256: string; finishedAt: string | null }> {
+  if (!isValidRunId(runId)) throw new Error("Invalid run id.");
+  const manifest = JSON.parse((await getFile(runId, "manifest.json")).toString("utf8")) as Manifest;
+  const state = JSON.parse((await getFile(runId, "state.json")).toString("utf8")) as CrawlerState;
+  if (manifest.status !== "done" || state.status !== "done") throw new Error(`Harvest ${runId} is "${state.status ?? "unknown"}", not done.`);
+  const b = await getFile(runId, "inventories.json");
+  const h = sha(b);
+  const v = verifyFile(manifest, "inventories.json", b.length, h);
+  if (!v.ok) throw new Error(v.reason);
+  const inv = JSON.parse(b.toString("utf8")) as { data?: ListLot[] };
+  if (!Array.isArray(inv.data) || inv.data.length === 0) throw new Error("inventories.json has no lots.");
+  return { lots: inv.data, sha256: h, finishedAt: state.finishedAt ?? null };
+}

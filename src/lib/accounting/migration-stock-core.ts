@@ -93,6 +93,26 @@ export function migrationStockRefusal(door: "bill" | "receipt", manifestNumber: 
   );
 }
 
+/**
+ * R50 S11: the Oct 30 count's adjustments (reason "count", note written ONLY by
+ * cultivera-count-core countAdjustmentNote: `R50 Oct-30 count <import uuid>: barcode …`)
+ * move migrated Cultivera lots to the shelf count. That stock is opening
+ * inventory (§1.4), so the Sage adjustments export leaves these rows out and
+ * prints how many (never silent: rule 48). They stay in inventory_adjustments
+ * and in the CCRS adjustment export. Exact shape match: a hand-typed note that
+ * merely mentions the count is NOT excluded.
+ */
+const MIGRATION_COUNT_NOTE_RE = /^R50 Oct-30 count [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}: barcode /;
+
+export function isMigrationCountAdjustment(row: { reason?: unknown; note?: unknown }): boolean {
+  return row.reason === "count" && typeof row.note === "string" && MIGRATION_COUNT_NOTE_RE.test(row.note);
+}
+
+export function migrationCountSkippedWarning(count: number): string {
+  const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  return `${n} Oct 30 count adjustment${n === 1 ? "" : "s"} on Cultivera migration stock left out: they set the opening inventory to the shelf count, not an operating loss or gain.`;
+}
+
 /* ------------------------------------------------------------------ *
  * Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
  * ------------------------------------------------------------------ */
@@ -152,6 +172,13 @@ export function __runMigrationStockCoreTests(): { passed: number; failed: number
   ok(migrationSkippedWarning(680).startsWith("680 Cultivera migration manifests left out:"), "warning plural");
   ok(migrationSkippedWarning(2.7).startsWith("2 Cultivera migration manifests"), "warning floors");
   ok(migrationSkippedWarning(Number.NaN).startsWith("0 Cultivera"), "warning junk → 0");
+
+  const uuid = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  ok(isMigrationCountAdjustment({ reason: "count", note: `R50 Oct-30 count ${uuid}: barcode 123 counted 3, Cultivera sold 0 after the count, Cultivera on hand 4` }), "count note on migration stock recognised");
+  ok(!isMigrationCountAdjustment({ reason: "damage", note: `R50 Oct-30 count ${uuid}: barcode 123` }), "other reason never excluded");
+  ok(!isMigrationCountAdjustment({ reason: "count", note: "R50 Oct-30 count fixed shelf 3: barcode 1" }), "hand-typed note never excluded");
+  ok(!isMigrationCountAdjustment({ reason: "count", note: ` R50 Oct-30 count ${uuid}: barcode 1` }) && !isMigrationCountAdjustment({ reason: "count", note: null }), "exact prefix only; null note kept");
+  ok(migrationCountSkippedWarning(1).startsWith("1 Oct 30 count adjustment on") && migrationCountSkippedWarning(12).startsWith("12 Oct 30 count adjustments on"), "count warning text");
 
   return { passed, failed };
 }
