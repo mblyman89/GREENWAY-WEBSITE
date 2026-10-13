@@ -50,6 +50,17 @@ export function cardRefreshEnabled(raw: string | undefined | null): boolean {
   return !(v === "off" || v === "false" || v === "0" || v === "no");
 }
 
+/**
+ * Onboarding row copy beside Approve on a rebuilt draft. With the switch on,
+ * approving rebuilds the live card from our onboarding (prices, sizes and
+ * visibility stay). Off: the S3 rule (approval does not touch the menu).
+ */
+export function cultiveraApproveCopy(livePriceLabel: string, envRaw: string | undefined | null): string {
+  return cardRefreshEnabled(envRaw)
+    ? `Live price ${livePriceLabel}; approving keeps it and rebuilds the live card from this onboarding (sizes and visibility unchanged).`
+    : `Live price ${livePriceLabel}; approving keeps it and does not change the menu.`;
+}
+
 /** The manifest kind whose approvals refresh live cards (the rebuilt Cultivera manifests only). */
 export const REFRESH_MANIFEST_KIND = "cultivera-reconstructed";
 
@@ -712,5 +723,7 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
   ok(/still on sale/.test(refreshWithheldNote(1, true)) && !/kept off/.test(refreshWithheldNote(3, true)), "withheld note never says kept off");
   ok(/^The menu update published\. 1 product/.test(refreshWithheldNote(1, true)) && /^No menu update was needed\. 2 products/.test(refreshWithheldNote(2, false)), "withheld note: published vs nothing staged");
 
+  ok(cultiveraApproveCopy("$30.00", undefined).includes("rebuilds the live card"), "approve copy: on by default");
+  ok(cultiveraApproveCopy("$30.00", "off") === "Live price $30.00; approving keeps it and does not change the menu.", "approve copy: switch off keeps S3 wording");
   return { passed, failed };
 }

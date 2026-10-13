@@ -57,6 +57,7 @@ import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lo
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { loadCultiveraManifestSection, loadRebuiltManifestIds } from "@/lib/inventory/cultivera-onboarding";
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
+import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
 import { startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
@@ -1820,7 +1821,7 @@ export default async function CatalogDraftsPage({
                                       {CULTIVERA_ROW_BADGE}
                                     </span>
                                     <span className="text-xs text-[var(--admin-text-muted)]">
-                                      Live price {d.suggested_price_minor_units != null ? fmtMoney(d.suggested_price_minor_units) : "differs by size"}; approving keeps it and does not change the menu.
+                                      {cultiveraApproveCopy(d.suggested_price_minor_units != null ? fmtMoney(d.suggested_price_minor_units) : "differs by size", process.env[CARD_REFRESH_ENV])}
                                     </span>
                                     <Button type="submit" variant="save" size="sm">{"\u2713"} Approve</Button>
                                   </div>

@@ -80,6 +80,17 @@ vi.mock("@/lib/auth/audit", () => ({
 vi.mock("@/lib/site/public-surfaces", () => ({ revalidatePublicMenuSurfaces: () => net.calls.push("public-surfaces") }));
 vi.mock("@/lib/pos/menu-version", () => ({ archiveSupersededStaged: async () => 0 }));
 vi.mock("@/lib/pos/cutover-guard", () => ({ shouldHoldForCutover: async () => false }));
+// Spy that delegates to the real reader: pins WHETHER staging asks for vendor ids.
+vi.mock("@/lib/inventory/restock-preview-server", async (orig) => {
+  const real = await orig<typeof import("@/lib/inventory/restock-preview-server")>();
+  return {
+    ...real,
+    loadVendorIdInputs: (...a: Parameters<typeof real.loadVendorIdInputs>) => {
+      net.calls.push("vendor-id-read");
+      return real.loadVendorIdInputs(...a);
+    },
+  };
+});
 vi.mock("@/lib/supabase/env", () => ({ isSupabaseServiceConfigured: true }));
 vi.mock("@/lib/inventory/website-category-resolver-server", () => ({
   resolveWebsiteCategories: async (lots: unknown[]) => lots.map(() => ({ websiteCategory: "edibles" })),
@@ -211,7 +222,7 @@ const liveVariant = (i: number) => ({
 });
 
 type Mode = "received" | "rebuilt";
-function world(mode: Mode) {
+function world(mode: Mode, kindOverride?: string) {
   const live = mode === "rebuilt" ? [cultiveraCard(12), cultiveraCard(13)] : [];
   const variants = mode === "rebuilt" ? [liveVariant(12), liveVariant(13)] : [];
   const price = mode === "rebuilt" ? null : 2000; // a rebuilt sizes-differ draft may carry no price (S3 rule)
@@ -219,7 +230,7 @@ function world(mode: Mode) {
     const t = table(r);
     if (t === "inbound_manifests" && r.method === "GET") {
       const sel = r.url.searchParams.get("select") ?? "";
-      if (sel.includes("payload_kind")) return { status: 200, body: [{ id: M, payload_kind: mode === "rebuilt" ? "cultivera-reconstructed" : "wcia" }] };
+      if (sel.includes("payload_kind")) return { status: 200, body: [{ id: M, payload_kind: kindOverride ?? (mode === "rebuilt" ? "cultivera-reconstructed" : "wcia") }] };
       return { status: 200, body: [{ manifest_number: "M-1", vendor_label: "bytes LLC", received_at: null, transfer_date: "2026-09-01" }] };
     }
     if (t === "catalog_product_drafts") return { status: 200, body: [draft(12, D12, LOT12, price), draft(13, D13, LOT13, price)] };
@@ -359,6 +370,24 @@ describe("R50 S3c parity: a rebuilt Cultivera manifest's cards == a received del
     const ev = events().find((e) => e.event_type === "cultivera_cards_refreshed")!;
     expect(ev.note).toContain("Prices, sizes, stock and visibility did not change.");
     expect(ev.note).toContain("The update is live.");
+  });
+
+  it("rebuilt: the vendor-id restock match is never asked for (a refresh never matches or merges)", async () => {
+    const prev = process.env.INTAKE_VENDOR_ID_IDENTITY;
+    process.env.INTAKE_VENDOR_ID_IDENTITY = "on";
+    try {
+      world("rebuilt");
+      await stage();
+      expect(net.calls).not.toContain("vendor-id-read");
+      // Control: the SAME world (cards live) as a native delivery does ask (the spy is live).
+      net.calls.length = 0;
+      world("rebuilt", "wcia");
+      await stage();
+      expect(net.calls).toContain("vendor-id-read");
+    } finally {
+      if (prev === undefined) delete process.env.INTAKE_VENDOR_ID_IDENTITY;
+      else process.env.INTAKE_VENDOR_ID_IDENTITY = prev;
+    }
   });
 
   it("switch off: a rebuilt manifest builds nothing (the S3 rule), and the menu is never written", async () => {
