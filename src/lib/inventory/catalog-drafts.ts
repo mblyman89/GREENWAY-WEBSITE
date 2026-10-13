@@ -119,6 +119,14 @@ import {
   type BatchResult,
 } from "@/lib/inventory/batch-staging-core";
 import { isUuid } from "@/lib/catalog/draft-deep-link-core";
+import {
+  LIVE_PRICE_RATIONALE,
+  NO_LIVE_PRICE_RATIONALE,
+  livePricesByKey,
+  planReonboardSeeding,
+  reonboardApproval,
+  stagingSkipForManifestKind,
+} from "@/lib/inventory/cultivera-onboarding-core";
 // SLICE 18F: the onboarding memory. This module only SUPPLIES rows to it.
 import {
   recallClassification,
@@ -254,7 +262,60 @@ export type CatalogMatchResult = {
   restockAmbiguous?: number;
   /** S05: true when a draft insert proved migration 0234 is not applied. */
   identityColumnsMissing?: boolean;
+  /**
+   * R50 S3: present only in re-onboarding mode (a manifest rebuilt from the
+   * Cultivera export). Why each lot was or was not given a draft.
+   */
+  reonboard?: {
+    skippedOpen: number;
+    skippedOnboarded: number;
+    sameCard: number;
+    noKey: number;
+    seededOnMenu: number;
+  };
 };
+
+/**
+ * R50 S3: the LIVE price of each card key on the published menu version, read
+ * from menu_items + menu_variants. A key whose sizes are priced differently
+ * (or that has an unpriced size) maps to null - one price is never picked out
+ * of several. Keys not on the published menu are absent from both outputs.
+ * Chunked .in() reads; any read error is returned, never treated as "no price".
+ */
+export async function loadLivePricesForKeys(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  publishedVersionId: string,
+  keys: readonly string[],
+): Promise<
+  | { ok: true; publishedKeys: Set<string>; prices: Map<string, number | null> }
+  | { ok: false; error: string }
+> {
+  const CHUNK = 150;
+  const items: { id: string; source_item_id: string | null }[] = [];
+  const unique = Array.from(new Set(keys.filter(Boolean)));
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const { data, error } = await admin
+      .from("menu_items")
+      .select("id, source_item_id")
+      .eq("menu_version_id", publishedVersionId)
+      .in("source_item_id", unique.slice(i, i + CHUNK));
+    if (error) return { ok: false, error: error.message };
+    items.push(...((data as { id: string; source_item_id: string | null }[] | null) ?? []));
+  }
+  const variants: { menu_item_id: string; price_minor_units: unknown }[] = [];
+  const itemIds = items.map((it) => it.id);
+  for (let i = 0; i < itemIds.length; i += CHUNK) {
+    const { data, error } = await admin
+      .from("menu_variants")
+      .select("menu_item_id, price_minor_units")
+      .in("menu_item_id", itemIds.slice(i, i + CHUNK));
+    if (error) return { ok: false, error: error.message };
+    variants.push(...((data as { menu_item_id: string; price_minor_units: unknown }[] | null) ?? []));
+  }
+  const publishedKeys = new Set<string>();
+  for (const it of items) if (it.source_item_id) publishedKeys.add(it.source_item_id);
+  return { ok: true, publishedKeys, prices: livePricesByKey(items, variants) };
+}
 
 /**
  * For each lot on a manifest, check if its pos_product_key matches a
@@ -275,7 +336,17 @@ export type CatalogMatchResult = {
 export async function seedDraftsForManifest(
   manifestId: string,
   actorId: string | null,
+  /**
+   * R50 S3: `reonboard` = the manifest was REBUILT from the Cultivera export,
+   * so its card keys are already on the live menu. Instead of skipping them
+   * (planDraftSeeding's "match"), seed ONE draft per card key that has no
+   * open and no approved draft, carrying the LIVE price (not a computed
+   * suggestion, no 2x floor). Everything else - the insert, the identity
+   * stamp, lotIdentities for the KB link - is the native path.
+   */
+  opts: { reonboard?: boolean } = {},
 ): Promise<CatalogMatchResult> {
+  const reonboard = opts.reonboard === true;
   const empty: CatalogMatchResult = {
     matched: 0,
     unmatched: 0,
@@ -308,7 +379,16 @@ export async function seedDraftsForManifest(
     new Set(lots.map((l) => l.pos_product_key).filter((k): k is string => Boolean(k))),
   );
   const publishedKeys = new Set<string>();
-  if (published && lotKeys.length > 0) {
+  let livePrices = new Map<string, number | null>();
+  if (reonboard && published && lotKeys.length > 0) {
+    const live = await loadLivePricesForKeys(admin, published.id, lotKeys);
+    if (!live.ok) {
+      console.error("[catalog-drafts] live-price read failed:", live.error);
+      return { ...empty, hasPublishedMenu, firstError: live.error };
+    }
+    for (const k of live.publishedKeys) publishedKeys.add(k);
+    livePrices = live.prices;
+  } else if (published && lotKeys.length > 0) {
     const { data: itemRows, error: itemsError } = await admin
       .from("menu_items")
       .select("source_item_id")
@@ -335,6 +415,22 @@ export async function seedDraftsForManifest(
     }
     for (const r of (draftRows as { pos_product_key: string | null }[] | null) ?? []) {
       if (r.pos_product_key) openDraftKeys.add(r.pos_product_key);
+    }
+  }
+  // R50 S3: keys already onboarded (an APPROVED draft) are never re-seeded.
+  const onboardedKeys = new Set<string>();
+  if (reonboard && lotKeys.length > 0) {
+    const { data: doneRows, error: doneError } = await admin
+      .from("catalog_product_drafts")
+      .select("pos_product_key")
+      .eq("status", "approved")
+      .in("pos_product_key", lotKeys);
+    if (doneError) {
+      console.error("[catalog-drafts] approved-drafts read failed:", doneError.message);
+      return { ...empty, hasPublishedMenu, firstError: doneError.message };
+    }
+    for (const r of (doneRows as { pos_product_key: string | null }[] | null) ?? []) {
+      if (r.pos_product_key) onboardedKeys.add(r.pos_product_key);
     }
   }
 
@@ -387,7 +483,7 @@ export async function seedDraftsForManifest(
     identityKey: identityByLot.get(l.id)?.identityKey ?? null,
   }));
   const liveIdentityToCardKeys =
-    stampOn && published && identityByLot.size > 0
+    !reonboard && stampOn && published && identityByLot.size > 0
       ? await loadLiveIdentityIndex(
           admin,
           published.id,
@@ -396,12 +492,28 @@ export async function seedDraftsForManifest(
             .map((l) => (l.vendor_id ? vendorNames.get(l.vendor_id) ?? null : null)),
         )
       : undefined;
-  const plan = planDraftSeeding({
-    lots: seedInputs,
-    publishedKeys,
-    openDraftKeys,
-    liveIdentityToCardKeys,
-  });
+  const rePlan = reonboard
+    ? planReonboardSeeding({ lots: seedInputs, publishedKeys, openDraftKeys, onboardedKeys })
+    : null;
+  const plan: {
+    matched: number;
+    unmatched: number;
+    restockAmbiguous: number;
+    toSeed: { lotId: string; restockOfCardKey?: string | null }[];
+  } = rePlan
+    ? {
+        // Re-onboarding: "matched" = lots that got no draft (already covered).
+        matched: rePlan.decisions.length - rePlan.toSeed.length,
+        unmatched: rePlan.toSeed.length,
+        restockAmbiguous: 0,
+        toSeed: rePlan.toSeed.map((t) => ({ lotId: t.lotId, restockOfCardKey: null })),
+      }
+    : planDraftSeeding({
+        lots: seedInputs,
+        publishedKeys,
+        openDraftKeys,
+        liveIdentityToCardKeys,
+      });
   const lotById = new Map(lots.map((l) => [l.id, l] as const));
   const labCache = new Map<
     string,
@@ -458,19 +570,32 @@ export async function seedDraftsForManifest(
     // product (same identity_key + same size). Without a vendor SKU the
     // pos_product_key is new on each delivery, so restocks used to read
     // "no sales history". Identity is optional evidence: null → this key only.
-    const velocity = await getVelocityForProduct(lot.pos_product_key, 60, {
-      identityKey: identityByLot.get(lot.id)?.identityKey ?? null,
-      unitWeight: lot.unit_weight ?? null,
-      unitWeightUom: lot.unit_weight_uom ?? null,
-    });
-    // T-319: pass the category so the auto price folds the RIGHT tax divisor
-    // (cannabis 1.463 vs merch 1.093) and lands on a clean whole dollar.
-    const suggestion = suggestPrice(
-      lot.unit_cost_minor_units,
-      velocity,
-      pricingSettings,
-      lot.category,
-    );
+    // R50 S3: re-onboarding never computes a price - the card is already
+    // selling at its live price, which is what the draft carries (no floor:
+    // approving it changes nothing on the menu).
+    let suggestion: { floorMinor: number | null; suggestedMinor: number | null; rationale: string };
+    if (reonboard) {
+      const live = lot.pos_product_key ? livePrices.get(lot.pos_product_key.trim()) ?? null : null;
+      suggestion = {
+        floorMinor: null,
+        suggestedMinor: live,
+        rationale: live !== null ? LIVE_PRICE_RATIONALE : NO_LIVE_PRICE_RATIONALE,
+      };
+    } else {
+      const velocity = await getVelocityForProduct(lot.pos_product_key, 60, {
+        identityKey: identityByLot.get(lot.id)?.identityKey ?? null,
+        unitWeight: lot.unit_weight ?? null,
+        unitWeightUom: lot.unit_weight_uom ?? null,
+      });
+      // T-319: pass the category so the auto price folds the RIGHT tax divisor
+      // (cannabis 1.463 vs merch 1.093) and lands on a clean whole dollar.
+      suggestion = suggestPrice(
+        lot.unit_cost_minor_units,
+        velocity,
+        pricingSettings,
+        lot.category,
+      );
+    }
 
     // PLAIN INSERT (dedupe already planned above) — READ the error. The old
     // upsert targeted a PARTIAL unique index (impossible in ON CONFLICT via
@@ -563,6 +688,17 @@ export async function seedDraftsForManifest(
           restockHints,
           restockAmbiguous: plan.restockAmbiguous,
           identityColumnsMissing,
+        }
+      : {}),
+    ...(rePlan
+      ? {
+          reonboard: {
+            skippedOpen: rePlan.counts.skip_open_draft,
+            skippedOnboarded: rePlan.counts.skip_onboarded,
+            sameCard: rePlan.counts.skip_same_card,
+            noKey: rePlan.counts.skip_no_key,
+            seededOnMenu: rePlan.seededOnMenu,
+          },
         }
       : {}),
   };
@@ -1137,12 +1273,54 @@ export async function approveDraftWithPrice(
   } | null;
   const cost = row?.unit_cost_minor_units ?? null;
 
-  const settings = await getPricingSettings();
-  // T-319: validate the override against the SAME tax-inclusive, whole-dollar
-  // floor the auto price used (category picks the tax divisor).
-  const check = validatePrice(priceMinor, cost, settings, row?.category ?? null);
-  if (!check.ok) {
-    return { ok: false, error: check.error };
+  // R50 S3: a draft on a manifest REBUILT from the Cultivera export is a card
+  // that is already selling. Approving it catalogues the product (KB, facts,
+  // golden record); it never prices or stages anything. The recorded price is
+  // the LIVE one, re-read now (never the form's), and only when every size of
+  // the card agrees; otherwise none. If the manifest kind cannot be read the
+  // approval is refused - we cannot tell which rules apply (fail closed).
+  let reonboarding = false;
+  let recordedPrice: number | null = priceMinor;
+  if (row?.manifest_id) {
+    const { data: kindRow, error: kindErr } = await admin
+      .from("inbound_manifests")
+      .select("id, payload_kind:raw_payload->>kind")
+      .eq("id", row.manifest_id)
+      .maybeSingle();
+    if (kindErr) {
+      return { ok: false, error: "Could not read this product's delivery, so it was not approved. Try again." };
+    }
+    reonboarding =
+      stagingSkipForManifestKind((kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null) !== null;
+  }
+  if (reonboarding) {
+    let live: number | null = null;
+    const key = row?.pos_product_key?.trim() ?? "";
+    const published = key ? await getPublishedVersion() : null;
+    if (published && key) {
+      const read = await loadLivePricesForKeys(admin, published.id, [key]);
+      if (!read.ok) {
+        return { ok: false, error: "Could not read the live menu price, so it was not approved. Try again." };
+      }
+      live = read.prices.get(key) ?? null;
+    }
+    const plan = reonboardApproval(live);
+    recordedPrice = plan.priceMinor; // null = no single live price; nothing recorded
+    opts = { ...opts, skipStaging: plan.skipStaging };
+  } else {
+    // R50 S3: only a re-onboarding may approve without a price; an ordinary
+    // draft always needs a positive whole-cent price (validatePrice allows
+    // anything when there is no cost, so this check is not redundant).
+    if (!Number.isInteger(priceMinor) || priceMinor <= 0) {
+      return { ok: false, error: "Enter a price greater than $0." };
+    }
+    const settings = await getPricingSettings();
+    // T-319: validate the override against the SAME tax-inclusive, whole-dollar
+    // floor the auto price used (category picks the tax divisor).
+    const check = validatePrice(priceMinor, cost, settings, row?.category ?? null);
+    if (!check.ok) {
+      return { ok: false, error: check.error };
+    }
   }
 
   // SLICE 64 (owner bug B3): the classification GATE. Re-run the resolver +
@@ -1289,7 +1467,7 @@ export async function approveDraftWithPrice(
   // an approval without picks keeps working exactly as before, and an
   // approval WITH picks fails with a friendly pointer at the migration.
   const update: Record<string, unknown> = {
-    price_minor_units: priceMinor,
+    price_minor_units: recordedPrice,
     status: "approved",
     updated_by: actorId,
   };
