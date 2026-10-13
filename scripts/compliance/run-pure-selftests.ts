@@ -730,6 +730,7 @@ import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-auto
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runCultiveraOnboardingCoreTests } from "../../src/lib/inventory/cultivera-onboarding-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
+import { __runCultiveraCardRefreshCoreTests } from "../../src/lib/inventory/cultivera-card-refresh-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
 import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
@@ -1529,6 +1530,7 @@ __runLiquidVolumeTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
+  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 41); // R50 S3c: rebuilt card refresh by survivorship
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
