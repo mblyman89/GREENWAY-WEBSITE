@@ -253,7 +253,14 @@ describe("S02 structural pins — the pages use the core", () => {
 
   it("intake banners open THIS delivery's drafts (F-080)", () => {
     // R23: the accepted + finalized banners merged into ONE (finalize-banner-core).
-    expect(intake.match(/href=\{draftsForManifestHref\(id\)\}/g)).toHaveLength(1);
+    // R50 S10a: the "Moved from Cultivera" banner (rebuilt manifests only) adds a
+    // second link to the same delivery's drafts. The finalize banner itself still
+    // carries exactly one, so the R23 merge stays pinned.
+    expect(intake.match(/href=\{draftsForManifestHref\(id\)\}/g)).toHaveLength(2);
+    const fin = intake.slice(intake.indexOf("data-finalize-banner={finalBanner.kind}"), intake.indexOf("{/* S29: the books/booksError banners"));
+    expect(fin.match(/href=\{draftsForManifestHref\(id\)\}/g)).toHaveLength(1);
+    const reb = intake.slice(intake.indexOf('data-testid="rebuilt-manifest-banner"'), intake.indexOf("All Cultivera manifests"));
+    expect(reb.match(/href=\{draftsForManifestHref\(id\)\}/g)).toHaveLength(1);
     expect(intake).not.toContain('href="/admin/inventory/drafts"');
   });
 
