@@ -7,7 +7,7 @@
  * significantly enhanced to make it easy to read and follow the steps."
  *
  * Pins:
- *   1. the pure guide core runs at its measured self-test count (70);
+ *   1. the pure guide core runs at its measured self-test count (72);
  *   2. the rendered guide shows progress, the one "next" step, real links, and
  *      never claims "Done" for a step the page cannot prove;
  *   3. every guide href is a real admin route in this repo;
@@ -37,7 +37,7 @@ const statusOf = (html: string, key: string) => html.match(new RegExp(`data-test
 
 describe("R50 S10b guide core", () => {
   it("runs at its measured self-test count", () => {
-    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 70, failed: 0 });
+    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 72, failed: 0 });
   });
 });
 
@@ -46,12 +46,12 @@ describe("R50 S10b rendered guide", () => {
     const html = render(base);
     expect(html).toContain(GUIDE_TITLE);
     expect(html).not.toContain("<details");
-    expect(html).toContain("0 of 9 done");
+    expect(html).toContain("0 of 10 done");
     expect(statusOf(html, "fetch")).toBe("next");
     expect(html.match(/aria-current="step"/g)?.length).toBe(1);
     expect(html).toContain('href="#fetch-cultivera"');
     expect(html).toContain('href="/admin/menu-imports/cutover"');
-    expect(html).toContain("Step 1 of 9: Fetch everything from Cultivera.");
+    expect(html).toContain("Step 1 of 10: Fetch everything from Cultivera.");
   });
   it("after a fetch: links the newest run for the go/no-go", () => {
     const html = render({ ...base, recentRuns: ["run-2", "run-1"] });
@@ -70,7 +70,7 @@ describe("R50 S10b rendered guide", () => {
   it("live: collapsed, five done, the follow-ups are Check (never Done)", () => {
     const html = render({ ...base, cutover: { done: true, first: { importId: "LIVE", publishedAt: "2026-11-01" } } }, true);
     expect(html).toContain("<details");
-    expect(html).toContain("5 of 9 done");
+    expect(html).toContain("5 of 10 done");
     for (const k of ["manifests", "onboarding", "ccrs_cleanup", "receiving"]) expect(statusOf(html, k)).toBe("check");
     expect(html).toContain('href="/admin/menu-imports/LIVE/manifests"');
     expect(html).toContain('href="/admin/menu-imports/LIVE/missing-products"');
@@ -80,8 +80,8 @@ describe("R50 S10b rendered guide", () => {
   });
   it("unknown read: every step is Check, zero done", () => {
     const html = render({ ...base, cutover: { done: false, unknown: true }, recentRuns: ["r"] });
-    expect(html).toContain("0 of 9 done");
-    expect(html.match(/data-status="check"/g)?.length).toBe(9);
+    expect(html).toContain("0 of 10 done");
+    expect(html.match(/data-status="check"/g)?.length).toBe(10);
   });
   it("crawler off: step 1 says set up first, step 2 is not next-without-a-run", () => {
     const html = render({ ...base, crawlerConfigured: false });
@@ -131,7 +131,7 @@ describe("R50 S10b page wiring", () => {
   });
   it("is registered in the pure runner", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 70);');
+    expect(runner).toContain('assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 72);');
   });
 });
 

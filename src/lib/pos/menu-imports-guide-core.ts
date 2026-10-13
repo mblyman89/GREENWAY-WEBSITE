@@ -48,6 +48,7 @@ export const GUIDE_STEP_KEYS = [
   "stage",
   "review",
   "publish",
+  "count",
   "manifests",
   "onboarding",
   "ccrs_cleanup",
@@ -69,6 +70,7 @@ export const GUIDE_HREF = {
   receiving: RECEIVING_PATH,
   ccrsCleanup: "/admin/compliance/ccrs#migration-garbage",
   ccrsFiles: "/admin/compliance/ccrs#ccrs-files",
+  count: "/admin/menu-imports/count",
 } as const;
 
 export type GuideImportRow = {
@@ -187,9 +189,17 @@ export function buildMenuImportsGuide(input: GuideInput): GuideStep[] {
     links: reviewImportId && !done ? [{ href: GUIDE_HREF.publishSection(reviewImportId), label: "Go to Publish" }] : [],
   });
 
-  // 6..9 happen after the import is live. This page doesn't read them, so they are
+  // 6..10 happen after the import is live. This page doesn't read them, so they are
   // "check" once done, otherwise "todo".
   const after: GuideStatus = done ? "check" : "todo";
+  push({
+    key: "count",
+    title: "Apply the Oct 30 shelf count",
+    body: "Before the count, download one scan workbook per counter. After publish, upload the scanned workbooks. You see every lot's move first (counted, minus the sales on the 31st), and nothing changes until you confirm.",
+    status: after,
+    why: done ? "Open the count page. It shows whether the count was applied." : "The upload opens after publish. Workbooks can be downloaded before.",
+    links: [{ href: GUIDE_HREF.count, label: "Oct 30 shelf count" }],
+  });
   push({
     key: "manifests",
     title: "Rebuild the Cultivera manifests",
@@ -268,7 +278,7 @@ export const MENU_IMPORTS_HELP_STEPS: readonly string[] = [
   "One time only: press Fetch on this page. It reads Cultivera POS (read-only) and checks every lot, unit and cent.",
   "Open the fetch run. If it says GO, press \u201cStage this harvest for review\u201d. If it says NO-GO, it names what to fix.",
   "Open the staged import. Work Fact Review and the warnings, then Publish. Publish Cultivera first, then receive.",
-  "After publish: rebuild the Cultivera manifests, approve products on Onboarding, and clean up dead lots on the CCRS hub before your first upload.",
+  "After publish: upload the Oct 30 shelf count workbooks, rebuild the Cultivera manifests, approve products on Onboarding, and clean up dead lots on the CCRS hub before your first upload.",
   "Day to day: receive and approve each product with a price. That publishes it automatically, with no upload and no Publish click.",
 ];
 
@@ -323,7 +333,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
 
   // shape
   const g0 = buildMenuImportsGuide(base);
-  ok(g0.length === GUIDE_STEP_KEYS.length, "9 steps");
+  ok(g0.length === GUIDE_STEP_KEYS.length && g0.length === 10, "10 steps");
   ok(g0.map((s) => s.key).join() === GUIDE_STEP_KEYS.join(), "order");
   ok(g0.every((s, i) => s.n === i + 1), "numbered 1..n");
   ok(g0.every((s) => s.title && s.body && s.why), "copy present");
@@ -336,6 +346,8 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(st(g0, "ccrs_cleanup").links[0].href === "/admin/compliance/ccrs#migration-garbage", "ccrs link");
   ok(st(g0, "receiving").links[0].href === "/admin/inventory/intake?view=cultivera", "receiving cultivera link");
   ok(st(g0, "fetch").links[1].href === "/admin/menu-imports/cutover", "runbook link");
+  ok(st(g0, "count").links[0].href === "/admin/menu-imports/count", "count link");
+  ok(st(g0, "count").status === "todo" && st(g0, "count").n === 6, "count is step 6, after publish, locked before it");
 
   // crawler off
   const gOff = buildMenuImportsGuide({ ...base, crawlerConfigured: false });
@@ -388,7 +400,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(st(gDone, "review").links[0].href === "/admin/menu-imports/IMP", "done: review links the migrated import, not a later staged one");
   ok(st(gDone, "publish").links.length === 0, "done: no publish link");
   ok(guideSummary(gDone).headline.startsWith("The Cultivera import is live"), "done headline");
-  ok(guideSummary(gDone).done === 5 && guideSummary(gDone).total === 9, "done counts");
+  ok(guideSummary(gDone).done === 5 && guideSummary(gDone).total === 10, "done counts");
   ok(st(gDone, "fetch").status === "done", "done overrides crawler-off");
   const gDoneOff = buildMenuImportsGuide({ ...base, crawlerConfigured: false, cutover: { done: true, first: { importId: "I", publishedAt: "x" } } });
   ok(st(gDoneOff, "fetch").status === "done", "done + crawler off: fetch done");
@@ -403,8 +415,8 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   // summary
   const mixed = buildMenuImportsGuide(base).map((x, i) => ({ ...x, status: (i === 0 ? "done" : "check") as GuideStatus }));
   ok(guideSummary(mixed).headline === "Check each step below.", "partly done, no next: never says live");
-  ok(guideSummary(g0).headline === `Step 1 of 9: ${st(g0, "fetch").title}.`, "fresh headline");
-  ok(guideSummary(gSt).headline.startsWith("Step 4 of 9"), "staged headline");
+  ok(guideSummary(g0).headline === `Step 1 of 10: ${st(g0, "fetch").title}.`, "fresh headline");
+  ok(guideSummary(gSt).headline.startsWith("Step 4 of 10"), "staged headline");
   ok(Object.keys(GUIDE_STATUS_LABEL).length === 5, "five labels");
   ok(MENU_IMPORTS_HELP_STEPS.length === 5, "five help steps");
   ok(MENU_IMPORTS_HELP_STEPS.some((s) => s.includes("Publish Cultivera first, then receive")), "help keeps runbook rule");
