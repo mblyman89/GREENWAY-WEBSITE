@@ -179,7 +179,7 @@ export default async function MenuImportsPage({
         )}
         {params.staged && (
           <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-orange)]">
-            Import staged for review. Open it from Import history below, work Fact Review and the warnings, then
+            Import staged for review. Open it from the history list at the bottom, work Fact Review and the warnings, then
             publish. The guide above shows the next step.
           </div>
         )}
