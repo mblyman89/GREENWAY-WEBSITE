@@ -792,13 +792,12 @@ export async function stageIntakeMenuVersionForManifest(
             : {}),
         },
         notes:
-          (refreshPlan ? refreshNotesSuffix(refreshPlan.refreshed.length).trim() + " " : "") +
           buildIntakeVersionNotes({
             manifest: manifestHeader,
             added: plan.addedCount,
             merged: plan.mergedCount,
             carried: plan.carriedCount,
-          }) + batchNotesSuffix(opts.batchCount),
+          }) + batchNotesSuffix(opts.batchCount) + refreshNotesSuffix(refreshPlan?.refreshed.length ?? 0),
         created_by: actorId,
       })
       .select("*")
