@@ -9,6 +9,8 @@ import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { getPosRun, isValidRunId, loadRunForImport, type LoadedRun } from "@/lib/pos/cultivera-fetch-client";
 import { MAX_HARVEST_AGE_MINUTES, importDecision, runView } from "@/lib/pos/cultivera-fetch-button-core";
 import { cancelFetchAction, importFetchAction, startFetchAction } from "../../fetch-actions";
+// R50 S10b: one plain "what to do now" line, from the same facts this page shows.
+import { fetchRunNextStep } from "@/lib/pos/menu-imports-guide-core";
 
 /**
  * R50 S9 — one "Fetch It All" run: live stage progress while the crawler harvests,
@@ -64,12 +66,34 @@ export default async function FetchRunPage({
     ? importDecision({ isTest: false, go: Boolean(report?.go), cutoverDone: await readCutoverDone(), ageMinutes: age, filesVerified: loaded.verified })
     : null;
 
+  const next = fetchRunNextStep({
+    view: view ? { status: view.status, canImport: view.canImport } : null,
+    loadError,
+    checkError,
+    checked: loaded !== null,
+    go: loaded ? Boolean(report?.go) : null,
+    realAllowed: realDecision ? realDecision.allowed : null,
+  });
+  const NEXT_TONE = {
+    wait: "border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 text-[var(--admin-orange)]",
+    go: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
+    fix: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  } as const;
+
   return (
     <div>
       <AdminPageHeader title="Fetch It All, Fuck Cultivera" subtitle={`Harvest run ${runId}`} />
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <Breadcrumbs items={[{ label: "Menu Imports", href: "/admin/menu-imports" }, { label: "Fetch run" }]} />
         <FetchRunAutoRefresh active={Boolean(view?.poll)} />
+
+        <div data-testid="fetch-run-next" data-tone={next.tone} className={`rounded-lg border px-4 py-3 text-sm ${NEXT_TONE[next.tone]}`}>
+          <span className="font-semibold">What to do now: </span>
+          {next.text}{" "}
+          <Link href="/admin/menu-imports#migration-guide" className="whitespace-nowrap text-xs underline">
+            See all steps
+          </Link>
+        </div>
 
         {(sp.error || loadError || checkError) && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
