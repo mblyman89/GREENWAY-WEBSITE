@@ -945,7 +945,8 @@ describe("S13 wiring", () => {
     // R37 S4: rereadDeliveryCoasAction (appended after these two) also requires it.
     // R37 S5: setDeliveryBrandAction + setDraftBrandAction too (5 in total).
     // R37 S6: lookupAgainAction ("Search again") too (6 in total).
-    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(6);
+    // R50 S3: startCultiveraOnboardingAction too (7 in total).
+    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(7);
   });
   it("lookupAllAction (behavioural): enqueues and redirects with lookup=started, then lookup=exists", async () => {
     seedDrafts(state.db, 2);

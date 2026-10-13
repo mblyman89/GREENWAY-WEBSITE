@@ -341,6 +341,21 @@ export function cultiveraOnboardingNote(r: {
   return `Cultivera manifest started through Onboarding: ${parts.join(", ")}. The live menu was not changed.${err}`;
 }
 
+/**
+ * The banner after pressing Start. Closed set: only "ok" / "error" render;
+ * any other flag (a hand-edited URL) renders nothing. The message is clipped
+ * and only ever shown as text.
+ */
+export function cultiveraStartBanner(
+  flag: string | null | undefined,
+  msg: string | null | undefined,
+): { tone: "ok" | "bad"; text: string } | null {
+  const m = (msg ?? "").trim().slice(0, 600);
+  if (flag === "ok") return { tone: "ok", text: m || "Cultivera manifest started through Onboarding. The live menu was not changed." };
+  if (flag === "error") return { tone: "bad", text: `Could not start this Cultivera manifest${m ? `: ${m}` : "."}` };
+  return null;
+}
+
 // --- 7. Self-tests --------------------------------------------------------------
 
 export function __runCultiveraOnboardingCoreTests(): { passed: number; failed: number } {
@@ -386,6 +401,10 @@ export function __runCultiveraOnboardingCoreTests(): { passed: number; failed: n
   ok(livePriceForCard([2500, 3000]) === null, "sizes differ -> null");
   ok(livePriceForCard([]) === null && livePriceForCard(null) === null && livePriceForCard(undefined) === null, "no variants");
   ok(livePriceForCard([0]) === null && livePriceForCard([-5]) === null, "non-positive");
+  ok(cultiveraStartBanner(undefined, "x") === null && cultiveraStartBanner("weird", "x") === null, "banner closed set");
+  ok(cultiveraStartBanner("ok", "Done.")?.tone === "ok" && cultiveraStartBanner("ok", "Done.")?.text === "Done." && (cultiveraStartBanner("ok", "")?.text ?? "").includes("not changed"), "banner ok");
+  ok(cultiveraStartBanner("error", "nope")?.text === "Could not start this Cultivera manifest: nope" && cultiveraStartBanner("error", null)?.text === "Could not start this Cultivera manifest.", "banner error");
+  ok((cultiveraStartBanner("ok", "y".repeat(900))?.text.length ?? 0) === 600, "banner clipped");
   ok(CULTIVERA_ROW_BADGE === "Already on the menu" && CULTIVERA_SECTION_HELP.includes("never changed"), "copy");
   ok(livePriceForCard([25.5]) === null, "non-integer cents");
   ok(livePriceForCard(["2500"]) === 2500 && livePriceForCard([""]) === null && livePriceForCard([null]) === null && livePriceForCard(["x"]) === null, "string / blank / null / junk");
