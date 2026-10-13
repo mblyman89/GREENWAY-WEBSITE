@@ -442,6 +442,26 @@ export function intakeDisplayName(
   return fam ? fam.display : null;
 }
 
+/**
+ * R50 S3c: the customer-facing name + description a received SINGLETON card
+ * gets from mastering (SLICE 65 display name; SLICE S12 placeholder rebuilt
+ * with that name, real copy never overwritten). Shared with the Cultivera
+ * card refresh so a rebuilt card reads exactly like a received one.
+ */
+export function masteredSingletonText(
+  it: Pick<PlannedInjectedItem, "name" | "product_name" | "brand_name" | "vendor_name" | "category" | "strain_name" | "description">,
+): { name: string; description: string } {
+  const display = intakeDisplayName(it);
+  if (!display || display === it.name) return { name: it.name, description: it.description };
+  const vendor = normalizeWhitespace(it.vendor_name);
+  return {
+    name: display,
+    description: isBoilerplateDescription(it.description)
+      ? `${display} from ${normalizeWhitespace(it.brand_name) || vendor}${BOILERPLATE_TAIL}`
+      : it.description,
+  };
+}
+
 /** vendor|categoryAxis|family — the owner's "same product, same vendor" identity. */
 function identityKey(vendor: string, category: string, family: string): string {
   return [collapseFamilyKeyPart(vendor), groupingCategoryAxis(category), family].join("|");
@@ -2318,6 +2338,29 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(p.newCards.length === 1, "R35: rollup still one card");
     assert(p.newCards[0].aroma_notes?.join(",") === "earthy", "R35: rollup aroma = the base lot's");
     assert(p.newCards[0].effects?.join(",") === "happy", "R35: rollup effects = the first lot that has them (per column)");
+  }
+
+  // R50 S3c: masteredSingletonText == what the planner does to a singleton.
+  {
+    const p = buildIntakeMasteringPlan({
+      drafts: [draft({ name: "Fairwinds - Blue Dream 3.5g" })],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [],
+    });
+    const inj = buildDraftInjectionPlan({
+      drafts: [draft({ name: "Fairwinds - Blue Dream 3.5g" })],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      baseSortOrder: 0,
+    });
+    const t = masteredSingletonText(inj.items[0]);
+    assert(p.newCards.length === 1 && t.name === p.newCards[0].name, "S3c: singleton text name == planner's");
+    assert(t.description === p.newCards[0].description, "S3c: singleton text description == planner's");
+    const real = masteredSingletonText({ ...inj.items[0], description: "Real copy." });
+    assert(real.description === "Real copy.", "S3c: real copy never overwritten");
+    const novendor = masteredSingletonText({ ...inj.items[0], vendor_name: null });
+    assert(novendor.name === inj.items[0].name && novendor.description === inj.items[0].description, "S3c: no vendor = unchanged");
   }
 
   return { passed };

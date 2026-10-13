@@ -13,7 +13,8 @@
  *   - catalogue fields our pipeline decides (name, product name, brand,
  *     vendor, category, filter categories, inventory type, type label, strain
  *     type, strain name) take our value when ours is not blank;
- *   - description only when ours is real copy (never the placeholder);
+ *   - description: ours when it is real copy, or when the live one is blank
+ *     or a placeholder (real live copy is never replaced by the placeholder);
  *   - facts (potency, compounds, mg facts, net measures, the compliance
  *     flags, effects, aroma) take our value only when it is NOT null:
  *     null = "not verified", it never wipes a live value (S12 rule);
@@ -39,7 +40,7 @@ import {
   type PlannedInjectedItem,
   type InjectionDiagnostic,
 } from "@/lib/pos/draft-injection-core";
-import { intakeDisplayName, lotFactsFromInjected } from "@/lib/pos/intake-mastering-core";
+import { lotFactsFromInjected, masteredSingletonText } from "@/lib/pos/intake-mastering-core";
 import { boilerplateDescription, isBoilerplateDescription } from "@/lib/catalog/golden-record-core";
 
 /** Kill switch: `off` restores the S3 behaviour (approval catalogues only, no card refresh). */
@@ -104,10 +105,13 @@ export function buildRebuiltRefreshStagingPlan(inputs: {
     enrichmentByDraftId: inputs.enrichmentByDraftId,
     baseSortOrder: 0,
   });
+  // Mastering's singleton text (display name + placeholder rebuilt with it),
+  // so the rebuilt card reads exactly like a received one.
+  const ours = injection.items.map((it) => ({ ...it, ...masteredSingletonText(it) }));
   const refresh = planRebuiltCardRefresh({
     items: base.items,
-    ours: injection.items,
-    displayNameOf: (it) => intakeDisplayName(it),
+    ours,
+    displayNameOf: (it) => it.name,
   });
   return {
     items: base.items,
@@ -141,10 +145,11 @@ export function refreshEventNote(p: { refreshed: number; notLive: number; publis
  * delivery (where the product is kept OFF the menu), a Cultivera card is
  * already selling, so it simply keeps its current card.
  */
-export function refreshWithheldNote(n: number): string {
+export function refreshWithheldNote(n: number, published: boolean): string {
   const count = Math.max(0, Math.floor(Number.isFinite(n) ? n : 0));
   const what = count === 1 ? "1 product from Cultivera keeps" : `${count} products from Cultivera keep`;
-  return `The menu update published. ${what} its current card (still on sale) because a fact could not be verified \u2014 set the facts on Product Onboarding \u2192 Approved and the card is rebuilt.`;
+  const lead = published ? "The menu update published. " : "No menu update was needed. ";
+  return `${lead}${what} its current card (still on sale) because a fact could not be verified \u2014 set the facts on Product Onboarding \u2192 Approved and the card is rebuilt.`;
 }
 
 /** The lot fact columns the staging writes (LotFactBundle, minus provenance). */
@@ -215,9 +220,11 @@ export const CATALOGUE_TEXT_FIELDS = [
   "vendor_name",
   "category",
   "pos_inventory_type",
-  "pos_inventory_category",
   "strain_name",
 ] as const;
+
+/** Catalogue fields OUR rule decides even when the answer is "none" (null is a decision here). */
+export const DECIDED_NULLABLE_FIELDS = ["pos_inventory_category"] as const;
 
 export const FACT_FIELDS = [
   "thc",
@@ -263,6 +270,10 @@ const blank = (v: unknown) => v === null || v === undefined || (typeof v === "st
 /** A strain type our pipeline did not decide ("unknown") never replaces a live one. */
 const knownStrainType = (v: unknown) => typeof v === "string" && v.trim() !== "" && v.trim().toLowerCase() !== "unknown";
 
+function sortedKeys(o: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+}
+
 function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
@@ -295,8 +306,21 @@ export function refreshLiveCard(live: StagedSnapshotItem, ours: PlannedInjectedI
     for (const c of live.filter_categories ?? []) if (c && c !== live.category && c !== oldCategory && !merged.includes(c)) merged.push(c);
     set("filter_categories", merged);
   }
+  // The type label is OUR house-type decision (labeler >= its confidence bar,
+  // or the approver's pick). When we decided "no confident type", the received
+  // card shows our category label (cardTypeLabel's fallback), so the rebuilt
+  // card must too: Cultivera's raw label is cleared, never kept as if verified.
+  for (const f of DECIDED_NULLABLE_FIELDS) {
+    const v = src[f];
+    set(f, blank(v) ? null : typeof v === "string" ? v.trim() : v);
+  }
   if (knownStrainType(ours.strain_type)) set("strain_type", ours.strain_type);
-  if (!isBoilerplateDescription(ours.description)) set("description", ours.description.trim());
+  // Description: our real copy always wins; our placeholder sentence wins only
+  // over a live description that is itself blank or a placeholder (a received
+  // card prints the placeholder too). Real live copy is never replaced by it.
+  if (!isBoilerplateDescription(ours.description) || isBoilerplateDescription(live.description)) {
+    if (!blank(ours.description)) set("description", ours.description.trim());
+  }
   for (const f of FACT_FIELDS) {
     const v = src[f];
     if (v === null || v === undefined) continue;
@@ -304,8 +328,13 @@ export function refreshLiveCard(live: StagedSnapshotItem, ours: PlannedInjectedI
     set(f, v);
   }
   if (Array.isArray(ours.compounds_json) && ours.compounds_json.length > 0) set("compounds_json", ours.compounds_json);
-  const prov = { ...(live.fact_provenance ?? {}), ...(ours.fact_provenance ?? {}) };
-  if (!sameValue(prov, live.fact_provenance ?? {})) set("fact_provenance", prov);
+  // Provenance: a field we just rewrote no longer comes from where the live
+  // card said it did, so its old provenance is dropped; ours goes on top.
+  const rewritten = new Set(changes.map((c) => c.field));
+  const prov: Record<string, string> = {};
+  for (const [k, v] of Object.entries(live.fact_provenance ?? {})) if (!rewritten.has(k)) prov[k] = v;
+  Object.assign(prov, ours.fact_provenance ?? {});
+  if (!sameValue(sortedKeys(prov), sortedKeys(live.fact_provenance ?? {}))) set("fact_provenance", prov);
   return changes;
 }
 
@@ -496,6 +525,17 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
   const l3 = live();
   refreshLiveCard(l3, ours({ brand_name: "  ", strain_name: null, pos_inventory_category: null }), null);
   ok(l3.brand_name === "FW" && l3.pos_inventory_category === null && l3.strain_name === null, "blank ours keeps live");
+  // Type label: our "no confident type" clears Cultivera's raw label (the menu then shows our category label)
+  const l3b = live({ pos_inventory_category: "EDIBLE" });
+  refreshLiveCard(l3b, ours({ pos_inventory_category: null }), null);
+  ok(l3b.pos_inventory_category === null, "type label: our null decision clears Cultivera's raw label");
+  const l3c = live({ pos_inventory_category: "EDIBLE" });
+  refreshLiveCard(l3c, ours({ pos_inventory_category: "  Gummies " }), null);
+  ok(l3c.pos_inventory_category === "Gummies", "type label: ours, trimmed");
+  // Provenance of a rewritten field is dropped (it described the old value); others kept
+  const l3d = live({ fact_provenance: { thc: "cultivera", net_weight_grams: "human" } });
+  refreshLiveCard(l3d, ours({ fact_provenance: {} }), null);
+  ok(l3d.fact_provenance.thc === undefined && l3d.fact_provenance.net_weight_grams === "human", "provenance: stale entry dropped, untouched field kept");
   ok(l3.brand_name === "FW", "blank brand kept");
   // unknown strain type never replaces
   const l4 = live({ strain_type: "indica" });
@@ -505,6 +545,15 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
   const l5 = live();
   refreshLiveCard(l5, ours({ description: "  Sweet berry, calm finish.  " }), null);
   ok(l5.description === "Sweet berry, calm finish.", "real copy replaces (trimmed)");
+  const l5b = live({ description: "" });
+  refreshLiveCard(l5b, ours(), null);
+  ok(l5b.description === boilerplateDescription("Blue Dream", "Fairwinds"), "blank live description takes our placeholder (as a received card)");
+  const l5c = live({ description: boilerplateDescription("BLUE DREAM 3.5G FW", "FW") });
+  refreshLiveCard(l5c, ours(), null);
+  ok(l5c.description === boilerplateDescription("Blue Dream", "Fairwinds"), "an old placeholder is replaced by ours");
+  const l5d = live({ description: "" });
+  refreshLiveCard(l5d, ours({ description: "   " }), null);
+  ok(l5d.description === "", "blank ours never writes");
   // Extra live shelf kept
   const l6 = live({ category: "preroll", filter_categories: ["preroll", "preroll-pack"] });
   refreshLiveCard(l6, ours({ category: "preroll", filter_categories: ["preroll"] }), null);
@@ -660,7 +709,8 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
   // Notes
   ok(/^1 live card was rebuilt/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true })) && /Prices, sizes, stock and visibility did not change/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true })), "event note");
   ok(/waiting on Admin/.test(refreshEventNote({ refreshed: 2, notLive: 1, published: false })) && /1 approved product is not on the live menu/.test(refreshEventNote({ refreshed: 2, notLive: 1, published: false })), "event note: waiting + not live");
-  ok(/still on sale/.test(refreshWithheldNote(1)) && !/kept off/.test(refreshWithheldNote(3)), "withheld note never says kept off");
+  ok(/still on sale/.test(refreshWithheldNote(1, true)) && !/kept off/.test(refreshWithheldNote(3, true)), "withheld note never says kept off");
+  ok(/^The menu update published\. 1 product/.test(refreshWithheldNote(1, true)) && /^No menu update was needed\. 2 products/.test(refreshWithheldNote(2, false)), "withheld note: published vs nothing staged");
 
   return { passed, failed };
 }
