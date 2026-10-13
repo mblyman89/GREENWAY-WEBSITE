@@ -38,6 +38,7 @@ import {
   REHOME_LOT_SELECT,
   planFromSources,
   planRehome,
+  plannedDedupeKeys,
   verifyRehome,
   type ControlTotals,
   type ExistingManifest,
@@ -102,12 +103,34 @@ export async function readRebuiltManifests(admin: Admin, importId: string): Prom
   return read.rows;
 }
 
-export async function loadRehomeState(admin: Admin, importId: string): Promise<RehomeState> {
+/** Dedupe keys per `.in()` read (keys are ~60 chars; 100 keep the URL ≈ 7 KB). */
+export const REHOME_KEY_CHUNK = 100;
+
+/**
+ * ANY manifest already holding one of these dedupe keys, whoever made it. A key
+ * held by something that is not this import's rebuilt manifest must refuse the
+ * plan in the PREVIEW, not fail half-way through the inserts.
+ */
+export async function readManifestsByKeys(admin: Admin, keys: readonly string[]): Promise<ExistingManifest[]> {
+  const out: ExistingManifest[] = [];
+  const uniq = [...new Set(keys)];
+  for (let i = 0; i < uniq.length; i += REHOME_KEY_CHUNK) {
+    const chunk = uniq.slice(i, i + REHOME_KEY_CHUNK);
+    const { data, error } = await admin.from("inbound_manifests").select(REHOME_EXISTING_SELECT).in("dedupe_key", chunk).order("id", { ascending: true });
+    if (error) throw new Error(`Could not check existing manifests (${error.message}).`);
+    out.push(...((data as unknown as ExistingManifest[] | null) ?? []));
+  }
+  return out;
+}
+
+export async function loadRehomeState(admin: Admin, importId: string, plannedKeys: readonly string[] = []): Promise<RehomeState> {
   const source = await findSourceManifest(admin, importId);
   const ids = await importManifestIds(admin, importId);
   const lots = await readLotsOnManifests<RehomeLot>(admin, ids, REHOME_LOT_SELECT);
-  const existing = await readRebuiltManifests(admin, importId);
-  return { importId, source, lots, existing };
+  const byId = new Map<string, ExistingManifest>();
+  for (const m of await readRebuiltManifests(admin, importId)) byId.set(m.id, m);
+  for (const m of await readManifestsByKeys(admin, plannedKeys)) byId.set(m.id, m);
+  return { importId, source, lots, existing: [...byId.values()] };
 }
 
 export type RehomePreview = { plan: RehomePlan; gate: ManifestPlanGate; state: RehomeState };
@@ -119,8 +142,8 @@ export async function previewRehome(
   sources: RehomeSources,
   opts: { actorId?: string | null } = {},
 ): Promise<RehomePreview> {
-  const state = await loadRehomeState(admin, importId);
   const { plan: tplan, gate } = planFromSources(sources.lotSources, sources.transfers, sources.links, sources.pacificToday, sources.indexSkipped ?? 0);
+  const state = await loadRehomeState(admin, importId, plannedDedupeKeys(importId, tplan));
   const plan = planRehome({
     importId,
     source: state.source,

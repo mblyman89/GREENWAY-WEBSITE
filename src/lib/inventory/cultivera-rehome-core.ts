@@ -410,6 +410,14 @@ function fallbackRow(input: RehomeInput, g: ReconstructedGroup, vendorId: string
   };
 }
 
+/** Every dedupe key the plan could create (to look up in the DB before Apply). */
+export function plannedDedupeKeys(importId: string, plan: Pick<TransferMatchPlan, "transferGroups" | "fallbackGroups">): string[] {
+  return [
+    ...plan.transferGroups.map((g) => transferDedupeKey(importId, g)),
+    ...plan.fallbackGroups.map((g) => reconstructedDedupeKey(importId, g)),
+  ];
+}
+
 /**
  * Build the whole Apply from facts. PURE and deterministic. Re-running it after
  * a partial Apply yields only the remaining work (idempotent / resumable).
@@ -755,6 +763,11 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   ok(
     !planRehome(base({ existing: [{ id: "m-x", dedupe_key: "0001234567|GROW CO|IMPORT-imp-1", payload_kind: RECONSTRUCTED_MANIFEST_KIND, payload_import_id: "imp-2" }] })).ok,
     "existing key from another import refuses",
+  );
+
+  ok(
+    plannedDedupeKeys("imp-1", plan([tg({})], [fg({})])).join("~") === "0001234567|GROW CO|IMPORT-imp-1~CV-20240702-0932-ABCDEF|LEAF|IMPORT-imp-1",
+    "planned dedupe keys (transfer then rebuilt)",
   );
 
   // Vendor-by-link and partially accepted
