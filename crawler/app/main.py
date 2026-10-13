@@ -811,6 +811,9 @@ async def leaflink_menu(
 
 class CultiveraPosStartRequest(BaseModel):
     fresh: bool = Field(default=False, description="Ignore an unfinished run and start a new harvest.")
+    sales_from: str | None = Field(
+        default=None, alias="salesFrom", pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="R50 S11: the count date (YYYY-MM-DD). Also scrape Cultivera Sales Details from then to today.")
 
 
 @app.post("/cultivera-pos/runs", status_code=202)
@@ -821,7 +824,7 @@ def cultivera_pos_start(
     """Start the Phase A harvest, or resume the newest unfinished run. 202 + run id; poll GET."""
     _require_secret(x_crawler_secret)
     try:
-        out = pos_jobs.start_or_resume(fresh=req.fresh)
+        out = pos_jobs.start_or_resume(fresh=req.fresh, sales_from=req.sales_from)
     except RuntimeError as exc:
         if str(exc) == "busy":
             raise HTTPException(status_code=409, detail="A Cultivera POS harvest is already running.") from exc

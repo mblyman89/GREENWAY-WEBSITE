@@ -584,6 +584,7 @@ import { __runCultiveraRehomeCoreTests } from "../../src/lib/inventory/cultivera
 import { __runCultiveraRehomeUiCoreTests } from "../../src/lib/inventory/cultivera-rehome-ui-core";
 import { __runCultiveraFetchCoreTests } from "../../src/lib/pos/cultivera-fetch-core";
 import { __runCultiveraFetchButtonCoreTests } from "../../src/lib/pos/cultivera-fetch-button-core";
+import { __runCultiveraCountCoreTests } from "../../src/lib/pos/cultivera-count-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
 import { __runCultiveraStrainFixCoreTests } from "../../src/lib/pos/cultivera-strain-fix-core";
 import { __runLegacyLotRemovalCoreTests } from "../../src/lib/pos/legacy-lot-removal-core";
@@ -2258,6 +2259,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 36); // R50 S9: the button — run view, sha verify, import gate
+  assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 43); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

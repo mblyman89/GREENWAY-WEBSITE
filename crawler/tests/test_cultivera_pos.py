@@ -60,6 +60,14 @@ class FakeCultivera:
         self.data_calls = 0
         self.token = TOKEN
         self.wcia_bodies: list = []
+        # R50 S11: Sales Details (Tsid = barcode). SalesPersonName must never reach disk.
+        self.sales = [{"Id": 900 + i, "Tsid": f"B{1 + i % 3}", "Units": 1 + (i == 2), "ReturnUnits": int(i == 4),
+                       "Cost": 2.5 * (1 + (i == 2)), "GrossSales": 10.0, "NetSales": 8.0,
+                       "CreatedAt": f"2026-10-31T{10 + i:02d}:00:00Z", "OrderStatus": 4 if i == 4 else 1,
+                       "SalesPersonName": "Budtender Bob", "SalesPersonId": 77, "PaymentMethod": "Cash"}
+                      for i in range(7)]
+        self.sales_bodies: list = []
+        self.summary_override: dict | None = None
 
     def handler(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
@@ -120,6 +128,17 @@ class FakeCultivera:
             if body != {"Url": WCIA_URL}:
                 return httpx.Response(404)
             return httpx.Response(200, json={"JsonFile": WCIA_DOC})
+        if path == cp.SALES_ENDPOINT:
+            self.sales_bodies.append(body)
+            p = body["Page"]
+            return httpx.Response(200, json={"Count": len(self.sales),
+                                             "Data": self.sales[p["Skip"]:p["Skip"] + min(p["Take"], self.page_cap)]})
+        if path == cp.SALES_SUMMARY_ENDPOINT:
+            assert "Page" not in body
+            self.sales_bodies.append(body)
+            return httpx.Response(200, json=self.summary_override or {
+                "GrossSales": round(sum(r["GrossSales"] for r in self.sales), 2),
+                "NetSales": round(sum(r["NetSales"] for r in self.sales), 2), "Discounts": 0, "Taxes": 0, "Returns": 0})
         m = re.fullmatch(r"inventories/inventory-batch/(\d+)", path)
         if m:
             return httpx.Response(200, json={"Id": int(m.group(1)), "ReceivedDate": "2026-10-01T15:04:05Z"})
@@ -674,10 +693,119 @@ def test_wcia_cancel_inside_the_loop(tmp_path):
 
 def test_wcia_stage_order():
     s = list(cp.STAGES_PHASE_A)
-    assert s.index("transfer_details") < s.index("batches") < s.index("wcia_json") == len(s) - 1
-    assert cp.ENRICHMENT_STAGES == frozenset({"wcia_json"})
+    assert s.index("transfer_details") < s.index("batches") < s.index("sales") < s.index("wcia_json") == len(s) - 1
+    assert cp.ENRICHMENT_STAGES == frozenset({"sales", "wcia_json"})
 
 
 def test_wcia_downloadable():
     from app import cultivera_pos_jobs as j
     assert "wcia_json.jsonl" in j.DOWNLOADABLE
+
+
+# ------------------------------------------------------------------ R50 S11: Cultivera sales for the Oct 30 count
+
+NOON_OCT_31_PT = 1793473200.0  # 2026-10-31T12:00:00-07:00
+
+
+def test_sales_filter_dates_and_body():
+    f = cp.sales_filter("2026-10-30", "2026-10-31")
+    assert f["DateFrom"] == "10/30/2026" and f["DateTo"] == "10/31/2026" and "Page" not in f
+    b = cp.sales_body("2026-10-30", "2026-10-31")(500, 250)
+    assert b["Page"] == {"Skip": 500, "Take": 250, "Sort": [{"field": "Id", "dir": "asc"}], "HasSortInfo": True}
+    assert b["DateFrom"] == "10/30/2026" and b["Barcode"] == "" and b["SalesType"] is None
+    for bad in ("10/30/2026", "2026-10-3", "", None):
+        with pytest.raises(cp.CultiveraPosError):
+            cp.sales_filter(bad, "2026-10-31")  # type: ignore[arg-type]
+
+
+def test_pacific_wall_clock():
+    assert cp.pacific_wall(NOON_OCT_31_PT) == "2026-10-31T12:00:00"
+    assert cp.pacific_wall(1794297600.0) == "2026-11-10T00:00:00"  # PST after the Nov 1 change (UTC-8)
+
+
+def test_sales_stage_scrapes_count_window(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    m = cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT, sales_from="2026-10-30")
+    st = c.run.read_json("state.json")
+    assert st["status"] == "done" and st["salesFrom"] == "2026-10-30"
+    s = st["stages"]["sales"]
+    assert s["status"] == "done" and s["rows"] == 7 and s["dateTo"] == "2026-10-31" and s["reconciled"] is True
+    assert s["startedPacific"] == "2026-10-31T12:00:00"
+    rows = c.run.read_jsonl("sales.jsonl")
+    assert [r["Id"] for r in rows] == list(range(900, 907))  # paged 3+3+1, Count-verified
+    assert all(set(r) == set(cp.SALES_SAFE_FIELDS) for r in rows)
+    raw = (tmp_path / "run" / "sales.jsonl").read_text()
+    assert "Budtender" not in raw and "SalesPerson" not in raw and "PaymentMethod" not in raw
+    summ = c.run.read_json("sales_summary.json")
+    assert summ["units"] == 8 and summ["returnUnits"] == 1 and summ["cogs"] == 20.0 and summ["reconciled"]
+    assert summ["dateFrom"] == "2026-10-30" and summ["dateTo"] == "2026-10-31"
+    assert all(b["DateFrom"] == "10/30/2026" and b["DateTo"] == "10/31/2026" for b in fake.sales_bodies)
+    assert {"sales.jsonl", "sales_summary.json"} <= {f["name"] for f in m["files"]}
+
+
+def test_sales_skipped_without_count_date(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    m = cp.run_phase_a(c)
+    st = c.run.read_json("state.json")
+    assert st["status"] == "done" and st["stages"]["sales"]["skipped"] and fake.sales_bodies == []
+    assert "sales.jsonl" not in {f["name"] for f in m["files"]}
+
+
+def test_sales_totals_mismatch_is_partial_not_failed(tmp_path):
+    fake = FakeCultivera()
+    fake.summary_override = {"GrossSales": 70.0, "NetSales": 55.99}
+    c = _client(tmp_path, fake)
+    cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT, sales_from="2026-10-30")
+    st = c.run.read_json("state.json")
+    assert st["status"] == "done" and st["stages"]["sales"]["status"] == "partial"
+    assert st["stages"]["sales"]["reconciled"] is False
+    assert c.run.read_json("sales_summary.json")["checks"]["NetSales"] == {"rows": 56.0, "cultivera": 55.99}
+
+
+def test_sales_count_mismatch_is_partial(tmp_path):
+    fake = FakeCultivera()
+    fake.sales.append(dict(fake.sales[0]))  # same Id twice -> unique rows != Count
+    c = _client(tmp_path, fake)
+    cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT, sales_from="2026-10-30")
+    st = c.run.read_json("state.json")
+    assert st["status"] == "done" and st["stages"]["sales"]["status"] == "partial"
+    assert "Count" in st["stages"]["sales"]["error"]
+
+
+def test_sales_count_date_in_future_is_partial(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT, sales_from="2026-11-02")
+    st = c.run.read_json("state.json")
+    assert st["stages"]["sales"]["status"] == "partial" and "after today" in st["stages"]["sales"]["error"]
+    assert fake.sales_bodies == []
+
+
+def test_sales_bad_count_date_refused():
+    with pytest.raises(ValueError):
+        cp.run_phase_a(None, sales_from="10/30/2026")  # type: ignore[arg-type]
+
+
+def test_sales_resume_with_new_date_refetches(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT, sales_from="2026-10-31")
+    n = len(fake.sales_bodies)
+    cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT)  # resume, same date kept -> not refetched
+    assert len(fake.sales_bodies) == n
+    cp.run_phase_a(c, clock=lambda: NOON_OCT_31_PT, sales_from="2026-10-30")
+    assert len(fake.sales_bodies) > n and c.run.read_json("sales_summary.json")["dateFrom"] == "2026-10-30"
+
+
+def test_sales_downloadable_and_start_passes_date(tmp_path):
+    from app import cultivera_pos_jobs as j
+    assert {"sales.jsonl", "sales_summary.json"} <= j.DOWNLOADABLE
+    import inspect
+    assert "sales_from" in inspect.signature(j.start_or_resume).parameters
+
+
+def test_sales_only_reads():
+    assert cp.guard_request("POST", cp.Q + cp.SALES_ENDPOINT)
+    assert cp.guard_request("POST", cp.Q + cp.SALES_SUMMARY_ENDPOINT)
