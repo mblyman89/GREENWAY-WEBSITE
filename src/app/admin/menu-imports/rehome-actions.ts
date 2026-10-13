@@ -77,7 +77,7 @@ export async function applyRehomeAction(formData: FormData): Promise<void> {
     redirect(rehomeHref(importId, { error: err instanceof Error ? err.message : "Rebuild failed." }));
   }
   revalidatePath(`/admin/menu-imports/${importId}`);
-  revalidatePath("/admin/receiving");
+  revalidatePath("/admin/inventory/intake");
   redirect(rehomeHref(importId, failed ? { error: msg } : { done: msg }));
 }
 
@@ -107,6 +107,6 @@ export async function rollbackRehomeAction(formData: FormData): Promise<void> {
     redirect(rehomeHref(importId, { error: err instanceof Error ? err.message : "Rollback failed." }));
   }
   revalidatePath(`/admin/menu-imports/${importId}`);
-  revalidatePath("/admin/receiving");
+  revalidatePath("/admin/inventory/intake");
   redirect(rehomeHref(importId, { done: msg }));
 }
