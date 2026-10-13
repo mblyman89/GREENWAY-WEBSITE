@@ -343,6 +343,12 @@ export function parseSaleLine(raw: Record<string, unknown>): { ok: true; line: C
 export type SalesWindow = {
   /** YYYY-MM-DD — the day after the count (10/31). */
   salesDay: string;
+  /**
+   * Pacific wall time "YYYY-MM-DDTHH:MM:SS" the harvest began reading quantities (earliest of the
+   * export_inventories / inventory_list stage starts). A sale at or after it may be missing from
+   * the imported quantity, so subtracting it would be wrong: any such line blocks apply.
+   */
+  snapshotPacific?: string;
 };
 
 export type SalesRollup = {
@@ -356,6 +362,8 @@ export type SalesRollup = {
    * count roll-forward does not include them, so ANY such line blocks apply (fetch before opening).
    */
   linesAfterDay: number;
+  /** sales-day lines stamped at or after the harvest snapshot began (see SalesWindow) — block apply */
+  linesAfterSnapshot: number;
   duplicateIds: number;
   noBarcode: number;
   unusable: string[];
@@ -370,6 +378,7 @@ export function rollupSales(rawLines: Record<string, unknown>[], window: SalesWi
     linesInWindow: 0,
     linesBeforeDay: 0,
     linesAfterDay: 0,
+    linesAfterSnapshot: 0,
     duplicateIds: 0,
     noBarcode: 0,
     unusable: [],
@@ -400,6 +409,7 @@ export function rollupSales(rawLines: Record<string, unknown>[], window: SalesWi
       continue;
     }
     r.linesInWindow += 1;
+    if (window.snapshotPacific && l.createdAt >= window.snapshotPacific) r.linesAfterSnapshot += 1;
     if (l.barcode === "") {
       r.noBarcode += 1;
       continue;
@@ -605,7 +615,7 @@ export function planCount(input: {
     salesUnitsNotOnAnyLot,
   };
   const blocked =
-    input.problems.some((p) => p.severity === "blocking") || input.sales.unusable.length > 0 || input.sales.linesAfterDay > 0;
+    input.problems.some((p) => p.severity === "blocking") || input.sales.unusable.length > 0 || input.sales.linesAfterDay > 0 || input.sales.linesAfterSnapshot > 0;
   return { lines, adjustments, summary, blocked };
 }
 
@@ -634,6 +644,23 @@ export function checkSalesSummary(raw: unknown, salesDay: string, linesInFile: n
   const dateTo = typeof r.dateTo === "string" ? r.dateTo : null;
   if (!dateTo || dateTo < salesDay) problems.push("The sales window has no valid end date.");
   return { ok: problems.length === 0, problems, dateTo, fetchedAtPacific: typeof r.fetchedAtPacific === "string" ? r.fetchedAtPacific : null };
+}
+
+/** The harvest stages that read lot quantities (the import's on-hand comes from these). */
+export const QUANTITY_STAGES = ["export_inventories", "inventory_list"] as const;
+
+/**
+ * When the harvest began reading quantities: the earliest `startedPacific` of the quantity stages.
+ * null when any is missing or unreadable (an older crawler) — the count page then refuses.
+ */
+export function harvestSnapshotPacific(stages: Partial<Record<string, { startedPacific?: unknown }>> | null | undefined): string | null {
+  const times: string[] = [];
+  for (const k of QUANTITY_STAGES) {
+    const t = stages?.[k]?.startedPacific;
+    if (typeof t !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(t)) return null;
+    times.push(t);
+  }
+  return times.sort()[0];
 }
 
 /** The sales day for a count date: the next calendar day (YYYY-MM-DD in, YYYY-MM-DD out; null if invalid). */
@@ -803,6 +830,17 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(note.startsWith(countSessionPrefix("S1")) && note.includes("counted 3") && note.includes("sold 2") && note.includes("on hand 4"), "adjustment note carries the evidence + session key");
   ok(salesDayAfter("2026-10-30") === "2026-10-31" && salesDayAfter("2026-10-31") === "2026-11-01" && salesDayAfter("2026-12-31") === "2027-01-01", "sales day = next day (month/year roll)");
   ok(salesDayAfter("2026-02-30") === null && salesDayAfter("10/30/2026") === null, "invalid count date refused");
+
+  // ---- a sale after the harvest snapshot began blocks ----
+  const snapW = { salesDay: "2026-10-31", snapshotPacific: "2026-10-31T18:30:00" };
+  const early = rollupSales([sale(70, "S1", 1, "2026-10-31T18:29:59")], snapW);
+  const late = rollupSales([sale(71, "S1", 1, "2026-10-31T18:30:00")], snapW);
+  ok(early.linesAfterSnapshot === 0 && late.linesAfterSnapshot === 1, "sale at/after the snapshot start counted");
+  ok(!planCount({ lots: [], counted: new Map(), sales: early, problems: [] }).blocked && planCount({ lots: [], counted: new Map(), sales: late, problems: [] }).blocked, "sale after the snapshot blocks apply");
+
+  ok(harvestSnapshotPacific({ export_inventories: { startedPacific: "2026-10-31T18:31:00" }, inventory_list: { startedPacific: "2026-10-31T18:30:05" } }) === "2026-10-31T18:30:05", "snapshot = earliest quantity stage start");
+  ok(harvestSnapshotPacific({ export_inventories: { startedPacific: "2026-10-31T18:31:00" }, inventory_list: {} }) === null && harvestSnapshotPacific(null) === null, "missing stage time → null (refuse)");
+  ok(harvestSnapshotPacific({ export_inventories: { startedPacific: "2026-10-31 18:31" }, inventory_list: { startedPacific: "2026-10-31T18:30:05" } }) === null, "malformed stage time → null");
 
   // ---- the saved sales summary ----
   const goodSum = { dateFrom: "2026-10-31", dateTo: "2026-10-31", count: 4, rows: 4, reconciled: true, fetchedAtPacific: "2026-10-31T22:10:00" };

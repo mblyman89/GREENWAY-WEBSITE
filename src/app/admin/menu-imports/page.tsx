@@ -316,13 +316,24 @@ export default async function MenuImportsPage({
             <li>On a GO, press &ldquo;Stage this harvest for review&rdquo;. On a NO-GO, fix what it names and fetch again.</li>
           </ol>
           {isCrawlerConfigured() ? (
+            <>
             <form action={startFetchAction} className="mt-4 flex flex-wrap items-center gap-4">
               <Button type="submit" variant="primary">Fetch It All, Fuck Cultivera</Button>
               <label className="flex items-center gap-2 text-xs text-white/60">
                 <input type="checkbox" name="fresh" />
                 <span>Start fresh. Leave this off to resume an unfinished fetch.</span>
               </label>
+              <label className="flex items-center gap-2 text-xs text-white/60" data-testid="fetch-count-date">
+                <span>Shelf count date (only for the Oct 30 count fetch):</span>
+                <input type="date" name="count_date" className="rounded border border-white/20 bg-black px-2 py-1 text-white" />
+              </label>
             </form>
+            <p className="mt-2 text-xs text-white/40">
+              The count fetch: set the count date (10/30) and press after the store closes on 10/31 and before it opens
+              on 11/01. It also reads Cultivera&apos;s Sales Details for 10/31, which the{" "}
+              <Link href="/admin/menu-imports/count" className="underline">count page</Link> takes off the shelf count.
+            </p>
+            </>
           ) : (
             <p className="mt-3 text-xs text-[var(--admin-gold)]">
               The crawler is not connected. Set CRAWLER_BASE_URL and CRAWLER_SHARED_SECRET on the site, and
