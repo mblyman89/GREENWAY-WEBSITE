@@ -20,6 +20,8 @@ import { runImport } from "@/lib/pos/import-service";
 import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { cancelPosRun, isValidRunId, loadRunForImport, startPosRun } from "@/lib/pos/cultivera-fetch-client";
 import { importDecision } from "@/lib/pos/cultivera-fetch-button-core";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { savePlanInputs } from "@/lib/inventory/cultivera-rehome-store";
 
 const runHref = (id: string, q = "") => `/admin/menu-imports/fetch/${id}${q}`;
 const err = (m: string) => "?error=" + encodeURIComponent(m);
@@ -98,6 +100,20 @@ export async function importFetchAction(formData: FormData): Promise<void> {
     });
     importId = result.import.id;
 
+    // R50 S2c: keep the manifest plan's inputs (transfer index + links, no prices) next to the raw
+    // workbooks, so "Rebuild manifests" works after the crawler prunes this run. Test imports make no
+    // lots, so they have nothing to re-home. A failure here never hides the staged import: it is
+    // audited, and Rebuild will refuse with the reason.
+    let planInputs: { saved: boolean; key?: string; bytes?: number; sha256?: string; error?: string } | null = null;
+    if (!isTest && loaded.planInputsFor) {
+      try {
+        planInputs = { saved: true, ...(await savePlanInputs(createSupabaseAdminClient(), loaded.planInputsFor(importId))) };
+      } catch (e) {
+        planInputs = { saved: false, error: e instanceof Error ? e.message : String(e) };
+        console.error("[menu-imports] could not save manifest plan inputs:", e);
+      }
+    }
+
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -127,6 +143,7 @@ export async function importFetchAction(formData: FormData): Promise<void> {
               link: report.manifestPlan.summary.link,
             }
           : null,
+        planInputs,
         items: result.version.item_count,
         variants: result.version.variant_count,
         errors: result.transform.diagnosticCounts.errors,

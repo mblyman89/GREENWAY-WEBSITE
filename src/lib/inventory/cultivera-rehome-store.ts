@@ -20,6 +20,8 @@
  * recordAudit needs request headers, so the server action audits the result.
  */
 import "server-only";
+import crypto from "node:crypto";
+import { transformWorkbooks } from "@/lib/pos/transform";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
@@ -37,6 +39,7 @@ import {
   REHOME_EXISTING_SELECT,
   REHOME_LOT_SELECT,
   REHOME_MOVE_BATCH,
+  checkPlanInputs,
   planFromSources,
   planRehome,
   plannedDedupeKeys,
@@ -46,10 +49,92 @@ import {
   type PlanLotSource,
   type RehomeLot,
   type RehomePlan,
+  type RehomePlanInputs,
 } from "@/lib/inventory/cultivera-rehome-core";
 import type { ManifestPlanGate } from "@/lib/inventory/cultivera-transfer-match-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
+
+/* ---------------- persisted plan inputs + Apply sources ---------------- */
+
+/** Same private bucket as the import's raw workbooks. */
+export const REHOME_INPUTS_BUCKET = "pos-raw";
+export const rehomeInputsKey = (importId: string) => `rehome/${importId}/plan-inputs.json`;
+
+/**
+ * Save the plan inputs next to the import's raw workbooks (upsert: re-saving
+ * the same import's inputs is idempotent). Returns the sha256 for the audit row.
+ */
+export async function savePlanInputs(admin: Admin, inputs: RehomePlanInputs): Promise<{ key: string; bytes: number; sha256: string }> {
+  if (!isSafeImportId(inputs.importId)) throw new Error("That import id is not valid.");
+  const problems = checkPlanInputs(inputs, inputs.importId);
+  if (problems.length > 0) throw new Error(`Plan inputs not saved: ${problems.join("; ")}.`);
+  const body = Buffer.from(JSON.stringify(inputs), "utf8");
+  const key = rehomeInputsKey(inputs.importId);
+  const { error } = await admin.storage.from(REHOME_INPUTS_BUCKET).upload(key, body, { contentType: "application/json", upsert: true });
+  if (error) throw new Error(`Could not save the manifest plan inputs (${error.message}).`);
+  return { key, bytes: body.length, sha256: crypto.createHash("sha256").update(body).digest("hex") };
+}
+
+export async function loadPlanInputs(admin: Admin, importId: string): Promise<RehomePlanInputs> {
+  if (!isSafeImportId(importId)) throw new Error("That import id is not valid.");
+  const { data, error } = await admin.storage.from(REHOME_INPUTS_BUCKET).download(rehomeInputsKey(importId));
+  if (error || !data) {
+    throw new Error(
+      `This import has no saved manifest plan inputs (${error?.message ?? "missing"}). It was not made by Fetch It All with transfer details; re-run the fetch and import.`,
+    );
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(Buffer.from(await data.arrayBuffer()).toString("utf8"));
+  } catch {
+    throw new Error("The saved manifest plan inputs are not valid JSON.");
+  }
+  const problems = checkPlanInputs(raw, importId);
+  if (problems.length > 0) throw new Error(`The saved manifest plan inputs are unusable: ${problems.join("; ")}.`);
+  return raw as RehomePlanInputs;
+}
+
+/**
+ * Everything the planner needs, rebuilt on the server from what was stored at
+ * import time: the transform's lot sources from the SAME raw workbooks
+ * runImport created the lots from, and the persisted transfer index + links.
+ */
+export async function loadRehomeSources(admin: Admin, importId: string): Promise<RehomeSources & { runId: string }> {
+  if (!isSafeImportId(importId)) throw new Error("That import id is not valid.");
+  const { data: row, error } = await admin
+    .from("pos_imports")
+    .select("id, products_storage_key, inventories_storage_key, is_test")
+    .eq("id", importId)
+    .limit(1);
+  if (error) throw new Error(`Could not read the import (${error.message}).`);
+  const imp = ((row as { id: string; products_storage_key: string | null; inventories_storage_key: string | null; is_test: boolean }[] | null) ?? [])[0];
+  if (!imp) throw new Error("That import does not exist.");
+  if (imp.is_test) throw new Error("A test import never creates lots, so there is nothing to re-home.");
+  if (!imp.products_storage_key || !imp.inventories_storage_key) throw new Error("This import has no stored raw workbook files.");
+  const [p, i] = await Promise.all([
+    admin.storage.from(REHOME_INPUTS_BUCKET).download(imp.products_storage_key),
+    admin.storage.from(REHOME_INPUTS_BUCKET).download(imp.inventories_storage_key),
+  ]);
+  if (p.error || !p.data || i.error || !i.data) {
+    throw new Error(`Could not re-read the import's raw workbooks (${p.error?.message ?? i.error?.message ?? "missing"}).`);
+  }
+  const inputs = await loadPlanInputs(admin, importId);
+  const t = transformWorkbooks({
+    productsBuffer: Buffer.from(await p.data.arrayBuffer()),
+    inventoriesBuffer: Buffer.from(await i.data.arrayBuffer()),
+    productsSheet: "Sheet1",
+    inventoriesSheet: "Inventories",
+  });
+  return {
+    runId: inputs.runId,
+    lotSources: t.lotSources.map((s) => ({ barcode: s.barcode, vendor: s.vendor, receivedDateRaw: s.receivedDateRaw, units: s.units, productName: s.productName })),
+    transfers: inputs.transfers,
+    links: new Map(inputs.links),
+    pacificToday: inputs.pacificToday,
+    indexSkipped: inputs.indexSkipped,
+  };
+}
 
 /** Manifests per INSERT (each row carries its barcodes in raw_payload; keep bodies modest). */
 export const REHOME_INSERT_CHUNK = 50;
