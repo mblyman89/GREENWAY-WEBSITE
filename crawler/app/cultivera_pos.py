@@ -38,9 +38,11 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -86,12 +88,13 @@ STAGES_PHASE_A = (
     "transfers_list",
     "transfer_details",
     "batches",
+    "sales",
     "wcia_json",
 )
 
 # Enrichment stages (R50 S3b): the cutover import never waits on them. They run last, stop before the
 # time budget is spent, and a miss or an error is recorded as "partial" - never a failed run.
-ENRICHMENT_STAGES = frozenset({"wcia_json"})
+ENRICHMENT_STAGES = frozenset({"sales", "wcia_json"})
 # Seconds of the budget an enrichment stage leaves unused (the import's go/no-go has a time check).
 ENRICHMENT_MARGIN_SECONDS = 120.0
 
@@ -151,6 +154,53 @@ def transfers_body(skip: int, take: int) -> dict[str, Any]:
     """Flat body data-api/transfers/incoming takes (cbo-app.bundle.js; Kendo shape returns HTTP 500)."""
     return {"Number": None, "VendorIds": [], "StatusIds": [], "DateFrom": None, "DateTo": None,
             "Skip": skip, "Take": take, "Sort": [{"field": "Id", "dir": "asc"}], "HasSortInfo": True}
+
+
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
+# R50 S11 (the Oct 30 count): the Sales Details grid of the Cultivera back office (Reports -> Sales
+# Details), read from cbo-app.bundle.js and measured live (10/12 and 9/28-10/11/2026): Kendo-style Page
+# + flat filters, DateFrom/DateTo as MM/DD/YYYY (the back office date picker format), {Count, Data}.
+SALES_ENDPOINT = "reports/daily-sales-detail"
+SALES_SUMMARY_ENDPOINT = "reports/sales-details-summary"
+# Only what the count roll-forward and the COGS check need. No employee, customer or payment fields
+# ever reach disk (SalesPersonName / SalesPersonId / PaymentMethod are dropped here).
+SALES_SAFE_FIELDS = ("Id", "OrderId", "OrderNo", "ProductId", "ProductName", "CreatedAt", "Tsid", "Units",
+                     "ReturnUnits", "FinalUnits", "UnitPrice", "DiscountAmount", "TotalReturn", "OrderStatus",
+                     "Category", "InventoryType", "GrossSales", "NetSales", "TotalTax", "Cost", "IsCannabis")
+_DAY = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def sales_filter(date_from: str, date_to: str) -> dict[str, Any]:
+    """Flat filter body of the Sales Details grid. Dates are YYYY-MM-DD in, MM/DD/YYYY out."""
+    def mdy(d: str) -> str:
+        m = _DAY.match(d or "")
+        if not m:
+            raise CultiveraPosError(f"sales date must be YYYY-MM-DD, got {d!r}")
+        return f"{m.group(2)}/{m.group(3)}/{m.group(1)}"
+    return {"CategoryIds": [], "InventoryTypeIds": [], "ProductIds": [], "VendorIds": [], "EmployeeIds": [],
+            "OriginIds": [], "PaymentMethodIds": [], "DateFrom": mdy(date_from), "DateTo": mdy(date_to),
+            "ShiftId": None, "WeekDays": [], "Barcode": "", "SalesWithoutCategory": False,
+            "SalesWithoutInventoryType": False, "HourFrom": "", "HourTo": "", "SalesType": None}
+
+
+def sales_body(date_from: str, date_to: str) -> Callable[[int, int], dict[str, Any]]:
+    flt = sales_filter(date_from, date_to)
+    return lambda skip, take: {"Page": {"Skip": skip, "Take": take, "Sort": [{"field": "Id", "dir": "asc"}],
+                                        "HasSortInfo": True}, **flt}
+
+
+def safe_sale(row: dict[str, Any]) -> dict[str, Any]:
+    return {k: row.get(k) for k in SALES_SAFE_FIELDS}
+
+
+def pacific_wall(epoch: float) -> str:
+    """Epoch -> Pacific wall time "YYYY-MM-DDTHH:MM:SS" (the clock Cultivera stamps sales with)."""
+    return datetime.fromtimestamp(epoch, PACIFIC).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def valid_sales_from(v: Any) -> bool:
+    return isinstance(v, str) and bool(_DAY.match(v))
 
 
 def parse_export_response(payload: Any) -> tuple[str, str]:
@@ -529,6 +579,44 @@ def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool],
             "refused": len(skipped), "missing": missing}
 
 
+def stage_sales(client: PosClient, sales_from: str | None, now_epoch: float) -> dict[str, Any]:
+    """R50 S11 - the Oct 30 count roll-forward: every Sales Details line from the count day through
+    today (Pacific), read-only, Count-verified, safe fields only -> sales.jsonl, plus Cultivera's own
+    totals for the same window -> sales_summary.json. Row sums must equal the summary (measured equal
+    on 10/12 and on 9/28-10/11); a difference is recorded as "partial" and the count page refuses it.
+    No count date on the run -> nothing is fetched (the cutover import never needs sales)."""
+    if not valid_sales_from(sales_from):
+        return {"skipped": "no count date on this run"}
+    date_to = pacific_wall(now_epoch)[:10]
+    if str(sales_from) > date_to:
+        raise CultiveraPosError(f"sales: count date {sales_from} is after today ({date_to})")
+    rows, count = _page_all(client, SALES_ENDPOINT, sales_body(str(sales_from), date_to))
+    safe = [safe_sale(r) for r in rows]
+    client.run.write_atomic("sales.jsonl", "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in safe).encode())
+    summary = client.json("POST", Q + SALES_SUMMARY_ENDPOINT, sales_filter(str(sales_from), date_to))
+    if not isinstance(summary, dict):
+        raise CultiveraPosError(f"sales summary is not an object: {str(summary)[:200]}")
+
+    def total(field_name: str) -> float:
+        return round(sum(float(r.get(field_name) or 0) for r in safe), 2)
+
+    checks = {f: {"rows": total(f), "cultivera": round(float(summary.get(f) or 0), 2)} for f in ("GrossSales", "NetSales")}
+    reconciled = all(abs(v["rows"] - v["cultivera"]) < 0.005 for v in checks.values())
+    client.run.write_json("sales_summary.json", {
+        "dateFrom": sales_from, "dateTo": date_to, "count": count, "rows": len(safe),
+        "units": sum(int(r.get("Units") or 0) for r in safe),
+        "returnUnits": sum(int(r.get("ReturnUnits") or 0) for r in safe),
+        "cogs": total("Cost"), "checks": checks, "reconciled": reconciled,
+        "cultivera": {k: summary.get(k) for k in ("GrossSales", "Discounts", "Taxes", "Returns", "NetSales")},
+        "fetchedAtPacific": pacific_wall(now_epoch),
+    })
+    out: dict[str, Any] = {"file": "sales.jsonl", "rows": len(safe), "dateFrom": sales_from, "dateTo": date_to,
+                           "reconciled": reconciled}
+    if not reconciled:
+        out["missing"] = ["totals differ from Cultivera's Sales Details summary"]
+    return out
+
+
 def exported_barcodes_from_xlsx(path: Path) -> set[str]:
     """Barcodes in the inventory export (column 'Barcode'). openpyxl, read-only streaming."""
     from openpyxl import load_workbook  # local import: only this stage needs it
@@ -575,12 +663,22 @@ def build_manifest(run: RunDir, state: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: False,
-                clock: Callable[[], float] = time.time, budget_seconds: float = 1800.0) -> dict[str, Any]:
+                clock: Callable[[], float] = time.time, budget_seconds: float = 1800.0,
+                sales_from: str | None = None) -> dict[str, Any]:
     """Run (or resume) Phase A. Returns the manifest. Never raises for a stage error — it is recorded
-    in state.json with status "failed" so the button can show it and a rerun resumes."""
+    in state.json with status "failed" so the button can show it and a rerun resumes.
+
+    `sales_from` (YYYY-MM-DD, R50 S11): the count date. When set, the sales stage scrapes Cultivera's
+    Sales Details from that day through today; a different date on a resume refetches the sales."""
+    if sales_from is not None and not valid_sales_from(sales_from):
+        raise ValueError("sales_from must be YYYY-MM-DD")
     run = client.run
     state = run.read_json("state.json", {}) or {}
     state.setdefault("stages", {})
+    if sales_from is not None:
+        if state.get("salesFrom") != sales_from:
+            state["stages"].pop("sales", None)
+        state["salesFrom"] = sales_from
     state.setdefault("startedAt", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock())))
     state["status"] = "running"
     run.write_json("state.json", state)
@@ -606,6 +704,11 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
                 result = stage_transfers_list(client)
             elif stage == "transfer_details":
                 result = stage_transfer_details(client, cancelled)
+            elif stage == "sales":
+                try:
+                    result = stage_sales(client, state.get("salesFrom"), clock())
+                except (CultiveraPosError, CultiveraPosRefused) as e:  # enrichment never fails the run
+                    result = {"error": str(e)[:300], "missing": ["?"]}
             elif stage == "wcia_json":
                 try:
                     result = stage_wcia_json(client, cancelled, lambda: not remaining_budget_ok(
@@ -617,7 +720,10 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
             incomplete = bool(result.get("missing"))
             enrichment = stage in ENRICHMENT_STAGES
             state["stages"][stage] = {"status": ("partial" if enrichment else "incomplete") if incomplete else "done",
-                                      "seconds": round(clock() - s0, 1), **result}
+                                      "seconds": round(clock() - s0, 1), **result,
+                                      # R50 S11: Pacific wall clock of each stage, so the count can tell
+                                      # which Cultivera sales the inventory snapshot already includes.
+                                      "startedPacific": pacific_wall(s0), "endedPacific": pacific_wall(clock())}
             run.write_json("state.json", state)
             if incomplete and not enrichment:
                 raise CultiveraPosError(f"{stage}: {len(result['missing'])} ids not fetched")

@@ -30,6 +30,7 @@ from .cultivera_pos import PosClient, RunDir, run_phase_a
 DOWNLOADABLE = frozenset({
     "export_inventories.xlsx", "export_products.xlsx", "inventories.json", "transfers.json",
     "transfer_details.jsonl", "wcia_json.jsonl", "batches.jsonl", "errors.jsonl", "manifest.json", "state.json",
+    "sales.jsonl", "sales_summary.json",
 })
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 KEEP_RUNS = 12
@@ -91,7 +92,7 @@ def prune(settings: Settings | None = None, keep: int = KEEP_RUNS) -> None:
 
 
 def start_or_resume(*, fresh: bool = False, settings: Settings | None = None,
-                    client_factory=None, background: bool = True) -> dict[str, Any]:
+                    client_factory=None, background: bool = True, sales_from: str | None = None) -> dict[str, Any]:
     """Start (or resume) the single run. Raises RuntimeError("busy") if one is active,
     RuntimeError("not configured") if the POS login is not set."""
     s = settings or get_settings()
@@ -114,7 +115,8 @@ def start_or_resume(*, fresh: bool = False, settings: Settings | None = None,
 
     def work() -> None:
         try:
-            run_phase_a(client, cancelled=cancel.is_set, budget_seconds=s.cultivera_pos_budget_seconds)
+            run_phase_a(client, cancelled=cancel.is_set, budget_seconds=s.cultivera_pos_budget_seconds,
+                        sales_from=sales_from)
         finally:
             client.close()
             with _lock:
