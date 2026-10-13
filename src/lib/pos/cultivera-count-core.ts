@@ -847,6 +847,8 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(checkSalesSummary(goodSum, "2026-10-31", 4).ok, "reconciled summary for the sales day accepted");
   ok(!checkSalesSummary({ ...goodSum, reconciled: false }, "2026-10-31", 4).ok, "unreconciled summary refused");
   ok(!checkSalesSummary(goodSum, "2026-11-01", 4).ok, "summary for another sales day refused");
+  const early30 = checkSalesSummary({ ...goodSum, dateFrom: "2026-10-30" }, "2026-10-31", 4);
+  ok(!early30.ok && early30.problems.length === 1 && early30.problems[0].includes("not from the sales day"), "window starting the day before the sales day refused (only that reason)");
   ok(!checkSalesSummary(goodSum, "2026-10-31", 3).ok, "line count differs from the crawler's → refused");
   ok(!checkSalesSummary({ ...goodSum, count: 5 }, "2026-10-31", 4).ok, "Cultivera count differs from rows saved → refused");
   ok(!checkSalesSummary(null, "2026-10-31", 0).ok && !checkSalesSummary([], "2026-10-31", 0).ok, "non-object summary refused");
