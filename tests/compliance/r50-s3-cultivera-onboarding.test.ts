@@ -424,6 +424,8 @@ describe("D. approval of an already-selling card", () => {
       req.table === "inbound_manifests" ? { status: 500, body: { code: "XX000", message: "down", details: null, hint: null } } : undefined;
     const res = await approveDraftWithPrice(d.id as string, 2500, ACTOR);
     expect(res.ok).toBe(false);
+    // refused for THIS reason (not by the ordinary floor it would fall through to)
+    expect(res.error).toContain("Could not read this product's delivery");
     expect(d.status).toBe("draft");
   });
 
@@ -433,6 +435,7 @@ describe("D. approval of an already-selling card", () => {
       req.table === "menu_variants" ? { status: 500, body: { code: "XX000", message: "down", details: null, hint: null } } : undefined;
     const res = await approveDraftWithPrice(d.id as string, 2500, ACTOR);
     expect(res.ok).toBe(false);
+    expect(res.error).toContain("Could not read the live menu price");
     expect(d.status).toBe("draft");
   });
 
