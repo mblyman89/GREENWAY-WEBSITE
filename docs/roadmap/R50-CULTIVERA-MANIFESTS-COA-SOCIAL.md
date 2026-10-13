@@ -1094,3 +1094,80 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   * The Onboarding row copy now says approval "rebuilds the live card from this onboarding (sizes and
     visibility unchanged)". With the switch off it still says "does not change the menu". The Start note
     ("The live menu was not changed.") stays as it is, because Start only adds drafts.
+
+- **2026-10-13, S10a: Cultivera manifests on the receiving table (owner follow-up #5, part 1).**
+  * `receiving-table-core.ts` is pure, with 88 self-tests. It adds a third view, `?view=cultivera`, which
+    lists every rebuilt manifest as Complete / Needs attention / Unknown. The status comes from the
+    onboarding tally, and an unreadable tally is Unknown, never Complete.
+  * It also adds status, vendor, search and date filters, plus sorting. The default view and its counts are
+    unchanged.
+  * Tests: 16 vitest; mutants 21/21 core + 11/11 wiring.
+- **2026-10-13, S10c: migrated garbage → CCRS clean-up (owner follow-up #5, part 3; D-15, U-46).**
+  * `ccrs-migration-garbage-core.ts` is pure, with 53 self-tests. "Dead" means only `no_product_master` or
+    no barcode. Each dead lot is routed by the CCRS ledger: zero in CCRS (Reconciliation `[G L1142]`, via
+    R15b), fix status, local only, reconcile first, already zeroed, or already removed.
+  * It never sends an Inventory Delete (`[G L0248]`, U-46 OPEN). Fixable rows are listed, not removed.
+  * The store is read-only and fails closed: any short read is an error, never a partial list. The panel
+    sits at `/admin/compliance/ccrs#migration-garbage`.
+  * Tests: 13 vitest; mutants 25/25 core + 15/15 wiring.
+- **2026-10-13, S10b: Menu Imports revamp (owner follow-up #5, part 2).**
+  * `src/lib/pos/menu-imports-guide-core.ts` is pure, with 70 self-tests and is registered in the runner. It
+    holds the nine-step migration guide:
+    1. Fetch
+    2. Go / no-go
+    3. Stage
+    4. Review (Fact Review, warnings, types)
+    5. Publish
+    6. Rebuild manifests
+    7. Onboarding and missing products
+    8. CCRS clean-up
+    9. Receive from now on (Cultivera view)
+  * **How a status is set.** Status comes only from facts the page already reads: the cutover verdict, fetch
+    runs, import rows and the crawler setting.
+    - A step the page cannot prove is "Check", never "Done". Steps 6–9 stay Check even after go-live.
+    - An unknown cutover read, or a page-load error, turns every step into Check with zero done.
+    - Exactly one step is "Do this next", and a blocked step (crawler off) is never next.
+    - A test import never counts.
+    - After go-live, the guide links the migrated import, not a later staged one.
+  * **Page changes.**
+    - `MenuImportsGuide.tsx` is open before go-live and collapsed after.
+    - The HelpPanel has new steps ("How the Cultivera migration works") and a CCRS clean-up note ("Nothing is
+      ever sent as a Delete").
+    - The Fetch section has an anchor (`#fetch-cultivera`) and a three-line "what happens next" list.
+    - The recent-runs label, the staged banner and the empty-history copy were rewritten.
+    - The import page's Publish section gained the `#publish` anchor the guide links to.
+  * **Fetch run page.** `fetchRunNextStep` prints one "What to do now" line from the page's own facts:
+    running, failed/cancelled → Resume, unknown, done but short, check error, unchecked, GO + allowed, GO but
+    refused (test only), and NO-GO. An unchecked run never says GO.
+  * **Tests.**
+    - 13 vitest: the rendered guide, every guide href resolving to a real `src/app` route, and the page
+      wiring.
+    - Every existing pin is kept, including s21, s18, r13a, s15, s16, intake-version-copy-core,
+      receiving-is-the-real-pipeline, r14a, r14b and pipeline-fix-links-connected. One s21 pin caught new
+      banner text that said "Import history" above the wrapper; the copy was reworded and the pin was left
+      unchanged.
+    - Mutants: 25/25 core (three survivors found and pinned), 14/14 page/panel/runner, and 10/10 fetch-run
+      (one survivor pinned).
+- **2026-10-13, research notes (enterprise migration practice; every claim is from the cited page).**
+  * **Concentrus, "Data Migration Cutover Plan: Checklist And Risk Controls" (2026-03-16)**
+    (https://concentrus.com/data-migration-cutover-plan).
+    - A cutover plan has four layers: preparation, execution sequence, validation checkpoints and rollback.
+    - Success criteria must be measurable, e.g. "Record count match 100%".
+    - Go/no-go is a formal sign-off, not a verbal confirmation.
+    - Rehearse with a full copy of production data at least two weeks before go-live, and time every block.
+    - Our §3b.6 go/no-go and the rehearsals in §3b.8 already follow this. The guide's step 2 makes the
+      go/no-go an explicit stop.
+  * **Monic Solutions, "Data migration reconciliation report template" (2026-09-27)**
+    (https://www.monicss.com/insight-data-migration-reconciliation-report-template.html).
+    - "Equal row counts alone cannot establish matching keys, values or business outcomes."
+    - "Partial, sampled or unrun mandatory work stays Not assessed"; "Treat a skipped field as uncovered,
+      not passing."
+    - Keep a tool error, an unavailable check and a genuine mismatch as separate records.
+    - Keep exceptions traceable across reruns rather than replacing them with "a fresh green summary".
+    - **Applied here:** the guide's "Check" status means not assessed, never done. The fetch-run line
+      separates a crawler error, a check error and a NO-GO. S10c keeps a short read as an error, distinct
+      from an empty list.
+  * **Konexxia migration audit (read during S10c).** It recommends exception reports with categories and
+    resolution strategies, documented exclusions with sign-off, and item-by-item inventory reconciliation.
+    **Applied here:** S10c groups rows by route and by reason with a resolution link. D-15 is the recorded
+    sign-off for the clean-up.
