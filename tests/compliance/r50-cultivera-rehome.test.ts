@@ -81,9 +81,14 @@ describe("cultivera-rehome core", () => {
 
 type Row = Record<string, unknown>;
 type Db = Record<string, Row[]>;
-type Fail = { table: string; op: "select" | "insert" | "update" | "delete"; nth?: number };
+type Fail = { table: string; op: "select" | "insert" | "update" | "delete"; nth?: number; /** report success but write nothing */ lie?: boolean; /** run against the db just before the call (simulate a concurrent writer) */ before?: (db: Db) => void; /** with before: still perform the call normally */ pass?: boolean };
 
 function colValue(r: Row, col: string): unknown {
+  const j = /^raw_payload->(\w+)$/.exec(col);
+  if (j) {
+    const p = r.raw_payload as Row | null | undefined;
+    return p ? (p[j[1]] ?? null) : null;
+  }
   const m = /^raw_payload->>(\w+)$/.exec(col);
   if (m) {
     const p = r.raw_payload as Row | null | undefined;
@@ -106,10 +111,10 @@ function project(r: Row, select: string): Row {
 function fakeAdmin(db: Db, fails: Fail[] = []) {
   const counts: Record<string, number> = {};
   let seq = 0;
-  const failNow = (table: string, op: Fail["op"]) => {
+  const failNow = (table: string, op: Fail["op"]): Fail | undefined => {
     const k = `${table}:${op}`;
     counts[k] = (counts[k] ?? 0) + 1;
-    return fails.some((f) => f.table === table && f.op === op && (f.nth == null || f.nth === counts[k]));
+    return fails.find((f) => f.table === table && f.op === op && (f.nth == null || f.nth === counts[k]));
   };
   const admin = {
     from(table: string) {
@@ -123,10 +128,13 @@ function fakeAdmin(db: Db, fails: Fail[] = []) {
       let rng: [number, number] | null = null;
       const preds: ((r: Row) => boolean)[] = [];
       const run = () => {
-        if (failNow(table, op)) return { data: null, error: { message: "boom" }, count: null };
+        const f = failNow(table, op);
+        if (f?.before) f.before(db);
+        if (f && !f.lie && !f.pass) return { data: null, error: { message: "boom" }, count: null };
         const rows = db[table];
+        const lie = Boolean(f?.lie);
         if (op === "insert") {
-          const list = (payload as Row[]).map((p) => ({ id: `gen-${table}-${++seq}`, ...p }));
+          const list: Row[] = (payload as Row[]).map((p) => ({ id: `gen-${table}-${++seq}`, ...p }));
           if (table === "inbound_manifests") {
             const keys = new Set(rows.map((r) => r.dedupe_key));
             for (const r of list) {
@@ -139,7 +147,7 @@ function fakeAdmin(db: Db, fails: Fail[] = []) {
         }
         const hit = rows.filter((r) => preds.every((p) => p(r)));
         if (op === "update") {
-          for (const r of hit) Object.assign(r, payload as Row);
+          if (!lie) for (const r of hit) Object.assign(r, payload as Row);
           return { data: returning ? hit.map((r) => project(r, returning!)) : null, error: null, count: null };
         }
         if (op === "delete") {
@@ -176,7 +184,8 @@ function fakeAdmin(db: Db, fails: Fail[] = []) {
         limit(n: number) { lim = n; return b; },
         range(f: number, t: number) { rng = [f, t]; return b; },
         then<T>(res: (v: ReturnType<typeof run>) => T, rej?: (e: unknown) => T) {
-          return Promise.resolve().then(run).then(res, rej);
+          // setImmediate (a macrotask) so vitest's per-test timeout can fire on a runaway loop.
+          return new Promise<ReturnType<typeof run>>((ok) => setImmediate(() => ok(run()))).then(res, rej);
         },
       };
       return b;
@@ -236,7 +245,8 @@ function seed(): { db: Db; sources: RehomeSources } {
 
 const lotsOn = (db: Db, id: string) => db.inventory_lots.filter((l) => l.manifest_id === id).map((l) => l.id).sort();
 const rebuilt = (db: Db) => db.inbound_manifests.filter((m) => (m.raw_payload as Row)?.kind === RECONSTRUCTED_MANIFEST_KIND);
-const fingerprint = (db: Db) => JSON.stringify(db.inventory_lots.map(({ manifest_id: _m, ...rest }) => rest));
+const fingerprint = (db: Db) =>
+  JSON.stringify(db.inventory_lots.map((l) => Object.fromEntries(Object.entries(l).filter(([k]) => k !== "manifest_id"))));
 
 describe("cultivera-rehome store", () => {
   it("preview is read-only and plans every source lot", async () => {
@@ -329,6 +339,17 @@ describe("cultivera-rehome store", () => {
     expect(lotsOn(db, SRC)).toEqual([]);
   });
 
+  it("Apply verifies from a DB re-read: a write that reports success but did not land fails the run", async () => {
+    const { db, sources } = seed();
+    const a = await applyRehome(fakeAdmin(db, [{ table: "inventory_lots", op: "update", nth: 1, lie: true }]), IMP, sources);
+    expect(a.ok).toBe(false);
+    expect(a.problems.join()).toMatch(/not on their planned/);
+    // and a plain re-run finishes the job
+    const b = await applyRehome(fakeAdmin(db), IMP, sources);
+    expect(b.ok).toBe(true);
+    expect(lotsOn(db, SRC)).toEqual([]);
+  });
+
   it("a timeline-event failure is surfaced as a warning, never swallowed", async () => {
     const { db, sources } = seed();
     const a = await applyRehome(fakeAdmin(db, [{ table: "manifest_events", op: "insert" }]), IMP, sources);
@@ -361,9 +382,43 @@ describe("cultivera-rehome store", () => {
     db.inventory_lots.push({ id: "lot-x", manifest_id: m2.id, ccrs_inventory_external_id: "X", on_hand_qty: 1, received_qty: 1, unit_cost_minor_units: 1, status: "active" });
     const r = await rollbackRehome(fakeAdmin(db), IMP);
     expect(db.inbound_manifests.some((m) => m.id === m1.id)).toBe(true);
-    expect(r.keptWithWork).toBe(1);
+    expect(db.inbound_manifests.some((m) => m.id === m2.id)).toBe(true);
+    expect(r).toMatchObject({ movedBack: 3, keptWithWork: 1, keptNonEmpty: 1 });
+    expect(db.inventory_lots.find((l) => l.id === "lot-x")!.manifest_id).toBe(m2.id);
+    expect(lotsOn(db, SRC)).toEqual(["lot-a", "lot-b", "lot-c"]);
     expect(db.vendor_manifest_payments).toHaveLength(1);
     expect(rebuilt(db).length).toBe(r.keptWithWork + r.keptNonEmpty);
+  });
+
+  it("rollback stops loudly (never spins) when a move-back reports success but nothing moves", async () => {
+    const { db, sources } = seed();
+    await applyRehome(fakeAdmin(db), IMP, sources);
+    await expect(rollbackRehome(fakeAdmin(db, [{ table: "inventory_lots", op: "update", lie: true }]), IMP)).rejects.toThrow(/not making progress/);
+    expect(rebuilt(db).length).toBeGreaterThan(0);
+    const r = await rollbackRehome(fakeAdmin(db), IMP);
+    expect(r.movedBack).toBe(3);
+    expect(rebuilt(db)).toHaveLength(0);
+  });
+
+  it("rollback's delete is itself guarded by lineage (a manifest re-tagged meanwhile survives)", async () => {
+    const { db, sources } = seed();
+    await applyRehome(fakeAdmin(db), IMP, sources);
+    const ids = rebuilt(db).map((m) => m.id);
+    // Between the work check and the delete, someone turns the first rebuilt manifest into a native one.
+    const retag = (d: Db) => {
+      const m = d.inbound_manifests.find((x) => x.id === ids[0])!;
+      m.raw_payload = { kind: "wcia" };
+    };
+    const r = await rollbackRehome(fakeAdmin(db, [{ table: "inbound_manifests", op: "delete", nth: 1, before: retag, pass: true }]), IMP);
+    expect(db.inbound_manifests.some((m) => m.id === ids[0])).toBe(true);
+    expect(r.deleted).toBe(ids.length - 1);
+  });
+
+  it("rollback refuses to guess when a rebuilt manifest has no barcode lineage", async () => {
+    const { db, sources } = seed();
+    await applyRehome(fakeAdmin(db), IMP, sources);
+    delete (rebuilt(db)[0].raw_payload as Row).barcodes;
+    await expect(rollbackRehome(fakeAdmin(db), IMP)).rejects.toThrow(/no barcode lineage/);
   });
 
   it("rollback fails closed when it cannot check work tables", async () => {

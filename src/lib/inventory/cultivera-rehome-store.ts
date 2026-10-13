@@ -36,6 +36,7 @@ import {
   REHOME_EVENT_TYPE,
   REHOME_EXISTING_SELECT,
   REHOME_LOT_SELECT,
+  REHOME_MOVE_BATCH,
   planFromSources,
   planRehome,
   plannedDedupeKeys,
@@ -277,37 +278,63 @@ export type RehomeRollbackResult = { movedBack: number; deleted: number; keptNon
 export const REHOME_ROLLBACK_WORK_TABLES = ["catalog_product_drafts", "pos_fact_reviews", "manifest_documents", "vendor_manifest_payments"] as const;
 
 /**
- * Undo: every lot on this import's rebuilt manifests goes back to the
- * POS-IMPORT manifest (guarded by its current manifest), then rebuilt
+ * Undo: every lot on this import's rebuilt manifests WHOSE BARCODE IS IN THAT
+ * MANIFEST'S LINEAGE goes back to the POS-IMPORT manifest (guarded by its
+ * current manifest; a lot placed there by hand stays), then rebuilt
  * manifests left empty are deleted. A rebuilt manifest that still holds a
  * lot (moved there by hand) or any enrichment work (drafts, fact reviews,
  * documents, payments) is kept and counted — never destroy work.
  */
+/** The barcodes a rebuilt manifest's lineage says it holds (rollback moves back only these). */
+async function lineageBarcodes(admin: Admin, manifestId: string): Promise<Set<string>> {
+  const { data, error } = await admin.from("inbound_manifests").select("barcodes:raw_payload->barcodes").eq("id", manifestId).limit(1);
+  if (error) throw new Error(`Rollback could not read the lineage of ${manifestId} (${error.message}).`);
+  const raw = ((data as { barcodes: unknown }[] | null) ?? [])[0]?.barcodes;
+  if (!Array.isArray(raw)) throw new Error(`Rebuilt manifest ${manifestId} has no barcode lineage; rollback refuses to guess which lots are ours.`);
+  return new Set(raw.filter((b): b is string => typeof b === "string"));
+}
+
 export async function rollbackRehome(admin: Admin, importId: string): Promise<RehomeRollbackResult> {
   const source = await findSourceManifest(admin, importId);
   const rebuilt = await readRebuiltManifests(admin, importId);
   let movedBack = 0;
   for (const m of rebuilt) {
-    for (;;) {
-      const { data: lots, error: rErr } = await admin
+    const ours = await lineageBarcodes(admin, m.id);
+    // Read every lot on this manifest (paged, fail-closed), keep only lineage barcodes;
+    // a lot placed here by hand is never moved.
+    const read = await pagedAllChecked<{ id: string; ccrs_inventory_external_id: string | null }>(async (from, to) => {
+      const { data, error } = await admin
         .from("inventory_lots")
-        .select("id")
+        .select("id, ccrs_inventory_external_id")
         .eq("manifest_id", m.id)
         .order("id", { ascending: true })
-        .limit(150);
-      if (rErr) throw new Error(`Rollback stopped reading ${m.id} (${rErr.message}); run it again.`);
-      const ids = ((lots as { id: string }[] | null) ?? []).map((l) => l.id);
-      if (ids.length === 0) break;
+        .range(from, to);
+      return { ok: !error, rows: (data as { id: string; ccrs_inventory_external_id: string | null }[] | null) ?? [] };
+    });
+    if (!read.verdict.complete) throw new Error(`Rollback could not read the lots on ${m.id}. ${read.verdict.message} Run it again.`);
+    const ids = read.rows.filter((l) => l.ccrs_inventory_external_id != null && ours.has(l.ccrs_inventory_external_id)).map((l) => l.id);
+    let movedHere = 0;
+    for (let i = 0; i < ids.length; i += REHOME_MOVE_BATCH) {
+      const batch = ids.slice(i, i + REHOME_MOVE_BATCH);
       const { data, error } = await admin
         .from("inventory_lots")
         .update({ manifest_id: source.id })
-        .in("id", ids)
+        .in("id", batch)
         .eq("manifest_id", m.id)
         .select("id");
       if (error) throw new Error(`Rollback stopped moving lots (${error.message}); run it again.`);
-      const n = ((data as { id: string }[] | null) ?? []).length;
-      movedBack += n;
-      if (n === 0) break;
+      movedHere += ((data as { id: string }[] | null) ?? []).length;
+    }
+    movedBack += movedHere;
+    // Progress check: a reported move that did not land (or a concurrent writer) stops loudly.
+    for (let i = 0; i < ids.length; i += REHOME_MOVE_BATCH) {
+      const { count, error } = await admin
+        .from("inventory_lots")
+        .select("id", { count: "exact", head: true })
+        .eq("manifest_id", m.id)
+        .in("id", ids.slice(i, i + REHOME_MOVE_BATCH));
+      if (error) throw new Error(`Rollback could not re-check ${m.id} (${error.message}); run it again.`);
+      if ((count ?? 0) > 0) throw new Error(`Rollback is not making progress on ${m.id} (lots still there after being moved back); stopped. Run it again.`);
     }
   }
   let deleted = 0;

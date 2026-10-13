@@ -1,0 +1,6 @@
+[
+ {"name":"skip verify","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"    ok: problems.length === 0,","new":"    ok: true,"},
+ {"name":"no progress guard","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"      if (ids.some((id) => seen.has(id))) {","new":"      if (ids.some((id) => seen.has(id)) && false) {"},
+ {"name":"rollback delete unguarded by import","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"      .eq(\"id\", m.id)\n      .eq(\"raw_payload->>kind\", RECONSTRUCTED_MANIFEST_KIND)\n      .eq(\"raw_payload->>import_id\", importId)\n      .select(\"id\");","new":"      .eq(\"id\", m.id)\n      .select(\"id\");"},
+ {"name":"rollback ignores non-empty","file":"src/lib/inventory/cultivera-rehome-store.ts","old":"    if ((count ?? 0) > 0) {","new":"    if ((count ?? 0) > 99) {"}
+]
