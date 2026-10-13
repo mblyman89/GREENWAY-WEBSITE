@@ -104,6 +104,26 @@ because it was shared in a chat transcript.
 > the wheel, just improve upon it. Follow the standing rules and never guess, never assume. Test it, test the
 > tests. Thank you!
 
+### 0.5 Owner's follow-up #5 (verbatim, 2026-10-13)
+
+> Thank you! Really great work so far, keep it up! Please continue building this fantastic new pipeline for the
+> Cultivera migration. There are two things I’d like to add to the list, the first is to add an option to the
+> receiving pages table that lets me see all the Cultivera manifests in there, I can open the manifest like ones
+> we intake. It should have a completed not complete status so I can see which ones are still in need of
+> attention. The receiving table should also have better filters and sorting so I can organize the list however
+> I need. The second addition is to completely revamp the menu import page, all of the helpers need to be
+> updated completely to help with the new process. Any links or buttons or help text and such should be
+> modified, updated, and significantly enhanced to make it easy to read and follow the steps. There will be
+> several items that we end up migrating to our system that we know are broken and the system won’t like. The
+> LCB examiners office has given me the green light to clean up my CCRS account so all the dead broken non
+> existent products we migrate will end up immediately being flagged to be removed from CCRS. So I’m not too
+> worried about the broken garbage, I just want the system to know, when we migrate, it’s going to be intaking
+> some garbage, and I want the system to recognize this and help me remove them from the system when I comes
+> time to do our first CCRS upload. Other than that, keep going above and beyond for me as you have been doing,
+> it’s working! Keep researching the internet for enterprise grade migration solutions to use and implement.
+> Follow the standing rules and never guess, never assume. Commit work often, the sand box is very unstable. We
+> must protect the work at all costs. Test it, test the tests. Thank you!
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
@@ -529,6 +549,9 @@ Use a dedicated business account, not a personal one.
 | **S6** | Onboarding "Attach harvested COAs": read the harvest (storage folder or uploaded files), marry by §2.7 rank, LlamaParse/unpdf read through the existing COA readers, create `lab_results` + link lots where none is linked, then the existing lab-facts attach | pure matcher tests on the 35 real fixtures |
 | **S7** | Crawler logged-in social reader: `storageState` capture script (headed, owner logs in by hand), session cache + validation + expiry, login-wall detection, profile/post extraction, drafts-only; `/research-social` falls back to it when no Graph token | pytest |
 | **S9** | The cutover button (§3b): Railway `cultivera_pos` job (Phase A/B, resumable, read-only guard) + supplemented workbook builder + link-first manifest plan + progress page on `/admin/menu-imports` with the go/no-go report; manual upload kept as fallback | pure cores + pytest + rehearsals #2–#4 pass §3b.6 |
+| **S10a** | Receiving table (follow-up #5): a "Cultivera manifests" view on the receiving table listing every rebuilt manifest with Complete / Needs attention (from the onboarding tally; Unknown when it cannot be read), each row opening the same manifest page; filters (status, vendor, search, date range) and sorting (pulled in, ETA, vendor, manifest #, status) in a pure `receiving-table-core.ts`; the default view and the counts stay as they are | self-tests + vitest + mutants |
+| **S10b** | Menu Imports revamp (follow-up #5): one numbered, plain-language migration guide (fetch → review → publish → rebuild manifests → onboard → CCRS clean-up), every helper, link and button label rewritten for the new process, copy in a pure core pinned by tests | copy/link pins + mutants |
+| **S10c** | Known garbage → CCRS clean-up (follow-up #5, examiner green light): a pure classifier over the import diagnostics marks migrated records that are dead/broken as "remove from CCRS" candidates; the CCRS hub lists them for the first upload; removal goes only through paths the CCRS bible allows (ledger-proven Delete / R15b adjust-out), never a guessed Delete | self-tests + vitest + mutants |
 | **S8** | Railway steps doc, final report + test strategy PDFs | delivered |
 
 ## 3b. The cutover button: "Fetch It All, Fuck Cultivera" (owner's request, 2026-10-12)
