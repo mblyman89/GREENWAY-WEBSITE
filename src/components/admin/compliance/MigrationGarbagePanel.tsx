@@ -150,7 +150,7 @@ function Body({ load }: { load: Extract<GarbageLoad, { state: "ready" }> }) {
             ))}
           </ul>
           <Link className="mt-1 inline-block underline" href={`/admin/menu-imports/${load.importId}/facts`}>
-            Open the import's fact review
+            Open the import&rsquo;s fact review
           </Link>
         </div>
       ) : null}
