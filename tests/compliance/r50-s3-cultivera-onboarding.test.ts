@@ -32,6 +32,8 @@ const st = vi.hoisted(() => ({
   calls: [] as string[],
   stageCalls: [] as string[],
   published: { id: "00000000-0000-4000-8000-0000000000f1" } as { id: string } | null,
+  /** When set, `from(table)` on the admin client throws synchronously for this table. */
+  throwOnTable: null as string | null,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -45,7 +47,15 @@ vi.mock("@/lib/supabase/env", async (orig) => ({
 vi.mock("@/lib/supabase/admin", async () => {
   const { PostgrestClient } = await import("@supabase/postgrest-js");
   return {
-    createSupabaseAdminClient: () => new PostgrestClient("http://fake.supabase.local/rest/v1", { fetch: st.db.fetch as typeof fetch }),
+    createSupabaseAdminClient: () => {
+      const client = new PostgrestClient("http://fake.supabase.local/rest/v1", { fetch: st.db.fetch as typeof fetch });
+      const from = client.from.bind(client);
+      client.from = ((table: string) => {
+        if (st.throwOnTable === table) throw new Error("socket hang up");
+        return from(table);
+      }) as typeof client.from;
+      return client;
+    },
   };
 });
 vi.mock("@/lib/auth/audit", () => ({ recordAudit: async (e: Record<string, unknown>) => void st.audits.push(e) }));
@@ -218,6 +228,7 @@ const newDrafts = () => st.db.rows("catalog_product_drafts").filter((d) => d.man
 
 beforeEach(() => {
   st.db = new FakePostgrest();
+  st.throwOnTable = null;
   st.audits = [];
   st.calls = [];
   st.stageCalls = [];
@@ -307,6 +318,14 @@ describe("B. staging guard", () => {
     st.db.before = (req) =>
       req.table === "inbound_manifests" ? { status: 500, body: { code: "XX000", message: "down", details: null, hint: null } } : undefined;
     const out = await realStaging.stageIntakeMenuVersionForManifest(MN, ACTOR);
+    expect(out.reason).toBe("manifest-kind-read-failed");
+    expect(st.db.log.some((r) => r.table === "catalog_product_drafts")).toBe(false);
+  });
+
+  it("a kind read that THROWS builds nothing either (fail closed)", async () => {
+    st.throwOnTable = "inbound_manifests";
+    const out = await realStaging.stageIntakeMenuVersionForManifest(MN, ACTOR);
+    st.throwOnTable = null;
     expect(out.reason).toBe("manifest-kind-read-failed");
     expect(st.db.log.some((r) => r.table === "catalog_product_drafts")).toBe(false);
   });

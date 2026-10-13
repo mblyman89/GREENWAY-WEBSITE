@@ -159,6 +159,35 @@ const ITEM_BATCH = 250;
 const VARIANT_BATCH = 500;
 
 /**
+ * R50 S3: the manifest-kind guard (kept OUT of the staging body so the S01 pin
+ * "one manifest HEADER read, after the no-changes return" still describes the
+ * header read). Returns a skip reason, or null when staging may proceed.
+ * Fails closed: an unreadable kind is "manifest-kind-read-failed".
+ */
+async function readMigrationKindSkip(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  manifestId: string,
+): Promise<string | null> {
+  try {
+    const { data: kindRow, error: kindErr } = await admin
+      .from("inbound_manifests")
+      .select("id, payload_kind:raw_payload->>kind")
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (kindErr) {
+      console.error("[intake-menu-staging] manifest kind read failed:", kindErr.message);
+      return "manifest-kind-read-failed";
+    }
+    return stagingSkipForManifestKind(
+      (kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null,
+    );
+  } catch (err) {
+    console.error("[intake-menu-staging] manifest kind read threw:", err);
+    return "manifest-kind-read-failed";
+  }
+}
+
+/**
  * Stage an intake-origin menu version from a freshly-accepted manifest's
  * APPROVED onboarding products. Returns an outcome the caller can log; never
  * throws.
@@ -204,24 +233,8 @@ export async function stageIntakeMenuVersionForManifest(
   // missing from the published menu would be injected as a NEW card. If the
   // manifest's kind cannot be read we cannot rule that out: build nothing
   // (fail closed; approvals stay saved, the live menu is untouched).
-  try {
-    const { data: kindRow, error: kindErr } = await admin
-      .from("inbound_manifests")
-      .select("id, payload_kind:raw_payload->>kind")
-      .eq("id", manifestId)
-      .maybeSingle();
-    if (kindErr) {
-      console.error("[intake-menu-staging] manifest kind read failed:", kindErr.message);
-      return skip("manifest-kind-read-failed");
-    }
-    const migrationSkip = stagingSkipForManifestKind(
-      (kindRow as { payload_kind?: string | null } | null)?.payload_kind ?? null,
-    );
-    if (migrationSkip) return skip(migrationSkip);
-  } catch (err) {
-    console.error("[intake-menu-staging] manifest kind read threw:", err);
-    return skip("manifest-kind-read-failed");
-  }
+  const kindSkip = await readMigrationKindSkip(admin, manifestId);
+  if (kindSkip) return skip(kindSkip);
 
   try {
     // 1) APPROVED onboarding drafts for THIS manifest. Only human-approved,
