@@ -713,8 +713,8 @@ export default async function ImportReviewPage({
           </section>
         )}
 
-        {/* Publish */}
-        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+        {/* Publish (R50 S10b: anchored so the Menu Imports guide can link straight here) */}
+        <section id="publish" className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <h2 className="text-sm font-semibold text-white">Publish</h2>
           {version?.status === "published" ? (
             <p className="mt-2 text-sm text-[var(--admin-accent)]">

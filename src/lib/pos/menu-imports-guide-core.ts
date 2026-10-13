@@ -15,7 +15,7 @@
  */
 
 import { rehomeHref } from "@/lib/inventory/cultivera-rehome-ui-core";
-import { missingProductsHref } from "@/lib/pos/pos-import-fix-core";
+import { IMPORT_PAGE_ANCHORS, missingProductsHref } from "@/lib/pos/pos-import-fix-core";
 import { CUTOVER_RUNBOOK_HREF } from "@/lib/inventory/cutover-guard-core";
 import { RECEIVING_PATH } from "@/lib/inventory/receiving-table-core";
 
@@ -61,7 +61,8 @@ export const GUIDE_HREF = {
   fetchRun: (runId: string) => `/admin/menu-imports/fetch/${encodeURIComponent(runId)}`,
   importReview: (importId: string) => `/admin/menu-imports/${importId}`,
   facts: (importId: string) => `/admin/menu-imports/${importId}/facts`,
-  diagnostics: (importId: string) => `/admin/menu-imports/${importId}#diagnostics`,
+  diagnostics: (importId: string) => `/admin/menu-imports/${importId}#${IMPORT_PAGE_ANCHORS.diagnostics}`,
+  publishSection: (importId: string) => `/admin/menu-imports/${importId}#publish`,
   publish: "/admin/publish",
   onboarding: "/admin/inventory/drafts",
   receivingCultivera: `${RECEIVING_PATH}?view=cultivera`,
@@ -183,7 +184,7 @@ export function buildMenuImportsGuide(input: GuideInput): GuideStep[] {
     body: "Press Publish on the import page (a manager or admin). That makes the menu live and creates the compliance lots. Publish Cultivera first, then receive.",
     status: done ? "done" : "todo",
     why: done ? "The Cultivera menu is live." : "Not published yet.",
-    links: reviewImportId && !done ? [{ href: `${GUIDE_HREF.importReview(reviewImportId)}#publish`, label: "Go to Publish" }] : [],
+    links: reviewImportId && !done ? [{ href: GUIDE_HREF.publishSection(reviewImportId), label: "Go to Publish" }] : [],
   });
 
   // 6..9 happen after the import is live. This page doesn't read them, so they are
