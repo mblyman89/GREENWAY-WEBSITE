@@ -13,9 +13,12 @@
  * import merges duplicate-barcode Cultivera rows into ONE lot, import-lot-core):
  *   counted   = Σ scans (1 unit each) + Σ hand-count qty, across every workbook
  *   netSold   = Σ (Units − ReturnUnits) over the Cultivera Sales Details lines
- *               the crawler scraped from the back office (reports/daily-sales-
- *               detail, Tsid = barcode) that fall AFTER the count and up to the
- *               harvest's inventory snapshot
+ *               the crawler scraped from the back office (#/rpt/sales-details →
+ *               data-api reports/daily-sales-detail, Tsid = barcode) dated the
+ *               sales day — 10/31, the day after the count (owner clarification
+ *               #4: back stock frozen while counted, floor counted after the 6 pm
+ *               close, so nothing sells during the count). The fetch must happen
+ *               after 10/31 and before any 11/01 sale; any later sale blocks apply.
  *   rolled    = counted − netSold            (the count, rolled forward)
  *   delta     = rolled − onHand              (onHand = the imported Cultivera qty)
  *   → a "count" adjustment on the imported lot (CCRS Reconciliation [G L1142])
@@ -321,37 +324,27 @@ export function parseSaleLine(raw: Record<string, unknown>): { ok: true; line: C
   };
 }
 
+/**
+ * Owner, clarification #4 (R50 §0.6): back stock is frozen while it is counted, the floor is counted
+ * after the 6 pm close on 10/30, so the count is final that night. The ONLY roll-forward is the
+ * Cultivera sales of the next day (10/31). A sales line counts when its Pacific wall date is `salesDay`.
+ */
 export type SalesWindow = {
-  /**
-   * When the counting started (Pacific wall). A sale in (countStarted, after] happened WHILE the
-   * shelves were being scanned — counted or not is unknowable, so that barcode is flagged.
-   * Omitted = the count happened with the store closed.
-   */
-  countStarted?: string;
-  /** Sales strictly AFTER this Pacific wall time (the count finished) happened after the count. */
-  after: string;
-  /** …and up to (inclusive) this one — when the harvest started reading Cultivera's inventory. */
-  through: string;
-  /**
-   * When the harvest finished reading Cultivera's inventory (inventory list end). A sale in
-   * (through, inFlightUntil] may or may not be in the imported qty — that barcode is flagged,
-   * never guessed. Omitted = through (no in-flight span).
-   */
-  inFlightUntil?: string;
+  /** YYYY-MM-DD — the day after the count (10/31). */
+  salesDay: string;
 };
 
 export type SalesRollup = {
   /** canonical barcode → net units sold in the window */
   netSold: Map<string, { units: number; cogs: number; lines: number; unknownStatus: number }>;
-  /** canonical barcodes with a sale while the harvest was reading the inventory */
-  inFlight: Set<string>;
-  /** canonical barcodes with a sale while the count was going on */
-  duringCount: Set<string>;
-  linesDuringCount: number;
   linesInWindow: number;
-  linesInFlight: number;
-  linesBefore: number;
-  linesAfterCutoff: number;
+  /** lines BEFORE the sales day (the crawler starts at the sales day, so normally 0) — not used */
+  linesBeforeDay: number;
+  /**
+   * lines AFTER the sales day, up to the fetch. Cultivera's on-hand already dropped for them but the
+   * count roll-forward does not include them, so ANY such line blocks apply (fetch before opening).
+   */
+  linesAfterDay: number;
   duplicateIds: number;
   noBarcode: number;
   unusable: string[];
@@ -363,13 +356,9 @@ export type SalesRollup = {
 export function rollupSales(rawLines: Record<string, unknown>[], window: SalesWindow): SalesRollup {
   const r: SalesRollup = {
     netSold: new Map(),
-    inFlight: new Set(),
-    duringCount: new Set(),
-    linesDuringCount: 0,
     linesInWindow: 0,
-    linesInFlight: 0,
-    linesBefore: 0,
-    linesAfterCutoff: 0,
+    linesBeforeDay: 0,
+    linesAfterDay: 0,
     duplicateIds: 0,
     noBarcode: 0,
     unusable: [],
@@ -390,18 +379,13 @@ export function rollupSales(rawLines: Record<string, unknown>[], window: SalesWi
       continue;
     }
     seen.add(l.id);
-    if (l.createdAt <= window.after) {
-      if (window.countStarted && l.createdAt > window.countStarted) {
-        r.linesDuringCount += 1;
-        if (l.barcode !== "") r.duringCount.add(l.barcode.toLowerCase());
-      } else r.linesBefore += 1;
+    const day = l.createdAt.slice(0, 10);
+    if (day < window.salesDay) {
+      r.linesBeforeDay += 1;
       continue;
     }
-    if (l.createdAt > window.through) {
-      if (window.inFlightUntil && l.createdAt <= window.inFlightUntil) {
-        r.linesInFlight += 1;
-        if (l.barcode !== "") r.inFlight.add(l.barcode.toLowerCase());
-      } else r.linesAfterCutoff += 1;
+    if (day > window.salesDay) {
+      r.linesAfterDay += 1;
       continue;
     }
     r.linesInWindow += 1;
@@ -447,8 +431,6 @@ export type CountException =
   | "ambiguous_barcode" // two imported lots share it (case-insensitively)
   | "negative_rolled" // more sold after the count than were counted
   | "unknown_order_status" // a sale line with an OrderStatus we have never measured
-  | "sale_during_harvest" // sold while the harvest read Cultivera's inventory — imported qty uncertain
-  | "sale_during_count" // sold while the shelves were being counted — counted or not is unknowable
   | "uncounted"; // an imported lot with stock that nobody scanned
 
 export type CountPlanLine = {
@@ -487,8 +469,6 @@ export type CountPlan = {
     ambiguous: number;
     negativeRolled: number;
     unknownStatus: number;
-    saleDuringHarvest: number;
-    saleDuringCount: number;
     uncountedLots: number;
     uncountedUnits: number;
     salesUnitsNet: number;
@@ -556,8 +536,6 @@ export function planCount(input: {
     const prior = lot.priorCountDelta ?? 0;
     let exception: CountException | null = null;
     if (!wasCounted && policy === "leave") exception = lot.onHand > 0 || netSold !== 0 ? "uncounted" : null;
-    else if (input.sales.inFlight.has(k)) exception = "sale_during_harvest";
-    else if (input.sales.duringCount.has(k)) exception = "sale_during_count";
     else if (s && s.unknownStatus > 0) exception = "unknown_order_status";
     else if (rolled < 0) exception = "negative_rolled";
     const leaveAlone = exception != null || (!wasCounted && policy === "leave");
@@ -600,14 +578,13 @@ export function planCount(input: {
     ambiguous: ex("ambiguous_barcode").length,
     negativeRolled: ex("negative_rolled").length,
     unknownStatus: ex("unknown_order_status").length,
-    saleDuringHarvest: ex("sale_during_harvest").length,
-    saleDuringCount: ex("sale_during_count").length,
     uncountedLots: ex("uncounted").length,
     uncountedUnits: ex("uncounted").reduce((a, v) => a + (v.onHand ?? 0), 0),
     salesUnitsNet: [...input.sales.netSold.values()].reduce((a, v) => a + v.units, 0),
     salesUnitsNotOnAnyLot,
   };
-  const blocked = input.problems.some((p) => p.severity === "blocking") || input.sales.unusable.length > 0;
+  const blocked =
+    input.problems.some((p) => p.severity === "blocking") || input.sales.unusable.length > 0 || input.sales.linesAfterDay > 0;
   return { lines, adjustments, summary, blocked };
 }
 
@@ -620,14 +597,14 @@ export function countSessionPrefix(sessionId: string): string {
   return `R50 Oct-30 count ${sessionId}:`;
 }
 
-/**
- * Default sales window for a count date (YYYY-MM-DD): everything after the
- * store closed on the count day (midnight = start of the next day) up to the
- * harvest snapshot (Pacific wall time). The owner can move `after` if the
- * count happened during open hours.
- */
-export function defaultSalesWindow(countDate: string, harvestSnapshotPacific: string): SalesWindow {
-  return { after: `${countDate}T23:59:59`, through: harvestSnapshotPacific };
+/** The sales day for a count date: the next calendar day (YYYY-MM-DD in, YYYY-MM-DD out; null if invalid). */
+export function salesDayAfter(countDate: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(countDate);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.getUTCFullYear() !== Number(m[1]) || d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) return null;
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -688,7 +665,7 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(!merged.counted.has("zzz") && !merged.counted.has("q"), "refused workbooks contribute nothing");
 
   // ---- sales ----
-  const W: SalesWindow = { after: "2026-10-30T23:59:59", through: "2026-10-31T23:59:59" };
+  const W: SalesWindow = { salesDay: "2026-10-31" };
   const sale = (Id: number, Tsid: string, Units: number, CreatedAt: string, extra: Record<string, unknown> = {}) => ({ Id, Tsid, Units, ReturnUnits: 0, Cost: Units * 2.5, CreatedAt, OrderStatus: 1, ProductName: "P", ...extra });
   ok(cultiveraWallTime("2026-10-31T08:15:02.123Z") === "2026-10-31T08:15:02" && cultiveraWallTime("2026-10-31 09:00") === "2026-10-31T09:00:00" && cultiveraWallTime("10/31/2026") === null, "CreatedAt kept as Pacific wall time");
   const sales = rollupSales(
@@ -696,8 +673,8 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
       sale(1, "8710000000000001234", 1, "2026-10-31T08:15:00Z"),
       sale(1, "8710000000000001234", 1, "2026-10-31T08:15:00Z"), // duplicate Id (page overlap)
       sale(2, "8710000000000001234", 2, "2026-10-31T12:00:00Z", { ReturnUnits: 1, OrderStatus: 4 }),
-      sale(3, "ABC DEF", 1, "2026-10-30T20:00:00Z"), // before the count closed → excluded
-      sale(4, "abc def", 1, "2026-11-01T00:00:01Z"), // after the snapshot → excluded
+      sale(3, "ABC DEF", 1, "2026-10-30T17:00:00Z"), // count day → not a 10/31 sale
+      sale(4, "abc def", 1, "2026-11-01T00:00:01Z"), // next day → not a 10/31 sale
       sale(5, "L-NEW", 1, "2026-10-31T13:00:00Z"),
       sale(6, "", 1, "2026-10-31T13:00:00Z"),
       sale(7, "L-ODD", 1, "2026-10-31T14:00:00Z", { OrderStatus: 9 }),
@@ -705,10 +682,11 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
     ],
     W,
   );
-  ok(sales.duplicateIds === 1 && sales.linesBefore === 1 && sales.linesAfterCutoff === 1, "dedupe by Id; window edges excluded");
+  ok(sales.duplicateIds === 1 && sales.linesBeforeDay === 1 && sales.linesAfterDay === 1, "dedupe by Id; only the sales day counts");
+  ok(rollupSales([sale(50, "E", 1, "2026-10-31T00:00:00"), sale(51, "E", 1, "2026-10-31T23:59:59")], W).netSold.get("e")?.units === 2, "both ends of the sales day count");
   ok(sales.netSold.get("8710000000000001234")?.units === 2, "net = Units − ReturnUnits (1 + 2−1)");
   ok(sales.netSold.get("8710000000000001234")?.cogs === 7.5 && sales.cogs === 15, "COGS summed (Cost is line COGS, money never mixed into qty)");
-  ok(sales.netSold.get("l-ret")?.units === 0, "full return nets to 0 (through is inclusive)");
+  ok(sales.netSold.get("l-ret")?.units === 0, "full return nets to 0");
   ok(sales.noBarcode === 1 && sales.netSold.get("l-odd")?.unknownStatus === 1, "no-barcode line counted, unknown status flagged");
   ok(sales.unitsSold === 6 && sales.unitsReturned === 2, "sold / returned totals");
   const bad = rollupSales([{ Id: 9, Tsid: "x", Units: 1.5, CreatedAt: "2026-10-31T09:00:00" }, { Tsid: "x" }, { Id: 10, Tsid: "x", Units: 1, CreatedAt: "nope" }], W);
@@ -742,7 +720,7 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(plan.adjustments.length === 1 && plan.adjustments[0].lotId === "L1" && plan.adjustments[0].delta === -3, "only clean differences adjust");
   ok(plan.summary.unitsDown === 3 && plan.summary.unitsUp === 0 && plan.summary.adjustedLots === 1 && plan.summary.unknownBarcodes === 3 && plan.summary.unknownUnits === 6 && plan.summary.uncountedLots === 1 && plan.summary.uncountedUnits === 5, "summary units");
   ok(plan.summary.salesUnitsNotOnAnyLot === 0 && plan.summary.salesUnitsNet === 4, "sales summary");
-  ok(!plan.blocked, "not blocked");
+  ok(plan.blocked, "the sample has an 11/01 sale → blocked");
 
   const neg = planCount({ lots: [{ lotId: "N", lotCode: "N1", productName: "", onHand: 3 }], counted: new Map([["n1", { code: "N1", units: 1, byCounter: {} }]]), sales: rollupSales([sale(20, "N1", 2, "2026-10-31T10:00:00")], W), problems: [] });
   ok(neg.lines[0].exception === "negative_rolled" && neg.adjustments.length === 0 && neg.summary.negativeRolled === 1, "sold more than counted → exception, no adjustment");
@@ -754,7 +732,10 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   ok(zz.adjustments.length === 1 && zz.adjustments[0].delta === -4 && zz.adjustments[0].rolled === 0, "zero policy: unscanned lot counted as 0");
   ok(planCount({ lots, counted, sales, problems: [{ severity: "blocking", code: "scan_mangled", message: "" }] }).blocked, "blocking problem blocks apply");
   ok(planCount({ lots, counted, sales: bad, problems: [] }).blocked, "unusable sales lines block apply");
-  ok(!planCount({ lots, counted, sales, problems: [{ severity: "warning", code: "scan_mangled", message: "" }] }).blocked, "warnings do not block");
+  ok(planCount({ lots, counted, sales, problems: [] }).blocked, "a sale after the sales day (before the fetch) blocks apply");
+  const onlyDay = rollupSales([sale(60, "8710000000000001234", 1, "2026-10-31T09:00:00"), sale(61, "X", 1, "2026-10-30T17:00:00")], W);
+  ok(!planCount({ lots, counted, sales: onlyDay, problems: [] }).blocked && onlyDay.linesBeforeDay === 1, "sales before the sales day do not block (not used)");
+  ok(!planCount({ lots, counted, sales: rollupSales([], W), problems: [{ severity: "warning", code: "scan_mangled", message: "" }] }).blocked, "warnings do not block");
 
   // ---- re-apply is idempotent; a corrected re-upload moves only the difference ----
   const once = planCount({ lots: [{ lotId: "R", lotCode: "R1", productName: "", onHand: 10, priorCountDelta: -3 }], counted: new Map([["r1", { code: "R1", units: 7, byCounter: {} }]]), sales: rollupSales([], W), problems: [] });
@@ -762,26 +743,11 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   const fix = planCount({ lots: [{ lotId: "R", lotCode: "R1", productName: "", onHand: 10, priorCountDelta: -3 }], counted: new Map([["r1", { code: "R1", units: 8, byCounter: {} }]]), sales: rollupSales([], W), problems: [] });
   ok(fix.adjustments[0]?.delta === 1, "corrected count (+1 found) moves only the difference");
 
-  // ---- a sale while the harvest read the inventory → that barcode is flagged ----
-  const WF: SalesWindow = { after: "2026-10-30T23:59:59", through: "2026-10-31T23:00:00", inFlightUntil: "2026-10-31T23:10:00" };
-  const fl = rollupSales([sale(30, "F1", 1, "2026-10-31T22:00:00"), sale(31, "F1", 1, "2026-10-31T23:05:00"), sale(32, "F2", 1, "2026-10-31T23:30:00")], WF);
-  ok(fl.inFlight.has("f1") && !fl.inFlight.has("f2") && fl.linesInFlight === 1 && fl.linesAfterCutoff === 1 && fl.netSold.get("f1")?.units === 1, "in-flight span separated from the window and from after-cutoff");
-  const flp = planCount({ lots: [{ lotId: "F", lotCode: "F1", productName: "", onHand: 3 }], counted: new Map([["f1", { code: "F1", units: 5, byCounter: {} }]]), sales: fl, problems: [] });
-  ok(flp.lines[0].exception === "sale_during_harvest" && flp.adjustments.length === 0 && flp.summary.saleDuringHarvest === 1, "in-flight barcode never adjusted");
-  ok(rollupSales([sale(33, "F1", 1, "2026-10-31T23:05:00")], { after: WF.after, through: WF.through }).linesAfterCutoff === 1, "no inFlightUntil → after the snapshot is simply excluded");
-
-  // ---- a sale while the count was going on → that barcode is flagged ----
-  const WC: SalesWindow = { countStarted: "2026-10-30T18:00:00", after: "2026-10-30T22:00:00", through: "2026-10-31T23:00:00" };
-  const dc = rollupSales([sale(40, "C1", 1, "2026-10-30T17:59:59"), sale(41, "C1", 1, "2026-10-30T18:30:00"), sale(42, "C2", 1, "2026-10-30T22:00:00"), sale(43, "C2", 1, "2026-10-30T22:00:01")], WC);
-  ok(dc.duringCount.has("c1") && dc.duringCount.has("c2") && dc.linesDuringCount === 2 && dc.linesBefore === 1 && dc.netSold.get("c2")?.units === 1 && !dc.netSold.has("c1"), "sales during the count separated (edges: start exclusive, finish inclusive)");
-  const dcp = planCount({ lots: [{ lotId: "C", lotCode: "C1", productName: "", onHand: 2 }], counted: new Map([["c1", { code: "C1", units: 1, byCounter: {} }]]), sales: dc, problems: [] });
-  ok(dcp.lines[0].exception === "sale_during_count" && dcp.adjustments.length === 0 && dcp.summary.saleDuringCount === 1, "during-count barcode never adjusted");
-
   // ---- notes / window ----
   const note = countAdjustmentNote("S1", { lotCode: "8710000000000001234", counted: 3, netSold: 2, onHand: 4 });
   ok(note.startsWith(countSessionPrefix("S1")) && note.includes("counted 3") && note.includes("sold 2") && note.includes("on hand 4"), "adjustment note carries the evidence + session key");
-  const dw = defaultSalesWindow("2026-10-30", "2026-11-01T00:30:00");
-  ok(dw.after === "2026-10-30T23:59:59" && dw.through === "2026-11-01T00:30:00", "default window: after count-day close → harvest snapshot");
+  ok(salesDayAfter("2026-10-30") === "2026-10-31" && salesDayAfter("2026-10-31") === "2026-11-01" && salesDayAfter("2026-12-31") === "2027-01-01", "sales day = next day (month/year roll)");
+  ok(salesDayAfter("2026-02-30") === null && salesDayAfter("10/30/2026") === null, "invalid count date refused");
 
   return { passed, failed: 0 };
 }
