@@ -61,9 +61,16 @@ async function detail(res: Response): Promise<string> {
   }
 }
 
-/** Start a harvest, or resume the newest unfinished one (fresh=false). */
-export async function startPosRun(fresh: boolean): Promise<{ runId: string; resumed: boolean }> {
-  const res = await posFetch("/runs", { method: "POST", body: JSON.stringify({ fresh }) });
+/**
+ * Start a harvest, or resume the newest unfinished one (fresh=false). R50 S11: `salesFrom`
+ * (YYYY-MM-DD, the day after the Oct 30 count) makes the crawler also read Cultivera's Sales
+ * Details from that day through today; omitted for every other harvest.
+ */
+export async function startPosRun(fresh: boolean, salesFrom?: string | null): Promise<{ runId: string; resumed: boolean }> {
+  if (salesFrom != null && !/^\d{4}-\d{2}-\d{2}$/.test(salesFrom)) throw new Error("The sales day must be YYYY-MM-DD.");
+  const body: Record<string, unknown> = { fresh };
+  if (salesFrom) body.salesFrom = salesFrom;
+  const res = await posFetch("/runs", { method: "POST", body: JSON.stringify(body) });
   if (res.status !== 202 && !res.ok) throw new Error(`Crawler responded ${res.status}: ${await detail(res)}`);
   const d = (await res.json()) as { runId: string; resumed: boolean };
   if (!isValidRunId(String(d.runId))) throw new Error("Crawler returned an invalid run id.");
@@ -123,6 +130,20 @@ export type LoadedRun = {
    * only: a missing or unverifiable file is reported here and NEVER refuses the import.
    */
   wcia: { records: WciaRunRecord[]; problem: string | null; file: { name: string; bytes: number; sha256: string } | null };
+  /**
+   * R50 S11: Cultivera's Sales Details for the Oct 30 count roll-forward (sales.jsonl +
+   * sales_summary.json), each verified against the manifest. Raw bytes are kept unchanged so the
+   * count page reads exactly what the crawler wrote. Never refuses the import: a missing or
+   * unverifiable file is reported here and the count page refuses instead.
+   */
+  sales: SalesFiles;
+};
+
+export type SalesFiles = {
+  lines: Buffer | null;
+  summary: Buffer | null;
+  problem: string | null;
+  files: { name: string; bytes: number; sha256: string }[];
 };
 
 /**
@@ -165,6 +186,29 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
       }
     } catch (e) {
       wcia.problem = `wcia_json.jsonl could not be downloaded: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  // R50 S11: the count's sales files, verified on their own (both or neither).
+  const sales: SalesFiles = { lines: null, summary: null, problem: null, files: [] };
+  const salesListed = optionalFilesToFetch(manifest).filter((n) => n === "sales.jsonl" || n === "sales_summary.json");
+  if (salesListed.length === 1) sales.problem = `The run lists ${salesListed[0]} without its partner file.`;
+  else if (salesListed.length === 2) {
+    try {
+      const got: Record<string, Buffer> = {};
+      for (const name of ["sales.jsonl", "sales_summary.json"]) {
+        const b = await getFile(runId, name);
+        const h = sha(b);
+        const v = verifyFile(manifest, name, b.length, h);
+        sales.files.push({ name, bytes: b.length, sha256: h });
+        if (!v.ok) sales.problem = (sales.problem ? sales.problem + " " : "") + v.reason;
+        got[name] = b;
+      }
+      if (!sales.problem) {
+        sales.lines = got["sales.jsonl"];
+        sales.summary = got["sales_summary.json"];
+      }
+    } catch (e) {
+      sales.problem = `The sales files could not be downloaded: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
   if (manifest.status !== "done" || state.status !== "done") problems.push(`The harvest status is "${state.status ?? "unknown"}", not done.`);
@@ -214,5 +258,5 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
     transferDetails && problems.length === 0
       ? (importId: string) => buildPlanInputs({ importId, runId, pacificToday: harvestDay, transferDetails: transferDetails!, listLots })
       : null;
-  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor, wcia };
+  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor, wcia, sales };
 }

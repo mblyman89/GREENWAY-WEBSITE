@@ -424,6 +424,12 @@ export type CountLot = {
    * count is then a no-op, and a corrected re-upload only moves the difference.
    */
   priorCountDelta?: number;
+  /**
+   * The lot's on_hand_qty right now. When given, it must equal onHand + priorCountDelta: anything
+   * else means something other than this count moved the lot since the import (a sale, a
+   * disposition), and the count never writes over that — the lot is left alone and listed.
+   */
+  currentOnHand?: number;
 };
 
 export type CountException =
@@ -431,7 +437,8 @@ export type CountException =
   | "ambiguous_barcode" // two imported lots share it (case-insensitively)
   | "negative_rolled" // more sold after the count than were counted
   | "unknown_order_status" // a sale line with an OrderStatus we have never measured
-  | "uncounted"; // an imported lot with stock that nobody scanned
+  | "uncounted" // an imported lot with stock that nobody scanned
+  | "moved_since_import"; // on_hand_qty ≠ Cultivera qty + earlier count adjustments
 
 export type CountPlanLine = {
   lotId: string | null;
@@ -469,6 +476,7 @@ export type CountPlan = {
     ambiguous: number;
     negativeRolled: number;
     unknownStatus: number;
+    movedSinceImport: number;
     uncountedLots: number;
     uncountedUnits: number;
     salesUnitsNet: number;
@@ -535,7 +543,8 @@ export function planCount(input: {
     const rolled = counted - netSold;
     const prior = lot.priorCountDelta ?? 0;
     let exception: CountException | null = null;
-    if (!wasCounted && policy === "leave") exception = lot.onHand > 0 || netSold !== 0 ? "uncounted" : null;
+    if (lot.currentOnHand !== undefined && lot.currentOnHand !== lot.onHand + prior) exception = "moved_since_import";
+    else if (!wasCounted && policy === "leave") exception = lot.onHand > 0 || netSold !== 0 ? "uncounted" : null;
     else if (s && s.unknownStatus > 0) exception = "unknown_order_status";
     else if (rolled < 0) exception = "negative_rolled";
     const leaveAlone = exception != null || (!wasCounted && policy === "leave");
@@ -578,6 +587,7 @@ export function planCount(input: {
     ambiguous: ex("ambiguous_barcode").length,
     negativeRolled: ex("negative_rolled").length,
     unknownStatus: ex("unknown_order_status").length,
+    movedSinceImport: ex("moved_since_import").length,
     uncountedLots: ex("uncounted").length,
     uncountedUnits: ex("uncounted").reduce((a, v) => a + (v.onHand ?? 0), 0),
     salesUnitsNet: [...input.sales.netSold.values()].reduce((a, v) => a + v.units, 0),
@@ -595,6 +605,24 @@ export function countAdjustmentNote(sessionId: string, line: { lotCode: string; 
 
 export function countSessionPrefix(sessionId: string): string {
   return `R50 Oct-30 count ${sessionId}:`;
+}
+
+/**
+ * The crawler's sales_summary.json, checked before its lines are used. Refused unless: Cultivera's
+ * own Sales Details totals equal the row sums (reconciled), the window starts on the sales day,
+ * and the number of lines saved equals the rows the crawler recorded (nothing lost in between).
+ */
+export function checkSalesSummary(raw: unknown, salesDay: string, linesInFile: number): { ok: boolean; problems: string[]; dateTo: string | null; fetchedAtPacific: string | null } {
+  const problems: string[] = [];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, problems: ["sales_summary.json is not an object."], dateTo: null, fetchedAtPacific: null };
+  const r = raw as Record<string, unknown>;
+  if (r.reconciled !== true) problems.push("Cultivera's Sales Details totals did not equal the fetched lines (reconciled is not true). Fetch again.");
+  if (r.dateFrom !== salesDay) problems.push(`The sales were fetched from ${String(r.dateFrom ?? "?")}, not from the sales day ${salesDay}. Fetch again with the right count date.`);
+  if (typeof r.rows !== "number" || r.rows !== linesInFile) problems.push(`sales.jsonl has ${linesInFile} lines but the crawler recorded ${String(r.rows ?? "?")}.`);
+  if (typeof r.count === "number" && typeof r.rows === "number" && r.count !== r.rows) problems.push(`Cultivera reported ${r.count} lines but ${r.rows} were saved.`);
+  const dateTo = typeof r.dateTo === "string" ? r.dateTo : null;
+  if (!dateTo || dateTo < salesDay) problems.push("The sales window has no valid end date.");
+  return { ok: problems.length === 0, problems, dateTo, fetchedAtPacific: typeof r.fetchedAtPacific === "string" ? r.fetchedAtPacific : null };
 }
 
 /** The sales day for a count date: the next calendar day (YYYY-MM-DD in, YYYY-MM-DD out; null if invalid). */
@@ -743,11 +771,29 @@ export function __runCultiveraCountCoreTests(): { passed: number; failed: number
   const fix = planCount({ lots: [{ lotId: "R", lotCode: "R1", productName: "", onHand: 10, priorCountDelta: -3 }], counted: new Map([["r1", { code: "R1", units: 8, byCounter: {} }]]), sales: rollupSales([], W), problems: [] });
   ok(fix.adjustments[0]?.delta === 1, "corrected count (+1 found) moves only the difference");
 
+  // ---- a lot moved by anything else since the import is never written over ----
+  const cnt = new Map([["m1", { code: "M1", units: 5, byCounter: {} }]]);
+  const steady = planCount({ lots: [{ lotId: "M", lotCode: "M1", productName: "", onHand: 10, priorCountDelta: -3, currentOnHand: 7 }], counted: cnt, sales: rollupSales([], W), problems: [] });
+  ok(steady.lines[0].exception === null && steady.adjustments[0]?.delta === -2, "on hand = Cultivera + earlier count → adjusts normally");
+  const moved = planCount({ lots: [{ lotId: "M", lotCode: "M1", productName: "", onHand: 10, priorCountDelta: -3, currentOnHand: 6 }], counted: cnt, sales: rollupSales([], W), problems: [] });
+  ok(moved.lines[0].exception === "moved_since_import" && moved.adjustments.length === 0 && moved.summary.movedSinceImport === 1, "lot moved since the import → left alone and listed");
+  const movedUncounted = planCount({ lots: [{ lotId: "M", lotCode: "M1", productName: "", onHand: 10, currentOnHand: 9 }], counted: new Map(), sales: rollupSales([], W), problems: [], uncountedPolicy: "zero" });
+  ok(movedUncounted.lines[0].exception === "moved_since_import" && movedUncounted.adjustments.length === 0, "moved wins over the zero policy");
+
   // ---- notes / window ----
   const note = countAdjustmentNote("S1", { lotCode: "8710000000000001234", counted: 3, netSold: 2, onHand: 4 });
   ok(note.startsWith(countSessionPrefix("S1")) && note.includes("counted 3") && note.includes("sold 2") && note.includes("on hand 4"), "adjustment note carries the evidence + session key");
   ok(salesDayAfter("2026-10-30") === "2026-10-31" && salesDayAfter("2026-10-31") === "2026-11-01" && salesDayAfter("2026-12-31") === "2027-01-01", "sales day = next day (month/year roll)");
   ok(salesDayAfter("2026-02-30") === null && salesDayAfter("10/30/2026") === null, "invalid count date refused");
+
+  // ---- the saved sales summary ----
+  const goodSum = { dateFrom: "2026-10-31", dateTo: "2026-10-31", count: 4, rows: 4, reconciled: true, fetchedAtPacific: "2026-10-31T22:10:00" };
+  ok(checkSalesSummary(goodSum, "2026-10-31", 4).ok, "reconciled summary for the sales day accepted");
+  ok(!checkSalesSummary({ ...goodSum, reconciled: false }, "2026-10-31", 4).ok, "unreconciled summary refused");
+  ok(!checkSalesSummary(goodSum, "2026-11-01", 4).ok, "summary for another sales day refused");
+  ok(!checkSalesSummary(goodSum, "2026-10-31", 3).ok, "line count differs from the crawler's → refused");
+  ok(!checkSalesSummary({ ...goodSum, count: 5 }, "2026-10-31", 4).ok, "Cultivera count differs from rows saved → refused");
+  ok(!checkSalesSummary(null, "2026-10-31", 0).ok && !checkSalesSummary([], "2026-10-31", 0).ok, "non-object summary refused");
 
   return { passed, failed: 0 };
 }
