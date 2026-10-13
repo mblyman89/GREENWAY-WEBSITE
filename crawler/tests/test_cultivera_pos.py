@@ -38,6 +38,11 @@ def _xlsx(header: list[str], rows: list[list]) -> bytes:
     return b.getvalue()
 
 
+WCIA_URL = "wa_pos/1D2/Interops/2026/10/01/3C4_InboundTransfer5.json"
+WCIA_DOC = json.dumps({"document_schema_version": "2.1.0", "transfer_id": "MANIFEST-1",
+                       "inventory_transfer_items": [{"inventory_id": "B1", "lab_result_data": {"lab_result_id": "L1"}}]})
+
+
 class FakeCultivera:
     """Minimal Cultivera POS: 7 lots (lot 7 missing from the export), 3 transfers (1 unreferenced)."""
 
@@ -54,6 +59,7 @@ class FakeCultivera:
         self.logins = 0
         self.data_calls = 0
         self.token = TOKEN
+        self.wcia_bodies: list = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
@@ -104,7 +110,16 @@ class FakeCultivera:
             if self.fail_detail_once == tid:
                 self.fail_detail_once = None
                 raise httpx.ConnectError("boom")
-            return httpx.Response(200, json={"Id": tid, "Details": []})
+            d: dict = {"Id": tid, "Details": []}
+            if tid == 11:  # 11 has a vendor WCIA file, 12 has none (HasJsonFile false)
+                d.update(HasJsonFile=True, JsonFile=WCIA_URL)
+            return httpx.Response(200, json=d)
+        if path == "transfers/incoming-load-wcia-json":
+            assert req.method == "POST"
+            self.wcia_bodies.append(body)
+            if body != {"Url": WCIA_URL}:
+                return httpx.Response(404)
+            return httpx.Response(200, json={"JsonFile": WCIA_DOC})
         m = re.fullmatch(r"inventories/inventory-batch/(\d+)", path)
         if m:
             return httpx.Response(200, json={"Id": int(m.group(1)), "ReceivedDate": "2026-10-01T15:04:05Z"})
@@ -244,7 +259,12 @@ def test_phase_a_end_to_end(tmp_path):
     assert st["stages"]["batches"]["list_only_lots"] == 1
     names = {f["name"] for f in m["files"]}
     assert {"export_inventories.xlsx", "export_products.xlsx", "inventories.json", "transfers.json",
-            "transfer_details.jsonl", "batches.jsonl"} <= names
+            "transfer_details.jsonl", "wcia_json.jsonl", "batches.jsonl"} <= names
+    # the vendor WCIA file: only transfer 11 has one; saved keyed by the Cultivera transfer id
+    w = c.run.read_jsonl("wcia_json.jsonl")
+    assert [(r["Id"], r["Url"], r["JsonFile"]) for r in w] == [(11, WCIA_URL, WCIA_DOC)]
+    assert fake.wcia_bodies == [{"Url": WCIA_URL}]
+    assert st["stages"]["wcia_json"]["wanted"] == 1 and st["stages"]["wcia_json"]["refused"] == 0
     for f in m["files"]:
         assert re.fullmatch(r"[0-9a-f]{64}", f["sha256"]) and f["bytes"] > 0
     # every request was a guarded read or the login
@@ -495,3 +515,113 @@ def test_manifest_hashes_are_real(tmp_path):
     m = cp.run_phase_a(c)
     for f in m["files"]:
         assert f["sha256"] == hashlib.sha256(c.run.p(f["name"]).read_bytes()).hexdigest()
+
+
+# ------------------------------------------------------------------ wcia_json (§1.5c)
+
+
+@pytest.mark.parametrize("url", [
+    None, "", 5, "https://evil.example/x.json", "/wa_pos/a.json", "wa_pos/../api/x.json", "wa_pos/a.txt",
+    "wa_pos//a.json", "data-api/inventories", "wa_pos/a b.json", "wa_pos/" + "a" * 400 + ".json",
+])
+def test_wcia_url_refused(url):
+    assert not cp.wcia_url_ok(url)
+
+
+def test_wcia_url_allowed():
+    assert cp.wcia_url_ok(WCIA_URL)
+
+
+def test_wcia_targets_pure():
+    t, sk = cp.wcia_targets([{"Id": 2, "JsonFile": WCIA_URL}, {"Id": 1, "JsonFile": WCIA_URL},
+                             {"Id": 3, "JsonFile": None}, {"Id": 4}, {"Id": None, "JsonFile": WCIA_URL},
+                             {"Id": 5, "JsonFile": "https://evil.example/a.json"}])
+    assert t == [(1, WCIA_URL), (2, WCIA_URL)]
+    assert sk == [{"id": 5, "error": "JsonFile path refused"}]
+
+
+@pytest.mark.parametrize("text,ok", [
+    (WCIA_DOC, True), (None, False), ("", False), ("  ", False), ("not json", False), ("[]", False),
+    (json.dumps({"inventory_transfer_items": None}), False), (json.dumps({"x": 1}), False),
+    (json.dumps({"inventory_transfer_items": []}), True), (5, False),
+])
+def test_wcia_text_ok(text, ok):
+    assert cp.wcia_text_ok(text) is ok
+
+
+def test_wcia_refused_path_is_never_sent(tmp_path):
+    def ov(r):
+        if str(r.url).endswith("incoming/11/detail"):
+            return httpx.Response(200, json={"Id": 11, "JsonFile": "../../api/inventories/split.json"})
+        return None
+
+    fake = FakeCultivera()
+    c = _with(tmp_path, fake, ov)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "done"
+    assert not any("load-wcia" in str(r.url) for r in fake.requests)
+    st = c.run.read_json("state.json")["stages"]["wcia_json"]
+    assert st["wanted"] == 0 and st["refused"] == 1
+    assert {"stage": "wcia_json", "id": 11, "error": "JsonFile path refused"} in c.run.read_jsonl("errors.jsonl")
+
+
+@pytest.mark.parametrize("reply", [
+    httpx.Response(200, json={"JsonFile": "<html>"}),
+    httpx.Response(200, json={"Nope": 1}),
+    httpx.Response(200, json=["x"]),
+    httpx.Response(200, content=b"not json"),
+])
+def test_wcia_bad_reply_not_saved_and_stops(tmp_path, reply):
+    c = _with(tmp_path, FakeCultivera(), lambda r: reply if "load-wcia" in str(r.url) else None)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "failed"
+    st = c.run.read_json("state.json")["stages"]
+    assert st["wcia_json"]["status"] == "incomplete" and st["wcia_json"]["missing"] == [11]
+    assert "batches" not in st
+    assert c.run.read_jsonl("wcia_json.jsonl") == []
+    assert {"stage": "wcia_json", "id": 11, "error": "not a WCIA document"} in c.run.read_jsonl("errors.jsonl")
+
+
+def test_wcia_http_error_recorded(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(404) if "load-wcia" in str(r.url) else None)
+    assert cp.run_phase_a(c)["status"] == "failed"
+    assert {"stage": "wcia_json", "id": 11, "status": 404} in c.run.read_jsonl("errors.jsonl")
+
+
+def test_wcia_resume_does_not_refetch(tmp_path):
+    fake = FakeCultivera()
+    c = _client(tmp_path, fake)
+    assert cp.run_phase_a(c)["status"] == "done"
+    st = c.run.read_json("state.json")
+    st["stages"]["wcia_json"]["status"] = "running"
+    c.run.write_json("state.json", st)
+    before = len(fake.wcia_bodies)
+    assert cp.run_phase_a(_client(tmp_path, fake))["status"] == "done"
+    assert len(fake.wcia_bodies) == before
+    assert len(c.run.read_jsonl("wcia_json.jsonl")) == 1
+
+
+def test_wcia_cancel_inside_the_loop(tmp_path):
+    def ov(r):
+        if str(r.url).endswith("incoming/12/detail"):
+            return httpx.Response(200, json={"Id": 12, "HasJsonFile": True, "JsonFile": WCIA_URL})
+        return None
+
+    fake = FakeCultivera()
+    c = _with(tmp_path, fake, ov)
+    # cancel as soon as the first WCIA file has been fetched — the second is never requested
+    m = cp.run_phase_a(c, cancelled=lambda: len(fake.wcia_bodies) >= 1)
+    assert m["status"] == "cancelled"
+    assert len(fake.wcia_bodies) == 1
+    assert [r["Id"] for r in c.run.read_jsonl("wcia_json.jsonl")] == [11]
+    assert "cancelled before wcia_json" in c.run.read_json("state.json")["error"]
+
+
+def test_wcia_stage_order():
+    s = list(cp.STAGES_PHASE_A)
+    assert s.index("transfer_details") < s.index("wcia_json") < s.index("batches")
+
+
+def test_wcia_downloadable():
+    from app import cultivera_pos_jobs as j
+    assert "wcia_json.jsonl" in j.DOWNLOADABLE
