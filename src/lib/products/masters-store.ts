@@ -247,28 +247,49 @@ export async function loadManifestLotKeys(
   return { ok: verdict.complete, lots: rows };
 }
 
+export type MasterableManifestRow = {
+  id: string;
+  manifest_number: string | null;
+  vendor_label: string | null;
+  transfer_date: string | null;
+  invoice_number_override: string | null;
+  status: string;
+};
+
 /**
- * R23 (owner fix 7) — accepted deliveries for the manifest filter options
- * (newest first, bounded). A failed read answers [] and the select simply
- * offers "Any manifest".
+ * R23 (owner fix 7) — accepted deliveries for the manifest filter options, newest first.
+ *
+ * R50 S12: this used to stop at the newest 300. The Cultivera rebuild alone makes hundreds of
+ * manifests (R50 §1.1, §1.9), so older deliveries silently vanished from the filter. It now reads
+ * EVERY accepted / partially accepted manifest in pages (pagedAllChecked, ordered on transfer_date
+ * then the unique id, so pages never overlap or skip). `complete:false` means a page failed or the
+ * safety ceiling was hit, and the page says so instead of pretending the list is whole.
  */
-export async function listMasterableManifests(limit = 300): Promise<
-  { id: string; manifest_number: string | null; vendor_label: string | null; transfer_date: string | null; invoice_number_override: string | null; status: string }[]
-> {
-  if (!isSupabaseServiceConfigured) return [];
+export async function listMasterableManifests(): Promise<{ manifests: MasterableManifestRow[]; complete: boolean }> {
+  if (!isSupabaseServiceConfigured) return { manifests: [], complete: false };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("inbound_manifests")
-    .select("id, manifest_number, vendor_label, transfer_date, invoice_number_override, status")
-    .in("status", ["accepted", "partially_accepted"])
-    .order("transfer_date", { ascending: false, nullsFirst: false })
-    .limit(limit);
-  if (error) {
-    console.error("[masters-store] manifest options read failed:", error.message);
-    return [];
-  }
-  return (data as { id: string; manifest_number: string | null; vendor_label: string | null; transfer_date: string | null; invoice_number_override: string | null; status: string }[] | null) ?? [];
+  const { rows, verdict } = await pagedAllChecked<MasterableManifestRow>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("inbound_manifests")
+        .select("id, manifest_number, vendor_label, transfer_date, invoice_number_override, status")
+        .in("status", ["accepted", "partially_accepted"])
+        .order("transfer_date", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        console.error("[masters-store] manifest options read failed:", error.message);
+        return { rows: [], ok: false };
+      }
+      return { rows: (data as MasterableManifestRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: MASTERABLE_MANIFESTS_CEILING },
+  );
+  return { manifests: rows, complete: verdict.complete };
 }
+
+/** Safety ceiling for the manifest filter read (the store has about 1,900 manifests in total today). */
+export const MASTERABLE_MANIFESTS_CEILING = 20_000;
 
 /**
  * Every manual-master member row (one pos_product_key belongs to at most one

@@ -131,12 +131,64 @@ describe("R23 fix 7 — store reads", () => {
     expect(lots.ok).toBe(true);
     expect(lots.lots.map((l) => l.pos_product_key)).toEqual(["LOT-9-onboarded"]);
     const opts = await listMasterableManifests();
-    expect(opts.map((m) => m.id).sort()).toEqual([MAN, MAN2].sort());
+    expect(opts.complete).toBe(true);
+    expect(opts.manifests.map((m) => m.id).sort()).toEqual([MAN, MAN2].sort());
   });
   it("an unreadable lot table is reported ok:false", async () => {
     seed();
     st.db.missing.add("inventory_lots");
     expect((await loadManifestLotKeys(MAN)).ok).toBe(false);
+  });
+});
+
+describe("R50 S12 — the Manifest list is no longer cut at 300", () => {
+  const many = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      const hex = i.toString(16).padStart(12, "0");
+      st.db.rows("inbound_manifests").push({
+        id: `aaaaaaaa-0000-4000-8000-${hex}`,
+        manifest_number: `CV-${i}`,
+        vendor_label: "Phat Panda",
+        transfer_date: `2025-${String((i % 12) + 1).padStart(2, "0")}-${String((i % 28) + 1).padStart(2, "0")}`,
+        invoice_number_override: null,
+        status: i % 2 ? "accepted" : "partially_accepted",
+        created_at: "2025-01-01",
+      });
+    }
+  };
+  it("reads every accepted manifest across pages (2,300 of them), each once, newest first", async () => {
+    seed();
+    many(2300);
+    const r = await listMasterableManifests();
+    expect(r.complete).toBe(true);
+    expect(r.manifests.length).toBe(2302);
+    expect(new Set(r.manifests.map((m) => m.id)).size).toBe(2302);
+    expect(r.manifests.some((m) => m.manifest_number === "CV-2299")).toBe(true);
+    const dates = r.manifests.map((m) => m.transfer_date ?? "");
+    expect([...dates].sort().reverse()).toEqual(dates);
+    const gets = st.db.log.filter((q) => q.table === "inbound_manifests" && q.method === "GET");
+    expect(gets.length).toBeGreaterThanOrEqual(3);
+    expect(gets.every((q) => (q.url.searchParams.get("order") ?? "").includes("id.asc"))).toBe(true);
+  });
+  it("the page offers the 301st and the 2,300th delivery in the Manifest select", async () => {
+    seed();
+    many(2300);
+    const html = await render();
+    expect(html).toContain("#CV-300<");
+    expect(html).toContain("#CV-2299<");
+    expect(html).not.toContain('data-testid="masters-manifest-list-incomplete"');
+  });
+  it("a failed page is reported incomplete, and the page says some may be missing", async () => {
+    seed();
+    many(1500);
+    st.db.before = (q) =>
+      q.table === "inbound_manifests" && Number(q.url.searchParams.get("offset") ?? 0) >= 1000
+        ? { status: 500, body: { code: "57014", message: "statement timeout", details: null, hint: null } }
+        : undefined;
+    const r = await listMasterableManifests();
+    expect(r.complete).toBe(false);
+    const html = await render();
+    expect(html).toContain('data-testid="masters-manifest-list-incomplete"');
   });
 });
 
