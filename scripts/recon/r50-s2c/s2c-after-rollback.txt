@@ -1,0 +1,7 @@
+lots|3762|25851|25851|65867005
+on_source|3762
+native_lot|5c2c1000-0000-4000-8000-000000000002|7|2026-10-13 00:17:45.965268+00
+rebuilt_manifests|0|0|0|0|
+events|0
+lot_fingerprint|2fccc59af28ee044223d35f53efce8ea
+manifest_per_lot_ok|3762
