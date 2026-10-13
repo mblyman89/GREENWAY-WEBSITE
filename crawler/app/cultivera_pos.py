@@ -85,6 +85,7 @@ STAGES_PHASE_A = (
     "inventory_list",
     "transfers_list",
     "transfer_details",
+    "wcia_json",
     "batches",
 )
 
@@ -185,6 +186,43 @@ def list_only_batch_ids(lots: Iterable[dict[str, Any]], exported_barcodes: set[s
     ids = {int(l["BatchId"]) for l in lots
            if str(l.get("Barcode") or "") not in exported_barcodes and l.get("BatchId") not in (None, "", 0)}
     return sorted(ids)
+
+
+_WCIA_URL = re.compile(r"^wa_pos/[A-Za-z0-9_./-]+\.json$")
+
+
+def wcia_url_ok(url: Any) -> bool:
+    """The vendor WCIA file path Cultivera stores on a transfer detail (§1.5c). Relative, under
+    wa_pos/, a .json file, no traversal. Anything else is never sent. Pure."""
+    return isinstance(url, str) and len(url) <= 400 and bool(_WCIA_URL.match(url)) and ".." not in url and "//" not in url
+
+
+def wcia_targets(details: Iterable[dict[str, Any]]) -> tuple[list[tuple[int, str]], list[dict[str, Any]]]:
+    """(transferId, JsonFile) pairs to fetch, and the details skipped with why. Pure."""
+    out: dict[int, str] = {}
+    skipped: list[dict[str, Any]] = []
+    for d in details:
+        tid, url = d.get("Id"), d.get("JsonFile")
+        if tid in (None, "", 0):
+            continue
+        if url in (None, ""):
+            continue  # transfer has no vendor file (HasJsonFile false) — nothing to get
+        if not wcia_url_ok(url):
+            skipped.append({"id": tid, "error": "JsonFile path refused"})
+            continue
+        out[int(tid)] = url
+    return sorted(out.items()), skipped
+
+
+def wcia_text_ok(text: Any) -> bool:
+    """The load-wcia-json reply's JsonFile must be a WCIA transfer document. Pure."""
+    if not isinstance(text, str):
+        return False
+    try:  # blank text is a ValueError here too
+        doc = json.loads(text)
+    except ValueError:
+        return False
+    return isinstance(doc, dict) and isinstance(doc.get("inventory_transfer_items"), list)
 
 
 def sha256_bytes(b: bytes) -> str:
@@ -444,6 +482,43 @@ def stage_transfer_details(client: PosClient, cancelled: Callable[[], bool]) -> 
                        "transfer_details.jsonl", "transfer_details", cancelled)
 
 
+def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool]) -> dict[str, Any]:
+    """The vendor's WCIA transfer file per transfer (§1.5c): lab ids, potency, COA links per line.
+    Read-only POST (Cultivera's own viewer call). Resumable per transfer id."""
+    details = client.run.read_jsonl("transfer_details.jsonl")
+    targets, skipped = wcia_targets(details)
+    for sk in skipped:
+        client.run.append_jsonl("errors.jsonl", {"stage": "wcia_json", **sk})
+    out_name = "wcia_json.jsonl"
+    have = {str(r.get("Id")) for r in client.run.read_jsonl(out_name)}
+    fetched = errors = 0
+    for tid, url in targets:
+        if str(tid) in have:
+            continue
+        if cancelled():
+            raise StageCancelled("wcia_json")
+        r = client.call("POST", Q + "transfers/incoming-load-wcia-json", {"Url": url})
+        if r.status_code != 200:
+            errors += 1
+            client.run.append_jsonl("errors.jsonl", {"stage": "wcia_json", "id": tid, "status": r.status_code})
+            continue
+        try:
+            rec = r.json()
+        except ValueError:
+            rec = None
+        text = rec.get("JsonFile") if isinstance(rec, dict) else None
+        if not wcia_text_ok(text):
+            errors += 1
+            client.run.append_jsonl("errors.jsonl", {"stage": "wcia_json", "id": tid, "error": "not a WCIA document"})
+            continue
+        client.run.append_jsonl(out_name, {"Id": tid, "Url": url, "JsonFile": text})
+        fetched += 1
+    saved = {str(r.get("Id")) for r in client.run.read_jsonl(out_name)}
+    missing = [t for t, _ in targets if str(t) not in saved]
+    return {"file": out_name, "wanted": len(targets), "fetched_now": fetched, "errors": errors,
+            "refused": len(skipped), "missing": missing}
+
+
 def exported_barcodes_from_xlsx(path: Path) -> set[str]:
     """Barcodes in the inventory export (column 'Barcode'). openpyxl, read-only streaming."""
     from openpyxl import load_workbook  # local import: only this stage needs it
@@ -521,6 +596,8 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
                 result = stage_transfers_list(client)
             elif stage == "transfer_details":
                 result = stage_transfer_details(client, cancelled)
+            elif stage == "wcia_json":
+                result = stage_wcia_json(client, cancelled)
             else:
                 result = stage_batches(client, cancelled)
             incomplete = bool(result.get("missing"))

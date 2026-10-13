@@ -29,7 +29,7 @@ from .cultivera_pos import PosClient, RunDir, run_phase_a
 # on the crawler: it is redacted, but it is an audit log, not an input).
 DOWNLOADABLE = frozenset({
     "export_inventories.xlsx", "export_products.xlsx", "inventories.json", "transfers.json",
-    "transfer_details.jsonl", "batches.jsonl", "errors.jsonl", "manifest.json", "state.json",
+    "transfer_details.jsonl", "wcia_json.jsonl", "batches.jsonl", "errors.jsonl", "manifest.json", "state.json",
 })
 RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 KEEP_RUNS = 12
