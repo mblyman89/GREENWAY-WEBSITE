@@ -539,6 +539,10 @@ describe("E. section loader + wiring", () => {
     const page = read("src/app/admin/inventory/drafts/page.tsx");
     expect(page).toContain('<input type="hidden" name="reonboard" value="1" />');
     expect(page).toContain('data-testid="cultivera-manifests"');
+    // S3c: the row copy follows the refresh switch (approval now rebuilds the card).
+    expect(page).toContain("cultiveraApproveCopy(");
+    expect(page).toContain("process.env[CARD_REFRESH_ENV]");
+    expect(page).not.toContain("approving keeps it and does not change the menu.");
     expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("cultivera-onboarding-core"');
   });
 });

@@ -1008,3 +1008,66 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     **22 / 22 mutants killed.** 40 related suites pass (1,087 tests), eslint 0, scoped tsc 0, all pure self-tests
     pass. Pins changed on purpose: s13 permission count 7, S31 allowlist `cvBanner.tone`, s11 header row in tbody.
   * Next is **S3b** (owner's follow-up #3): the full Cultivera fact harvest at onboarding (§0.3).
+
+- **2026-10-13, S3b: the vendors' own WCIA files at onboarding (owner follow-up #3, §1.5c).**
+  * Crawler stage `wcia_json` saves the vendor's WCIA transfer file for each transfer. The path is guarded,
+    the reply is validated, and the stage is resumable and cancellable. It runs last, as enrichment that may
+    end `partial`: a missing file never blocks the import. 80 pytest, **17 / 17 mutants killed**.
+  * `cultivera-wcia-core.ts` (pure, 32 self-tests) holds the storage key and the own-transfer link plan, so a
+    lot only takes lab results from its own transfer. `intake-store` now uses the same shared lab-row
+    builder, so native and Cultivera lab rows are built by one function.
+  * Start step 0b attaches the vendor's lab results fill-only (never over an existing value). A rejected
+    attach is reported as a result and never blocks Start.
+  * 14 behavioural tests. **19 / 19 mutants killed** (the last two: padded lot codes, a rejected attach).
+
+- **2026-10-13, S3c: a rebuilt manifest refreshes its live cards through the native pipeline (owner
+  follow-up #4, §1.5d).**
+  * **Practice followed, not invented.** We validate migration parity against a known-good baseline (dbSeer,
+    "Data Migration Validation": record checks, then business-rule parity, then an exception report). Golden
+    records use MDM field-level survivorship (Informatica / Reltio / Profisee): a trusted non-null value wins
+    per field, a null never wipes, and lineage is kept. The parity test uses a natively received delivery
+    as the baseline.
+  * **`cultivera-card-refresh-core.ts`** (pure, 82 self-tests, runner floor 82). It holds the switch
+    (`CULTIVERA_CARD_REFRESH`, on unless `off`), the kind gate (`cultivera-reconstructed` only), and the
+    staging plan.
+    * The plan carries the whole live menu forward and builds our cards with the native
+      `buildDraftInjectionPlan` plus mastering's `masteredSingletonText`. It then overlays them onto the live
+      cards by survivorship.
+    * The plan never adds a card, never merges, and never writes price, sizes, stock, visibility or sort
+      order.
+    * The core also holds the lot-fact patch (non-null only, provenance merged), the notes, the events, and
+      the Onboarding row copy.
+  * **Staging (`intake-menu-staging.ts`).** A rebuilt manifest now runs the same pipeline as a received one:
+    fact flags, saved fact answers, withhold, lot golden-record facts, KB links, auto-publish.
+    * An unverified product's refresh is withheld, and its live card keeps selling unchanged. The timeline
+      says "still on sale".
+    * Refresh mode makes no vendor-id restock read and no merge-answer read.
+    * `pos-import-migration`, an unreadable kind, or the switch set to `off` keep the S3 rule (skip, or fail
+      closed).
+  * **Approval** on a rebuilt draft now stages. The price is still the live one, re-read on the server.
+  * **Parity, measured** in `r50-s3c-cultivera-parity.test.ts` (11 tests). It runs real staging over the
+    shared PostgREST fake, with the real bytes COAs.
+    * The rebuilt card equals the received card on all 30 customer-facing fields, description included.
+    * Protected fields and variants stay byte-identical. The lot patch never touches stock.
+    * Re-approval builds no redundant version. Switch off makes zero writes.
+  * **Testing the tests: 27 / 27 mutants killed** across the core, the staging wiring and approval. One
+    survivor was found and pinned: the vendor-id read in refresh mode, now with a spy and a native control.
+  * Pins changed on purpose:
+    * mastering count 218 → 222 (`masteredSingletonText`);
+    * S01 notes pin (the refresh text is a suffix);
+    * S3 tests renamed "switch off: …".
+
+- **2026-10-13, S3d: the "via Cultivera" flag (owner follow-up #4).**
+  * The Inventory list and lot page are unchanged for migrated lots except for one flag.
+    `cultivera-received-flag-core.ts` (pure, 20 self-tests) is the one rule for both pages. A lot is flagged
+    when its manifest is a migration manifest (the shared lineage predicate `isCultiveraMigrationRow`) or
+    when its notes carry the import marker. Re-homing moves only `manifest_id`, so the marker survives. A real
+    delivery is never flagged.
+  * **List.** A "VIA CULTIVERA" badge sits in the always-visible product cell. One chunked lineage read
+    serves the badge. It fails soft: on a read error it falls back to the marker, like the Leafly badge.
+  * **Lot page.** "Received via Cultivera" sits beside the manifest link.
+  * **13 / 13 mutants killed.** Two survivors were found and pinned: an array payload, and a failure on a
+    later chunk.
+  * The Onboarding row copy now says approval "rebuilds the live card from this onboarding (sizes and
+    visibility unchanged)". With the switch off it still says "does not change the menu". The Start note
+    ("The live menu was not changed.") stays as it is, because Start only adds drafts.
