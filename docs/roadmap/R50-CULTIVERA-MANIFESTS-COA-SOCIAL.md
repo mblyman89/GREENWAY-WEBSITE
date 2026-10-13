@@ -328,6 +328,59 @@ same-barcode line from a re-delivery.
    `status` is never derived from it, and the menu never reads `lab_results.passed`. The inventory table
    will show the COA ✅ and lab, which is now true.
 
+### 1.5d S3c research: parity with a received manifest (2026-10-13, read in code; owner follow-up #4)
+
+**Practice we follow (not invented here).** Migration validation guides describe three layers:
+1. record and field checks;
+2. business-rule parity, where the target is compared against a known-good baseline;
+3. an exception report, where every difference is resolved or explicitly accepted
+   ([dbSeer, "Data Migration Validation"](https://dbseer.com/blog/data-migration-validation-how-to-prove-accuracy-completeness-and-parity)).
+
+MDM golden records are assembled by **field-level survivorship**: the most trusted *non-null* source wins per
+field, and the record keeps its lineage (Informatica / Reltio / Profisee survivorship rules). We already run
+both ideas:
+- the golden-record and attach-facts cores apply survivorship;
+- `migration-stock-core` and `import-lineage-core` carry lineage.
+
+S3c applies them to the one place they were missing.
+
+**Parity audit: every surface a received product reaches, and what a rebuilt one gets.**
+
+| Surface | Received manifest | Rebuilt manifest before S3c |
+|---|---|---|
+| Lots, vendor, cost, CCRS | finalize | same rows (imported); rebuilt manifest carries the shared vendor id |
+| Drafts, identity stamp, KB promote, KB link, COA read, lab facts, vendor lab JSON | finalize | same chain (S3 Start, S3b step 0b) |
+| Gemini lookup, fact chips, attach, classification gates, onboarding memory, `attachOnApproval` golden record | Onboarding / approval | same code, same gates |
+| **Menu card** (name, category, type, strain, potency, mg facts, compliance flags, description, effects) | approval stages and publishes a card built by `buildDraftInjectionPlan` (+ mastering name) | **never**: staging is skipped (`migration-manifest`), so the live card keeps Cultivera's data. **This is the gap.** |
+| Lot golden-record facts (servings, mg, net measure, minors) | written by staging (`lotFactsByKey`) | never (same skip) |
+| Fact review hold / withhold | staging | never (same skip) |
+| Inventory list / lot detail | native | identical rows; **no "received via Cultivera" flag** (only the old "From the one-time Cultivera import" callout on detail) |
+| Intake list, dock-to-shelf, payables, Sage, bills, receipts | native | excluded on purpose (history, not work; accounting-inert, §1.4). Kept. |
+
+**S3c design: "refresh, never inject".** A rebuilt manifest's approved drafts go through the SAME staging
+pipeline (carry-forward completeness, fact flags, saved fact decisions, withhold, lot facts, KB links,
+auto-publish). Only the plan step differs. `planRebuiltCardRefresh` (pure) builds each approved draft's card
+with the native `buildDraftInjectionPlan`. For a key that is on the live menu, it then applies field-level
+survivorship onto the carried live card.
+
+* **Catalogue fields our pipeline decides** take our value when it has one:
+  - name (`intakeDisplayName`, as mastering names a new card), product name, brand, vendor;
+  - category and filter categories, inventory type and type label;
+  - strain type and strain name;
+  - description (only a non-placeholder one replaces it); effects and aroma.
+* **Facts:** a non-null value from our pipeline wins (potency display and JSON, compounds, mg facts, net measures,
+  the four compliance flags). A null never wipes a live value, because null means "not verified" (S12 rule).
+  Provenance is merged.
+* **Never touched:** source key, price, price label, variants (ids, prices, levels, medical), hidden and
+  hidden reason, stock status, sort order. *Sellable stays sellable.*
+* **No new cards.** A key not on the live menu is reported and never injected. Rebuilt cards are never merged
+  into other cards (no mastering merges on migration stock).
+* **Fact flags** work as on a received delivery: an unanswered flag withholds the REFRESH for that product.
+  The live card keeps selling unchanged, because a withheld refresh is simply not applied.
+* **Fail closed.** An unreadable manifest kind still builds nothing. `CULTIVERA_CARD_REFRESH=off` restores the
+  S3 behaviour (approval catalogues only).
+* **Approval:** a rebuilt draft no longer skips staging. The price stays the live one (S3 rule), never typed.
+
 ### 1.6 Cultivera POS back office (from the PUBLIC client code only; no login was attempted)
 
 Sources: `https://wa.cultiverapos.com/scripts/app.bundle.js`, `/scripts/cbo-app.bundle.js`,
