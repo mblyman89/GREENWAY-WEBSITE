@@ -317,7 +317,7 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
   const file = lines.join("\n") + "\n";
   // R41 S2: re-read our own output. A file that is not credits-only, or does
   // not carry Timberland's originator fields where the bank reads them, is
-  // never handed over (Brenda: "Make sure that it's an unbalanced batch").
+  // never handed over (Brenda, EMAIL 1 in docs/authorities/ach/timberland-brenda-2026-10.txt: an unbalanced batch).
   const shape = checkBuiltFileShape(file, originator);
   if (shape.length) return { ok: false, error: `The ACH file failed its own check, so it was not released: ${shape.join("; ")}.` };
   return { ok: true, file, totalCents, entryCount, recordCount: lines.length };

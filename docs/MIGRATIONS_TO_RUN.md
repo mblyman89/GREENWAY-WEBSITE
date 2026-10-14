@@ -2439,8 +2439,8 @@ in Vercel.
 
 - [ ] `0272_ach_company_timberland_confirmed.sql` adds the stamp that records
   that you checked the company ACH settings **with Timberland**. Brenda wrote:
-  "There are 3 parameters I need to have match my side. Company Name /
-  Company ID / Make sure that it's an unbalanced batch".
+  "There are 3 parameters I need to have match my side." She listed "Company
+  Name", "Company ID" and "Make sure that it’s an unbalanced batch".
   - Four new columns on `ach_company_settings`: `timberland_confirmed_at`,
     `timberland_confirmed_by`, `timberland_confirm_note` (who at Timberland
     confirmed and how, 10 to 500 characters) and

@@ -7,12 +7,12 @@
 --   stamp the moment a value Timberland matches against changes.
 --
 -- WHY
---   Brenda (Timberland Cash Management) wrote: "There are 3 parameters I need
---   to have match my side. Company Name / Company ID / Make sure that it's an
---   unbalanced batch" (docs/authorities/ach/timberland-brenda-2026-10.txt).
+--   Brenda (Timberland Cash Management) named three parameters that must
+--   match her side: the Company Name, the Company ID, and an unbalanced batch
+--   (verbatim in docs/authorities/ach/timberland-brenda-2026-10.txt, EMAIL 1).
 --   The app now refuses any file whose originator does not match her answers
 --   (timberland-originator-core.ts). The stamp records that a person checked
---   the stored values WITH Timberland, who, when and how; a stale stamp would
+--   the stored values WITH Timberland, who, when and how. A stale stamp would
 --   claim a check that never covered the current values, so any change to a
 --   matched field clears it and records when.
 --
@@ -24,7 +24,7 @@
 --   file. Its last four are checked by originatorReadiness() instead.
 --
 -- WHO MAY STAMP
---   Only the owner. 0271's ach_company_settings_owner_guard already refuses
+--   Only the owner. The 0271 ach_company_settings_owner_guard already refuses
 --   any change to this row (every column except updated_at/updated_by) unless
 --   updated_by is the active owner, so these new columns are owner-only with
 --   no new policy. This file adds: the stamp must name the same person as
@@ -86,7 +86,7 @@ begin
     new.timberland_confirm_note := null;
     return new;
   end if;
-  -- 2. A new or changed stamp must be the stamping person's own, and now.
+  -- 2. A new or changed stamp must name the person saving it, dated now.
   if new.timberland_confirmed_at is not null
      and (new.timberland_confirmed_at is distinct from old.timberland_confirmed_at
           or new.timberland_confirmed_by is distinct from old.timberland_confirmed_by

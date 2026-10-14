@@ -2,9 +2,9 @@
  * R41 S2: originator validation + "what Timberland sees" + the confirmation stamp.
  *
  * Source of the rules: Brenda (Timberland Cash Management),
- * docs/authorities/ach/timberland-brenda-2026-10.txt: "There are 3 parameters I
- * need to have match my side. Company Name / Company ID / Make sure that it's an
- * unbalanced batch". Plan: R41-TIMBERLAND-SLICE-PLAN.md v4, slice S2.
+ * docs/authorities/ach/timberland-brenda-2026-10.txt, EMAIL 1: "There are 3
+ * parameters I need to have match my side." (Company Name, Company ID, an
+ * unbalanced batch; each quote pinned below.) Plan: R41-TIMBERLAND-SLICE-PLAN.md v4, slice S2.
  *
  * This file pins the WIRING: that the pure validator is the one gate every
  * builder, page and save path goes through, and that migration 0272 does what
@@ -247,3 +247,29 @@ describe("the public repo carries no full account number", () => {
     }
   });
 });
+
+describe("never put words in Brenda's mouth: every S2 quote is verbatim in the mirror", () => {
+  const flat = (t: string) => t.replace(/\s+/g, " ").trim();
+  const mirror = flat(read("docs/authorities/ach/timberland-brenda-2026-10.txt"));
+  const QUOTES: [string, string][] = [
+    ["src/lib/payments/timberland-originator-core.ts", "There are 3 parameters I need to have match my side."],
+    ["src/lib/payments/timberland-originator-core.ts", "Make sure that it\u2019s an unbalanced batch"],
+    ["src/lib/payments/timberland-originator-core.ts", "1. GREENWAY MARIJUA (that is all that will fit in this section)"],
+    ["src/lib/payments/timberland-originator-core.ts", "2. 1 + EIN"],
+    ["src/lib/payments/timberland-originator-core.ts", "3. Routing number \u2013 325170754"],
+    ["src/lib/payments/timberland-preview-core.ts", "that is all that will fit in this section"],
+    ["docs/MIGRATIONS_TO_RUN.md", "There are 3 parameters I need to have match my side."],
+    ["docs/MIGRATIONS_TO_RUN.md", "Make sure that it\u2019s an unbalanced batch"],
+  ];
+  for (const [f, q] of QUOTES) {
+    it(`${f}: "${q.slice(0, 40)}..."`, () => {
+      expect(flat(read(f)), "the file quotes it").toContain(q);
+      expect(mirror, "the mirror has it word for word").toContain(q);
+    });
+  }
+  it("the mirror says \"fit\" (the owner's re-paste in round 7 said \"fix\"; the mirror is the source)", () => {
+    expect(mirror).toContain("that is all that will fit in this section");
+    expect(mirror).not.toContain("that is all that will fix");
+  });
+});
+
