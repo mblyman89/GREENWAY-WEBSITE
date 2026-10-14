@@ -60,7 +60,7 @@ import { WCIA_BACKFILL_HELP, parseBackfillCursor } from "@/lib/inventory/cultive
 import { COA_BACKFILL_HELP, parseCoaCursor } from "@/lib/inventory/coa-archive-backfill-core";
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
-import { acceptCardAliasAction, forgetCardAliasAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -228,7 +228,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; alias?: string; alias_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -1181,6 +1181,32 @@ export default async function CatalogDraftsPage({
                     </Button>
                     <span className="text-[var(--admin-text-muted)]">{WCIA_BACKFILL_HELP}</span>
                   </form>
+                  {(() => {
+                    // R50 A3: preview first - the same walk, nothing written.
+                    const pvTone = sp.lab_pv === "info" || sp.lab_pv === "warn" ? sp.lab_pv : null;
+                    const pvNext = parseBackfillCursor(sp.lab_pv_next);
+                    return (
+                      <div className="mt-2" data-testid="wcia-preview">
+                        {pvTone && sp.lab_pv_msg && (
+                          <p
+                            role={pvTone === "warn" ? "alert" : "status"}
+                            data-testid="wcia-preview-result"
+                            data-tone={pvTone}
+                            className={pvTone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-text)]"}
+                          >
+                            {sp.lab_pv_msg.slice(0, 700)}
+                          </p>
+                        )}
+                        <form action={previewWciaBackfillAction} className="flex flex-wrap items-center gap-3">
+                          {pvNext && <input type="hidden" name="cursor" value={pvNext} />}
+                          <Button type="submit" variant="neutral" size="sm" data-testid="wcia-preview-button">
+                            {pvNext ? "Continue preview" : "Preview first (writes nothing)"}
+                          </Button>
+                          <span className="text-[var(--admin-text-muted)]">Shows what the button above would link and add, without saving anything.</span>
+                        </form>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
@@ -1207,6 +1233,30 @@ export default async function CatalogDraftsPage({
                     </Button>
                     <span className="text-[var(--admin-text-muted)]">{COA_BACKFILL_HELP}</span>
                   </form>
+                  {(() => {
+                    // R50 A3: preview first - the same candidates and link check, nothing downloaded.
+                    const pvTone = sp.coa_pv === "info" || sp.coa_pv === "warn" ? sp.coa_pv : null;
+                    return (
+                      <div className="mt-2" data-testid="coa-preview">
+                        {pvTone && sp.coa_pv_msg && (
+                          <p
+                            role={pvTone === "warn" ? "alert" : "status"}
+                            data-testid="coa-preview-result"
+                            data-tone={pvTone}
+                            className={pvTone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-text)]"}
+                          >
+                            {sp.coa_pv_msg.slice(0, 700)}
+                          </p>
+                        )}
+                        <form action={previewCoaArchiveBackfillAction} className="flex flex-wrap items-center gap-3">
+                          <Button type="submit" variant="neutral" size="sm" data-testid="coa-preview-button">
+                            Preview first (writes nothing)
+                          </Button>
+                          <span className="text-[var(--admin-text-muted)]">Counts the certificates the button above would download and the links it would skip. Nothing is downloaded.</span>
+                        </form>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}

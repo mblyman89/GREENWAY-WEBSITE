@@ -666,6 +666,48 @@ export async function runCoaArchiveBackfillAction(formData: FormData) {
 }
 
 /**
+ * R50 A3 - "Preview first (writes nothing)" for the S12b button. The SAME walk
+ * and the SAME link plan as the real run (runWciaBackfill dryRun): it reads the
+ * vendor files and the lots, then stops before any lab result, lot link,
+ * timeline line or audit row. Resumable with its own cursor (lab_pv_next).
+ */
+export async function previewWciaBackfillAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { runWciaBackfill } = await import("@/lib/inventory/cultivera-wcia-backfill");
+  const { wciaPreviewNote, wciaPreviewTone } = await import("@/lib/inventory/bulk-preview-core");
+  const raw = formData.get("cursor");
+  let extra: Record<string, string>;
+  try {
+    const run = await runWciaBackfill(typeof raw === "string" ? raw : null, session.userId, { dryRun: true });
+    extra = { lab_pv: wciaPreviewTone(run), lab_pv_msg: wciaPreviewNote(run).slice(0, 700), cv_page: "1" };
+    if (run.next && !(run.ok && run.done)) extra.lab_pv_next = run.next;
+  } catch (err) {
+    console.error("[drafts] wcia preview failed:", err);
+    extra = { lab_pv: "warn", lab_pv_msg: `Preview stopped: ${(err instanceof Error ? err.message : String(err)).slice(0, 300)}`, cv_page: "1" };
+  }
+  redirect(draftsHref({ extra }));
+}
+
+/**
+ * R50 A3 - "Preview first (writes nothing)" for the S13 button: the SAME
+ * candidate query and URL check, read-only. Nothing is downloaded or saved.
+ */
+export async function previewCoaArchiveBackfillAction() {
+  await requirePermission("inventory.manage");
+  const { previewCoaArchiveBackfill } = await import("@/lib/inventory/coa-archive-backfill");
+  const { coaPreviewNote, coaPreviewTone } = await import("@/lib/inventory/bulk-preview-core");
+  let extra: Record<string, string>;
+  try {
+    const run = await previewCoaArchiveBackfill();
+    extra = { coa_pv: coaPreviewTone(run), coa_pv_msg: coaPreviewNote(run).slice(0, 700), cv_page: "1" };
+  } catch (err) {
+    console.error("[drafts] coa preview failed:", err);
+    extra = { coa_pv: "warn", coa_pv_msg: `Preview stopped: ${(err instanceof Error ? err.message : String(err)).slice(0, 300)}`, cv_page: "1" };
+  }
+  redirect(draftsHref({ extra }));
+}
+
+/**
  * R50 A1 - "Yes, same product - always join this card" on the S4 suggestion.
  * The server re-runs the row's preview and saves ONLY a card the scorer
  * suggests for that row right now (card-alias-core acceptCheck); the posted

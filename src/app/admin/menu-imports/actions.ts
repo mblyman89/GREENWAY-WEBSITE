@@ -471,6 +471,27 @@ export async function fillLotFactsAction(formData: FormData): Promise<void> {
 }
 
 /**
+ * R50 A3 - "Preview first (writes nothing)" for the fill button above: the
+ * SAME re-read and the SAME planLotFactFill (fillImportLotFacts dryRun), then
+ * stop. No lot is updated and no audit row is written.
+ */
+export async function previewLotFactsAction(formData: FormData): Promise<void> {
+  await requirePermission("inventory.manage");
+  const importId = String(formData.get("importId") ?? "");
+  if (!importId) redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import id."));
+  const dest = `/admin/menu-imports/${importId}`;
+  const { factFillPreviewNote } = await import("@/lib/inventory/bulk-preview-core");
+  let msg: string;
+  try {
+    const r = await fillImportLotFacts(importId, { dryRun: true });
+    msg = factFillPreviewNote({ matched: r.matched, datesWould: r.datesFilled, potencyWould: r.potencyFilled, potencyColumnsPresent: r.potencyColumnsPresent });
+  } catch (err) {
+    msg = `Preview stopped: ${err instanceof Error ? err.message : "the preview failed"}. Nothing was written.`;
+  }
+  redirect(dest + "?facts_pv=" + encodeURIComponent(msg.slice(0, 700)) + "#lot-plan");
+}
+
+/**
  * PROGRAM 3 / SLICE 57 — record one human decision in the golden-record
  * exception queue (approve / fix / reject) and mirror it onto the STAGED
  * menu_items row (fix writes corrected facts with provenance "reviewer";
