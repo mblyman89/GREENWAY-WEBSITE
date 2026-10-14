@@ -32,7 +32,7 @@ import {
   removalListTitle,
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
-import { publishVersion, backfillLotsAction, refileFromTypeCheck, fillLotFactsAction } from "../actions";
+import { publishVersion, backfillLotsAction, refileFromTypeCheck, fillLotFactsAction, previewLotFactsAction } from "../actions";
 import { bulkRefileFromTypeCheck } from "../fix-actions";
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { isValidWebsiteCategory } from "@/lib/menu/menu-category-override-core";
@@ -85,7 +85,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string; refiled?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string; refiled?: string; facts_pv?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { id } = await params;
@@ -687,6 +687,22 @@ export default async function ImportReviewPage({
                   you already typed is never overwritten.
                 </p>
               </form>
+            ) : null}
+            {/* R50 A3: preview the fill first - the same re-read and plan, nothing written. */}
+            {hasCreatedLots && canRefile && !imp.is_test ? (
+              <div className="mt-2" data-testid="lot-plan-fill-facts-preview">
+                {sp.facts_pv && (
+                  <p role="status" data-testid="lot-plan-fill-facts-preview-result" className="mb-2 text-xs text-white/80">
+                    {sp.facts_pv.slice(0, 700)}
+                  </p>
+                )}
+                <form action={previewLotFactsAction}>
+                  <input type="hidden" name="importId" value={imp.id} />
+                  <Button type="submit" variant="neutral" size="sm" data-testid="lot-plan-fill-facts-preview-button">
+                    Preview first (writes nothing)
+                  </Button>
+                </form>
+              </div>
             ) : null}
             {/* R50 S2c: put the lots back on the real Cultivera deliveries (opens a read-only preview first). */}
             {hasCreatedLots && !imp.is_test ? (
