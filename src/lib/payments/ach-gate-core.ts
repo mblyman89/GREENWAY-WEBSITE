@@ -42,6 +42,8 @@ export const TARGET_TYPES = [
   "payroll_run",
   "company",
   "vendor_payment",
+  // R41 S3 / 0273: a released ACH file (void requests).
+  "ach_file",
 ] as const;
 export type TargetType = (typeof TARGET_TYPES)[number];
 
@@ -82,6 +84,8 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   "ach_notice.resolve": { targetType: "notice", idField: "notice_id", version: { table: "ach_return_notices", key: "id", cols: ["resolved_at"] } },
   "employee_hold.release": { targetType: "authorization", idField: "auth_id", version: AUTH },
   "ach_check.start": { targetType: "account", idField: "account_id", version: { table: "ach_authorization_accounts", key: "id", cols: ["verification_status", "updated_at"] } },
+  // R41 S3: releasing a check file carries the list fingerprint (fp); the store refuses it if the list changed.
+  "ach_check.release_file": { targetType: "verification", idField: null, version: null },
   // Marking a check file sent carries the page's file fingerprint (fp); the store refuses it if the planned file changed.
   "ach_check.mark_sent": { targetType: "verification", idField: null, version: null },
   "ach_check.finish": { targetType: "verification", idField: "verification_id", version: { table: "ach_verifications", key: "id", cols: ["status", "updated_at"] } },
@@ -98,6 +102,8 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   "vendor_ach_flag.change": { targetType: "vendor", idField: "vendor_id", version: { table: "vendors", key: "id", cols: ["ach_needs_bank_info", "ach_opted_out", "ach_opted_out_reason"] } },
   // Building a vendor file re-reads the vault, the payables and the amounts owed at replay time.
   "vendor_ach.build": { targetType: "vendor_payment", idField: null, version: null },
+  // R41 S3: a void request is stale once the file moved (uploaded, approved, voided).
+  "ach_file.void": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
 };
 
 /** The fixed id of the single ach_company_settings row (id boolean primary key = true). */

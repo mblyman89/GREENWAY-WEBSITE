@@ -10,6 +10,8 @@
  *   4. Annual reviews (Nacha Phase 2: at least once a year).
  *   5. Test-credit monitoring (Nacha Micro-Entries Phase 2).
  *   6. Records: retention and legal hold (owner Q7/Q8: archive, never delete).
+ *   7. R41 S3: released ACH files (ach_files, 0273): download the stored
+ *      bytes, void with a reason (owner). Kept forever.
  *
  * Owner/admin only (settings.manage). The page shows last-4 only; test-credit
  * amounts are never shown (the person must read them back).
@@ -26,12 +28,15 @@ import { listVendors } from "@/lib/vendors/store";
 import { resolveStaffNames } from "@/lib/promotions/promotions-store";
 import { ACH_CODES } from "@/lib/payments/ach-authorization-core";
 import { checkEffectiveDate, defaultCheckEffectiveDate } from "@/lib/payments/ach-ops-core";
-import { checkListFingerprint, opsPageView } from "@/lib/payments/ach-ops-store";
+import { checkFileSourceId, checkListFingerprint, opsPageView } from "@/lib/payments/ach-ops-store";
+import { listAchFiles } from "@/lib/payments/ach-file-ledger-store";
+import { voidAchFileAction } from "../file-actions";
 import { monitorSummary, noticeUrgencyLabel, releaseHint } from "@/lib/payments/ach-ops-ui-core";
 import {
   finishCheckAction,
   logNoticeAction,
   markCheckFileSentAction,
+  releaseCheckFileAction,
   releaseEmployeeHoldAction,
   resolveNoticeAction,
   reviewDoneAction,
@@ -55,7 +60,8 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
   const session = await requirePermission("settings.manage");
   const sp = await searchParams;
   const today = pacificToday();
-  const [view, employees, vendors] = await Promise.all([opsPageView(today), listEmployees({ includeInactive: true }), listVendors()]);
+  const [view, employees, vendors, files] = await Promise.all([opsPageView(today), listEmployees({ includeInactive: true }), listVendors(), listAchFiles(50)]);
+  const liveBySource = new Map(files.rows.filter((f) => f.status !== "voided").map((f) => [`${f.kind}|${f.source_id}`, f]));
   const effChecked = checkEffectiveDate(sp.eff ?? "", today);
   const effective = effChecked.ok ? effChecked.date : defaultCheckEffectiveDate(today);
   const effError = sp.eff && !effChecked.ok ? effChecked.error : null;
@@ -78,7 +84,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
               "When Timberland reports a returned payment (R code) or a bank correction (C code), log it here the same day. The payee's banking goes on hold at once, and Stephen, Michael and the store are emailed.",
               "Call the payee only at a number already on file, never one from an email or the notice. Fix the details, then resolve the notice with a note.",
               "A new employee account is checked before real pay goes to it: a prenote ($0) or a test credit (a few cents they read back to you).",
-              "Download the check file, upload it to Timberland, then tick the box to say it was uploaded. Nothing is recorded until you confirm.",
+              "Release the check file (once; it gets the day's next File ID Modifier), download it, upload it to Timberland, then tick the box to say it was uploaded. Every download is the same bytes.",
               "Every active authorization is reviewed at least once a year. Records are archived, never deleted; a legal hold keeps one past its normal keep period.",
             ]}
           >
@@ -303,13 +309,26 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
               if (!ids.length) return <p key={m} className="text-xs text-white/50">{m === "prenote" ? "No prenotes" : "No test credits"} waiting.</p>;
               const fp = checkListFingerprint(ids);
               const href = `/admin/settings/banking/operations/check-file?method=${m}&effective=${effective}&fp=${fp}`;
+              const live = liveBySource.get(`${m}|${checkFileSourceId(m, effective, fp)}`);
               return (
                 <div key={m} className="mb-3 space-y-2 text-sm">
                   <p>
                     {ids.length} {m === "prenote" ? "prenote" : "test credit"}
                     {ids.length === 1 ? "" : "s"} waiting, effective {effective}.{" "}
-                    <a href={href} className="font-semibold text-emerald-300 hover:underline">Download the file</a>
+                    {live ? (
+                      <a href={href} className="font-semibold text-emerald-300 hover:underline">Download {live.filename} (File ID {live.file_id_modifier})</a>
+                    ) : (
+                      <span className="text-white/50">Not released yet.</span>
+                    )}
                   </p>
+                  {!live ? (
+                    <form action={releaseCheckFileAction} className="flex flex-wrap items-center gap-2 text-xs">
+                      <input type="hidden" name="method" value={m} />
+                      <input type="hidden" name="effective" value={effective} />
+                      <input type="hidden" name="fp" value={fp} />
+                      <button className={btnGhost}>Release the file</button>
+                    </form>
+                  ) : null}
                   <form action={markCheckFileSentAction} className="flex flex-wrap items-center gap-2 text-xs">
                     <input type="hidden" name="method" value={m} />
                     <input type="hidden" name="effective" value={effective} />
@@ -363,6 +382,48 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
           ) : (
             <p className="mt-2 text-xs text-white/50">Nothing unusual.</p>
           )}
+        </section>
+
+        {/* 7. Released ACH files (R41 S3) */}
+        <section id="files" className={card}>
+          <h2 className={h2}>Released ACH files ({files.rows.length})</h2>
+          <p className="mb-3 text-xs text-white/50">
+            Every file the site released, kept forever. A download is always the same bytes, checked against their fingerprint first. A voided file is never served again and its File ID Modifier is never reused that day.
+          </p>
+          {!files.tableReady ? <p className="text-sm text-amber-200">The ACH file ledger is not set up yet: run migration 0273 (docs/MIGRATIONS_TO_RUN.md).</p> : null}
+          {files.error ? <p role="alert" className="text-sm text-red-300">{files.error}</p> : null}
+          {files.rows.length ? (
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase text-white/40">
+                <tr><th className="py-1">File</th><th>Day / ID</th><th>Effective</th><th>Entries</th><th>Total</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody className="text-white/80">
+                {files.rows.map((f) => (
+                  <tr key={f.id} className="border-t border-white/5 align-top">
+                    <td className="py-2">{f.filename}<div className="text-xs text-white/40">{f.kind.replace("_", " ")} · sha256 {f.sha256.slice(0, 12)}…</div></td>
+                    <td>{f.file_date} {f.file_id_modifier}</td>
+                    <td>{f.effective_date}</td>
+                    <td>{f.entry_count}</td>
+                    <td>${(Number(f.total_cents) / 100).toFixed(2)}</td>
+                    <td>{f.status === "voided" ? <Badge tone="danger">voided</Badge> : <Badge tone="green">{f.status.replace("_", " ")}</Badge>}{f.voided_reason ? <div className="text-xs text-white/40">{f.voided_reason}</div> : null}</td>
+                    <td className="space-y-2">
+                      {f.status !== "voided" ? (
+                        <>
+                          <a href={`/admin/settings/banking/files/${f.id}/download`} className="block text-xs font-semibold text-emerald-300 hover:underline">Download</a>
+                          <form action={voidAchFileAction} className="flex flex-col gap-1 text-xs">
+                            <input type="hidden" name="file_id" value={f.id} />
+                            <input name="reason" required minLength={10} maxLength={500} placeholder="Why void it (10+ characters)" className={inputCls} />
+                            <label className="flex items-center gap-2"><input type="checkbox" name="confirm" value="yes" required /> This file must never be uploaded</label>
+                            <button className={btnGhost}>Void</button>
+                          </form>
+                        </>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : files.tableReady ? <p className="text-sm text-white/50">No files released yet.</p> : null}
         </section>
 
         {/* 6. Records */}

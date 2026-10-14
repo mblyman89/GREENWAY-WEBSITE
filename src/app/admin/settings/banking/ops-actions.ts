@@ -23,6 +23,7 @@ import {
   logNotice,
   markCheckFileSent,
   markReviewDone,
+  releaseCheckFile,
   releaseEmployeeHold,
   resendOpsMailer,
   resolveNotice,
@@ -142,6 +143,27 @@ async function startCheckBody(session: StaffSession, fd: FormData): Promise<void
       ? "Call the person at a number on file, then record the result."
       : `It goes in the next ${r.method === "prenote" ? "prenote" : "test credit"} file: download it below, upload it to Timberland, then confirm.`;
   back({ msg: `Check started. ${next}` }, "#checks");
+}
+
+export async function releaseCheckFileAction(fd: FormData): Promise<void> {
+  return achGate("ach_check.release_file", fd, { reply: replyAt("#checks") }, (session) => releaseCheckFileBody(session, fd));
+}
+
+/** R41 S3: the check file is released once into the ach_files ledger; the download then serves those bytes. */
+async function releaseCheckFileBody(session: StaffSession, fd: FormData): Promise<void> {
+  const method = str(fd, "method");
+  if (method !== "prenote" && method !== "micro_entry") back({ error: "Choose the prenote or the test credit file." }, "#checks");
+  const r = await releaseCheckFile({ method, effective: str(fd, "effective"), fingerprint: str(fd, "fp"), actorId: session.profile.id, todayIso: pacificToday(), now: new Date() });
+  if (!r.ok) back({ error: r.error }, "#checks");
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ach.verification.file_released",
+    entityType: "ach_files",
+    entityId: r.fileId,
+    after: { method, ids: r.plan.ids, effective: r.plan.effective, filename: r.plan.filename, file_id_modifier: r.modifier, entry_count: r.plan.entryCount, total_cents: r.plan.totalCents },
+  }).catch(() => {});
+  back({ msg: `File released (File ID Modifier ${r.modifier}). Download it, upload it to Timberland, then confirm it was sent.` }, "#checks");
 }
 
 export async function markCheckFileSentAction(fd: FormData): Promise<void> {
