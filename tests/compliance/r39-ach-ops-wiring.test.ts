@@ -24,7 +24,26 @@ function fn(src: string, name: string): string {
   return src.slice(i, j === -1 ? undefined : j);
 }
 const firstLine = (body: string) => body.slice(body.indexOf("{") + 1).trim().split("\n")[0];
+/** R41 S0: the private body an exported action hands to achGate (never exported). */
+function bodyOf(src: string, name: string): string {
+  const b = name.replace(/Action$/, "Body");
+  const i = src.indexOf(`async function ${b}(`);
+  expect(i, `${b} exists`).toBeGreaterThan(-1);
+  expect(src.slice(Math.max(0, i - 7), i), `${b} is not exported`).not.toBe("export ");
+  const j = src.indexOf("\nexport ", i + 10);
+  return src.slice(i, j === -1 ? undefined : j);
+}
 
+const KIND: Record<string, string> = {
+  logNoticeAction: "ach_notice.log",
+  resolveNoticeAction: "ach_notice.resolve",
+  releaseEmployeeHoldAction: "employee_hold.release",
+  startCheckAction: "ach_check.start",
+  markCheckFileSentAction: "ach_check.mark_sent",
+  finishCheckAction: "ach_check.finish",
+  setLegalHoldAction: "legal_hold.set",
+  reviewDoneAction: "annual_review.done",
+};
 const NAMES = [
   "logNoticeAction",
   "resolveNoticeAction",
@@ -37,14 +56,21 @@ const NAMES = [
 ];
 
 describe("ops actions: owner/admin only, audited, words back", () => {
-  it("is a server-actions module; every export requires settings.manage FIRST; no extra exports", () => {
+  it("R41 S0: is a server-actions module; every export goes through achGate FIRST with its own kind; no extra exports", () => {
     expect(ACTIONS.trimStart().startsWith('"use server";')).toBe(true);
-    for (const n of NAMES) expect(firstLine(fn(ACTIONS, n)), n).toBe('const session = await requirePermission("settings.manage");');
+    for (const n of NAMES) {
+      expect(firstLine(fn(ACTIONS, n)), n).toMatch(new RegExp(`^return achGate\\("${KIND[n].replace(".", "\\.")}", fd, \\{`));
+      // The body runs only through the gate, with the gate's session.
+      expect(firstLine(fn(ACTIONS, n)), n).toContain(`(session) => ${n.replace(/Action$/, "Body")}(session, fd)`);
+    }
     expect([...ACTIONS.matchAll(/export async function /g)].length).toBe(NAMES.length);
+    expect(ACTIONS).not.toMatch(/^export (const|function|let|default)/m);
+    // The old bypass is gone: no export starts with settings.manage any more.
+    expect(code(ACTIONS)).not.toContain('requirePermission("settings.manage")');
   });
   it("every action writes an audit row with the signed-in profile AFTER the store succeeded", () => {
     for (const n of NAMES) {
-      const b = fn(ACTIONS, n);
+      const b = bodyOf(ACTIONS, n);
       expect(b, n).toMatch(/recordAudit\(\{\s*actorId: session\.profile\.id,\s*actorEmail: session\.email/);
       const ok = b.indexOf("if (!r.ok) back(");
       expect(ok, n).toBeGreaterThan(-1);
@@ -63,21 +89,21 @@ describe("ops actions: owner/admin only, audited, words back", () => {
       setLegalHoldAction: "setLegalHold(",
       reviewDoneAction: "markReviewDone(",
     };
-    for (const [n, call] of Object.entries(map)) expect(fn(ACTIONS, n), n).toContain(`await ${call}`);
+    for (const [n, call] of Object.entries(map)) expect(bodyOf(ACTIONS, n), n).toContain(`await ${call}`);
   });
   it("the actor is always the session, never a form field", () => {
     expect(ACTIONS).not.toMatch(/actorId:\s*str\(fd/);
     expect(ACTIONS).not.toMatch(/str\(fd, "actor/);
   });
   it("confirm-sent needs the checkbox and the fingerprint BEFORE the store is called", () => {
-    const b = fn(ACTIONS, "markCheckFileSentAction");
+    const b = bodyOf(ACTIONS, "markCheckFileSentAction");
     const box = b.indexOf('str(fd, "confirm") !== "yes"');
     expect(box).toBeGreaterThan(-1);
     expect(box).toBeLessThan(b.indexOf("markCheckFileSent("));
     expect(b).toContain('fingerprint: str(fd, "fp")');
   });
   it("the test-credit amount is never audited or shown", () => {
-    const b = fn(ACTIONS, "startCheckAction");
+    const b = bodyOf(ACTIONS, "startCheckAction");
     expect(b).not.toMatch(/micro|cents/i);
     expect(PAGE).not.toMatch(/micro_amount_cents|microCents/);
   });
@@ -85,9 +111,15 @@ describe("ops actions: owner/admin only, audited, words back", () => {
     for (const m of ACTIONS.matchAll(/back\((\{[^;]*)\);/g)) expect(m[1]).not.toMatch(/fd\.get|str\(fd/);
   });
   it("owner emails go through the Resend mailer and the link uses the vetted site URL", () => {
-    expect(fn(ACTIONS, "logNoticeAction")).toContain("mail: resendOpsMailer()");
-    expect(fn(ACTIONS, "releaseEmployeeHoldAction")).toContain("mail: resendOpsMailer()");
-    expect(fn(ACTIONS, "logNoticeAction")).toContain("opsSiteUrl(process.env)");
+    expect(bodyOf(ACTIONS, "logNoticeAction")).toContain("mail: resendOpsMailer()");
+    expect(bodyOf(ACTIONS, "logNoticeAction")).toContain("opsSiteUrl(process.env)");
+  });
+  it("R41 S0 (D-6): a hold release says whether the actor is the owner from the session role, never the form; the store sends no one-person email any more (achGate sends the receipt)", () => {
+    const b = bodyOf(ACTIONS, "releaseEmployeeHoldAction");
+    expect(b).toContain('actorIsOwner: achAuthority(session.profile.role) === "act"');
+    expect(b).not.toMatch(/\bmail:/);
+    expect(b).not.toContain("resendOpsMailer");
+    expect(b).not.toMatch(/str\(fd, "(owner|role|is_owner)/);
   });
 });
 

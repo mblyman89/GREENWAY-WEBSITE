@@ -1,28 +1,31 @@
-0 killed ops-actions.ts   const session = await requirePermission("settings.manage")
-1 killed ops-actions.ts reviewDoneAction(fd: FormData): Promise<void> {   const sess
-2 killed ops-actions.ts   if (!r.ok) back({ error: r.error }, "#holds"); 
-3 killed ops-actions.ts actorId: session.profile.id, actorEmail: session.email, acti
-4 killed ops-actions.ts const r = await finishCheck({
-5 killed ops-actions.ts if (str(fd, "confirm") !== "yes") back(
-6 killed ops-actions.ts fingerprint: str(fd, "fp")
-7 killed ops-actions.ts after: { account_id: accountId, method: r.method }
-8 killed ops-actions.ts back({ error: "Tick the box to confirm the file was uploaded
-9 killed ops-actions.ts     mail: resendOpsMailer(),   });   if (!r.ok) back({ error
-10 killed ops-actions.ts `${opsSiteUrl(process.env)}${OPS}`
-11 killed route.ts   const session = await requirePermission("settings.manage")
-12 killed route.ts if (!/^[0-9a-f]{16}$/.test(fp)) {
-13 killed route.ts , expect: fp });
-14 killed route.ts const body = res.plan.file.replace(/\r?\n/g, "\r\n");
-15 killed route.ts { status: 400, headers: { "Cache-Control": "no-store" } }); 
-16 killed route.ts       "X-Content-Type-Options": "nosniff", 
-17 killed route.ts filename: res.plan.filename,
-18 killed route.ts import { buildCheckFile } from "@/lib/payments/ach-ops-store
-19 killed page.tsx export const dynamic = "force-dynamic";
-20 killed page.tsx <form action={reviewDoneAction}
-21 killed page.tsx <section id="records"
-22 killed page.tsx <input type="hidden" name="fp" value={fp} />
-23 killed page.tsx name="confirm" value="yes" required
-24 killed page.tsx &fp=${fp}
-25 killed page.tsx <Link href="/admin/settings/banking/operations"
-total 26 killed 26 survivors []
+0 killed ops-actions.ts   return achGate("ach_notice.log", fd,
+1 killed ops-actions.ts return achGate("annual_review.done", fd,
+2 killed ops-actions.ts (session) => reviewDoneBody(session, fd)); }
+3 killed ops-actions.ts async function startCheckBody(
+4 killed ops-actions.ts actorIsOwner: achAuthority(session.profile.role) === "act",
+5 killed ops-actions.ts   if (!r.ok) back({ error: r.error }, "#holds"); 
+6 killed ops-actions.ts actorId: session.profile.id, actorEmail: session.email, acti
+7 killed ops-actions.ts const r = await finishCheck({
+8 killed ops-actions.ts if (str(fd, "confirm") !== "yes") back(
+9 killed ops-actions.ts fingerprint: str(fd, "fp")
+10 killed ops-actions.ts after: { account_id: accountId, method: r.method }
+11 killed ops-actions.ts back({ error: "Tick the box to confirm the file was uploaded
+12 killed ops-actions.ts     mail: resendOpsMailer(),   });   if (!r.ok) back({ error
+13 killed ops-actions.ts `${opsSiteUrl(process.env)}${OPS}`
+14 killed route.ts   const session = await requirePermission("settings.manage")
+15 killed route.ts if (!/^[0-9a-f]{16}$/.test(fp)) {
+16 killed route.ts , expect: fp });
+17 killed route.ts const body = res.plan.file.replace(/\r?\n/g, "\r\n");
+18 killed route.ts { status: 400, headers: { "Cache-Control": "no-store" } }); 
+19 killed route.ts       "X-Content-Type-Options": "nosniff", 
+20 killed route.ts filename: res.plan.filename,
+21 killed route.ts import { buildCheckFile } from "@/lib/payments/ach-ops-store
+22 killed page.tsx export const dynamic = "force-dynamic";
+23 killed page.tsx <form action={reviewDoneAction}
+24 killed page.tsx <section id="records"
+25 killed page.tsx <input type="hidden" name="fp" value={fp} />
+26 killed page.tsx name="confirm" value="yes" required
+27 killed page.tsx &fp=${fp}
+28 killed page.tsx <Link href="/admin/settings/banking/operations"
+total 29 killed 29 survivors []
 EXIT 0

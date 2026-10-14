@@ -9,9 +9,12 @@ P = "src/app/admin/settings/banking/operations/page.tsx"
 B = "src/app/admin/settings/banking/page.tsx"
 T = "tests/compliance/r39-ach-ops-wiring.test.ts"
 M = [
-    # actions: permission first
-    (A, '  const session = await requirePermission("settings.manage");\n  const r = await logNotice({', '  const r = await logNotice({'),
-    (A, 'reviewDoneAction(fd: FormData): Promise<void> {\n  const session = await requirePermission("settings.manage");', 'reviewDoneAction(fd: FormData): Promise<void> {\n  const session = await requirePermission("settings.view");'),
+    # actions: achGate first (R41 S0)
+    (A, '  return achGate("ach_notice.log", fd,', '  const session = await requirePermission("settings.manage");\n  void session;\n  return achGate("ach_notice.log", fd,'),
+    (A, 'return achGate("annual_review.done", fd,', 'return achGate("legal_hold.set", fd,'),
+    (A, '(session) => reviewDoneBody(session, fd));\n}', '(session) => reviewDoneBody(session, fd));\n}\n\nexport async function reviewDoneDirect(fd: FormData): Promise<void> {\n  return reviewDoneBody(await requirePermission("settings.manage"), fd);\n}'),
+    (A, 'async function startCheckBody(', 'export async function startCheckBody('),
+    (A, 'actorIsOwner: achAuthority(session.profile.role) === "act",', 'actorIsOwner: str(fd, "is_owner") === "yes",'),
     # audit after ok-check
     (A, '  if (!r.ok) back({ error: r.error }, "#holds");\n', ''),
     (A, 'actorId: session.profile.id, actorEmail: session.email, action: "ach.notice.resolved"', 'actorId: str(fd, "actor"), actorEmail: session.email, action: "ach.notice.resolved"'),
@@ -25,7 +28,7 @@ M = [
     # redirect echo
     (A, 'back({ error: "Tick the box to confirm the file was uploaded to Timberland." }, "#checks")', 'back({ error: str(fd, "confirm") }, "#checks")'),
     # mailer / site url
-    (A, '    mail: resendOpsMailer(),\n  });\n  if (!r.ok) back({ error: r.error }, "#holds");', '    mail: async () => ({ ok: true }),\n  });\n  if (!r.ok) back({ error: r.error }, "#holds");'),
+    (A, '    mail: resendOpsMailer(),\n  });\n  if (!r.ok) back({ error: r.error }, "#notices");', '    mail: async () => ({ ok: true }),\n  });\n  if (!r.ok) back({ error: r.error }, "#notices");'),
     (A, '`${opsSiteUrl(process.env)}${OPS}`', '`${process.env.NEXT_PUBLIC_SITE_URL}${OPS}`'),
     # route
     (R, '  const session = await requirePermission("settings.manage");\n  const q = new URL', '  const q = new URL(req.url);\n  const session = await requirePermission("settings.manage");\n  void q;\n  const q2 = new URL'),
