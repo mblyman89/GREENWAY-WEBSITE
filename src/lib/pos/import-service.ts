@@ -28,6 +28,7 @@
  * server work; the calling server actions are responsible for permission gating.
  */
 import "server-only";
+import { datesInPlan } from "@/lib/inventory/bulk-preview-core";
 import crypto from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { transformWorkbooks, type TransformResult } from "@/lib/pos/transform";
@@ -747,6 +748,7 @@ function withoutPosPotency(row: Record<string, unknown>): Record<string, unknown
  */
 export async function fillImportLotFacts(
   importId: string,
+  opts: { dryRun?: boolean } = {},
 ): Promise<{ matched: number; datesFilled: number; potencyFilled: number; potencyColumnsPresent: boolean }> {
   const admin = createSupabaseAdminClient();
   const { data: importRow, error: impErr } = await admin
@@ -801,6 +803,9 @@ export async function fillImportLotFacts(
 
   const nowIso = storeNow().toISOString();
   const plan = planLotFactFill(planned, existing, { pacificToday: pacificToday(), nowIso, potencyColumnsPresent });
+  // R50 A3 preview: the same re-read and the same plan; stop before any write.
+  // The counts are what the guarded writes below would take if nothing changes meanwhile.
+  if (opts.dryRun) return { matched: plan.matched, datesFilled: datesInPlan(plan.dateGroups), potencyFilled: plan.potencyPatches.length, potencyColumnsPresent };
 
   // Dates: one UPDATE per distinct date (≈ a few hundred), each guarded by
   // `received_on is null` in SQL so a concurrent owner edit is never clobbered.

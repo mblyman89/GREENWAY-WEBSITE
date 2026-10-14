@@ -38,6 +38,7 @@ import {
   type CoaBackfillRun,
   type CoaOutcome,
 } from "@/lib/inventory/coa-archive-backfill-core";
+import { planCoaPreview, type CoaPreviewRow, type CoaPreviewRun } from "@/lib/inventory/bulk-preview-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -195,5 +196,36 @@ export async function runCoaArchiveBackfill(cursorIn: unknown, actorId: string |
       last = batch[batch.length - 1].id.toLowerCase();
     }
     if (rows.length < pageSize) return finish({ ok: true, done: true, next: null, totals, elapsedMs: now() - t0 });
+  }
+}
+
+/** R50 A3: rows read for a preview at most (a keyset walk; the real run pages the same way). */
+export const COA_PREVIEW_MAX = 20_000;
+const COA_PREVIEW_PAGE = 1000;
+
+/**
+ * R50 A3 - "Preview first": the SAME candidate query the real run walks
+ * (coa_url set, no stored copy, id order) and the SAME URL check, read-only.
+ * Nothing is downloaded, uploaded, recorded or audited.
+ */
+export async function previewCoaArchiveBackfill(opts: { admin?: Admin; max?: number; pageSize?: number } = {}): Promise<CoaPreviewRun> {
+  if (!opts.admin && !isSupabaseServiceConfigured) return { ok: false, error: "the database is not configured" };
+  const admin = opts.admin ?? createSupabaseAdminClient();
+  const max = opts.max ?? COA_PREVIEW_MAX;
+  const pageSize = opts.pageSize ?? COA_PREVIEW_PAGE;
+  const rows: CoaPreviewRow[] = [];
+  let last: string | null = null;
+  for (;;) {
+    let q = admin.from("lab_results").select("id, coa_url").not("coa_url", "is", null).is("coa_storage_path", null);
+    if (last) q = q.gt("id", last);
+    const { data, error } = await q.order("id", { ascending: true }).limit(pageSize);
+    if (error) return { ok: false, error: `the lab results could not be read (${short(error)})` };
+    const page = (data as CoaPreviewRow[] | null) ?? [];
+    for (const r of page) {
+      if (rows.length >= max) return { ok: true, preview: planCoaPreview(rows), capped: true };
+      rows.push(r);
+    }
+    if (page.length < pageSize) return { ok: true, preview: planCoaPreview(rows), capped: false };
+    last = page[page.length - 1].id;
   }
 }

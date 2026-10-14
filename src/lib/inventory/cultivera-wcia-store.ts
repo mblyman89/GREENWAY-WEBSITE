@@ -116,6 +116,7 @@ export async function attachWciaLabResults(
   manifestId: string,
   lineage: { import_id?: unknown; cultivera_transfer_id?: unknown } | null,
   actorId: string | null,
+  opts: { dryRun?: boolean } = {},
 ): Promise<WciaAttachResult> {
   const transferId = parseTransferId(lineage?.cultivera_transfer_id);
   // A manifest grouped by receive time (S1 fallback) has no transfer: nothing to attach.
@@ -160,6 +161,17 @@ export async function attachWciaLabResults(
     for (const [k, v] of pickExistingLabs((data as { id: string; labtest_external_identifier: string | null; created_at: string | null }[] | null) ?? [], ids)) {
       existing.set(k, v);
     }
+  }
+
+  // R50 A3 dry run: the SAME plan and the same exact-id reuse lookup (reads only), then stop before
+  // any write. `created` / `linked` are what a real run would do if nothing changes meanwhile.
+  if (opts.dryRun) {
+    for (const need of plan.needs) {
+      if (need.externalId && existing.has(need.externalId)) result.reused += 1;
+      else result.created += 1;
+    }
+    result.linked = plan.links.length;
+    return result;
   }
 
   const labIdByKey = new Map<string, string>();

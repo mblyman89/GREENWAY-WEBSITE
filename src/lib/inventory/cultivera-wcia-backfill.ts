@@ -48,6 +48,8 @@ export type WciaBackfillOptions = {
   now?: () => number;
   budgetMs?: number;
   pageSize?: number;
+  /** R50 A3: preview only. Same walk and plan, no lab result, lot, timeline or audit write. */
+  dryRun?: boolean;
 };
 
 export async function runWciaBackfill(cursorIn: unknown, actorId: string | null, opts: WciaBackfillOptions = {}): Promise<WciaBackfillRun> {
@@ -61,7 +63,9 @@ export async function runWciaBackfill(cursorIn: unknown, actorId: string | null,
   const t0 = now();
   let last = cursor;
 
+  const dryRun = opts.dryRun === true;
   const finish = async (run: WciaBackfillRun): Promise<WciaBackfillRun> => {
+    if (dryRun) return run; // a preview leaves no trace
     try {
       await recordAudit({
         actorId,
@@ -100,13 +104,13 @@ export async function runWciaBackfill(cursorIn: unknown, actorId: string | null,
     const rows = (data as ManifestRow[] | null) ?? [];
     for (const m of rows) {
       if (!canStartNext(now() - t0, budget)) return finish({ ok: true, done: false, next: last, totals, elapsedMs: now() - t0 });
-      const r: WciaAttachResult = await attachWciaLabResults(admin, m.id, m, actorId).catch(
+      const r: WciaAttachResult = await attachWciaLabResults(admin, m.id, m, actorId, { dryRun }).catch(
         (reason: unknown) => emptyWciaResult("error", [short(reason)]),
       );
       totals = addBackfillResult(totals, m.manifest_number || m.id.slice(0, 8), r);
       const note = wciaAttachNote(r);
       // Only a run that changed something (or failed) earns a timeline line: a re-run that links nothing stays quiet.
-      if (note && (r.linked > 0 || r.created > 0 || r.status !== "attached" || r.errors.length > 0)) {
+      if (!dryRun && note && (r.linked > 0 || r.created > 0 || r.status !== "attached" || r.errors.length > 0)) {
         try {
           await admin.from("manifest_events").insert({ manifest_id: m.id, event_type: CULTIVERA_WCIA_EVENT, note, actor_id: actorId });
         } catch (err) {
