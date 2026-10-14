@@ -49,6 +49,10 @@ M = [
     (P, '<input type="hidden" name="fp" value={fp} />', '<input type="hidden" name="fp" value="" />'),
     (P, 'name="confirm" value="yes" required', 'name="confirm" value="yes"'),
     (P, '&fp=${fp}', ''),
+    # R41 S3: the release form, the void form
+    (P, '<input type="hidden" name="fp" value={fp} />\n                      <button className={btnGhost}>Release the file</button>', '<button className={btnGhost}>Release the file</button>'),
+    (P, '<input name="reason" required minLength={10} maxLength={500} placeholder="Why void it', '<input name="reason" minLength={10} maxLength={500} placeholder="Why void it'),
+    (A, 'const r = await releaseCheckFile({ method, effective: str(fd, "effective"), fingerprint: str(fd, "fp"),', 'const r = await releaseCheckFile({ method, effective: str(fd, "effective"), fingerprint: str(fd, "fingerprint"),'),
     # banking link
     (B, '<Link href="/admin/settings/banking/operations"', '<Link href="/admin/settings/banking"'),
 ]

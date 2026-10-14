@@ -570,7 +570,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
   it("R41 S3: release refuses a stale or malformed fingerprint and a missing key; nothing is written", async () => {
     const bad = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1, VER2]), actorId: STEPHEN, todayIso: TODAY, now: NOW });
     expect(bad.ok === false && bad.error).toMatch(/changed since this page loaded/);
-    expect((await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: "nope", actorId: STEPHEN, todayIso: TODAY, now: NOW })).ok).toBe(false);
+    expect(await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: "nope", actorId: STEPHEN, todayIso: TODAY, now: NOW })).toEqual({ ok: false, error: "Reload the Operations page and use its release button." });
     delete process.env.DATA_ENCRYPTION_KEY;
     expect((await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1]), actorId: STEPHEN, todayIso: TODAY, now: NOW })).ok).toBe(false);
     expect(st.db.rows("ach_files")).toHaveLength(0);
