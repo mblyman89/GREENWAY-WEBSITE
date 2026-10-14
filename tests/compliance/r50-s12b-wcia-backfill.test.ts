@@ -167,7 +167,13 @@ describe("R50 S12b — one click attaches the vendor lab results across every re
     rebuilt(1, { lots: [["B1", "L1"], ["B2", "L1"], ["B3", "L1"]] });
     st.db.rows("inventory_lots")[1].lab_result_id = "keep-me";
     st.db.rows("inventory_lots")[2].status = "destroyed";
-    const strip = () => st.db.rows("inventory_lots").map(({ lab_result_id: _a, updated_by: _b, ...rest }) => rest);
+    const strip = () =>
+      st.db.rows("inventory_lots").map((l) => {
+        const rest: Row = { ...l };
+        delete rest.lab_result_id;
+        delete rest.updated_by;
+        return rest;
+      });
     const before = strip();
     const r = await runWciaBackfill(null, ACTOR, { admin: admin() });
     expect(r.ok && r.totals.linked).toBe(1);
@@ -310,6 +316,9 @@ describe("R50 S12b — wiring", () => {
     for (const id of ["wcia-backfill", "wcia-backfill-button", "wcia-backfill-result"]) expect(page).toContain(`data-testid="${id}"`);
     expect(page).toMatch(/const next = parseBackfillCursor\(sp\.lab_bf_next\)/);
     expect(page).toMatch(/action=\{runWciaBackfillAction\}/);
+    // Continue carries the checkpoint back to the action (else it would restart from the first manifest).
+    expect(page).toContain('{next && <input type="hidden" name="cursor" value={next} />}');
+    expect(page).toMatch(/\{next \? "Continue attaching vendor lab results" : "Attach vendor lab results to every Cultivera manifest"\}/);
   });
   it("the pure runner pins the core's self-test count", () => {
     expect(core.__runCultiveraWciaBackfillCoreTests().passed).toBe(27);
