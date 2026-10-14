@@ -469,6 +469,14 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     fixLabel: null,
     informational: true,
   },
+  // R50 A7: a lot's barcode is already live, but on a card it may not join.
+  intake_master_barcode_unused: {
+    title: "Same barcode on the menu, matched by name instead",
+    fix: "Nothing to do \u2014 the product was matched by name, exactly as before. If it should join that card, fix the card (unhide it, or correct its category or vendor).",
+    fixHref: null,
+    fixLabel: null,
+    informational: true,
+  },
   intake_display_name_built: {
     title: "Cleaner menu name built",
     fix: "Nothing to do — the manifest name stays on file.",

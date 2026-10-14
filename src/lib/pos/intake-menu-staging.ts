@@ -104,7 +104,7 @@ import {
 } from "@/lib/pos/intake-menu-staging-core";
 // S19: vendor-id identity for the restock match (bounded reads, flag).
 import { VENDOR_ID_IDENTITY_ENV, vendorIdIdentityEnabled } from "@/lib/inventory/vendor-identity-core";
-import { loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
+import { loadBarcodeInputs, loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 // S32: remembered answers for products that matched 2+ live cards.
@@ -510,6 +510,27 @@ export async function stageIntakeMenuVersionForManifest(
           })
         : undefined;
 
+    // R50 A7: barcode-first inputs - a delivery lot whose barcode is already a
+    // lot on ONE live card joins it before any name rule. Only when something
+    // is live and this is not a refresh; flag off (INTAKE_BARCODE_FIRST) or
+    // any failed read = undefined = the plan before A7, byte for byte.
+    const barcodes =
+      !refreshMode && publishedItems.length > 0
+        ? await loadBarcodeInputs(admin, {
+            drafts: drafts.map((d) => ({ pos_product_key: d.pos_product_key, lot_id: d.lot_id })),
+            liveCards: publishedItems.map((it) => ({
+              source_item_id: it.source_item_id,
+              name: it.name,
+              brand_name: it.brand_name,
+              vendor_name: it.vendor_name,
+              category: it.category,
+              strain_name: it.strain_name,
+              hidden: it.hidden,
+              variants: it.variants.map((v) => ({ source_variant_id: v.source_variant_id, medical: v.medical })),
+            })),
+          })
+        : undefined;
+
     // 4) Pure plan. R50 S3c: a rebuilt manifest refreshes the carried live
     //    cards instead (no new cards, no merges, so no merge answers apply).
     const firstPlan = refreshMode
@@ -519,6 +540,7 @@ export async function stageIntakeMenuVersionForManifest(
           approvedDrafts: drafts,
           enrichmentByDraftId,
           vendorIds,
+          barcodes,
         });
 
     // S32: a remembered "join card X" / "keep separate" answer can only apply
@@ -549,6 +571,7 @@ export async function stageIntakeMenuVersionForManifest(
             vendorIds,
             mergeDecisions,
             cardAliases,
+            barcodes,
           })
         : firstPlan;
 

@@ -563,6 +563,8 @@ export default async function CatalogDraftsPage({
         drafts.map((d, i) => ({
           id: d.id,
           pos_product_key: d.pos_product_key,
+          // R50 A7: the row's lot, so the preview reads its barcode.
+          lot_id: d.lot_id,
           name: d.name,
           brand_name: d.brand_name,
           vendor_name: d.vendor_name,

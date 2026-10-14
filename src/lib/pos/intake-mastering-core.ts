@@ -89,6 +89,7 @@ import {
   type VendorIdInputs,
 } from "@/lib/inventory/vendor-identity-core";
 import { formatMoney } from "@/lib/pos/format";
+import { type BarcodeInputs } from "@/lib/pos/barcode-match-core";
 import { variantSizeValue } from "@/lib/menu/variant-sort";
 
 /** A live (carried-forward) card the planner may merge a restock into. */
@@ -159,6 +160,14 @@ export type IntakeMasteringInputs = {
    * as before. Absent = byte-identical behaviour to before A1.
    */
   cardAliases?: ReadonlyMap<string, string>;
+  /**
+   * R50 A7: barcode-first matching (barcode-match-core.ts). A delivery lot
+   * whose barcode (inventory_lots.lot_code) is already a lot on ONE live
+   * card joins that card before any name rule - when the card is a valid
+   * merge target in the same category axis and the vendor ids do not
+   * disagree (barcodeTarget). Absent = byte-identical behaviour to before A7.
+   */
+  barcodes?: BarcodeInputs;
 };
 
 /**
@@ -613,6 +622,63 @@ export function aliasTarget(
   return { kind: "join", card };
 }
 
+/** R50 A7: why a lot's barcode matched a live lot but was NOT used. */
+export type BarcodeUnusedReason = "ambiguous" | "not_a_target" | "other_category" | "vendor_differs";
+
+/**
+ * R50 A7: the live card a delivery lot joins because its barcode is already
+ * a lot on that card - consulted BEFORE the name rule.
+ *   none    no barcode inputs, the lot has no usable barcode, or no live
+ *           card holds a lot with that barcode -> the rules as before.
+ *   unused  a live lot carries the barcode but it is not safe to use:
+ *             ambiguous       lots on 2+ different live cards carry it
+ *             not_a_target    the card is hidden, medical-only, has no
+ *                             vendor or a vague name (buildLiveMergeIndex)
+ *             other_category  the card sits in another category axis
+ *             vendor_differs  both sides carry a vendor id and they differ
+ *           -> the rules as before, plus one info diagnostic.
+ *   join    the card.
+ */
+export function barcodeTarget(
+  live: LiveMergeIndex,
+  barcodes: BarcodeInputs | undefined,
+  lotKey: string,
+  category: string,
+):
+  | { kind: "none" }
+  | { kind: "unused"; barcode: string; reason: BarcodeUnusedReason; cardKeys: string[] }
+  | { kind: "join"; barcode: string; card: LiveCardCandidate } {
+  const barcode = barcodes?.barcodeByLotKey.get(lotKey);
+  if (!barcode) return { kind: "none" };
+  const lots = barcodes?.liveByBarcode.get(barcode) ?? [];
+  const cardKeys = [...new Set(lots.map((l) => l.cardKey))].sort();
+  if (cardKeys.length === 0) return { kind: "none" };
+  if (cardKeys.length > 1) return { kind: "unused", barcode, reason: "ambiguous", cardKeys };
+  const card = live.eligible.get(cardKeys[0]);
+  if (!card) return { kind: "unused", barcode, reason: "not_a_target", cardKeys };
+  if (groupingCategoryAxis(card.category) !== groupingCategoryAxis(category)) {
+    return { kind: "unused", barcode, reason: "other_category", cardKeys };
+  }
+  const draftVid = barcodes?.vendorIdByLotKey.get(lotKey) ?? null;
+  if (draftVid && lots.some((l) => l.vendorId !== null && l.vendorId !== draftVid)) {
+    return { kind: "unused", barcode, reason: "vendor_differs", cardKeys };
+  }
+  return { kind: "join", barcode, card };
+}
+
+/** R50 A7: the words for an unused barcode match (the info diagnostic). */
+export function barcodeUnusedCopy(name: string, barcode: string, reason: BarcodeUnusedReason, cardKeys: string[]): string {
+  const why =
+    reason === "ambiguous"
+      ? `lots on ${cardKeys.length} different live cards carry it`
+      : reason === "not_a_target"
+        ? `the live card ${cardKeys[0]} is hidden, medical-only, has no vendor or a name too vague to add stock to`
+        : reason === "other_category"
+          ? `the live card ${cardKeys[0]} is in a different category`
+          : `the live card ${cardKeys[0]}'s lot is filed under a different vendor record`;
+  return `\u201c${name}\u201d has barcode ${barcode}, which is already a lot on the live menu, but ${why} - so it was matched by name instead, exactly as before.`;
+}
+
 /**
  * S19: which live cards a group of same-identity lots matches. Without ids
  * (or with mixed ids): the name rule. With ONE shared vendor id: the name
@@ -637,6 +703,8 @@ export function matchLiveCards(
 export type RestockPreviewDraft = {
   id: string;
   pos_product_key: string | null;
+  /** R50 A7: the row's inventory lot (its barcode is read for barcode-first). Absent = no barcode. */
+  lot_id?: string | null;
   name: string;
   brand_name: string | null;
   vendor_name: string | null;
@@ -742,6 +810,7 @@ export function previewRestockVerdicts(input: {
   liveCards: LiveCardCandidate[];
   vendorIds?: VendorIdInputs;
   cardAliases?: ReadonlyMap<string, string>;
+  barcodes?: BarcodeInputs;
 }): Map<string, RestockVerdict> {
   return previewMasteringGroups(input).verdicts;
 }
@@ -758,6 +827,8 @@ export function previewMasteringGroups(input: {
   vendorIds?: VendorIdInputs;
   /** R50 A1: saved aliases - the SAME rule as the planner (aliasTarget, zero exact matches only). */
   cardAliases?: ReadonlyMap<string, string>;
+  /** R50 A7: barcode-first - the SAME rule as the planner (barcodeTarget, before the name rule). */
+  barcodes?: BarcodeInputs;
 }): { verdicts: Map<string, RestockVerdict>; groups: PreviewGroupView[] } {
   const out = new Map<string, RestockVerdict>();
   const views: PreviewGroupView[] = [];
@@ -777,6 +848,32 @@ export function previewMasteringGroups(input: {
     const sizeOf = live.variantLotKeys.get(key);
     if (sizeOf) {
       out.set(d.id, { kind: "already_live", cardKey: sizeOf, asSize: true });
+      continue;
+    }
+    // R50 A7: barcode first, exactly as buildIntakeMasteringPlan.
+    const bt = barcodeTarget(live, input.barcodes, key, category);
+    if (bt.kind === "join") {
+      const card = bt.card;
+      const verdict: RestockVerdict = {
+        kind: "joins",
+        cardKey: card.source_item_id,
+        cardName: card.name,
+        fromCultivera: isCultiveraCardKey(card.source_item_id),
+        matchedBy: "name",
+        vendorRecordDiffers: false,
+        byBarcode: bt.barcode,
+      };
+      out.set(d.id, verdict);
+      const size = typeof d.size_label === "string" ? d.size_label.trim() : "";
+      views.push({
+        identity: `barcode|${bt.barcode}`,
+        category,
+        family: "",
+        draftIds: [d.id],
+        sizes: [size || PREVIEW_SIZE_UNKNOWN],
+        verdict,
+        liveCard: liveCardView(card),
+      });
       continue;
     }
     const vendor = normalizeWhitespace(d.vendor_name);
@@ -1030,6 +1127,48 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
         context: { pos_product_key: it.source_item_id, card_key: liveCardKey },
       });
       continue;
+    }
+
+    // R50 A7: barcode first - the same lot barcode already sells on ONE live
+    // card -> join that card before any name rule. Anything unsafe falls
+    // through to the rules below, unchanged, with one info diagnostic.
+    const bt = barcodeTarget(live, inputs.barcodes, it.source_item_id, it.category);
+    if (bt.kind === "join" && it.variant) {
+      const target = bt.card;
+      const list = mergesByCardKey.get(target.source_item_id) ?? [];
+      list.push({
+        source_variant_id: it.variant.source_variant_id,
+        label: it.variant.label,
+        price_minor_units: it.variant.price_minor_units,
+        inventory_level: it.variant.inventory_level,
+        medical: it.variant.medical,
+      });
+      mergesByCardKey.set(target.source_item_id, list);
+      const cats = mergeCategoriesByCardKey.get(target.source_item_id) ?? [];
+      for (const c of [it.category, ...it.filter_categories]) if (!cats.includes(c)) cats.push(c);
+      mergeCategoriesByCardKey.set(target.source_item_id, cats);
+      mergedVariantCount += 1;
+      diagnostics.push({
+        severity: "info",
+        code: "intake_master_restock",
+        message: `\u201c${it.name}\u201d joined the live card \u201c${target.name}\u201d because its barcode ${bt.barcode} is already a lot on that card \u2014 no duplicate card created.`,
+        context: {
+          card_key: target.source_item_id,
+          lots: [it.source_item_id],
+          matched_by: "barcode",
+          barcode: bt.barcode,
+          vendor_record_differs: false,
+        },
+      });
+      continue;
+    }
+    if (bt.kind === "unused") {
+      diagnostics.push({
+        severity: "info",
+        code: "intake_master_barcode_unused",
+        message: barcodeUnusedCopy(it.name, bt.barcode, bt.reason, bt.cardKeys),
+        context: { pos_product_key: it.source_item_id, barcode: bt.barcode, reason: bt.reason, card_keys: bt.cardKeys },
+      });
     }
 
     const vendor = normalizeWhitespace(it.vendor_name);
