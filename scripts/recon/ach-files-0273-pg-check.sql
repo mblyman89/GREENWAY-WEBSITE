@@ -125,6 +125,11 @@ begin
   -- 7. void: owner, with a reason; the run goes back to draft; the letter stays used
   perform pg_temp.must_fail(format($q$select public.ach_file_void(%L, %L, 'wrong pay date on the run')$q$, f1, u_s), 'ACH_OWNER_ONLY');
   perform pg_temp.must_fail(format($q$select public.ach_file_void(%L, %L, 'short')$q$, f1, u_m), 'ACH_FILE_REASON');
+  perform pg_temp.must_fail(format($q$select public.ach_file_void(%L, %L, %L)$q$, f1, u_m, repeat('x', 501)), 'ach_files_void_shape');
+  -- the CHECK is a second line on its own: with the guard off for one statement (rolled back), a short reason is still refused
+  alter table public.ach_files disable trigger trg_ach_files_guard;
+  perform pg_temp.must_fail(format($q$update public.ach_files set status = 'voided', voided_by = %L, voided_at = now(), voided_reason = 'short' where id = %L$q$, u_m, f1), 'ach_files_void_shape');
+  alter table public.ach_files enable trigger trg_ach_files_guard;
   select status into r from public.ach_files where id = f1;
   assert r.status = 'uploaded', 'refused voids changed nothing';
   kind_out := public.ach_file_void(f1, u_m, '  wrong pay date on the run  ');
@@ -148,11 +153,27 @@ begin
 
   -- 9. void of a non-payroll file leaves payroll runs alone
   select id into f2 from public.ach_files where source_id = 'v-2';
-  perform public.ach_file_void(f2, u_m, 'vendor asked for a check instead');
+  kind_out := public.ach_file_void(f2, u_m, 'vendor asked for a check instead');
+  assert kind_out = 'vendor', 'a vendor void returns vendor';
   select status into r from public.payroll_runs where id = run1;
   assert r.status = 'file_generated', 'a vendor void does not touch payroll';
   select count(*) into n from public.payroll_runs where id = run2 and status = 'draft';
   assert n = 1, 'the other run is untouched';
+
+  -- 9b. a payroll void puts back ITS run only; another released run stays released
+  f2 := public.ach_file_release_payroll(run2, u_m, '2026-10-20', 'D', 'payroll_2026-11-06_y.ach', '2026-11-06', 1, 900, pg_temp.h('0'), pg_temp.h('0'), 'encv1:e:f', false, null);
+  select id into f1 from public.ach_files where kind = 'payroll' and source_id = run1::text and status <> 'voided';
+  kind_out := public.ach_file_void(f1, u_m, 'second payroll file was wrong');
+  assert kind_out = 'payroll', 'a payroll void returns payroll';
+  select status into r from public.payroll_runs where id = run1;
+  assert r.status = 'draft', 'the voided file''s run is a draft again';
+  select status into r from public.payroll_runs where id = run2;
+  assert r.status = 'file_generated', 'a payroll void never touches another run';
+
+  -- 9c. a run that is not a draft (already submitted) and has NO live file is still refused
+  update public.payroll_runs set status = 'submitted' where id = run1;
+  perform pg_temp.must_fail(format($q$select public.ach_file_release_payroll(%L, %L, '2026-10-20', 'E', 'payroll_2026-10-23_z.ach', '2026-10-23', 2, 150123, %L, %L, 'encv1:g:h', false, null)$q$,
+    run1, u_m, pg_temp.h('f'), pg_temp.h('f')), 'not a draft');
 
   -- 10. the 0271 request list takes ach_file
   select count(*) into n from pg_constraint where conname = 'ach_change_requests_target_type_check' and pg_get_constraintdef(oid) like '%ach_file%';
