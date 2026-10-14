@@ -495,7 +495,7 @@ describe("test the tests", () => {
   it("scripts/r41/mutate-s3-app.last.log: every mutant killed, control passed, the log covers the script's full list", () => {
     const script = read("scripts/r41/mutate-s3-app.py");
     const log = read("scripts/r41/mutate-s3-app.last.log");
-    const listed = script.slice(script.indexOf("M = ["), script.indexOf("\n]\n")).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
+    const listed = script.slice(script.indexOf("\nM = ["), script.indexOf("\n]\n", script.indexOf("\nM = ["))).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
     const m = /total (\d+) killed (\d+) survivors \[\]/.exec(log);
     expect(m, "clean summary line").not.toBeNull();
     expect(Number(m![1])).toBe(listed);
