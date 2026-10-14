@@ -614,3 +614,29 @@ export async function startCultiveraOnboardingAction(manifestId: string) {
   revalidatePath("/admin/inventory/drafts");
   redirect(draftsHref({ manifestId, extra }));
 }
+
+/**
+ * R50 S12b - "Attach vendor lab results to every Cultivera manifest".
+ * One click walks the rebuilt manifests (id order) through the SAME fill-only
+ * attach Start runs, stops before the page's time limit and hands back a
+ * checkpoint; "Continue" resumes from it. Never changes stock, status, cost,
+ * CCRS fields, prices or live cards.
+ */
+export async function runWciaBackfillAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { runWciaBackfill } = await import("@/lib/inventory/cultivera-wcia-backfill");
+  const { backfillNote, backfillTone } = await import("@/lib/inventory/cultivera-wcia-backfill-core");
+  const raw = formData.get("cursor");
+  let extra: Record<string, string>;
+  try {
+    const run = await runWciaBackfill(typeof raw === "string" ? raw : null, session.userId);
+    extra = { lab_bf: backfillTone(run), lab_bf_msg: backfillNote(run).slice(0, 700), cv_page: "1" };
+    if (run.next && !(run.ok && run.done)) extra.lab_bf_next = run.next;
+  } catch (err) {
+    console.error("[drafts] wcia backfill failed:", err);
+    extra = { lab_bf: "warn", lab_bf_msg: `Stopped: ${(err instanceof Error ? err.message : String(err)).slice(0, 300)}`, cv_page: "1" };
+  }
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/inventory");
+  redirect(draftsHref({ extra }));
+}
