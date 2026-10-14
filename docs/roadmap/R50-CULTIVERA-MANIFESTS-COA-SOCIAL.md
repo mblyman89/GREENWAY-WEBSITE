@@ -1298,3 +1298,47 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     - rings a test sale and return (U-48, U-49);
     - opens a workbook in Excel on a store PC (U-53).
   * **On 10/31:** fetch after the close and before the 11/01 open (U-50), with the count date set to 10/30.
+
+### S12b — vendor lab results onto every Cultivera manifest, one button (PR #1361, merged)
+
+  * **What.** On Product Onboarding → Cultivera manifests, one button, "Attach vendor lab results to every
+    Cultivera manifest", runs the same fill-only WCIA attach the per-manifest Start runs, over every rebuilt
+    manifest. Before this it took one click per manifest (about 700).
+  * **How.**
+    - Keyset pages of 50 (`id > cursor`).
+    - About 200 s per click. When time runs out, the run pauses and the button becomes **Continue**, which
+      resumes from the saved cursor.
+    - A certificate is never replaced. A re-run is a no-op.
+    - One audit row per click (`cultivera.wcia_backfill_run`).
+    - A failing manifest is counted and named, never fatal. A list-read error stops honestly and can be resumed.
+  * **Tests.** vitest 13 and pure 27. Mutants 18/18. The related suites (39 files) pass.
+
+### S4 — "Looks like Cultivera product X" on a New-card onboarding row (this PR)
+
+  * **What.** The exact restock rule stays the only thing that merges. When a delivered product gets the
+    verdict "New card", the row now also shows the imported Cultivera card it is spelled almost exactly
+    like, with the evidence (vendor, category, how the names differ, size) and a link to compare.
+  * **Never applied.** Approve, staging and the merge never read it; this is pinned by a test.
+  * **Rule** (`cultivera-intake-suggestion-core.ts`, pure). Only Cultivera keys qualify, and never hidden or
+    medical-only cards. The card must match on all of the following:
+    - the same vendor record, vendor name or brand;
+    - no conflicting named brand;
+    - the same category axis;
+    - the same numbers in the name (a hard block).
+    The name must then be one of:
+    - the same apart from spacing or punctuation;
+    - the same words reordered;
+    - ONE letter off, with the same first letter and at least 6 letters.
+    Vendor/brand words and product-form words are dropped from the comparison first. Flavour words are never dropped.
+  * **Measured on the real export, not guessed.**
+    - A first version used token/bigram similarity at 0.8. Over the 3,247 distinct imported identities it
+      flagged 129 pairs, mostly different flavours or strains (Wyld sour cherry vs sour apple, Cherry vs
+      Berry Gelato).
+    - The strict rule flags exactly 13 pairs, all genuine variants (Grand Daddy / Granddaddy Purple,
+      Tropicana / Tropicanna Cookies, Facelock / Face Lock, …).
+    - On the real Old Name → New Name renames it recovers 145 variants (81 same, 32 reordered, 32 typo).
+    - Both results are pinned in vitest.
+  * **Cost.** No new reads: it rides the restock preview's GET reads. A scorer failure is caught and the
+    preview still shows (`safeSuggestions`).
+  * **Tests.** pure 58 and vitest 13. Mutants 28/28 (one survivor, "vendor link off", was found and
+    pinned). The related suites (41 files) pass.
