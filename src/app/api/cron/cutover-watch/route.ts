@@ -10,7 +10,9 @@
  * :02, :07, ... :57 ("2-59/5 * * * *", 288 ticks a day; pinned by
  * tests/compliance/leafly-certification.test.ts L-34 cadence map). The
  * 2-minute offset keeps it off content-schedule's :00/:05 minutes (L-33 bans
- * two identical expressions; it also spreads the cold starts). Five minutes is the delay between a harvest failing and the
+ * two identical expressions; it also spreads the cold starts). Range/step
+ * minute syntax is accepted by Vercel's own validator (vercel/vercel
+ * packages/cli/src/commands/crons/add.ts validateCronField: "1-30/2"). Five minutes is the delay between a harvest failing and the
  * owner's phone buzzing. No Pacific arithmetic: the watch windows are
  * relative ("last 6 hours"), not wall-clock times. An idle tick (nothing
  * started in 6 h, no failed/processing import in 24 h) is two indexed reads
