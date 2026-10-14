@@ -6,10 +6,12 @@
  *
  * Brenda (Timberland Cash Management) said three things must match her side
  * (docs/authorities/ach/timberland-brenda-2026-10.txt, Email 1):
- *   "There are 3 parameters I need to have match my side. Company Name /
- *    Company ID / Make sure that it's an unbalanced batch"
- * and then answered them (Email 2): "1. GREENWAY MARIJUA (that is all that
- * will fit in this section)", "2. 1 + EIN", "3. Routing number - 325170754".
+ *   "There are 3 parameters I need to have match my side." She listed
+ *   "Company Name", "Company ID" and "Make sure that it’s an unbalanced batch".
+ * and then answered them (Email 2):
+ *   "1. GREENWAY MARIJUA (that is all that will fit in this section)"
+ *   "2. 1 + EIN"
+ *   "3. Routing number – 325170754"
  * The signed agreement allows only CCD and PPD (section 1) and lists the
  * restricted codes in Schedule E: "IAT, CTX, TEL, POP, BOC, ARC, RCK".
  *
