@@ -1,0 +1,274 @@
+/**
+ * src/lib/payments/ach-gate-core.ts  (R41 S0, PURE)
+ *
+ * The decisions behind src/lib/payments/ach-gate.ts, kept pure so they can be
+ * tested exhaustively:
+ *
+ *   - KIND_SPECS: for every ACH action kind, which form field names the record
+ *     it changes, which row is that record, and which columns make up its
+ *     "version". D-7 (owner, round 6: "yes"): a request never expires, but it
+ *     is refused if the record changed after it was sent. The version is the
+ *     SHA-256 of those columns, so it never stores a bank number, even an
+ *     encrypted one.
+ *   - redirectOutcome: every ACH server action ends in redirect(url) with
+ *     ?error=... on failure and ?msg= / ?ok= / ?note= on success. When the
+ *     owner approves a request, the action is replayed and its redirect is
+ *     caught (Next 16 redirect() throws an error whose digest is
+ *     "NEXT_REDIRECT;<type>;<url>;<status>;", see
+ *     node_modules/next/dist/client/components/redirect.js getRedirectError);
+ *     this reads the result in words from that URL.
+ *   - summaryArray: the masked summary in the shape the 0271 table wants
+ *     (a JSON array).
+ *
+ * The column names below were read from the real schema (all 271 migrations
+ * applied to Postgres 15, information_schema.columns) and a vitest pins each
+ * one against the migration text.
+ */
+import { createHash } from "node:crypto";
+import type { AchActionKind } from "@/lib/auth/ach-authority-core";
+import { ACH_ACTION_KINDS } from "@/lib/auth/ach-authority-core";
+
+/** The 0271 ach_change_requests.target_type CHECK list. */
+export const TARGET_TYPES = [
+  "vendor",
+  "employee",
+  "authorization",
+  "account",
+  "verification",
+  "notice",
+  "document",
+  "contact",
+  "invite",
+  "payroll_run",
+  "company",
+  "vendor_payment",
+] as const;
+export type TargetType = (typeof TARGET_TYPES)[number];
+
+export type VersionSpec = {
+  table: string;
+  /** Column matched against the target id. */
+  key: string;
+  /** Columns whose values make up the version. */
+  cols: readonly string[];
+  /** true: every matching row (a vendor's contacts); false: one row. */
+  many?: boolean;
+};
+
+export type KindSpec = {
+  targetType: TargetType;
+  /** Form field that holds the target id; null = no single record (or the id is passed in). */
+  idField: string | null;
+  /** null = nothing to compare: the replay re-checks everything live (documented per kind). */
+  version: VersionSpec | null;
+};
+
+const VAULT: VersionSpec = { table: "vendor_bank_details", key: "vendor_id", cols: ["status", "updated_at", "released_at", "verified_at", "archived_at"] };
+const AUTH: VersionSpec = { table: "ach_authorizations", key: "id", cols: ["state", "legal_hold", "annual_review_due_on", "updated_at"] };
+
+export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
+  "vendor_bank.save": { targetType: "vendor", idField: "vendor_id", version: VAULT },
+  "vendor_bank.hold": { targetType: "vendor", idField: "vendor_id", version: VAULT },
+  "vendor_bank.release": { targetType: "vendor", idField: "vendor_id", version: VAULT },
+  "vendor_bank.verify": { targetType: "vendor", idField: "vendor_id", version: VAULT },
+  "vendor_bank.archive": { targetType: "vendor", idField: "vendor_id", version: VAULT },
+  // A callback contact added or retired after the request changes the list the release relies on.
+  "vendor_contact.add": { targetType: "vendor", idField: "vendor_id", version: { table: "payee_contacts", key: "vendor_id", cols: ["id", "value", "retired_at"], many: true } },
+  "vendor_contact.retire": { targetType: "contact", idField: "contact_id", version: { table: "payee_contacts", key: "id", cols: ["retired_at"] } },
+  "employee_bank.save": { targetType: "employee", idField: "employee_id", version: { table: "employees", key: "id", cols: ["bank_routing", "bank_account_number", "bank_account_type", "bank_changed_at"] } },
+  "employee_bank.clear": { targetType: "employee", idField: "employee_id", version: { table: "employees", key: "id", cols: ["bank_routing", "bank_account_number", "bank_account_type", "bank_changed_at"] } },
+  // A stop action runs at once for Stephen (option B): never a request, so no version.
+  "ach_notice.log": { targetType: "notice", idField: null, version: null },
+  "ach_notice.resolve": { targetType: "notice", idField: "notice_id", version: { table: "ach_return_notices", key: "id", cols: ["resolved_at"] } },
+  "employee_hold.release": { targetType: "authorization", idField: "auth_id", version: AUTH },
+  "ach_check.start": { targetType: "account", idField: "account_id", version: { table: "ach_authorization_accounts", key: "id", cols: ["verification_status", "updated_at"] } },
+  // Marking a check file sent carries the page's file fingerprint (fp); the store refuses it if the planned file changed.
+  "ach_check.mark_sent": { targetType: "verification", idField: null, version: null },
+  "ach_check.finish": { targetType: "verification", idField: "verification_id", version: { table: "ach_verifications", key: "id", cols: ["status", "updated_at"] } },
+  "legal_hold.set": { targetType: "authorization", idField: "auth_id", version: AUTH },
+  "annual_review.done": { targetType: "authorization", idField: "auth_id", version: AUTH },
+  "ach_document.reject": { targetType: "document", idField: "document_id", version: { table: "ach_authorization_documents", key: "id", cols: ["intake_status", "archived_at"] } },
+  "banking_settings.save": { targetType: "company", idField: null, version: { table: "ach_company_settings", key: "id", cols: ["updated_at"] } },
+  // The run id is bound to the action (generateRunAction(runId, formData)), not a form field.
+  "payroll.generate": { targetType: "payroll_run", idField: null, version: { table: "payroll_runs", key: "id", cols: ["status", "updated_at"] } },
+  "vendor_esign.countersign": { targetType: "invite", idField: "invite_id", version: { table: "vendor_esign_invites", key: "id", cols: ["state", "countersigned_at", "rejected_at"] } },
+  "vendor_esign.reject": { targetType: "invite", idField: "invite_id", version: { table: "vendor_esign_invites", key: "id", cols: ["state", "countersigned_at", "rejected_at"] } },
+  "vendor_ach_flag.change": { targetType: "vendor", idField: "vendor_id", version: { table: "vendors", key: "id", cols: ["ach_needs_bank_info", "ach_opted_out", "ach_opted_out_reason"] } },
+  // Building a vendor file re-reads the vault, the payables and the amounts owed at replay time.
+  "vendor_ach.build": { targetType: "vendor_payment", idField: null, version: null },
+};
+
+/** The fixed id of the single ach_company_settings row (id boolean primary key = true). */
+export const COMPANY_TARGET_ID = "true";
+
+/** Target id from the form, or null. Ids are trimmed and length-capped; the store validates them. */
+export function targetIdFrom(kind: AchActionKind, get: (k: string) => unknown, explicitId?: string | null): string | null {
+  if (explicitId !== undefined && explicitId !== null) return String(explicitId).trim().slice(0, 100) || null;
+  const spec = KIND_SPECS[kind];
+  if (spec.targetType === "company") return COMPANY_TARGET_ID;
+  if (!spec.idField) return null;
+  const v = get(spec.idField);
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s.slice(0, 100) : null;
+}
+
+function canon(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return JSON.stringify(v);
+}
+
+/**
+ * The version of a record: SHA-256 (first 32 hex) of the spec's columns, in
+ * spec order. "absent" when there is no row: a request made against nothing
+ * (new banking) becomes stale if a row appears. For `many`, rows are sorted
+ * so the order the database returns them in never matters.
+ */
+export function versionString(spec: VersionSpec, rows: readonly Record<string, unknown>[]): string {
+  if (rows.length === 0) return "absent";
+  const lines = rows.map((r) => spec.cols.map((c) => `${c}=${canon(r[c])}`).join("|"));
+  if (spec.many) lines.sort();
+  else if (lines.length > 1) throw new Error(`version: ${spec.table}.${spec.key} matched ${lines.length} rows`);
+  return createHash("sha256").update(`${spec.table}\n${lines.join("\n")}`, "utf8").digest("hex").slice(0, 32);
+}
+
+export type RedirectOutcome = { ok: boolean; message: string };
+
+/**
+ * Read the result of a replayed action from its redirect URL. Any `error=`
+ * means failure. Otherwise the first of msg / ok / note is the message, and a
+ * redirect with none of them (for example, opening the new run) is success.
+ */
+export function redirectOutcome(url: string): RedirectOutcome {
+  const hash = url.indexOf("#");
+  const beforeHash = hash === -1 ? url : url.slice(0, hash);
+  const q = beforeHash.indexOf("?");
+  const query = q === -1 ? "" : beforeHash.slice(q + 1);
+  const p = new URLSearchParams(query);
+  const err = p.get("error");
+  if (err !== null) return { ok: false, message: err.trim() || "The action was refused." };
+  for (const k of ["msg", "ok", "note"]) {
+    const v = p.get(k);
+    if (v !== null && v.trim()) return { ok: true, message: v.trim() };
+  }
+  return { ok: true, message: "Done." };
+}
+
+/** The Next.js redirect digest: "NEXT_REDIRECT;<replace|push>;<url>;<status>;". Returns the URL or null. */
+export function redirectUrlFromDigest(digest: unknown): string | null {
+  if (typeof digest !== "string") return null;
+  const parts = digest.split(";");
+  if (parts[0] !== "NEXT_REDIRECT" || (parts[1] !== "replace" && parts[1] !== "push")) return null;
+  const status = Number(parts.at(-2));
+  if (!Number.isInteger(status) || status < 300 || status > 399) return null;
+  return parts.slice(2, -2).join(";");
+}
+
+/** The masked summary as the 0271 table stores it: a JSON array of {field, value}. */
+export function summaryArray(summary: Record<string, string>): { field: string; value: string }[] {
+  return Object.entries(summary).map(([field, value]) => ({ field: field.slice(0, 80), value: value.slice(0, 300) }));
+}
+
+export function summaryObject(arr: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!Array.isArray(arr)) return out;
+  for (const it of arr) {
+    if (it && typeof it === "object" && typeof (it as { field?: unknown }).field === "string") {
+      out[(it as { field: string }).field] = String((it as { value?: unknown }).value ?? "");
+    }
+  }
+  return out;
+}
+
+/** Pacific wall-clock time for emails. */
+export function pacificWhen(d: Date): string {
+  return d.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" });
+}
+
+// ---------------------------------------------------------------------------
+// Self-tests (scripts/compliance/run-pure-selftests.ts)
+// ---------------------------------------------------------------------------
+export function __runAchGateCoreTests(): { passed: number; failed: number } {
+  let passed = 0;
+  let failed = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (cond) passed += 1;
+    else {
+      failed += 1;
+      console.error("FAIL ach-gate-core:", msg);
+    }
+  };
+
+  // every kind has a spec, and every spec names a real target type
+  for (const k of ACH_ACTION_KINDS) {
+    ok(Boolean(KIND_SPECS[k]), `spec for ${k}`);
+    ok((TARGET_TYPES as readonly string[]).includes(KIND_SPECS[k].targetType), `target type for ${k}`);
+  }
+  ok(Object.keys(KIND_SPECS).length === ACH_ACTION_KINDS.length, "no extra specs");
+
+  // target ids
+  const get = (m: Record<string, string>) => (k: string) => m[k];
+  ok(targetIdFrom("vendor_bank.save", get({ vendor_id: "  v1 " })) === "v1", "vendor id trimmed");
+  ok(targetIdFrom("vendor_bank.save", get({})) === null, "missing id -> null");
+  ok(targetIdFrom("banking_settings.save", get({})) === COMPANY_TARGET_ID, "company target fixed");
+  ok(targetIdFrom("payroll.generate", get({ vendor_id: "x" }), "run-1") === "run-1", "explicit id wins");
+  ok(targetIdFrom("payroll.generate", get({})) === null, "payroll without explicit id -> null");
+  ok(targetIdFrom("vendor_ach.build", get({ vendor_id: "x" })) === null, "build has no single target");
+  ok(targetIdFrom("vendor_bank.save", get({ vendor_id: "a".repeat(500) }))?.length === 100, "id capped at 100");
+
+  // versions
+  const spec: VersionSpec = { table: "t", key: "id", cols: ["a", "b"] };
+  const v1 = versionString(spec, [{ a: "x", b: 1 }]);
+  ok(/^[0-9a-f]{32}$/.test(v1), "version is 32 hex");
+  ok(versionString(spec, [{ a: "x", b: 1 }]) === v1, "version is stable");
+  ok(versionString(spec, [{ a: "x", b: 2 }]) !== v1, "a column change changes the version");
+  ok(versionString(spec, [{ a: "x", b: 1, c: "other" }]) === v1, "a column outside the spec does not");
+  ok(versionString(spec, [{ a: null, b: 1 }]) !== versionString(spec, [{ a: "null", b: 1 }]), "null differs from the text 'null'");
+  ok(versionString(spec, []) === "absent", "no row -> absent");
+  ok(versionString({ ...spec, table: "u" }, [{ a: "x", b: 1 }]) !== v1, "table is part of the version");
+  let threw = false;
+  try {
+    versionString(spec, [{ a: 1 }, { a: 2 }]);
+  } catch {
+    threw = true;
+  }
+  ok(threw, "two rows for a single-row spec throws");
+  const many: VersionSpec = { ...spec, many: true };
+  ok(versionString(many, [{ a: 1 }, { a: 2 }]) === versionString(many, [{ a: 2 }, { a: 1 }]), "many: order-free");
+  ok(versionString(many, [{ a: 1 }]) !== versionString(many, [{ a: 1 }, { a: 2 }]), "many: an added row changes it");
+  ok(!versionString({ table: "employees", key: "id", cols: ["bank_account_number"] }, [{ bank_account_number: "123456789" }]).includes("6789"), "version never holds the number");
+
+  // redirect outcome
+  ok(redirectOutcome("/admin/settings/banking?tab=vendors&msg=Saved").ok, "msg = ok");
+  ok(redirectOutcome("/admin/settings/banking?tab=vendors&msg=Saved").message === "Saved", "msg text");
+  ok(!redirectOutcome("/x?tab=vendors&error=Nope").ok, "error = fail");
+  ok(redirectOutcome("/x?error=Nope&msg=Saved").ok === false, "error wins over msg");
+  ok(redirectOutcome("/x?ok=Fine").message === "Fine", "ok param");
+  ok(redirectOutcome("/x?saved=1&note=Countersigned#vendor-esign").message === "Countersigned", "note param, hash ignored");
+  ok(redirectOutcome("/admin/payroll/abc").ok && redirectOutcome("/admin/payroll/abc").message === "Done.", "plain redirect = ok");
+  ok(!redirectOutcome("/x?error=").ok, "empty error still fails");
+  ok(redirectOutcome("/x#a?error=1").ok, "error after the hash is not a query");
+  ok(redirectOutcome(`/x?msg=${encodeURIComponent("A & B")}`).message === "A & B", "decoded");
+
+  // digest
+  ok(redirectUrlFromDigest("NEXT_REDIRECT;push;/a?b=1;303;") === "/a?b=1", "push digest");
+  ok(redirectUrlFromDigest("NEXT_REDIRECT;replace;/a;b?c=1;307;") === "/a;b?c=1", "url with ;");
+  ok(redirectUrlFromDigest("NEXT_NOT_FOUND;push;/a;303;") === null, "not a redirect");
+  ok(redirectUrlFromDigest("NEXT_REDIRECT;other;/a;303;") === null, "bad type");
+  ok(redirectUrlFromDigest("NEXT_REDIRECT;push;/a;abc;") === null, "bad status");
+  ok(redirectUrlFromDigest(undefined) === null, "no digest");
+
+  // summary
+  const arr = summaryArray({ routing: "\u2022\u2022\u2022\u20220001", note: "hi" });
+  ok(Array.isArray(arr) && arr.length === 2 && arr[0].field === "routing", "summary array");
+  ok(summaryObject(arr).note === "hi", "summary round trip");
+  ok(Object.keys(summaryObject("x")).length === 0 && Object.keys(summaryObject([{ nope: 1 }])).length === 0, "bad summary ignored");
+  ok(summaryArray({ big: "x".repeat(400) })[0].value.length === 300, "values capped");
+
+  ok(pacificWhen(new Date("2026-07-01T19:00:00Z")).includes("12:00"), "Pacific time (PDT noon)");
+
+  if (failed > 0) throw new Error(`ach-gate-core: ${failed} test(s) failed`);
+  console.log(`ach-gate-core: ${passed} passed, 0 failed`);
+  return { passed, failed };
+}
