@@ -6,11 +6,12 @@ import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Button, Badge } from "@/components/admin/ui";
 import {
-  getAchCompanySettings,
+  getOriginatorReadiness,
   listPayrollRuns,
   getPayrollReconcileInputs,
 } from "@/lib/payroll/payroll-store";
 import { centsToDollars } from "@/lib/payroll/payroll-core";
+import { OriginatorNotReady } from "@/components/admin/payroll/OriginatorNotReady";
 import {
   reconcilePayroll,
   formatDiff,
@@ -52,13 +53,13 @@ export default async function PayrollPage({
     );
   }
 
-  const [settings, runs, reconcileInputs] = await Promise.all([
-    getAchCompanySettings(),
+  const [{ readiness }, runs, reconcileInputs] = await Promise.all([
+    getOriginatorReadiness(),
     listPayrollRuns(),
     getPayrollReconcileInputs(),
   ]);
-  const settingsComplete =
-    !!settings.destination_routing && !!settings.company_name && !!settings.originating_dfi;
+  // R41 S2: the one Timberland readiness answer (the builder uses the same check).
+  const originatorReady = readiness.ready;
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -108,7 +109,7 @@ export default async function PayrollPage({
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Pay runs" value={runs.length} accent="muted" />
           <StatCard label="Files generated" value={runs.filter((r) => r.status === "file_generated" || r.status === "submitted").length} accent="green" />
-          <StatCard label="Bank block" value={settingsComplete ? "Ready" : "Set up"} accent={settingsComplete ? "green" : "gold"} />
+          <StatCard label="Bank block" value={originatorReady ? "Ready" : "Set up"} accent={originatorReady ? "green" : "gold"} />
         </div>
 
         {/* Create a run */}
@@ -122,10 +123,10 @@ export default async function PayrollPage({
             <Field label="Pay date" help="ACH effective date" required>
               <Input type="date" name="pay_date" defaultValue={today} />
             </Field>
-            <Button type="submit" variant="save" size="sm" disabled={!settingsComplete}>
+            <Button type="submit" variant="save" size="sm" disabled={!originatorReady}>
               Create run
             </Button>
-            {!settingsComplete ? (
+            {!originatorReady ? (
               <span className="text-xs text-[var(--admin-gold)]">Set your bank block first ↓</span>
             ) : null}
           </form>
@@ -181,8 +182,13 @@ export default async function PayrollPage({
           <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
             Your bank details for the ACH file header — routing, account number, company ID, and
             originating DFI — now live on their own <span className="font-semibold">Banking settings</span> page so
-            they are shared by both payroll and vendor payments. {settingsComplete ? "They are set up." : "They still need to be filled in before you can generate a file."}
+            they are shared by both payroll and vendor payments. {originatorReady ? "They match Timberland's setup." : "They do not match Timberland's setup yet, so no file can be made."}
           </p>
+          {!originatorReady ? (
+            <div className="mb-4">
+              <OriginatorNotReady problems={readiness.problems} />
+            </div>
+          ) : null}
           <Link
             href="/admin/settings/banking"
             className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--admin-text)] transition hover:border-white/30"

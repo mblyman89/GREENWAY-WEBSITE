@@ -2434,3 +2434,40 @@ in Vercel.
   employee bank change has been stamped. Those are records. Otherwise it
   puts back the 0259 vault guard, the 0263 hold release and the 0258
   manager-drop rules exactly as they were.
+
+## R41 — 0272 — "Timberland confirmed on ___" stamp on My banking
+
+- [ ] `0272_ach_company_timberland_confirmed.sql` adds the stamp that records
+  that you checked the company ACH settings **with Timberland**. Brenda wrote:
+  "There are 3 parameters I need to have match my side. Company Name /
+  Company ID / Make sure that it's an unbalanced batch".
+  - Four new columns on `ach_company_settings`: `timberland_confirmed_at`,
+    `timberland_confirmed_by`, `timberland_confirm_note` (who at Timberland
+    confirmed and how, 10 to 500 characters) and
+    `timberland_confirm_cleared_at`.
+  - **The stamp clears itself.** Changing the bank routing number, Immediate
+    Origin, company name, Company ID or Originating DFI wipes the stamp and
+    records when. The card then says "Re-confirm with Timberland".
+  - **Only you can stamp.** The 0271 owner guard already covers this row. A
+    stamp must also name the person saving it, and it cannot be dated in the
+    future. Stephen's "confirm" becomes a request for you to approve, like
+    every other banking change.
+  - No new table. Nothing is deleted.
+
+  Apply it **after 0271**. It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from information_schema.columns where table_name = 'ach_company_settings'
+            and column_name like 'timberland_%') as cols,
+         (select count(*) from pg_trigger where tgname = 'trg_ach_company_settings_timberland_stamp') as trg;
+  -- cols | trg
+  -- 4    | 1
+  ```
+
+  For the full proof, paste `scripts/recon/ach-timberland-confirm-0272-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0272 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0272_ach_company_timberland_confirmed.rollback.sql`.
+  It drops the stamp and its history, so copy the four columns first.

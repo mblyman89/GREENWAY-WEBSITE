@@ -461,32 +461,13 @@ export function checkListFingerprint(ids: readonly string[]): string {
 }
 
 async function originatorFromSettings(): Promise<{ ok: true; originator: AchOriginator } | Fail> {
-  const { getAchCompanySettings } = await import("@/lib/payroll/payroll-store");
-  const s = await getAchCompanySettings();
-  const missing = (
-    [
-      ["destination routing", s.destination_routing],
-      ["destination name", s.destination_name],
-      ["immediate origin", s.immediate_origin],
-      ["company name", s.company_name],
-      ["company ID", s.company_id],
-      ["originating DFI", s.originating_dfi],
-    ] as const
-  )
-    .filter(([, v]) => !String(v ?? "").trim())
-    .map(([k]) => k);
-  if (missing.length) return { ok: false, error: `Fill in the company ACH settings first (Company tab): ${missing.join(", ")}.` };
-  return {
-    ok: true,
-    originator: {
-      destinationRouting: s.destination_routing,
-      destinationName: s.destination_name,
-      immediateOrigin: s.immediate_origin,
-      companyName: s.company_name,
-      companyId: s.company_id,
-      originatingDfi: s.originating_dfi,
-    },
-  };
+  // R41 S2: one readiness answer (settings + company EIN vs Timberland's setup).
+  const { getOriginatorReadiness } = await import("@/lib/payroll/payroll-store");
+  const { readiness } = await getOriginatorReadiness();
+  if (!readiness.originator) {
+    return { ok: false, error: `The company ACH settings do not match Timberland's setup (My banking tab): ${readiness.problems.join(" ")}` };
+  }
+  return { ok: true, originator: readiness.originator };
 }
 
 /** The planned checks of one method, with bank details decrypted for the file. */

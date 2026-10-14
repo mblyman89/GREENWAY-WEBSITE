@@ -1,0 +1,18 @@
+killed   routing-not-matched  (CONTEXT:  PL/pgSQL function inline_code_block line 67 at ASSERT)
+killed   origin-not-matched  (CONTEXT:  PL/pgSQL function inline_code_block line 67 at ASSERT)
+killed   name-not-matched  (CONTEXT:  PL/pgSQL function inline_code_block line 67 at ASSERT)
+killed   id-not-matched  (CONTEXT:  PL/pgSQL function inline_code_block line 67 at ASSERT)
+killed   odfi-not-matched  (CONTEXT:  PL/pgSQL function inline_code_block line 67 at ASSERT)
+killed   stamp-kept-on-change  (CONTEXT:  PL/pgSQL function inline_code_block line 67 at ASSERT)
+killed   cleared-at-not-recorded  (CONTEXT:  PL/pgSQL function inline_code_block line 69 at ASSERT)
+killed   cleared-at-always  (CONTEXT:  PL/pgSQL function inline_code_block line 50 at ASSERT)
+killed   self-check-off  (PL/pgSQL function inline_code_block line 35 at PERFORM)
+killed   self-null-ok  (PL/pgSQL function inline_code_block line 37 at PERFORM)
+killed   future-ok  (PL/pgSQL function inline_code_block line 39 at PERFORM)
+killed   note-short-ok  (PL/pgSQL function inline_code_block line 41 at PERFORM)
+killed   note-without-stamp-ok  (PL/pgSQL function inline_code_block line 45 at PERFORM)
+killed   trigger-on-insert-only  (PL/pgSQL function inline_code_block line 35 at PERFORM)
+killed   trigger-renamed-before-guard  (CONTEXT:  PL/pgSQL function inline_code_block line 23 at ASSERT)
+killed   column-dropped  (mutated migration did not apply: psql:/tmp/mut0272.sql:70: ERROR:  column "timberland_confirm_cleared_at" of relation "public.ach_company_settings" does )
+control pass
+total 16 killed 16 survivors []

@@ -301,6 +301,8 @@ const GATED_FILES: Record<string, string[]> = {
   "src/app/admin/settings/banking/document-actions.ts": ["ach_document.reject"],
   "src/app/admin/vendors/vendor-esign-actions.ts": ["vendor_esign.countersign", "vendor_esign.reject"],
   "src/app/admin/vendor-payments/actions.ts": ["vendor_ach.build"],
+  // R41 S2: recording Timberland's confirmation of the originator setup.
+  "src/app/admin/settings/banking/actions.ts": ["timberland_setup.confirm"],
 };
 
 describe("every ACH kind is gated exactly once, and the approval replay covers every kind", () => {

@@ -8,9 +8,13 @@ import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   getAchCompanySettings,
+  getCompanyEin,
+  getOriginatorReadiness,
   saveAchCompanySettings,
+  saveTimberlandStamp,
   type AchCompanySettings,
 } from "@/lib/payroll/payroll-store";
+import { confirmStampProblem, originatorFromSettings, validateOriginator } from "@/lib/payments/timberland-originator-core";
 
 const ROOT = "/admin/settings/banking";
 
@@ -53,6 +57,15 @@ async function saveBankingSettingsBody(session: StaffSession, formData: FormData
     company_account_type: accountType === "savings" ? "savings" : "checking",
   };
 
+  // R41 S2: refuse values Timberland would not match, with the exact reason,
+  // before anything is written. The EIN itself lives on Books > Company
+  // information, so a missing EIN is not a reason to refuse THIS save (the
+  // file builder still refuses until it is entered).
+  const problems = validateOriginator(originatorFromSettings(input, await getCompanyEin())).filter((p) => p.field !== "companyEin");
+  if (problems.length) {
+    redirect(`${ROOT}?tab=company&error=${encodeURIComponent(`Not saved. ${problems.map((p) => p.message).join(" ")}`)}`);
+  }
+
   const res = await saveAchCompanySettings(input, session.profile.id);
   await recordAudit({
     actorId: session.profile.id,
@@ -66,6 +79,42 @@ async function saveBankingSettingsBody(session: StaffSession, formData: FormData
   redirect(
     res.ok
       ? `${ROOT}?tab=company&msg=${encodeURIComponent("Banking settings saved.")}`
+      : `${ROOT}?tab=company&error=${encodeURIComponent(res.error)}`,
+  );
+}
+
+/**
+ * R41 S2: record that Timberland confirmed the company ACH setup (the
+ * "Timberland confirmed on ___" stamp, migration 0272). Through achGate:
+ * Michael stamps at once; Stephen's goes to Michael as a request, and is
+ * refused as stale if the settings were saved after he asked.
+ */
+export async function confirmTimberlandSetupAction(formData: FormData): Promise<void> {
+  return achGate(
+    "timberland_setup.confirm",
+    formData,
+    { reply: (r: RedirectOutcome): never => redirect(`${ROOT}?tab=company&${r.ok ? "msg" : "error"}=${encodeURIComponent(r.message)}`) },
+    (session) => confirmTimberlandSetupBody(session, formData),
+  );
+}
+
+async function confirmTimberlandSetupBody(session: StaffSession, formData: FormData): Promise<void> {
+  const note = String(formData.get("confirm_note") ?? "").trim();
+  const { readiness } = await getOriginatorReadiness();
+  const problem = confirmStampProblem(readiness, note);
+  if (problem) redirect(`${ROOT}?tab=company&error=${encodeURIComponent(`Not recorded. ${problem}`)}`);
+
+  const res = await saveTimberlandStamp(session.profile.id, note);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "banking.timberland.confirm",
+    entityType: "ach_company_settings",
+    after: { ok: res.ok, note },
+  }).catch(() => {});
+  revalidatePath(ROOT);
+  redirect(
+    res.ok
+      ? `${ROOT}?tab=company&msg=${encodeURIComponent("Recorded: Timberland confirmed the company ACH setup.")}`
       : `${ROOT}?tab=company&error=${encodeURIComponent(res.error)}`,
   );
 }

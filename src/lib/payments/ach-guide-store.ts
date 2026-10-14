@@ -23,7 +23,8 @@ import { opsPageView, type OpsView } from "@/lib/payments/ach-ops-store";
 import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
 import { readVendorAchFlags, vendorFollowUpList } from "@/lib/payments/vendor-ach-enrollment-core";
 import { participationRows } from "@/lib/payments/vendor-esign-store";
-import { getAchCompanySettings, listPayrollRuns } from "@/lib/payroll/payroll-store";
+import { getAchCompanySettings, getCompanyEin, listPayrollRuns } from "@/lib/payroll/payroll-store";
+import { originatorReadiness } from "@/lib/payments/timberland-originator-core";
 import { listEmployeeDepositPlans } from "@/lib/payroll/employee-deposit-plans-store";
 import { employeeAchCard } from "@/lib/payroll/employee-ach-card-core";
 import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
@@ -80,14 +81,6 @@ export async function setAchTaskDone(input: {
 function emailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.ORDER_EMAIL_FROM && (process.env.ORDER_STAFF_EMAILS ?? "").trim());
 }
-
-const COMPANY_FIELDS: readonly [string, string][] = [
-  ["destination_routing", "Timberland ACH routing"],
-  ["company_name", "company name"],
-  ["originating_dfi", "originating DFI"],
-  ["company_id", "Company ID"],
-  ["company_account_number", "Greenway account number"],
-];
 
 /**
  * Everything the Guide shows. `problems` lists reads that failed; the page
@@ -147,8 +140,10 @@ export async function loadGuideSnapshot(todayIso: string): Promise<{ snapshot: G
     }),
   );
 
-  const s = settings as Record<string, unknown> | null;
-  const companyMissing = COMPANY_FIELDS.filter(([k]) => !String(s?.[k] ?? "").trim()).map(([, label]) => label);
+  // R41 S2: the one Timberland readiness answer. A failed settings read is
+  // `null` and reads as "could not be read", never as all clear.
+  const ein = await safe("Company EIN", () => getCompanyEin(), "");
+  const companyMissing = [...originatorReadiness(settings, ein).problems];
   const llama = isLlamaParseConfigured();
   const run = runs[0] ?? null;
 

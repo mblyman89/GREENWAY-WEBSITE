@@ -23,7 +23,10 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { BankingSettingsForm } from "@/components/admin/settings/BankingSettingsForm";
-import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
+import { getAchCompanySettings, getCompanyEin, getTimberlandStamp } from "@/lib/payroll/payroll-store";
+import { originatorReadiness, timberlandStampView } from "@/lib/payments/timberland-originator-core";
+import { achAuthority } from "@/lib/auth/ach-authority-core";
+import { WhatTimberlandSeesCard } from "./WhatTimberlandSeesCard";
 import { maskAccountTail, isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import {
   resolveVaultTab,
@@ -147,12 +150,13 @@ export default async function BankingVaultPage({
     company_account_number: "",
     company_account_type: "checking" as const,
   };
-  const achComplete =
-    !!resolvedAch.destination_routing &&
-    !!resolvedAch.company_name &&
-    !!resolvedAch.originating_dfi &&
-    !!resolvedAch.company_id &&
-    !!resolvedAch.company_account_number;
+  // R41 S2: the one Timberland readiness answer (a failed settings read is
+  // null -> "could not be read", never all clear). complete = files can be
+  // built AND the funding account is the agreement's.
+  const [companyEin, stampRead] = await Promise.all([getCompanyEin(), tab === "company" ? getTimberlandStamp() : Promise.resolve(null)]);
+  const readiness = originatorReadiness(achSettings, companyEin);
+  const achComplete = readiness.complete;
+  const achSide = achAuthority(session.profile.role);
 
   return (
     <div>
@@ -584,15 +588,33 @@ export default async function BankingVaultPage({
           <div className="space-y-6">
             {!achComplete ? (
               <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
-                Your banking settings are incomplete. Fill in every field below (ask your bank for Company ID,
-                Immediate Origin, and Originating DFI if needed) before generating a payroll or vendor ACH file.
+                {readiness.ready
+                  ? "ACH files can be built, but the setup is not complete:"
+                  : "These settings do not match Timberland's setup yet, so no payroll or vendor ACH file can be made:"}
+                <ul className="mt-1 list-disc pl-5">
+                  {readiness.problems.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
               </div>
             ) : null}
+            {stampRead?.error ? (
+              <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+                Could not read the Timberland confirmation: {stampRead.error}
+              </div>
+            ) : null}
+            <WhatTimberlandSeesCard
+              readiness={readiness}
+              stampView={timberlandStampView(stampRead?.stamp ?? null, stampRead?.columnsReady ?? false)}
+              viewerIsOwner={achSide === "act"}
+              canAct={achSide !== "none"}
+            />
             <div className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60">
               Your originating bank & company details for ACH files — shared by Payroll and Accounts
-              Payable, set once here. The three bank-assigned values (Company ID, Immediate Origin,
-              Originating DFI) come from your bank when you enroll in ACH origination; call your
-              treasury/ACH contact if unsure — never guess, a wrong value makes the bank reject the file.
+              Payable, set once here. Timberland set these up (Brenda, Timberland Cash Management):
+              routing 325170754, Company ID and Immediate Origin &ldquo;1 + EIN&rdquo; (the EIN comes from
+              Books {">"} Company information), Originating DFI 32517075, company name GREENWAY MARIJUANA
+              (the batch shows GREENWAY MARIJUA). A save with any other value is refused with the reason.
             </div>
             <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
               {/* S-10: render the funding account MASKED — submitting the mask (or

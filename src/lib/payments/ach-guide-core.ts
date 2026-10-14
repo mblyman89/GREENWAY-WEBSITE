@@ -88,7 +88,7 @@ export type GuideSnapshot = {
   migrationsReady: boolean;
   migrationError: string | null;
   encryptionConfigured: boolean;
-  /** My banking: the five fields a file needs. */
+  /** My banking matches Timberland (R41 S2: originatorReadiness().complete); companyMissing = its problems, verbatim. */
   companyAchComplete: boolean;
   companyMissing: string[];
   /** resolveNotifyContacts().problems */
@@ -195,7 +195,7 @@ export function buildJourneys(s: GuideSnapshot): Journey[] {
     {
       id: "company",
       title: "My banking: Greenway's own bank details",
-      detail: s.companyAchComplete ? "Timberland routing, company name, company ID, originating DFI and account are filled in." : `Still missing: ${s.companyMissing.join(", ") || "some fields"}. Timberland gives you these.`,
+      detail: s.companyAchComplete ? "Timberland routing, company name, Company ID (1 + EIN), originating DFI and the agreement's account all match Timberland's setup." : `Does not match Timberland's setup yet: ${s.companyMissing.join(" ") || "the settings could not be checked."}`,
       status: st(s.companyAchComplete, "blocked"),
       href: GUIDE_LINKS.company,
       hrefLabel: "Open My banking",
@@ -402,8 +402,8 @@ export function buildBlockers(s: GuideSnapshot): Blocker[] {
       id: "company",
       severity: "stops_all",
       who: "Payroll and vendor files",
-      problem: `My banking is incomplete${s.companyMissing.length ? ` (missing: ${s.companyMissing.join(", ")})` : ""}. No ACH file can be made.`,
-      fix: ["Call Timberland's cash management team and ask for: ACH destination routing, Company ID, originating DFI.", "Type them into My banking with Greenway's account number, and save."],
+      problem: `My banking does not match Timberland's setup${s.companyMissing.length ? ` (${s.companyMissing.join(" ")})` : ""}. No ACH file can be made.`,
+      fix: ["Timberland's values are on My banking (routing 325170754, Company ID 1 + EIN, originating DFI 32517075, name GREENWAY MARIJUANA).", "Make sure the EIN is entered on Books > Company information, type the values into My banking, and save."],
       href: GUIDE_LINKS.company,
       hrefLabel: "Open My banking",
     });

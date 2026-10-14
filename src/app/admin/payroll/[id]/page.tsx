@@ -7,7 +7,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Badge } from "@/components/admin/ui";
 import {
   getPayrollRun,
-  getAchCompanySettings,
+  getOriginatorReadiness,
   evaluateRunGuardrails,
 } from "@/lib/payroll/payroll-store";
 import { listEmployees, listEmployeeBanking } from "@/lib/staffing/store";
@@ -19,6 +19,7 @@ import {
 } from "@/components/admin/payroll/PayrollEntryTable";
 import { PayrollSourceDocPanel } from "@/components/admin/payroll/PayrollSourceDocPanel";
 import { PayrollGuardrailPanel } from "@/components/admin/payroll/PayrollGuardrailPanel";
+import { OriginatorNotReady } from "@/components/admin/payroll/OriginatorNotReady";
 import { saveRunLinesAction, generateRunAction, uploadSourceDocAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -58,25 +59,20 @@ export default async function PayrollRunPage({
   if (!detail) notFound();
   const { run, lines } = detail;
 
-  const [employees, banking, settings, guard] = await Promise.all([
+  const [employees, banking, { readiness }, guard] = await Promise.all([
     listEmployees(),
     // S-10: banking comes ONLY from the dedicated payroll read path — the
     // default employee selection excludes the bank_* columns entirely.
     listEmployeeBanking(),
-    getAchCompanySettings(),
+    getOriginatorReadiness(),
     evaluateRunGuardrails(id),
   ]);
   const bankingByEmployee = new Map(banking.map((b) => [b.employee_id, b]));
   const report = guard?.report ?? null;
 
   const readOnly = run.status !== "draft";
-  const settingsComplete = Boolean(
-    settings.destination_routing &&
-      settings.immediate_origin &&
-      settings.company_name &&
-      settings.company_id &&
-      settings.originating_dfi,
-  );
+  // R41 S2: the one Timberland readiness answer (the builder uses the same check).
+  const originatorReady = readiness.ready;
 
   // Merge each active employee with any existing saved line for this run.
   // Prefill amounts from the saved line (via centsToDollars); prefill banking
@@ -164,15 +160,7 @@ export default async function PayrollRunPage({
         <StatCard label="Total gross" value={`$${centsToDollars(run.total_gross_cents)}`} accent="gold" />
       </div>
 
-      {!settingsComplete ? (
-        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)] bg-[var(--admin-danger-soft,rgba(220,38,38,0.08))] px-4 py-3 text-sm text-[var(--admin-danger)]">
-          Your bank ACH block is not fully configured yet.{" "}
-          <Link href="/admin/payroll" className="underline">
-            Finish the ACH company settings
-          </Link>{" "}
-          before generating a file. You can still enter amounts now.
-        </div>
-      ) : null}
+      {!originatorReady ? <OriginatorNotReady problems={readiness.problems} tail="before generating a file. You can still enter amounts now." /> : null}
 
       {orphanLines.length > 0 ? (
         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-xs text-[var(--admin-text-muted)]">
@@ -205,7 +193,7 @@ export default async function PayrollRunPage({
           findings={report.findings}
           hasHardBlock={report.hasHardBlock}
           hasWarnings={report.hasWarnings}
-          settingsComplete={settingsComplete}
+          settingsComplete={originatorReady}
           generateAction={generateRunAction}
         />
       ) : null}

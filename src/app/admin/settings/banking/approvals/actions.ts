@@ -89,6 +89,7 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "annual_review.done": (fd) => ops.reviewDoneAction(fd),
   "ach_document.reject": (fd) => docs.rejectAchDocumentAction(fd),
   "banking_settings.save": (fd) => company.saveBankingSettingsAction(fd),
+  "timberland_setup.confirm": (fd) => company.confirmTimberlandSetupAction(fd),
   "payroll.generate": (fd, targetId) => payroll.generateRunAction(targetId ?? "", fd),
   "vendor_esign.countersign": (fd) => esign.countersignVendorEsignAction(fd),
   "vendor_esign.reject": (fd) => esign.rejectVendorEsignAction(fd),
