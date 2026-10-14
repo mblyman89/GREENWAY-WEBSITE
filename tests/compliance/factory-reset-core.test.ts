@@ -1306,7 +1306,11 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R50 A1 / 0270: intake_card_aliases (the owner's "this product is
     //       that live card" answers; decisions about products like
     //       intake_merge_decisions, no FK into the wiped menu tables)
-    expect(plan.keep.length).toBe(154);
+    //   +3  R41 S0 / 0271: ach_change_requests, ach_change_request_events,
+    //       ach_owner_reviews (Michael's D-6 option B request/approval trail
+    //       and his review list; the database refuses DELETE on all three,
+    //       so a WIPE rule would make the reset fail part-way)
+    expect(plan.keep.length).toBe(157);
     expect(plan.wipe.length).toBe(139);
   });
 
@@ -1332,5 +1336,29 @@ describe("D-65 — the connections survive the reset", () => {
     const auth = TABLE_RULES.find((r) => r.table === "ach_authorizations")!;
     expect(auth.because).toContain("Nacha");
     expect(auth.because).toContain("WAC 314-55-087");
+  });
+
+  it("R41 S0: the three 0271 owner-authority tables survive the reset, each by its own rule", () => {
+    const r41 = ["ach_change_requests", "ach_change_request_events", "ach_owner_reviews"];
+    for (const t of r41) {
+      const c = classifyTable(t);
+      expect(c, `${t} must be classified`).not.toBeNull();
+      expect(c!.disposition, `${t} must survive the reset`).toBe("KEEP");
+      expect(c!.source, `${t} needs its own rule, not a prefix family`).toBe("table");
+    }
+    // The reason has to be the real one: the database refuses DELETE on
+    // these (0271), so a WIPE would fail part-way. Pin that the migration
+    // really does refuse, so the KEEP rule cannot drift from the database.
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0271_ach_owner_authority.sql"), "utf8");
+    for (const t of r41) {
+      expect(sql, `${t} must be created in 0271`).toMatch(new RegExp(`create table if not exists (public\\.)?${t}\\b`));
+    }
+    const flat = sql.replace(/\s+/g, " ");
+    expect(flat).toContain("before update or delete on public.ach_change_request_events");
+    expect(flat).toContain("before insert or update or delete on public.ach_change_requests");
+    expect(flat).toContain("before insert or update or delete on public.ach_owner_reviews");
+    expect(sql).toContain("ACH_REQUEST_KEEP");
+    expect(sql).toContain("ACH_REVIEW_KEEP");
+    expect(sql).toContain("ACH_REQUEST_EVENTS_APPEND_ONLY");
   });
 });

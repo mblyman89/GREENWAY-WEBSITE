@@ -965,7 +965,10 @@ describe("N6 the top nav can actually render the new tabs", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("N7 owner-only is derived, not copied", () => {
-  it("names exactly the six owner-only permissions in use today", () => {
+  it("names exactly the seven owner-only permissions in use today", () => {
+    // R41 S0 added `ach.act`. Michael's D-6 answer (Option B): only the owner
+    // acts alone on vendor bank / ACH; Stephen (admin) holds `ach.request`
+    // instead, so his live changes become requests Michael approves.
     // books-23 added TWO. `inventory.audit`: approving and posting an inventory
     // audit is an accounting act, and Michael's instruction was that "anything
     // accounting, bookkeeping, taxes, finance, should be hard gated to me only."
@@ -979,6 +982,7 @@ describe("N7 owner-only is derived, not copied", () => {
     // compliance manager be hired one day without handing over the bank feed.
     expect(ownerOnlyPermissions().sort()).toEqual(
       [
+        "ach.act",
         "audit.view",
         "books.view",
         "compliance.calendar",

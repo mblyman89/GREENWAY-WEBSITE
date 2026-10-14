@@ -365,3 +365,36 @@ describe("old wording is gone from the live ACH paths", () => {
     });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Part 3. The three statements of "who may act" must agree: the role map
+// (roles.ts), the routing core (ach-authority-core.ts) and the database
+// (0271 ach_actor_is_owner). roles.ts says "a vitest pins both"; this is it.
+// The gate tests above mock requirePermission, so they cannot see the map.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("D-6: role map, routing core and database agree on who acts", () => {
+  it("ach.act is exactly the owner; ach.request is exactly owner + admin", async () => {
+    const roles = await vi.importActual<typeof import("@/lib/auth/roles")>("@/lib/auth/roles");
+    expect(roles.rolesForPermission("ach.act")).toEqual(["owner"]);
+    expect([...roles.rolesForPermission("ach.request")].sort()).toEqual(["admin", "owner"]);
+  });
+
+  it("for every role, can(ach.act) ⇔ achAuthority = act and can(ach.request) ⇔ authority ≠ none", async () => {
+    const roles = await vi.importActual<typeof import("@/lib/auth/roles")>("@/lib/auth/roles");
+    const { achAuthority } = await vi.importActual<typeof import("@/lib/auth/ach-authority-core")>(
+      "@/lib/auth/ach-authority-core",
+    );
+    expect(roles.ALL_ROLES.length).toBeGreaterThan(3);
+    for (const r of roles.ALL_ROLES) {
+      expect(roles.can(r, "ach.act"), r).toBe(achAuthority(r) === "act");
+      expect(roles.can(r, "ach.request"), r).toBe(achAuthority(r) !== "none");
+    }
+  });
+
+  it("the database rule is the same: active owner only", () => {
+    const sql = read("supabase/migrations/0271_ach_owner_authority.sql").replace(/\s+/g, " ");
+    expect(sql).toContain(
+      "select p_actor is not null and exists ( select 1 from public.staff_profiles where id = p_actor and active = true and role = 'owner' );",
+    );
+  });
+});
