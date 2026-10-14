@@ -1,0 +1,509 @@
+                 USER GUIDE:
+    N A C H A F I L E F O R M AT
+S P E C I F I C AT I O N S G U I D E
+User Guide:
+NACHA File Format
+Specifications Guide
+Refer to the National Automated Clearing House Association (NACHA) Operating Rules for information concerning the rules
+and guidelines governing ACH. All ACH NACHA files must conform to the standard format developed by NACHA.
+
+
+General Specifications for NACHA Files at Banc of California
+• ACH Company ID: 10-digit ACH Company ID assigned by Bank
+• Immediate Destination: 0122238200
+• Immediate Destination Name: Banc of California
+• Immediate Origin: Same as ACH Company ID assigned by Bank
+• Immediate Origin Name: Name(s) for the ACH Company ID(s)
+• Blocking Factor: 10
+
+   ˚ The 10 indicates that every 10 rows/records in the file are considered a block.
+   ˚ If the number of rows/records within the file is not a multiple of 10, the block will need to be completed with filler rows
+     made up of all 9s. Complete blocks are required.
+• Batch Number and Trace Number: The first 8 digits of the Bank’s ABA# – 12223820 – will comprise the first 8 digits of
+  the 15 digits of the Batch and Trace Numbers.
+
+
+Additional File Requirement Information
+• All rows/records in the file must be 94 positions in length.
+• File should be a text file (.csv, .xls or .doc files not allowed).
+
+   ˚ Text Encoding Setting: ANSI (UTF-8 not allowed).
+• File must contain Carriage Returns and Line Feeds – this field may be labeled as CR/LR in your system.
+• Batch numbers must be sequential and ascending Fields within each record type are alphabetic, numeric or
+  alpha-numeric (both alphabetic and numeric).
+NOTE: Special characters or symbols should NOT be used in any field but the addenda.
+• All alphabetic fields must be left justified and blank filled.
+• All alphabetic characters must be in UPPERCASE or “ALLCAPS”.
+• All numeric fields must be right justified and zero prefilled and cannot include any symbols or special characters.
+
+
+                                                                                                                                   2
+Understanding the Record Formats on the Following Pages
+All records will indicate if the field is Mandatory (M), Required (R) or Optional (O).
+Mandatory: A mandatory field (M) is necessary to ensure the proper origination of an entry. Any “Mandatory” field not
+included in an ACH record will cause that entry, batch or file to be rejected by the Bank.
+Required: A required field (R) will not cause the entry to reject at the point of origination, but may cause a reject at the
+Receiving Depository Financial Institution.
+Optional: Any field labeled Optional (O) is to be used at the discretion of the Originator. If not using an optional field,
+populate the field with blanks so that each record/row length is the required 94 positions.
+
+
+File Header Record for PPD, CCD and CTX Format Files
+Field#              1      2         3         4          5        6         7       8       9       10        11       12        13
+                  Record                                 File      File                                   Immediate Immediate
+                         Priority Immediate Immediate                      File ID Record Blocking Format                     Reference
+Field Name         Type                                 Create   Create                                   Destination Origin
+                          Code Destination    Origin                      Modifier Size    Factor Code                          Code
+                   Code                                  Date     Time                                      Name      Name
+Field Inclusion
+                    M      R         M         M          M        M         M       M       M       M         M        M         M
+Requirement
+                                            Company ID Format    Format                                                         Alpha-
+                                                                           Alpha-                            BANC OF Company
+Contents            1      01     122238200 provided by   as       as               094      10       1                        numeric
+                                                                          numeric                           CALIFORNIA Name
+                                               Bank     YYMMDD   HHMM                                                          or Blank
+Field Length        1      2         10        10         6        4         1       3       2        1        23       23        8
+
+Position          01-01   02-03     04-13     14-23     24-29    30-33     34-34    35-37   38-39   40-40     41-63    64-86    87-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                       RECORD SIZE
+Populate this field in the File Header with 1                          Indicates the number of characters contained in each
+PRIORITY CODE                                                          record/row. The value 094 must be used.
+Populate this field with 01                                            BLOCKING FACTOR
+IMMEDIATE DESTINATION                                                  Defines the number of physical records/rows within a file.
+Populate this field with a leading blank space followed by             The value 10 must be used.
+122238200                                                              FORMAT CODE
+IMMEDIATE ORIGIN                                                       Populate this field with 1
+Populate this field with the 10-digit ACH Company ID provided          IMMEDIATE DESTINATION NAME
+by the Bank.                                                           Populate this field with Banc of California
+(If multi-company entity, use ACH Company ID for the main              IMMEDIATE ORIGIN NAME
+or relationship company.)                                              Identifies the originator of the file. Populate this field with
+FILE CREATION DATE                                                     the Company Name for the corresponding ACH Company
+Date when the originator created the file. Format                      ID provided by the Bank.
+as YYMMDD.                                                             (If multi-company entity, use main or relationship Company
+FILE CREATION TIME                                                     Name.)
+Time when the originator created the file. Format as HHMM.             REFERENCE CODE
+FILE ID MODIFIER                                                       If not being used, populate the 8 positions with blank spaces.
+Populate this field with A
+Provides means for an originator to distinguish between
+files created on the same date. Format: Uppercase A-Z or
+the numbers 0-9. This field cannot be left blank.
+
+
+                                                                                                                                         3
+Company/Batch Header Record for PPD, CCD and CTX Format Files
+Field#           1        2       3         4          5         6         7          8         9        10        11        12        13
+                                                              Standard
+               Record Service          Company                          Company Company Effective               Originator
+                              Company               Company     Entry                                Settlement            Originating Batch
+Field Name      Type Class            Discretionary                       Entry    Descriptive Entry             Status
+                               Name                   ID        Class                                   Date                 DFI ID   Number
+                Code Code                 Data                         Description   Date      Date               Code
+                                                                Code
+Field                                                                                                 Inserted
+Inclusion        M       M        M         O          M         M         M          O         R      by ACH      M         M         M
+Requirement                                                                                           Operator
+                                  ACH                 ACH                                     Format
+                       Numeric             Alpha-            Alpha-      Alpha-     Alpha-                        Alpha-
+Contents         5              Company             Company                                     as   Numeric             12223820 Numeric
+                        3-digit           numeric           numeric     numeric    numeric                       numeric
+                                 Name                  ID                                    YYMMDD
+Field Length     1        3      16         20        10         3         10         6         6        3          1         8        7
+Position       01-01   02-04    05-20      21-40     41-50     51-53     54-63      64-69     70-75    76-78      79-79     80-87    88-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                        COMPANY ENTRY DESCRIPTION
+Populate this field in the File Header with 5                           Provides a description of the transaction for the receiver
+                                                                        (e.g., PAYROLL or DIVIDEND). In accordance with Regulation
+SERVICE CLASS CODE
+                                                                        E, most receiving banks will display this field on their bank
+Defines the type of entries contained in the batch. Choose
+                                                                        statement.
+one option:
+200 for a batch of Debits and Credits                                   COMPANY DESCRIPTIVE DATE
+220 for a batch of Credits Only                                         Provides a descriptive date for the receiver. If not used,
+225 for a batch of Debits Only                                          populate this field with blanks.
+COMPANY NAME                                                            Note: This field is solely for descriptive purposes and will
+The ACH COMPANY NAME as provided by the Bank.                           not be used to calculate settlement or used for posting pur-
+Identifies the company that has the relationship with the               poses. Many receiving banks will display this field on their
+receivers of the ACH transactions. In accordance with Reg E,            customer’s activity/statement.
+most receiving financial institutions will display this field on        EFFECTIVE ENTRY DATE
+their customer’s activity/statement.                                    Date on which the originator intends the batch of entries to
+COMPANY DISCRETIONARY                                                   be settled (posted to the receivers’ account(s)).
+Reference information for use by the originator. (Is viewable           SETTLEMENT DATE
+by receiver.)                                                           MUST BE LEFT BLANK. The 3-digit date will be inserted by
+COMPANY ID                                                              the ACH Operator.
+The 10-digit ACH Company ID provided by the Bank for the                ORIGINATOR STATUS CODE
+Company Name in Field 3.                                                Populate this field with 1
+STANDARD ENTRY CLASS CODE (or SEC CODE)                                 ORIGINATING DFI ID NUMBER
+Defines the type of ACH entries contained in the batch.                 Populate this field with 12223820
+Per the NACHA Rules, select the correct SEC Code option:
+   • PPD – used for transactions destined to an                         BATCH NUMBER
+		individual/person.                                                    Used by the originator to assign a trace number, in ascending
+   • CCD – used for transactions destined to a corporate/               order/sequence, to each batch in the file (e.g., 0000001).
+		 business entity.
+   • CTX – Consult your NACHA Operating Rules for
+		 addenda format structure.
+
+
+
+
+                                                                                                                                             4
+Entry Detail Record for Only PPD and CCD Format Files
+Field#               1          2             3            4           5         6           7           8            9          10          11
+                                                                                                       Individual
+                  Record Transaction Receiving                       DFI                  Individual                          Addenda
+                                                         Check                                          Name or Discretionary              Trace
+Field Name         Type     Type         DFI                       Account    Amount    Identification                         Record
+                                                          Digit                                        Company      Data                  Number
+                   Code     Code     Identification                Number                  Number                             Indicator
+                                                                                                         Name
+Field
+Inclusion           M           M             M            M           R         M           O           R           O           M           M
+Requirement
+                                                                                                                                           Numeric
+                                                                    Alpha-   $$$$$$$$      Alpha-      Alpha-      LEAVE
+Contents            6         Numeric    TTTTAAAA       Numeric                                                               Numeric     12223820
+                                                                   numeric      CC        numeric     numeric      BLANK
+                                                                                                                                          #######
+Field Length         1          2             8            1          17        10           15          22           2           1          15
+Position           01-01       02-03        04-11        12-12       13-29     30-39       40-54       55-76        77-78       79-79      80-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                             INDIVIDUAL ID NUMBER
+Populate this field in the Entry Detail Record with 6                        Identifying number by which the receiver is known to the
+                                                                             originator (i.e., vendor number).
+TRANSACTION TYPE CODE
+Identifies the type of entry (live dollar transaction or prenote             NUMBER OF ADDENDA RECORDS
+transaction).                                                                Total number of addenda records/rows following the detail
+                                                                             record/row. (If none, use 0000.)
+Live Dollar Transactions            Prenote Transactions
+Code       Transaction Type         Code    Transaction Type                 RECEIVING COMPANY NAME or COMPANY ID NUMBER
+22 Credit to Checking Account       23 Credit Prenote to Checking Account    The name identifying the receiver of the transaction.
+27 Debit to Checking Account        28 Debit Prenote to Checking Account     Format: The name should match the account name at the
+32 Credit to Savings Account        33 Credit Prenote to Savings Account     receiver’s bank.
+37 Debit to Savings Account         38 Debit Prenote to Savings Account
+                                                                             RESERVED and DISCRETIONARY DATA FIELDS
+RECEIVING DFI IDENTIFICATION                                                 Both fields must be left BLANK.
+The first 8 digits of the receiver’s bank ABA transit
+routing number at the bank where the receiver’s account                      ADDENDA RECORD INDICATOR
+is maintained.                                                               Enter 0 in this field to indicate no addenda record will follow
+                                                                             the detail record.
+CHECK DIGIT
+                                                                             Enter 1 to indicate an addenda or “7 record” will immediately
+The last digit of receiver’s bank transit routing number.
+                                                                             follow the detail record.
+DFI ACCOUNT NUMBER
+                                                                             TRACE NUMBER
+Receiver’s bank account number.
+                                                                             A means for the originator to identify the individual entries.
+Format: If the account number exceeds 17 positions, only
+                                                                             Format: The first 8 positions of the field should be 12223820.
+use the leftmost 17 digits. Omit any spaces or special
+characters/symbols within the account number. This field                     The remainder of the field must be a unique number and
+must be left justified.                                                      does not have to be in strict numerical order but must be in
+                                                                             ascending order. Trace numbers may be duplicated across
+AMOUNT                                                                       different files.
+The amount of the transaction. For prenote codes, the
+amount must be zero.
+
+
+
+
+                                                                                                                                                   5
+Optional Addenda Record for Only PPD and CCD Format Files
+Addenda Record: This record provides business transaction information in a machine-readable format. It is usually
+formatted according to American National Standards Institute (ANSI), Accredited Standards Committee (ASC), X12 Standard
+or NACHA-endorsed banking conventions.
+
+Field#                        1                   2                   3                     4                          5
+
+                      Record Type           Addenda Type        Payment-Related      Addenda Sequence       Entry Detail Sequence
+Field Name
+                         Code                  Code               Information            Number                    Number
+
+Field Inclusion
+                              M                   M                   O                     M                          M
+Requirement
+
+                            7                     05
+Contents                                                         Alpha-numeric            Numeric                    Numeric
+                   (For CCD+ and PPD+)    (For CCD+ and PPD+)
+
+Field Length                  1                   2                   80                    4                           7
+
+Position                  01-01                 02-03               04-83                  84-87                      88-94
+
+
+
+Field Name Description and Content Information
+For CCD+ and PPD+ Type Addenda: RECORD TYPE CODE                ENTRY DETAIL SEQUENCE NUMBER
+Populate this field in the Addenda Record with 7                This number is the same as the last 7 digits of the trace
+                                                                number from the preceding entry detail record.
+ADDENDA TYPE CODE
+Populate this field with 05                                     For TXP Type Addenda:
+                                                                Consult your NACHA Operating Rules and the specific tax
+PAYMENT-RELATED INFORMATION                                     authority for addenda format layout information.
+Free-form field which may contain alpha-numeric
+                                                                Payment Federal (EFTPS), Employer’s Tax – 941
+information/text that further identifies the purpose of the
+transaction. This field may contain invoice information or      Example Layout:
+reference numbers to help the receiver apply the                TXP*123456789*94105*160101*1*10000*2*5000*3*15000\
+transaction in their accounting system.                           Tax Identification Number        123456789
+ADDENDA SEQUENCE NUMBER                                           Tax Payment Type Code            09405 (940 = 09405, 		
+A number consecutively assigned to each addenda record                                             09407, 09404)
+following a sequence number entry detail record. For CCD+
+or PPD+ this number will always be 0001.                          (Tax Period End) Date            January 1, 2016
+                                                                                                   (1601 = 160101)
+                                                                  Tax Amount                       $300.00
+                                                                                                   (Amount Type = TXP02: 09405)
+
+
+
+
+                                                                                                                                    6
+Entry Detail Record for Only CTX Format Files
+Field#            1         2             3           4        5        6         7         8         9        10          11        12       13
+
+                                                                                           Number Receiving
+                Record               Receiving                 DFI            Individual                                           Addenda
+                       Transaction                  Check             Total                   of   Company           Discretionary            Trace
+Field Name       Type                  DFI                   Account        Identification                  Reserved                Record
+                       Type Code                     Digit           Amount                Addenda Name or               Data                Number
+                 Code              Identification            Number            Number                                              Indicator
+                                                                                           Records Company
+
+Field
+Inclusion         M         M            M            M        R       M          O         M         R        N/A         O         M        M
+Requirement
+
+                                                              Alpha- $$$$$$     Alpha-              Alpha-   LEAVE      LEAVE
+Contents          6      Numeric     TTTTAAAA Numeric                                    Numeric                                  Numeric Numeric
+                                                             numeric $$CC      numeric             numeric   BLANK      BLANK
+
+Field Length       1        2             8           1        17      10        15         4         16        2          2          1       15
+Position        01-01     02-03         04-11       12-12     13-29   30-39     40-46     55-58     59-74     75-76      77-78      79-79   80-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                               INDIVIDUAL ID NUMBER
+Populate this field in the Entry Detail Record with 6                          Identifying number by which the receiver is known to the
+                                                                               originator (i.e., vendor number).
+TRANSACTION TYPE CODE
+Identifies the type of entry (live dollar transaction or prenote               NUMBER OF ADDENDA RECORDS
+transaction)                                                                   Total number of addenda records/rows following the detail
+                                                                               record/row. (If none, use 0000.)
+Live Dollar Transactions            Prenote Transactions
+Code       Transaction Type         Code      Transaction Type                 RECEIVING COMPANY NAME or COMPANY ID NUMBER
+22 Credit to Checking Account       23 Credit Prenote to Checking Account      The name identifying the receiver of the transaction.
+27 Debit to Checking Account        28 Debit Prenote to Checking Account       Format: The name should match the account name at the
+32 Credit to Savings Account        33 Credit Prenote to Savings Account       receiver’s bank.
+37 Debit to Savings Account         38 Debit Prenote to Savings Account
+                                                                               RESERVED and DISCRETIONARY DATA FIELDS
+RECEIVING DFI IDENTIFICATION                                                   Both fields must be left BLANK.
+The first 8 digits of the receiver’s bank ABA transit
+routing number at the bank where the receiver’s account                        ADDENDA RECORD INDICATOR
+is maintained.                                                                 Enter 0 in this field to indicate no addenda record will follow
+                                                                               the detail record.
+CHECK DIGIT
+                                                                               Enter 1 to indicate an addenda or “7 record” will immediately
+The last digit of receiver’s bank transit routing number.
+                                                                               follow the detail record.
+DFI ACCOUNT NUMBER
+                                                                               TRACE NUMBER
+Receiver’s bank account number.
+                                                                               A means for the originator to identify the individual entries.
+Format: If the account number exceeds 17 positions, only
+                                                                               Format: The first 8 positions of the field should be 12223820.
+use the leftmost 17 digits. Omit any spaces or special
+                                                                               The remainder of the field must be a unique number and
+characters/symbols within the account number. This field
+                                                                               does not have to be in strict numerical order but must be in
+must be left justified.
+                                                                               ascending order. Trace numbers may be duplicated across
+AMOUNT                                                                         different files.
+The amount of the transaction. For prenote codes, the
+amount must be zero.
+
+
+
+
+                                                                                                                                                   7
+Optional – Addenda Record for CTX Format Files
+Addenda Record: The CTX format is typically used to pay single or multiple invoices that are listed in the addenda records.
+Remittance information within the CTX addenda records (Field #3 – payment-related information) must be formatted as
+either syntactically correct ANSI ASC x12 transaction set or as a payment-related UN/EDIFACT transaction.
+
+Field#                      1                     2                     3                   4                     5
+
+                      Record Type           Addenda Type        Payment-Related      Addenda Sequence         Entry Detail
+Field Name
+                         Code                  Code               Information            Number            Sequence Number
+
+Field Inclusion
+                           M                      M                     O                   M                     M
+Requirement
+
+                                                                  Alpha-numeric
+Contents                   7                     05              and applicable          Numeric                Numeric
+                                                                special characters
+
+Field Length                1                     2                    80                   4                      7
+
+Position                  01-01                 02-03                 04-83               84-87                  88-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                ADDENDA SEQUENCE NUMBER
+Populate this field in the File Header with 7                   A number consecutively assigned to each addenda record
+                                                                following a sequence number entry detail record. For CTX
+ADDENDA TYPE CODE
+                                                                this number will always be 0001.
+Populate this field with 05 for CTX formatted files. Or with:
+98 – Used for Notification of Change entries. The addenda       ENTRY DETAIL SEQUENCE NUMBER
+record will contain the correct information.                    This number is the same as the last 7 digits of the trace
+                                                                number from the preceding entry detail record.
+99 – Used for Return Entries.
+PAYMENT-RELATED INFORMATION
+This field contains additional information associated with
+the payment. The information can be in either ANSI or UN/
+EDIFACT format.
+
+
+
+
+                                                                                                                             8
+Company/Batch Record for PPD, CCD and CTX Format Files
+Field#             1         2          3          4          5            6            7              8           9           10          11
+
+                Record    Service    Entry                Total Debit Total Credit                   Message                Originating
+                                                 Entry                                Company                                              Batch
+Field Name       Type      Class    Addenda               Entry Dollar Entry Dollar                Authentication Reserved      DFI
+                                                 Hash                               Identification                                        Number
+                 Code      Code      Count                 Amount       Amount                         Code                Identification
+
+Field
+Inclusion         M          M          M          M          M            M            M             O           N/A          M           M
+Requirement
+
+                                                          $$$$$$$$     $$$$$$$$       ACH           LEAVE        LEAVE
+Contents           8      Numeric    Numeric   Numeric                                                                     12223820     Numeric
+                                                             CC           CC       Company ID       BLANK        BLANK
+
+Field Length       1         3          6         10          12           12           10            19           6           8           7
+
+Position         01-01     02-04      05-10      11-20       21-32       33-44        45-54          55-73       74-79       80-87       88-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                         TOTAL DEBIT ENTRY DOLLAR AMOUNT
+Populate this field in the File Header with 8                            Sum total of all debit amounts within the Batch’s Entry Detail
+                                                                         Records.
+SERVICE CLASS CODE
+Defines the type of entries contained in the batch. Must                 TOTAL CREDIT ENTRY DOLLAR AMOUNT
+match the Service Class Code used in the Company/Batch                   Sum total of all credit amounts within the Batch’s Entry
+Header Record.                                                           Detail Records.
+200 for a batch of Debits and Credits
+                                                                         COMPANY ID
+220 for a batch of Credits Only
+                                                                         Populate this field with the 10-digit ACH Company ID provid-
+225 for a batch of Debits Only
+                                                                         ed by the Bank and used for the batch. (Same as Field 5, in
+ENTRY/ADDENDA COUNT                                                      the corresponding batch header.)
+The number of Entry Detail “6” Records and Addenda “7”
+                                                                         MESSAGE AUTHENTICATION CODE
+Records within the Batch.
+                                                                         Field must be left BLANK.
+ENTRY HASH
+                                                                         RESERVED
+Sum total of all of the Receiving DFI Identification fields from
+                                                                         Field must be left blank.
+the Batch’s Entry Detail “6” Records. The Entry Hash provides
+verification against the alteration of data contents due to              ORIGINATING DFI ID NUMBER
+software failure or human error.                                         Populate this field with 12223820
+Format: Use the rightmost 10 digits if total exceeds the                 BATCH NUMBER
+required 10-digit field length. Prefill with 0s if the total is          Used by the originator to assign a trace number, in ascending
+shorter than the required 10-digit field length.                         order/sequence, to each batch in the file (e.g., 0000001).
+Note: The Receiving DFI Identification Field is populated
+with the first 8 digits of the receiver’s bank ABA transit routing
+number at the bank where the receiver’s account
+is maintained.
+
+
+
+
+                                                                                                                                                 9
+File Control Record for PPD, CCD and CTX Format Files
+Field#                  1             2              3              4                  5              6                  7                 8
+
+                                                                                               Total Debit Entry Total Credit Entry
+                   Record Type                                    Entry/
+Field Name                       Batch Count    Block Count                       Entry Hash    Dollar Amount     Dollar Amount        Reserved
+                      Code                                    Addenda Count
+                                                                                                     in File           in File
+
+Field
+Inclusion              M              M             M               M                 M               M                  M                N/A
+Requirement
+
+Contents                9          Numeric       Numeric          Numeric          Numeric       $$$$$$$$CC       $$$$$$$$CC          Blank Spaces
+
+
+Field Length            1             6              6              8                 10              12                 12               39
+
+Position              01-01         02-07          08-13           14-21             22-31          32-43              44-55             56-94
+
+
+
+Field Name Description and Content Information
+RECORD TYPE CODE                                                           TOTAL DEBIT ENTRY DOLLAR AMOUNT
+Populate this field in the Entry Detail Record with 9                      Sum total of all debit amounts within the Entry Detail Records
+                                                                           within the File. (Note: If file contains only one batch, this total
+BATCH COUNT
+                                                                           will match the Total Debit Entry Dollar Amount Field in the
+Total number of batches in the file.
+                                                                           Company / Batch Control “8” Record.)
+BLOCK COUNT
+                                                                           TOTAL CREDIT ENTRY DOLLAR AMOUNT
+Every 10 records/rows are a “block”.
+                                                                           Sum total of all credit amounts within the Entry Detail Records
+The total number of records/rows in your file must be evenly               within the File. (Note: If file contains only one batch, this
+divisible by 10. If the number of records/rows within the file is          total will match the Total Credit Entry Dollar Amount Field in
+not a multiple of 10, the remainder of the block must be                   the Company / Batch Control “8” Record.)
+completed with filler rows of all 9s.
+                                                                           RESERVED
+(The filler row(s) will contain 94 9s.)
+                                                                           Field must be filled with blank spaces.
+ENTRY / ADDENDA COUNT                                                      Note: Populate the field with blank spaces so that the
+The number of Entry Detail “6” Records and Addenda “7”                     record / row length is the required 94 positions.
+Records within the File. (Note: If file contains only one batch,
+this total will match the Entry / Addenda Count Field in the
+Company / Batch Control “8” Record.)
+ENTRY HASH
+Sum total of all of the Receiving DFI Identification fields from
+the Entry Detail “6” Records in the File. The Entry Hash
+provides verification against the alteration of data contents
+due to software failure or human error.
+(Note: If file contains only one batch, this total will match
+the Entry Hash Field in the Company / Batch Control “8”
+Record.)
+Format: Use the rightmost 10 digits if total exceeds the
+required 10-digit field length. Prefill with 0s if the total is
+shorter than the required 10-digit field length.
+
+
+
+
+                                                                                                                                                  10
+
