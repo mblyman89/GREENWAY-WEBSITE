@@ -13,7 +13,7 @@ import {
 } from "@/lib/inventory/cutover-guard-core";
 import { rebuildCutoverDeliveryAction, sendCutoverTestAlertAction } from "../actions";
 import { readRecentWatchAlerts, readWatchChannels } from "@/lib/pos/cutover-watch";
-import { WATCH_TEXT_NOTE, channelSummary, describeWatchLog } from "@/lib/pos/cutover-watch-core";
+import { WATCH_TEXT_NOTE, channelSummary } from "@/lib/pos/cutover-watch-core";
 import { formatDateTime } from "@/lib/pos/format";
 
 /**
@@ -44,7 +44,6 @@ export default async function CutoverRunbookPage({
   // R50 A4: the failure-alert channels and the alerts already sent.
   const [channels, recent] = await Promise.all([readWatchChannels(), readRecentWatchAlerts(20)]);
   const chan = channelSummary(channels);
-  const nowMs = Date.now();
 
   return (
     <div>
@@ -146,7 +145,7 @@ export default async function CutoverRunbookPage({
           ) : (
             <ul className="mt-2 space-y-2" data-testid="cutover-alerts-log">
               {recent.rows.map((r) => {
-                const v = describeWatchLog(r, nowMs, r.sent_at);
+                const v = r.view;
                 const tone = v.tone === "ok" ? "text-[var(--admin-accent)]" : v.tone === "bad" ? "text-red-300" : "text-white/60";
                 return (
                   <li key={r.dedupe_key} className="rounded-lg border border-white/10 px-3 py-2 text-sm">
