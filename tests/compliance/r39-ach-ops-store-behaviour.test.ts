@@ -99,6 +99,22 @@ function seed() {
     { id: true, destination_routing: "325170754", destination_name: "TIMBERLAND BANK", immediate_origin: "1911234567", company_name: "GREENWAY MARIJUANA", company_id: "1911234567", originating_dfi: "32517075", entry_description: "PAYROLL", company_account_number: "", company_account_type: "checking" },
   ]);
   st.db.tables.set("company_profile", [{ id: true, ein: "911234567" }]);
+  // R41 S3: the released-file ledger (0273) with its unique rules.
+  st.db.tables.set("ach_files", []);
+  st.db.defaults.set("ach_files", () => ({ status: "released", released_at: NOW.toISOString(), voided_by: null, voided_at: null, voided_reason: null }));
+  const live = (r: Record<string, unknown>) => r.status !== "voided";
+  st.db.uniques.push(
+    { table: "ach_files", columns: ["file_date", "file_id_modifier"], name: "ach_files_day_modifier_key" },
+    { table: "ach_files", columns: ["sha256"], where: live, name: "ach_files_sha_live" },
+    { table: "ach_files", columns: ["entry_set_hmac", "effective_date"], where: live, name: "ach_files_no_duplicate_entries" },
+    { table: "ach_files", columns: ["kind", "source_id"], where: live, name: "ach_files_one_live_per_source" },
+  );
+}
+/** R41 S3: release the prenote list the page shows (owner), as the operations page does. */
+async function releasePrenote(fp: string) {
+  const r = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: fp, actorId: STEPHEN, todayIso: TODAY, now: NOW });
+  if (!r.ok) throw new Error(r.error);
+  return r;
 }
 
 function everythingWritten(): string {
@@ -379,7 +395,7 @@ describe("startCheck / finishCheck", () => {
 // =========================================================================
 describe("check file: build (GET, records nothing) and confirm sent", () => {
   it("builds a prenote file from the decrypted accounts; nothing is recorded", async () => {
-    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(st.rpc).toHaveLength(0);
@@ -387,6 +403,8 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     expect(r.plan.filename).toBe("acctcheck_prenote_2026-10-06_1.ach");
     expect(r.plan.totalCents).toBe(0);
     const lines = r.plan.file.split(/\r?\n/).filter(Boolean);
+    expect(lines[0].charAt(33)).toBe("A"); // R41 S3: the modifier given, never a fixed P/M
+    expect(st.db.rows("ach_files")).toHaveLength(0);
     const entries = lines.filter((l) => l.startsWith("6"));
     expect(entries).toHaveLength(1);
     expect(entries[0].slice(1, 3)).toBe("23"); // checking prenote credit
@@ -399,24 +417,24 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
 
   it("a check whose authorization went on hold is left out and named, not built", async () => {
     st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC2, method: "prenote", status: "planned", micro_amount_cents: null });
-    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r.ok && r.plan.ids).toEqual([VER1]);
     expect(r.ok && r.skipped).toEqual(["Sam Helper: the authorization is on hold (release the hold or cancel the check)"]);
     st.db.tables.get("ach_verifications")!.splice(0, 1);
-    const only = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const only = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(only.ok === false && only.error).toMatch(/No prenotes are waiting.*Left out: Sam Helper/);
   });
 
   it("an archived account is left out and named", async () => {
     st.db.tables.get("ach_authorization_accounts")!.find((a) => a.id === ACC1)!.archived_at = "2026-10-04T00:00:00Z";
-    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r.ok === false && r.error).toMatch(/Left out: Pat Worker: the account was archived/);
   });
 
   it("company settings incomplete: refused with the missing fields named", async () => {
     st.db.tables.get("ach_company_settings")![0].company_id = "";
     st.db.tables.get("ach_company_settings")![0].originating_dfi = " ";
-    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     // R41 S2: refused through the one readiness check, each problem named.
     expect(r.ok).toBe(false);
     const e = r.ok === false ? r.error : "";
@@ -427,18 +445,19 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
 
   it("without the key the accounts cannot be read: refused", async () => {
     delete process.env.DATA_ENCRYPTION_KEY;
-    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r).toEqual({ ok: false, error: store.OPS_NO_KEY });
   });
 
   it("a weekend effective date is refused by the core", async () => {
-    const r = await store.buildCheckFile({ method: "prenote", effective: "2026-10-10", todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: "2026-10-10", todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r.ok).toBe(false);
   });
 
   it("confirm sent: one mark_sent with exactly the file's ids and dates", async () => {
-    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     if (!b.ok) throw new Error(b.error);
+    await releasePrenote(b.fingerprint);
     reply({ ach_verification_mark_sent: 1 });
     const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: b.fingerprint, actorId: MICHAEL, todayIso: TODAY, now: NOW });
     expect(r.ok && r.count).toBe(1);
@@ -450,17 +469,18 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
 
   it("a check already sent is never put in a file again (only planned ones are read)", async () => {
     st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC1, method: "prenote", status: "sent", micro_amount_cents: null });
-    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r.ok && r.plan.ids).toEqual([VER1]);
   });
 
   it("confirm sent with two checks: both ids reach mark_sent, sorted, and the count must match", async () => {
     st.db.tables.get("ach_authorizations")!.find((a) => a.id === AUTH2)!.state = "verifying";
     st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC2, method: "prenote", status: "planned", micro_amount_cents: null });
-    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     if (!b.ok) throw new Error(b.error);
     expect(b.plan.ids).toEqual([VER1, VER2]);
     expect(b.plan.filename).toBe("acctcheck_prenote_2026-10-06_2.ach");
+    await releasePrenote(b.fingerprint);
     reply({ ach_verification_mark_sent: 2 });
     const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: b.fingerprint, actorId: MICHAEL, todayIso: TODAY, now: NOW });
     expect(r.ok && r.count).toBe(2);
@@ -468,8 +488,9 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
   });
 
   it("the list changed after download (a new check planned): refused, nothing marked", async () => {
-    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     if (!b.ok) throw new Error(b.error);
+    await releasePrenote(b.fingerprint);
     st.db.tables.get("ach_authorizations")!.find((a) => a.id === AUTH2)!.state = "verifying";
     st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC2, method: "prenote", status: "planned", micro_amount_cents: null });
     const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: b.fingerprint, actorId: MICHAEL, todayIso: TODAY, now: NOW });
@@ -480,6 +501,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
   it("no fingerprint = not downloaded: refused; a count mismatch from the database is not success", async () => {
     expect((await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: "", actorId: MICHAEL, todayIso: TODAY, now: NOW })).ok).toBe(false);
     expect(st.rpc).toHaveLength(0);
+    await releasePrenote(store.checkListFingerprint([VER1]));
     reply({ ach_verification_mark_sent: 0 });
     const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1]), actorId: MICHAEL, todayIso: TODAY, now: NOW });
     expect(r.ok === false && r.error).toMatch(/different number of checks/);
@@ -487,7 +509,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
 
   it("a test-credit file carries each planned amount and the ACCTVERIFY description", async () => {
     st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC1, method: "micro_entry", status: "planned", micro_amount_cents: 42 });
-    const r = await store.buildCheckFile({ method: "micro_entry", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    const r = await store.buildCheckFile({ method: "micro_entry", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.plan.ids).toEqual([VER2]);
@@ -496,6 +518,62 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     const e = r.plan.file.split(/\r?\n/).find((l) => l.startsWith("6"))!;
     expect(e.slice(1, 3)).toBe("22");
     expect(Number(e.slice(29, 39))).toBe(42);
+  });
+
+  it("R41 S3: confirm sent before the file was released is refused; nothing is marked", async () => {
+    reply({ ach_verification_mark_sent: 1 });
+    const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1]), actorId: MICHAEL, todayIso: TODAY, now: NOW });
+    expect(r.ok === false && r.error).toMatch(/has not been released yet/);
+    expect(st.rpc).toHaveLength(0);
+  });
+
+  it("R41 S3: a release writes ONE encrypted ach_files row (no plain account number), the day's letter, the list's source id", async () => {
+    const fp = store.checkListFingerprint([VER1]);
+    const r = await releasePrenote(fp);
+    const rows = st.db.rows("ach_files");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: "prenote", source_id: store.checkFileSourceId("prenote", EFFECTIVE, fp), file_date: "2026-10-05", file_id_modifier: "A", filename: "acctcheck_prenote_2026-10-06_1.ach", entry_count: 1, total_cents: 0, counts_toward_limit: false, released_by: STEPHEN });
+    expect(String(rows[0].body_enc)).toMatch(/^encv1:/);
+    expect(decryptSecret(String(rows[0].body_enc))).toBe(r.plan.file);
+    expect(r.plan.file).toContain("\r\n");
+    expect(everythingWritten()).not.toContain(A1);
+    expect(st.rpc).toHaveLength(0);
+  });
+
+  it("R41 S3: confirm sent sends the RELEASED file's name, and the released letter is the one rebuilt", async () => {
+    st.db.rows("ach_files").push({ id: "x", kind: "vendor", source_id: "other", file_date: "2026-10-05", file_id_modifier: "A", status: "released" });
+    const fp = store.checkListFingerprint([VER1]);
+    const r = await releasePrenote(fp);
+    expect(r.modifier).toBe("B");
+    expect(r.plan.file.split("\r\n")[0].charAt(33)).toBe("B");
+    reply({ ach_verification_mark_sent: 1 });
+    const m = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: fp, actorId: MICHAEL, todayIso: TODAY, now: NOW });
+    expect(m.ok && m.plan.filename).toBe("acctcheck_prenote_2026-10-06_1.ach");
+    // The confirm-time rebuild carries the released letter (the header clock is the confirm time; the bytes uploaded are the stored ones).
+    expect(m.ok && m.plan.file.split(/\r?\n/)[0].charAt(33)).toBe("B");
+    expect(m.ok && m.plan.ids).toEqual([VER1]);
+  });
+
+  it("R41 S3: the same list released twice is refused; a voided release is not live and cannot be confirmed", async () => {
+    const fp = store.checkListFingerprint([VER1]);
+    await releasePrenote(fp);
+    const again = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: fp, actorId: STEPHEN, todayIso: TODAY, now: NOW });
+    expect(again.ok).toBe(false);
+    expect(st.db.rows("ach_files")).toHaveLength(1);
+    st.db.rows("ach_files")[0].status = "voided";
+    reply({ ach_verification_mark_sent: 1 });
+    const m = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: fp, actorId: MICHAEL, todayIso: TODAY, now: NOW });
+    expect(m.ok === false && m.error).toMatch(/voided/);
+    expect(st.rpc).toHaveLength(0);
+  });
+
+  it("R41 S3: release refuses a stale or malformed fingerprint and a missing key; nothing is written", async () => {
+    const bad = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1, VER2]), actorId: STEPHEN, todayIso: TODAY, now: NOW });
+    expect(bad.ok === false && bad.error).toMatch(/changed since this page loaded/);
+    expect((await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: "nope", actorId: STEPHEN, todayIso: TODAY, now: NOW })).ok).toBe(false);
+    delete process.env.DATA_ENCRYPTION_KEY;
+    expect((await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1]), actorId: STEPHEN, todayIso: TODAY, now: NOW })).ok).toBe(false);
+    expect(st.db.rows("ach_files")).toHaveLength(0);
   });
 
   it("fingerprint ignores order and changes with membership", () => {

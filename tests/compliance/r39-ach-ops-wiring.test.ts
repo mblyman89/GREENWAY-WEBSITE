@@ -40,6 +40,7 @@ const KIND: Record<string, string> = {
   releaseEmployeeHoldAction: "employee_hold.release",
   startCheckAction: "ach_check.start",
   markCheckFileSentAction: "ach_check.mark_sent",
+  releaseCheckFileAction: "ach_check.release_file",
   finishCheckAction: "ach_check.finish",
   setLegalHoldAction: "legal_hold.set",
   reviewDoneAction: "annual_review.done",
@@ -50,6 +51,7 @@ const NAMES = [
   "releaseEmployeeHoldAction",
   "startCheckAction",
   "markCheckFileSentAction",
+  "releaseCheckFileAction",
   "finishCheckAction",
   "setLegalHoldAction",
   "reviewDoneAction",
@@ -85,6 +87,7 @@ describe("ops actions: owner/admin only, audited, words back", () => {
       releaseEmployeeHoldAction: "releaseEmployeeHold(",
       startCheckAction: "startCheck(",
       markCheckFileSentAction: "markCheckFileSent(",
+      releaseCheckFileAction: "releaseCheckFile(",
       finishCheckAction: "finishCheck(",
       setLegalHoldAction: "setLegalHold(",
       reviewDoneAction: "markReviewDone(",
@@ -128,16 +131,15 @@ describe("check-file route: GET records nothing, owner/admin only, never cached"
     const body = ROUTE.slice(ROUTE.indexOf("export async function GET("));
     expect(firstLine(body)).toBe('const session = await requirePermission("settings.manage");');
   });
-  it("builds only (no mark_sent), and requires the page's fingerprint", () => {
-    expect(ROUTE).toContain("buildCheckFile(");
-    expect(ROUTE_CODE).toContain("buildCheckFile(");
-    expect(ROUTE_CODE).not.toMatch(/markCheckFileSent|mark_sent|\.rpc\(/);
+  it("R41 S3: serves the RELEASED stored bytes only: never builds, never marks sent, keyed by the page's fingerprint", () => {
+    expect(ROUTE_CODE).toContain("readLiveFileForSource(method, checkFileSourceId(method, ");
+    expect(ROUTE_CODE).not.toMatch(/buildCheckFile|planCheckFile|releaseCheckFile|releaseAchFile/);
+    expect(ROUTE_CODE).not.toMatch(/markCheckFileSent|mark_sent|\.rpc\(|\.insert\(|\.update\(/);
     expect(ROUTE).toContain("/^[0-9a-f]{16}$/.test(fp)");
-    expect(ROUTE).toContain("expect: fp");
+    expect(ROUTE_CODE).toContain("return new Response(res.body, {");
   });
-  it("CRLF, attachment, no-store, nosniff; refusals are no-store too", () => {
-    expect(ROUTE).toContain('.replace(/\\r?\\n/g, "\\r\\n")');
-    expect(ROUTE).toContain("attachment; filename=");
+  it("attachment with the ledger filename, no-store, nosniff; refusals are no-store too (CRLF is fixed at release, R41 S3)", () => {
+    expect(ROUTE).toContain('attachment; filename="${res.row.filename}"');
     expect([...ROUTE.matchAll(/"Cache-Control": "no-store"/g)].length).toBe(4);
     expect(ROUTE).toContain('"X-Content-Type-Options": "nosniff"');
   });
