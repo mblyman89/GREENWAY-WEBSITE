@@ -208,6 +208,8 @@ export function staleVerdict(baseVersion: string | null, currentVersion: string 
 export function isSecretField(name: string): boolean {
   const n = name.toLowerCase();
   if (n === "routing" || n === "account_number" || n === "accountnumber" || n === "company_account_number") return true;
+  // A notice of change's corrected data (C01 account, C02 routing, C03 both...): ops "corrected" field.
+  if (n === "corrected") return true;
   if (n === "destination_routing" || n === "immediate_origin" || n === "originating_dfi") return false; // bank ids, not secrets
   return /^a[1-3]_(rtn|acct)$/.test(n) || /(^|_)(routing|account_number)$/.test(n);
 }
@@ -241,7 +243,10 @@ export function maskedSummary(entries: FormEntries): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, vals] of Object.entries(entries)) {
     const joined = vals.join(", ");
-    out[k] = isSecretField(k) ? vals.map(maskTail).join(", ") : joined.length > 300 ? `${joined.slice(0, 297)}...` : joined;
+    if (isSecretField(k)) out[k] = vals.map(maskTail).join(", ");
+    // The test amounts a payee reads back (finish an account check): never shown, like the store's audit row.
+    else if (k === "confirmed" && vals.some((v) => !/^(yes|on|)$/i.test(v.trim()))) out[k] = "(hidden: amounts read back by the payee)";
+    else out[k] = joined.length > 300 ? `${joined.slice(0, 297)}...` : joined;
   }
   return out;
 }
@@ -383,5 +388,10 @@ export function __runAchAuthorityCoreTests(): { passed: number; failed: number }
   ok((dailyReminderEmail({ pending: 1, toReview: 2, oldestPacific: null, url: "u" })?.subject ?? "").includes("1 request waiting"), "reminder counts");
   ok(ownerReceiptEmail({ kind: "vendor_bank.save", target: "Acme", outcome: "Saved.", whenPacific: "now", url: "u" }).subject.startsWith("Was this you?"), "receipt subject");
 
+  // R41 S0 review: NOC corrected data and read-back test amounts never shown
+  ok(isSecretField("corrected"), "NOC corrected data is secret");
+  ok(maskedSummary({ corrected: ["5550001234"] }).corrected === "\u2022\u2022\u2022\u20221234", "corrected masked to last 4");
+  ok(!JSON.stringify(maskedSummary({ confirmed: ["0.07,0.12"] })).includes("0.07"), "read-back amounts hidden");
+  ok(maskedSummary({ confirmed: ["yes"] }).confirmed === "yes", "a yes checkbox still shows");
   return { passed, failed };
 }
