@@ -497,6 +497,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ach_change_requests", disposition: "KEEP", because: "Stephen's ACH change requests and Michael's decisions: the dual-control record." },
   { table: "ach_change_request_events", disposition: "KEEP", because: "The append-only trail of every ACH request step (asked, approved, rejected, withdrawn, done)." },
   { table: "ach_owner_reviews", disposition: "KEEP", because: "Stephen's urgent stop actions and when Michael checked each one off." },
+  { table: "ach_files", disposition: "KEEP", because: "Every ACH file released to the bank, its exact encrypted bytes and fingerprint (payment records, kept forever; the database refuses DELETE)." },
   // R39 (0261). The database refuses to delete a signed e-sign session
   // (ACH_ESIGN_KEEP) and the session points at the kept documents with
   // on delete restrict, so a reset that tried to wipe it would fail part-way.

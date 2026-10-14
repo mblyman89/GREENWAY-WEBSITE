@@ -1310,7 +1310,10 @@ describe("D-65 — the connections survive the reset", () => {
     //       ach_owner_reviews (Michael's D-6 option B request/approval trail
     //       and his review list; the database refuses DELETE on all three,
     //       so a WIPE rule would make the reset fail part-way)
-    expect(plan.keep.length).toBe(157);
+    //   +1  R41 S3 / 0273: ach_files (every released ACH file, its encrypted
+    //       bytes and fingerprint; payment records kept forever, and the
+    //       database refuses DELETE, so a WIPE rule would fail part-way)
+    expect(plan.keep.length).toBe(158);
     expect(plan.wipe.length).toBe(139);
   });
 
