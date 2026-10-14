@@ -33,20 +33,40 @@ function fn(src: string, name: string): string {
   return src.slice(i, j === -1 ? undefined : j);
 }
 const firstLine = (body: string) => body.slice(body.indexOf("{") + 1).trim().split("\n")[0];
+/** R41 S0: an exported action's body, or the private *Body it hands to achGate. */
+function impl(src: string, name: string): string {
+  const exported = fn(src, name);
+  if (!firstLine(exported).startsWith("return achGate(")) return exported;
+  const b = name.replace(/Action$/, "Body");
+  const i = src.indexOf(`async function ${b}(`);
+  expect(i, `${b} exists`).toBeGreaterThan(-1);
+  expect(src.slice(Math.max(0, i - 7), i), `${b} is not exported`).not.toBe("export ");
+  const j = src.indexOf("\nexport ", i + 10);
+  return src.slice(i, j === -1 ? undefined : j);
+}
 
-describe("admin vendor e-sign actions: settings.manage (owner Q1: Stephen and Michael)", () => {
+describe("admin vendor e-sign actions: gather on settings.manage, live through achGate (R41 S0, D-6)", () => {
   const NAMES = ["sendVendorEsignLinkAction", "cancelVendorEsignAction", "countersignVendorEsignAction", "rejectVendorEsignAction", "bulkInviteVendorsAction"];
-  it("is a server-actions module and every export requires settings.manage first", () => {
+  it("R41 S0: gather steps (send, cancel, bulk invite) need settings.manage first; live steps (countersign, reject) go through achGate first", () => {
     expect(ADMIN.trimStart().startsWith('"use server";') || ADMIN.includes('\n"use server";')).toBe(true);
-    for (const n of NAMES) expect(firstLine(fn(ADMIN, n)), n).toBe('const session = await requirePermission("settings.manage");');
+    // Plan v4 S0 table: "Send an e-sign link ... cancel a link | gather"; "Countersign or reject a vendor e-sign | live".
+    for (const n of ["sendVendorEsignLinkAction", "cancelVendorEsignAction", "bulkInviteVendorsAction"]) {
+      expect(firstLine(fn(ADMIN, n)), n).toBe('const session = await requirePermission("settings.manage");');
+    }
+    expect(firstLine(fn(ADMIN, "countersignVendorEsignAction"))).toBe(
+      'return achGate("vendor_esign.countersign", fd, { reply: replyFor(fd) }, (session) => countersignVendorEsignBody(session, fd));',
+    );
+    expect(firstLine(fn(ADMIN, "rejectVendorEsignAction"))).toBe(
+      'return achGate("vendor_esign.reject", fd, { reply: replyFor(fd) }, (session) => rejectVendorEsignBody(session, fd));',
+    );
     expect([...ADMIN.matchAll(/export async function /g)].length).toBe(NAMES.length);
   });
   it("invite ownership: the invite must belong to the vendor in the form", () => {
     expect(ADMIN).toMatch(/if \(!inv \|\| inv\.vendor_id !== vendorId\) back\(/);
-    for (const n of NAMES.slice(1, 4)) expect(fn(ADMIN, n), n).toContain("await inviteFor(fd, vendorId)");
+    for (const n of NAMES.slice(1, 4)) expect(impl(ADMIN, n), n).toContain("await inviteFor(fd, vendorId)");
   });
   it("countersign needs the callback checkbox BEFORE the store is called", () => {
-    const b = fn(ADMIN, "countersignVendorEsignAction");
+    const b = impl(ADMIN, "countersignVendorEsignAction");
     expect(b.indexOf('str(fd, "callback_done") !== "on"')).toBeGreaterThan(-1);
     expect(b.indexOf('str(fd, "callback_done") !== "on"')).toBeLessThan(b.indexOf("countersignVendorInvite("));
   });
@@ -57,7 +77,7 @@ describe("admin vendor e-sign actions: settings.manage (owner Q1: Stephen and Mi
     expect(b).toContain("VENDOR_BULK_PAUSE_MS");
   });
   it("every admin action is audited with the signed-in profile", () => {
-    for (const n of NAMES.slice(0, 4)) expect(fn(ADMIN, n), n).toMatch(/recordAudit\(\{\s*actorId: session\.profile\.id/);
+    for (const n of NAMES.slice(0, 4)) expect(impl(ADMIN, n), n).toMatch(/recordAudit\(\{\s*actorId: session\.profile\.id/);
   });
   it("redirects never echo raw form values", () => {
     for (const m of ADMIN.matchAll(/redirect\(([^;]*)\);/g)) expect(m[1]).not.toMatch(/fd\.get|str\(fd/);
