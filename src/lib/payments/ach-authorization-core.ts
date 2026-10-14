@@ -391,11 +391,10 @@ export function stateAfterBankChange(current: AuthorizationState): Authorization
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// 7. Release (owner answer Q1: Michael and Stephen may do everything)
+// 7. Release (R41 S0, owner round 6, D-6 option B: the owner releases)
 // ───────────────────────────────────────────────────────────────────────────
 
-export const MIN_SOLO_REASON_CHARS = 20;
-/** Who was spoken to, and when: "Spoke with Maria in AR, she read back ...4821". */
+/** Who confirmed the details: "Spoke with Maria in AR, she read back ...4821". */
 export const MIN_CALLBACK_NOTE_CHARS = 10;
 
 /**
@@ -409,29 +408,30 @@ export const CALLBACK_METHODS = ["phone", "in_person"] as const;
 export type CallbackMethod = (typeof CALLBACK_METHODS)[number];
 
 export type ReleaseInput = {
-  actorUserId: string;
-  actorCanManage: boolean; // holds settings.manage (owner or admin)
-  /** null for legacy holds entered before the change log existed. */
-  changeEnteredByUserId: string | null;
+  /** The person releasing is the active owner (ach.act). */
+  actorIsOwner: boolean;
   callback: { done: boolean; method?: CallbackMethod; numberUnchangedForDays: number | null; note?: string };
+  /** Optional free text; stored when written, never required. */
   reason: string;
 };
 
-export type ReleaseVerdict =
-  | { ok: true; mode: "dual"; notifyOther: false }
-  | { ok: true; mode: "solo"; notifyOther: true }
-  | { ok: false; refusal: string };
+export type ReleaseVerdict = { ok: true; mode: "owner" } | { ok: false; refusal: string };
 
 /**
- * Releasing a hold. A second person is preferred (dual control); the same
- * person who entered the change MAY release it alone, because the owner said
- * either of them can do any action, but only with a written reason and a
- * notice to the other (Stephen <-> Michael). In BOTH modes the callback must
- * have been made to a number that has been on file for the look-back window
- * (ach-sao-verify-by-phone, ach-callback-manipulation).
+ * Releasing a hold. R41 S0 (owner, round 6: "D-6 ... option b"): only Michael,
+ * the owner, releases. He acts alone, with no written reason, and gets a
+ * "Was this you?" receipt (D-8). Stephen's release arrives here only after
+ * Michael approves it. The R39 dual / solo split (and its 20-character solo
+ * reason) is gone: the database (0271 vendor_bank_guard, ach_auth_release_hold)
+ * accepts release_mode 'owner' only. In every case the payee must have
+ * confirmed the details first, by a call to a number on file for the
+ * look-back window or in person (ach-sao-verify-by-phone,
+ * ach-callback-manipulation).
  */
 export function releaseVerdict(input: ReleaseInput, lookBackDays: number = CONTACT_LOOKBACK_DAYS): ReleaseVerdict {
-  if (!input.actorCanManage) return { ok: false, refusal: "Only Michael or Stephen (settings.manage) can release a banking hold." };
+  if (!input.actorIsOwner) {
+    return { ok: false, refusal: "Only Michael (the owner) releases a banking hold. Stephen's release goes to Michael for approval." };
+  }
   if (!input.callback.done) return { ok: false, refusal: "Call the payee first, at a number already on file, and record the call." };
   if ((input.callback.note ?? "").trim().length < MIN_CALLBACK_NOTE_CHARS) {
     return {
@@ -449,15 +449,7 @@ export function releaseVerdict(input: ReleaseInput, lookBackDays: number = CONTA
       refusal: `The number you called changed within the last ${lookBackDays} days. Verify in person or by a number on file longer than that.`,
     };
   }
-  // Unknown author (a hold from before the change log) is treated as the
-  // strict case: a reason and a notice, never a silent dual release.
-  if (input.changeEnteredByUserId !== null && input.actorUserId !== input.changeEnteredByUserId) {
-    return { ok: true, mode: "dual", notifyOther: false };
-  }
-  if (input.reason.trim().length < MIN_SOLO_REASON_CHARS) {
-    return { ok: false, refusal: `Releasing your own change needs a written reason (at least ${MIN_SOLO_REASON_CHARS} characters).` };
-  }
-  return { ok: true, mode: "solo", notifyOther: true };
+  return { ok: true, mode: "owner" };
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -752,21 +744,18 @@ export function __runAchAuthorizationCoreTests(): { passed: number; failed: numb
   ok(!canTransition("archived", "active") && !canTransition("revoked", "active"), "no resurrection");
   ok(stateAfterBankChange("active") === "on_hold", "change -> hold");
   throws(() => stateAfterBankChange("archived"), "cannot edit archived");
-  const base: ReleaseInput = { actorUserId: "m", actorCanManage: true, changeEnteredByUserId: "s", callback: { done: true, numberUnchangedForDays: 400, note: "Maria in AR read back 4821" }, reason: "" };
+  const base: ReleaseInput = { actorIsOwner: true, callback: { done: true, numberUnchangedForDays: 400, note: "Maria in AR read back 4821" }, reason: "" };
   ok(!releaseVerdict({ ...base, callback: { ...base.callback, note: "ok" } }).ok, "callback without a real note refused");
   ok(releaseVerdict({ ...base, callback: { done: true, method: "in_person", numberUnchangedForDays: null, note: "Vendor rep at the store, ID seen" } }).ok, "in-person needs no phone look-back");
   ok(!releaseVerdict({ ...base, callback: { done: true, method: "phone", numberUnchangedForDays: null, note: "Called the number in the email" } }).ok, "phone with unknown number age refused");
-  const unknownAuthor = releaseVerdict({ ...base, changeEnteredByUserId: null });
-  ok(!unknownAuthor.ok, "unknown author without reason refused (treated as solo)");
-  const unknownWithReason = releaseVerdict({ ...base, changeEnteredByUserId: null, reason: "Legacy hold from before the change log" });
-  ok(unknownWithReason.ok && unknownWithReason.mode === "solo", "unknown author with reason = solo + notify");
-  ok(releaseVerdict(base).ok && (releaseVerdict(base) as { mode: string }).mode === "dual", "other person releases");
-  ok(!releaseVerdict({ ...base, changeEnteredByUserId: "m" }).ok, "solo without reason refused");
-  const solo = releaseVerdict({ ...base, changeEnteredByUserId: "m", reason: "Stephen is on vacation until the 20th" });
-  ok(solo.ok && solo.mode === "solo" && solo.notifyOther, "solo with reason ok + notify");
-  ok(!releaseVerdict({ ...base, callback: { done: true, numberUnchangedForDays: 30 } }).ok, "recently changed number refused");
-  ok(!releaseVerdict({ ...base, callback: { done: false, numberUnchangedForDays: 400 } }).ok, "no callback refused");
-  ok(!releaseVerdict({ ...base, actorCanManage: false }).ok, "manager cannot release");
+  const ownerRel = releaseVerdict(base);
+  ok(ownerRel.ok && ownerRel.mode === "owner", "owner releases alone with no reason (R41 S0)");
+  ok(!releaseVerdict({ ...base, actorIsOwner: false }).ok, "admin / anyone else cannot release (request instead)");
+  ok(!releaseVerdict({ ...base, actorIsOwner: false, reason: "r".repeat(40) }).ok, "a long reason never lets a non-owner release");
+  ok(!releaseVerdict({ ...base, callback: { done: true, numberUnchangedForDays: 30, note: "Maria in AR read back 4821" } }).ok, "recently changed number refused");
+  ok(releaseVerdict({ ...base, callback: { done: true, numberUnchangedForDays: CONTACT_LOOKBACK_DAYS, note: "Maria in AR read back 4821" } }).ok, "number exactly at the look-back qualifies");
+  ok(!releaseVerdict({ ...base, callback: { done: true, numberUnchangedForDays: CONTACT_LOOKBACK_DAYS - 1, note: "Maria in AR read back 4821" } }).ok, "one day short of the look-back refused");
+  ok(!releaseVerdict({ ...base, callback: { done: false, numberUnchangedForDays: 400, note: "Maria in AR read back 4821" } }).ok, "no callback refused");
 
   // look-back
   const contacts: ContactRecord[] = [

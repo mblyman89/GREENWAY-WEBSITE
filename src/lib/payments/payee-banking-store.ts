@@ -290,7 +290,8 @@ export async function holdVendorBank(params: {
 export async function releaseVendorBankHold(params: {
   vendorId: string;
   actorId: string;
-  mode: "dual" | "solo";
+  /** R41 S0 (0271): the owner is the only releaser. */
+  mode: "owner";
   method: "phone" | "in_person";
   note: string;
   reason: string | null;

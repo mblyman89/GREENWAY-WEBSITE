@@ -428,7 +428,7 @@ export async function saveEmployeeBankingAction(formData: FormData): Promise<voi
     routing: parsed.value.routing,
     accountNumber: parsed.value.accountNumber,
     accountType: parsed.value.accountType,
-  });
+  }, session.profile.id);
   if (!res.ok) back("employees", { error: res.error });
 
   const after = maskedBankSnapshot({
@@ -475,7 +475,7 @@ export async function clearEmployeeBankingAction(formData: FormData): Promise<vo
     routing: "",
     accountNumber: "",
     accountType: "checking",
-  });
+  }, session.profile.id);
   if (!res.ok) back("employees", { error: res.error });
 
   await recordAudit({

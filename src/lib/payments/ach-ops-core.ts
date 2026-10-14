@@ -23,7 +23,6 @@ import {
   CALLBACK_METHODS,
   MICRO_ENTRY_DESCRIPTION,
   MIN_CALLBACK_NOTE_CHARS,
-  MIN_SOLO_REASON_CHARS,
   PAYROLL_DESCRIPTION,
   addCalendarDays,
   daysBetween,
@@ -250,27 +249,25 @@ export function checkFinishForm(i: {
 // 3. Employee hold release (same rules as ach_auth_release_hold)
 // ---------------------------------------------------------------------------
 
+/**
+ * R41 S0 (D-6 option B): only the owner releases an employee hold, alone and
+ * with no written reason (0271 ach_auth_release_hold, mode 'owner'). The
+ * reason field is optional text that is stored when written.
+ */
 export function checkHoldReleaseForm(i: {
-  actorId: string;
-  holdEnteredBy: string | null;
+  actorIsOwner: boolean;
   method: string | null | undefined;
   note: string | null | undefined;
   reason: string | null | undefined;
-}): { ok: true; method: CallbackMethod; note: string; reason: string; solo: boolean } | { ok: false; error: string } {
+}): { ok: true; method: CallbackMethod; note: string; reason: string } | { ok: false; error: string } {
+  if (!i.actorIsOwner) return { ok: false, error: "Only Michael (the owner) releases an employee banking hold. Stephen's release goes to Michael for approval." };
   const method = String(i.method ?? "");
   if (!(CALLBACK_METHODS as readonly string[]).includes(method)) return { ok: false, error: "Say how the employee confirmed: by phone or in person." };
   const note = String(i.note ?? "").trim().replace(/\s+/g, " ").slice(0, 500);
   if (note.length < MIN_CALLBACK_NOTE_CHARS) return { ok: false, error: `Write who confirmed what (at least ${MIN_CALLBACK_NOTE_CHARS} characters).` };
   const reason = String(i.reason ?? "").trim().replace(/\s+/g, " ").slice(0, 500);
-  const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId;
-  if (solo && reason.length < MIN_SOLO_REASON_CHARS) {
-    return {
-      ok: false,
-      error: `You put this hold on (or it is older than the log), so releasing it alone needs a written reason of at least ${MIN_SOLO_REASON_CHARS} characters. The other owner is told.`,
-    };
-  }
   for (const t of [note, reason]) if (/\d{7,}/.test(t.replace(/\d{3}-\d{3}-\d{4}/g, ""))) return { ok: false, error: "Please do not put account or routing numbers in the note." };
-  return { ok: true, method: method as CallbackMethod, note, reason, solo };
+  return { ok: true, method: method as CallbackMethod, note, reason };
 }
 
 // ---------------------------------------------------------------------------
@@ -568,12 +565,12 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
 
   // release form
   const rel = (o: Partial<Parameters<typeof checkHoldReleaseForm>[0]>) =>
-    checkHoldReleaseForm({ actorId: "m", holdEnteredBy: "s", method: "phone", note: "Ann confirmed 4821", reason: "", ...o });
-  ok(rel({}).ok && (rel({}) as { solo: boolean }).solo === false, "dual release ok without reason");
-  ok(!rel({ holdEnteredBy: "m" }).ok, "solo needs reason");
-  ok(!rel({ holdEnteredBy: null }).ok, "unknown author is solo");
-  const solo = rel({ holdEnteredBy: "m", reason: "Stephen is away until Monday; payroll Friday" });
-  ok(solo.ok && solo.solo === true, "solo with reason ok");
+    checkHoldReleaseForm({ actorIsOwner: true, method: "phone", note: "Ann confirmed 4821", reason: "", ...o });
+  ok(rel({}).ok, "owner release ok without a reason (R41 S0)");
+  ok(!rel({ actorIsOwner: false }).ok, "non-owner refused");
+  ok(!rel({ actorIsOwner: false, reason: "Stephen is away until Monday; payroll Friday" }).ok, "a reason never lets a non-owner release");
+  const withR = rel({ reason: "Called Ann at the number on file" });
+  ok(withR.ok && withR.reason === "Called Ann at the number on file", "an optional reason is kept");
   ok(!rel({ method: "email" }).ok, "email is not a callback");
   ok(!rel({ note: "ok" }).ok, "short note refused");
   ok(!rel({ note: "new acct 123456789" }).ok, "numbers refused");
