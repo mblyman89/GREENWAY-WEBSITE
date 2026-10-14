@@ -53,8 +53,15 @@ M = [
     # fingerprint / file
     ('createHash("sha256").update([...ids].sort().join(","), "utf8")', 'createHash("sha256").update(ids.join(","), "utf8")'),
     ('if (input.expect && input.expect !== fp) return', 'if (false) return'),
-    ('.filter(([, v]) => !String(v ?? "").trim())', '.filter(([, v]) => !String(v ?? ""))'),
-    ('if (missing.length) return', 'if (false) return'),
+    # R41 S2 moved the settings check into one readiness answer
+    ('  if (!readiness.originator) {\n    return { ok: false, error: `The company ACH settings', '  if (false) {\n    return { ok: false, error: `The company ACH settings'),
+    ("Timberland's setup (My banking tab): ${readiness.problems.join(\" \")}`", "Timberland's setup (My banking tab): `"),
+    # R41 S3: release once, confirm only a live released file
+    ('if (!live) return { ok: false, error: "This file has not been released yet', 'if (false) return { ok: false, error: "This file has not been released yet'),
+    ('fileIdModifier: live.file_id_modifier, expect: input.fingerprint', 'fileIdModifier: "A", expect: input.fingerprint'),
+    ('if (fp !== input.fingerprint) return { ok: false, error: "The list of checks changed since this page loaded. Reload the page and release again." };', ''),
+    ('sourceId: checkFileSourceId(input.method, first.plan.effective, fp),', 'sourceId: checkFileSourceId(input.method, first.plan.effective, String(input.now.getTime())),'),
+    ('fileIdModifier: input.fileIdModifier });\n  if (!plan.ok)', 'fileIdModifier: "A" });\n  if (!plan.ok)'),
     ('.eq("method", method).eq("status", "planned");', '.eq("method", method);'),
     ('if (acct.archived_at) {\n      skipped.push', 'if (false) {\n      skipped.push'),
     ('if (a.state !== "verifying") {\n      skipped.push', 'if (false) {\n      skipped.push'),

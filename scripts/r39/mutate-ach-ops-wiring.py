@@ -33,12 +33,15 @@ M = [
     # route
     (R, '  const session = await requirePermission("settings.manage");\n  const q = new URL', '  const q = new URL(req.url);\n  const session = await requirePermission("settings.manage");\n  void q;\n  const q2 = new URL'),
     (R, 'if (!/^[0-9a-f]{16}$/.test(fp)) {', 'if (!fp) {'),
-    (R, ', expect: fp });', ' });'),
-    (R, 'const body = res.plan.file.replace(/\\r?\\n/g, "\\r\\n");', 'const body = res.plan.file;'),
+    # R41 S3: the route serves the released bytes for exactly this list
+    (R, 'checkFileSourceId(method, q.get("effective") ?? "", fp));', 'checkFileSourceId(method, q.get("effective") ?? "", ""));'),
+    (R, 'return new Response(res.body, {', 'return new Response(res.body.replace(/\\r\\n/g, "\\n"), {'),
     (R, '{ status: 400, headers: { "Cache-Control": "no-store" } });\n  }\n  const res', '{ status: 400 });\n  }\n  const res'),
     (R, '      "X-Content-Type-Options": "nosniff",\n', ''),
-    (R, 'filename: res.plan.filename,', 'filename: res.plan.filename, file: res.plan.file,'),
-    (R, 'import { buildCheckFile } from "@/lib/payments/ach-ops-store";', 'import { buildCheckFile, markCheckFileSent } from "@/lib/payments/ach-ops-store";\nvoid markCheckFileSent;'),
+    (R, 'filename: res.row.filename, file_id_modifier', 'filename: res.row.filename, account: res.body, file_id_modifier'),
+    (R, 'import { checkFileSourceId } from "@/lib/payments/ach-ops-store";', 'import { checkFileSourceId, buildCheckFile } from "@/lib/payments/ach-ops-store";\nvoid buildCheckFile;'),
+    (R, 'const res = await readLiveFileForSource(', 'void releaseCheckFileX;\n  const res = await readLiveFileForSource('),
+    (P, 'action={releaseCheckFileAction}', 'action={markCheckFileSentAction}'),
     # page
     (P, 'export const dynamic = "force-dynamic";', ''),
     (P, '<form action={reviewDoneAction}', '<form'),

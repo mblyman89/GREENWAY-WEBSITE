@@ -132,7 +132,7 @@ describe("check-file route: GET records nothing, owner/admin only, never cached"
     expect(firstLine(body)).toBe('const session = await requirePermission("settings.manage");');
   });
   it("R41 S3: serves the RELEASED stored bytes only: never builds, never marks sent, keyed by the page's fingerprint", () => {
-    expect(ROUTE_CODE).toContain("readLiveFileForSource(method, checkFileSourceId(method, ");
+    expect(ROUTE_CODE).toContain('readLiveFileForSource(method, checkFileSourceId(method, q.get("effective") ?? "", fp));');
     expect(ROUTE_CODE).not.toMatch(/buildCheckFile|planCheckFile|releaseCheckFile|releaseAchFile/);
     expect(ROUTE_CODE).not.toMatch(/markCheckFileSent|mark_sent|\.rpc\(|\.insert\(|\.update\(/);
     expect(ROUTE).toContain("/^[0-9a-f]{16}$/.test(fp)");
