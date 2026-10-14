@@ -2,7 +2,7 @@ CONTROL pass
 killed   owner-is-admin
 killed   owner-inactive-ok
 killed   jwt-ignored
-SURVIVED helper-grant-anon
+killed   helper-grant-anon
 killed   mode-any
 killed   vault-verify-anyone
 killed   vault-release-anyone
@@ -17,7 +17,7 @@ killed   vault-archived-reopen
 killed   emp-no-stamp-ok
 killed   emp-stale-stamp-ok
 killed   emp-anyone
-SURVIVED emp-type-free
+killed   emp-type-free
 killed   emp-insert-free
 killed   co-anyone
 killed   co-trigger-off
@@ -32,7 +32,7 @@ killed   d5-events-manager
 killed   req-delete-ok
 killed   req-start-approved
 killed   req-payload-mutable
-SURVIVED req-summary-mutable
+killed   req-summary-mutable
 killed   req-reopen
 killed   req-withdraw-anyone
 killed   req-raw-approve-anyone
@@ -40,16 +40,16 @@ killed   req-result-rewrite
 killed   req-events-mutable
 killed   decide-actor-optional
 killed   decide-any-decision
-SURVIVED decide-final-ok
+killed   decide-final-ok
 SURVIVED decide-withdraw-anyone
-SURVIVED decide-admin-approves
+killed   decide-admin-approves
 killed   decide-stale-off
 killed   decide-stale-null-ok
 killed   decide-no-event
 killed   result-anyone
 killed   result-both
 killed   result-not-approved
-SURVIVED result-other-owner
+killed   result-other-owner
 killed   rev-delete-ok
 killed   rev-start-checked
 killed   rev-outcome-mutable
@@ -59,4 +59,11 @@ killed   rls-off
 killed   grant-authenticated
 killed   service-delete
 killed   decide-authenticated
-control restored; killed 53/60 survivors ['helper-grant-anon', 'emp-type-free', 'req-summary-mutable', 'decide-final-ok', 'decide-withdraw-anyone', 'decide-admin-approves', 'result-other-owner']
+control restored; killed 59/60 survivors ['decide-withdraw-anyone']
+# Survivor analysis (R41 S0):
+#   decide-withdraw-anyone is EQUIVALENT. ach_request_decide's withdraw check and
+#   ach_change_requests_guard enforce the same rule (decided_by must equal
+#   requested_by for 'withdrawn'). With the function check removed, the UPDATE
+#   inside the function hits the table guard and raises ACH_REQUEST_WITHDRAW,
+#   the exact text the probe expects. The duplicate check stays as defence in
+#   depth; no probe can tell the two layers apart.
