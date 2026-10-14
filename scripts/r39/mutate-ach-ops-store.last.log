@@ -21,12 +21,12 @@
 20 killed if (!UUID.test(input.noticeId)) return
 21 killed if (a.payee_type !== "employee") return
 22 killed if (a.state !== "on_hold") return
-23 killed holdEnteredBy: a.hold_entered_by,
-24 killed p_reason: f.solo ? f.reason : f.reason || null,
-25 killed const mode = data === "solo" ? "solo" : data === "dual" ? "dual" : nul
-26 killed if (mode === "solo") {     const book
-27 killed const to = soloNoticeRecipients(input.actorEmail, book);
-28 killed `The hold was: ${a.hold_reason ?? "(no reason recorded)"}`,
+23 killed actorIsOwner: input.actorIsOwner, method: input.method
+24 killed p_reason: f.reason || null,
+25 killed if (data !== "owner") return
+26 killed if (data !== "owner") return
+27 killed return { ok: true, mode: "owner", before: a };
+28 killed p_actor: input.actorId,     p_method: f.method,
 29 killed if (!data) return { ok: false, error: opsDbErrorMessage("ACH_RELEASE_N
 30 killed const cents = method === "micro_entry" ? pickMicroCents(
 31 killed (input.randomBelow ?? ((n) => randomInt(n)))
@@ -63,3 +63,4 @@
 62 killed verRows.filter((v) => v.method === m && v.status === "planned")
 63 killed payee: names.get(`${n.payee_type}:${n.employee_id ?? n.vendor_id}`)
 total 64 killed 64 survivors []
+EXIT 0

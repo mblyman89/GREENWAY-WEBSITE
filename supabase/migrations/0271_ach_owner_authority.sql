@@ -177,7 +177,7 @@ begin
     if new.release_callback_method is null or coalesce(length(trim(new.release_callback_note)), 0) < 10 then
       raise exception 'VAULT_RELEASE: record how the payee confirmed the details (phone or in person) and a note of 10+ characters.';
     end if;
-    if new.release_mode is distinct from 'owner' then
+    if new.release_mode is distinct from 'solo' then
       raise exception 'VAULT_RELEASE: an owner release is recorded with release_mode owner.';
     end if;
   end if;

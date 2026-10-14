@@ -275,6 +275,15 @@ describe("releaseEmployeeHold", () => {
     expect(r.ok && r.mode).toBe("owner");
     expect(rpcs("ach_auth_release_hold")[0].body).toEqual({ p_auth_id: AUTH2, p_actor: MICHAEL, p_method: "phone", p_note: "Called Sam on file number, confirmed", p_reason: null });
     expect(mails).toHaveLength(0);
+    // The audit's "before" is the row as it was (on hold), not after.
+    expect(r.ok && r.before.state).toBe("on_hold");
+  });
+
+  it("OWNER, confirmed in person: the method chosen is the method sent", async () => {
+    reply({ ach_auth_release_hold: "owner" });
+    const r = await store.releaseEmployeeHold({ ...base, actorId: MICHAEL, method: "in_person" });
+    expect(r.ok).toBe(true);
+    expect(rpcs("ach_auth_release_hold")[0].body.p_method).toBe("in_person");
   });
 
   it("OWNER on his OWN hold: still released alone (the 20-character solo reason is gone); an optional reason is passed through", async () => {

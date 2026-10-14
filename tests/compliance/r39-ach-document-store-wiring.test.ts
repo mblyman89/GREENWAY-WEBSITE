@@ -124,10 +124,21 @@ describe("R39 S5 actions: who may do what (owner Q1, Q2)", () => {
     expect(d).toContain('requirePermission(payeeType === "vendor" ? "vendors.manage" : "staffing.manage")');
     expect(d).toContain("canDropDocuments(session.profile.role)");
   });
-  it("open, extract, rekey, reject: settings.manage (owner + admin)", () => {
-    for (const n of ["openAchDocumentAction", "extractAchDocumentAction", "rekeyAchDocumentAction", "rejectAchDocumentAction"]) {
-      expect(fn(ACTIONS, n), n).toContain('requirePermission("settings.manage")');
+  it("open, extract, rekey: settings.manage (owner + admin) first; they only fill the intake queue (plan v4 S0: gather)", () => {
+    for (const n of ["openAchDocumentAction", "extractAchDocumentAction", "rekeyAchDocumentAction"]) {
+      expect(fn(ACTIONS, n).split("\n")[1], n).toBe('  const session = await requirePermission("settings.manage");');
     }
+  });
+  it("R41 S0 (D-6): reject is a live change, so it goes through achGate; its body is private", () => {
+    const r = fn(ACTIONS, "rejectAchDocumentAction");
+    expect(r).toMatch(/return achGate\(\s*"ach_document\.reject",\s*fd,/);
+    expect(r).toContain("(session) => rejectAchDocumentBody(session, fd)");
+    expect(r).not.toContain("requirePermission(");
+    expect(ACTIONS).toContain("\nasync function rejectAchDocumentBody(session: StaffSession, fd: FormData)");
+    expect(ACTIONS).not.toContain("export async function rejectAchDocumentBody");
+  });
+  it("R41 S0 (D-5): the drop refusal names the owner and admin only", () => {
+    expect(fn(ACTIONS, "dropAchDocumentAction")).toContain("Only Michael (the owner) and Stephen (admin) can drop ACH documents.");
   });
   it("redirects stay on our admin pages", () => {
     expect(ACTIONS).toContain("safeReturnPath(str(fd, \"return_to\")");

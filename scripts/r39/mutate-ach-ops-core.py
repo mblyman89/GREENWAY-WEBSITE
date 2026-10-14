@@ -43,9 +43,10 @@ M = [
     # release
     ('if (!(CALLBACK_METHODS as readonly string[]).includes(method)) return', 'if (false) return'),
     ('if (note.length < MIN_CALLBACK_NOTE_CHARS) return { ok: false, error: `Write who confirmed', 'if (false) return { ok: false, error: `Write who confirmed'),
-    ('const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId;', 'const solo = i.holdEnteredBy === i.actorId;'),
-    ('const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId;', 'const solo = i.holdEnteredBy === null;'),
-    ('if (solo && reason.length < MIN_SOLO_REASON_CHARS) {', 'if (false) {'),
+    # R41 S0 (D-6): owner only, no solo reason
+    ('if (!i.actorIsOwner) return { ok: false, error: "Only Michael', 'if (false) return { ok: false, error: "Only Michael'),
+    ('if (!i.actorIsOwner) return { ok: false, error: "Only Michael', 'if (!i.actorIsOwner && reason.length < 20) return { ok: false, error: "Only Michael'),
+    ('[/ACH_OWNER_ONLY/, ', '[/ACH_OWNER_ONLYX/, '),
     ('for (const t of [note, reason]) if', 'for (const t of [reason]) if'),
     # review
     ('if (r.state !== "active") continue;', ''),
