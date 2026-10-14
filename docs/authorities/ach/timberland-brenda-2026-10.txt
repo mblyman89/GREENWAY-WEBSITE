@@ -1,0 +1,59 @@
+# Timberland Bank (Brenda, Cash Management): two emails, VERBATIM
+
+- Source: the owner (Michael Lyman) pasted both emails into the developer chat. They are
+  "provided by the owner". The emails' own sent dates and headers were not provided, so none
+  is given here. Both were in the chat on or before 2026-10-13, 18:54 PDT
+  (the time stamp of the archived R41 recon session that contains them).
+- Nothing below the EMAIL lines was retyped. Each body is a byte-for-byte copy of the owner's
+  message, from the first word of Brenda's text to the last (the owner's own covering words
+  before it are left out). Non-breaking spaces and curly quotes are kept as received.
+- Redactions: none were needed. Neither email contains an account number, phone or email address.
+- Email 1 is Brenda's reply with her answers written inline under the owner's original questions.
+- Email 2 is Brenda's numbered answers 1-10. The owner wrote: "I sent Brenda the new questions
+  and she has now responded with the answers." The questions are NOT Brenda's words. They are
+  the list the developer drafted for the owner (R41 recon reply, shown under QUESTIONS AS
+  DRAFTED). The owner's exact sent wording is not on record, so read each answer with that in mind.
+- Used by: src/lib/payments/timberland-profile-core.ts (every quote there is checked, by
+  tests/compliance/r41-s1-timberland-profile.test.ts, to be an exact substring of this file
+  after whitespace is flattened).
+
+===== EMAIL 1 (Brenda, reply with inline answers) =====
+“ Great questions.
+ 
+So I’m assuming that your software has the capability to export a NACHA formatted file.  There are 3 parameters I need to have match my side. 
+ 
+Company Name
+Company ID
+Make sure that it’s an unbalanced batch
+ 
+If you can let me know what company name and ID your software provider programmed in these fields, I can make sure they match when I get this set up.
+ 
+I will need about 24-48 hours to get your access completed, you will have a different login to our cash management portal. 
+ 
+See below for answers to your other questions.
+
+Good morning, Brenda. I hope you had a good weekend! I have built my payment system and am ready to start sending ACH payments. I have a few questions I was hoping you could answer before I check this off my list. Does Timberland support a prenote or a test credit to verify an account? Yes, you can upload a pre-note file.  You need 6 days to confirm if that account number is correct or not.  Do they offer dual approval, or call-back, on ACH files? We can set up dual approval and we prefer that.  You would have to have another person available to login and do that approval, or they enter and you approve.  We do not do call-backs for ACH. What are the cutoff times and the daily and per-file limits? Cutoff time is 4 pm daily to have a file processed next day.  We established limits in the ACH Agreement, $50,000 per transaction, $100,000 per month.   Do they require the PAYROLL description, and in what format? This is a new NACHA rule that yes requires PAYROLL be added in the discretionary data field.   What is the deadline and process for reporting an unauthorized transfer?  As soon as possible.  NACHA rules state that you can reverse a transaction up to 5 business days.  This does not mean that you would get your money back.   Is there a cashmanagement services section added to my online banking portal for me to interact with, and how will I know the service is set up on the bank side? This is a totally different online access and I will communicate with you when I have things set up.  Thank you again for helping me! Also, I apologize if these questions have already been answered. These questions are coming from my developer who is helping me with this process.”
+
+===== QUESTIONS AS DRAFTED FOR THE OWNER (not Brenda's words; context for EMAIL 2) =====
+1. Our batch header shows **GREENWAY MARIJUA** (16 characters max) and the file header shows **GREENWAY MARIJUANA**. Which should she match? First confirm the name you want on statements.
+2. What exact 10-character Company ID did Timberland assign? Is it "1" plus your EIN? Is the Immediate Origin the same?
+3. Which routing number goes in the file header: 325170754, or a separate ACH routing number?
+4. Nacha requires PAYROLL in the Company Entry Description, which is where we put it. Does she *also* want it in the discretionary data field?
+5. Are the prenote's 6 days banking days or calendar days, and counted from upload or from the payment date?
+6. Is the $100,000 a calendar month, by payment date or upload date? Do prenotes and test credits count?
+7. Is 4 pm the deadline for the upload or for the final approval? With dual approval, both may need to happen before 4 pm.
+8. Any required file name, extension or format?
+9. Will the portal reject two files with the same date and file ID?
+10. Can she accept a test file before the first live payroll?
+
+===== EMAIL 2 (Brenda, numbered answers, as pasted by the owner) =====
+1. GREENWAY MARIJUA (that is all that will fit in this section)
+2. 1 + EIN
+3. Routing number – 325170754
+4. Company entry description is good
+5. Banking days
+6. Calendar days – no pre-notes do not count as they will process with a zero dollar limit
+7. Upload and approvals by 4 pm
+8. Nothing required
+9. No they should not
+10. Yes

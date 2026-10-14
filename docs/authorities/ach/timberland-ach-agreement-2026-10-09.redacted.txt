@@ -1,0 +1,712 @@
+# Timberland Bank ACH Origination Agreement (signed by the company 10/09/26). REDACTED TEXT MIRROR
+
+- Source: Signed_ACH_Origination_Agreement.pdf, provided by the owner (Michael Lyman) on 2026-10-14.
+  12 pages, scanned with Epson ScanSmart (PDF CreationDate 2026-10-09 20:43:04 UTC), no text layer.
+  sha256 of the original PDF: 302132a284ad0ebfc83c3bbf6aa77fe002141b7ec8646efa4fd2bea129158ce4
+- The original PDF is NOT in this repository (the repository is public; the PDF holds the full
+  account number, personal phones, emails and signatures). The owner keeps it (R41 plan D-3 default b).
+  Anyone holding the PDF can prove this text came from it with: sha256sum Signed_ACH_Origination_Agreement.pdf
+- Method:
+  - pdftoppm -r 200, then tesseract --psm 4. Nothing was retyped by hand except the fixes listed below.
+  - Proofread (R41 S1) against a second, independent OCR at 400 dpi (pdftoppm -r 400, tesseract --psm 4).
+    Every token where the two readings differed was looked at on the 400 dpi page image. The scan, not
+    either OCR, decided each one.
+  - Pages 8, 10 and 12 are forms, and the OCR scrambles their layout. Use the VERIFIED TRANSCRIPTION at
+    the end of this file for those pages.
+- Redactions (the repository is PUBLIC):
+  - the full account number becomes [ACCOUNT ENDING 6048] (the repo already shows "ending 6048")
+  - personal phone numbers become [REDACTED PHONE] (Timberland's published 1-800 number is kept)
+  - email addresses become [REDACTED EMAIL]
+  - signatures are not reproduced
+- OCR fixes, each confirmed against the page image (200 dpi recon):
+  - Financia! -> Financial; tn-Process -> In-Process; Qver -> Over; agaregate -> aggregate
+  - Entnes -> Entries; reiates -> relates; shalt -> shall; Timberiand -> Timberland
+  - ustreas.gow -> ustreas.gov; (if) -> (ii)
+- OCR fixes, each confirmed against the 400 dpi page image (R41 S1 proofread):
+  - p.1: "[IXICCD -" -> "☒CCD –" and "KXIPPD -" -> "☒PPD –" (both boxes are ticked on the scan)
+  - p.1: "the Obligations of" -> "the obligations of"; the page number "4" -> "1"
+  - p.2: "ccD" -> "CCD" (the section 5 table); "intemal" -> "internal"; "Financiat" -> "Financial"
+  - p.3: "ail items" -> "all items"
+  - p.4: "!n doing so" -> "In doing so"; "24, Fees." -> "24. Fees."
+  - p.3: "!f Financial" -> "If Financial"; "files. if Financial" -> "files. If Financial"
+  - p.5: "ali purposes" -> "all purposes"; "that Fl may" -> "that FI may"
+  - p.6: "{n the event" -> "In the event"
+  - p.7: "ODFI - it is" -> "ODFI – it is"
+  - p.9: "the ODF." -> "the ODFI."; "i : Same Day" -> "Timing of Delivery: Same Day"; "(RDF)" -> "(RDFI)";
+         "RDFi." -> "RDFI."; "Schedule B ~ Fees" -> "Schedule B – Fees"; "Corporate NachaCD = $" -> "Corporate Nacha CD $"
+  - p.11: "Schedule E - Restricted" -> "Schedule E – Restricted"; "Suspects" -> "suspects"; "¢" bullets -> "•"
+  - pp.2-6: 13 x "Financial institution" -> "Financial Institution". All 13 were cropped and viewed: every one
+    has a capital I on the scan. The lowercase "financial institution(s)" on pp.1, 7 and 11 IS lowercase on
+    the scan and is kept.
+- Typos that are in the ORIGINAL and are kept as printed (both OCR passes agree and the image shows them):
+  "Instituion" (Sched F, p.11), "ad he or she" (App. B, p.8), "laws off" (p.6).
+- "Intemet" (Sched F, p.11, "Timberland Bank Intemet Banking") is kept as it appears. Both OCR passes read
+  "Intemet". At 400 dpi the letters after "Inte" form three joined stems with no gap, like an "m", while the
+  two "internet" words on the same page show a clear r / n split. The scan looks like "Intemet", but a scan
+  cannot prove what was printed, so it MAY be "Internet". Code must not quote this word.
+- Timberland's signature block (p.6) is BLANK on this copy (Brenda Q12 asks for a countersigned copy).
+- Sections 28 and 31 mention Schedules A through H; this copy ends at Schedule G (Brenda Q13).
+
+===== [scan page 01] =====
+ACH Origination Agreement
+
+Lymans Marijuana LLC (Company) has requested that Timberland Bank (Financial Institution) permit it to initiate Entries
+to and/or from company account(s) [ACCOUNT ENDING 6048] maintained at Timberland Bank and other financial institutions by means of
+the Automated Clearing House (ACH) Network where standards, rules, and procedures are established by the National
+Automated Clearing House Association (NACHA). Financial Institution has agreed to do so on the terms of this Agreement.
+
+Capitalized terms used in this Agreement are defined in the Glossary or in the sections in which they are used. The
+Agreement sets out Company's rights, responsibilities and obligations and Financial Institutions rights, responsibilities and
+obligations with respect to this Service Financial Institution may provide to you from time to time.
+
+1. Types of Entries. Financial Institution will transmit debit and/or credit Entries initiated by Company to the ACH Network
+as provided in the NACHA Operating Rules (referred to as the “Rules”) and this Agreement. As used in this Agreement,
+the following are ACH Standard Entry Class Codes (SEC) approved for use by Company:
+
+☒CCD – Corporate Credit or Debit - Either a credit or debit where funds are either distributed or consolidated
+between corporate entities.
+☒PPD – Prearranged Payment and Deposit
+o Direct Deposit - The transfer of funds into a consumer's account. Funds being deposited can represent
+a variety of products, such as payroll, interest, pension, dividends, etc.
+o Direct Payment - Preauthorized payment is a debit application. This includes recurring bills that do not
+vary in amount -- insurance premiums, mortgage payments, charitable contributions, and installment loan
+payments or standing authorizations where the amount does vary, such as utility payments.
+
+The above SEC Codes are the most commonly-used and not an all-inclusive list. Timberland Bank has identified specific
+restrictions on the types of ACH transactions that may be originated in Schedule F to this Agreement.
+
+2. ACH Rules. Company agrees to comply with and be bound by the current Rules in existence which may be amended
+from time to time. The duties of Company set forth in this Agreement in no way limits the requirements of complying with
+the Rules. Any fines or liabilities imposed against Financial Institution for a violation of the Rules caused by an action and/or
+inaction of Company may be assessed against Company. Costs associated with Rules publications and/or association
+membership will be the responsibility of Company. If Company utilizes third-party vendor or processor, Company will take
+such measures as may be necessary to ensure compliance with the Rules by such vendors and processors.
+
+3. United States Laws and Regulations. Company acknowledges that it will not generate transactions that violate the
+laws or regulations of the United States. This includes, but is not limited to; sanction laws administered by the Office of
+Foreign Assets Control (OFAC). It shall be the responsibility of Company to obtain information regarding such OFAC
+enforced sanctions. (This information may be obtained directly from the OFAC Compliance Hotline at 800-540-OFAC or
+from the OFAC’s home page site at www.ustreas.gov/ofac.) Company agrees that the performance of any action by
+Financial Institution to debit or credit an account or transfer funds otherwise required by the Rules is excused from the
+performance of such action to the extent that the action is inconsistent with United States law, including the obligations of
+the Financial Institution under OFAC or any program administered by the United States Department of the Treasury's
+Financial Crimes Enforcement Network (FinCEN). Company agrees generally and warrants to Financial Institution that all
+actions by Company contemplated by this Agreement, including the preparation, transmittal, and settlement of Entries and
+payment orders, shall comply in all material respects with United States laws, regulations, regulatory guidelines and
+guidance, and official commentaries, including without limitation all such regulations, guidelines, and commentaries issued
+by the Board of Governors of the Federal Reserve and the Federal Financial Institutions Examination Council (FFIEC).
+
+4. Underwriting. Company approval for use of this Service may be subject to underwriting criteria established by
+Financial Institution from time to time. If Financial Institution requires application of underwriting criteria to Company
+approval for use of this Service, Financial Institution will communicate to Company the nature and content of that criteria
+and the information Company will be required to provide to Financial Institution. Company agrees to provide Financial
+
+1
+
+===== [scan page 02] =====
+Institution such financial, business and operating information as Financial Institution may reasonably request in connection
+with Financial Institution's underwriting and approval process.
+
+5. Authorizations. Before Company’s initiation of the first debit entry to a Customer's account, Company will obtain a
+proper authorization in accordance with the Rules and U.S. laws. An authorization agreement must be readily identifiable
+as either an ACH credit or an ACH debit authorization and must clearly and conspicuously state the terms of the
+authorization in order that the consumer or company understands the authorization to which he or she is agreeing. All
+debits to consumer accounts must be authorized by the consumer in writing and must be signed or similarly authenticated
+using a digital signature. For debit Entries, Company must provide the consumer with evidence of the authorization and
+information regarding the manner in which authorization can be revoked. Company, upon request, must present a copy of
+the Customer's authorization to Financial Institution within 5 banking days. Company must retain the signed or authenticated
+authorization for a period of two calendar years following the termination or revocation of the authorization. Company will
+initiate no Entry after the termination or revocation of a consumer's authorization.
+
+The following table shows the proper SEC Codes to use depending on how you obtained the authorization to debit/credit
+an individual or company’s account:
+
+SEC Code Debit / Credit Authorization Method
+PPD Debit or Credit Document signed by individual or similarly
+authenticated
+CCD Debit or Credit Document signed by Company Owner
+
+* Please see the CCD PPD definition in section 1 above or refer to the NACHA Rules for a detailed explanation.
+
+6. Prenotification. If Company chooses to originate non-dollar prenotification Entries to verify the accuracy of routing
+and account numbers, it agrees not to initiate live dollar Entries until at least 6 banking days following the settlement date
+of the prenotification Entry. Prenotification will be provided to Financial Institution in the format provided in the Rules. If
+Company receives notice that a prenotification has been rejected or returned, Company will research the problem and make
+any necessary corrections before transmitting another Entry.
+
+7. Notifications of Change. Financial Institution will notify Company of Correction Entries (COR), which are commonly
+referred to as Notification of Change (NOC) entries. Company agrees to make the changes submitted within 6 banking
+days of the receipt of the NOC information or before the next “live” Entry, whichever is later. If the NOC is incorrect,
+Company will generate a Refused NOC and deliver it to Financial Institution within 15 calendar days
+
+8. Transmission of Entries and Security Procedures. Company will transmit all Entries to Financial Institution on or
+before the deadlines described on Schedule A to this Agreement. Company will conform all Entries to the format, content,
+data encryption, and other specifications contained in the Rules. Company authorizes Financial Institution to transmit ail
+Entries received by Financial Institution from Company in accordance with the terms of this Agreement and to credit or debit
+such Entries to the specified accounts. Company is strictly responsible to establish and maintain the procedures to
+safeguard against unauthorized transmissions. Company warrants that no individual will be allowed to initiate transfers in
+the absence of proper supervision and safeguards, and agrees to take reasonable steps to maintain the confidentiality of
+the Security Procedures and any passwords, codes, security devices and related instructions provided by Financial
+Institution in connection with the Service. See Schedule G for suggested security procedures.
+
+9. Audit and Review. Company agrees, upon reasonable notice by Financial Institution, to permit Financial Institution
+to audit, inspect, and review its policies and processes for purposes of ensuring the Company's compliance with this
+agreement, the ACH Rules, and applicable laws and regulations. Company acknowledges that Financial Institution may
+from time to time require that Company develop and adopt internal controls and processes related to ACH origination as
+mandated by Financial Institution as a condition to Financial Institution's agreement to continue providing ACH Origination
+Services to Company.
+
+10. Financial Institution Obligations. In a timely manner and in accordance with the Rules, Financial Institution will
+process, transmit, and settle for the Entries received from Company which comply with the terms of this Agreement,
+including the Security Procedures. Financial Institution shall have no obligation to transmit Entries if Company is in default
+of any of its obligations under this Agreement, including any obligation to pay Financial Institution.
+
+===== [scan page 03] =====
+11. Warranties. Company certifies to Financial Institution all warranties Financial Institution is deemed by the Rules to
+make with respect to Entries originated by Company. Without limiting the foregoing, Company warrants and agrees that
+(a) each Entry is accurate, is timely, has been authorized by the party whose account will be credited or debited, and
+otherwise complies with the Rules; (b) each debit Entry is for the sum which, on the settlement date with respect to it will be
+owing to Company from the party whose account will be debited, is for a sum specified by such party to be paid to Company,
+or is a correction of a previously transmitted erroneous credit Entry; and (c) Company will comply with the terms of the
+Electronic Funds Transfer Act and Regulation E, if applicable, or Uniform Commercial Code Article 4A, if applicable, and
+shall otherwise perform its obligations under this Agreement in accordance with all applicable laws and regulations.
+Company shall indemnify Financial Institution against any loss, liability, or expense (including attorney’s fees and expenses)
+resulting from or arising out of any breach of any of the foregoing warranties or agreements.
+
+12. Data Retention. Company shall retain data to permit remaking of entries for one calendar year following the date of
+their transmittal by Financial Institution as provided herein, and shall provide such data to Financial Institution upon its
+request. Company is responsible to retain all items, source documents and records of authorization in accordance with the
+Rules.
+
+13. Provisional Credit. Company acknowledges that the Rules make provisional any credit given for an Entry until
+Financial Institution crediting the account specified in the Entry receives final settlement. If Financial Institution does not
+receive final settlement, it is entitled to a refund from the credited party and the originator of the Entry shall not be deemed
+to have paid the party.
+
+14. Form and Format. Financial Institution shall notify Company whether Entries shall be in the form of balanced or
+unbalanced files. If Financial Institution requires a balanced file, then Financial Institution shall control when and where
+offset Entries occur. If Financial Institution requires that Entries shall be in the form of an unbalanced file, then this means
+an Entry contains only the originating items for that Entry without any corresponding offset or settlement transaction.
+Credit Entries. Financial Institution reserves the right to require that Company pay Financial Institution in immediately
+available funds at the time of transmittal or at any time prior to settlement the amount of each credit Entry submitted by
+Company.
+
+Debit Entries. Financial Institution shall on the applicable Settlement Date credit the account with the amount of each
+debit Entry transmitted to Financial Institution. In the event any Entry is returned in accordance with the Rules by a
+Receiving Depository Financial Institution after Financial Institution has provided credit, Company shall, upon demand,
+repay Financial Institution the amount of the Return Entry. Financial Institution may require Company to maintain
+reserves in accordance with Section 21 of this Agreement.
+
+Entry Settlement. Company shall provide Financial Institution with immediately available funds not later than 9:00 a.m.
+PST on each Settlement Date sufficient to pay all Entries initiated by Company which are to be settled on that date.
+Company hereby authorizes and instructs Financial Institution to make deposits, withdrawals and transfers to and from
+Company's Accounts as appropriate or necessary in connection with any of the ACH services provided by Financial
+Institution under this Agreement. Notwithstanding anything in this Agreement to the contrary, Financial Institution
+reserves the right to require that sufficient collected funds be in Company's Accounts prior to the time any Entry is
+processed by Financial Institution under this Agreement.
+
+15. Pre-Funding. Financial Institution reserves the right to require Company to pre-fund an Account maintained at
+Financial Institution prior to the Settlement Date of the ACH file. Financial Institution shall determine whether pre-funding
+is required based on criteria established from time to time by Financial Institution. Financial Institution will communicate
+directly to Company if pre-funding is required and, if requested by Company, will provide Company with an explanation of
+its pre-funding criteria. If it is determined that pre-funding is required, Company will provide immediately available and
+collected funds sufficient to pay all Entries initiated by Company prior to initiating any Entries for which pre-funding is
+required.
+
+16. Settlement. Company will maintain an Account with Financial Institution at all times during the term of this Agreement
+and until the period for Return Entries has elapsed. Company will maintain in the Account immediately available funds
+sufficient to cover all credit Entries originated and returns of debit Entries originated. Company authorizes Financial
+Institution to debit its Account in the amount of each file.
+
+17. Settlement Discrepancies. The periodic statement issued by Financial Institution for Company's Account will reflect
+Entries credited and debited to Company's Account. Company agrees to notify Financial Institution within a reasonable
+time not to exceed 30 calendar days (except where applicable law provides a 60 calendar day review period) after Company
+receives a periodic statement of any discrepancy between Company’s records and the information in the periodic statement.
+Company and Financial Institution agree to cooperate with the other party in performing loss recovery efforts in the event
+either party may be liable to the other for damages.
+
+===== [scan page 04] =====
+18. Cancellation or Amendment of Entries. Company shall have no right to cancel or amend any Entry/File after receipt
+of Entry/File by Financial Institution. However, Financial Institution shall use reasonable efforts to act on a request by
+Company to cancel an Entry/File before transmitting it to the ACH Network or processing it as an on-us Entry. Financial
+Institution shall have no liability if it fails to effect the cancellation.
+
+19. Rejection of Entries. Financial Institution may reject any Entry/File, including an on-us Entry, which does not comply
+with the requirements of Sections 2 and 3 of this Agreement and may reject any Entry if Company is not otherwise in
+compliance with the terms of the Agreement. Financial Institution shall notify Company of such rejection no later than the
+business day such Entry would otherwise have been transmitted by Financial tnstitution to the ACH Network or, in the case
+of an on-us Entry, its effective Entry date. It shall be the responsibility of Company to remake any Entries or files rejected
+by Financial Institution or the ACH Operator.
+
+20. Return Entries. Financial Institution shall notify Company of the receipt of a Return Entry from the ACH no later than
+1 banking day after the banking day of such receipt. Financial Institution shall have no obligation to re-transmit a Return
+Entry if Financial Institution complied with the terms of this Agreement with respect to the original Entry. Company
+authorizes Financial Institution to charge back returns to Company's designated Account the amount of any Retum Entry
+as soon as information is made available to Financial Institution. Company will promptly provide immediately available
+funds to indemnify Financial Institution if any debit Entry is returned after Financial Institution has permitted Company to
+withdraw funds in the amount thereof or if any adjustment memorandum that relates to such Entry is received by Financial
+institution.
+
+21. Reversals. Company may initiate a reversing Entry or file of Entries for erroneous or duplicate transactions, as
+permitted by the Rules. In doing so Company warrants that it has initiated the Entries or files within 5 banking days of the
+original Entry or Entries and within 24 hours of discovery of the error. Company also warrants that the account holder of a
+reversing Entry has been notified of the reversal, and the reason for the reversal, no later than the settlement day of the
+reversal. For both reversing Entries and files, Company indemnifies all parties of the transaction(s) from and against any
+claim, demand, loss, liability, or expense.
+
+22. Reserves. From time to time, Financial Institution shall evaluate Company's transaction activity for the purpose of
+establishing averages for transaction frequency, amount, and retums and adjustments. These evaluations will occur at
+least annually and may occur more frequently at Financial Institution's discretion. In connection with these evaluations,
+Financial Institution reserves the right to require Company to establish reserves with Financial Institution calculated by
+Financial Institution to cover Company's obligations to Financial Institution arising from ACH activities under this
+Agreement. Reserves may be expressed as a fixed dollar amount in the form of an Assignment of Depository account.
+The amount of reserves required by Financial Institution, if any, will be communicated directly to Company from time to
+time. Company agrees to establish reserves as required by Financial Institution within 10 banking days after receipt of a
+communication from Financial Institution setting forth the amount of required reserves and the basis of calculation used to
+determine the amount of reserves. Financial Institution may suspend ACH processing activity for Company if Company
+fails to establish the required amount of reserves within the time period specified by Financial Institution in its
+communication to Company.
+
+23. Name and Account Number Inconsistency. Company acknowledges that, if an Entry describes the receiver
+inconsistently by name and account number, payment of the Entry may be made as provided in the Rules on the basis of
+the account number even if it identifies a party different from the named receiver.
+
+24. Fees. Company authorizes Financial Institution to debit its designated Account for services provided under the
+Agreement in accordance with the schedule of fees and charges attached to this Agreement as Schedule B. Financial
+Institution may change its fees from time to time upon written notice to Company.
+
+25. Liability. Financial Institution shall be responsible only for performing the services expressly provided for in the
+Agreement, and shall be liable only for its gross negligence or willful misconduct in performing those services. In no event
+shall Financial Institution have any liability for any consequential, special, punitive, or indirect loss or damage which
+Company may incur or suffer in connection with this Agreement. In addition, Financial Institution shall be excused from
+failing to act or delay in acting if such failure or delay is caused by legal constraint, interruption of transmission or
+communications facilities, equipment failure, war, emergency conditions, or other conditions beyond Financial Institution’s
+control. Financial Institution shall not be held liable for any delay by an ACH Operator or Receiving Depository Financial
+Institution in processing any credit or debit Entry Company originates, nor shall it be held liable for the failure of a third party
+to process, credit, or debit any such Entry, or for other acts of omission.
+
+26. Exposure Limits. Company shall comply with the monetary file limits established by Financial Institution (See
+Exposure Limits in Schedule C attached to this Agreement).
+
+4
+
+===== [scan page 05] =====
+"Maximum daily credit debit limit’ means the maximum daily aggregate amount of In-Process Entries permitted to be
+outstanding at any time, this amount shall be separately communicated to Company by Financial Institution in writing from
+time to time.
+
+"Maximum Monthly aggregate Limit’ means the aggregate dollar amount of all credit or debit Entries initiated by Company
+and in process on any month for which settlement has not occurred with respect to credit Entries, or the applicable period
+for the return of items has not expired with respect to debit Entries.
+
+"Over limit Entry’ means an Entry the amount of which would cause the aggregate amount of In-Process Entries to
+exceed the Entry Settlement Limit.
+
+Company agrees that Financial Institution will not process an Over limit Entry. Financial Institution will suspend any Over
+limit Entry submitted by Company and may, following its receipt of an Over limit Entry; suspend all In-Process Entries.
+Company acknowledges that any over limit Entry or other In-Process Entries suspended by Financial Institution will not
+settle on their scheduled Settlement Date. If Company wishes to initiate an Entry that would cause the amount of In-Process
+Entries to exceed the Entry Settlement Limit, Company may submit to Financial Institution its request to initiate an Entry
+that otherwise would be an Over limit Entry. Company must submit its request at least 2 banking days prior to the date on
+which Company wishes to initiate the Entry that otherwise would be an Over limit Entry. Financial Institution may require
+from Company financial or other information in connection with Financial Institution's consideration of the request. Financial
+Institution may grant or deny Company's request at its sole discretion. In addition to the foregoing, Financial Institution
+generally reserves the right to limit the nature and amount of the preauthorized debit/credit Entries processed under this
+Agreement or to refuse to process any debit/credit Entries under this Agreement if, in Financial Institution's sole judgment
+(i) there is reasonable cause to believe that any Entry will be returned or will not settle in the ordinary course of the
+transaction for any reason, (ii) to do otherwise would violate any limit set by the applicable clearing house association or
+any governmental authority or agency to control payment system risk, or (iii) a preauthorized credit Entry or the return of a
+preauthorized debit Entry would create an overdraft of Company's Accounts. If any of the foregoing actions are taken by
+Financial Institution with respect to a particular preauthorized debit/credit Entry, Financial Institution will notify Company as
+promptly as practicable, but in no event later than 2 banking days after its decision.
+
+27. Security Interest. In order to secure the prompt payment and performance of all of Company's obligations to Financial
+Institution under this Agreement, Company hereby grants to and in favor of Financial Institution a security interest in, to,
+and covering all of Company's Accounts maintained by Company with Financial Institution, including all amounts (including
+reserves) held in the Accounts at any time and from time to time. In the event Company initiates insolvency or bankruptcy
+proceedings, Financial Institution shall be deemed a secured party for all purposes with respect to the Accounts and all
+amounts held in the Accounts.
+
+28. Amendments to Agreement. From time to time Financial Institution may amend any of the terms and conditions
+contained in this Agreement, including any part of Schedules A through H attached hereto. Such amendments shall
+become effective upon receipt of notice by Company or such later date as may be stated in Financial Institution's notice to
+Company.
+
+29. Inspection. Upon reasonable notice from Financial Institution to Company, Financial Institution shall have the right to
+inspect Company's books and records and to make on-site visits to any and all Company locations with regard to all
+information deemed by Financial Institution to be necessary or pertinent to Company's use of ACH services provided by
+Financial Institution under this Agreement. Information subject to Financial Institution's right of inspection shall include all
+information maintained by Company with respect to Company's customers, clients, vendors and processors (including
+audits) if, in the opinion of Financial Institution, Company's relationship with such customers and clients is materially related
+to Company's ACH transaction activity conducted through Financial Institution under this Agreement. Physical site visits
+may be conducted to ensure notification and communication processes and disclosure requirements are being followed
+with respect to those addressed in the Rules.
+
+30. Termination of Agreement. Either party may terminate this Agreement upon 3 calendar days written notice to the
+other; provided however that FI may terminate this agreement immediately upon its determination that Company is in
+violation of this Agreement, the ACH Rules or applicable laws or if Company initiates any bankruptcy proceeding or is
+otherwise declared insolvent. Any termination of this Agreement shall not affect any of Financial Institution's rights or
+Company's obligations with respect to any Entries initiated by Company prior to such termination, or the payment obligations
+of Company with respect to services performed by Financial Institution prior to termination, or any other obligations that
+survive termination of this Agreement. Company's obligation with respect to any Entry shall survive termination of this
+Agreement until any applicable statute of limitation has elapsed.
+
+31. Miscellaneous. This Agreement, including Appendix A and the attached Schedules A through H, is an addendum of
+this ACH Origination Agreement between Financial Institution and Company with respect to the subject matter and
+supersedes any prior agreement(s) between Financial Institution and Company with respect to such subject matter.
+
+5
+
+===== [scan page 06] =====
+Company may not assign this Agreement or any of the rights or duties hereunder without Financial Institution's prior written
+consent. Financial Institution may waive enforcement of any provision of this Agreement. Any such waiver shall not affect
+Financial Institution’s rights with respect to any other transaction or modify the terms of this Agreement. This Agreement
+shall be binding upon and inure to the benefit of the parties hereto and their respective legal representatives, successors,
+and assigns. This Agreement is not for the benefit of any other person, and no other person shall have any right against
+Financial Institution or Company hereunder. In the event that any provision of this Agreement shall be determined to be
+invalid, illegal, or unenforceable to any extent, the remainder of this Agreement shall not be impaired or otherwise affected
+and shall continue to be valid and enforceable to the fullest extent permitted by law. Financial Institution shall be entitled to
+rely on any written notice believed by it in good faith to be signed by one of the authorized representatives whose names
+and signatures are set forth in this Agreement and the implementation process and forms. This Agreement shall be
+governed by and construed in accordance with the laws off the United States of America and the state in which Financial
+Institution maintains Company's Accounts.
+
+IN WITNESS WHEREOF the parties hereto have caused this Agreement to be executed by their duly authorized officers.
+
+Company: Lymans Marijuana LLC Timberland Bank (Financial Institution)
+By: by:
+
+Printed Name: Michael Lyman Printed Name:
+
+Title: Owner Title:
+
+Date 10/09/26 Date:
+
+
+===== [scan page 07] =====
+Appendix A - Glossa
+
+“ACH Network” means the funds transfer system (network) governed by the NACHA Rules which provides for the inter-
+financial institution clearing of electronic entries for participating financial institutions.
+
+“Account” means a demand deposit account or other deposit account Company has with Financial Institution that
+Financial Institution permits to be linked to a Service.
+
+“Agreement” means the Agreement for ACH Origination, which may change from time to time. All references to ;
+Agreement include all Schedules, Addendums and User Guides Financial Institution provides to Company from time to
+time.
+
+“Effective Entry Date” means the date placed on an ACH transaction by the Originator of the transaction or the ODFI – it is
+normally the date the Originator or ODFI intends the transfer to take place.
+
+“Electronic Funds Transfer Act” means the law passed by the US congress in 1978, which set out the rights and
+obligations of consumers and their financial institutions regarding the use of electronic systems to transfer funds. This act
+is implemented in the Federal Reserve Bank's Regulation E.
+
+“Entries” mean Credit Entries and Debit Entries, including On-Us Entries consistent with the NACHA Rules and also
+includes any data for entries or any prenotification entries.
+
+“File” means a group of ACH entries stored for delivery to an ACH receiving point.
+
+“ODFI or Originating Depository Financial Institution” means financial institutions that originate ACH transactions on behalf
+of its customers. ODFI's must abide by the NACHA Operating Rules.
+
+“Originator” means a company, individual or entity that initiates entries into the ACH Network.
+
+“Password” means confidential, unique personal numbers, codes, marks, signs, public keys or other information
+composed of a string of characters used as a means of authenticating and accessing a Service.
+
+“RDFI or Receiving Depository Financial Institution” means a financial institution qualified by NACHA to receive ACH
+transactions.
+
+“Regulation E” means the regulation published by the Federal Reserve Bank to implement the Electronic Fund Transfer
+Act mandating consumer rights and obligation with regard to electronic fund transfers.
+
+“Return Entry or Return Entries” mean any item, which cannot be processed and is being returned by the RDFI to the
+ODFI for correction or re-initiation.
+
+“Rules” mean the NACHA Operating Rules which provide a complete guide to the Rules and Regulations governing the
+ACH Network.
+
+“SEC Codes” or Standard Entry Class codes mean the three-character code within an ACH company/batch header, which
+identifies the type of transactions within that batch (e.g. CCD, CTX, PPD, etc.).
+
+“Security Procedures” means, unless we agree otherwise with you, the applicable security requirements and procedure
+for verifying the authenticity of Entries.
+
+“Service” means the ACH Services and features of those services which Financial Institution may provide from time to
+time to Financial Institution's commercial or small business customers.
+
+"Settlement Date” means the date on which settlement occurs, i.e., funds actually change hands as a result of an ACH
+eniry.
+
+“Uniform Commercial Code Article 4A (UCC4A)” means the portion of the Uniform Commercial Code which deals with
+certain funds transfers, including ACH credit transactions not subject to the Electronic Fund Transfer Act of Regulation E.
+This law outlines the protections and responsibilities given to the parties to wholesale credit transactions, and sets the
+legal standard for commercially reasonable security procedures to be used in conjunction with those transactions.
+
+===== [scan page 08] =====
+Appendix B
+Cash Management Delegation of Authority
+
+This form is used if a Company wishes to delegate authority to sign various authorization forms to someone other
+than the person who signed the authorization for the ACH Origination Agreement.
+
+By signing below, Company authorizes the incumbent listed in Section A, acting alone, to execute documents that
+Financial Institution may request, and any amendments or renewals pertaining to the use of Services, including but
+not limited to designating one or more persons authorized to initiate, amend, cancel, confirm or verify the authenticity
+of instructions to Financial Institution for Services (whether given orally, electronically or by fax instructions) and to
+revoke any authorization granted to such person ad he or she deems appropriate. The signer of this form has the
+same authority describe above for ACH Origination Service with Financial Institution, unless otherwise specified.
+Financial Institution is entitled to rely on this delegation until written notice of its revocation is received by Financial
+Institution.
+
+Guidelines for Completion: Fill out Section A and list contact information under ACH Contacts.
+
+A. To Delegate Authority to Specific Individuals
+
+Name Rights Account(s) Limits
+Michael Lyman EnterX ApproveX [ACCOUNT ENDING 6048] $50,000
+
+Enter Approvel)
+
+Enter Approvel)
+
+Enter Approve
+
+B. Timberland Bank is required to have two or more ACH contacts for your company, please provide the name of the
+person, phone number, fax number and email address of who might handle the ACH file.
+
+Name Phone Fax Email
+Michael Lyman [REDACTED PHONE] [REDACTED EMAIL]
+Alyssa Lyman [REDACTED PHONE] [REDACTED EMAIL]
+Authorization
+
+Authorization Instructions: The same person who signed the ACH Origination Agreement form must sign this Cash
+Management Delegation of Authority form.
+
+Signature UA
+
+
+===== [scan page 09] =====
+Attached Schedules A Through G
+
+Schedule A — Delivery Specifications
+
+Delivery Deadline: All ACH input files must be received by Financial Institution no later than 4:00 p.m. PST to be processed
+on that same day. Input files containing credit transactions must be transmitted or delivered to Financial Institution at least
+2 banking days prior to the Effective Entry Date of the Entries contained within the file.
+
+Effective Entry Date: The Effective Entry Date is a date specified by Company on which it intends an Entry to be posted
+and settled. The Effective Entry Date must be a future date and must not be a Saturday, a Sunday, or a holiday observed
+by the Federal Reserve Bank as listed in Schedule D.
+
+Upload File Format: All ACH input files must be in the standard ACH format based on the NACHA Operating Rules.
+
+Same Day ACH — An Entry for which the Effective Entry Date is the same Banking Day as the date on which the Entry is
+transmitted by the ODFI to its ACH Operator and is transmitted by the ACH operator's deadline for same day processing
+and settlement. A Same Day Entry may be sent up to the amount of 1,000,000.00 depending on the limit set by the ODFI.
+For purposes of fulfilling its obligation under these rules, an RDFI may rely on the settlement date of an entry, regardless of
+the effective entry date. An entry with a stale or invalid effective entry date will also be a same day entry if it is transmitted
+by the ODFI to its ACH operator by the ACH operator's deadline for same day processing and settlement, and is otherwise
+eligible for same day processing and settlement.
+
+Timing of Delivery: Same Day ACH Batches must be entered and received by the Financial Institution by 12:00 PM to be
+delivered to the Receiving Deposit Financial Institution (RDFI) for same day. Both credit and debits entries to be received
+by the RDFI by 5:00 PST and posting of the item is up to the discretion of the RDFI.
+
+Schedule B – Fees
+
+Fee Schedule: Company authorizes Financial Institution to debit any of the following fees from Company’s Account from
+time to time as appropriate or as defined below:
+
+ACH Service Fee $ 50.00 per month
+
+Return/NOC $ 5.00 per item
+
+Corporate Nacha CD $ 24.00 per year
+
+Same Day ACH $ 25.00 per month (Additional fee and is subject to approval)
+
+Billing Account Number [ACCOUNT ENDING 6048]
+
+===== [scan page 10] =====
+Schedule C — ACH Exposure Limits
+
+Limit for Credit Files:
+
+& ACH Batch
+
+Maximum daily aggregate limit of all credit files
+
+Maximum monthly aggregate limit of all credit files
+
+0 ACH Pass Thru
+
+Limit for Debit Files:
+O ACH Collections
+
+Maximum daily aggregate limit of all debit files
+
+Maximum monthly aggregate limit of all debit files
+
+Dual Approval Required (Recommended by Bank)
+O Yes
+
+&] No
+
+Same Day ACH 1 Yes & No
+
+Mlicbatl Lyyr
+
+Authorized Signature 7
+
+$ 50,000.00
+
+$50,000.00
+100,000.00
+
+g
+
+$0.00
+
+10/04/26
+
+Date
+
+10
+
+===== [scan page 11] =====
+Schedule D — Standard Holidays Observed by the Federal Reserve System
+
+Timberland Bank’s banking days include all days except Saturday and Sunday and the following standard holidays that
+are observed by Federal Reserve Bank in Seattle.
+
+New Years’ Day Juneteenth Veterans Day
+Martin Luther King, Jr. Day Independence Day Thanksgiving Day
+Presidents’ Day Labor Day Christmas
+Memorial Day Columbus Day
+
+The Federal Reserve Bank and/or Timberland Bank will be closed on these dates. Please keep in mind that ACH files
+cannot be delivered to your financial institution on these dates, and transactions with effective dates on these holidays will
+have settlement deferred until the businesses day after the holiday. To ensure that your transactions are received and
+posted to your customers’ accounts it is necessary that Timberland Bank receive the file as follows:
+
+If the normal effective date falls on a holiday date, the effective day should be changed to the business day immediately
+prior to the holiday for credits and immediately after the holiday for debits, and transmittals should be adjusted
+accordingly.
+
+Schedule E – Restricted ACH Transactions
+
+Financial Institution has identified the following ACH transaction restrictions:
+
+IAT, CTX, TEL, POP, BOC, ARC, RCK
+
+For definitions of the above SIC codes please refer to NACHA Operating Rules & Guidelines.
+
+Schedule F - Security Procedures
+
+Company is responsible to strictly establish and to maintain procedures to safeguard against unauthorized transactions.
+Company warrants that no individual will be allowed to initiate transfers in the absence of proper supervision and
+safeguards, and agrees to take reasonable steps to maintain the confidentiality of the security procedures and any
+passwords, codes, security devices, and related instructions provided by Financial Instituion. If Company believes or
+suspects that any such information has been accessed by an unauthorized individual, Company will verbally notify
+Financial Institution immediately, followed by written confirmation within 1 calendar day of verbal notice. The occurrence
+of such notification will not affect any transfers made in good faith by Financial Institution prior to the notification and within
+a reasonable time period to prevent unauthorized transfers.
+
+Timberland Bank requires companies’ use of a private secured internet connection and a network that is protected by
+Anti-virus, Anti-spyware, and a Firewall on all company computers that will be originating ACH files. Wireless internet
+connections are not recommended. Timberland Bank also recommends dual control approval for all file originations.
+
+The Company's System User is responsible for following all security rules set up by the Timberland Bank Intemet Banking
+service provider.
+
+Transmittal of Files:
+
+e Company will transmit files to Financial Institution via pre-arranged access to ACH system utilizing agreed upon logon
+procedures and proper access identification.
+
+• Company will only transmit files using assigned Token Device or a code which can be sent to your phone by either
+text or phone call.. ACH file will not be transmitted if not approved with the code.
+
+• Company will transmit ACH Files in accordance with NACHA rules and this contract.
+
+11
+
+===== [scan page 12] =====
+Schedule G: Token or Text Security
+
+In order to enable Company to release ACH file transmissions, Timberland Bank, may issue any authorized ACH users a
+Token Security device.
+
+By signing below, ACH Originator agrees to establish and maintain procedures to safeguard any credentials and/or
+devices furnished by Timberland Bank. ACH Originator and/or Authorized user agrees to notify Financial Institution at
+once if it believes any credentials have been compromised by an unauthorized person or if a Token has become lost,
+stolen, or defective. If Timberland Bank believes that security has been breached, it may deactivate Token without prior
+notice. You may contact Timberland Bank at 1-800-562-8761.
+
+Token devices are property of Timberland Bank and must be returned upon termination of this agreement. The replacement
+fee for a lost token is $25.00.
+
+Systam User Michael Lyman
+
+Phone Number for text code | [REDACTED PHONE]
+
+Email Address [REDACTED EMAIL]
+Token Serial Number nla
+
+System User
+
+Phone Number for text code
+Email Address
+
+Token Serial Number
+
+System User
+
+Phone Number for text code
+Email Address
+
+Token Serial Number
+
+ty OQuner
+
+Authorized Signature 7 Title
+
+{0/09 /Zo
+
+Date
+
+12
+
+
+===== VERIFIED TRANSCRIPTION OF THE FORM PAGES (read from the page images, not from OCR) =====
+
+[p.8 Appendix B - Cash Management Delegation of Authority]
+A. Michael Lyman | Rights: Enter [X] Approve [X] | Account(s): [ACCOUNT ENDING 6048] | Limits: $50,000
+   (three further rows blank, Enter [ ] Approve [ ])
+B. ACH contacts: Michael Lyman | [REDACTED PHONE] | (no fax) | [REDACTED EMAIL]
+                 Alyssa Lyman  | [REDACTED PHONE] | (no fax) | [REDACTED EMAIL]
+Signed: Michael Lyman
+
+[p.10 Schedule C - ACH Exposure Limits]
+Limit for Credit Files:
+  [X] ACH Batch ................................................ $ 50,000.00
+  Maximum daily aggregate limit of all credit files ............ $ 50,000.00
+  Maximum monthly aggregate limit of all credit files .......... $100,000.00
+  [ ] ACH Pass Thru ............................................ $ ______
+Limit for Debit Files:
+  [ ] ACH Collections .......................................... $0.00
+  Maximum daily aggregate limit of all debit files ............. $0.00
+  Maximum monthly aggregate limit of all debit files ........... $0.00
+Dual Approval Required (Recommended by Bank)   [ ] Yes   [X] No
+Same Day ACH   [ ] Yes   [X] No
+Authorized Signature: (Michael Lyman)   Date: 10/09/26
+
+[p.12 Schedule G - Token or Text Security, user table]
+System User: Michael Lyman | Phone Number for text code: [REDACTED PHONE]
+Email Address: [REDACTED EMAIL] (NOTE: the domain on this form is misspelled "mariguana", not "marijuana". Appendix B spells it correctly. Ask Timberland to fix it.)
+Token Serial Number: n/a
+(second and third user tables blank)
+Authorized Signature: (Michael Lyman)   Title: Owner   Date: 10/09/26
