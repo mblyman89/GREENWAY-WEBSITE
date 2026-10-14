@@ -32,6 +32,8 @@ M = [
      '    const version = { ok: true as const, version: null };'),
     ("request-no-mail", G, '    const mailed = await mailMichael(\n      requestArrivedEmail({', '    const mailed = true || await mailMichael(\n      requestArrivedEmail({'),
     ("requester-from-form", G, '      requestedBy: session.profile.id,', '      requestedBy: String(fd.get("requested_by") ?? session.profile.id),'),
+    ("supersede-actor-from-form", G, 'targetId, actorId: session.profile.id });', 'targetId, actorId: String(fd.get("actor_id") ?? session.profile.id) });'),
+    ("review-doneby-from-form", G, 'outcome: outcome.message, doneBy: session.profile.id });', 'outcome: outcome.message, doneBy: String(fd.get("actor_id") ?? session.profile.id) });'),
     # run path
     ("receipt-on-failure", G, '  if (outcome.ok) {\n    const label', '  if (true) {\n    const label'),
     ("no-supersede", G, '      if (targetId) await supersedePendingFor(', '      if (false) await supersedePendingFor('),

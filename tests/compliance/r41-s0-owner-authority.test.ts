@@ -140,6 +140,12 @@ describe("achGate: the owner acts alone and gets a receipt (D-6, D-8)", () => {
     expect(h.mails).toHaveLength(1);
     expect(h.mails[0].to).toEqual(["michael@greenwaymarijuana.com"]);
   });
+  it("a forged actor field cannot change who superseded the pending requests", async () => {
+    as("owner", OWNER);
+    await gate("vendor_bank.release", form({ vendor_id: VENDOR, actor_id: ADMIN, actorId: ADMIN }), back("msg=ok"));
+    expect(h.superseded).toHaveLength(1);
+    expect(h.superseded[0].actorId).toBe(OWNER);
+  });
   it("a refused body (error=) sends no receipt and supersedes nothing", async () => {
     as("owner", OWNER);
     const r = await gate("vendor_bank.release", form({ vendor_id: VENDOR }), back("error=Call+first"));
@@ -188,6 +194,22 @@ describe("achGate: Stephen's live action becomes a request; nothing runs (D-6, D
     expect(h.inserted).toHaveLength(1);
     expect(r.value?.message).toContain("did not go");
   });
+  it("who asked comes from the signed-in session, never from the form (a forged field is ignored)", async () => {
+    // Mutation requester-from-form survived the first run: no test sent a
+    // forged identity. These are the field names an attacker would try.
+    as("admin", ADMIN);
+    const forged = form({
+      vendor_id: VENDOR,
+      requested_by: OWNER,
+      requestedBy: OWNER,
+      actor_id: OWNER,
+      owner_id: OWNER,
+    });
+    await gate("vendor_bank.release", forged, back("msg=x"));
+    expect(h.inserted).toHaveLength(1);
+    expect(h.inserted[0].requestedBy).toBe(ADMIN);
+    expect(JSON.stringify(h.inserted[0].requestedBy)).not.toContain(OWNER);
+  });
   it("every live kind is a request for the admin (none runs)", async () => {
     as("admin", ADMIN);
     for (const k of ACH_ACTION_KINDS.filter((x) => classifyAchAction(x) === "live")) {
@@ -209,6 +231,12 @@ describe("achGate: Stephen's stop action takes effect at once, alerts Michael, g
     expect(h.mails).toHaveLength(1);
     expect(new URLSearchParams(r.url!.split("?")[1]).get("msg")).toBe(`On hold. ${STOP_DONE_SUFFIX}`);
     expect(h.inserted).toHaveLength(0);
+  });
+  it("the review item names the signed-in admin even if the form claims someone else", async () => {
+    as("admin", ADMIN);
+    await gate("vendor_bank.hold", form({ vendor_id: VENDOR, actor_id: OWNER, done_by: OWNER, doneBy: OWNER }), back("msg=On+hold."));
+    expect(h.reviews).toHaveLength(1);
+    expect(h.reviews[0].doneBy).toBe(ADMIN);
   });
   it("if the review item cannot be saved Stephen is told to tell Michael himself", async () => {
     as("admin", ADMIN);
