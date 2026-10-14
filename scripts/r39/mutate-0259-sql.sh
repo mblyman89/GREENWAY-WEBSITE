@@ -6,6 +6,12 @@
 # 0259 is re-applied at the end and the control re-run.
 #
 #   DB=r39 bash scripts/r39/mutate-0259-sql.sh
+# R41 S0 NOTE: migration 0271 (owner authority) REPLACES vendor_bank_guard()
+# and the 0259 pg-check now tests the 0271 owner rules. This script re-applies
+# 0259's own body, so its control run is only valid on a database WITHOUT 0271
+# (and a 0259-era copy of the check, git a8110d29^). Its last result (31/31)
+# is R39 history. The live release rules are mutation-tested by
+# scripts/r41/mutate-0271-sql.py and scripts/r41/mutate-owner-parity.py.
 set -u
 export PGPASSWORD=${PGPASSWORD:-postgres}
 DBNAME=${DB:-r39}
