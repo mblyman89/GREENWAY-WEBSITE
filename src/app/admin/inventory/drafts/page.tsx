@@ -56,9 +56,10 @@ import {
 import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { loadCultiveraManifestSection, loadRebuiltManifestIds } from "@/lib/inventory/cultivera-onboarding";
+import { WCIA_BACKFILL_HELP, parseBackfillCursor } from "@/lib/inventory/cultivera-wcia-backfill-core";
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
-import { startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { runWciaBackfillAction, startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -223,7 +224,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -1130,6 +1131,32 @@ export default async function CatalogDraftsPage({
               Cultivera manifests{cvSection.ok ? ` (${cvSection.total})` : ""}
             </summary>
             <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{CULTIVERA_SECTION_HELP}</p>
+            {/* R50 S12b: the vendor's lab results for EVERY rebuilt manifest, resumable. */}
+            {(() => {
+              const tone = sp.lab_bf === "ok" || sp.lab_bf === "info" || sp.lab_bf === "warn" ? sp.lab_bf : null;
+              const next = parseBackfillCursor(sp.lab_bf_next);
+              return (
+                <div className="mt-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-xs" data-testid="wcia-backfill">
+                  {tone && sp.lab_bf_msg && (
+                    <p
+                      role={tone === "warn" ? "alert" : "status"}
+                      data-testid="wcia-backfill-result"
+                      data-tone={tone}
+                      className={tone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-accent)]"}
+                    >
+                      {sp.lab_bf_msg.slice(0, 700)}
+                    </p>
+                  )}
+                  <form action={runWciaBackfillAction} className="flex flex-wrap items-center gap-3">
+                    {next && <input type="hidden" name="cursor" value={next} />}
+                    <Button type="submit" variant="neutral" size="sm" data-testid="wcia-backfill-button">
+                      {next ? "Continue attaching vendor lab results" : "Attach vendor lab results to every Cultivera manifest"}
+                    </Button>
+                    <span className="text-[var(--admin-text-muted)]">{WCIA_BACKFILL_HELP}</span>
+                  </form>
+                </div>
+              );
+            })()}
             {!cvSection.ok ? (
               <p className="mt-2 text-xs text-[var(--admin-danger)]" data-testid="cultivera-manifests-error">
                 The Cultivera manifests could not be read: {cvSection.error}
