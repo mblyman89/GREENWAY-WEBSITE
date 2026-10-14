@@ -756,6 +756,11 @@ export function __runAchAuthorizationCoreTests(): { passed: number; failed: numb
   ok(releaseVerdict({ ...base, callback: { done: true, numberUnchangedForDays: CONTACT_LOOKBACK_DAYS, note: "Maria in AR read back 4821" } }).ok, "number exactly at the look-back qualifies");
   ok(!releaseVerdict({ ...base, callback: { done: true, numberUnchangedForDays: CONTACT_LOOKBACK_DAYS - 1, note: "Maria in AR read back 4821" } }).ok, "one day short of the look-back refused");
   ok(!releaseVerdict({ ...base, callback: { done: false, numberUnchangedForDays: 400, note: "Maria in AR read back 4821" } }).ok, "no callback refused");
+  // The verdict is exactly { ok, mode: "owner" }: no R39 notifyOther / solo field survives to
+  // drive a stale "tell the other person" email, and the database (0271) accepts 'owner' only.
+  ok(JSON.stringify(ownerRel) === JSON.stringify({ ok: true, mode: "owner" }), "owner verdict has exactly the 0271 shape");
+  const refusedAdmin = releaseVerdict({ ...base, actorIsOwner: false });
+  ok(!refusedAdmin.ok && /Michael/.test(refusedAdmin.refusal) && /approval/.test(refusedAdmin.refusal), "non-owner refusal names Michael and the approval path (D-6 option B)");
 
   // look-back
   const contacts: ContactRecord[] = [

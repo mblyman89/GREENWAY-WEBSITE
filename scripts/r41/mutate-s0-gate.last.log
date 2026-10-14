@@ -25,3 +25,10 @@ killed   build-ungated
 killed   cron-twice
 control pass
 total 25 killed 25 survivors []
+
+# R41 S0 follow-up (CI compliance caught the assertRan floor: ach-authorization-core ran 73 < 74)
+# New checks added in __runAchAuthorizationCoreTests; floor raised to 75. Manual mutants, run by hand:
+M1 releaseVerdict returns extra notifyOther field  -> {"passed":74,"failed":1} KILLED
+M2 refusal text drops the approval path            -> {"passed":74,"failed":1} KILLED
+M3 refusal text drops "Michael"                    -> {"passed":74,"failed":1} KILLED
+control (restored)                                 -> {"passed":75,"failed":0} PASS
