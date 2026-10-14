@@ -1145,6 +1145,9 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       });
       mergesByCardKey.set(target.source_item_id, list);
       const cats = mergeCategoriesByCardKey.get(target.source_item_id) ?? [];
+      // The same expression as the group merge below (today injection mints
+      // filter_categories = [category], so the spread adds nothing new; kept
+      // identical so a future multi-section lot behaves the same either way).
       for (const c of [it.category, ...it.filter_categories]) if (!cats.includes(c)) cats.push(c);
       mergeCategoriesByCardKey.set(target.source_item_id, cats);
       mergedVariantCount += 1;
