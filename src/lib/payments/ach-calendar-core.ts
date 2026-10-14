@@ -553,7 +553,7 @@ export const ACH_FRAUD_PROCEDURE: readonly { readonly rule: string; readonly enf
   { rule: "Bank details are never accepted or changed from an email, text or phone call alone. Vendors use the secure sign-up link; employees sign in person.", enforcedBy: "/admin/settings/banking?tab=vendors" },
   { rule: "Any change to a routing number, account number or account type puts that payee ON HOLD. Nothing is paid to the new account until it is released.", enforcedBy: "/admin/settings/banking/operations#holds" },
   { rule: "Before a hold is released, we call the payee at a phone number we have had on file for at least 90 days (or confirm in person) and write down who we spoke to.", enforcedBy: "/admin/settings/banking/operations#holds" },
-  { rule: "If the person who entered a change also releases it, the other owner and the store are told automatically.", enforcedBy: "/admin/settings/banking/operations#holds" },
+  { rule: "Michael, the owner, can make and release any ACH change himself. Stephen gathers and records ACH information; anything he adds, changes, removes or releases waits for Michael's approval. Every change is logged with who entered it and who approved it.", enforcedBy: "/admin/settings/banking/approvals" },
   { rule: "A new employee account is checked with a prenote or a test credit before real pay goes to it.", enforcedBy: "/admin/settings/banking/operations#checks" },
   { rule: "Returned payments and bank correction notices are logged the same day. The payee goes on hold at once, and Stephen, Michael and the store are emailed.", enforcedBy: "/admin/settings/banking/operations#notices" },
   { rule: "Test credits are monitored for unusual volume or returns.", enforcedBy: "/admin/settings/banking/operations#monitor" },

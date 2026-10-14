@@ -288,8 +288,8 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     whatItMeansHere:
     "This is the sentence the whole vault design answers. A bank-detail change is the single most " +
     "valuable thing a fraudster can achieve, so a change puts the payee ON HOLD, must be verified " +
-    "by a callback to a number already on file, and must be released by Michael or Stephen with a " +
-    "written record. Payments cannot go to new details until that happens.",
+    "by a callback to a number already on file, and must be released by Michael (the owner) with " +
+    "a written record. Payments cannot go to new details until that happens.",
   },
   {
     id: "ach-fraud-phase-2-annual-review",
@@ -629,9 +629,9 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "information in the vendor master file.",
     whatItMeansHere:
     "The reason managers can upload a signed form but cannot open it, edit bank details or " +
-    "release a payee. Only Michael and Stephen can change the vendor or employee master file. " +
-    "With two people that is the strongest separation available, and the solo-release log covers " +
-    "the days only one of them is in.",
+    "release a payee. Only Michael (the owner) can change the vendor or employee master file; " +
+    "Stephen (admin) can gather and record, and his changes wait for Michael's approval. Every " +
+    "change is logged with who entered it and who approved it.",
   },
   {
     id: "ach-callback-manipulation",

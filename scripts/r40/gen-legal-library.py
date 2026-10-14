@@ -61,7 +61,7 @@ ENTRIES = [
         howWeProtectYou=(
             "This is exactly why Greenway's vault only lets you verify a bank change with a phone number or email "
             "that has been on file for at least 90 days, and never one taken from the request. A change also puts the "
-            "payee ON HOLD until Michael or Stephen releases it."
+            "payee ON HOLD until Michael (the owner) releases it."
         ),
         appLink="/admin/settings/banking/operations#holds",
     ),
@@ -140,9 +140,9 @@ ENTRIES = [
             "fraud it would have stopped is likely yours. 'We are a small shop' did not help this company."
         ),
         howWeProtectYou=(
-            "Accept every security procedure Timberland offers, especially dual approval. Michael and Stephen can "
-            "each act alone in Greenway's system, but when one of them releases a hold alone, the other and the store "
-            "are told immediately and the reason is logged."
+            "Accept every security procedure Timberland offers, especially dual approval. In Greenway's system "
+            "Michael, the owner, makes and releases every ACH change himself; anything Stephen adds, changes, removes "
+            "or releases waits for Michael's approval, and every change is logged with who entered it and who approved it."
         ),
         appLink="/admin/settings/banking/operations#holds",
     ),

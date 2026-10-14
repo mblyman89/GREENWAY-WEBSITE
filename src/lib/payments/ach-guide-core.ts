@@ -425,7 +425,7 @@ export function buildBlockers(s: GuideSnapshot): Blocker[] {
       severity: "stops_one",
       who: h.payee,
       problem: `${h.payee}'s direct deposit is ON HOLD (a bank change, return or correction).`,
-      fix: ["Call them at a phone number you have had for 90+ days, or see them in person.", "Have them read back the last 4 of the account.", "Release the hold with a note. If you entered the change yourself, the other owner is told automatically."],
+      fix: ["Call them at a phone number you have had for 90+ days, or see them in person.", "Have them read back the last 4 of the account.", "Michael releases the hold with a note. Stephen's release is sent to Michael for approval."],
       href: GUIDE_LINKS.holds,
       hrefLabel: "Open holds",
       fallback: h.employeeId ? PAY_BY_CHECK_FALLBACK : undefined,
@@ -535,7 +535,7 @@ const RULES: readonly Rule[] = [
   { id: "bank_changed", test: /bank account changed since their last payment/i, title: "Bank account changed since last payday", why: "A changed account right before payday is the most common payroll-fraud pattern.", fix: ["Call the employee at a number on file and confirm the change.", "Then confirm the warning on the payroll run."], href: GUIDE_LINKS.holds, hrefLabel: "Open holds" },
   { id: "duplicate_amount", test: /identical to the last payment|looks like a duplicate/i, title: "This looks like a duplicate payment", why: "The amount is exactly the same as the last payment to this person. That is normal for a fixed salary, and it is also what a double payment looks like.", fix: ["Check the payroll register: is this really a new pay period?", "If it is correct, confirm the warning on the payroll run to continue. The confirmation is recorded."], href: GUIDE_LINKS.payroll, hrefLabel: "Open payroll" },
   { id: "ceiling", test: /usual per-employee ceiling|usual per-run ceiling/i, title: "Amount is above the usual limit", why: "A safety limit caught an unusually large payment. It protects against a typing mistake (an extra zero) and against fraud.", fix: ["Compare the number with the Sage register or paystub.", "If it is correct, confirm the warning on the payroll run to continue. The confirmation is recorded."], href: GUIDE_LINKS.payroll, hrefLabel: "Open payroll" },
-  { id: "dual_control", test: /releasing this file yourself|self-approval/i, title: "You are approving your own payroll file", why: "This is a reminder, not a block. Having a second person look at a payroll file is the strongest protection against payroll fraud.", fix: ["If Stephen or Michael is available, ask them to look at the run before you release it.", "You can still continue."], href: GUIDE_LINKS.payroll, hrefLabel: "Open payroll" },
+  { id: "dual_control", test: /releasing this file yourself|self-approval/i, title: "You are approving your own payroll file", why: "This is a reminder, not a block. Having a second person look at a payroll file is the strongest protection against payroll fraud.", fix: ["If Michael (the owner) generated it himself, this note is a record only. Otherwise Michael reviews the run when he approves it.", "You can still continue."], href: GUIDE_LINKS.payroll, hrefLabel: "Open payroll" },
   { id: "source_document", test: /source document/i, title: "Attach the payroll source document", why: "Every payroll file needs the Sage register (or paystubs) attached, so the numbers can be checked later.", fix: ["Attach the Sage payroll register PDF to the run, then generate."], href: GUIDE_LINKS.payroll, hrefLabel: "Open payroll" },
 ];
 
@@ -632,7 +632,7 @@ export function __runAchGuideCoreTests(): { passed: number; failed: number } {
   ok(vb[0].who === "Acme" && vb[0].severity === "stops_one" && vb[1].severity === "warning", "vendor severity order");
   ok(vb[0].href === "/admin/vendors/v1#vendor-esign", "vendor deep link");
 
-  ok(explainPaymentMessage("Jane: On hold: a bank change, return or correction is waiting for release by Michael or Stephen.").matched === "on_hold", "explain on hold");
+  ok(explainPaymentMessage("Jane: On hold: a bank change, return or correction is waiting for release by Michael (the owner).").matched === "on_hold", "explain on hold");
   ok(explainPaymentMessage("Acme opted out of ACH (cash). Pay another way").matched === "opted_out", "explain opted out");
   ok(explainPaymentMessage("random").matched === "unknown", "unknown falls through");
   ok(explainPaymentMessage("Signed, but the account has not been verified.").matched === "signed_unverified", "signed not verified");

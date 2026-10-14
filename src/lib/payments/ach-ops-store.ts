@@ -10,8 +10,8 @@
  *   notices   log a return / NOC (the money stops in the same transaction),
  *             resolve it with a note. Stephen, Michael and the store are
  *             emailed (owner Q9); the screen lists who to call.
- *   holds     release an employee hold after a callback; a solo release
- *             tells the other owner.
+ *   holds     release an employee hold after a callback. R41 S0: only
+ *             Michael (the owner) releases; Stephen's release is a request.
  *   checks    start a prenote / test credit / callback; build the check file
  *             (pure GET, nothing recorded); mark it sent only when the person
  *             confirms the upload, and only if the list is still exactly the

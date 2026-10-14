@@ -195,7 +195,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                     {h.hold_reason ?? "No reason recorded"} · put on hold by {h.hold_entered_by ? staff.get(h.hold_entered_by) ?? "a staff member" : "unknown"}
                     {h.hold_entered_at ? ` on ${h.hold_entered_at.slice(0, 10)}` : ""}
                   </p>
-                  <p className="mt-1 text-xs text-amber-200">{releaseHint(session.profile.id, h.hold_entered_by)}</p>
+                  <p className="mt-1 text-xs text-amber-200">{releaseHint(session.profile.role === "owner")}</p>
                   <form action={releaseEmployeeHoldAction} className="mt-2 grid gap-2 sm:grid-cols-[10rem_1fr_1fr_auto]">
                     <input type="hidden" name="auth_id" value={h.id} />
                     <select name="method" required className={inputCls} defaultValue="">
@@ -204,8 +204,8 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                       <option value="in_person">In person</option>
                     </select>
                     <input name="note" required minLength={10} maxLength={500} placeholder="Who confirmed what (10+ characters)" className={inputCls} />
-                    <input name="reason" maxLength={500} placeholder="Reason if releasing alone (20+ characters)" className={inputCls} />
-                    <button className={btnGhost}>Release</button>
+                    <input name="reason" maxLength={500} placeholder="Reason (optional)" className={inputCls} />
+                    <button className={btnGhost}>{session.profile.role === "owner" ? "Release" : "Send release to Michael"}</button>
                   </form>
                 </li>
               ))}

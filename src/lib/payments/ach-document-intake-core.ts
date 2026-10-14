@@ -564,9 +564,10 @@ export type RekeyVerdict =
  *   2. If a usable draft exists (AcroForm or LlamaParse with every field) and
  *      the entry matches it field for field -> accepted on "matches_form".
  *   3. Otherwise a SECOND blind entry is required, and the two entries must
- *      match each other -> accepted on "two_blind_entries". (Owner Q1: Stephen
- *      and Michael can each do everything, so the second entry may be the same
- *      person; it is recorded either way.)
+ *      match each other -> accepted on "two_blind_entries". (The second entry
+ *      may be the same person; it is recorded either way. Re-keying only
+ *      gathers: what it produces lands ON HOLD and only Michael, the owner,
+ *      releases it, R41 S0.)
  * A draft is usable only if it has no warnings and every account is complete.
  */
 export function rekeyVerdict(draft: BankDraft, entries: readonly RekeyEntry[]): RekeyVerdict {

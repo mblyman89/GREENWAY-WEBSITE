@@ -46,11 +46,14 @@ export function monitorSummary(m: MonitorReport): { headline: string; tone: "ok"
   return { headline, tone: m.flags.length ? "look" : "ok" };
 }
 
-/** Hint above the release form: will this be a solo release? */
-export function releaseHint(actorId: string, holdEnteredBy: string | null): string {
-  if (holdEnteredBy === null) return "Nobody is recorded as having put this on hold, so releasing it counts as one person: write a reason of 20+ characters. The other owner is emailed.";
-  if (holdEnteredBy === actorId) return "You put this on hold, so releasing it yourself counts as one person: write a reason of 20+ characters. The other owner is emailed.";
-  return "Someone else put this on hold, so your release is the second person. A reason is optional.";
+/**
+ * Hint above the release form (R41 S0, D-6 option B): Michael (the owner)
+ * releases at once; Stephen's release is sent to Michael for approval.
+ */
+export function releaseHint(viewerIsOwner: boolean): string {
+  return viewerIsOwner
+    ? "Release after the callback. It takes effect at once; you get a \"Was this you?\" receipt."
+    : "Your release is sent to Michael for approval. Nothing changes until he approves.";
 }
 
 // ---------------------------------------------------------------------------
@@ -89,8 +92,8 @@ export function __runAchOpsUiCoreTests(): { passed: number; failed: number } {
   ok(m0.tone === "ok" && m0.headline === "Test credits sent: 1 in the last 30 days (0 came back); 3 in the last year (1 came back).", "summary words");
   ok(monitorSummary({ sent30: 0, returned30: 0, sent365: 0, returned365: 0, flags: ["x"] }).tone === "look", "any flag -> look");
 
-  ok(/one person/.test(releaseHint("a", null)), "unknown author is solo");
-  ok(/one person/.test(releaseHint("a", "a")), "own hold is solo");
-  ok(/second person/.test(releaseHint("a", "b")), "other's hold is dual");
+  ok(/at once/.test(releaseHint(true)) && !/20\+/.test(releaseHint(true)), "owner releases at once, no 20-character reason");
+  ok(/sent to Michael for approval/.test(releaseHint(false)), "admin release is a request");
+  ok(releaseHint(true) !== releaseHint(false), "owner and admin hints differ");
   return { passed, failed };
 }
