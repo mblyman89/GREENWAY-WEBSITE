@@ -7,7 +7,8 @@ import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip"
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
+import { getOriginatorReadiness } from "@/lib/payroll/payroll-store";
+import { OriginatorNotReady } from "@/components/admin/payroll/OriginatorNotReady";
 import { Card, CardHeader, Section } from "@/components/admin/ui";
 import { getVendorReconcileInputs } from "@/lib/payments/vendor-reconcile-store";
 import {
@@ -43,12 +44,12 @@ export default async function VendorPaymentsPage({
     );
   }
 
-  const [settings, reconcileInputs] = await Promise.all([
-    getAchCompanySettings(),
+  const [{ settings, readiness }, reconcileInputs] = await Promise.all([
+    getOriginatorReadiness(),
     getVendorReconcileInputs(),
   ]);
-  const settingsComplete =
-    !!settings.destination_routing && !!settings.company_name && !!settings.originating_dfi;
+  // R41 S2: the one Timberland readiness answer (the builder uses the same check).
+  const originatorReady = readiness.ready;
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -118,9 +119,9 @@ export default async function VendorPaymentsPage({
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard
             label="Bank/ACH setup"
-            value={settingsComplete ? "Ready" : "Incomplete"}
-            hint={settingsComplete ? "company + routing on file" : "set it on the Payroll page"}
-            accent={settingsComplete ? "green" : "orange"}
+            value={originatorReady ? "Ready" : "Incomplete"}
+            hint={originatorReady ? "matches Timberland's setup" : "fix it on Banking > My banking"}
+            accent={originatorReady ? "green" : "orange"}
             href="/admin/payroll"
           />
           <StatCard
@@ -137,15 +138,7 @@ export default async function VendorPaymentsPage({
           />
         </div>
 
-        {!settingsComplete && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
-            Your bank/company ACH settings are incomplete. Set them once on the{" "}
-            <Link href="/admin/payroll" className="font-semibold underline">
-              Payroll page
-            </Link>{" "}
-            — they are shared with vendor payments.
-          </div>
-        )}
+        {!originatorReady && <OriginatorNotReady problems={readiness.problems} tail="(shared by payroll and vendor payments)." />}
 
         <Section
           title="Pay by ACH"
@@ -159,7 +152,7 @@ export default async function VendorPaymentsPage({
               </p>
             ) : (
               <VendorAchForm
-                settingsComplete={settingsComplete}
+                settingsComplete={originatorReady}
                 companyName={settings.company_name}
                 viewerIsOwner={achSide === "act"}
               />

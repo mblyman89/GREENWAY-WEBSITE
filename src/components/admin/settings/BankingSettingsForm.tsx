@@ -11,19 +11,19 @@ export function BankingSettingsForm({ settings }: { settings: AchCompanySettings
   return (
     <form action={saveBankingSettingsAction} className="grid gap-4 sm:grid-cols-2">
       {/* --- What the owner already knows --- */}
-      <Field label="Bank name" help="Your bank — “Immediate Destination Name” on the ACH file.">
-        <Input name="destination_name" defaultValue={settings.destination_name} placeholder="Timberland Bank" />
+      <Field label="Bank name" help="“Immediate Destination Name” on the ACH file. Timberland: TIMBERLAND BANK.">
+        <Input name="destination_name" defaultValue={settings.destination_name} placeholder="TIMBERLAND BANK" />
       </Field>
-      <Field label="Bank routing number (ABA)" help="Your bank's 9-digit routing — the “Immediate Destination.”">
-        <Input name="destination_routing" defaultValue={settings.destination_routing} placeholder="123456780" inputMode="numeric" />
+      <Field label="Bank routing number (ABA)" help="The “Immediate Destination.” Timberland's is 325170754 (Brenda, answer 3). Digits only.">
+        <Input name="destination_routing" defaultValue={settings.destination_routing} placeholder="325170754" inputMode="numeric" />
       </Field>
-      <Field label="Company (legal / DBA) name" help="Prints on employees' & vendors' statements. Trimmed to 16 chars in the file.">
-        <Input name="company_name" defaultValue={settings.company_name} placeholder="Greenway Marijuana" />
+      <Field label="Company name" help="Enter GREENWAY MARIJUANA. The batch header keeps 16 characters, GREENWAY MARIJUA, which is how Timberland set it up (Brenda, answer 1). Not the legal or IRS name.">
+        <Input name="company_name" defaultValue={settings.company_name} placeholder="GREENWAY MARIJUANA" />
       </Field>
 
       {/* --- Your own funding account (the missing one) --- */}
-      <Field label="Your account number" help="Your funding account at the bank. Not printed in the ACH header; used for the balanced-file offset and your bank's upload portal.">
-        <Input name="company_account_number" defaultValue={settings.company_account_number} placeholder="000123456789" inputMode="numeric" />
+      <Field label="Your account number" help="Your funding account at Timberland (the agreement names the account ending 6048). Not written in the file: Timberland's batches are unbalanced (credits only).">
+        <Input name="company_account_number" defaultValue={settings.company_account_number} placeholder="account ending 6048" inputMode="numeric" />
       </Field>
       <Field label="Account type" help="Which of your accounts funds the batch.">
         <select
@@ -37,14 +37,14 @@ export function BankingSettingsForm({ settings }: { settings: AchCompanySettings
       </Field>
 
       {/* --- Bank-assigned values (explained in the help panel above) --- */}
-      <Field label="Company ID" help="Bank-assigned 10-char ID — usually “1” + your 9-digit EIN. Ask your bank if unsure.">
-        <Input name="company_id" defaultValue={settings.company_id} placeholder="1911234567" />
+      <Field label="Company ID" help="“1” followed by the 9-digit EIN, 10 digits, no dashes (Brenda, answer 2: “1 + EIN”). Must match the EIN on Books > Company information.">
+        <Input name="company_id" defaultValue={settings.company_id} placeholder="1 + EIN (10 digits)" inputMode="numeric" />
       </Field>
-      <Field label="Immediate Origin" help="Bank-assigned 10-char origin — usually the same “1” + EIN as Company ID. Ask your bank.">
-        <Input name="immediate_origin" defaultValue={settings.immediate_origin} placeholder="1911234567" />
+      <Field label="Immediate Origin" help="The same “1” + EIN as the Company ID, 10 digits.">
+        <Input name="immediate_origin" defaultValue={settings.immediate_origin} placeholder="1 + EIN (10 digits)" inputMode="numeric" />
       </Field>
-      <Field label="Originating DFI" help="The first 8 digits of YOUR bank's routing number. Auto-derived, but confirm with your bank.">
-        <Input name="originating_dfi" defaultValue={settings.originating_dfi} placeholder="12345678" inputMode="numeric" />
+      <Field label="Originating DFI" help="The first 8 digits of Timberland's routing number: 32517075.">
+        <Input name="originating_dfi" defaultValue={settings.originating_dfi} placeholder="32517075" inputMode="numeric" />
       </Field>
       <Field label="Statement description" help="Payroll files always say PAYROLL (a Nacha rule since March 20, 2026), whatever is typed here. Vendor payment files say VENDOR PAY. 10 chars max.">
         <Input name="entry_description" defaultValue={settings.entry_description} placeholder="PAYROLL" />

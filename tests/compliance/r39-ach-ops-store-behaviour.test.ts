@@ -95,8 +95,10 @@ function seed() {
   ]);
   st.db.tables.set("ach_return_notices", []);
   st.db.tables.set("ach_company_settings", [
-    { id: true, destination_routing: "325170835", destination_name: "TIMBERLAND BANK", immediate_origin: "1234567890", company_name: "GREENWAY", company_id: "1234567890", originating_dfi: "32517083", entry_description: "PAYROLL", company_account_number: "", company_account_type: "checking" },
+    // R41 S2: the Timberland shape (Brenda answers 1-3); EIN is a test value.
+    { id: true, destination_routing: "325170754", destination_name: "TIMBERLAND BANK", immediate_origin: "1911234567", company_name: "GREENWAY MARIJUANA", company_id: "1911234567", originating_dfi: "32517075", entry_description: "PAYROLL", company_account_number: "", company_account_type: "checking" },
   ]);
+  st.db.tables.set("company_profile", [{ id: true, ein: "911234567" }]);
 }
 
 function everythingWritten(): string {
@@ -415,7 +417,12 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     st.db.tables.get("ach_company_settings")![0].company_id = "";
     st.db.tables.get("ach_company_settings")![0].originating_dfi = " ";
     const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
-    expect(r).toEqual({ ok: false, error: "Fill in the company ACH settings first (Company tab): company ID, originating DFI." });
+    // R41 S2: refused through the one readiness check, each problem named.
+    expect(r.ok).toBe(false);
+    const e = r.ok === false ? r.error : "";
+    expect(e).toMatch(/^The company ACH settings do not match Timberland's setup \(My banking tab\): /);
+    expect(e).toMatch(/Company ID/i);
+    expect(e).toMatch(/Originating DFI/);
   });
 
   it("without the key the accounts cannot be read: refused", async () => {

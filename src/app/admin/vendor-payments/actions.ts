@@ -21,8 +21,7 @@ import { requirePermission, type StaffSession } from "@/lib/auth/session";
 import { achGate } from "@/lib/payments/ach-gate";
 import { vendorBuildOutcome, type RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
-import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
-import type { AchOriginator } from "@/lib/payments/nacha-core";
+import { getOriginatorReadiness } from "@/lib/payroll/payroll-store";
 import {
   validateVendorPayments,
   vendorPaymentsToNacha,
@@ -348,21 +347,14 @@ export async function buildVendorAchAction(
 }
 
 async function buildVendorAchBody(session: StaffSession, formData: FormData): Promise<VendorPayFormResult> {
-  const settings = await getAchCompanySettings();
-  const settingsComplete =
-    !!settings.destination_routing && !!settings.company_name && !!settings.originating_dfi;
-  if (!settingsComplete) {
+  // R41 S2: one readiness answer (settings + company EIN vs Timberland's setup).
+  const { readiness } = await getOriginatorReadiness();
+  if (!readiness.originator) {
     return {
-      problems: [
-        {
-          index: null,
-          vendorName: null,
-          message:
-            "Bank/company ACH settings are incomplete. Set them once on the Payroll page — they are shared with vendor payments.",
-        },
-      ],
+      problems: readiness.problems.map((message) => ({ index: null, vendorName: null, message: `${message} (Banking > My banking.)` })),
     };
   }
+  const originator = readiness.originator;
 
   const rows = parseRows(formData);
   if (rows.length === 0) {
@@ -525,15 +517,6 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
   if (preProblems.length > 0) {
     return { problems: preProblems, warnings };
   }
-
-  const originator: AchOriginator = {
-    destinationRouting: settings.destination_routing,
-    destinationName: settings.destination_name,
-    immediateOrigin: settings.immediate_origin,
-    companyName: settings.company_name,
-    companyId: settings.company_id,
-    originatingDfi: settings.originating_dfi,
-  };
 
   const effectiveDateRaw = String(formData.get("effectiveDate") ?? "").trim();
   const effectiveDate = effectiveDateRaw ? new Date(`${effectiveDateRaw}T00:00:00Z`) : new Date();

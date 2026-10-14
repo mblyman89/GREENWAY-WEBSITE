@@ -137,6 +137,49 @@ export function transactionCode(e: Pick<AchEntry, "accountType" | "prenote">): s
 }
 
 // ---------------------------------------------------------------------------
+// Header records (R41 S2: shared with the "What Timberland sees" preview)
+// ---------------------------------------------------------------------------
+
+/** The 1 record (File Header), 94 characters. */
+export function fileHeaderRecord(originator: AchOriginator, created: Date, fileIdModifier: string): string {
+  return (
+    "1" +
+    "01" +
+    " " + numeric(originator.destinationRouting.replace(/\D/g, ""), 9) + // 4-13 (b + 9)
+    numeric(originator.immediateOrigin, 10) + // 14-23
+    yymmdd(created) + // 24-29
+    hhmm(created) + // 30-33
+    fileIdModifier + // 34
+    "094" + // 35-37 record size
+    "10" + // 38-39 blocking factor
+    "1" + // 40 format code
+    alpha(originator.destinationName, 23) + // 41-63
+    alpha(originator.companyName, 23) + // 64-86
+    " ".repeat(8) // 87-94 reference code
+  );
+}
+
+/** The 5 record (Batch Header, service class 220 = credits only), 94 characters. */
+export function batchHeaderRecord(originator: AchOriginator, secCode: string, companyEntryDescription: string, effectiveDate: Date, batchNumber: number): string {
+  const originDfi8 = originator.originatingDfi.replace(/\D/g, "").slice(0, 8);
+  return (
+    "5" +
+    "220" + // service class code: credits only
+    alpha(originator.companyName, 16) + // 5-20
+    " ".repeat(20) + // 21-40 discretionary data
+    alpha(originator.companyId, 10) + // 41-50
+    alpha(secCode, 3) + // 51-53
+    alpha(companyEntryDescription, 10) + // 54-63
+    yymmdd(effectiveDate) + // 64-69 descriptive date
+    yymmdd(effectiveDate) + // 70-75 effective entry date
+    " ".repeat(3) + // 76-78 reserved (settlement)
+    "1" + // 79 originator status code
+    numeric(originDfi8, 8) + // 80-87 originating DFI id
+    numeric(batchNumber, 7) // 88-94
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Builder
 // ---------------------------------------------------------------------------
 
@@ -202,40 +245,12 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
 
   const lines: string[] = [];
 
-  // ---- 1: File Header ----
-  lines.push(
-    "1" +
-      "01" +
-      " " + numeric(originator.destinationRouting.replace(/\D/g, ""), 9) + // 4-13 (b + 9)
-      numeric(originator.immediateOrigin, 10) + // 14-23
-      yymmdd(created) + // 24-29
-      hhmm(created) + // 30-33
-      fileIdModifier + // 34
-      "094" + // 35-37 record size
-      "10" + // 38-39 blocking factor
-      "1" + // 40 format code
-      alpha(originator.destinationName, 23) + // 41-63
-      alpha(originator.companyName, 23) + // 64-86
-      " ".repeat(8), // 87-94 reference code
-  );
-
-  // ---- 5: Batch Header (single batch, credits only = SCC 220) ----
+  // ---- 1: File Header, 5: Batch Header (single batch, credits only) ----
+  // R41 S2: built by the same exported helpers the "What Timberland sees"
+  // card uses, so the preview is these exact bytes.
+  lines.push(fileHeaderRecord(originator, created, fileIdModifier));
   const batchNumber = 1;
-  lines.push(
-    "5" +
-      "220" + // service class code: credits only
-      alpha(originator.companyName, 16) + // 5-20
-      " ".repeat(20) + // 21-40 discretionary data
-      alpha(originator.companyId, 10) + // 41-50
-      alpha(secCode, 3) + // 51-53
-      alpha(input.companyEntryDescription, 10) + // 54-63
-      yymmdd(effectiveDate) + // 64-69 descriptive date
-      yymmdd(effectiveDate) + // 70-75 effective entry date
-      " ".repeat(3) + // 76-78 reserved (settlement)
-      "1" + // 79 originator status code
-      numeric(originDfi8, 8) + // 80-87 originating DFI id
-      numeric(batchNumber, 7), // 88-94
-  );
+  lines.push(batchHeaderRecord(originator, secCode, input.companyEntryDescription, effectiveDate, batchNumber));
 
   // ---- 6: Entry Detail records ----
   let hash = 0;

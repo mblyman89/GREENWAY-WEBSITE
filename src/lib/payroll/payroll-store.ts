@@ -17,7 +17,8 @@ import {
   planPayrollEntries,
   type PayrollLineInput,
 } from "@/lib/payroll/payroll-core";
-import { buildNachaFile, type AchOriginator } from "@/lib/payments/nacha-core";
+import { buildNachaFile } from "@/lib/payments/nacha-core";
+import { originatorReadiness, type OriginatorReadiness, type TimberlandStamp } from "@/lib/payments/timberland-originator-core";
 import { listEmployeeDepositPlans } from "@/lib/payroll/employee-deposit-plans-store";
 import {
   evaluatePayrollGuardrails,
@@ -80,6 +81,92 @@ export async function getAchCompanySettings(): Promise<AchCompanySettings> {
   } catch {
     return { ...EMPTY_SETTINGS };
   }
+}
+
+/**
+ * R41 S2: the company EIN from Books > Company information
+ * (company_profile.ein, constrained to 9 digits by migration 0196). Timberland
+ * set the Company ID up as "1 + EIN", so every ACH file checks against it.
+ * A failed read returns "" and the check then refuses ("EIN is not entered"),
+ * never passes.
+ */
+export async function getCompanyEin(): Promise<string> {
+  if (!isSupabaseServiceConfigured) return "";
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.from("company_profile").select("ein").eq("id", true).maybeSingle();
+    if (error || !data) return "";
+    const ein = (data as { ein?: unknown }).ein;
+    return typeof ein === "string" ? ein.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * R41 S2: the ONE readiness answer (settings + EIN, checked against
+ * Timberland's setup). Every page and every file builder uses this; the old
+ * 3/5/6-field `settingsComplete` checks are gone.
+ */
+/**
+ * R41 S2: the "Timberland confirmed on ___" stamp (migration 0272). Before
+ * 0272 is applied the columns do not exist; that reads as columnsReady=false
+ * (the card says so), never as "confirmed".
+ */
+export async function getTimberlandStamp(): Promise<{ columnsReady: boolean; stamp: TimberlandStamp | null; error: string | null }> {
+  if (!isSupabaseServiceConfigured) return { columnsReady: false, stamp: null, error: "Database not connected." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("ach_company_settings")
+      .select("timberland_confirmed_at,timberland_confirmed_by,timberland_confirm_note,timberland_confirm_cleared_at")
+      .eq("id", true)
+      .maybeSingle();
+    if (error) {
+      const missing = error.code === "42703" || /column .* does not exist|could not find .* column/i.test(error.message ?? "");
+      return { columnsReady: false, stamp: null, error: missing ? null : error.message };
+    }
+    const d = (data ?? {}) as Record<string, string | null>;
+    return {
+      columnsReady: true,
+      stamp: {
+        confirmedAt: d.timberland_confirmed_at ?? null,
+        confirmedBy: d.timberland_confirmed_by ?? null,
+        note: d.timberland_confirm_note ?? null,
+        clearedAt: d.timberland_confirm_cleared_at ?? null,
+      },
+      error: null,
+    };
+  } catch (e) {
+    return { columnsReady: false, stamp: null, error: e instanceof Error ? e.message : "read failed" };
+  }
+}
+
+/**
+ * R41 S2: write the stamp. The caller has already checked the owner (achGate)
+ * and the readiness (confirmStampProblem). 0271 refuses a non-owner
+ * updated_by; 0272 refuses a stamp that does not name updated_by, and clears
+ * it if a matched field changed in the same write.
+ */
+export async function saveTimberlandStamp(actorId: string, note: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("ach_company_settings")
+    .update({
+      timberland_confirmed_at: new Date().toISOString(),
+      timberland_confirmed_by: actorId,
+      timberland_confirm_note: note.trim().slice(0, 500),
+      updated_by: actorId,
+    })
+    .eq("id", true);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function getOriginatorReadiness(): Promise<{ settings: AchCompanySettings; ein: string; readiness: OriginatorReadiness }> {
+  const [settings, ein] = await Promise.all([getAchCompanySettings(), getCompanyEin()]);
+  return { settings, ein, readiness: originatorReadiness(settings, ein) };
 }
 
 export async function saveAchCompanySettings(
@@ -489,7 +576,6 @@ export async function generatePayrollNacha(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const detail = await getPayrollRun(runId);
   if (!detail) return { ok: false, error: "Payroll run not found." };
-  const settings = await getAchCompanySettings();
 
   const lines: PayrollLineInput[] = detail.lines.map((l) => ({
     employeeId: l.employee_id ?? l.id,
@@ -528,14 +614,11 @@ export async function generatePayrollNacha(
     }
   }
 
-  const originator: AchOriginator = {
-    destinationRouting: settings.destination_routing,
-    destinationName: settings.destination_name,
-    immediateOrigin: settings.immediate_origin,
-    companyName: settings.company_name,
-    companyId: settings.company_id,
-    originatingDfi: settings.originating_dfi,
-  };
+  // R41 S2: the originator comes only from the Timberland readiness check
+  // (settings + company EIN). buildNachaFile checks it again on its own.
+  const { readiness } = await getOriginatorReadiness();
+  if (!readiness.originator) return { ok: false, error: `The company ACH settings do not match Timberland's setup: ${readiness.problems.join(" ")} Fix them on Banking > My banking.` };
+  const originator = readiness.originator;
 
   // R39 S3: split deposits. One line per employee (validated above); up to
   // three entries per line from the employee's signed authorization.

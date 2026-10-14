@@ -89,6 +89,8 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   "annual_review.done": { targetType: "authorization", idField: "auth_id", version: AUTH },
   "ach_document.reject": { targetType: "document", idField: "document_id", version: { table: "ach_authorization_documents", key: "id", cols: ["intake_status", "archived_at"] } },
   "banking_settings.save": { targetType: "company", idField: null, version: { table: "ach_company_settings", key: "id", cols: ["updated_at"] } },
+  // R41 S2: a confirmation covers the values on screen; any later save (updated_at) makes the request stale.
+  "timberland_setup.confirm": { targetType: "company", idField: null, version: { table: "ach_company_settings", key: "id", cols: ["updated_at"] } },
   // The run id is bound to the action (generateRunAction(runId, formData)), not a form field.
   "payroll.generate": { targetType: "payroll_run", idField: null, version: { table: "payroll_runs", key: "id", cols: ["status", "updated_at"] } },
   "vendor_esign.countersign": { targetType: "invite", idField: "invite_id", version: { table: "vendor_esign_invites", key: "id", cols: ["state", "countersigned_at", "rejected_at"] } },

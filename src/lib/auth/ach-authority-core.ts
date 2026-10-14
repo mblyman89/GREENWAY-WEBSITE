@@ -91,6 +91,7 @@ export const ACH_ACTIONS = {
   "annual_review.done": { cls: "live", label: "Record the annual authorization review" },
   "ach_document.reject": { cls: "live", label: "Reject an ACH intake document" },
   "banking_settings.save": { cls: "live", label: "Change the company banking settings" },
+  "timberland_setup.confirm": { cls: "live", label: "Record that Timberland confirmed the company ACH setup" },
   "payroll.generate": { cls: "live", label: "Generate the payroll ACH file" },
   "vendor_esign.countersign": { cls: "live", label: "Countersign a vendor ACH agreement" },
   "vendor_esign.reject": { cls: "live", label: "Reject a vendor e-signed ACH form" },
