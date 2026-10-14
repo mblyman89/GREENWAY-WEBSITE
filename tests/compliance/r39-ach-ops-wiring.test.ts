@@ -168,6 +168,29 @@ describe("Operations page", () => {
     expect(PAGE).toContain('<input type="hidden" name="fp" value={fp} />');
     expect(PAGE).toContain('name="confirm" value="yes" required');
   });
+  // R41 S3: each form on its own (a shared string elsewhere must not satisfy these).
+  const formOf = (action: string) => {
+    const i = PAGE.indexOf(`<form action={${action}}`);
+    expect(i, action).toBeGreaterThan(-1);
+    return PAGE.slice(i, PAGE.indexOf("</form>", i));
+  };
+  it("R41 S3: the release form and the confirm form EACH post the list fingerprint; confirm needs the ticked box; void needs its box and a reason", () => {
+    for (const a of ["releaseCheckFileAction", "markCheckFileSentAction"]) {
+      const f = formOf(a);
+      expect(f, a).toContain('<input type="hidden" name="fp" value={fp} />');
+      expect(f, a).toContain('<input type="hidden" name="method" value={m} />');
+      expect(f, a).toContain('<input type="hidden" name="effective" value={effective} />');
+    }
+    expect(formOf("markCheckFileSentAction")).toContain('<input type="checkbox" name="confirm" value="yes" required /> I uploaded this file to Timberland');
+    expect(formOf("releaseCheckFileAction")).not.toContain('name="confirm"');
+    const v = formOf("voidAchFileAction");
+    expect(v).toContain('name="confirm" value="yes" required');
+    expect(v).toMatch(/name="reason"[^>]*required/);
+  });
+  it("R41 S3: the release and confirm bodies EACH pass the posted fingerprint to the store", () => {
+    expect(bodyOf(ACTIONS, "releaseCheckFileAction")).toContain('await releaseCheckFile({ method, effective: str(fd, "effective"), fingerprint: str(fd, "fp"), actorId: session.profile.id,');
+    expect(bodyOf(ACTIONS, "markCheckFileSentAction")).toContain('await markCheckFileSent({ method, effective: str(fd, "effective"), fingerprint: str(fd, "fp"), actorId: session.profile.id,');
+  });
   it("the field names match what the store reads", () => {
     for (const f of ["payee", "code", "received_on", "settlement_date", "amount", "trace", "corrected", "verification"]) expect(PAGE, f).toContain(`name="${f}"`);
     for (const f of ['"payee"', '"code"', '"received_on"', '"settlement_date"', '"amount"', '"trace"', '"corrected"']) expect(read("src/lib/payments/ach-return-log-core.ts")).toContain(`g(${f})`);
