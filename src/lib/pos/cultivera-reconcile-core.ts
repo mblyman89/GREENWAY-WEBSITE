@@ -363,11 +363,17 @@ export function explanationsFromEvents(events: readonly ExplainEvent[]): Map<str
 /** Validate a note before it is saved. */
 export function parseExplainInput(v: { key: unknown; note: unknown }): { ok: true; key: string; note: string } | { ok: false; error: string } {
   const key = typeof v.key === "string" ? v.key.trim() : "";
-  const note = typeof v.note === "string" ? v.note.replace(/\s+/g, " ").trim() : "";
   if (!/^(units_differ|missing_lot|extra_lot|not_whole|blank_product|no_barcode)\|[^|]{1,200}\|\d*\|\d*$/.test(key)) return { ok: false, error: "That line could not be identified. Reload the page and try again." };
+  const n = parseNoteText(v.note);
+  return n.ok ? { ok: true, key, note: n.note } : n;
+}
+
+/** The note rules alone (one line's note and the bulk note share them). */
+export function parseNoteText(v: unknown): { ok: true; note: string } | { ok: false; error: string } {
+  const note = typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "";
   if (note.length < 3) return { ok: false, error: "Write a short note saying what you found (at least 3 characters)." };
   if (note.length > RECONCILE_NOTE_MAX) return { ok: false, error: `Keep the note under ${RECONCILE_NOTE_MAX} characters.` };
-  return { ok: true, key, note };
+  return { ok: true, note };
 }
 
 export type Verdict = "go" | "go_explained" | "no_go";
@@ -479,10 +485,10 @@ export function creatableMissing(lines: readonly MismatchLine[]): number {
 }
 
 /** A link back to this page with filters (empty values dropped). */
-export function reconcileHref(importId: string, q: Partial<Record<"kind" | "vendor" | "category" | "q" | "open" | "page" | "barcode", string | number>> = {}): string {
+export function reconcileHref(importId: string, q: Partial<Record<"kind" | "vendor" | "category" | "q" | "open" | "page" | "barcode" | "jump", string | number>> = {}): string {
   const p = new URLSearchParams();
   if (importId) p.set("import", importId);
-  for (const k of ["kind", "vendor", "category", "q", "open", "page", "barcode"] as const) {
+  for (const k of ["kind", "vendor", "category", "q", "open", "page", "barcode", "jump"] as const) {
     const v = q[k];
     if (v != null && String(v) !== "") p.set(k, String(v));
   }
@@ -493,6 +499,114 @@ export function reconcileHref(importId: string, q: Partial<Record<"kind" | "vend
 /** The kind filter from the URL, or "" when it is not a real kind. */
 export function parseKind(v: unknown): MismatchKind | "" {
   return typeof v === "string" && (RECONCILE_KINDS as string[]).includes(v) ? (v as MismatchKind) : "";
+}
+
+/* ------------------------------------------------------------------ *
+ *  A2+ "work it and fix it" helpers (owner follow-up): bulk notes, note
+ *  suggestions, jump to the next open line, progress, open counts per group.
+ * ------------------------------------------------------------------ */
+
+/** One filter, read the same way by the page, the CSV route and the bulk buttons. */
+export function filterFromParams(get: (k: string) => unknown): LineFilter {
+  const s = (k: string, max: number) => {
+    const v = get(k);
+    return typeof v === "string" && v ? v.slice(0, max) : undefined;
+  };
+  return { kind: parseKind(get("kind")) || undefined, vendor: s("vendor", 200), category: s("category", 200), q: s("q", 100), open: get("open") === "1" };
+}
+
+/** Bulk buttons write at most this many notes per press (one audit row each). */
+export const RECONCILE_BULK_MAX = 500;
+
+/** Ready-made notes per kind (he can pick one or type his own). */
+export const NOTE_PRESETS: Record<MismatchKind, readonly string[]> = {
+  units_differ: ["Two Cultivera rows were merged into one lot - units are right", "Lot was changed after the import - checked, fine", "Checked the shelf - our number is right"],
+  missing_lot: ["Same stock as the existing lot on the earlier delivery - counted there", "Sold out in Cultivera before the import - nothing on the shelf", "Not on the shelf - checked", "Will create it by hand after the count"],
+  extra_lot: ["Moved here by Rebuild deliveries - same stock", "Lot from an older import - checked, fine", "Checked the shelf - it is there"],
+  not_whole: ["Changed by hand on purpose - checked its history", "Bulk item sold by weight - fine"],
+  blank_product: ["Zero on the shelf - no product to fix", "Fixed the name in Cultivera - will re-import"],
+  no_barcode: ["Checked in Cultivera - no real barcode exists", "Made-up code is fine for this item"],
+};
+
+/** Suggestions for one line: his own recent notes first (newest, distinct), then the presets for its kind. */
+export function noteSuggestions(kind: MismatchKind, explained: ReadonlyMap<string, Explanation>, max = 8): string[] {
+  const recent = [...explained.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).map((e) => e.note);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const n of [...recent, ...(NOTE_PRESETS[kind] ?? [])]) {
+    const k = n.trim().toLowerCase();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(n.trim());
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** Keys of the lines that still need a note / already have one (in list order). */
+export function openKeys(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation>): string[] {
+  return lines.map(lineKey).filter((k) => !explained.has(k));
+}
+export function explainedKeys(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation>): string[] {
+  return lines.map(lineKey).filter((k) => explained.has(k));
+}
+
+/** The next line without a note after `afterKey` (wrapping round), never `afterKey` itself. null = none left. */
+export function nextOpenKey(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation>, afterKey: string): string | null {
+  const keys = lines.map(lineKey);
+  const at = keys.indexOf(afterKey);
+  const order = at < 0 ? keys : [...keys.slice(at + 1), ...keys.slice(0, at)];
+  return order.find((k) => k !== afterKey && !explained.has(k)) ?? null;
+}
+
+/** A safe, one-to-one HTML id for a line (letters and digits kept, anything else -> _hhhh). */
+export function lineAnchor(key: string): string {
+  return "line-" + key.replace(/[^A-Za-z0-9]/g, (c) => "_" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+}
+
+/** Where a line sits in the filtered list: which page it is on (1-based). null = not in the list. */
+export function pageOfKey(lines: readonly MismatchLine[], key: string, size = RECONCILE_LINE_CAP): number | null {
+  const i = lines.findIndex((l) => lineKey(l) === key);
+  return i < 0 ? null : Math.floor(i / size) + 1;
+}
+
+/** "12 of 40 explained (30%)". pct floors, so 100% only when nothing is open. */
+export function progressOf(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation>): { total: number; explained: number; open: number; pct: number } {
+  const total = lines.length;
+  const ex = lines.filter((l) => explained.has(lineKey(l))).length;
+  return { total, explained: ex, open: total - ex, pct: total === 0 ? 100 : Math.floor((ex * 100) / total) };
+}
+
+/** Lines still open per vendor (or category), for the group tables. */
+export function openByGroup(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation>, field: "vendor" | "category"): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of lines) if (!explained.has(lineKey(l))) m.set(l[field], (m.get(l[field]) ?? 0) + 1);
+  return m;
+}
+
+/** His latest notes on lines that still exist (newest first) - "what did I write?" with a jump back. */
+export function recentNotes(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation>, max = 10): { line: MismatchLine; note: Explanation }[] {
+  const out: { line: MismatchLine; note: Explanation }[] = [];
+  for (const l of lines) {
+    const e = explained.get(lineKey(l));
+    if (e) out.push({ line: l, note: e });
+  }
+  return out.sort((a, b) => (a.note.at < b.note.at ? 1 : a.note.at > b.note.at ? -1 : 0)).slice(0, Math.max(0, max));
+}
+
+/**
+ * The bulk buttons send how many lines they saw. The server re-checks and
+ * refuses if the list changed in between (a note must never land on a line
+ * he did not see), if it is over the cap, or if the box was not ticked.
+ */
+export function checkBulk(v: { keys: readonly string[]; expected: unknown; confirm: unknown; verb: "explain" | "remove" }): { ok: true } | { ok: false; error: string } {
+  if (v.confirm !== "yes") return { ok: false, error: "Tick the box to confirm." };
+  const exp = typeof v.expected === "string" && /^\d{1,6}$/.test(v.expected) ? Number(v.expected) : NaN;
+  if (!Number.isFinite(exp)) return { ok: false, error: "The page was out of date. Reload and try again." };
+  if (v.keys.length === 0) return { ok: false, error: v.verb === "explain" ? "Every line in this view already has a note." : "No line in this view has a note to remove." };
+  if (v.keys.length !== exp) return { ok: false, error: `The list changed since the page loaded (it showed ${exp}, now ${v.keys.length}). Nothing was saved. Look again and press it again.` };
+  if (v.keys.length > RECONCILE_BULK_MAX) return { ok: false, error: `That is ${v.keys.length} lines. Narrow the filter to ${RECONCILE_BULK_MAX} or fewer (by vendor, category or kind) and press it again.` };
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ *
@@ -682,6 +796,7 @@ export function __runCultiveraReconcileCoreTests(): { passed: number; failed: nu
   ok(creatableMissing(r4.mismatches) === 0 && creatableMissing(r4b.mismatches) === 1, "elsewhere lines are not creatable");
   ok(reconcileHref("abc") === "/admin/menu-imports/reconcile?import=abc" && reconcileHref("") === "/admin/menu-imports/reconcile", "href base");
   ok(reconcileHref("abc", { kind: "extra_lot", vendor: "A & B", page: 2, q: "" }) === "/admin/menu-imports/reconcile?import=abc&kind=extra_lot&vendor=A+%26+B&page=2", "href encodes + drops empty");
+  ok(reconcileHref("abc", { jump: "units_differ|A|3|4", page: "" }) === "/admin/menu-imports/reconcile?import=abc&jump=units_differ%7CA%7C3%7C4", "href carries the jump key");
   ok(parseKind("missing_lot") === "missing_lot" && parseKind("bogus") === "" && parseKind(undefined) === "", "parse kind");
   ok(RECONCILE_KINDS.length === 6, "six kinds");
 
@@ -692,6 +807,53 @@ export function __runCultiveraReconcileCoreTests(): { passed: number; failed: nu
   // empty everything: 0 = 0 and go only when reads complete
   ok(reconcile({ file: fileSide([]), lots: [], readsComplete: true }).go, "empty balances");
   ok(!reconcile({ file: fileSide([]), lots: [], readsComplete: false }).go, "empty but unread = no-go");
+
+  // A2+ helpers
+  const fp = (o: Record<string, string>) => filterFromParams((k) => o[k]);
+  const f0 = fp({ kind: "extra_lot", vendor: "V".repeat(250), q: "x".repeat(150), open: "1" });
+  ok(f0.kind === "extra_lot" && f0.vendor?.length === 200 && f0.q?.length === 100 && f0.open === true && f0.category === undefined, "filterFromParams caps + kind");
+  ok(fp({ kind: "bogus", open: "yes" }).kind === undefined && fp({ open: "yes" }).open === false && fp({ category: "" }).category === undefined, "filterFromParams refuses junk");
+  ok(RECONCILE_KINDS.every((k) => NOTE_PRESETS[k].length >= 2 && NOTE_PRESETS[k].every((n) => n.length >= 3 && n.length <= RECONCILE_NOTE_MAX)), "presets per kind, valid notes");
+  const exA = new Map<string, Explanation>([
+    ["k1", { key: "k1", note: "Older note", by: null, at: "2026-10-31T01:00:00Z" }],
+    ["k2", { key: "k2", note: "Newest note", by: null, at: "2026-10-31T02:00:00Z" }],
+    ["k3", { key: "k3", note: "newest NOTE ", by: null, at: "2026-10-31T00:00:00Z" }],
+  ]);
+  const sg = noteSuggestions("extra_lot", exA);
+  ok(sg[0] === "Newest note" && sg[1] === "Older note" && sg.length === 2 + NOTE_PRESETS.extra_lot.length, "suggestions: own notes newest first, case-insensitive dedupe, then presets");
+  ok(noteSuggestions("extra_lot", exA, 1).length === 1 && noteSuggestions("not_whole", new Map()).join() === NOTE_PRESETS.not_whole.join(), "suggestions capped / presets alone");
+  const k10 = r10.mismatches.map(lineKey);
+  const ex10 = new Map<string, Explanation>([[k10[1], { key: k10[1], note: "ok", by: null, at: "t" }], [k10[2], { key: k10[2], note: "ok", by: null, at: "t" }]]);
+  ok(openKeys(r10.mismatches, ex10).length === r10.mismatches.length - 2 && !openKeys(r10.mismatches, ex10).includes(k10[1]), "open keys");
+  ok(explainedKeys(r10.mismatches, ex10).join() === [k10[1], k10[2]].join(), "explained keys in order");
+  ok(nextOpenKey(r10.mismatches, ex10, k10[0]) === k10[3], "next open skips explained");
+  const lastK = k10[k10.length - 1];
+  ok(nextOpenKey(r10.mismatches, ex10, lastK) === k10[0], "next open wraps round");
+  ok(nextOpenKey(r10.mismatches, ex10, "nope") === k10[0], "unknown key starts at the top");
+  ok(nextOpenKey(r3.mismatches, new Map(), lineKey(r3.mismatches[0])) === null && nextOpenKey(r3.mismatches, allEx, "x") === null, "never itself; none left = null");
+  ok(lineAnchor("units_differ|A b|3|4") === "line-units_005fdiffer_007cA_0020b_007c3_007c4" && lineAnchor("a|b") !== lineAnchor("a_007cb") && /^[A-Za-z0-9_-]+$/.test(lineAnchor('x"<>&|')), "anchor safe + one-to-one");
+  ok(pageOfKey(r10.mismatches, k10[0]) === 1 && pageOfKey(r10.mismatches, k10[200]) === 2 && pageOfKey(r10.mismatches, k10[199]) === 1 && pageOfKey(r10.mismatches, "nope") === null, "page of key");
+  const pr = progressOf(r10.mismatches, ex10);
+  ok(pr.total === r10.mismatches.length && pr.explained === 2 && pr.open === pr.total - 2 && pr.pct === Math.floor(200 / pr.total), "progress floors");
+  const almost = new Map(k10.slice(1).map((k) => [k, { key: k, note: "ok", by: null, at: "t" }] as [string, Explanation]));
+  ok(progressOf(r10.mismatches, almost).pct === 99 && progressOf([], new Map()).pct === 100, "100% only when nothing open");
+  const og = openByGroup(mixed.mismatches, new Map(), "vendor");
+  ok([...og.values()].reduce((a, b) => a + b, 0) === mixed.mismatches.length, "open by group sums");
+  const ogx = openByGroup(r3.mismatches, allEx, "category");
+  ok(ogx.size === 0 && openByGroup(r3.mismatches, new Map(), "category").get("Flower") === 1, "open by group skips explained");
+  ok(!checkBulk({ keys: ["a"], expected: "1", confirm: "no", verb: "explain" }).ok, "bulk needs the tick");
+  const cb = (keys: string[], expected: unknown, verb: "explain" | "remove" = "explain") => checkBulk({ keys, expected, confirm: "yes", verb });
+  ok(cb(["a", "b"], "2").ok && !cb(["a", "b"], "3").ok && !cb(["a"], "x").ok && !cb(["a"], "").ok && !cb(["a"], 1).ok, "bulk count must match what he saw");
+  const stale = cb(["a", "b"], "3");
+  ok(!stale.ok && stale.error.includes("showed 3, now 2") && stale.error.includes("Nothing was saved"), "stale list explained");
+  const none = cb([], "0");
+  ok(!none.ok && none.error.includes("already has a note") && !cb([], "0", "remove").ok, "empty list refused");
+  const big = Array.from({ length: RECONCILE_BULK_MAX + 1 }, (_, i) => "k" + i);
+  const rn = recentNotes(r10.mismatches, new Map([...ex10, ["gone|X|1|2", { key: "gone|X|1|2", note: "old", by: null, at: "z" }], [k10[2], { key: k10[2], note: "later", by: null, at: "u" }]]));
+  ok(rn.length === 2 && rn[0].note.note === "later" && rn[0].line.barcode === r10.mismatches[2].barcode && recentNotes(r10.mismatches, ex10, 1).length === 1, "recent notes: newest first, only lines that exist, capped");
+  const pn = parseNoteText("  a   b  ");
+  ok(pn.ok && pn.note === "a b" && !parseNoteText("ab").ok && !parseNoteText(5).ok && !parseNoteText("x".repeat(RECONCILE_NOTE_MAX + 1)).ok && parseNoteText("x".repeat(RECONCILE_NOTE_MAX)).ok, "note text rules (bounds inclusive)");
+  ok(!cb(big, String(big.length)).ok && cb(big.slice(1), String(RECONCILE_BULK_MAX)).ok, "bulk cap inclusive");
 
   return { passed, failed };
 }

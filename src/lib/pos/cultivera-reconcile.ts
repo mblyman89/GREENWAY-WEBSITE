@@ -243,3 +243,27 @@ export async function writeReconcileEvent(
   });
   return error ? error.message : null;
 }
+
+/**
+ * A2+ bulk notes: many events in ONE insert (all or nothing - PostgREST
+ * inserts an array in one statement), CHECKED like writeReconcileEvent.
+ * Returns the error text or null.
+ */
+export async function writeReconcileEvents(
+  admin: Admin,
+  v: { importId: string; action: string; actorId: string | null; actorEmail: string | null; afters: readonly Record<string, unknown>[] },
+): Promise<string | null> {
+  if (v.afters.length === 0) return null;
+  const { error } = await admin.from("audit_logs").insert(
+    v.afters.map((after) => ({
+      actor_id: v.actorId,
+      actor_email: v.actorEmail,
+      action: v.action,
+      entity_type: "pos_import",
+      entity_id: v.importId,
+      before_json: null,
+      after_json: after,
+    })),
+  );
+  return error ? error.message : null;
+}
