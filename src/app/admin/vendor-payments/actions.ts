@@ -63,6 +63,8 @@ import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
 import { optOutPayRefusal } from "@/lib/payments/vendor-ach-enrollment-core";
 import { listVendorAchFlags } from "@/lib/payments/vendor-ach-enrollment-store";
 import { maskAccountTail } from "@/lib/security/at-rest-crypto";
+import { releaseAchFile } from "@/lib/payments/ach-file-ledger-store";
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 export type PayableOption = {
   /**
@@ -519,19 +521,37 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
   }
 
   const effectiveDateRaw = String(formData.get("effectiveDate") ?? "").trim();
-  const effectiveDate = effectiveDateRaw ? new Date(`${effectiveDateRaw}T00:00:00Z`) : new Date();
+  const now = new Date();
+  const effectiveDate = effectiveDateRaw ? new Date(`${effectiveDateRaw}T00:00:00Z`) : now;
+  const effectiveYmd = effectiveDate.toISOString().slice(0, 10);
 
-  const result: VendorAchResult = vendorPaymentsToNacha(payments, originator, {
-    effectiveDate,
-    companyEntryDescription: "VENDOR PAY",
+  // R41 S3: the file is RELEASED ONCE into the ach_files ledger (0273) with
+  // today's next File ID Modifier, BEFORE any payment is recorded: a
+  // duplicate (same payments, same effective date) is refused by the
+  // database and nothing is marked paid. The browser gets the stored bytes.
+  const stamp = pacificDayKey(now);
+  const batchRef = `vendor-ach-${stamp}-${now.getTime().toString(36)}`;
+  const filename = `vendor-ach-${stamp}-${batchRef.slice(-8)}.ach`;
+  let result: VendorAchResult | null = null;
+  const released = await releaseAchFile({
+    kind: "vendor",
+    sourceId: batchRef,
+    actorId: session.userId,
+    now,
+    effectiveDate: effectiveYmd,
+    filename,
+    build: (fileIdModifier) => {
+      result = vendorPaymentsToNacha(payments, originator, { effectiveDate, companyEntryDescription: "VENDOR PAY", createdAt: now, fileIdModifier });
+      return result.ok ? { ok: true, file: result.file, entryCount: result.entryCount, totalCents: result.totalCents } : { ok: false, error: result.problems.map((p) => p.message).join(" ") };
+    },
   });
-
-  if (!result.ok) {
-    return { problems: result.problems, warnings };
+  const built = result as VendorAchResult | null;
+  if (built && !built.ok) {
+    return { problems: built.problems, warnings };
   }
-
-  const stamp = new Date().toISOString().slice(0, 10);
-  const batchRef = `vendor-ach-${stamp}-${Date.now().toString(36)}`;
+  if (!released.ok || !built) {
+    return { problems: [{ index: null, vendorName: null, message: released.ok ? "The vendor file was not built. Reload the page." : released.error }], warnings };
+  }
 
   // Record each payment against its source document (persist the applied
   // amount so future over/under math is correct). Best-effort — never blocks
@@ -581,9 +601,11 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
     entityType: "vendor_payments",
     after: {
       batchRef,
-      entryCount: result.entryCount,
-      totalCents: result.totalCents,
-      recordCount: result.recordCount,
+      achFileId: released.id,
+      fileIdModifier: released.modifier,
+      entryCount: released.entryCount,
+      totalCents: released.totalCents,
+      recordCount: built.recordCount,
       manifests: rows.map((r) => r.manifestId),
       partials: warnings.length,
     },
@@ -592,10 +614,10 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
   return {
     problems: [],
     warnings,
-    file: result.file,
-    filename: `vendor-ach-${stamp}.txt`,
-    totalCents: result.totalCents,
-    entryCount: result.entryCount,
+    file: released.body,
+    filename: released.filename,
+    totalCents: released.totalCents,
+    entryCount: released.entryCount,
   };
 }
 

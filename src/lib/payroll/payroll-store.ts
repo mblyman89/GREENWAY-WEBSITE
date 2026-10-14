@@ -18,6 +18,7 @@ import {
   type PayrollLineInput,
 } from "@/lib/payroll/payroll-core";
 import { buildNachaFile } from "@/lib/payments/nacha-core";
+import { releasePayrollAchFile } from "@/lib/payments/ach-file-ledger-store";
 import { originatorReadiness, type OriginatorReadiness, type TimberlandStamp } from "@/lib/payments/timberland-originator-core";
 import { listEmployeeDepositPlans } from "@/lib/payroll/employee-deposit-plans-store";
 import {
@@ -564,9 +565,12 @@ export type GenerateResult =
   | { ok: false; error: string };
 
 /**
- * Build the NACHA file for a run from its saved lines + company settings.
- * Validates first; on success stamps the run status/filename. Returns the file
- * text so the download route can serve it.
+ * Build and RELEASE the NACHA file for a run, once (R41 S3). Validates and
+ * runs the guardrails first; on success one 0273 call writes the ach_files
+ * row (encrypted bytes + SHA-256) and stamps the run. Returns the exact
+ * stored bytes (CRLF). The download route never calls this: it serves the
+ * stored bytes (readLiveFileForSource). A second release for the same run is
+ * refused until the owner voids the first file.
  */
 export async function generatePayrollNacha(
   runId: string,
@@ -576,6 +580,7 @@ export async function generatePayrollNacha(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const detail = await getPayrollRun(runId);
   if (!detail) return { ok: false, error: "Payroll run not found." };
+  if (detail.run.status !== "draft") return { ok: false, error: "This run already has its ACH file. Download it, or void it (owner, with a reason) to release a new one." };
 
   const lines: PayrollLineInput[] = detail.lines.map((l) => ({
     employeeId: l.employee_id ?? l.id,
@@ -632,43 +637,43 @@ export async function generatePayrollNacha(
         ...planned.notes.filter((n) => !/no signed ACH authorization/.test(n)),
       ];
 
+  // R41 S3: released ONCE into the ach_files ledger (0273). The File ID
+  // Modifier is the next free one today (Pacific); the run is stamped by the
+  // same database call that writes the ledger row, so the stamp and the file
+  // can never disagree. The download serves these stored bytes and never
+  // comes back here.
   const effectiveDate = new Date(`${detail.run.pay_date}T00:00:00Z`);
-  const built = buildNachaFile({
-    originator,
-    entries: planned.entries,
-    secCode: "PPD",
-    // R40: Nacha has REQUIRED the Company Entry Description "PAYROLL" on PPD
-    // wage credits since March 20, 2026 (docs/authorities/ach/
-    // nacha-company-entry-descriptions.txt). The stored setting is ignored for
-    // payroll so a typo or "WAGES" can never put Greenway out of compliance.
-    companyEntryDescription: PAYROLL_ENTRY_DESCRIPTION,
-    effectiveDate,
-    createdAt: new Date(),
-    fileIdModifier: detail.run.file_id_modifier || "A",
-  });
-  if (!built.ok) return { ok: false, error: built.error };
-
   const filename = `payroll_${detail.run.pay_date}_${runId.slice(0, 8)}.ach`;
-  const admin = createSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
-  await admin
-    .from("payroll_runs")
-    .update({
-      status: "file_generated",
-      nacha_filename: filename,
-      generated_at: nowIso,
-      // Dual control: the actor who released the file (self-approval logged).
-      approved_by: actorId,
-      approved_at: nowIso,
-      // Record any conscious override of soft warnings.
-      guardrail_override: !!opts.overrideWarnings,
-      guardrail_override_reason: opts.overrideWarnings ? (opts.overrideReason ?? null) : null,
-      guardrail_override_by: opts.overrideWarnings ? actorId : null,
-      updated_by: actorId,
-    })
-    .eq("id", runId);
+  if (!actorId) return { ok: false, error: "Only the owner releases a payroll ACH file." };
+  const now = new Date();
+  const released = await releasePayrollAchFile({
+    runId,
+    actorId,
+    now,
+    effectiveDate: detail.run.pay_date,
+    filename,
+    overrideWarnings: !!opts.overrideWarnings,
+    overrideReason: opts.overrideWarnings ? (opts.overrideReason ?? null) : null,
+    build: (fileIdModifier) => {
+      const b = buildNachaFile({
+        originator,
+        entries: planned.entries,
+        secCode: "PPD",
+        // R40: Nacha has REQUIRED the Company Entry Description "PAYROLL" on PPD
+        // wage credits since March 20, 2026 (docs/authorities/ach/
+        // nacha-company-entry-descriptions.txt). The stored setting is ignored for
+        // payroll so a typo or "WAGES" can never put Greenway out of compliance.
+        companyEntryDescription: PAYROLL_ENTRY_DESCRIPTION,
+        effectiveDate,
+        createdAt: now,
+        fileIdModifier,
+      });
+      return b.ok ? { ok: true, file: b.file, entryCount: b.entryCount, totalCents: b.totalCents } : { ok: false, error: b.error };
+    },
+  });
+  if (!released.ok) return { ok: false, error: released.error };
 
-  return { ok: true, filename, file: built.file, totalCents: built.totalCents, entryCount: built.entryCount, notes, splitsReady: deposit.tableReady };
+  return { ok: true, filename: released.filename, file: released.body, totalCents: released.totalCents, entryCount: released.entryCount, notes, splitsReady: deposit.tableReady };
 }
 
 // ---------------------------------------------------------------------------
