@@ -201,7 +201,9 @@ describe("S34 wiring", () => {
   it("the server reads the widened variant columns and stays read-only", () => {
     const srv = read("src/lib/inventory/restock-preview-server.ts");
     expect(srv).toContain('"menu_item_id, source_variant_id, medical, label, price_minor_units, inventory_level"');
-    expect(srv).toContain("previewMasteringGroups({ drafts, liveCards, vendorIds })");
+    // R50 A7: the same call now also passes the barcode-first inputs.
+    expect(srv).toContain("previewMasteringGroups({ drafts, liveCards, vendorIds, barcodes })");
+    expect(srv).not.toMatch(/\.(insert|update|upsert|delete)\(/);
     expect(srv).not.toContain("previewRestockVerdicts(");
   });
 

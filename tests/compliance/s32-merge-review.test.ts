@@ -164,7 +164,7 @@ describe("1. pure cores", () => {
   });
   it("intake-mastering-core self-tests (S32 block included) pass with zero failures", () => {
     // Throws on the first failure; returns the count when all pass.
-    expect(__runIntakeMasteringCoreTests().passed).toBe(271); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2); R35 #6: +6 (effects/aroma rollup); R50 S3c: +4 masteredSingletonText; R50 A1: +49 (card alias)
+    expect(__runIntakeMasteringCoreTests().passed).toBe(327); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2); R35 #6: +6 (effects/aroma rollup); R50 S3c: +4 masteredSingletonText; R50 A1: +49 (card alias); R50 A7: +56 (barcode-first)
   });
   it("the core is pure (no React, next/*, supabase, env, fetch)", () => {
     const src = read("src/lib/pos/merge-review-core.ts");
@@ -347,7 +347,8 @@ describe("4. staging reads saved choices only when needed", () => {
     // R50 A1: the S32 read now runs in parallel with the card-alias read (still
     // zero reads when nothing is flagged; still the first plan when neither loads).
     expect(src).toContain("ambiguousIdentities.length > 0 ? loadMergeDecisions(ambiguousIdentities) : Promise.resolve(new Map<string, MergeDecision>())");
-    expect(src).toMatch(/mergeDecisions\.size > 0 \|\| cardAliases\.size > 0\s*\?\s*buildIntakeStagedVersionPlan\(\{[^}]*\bmergeDecisions,\s*cardAliases,\s*\}\)\s*:\s*firstPlan;/);
+    // R50 A7: the re-plan also carries the barcode-first inputs (same as the first plan).
+    expect(src).toMatch(/mergeDecisions\.size > 0 \|\| cardAliases\.size > 0\s*\?\s*buildIntakeStagedVersionPlan\(\{[^}]*\bmergeDecisions,\s*cardAliases,\s*barcodes,\s*\}\)\s*:\s*firstPlan;/);
     // and the staging core hands them to the planner
     expect(code("src/lib/pos/intake-menu-staging-core.ts")).toContain("mergeDecisions: inputs.mergeDecisions");
   });
