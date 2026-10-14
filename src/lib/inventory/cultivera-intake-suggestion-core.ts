@@ -327,7 +327,7 @@ export function suggestionLinks(s: IntakeSuggestion): { href: string; label: str
 
 // --- Self-tests -------------------------------------------------------------
 
-export function __runCultiveraIntakeSuggestionCoreTests(): { passed: number } {
+export function __runCultiveraIntakeSuggestionCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   const ok = (cond: boolean, label: string) => {
     if (!cond) throw new Error(`cultivera-intake-suggestion-core self-test failed: ${label}`);
@@ -447,5 +447,5 @@ export function __runCultiveraIntakeSuggestionCoreTests(): { passed: number } {
   const links = r ? suggestionLinks(r) : [];
   ok(links.length === 3 && links[0].href === "/admin/products/pos-000000000003" && links[0].label === "Open the imported card", "links");
   ok(SUGGESTION_DETAIL.includes("nothing is applied") && SUGGESTION_DETAIL.includes("exactly as before"), "detail says never applied");
-  return { passed };
+  return { passed, failed: 0 };
 }
