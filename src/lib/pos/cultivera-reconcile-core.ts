@@ -639,6 +639,9 @@ export function __runCultiveraReconcileCoreTests(): { passed: number; failed: nu
   const allEx = new Map(r3.mismatches.map((l) => [lineKey(l), { key: lineKey(l), note: "ok", by: null, at: "t" }]));
   ok(verdictFor(r3, allEx).verdict === "go_explained" && verdictFor(r3, allEx).explained === 1, "all explained = go (explained)");
   ok(verdictFor(r2, new Map()).verdict === "no_go", "failed read = no-go");
+  // defensive: a failed check with no line to explain is never "explained"
+  const odd = { go: false, checks: [{ id: "reads" as const, pass: true, detail: "" }, { id: "total" as const, pass: false, detail: "" }], mismatches: [] as MismatchLine[] };
+  ok(verdictFor(odd, new Map()).verdict === "no_go", "red check with no lines = no-go, never GO (explained)");
   const r2b = reconcile({ file: f1, lots: [lot("A", 4), lot("B", 2)], readsComplete: false });
   ok(verdictFor(r2b, new Map(r2b.mismatches.map((l) => [lineKey(l), { key: lineKey(l), note: "ok", by: null, at: "t" }]))).verdict === "no_go", "notes cannot rescue a failed read");
   const half = new Map([[lineKey(r5.mismatches[0]), { key: "", note: "ok", by: null, at: "t" }]]);

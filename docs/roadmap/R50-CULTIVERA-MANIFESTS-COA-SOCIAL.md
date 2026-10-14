@@ -1414,3 +1414,37 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     the byAlias chip copy). The one left is equivalent: `decidedTarget` needs ≥ 1 live match and the alias
     needs 0, so "alias before decision" can never change the target.
 
+### A2 — "Do the units balance?" go / no-go page (`/admin/menu-imports/reconcile`)
+  * **What.** Pick the Cultivera import (defaults to the published one). The page re-reads the exact
+    inventories workbook the import made lots from (`pos-raw` bucket, `Inventories` sheet, the transform's
+    own whitespace rules and `Units Available For Sale` floor) and compares it barcode by barcode with every
+    lot on that import's manifests (followed wherever "Rebuild deliveries" moved them). It compares
+    **received_qty** (what the import wrote), never on-hand (sales and the Oct 30 count move on-hand).
+  * **Verdict.** 🟢 GO (every check passes), 🟡 GO (explained) (every line left has a note), 🔴 NO-GO.
+    Any failed read is NO-GO, always; a note can never rescue it. Eight named checks (reads, total,
+    barcodes, missing, extra, no-barcode rows, blank product names, whole numbers).
+  * **Helpers on the page.** Read-once help box; totals; vendor and category tables (red names link to the
+    filtered lines, "show only red"); barcode lookup (both sides, every lot with status); line list with
+    kind chips + counts, vendor / category / text filters, "only unexplained", 200 per page with filters
+    kept; every line says what it means and **what to do**, links each lot, and names the earlier delivery
+    when a "missing" barcode is really a lot that already existed elsewhere (looked up by the import's own
+    dedupe key, `ccrs_inventory_external_id`); CSV of the filtered lines (UTF-8 BOM, RFC 4180, formula
+    guard); next-step links (import page, rebuild deliveries, count page, cutover runbook).
+  * **Things you can work from the page.** (1) **Explain a line** with a note (`menu.import`); the note is
+    keyed to both numbers, so if either changes the line re-opens. "Remove note" undoes it. (2) **Create the
+    missing lots** (`menu.publish`) — the import's own idempotent backfill, adds only lots that do not exist,
+    never touches an existing lot, audited `pos_import.backfill_lots` with `from: reconcile`. (3) **Sign off**
+    (`menu.publish`, tick box) — the server re-runs the whole check and refuses NO-GO or unreadable notes;
+    the page shows the last sign-off and flags it if the numbers moved since.
+  * **Storage.** No migration: notes and sign-offs are `audit_logs` events (`cultivera_reconcile.explain /
+    .unexplain / .signoff`, entity `pos_import`), which the factory reset keeps. The loader writes nothing
+    else; a failed insert says the note was NOT saved.
+  * **Verified on the real export.** Transform + lot planner on the back-office `INVENTORIES.xlsx` +
+    `PRODUCTS.xlsx`: 26,249 = 26,249 units over 3,870 barcodes, GO (pinned in vitest, skipped where the file
+    is absent).
+  * **Bugs found by the tests and fixed.** A barcode whose only lot had a non-whole quantity was also listed
+    as "missing" (so "Create the missing lots" would have counted it); junk bytes in the stored file parsed as
+    a one-cell CSV and read as zero units — now refused by a header check naming the missing columns.
+  * **Tests.** Core self-tests 95 (runner floor 95), vitest 38 (loader on the postgrest fake + a real xlsx in
+    a storage mock, all four actions, CSV route, page render incl. roles, wiring pins, real-export pin), guide
+    67 → 74 pins updated. Mutants 26/26 killed (one survivor, "GO (explained) with zero lines", pinned).
