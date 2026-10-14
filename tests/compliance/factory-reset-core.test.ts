@@ -1303,7 +1303,10 @@ describe("D-65 — the connections survive the reset", () => {
     //       product_first_seen (owner tag configuration and product history,
     //       keyed by product key with no FK into the wiped menu tables; KEEP
     //       so the pinned 139-table WIPE list in 0240 is not reopened)
-    expect(plan.keep.length).toBe(153);
+    //   +1  R50 A1 / 0270: intake_card_aliases (the owner's "this product is
+    //       that live card" answers; decisions about products like
+    //       intake_merge_decisions, no FK into the wiped menu tables)
+    expect(plan.keep.length).toBe(154);
     expect(plan.wipe.length).toBe(139);
   });
 
