@@ -1,0 +1,19 @@
+killed   vault-release-anyone
+killed   vault-mode-solo
+killed   vault-solo-reason-back
+killed   vault-note-9
+killed   vault-history-mode-lost
+killed   hold-anyone
+killed   hold-returns-solo
+killed   hold-solo-reason-back
+killed   hold-method-email
+killed   hold-owner-check-late
+killed   d5-storage-manager
+killed   d5-events-manager
+killed   core-verdict-anyone
+killed   core-verdict-mode
+killed   vrel-owner-forced
+killed   ops-form-anyone
+killed   intake-manager-drops
+control pass
+total 17 killed 17 survivors []
