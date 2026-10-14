@@ -52,6 +52,16 @@ M = [
     # banking link
     (B, '<Link href="/admin/settings/banking/operations"', '<Link href="/admin/settings/banking"'),
 ]
+# R41 S3: this test file also checks THIS script's log; while a run is in
+# progress the log is stale, which would "kill" every mutant for free. So the
+# log tests are left out of the run (by name), and a control run on the
+# unmutated tree must pass first.
+RUN = ["timeout", "150", "npx", "vitest", "run", T, "-t", "^(?!.*last\\.log).*$"]
+ctl = subprocess.run(RUN, capture_output=True, text=True)
+print("control (unmutated) exit", ctl.returncode, flush=True)
+if ctl.returncode != 0:
+    print(ctl.stdout[-2000:])
+    sys.exit(2)
 files = sorted({f for f, _, _ in M})
 orig = {f: open(f).read() for f in files}
 surv = []
@@ -63,7 +73,7 @@ for i, (f, a, b) in enumerate(M):
         continue
     open(f, "w").write(s0.replace(a, b, 1))
     try:
-        r = subprocess.run(["timeout", "150", "npx", "vitest", "run", T], capture_output=True, text=True)
+        r = subprocess.run(RUN, capture_output=True, text=True)
     finally:
         open(f, "w").write(s0)
     k = r.returncode != 0
