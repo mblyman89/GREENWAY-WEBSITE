@@ -23,51 +23,14 @@
  */
 
 // ---------------------------------------------------------------------------
-// Field helpers
+// Field helpers (R41 S2: moved to nacha-fields-core.ts so the Timberland
+// files can use them without an import cycle; re-exported here unchanged)
 // ---------------------------------------------------------------------------
 
-/** Left-justify + blank-pad (alphanumeric), truncating to width. */
-export function alpha(value: string | null | undefined, width: number): string {
-  const s = sanitizeAlpha(value ?? "");
-  if (s.length >= width) return s.slice(0, width);
-  return s + " ".repeat(width - s.length);
-}
+import { alpha, dfiId8, isValidRouting, numeric, routingCheckDigit, sanitizeAlpha } from "./nacha-fields-core";
+import { checkBuiltFileShape, checkOriginatorForFile, checkSecCode } from "./timberland-originator-core";
 
-/** Right-justify + zero-pad (numeric), truncating leftmost if too long. */
-export function numeric(value: number | string, width: number): string {
-  const digits = String(value).replace(/[^0-9]/g, "");
-  if (digits.length >= width) return digits.slice(digits.length - width);
-  return "0".repeat(width - digits.length) + digits;
-}
-
-/** Strip to the ASCII subset NACHA permits (upper-case, digits, space, basic). */
-export function sanitizeAlpha(value: string): string {
-  return value
-    .toUpperCase()
-    .replace(/[^A-Z0-9 .,&/\-]/g, "")
-    .replace(/\s+/g, " ")
-    .trimEnd();
-}
-
-/** ABA routing number check-digit validation (mod-10, weights 3-7-1). */
-export function isValidRouting(routing: string | null | undefined): boolean {
-  const r = (routing ?? "").replace(/\D/g, "");
-  if (r.length !== 9) return false;
-  const w = [3, 7, 1, 3, 7, 1, 3, 7, 1];
-  let sum = 0;
-  for (let i = 0; i < 9; i += 1) sum += Number(r[i]) * w[i];
-  return sum % 10 === 0;
-}
-
-/** First 8 digits of a 9-digit routing number (Receiving/Originating DFI ID). */
-export function dfiId8(routing: string): string {
-  return routing.replace(/\D/g, "").slice(0, 8);
-}
-
-/** Check digit = 9th digit of the routing number. */
-export function routingCheckDigit(routing: string): string {
-  return routing.replace(/\D/g, "").slice(8, 9);
-}
+export { alpha, dfiId8, isValidRouting, numeric, routingCheckDigit, sanitizeAlpha };
 
 function yymmdd(d: Date): string {
   const y = String(d.getUTCFullYear()).slice(2);
@@ -98,6 +61,12 @@ export type AchOriginator = {
   companyId: string;
   /** Originating DFI ID — first 8 digits of YOUR routing at the ODFI. */
   originatingDfi: string;
+  /**
+   * R41 S2: the 9-digit EIN from company_profile.ein. Never written into the
+   * file; the builder uses it to prove Company ID = Immediate Origin = "1" +
+   * EIN (Brenda: "1 + EIN") before a single byte is produced.
+   */
+  companyEin: string;
 };
 
 /** One receiver (employee for PPD, vendor for CCD). Amount in CENTS. */
@@ -175,6 +144,13 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
   const { originator, entries, secCode, effectiveDate } = input;
 
   // --- Validate ---
+  // R41 S2: every file path (payroll, vendor, prenote, test credit) comes
+  // through here, so the Timberland originator check and the SEC allowlist
+  // live here and cannot be skipped by a caller.
+  const secProblem = checkSecCode(secCode);
+  if (secProblem) return { ok: false, error: secProblem };
+  const originatorProblem = checkOriginatorForFile(originator);
+  if (originatorProblem) return { ok: false, error: originatorProblem };
   if (entries.length === 0) return { ok: false, error: "No entries to include in the ACH file." };
   if (!isValidRouting(originator.destinationRouting)) {
     return { ok: false, error: "Originating bank (Immediate Destination) routing number is invalid." };
@@ -324,6 +300,11 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
   for (let i = 0; i < pad; i += 1) lines.push("9".repeat(94));
 
   const file = lines.join("\n") + "\n";
+  // R41 S2: re-read our own output. A file that is not credits-only, or does
+  // not carry Timberland's originator fields where the bank reads them, is
+  // never handed over (Brenda: "Make sure that it's an unbalanced batch").
+  const shape = checkBuiltFileShape(file, originator);
+  if (shape.length) return { ok: false, error: `The ACH file failed its own check, so it was not released: ${shape.join("; ")}.` };
   return { ok: true, file, totalCents, entryCount, recordCount: lines.length };
 }
 
@@ -339,6 +320,18 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
       failed += 1;
       console.error("FAIL:", msg);
     }
+  };
+
+  // R41 S2: the one originator every fixture uses. Timberland's routing and
+  // ODFI, Brenda's company name, and "1" + a TEST EIN (not Greenway's).
+  const GW: AchOriginator = {
+    destinationRouting: "325170754",
+    destinationName: "TIMBERLAND BANK",
+    immediateOrigin: "1911234567",
+    companyName: "Greenway Marijuana",
+    companyId: "1911234567",
+    originatingDfi: "32517075",
+    companyEin: "911234567",
   };
 
   // field helpers
@@ -357,14 +350,9 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
 
   // build a 2-entry PPD file
   const res = buildNachaFile({
-    originator: {
-      destinationRouting: "125000105", // valid ABA (Washington Federal) for test
-      destinationName: "Timberland Bank",
-      immediateOrigin: "1911234567",
-      companyName: "Greenway Marijuana",
-      companyId: "1911234567",
-      originatingDfi: "125000105",
-    },
+    // R41 S2 fixture update: Timberland's routing/ODFI and "1" + a test EIN
+    // (was 125000105 / 1911234567, which Timberland's check now refuses).
+    originator: GW,
     entries: [
       { accountType: "checking", routing: "021000021", accountNumber: "123456789", amountCents: 150000, name: "Jane Doe", idNumber: "EMP1" },
       { accountType: "savings", routing: "011401533", accountNumber: "987654321", amountCents: 249999, name: "John Roe", idNumber: "EMP2" },
@@ -406,32 +394,32 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
 
   // rejects
   const bad = buildNachaFile({
-    originator: { destinationRouting: "125000105", destinationName: "T", immediateOrigin: "1", companyName: "G", companyId: "1", originatingDfi: "125000105" },
+    originator: GW,
     entries: [{ accountType: "checking", routing: "021000022", accountNumber: "1", amountCents: 100, name: "X" }],
     secCode: "PPD",
     companyEntryDescription: "PAYROLL",
     effectiveDate: new Date(),
   });
-  ok(!bad.ok, "bad receiver routing rejected");
+  ok(!bad.ok && /routing number fails the ABA check digit/.test(bad.error), "bad receiver routing rejected for that reason");
   const noEntries = buildNachaFile({
-    originator: { destinationRouting: "125000105", destinationName: "T", immediateOrigin: "1", companyName: "G", companyId: "1", originatingDfi: "125000105" },
+    originator: GW,
     entries: [],
     secCode: "PPD",
     companyEntryDescription: "PAYROLL",
     effectiveDate: new Date(),
   });
-  ok(!noEntries.ok, "empty entries rejected");
+  ok(!noEntries.ok && /No entries/.test(noEntries.error), "empty entries rejected for that reason");
   const zeroAmt = buildNachaFile({
-    originator: { destinationRouting: "125000105", destinationName: "T", immediateOrigin: "1", companyName: "G", companyId: "1", originatingDfi: "125000105" },
+    originator: GW,
     entries: [{ accountType: "checking", routing: "021000021", accountNumber: "1", amountCents: 0, name: "X" }],
     secCode: "PPD",
     companyEntryDescription: "PAYROLL",
     effectiveDate: new Date(),
   });
-  ok(!zeroAmt.ok, "zero amount rejected");
+  ok(!zeroAmt.ok && /positive whole number of cents/.test(zeroAmt.error), "zero amount rejected for that reason");
 
   // R39 S3: prenotes (23 checking / 33 savings, $0)
-  const O = { destinationRouting: "125000105", destinationName: "T", immediateOrigin: "1", companyName: "G", companyId: "1", originatingDfi: "125000105" };
+  const O = GW;
   const pre = buildNachaFile({
     originator: O,
     entries: [
@@ -488,6 +476,40 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
   ok(!dupPre.ok && /2 prenotes/.test(dupPre.error), "doubled prenote refused");
   ok(transactionCode({ accountType: "checking" }) === "22" && transactionCode({ accountType: "savings", prenote: true }) === "33", "transactionCode table");
   ok(PRENOTE_WAIT_BANKING_DAYS === 3, "Nacha prenote wait is 3 banking days");
+
+  // R41 S2: Timberland originator, SEC allowlist and output self-check, all
+  // INSIDE the builder so no caller can skip them.
+  const one: AchEntry[] = [{ accountType: "checking", routing: "021000021", accountNumber: "123", amountCents: 100, name: "X" }];
+  const b = (o: Partial<AchOriginator>, sec: string = "PPD") =>
+    buildNachaFile({ originator: { ...GW, ...o }, entries: one, secCode: sec as "PPD", companyEntryDescription: "PAYROLL", effectiveDate: new Date("2026-10-23T00:00:00Z"), createdAt: new Date("2026-10-20T18:00:00Z") });
+  const good = b({});
+  ok(good.ok, "a Greenway/Timberland originator builds");
+  if (good.ok) {
+    const [h1, h5] = good.file.split("\n");
+    ok(h1.slice(3, 13) === " 325170754", "file header 4-13 = blank + Timberland routing");
+    ok(h1.slice(13, 23) === "1911234567", "file header 14-23 = 1 + EIN");
+    ok(h1.slice(63, 86) === "GREENWAY MARIJUANA     ", "file header 64-86 keeps the full trade name (Q11)");
+    ok(h5.slice(4, 20) === "GREENWAY MARIJUA", "batch 5-20 = Brenda's 16 characters");
+    ok(h5.slice(20, 40) === " ".repeat(20), "batch 21-40 discretionary stays blank (Q14 open)");
+    ok(h5.slice(40, 50) === "1911234567", "batch 41-50 = Company ID");
+    ok(h5.slice(79, 87) === "32517075", "batch 80-87 = Timberland ODFI");
+    ok(!/(?<!1)911234567/.test(good.file), "the EIN only ever appears as 1+EIN, never on its own");
+  }
+  const refused = (r: BuildNachaResult, re: RegExp) => !r.ok && re.test(r.error);
+  ok(refused(b({ companyEin: "" }), /EIN is not entered/), "no EIN: no file");
+  ok(refused(b({ companyId: "911234567", immediateOrigin: "911234567" }), /only 9 digits/), "9-digit IDs: no file");
+  ok(refused(b({ companyId: "1999999999" }), /does not match the company EIN/), "Company ID for another EIN: no file");
+  ok(refused(b({ immediateOrigin: "1999999999" }), /Immediate Origin "1999999999" does not match/), "Immediate Origin for another EIN: no file");
+  ok(refused(b({ destinationRouting: "125000105" }), /not Timberland's/), "another bank's routing: no file");
+  ok(refused(b({ originatingDfi: "12500010" }), /Originating DFI/), "another ODFI: no file");
+  ok(refused(b({ companyName: "Lymans Marijuana LLC" }), /GREENWAY MARIJUA/), "the legal name in the batch: no file");
+  ok(refused(b({ destinationName: "" }), /Bank name is blank/), "blank bank name: no file");
+  ok(refused(b({}, "CTX"), /Schedule E/), "CTX refused by the builder");
+  ok(refused(b({}, "WEB"), /not an entry type/), "WEB refused by the builder");
+  ok(refused(b({ companyEin: "" }, "CTX"), /Schedule E/), "the SEC refusal comes first");
+  // the originator is checked before the entries, so a bad setup is reported even with no entries
+  const noneBad = buildNachaFile({ originator: { ...GW, companyEin: "" }, entries: [], secCode: "PPD", companyEntryDescription: "P", effectiveDate: new Date() });
+  ok(refused(noneBad, /EIN/), "a bad originator is reported before 'no entries'");
 
   console.log(`nacha-core: ${passed} passed, ${failed} failed`);
   return { passed, failed };

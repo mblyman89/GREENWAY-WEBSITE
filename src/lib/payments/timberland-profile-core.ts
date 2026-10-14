@@ -28,7 +28,7 @@
  * default the later slices use until Brenda answers.
  */
 
-import { dfiId8, isValidRouting } from "./nacha-core";
+import { dfiId8, isValidRouting } from "./nacha-fields-core";
 import { PRENOTE_WAIT_BANKING_DAYS as NACHA_PRENOTE_WAIT_BANKING_DAYS } from "./ach-authorization-core";
 
 // ───────────────────────────────────────────────────────────────────────────

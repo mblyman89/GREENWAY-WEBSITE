@@ -22,12 +22,13 @@ import {
 } from "@/lib/payments/nacha-core";
 
 const O = {
-  destinationRouting: "125000105",
+  destinationRouting: "325170754",
   destinationName: "TIMBERLAND BANK",
   immediateOrigin: "1911234567",
-  companyName: "GREENWAY",
+  companyName: "GREENWAY MARIJUANA",
   companyId: "1911234567",
-  originatingDfi: "125000105",
+  originatingDfi: "32517075",
+  companyEin: "911234567", // R41 S2: Timberland shape (test EIN, not Greenway's)
 };
 const build = (entries: AchEntry[]) =>
   buildNachaFile({ originator: O, entries, secCode: "PPD", companyEntryDescription: "PAYROLL", effectiveDate: new Date("2026-03-02T00:00:00Z") });
@@ -37,7 +38,7 @@ describe("nacha-core embedded self-tests", () => {
   it("all pass with the floor", () => {
     const r = __runNachaCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(41);
+    expect(r.passed).toBeGreaterThanOrEqual(62);
   });
 });
 
