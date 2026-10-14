@@ -181,11 +181,14 @@ export function reconcile(input: {
   let oursTotal = 0;
   let onHandNow = 0;
   const notWhole: MismatchLine[] = [];
+  /** Barcodes that DO have a lot here, even if its quantity is not whole (never also "missing"). */
+  const notWholeCodes = new Set<string>();
   for (const l of input.lots) {
     const rec = wholeQty(l.received_qty);
     const oh = wholeQty(l.on_hand_qty);
     const code = ws(l.lot_code);
     if (rec == null) {
+      if (code) notWholeCodes.add(code);
       const f = code ? file.byBarcode.get(code) : undefined;
       notWhole.push({ barcode: code || l.id, kind: "not_whole", product: f?.product ?? "", vendor: f?.vendor ?? RECONCILE_NOT_IN_FILE, category: f?.category ?? RECONCILE_NOT_IN_FILE, cultivera: f?.units ?? null, ours: null, lotIds: [l.id] });
       continue;
@@ -214,6 +217,7 @@ export function reconcile(input: {
     add(vendors, f.vendor, f.units, o?.units ?? 0);
     add(cats, f.category, f.units, o?.units ?? 0);
     if (!o) {
+      if (notWholeCodes.has(f.barcode)) continue; // already red as not_whole; a lot exists
       const away = input.elsewhere?.get(f.barcode);
       lines.push({ barcode: f.barcode, kind: "missing_lot", product: f.product, vendor: f.vendor, category: f.category, cultivera: f.units, ours: 0, lotIds: away ? [...away] : [], ...(away && away.length > 0 ? { elsewhere: true } : {}) });
     } else if (o.units !== f.units) {
@@ -274,7 +278,7 @@ export function reconcile(input: {
 
 /** Barcodes worth asking "is it a lot somewhere else?" (the missing ones, capped). */
 export function missingBarcodes(file: FileSide, lots: readonly ReconcileLot[], cap = 2000): string[] {
-  const have = new Set(lots.map((l) => ws(l.lot_code)).filter(Boolean));
+  const have = new Set(lots.map((l) => ws(l.lot_code)).filter(Boolean)); // any lot, whole or not
   return [...file.byBarcode.keys()].filter((b) => !have.has(b)).sort().slice(0, cap);
 }
 
@@ -582,6 +586,7 @@ export function __runCultiveraReconcileCoreTests(): { passed: number; failed: nu
   const r9 = reconcile({ file: f1, lots: [lot("A", "2.5"), lot("B", 2)], readsComplete: true });
   ok(!r9.go && r9.mismatches[0].kind === "not_whole" && r9.checks.find((c) => c.id === "whole")?.pass === false, "non-whole qty red, first");
   ok(r9.totals.ours === 2, "non-whole excluded from total (never rounded)");
+  ok(r9.mismatches.filter((l) => l.barcode === "A").length === 1 && creatableMissing(r9.mismatches) === 0, "non-whole lot is one red line, never also 'missing' (nothing to create)");
 
   // sort + cap
   const many = fileSide(Array.from({ length: 250 }, (_, i) => row(`B${String(i).padStart(3, "0")}`, 1)));
