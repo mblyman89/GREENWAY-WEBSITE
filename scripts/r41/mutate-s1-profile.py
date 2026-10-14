@@ -41,7 +41,8 @@ M = [
     ("monthly-limit-drift", P, "    value: 10_000_000,", "    value: 10_000_100,"),
     ("routing-drift", P, '    value: "325170754",', '    value: "325170755",'),
     ("last4-drift", P, '    value: "6048",', '    value: "6049",'),
-    ("same-day-allowed", P, "Yes [X] No", "Yes [X] Nx"),
+    ("same-day-box-yes", P, 'quote: "Same Day ACH [ ] Yes [X] No"', 'quote: "Same Day ACH [X] Yes [ ] No"'),
+    ("same-day-value-true", P, '  sameDayAllowed: {\n    value: false,', '  sameDayAllowed: {\n    value: true,'),
     ("ctx-allowed", P, 'value: ["PPD", "CCD"] as readonly string[],', 'value: ["PPD", "CCD", "CTX"] as readonly string[],'),
     ("cutoff-5pm", P, "{ hour: 16, minute: 0, tz:", "{ hour: 17, minute: 0, tz:"),
     ("funding-10am", P, "{ hour: 9, minute: 0, tz:", "{ hour: 10, minute: 0, tz:"),
@@ -56,7 +57,7 @@ M = [
     ("flatten-noop", P, "export function flattenWs(", "export function flattenWsX("),
     # mirrors
     ("mirror-cutoff-edited", BR, "Cutoff time is 4 pm daily", "Cutoff time is 5 pm daily"),
-    ("mirror-limit-edited", AG, "Maximum daily aggregate limit of all credit files", "Maximum daily aggregate limit of all credit file"),
+    ("mirror-limit-edited", AG, "Maximum daily aggregate limit of all credit files ............ $ 50,000.00", "Maximum daily aggregate limit of all credit files ............ $ 50,000.01"),
     ("mirror-account-leak", AG, "[ACCOUNT ENDING 6048] maintained at Timberland Bank", FAKE_ACCT + " maintained at Timberland Bank"),
     ("mirror-email-leak", BR, "Cutoff time is 4 pm daily", "Write to someone@example.com. Cutoff time is 4 pm daily"),
     ("mirror-phone-leak", BR, "Cutoff time is 4 pm daily", "Call 360-555-0142. Cutoff time is 4 pm daily"),
