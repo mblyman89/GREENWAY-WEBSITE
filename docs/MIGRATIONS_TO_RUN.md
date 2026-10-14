@@ -2471,3 +2471,47 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0272_ach_company_timberland_confirmed.rollback.sql`.
   It drops the stamp and its history, so copy the four columns first.
+
+## R41 — 0273 — ACH file ledger: release once, download the same bytes
+
+- [ ] `0273_ach_files.sql` adds the ledger of every ACH file the site
+  releases. Up to now every download of a payroll file **rebuilt** it and
+  re-stamped who approved it. From now on:
+  - **Released once.** The file is built once, by you. Its exact bytes are
+    stored encrypted with a fingerprint (SHA-256). Every download serves
+    those same bytes, checks the fingerprint first, and changes nothing.
+  - **File ID Modifier.** Position 34 of the File Header is a letter or digit
+    (A–Z, 0–9). The first file of the day gets A, the next B, and so on.
+    A voided file keeps its letter, because it may already be at the bank.
+  - **Duplicate block.** Brenda's answer 9 was "No they should not", so the
+    Timberland portal will not stop the same file twice. The database
+    refuses a second live file with the same payments and effective date,
+    the same bytes, or the same payroll run.
+  - **Void.** Only you, with a reason of at least 10 characters. Voiding a
+    payroll file puts the run back to draft. The row and its bytes stay.
+  - **Kept forever.** Nothing can delete a row. The Timberland agreement
+    (section 12) asks for one calendar year.
+  - One new table, `ach_files`. It is KEEP in factory reset. Two
+    server-only functions. Staff can read rows through RLS; only the server
+    can write them.
+
+  Apply it **after 0272**. It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_indexes where tablename = 'ach_files'
+            and indexname in ('ach_files_sha_live', 'ach_files_no_duplicate_entries', 'ach_files_one_live_per_source')) as idx,
+         (select count(*) from pg_trigger where tgname = 'trg_ach_files_guard') as trg,
+         (select count(*) from pg_proc where proname in ('ach_file_release_payroll', 'ach_file_void')) as fns;
+  -- idx | trg | fns
+  -- 3   | 1   | 2
+  ```
+
+  For the full proof, paste `scripts/recon/ach-files-0273-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0273 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0273_ach_files.rollback.sql`.
+  It **refuses** once any file has been released, or once an approval
+  request targets a file. Those are payment records. Otherwise it drops the
+  table and the two functions and puts the 0271 request target list back.
