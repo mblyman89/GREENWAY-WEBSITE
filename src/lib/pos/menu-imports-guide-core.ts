@@ -71,6 +71,8 @@ export const GUIDE_HREF = {
   ccrsCleanup: "/admin/compliance/ccrs#migration-garbage",
   ccrsFiles: "/admin/compliance/ccrs#ccrs-files",
   count: "/admin/menu-imports/count",
+  // R50 A2: the go / no-go units check (Cultivera file = our lots).
+  reconcile: (importId: string | null) => (importId ? `/admin/menu-imports/reconcile?import=${importId}` : "/admin/menu-imports/reconcile"),
 } as const;
 
 export type GuideImportRow = {
@@ -198,7 +200,10 @@ export function buildMenuImportsGuide(input: GuideInput): GuideStep[] {
     body: "Before the count, download one scan workbook per counter. After publish, upload the scanned workbooks. You see every lot's move first (counted, minus the sales on the 31st), and nothing changes until you confirm.",
     status: after,
     why: done ? "Open the count page. It shows whether the count was applied." : "The upload opens after publish. Workbooks can be downloaded before.",
-    links: [{ href: GUIDE_HREF.count, label: "Oct 30 shelf count" }],
+    links: [
+      { href: GUIDE_HREF.count, label: "Oct 30 shelf count" },
+      { href: GUIDE_HREF.reconcile(migratedImportId), label: "Go / no-go: do the units balance?" },
+    ],
   });
   push({
     key: "manifests",
@@ -347,6 +352,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(st(g0, "receiving").links[0].href === "/admin/inventory/intake?view=cultivera", "receiving cultivera link");
   ok(st(g0, "fetch").links[1].href === "/admin/menu-imports/cutover", "runbook link");
   ok(st(g0, "count").links[0].href === "/admin/menu-imports/count", "count link");
+  ok(st(g0, "count").links[1].href === "/admin/menu-imports/reconcile", "A2: go / no-go link (no import yet = page picker)");
   ok(st(g0, "count").status === "todo" && st(g0, "count").n === 6, "count is step 6, after publish, locked before it");
 
   // crawler off
@@ -396,6 +402,7 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(GUIDE_STEP_KEYS.slice(5).every((k) => st(gDone, k).status === "check"), "done: follow-ups are check, never done");
   ok(nexts(gDone).length === 0, "done: no next");
   ok(st(gDone, "manifests").links[0].href === rehomeHref("IMP"), "done: rehome for the migrated import");
+  ok(st(gDone, "count").links[1].href === "/admin/menu-imports/reconcile?import=IMP", "A2: done: go / no-go for the migrated import");
   ok(st(gDone, "onboarding").links[1].href === missingProductsHref("IMP"), "done: missing products for migrated import");
   ok(st(gDone, "review").links[0].href === "/admin/menu-imports/IMP", "done: review links the migrated import, not a later staged one");
   ok(st(gDone, "publish").links.length === 0, "done: no publish link");
