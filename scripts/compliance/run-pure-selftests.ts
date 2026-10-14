@@ -2273,7 +2273,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 68); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode (+S11b scanner text)
   assertRan("scanner-setup-core", __runScannerSetupCoreTests(), 48); // R50 S11b: Tera D5100 + DuraScan D760 setup barcodes, guides, test box
   assertRan("card-alias-core", __runCardAliasCoreTests(), 44); // R50 A1: one-click accept of a Cultivera suggestion (permanent decision, re-verified)
-  assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 95); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
+  assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 120); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
   assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28); // R50 A3: dry-run preview copy + COA URL triage
   assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37); // R50 A4: cutover failure-alert planner
   console.log("ALL PURE SELF-TESTS PASSED");

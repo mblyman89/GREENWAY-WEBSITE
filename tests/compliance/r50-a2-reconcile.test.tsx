@@ -176,7 +176,7 @@ describe("A2 pure core self-tests", () => {
   it("passes every self-test", () => {
     const res = core.__runCultiveraReconcileCoreTests();
     expect(res.failed).toBe(0);
-    expect(res.passed).toBeGreaterThanOrEqual(95);
+    expect(res.passed).toBeGreaterThanOrEqual(120);
   });
 });
 
@@ -553,7 +553,9 @@ describe("A2 wiring pins", () => {
     expect(read("src/app/admin/menu-imports/reconcile/page.tsx")).toContain('requirePermission("menu.import")');
     const a = read("src/app/admin/menu-imports/reconcile/actions.ts");
     expect(a.match(/requirePermission\("menu.publish"\)/g)?.length).toBe(2);
-    expect(a.match(/requirePermission\("menu.import"\)/g)?.length).toBe(2);
+    // A2+: the shared bulk() helper (bulk note + bulk remove) is the third menu.import gate.
+    expect(a.match(/requirePermission\("menu.import"\)/g)?.length).toBe(3);
+    expect(a).toMatch(/async function bulk\(form: FormData, verb: "explain" \| "remove"\): Promise<never> \{\n  const session = await requirePermission\("menu.import"\);/);
   });
   it("loader reads the same file + sheet the import re-reads, and never writes lots", () => {
     const s = read("src/lib/pos/cultivera-reconcile.ts");
@@ -569,7 +571,7 @@ describe("A2 wiring pins", () => {
     expect(read("src/app/admin/menu-imports/page.tsx")).toContain('href="/admin/menu-imports/reconcile"');
   });
   it("registered in the pure runner", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-reconcile-core", __runCultiveraReconcileCoreTests\(\), 95\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-reconcile-core", __runCultiveraReconcileCoreTests\(\), 120\)/);
   });
 });
 

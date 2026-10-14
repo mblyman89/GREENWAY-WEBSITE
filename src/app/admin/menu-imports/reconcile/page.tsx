@@ -15,21 +15,32 @@ import {
   RECONCILE_LINE_CAP,
   RECONCILE_NOTE_MAX,
   VERDICT_COPY,
+  RECONCILE_BULK_MAX,
   creatableMissing,
+  explainedKeys,
+  filterFromParams,
   filterLines,
   kindCounts,
+  lineAnchor,
   lineKey,
+  nextOpenKey,
+  noteSuggestions,
+  openByGroup,
+  openKeys,
+  pageOfKey,
+  progressOf,
+  recentNotes,
   lookupBarcode,
   mismatchFix,
   mismatchNote,
   pageOf,
-  parseKind,
   reconcileHeadline,
   reconcileHref,
   verdictFor,
   type GroupRow,
+  type MismatchKind,
 } from "@/lib/pos/cultivera-reconcile-core";
-import { createMissingLotsAction, explainLineAction, signOffAction, unexplainLineAction } from "./actions";
+import { bulkExplainAction, bulkUnexplainAction, createMissingLotsAction, explainLineAction, signOffAction, unexplainLineAction } from "./actions";
 
 /**
  * R50 A2 - "Do the units balance?" The go / no-go check after the Cultivera
@@ -66,6 +77,7 @@ type SP = {
   open?: string;
   page?: string;
   barcode?: string;
+  jump?: string;
   red?: string;
   error?: string;
   notice?: string;
@@ -90,13 +102,8 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
     if (importId) load = await loadReconcile(admin, importId);
   }
 
-  const filter = {
-    kind: parseKind(sp.kind) || undefined,
-    vendor: sp.vendor ? sp.vendor.slice(0, 200) : undefined,
-    category: sp.category ? sp.category.slice(0, 200) : undefined,
-    q: sp.q ? sp.q.slice(0, 100) : undefined,
-    open: sp.open === "1",
-  };
+  // Same reader as the CSV route and the bulk buttons, so all three see the same lines.
+  const filter = filterFromParams((k) => sp[k as keyof SP]);
   const keep: Record<string, string> = {
     kind: filter.kind ?? "",
     vendor: filter.vendor ?? "",
@@ -176,7 +183,20 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
                 ? "border-[var(--admin-gold)]/50 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
                 : "border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]";
           const lines = filterLines(report.mismatches, filter, explanations);
-          const pg = pageOf(lines, Number(sp.page ?? 1));
+          // ?jump=<line key>: open the page that line is on and highlight it ("Save & next", "first open line").
+          const jumpKey = sp.jump ? sp.jump.slice(0, 260) : "";
+          const jumpPage = jumpKey ? pageOfKey(lines, jumpKey) : null;
+          const pg = pageOf(lines, jumpPage ?? Number(sp.page ?? 1));
+          const progress = progressOf(report.mismatches, explanations);
+          const viewOpen = openKeys(lines, explanations);
+          const viewExplained = explainedKeys(lines, explanations);
+          const firstOpen = viewOpen[0] ?? null;
+          const firstOpenAll = openKeys(report.mismatches, explanations)[0] ?? null;
+          const openVendors = openByGroup(report.mismatches, explanations, "vendor");
+          const openCats = openByGroup(report.mismatches, explanations, "category");
+          const recent = recentNotes(report.mismatches, explanations);
+          const kindsOnPage = [...new Set(pg.items.map((l) => l.kind))] as MismatchKind[];
+          const jumpTo = (key: string) => reconcileHref(imp.id, { ...keep, page: "", jump: key }) + "#" + lineAnchor(key);
           const kc = kindCounts(report.mismatches, explanations);
           const creatable = creatableMissing(report.mismatches);
           const look = sp.barcode ? lookupBarcode(sp.barcode.slice(0, 100), load.file, load.lots, report) : null;
@@ -185,12 +205,12 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
           const filtered = Boolean(filter.kind || filter.vendor || filter.category || filter.q || filter.open);
           const csvQs = new URLSearchParams({ import: imp.id, ...(filter.kind ? { kind: filter.kind } : {}), ...(filter.vendor ? { vendor: filter.vendor } : {}), ...(filter.category ? { category: filter.category } : {}), ...(filter.q ? { q: filter.q } : {}), ...(filter.open ? { open: "1" } : {}) }).toString();
 
-          const GroupTable = ({ title, rows, field, testid }: { title: string; rows: GroupRow[]; field: "vendor" | "category"; testid: string }) => (
+          const GroupTable = ({ title, rows, field, testid, open }: { title: string; rows: GroupRow[]; field: "vendor" | "category"; testid: string; open: Map<string, number> }) => (
             <div data-testid={testid}>
               <h3 className="text-xs font-semibold text-white">{title} ({rows.filter((g) => !g.ok).length} red of {rows.length})</h3>
               <div className="mt-2 max-h-96 overflow-auto">
                 <table className="w-full text-left text-xs text-white/70">
-                  <thead className="sticky top-0 bg-[#0a0a0a] text-white/40"><tr><th></th><th>{field === "vendor" ? "Vendor" : "Category"}</th><th className="text-right">Cultivera</th><th className="text-right">Ours</th><th className="text-right">Diff</th></tr></thead>
+                  <thead className="sticky top-0 bg-[#0a0a0a] text-white/40"><tr><th></th><th>{field === "vendor" ? "Vendor" : "Category"}</th><th className="text-right">Cultivera</th><th className="text-right">Ours</th><th className="text-right">Diff</th><th className="text-right" title="Lines with no note yet">Open</th></tr></thead>
                   <tbody>
                     {rows.map((g) => (
                       <tr key={g.key} className={g.ok ? "" : "text-[var(--admin-danger)]"}>
@@ -199,6 +219,11 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
                         <td className="text-right">{n(g.cultivera)}</td>
                         <td className="text-right">{n(g.ours)}</td>
                         <td className="text-right">{g.diff === 0 ? "0" : signed(g.diff)}</td>
+                        <td className="text-right">
+                          {open.get(g.key) ? (
+                            <Link className="underline" href={reconcileHref(imp.id, { [field]: g.key, open: "1" })} data-open-group={g.key}>{n(open.get(g.key))}</Link>
+                          ) : g.ok ? "" : "\u2713"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -213,7 +238,19 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
                 <p className="text-lg font-black">{v.verdict === "go" ? "🟢 " : v.verdict === "go_explained" ? "🟡 " : "🔴 "}{VERDICT_COPY[v.verdict]}</p>
                 <p className="mt-1 text-sm">{reconcileHeadline(report)}</p>
                 {v.verdict !== "go" && report.mismatchCount > 0 && (
-                  <p className="mt-1 text-xs">{n(v.open)} line(s) open, {n(v.explained)} explained by your notes.</p>
+                  <div className="mt-2" data-testid="rc-progress" data-pct={progress.pct}>
+                    <p className="text-xs">{n(v.open)} line(s) open, {n(v.explained)} explained by your notes ({progress.pct}% done).</p>
+                    <div className="mt-1 h-2 w-full max-w-md overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.pct} aria-label="Lines explained">
+                      <div className="h-full bg-current" style={{ width: `${progress.pct}%` }} />
+                    </div>
+                    {firstOpenAll && (
+                      <p className="mt-2 text-xs">
+                        <Link className="font-semibold underline" href={reconcileHref(imp.id, { open: "1", jump: firstOpenAll }) + "#" + lineAnchor(firstOpenAll)} data-testid="rc-start-working">
+                          Start working: go to the first line without a note \u2192
+                        </Link>
+                      </p>
+                    )}
+                  </div>
                 )}
                 <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
                   <dt className="opacity-70">Cultivera units</dt><dd className="font-bold">{n(report.totals.cultivera)}</dd>
@@ -297,10 +334,10 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
                     {onlyRed ? "Show every row" : "Show only red rows"}
                   </Link>
                 </div>
-                <p className="text-xs text-white/50">Red rows come first. Click a red name to see just its lines.</p>
+                <p className="text-xs text-white/50">Red rows come first. Click a red name to see just its lines; click an Open number to see only the lines there that still need a note.</p>
                 <div className="grid gap-6 lg:grid-cols-2">
-                  <GroupTable title="Vendors" rows={vendors} field="vendor" testid="rc-vendors" />
-                  <GroupTable title="Categories" rows={cats} field="category" testid="rc-categories" />
+                  <GroupTable title="Vendors" rows={vendors} field="vendor" testid="rc-vendors" open={openVendors} />
+                  <GroupTable title="Categories" rows={cats} field="category" testid="rc-categories" open={openCats} />
                 </div>
               </section>
 
@@ -339,7 +376,16 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
                       )}
                     </div>
                     <p className="sm:col-span-2">
-                      {look.line ? <span className="text-[var(--admin-danger)]">🔴 {mismatchNote(look.line)}. {mismatchFix(look.line)}</span> : <span>🟢 This barcode balances.</span>}
+                      {look.line ? (
+                        <span className="text-[var(--admin-danger)]">
+                          🔴 {mismatchNote(look.line)}. {mismatchFix(look.line)}{" "}
+                          <Link className="underline" href={reconcileHref(imp.id, { jump: lineKey(look.line) }) + "#" + lineAnchor(lineKey(look.line))} data-testid="rc-lookup-goto">
+                            {explanations.has(lineKey(look.line)) ? "See its note" : "Go to the line and write a note"}
+                          </Link>
+                        </span>
+                      ) : (
+                        <span>🟢 This barcode balances.</span>
+                      )}
                     </p>
                   </div>
                 )}
@@ -400,14 +446,85 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
 
                     <p className="text-xs text-white/50">
                       Showing {n(pg.items.length)} of {n(lines.length)} line(s){filtered ? " (filtered)" : ""}. Page {pg.page} of {pg.pages}, {RECONCILE_LINE_CAP} per page.
+                      {" "}{n(viewOpen.length)} without a note in this view.
+                      {firstOpen && (
+                        <>
+                          {" "}
+                          <Link className="text-[var(--admin-accent)] underline" href={jumpTo(firstOpen)} data-testid="rc-first-open">Go to the first one</Link>
+                        </>
+                      )}
                     </p>
+
+                    {(viewOpen.length > 0 || viewExplained.length > 0) && (
+                      <details className="rounded-lg border border-white/10 p-3 text-xs text-white/70" data-testid="rc-bulk">
+                        <summary className="cursor-pointer font-semibold text-white">Work many lines at once ({n(viewOpen.length)} open, {n(viewExplained.length)} with a note in this view)</summary>
+                        <p className="mt-2 text-white/50">
+                          These buttons act on <b>every line in the current view</b> (all pages, not just this one) - narrow it first with the vendor, category, kind or search filter.
+                          The server re-reads the lines when you press, and refuses if the count changed since this page loaded. At most {RECONCILE_BULK_MAX} lines per press.
+                        </p>
+                        {viewOpen.length > 0 && (
+                          <form action={bulkExplainAction} className="mt-3 flex flex-wrap items-center gap-2" data-testid="rc-bulk-explain">
+                            <KeepFields id={imp.id} />
+                            <input type="hidden" name="expected" value={viewOpen.length} />
+                            <input name="note" required minLength={3} maxLength={RECONCILE_NOTE_MAX} list="rc-presets-all" placeholder="One note for all of them, e.g. 'moved by Rebuild deliveries'" className="min-w-[18rem] flex-1 rounded border border-white/20 bg-black px-2 py-1 text-white" />
+                            <label className="flex items-center gap-2">
+                              <input type="checkbox" name="confirm" value="yes" required />
+                              <span>Yes, put this note on all {n(viewOpen.length)} open line(s)</span>
+                            </label>
+                            <Button type="submit" variant="save" size="sm">Save the note on all</Button>
+                          </form>
+                        )}
+                        {viewExplained.length > 0 && (
+                          <form action={bulkUnexplainAction} className="mt-3 flex flex-wrap items-center gap-2" data-testid="rc-bulk-unexplain">
+                            <KeepFields id={imp.id} />
+                            <input type="hidden" name="expected" value={viewExplained.length} />
+                            <label className="flex items-center gap-2">
+                              <input type="checkbox" name="confirm" value="yes" required />
+                              <span>Yes, remove the notes from all {n(viewExplained.length)} line(s) with a note in this view (the undo)</span>
+                            </label>
+                            <Button type="submit" variant="neutral" size="sm">Remove the notes</Button>
+                          </form>
+                        )}
+                      </details>
+                    )}
+
+                    {recent.length > 0 && (
+                      <details className="rounded-lg border border-white/10 p-3 text-xs text-white/70" data-testid="rc-recent-notes">
+                        <summary className="cursor-pointer font-semibold text-white">Your latest notes ({n(recent.length)})</summary>
+                        <ul className="mt-2 space-y-1">
+                          {recent.map(({ line, note }) => (
+                            <li key={note.key}>
+                              <Link className="font-mono underline" href={reconcileHref(imp.id, { jump: note.key }) + "#" + lineAnchor(note.key)}>{line.barcode}</Link>{" "}
+                              <span className="text-white/50">{MISMATCH_COPY[line.kind]}</span> - &quot;{note.note}&quot; ({note.by ?? "someone"}, {when(note.at)})
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+
+                    <datalist id="rc-presets-all">
+                      {noteSuggestions("units_differ", explanations, 12).map((t) => <option key={t} value={t} />)}
+                    </datalist>
+                    {kindsOnPage.map((k) => (
+                      <datalist key={k} id={`rc-presets-${k}`}>
+                        {noteSuggestions(k, explanations).map((t) => <option key={t} value={t} />)}
+                      </datalist>
+                    ))}
 
                     <ul className="space-y-3">
                       {pg.items.map((l) => {
                         const key = lineKey(l);
                         const ex = explanations.get(key);
+                        const here = key === jumpKey;
+                        const nextKey = ex ? null : nextOpenKey(lines, explanations, key);
                         return (
-                          <li key={key} className={`rounded-lg border p-3 text-xs ${ex ? "border-white/10 text-white/60" : "border-[var(--admin-danger)]/30 text-white/80"}`} data-line={key}>
+                          <li
+                            key={key}
+                            id={lineAnchor(key)}
+                            className={`scroll-mt-24 rounded-lg border p-3 text-xs ${here ? "ring-2 ring-[var(--admin-gold)]" : ""} ${ex ? "border-white/10 text-white/60" : "border-[var(--admin-danger)]/30 text-white/80"}`}
+                            data-line={key}
+                            data-here={here ? "1" : undefined}
+                          >
                             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                               <span className={ex ? "" : "font-semibold text-[var(--admin-danger)]"}>{ex ? "📝" : "🔴"} {mismatchNote(l)}</span>
                               <Link className="font-mono underline" href={reconcileHref(imp.id, { barcode: l.barcode })}>{l.barcode}</Link>
@@ -436,8 +553,10 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
                               <form action={explainLineAction} className="mt-2 flex flex-wrap items-center gap-2">
                                 <KeepFields id={imp.id} />
                                 <input type="hidden" name="key" value={key} />
-                                <input name="note" required minLength={3} maxLength={RECONCILE_NOTE_MAX} placeholder="What you found, e.g. 'old lot, sold out in Cultivera'" className="min-w-[18rem] flex-1 rounded border border-white/20 bg-black px-2 py-1 text-white" />
+                                {nextKey && <input type="hidden" name="next_key" value={nextKey} />}
+                                <input name="note" required minLength={3} maxLength={RECONCILE_NOTE_MAX} list={`rc-presets-${l.kind}`} autoFocus={here} placeholder="What you found (click for suggestions), e.g. 'old lot, sold out in Cultivera'" className="min-w-[18rem] flex-1 rounded border border-white/20 bg-black px-2 py-1 text-white" />
                                 <Button type="submit" variant="save" size="sm">Save note</Button>
+                                <Button type="submit" variant="neutral" size="sm" name="next" value="1" title="Save this note, then jump to the next line without a note">Save &amp; next</Button>
                               </form>
                             )}
                           </li>
