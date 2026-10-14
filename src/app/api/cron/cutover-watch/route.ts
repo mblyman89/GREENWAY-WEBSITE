@@ -6,9 +6,11 @@
  * src/lib/pos/cutover-watch-core.ts (pure, self-tested). Claims + sends:
  * src/lib/pos/cutover-watch.ts.
  *
- * SCHEDULING (AGENTS rule 12). vercel.json runs this every 5 minutes (288
- * ticks a day; pinned by tests/compliance/leafly-certification.test.ts L-34
- * cadence map). Five minutes is the delay between a harvest failing and the
+ * SCHEDULING (AGENTS rule 12). vercel.json runs this every 5 minutes at
+ * :02, :07, ... :57 ("2-59/5 * * * *", 288 ticks a day; pinned by
+ * tests/compliance/leafly-certification.test.ts L-34 cadence map). The
+ * 2-minute offset keeps it off content-schedule's :00/:05 minutes (L-33 bans
+ * two identical expressions; it also spreads the cold starts). Five minutes is the delay between a harvest failing and the
  * owner's phone buzzing. No Pacific arithmetic: the watch windows are
  * relative ("last 6 hours"), not wall-clock times. An idle tick (nothing
  * started in 6 h, no failed/processing import in 24 h) is two indexed reads

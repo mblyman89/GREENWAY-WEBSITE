@@ -353,9 +353,9 @@ describe("R50 A4 · the test button and the runbook panel", () => {
 });
 
 describe("R50 A4 · cron wiring (AGENTS rule 12)", () => {
-  it("vercel.json runs it every 5 minutes", () => {
+  it("vercel.json runs it every 5 minutes, offset to :02/:07/... (never the same expression as content-schedule)", () => {
     const v = JSON.parse(read("vercel.json")) as { crons: { path: string; schedule: string }[] };
-    expect(v.crons.find((c) => c.path === "/api/cron/cutover-watch")?.schedule).toBe("*/5 * * * *");
+    expect(v.crons.find((c) => c.path === "/api/cron/cutover-watch")?.schedule).toBe("2-59/5 * * * *");
   });
 
   it("the route uses the fail-closed preamble and the watcher", () => {

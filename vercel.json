@@ -37,7 +37,7 @@
     },
     {
       "path": "/api/cron/cutover-watch",
-      "schedule": "*/5 * * * *"
+      "schedule": "2-59/5 * * * *"
     }
   ]
 }

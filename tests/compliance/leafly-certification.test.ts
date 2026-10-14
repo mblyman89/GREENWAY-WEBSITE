@@ -528,6 +528,14 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       if (!(n >= 1)) return null;
       return Math.floor((hi - lo) / n) + 1;
     }
+    // R50 A4: "A-B/N" (a step over a range), so a 5-minute cron can be
+    // offset off another 5-minute cron's minutes (2-59/5 = :02, :07, ...).
+    const ranged = /^(\d+)-(\d+)\/(\d+)$/.exec(field);
+    if (ranged) {
+      const [a, b, n] = [ranged[1], ranged[2], ranged[3]].map((x) => Number.parseInt(x!, 10)) as [number, number, number];
+      if (!(n >= 1) || a < lo || b > hi || a > b) return null;
+      return Math.floor((b - a) / n) + 1;
+    }
     if (/^\d+$/.test(field)) {
       const v = Number.parseInt(field, 10);
       return v >= lo && v <= hi ? 1 : null;
@@ -562,6 +570,12 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
     expect(runsPerDay("0 99 * * *")).toBeNull();
     expect(runsPerDay("*/0 * * * *")).toBeNull();
     expect(runsPerDay("0 3 * *")).toBeNull();
+    expect(runsPerDay("2-59/5 * * * *")).toBe(288); // :02 :07 ... :57
+    expect(runsPerDay("0-59/5 * * * *")).toBe(288);
+    expect(runsPerDay("2-30/5 * * * *")).toBe(6 * 24); // :02 :07 :12 :17 :22 :27
+    expect(runsPerDay("5-2/5 * * * *")).toBeNull();
+    expect(runsPerDay("2-60/5 * * * *")).toBeNull();
+    expect(runsPerDay("2-59/0 * * * *")).toBeNull();
     expect(stepMinutes("*/2 * * * *")).toBe(2);
     expect(stepMinutes("0 12 * * *")).toBeNull();
   });
@@ -589,7 +603,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       "/api/cron/leafly-menu-sync": 96, //  every 15 minutes
       "/api/cron/lookup-jobs": 1440, //    every minute (S13 batch lookup worker)
       "/api/cron/content-schedule": 288, // every 5 minutes (R46 scheduled publish; editor snaps times to the same grid)
-      "/api/cron/cutover-watch": 288, //   every 5 minutes (R50 A4: harvest / import failure alerts; each alert claimed once, an idle tick sends nothing)
+      "/api/cron/cutover-watch": 288, //   every 5 minutes at :02, :07 ... (offset off content-schedule's minutes; R50 A4: harvest / import failure alerts; each alert claimed once, an idle tick sends nothing)
     };
     for (const c of crons) {
       const want = expected[c.path ?? ""] ?? 1;
