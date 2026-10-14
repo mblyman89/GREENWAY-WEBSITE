@@ -234,6 +234,32 @@ export function pacificWhen(d: Date): string {
 // ---------------------------------------------------------------------------
 // Self-tests (scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
+/** Cents to "$1,234.56" (integer math; no floats). */
+export function centsWords(cents: number): string {
+  if (!Number.isInteger(cents)) return "an unreadable amount";
+  const neg = cents < 0;
+  const abs = Math.abs(cents);
+  const dollars = Math.floor(abs / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${neg ? "-" : ""}$${dollars}.${String(abs % 100).padStart(2, "0")}`;
+}
+
+/** The vendor-file build result in words (data action: no redirect to read). */
+export function vendorBuildOutcome(v: {
+  problems?: { message: string }[];
+  file?: string;
+  entryCount?: number;
+  totalCents?: number;
+  warnings?: unknown[];
+} | null | undefined): RedirectOutcome {
+  if (v && typeof v.file === "string" && v.file.length > 0 && (v.problems?.length ?? 0) === 0) {
+    const n = typeof v.entryCount === "number" ? v.entryCount : 0;
+    const total = typeof v.totalCents === "number" ? ` totalling ${centsWords(v.totalCents)}` : "";
+    const partial = v.warnings && v.warnings.length > 0 ? ` (${v.warnings.length} partial)` : "";
+    return { ok: true, message: `Vendor ACH file built: ${n} payment(s)${total}${partial}.` };
+  }
+  return { ok: false, message: v?.problems?.[0]?.message || "The vendor ACH file was not built." };
+}
+
 export function __runAchGateCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -339,5 +365,19 @@ export function __runAchGateCoreTests(): { passed: number; failed: number } {
 
   if (failed > 0) throw new Error(`ach-gate-core: ${failed} test(s) failed`);
   console.log(`ach-gate-core: ${passed} passed, 0 failed`);
+
+  // vendor build outcome + cents words
+  ok(centsWords(0) === "$0.00", "0 cents");
+  ok(centsWords(5) === "$0.05", "5 cents padded");
+  ok(centsWords(123456789) === "$1,234,567.89", "thousands grouped");
+  ok(centsWords(-250) === "-$2.50", "negative");
+  ok(centsWords(1.5) === "an unreadable amount", "float refused");
+  ok(vendorBuildOutcome({ problems: [], file: "101...", entryCount: 2, totalCents: 150000 }).message === "Vendor ACH file built: 2 payment(s) totalling $1,500.00.", "built message");
+  ok(vendorBuildOutcome({ problems: [], file: "x", entryCount: 1, totalCents: 1, warnings: [{}] }).message.endsWith("(1 partial)."), "partial noted");
+  ok(vendorBuildOutcome({ problems: [], file: "x" }).ok, "file and no problems = ok");
+  ok(!vendorBuildOutcome({ problems: [{ message: "Overpay blocked" }], file: "x" }).ok, "a problem means not ok even with a file");
+  ok(vendorBuildOutcome({ problems: [{ message: "Overpay blocked" }] }).message === "Overpay blocked", "first problem is the message");
+  ok(!vendorBuildOutcome({ problems: [], file: "" }).ok, "empty file is not built");
+  ok(!vendorBuildOutcome(null).ok && vendorBuildOutcome(undefined).message === "The vendor ACH file was not built.", "null safe");
   return { passed, failed };
 }

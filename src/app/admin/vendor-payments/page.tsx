@@ -1,3 +1,4 @@
+import { achAuthority } from "@/lib/auth/ach-authority-core";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -25,7 +26,9 @@ export default async function VendorPaymentsPage({
   searchParams: Promise<{ back?: string }>;
 }) {
   const { back } = await searchParams;
-  await requirePermission("payables.manage");
+  const session = await requirePermission("payables.manage");
+  // R41 S0 / D-4: building a vendor ACH file needs ach.act (owner) or ach.request (admin -> a request).
+  const achSide = achAuthority(session.profile.role);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -149,10 +152,18 @@ export default async function VendorPaymentsPage({
           description="Generate a NACHA file to upload to your bank."
         >
           <Card>
-            <VendorAchForm
-              settingsComplete={settingsComplete}
-              companyName={settings.company_name}
-            />
+            {achSide === "none" ? (
+              <p className="text-sm text-[var(--admin-text-muted)]">
+                Only Michael (the owner) builds vendor ACH files, and Stephen (admin) can send a batch to Michael for approval. You can still record
+                non-ACH payments below.
+              </p>
+            ) : (
+              <VendorAchForm
+                settingsComplete={settingsComplete}
+                companyName={settings.company_name}
+                viewerIsOwner={achSide === "act"}
+              />
+            )}
           </Card>
         </Section>
 
