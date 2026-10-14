@@ -85,6 +85,7 @@ export const ACH_ACTIONS = {
   "ach_notice.resolve": { cls: "live", label: "Resolve a return or change notice" },
   "employee_hold.release": { cls: "live", label: "Release an employee banking hold" },
   "ach_check.start": { cls: "live", label: "Start an account check (prenote or test credit)" },
+  "ach_check.release_file": { cls: "live", label: "Release an account-check ACH file (prenote or test credit)" },
   "ach_check.mark_sent": { cls: "live", label: "Mark an account-check file as uploaded" },
   "ach_check.finish": { cls: "live", label: "Record an account-check result" },
   "legal_hold.set": { cls: "live", label: "Set or clear a legal hold" },
@@ -97,6 +98,8 @@ export const ACH_ACTIONS = {
   "vendor_esign.reject": { cls: "live", label: "Reject a vendor e-signed ACH form" },
   "vendor_ach_flag.change": { cls: "live", label: "Change a vendor's ACH flag (needs bank info / opted out)" },
   "vendor_ach.build": { cls: "live", label: "Build a vendor ACH payment file" },
+  // R41 S3: voiding a released file (it may already be at the bank) is the owner's call.
+  "ach_file.void": { cls: "live", label: "Void a released ACH file" },
 } as const satisfies Record<string, { cls: "live" | "stop"; label: string }>;
 
 export type AchActionKind = keyof typeof ACH_ACTIONS;

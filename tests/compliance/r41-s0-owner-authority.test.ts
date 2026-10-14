@@ -296,13 +296,15 @@ const GATED_FILES: Record<string, string[]> = {
     "vendor_contact.add", "vendor_contact.retire", "employee_bank.save", "employee_bank.clear",
   ],
   "src/app/admin/settings/banking/ops-actions.ts": [
-    "ach_notice.log", "ach_notice.resolve", "employee_hold.release", "ach_check.start", "ach_check.mark_sent", "ach_check.finish", "legal_hold.set", "annual_review.done",
+    "ach_notice.log", "ach_notice.resolve", "employee_hold.release", "ach_check.start", "ach_check.release_file", "ach_check.mark_sent", "ach_check.finish", "legal_hold.set", "annual_review.done",
   ],
   "src/app/admin/settings/banking/document-actions.ts": ["ach_document.reject"],
   "src/app/admin/vendors/vendor-esign-actions.ts": ["vendor_esign.countersign", "vendor_esign.reject"],
   "src/app/admin/vendor-payments/actions.ts": ["vendor_ach.build"],
   // R41 S2: recording Timberland's confirmation of the originator setup.
   "src/app/admin/settings/banking/actions.ts": ["timberland_setup.confirm"],
+  // R41 S3: voiding a released ACH file.
+  "src/app/admin/settings/banking/file-actions.ts": ["ach_file.void"],
 };
 
 describe("every ACH kind is gated exactly once, and the approval replay covers every kind", () => {

@@ -135,6 +135,10 @@ export async function labelForTarget(kind: AchActionKind, targetId: string | nul
   try {
     if (t === "company") return "Company banking settings";
     if (t === "vendor_payment") return "Vendor ACH payment file";
+    if (t === "ach_file" && targetId) {
+      const f = await one("ach_files", "filename,file_date,file_id_modifier", targetId);
+      if (f) return `ACH file ${txt(f.filename)} (${txt(f.file_date)} ${txt(f.file_id_modifier)})`.slice(0, 200);
+    }
     if (!targetId) return fallback;
     let label = "";
     if (t === "vendor") label = txt((await one("vendors", "display_name", targetId))?.display_name);

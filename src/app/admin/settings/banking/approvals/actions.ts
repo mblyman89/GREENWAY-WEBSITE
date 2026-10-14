@@ -49,6 +49,7 @@ import { opsSiteUrl } from "@/lib/payments/ach-ops-ui-core";
 import { decryptSecret } from "@/lib/security/at-rest-crypto";
 import * as vault from "../vault-actions";
 import * as ops from "../ops-actions";
+import * as files from "../file-actions";
 import * as docs from "../document-actions";
 import * as company from "../actions";
 import * as payroll from "../../../payroll/actions";
@@ -83,6 +84,7 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "ach_notice.resolve": (fd) => ops.resolveNoticeAction(fd),
   "employee_hold.release": (fd) => ops.releaseEmployeeHoldAction(fd),
   "ach_check.start": (fd) => ops.startCheckAction(fd),
+  "ach_check.release_file": (fd) => ops.releaseCheckFileAction(fd),
   "ach_check.mark_sent": (fd) => ops.markCheckFileSentAction(fd),
   "ach_check.finish": (fd) => ops.finishCheckAction(fd),
   "legal_hold.set": (fd) => ops.setLegalHoldAction(fd),
@@ -95,6 +97,7 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "vendor_esign.reject": (fd) => esign.rejectVendorEsignAction(fd),
   "vendor_ach_flag.change": (fd) => flags.changeVendorAchFlagAction(fd),
   "vendor_ach.build": (fd) => ap.buildVendorAchAction(null, fd),
+  "ach_file.void": (fd) => files.voidAchFileAction(fd),
 };
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
