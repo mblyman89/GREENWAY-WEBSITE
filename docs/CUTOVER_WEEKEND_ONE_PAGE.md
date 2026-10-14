@@ -49,7 +49,7 @@ Tick each box yourself; the app cannot see what you have done.
 
 | Done | Time | Step | Check |
 |---|---|---|---|
-| [ ] |  | **Daily: compare against Cultivera's last numbers.** Once a day for the first week, check the units by vendor and category against the cutover import. (/admin/menu-imports/reconcile) | Each difference has a reason (a sale, a delivery, a count). |
+| [ ] |  | **Daily: compare against Cultivera's last numbers.** Once a day through 11/08: on hand must equal Cultivera's units plus every count, adjustment, sale and void. Press I ran today's check. (/admin/menu-imports/drift) | Green, or every red product counted and fixed. |
 
 ## If something goes wrong
 

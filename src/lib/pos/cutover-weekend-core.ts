@@ -272,10 +272,10 @@ export const WEEKEND_STEPS: readonly WeekendStep[] = [
     day: "after",
     at: null,
     title: "Daily: compare against Cultivera's last numbers",
-    detail: "Once a day for the first week, check the units by vendor and category against the cutover import.",
-    check: "Each difference has a reason (a sale, a delivery, a count).",
-    href: "/admin/menu-imports/reconcile",
-    linkLabel: "Go / no-go check",
+    detail: "Once a day through 11/08: on hand must equal Cultivera's units plus every count, adjustment, sale and void. Press I ran today's check.",
+    check: "Green, or every red product counted and fixed.",
+    href: "/admin/menu-imports/drift",
+    linkLabel: "Daily drift check",
   },
 ];
 

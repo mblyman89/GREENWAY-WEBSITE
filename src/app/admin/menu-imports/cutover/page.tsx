@@ -182,6 +182,18 @@ export default async function CutoverRunbookPage({
           </p>
         </section>
 
+        {/* R50 A6: the daily drift check, first week only */}
+        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="cutover-drift">
+          <h2 className="text-sm font-semibold text-white">Did anything drift today? (11/02 to 11/08)</h2>
+          <p className="mt-2 text-sm text-white/60">
+            Once a day for the first week: on hand must equal Cultivera&apos;s units plus every count, adjustment, sale and
+            void. Red names the product to count. It switches itself off after 11/08.{" "}
+            <Link href="/admin/menu-imports/drift" className="text-[var(--admin-accent)] hover:underline">
+              Open the daily drift check
+            </Link>
+          </p>
+        </section>
+
         {/* R50 A4: failure alerts */}
         <section id="cutover-alerts" className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="cutover-alerts">
           <h2 className="text-sm font-semibold text-white">Failure alerts (email and phone)</h2>
