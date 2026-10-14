@@ -455,6 +455,43 @@ export function reconcileCsv(lines: readonly MismatchLine[], explained: Readonly
 }
 
 /* ------------------------------------------------------------------ *
+ *  Page helpers
+ * ------------------------------------------------------------------ */
+
+export const RECONCILE_HREF = "/admin/menu-imports/reconcile";
+export const RECONCILE_KINDS = Object.keys(KIND_ORDER) as MismatchKind[];
+
+/** Lines per kind (in page order), open = not explained. Kinds with no lines are left out. */
+export function kindCounts(lines: readonly MismatchLine[], explained: ReadonlyMap<string, Explanation> = new Map()): { kind: MismatchKind; total: number; open: number }[] {
+  return RECONCILE_KINDS.map((kind) => {
+    const of = lines.filter((l) => l.kind === kind);
+    return { kind, total: of.length, open: of.filter((l) => !explained.has(lineKey(l))).length };
+  }).filter((c) => c.total > 0);
+}
+
+/** Missing lines the "Create the missing lots" button can actually help (not the elsewhere ones). */
+export function creatableMissing(lines: readonly MismatchLine[]): number {
+  return lines.filter((l) => l.kind === "missing_lot" && !l.elsewhere).length;
+}
+
+/** A link back to this page with filters (empty values dropped). */
+export function reconcileHref(importId: string, q: Partial<Record<"kind" | "vendor" | "category" | "q" | "open" | "page" | "barcode", string | number>> = {}): string {
+  const p = new URLSearchParams();
+  if (importId) p.set("import", importId);
+  for (const k of ["kind", "vendor", "category", "q", "open", "page", "barcode"] as const) {
+    const v = q[k];
+    if (v != null && String(v) !== "") p.set(k, String(v));
+  }
+  const s = p.toString();
+  return s ? `${RECONCILE_HREF}?${s}` : RECONCILE_HREF;
+}
+
+/** The kind filter from the URL, or "" when it is not a real kind. */
+export function parseKind(v: unknown): MismatchKind | "" {
+  return typeof v === "string" && (RECONCILE_KINDS as string[]).includes(v) ? (v as MismatchKind) : "";
+}
+
+/* ------------------------------------------------------------------ *
  *  Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
  * ------------------------------------------------------------------ */
 
@@ -627,6 +664,18 @@ export function __runCultiveraReconcileCoreTests(): { passed: number; failed: nu
   const csvLines = csv.trim().split("\r\n");
   ok(csvLines.length === 2 && csvLines[0].startsWith("Kind,Barcode") && csvLines[1].includes("Different units,A,P A,Acme,Flower,3,4,1") && csvLines[1].includes(",ok,L-A"), "csv row with diff, note, lots");
   ok(csv.endsWith("\r\n"), "csv crlf");
+
+
+  // page helpers
+  const kc = kindCounts(mixed.mismatches);
+  ok(kc.map((c) => c.kind).join() === "not_whole,missing_lot,units_differ,extra_lot" && kc.every((c) => c.total === 1 && c.open === 1), "kind counts in page order");
+  const kcEx = kindCounts(r3.mismatches, allEx);
+  ok(kcEx.length === 1 && kcEx[0].open === 0 && kcEx[0].total === 1, "kind counts open excludes explained");
+  ok(creatableMissing(r4.mismatches) === 0 && creatableMissing(r4b.mismatches) === 1, "elsewhere lines are not creatable");
+  ok(reconcileHref("abc") === "/admin/menu-imports/reconcile?import=abc" && reconcileHref("") === "/admin/menu-imports/reconcile", "href base");
+  ok(reconcileHref("abc", { kind: "extra_lot", vendor: "A & B", page: 2, q: "" }) === "/admin/menu-imports/reconcile?import=abc&kind=extra_lot&vendor=A+%26+B&page=2", "href encodes + drops empty");
+  ok(parseKind("missing_lot") === "missing_lot" && parseKind("bogus") === "" && parseKind(undefined) === "", "parse kind");
+  ok(RECONCILE_KINDS.length === 6, "six kinds");
 
   // missingBarcodes
   ok(missingBarcodes(f1, [lot("A", 3)]).join() === "B", "missing barcodes");
