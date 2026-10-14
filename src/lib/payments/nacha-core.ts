@@ -28,6 +28,7 @@
 // ---------------------------------------------------------------------------
 
 import { alpha, dfiId8, isValidRouting, numeric, routingCheckDigit, sanitizeAlpha } from "./nacha-fields-core";
+import { pacificParts } from "@/lib/reports/timezone";
 import { checkBuiltFileShape, checkOriginatorForFile, checkSecCode } from "./timberland-originator-core";
 
 export { alpha, dfiId8, isValidRouting, numeric, routingCheckDigit, sanitizeAlpha };
@@ -39,8 +40,21 @@ function yymmdd(d: Date): string {
   return `${y}${m}${day}`;
 }
 
-function hhmm(d: Date): string {
-  return `${String(d.getUTCHours()).padStart(2, "0")}${String(d.getUTCMinutes()).padStart(2, "0")}`;
+/**
+ * R41 S3: the File Header's creation date and time are Greenway's wall clock
+ * (America/Los_Angeles), not UTC. The ACH file ledger keys the File ID
+ * Modifier on that same Pacific date (unique file_date + modifier), so the
+ * date Timberland reads in positions 24-29 is the date the ledger counted.
+ * With UTC, a file built after 5 pm Pacific carried tomorrow's date.
+ */
+function pacificYymmdd(d: Date): string {
+  const p = pacificParts(d);
+  return `${String(p.year).slice(2)}${String(p.month).padStart(2, "0")}${String(p.day).padStart(2, "0")}`;
+}
+
+function pacificHhmm(d: Date): string {
+  const p = pacificParts(d);
+  return `${String(p.hour).padStart(2, "0")}${String(p.minute).padStart(2, "0")}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,8 +161,8 @@ export function fileHeaderRecord(originator: AchOriginator, created: Date, fileI
     "01" +
     " " + numeric(originator.destinationRouting.replace(/\D/g, ""), 9) + // 4-13 (b + 9)
     numeric(originator.immediateOrigin, 10) + // 14-23
-    yymmdd(created) + // 24-29
-    hhmm(created) + // 30-33
+    pacificYymmdd(created) + // 24-29 (R41 S3: Pacific, = ach_files.file_date)
+    pacificHhmm(created) + // 30-33
     fileIdModifier + // 34
     "094" + // 35-37 record size
     "10" + // 38-39 blocking factor
@@ -240,7 +254,14 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
   }
 
   const created = input.createdAt ?? effectiveDate;
-  const fileIdModifier = (input.fileIdModifier ?? "A").slice(0, 1).toUpperCase();
+  // R41 S3: the File ID Modifier is one upper-case letter A-Z or digit 0-9
+  // (docs/authorities/ach/odfi-banc-of-california-nacha-file-format.txt,
+  // odfi-hometrust-ach-format-2023.txt). The ledger hands out the next free
+  // one for the day; anything else is refused, never trimmed or upper-cased.
+  const fileIdModifier = input.fileIdModifier ?? "A";
+  if (!/^[A-Z0-9]$/.test(fileIdModifier)) {
+    return { ok: false, error: `The File ID Modifier must be one letter A-Z or one digit 0-9 (got "${fileIdModifier}").` };
+  }
   const originDfi8 = originator.originatingDfi.replace(/\D/g, "").slice(0, 8);
 
   const lines: string[] = [];
@@ -555,6 +576,26 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
     ok(has(put(0, 13, "1999999999"), /Immediate Origin/), "shape: a wrong Immediate Origin is caught");
     ok(has(rows.slice(1).join("\n"), /not a file header/), "shape: a missing file header is caught");
     ok(has(rows.map((r, i) => (i === 0 ? r + " " : r)).join("\n"), /94 characters/), "shape: a 95-character record is caught");
+  }
+
+  // R41 S3: the File Header date/time is Pacific (= ach_files.file_date), and
+  // the File ID Modifier is one A-Z or 0-9, refused otherwise (never fixed up).
+  {
+    const at = (createdAt: string, fileIdModifier?: string) =>
+      buildNachaFile({ originator: GW, entries: [{ accountType: "checking", routing: "021000021", accountNumber: "123456789", amountCents: 100, name: "A", idNumber: "E" }], secCode: "PPD", companyEntryDescription: "PAYROLL", effectiveDate: new Date("2026-10-23T00:00:00Z"), createdAt: new Date(createdAt), fileIdModifier });
+    const head = (r: ReturnType<typeof at>) => (r.ok ? r.file.slice(0, 94) : "");
+    const late = at("2026-10-21T01:30:00Z"); // Tue Oct 20, 6:30 pm PDT
+    ok(head(late).slice(23, 29) === "261020", "header date is the Pacific day (6:30 pm PDT stays Oct 20, not UTC Oct 21)");
+    ok(head(late).slice(29, 33) === "1830", "header time is Pacific wall-clock HHMM (18:30)");
+    const winter = at("2026-12-01T07:59:00Z"); // Mon Nov 30, 11:59 pm PST
+    ok(head(winter).slice(23, 33) === "2611302359", "header date/time in PST (UTC-8) is still Pacific");
+    ok(head(at("2026-10-20T18:00:00Z", "B")).slice(33, 34) === "B", "the given modifier lands in position 34");
+    ok(head(at("2026-10-20T18:00:00Z", "7")).slice(33, 34) === "7", "a digit modifier is allowed");
+    ok(head(at("2026-10-20T18:00:00Z")).slice(33, 34) === "A", "no modifier given: A");
+    for (const bad of ["b", "AB", "", " ", "-"]) {
+      const r = at("2026-10-20T18:00:00Z", bad);
+      ok(!r.ok && /File ID Modifier must be one letter A-Z or one digit 0-9/.test(r.error), `modifier ${JSON.stringify(bad)} is refused, not trimmed or upper-cased`);
+    }
   }
 
   console.log(`nacha-core: ${passed} passed, ${failed} failed`);
