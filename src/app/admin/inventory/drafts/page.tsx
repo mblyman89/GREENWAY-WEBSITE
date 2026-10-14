@@ -1103,7 +1103,7 @@ export default async function CatalogDraftsPage({
           </div>
         )}
 
-        {/* R50 S3: start a Cultivera-rebuilt manifest through Onboarding. */}
+        {/* R50 A1: result of "Yes, same product" / "Forget this choice" (closed set, aliasBanner). */}
         {aliasNote && (
           <div
             role={aliasNote.tone === "warn" ? "alert" : "status"}
@@ -1118,6 +1118,7 @@ export default async function CatalogDraftsPage({
             {aliasNote.text}
           </div>
         )}
+        {/* R50 S3: start a Cultivera-rebuilt manifest through Onboarding. */}
         {cvBanner && (
           <div
             role={cvBanner.tone === "bad" ? "alert" : "status"}

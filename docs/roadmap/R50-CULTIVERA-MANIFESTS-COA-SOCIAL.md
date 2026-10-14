@@ -626,6 +626,13 @@ Use a dedicated business account, not a personal one.
 | **S10b** | Menu Imports revamp (follow-up #5): one numbered, plain-language migration guide (fetch → review → publish → rebuild manifests → onboard → CCRS clean-up), every helper, link and button label rewritten for the new process, copy in a pure core pinned by tests | copy/link pins + mutants |
 | **S10c** | Known garbage → CCRS clean-up (follow-up #5, examiner green light): a pure classifier over the import diagnostics marks migrated records that are dead/broken as "remove from CCRS" candidates; the CCRS hub lists them for the first upload; removal goes only through paths the CCRS bible allows (ledger-proven Delete / R15b adjust-out), never a guessed Delete | self-tests + vitest + mutants |
 | **S8** | Railway steps doc, final report + test strategy PDFs | delivered |
+| **A1** | One-click accept of an S4 suggestion, remembered (0270 `intake_card_aliases`); applied only with zero exact matches and only to an eligible same-axis card, else stale | pure + vitest + mutants |
+| **A2** | Reconciliation go/no-go page: Cultivera units = ours, by vendor / category, red/green | pure + vitest + mutants |
+| **A3** | Dry-run preview before every bulk apply (counts that would change, nothing written) | pure + vitest + mutants |
+| **A4** | Failure alerts (email / text) for the cutover jobs, on the existing notify infrastructure | pure + vitest + mutants |
+| **A5** | One-page cutover runbook for 10/31–11/01 (doc + `/admin/menu-imports/cutover`) | copy pins |
+| **A6** | Drift check 11/02–11/08 (our counts vs the last Cultivera numbers, daily) | pure + vitest + mutants |
+| **A7** | Barcode-first matching (a delivery line whose barcode is already a live lot joins that card before any name rule) | pure + vitest + mutants |
 
 ## 3b. The cutover button: "Fetch It All, Fuck Cultivera" (owner's request, 2026-10-12)
 
@@ -1378,3 +1385,32 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     - vitest: 13, against the real postgrest-js fake and the real fixture COA links.
     - Mutants: 25/25 (three survivors found and pinned: the cursor filter, byte counting, and the tone for
       a bad link alone).
+
+### A1 — "Yes, same product — always join this card" (one-click accept of the S4 hint, remembered)
+  * **What.** Under a "New card" onboarding row that has an S4 suggestion, one button per suggested card.
+    Pressing it saves a permanent answer: this product identity (vendor|category axis|family, exactly as the
+    planner builds it) IS that live card. Every later delivery of the product then joins that card as a size
+    or restock, and the chip reads "(you said it is this product)" with a "Forget this choice" button.
+  * **Why a new table (0270 `intake_card_aliases`).** S32's `intake_merge_decisions` is for 2+ matches
+    (check cardinality ≥ 2) and is only read in that case. This is the 0-match case. Additive, RLS on with
+    no policy (service role only), `decided_by → staff_profiles on delete set null`, no FK into a WIPE
+    table, factory reset KEEP (a wiped card key simply reads as stale). Rollback provided.
+  * **Never a guess.**
+    - The alias is consulted ONLY when the exact rule matched no live card (one match or S32 still win).
+    - It applies ONLY while the card is still an eligible merge target (published, not hidden, not
+      medical-only) on the SAME category axis; otherwise it is stale, the product is added as its own card
+      exactly as before, and an info diagnostic `intake_master_alias_stale` says why.
+    - The server re-computes the row's verdict, identity and suggestions (`card-alias-server.ts`) and saves
+      only a card the scorer suggests for that row right now; a posted card key is never trusted.
+    - Preview (chip) and staging (Approve) share `aliasTarget`, so what the chip says is what Approve does.
+  * **Cost.** Zero extra reads unless a group matched nothing; then one chunked select (staging) or one
+    re-run of the dry run (preview). A failed read (or 0270 not applied) = no aliases = the plan byte for byte.
+  * **Audit.** `intake_card_alias.accept` / `.forget` audit rows and `card_alias_saved` /
+    `card_alias_forgotten` manifest events. `inventory.manage` required.
+  * **Tests.** Mastering self-tests 222 → 271 (+49), card-alias-core 44, vitest 25 (store on the real
+    postgrest-js fake, both actions behavioural, controls render, wiring + migration pins). Related suites
+    (~70 files) pass; pins updated: s13 (11 inventory.manage actions), S31 colour allowlist, S32 parallel read.
+    Mutants 17/18 killed (two survivors found and pinned: a later failed chunk must discard the whole read;
+    the byAlias chip copy). The one left is equivalent: `decidedTarget` needs ≥ 1 live match and the alias
+    needs 0, so "alias before decision" can never change the target.
+
