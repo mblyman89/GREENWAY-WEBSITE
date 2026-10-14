@@ -526,6 +526,37 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
   const noneBad = buildNachaFile({ originator: { ...GW, companyEin: "" }, entries: [], secCode: "PPD", companyEntryDescription: "P", effectiveDate: new Date() });
   ok(refused(noneBad, /EIN/), "a bad originator is reported before 'no entries'");
 
+  // R41 S2: checkBuiltFileShape re-reads the builder's own output. Each check
+  // is proven by tampering ONE field of a good file (the builder cannot make
+  // these, so the only way to test the net is to cut a hole in a real file).
+  if (good.ok) {
+    const rows = good.file.split("\n");
+    const put = (i: number, from: number, text: string) => {
+      const r = [...rows];
+      r[i] = r[i]!.slice(0, from) + text + r[i]!.slice(from + text.length);
+      return r.join("\n");
+    };
+    const i5 = rows.findIndex((r) => r[0] === "5");
+    const i8 = rows.findIndex((r) => r[0] === "8");
+    const i9 = rows.findIndex((r) => r[0] === "9");
+    const i6 = rows.findIndex((r) => r[0] === "6");
+    const has = (f: string, re: RegExp) => checkBuiltFileShape(f, GW).some((m) => re.test(m));
+    ok(checkBuiltFileShape(good.file, GW).length === 0, "shape: a good file has no problems");
+    ok(has(put(i5, 4, "GREENWAY CANNABI"), /Company Name is not/), "shape: a wrong batch name is caught");
+    ok(has(put(i5, 79, "12500010"), /Originating DFI is not Timberland/), "shape: a wrong batch ODFI is caught");
+    ok(has(put(i5, 40, "1999999999"), /batch Company ID/), "shape: a wrong batch Company ID is caught");
+    ok(has(put(i5, 50, "CTX"), /entry type "CTX"/), "shape: a restricted SEC in the batch is caught");
+    ok(has(put(i5, 1, "200"), /credits-only/), "shape: a mixed (200) batch is caught (Brenda: unbalanced)");
+    ok(has(put(i8, 1, "200"), /batch control is not service class 220/), "shape: a mixed batch control is caught");
+    ok(has(put(i8, 20, "000000000001"), /batch has a debit total/), "shape: a batch debit total is caught");
+    ok(has(put(i9, 31, "000000000001"), /file has a debit total/), "shape: a file debit total is caught");
+    ok(has(put(i6, 1, "27"), /transaction code 27/), "shape: a debit entry (27) is caught (no offset)");
+    ok(has(put(0, 3, " 125000105"), /routing number/), "shape: another bank in the file header is caught");
+    ok(has(put(0, 13, "1999999999"), /Immediate Origin/), "shape: a wrong Immediate Origin is caught");
+    ok(has(rows.slice(1).join("\n"), /not a file header/), "shape: a missing file header is caught");
+    ok(has(rows.map((r, i) => (i === 0 ? r + " " : r)).join("\n"), /94 characters/), "shape: a 95-character record is caught");
+  }
+
   console.log(`nacha-core: ${passed} passed, ${failed} failed`);
   return { passed, failed };
 }

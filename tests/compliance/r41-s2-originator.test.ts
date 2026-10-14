@@ -9,7 +9,7 @@
  * This file pins the WIRING: that the pure validator is the one gate every
  * builder, page and save path goes through, and that migration 0272 does what
  * its header says. The behaviour itself is proven by the pure self-tests
- * (timberland-originator-core 65, nacha-core 62, timberland-preview-core 19),
+ * (timberland-originator-core 68, nacha-core 76, timberland-preview-core 19),
  * run here and in scripts/compliance/run-pure-selftests.ts.
  */
 import { describe, expect, it } from "vitest";
@@ -26,15 +26,15 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"
 const sqlStrip = (s: string) => s.replace(/--.*$/gm, "");
 
 describe("pure cores: self-tests pass with their floors", () => {
-  it("timberland-originator-core >= 65", () => {
+  it("timberland-originator-core >= 68", () => {
     const r = __runTimberlandOriginatorCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(65);
+    expect(r.passed).toBeGreaterThanOrEqual(68);
   });
-  it("nacha-core >= 62", () => {
+  it("nacha-core >= 76", () => {
     const r = __runNachaCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(62);
+    expect(r.passed).toBeGreaterThanOrEqual(76);
   });
   it("timberland-preview-core >= 19", () => {
     const r = __runTimberlandPreviewCoreTests();
@@ -43,8 +43,8 @@ describe("pure cores: self-tests pass with their floors", () => {
   });
   it("all three are registered in run-pure-selftests with those floors", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
-    expect(src).toMatch(/assertRan\("timberland-originator-core", __runTimberlandOriginatorCoreTests\(\), 65\)/);
-    expect(src).toMatch(/assertRan\("nacha-core", __runNachaCoreTests\(\), 62\)/);
+    expect(src).toMatch(/assertRan\("timberland-originator-core", __runTimberlandOriginatorCoreTests\(\), 68\)/);
+    expect(src).toMatch(/assertRan\("nacha-core", __runNachaCoreTests\(\), 76\)/);
     expect(src).toMatch(/assertRan\("timberland-preview-core", __runTimberlandPreviewCoreTests\(\), 19\)/);
   });
 });
@@ -136,6 +136,10 @@ describe("the save path refuses a mismatch (except the EIN, which lives on Compa
     expect(v).toBeGreaterThan(0);
     expect(save).toBeGreaterThan(v);
     expect(body).toMatch(/\.filter\(\(p\) => p\.field !== "companyEin"\)/);
+    // the problems actually stop the save: a redirect (which throws) sits
+    // between the check and the write, guarded by the problems list only
+    const between = body.slice(v, save);
+    expect(between).toMatch(/\n\s*if \(problems\.length\) \{\s*\n\s*redirect\(`\$\{ROOT\}\?tab=company&error=\$\{encodeURIComponent\(`Not saved\. /);
   });
   it("behaviour: a non-Timberland routing is a problem on the routing field", () => {
     const p = validateOriginator(greenwayTestOriginator({ destinationRouting: "021000021" }));
@@ -156,6 +160,8 @@ describe("the confirmation is gated, checked and audited", () => {
     expect(a).toBeGreaterThan(0);
     expect(b).toBeGreaterThan(a);
     expect(c).toBeGreaterThan(b);
+    // the problem stops the write: redirect (throws) on any problem, before saveTimberlandStamp
+    expect(body.slice(a, b)).toMatch(/\n\s*if \(problem\) redirect\(`\$\{ROOT\}\?tab=company&error=\$\{encodeURIComponent\(`Not recorded\. \$\{problem\}`\)\}`\);/);
   });
   it("the kind is registered in ACH_ACTIONS, KIND_SPECS and REPLAY", () => {
     expect(read("src/lib/auth/ach-authority-core.ts")).toContain('"timberland_setup.confirm"');
