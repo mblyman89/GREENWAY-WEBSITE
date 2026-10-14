@@ -179,7 +179,7 @@ export function barcodesToRead(draftLots: Array<{ lot_code: string | null }>): {
 
 // --- self-tests -----------------------------------------------------------------
 
-export function __runBarcodeMatchCoreTests(): { passed: number } {
+export function __runBarcodeMatchCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   const ok = (cond: boolean, msg: string) => {
     if (!cond) throw new Error("FAIL barcode-match-core: " + msg);
@@ -266,5 +266,5 @@ export function __runBarcodeMatchCoreTests(): { passed: number } {
   const none = buildBarcodeInputs({ drafts: [], draftLots: [], liveLots: [], liveCards: cards });
   ok(none.barcodeByLotKey.size === 0 && none.liveByBarcode.size === 0, "empty in, empty out");
 
-  return { passed };
+  return { passed, failed: 0 };
 }
