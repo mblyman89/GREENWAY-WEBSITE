@@ -411,6 +411,9 @@ export function __runTimberlandOriginatorCoreTests(): { passed: number; failed: 
   ok(only(greenwayTestOriginator({ companyId: "1911234568" }), "companyId"), "Company ID for a different EIN refused");
   ok(only(greenwayTestOriginator({ immediateOrigin: "1911234568" }), "immediateOrigin"), "Immediate Origin for a different EIN refused");
   ok(only(greenwayTestOriginator({ companyId: "9911234567" }), "companyId"), "a 10-digit ID with the wrong prefix refused");
+  // with no EIN to compare against, the "1" prefix rule alone must hold
+  ok(fields(greenwayTestOriginator({ companyEin: "", companyId: "9911234567" })).includes("companyId"), "with no EIN, a wrong-prefix 10-digit ID is still refused");
+  ok(fields(greenwayTestOriginator({ companyEin: "", immediateOrigin: "0911234567" })).includes("immediateOrigin"), "with no EIN, a 0-prefixed Immediate Origin is still refused");
   ok(only(greenwayTestOriginator({ companyId: "" }), "companyId"), "blank Company ID refused");
   ok(only(greenwayTestOriginator({ companyId: " 1911234567" }), "companyId"), "a leading space is refused (it would shift the batch header)");
   ok(only(greenwayTestOriginator({ immediateOrigin: "1911234567 " }), "immediateOrigin"), "a trailing space is refused");
@@ -427,6 +430,7 @@ export function __runTimberlandOriginatorCoreTests(): { passed: number; failed: 
   ok(only(greenwayTestOriginator({ companyName: "GREENWAY MARIJUAN" }), "companyName"), "17 characters refused");
   ok(only(greenwayTestOriginator({ companyName: "" }), "companyName"), "blank name refused");
   ok(validateOriginator(greenwayTestOriginator({ companyName: "Greenway Cannabis" }))[0]!.message.includes(BATCH_COMPANY_NAME), "the name refusal quotes Brenda's name");
+  ok(validateOriginator(greenwayTestOriginator({ companyName: "Greenway Cannabis" }))[0]!.message.includes('puts "GREENWAY CANNABI" in the batch header'), "the name refusal shows what the batch would print");
   ok(ACCEPTED_COMPANY_NAMES.every((n) => alpha(n, 16) === BATCH_COMPANY_NAME), "both accepted names cut to Brenda's 16");
   // all wrong at once
   ok(validateOriginator({ destinationRouting: "", destinationName: "", immediateOrigin: "", companyName: "", companyId: "", originatingDfi: "", companyEin: "" }).length === 7, "an empty originator reports all seven fields");

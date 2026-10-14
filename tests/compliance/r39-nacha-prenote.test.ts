@@ -38,7 +38,7 @@ describe("nacha-core embedded self-tests", () => {
   it("all pass with the floor", () => {
     const r = __runNachaCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(62);
+    expect(r.passed).toBeGreaterThanOrEqual(76);
   });
 });
 

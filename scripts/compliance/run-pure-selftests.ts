@@ -1734,7 +1734,7 @@ __runLiquidVolumeTests();
   __runNonCannabisTests();
   __runNamingConventionTests();
   __runCcrsProductNameCoreTests();
-  assertRan("nacha-core", __runNachaCoreTests(), 62); // R41 S2: +21 (Timberland originator, SEC, shape-check refusals)
+  assertRan("nacha-core", __runNachaCoreTests(), 76); // R41 S2: +21 (Timberland originator, SEC, shape-check refusals)
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
   __runPayeeBankingCoreTests();
   assertRan("payroll-core", __runPayrollCoreTests(), 34);
@@ -2244,7 +2244,7 @@ __runLiquidVolumeTests();
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 115); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails
   assertRan("ach-gate-core", __runAchGateCoreTests(), 135); // R41 S0: versions, redirect outcomes, replay match, supersede, payload parse, vendor build outcome
   assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42); // R41 S1: every Timberland term readable in its own quote; 14 drift mutants; Q1, Q3-Q14
-  assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 65); // R41 S2: every file is checked against Timberland's originator + its own built shape
+  assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 68); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
