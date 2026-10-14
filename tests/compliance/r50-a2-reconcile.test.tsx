@@ -68,7 +68,7 @@ vi.mock("@/lib/supabase/admin", async () => {
               st.calls.push(`download:${bucket}/${key}`);
               if (st.dlError) return { data: null, error: { message: st.dlError } };
               const b = st.files.get(`${bucket}/${key}`);
-              return b ? { data: new Blob([b]), error: null } : { data: null, error: { message: "Object not found" } };
+              return b ? { data: new Blob([new Uint8Array(b)]), error: null } : { data: null, error: { message: "Object not found" } };
             },
           }),
         },
