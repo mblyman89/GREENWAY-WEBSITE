@@ -207,28 +207,29 @@ begin
   -- countersign: refused until the vault is released after signing ---------
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, null, 'ok', %L)$q$, i1, acc1), 'VENDOR_ESIGN_ACTOR');
-  -- releasing the vault: the sender releasing alone is SOLO (0259)
-  perform pg_temp.must_fail(format($q$update public.vendor_bank_details set status = 'active', released_by = %L, released_at = now() + interval '1 second', release_mode = 'dual', release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = %L$q$, u_m, ven), 'SOLO');
+  -- releasing the vault: since 0271 (R41 S0, D-6 option B) only the OWNER
+  -- releases, with release_mode 'owner'; the admin is refused
+  perform pg_temp.must_fail(format($q$update public.vendor_bank_details set status = 'active', released_by = %L, released_at = now() + interval '1 second', release_mode = 'owner', release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = %L$q$, u_s, ven), 'ACH_OWNER_ONLY');
   -- a release dated BEFORE the signing does not count (the vendor signed after it)
-  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() - interval '1 minute', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() - interval '1 minute', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
   -- a released vault whose routing was changed after signing does not count
   update public.vendor_bank_details set bank_routing = 'encv1:r2:x', updated_by = u_s where vendor_id = ven;
-  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '1 second', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '1 second', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
   update public.vendor_bank_details set bank_routing = 'encv1:r1:x', updated_by = u_s where vendor_id = ven;
   -- a released vault whose account was changed after signing does not count
   update public.vendor_bank_details set bank_account_number = 'encv1:a2:x', updated_by = u_s where vendor_id = ven;
-  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '1 second', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '1 second', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
   -- put the signed banking back (on hold again, authored by the inviter), then a dual release
   update public.vendor_bank_details set bank_account_number = 'encv1:a1:x', updated_by = u_m where vendor_id = ven;
   select * into r from public.vendor_bank_details where vendor_id = ven;
   assert r.status = 'on_hold', 'changing banking puts it back on hold';
-  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() + interval '2 seconds', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '2 seconds', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   -- acceptance file must be in this vendor's folder
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s,
@@ -236,22 +237,24 @@ begin
   -- a later manual hold (same banking, release time kept) blocks countersigning
   update public.vendor_bank_details set status = 'on_hold', hold_reason = 'Owner paused: second look at bank letter' where vendor_id = ven;
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
-  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() + interval '3 seconds', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '3 seconds', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   -- an authorization put on hold is not waiting for acceptance; verifying is
   update public.ach_authorizations set state = 'on_hold', hold_reason = 'Owner review' where id = auth1;
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_AUTH');
   update public.ach_authorizations set state = 'verifying' where id = auth1;
-  perform public.vendor_esign_countersign(i1, u_s, 'Callback ok, dual approval', acc1);
+  -- 0271: countersigning makes the authorization active, so the admin is refused
+  perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'ACH_OWNER_ONLY');
+  perform public.vendor_esign_countersign(i1, u_m, 'Callback ok, owner accepted', acc1);
   select * into r from public.ach_authorizations where id = auth1;
-  assert r.state = 'active' and r.annual_review_due_on = ((now() at time zone 'America/Los_Angeles')::date + interval '1 year')::date and r.updated_by = u_s,
+  assert r.state = 'active' and r.annual_review_due_on = ((now() at time zone 'America/Los_Angeles')::date + interval '1 year')::date and r.updated_by = u_m,
     format('authorization active with annual review: %s %s', r.state, r.annual_review_due_on);
   select * into r from public.vendor_esign_invites where id = i1;
-  assert r.state = 'countersigned' and r.countersigned_by = u_s and r.countersign_document_id is not null, 'invite countersigned';
-  select count(*) into n from public.ach_authorization_documents where id = r.countersign_document_id and authorization_id = auth1 and uploaded_by = u_s;
+  assert r.state = 'countersigned' and r.countersigned_by = u_m and r.countersign_document_id is not null, 'invite countersigned';
+  select count(*) into n from public.ach_authorization_documents where id = r.countersign_document_id and authorization_id = auth1 and uploaded_by = u_m;
   assert n = 1, 'acceptance document linked';
   select count(*) into n from public.ach_authorization_events where authorization_id = auth1 and event_kind = 'vendor_esign_countersigned'
-     and actor_id = u_s and detail->>'vault_release_mode' = 'dual';
+     and actor_id = u_m and detail->>'vault_release_mode' = 'owner';
   assert n = 1, 'countersigned event records the vault release mode';
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set countersign_note = 'x' where id = %L$q$, i1), 'VENDOR_ESIGN_FINAL');
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'again', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_STATE');
@@ -287,14 +290,14 @@ begin
   select * into r from public.vendor_bank_details where vendor_id = ven;
   assert r.change_entered_by = u_s and r.updated_by = u_s and r.created_by = u_m,
     format('the vault change is authored by THIS invite''s sender, not the row creator: %s', r.change_entered_by);
-  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '4 seconds', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '4 seconds', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   perform public.vendor_esign_reject(i3, u_s, 'Owner review: bank letter name does not match vendor');
   select status into r from public.vendor_bank_details where vendor_id = ven;
   assert r.status = 'on_hold', 'reject after release re-holds the vault';
 
   -- re-signing the SAME banking while the vault is active still re-holds it
-  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '5 seconds', release_mode = 'dual',
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '5 seconds', release_mode = 'owner',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   -- the same proof file as an earlier document is reused, not duplicated ---
   i4 := pg_temp.ready_invite(ven, u_m, repeat('a', 64), repeat('5', 64));

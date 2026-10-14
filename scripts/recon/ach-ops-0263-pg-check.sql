@@ -86,11 +86,11 @@ begin
   a2 := pg_temp.acct(auth1, 2, '2222', u_m);
   b1 := pg_temp.acct(auth2, 1, '3333', u_m);
 
-  -- vendor vault banking: lands on hold (0259), released dual -> active
+  -- vendor vault banking: lands on hold (0259), released by the owner -> active (0271)
   insert into public.vendor_bank_details (vendor_id, bank_routing, bank_account_number, created_by, updated_by)
     values (ven, '021000021', '123456789', u_m, u_m);
-  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = clock_timestamp(), release_mode = 'dual',
-         release_callback_method = 'phone', release_callback_note = 'Called vendor at number on file', updated_by = u_s
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = clock_timestamp(), release_mode = 'owner',
+         release_callback_method = 'phone', release_callback_note = 'Called vendor at number on file', updated_by = u_m
    where vendor_id = ven;
   select status into t from public.vendor_bank_details where vendor_id = ven;
   assert t = 'active', format('fixture: vault must be active, is %s', t);
@@ -257,16 +257,19 @@ begin
 
   -- ===== release employee hold ===============================================
   t := $q$select public.ach_auth_release_hold(%L, %L, %L, %L, %L)$q$;
-  perform pg_temp.must_fail(format(t, vauth, u_s, 'phone', 'Called vendor back', null), 'ACH_RELEASE_PAYEE');
-  perform pg_temp.must_fail(format(t, auth2, u_s, 'phone', 'Called employee back', null), 'ACH_RELEASE_STATE');
-  perform pg_temp.must_fail(format(t, gen_random_uuid(), u_s, 'phone', 'Called employee back', null), 'ACH_RELEASE_NOT_FOUND');
+  perform pg_temp.must_fail(format(t, vauth, u_m, 'phone', 'Called vendor back', null), 'ACH_RELEASE_PAYEE');
+  perform pg_temp.must_fail(format(t, auth2, u_m, 'phone', 'Called employee back', null), 'ACH_RELEASE_STATE');
+  perform pg_temp.must_fail(format(t, gen_random_uuid(), u_m, 'phone', 'Called employee back', null), 'ACH_RELEASE_NOT_FOUND');
   perform pg_temp.must_fail(format(t, auth1, null, 'phone', 'Called employee back', null), 'ACH_RELEASE_ACTOR');
-  perform pg_temp.must_fail(format(t, auth1, u_s, 'email', 'Called employee back', null), 'ACH_RELEASE_CALLBACK');
-  perform pg_temp.must_fail(format(t, auth1, u_s, 'phone', 'ok', null), 'ACH_RELEASE_CALLBACK');
-  perform pg_temp.must_fail(format(t, auth1, u_m, 'phone', 'Called employee back', 'too short reason'), 'ACH_RELEASE_SOLO');
+  -- 0271 (R41 S0, D-6 option B): only the OWNER releases; the admin is refused
+  -- before anything else is looked at, and gets the request wording.
+  perform pg_temp.must_fail(format(t, auth1, u_s, 'phone', 'Called employee at number on file', null), 'ACH_OWNER_ONLY');
+  perform pg_temp.must_fail(format(t, auth1, u_m, 'email', 'Called employee back', null), 'ACH_RELEASE_CALLBACK');
+  perform pg_temp.must_fail(format(t, auth1, u_m, 'phone', 'ok', null), 'ACH_RELEASE_CALLBACK');
   -- a3 (unverified, added while active) is still live -> release goes to verifying
-  t := public.ach_auth_release_hold(auth1, u_s, 'phone', 'Called employee at number on file', null);
-  assert t = 'dual', format('different person = dual, got %s', t);
+  -- The owner held it (u_m logged the notice) and releases it himself with NO reason.
+  t := public.ach_auth_release_hold(auth1, u_m, 'phone', 'Called employee at number on file', null);
+  assert t = 'owner', format('owner release returns owner, got %s', t);
   select * into r from public.ach_authorizations where id = auth1;
   assert r.state = 'verifying' and r.hold_reason is null, format('unverified account -> verifying, got %s', r.state);
   -- verify a3 by callback, then the authorization is active again
@@ -275,19 +278,21 @@ begin
   perform pg_temp.must_fail(format($q$select public.ach_verification_finish(%L, %L, 'passed', null, 'ok')$q$, w1, u_m), 'ACH_VERIFICATION_NOTE');
   t := public.ach_verification_finish(w1, u_m, 'passed', null, 'Employee read voided check digits by phone');
   assert t = 'active', format('callback verified the last account -> active, got %s', t);
-  -- solo release: the same person holds and releases
-  perform public.ach_notice_log(u_m, 'employee', emp, 'R03', td, td - 1, 1000, trace, null, null, null, 'Return R03 no account found', null);
-  t := public.ach_auth_release_hold(auth1, u_m, 'in_person', 'Employee came in with new check', 'Only owner on shift; bank confirmed error.');
-  assert t = 'solo', format('same person = solo, got %s', t);
+  -- the ADMIN logs a notice (a STOP action: it takes effect at once), the owner releases
+  perform public.ach_notice_log(u_s, 'employee', emp, 'R03', td, td - 1, 1000, trace, null, null, null, 'Return R03 no account found', null);
+  select state into t from public.ach_authorizations where id = auth1;
+  assert t = 'on_hold', format('admin notice holds at once, got %s', t);
+  t := public.ach_auth_release_hold(auth1, u_m, 'in_person', 'Employee came in with new check', null);
+  assert t = 'owner', format('owner release, got %s', t);
   select state into t from public.ach_authorizations where id = auth1;
   assert t = 'active', format('all verified -> active, got %s', t);
-  select count(*) into n from public.ach_authorization_events where authorization_id = auth1 and event_kind = 'hold_released_solo';
-  assert n = 1, 'solo release event';
-  -- unknown holder (older hold without hold_entered_by) is solo too
+  select count(*) into n from public.ach_authorization_events where authorization_id = auth1 and event_kind = 'hold_released_owner';
+  assert n = 2, format('two owner release events, got %s', n);
+  -- unknown holder (older hold without hold_entered_by): the owner still releases, no reason
   update public.ach_authorizations set state = 'on_hold', hold_reason = 'Old manual hold', hold_entered_by = null where id = auth1;
-  perform pg_temp.must_fail(format($q$select public.ach_auth_release_hold(%L, %L, 'phone', 'Called employee back', 'short')$q$, auth1, u_s), 'ACH_RELEASE_SOLO');
-  t := public.ach_auth_release_hold(auth1, u_s, 'phone', 'Called employee back', 'Hold had no recorded author; owner checked.');
-  assert t = 'solo', 'unknown holder = solo';
+  perform pg_temp.must_fail(format($q$select public.ach_auth_release_hold(%L, %L, 'phone', 'Called employee back', null)$q$, auth1, u_s), 'ACH_OWNER_ONLY');
+  t := public.ach_auth_release_hold(auth1, u_m, 'phone', 'Called employee back', null);
+  assert t = 'owner', 'unknown holder = owner release';
 
   -- ===== a notice answers a prenote: the check fails =========================
   w2 := public.ach_verification_start(b1, u_m, 'prenote', null);
@@ -307,9 +312,9 @@ begin
   perform pg_temp.must_fail(format($q$select public.ach_verification_finish(%L, %L, 'passed', null, null)$q$, w2, u_m), 'ACH_VERIFICATION_FINAL');
   -- held authorization: no new check until released
   perform pg_temp.must_fail(format($q$select public.ach_verification_start(%L, %L, 'prenote', null)$q$, b1, u_m), 'ACH_VERIFICATION_STATE');
-  -- released (dual: u_m held it) with a failed account -> verifying; a new prenote is sent
-  t := public.ach_auth_release_hold(auth2, u_s, 'phone', 'Employee gave the same account again', null);
-  assert t = 'dual', 'auth2 dual release';
+  -- released by the owner with a failed account -> verifying; a new prenote is sent
+  t := public.ach_auth_release_hold(auth2, u_m, 'phone', 'Employee gave the same account again', null);
+  assert t = 'owner', 'auth2 owner release';
   select state into t from public.ach_authorizations where id = auth2;
   assert t = 'verifying', format('failed account -> verifying, got %s', t);
   w2 := public.ach_verification_start(b1, u_m, 'prenote', null);
@@ -333,9 +338,9 @@ begin
   assert t = 'signed', 'vendor authorization state is not touched (the vault pays vendors)';
   res := public.ach_notice_log(u_m, 'vendor', ven, 'C01', td, td - 3, 0, trace, 'encv1:c:x', '0042', td + 6, 'Vendor NOC C01 new account', null);
   assert res ->> 'hold' = 'already_on_hold', 'second vendor notice sees the hold';
-  -- release the vault (dual), then the SAME reason again still holds it (0259 needs a new reason)
-  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = clock_timestamp(), release_mode = 'dual',
-         release_callback_method = 'phone', release_callback_note = 'Called vendor AP at number on file', updated_by = u_s
+  -- release the vault (owner), then the SAME reason again still holds it (0259 needs a new reason)
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = clock_timestamp(), release_mode = 'owner',
+         release_callback_method = 'phone', release_callback_note = 'Called vendor AP at number on file', updated_by = u_m
    where vendor_id = ven;
   res := public.ach_notice_log(u_m, 'vendor', ven, 'R02', td, td - 3, 50000, trace, null, null, null, 'Vendor return R02 account closed', null);
   assert res ->> 'hold' = 'vault', 'repeat reason still holds';
