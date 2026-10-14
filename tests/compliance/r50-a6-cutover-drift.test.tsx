@@ -91,11 +91,11 @@ function baseDb(): DB {
 }
 
 describe("R50 A6 · the drift core", () => {
-  it("self-tests run (47) and are a live call in the pure runner", () => {
-    expect(core.__runCutoverDriftCoreTests()).toEqual({ passed: 47, failed: 0 });
+  it("self-tests run (48) and are a live call in the pure runner", () => {
+    expect(core.__runCutoverDriftCoreTests()).toEqual({ passed: 48, failed: 0 });
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runCutoverDriftCoreTests } from "../../src/lib/pos/cutover-drift-core";');
-    expect(runner).toMatch(/^ {2}assertRan\("cutover-drift-core", __runCutoverDriftCoreTests\(\), 47\);/m);
+    expect(runner).toMatch(/^ {2}assertRan\("cutover-drift-core", __runCutoverDriftCoreTests\(\), 48\);/m);
   });
 
   it("the window and names are fixed", () => {
@@ -164,6 +164,38 @@ describe("R50 A6 · the loader (fake database)", () => {
     if (!r.ok) throw new Error("load");
     expect(r.report.ok).toBe(false);
     expect(r.report.lines[0]).toMatchObject({ key: "K1", kind: "drift", drift: -1, product: "Blue Dream 1g", vendor: "Vendor One" });
+  });
+
+  it("a void puts its units back in the expected count (voids are read)", async () => {
+    const { loadDrift } = await import("@/lib/pos/cutover-drift");
+    const db = baseDb();
+    (db.inventory_lots[0] as Row).on_hand_qty = 8;
+    db.order_events.push({ id: "e4", order_id: "o4", event_type: "sale_void_restocked", note: "Restocked", created_at: "2026-11-02T19:00:00Z" });
+    db.order_lines.push({ id: "ol4", order_id: "o4", product_id: "K1", variant_id: null, quantity: 1 });
+    const r = await loadDrift(fakeAdmin(db).admin, IMP, Date.parse("2026-11-02T20:00:00Z"));
+    if (!r.ok) throw new Error("load");
+    expect(r.report.ok).toBe(true);
+    expect(r.report.totals).toMatchObject({ voided: 1, drift: 0 });
+  });
+
+  it("keypad custom lines never count as sold, even if a lot shares the id (the decrement skips them)", async () => {
+    const { loadDrift } = await import("@/lib/pos/cutover-drift");
+    const db = baseDb();
+    db.inventory_lots.push({ id: "L5", manifest_id: "m1", pos_product_key: "pos-custom-merch", received_qty: 9, on_hand_qty: 9, created_at: T0, product_name: "Odd", category: "Flower", vendor_id: "v1", status: "active" });
+    const r = await loadDrift(fakeAdmin(db).admin, IMP, Date.parse("2026-11-02T20:00:00Z"));
+    if (!r.ok) throw new Error("load");
+    expect(r.report.totals).toMatchObject({ sold: 3, drift: 0 });
+    expect(r.report.ok).toBe(true);
+  });
+
+  it("a destroyed lot of this import is left out (not judged)", async () => {
+    const { loadDrift } = await import("@/lib/pos/cutover-drift");
+    const db = baseDb();
+    db.inventory_lots.push({ id: "L4", manifest_id: "m1", pos_product_key: "K4", received_qty: 2, on_hand_qty: 0, created_at: T0, product_name: "Burned", category: "Flower", vendor_id: "v1", status: "destroyed" });
+    const r = await loadDrift(fakeAdmin(db).admin, IMP, Date.parse("2026-11-02T20:00:00Z"));
+    if (!r.ok) throw new Error("load");
+    expect(r.report.ok).toBe(true);
+    expect(r.report.totals).toMatchObject({ products: 3, cultivera: 19 });
   });
 
   it("a failed or stuck sale is red", async () => {

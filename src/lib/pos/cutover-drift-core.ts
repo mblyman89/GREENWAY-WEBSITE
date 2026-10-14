@@ -419,6 +419,8 @@ export function __runCutoverDriftCoreTests(): { passed: number; failed: number }
   // not whole: red, excluded from sums
   const r13 = driftReport({ ...base, lots: [lot("a", "K1", "10.5", 10), lot("b", "K2", 4, 4)] });
   ok(!r13.ok && r13.totals.notWhole === 1 && r13.totals.cultivera === 4 && r13.lines[0].kind === "not_whole", "non-whole lot red, not summed");
+  const r13b = driftReport({ ...base, lots: [lot("a", "K1", "10.5", 10), lot("a2", "K1", 5, 5), lot("b", "K2", 4, 4)] });
+  ok(!r13b.ok && r13b.totals.cultivera === 4 && r13b.totals.onHand === 4 && r13b.totals.expected === 4, "a not-whole product's other lots stay out of the totals");
   const r14 = driftReport({ ...base, lots: [lot("a", "K1", 10, 10)], adjustments: [{ lot_id: "a", qty_delta: "0.5", reason: "count" }] });
   ok(!r14.ok && r14.totals.notWhole === 1, "non-whole adjustment red");
   const r14b = driftReport({ ...base, lots: [lot("a", "K1", 10, 10)], sold: [line("K1", "1.5")] });
