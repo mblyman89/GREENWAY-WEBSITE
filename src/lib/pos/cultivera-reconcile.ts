@@ -31,6 +31,7 @@ import {
   RECONCILE_EXPLAIN_ACTION,
   RECONCILE_SIGNOFF_ACTION,
   RECONCILE_UNEXPLAIN_ACTION,
+  RECONCILE_UNITS_COLUMN,
   explanationsFromEvents,
   fileSide,
   missingBarcodes,
@@ -75,11 +76,19 @@ function ws(v: unknown): string {
 }
 
 /** transform.ts readWorkbookRowsFromBuffer, byte for byte. */
+/** Columns the comparison reads; all must be in the header row. */
+export const RECONCILE_REQUIRED_COLUMNS = ["Barcode", "Product", RECONCILE_UNITS_COLUMN] as const;
+
 export function readInventoryRows(buffer: Buffer | Uint8Array): WorkbookRow[] {
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const name = wb.SheetNames.includes(RECONCILE_SHEET) ? RECONCILE_SHEET : wb.SheetNames[0];
   if (!name) throw new Error("The stored Cultivera file has no sheets.");
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[name], { defval: "", raw: false });
+  const sheet = wb.Sheets[name];
+  // Junk bytes still "parse" (as one-cell CSV), so prove it is the Cultivera export by its header row.
+  const head = (XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false })[0] ?? []).map((h) => ws(h));
+  const missing = RECONCILE_REQUIRED_COLUMNS.filter((c) => !head.includes(c));
+  if (missing.length) throw new Error(`It does not look like Cultivera's inventories export (missing column${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}).`);
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: false });
   return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [ws(k), ws(v)])));
 }
 
