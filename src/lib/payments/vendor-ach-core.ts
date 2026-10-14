@@ -260,12 +260,13 @@ export function __runVendorAchTests(): { passed: number; failed: number } {
   };
 
   const originator: AchOriginator = {
-    destinationRouting: "021000021", // valid ABA (Chase)
+    destinationRouting: "325170754",
     destinationName: "TIMBERLAND BANK",
-    immediateOrigin: "1123456789",
+    immediateOrigin: "1911234567",
     companyName: "GREENWAY MARIJUANA",
-    companyId: "1123456789",
-    originatingDfi: "02100002",
+    companyId: "1911234567",
+    originatingDfi: "32517075",
+    companyEin: "911234567", // R41 S2: Timberland shape (test EIN, not Greenway's)
   };
 
   const goodPayment = (over: Partial<VendorPayment> = {}): VendorPayment => ({

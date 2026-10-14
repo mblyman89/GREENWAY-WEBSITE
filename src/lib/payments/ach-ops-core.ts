@@ -451,12 +451,13 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
     }
   };
   const ORIG: AchOriginator = {
-    destinationRouting: "325170835",
+    destinationRouting: "325170754",
     destinationName: "TIMBERLAND BANK",
-    immediateOrigin: "1234567890",
-    companyName: "GREENWAY",
-    companyId: "1234567890",
-    originatingDfi: "32517083",
+    immediateOrigin: "1911234567",
+    companyName: "GREENWAY MARIJUANA",
+    companyId: "1911234567",
+    originatingDfi: "32517075",
+    companyEin: "911234567", // R41 S2: Timberland shape (test EIN, not Greenway's)
   };
   const chk = (over: Partial<PlannedCheck> = {}): PlannedCheck => ({
     verificationId: "v1",

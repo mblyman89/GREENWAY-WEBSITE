@@ -927,6 +927,7 @@ import { __runAchOpsUiCoreTests } from "../../src/lib/payments/ach-ops-ui-core";
 import { __runAchAuthorityCoreTests } from "../../src/lib/auth/ach-authority-core";
 import { __runAchGateCoreTests } from "../../src/lib/payments/ach-gate-core";
 import { __runTimberlandProfileCoreTests } from "../../src/lib/payments/timberland-profile-core";
+import { __runTimberlandOriginatorCoreTests } from "../../src/lib/payments/timberland-originator-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
@@ -1732,7 +1733,7 @@ __runLiquidVolumeTests();
   __runNonCannabisTests();
   __runNamingConventionTests();
   __runCcrsProductNameCoreTests();
-  assertRan("nacha-core", __runNachaCoreTests(), 41);
+  assertRan("nacha-core", __runNachaCoreTests(), 62); // R41 S2: +21 (Timberland originator, SEC, shape-check refusals)
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
   __runPayeeBankingCoreTests();
   assertRan("payroll-core", __runPayrollCoreTests(), 34);
@@ -2242,6 +2243,7 @@ __runLiquidVolumeTests();
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 115); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails
   assertRan("ach-gate-core", __runAchGateCoreTests(), 135); // R41 S0: versions, redirect outcomes, replay match, supersede, payload parse, vendor build outcome
   assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42); // R41 S1: every Timberland term readable in its own quote; 14 drift mutants; Q1, Q3-Q14
+  assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 65); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
