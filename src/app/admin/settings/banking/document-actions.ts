@@ -3,19 +3,25 @@
 /**
  * R39 S5 — ACH document intake actions.
  *
- *   dropAchDocumentAction    managers and admins (owner Q2). Employees need
- *                            staffing.manage, vendors vendors.manage, and both
- *                            need a drop role (owner/admin/manager), matching
- *                            the bucket policy public.is_manager() (0258).
- *   open / extract / rekey / reject: owner + admin only (settings.manage),
- *                            matching public.is_admin() and owner Q1.
+ *   dropAchDocumentAction    owner and admin only (R41 owner decision D-5).
+ *                            Employees need staffing.manage, vendors
+ *                            vendors.manage, and both need a drop role
+ *                            (owner/admin), matching the bucket policy
+ *                            public.is_admin() (0271 narrows 0258).
+ *   open / extract / rekey:  owner + admin (settings.manage): they only fill
+ *                            the intake queue; anything they produce lands on
+ *                            hold or unverified.
+ *   reject:                  a live change, so through achGate (R41 S0):
+ *                            Michael acts at once; Stephen's is sent to him.
  *
  * Audit rows carry document ids, kinds, statuses and last-4 only. Redirect
  * targets go through safeReturnPath (our own /admin pages only).
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePermission, type StaffSession } from "@/lib/auth/session";
+import { achGate } from "@/lib/payments/ach-gate";
+import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   canDropDocuments,
@@ -53,7 +59,7 @@ export async function dropAchDocumentAction(fd: FormData): Promise<void> {
   const ret = safeReturnPath(str(fd, "return_to"), safeReturnPath(fallback, "/admin"));
   if (payeeType !== "employee" && payeeType !== "vendor") back(ret, "error", "Unknown payee type.");
   const session = await requirePermission(payeeType === "vendor" ? "vendors.manage" : "staffing.manage");
-  if (!canDropDocuments(session.profile.role)) back(ret, "error", "Only managers, admins and the owner can drop ACH documents.");
+  if (!canDropDocuments(session.profile.role)) back(ret, "error", "Only Michael (the owner) and Stephen (admin) can drop ACH documents.");
 
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) back(ret, "error", "Pick the file to drop.");
@@ -155,7 +161,16 @@ export async function rekeyAchDocumentAction(fd: FormData): Promise<void> {
 }
 
 export async function rejectAchDocumentAction(fd: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const id = str(fd, "document_id");
+  return achGate(
+    "ach_document.reject",
+    fd,
+    { reply: (r: RedirectOutcome): never => back(docPage(id), r.ok ? "ok" : "error", r.message) },
+    (session) => rejectAchDocumentBody(session, fd),
+  );
+}
+
+async function rejectAchDocumentBody(session: StaffSession, fd: FormData): Promise<void> {
   const id = str(fd, "document_id");
   const doc = await getAchDocument(id);
   if (!doc) back(QUEUE, "error", "That document no longer exists.");

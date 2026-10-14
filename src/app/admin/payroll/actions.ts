@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePermission, type StaffSession } from "@/lib/auth/session";
+import { achGate } from "@/lib/payments/ach-gate";
+import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { createHash } from "node:crypto";
 import {
@@ -137,7 +139,20 @@ export async function uploadSourceDocAction(runId: string, formData: FormData): 
  * payroll guardrails first. Soft warnings require an explicit, recorded
  * override checkbox; hard blocks can never be bypassed. */
 export async function generateRunAction(runId: string, formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate(
+    "payroll.generate",
+    formData,
+    {
+      explicitId: runId,
+      reply: (r: RedirectOutcome): never =>
+        redirect(`${ROOT}/${encodeURIComponent(runId)}?${r.ok ? "msg" : "error"}=${encodeURIComponent(r.message)}`),
+    },
+    (session) => generateRunBody(session, runId, formData),
+  );
+}
+
+/** R41 S0: the body runs for Michael (owner) at once, or when he approves Stephen's request. */
+async function generateRunBody(session: StaffSession, runId: string, formData: FormData): Promise<void> {
   const overrideWarnings = String(formData.get("override_warnings") ?? "") === "on";
   const overrideReason = String(formData.get("override_reason") ?? "").trim() || null;
   const res = await generatePayrollNacha(runId, session.profile.id, { overrideWarnings, overrideReason });

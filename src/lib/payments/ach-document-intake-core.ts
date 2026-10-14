@@ -759,8 +759,12 @@ export function rekeyStep(
   };
 }
 
-/** Roles allowed to drop documents: mirrors public.is_manager() (0130). */
-export const DROP_ROLES = ["owner", "admin", "manager"] as const;
+/**
+ * Roles allowed to drop documents. R41 S0, owner decision D-5 (only the owner
+ * and admin drop ACH documents): mirrors public.is_admin(), which 0271 puts on
+ * the two 0258 drop policies (ach_docs_manager_drop, ach_documents_manager_drop).
+ */
+export const DROP_ROLES = ["owner", "admin"] as const;
 /** Roles allowed to read, re-key and accept: mirrors public.is_admin() (0001). */
 export const REVIEW_ROLES = ["owner", "admin"] as const;
 export function canDropDocuments(role: string | null | undefined): boolean {
@@ -1184,7 +1188,7 @@ export function __runAchDocumentIntakeTests(): { passed: number; failed: number 
   ok(vfOk.ok && vfOk.basis === "matches_form", "second entry matching form after a wrong first is fine");
 
   // roles mirror is_manager / is_admin
-  ok(canDropDocuments("manager") && canDropDocuments("owner") && !canDropDocuments("content_editor") && !canDropDocuments("staff") && !canDropDocuments(null), "drop roles");
+  ok(!canDropDocuments("manager") && canDropDocuments("admin") && canDropDocuments("owner") && !canDropDocuments("content_editor") && !canDropDocuments("staff") && !canDropDocuments(null), "drop roles");
   ok(canReviewDocuments("admin") && !canReviewDocuments("manager"), "review roles");
 
   // fingerprints + server step (parity with rekeyVerdict)

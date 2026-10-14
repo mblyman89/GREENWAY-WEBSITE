@@ -2,17 +2,31 @@
 
 /**
  * R39 S4 — the vendor ACH card's buttons (needs bank info / opted out).
- * settings.manage only: managers who edit vendors never see or change
- * whether a vendor is paid by ACH (same rule as the vault badge, SLICE 94).
+ * R41 S0: through achGate. Michael (owner) acts at once with a receipt;
+ * Stephen's (admin) change is sent to Michael for approval; managers who edit
+ * vendors never see or change whether a vendor is paid by ACH.
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/auth/session";
+import type { StaffSession } from "@/lib/auth/session";
+import { achGate } from "@/lib/payments/ach-gate";
+import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { changeVendorAchFlag } from "@/lib/payments/vendor-ach-enrollment-store";
 
 export async function changeVendorAchFlagAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_ach_flag.change", formData, { reply: (r) => replyFlag(formData, r) }, (session) => changeVendorAchFlagBody(session, formData));
+}
+
+/** The gate's answer on the page the button was on. */
+function replyFlag(formData: FormData, r: RedirectOutcome): never {
+  const vendorId = String(formData.get("vendor_id") ?? "").trim();
+  const base = String(formData.get("return_to") ?? "") === "vault" || !vendorId ? "/admin/settings/banking?tab=vendors" : `/admin/vendors/${encodeURIComponent(vendorId)}`;
+  const join = base.includes("?") ? "&" : "?";
+  redirect(`${base}${join}${r.ok ? "msg" : "error"}=${encodeURIComponent(r.message)}`);
+}
+
+async function changeVendorAchFlagBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   const action = String(formData.get("ach_action") ?? "").trim();
   const reason = String(formData.get("opt_out_reason") ?? "");
