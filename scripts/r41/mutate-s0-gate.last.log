@@ -1,0 +1,27 @@
+killed   admin-acts-directly
+killed   manager-is-admin
+killed   owner-no-receipt
+killed   stop-no-review
+killed   request-runs-body
+killed   plaintext-stored
+killed   no-stale-version
+killed   request-no-mail
+killed   requester-from-form
+killed   supersede-actor-from-form
+killed   review-doneby-from-form
+killed   receipt-on-failure
+killed   no-supersede
+killed   swallow-errors
+killed   stop-no-suffix
+killed   review-fail-hidden
+killed   replay-any-kind
+killed   replay-any-owner
+killed   replay-admin
+killed   third-stop-kind
+killed   ops-bypass
+killed   replay-gap
+killed   approve-not-owner
+killed   build-ungated
+killed   cron-twice
+control pass
+total 25 killed 25 survivors []
