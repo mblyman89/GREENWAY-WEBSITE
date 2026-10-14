@@ -87,8 +87,8 @@ META = {
         "builds written, logged procedures instead of relying on memory."),
     "fraud-phase-2-change-controls": ("industry_guidance", None,
         "This is the sentence the whole vault design answers. A bank-detail change is the single most valuable thing a fraudster can achieve, so a "
-        "change puts the payee ON HOLD, must be verified by a callback to a number already on file, and must be released by Michael or Stephen with "
-        "a written record. Payments cannot go to new details until that happens."),
+        "change puts the payee ON HOLD, must be verified by a callback to a number already on file, and must be released by Michael (the owner) "
+        "with a written record. Payments cannot go to new details until that happens."),
     "fraud-phase-2-annual-review": ("industry_guidance", None,
         "Two duties: have risk-based procedures, and review them at least once a year. The system records the last review date and flags the "
         "procedures as overdue after twelve months, so the annual review is something the screen asks for rather than something to remember."),
@@ -164,9 +164,9 @@ META = {
         "Washington's own auditor says the same thing as the bank summaries: call, using contact information already on file. The State Auditor "
         "audits public bodies, not Greenway, so this is persuasive and not binding - but it is the clearest Washington statement of the standard."),
     "sao-segregate-duties": ("state_manual", None,
-        "The reason managers can upload a signed form but cannot open it, edit bank details or release a payee. Only Michael and Stephen can change "
-        "the vendor or employee master file. With two people that is the strongest separation available, and the solo-release log covers the days "
-        "only one of them is in."),
+        "The reason managers can upload a signed form but cannot open it, edit bank details or release a payee. Only Michael (the owner) can change "
+        "the vendor or employee master file; Stephen (admin) can gather and record, and his changes wait for Michael's approval. Every change is "
+        "logged with who entered it and who approved it."),
     "callback-manipulation": ("industry_guidance", None,
         "The trap a plain callback falls into: the fraudster first changes the phone number, then asks for the bank change, then answers the "
         "callback. That is why a contact change within the look-back window before a bank change raises the risk and forces the callback to an "

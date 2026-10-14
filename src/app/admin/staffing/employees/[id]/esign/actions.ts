@@ -3,8 +3,9 @@
 /**
  * R39 S6 — in-person e-sign of the employee direct deposit form (GW-ACH-E).
  *
- * Every action needs settings.manage (owner + admin: Stephen and Michael,
- * owner Q1). The person signed in on the store device stays at the counter;
+ * Every action needs settings.manage (owner + admin). E-signing only gathers
+ * evidence: the banking it produces lands ON HOLD, and only Michael (the
+ * owner) releases it (R41 S0; Stephen's release is a request). The person signed in on the store device stays at the counter;
  * the employee types their own email, code, accounts and name (owner Q12:
  * no self-service, so there is no link the employee can open elsewhere).
  *

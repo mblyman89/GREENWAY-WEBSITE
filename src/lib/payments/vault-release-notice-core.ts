@@ -1,9 +1,12 @@
 /**
  * src/lib/payments/vault-release-notice-core.ts  (R39 S3, PURE)
  *
- * What happens after a SOLO release (the person who entered a bank change
- * also released its hold). Owner answer Q1: Michael and Stephen may each do
- * every action; Q9: notify "Stephen and I. By his phone and email, or my phone
+ * HISTORY (R41 S0): SOLO releases ended when only Michael (the owner) could
+ * release (D-6 option B). The notice builders are kept for the history view
+ * and their helpers (escapeHtml, phoneReminder) are still shared.
+ *
+ * Before R41: what happened after a SOLO release (the person who entered a
+ * bank change also released its hold). Q9: notify "Stephen and I. By his phone and email, or my phone
  * and email, or contacting the store phone and email."
  *
  * This module decides WHO hears about it and WHAT the notice says. It does no

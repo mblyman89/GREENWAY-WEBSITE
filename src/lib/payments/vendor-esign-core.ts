@@ -754,7 +754,7 @@ export function vendorSignedNotices(i: VendorSignedNoticeInput): { vendor: { sub
       html:
         `<p>${v} e-signed GW-ACH-V on ${w} (signer ${s}). ${i.requestType === "new" ? "New enrollment." : "<strong>Change of bank details.</strong>"} Account ending &bull;&bull;&bull;&bull;${t}. Link sent by ${escapeHtml(i.inviterName)}.</p>` +
         "<p>The banking is <strong>ON HOLD</strong>. To finish: (1) call the vendor at a number you already had (not one typed on the form) and confirm the tax ID last 4 and account last 4; " +
-        "(2) release the hold in Settings &rarr; Banking (the other owner releases, or the sender with a written reason); (3) countersign on the vendor's page.</p>" +
+        "(2) Michael releases the hold in Settings &rarr; Banking (Stephen's release is sent to Michael for approval); (3) Michael countersigns on the vendor's page.</p>" +
         flags +
         `<p><a href="${escapeHtml(i.vendorPageUrl)}">Open the vendor</a></p>`,
     },

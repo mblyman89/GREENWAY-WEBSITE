@@ -371,7 +371,7 @@ export function payable(state: AuthorizationState): { ok: true } | { ok: false; 
     case "verifying":
       return { ok: false, reason: "Account verification (prenote or test credit) is still in progress." };
     case "on_hold":
-      return { ok: false, reason: "On hold: a bank change, return or correction is waiting for release by Michael or Stephen." };
+      return { ok: false, reason: "On hold: a bank change, return or correction is waiting for release by Michael (the owner)." };
     case "revoked":
       return { ok: false, reason: "The payee revoked this authorization." };
     case "archived":
@@ -651,7 +651,7 @@ export function resolveNotifyContacts(env: Readonly<Record<string, string | unde
   };
 }
 
-/** Who hears about a solo release: the OTHER owner/admin, plus the store line. */
+/** HISTORY (before R41 S0): who heard about a solo release. Since R41 only the owner releases. */
 export function soloReleaseRecipients(
   releasedBy: "stephen" | "michael",
   contacts: Readonly<Record<"stephen" | "michael" | "store", NotifyContact>> = ACH_NOTIFY_PUBLIC,

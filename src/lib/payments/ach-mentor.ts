@@ -210,9 +210,9 @@ export const ACH_FUNCTION_LESSONS: readonly AchLesson[] = [
     key: "releaseVerdict",
     title: "Releasing a hold",
     plain:
-      "Michael or Stephen may release. Ideally the person who did NOT enter the change releases it. Either of you " +
-      "may release your own change alone when needed, but you must write why, and the other person is told " +
-      "automatically. In every case the payee must confirm the details first: by a call to a number that has been on " +
+      "Michael (the owner) releases. Stephen can ask: his release is sent to Michael and nothing changes until " +
+      "Michael approves it. Michael's own release needs no written reason, and he gets a \"Was this you?\" receipt. " +
+      "In every case the payee must confirm the details first: by a call to a number that has been on " +
       "file for at least 90 days (never a number from the change request itself), or face to face. Either way you " +
       "write down who confirmed it.",
     authorities: ["ach-sao-verify-by-phone", "ach-sao-segregate-duties", "ach-verify-with-contact-on-file", "ach-callback-manipulation", "ach-unc-verbal-in-person-or-phone"],
@@ -263,8 +263,10 @@ export const ACH_FUNCTION_LESSONS: readonly AchLesson[] = [
   },
   {
     key: "soloReleaseRecipients",
-    title: "Who hears about a solo release",
-    plain: "The other of you two, plus the store line. A change one person entered and released alone never goes unnoticed.",
+    title: "Who hears about a release (before R41)",
+    plain:
+      "Before R41, a release by the person who entered the change emailed the other of you two plus the store line. " +
+      "Since R41 only Michael releases, so this list is kept only to explain older SOLO entries in the history.",
     authorities: ["ach-sao-segregate-duties"],
   },
   {
