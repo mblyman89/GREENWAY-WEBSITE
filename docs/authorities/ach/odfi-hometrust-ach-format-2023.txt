@@ -1,0 +1,557 @@
+Treasury Management Services
+
+
+
+NACHA FILE
+FORMAT
+SPECIFICATIONS
+A Guide For ACH Originators
+
+
+
+
+ HomeTrust Bank
+ Updated January 2015
+         Introduction
+         This NACHA File Format Specifications guide provides file record layouts for formatting ACH entries
+         your company originate through HomeTrust Bank’s Treasury Management Services using common
+         standard entry class codes (SECs). It is very important that you (or your software vendor) utilize the
+         specifications outlined in this guide. This will ensure a successful file transmission.
+
+         The formats and specifications described in this guide comply with the rules of the National Automated
+         Clearing House (NACHA). NACHA Rules bind all participants utilizing the automated clearing house
+         (ACH) and compliance with the rules is mandatory. For a definition of terms or more information
+         regarding ACH, please refer to your NACHA Rule Book. If you do not have a copy, you may access the
+         rules online at: www.achrulesonline.org.
+
+         Testing
+         Please contact your HomeTrust Bank representative once you are ready to begin transmitting your ACH
+         files. In addition, if you plan to change key fields in either of the Header Records please contact us. These
+         types of changes may require additional testing.
+
+         ACH Sequence of Records
+
+
+
+
+                There are 94 characters in an ACH record
+                ACH records are numbered: 1, 5, 6, 7 if applicable, 8, and then 9
+                There are 10 records in a block
+                Within each file, there can be multiple batches
+                Within each batch, there can multiple detail entry and addenda records
+                Addenda records provide additional information pertaining to the entry detail record they are
+                 attached to
+
+
+Page 1    Updated January 2015, HomeTrust Bank
+                                           FILE HEADER RECORD FORMATS FOR ALL ENTRIES
+
+              Field #          Position            Size      NACHA Formats & Contents (All           Mandatory or        NACHA Data Element
+                                                                fields must be in CAPS)                Optional               Name
+                                                                                                     for NACHA
+
+              1              01-01             1            '1'                                     Mandatory          Record Type Code
+
+              2              02-03             2            '01'                                    Mandatory          Priority Code
+
+              3              04-13             10           bTTTTAAAAC                              Mandatory          Immediate Destination
+
+              4              14-23             10                       1NNNNNNNNN                  Mandatory          Immediate Origin
+                                                                                or
+                                                                        3NNNNNNNNN
+                                                                                or
+                                                                        9NNNNNNNNN
+                                                                                or
+                                                                         NTTTTAAAAC
+                                                                  where N is any number from 0-9
+
+              5              24-29             6            YYMMDD                                  Mandatory          File Creation Date
+
+              6              30-33             4            HHMM                                    Optional           File Creation Time
+
+              7              34-34             1            Upper Case A-Z                          Mandatory          File ID Modifier
+                                                            or Numeric
+                                                            0-9
+
+              8              35-37             3            '094'                                   Mandatory          Record Size
+
+              9              38-39             2            '10'                                    Mandatory          Blocking Factor
+
+              10             40-40             1            '1'                                     Mandatory          Format Code
+
+              11             41-63             23           Alphanumeric                            Optional           Immediate Destination
+                                                                                                                       Name
+
+              12             64-86             23           Alphanumeric                            Optional           Immediate Origin
+                                                                                                                       Name
+
+              13             87-94             8            Alphanumeric                            Optional           Reference Code
+
+
+
+         NACHA Description of Field and HomeTrust's Preferences or Requirements (if different from NACHA)
+            NACHA defines all fields as: Mandatory, Required or Optional. For simplicity, these fields are defined here as either Mandatory or
+            Optional. Please see NACHA Corporate Guidelines for further explanation.
+
+         1.        '1' designates a file header record.
+
+         2.        Priority code on all files will be '01' unless otherwise advised.
+
+         3.        The R/T identification number for your bank (HomeTrust) preceded by a blank, where TTTT = routing transit number and AAAA = ABA
+                   number and C = check digit.
+
+                   HomeTrust's Preference: use a blank (b) followed by HomeTrust R/T          b253170279
+
+         4.        The company tax id number OR the R/T identification number for your bank preceded by a blank.
+
+                   HomeTrust's Requirement*: Use company IRS tax id number, preceded by the number '1'. Alternately, you may use a Data Universal
+                   Numbering Systems (DUNS) number preceded by the number '3', or a unique number preceded by '0' - '9'. However, please note: If you
+                   ever change this number, you must notify HomeTrust. HomeTrust uses the number to associate this file with your company.
+
+
+
+
+Page 2    Updated January 2015, HomeTrust Bank
+      * Please contact HomeTrust if you cannot comply with this requirement. Note: NACHA allows R/T for ACH Operators (banks, not
+      companies), otherwise, this can be mutually defined between Originator and ODFI. If company chooses to use R/T in this field, then
+      HomeTrust Requires that field 12 specify the company.
+
+5.    Date the file is created. For your protection, HomeTrust may edit this field for file duplication.
+
+6.    Time of day the file is created. Time is expressed using 24 hour or military clock. For your protection, HomeTrust edits this field for file
+      duplication. If the actual time is unknown, you may insert '0001' in this field. All zeros or all blanks are NOT permitted!
+
+7.    A 1-digit (A-Z or 0-9) used to distinguish multiple files prepared on the same day. The first file of the day should have an upper case 'A' in
+      this field. If a second file is submitted on the same day, the field should contain an upper case 'B', etc.
+
+8.    Record size will always be '094'.
+
+9.    Blocking factor will always be '10'.
+
+10.   Format code will always be '1'.
+
+11.   Contains name of receiving bank, in this case, HOMETRUST
+
+12.   Contains name of your company. Please be as descriptive as possible.
+
+      HomeTrust's Requirement: This field is mandatory for processing at HomeTrust to assist in identification of file. Additionally:
+      If you ever change the company name, you must notify HomeTrust. HomeTrust uses this field to associate your file with your company.
+
+13.   This field is optional. If not used, then fill with blanks or zeros.
+
+
+
+
+Page 3      Updated January 2015, HomeTrust Bank
+                                                  COMPANY/BATCH HEADER FOR ALL ENTRIES
+
+                       Position        Size         NACHA Formats &                      Mandatory or                NACHA Data Element Name
+          Field                                   Contents (All fields must                Optional
+                                                       be in CAPS)                       for NACHA
+
+      1               01-01           1         '5'                                  Mandatory                   Record Type Code
+
+      2               02-04           3         Numeric                              Mandatory                   Service Class Code
+
+      3               05-20           16        Alphanumeric                         Mandatory                   Company Name
+
+
+      4               21-40           20        Alphanumeric                         Optional                    Company Discretionary Data
+
+      5               41-50           10        Alphanumeric                         Mandatory                   Company Identification
+
+      6               51-53           3         Alphanumeric                         Mandatory                   Standard Entry Class Code
+
+      7               54-63           10        Alphanumeric                         Mandatory                   Company Entry Description
+
+      8               64-69           6         Alphanumeric                         Optional                    Company Descriptive Date
+
+      9               70-75           6         YYMMDD                               Mandatory                   Effective Entry Date
+
+      10              76-78           3         Alphanumeric                         Mandatory                   Reserved
+
+      11              79-79           1         '1'                                  Mandatory                   Originator Status Code
+
+      12              80-87           8         TTTTAAAA                             Mandatory                   Originating DFI (Bank) Identification
+
+      13              88-94           7         Numeric                              Mandatory                   Batch Number
+
+
+1.        '5' designates a Company/Batch Header Record. This record identifies the Originator and briefly describes the purpose for the batch of
+          transactions. All data in this record applies to all detail records within this batch.
+
+2.        Service class code is '200' if both debits and credits are contained in this batch, '220' if all credits and '225' if all debits.
+
+3.        Contains the name of your company. This field will be shown by the receiving bank on its statement or advice to recipient.
+
+          HomeTrust's Requirement:
+          If you ever change this information, you must notify HomeTrust in advance as we rely on it to identify your company and your settlement
+          account number.
+
+4.        This field may contain descriptive data, but it may not be printed by the receiving bank on its statement or advice to recipient.
+
+5.        Your company IRS employer ID number**, preceded by the number '1' should be in this field. Alternately, you may use a DUNS number
+          preceded by the number '3', or a unique number preceded by any number, '0' - '9'. Used to identify an Originator.
+          **HomeTrust's Preference.
+
+          HomeTrust's Requirement:
+          If you ever change this information, you must notify HomeTrust in advance as we rely on it to identify your company and your settlement
+          account number.
+
+6.        Use the appropriate code to designate the type of transaction (other codes are in the NACHA rule book):
+          PPD - Prearranged Payments and Deposits (Corporate to Consumer)
+          CCD - Cash Concentration or Disbursement (Corporate to Corporate)
+          CTX - Corporate Trade Exchange (Corporate to Corporate)
+
+7.        Company entry description should describe the type of transaction; i.e 'Payroll', 'Salary', 'Water Bill', etc. Use general terms since this
+          description will apply to all detail records within the batch. The contents of this field will be shown by the receiving bank on its statement
+          or advice to recipient.
+
+8.        A date meaningful to your employee or customer, such as payroll period ending date.
+
+9.        The date on which this transaction should post to the receiver's account.
+
+10.       Reserved, leave blank. Federal Reserve will insert settlement date.
+
+
+
+Page 4            Updated January 2015, HomeTrust Bank
+11.   '1' indicates that you have accepted the rules and regulations of the Automated Clearing House.
+
+12.   The R/T identification number for your bank, HomeTrust, where TTTT = routing transit number and AAAA = ABA number.
+
+      HomeTrust R/T number: 253170279
+
+13.   A sequential ascending number assigned by you for each batch. The range is '0000001' through '9999999'.
+
+
+
+
+Page 5      Updated January 2015, HomeTrust Bank
+                                       ENTRY DETAIL FOR PPD, CCD OR CTX ENTRIES
+
+     Field #        Position         Size      NACHA Formats &                   Mandatory or                NACHA Data Element Name
+                                             Contents (All fields must             Optional
+                                                  be in CAPS)                    for NACHA
+
+     1             01-01         1          '6'                              Mandatory                   Record Type Code
+
+     2             02-03         2          Numeric                          Mandatory                   Transaction Code
+
+     3             04-11         8          TTTTAAAA                         Mandatory                   Receiving DFI (bank) Identification
+
+     4             12-12         1          Numeric                          Mandatory                   Check Digit
+
+     5             13-29         17         Alphanumeric, left justified     Mandatory                   DFI (Bank) Account Number
+
+     6             30-39         10         $$$$$$$$CC                       Mandatory                   Amount
+
+     7             40-54         15         Alphanumeric                     Optional                    PPD:       Individual ID #
+                                                                                                         CCD:       ID Number
+                                                                                                         CTX:       Audit Number
+
+     8             55-76         22         Alphanumeric                     Mandatory                   PPD:       Individual Name
+                                                                                                         CCD:       Corporate Name
+
+
+                   CTX           CTX                                                                     CTX:
+                   55-58         4                                                                       Broken down into 3 fields:
+                   59-74         16
+                   75-76         2
+
+     9             77-78         2          Alphanumeric                     Optional                    Discretionary Data
+
+     10            79-79         1          Numeric                          Mandatory                   Addenda Record Indicator
+
+     11            80-94         15         Numeric                          Mandatory                   Trace Number
+
+
+1.        '6' designates an entry detail record. Entry detail records contain information needed to post transaction.
+
+2.        Choose the appropriate code to identify the type of DR and CR entry:
+          '22' = credit to checking account
+          '23' = prenotification of credit to checking
+          '24' = "0" credit with remittance to checking
+          '27' = debit to checking account
+          '28' = prenotification of debit to checking
+          '29' = "0" debit with remittance to checking
+          '32' = credit to savings account
+          '33' = prenotification of credit to savings
+          '34' = "0" credit with remittance to savings
+          '37' = debit to savings account
+          '38' = prenotification of debit to savings
+          '39' = "0" debit with remittance to savings
+
+          NOTE: The most frequently used Transaction Codes are "22," "27," "32," and "37." If you plan to conduct a pre-note test, you MUST use
+          one of the following Transaction Codes, based upon the nature of the transaction: "23," "28," "33," or "38." Use Transaction Code "27"
+          for INBOUND activity (i.e. you are RECEIVING funds) and "22" for OUTBOUND activity (i.e. you are DISBURSING funds). As an
+          example, if the Transaction Code "27" is used, this activity will affect the RECEIVER'S checking account, not your Settlement account.
+          Accordingly, a transaction with the code "27" will result in a debit to the receiver's checking account and a credit to your settlement
+          account.
+
+3.        The receiving bank's R/T number, where TTTT = routing transit number and AAAA = ABA number. This indicates the bank to which this
+          transaction will be routed.
+
+
+
+
+Page 6          Updated January 2015, HomeTrust Bank
+      On a Check: This number is always printed at the bottom of a check as follows: │:NNNNNNNNN│:. For this field, the first 8 digits are
+      used. Only R/Ts beginning with '0', '1', '2' or '3' are valid.
+
+4.    The check digit is the 9th (and last) digit of the bank routing transit number in 3 above. The check digit is used to assure that the
+      routing/transit number is valid
+
+5.    The bank account number for the recipient at the RDFI specified in number 3 above. Only characters" 0 - 9" and "-" (dashes) are valid.
+      Blanks are NOT valid characters within the account number except as fillers. Must be left-justified with any unused positions following
+      the account number must contain blanks.
+
+      On a Check: The account number is printed at the bottom of a check immediately to the right of the routing/transit number.
+
+6.    The amount of the transaction in dollars and cents, with no punctuation. High order zeros will be used. If this entry is a prenote, then this
+      field may contain zeros.
+
+7.    The number by which you identify the individual or company; i.e. employee number, store number, etc. The number should uniquely
+      identify the individual within your system.
+
+      For PPD Accounts Receivable Truncated Check Debit Entries, the Individual Identification Number field (positions 40-54) must contain
+      the Check Serial Number of the item to which the PPD entry relates.
+
+8.    Name of receiving individual or receiving company. If transaction is a CTX this field is broken into 3 fields:
+      # of addenda records
+      Company Name
+      Reserved
+
+9.    Optional Data field.
+
+10.   If an addenda record, type '7', will follow, then this position must contain '1'; otherwise, it contains '0'.
+
+11.   The trace number is an ascending consecutive number used to uniquely identify each transaction. The first eight digits of the trace number
+      consist of the bank R/T number as described for Field 12 of the Company Batch Header Record '5'. The last seven digits of the trace
+      number consist of a sequential number in ascending sequence with each subsequent transaction incremented by 1. Example:
+      253170270000001, 253170270000002, 253170270000003
+
+
+
+
+Page 7       Updated January 2015, HomeTrust Bank
+                                          ENTRY DETAIL ADDENDA FOR ENTRIES
+
+     Field #       Position       Size       NACHA Formats &                    Mandatory or               NACHA Data Element Name
+                                           Contents (All fields must              Optional
+                                                be in CAPS)                     for NACHA
+
+     1            01-01          1         '7'                              Mandatory                  Record Type Code
+
+     2            02-03          2         '05'                             Mandatory                  Addenda Type Code
+
+     3            04-83          80        Alphanumeric                     Optional                   Payment Related Information
+
+     4            84-87          4         Numeric                          Mandatory                  Addenda Sequence Number
+
+     5            88-94          7         Numeric                          Mandatory                  Entry Detail Sequence Number
+
+
+1.       '7' designates an Entry Detail Addenda Record. Entry Detail Addenda are included if additional descriptive data is needed. If used, the
+         Addenda Record must immediately follow the entry detail record with which it is associated and that entry detail record must have '1' in
+         position 79.
+
+2.       Addenda type is '05' is valid for Standard Entry Class Codes ACK, ATX, CCD, CIE, CTX, DNE, ENR, PPD AND TRX.
+
+3.       Additional descriptive data, as needed, can be placed in positions 4 through 83 of the Entry Detail Addenda Record. Examples of
+         additional descriptive data include the note (NTE), Remittance (RMT), Reference (REF), and Date/Time (DTM) data segments as well as
+         the Tax Payment (TXP) convention. For more information, refer to NACHA Rules.
+
+4.       A sequential number consecutively assigned to each Primary Addenda Record following an Entry Detail Record.
+
+5.       Contains the last seven digits (or the ascending sequence number section) of the Entry Detail Record's trace number. This number is found
+         in the trace number (Field 11) of the related Entry Detail Record (type 6).
+
+
+
+
+Page 8         Updated January 2015, HomeTrust Bank
+                                         COMPANY/BATCH CONTROL FOR ALL ENTRIES
+
+     Field #         Position       Size         NACHA Formats &                     Mandatory or                  NACHA Data Element Name
+                                               Contents (All fields must               Optional
+                                                    be in CAPS)                      for NACHA
+
+     1              01-01           1         '8'                                Mandatory                     Record Type Code
+
+     2              02-04           3         Numeric                            Mandatory                     Service Class Code
+
+     3              05-10           6         Numeric                            Mandatory                     Entry/Addenda Count
+
+     4              11-20           10        Numeric                            Mandatory                     Entry Hash
+
+     5              21-32           12        $$$$$$$$$$CC                       Mandatory                     Total Debit Entry Dollar Amount
+
+     6              33-44           12        $$$$$$$$$$CC                       Mandatory                     Total Credit Entry Dollar Amount
+
+     7              45-54           10        1NNNNNNNNN                         Mandatory                     Company Identification
+
+     8              55-73           19        Alphanumeric                       Optional                      Message Authentication Code
+
+     9              74-79           6         Alphanumeric                       Mandatory                     Reserved
+
+     10             80-87           8         TTTTAAAA                           Mandatory                     Originating DFI (Bank) Identification
+
+     11             88-94           7         Numeric                            Mandatory                     Batch Number
+
+
+
+1.        '8' designates a Company/Batch Control Record. This 'trailer' record contains control totals that summarize preceding detail entries.
+
+2.        Service class code is '200' if both debits and credits are contained in this batch, '220' if all credits and '225' if all debits. This must be the
+          same as that used in the 5 record.
+
+3.        The number of Entry Detail Records plus each Entry Detail Addenda Records in this batch
+
+4.        The sum of the individual bank identification numbers in all of the Detail Entry Records in this batch. In the event that the sum exceeds 10
+          digits, the entry hash is the right justified 10 digits of the sum.
+
+5.        The total debit entry dollar amount in dollars and cents (no punctuation) of all debit transactions in this batch.
+
+          HomeTrust's Preference:
+          Your entry detail records should not contain a settlement entry. This is an automated entry at HomeTrust.
+
+6.        The total credit entry dollar amount in dollars and cents (no punctuation) of all credit transactions in this field.
+
+          HomeTrust's Preference:
+          Your entry detail records should not contain a settlement entry. This is an automated entry at HomeTrust.
+
+7.        Contains the same information as the Company Identification field '5' in the Company/Batch Header Record '5'.
+
+          HomeTrust's Requirement:
+          If you ever change this number, you must notify HomeTrust in advance as we rely on this number to identify your company and your
+          settlement account number.
+
+8.        No longer Reserved. Either blanks OR an 8 digit MAC code which complies with ANSI standards are allowed in this field.
+
+9.        Reserved. Blanks are mandatory in this field.
+
+10.       The R/T identification number for your bank preceded by a blank, where TTTT = routing transit number and AAAA = ABA number.
+          HomeTrust R/T: 253170279
+
+11.       Contains the same number as the batch number field '13' on the Company/Batch Header Record '5' for this batch.
+
+
+
+
+Page 9           Updated January 2015, HomeTrust Bank
+                                                   FILE TRAILER FOR ALL ENTRIES
+
+         Field #        Position           Size         NACHA Formats &                 Mandatory or            NACHA Data Element Name
+                                                      Contents (All fields must           Optional
+                                                           be in CAPS)                  for NACHA
+
+     1                 01-01           1              '9'                              Mandatory            Record Type Code
+
+     2                 02-07           6              Numeric                          Mandatory            Batch Count
+
+     3                 08-13           6              Numeric                          Mandatory            Block Count
+
+     4                 14-21           8              Numeric                          Mandatory            Entry/Addenda
+                                                                                                            Count
+
+     5                 22-31           10             Numeric                          Mandatory            Entry Hash
+
+     6                 32-43           12             $$$$$$$$$$cc                     Mandatory            Total Debit Entry
+                                                                                                            Dollar Amount in File
+
+     7                 44-55           12             $$$$$$$$$$cc                     Mandatory            Total Credit Entry
+                                                                                                            Dollar Amount in File
+
+     8                 56-94           39             Blanks                           Mandatory            Reserved
+
+
+
+1.       '9' designates a file trailer record which must summarize all detail records in this file.
+
+2.       The number of batches in this file.
+
+3.       The number of blocks of data in this file.
+
+4.       The number of Entry Detail Records plus Entry Detail Addenda Records in this file which must be equal to the sum of entry/addenda count
+         field on all Company/Batch Control Records in this file.
+
+5.       The sum of the contents of the individual bank routing/transit numbers in all of the Detail Entry Records in this file. (Must be equal to the
+         sum of entry hash field on all Company/Batch Control Records in this file.) In the event that the sum exceeds 10 digits, the entry hash is
+         the right justified 10 digits of the sum.
+
+6.       Total amount of all debit transactions, which must equal to the sum of the total debit entry dollar amount field on all Company/Batch
+         Control Records in this file.
+
+7.       Total amount of all credit transactions. (Equal to the sum of the total debit entry dollar amount field on all Company/Batch Control
+         Records in this file.)
+
+8.       Blanks are mandatory in this field.
+
+If the last block after the Record Type '9' Record is incomplete, then pad the last block with 9's.
+
+
+
+
+Page 10            Updated January 2015, HomeTrust Bank
+                                  ACH Formats: File Samples
+                    PPD: Prearranged Payments and Deposits (Corporate to Consumer)
+101 25317027915699999990301140930A094101HOMETRUST               MYCOMPANYID           MORTGAGE
+5200MYCPSPROFILEID MORTGAGE DRAFT       1569999999PPDMORT DRAFT030114030115   1253170270000001
+627053101233111111111111112 0000123456ID-JOHNQHARMON JOHN Q HARMON          000253170270000001
+627053000188222222222222223 0001234567ID-MARYCSMITH MARY C SMITH            000253170270000002
+627053111277333333333333334 0000432109ID-MIKETMARKS MIKE T MARKS            000253170270000003
+627053000311444444444444445 0000121238ID-SUSANDJOHNS SUSAN D JOHNSON        000253170270000004
+627053111744555555555555556 0000412625ID-PATTYPDAVIS PATTY P DAVIS          000253170270000005
+8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+
+                                       PPD (Plus) with Addenda Records
+101 25317027915699999990301040930A094101HOMETRUST               MYCOMPANYID           MORTGAGE
+5200MYCPSPROFILEID MORTGAGE DRAFT       1569999999PPDMORT DRAFT030104030105   1253170270000001
+627053101233111111111111112 0000123456ID-JOHNQHARMON JOHN Q HARMON          001253170270000001
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00010000001
+627053000188222222222222223 0001234567ID-MARYCSMITH MARY C SMITH            001253170270000002
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00010000001
+627053111277333333333333334 0000432109ID-MIKETMARKS MIKE T MARKS            001253170270000003
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00010000001
+627053000311444444444444445 0000121238ID-SUSANDJOHNS SUSAN D JOHNSON        001253170270000004
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00010000001
+627053111744555555555555556 0000412625ID-PATTYPDAVIS PATTY P DAVIS          001253170270000005
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00010000001
+8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+                   CCD: Cash Concentration or Disbursement (Corporate to Corporate)
+101 25317027915699999990301140930A094101HOMETRUST               MYCOMPANYID           PAYROLL0
+5200MYCPSPROFILEID PAYROLL DISBURSEMENT1569999999CCDPAYROLLDEP030114030115    1253170270000001
+622053101233111111111111112 0000123456ID-AGENCYONE    AGENCY NUMBER ONE     000253170270000001
+622053000188222222222222223 0001234567ID-COUNTYONE    COUNTY NUMBER ONE     000253170270000002
+622053111277333333333333334 0000432109ID-CITYONE      CITY NUMBER ONE       000253170270000003
+622053000311444444444444445 0000121238ID-DEPTONE      DEPARTMENT NUMBER ONE 000253170270000004
+622053111744555555555555556 0000412625ID-SCHOOLONE    SCHOOL DISTRICT ONE   000253170270000005
+8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+                                       CDD (Plus) with Addenda Records
+101 25317027915699999990301140930A094101HOMETRUST               MYCOMPANYID           PAYROLL0
+5200MYCPSPROFILEID PAYROLL DISBURSEMENT1569999999CCDPAYROLLDEP030114030115    1253170270000001
+622053101233111111111111112 0000123456ID-AGENCYONE    AGENCY NUMBER ONE     001253170270000001
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00010000001
+622053000188222222222222223 0001234567ID-COUNTYONE    COUNTY NUMBER ONE     001253170270000002
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00020000002
+622053111277333333333333334 0000432109ID-CITYONE      CITY NUMBER ONE       001253170270000003
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00030000003
+622053000311444444444444445 0000121238ID-DEPTONE      DEPARTMENT NUMBER ONE 001253170270000004
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00040000004
+622053111744555555555555556 0000412625ID-SCHOOLONE    SCHOOL DISTRICT ONE   001253170270000005
+705THIS IS AN EXAMPLE OF THE ADDENDA RECORD DESCRIPTIVE DATA. 80 BYTES OF YOUR TEXT00050000005
+8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+
+
+
+Page 11   Updated January 2015, HomeTrust Bank
+
