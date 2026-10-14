@@ -260,6 +260,49 @@ export function vendorBuildOutcome(v: {
   return { ok: false, message: v?.problems?.[0]?.message || "The vendor ACH file was not built." };
 }
 
+/**
+ * Read a decrypted request payload back. It must be exactly what
+ * formToEntries produced: an object of field -> array of strings. Anything
+ * else is refused (a damaged or tampered payload never reaches an action).
+ */
+export function parseStoredEntries(raw: string): { ok: true; entries: Record<string, string[]> } | { ok: false; refusal: string } {
+  const bad = { ok: false as const, refusal: "The stored request could not be read (it may be damaged, or the encryption key changed). Nothing was changed: reject it and ask for a fresh one." };
+  if (typeof raw !== "string" || raw.length === 0) return bad;
+  let v: unknown;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    return bad;
+  }
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return bad;
+  const out: Record<string, string[]> = Object.create(null);
+  for (const [k, arr] of Object.entries(v as Record<string, unknown>)) {
+    if (k.length === 0 || k.length > 100 || k === "__proto__" || k.startsWith("$ACTION")) return bad;
+    if (!Array.isArray(arr) || arr.length === 0 || arr.length > 500 || !arr.every((x) => typeof x === "string")) return bad;
+    out[k] = [...(arr as string[])];
+  }
+  return { ok: true, entries: out };
+}
+
+/** Field/value pairs in order, ready for FormData.append. */
+export function entriesToPairs(entries: Record<string, string[]>): [string, string][] {
+  const out: [string, string][] = [];
+  for (const k of Object.keys(entries)) for (const v of entries[k]) out.push([k, v]);
+  return out;
+}
+
+/** What Michael sees after approving, in plain words. */
+export function approvalResultText(kind: string, outcome: RedirectOutcome): string {
+  const head = outcome.ok ? "Approved and done." : "Approved, but it did not go through:";
+  const tail =
+    outcome.ok && kind === "payroll.generate"
+      ? " Download the file from the payroll run page."
+      : outcome.ok && kind === "vendor_ach.build"
+        ? " The file is downloading now; the payments are recorded."
+        : "";
+  return `${head} ${outcome.message}${tail}`.slice(0, 900);
+}
+
 export function __runAchGateCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -379,5 +422,27 @@ export function __runAchGateCoreTests(): { passed: number; failed: number } {
   ok(vendorBuildOutcome({ problems: [{ message: "Overpay blocked" }] }).message === "Overpay blocked", "first problem is the message");
   ok(!vendorBuildOutcome({ problems: [], file: "" }).ok, "empty file is not built");
   ok(!vendorBuildOutcome(null).ok && vendorBuildOutcome(undefined).message === "The vendor ACH file was not built.", "null safe");
+
+  // stored payload round trip
+  const pe = parseStoredEntries(JSON.stringify({ vendor_id: ["v1"], tags: ["a", "b"] }));
+  ok(pe.ok && pe.entries.vendor_id[0] === "v1" && pe.entries.tags.length === 2, "payload round trip");
+  ok(pe.ok && JSON.stringify(entriesToPairs(pe.entries)) === JSON.stringify([["vendor_id", "v1"], ["tags", "a"], ["tags", "b"]]), "pairs keep order and repeats");
+  ok(!parseStoredEntries("").ok, "empty refused (decrypt failed)");
+  ok(!parseStoredEntries("not json").ok, "garbage refused");
+  ok(!parseStoredEntries("[]").ok, "array refused");
+  ok(!parseStoredEntries("null").ok, "null refused");
+  ok(!parseStoredEntries(JSON.stringify({ a: "x" })).ok, "non-array value refused");
+  ok(!parseStoredEntries(JSON.stringify({ a: [1] })).ok, "non-string item refused");
+  ok(!parseStoredEntries(JSON.stringify({ a: [] })).ok, "empty array refused");
+  ok(!parseStoredEntries(JSON.stringify({ $ACTION_ID_x: ["1"] })).ok, "framework field refused");
+  ok(!parseStoredEntries('{"__proto__":["x"]}').ok, "__proto__ refused");
+  ok(!parseStoredEntries(JSON.stringify({ ["k".repeat(101)]: ["x"] })).ok, "long key refused");
+  ok(parseStoredEntries("{}").ok, "an empty form is allowed (the action validates)");
+  // approval words
+  ok(approvalResultText("vendor_bank.save", { ok: true, message: "Saved." }) === "Approved and done. Saved.", "approved words");
+  ok(approvalResultText("payroll.generate", { ok: true, message: "ACH file ready to download." }).endsWith("payroll run page."), "payroll points to the run page");
+  ok(approvalResultText("vendor_ach.build", { ok: true, message: "built" }).includes("downloading"), "vendor build says downloading");
+  ok(approvalResultText("vendor_bank.save", { ok: false, message: "Routing bad" }) === "Approved, but it did not go through: Routing bad", "failure words");
+  ok(approvalResultText("x.y", { ok: true, message: "m".repeat(2000) }).length === 900, "capped at 900");
   return { passed, failed };
 }

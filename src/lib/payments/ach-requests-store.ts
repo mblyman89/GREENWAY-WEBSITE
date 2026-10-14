@@ -356,6 +356,15 @@ export async function staffNames(ids: readonly string[]): Promise<Map<string, st
   return out;
 }
 
+/** One staff member's name and email (the requester, for the decision email). Null if unknown. */
+export async function staffContact(id: string): Promise<{ name: string; email: string } | null> {
+  if (!isSupabaseServiceConfigured || !UUID.test(id)) return null;
+  const { data } = await createSupabaseAdminClient().from("staff_profiles").select("full_name,email").eq("id", id).maybeSingle();
+  const r = data as { full_name: string | null; email: string | null } | null;
+  if (!r || !r.email) return null;
+  return { name: r.full_name || r.email, email: r.email };
+}
+
 /**
  * D-7 daily reminder: send once per Pacific day (compliance_reminder_log has
  * a unique dedupe_key, 0118). Returns false when today's reminder was already
