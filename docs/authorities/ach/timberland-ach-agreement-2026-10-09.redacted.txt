@@ -23,18 +23,24 @@
   - Entnes -> Entries; reiates -> relates; shalt -> shall; Timberiand -> Timberland
   - ustreas.gow -> ustreas.gov; (if) -> (ii)
 - OCR fixes, each confirmed against the 400 dpi page image (R41 S1 proofread):
+  (A final sweep flagged every word of the agreement text rarer than Zipf 2.0 in the wordfreq English list.
+  Each flagged word was either fixed below after viewing it, kept as an original typo, or is a real term:
+  NACHA, ODFI, RDFI, OFAC, FinCEN, FFIEC, Juneteenth, prenotification, preauthorized, Addendums, inure, Lymans.
+  Words on the form pages 8, 10 and 12 are covered by the VERIFIED TRANSCRIPTION instead.)
   - p.1: "[IXICCD -" -> "☒CCD –" and "KXIPPD -" -> "☒PPD –" (both boxes are ticked on the scan)
   - p.1: "the Obligations of" -> "the obligations of"; the page number "4" -> "1"
   - p.2: "ccD" -> "CCD" (the section 5 table); "intemal" -> "internal"; "Financiat" -> "Financial"
   - p.3: "ail items" -> "all items"
+  - p.4: "Financial tnstitution to the ACH" -> "Financial Institution to the ACH"
   - p.4: "!n doing so" -> "In doing so"; "24, Fees." -> "24. Fees."
   - p.3: "!f Financial" -> "If Financial"; "files. if Financial" -> "files. If Financial"
   - p.5: "ali purposes" -> "all purposes"; "that Fl may" -> "that FI may"
   - p.6: "{n the event" -> "In the event"
-  - p.7: "ODFI - it is" -> "ODFI – it is"
+  - p.7: "ODFI - it is" -> "ODFI – it is"; "Appendix A - Glossa" -> "Appendix A - Glossary"; "eniry." -> "entry."
   - p.9: "the ODF." -> "the ODFI."; "i : Same Day" -> "Timing of Delivery: Same Day"; "(RDF)" -> "(RDFI)";
          "RDFi." -> "RDFI."; "Schedule B ~ Fees" -> "Schedule B – Fees"; "Corporate NachaCD = $" -> "Corporate Nacha CD $"
   - p.11: "Schedule E - Restricted" -> "Schedule E – Restricted"; "Suspects" -> "suspects"; "¢" bullets -> "•"
+  - p.4: "Financial\ninstitution." (section 20) -> "Financial\nInstitution." (capital I on the scan)
   - pp.2-6: 13 x "Financial institution" -> "Financial Institution". All 13 were cropped and viewed: every one
     has a capital I on the scan. The lowercase "financial institution(s)" on pp.1, 7 and 11 IS lowercase on
     the scan and is kept.
@@ -44,6 +50,9 @@
   "Intemet". At 400 dpi the letters after "Inte" form three joined stems with no gap, like an "m", while the
   two "internet" words on the same page show a clear r / n split. The scan looks like "Intemet", but a scan
   cannot prove what was printed, so it MAY be "Internet". Code must not quote this word.
+- "Retum" (section 20, p.4) and "retums" (section 22, p.4) are kept as they appear, for the same reason: both
+  OCR passes read them that way and the 400 dpi crop shows one "m"-like glyph. They MAY be "Return" and
+  "returns" (the same page prints "Return" correctly four times). Code must not quote these two words.
 - Timberland's signature block (p.6) is BLANK on this copy (Brenda Q12 asks for a countersigned copy).
 - Sections 28 and 31 mention Schedules A through H; this copy ends at Schedule G (Brenda Q13).
 
@@ -234,7 +243,7 @@ Institution shall have no liability if it fails to effect the cancellation.
 19. Rejection of Entries. Financial Institution may reject any Entry/File, including an on-us Entry, which does not comply
 with the requirements of Sections 2 and 3 of this Agreement and may reject any Entry if Company is not otherwise in
 compliance with the terms of the Agreement. Financial Institution shall notify Company of such rejection no later than the
-business day such Entry would otherwise have been transmitted by Financial tnstitution to the ACH Network or, in the case
+business day such Entry would otherwise have been transmitted by Financial Institution to the ACH Network or, in the case
 of an on-us Entry, its effective Entry date. It shall be the responsibility of Company to remake any Entries or files rejected
 by Financial Institution or the ACH Operator.
 
@@ -245,7 +254,7 @@ authorizes Financial Institution to charge back returns to Company's designated 
 as soon as information is made available to Financial Institution. Company will promptly provide immediately available
 funds to indemnify Financial Institution if any debit Entry is returned after Financial Institution has permitted Company to
 withdraw funds in the amount thereof or if any adjustment memorandum that relates to such Entry is received by Financial
-institution.
+Institution.
 
 21. Reversals. Company may initiate a reversing Entry or file of Entries for erroneous or duplicate transactions, as
 permitted by the Rules. In doing so Company warrants that it has initiated the Entries or files within 5 banking days of the
@@ -384,7 +393,7 @@ Date 10/09/26 Date:
 
 
 ===== [scan page 07] =====
-Appendix A - Glossa
+Appendix A - Glossary
 
 “ACH Network” means the funds transfer system (network) governed by the NACHA Rules which provides for the inter-
 financial institution clearing of electronic entries for participating financial institutions.
@@ -438,7 +447,7 @@ for verifying the authenticity of Entries.
 time to Financial Institution's commercial or small business customers.
 
 "Settlement Date” means the date on which settlement occurs, i.e., funds actually change hands as a result of an ACH
-eniry.
+entry.
 
 “Uniform Commercial Code Article 4A (UCC4A)” means the portion of the Uniform Commercial Code which deals with
 certain funds transfers, including ACH credit transactions not subject to the Electronic Fund Transfer Act of Regulation E.
