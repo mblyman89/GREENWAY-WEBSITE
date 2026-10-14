@@ -45,6 +45,7 @@ import {
   type VendorIdInputs,
 } from "@/lib/inventory/vendor-identity-core";
 import { suggestCultiveraMatches, type IntakeSuggestion } from "@/lib/inventory/cultivera-intake-suggestion-core";
+import { loadCardAliases } from "@/lib/pos/card-alias-store";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -253,7 +254,14 @@ export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise
       variants: byItem.get(r.id) ?? [],
     }));
     const vendorIds = await loadVendorIdInputs(admin, { drafts, liveCards });
-    const dry = previewMasteringGroups({ drafts, liveCards, vendorIds });
+    const first = previewMasteringGroups({ drafts, liveCards, vendorIds });
+    // R50 A1: saved "this product IS that card" answers, read only for the
+    // groups the exact rule matched to no card ("new"); the SAME aliasTarget
+    // rule as the staging planner, so the chip and Approve agree. Any failed
+    // read (or 0270 not applied) = no aliases = the first dry run.
+    const newIdentities = first.groups.filter((g) => g.verdict.kind === "new").map((g) => g.identity);
+    const cardAliases = newIdentities.length > 0 ? await loadCardAliases(newIdentities) : new Map<string, string>();
+    const dry = cardAliases.size > 0 ? previewMasteringGroups({ drafts, liveCards, vendorIds, cardAliases }) : first;
     return {
       ok: true,
       verdicts: dry.verdicts,

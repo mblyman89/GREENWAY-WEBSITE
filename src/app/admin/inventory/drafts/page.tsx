@@ -60,7 +60,7 @@ import { WCIA_BACKFILL_HELP, parseBackfillCursor } from "@/lib/inventory/cultive
 import { COA_BACKFILL_HELP, parseCoaCursor } from "@/lib/inventory/coa-archive-backfill-core";
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
-import { runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { acceptCardAliasAction, forgetCardAliasAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -150,6 +150,8 @@ import { previewUnavailableCopy } from "@/lib/inventory/vendor-identity-core";
 import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
 import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
 import { CultiveraSuggestionChip } from "@/components/admin/catalog/CultiveraSuggestionChip";
+import { CardAliasControls } from "@/components/admin/catalog/CardAliasControls";
+import { aliasBanner, aliasResultCode } from "@/lib/pos/card-alias-core";
 import { MasteringPreviewPanel } from "@/components/admin/catalog/MasteringPreviewPanel";
 // S09: KB-first recall - the "Known product" chip.
 import { KnownProductChip } from "@/components/admin/catalog/KnownProductChip";
@@ -226,7 +228,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; alias?: string; alias_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -285,6 +287,9 @@ export default async function CatalogDraftsPage({
   ]);
   // R50 S3: result of pressing Start (closed set, cultiveraStartBanner).
   const cvBanner = cultiveraStartBanner(sp.cv, sp.cv_msg);
+  // R50 A1: the "Yes, same product" / "Forget" result.
+  const aliasCode = aliasResultCode(sp.alias);
+  const aliasNote = aliasCode ? aliasBanner(aliasCode, sp.alias_msg) : null;
   const focusIsRebuilt = Boolean(focus.manifestId && rebuiltIds?.has(focus.manifestId));
   // R32 (T-328): the CURRENT markup setting, so the price fine print is
   // recomputed live (never a stale frozen sentence) and drift is flagged.
@@ -579,6 +584,9 @@ export default async function CatalogDraftsPage({
   const cultiveraSuggestions = restockPreview && restockPreview.ok ? (restockPreview.suggestions ?? null) : null;
   // S34: the groups the SAME dry run built (null = no preview -> no panel).
   const previewGroups = restockPreview && restockPreview.ok ? restockPreview.groups : null;
+  // R50 A1: each row's group identity (the key a saved "same product" answer is stored under).
+  const previewIdentityByDraft = new Map<string, string>();
+  for (const g of previewGroups ?? []) for (const id of g.draftIds) previewIdentityByDraft.set(id, g.identity);
 
   // S11: the redesigned row (Facts + Manifest columns, the facts panel, the
   // lookup outside the approve form, the in-row error). ONBOARDING_V2_ROW=off
@@ -1096,6 +1104,20 @@ export default async function CatalogDraftsPage({
         )}
 
         {/* R50 S3: start a Cultivera-rebuilt manifest through Onboarding. */}
+        {aliasNote && (
+          <div
+            role={aliasNote.tone === "warn" ? "alert" : "status"}
+            data-testid="card-alias-banner"
+            data-tone={aliasNote.tone}
+            className={
+              aliasNote.tone === "warn"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            {aliasNote.text}
+          </div>
+        )}
         {cvBanner && (
           <div
             role={cvBanner.tone === "bad" ? "alert" : "status"}
@@ -1932,6 +1954,15 @@ export default async function CatalogDraftsPage({
                         {cultiveraSuggestions?.get(d.id) ? (
                           <CultiveraSuggestionChip suggestion={cultiveraSuggestions.get(d.id)!} />
                         ) : null}
+                        <CardAliasControls
+                          draftId={d.id}
+                          manifestId={d.manifest_id}
+                          verdict={previewVerdicts?.get(d.id)}
+                          suggestion={cultiveraSuggestions?.get(d.id)}
+                          identity={previewIdentityByDraft.get(d.id)}
+                          acceptAction={acceptCardAliasAction}
+                          forgetAction={forgetCardAliasAction}
+                        />
                         {productMemories?.get(d.id) ? (
                           <KnownProductChip memory={productMemories.get(d.id)!} now={now} />
                         ) : null}

@@ -664,3 +664,100 @@ export async function runCoaArchiveBackfillAction(formData: FormData) {
   revalidatePath("/admin/inventory/drafts");
   redirect(draftsHref({ extra }));
 }
+
+/**
+ * R50 A1 - "Yes, same product - always join this card" on the S4 suggestion.
+ * The server re-runs the row's preview and saves ONLY a card the scorer
+ * suggests for that row right now (card-alias-core acceptCheck); the posted
+ * key is never trusted. Saving changes nothing live: the alias is applied
+ * when the row is approved (and on future deliveries), only while the card is
+ * still a valid merge target (intake-mastering-core aliasTarget).
+ */
+export async function acceptCardAliasAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const core = await import("@/lib/pos/card-alias-core");
+  const get = (n: string) => {
+    const v = formData.get(n);
+    return typeof v === "string" ? v : "";
+  };
+  const form = core.parseAcceptForm(get);
+  if (!form.ok) redirect(draftsHref({ extra: { alias: "error", alias_msg: form.error } }));
+  const { draftId, manifestId, cardKey } = form.value;
+  let code: string = "error";
+  let message: string | null = null;
+  try {
+    const { loadAcceptEvidence } = await import("@/lib/pos/card-alias-server");
+    const checked = core.acceptCheck(cardKey, await loadAcceptEvidence(manifestId, draftId));
+    if (!checked.ok) {
+      message = checked.error;
+    } else {
+      const { saveCardAlias } = await import("@/lib/pos/card-alias-store");
+      const saved = await saveCardAlias({ identity: checked.identity, cardKey, cardName: checked.cardName }, session.userId);
+      if (!saved.migrated) code = "migration";
+      else if (!saved.ok) message = saved.error ?? "Saving failed.";
+      else {
+        code = "saved";
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: core.CARD_ALIAS_AUDIT_ACCEPT,
+          entityType: "intake_card_alias",
+          entityId: checked.identity,
+          after: { manifestId, draftId, cardKey, cardName: checked.cardName },
+        });
+        const { logManifestEvent } = await import("@/lib/inventory/intake-store");
+        await logManifestEvent(manifestId, "card_alias_saved", core.aliasEventNote(checked.identity, cardKey, checked.cardName), session.userId);
+      }
+    }
+  } catch (err) {
+    console.error("[drafts] acceptCardAliasAction failed:", err);
+    message = err instanceof Error ? err.message : "Saving the choice failed.";
+  }
+  revalidatePath("/admin/inventory/drafts");
+  const extra: Record<string, string> = { alias: code };
+  if (code === "error" && message) extra.alias_msg = message.slice(0, 300);
+  redirect(draftsHref({ manifestId, draftId, extra }));
+}
+
+/** R50 A1 - "Forget this choice": deletes the alias; nothing live changes. */
+export async function forgetCardAliasAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const core = await import("@/lib/pos/card-alias-core");
+  const get = (n: string) => {
+    const v = formData.get(n);
+    return typeof v === "string" ? v : "";
+  };
+  const form = core.parseForgetForm(get);
+  if (!form.ok) redirect(draftsHref({ extra: { alias: "error", alias_msg: form.error } }));
+  const { identity, manifestId, draftId } = form.value;
+  let code: string = "error";
+  let message: string | null = null;
+  try {
+    const { forgetCardAlias } = await import("@/lib/pos/card-alias-store");
+    const r = await forgetCardAlias(identity);
+    if (!r.migrated) code = "migration";
+    else if (!r.ok) message = r.error ?? "Forgetting failed.";
+    else {
+      code = "forgotten";
+      if (r.deleted) {
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: core.CARD_ALIAS_AUDIT_FORGET,
+          entityType: "intake_card_alias",
+          entityId: identity,
+          after: { manifestId, cardKey: r.cardKey },
+        });
+        const { logManifestEvent } = await import("@/lib/inventory/intake-store");
+        await logManifestEvent(manifestId, "card_alias_forgotten", `${identity} \u2192 choice forgotten`, session.userId);
+      }
+    }
+  } catch (err) {
+    console.error("[drafts] forgetCardAliasAction failed:", err);
+    message = err instanceof Error ? err.message : "Forgetting the choice failed.";
+  }
+  revalidatePath("/admin/inventory/drafts");
+  const extra: Record<string, string> = { alias: code };
+  if (code === "error" && message) extra.alias_msg = message.slice(0, 300);
+  redirect(draftsHref({ manifestId, draftId, extra }));
+}

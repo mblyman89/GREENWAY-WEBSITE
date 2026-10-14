@@ -236,6 +236,13 @@ export type IntakeStagingInputs = {
    * today's behaviour, byte for byte; a stale choice is never applied.
    */
   mergeDecisions?: ReadonlyMap<string, MergeDecision>;
+  /**
+   * R50 A1: remembered "this product IS that card" answers
+   * (intake_card_aliases), identity -> card key. Applied only to a product
+   * the exact rule matched to NO card, and only while the card is still a
+   * valid merge target. Absent or empty = today's behaviour, byte for byte.
+   */
+  cardAliases?: ReadonlyMap<string, string>;
 };
 
 /**
@@ -295,6 +302,8 @@ export type IntakeStagingPlan = {
   diagnostics: InjectionDiagnostic[];
   /** SLICE 62: verified extraction facts per lot key (for inventory_lots). */
   lotFactsByKey: Map<string, LotFactBundle>;
+  /** R50 A1: identities with no exact live match and no alias applied (the planner's list). */
+  unmatchedIdentities: string[];
 };
 
 /** Convert a mastered new card into a staged snapshot item. */
@@ -490,6 +499,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     enrichmentByDraftId: inputs.enrichmentByDraftId,
     vendorIds: inputs.vendorIds,
     mergeDecisions: inputs.mergeDecisions,
+    cardAliases: inputs.cardAliases,
     liveCards: items
       .filter((it) => it.origin === "carried")
       .map((it) => ({
@@ -548,6 +558,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     hasChanges: addedCount > 0 || mergedCount > 0,
     diagnostics: mastering.diagnostics,
     lotFactsByKey: mastering.lotFactsByKey,
+    unmatchedIdentities: mastering.unmatchedIdentities,
   };
 }
 
