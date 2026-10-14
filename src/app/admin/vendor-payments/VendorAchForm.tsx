@@ -32,9 +32,12 @@ function dollars(cents: number): string {
 export function VendorAchForm({
   settingsComplete,
   companyName,
+  viewerIsOwner,
 }: {
   settingsComplete: boolean;
   companyName: string;
+  /** R41 S0 / D-4: Michael builds the file; Stephen's batch is sent to Michael for approval. */
+  viewerIsOwner: boolean;
 }) {
   const [payables, setPayables] = useState<PayableOption[] | null>(null);
   const [rows, setRows] = useState<Row[]>([{ id: 1, manifestId: "", amount: "" }]);
@@ -305,9 +308,33 @@ export function VendorAchForm({
           + Add invoice
         </Button>
         <Button type="submit" variant="primary" disabled={pending || !settingsComplete || noPayables}>
-          {pending ? "Generating…" : "Generate ACH file"}
+          {pending ? (viewerIsOwner ? "Generating…" : "Sending…") : viewerIsOwner ? "Generate ACH file" : "Send to Michael for approval"}
         </Button>
       </div>
+
+      {!viewerIsOwner && (
+        <div className="space-y-1">
+          <label htmlFor="request_note" className="text-xs font-semibold text-[var(--admin-text-muted)]">
+            Note for Michael (optional)
+          </label>
+          <textarea
+            id="request_note"
+            name="request_note"
+            maxLength={1000}
+            rows={2}
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2 text-sm"
+          />
+          <p className="text-xs text-[var(--admin-text-faint)]">
+            Only Michael (the owner) builds vendor ACH files. This batch is sent to him; nothing is recorded as paid until he approves it.
+          </p>
+        </div>
+      )}
+
+      {state?.notice && (
+        <div role="status" className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
+          {state.notice}
+        </div>
+      )}
 
       {/* File-level problems */}
       {state?.problems?.some((p) => p.index === null) && (

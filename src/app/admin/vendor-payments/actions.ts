@@ -17,7 +17,9 @@
  * record the payment intent. Nothing is transmitted. Money is CENTS throughout.
  */
 import { revalidatePath } from "next/cache";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePermission, type StaffSession } from "@/lib/auth/session";
+import { achGate } from "@/lib/payments/ach-gate";
+import { vendorBuildOutcome, type RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
 import type { AchOriginator } from "@/lib/payments/nacha-core";
@@ -126,6 +128,8 @@ export type VendorPayFormResult = {
   filename?: string;
   totalCents?: number;
   entryCount?: number;
+  /** R41 S0: a plain-words note that is not a problem (e.g. "Sent to Michael for approval..."). */
+  notice?: string;
 };
 
 /**
@@ -325,12 +329,25 @@ function parseRows(formData: FormData): ParsedRow[] {
   return rows;
 }
 
+/** Requests land in `notice` (not a problem); refusals land in the file-level problem slot. */
+function buildReply(r: RedirectOutcome): VendorPayFormResult {
+  return r.ok ? { problems: [], notice: r.message } : { problems: [{ index: null, vendorName: null, message: r.message }] };
+}
+
+/**
+ * R41 S0 / D-4: only Michael (ach.act) builds vendor ACH files; Stephen
+ * (ach.request) sends the batch to Michael, and nothing is recorded until he
+ * approves it on the approvals page (which hands the file to his browser).
+ * Managers keep Accounts Payable (payables.manage) but no longer build files.
+ */
 export async function buildVendorAchAction(
   _prev: VendorPayFormResult | null,
   formData: FormData,
 ): Promise<VendorPayFormResult> {
-  const session = await requirePermission("payables.manage");
+  return achGate("vendor_ach.build", formData, { reply: buildReply, outcomeOf: vendorBuildOutcome }, (session) => buildVendorAchBody(session, formData));
+}
 
+async function buildVendorAchBody(session: StaffSession, formData: FormData): Promise<VendorPayFormResult> {
   const settings = await getAchCompanySettings();
   const settingsComplete =
     !!settings.destination_routing && !!settings.company_name && !!settings.originating_dfi;
