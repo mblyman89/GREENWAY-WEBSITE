@@ -32,6 +32,7 @@ declare
   u_admin uuid := gen_random_uuid();
   u_mgr   uuid := gen_random_uuid();
   u_staff uuid := gen_random_uuid();
+  u_own   uuid := gen_random_uuid();  -- 0271: the owner (go-live writes need an owner actor)
   emp     uuid;
   emp2    uuid;
   ven     uuid;
@@ -48,7 +49,9 @@ declare
   h4      text := repeat('d', 64);
 begin
   -- fixtures --------------------------------------------------------------
-  insert into auth.users (id, email) values (u_admin, 'a@x.test'), (u_mgr, 'm@x.test'), (u_staff, 's@x.test');
+  insert into auth.users (id, email) values (u_admin, 'a@x.test'), (u_mgr, 'm@x.test'), (u_staff, 's@x.test'), (u_own, 'o@x.test');
+  insert into public.staff_profiles (id, email, role, active) values
+    (u_own, 'o@x.test', 'owner', true) on conflict (id) do update set role = 'owner', active = true;
   insert into public.staff_profiles (id, email, role, active) values
     (u_admin, 'a@x.test', 'admin', true) on conflict (id) do update set role = 'admin', active = true;
   insert into public.staff_profiles (id, email, role, active) values
@@ -90,7 +93,10 @@ begin
   perform pg_temp.must_fail(format($q$update public.ach_authorizations set state = 'on_hold' where id = %L$q$, auth_e),
     'ach_auth_hold_has_reason');
   update public.ach_authorizations set state = 'on_hold', hold_reason = 'bank change pending callback' where id = auth_e;
-  update public.ach_authorizations set state = 'active' where id = auth_e;
+  -- 0271 (R41 S0, D-6 option B): going active needs an OWNER actor.
+  perform pg_temp.must_fail(format($q$update public.ach_authorizations set state = 'active', updated_by = %L where id = %L$q$, u_admin, auth_e),
+    'ACH_OWNER_ONLY');
+  update public.ach_authorizations set state = 'active', updated_by = u_own where id = auth_e;
   -- legal hold needs a reason
   perform pg_temp.must_fail(format($q$update public.ach_authorizations set legal_hold = true where id = %L$q$, auth_e),
     'ach_auth_legal_hold_reason');
@@ -155,10 +161,14 @@ begin
   perform pg_temp.must_fail(format($q$delete from public.ach_authorization_accounts where id = %L$q$, acct2),
     'ACH_ACCOUNT_IMMUTABLE');
   perform pg_temp.must_fail(format(
-    $q$update public.ach_authorization_accounts set verification_status = 'verified' where id = %L$q$, acct2),
-    'ach_acct_verified_shape');
+    $q$update public.ach_authorization_accounts set verification_status = 'verified', verified_by = %L where id = %L$q$, u_own, acct2),
+    'ach_acct_verified_shape');  -- owner stamped (0271) so only the CHECK can refuse
+  -- 0271 (R41 S0): only the owner marks an account verified.
+  perform pg_temp.must_fail(format(
+    $q$update public.ach_authorization_accounts set verification_status = 'verified', verification_method = 'prenote',
+       verified_at = now(), verified_by = %L where id = %L$q$, u_admin, acct2), 'ACH_OWNER_ONLY');
   update public.ach_authorization_accounts set verification_status = 'verified', verification_method = 'prenote',
-    verified_at = now(), verified_by = u_admin where id = acct2;
+    verified_at = now(), verified_by = u_own where id = acct2;
   -- archive frees the slot; the archived row is then frozen
   update public.ach_authorization_accounts set archived_at = now() where id = acct2;
   perform pg_temp.must_fail(format(
@@ -380,14 +390,28 @@ begin
   end;
   reset role;
 
-  -- manager: may DROP a document (received, unlinked, own uid), never read it
+  -- manager: since 0271 (owner decision D-5, "Only owner and admin can drop
+  -- ACH documents") a manager can no longer DROP a document, an event or a
+  -- file, and still never reads anything back.
   perform set_config('request.jwt.claim.sub', u_mgr::text, true);
   set local role authenticated;
-  insert into public.ach_authorization_documents (payee_type, employee_id, kind, storage_path, sha256, byte_size, mime_type, uploaded_by)
-    values ('employee', emp, 'signed_form', 'ach-docs/m/1.pdf', repeat('f', 64), 10, 'application/pdf', u_mgr);
-  insert into public.ach_authorization_events (payee_type, employee_id, event_kind, actor_id)
-    values ('employee', emp, 'document_dropped', u_mgr);
-  insert into storage.objects (bucket_id, name) values ('ach-docs', 'm/1.pdf');
+  begin
+    insert into public.ach_authorization_documents (payee_type, employee_id, kind, storage_path, sha256, byte_size, mime_type, uploaded_by)
+      values ('employee', emp, 'signed_form', 'ach-docs/m/1.pdf', repeat('f', 64), 10, 'application/pdf', u_mgr);
+    raise exception 'manager document drop was ACCEPTED (0271 D-5 refuses it)';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.ach_authorization_events (payee_type, employee_id, event_kind, actor_id)
+      values ('employee', emp, 'document_dropped', u_mgr);
+    raise exception 'manager document_dropped event was ACCEPTED (0271 D-5 refuses it)';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into storage.objects (bucket_id, name) values ('ach-docs', 'm/1.pdf');
+    raise exception 'manager storage drop was ACCEPTED (0271 D-5 refuses it)';
+  exception when insufficient_privilege then null;
+  end;
   select count(*) into n from public.ach_authorization_documents;
   assert n = 0, 'manager must not read documents back';
   select count(*) into n from storage.objects where bucket_id = 'ach-docs';
@@ -420,9 +444,14 @@ begin
   end;
   reset role;
 
-  -- admin: reads everything, including what the manager dropped
+  -- admin: may DROP (received, unlinked, own uid) and reads everything
   perform set_config('request.jwt.claim.sub', u_admin::text, true);
   set local role authenticated;
+  insert into public.ach_authorization_documents (payee_type, employee_id, kind, storage_path, sha256, byte_size, mime_type, uploaded_by)
+    values ('employee', emp, 'signed_form', 'ach-docs/m/1.pdf', repeat('f', 64), 10, 'application/pdf', u_admin);
+  insert into public.ach_authorization_events (payee_type, employee_id, event_kind, actor_id)
+    values ('employee', emp, 'document_dropped', u_admin);
+  insert into storage.objects (bucket_id, name) values ('ach-docs', 'm/1.pdf');
   select count(*) into n from public.ach_authorization_documents where storage_path = 'ach-docs/m/1.pdf';
   assert n = 1, 'admin must read the dropped document';
   select count(*) into n from storage.objects where bucket_id = 'ach-docs';
@@ -431,7 +460,7 @@ begin
   assert n >= 3, format('admin must see authorizations, saw %s', n);
   reset role;
 
-  raise notice 'ACH 0258 RLS CHECKS PASSED (staff / manager / admin)';
+  raise notice 'ACH 0258 RLS CHECKS PASSED (staff / manager / admin; manager drop refused since 0271)';
   raise notice 'ACH 0258 CHECK PASSED';
 end $$;
 
