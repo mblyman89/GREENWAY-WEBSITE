@@ -321,6 +321,7 @@ describe("R50 A4 · the test button and the runbook panel", () => {
     expect(recent.error).toBeNull();
     expect(recent.rows).toHaveLength(1);
     expect(recent.rows[0].dedupe_key.startsWith("cutover:test:")).toBe(true);
+    expect(recent.rows[0].view).toMatchObject({ tone: "ok", isTest: true, what: "Test alert" });
   });
 
   it("Send a test alert with no channel: says so instead of pretending", async () => {

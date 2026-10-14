@@ -42,7 +42,9 @@ import {
   plainText,
   runIdsToWatch,
   testAlert,
+  describeWatchLog,
   type WatchAlert,
+  type WatchLogView,
   type WatchChannels,
   type WatchImportFact,
   type WatchRunFact,
@@ -66,6 +68,8 @@ export type WatchLogRow = {
   recipients: string | null;
   sent_at: string;
 };
+
+export type WatchLogEntry = WatchLogRow & { view: WatchLogView };
 
 function staffEmails(): string[] {
   return (process.env.ORDER_STAFF_EMAILS ?? "")
@@ -101,7 +105,7 @@ export async function readWatchChannels(): Promise<WatchChannels> {
 }
 
 /** Recent cutover alerts (real + test) for the runbook page, newest first. Never throws. */
-export async function readRecentWatchAlerts(limit = 20): Promise<{ rows: WatchLogRow[]; error: string | null }> {
+export async function readRecentWatchAlerts(limit = 20, nowMs: number = Date.now()): Promise<{ rows: WatchLogEntry[]; error: string | null }> {
   if (!isSupabaseServiceConfigured) return { rows: [], error: "Supabase is not configured." };
   try {
     const admin = createSupabaseAdminClient();
@@ -112,7 +116,8 @@ export async function readRecentWatchAlerts(limit = 20): Promise<{ rows: WatchLo
       .order("sent_at", { ascending: false })
       .limit(limit);
     if (error) return { rows: [], error: error.message };
-    return { rows: (data as WatchLogRow[] | null) ?? [], error: null };
+    const rows = (data as WatchLogRow[] | null) ?? [];
+    return { rows: rows.map((r) => ({ ...r, view: describeWatchLog(r, nowMs, r.sent_at) })), error: null };
   } catch (e) {
     return { rows: [], error: e instanceof Error ? e.message : String(e) };
   }
