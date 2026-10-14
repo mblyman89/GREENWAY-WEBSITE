@@ -327,6 +327,24 @@ export function checksByDate(records: readonly DriftCheckRecord[]): Map<string, 
   return m;
 }
 
+/** sale-decrement.ts writes these exact notes (the marker row, or a plain note when the claim itself failed). */
+export const DECREMENT_IN_PROGRESS_NOTE = "Inventory decrement in progress\u2026";
+export const DECREMENT_FAILED_PARTWAY_PREFIX = "Inventory decrement FAILED partway";
+export const DECREMENT_FAILED_NOT_REDUCED_PREFIX = "Inventory decrement FAILED (stock not reduced";
+/** A marker still "in progress" this long after it was claimed did not finish. */
+export const DECREMENT_STUCK_MINUTES = 15;
+
+/** Did this sale's stock step go wrong? (A marker row or a note row; anything else is fine.) */
+export function decrementTrouble(note: string | null, createdAt: string, nowMs: number): boolean {
+  const n = note ?? "";
+  if (n.startsWith(DECREMENT_FAILED_PARTWAY_PREFIX) || n.startsWith(DECREMENT_FAILED_NOT_REDUCED_PREFIX)) return true;
+  if (n === DECREMENT_IN_PROGRESS_NOTE) {
+    const t = Date.parse(createdAt);
+    return !Number.isFinite(t) || nowMs - t >= DECREMENT_STUCK_MINUTES * 60_000;
+  }
+  return false;
+}
+
 /** Should the page load the numbers? Off after the week unless he asks once. */
 export function driftShouldRun(p: DriftPhase, anyway: boolean): boolean {
   return p.phase !== "after" || anyway;
@@ -454,6 +472,13 @@ export function __runCutoverDriftCoreTests(): { passed: number; failed: number }
     { date: "2026-11-03", ok: true, drift: 0, driftProducts: 0, by: "m", at: "2026-11-03T22:00:00Z" },
   ]);
   ok(recs.size === 2 && recs.get("2026-11-02")!.ok === true, "latest record per day wins");
+  // decrement trouble (the exact notes sale-decrement.ts writes)
+  const now = Date.parse("2026-11-02T20:00:00Z");
+  ok(decrementTrouble("Inventory decrement FAILED partway (x). The latch is kept", "2026-11-02T19:00:00Z", now), "failed partway");
+  ok(decrementTrouble("Inventory decrement FAILED (stock not reduced \u2014 run a cycle count or retry): x", "2026-11-02T19:00:00Z", now), "failed, not reduced");
+  ok(decrementTrouble(DECREMENT_IN_PROGRESS_NOTE, "2026-11-02T19:45:00Z", now) && !decrementTrouble(DECREMENT_IN_PROGRESS_NOTE, "2026-11-02T19:45:01Z", now), "stuck at exactly 15 minutes");
+  ok(!decrementTrouble("Inventory decremented for 2 line(s): 2 menu variant(s), 2 lot touch(es).", "2026-11-02T19:00:00Z", now) && !decrementTrouble(null, "x", now), "a finished decrement is fine");
+  ok(decrementTrouble(DECREMENT_IN_PROGRESS_NOTE, "garbage", now), "unreadable time on a stuck marker counts");
   ok(signedNum(3) === "+3" && signedNum(-2) === "-2" && signedNum(0) === "0", "signed");
   ok(wholeOrNull("") === null && wholeOrNull(" 4 ") === 4 && wholeOrNull(2.5) === null && wholeOrNull(undefined) === null, "wholeOrNull");
 
