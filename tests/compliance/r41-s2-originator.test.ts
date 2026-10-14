@@ -72,6 +72,15 @@ describe("the builder refuses before and checks after", () => {
     expect(b).toBeGreaterThan(a);
     expect(c).toBeGreaterThan(b);
   });
+  it("the shape problems stop the file: refused before the return of the file text", () => {
+    // A correct builder cannot produce a bad shape, so this net is proven two
+    // ways: nacha-core's self-test tampers ONE field of a real file per case
+    // (14 cases), and this pin proves the builder acts on the answer.
+    const i = body.indexOf("const shape = checkBuiltFileShape(file, originator);");
+    expect(i).toBeGreaterThan(0);
+    const next = body.slice(i, body.indexOf("return { ok: true, file", i));
+    expect(next).toMatch(/\n\s*if \(shape\.length\) return \{ ok: false, error: `The ACH file failed its own check, so it was not released: \$\{shape\.join\("; "\)\}\.` \};\n/);
+  });
   it("behaviour: a wrong-bank originator gets no file; the Timberland one does", () => {
     const entries = [{ name: "PAT WORKER", routing: "021000021", accountNumber: "0012345678", accountType: "checking" as const, amountCents: 1000, idNumber: "E1" }];
     const base = { entries, secCode: "PPD" as const, companyEntryDescription: "PAYROLL", effectiveDate: new Date("2026-10-06T19:00:00Z"), createdAt: new Date("2026-10-05T17:00:00Z") };
