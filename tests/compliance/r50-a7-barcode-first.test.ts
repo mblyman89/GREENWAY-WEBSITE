@@ -62,11 +62,11 @@ describe("R50 A7 - self-tests", () => {
   it("cores pass with pinned counts and are in the pure runner", async () => {
     const { __runBarcodeMatchCoreTests } = await import("@/lib/pos/barcode-match-core");
     const { __runIntakeMasteringCoreTests } = await import("@/lib/pos/intake-mastering-core");
-    expect(__runBarcodeMatchCoreTests().passed).toBe(33);
+    expect(__runBarcodeMatchCoreTests().passed).toBe(34);
     expect(__runIntakeMasteringCoreTests().passed).toBe(327);
     const runner = src("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runBarcodeMatchCoreTests } from "../../src/lib/pos/barcode-match-core";');
-    expect(runner).toMatch(/assertRan\("barcode-match-core", __runBarcodeMatchCoreTests\(\), 33\)/);
+    expect(runner).toMatch(/assertRan\("barcode-match-core", __runBarcodeMatchCoreTests\(\), 34\)/);
   });
 });
 
@@ -114,6 +114,44 @@ describe("R50 A7 - loadBarcodeInputs (real postgrest-js)", () => {
     st.db.missing.add("inventory_lots");
     expect(await loadBarcodeInputs(await admin(), { drafts: [{ pos_product_key: BC, lot_id: "lot-new" }], liveCards: [cult] })).toBeUndefined();
     spy.mockRestore();
+  });
+
+  it("a PARTIAL draft read (one chunk of several failed) is never used", async () => {
+    const { loadBarcodeInputs } = await import("@/lib/inventory/restock-preview-server");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // 250 drafts -> two id chunks (200 + 50); only the SECOND chunk fails, so
+    // the first chunk's lots (incl. lot-new) were read fine.
+    const drafts = [{ pos_product_key: BC, lot_id: "lot-new" }];
+    for (let i = 0; i < 249; i++) {
+      const id = `lot-f${String(i).padStart(3, "0")}`;
+      st.db.rows("inventory_lots").push({ id, pos_product_key: `KF${i}`, lot_code: `FILL${String(i).padStart(6, "0")}`, vendor_id: null });
+      drafts.push({ pos_product_key: `KF${i}`, lot_id: id });
+    }
+    let n = 0;
+    st.db.before = (req) => {
+      if (req.method !== "GET") return;
+      n += 1;
+      if (n === 2) return { status: 500, body: { message: "boom", code: "XX000" } };
+    };
+    expect(await loadBarcodeInputs(await admin(), { drafts, liveCards: [cult] })).toBeUndefined();
+    expect(n).toBe(2); // stopped after the id reads - never went on to the barcode read
+    spy.mockRestore();
+  });
+
+  it("more than 1,000 distinct barcodes -> undefined, no barcode read at all", async () => {
+    const { loadBarcodeInputs } = await import("@/lib/inventory/restock-preview-server");
+    const { BARCODE_LOOKUP_CAP } = await import("@/lib/pos/barcode-match-core");
+    expect(BARCODE_LOOKUP_CAP).toBe(1000);
+    const drafts = [{ pos_product_key: BC, lot_id: "lot-new" }];
+    for (let i = 0; i < BARCODE_LOOKUP_CAP; i++) {
+      const id = `lot-c${String(i).padStart(4, "0")}`;
+      st.db.rows("inventory_lots").push({ id, pos_product_key: `KC${i}`, lot_code: `CAP${String(i).padStart(7, "0")}`, vendor_id: null });
+      drafts.push({ pos_product_key: `KC${i}`, lot_id: id });
+    }
+    expect(await loadBarcodeInputs(await admin(), { drafts, liveCards: [cult] })).toBeUndefined();
+    const gets = st.db.log.filter((r) => r.method === "GET");
+    expect(gets.every((g) => g.url.searchParams.has("id"))).toBe(true);
+    expect(gets.some((g) => g.url.searchParams.has("lot_code"))).toBe(false);
   });
 
   it("end to end: the loader's inputs make the planner join the Cultivera card", async () => {

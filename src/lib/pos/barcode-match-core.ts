@@ -140,9 +140,16 @@ export function buildBarcodeInputs(input: {
     const vid = cleanId(lot.vendor_id);
     if (vid) vendorIdByLotKey.set(key, vid);
   }
-  const cardByLotKey = new Map<string, string>();
+  // Every live card that claims a lot key (normally one). Two cards claiming
+  // the same lot is never resolved by picking one: both are listed, so
+  // barcodeTarget sees "ambiguous" and the name rule decides, as before.
+  const cardsByLotKey = new Map<string, string[]>();
   for (const card of input.liveCards) {
-    for (const k of liveCardLotKeys(card)) if (!cardByLotKey.has(k)) cardByLotKey.set(k, card.source_item_id);
+    for (const k of liveCardLotKeys(card)) {
+      const list = cardsByLotKey.get(k) ?? [];
+      if (!list.includes(card.source_item_id)) list.push(card.source_item_id);
+      cardsByLotKey.set(k, list);
+    }
   }
   const wanted = new Set(barcodeByLotKey.values());
   const liveByBarcode = new Map<string, LiveBarcodeLot[]>();
@@ -150,10 +157,10 @@ export function buildBarcodeInputs(input: {
     if (ownLotIds.has(l.id)) continue;
     const bc = normalizeBarcode(l.lot_code);
     if (!bc || !wanted.has(bc)) continue;
-    const cardKey = cardByLotKey.get(l.pos_product_key?.trim() ?? "");
-    if (!cardKey) continue;
+    const cardKeys = cardsByLotKey.get(l.pos_product_key?.trim() ?? "") ?? [];
+    if (cardKeys.length === 0) continue;
     const list = liveByBarcode.get(bc) ?? [];
-    list.push({ cardKey, vendorId: cleanId(l.vendor_id) });
+    for (const cardKey of cardKeys) list.push({ cardKey, vendorId: cleanId(l.vendor_id) });
     liveByBarcode.set(bc, list);
   }
   return { barcodeByLotKey, vendorIdByLotKey, liveByBarcode };
@@ -245,6 +252,17 @@ export function __runBarcodeMatchCoreTests(): { passed: number } {
   const l2 = built.liveByBarcode.get("07825626909") ?? [];
   ok(l2.length === 1 && l2[0].cardKey === "LOT-OLD" && l2[0].vendorId === null, "intake card found by a variant's lot; a lot on no live card ignored");
   ok(!built.liveByBarcode.has("NOTASKED01"), "a barcode no draft carries is ignored");
+  // one lot key claimed by TWO live cards -> both listed (never pick one)
+  const twice = buildBarcodeInputs({
+    drafts: [{ pos_product_key: "K2", lot_id: "draft-lot-2" }],
+    draftLots: [{ id: "draft-lot-2", lot_code: "07825626909", vendor_id: null }],
+    liveLots: [{ id: "old-2", pos_product_key: "SHARED", lot_code: "07825626909", vendor_id: "v" }],
+    liveCards: [
+      { source_item_id: "SHARED", variants: [] },
+      { source_item_id: "CARD-B", variants: [{ source_variant_id: "SHARED-onboarded" }] },
+    ],
+  });
+  ok(JSON.stringify(twice.liveByBarcode.get("07825626909")) === JSON.stringify([{ cardKey: "SHARED", vendorId: "v" }, { cardKey: "CARD-B", vendorId: "v" }]), "a lot claimed by two cards lists both (ambiguous downstream)");
   const none = buildBarcodeInputs({ drafts: [], draftLots: [], liveLots: [], liveCards: cards });
   ok(none.barcodeByLotKey.size === 0 && none.liveByBarcode.size === 0, "empty in, empty out");
 

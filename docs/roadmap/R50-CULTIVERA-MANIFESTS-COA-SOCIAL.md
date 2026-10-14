@@ -1546,3 +1546,42 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   refused and nothing written, no tick / short note / bad id / notes unreadable / failed insert, the 500 cap,
   undo; Save & next; jump paging + highlight; open counts; suggestions order; CSV filter). A2's gate pin
   moves 2 → 3 menu.import (the shared bulk helper). Mutants 45/45 killed.
+
+### A7 — Barcode-first matching (a re-delivered lot joins its live card before any name rule)
+
+* **Why.** The barcode IS the lot number (owner, clarification #2). A WCIA line without a `product_sku` gets
+  `pos_product_key` = its barcode, while the Cultivera card for that product is keyed `pos-<hash>`, so the
+  key never matched and only the name rule could find the card. If the vendor renamed the product (or spelled
+  it differently) the re-delivery became a SECOND card. Measured on the committed `TRANSFERS_INDEX.json`:
+  **900 barcodes sit on 2+ real transfers** (re-deliveries, §1.9), and **no barcode is ever accepted from two
+  vendors (0 of 24,622)**.
+* **The rule** (`intake-mastering-core.ts` `barcodeTarget`, run for each delivery lot AFTER "already a size
+  on a live card" and BEFORE the vendor / name / S19 vendor-id / S32 decision / A1 alias rules):
+  the lot's `inventory_lots.lot_code` (= Cultivera Barcode = WCIA `inventory_id`) is already a lot on ONE
+  live card → the lot joins that card as its own `-onboarded` size (price, label, stock, medical kept; pack
+  sections carried like any merge). Diagnostic `intake_master_restock` with `matched_by: "barcode"`.
+* **Never guessed — each of these falls through to the rules before A7, byte for byte, plus one FYI note
+  `intake_master_barcode_unused` ("Same barcode on the menu, matched by name instead"):** lots on 2+
+  different live cards carry the barcode (`ambiguous`); the card is hidden, medical-only, has no vendor or a
+  vague name (`not_a_target`, the same eligibility as every merge); another category axis
+  (`other_category`); both sides carry a vendor id and any live lot's differs (`vendor_differs`).
+* **What a barcode is.** `^[A-Za-z0-9][A-Za-z0-9.-]{7,63}$` — 24,710 of the 24,713 barcodes in the transfer
+  index match; the 3 that do not are junk ("1", "Fire Bros AIO Phone Case", "Firebros Lanyard"), and the 8
+  misses in the inventories export are accessories ("RBBW", "giraffe", "D-0005" ...). Anything else is "no
+  barcode". Case is kept, never folded.
+* **Reads** (`restock-preview-server.ts` `loadBarcodeInputs`, shared by staging and the Onboarding preview so
+  the chip and Approve agree): the drafts' own lots by id, then the lots carrying those barcodes — two named,
+  paged, id-ordered reads. The delivery's own lot rows never count as live. Flag `INTAKE_BARCODE_FIRST=off`,
+  nothing live, a refresh (S3c), more than 1,000 barcodes, or ANY failed page → no inputs = the plan before A7.
+* **The chip** on Product Onboarding: "Restock → joins live card 'X' (same barcode)", with the barcode in the
+  sentence under it.
+* **Intake / receiving.** Nothing about receiving, quarantine, COAs, CCRS ids or stock changes. The ONLY
+  difference: a lot whose barcode already sells on one eligible live card now joins that card instead of being
+  matched by name. Every other lot is planned exactly as before (pinned byte-for-byte in the self-tests).
+* **Tests.** New `barcode-match-core.ts` (34 self-tests, in the runner; a lot claimed by two live cards lists both, so it is `ambiguous`). Planner self-tests 271 → 327 (+56:
+  join, beats name / ambiguous / alias, every unsafe reason byte-identical, absent/empty byte-identical,
+  already-a-size wins, mixed delivery, preview). New `r50-a7-barcode-first.test.ts` (12: the loader on the real
+  postgrest-js client — reads, own-lot exclusion, flag/empty/failed/missing table → none; end to end; owner
+  words; wiring order pins; a failed SECOND draft page and >1,000 barcodes → none). S32/S34/S19 count + wiring
+  pins moved with comments. Mutation: 64 mutants, 63 killed, 1 documented equivalent (dropping the joined
+  category from `filter_categories` — the injected variant already carries it).
