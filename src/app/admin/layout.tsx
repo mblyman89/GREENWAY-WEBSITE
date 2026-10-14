@@ -13,6 +13,7 @@ import { adminNav } from "@/components/admin/admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
 import { posExceptionSnapshot } from "@/lib/pos/sync-store";
 import { formatBadgeCount } from "@/lib/pos/exception-reminder-core";
+import { countWaitingForOwner } from "@/lib/payments/ach-requests-store";
 import { backOfficeGateForStaff } from "@/lib/staffing/handbook-ack-store";
 import { HandbookGateScreen } from "@/components/admin/HandbookGateScreen";
 
@@ -79,6 +80,14 @@ export default async function AdminLayout({
     const snap = await posExceptionSnapshot();
     const label = formatBadgeCount(snap.count);
     if (label) badges["/admin/registers"] = label;
+  }
+  // R41 S0 (D-6): Michael sees how many of Stephen's ACH requests and stop
+  // actions are waiting for him on the Banking nav item. Best-effort: a read
+  // failure counts as 0 (countWaitingForOwner never throws on a query error).
+  if (session.profile.role === "owner") {
+    const waiting = await countWaitingForOwner().catch(() => ({ pending: 0, toReview: 0 }));
+    const label = formatBadgeCount(waiting.pending + waiting.toReview);
+    if (label) badges["/admin/settings/banking"] = label;
   }
 
   return (

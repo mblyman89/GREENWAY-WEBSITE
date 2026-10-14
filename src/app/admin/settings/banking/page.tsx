@@ -48,6 +48,7 @@ import { VendorVaultCard } from "./VendorVaultCard";
 import { VendorParticipationPanel } from "./VendorParticipationPanel";
 import { BankingHelpTabs } from "./BankingHelpTabs";
 import { participationRows } from "@/lib/payments/vendor-esign-store";
+import { countWaitingForOwner } from "@/lib/payments/ach-requests-store";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,8 @@ export default async function BankingVaultPage({
   const session = await requirePermission("settings.manage");
   const sp = await searchParams;
   const tab: VaultTab = resolveVaultTab(sp.tab);
+  // R41 S0: Stephen's requests + stop actions waiting for Michael (Approvals tab count).
+  const waiting = await countWaitingForOwner().catch(() => ({ pending: 0, toReview: 0, oldest: null }));
 
   const [vault, vendors, employees, employeeBanking, achSettings, vendorContacts] = await Promise.all([
     listVendorBankDetails(),
@@ -242,6 +245,9 @@ export default async function BankingVaultPage({
           </Link>
           <Link href="/admin/settings/banking/operations" className={tabCls(false)}>
             ACH operations
+          </Link>
+          <Link href="/admin/settings/banking/approvals" className={tabCls(false)}>
+            Approvals{waiting.pending + waiting.toReview > 0 ? ` (${waiting.pending + waiting.toReview})` : ""}
           </Link>
           <BankingHelpTabs />
         </div>
