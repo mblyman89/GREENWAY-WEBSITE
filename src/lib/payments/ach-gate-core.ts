@@ -155,6 +155,51 @@ export function redirectOutcome(url: string): RedirectOutcome {
   return { ok: true, message: "Done." };
 }
 
+/**
+ * Add words to the success message of a redirect URL (Stephen's stop action:
+ * "... Michael has been alerted and it is on his review list."). The first
+ * of msg / ok / note that is present gets the suffix; if none is, msg is
+ * added. An error URL is returned unchanged. The hash is kept.
+ */
+export function withOutcomeSuffix(url: string, suffix: string): string {
+  const hashAt = url.indexOf("#");
+  const hash = hashAt === -1 ? "" : url.slice(hashAt);
+  const beforeHash = hashAt === -1 ? url : url.slice(0, hashAt);
+  const q = beforeHash.indexOf("?");
+  const path = q === -1 ? beforeHash : beforeHash.slice(0, q);
+  const p = new URLSearchParams(q === -1 ? "" : beforeHash.slice(q + 1));
+  if (p.get("error") !== null) return url;
+  const key = (["msg", "ok", "note"] as const).find((k) => p.get(k) !== null) ?? "msg";
+  const cur = (p.get(key) ?? "").trim();
+  p.set(key, (cur ? `${cur} ${suffix}` : suffix).slice(0, 900));
+  return `${path}?${p.toString()}${hash}`;
+}
+
+/**
+ * During an approval replay the action re-runs as the owner. It may only run
+ * the exact kind and record the request was about, so a request for vendor A
+ * can never be replayed against vendor B.
+ */
+export function replayMatches(
+  req: { kind: string; targetId: string | null },
+  run: { kind: string; targetId: string | null },
+): boolean {
+  return req.kind === run.kind && req.targetId === run.targetId;
+}
+
+/**
+ * When Michael changes a record himself, which of Stephen's pending requests
+ * about that record are superseded? Only the ones the change really replaces:
+ * the same kind of change, or a request whose record no longer matches the
+ * version it was made against (it would be refused as stale anyway). Adding
+ * a callback contact does not cancel a pending bank change.
+ */
+export function shouldSupersede(ownerKind: string, req: { kind: string; baseVersion: string | null }, currentVersion: string | null): boolean {
+  if (req.kind === ownerKind) return true;
+  if (req.baseVersion === null) return false;
+  return currentVersion !== req.baseVersion;
+}
+
 /** The Next.js redirect digest: "NEXT_REDIRECT;<replace|push>;<url>;<status>;". Returns the URL or null. */
 export function redirectUrlFromDigest(digest: unknown): string | null {
   if (typeof digest !== "string") return null;
@@ -258,6 +303,30 @@ export function __runAchGateCoreTests(): { passed: number; failed: number } {
   ok(redirectUrlFromDigest("NEXT_REDIRECT;other;/a;303;") === null, "bad type");
   ok(redirectUrlFromDigest("NEXT_REDIRECT;push;/a;abc;") === null, "bad status");
   ok(redirectUrlFromDigest(undefined) === null, "no digest");
+
+  // suffix
+  const S = "Michael has been alerted.";
+  ok(redirectOutcome(withOutcomeSuffix("/a?tab=vendors&msg=Held.", S)).message === "Held. Michael has been alerted.", "suffix on msg");
+  ok(withOutcomeSuffix("/a?tab=vendors&msg=Held.", S).includes("tab=vendors"), "other params kept");
+  ok(withOutcomeSuffix("/a?msg=Held.#notices", S).endsWith("#notices"), "hash kept");
+  ok(withOutcomeSuffix("/a?error=No", S) === "/a?error=No", "error url unchanged");
+  ok(redirectOutcome(withOutcomeSuffix("/a", S)).message === S, "no message -> msg added");
+  ok(redirectOutcome(withOutcomeSuffix("/x?saved=1&note=Done", S)).message === "Done " + S, "note param used");
+  ok(new URLSearchParams(withOutcomeSuffix("/x?ok=Yes", S).split("?")[1]).get("msg") === null, "ok param used, no extra msg");
+  ok(withOutcomeSuffix(`/a?msg=${"x".repeat(950)}`, S).length < 1000, "capped");
+
+  // replay
+  ok(replayMatches({ kind: "vendor_bank.save", targetId: "v1" }, { kind: "vendor_bank.save", targetId: "v1" }), "replay same");
+  ok(!replayMatches({ kind: "vendor_bank.save", targetId: "v1" }, { kind: "vendor_bank.save", targetId: "v2" }), "replay other record refused");
+  ok(!replayMatches({ kind: "vendor_bank.save", targetId: "v1" }, { kind: "vendor_bank.archive", targetId: "v1" }), "replay other kind refused");
+  ok(!replayMatches({ kind: "vendor_ach.build", targetId: null }, { kind: "vendor_ach.build", targetId: "x" }), "null vs id refused");
+
+  // supersede
+  ok(shouldSupersede("vendor_bank.save", { kind: "vendor_bank.save", baseVersion: "v1" }, "v1"), "same kind supersedes");
+  ok(!shouldSupersede("vendor_contact.add", { kind: "vendor_bank.save", baseVersion: "v1" }, "v1"), "other kind, unchanged record: kept");
+  ok(shouldSupersede("vendor_bank.release", { kind: "vendor_bank.save", baseVersion: "v1" }, "v2"), "other kind, record changed: superseded");
+  ok(!shouldSupersede("vendor_bank.release", { kind: "vendor_ach.build", baseVersion: null }, "v2"), "no version, other kind: kept");
+  ok(shouldSupersede("vendor_bank.save", { kind: "vendor_bank.save", baseVersion: null }, null), "no version, same kind: superseded");
 
   // summary
   const arr = summaryArray({ routing: "\u2022\u2022\u2022\u20220001", note: "hi" });
