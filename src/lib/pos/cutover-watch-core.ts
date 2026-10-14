@@ -289,7 +289,8 @@ export function __runCutoverWatchCoreTests(): { passed: number; failed: number }
   // runIdsToWatch
   const valid = (id: string) => /^\d{8}T\d{6}Z-[0-9a-f]{8}$/.test(id);
   const ids = runIdsToWatch([{ entity_id: RID }, { entity_id: RID }, { entity_id: "bad" }, { entity_id: null }, { entity_id: "20261031T140000Z-00000001" }, { entity_id: "20261031T130000Z-00000002" }, { entity_id: "20261031T120000Z-00000003" }], valid);
-  ok(ids.length === WATCH_MAX_RUNS && ids[0] === RID && !ids.includes("bad"), "runIds: distinct, valid, capped, newest first");
+  ok(ids.length === WATCH_MAX_RUNS && ids[0] === RID && !ids.includes("bad"), "runIds: valid, capped, newest first");
+  ok(ids.join(",") === `${RID},20261031T140000Z-00000001,20261031T130000Z-00000002`, "runIds: a run started then resumed is watched once");
 
   // harvest failed
   const failedRun = planCutoverAlerts({ nowMs: now, runs: [run({ status: "failed", error: "login: <b>401</b>", finishedAt: "2026-10-31T15:20:00Z" })], imports: [] });
@@ -311,6 +312,7 @@ export function __runCutoverWatchCoreTests(): { passed: number; failed: number }
   ok(slowAt(45).length === 1 && slowAt(45)[0].urgency === "warning" && slowAt(45)[0].body.includes("running 45 min"), "running 45 min: too long");
   ok(planCutoverAlerts({ nowMs: now, runs: [run({ status: "running" }, true)], imports: [] }).length === 0, "running with no start time: no guess");
   ok(planCutoverAlerts({ nowMs: now, runs: [run({ status: "running", startedAt: new Date(now - 50 * 60000).toISOString() }, true)], imports: [], budgetSeconds: 0 }).length === 1, "bad budget -> default 30 min");
+  ok(planCutoverAlerts({ nowMs: now, runs: [run({ status: "running", startedAt: new Date(now - 40 * 60000).toISOString() }, true)], imports: [], budgetSeconds: 0 }).length === 0, "bad budget (0) is not a 0-min budget: 40 min is still fine");
 
   // unreachable
   const un = planCutoverAlerts({ nowMs: now, runs: [{ runId: RID, reachable: false, error: "fetch failed" }], imports: [] });

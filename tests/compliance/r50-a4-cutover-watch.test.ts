@@ -128,6 +128,7 @@ beforeEach(() => {
   vi.stubEnv("ORDER_EMAIL_FROM", "Greenway <alerts@x.com>");
   vi.stubEnv("ORDER_STAFF_EMAILS", "owner@x.com, mgr@x.com");
   vi.stubEnv("CULTIVERA_POS_BUDGET_SECONDS", "");
+  vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://shop.example.com");
 });
 
 async function tick() {
@@ -138,8 +139,8 @@ async function tick() {
 describe("R50 A4 · the pure planner is wired and pinned", () => {
   it("self-tests pass at the pinned count, and the runner pins the same floor", async () => {
     const { __runCutoverWatchCoreTests } = await import("@/lib/pos/cutover-watch-core");
-    expect(__runCutoverWatchCoreTests()).toEqual({ passed: 35, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 35)');
+    expect(__runCutoverWatchCoreTests()).toEqual({ passed: 37, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37)');
   });
 });
 
@@ -153,6 +154,8 @@ describe("R50 A4 · claim before send", () => {
     expect(state.emails[0].to).toEqual(["owner@x.com", "mgr@x.com"]);
     expect(state.emails[0].html).toContain("\u0026lt;b\u0026gt;401");
     expect(state.emails[0].html).not.toContain("<b>401");
+    expect(state.emails[0].html).toContain(`href="https://shop.example.com/admin/menu-imports/fetch/${RID}"`);
+    expect(state.emails[0].html).toContain("Open the harvest");
     expect(state.pushes).toHaveLength(1);
     expect(state.pushes[0].body).toContain("login <b>401</b>"); // a notification is plain text, not HTML
     expect(state.pushes[0].url).toBe(`/admin/menu-imports/fetch/${RID}`);
