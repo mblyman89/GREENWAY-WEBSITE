@@ -106,6 +106,7 @@ export async function saveAchCompanySettings(
 export async function saveEmployeeBanking(
   employeeId: string,
   banking: { routing: string; accountNumber: string; accountType: "checking" | "savings" },
+  actorId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const admin = createSupabaseAdminClient();
@@ -118,6 +119,11 @@ export async function saveEmployeeBanking(
       bank_routing: banking.routing ? encryptSecret(banking.routing) : null,
       bank_account_number: banking.accountNumber ? encryptSecret(banking.accountNumber) : null,
       bank_account_type: banking.accountType,
+      // R41 S0 (0271): the employees bank guard needs a FRESH stamp of who
+      // made the change in this same write, and refuses unless that is the
+      // owner (an admin's change arrives here only after owner approval).
+      bank_changed_by: actorId,
+      bank_changed_at: new Date().toISOString(),
     })
     .eq("id", employeeId);
   if (error) return { ok: false, error: error.message };

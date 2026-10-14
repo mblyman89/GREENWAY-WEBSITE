@@ -28,7 +28,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { decryptSecret, encryptSecret } from "@/lib/security/at-rest-crypto";
 import { resolveNotifyContacts, type NotifyContact } from "@/lib/payments/ach-authorization-core";
-import { escapeHtml, phoneReminder, soloNoticeRecipients } from "@/lib/payments/vault-release-notice-core";
+import { phoneReminder } from "@/lib/payments/vault-release-notice-core";
 import { checkResolutionNote, noticeHoldReason, noticeOwnerEmail, parseReturnNotice, type ParsedNotice } from "@/lib/payments/ach-return-log-core";
 import {
   checkFinishForm,
@@ -366,55 +366,38 @@ async function readAuth(id: string): Promise<{ ok: true; auth: OpsAuthorization 
   return { ok: true, auth: data as OpsAuthorization };
 }
 
+/**
+ * R41 S0 (D-6 option B): only the owner releases an employee hold, alone, and
+ * the database (0271 ach_auth_release_hold) refuses anyone else and returns
+ * 'owner'. The owner's "Was this you?" receipt is sent by the ACH gate
+ * (src/lib/payments/ach-gate.ts), so this no longer emails anyone itself.
+ */
 export async function releaseEmployeeHold(input: {
   authId: string;
   actorId: string;
-  actorEmail: string | null;
-  actorLabel: string;
+  actorIsOwner: boolean;
   method: string | null | undefined;
   note: string | null | undefined;
   reason: string | null | undefined;
-  mail: OpsMailer;
-  env?: Readonly<Record<string, string | undefined>>;
-  now?: Date;
-}): Promise<{ ok: true; mode: "solo" | "dual"; before: OpsAuthorization; owner: OwnerNotice | null } | Fail> {
+}): Promise<{ ok: true; mode: "owner"; before: OpsAuthorization } | Fail> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: NOT_CONFIGURED };
   const r = await readAuth(input.authId);
   if (!r.ok) return r;
   const a = r.auth;
   if (a.payee_type !== "employee") return { ok: false, error: opsDbErrorMessage("ACH_RELEASE_PAYEE") };
   if (a.state !== "on_hold") return { ok: false, error: opsDbErrorMessage("ACH_RELEASE_STATE") };
-  const f = checkHoldReleaseForm({ actorId: input.actorId, holdEnteredBy: a.hold_entered_by, method: input.method, note: input.note, reason: input.reason });
+  const f = checkHoldReleaseForm({ actorIsOwner: input.actorIsOwner, method: input.method, note: input.note, reason: input.reason });
   if (!f.ok) return f;
   const { data, error } = await createSupabaseAdminClient().rpc("ach_auth_release_hold", {
     p_auth_id: a.id,
     p_actor: input.actorId,
     p_method: f.method,
     p_note: f.note,
-    p_reason: f.solo ? f.reason : f.reason || null,
+    p_reason: f.reason || null,
   });
   if (error) return { ok: false, error: dbErr(error) };
-  const mode = data === "solo" ? "solo" : data === "dual" ? "dual" : null;
-  if (!mode) return { ok: false, error: "The database did not confirm the release. Reload the page." };
-  let owner: OwnerNotice | null = null;
-  if (mode === "solo") {
-    const book = resolveNotifyContacts(input.env ?? process.env).contacts;
-    const to = soloNoticeRecipients(input.actorEmail, book);
-    const when = (input.now ?? new Date()).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" });
-    const name = a.payee_name.replace(/[\r\n]/g, " ").slice(0, 80);
-    const lines = [
-      `${input.actorLabel} released the ACH hold for employee ${name} without a second person.`,
-      `When: ${when} (Pacific).`,
-      `How the employee confirmed: ${f.method === "in_person" ? "in person" : "by phone"}.`,
-      `Callback note: ${f.note}`,
-      `Reason for releasing alone: ${f.reason}`,
-      `The hold was: ${a.hold_reason ?? "(no reason recorded)"}`,
-      "If you did not expect this, call the employee at a number already on file before the next payroll file is built.",
-    ];
-    const html = `<p>${escapeHtml(lines[0])}</p><ul>${lines.slice(1, 6).map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul><p><strong>${escapeHtml(lines[6])}</strong></p>`;
-    owner = await notify(input.mail, to, { subject: `Employee ACH hold released by one person: ${name}`, html });
-  }
-  return { ok: true, mode, before: a, owner };
+  if (data !== "owner") return { ok: false, error: "The database did not confirm the release. Reload the page." };
+  return { ok: true, mode: "owner", before: a };
 }
 
 // -------------------------------------------------------------- checks -----

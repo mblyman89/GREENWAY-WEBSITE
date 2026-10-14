@@ -14,6 +14,9 @@
  *
  * In person (UNC Finance 2020: "verbally (in person or by telephone) with a
  * known contact") needs no number, but still needs the note.
+ *
+ * R41 S0 (D-6 option B): only the owner releases; no written reason is
+ * required of him. Stephen's release is a request the owner approves.
  */
 import {
   CALLBACK_METHODS,
@@ -50,8 +53,8 @@ export function planVaultRelease(input: {
   record: { status: string; change_entered_by: string | null } | null;
   /** Live contacts for THIS vendor only. */
   contacts: readonly ReleaseContact[];
-  actorUserId: string;
-  actorCanManage: boolean;
+  /** R41 S0: the releaser is the active owner (an admin's release arrives here only after owner approval). */
+  actorIsOwner: boolean;
   /** Pacific YYYY-MM-DD. */
   today: string;
   lookBackDays?: number;
@@ -80,9 +83,7 @@ export function planVaultRelease(input: {
   }
   const v = releaseVerdict(
     {
-      actorUserId: input.actorUserId,
-      actorCanManage: input.actorCanManage,
-      changeEnteredByUserId: input.record.change_entered_by,
+      actorIsOwner: input.actorIsOwner,
       callback: { done: input.form.confirmedCall, method: m, numberUnchangedForDays: numberAgeDays, note: input.form.note },
       reason: input.form.reason,
     },
@@ -95,7 +96,7 @@ export function planVaultRelease(input: {
     verdict: v,
     method: m,
     note: input.form.note.trim(),
-    // A dual release stores no reason unless one was written; solo always has one.
+    // R41 S0: the owner never has to write a reason; one is stored if written.
     reason: reason ? reason : null,
     calledContact: called,
   };
@@ -138,10 +139,10 @@ export function __runVaultReleaseCoreTests(): { passed: number; failed: number }
   ];
   const rec = { status: "on_hold", change_entered_by: "michael" };
   const form = { method: "phone", contactId: "old", note: "Maria in AR read back 4821", reason: "", confirmedCall: true };
-  const base = { form, record: rec, contacts, actorUserId: "stephen", actorCanManage: true, today };
+  const base = { form, record: rec, contacts, actorIsOwner: true, today };
 
   const good = planVaultRelease(base);
-  ok(good.ok && good.verdict.mode === "dual" && good.calledContact?.id === "old" && good.reason === null, "dual phone release");
+  ok(good.ok && good.verdict.mode === "owner" && good.calledContact?.id === "old" && good.reason === null, "owner phone release, no reason needed");
   ok(planVaultRelease({ ...base, form: { ...form, contactId: "edge" } }).ok, "exactly 90 days qualifies");
   ok(!planVaultRelease({ ...base, form: { ...form, contactId: "young" } }).ok, "89 days refused");
   ok(!planVaultRelease({ ...base, form: { ...form, contactId: "future" } }).ok, "future on-file date treated as new");
@@ -154,15 +155,16 @@ export function __runVaultReleaseCoreTests(): { passed: number; failed: number }
   ok(inPerson.ok && inPerson.method === "in_person" && inPerson.calledContact === null, "in person needs no number");
   ok(!planVaultRelease({ ...base, form: { ...form, method: "in_person", note: "ok" } }).ok, "in person still needs the note");
   ok(!planVaultRelease({ ...base, form: { ...form, confirmedCall: false } }).ok, "unticked confirmation refused");
-  ok(!planVaultRelease({ ...base, actorCanManage: false }).ok, "non-manager refused");
+  ok(!planVaultRelease({ ...base, actorIsOwner: false }).ok, "non-owner refused (admin sends a request)");
   ok(!planVaultRelease({ ...base, record: null }).ok, "no record refused");
   ok(!planVaultRelease({ ...base, record: { ...rec, status: "active" } }).ok, "active row cannot be released");
   ok(!planVaultRelease({ ...base, record: { ...rec, status: "archived" } }).ok, "archived row cannot be released (re-open on hold first)");
-  ok(!planVaultRelease({ ...base, actorUserId: "michael" }).ok, "solo without reason refused");
-  const solo = planVaultRelease({ ...base, actorUserId: "michael", form: { ...form, reason: "Stephen is out until the 20th" } });
-  ok(solo.ok && solo.verdict.mode === "solo" && solo.verdict.notifyOther && solo.reason === "Stephen is out until the 20th", "solo with reason");
+  const withReason = planVaultRelease({ ...base, form: { ...form, reason: "Owner called Maria himself" } });
+  ok(withReason.ok && withReason.reason === "Owner called Maria himself", "a written reason is kept when given");
+  const ownChange = planVaultRelease({ ...base, record: { status: "on_hold", change_entered_by: "michael" } });
+  ok(ownChange.ok && ownChange.verdict.mode === "owner", "owner releases his own change alone (no solo reason, R41 S0)");
   const legacy = planVaultRelease({ ...base, record: { status: "on_hold", change_entered_by: null } });
-  ok(!legacy.ok, "unknown author without reason refused (treated as solo)");
+  ok(legacy.ok && legacy.verdict.mode === "owner", "legacy hold (unknown author) released by the owner");
 
   const ch = releasePhoneChoices(contacts, today);
   ok(ch.length === 4 && !ch.some((c) => c.id === "mail"), "only phones are choices");
