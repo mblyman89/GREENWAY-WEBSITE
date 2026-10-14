@@ -636,6 +636,7 @@ import { __runCommitIntegrityCoreTests } from "../../src/lib/pos/commit-integrit
 import { __runIntakePotencyCoreTests } from "../../src/lib/pos/intake-potency-core";
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
 import { __runCardAliasCoreTests } from "../../src/lib/pos/card-alias-core";
+import { __runBarcodeMatchCoreTests } from "../../src/lib/pos/barcode-match-core";
 import { __runCultiveraReconcileCoreTests } from "../../src/lib/pos/cultivera-reconcile-core";
 import { __runBulkPreviewCoreTests } from "../../src/lib/inventory/bulk-preview-core";
 import { __runCutoverWatchCoreTests } from "../../src/lib/pos/cutover-watch-core";
@@ -2273,6 +2274,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-count-core", __runCultiveraCountCoreTests(), 68); // R50 S11: Oct 30 count — workbooks, Cultivera sales roll-forward, plan per barcode (+S11b scanner text)
   assertRan("scanner-setup-core", __runScannerSetupCoreTests(), 48); // R50 S11b: Tera D5100 + DuraScan D760 setup barcodes, guides, test box
   assertRan("card-alias-core", __runCardAliasCoreTests(), 44); // R50 A1: one-click accept of a Cultivera suggestion (permanent decision, re-verified)
+  assertRan("barcode-match-core", __runBarcodeMatchCoreTests(), 33); // R50 A7: barcode-first inputs (shape, reads, own-lot exclusion)
   assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 120); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
   assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28); // R50 A3: dry-run preview copy + COA URL triage
   assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37); // R50 A4: cutover failure-alert planner

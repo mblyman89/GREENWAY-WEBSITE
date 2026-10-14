@@ -2698,5 +2698,125 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(!("byAlias" in (pvNone.verdicts.get("r1") ?? {})), "A1 preview: a normal join carries no byAlias key (unchanged shape)");
   }
 
+  // R50 A7: barcode first - a lot whose barcode is already a lot on ONE live
+  // card joins it before any name rule; anything unsafe = the plan before A7.
+  {
+    const BC = "WA413287.INUN16";
+    // A re-delivered barcode: the WCIA line had no SKU, so the lot key IS the barcode.
+    const d = draft({ pos_product_key: BC, name: "Totally Different Name 1g", strain_name: "Other Strain" });
+    const enr: [string, DraftEnrichment][] = [["d1", enrich({})]];
+    const cult = live({ source_item_id: "pos-0123456789ab", name: "Blue Dream", variants: [{ source_variant_id: "pos-0123456789ab-1", medical: false }] });
+    const bcIn = (over: Partial<BarcodeInputs> = {}, lots = [{ cardKey: "pos-0123456789ab", vendorId: null as string | null }]): BarcodeInputs => ({
+      barcodeByLotKey: new Map([[BC, BC]]),
+      vendorIdByLotKey: new Map(),
+      liveByBarcode: new Map([[BC, lots]]),
+      ...over,
+    });
+    const run = (cards: LiveCardCandidate[], barcodes?: BarcodeInputs, drafts = [d], e = enr, extra: Partial<IntakeMasteringInputs> = {}) =>
+      buildIntakeMasteringPlan({ drafts, existingKeys: new Set(), enrichmentByDraftId: new Map(e), liveCards: cards, ...(barcodes ? { barcodes } : {}), ...extra });
+    const ser = (x: IntakeMasteringPlan) => JSON.stringify({ ...x, mergesByCardKey: [...x.mergesByCardKey], mergeCategoriesByCardKey: [...x.mergeCategoriesByCardKey], lotFactsByKey: [...x.lotFactsByKey] });
+
+    // without barcodes: the name differs -> a new card (the gap A7 closes)
+    const before = run([cult]);
+    assert(before.newCards.length === 1 && before.mergesByCardKey.size === 0, "A7: without barcodes a renamed re-delivery is a new card");
+    // with barcodes: joins the card, never a new one
+    const j = run([cult], bcIn());
+    assert(j.newCards.length === 0 && j.addedCardCount === 0, "A7: barcode -> no new card");
+    const mv = j.mergesByCardKey.get("pos-0123456789ab") ?? [];
+    assert(mv.length === 1 && mv[0].source_variant_id === `${BC}-onboarded`, "A7: the lot joins as its own -onboarded variant");
+    assert(mv[0].price_minor_units === 1200 && mv[0].label === "1g" && mv[0].medical === false && mv[0].inventory_level === 10, "A7: the variant keeps price, label, stock, medical");
+    assert(j.mergedVariantCount === 1, "A7: merged count");
+    assert(j.mergeCategoriesByCardKey.get("pos-0123456789ab")?.includes("flower") === true, "A7: categories carried like any merge");
+    const rd = j.diagnostics.filter((x) => x.code === "intake_master_restock");
+    assert(rd.length === 1 && rd[0].severity === "info" && rd[0].context?.matched_by === "barcode" && rd[0].context?.barcode === BC, "A7: restock diagnostic says barcode");
+    assert(rd[0].context?.card_key === "pos-0123456789ab" && JSON.stringify(rd[0].context?.lots) === JSON.stringify([BC]) && rd[0].context?.vendor_record_differs === false, "A7: diagnostic names the card + lot");
+    assert(rd[0].message.includes(BC) && rd[0].message.includes("Blue Dream"), "A7: message names the barcode and card");
+    assert(j.unmatchedIdentities.length === 0, "A7: a barcode join is never 'unmatched' (no alias read)");
+    assert(j.lotFactsByKey.size === before.lotFactsByKey.size, "A7: lot facts collected exactly as before");
+
+    // barcode beats a DIFFERENT exact-name card
+    const nameCard = live({ source_item_id: "card-name", name: "Totally Different Name", strain_name: "Other Strain" });
+    const beat = run([nameCard, cult], bcIn());
+    assert(beat.mergesByCardKey.has("pos-0123456789ab") && !beat.mergesByCardKey.has("card-name"), "A7: barcode wins over the name rule");
+    // barcode beats an ambiguous name match too
+    const amb = run([nameCard, live({ source_item_id: "card-name-2", name: "Totally Different Name", strain_name: "Other Strain" }), cult], bcIn());
+    assert(amb.mergesByCardKey.has("pos-0123456789ab") && !amb.diagnostics.some((x) => x.code === "intake_master_merge_ambiguous"), "A7: barcode settles what the name rule calls ambiguous");
+    // an alias for the identity is never consulted when the barcode joins
+    const withAlias = run([cult, nameCard], bcIn(), [d], enr, { cardAliases: new Map([["fairwinds-llc|flower|other-strain", "card-name"]]) });
+    assert(withAlias.mergesByCardKey.has("pos-0123456789ab") && !withAlias.mergesByCardKey.has("card-name"), "A7: barcode wins over an alias");
+
+    // unsafe -> exactly the plan without barcodes + one info diagnostic
+    const unsafe: [string, LiveCardCandidate[], BarcodeInputs, BarcodeUnusedReason][] = [
+      ["two cards", [cult, live({ source_item_id: "pos-ffffffffffff" })], bcIn({}, [{ cardKey: "pos-0123456789ab", vendorId: null }, { cardKey: "pos-ffffffffffff", vendorId: null }]), "ambiguous"],
+      ["hidden", [{ ...cult, hidden: true }], bcIn(), "not_a_target"],
+      ["medical-only", [{ ...cult, variants: [{ source_variant_id: "x-1", medical: true }] }], bcIn(), "not_a_target"],
+      ["blank vendor", [{ ...cult, vendor_name: " " }], bcIn(), "not_a_target"],
+      ["card gone", [], bcIn(), "not_a_target"],
+      ["other axis", [{ ...cult, category: "edible" }], bcIn(), "other_category"],
+      ["vendor differs", [cult], bcIn({ vendorIdByLotKey: new Map([[BC, "v-new"]]) }, [{ cardKey: "pos-0123456789ab", vendorId: "v-old" }]), "vendor_differs"],
+    ];
+    for (const [label, cards, bi, reason] of unsafe) {
+      const u = run(cards, bi);
+      const plain = run(cards);
+      const ud = u.diagnostics.filter((x) => x.code === "intake_master_barcode_unused");
+      assert(ud.length === 1 && ud[0].severity === "info" && ud[0].context?.reason === reason && ud[0].context?.barcode === BC, `A7: unsafe (${label}) -> one info diagnostic, reason ${reason}`);
+      assert(ser({ ...u, diagnostics: u.diagnostics.filter((x) => x.code !== "intake_master_barcode_unused") }) === ser(plain), `A7: unsafe (${label}) -> otherwise byte-identical to no barcodes`);
+    }
+    const twoCards = run([cult, live({ source_item_id: "pos-ffffffffffff" })], bcIn({}, [{ cardKey: "pos-ffffffffffff", vendorId: null }, { cardKey: "pos-0123456789ab", vendorId: null }, { cardKey: "pos-0123456789ab", vendorId: null }]));
+    const tc = twoCards.diagnostics.find((x) => x.code === "intake_master_barcode_unused");
+    assert(JSON.stringify(tc?.context?.card_keys) === JSON.stringify(["pos-0123456789ab", "pos-ffffffffffff"]), "A7: ambiguous card keys deduped + sorted");
+    // same vendor id, or either side unknown -> joins
+    assert(run([cult], bcIn({ vendorIdByLotKey: new Map([[BC, "v1"]]) }, [{ cardKey: "pos-0123456789ab", vendorId: "v1" }])).mergesByCardKey.size === 1, "A7: same vendor id joins");
+    assert(run([cult], bcIn({ vendorIdByLotKey: new Map([[BC, "v1"]]) }, [{ cardKey: "pos-0123456789ab", vendorId: null }])).mergesByCardKey.size === 1, "A7: live lot without id joins");
+    assert(run([cult], bcIn({}, [{ cardKey: "pos-0123456789ab", vendorId: "v9" }])).mergesByCardKey.size === 1, "A7: draft without id joins");
+    assert(run([cult], bcIn({ vendorIdByLotKey: new Map([[BC, "v1"]]) }, [{ cardKey: "pos-0123456789ab", vendorId: "v1" }, { cardKey: "pos-0123456789ab", vendorId: "v2" }])).diagnostics.some((x) => x.context?.reason === "vendor_differs"), "A7: ANY differing live lot id refuses");
+    // a pack folds onto the single axis
+    const pack = run([{ ...cult, category: "preroll" }], bcIn(), [d], [["d1", enrich({ websiteCategory: "preroll-pack" })]]);
+    assert(pack.mergesByCardKey.has("pos-0123456789ab") && pack.mergeCategoriesByCardKey.get("pos-0123456789ab")?.includes("preroll-pack") === true, "A7: pack joins its single-axis card + keeps the pack section");
+
+    // none -> byte-identical
+    const empty: BarcodeInputs = { barcodeByLotKey: new Map(), vendorIdByLotKey: new Map(), liveByBarcode: new Map() };
+    assert(ser(run([cult], empty)) === ser(before), "A7: empty inputs byte-identical to none");
+    assert(ser(run([cult], bcIn({ liveByBarcode: new Map() }))) === ser(before), "A7: barcode on no live lot byte-identical");
+    assert(ser(run([cult], bcIn({ liveByBarcode: new Map([[BC, []]]) }))) === ser(before), "A7: empty live list byte-identical");
+    assert(ser(run([cult], bcIn({ barcodeByLotKey: new Map([["OTHER-KEY", BC]]) }))) === ser(before), "A7: another lot's barcode changes nothing");
+    // a lot already live as a size still says so (A7 runs after that check)
+    const sizeLive = run([{ ...cult, variants: [{ source_variant_id: `${BC}-onboarded`, medical: false }] }], bcIn());
+    assert(sizeLive.mergesByCardKey.size === 0 && sizeLive.diagnostics.some((x) => x.code === "intake_lot_already_live"), "A7: already-a-size wins (nothing added twice)");
+    // two lots of one delivery: the barcode one joins, the other groups as before
+    const d2 = draft({ id: "d2", pos_product_key: "LOT-Z", name: "Blue Dream 3.5g", price_minor_units: 3500 });
+    const mixed = run([cult], bcIn(), [d, d2], [["d1", enrich({})], ["d2", enrich({ packageLabel: "3.5g" })]]);
+    assert((mixed.mergesByCardKey.get("pos-0123456789ab") ?? []).map((v) => v.source_variant_id).join() === `${BC}-onboarded,LOT-Z-onboarded`, "A7: barcode lot first, then the name-matched lot, same card");
+    assert(mixed.diagnostics.filter((x) => x.code === "intake_master_restock").map((x) => x.context?.matched_by).join() === "barcode,name", "A7: one diagnostic per rule");
+
+    // barcodeTarget directly
+    const idx = buildLiveMergeIndex([cult]);
+    assert(barcodeTarget(idx, undefined, BC, "flower").kind === "none", "A7: no inputs -> none");
+    assert(barcodeTarget(idx, bcIn(), "NOPE", "flower").kind === "none", "A7: lot without barcode -> none");
+    const jt = barcodeTarget(idx, bcIn(), BC, "flower");
+    assert(jt.kind === "join" && jt.card === cult && jt.barcode === BC, "A7: join returns the card + barcode");
+    assert(barcodeUnusedCopy("X", BC, "ambiguous", ["a", "b"]).includes("lots on 2 different live cards"), "A7: ambiguous copy counts cards");
+    assert(barcodeUnusedCopy("X", BC, "other_category", ["a"]).includes("different category"), "A7: category copy");
+    assert(barcodeUnusedCopy("X", BC, "vendor_differs", ["a"]).includes("different vendor record"), "A7: vendor copy");
+    assert(barcodeUnusedCopy("X", BC, "not_a_target", ["a"]).includes("hidden, medical-only"), "A7: target copy");
+    assert(barcodeUnusedCopy("X", BC, "ambiguous", ["a", "b"]).endsWith("exactly as before."), "A7: copy says nothing changed");
+
+    // preview: the SAME rule, so the chip and Approve agree
+    const row: RestockPreviewDraft = { id: "r1", pos_product_key: BC, name: "Totally Different Name 1g", brand_name: "Fairwinds", vendor_name: "Fairwinds LLC", strain_name: "Other Strain", category: "flower", size_label: "1 g" };
+    const p0 = previewMasteringGroups({ drafts: [row], liveCards: [cult] });
+    assert(p0.verdicts.get("r1")?.kind === "new", "A7 preview: new without barcodes");
+    const p1 = previewMasteringGroups({ drafts: [row], liveCards: [cult, nameCard], barcodes: bcIn() });
+    const v1 = p1.verdicts.get("r1");
+    assert(v1?.kind === "joins" && v1.cardKey === "pos-0123456789ab" && v1.byBarcode === BC && v1.fromCultivera && !v1.byAlias, "A7 preview: joins byBarcode (wins over the name card)");
+    assert(p1.groups.length === 1 && p1.groups[0].liveCard?.key === "pos-0123456789ab" && p1.groups[0].sizes.join() === "1 g" && p1.groups[0].draftIds.join() === "r1", "A7 preview: its own group shows the joined card");
+    assert(p1.groups[0].identity === `barcode|${BC}`, "A7 preview: group identity never collides with a name identity");
+    const p2 = previewMasteringGroups({ drafts: [{ ...row, size_label: null }], liveCards: [cult], barcodes: bcIn() });
+    assert(p2.groups[0].sizes.join() === PREVIEW_SIZE_UNKNOWN, "A7 preview: unknown size said, never guessed");
+    const p3 = previewMasteringGroups({ drafts: [row], liveCards: [{ ...cult, hidden: true }], barcodes: bcIn() });
+    assert(p3.verdicts.get("r1")?.kind === "new", "A7 preview: unsafe -> as before");
+    const pvNone = previewMasteringGroups({ drafts: [row], liveCards: [nameCard] });
+    assert(!("byBarcode" in (pvNone.verdicts.get("r1") ?? {})), "A7 preview: a normal join carries no byBarcode key (unchanged shape)");
+  }
+
   return { passed };
 }
