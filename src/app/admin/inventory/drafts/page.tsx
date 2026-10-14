@@ -148,6 +148,7 @@ import { loadRestockPreview } from "@/lib/inventory/restock-preview-server";
 import { previewUnavailableCopy } from "@/lib/inventory/vendor-identity-core";
 import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
 import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
+import { CultiveraSuggestionChip } from "@/components/admin/catalog/CultiveraSuggestionChip";
 import { MasteringPreviewPanel } from "@/components/admin/catalog/MasteringPreviewPanel";
 // S09: KB-first recall - the "Known product" chip.
 import { KnownProductChip } from "@/components/admin/catalog/KnownProductChip";
@@ -573,6 +574,8 @@ export default async function CatalogDraftsPage({
         ? previewUnavailableCopy(restockPreview.reason)
         : null;
   const previewVerdicts = restockPreview && restockPreview.ok ? restockPreview.verdicts : null;
+  // R50 S4: "Looks like Cultivera product X" for "New card" rows (display only).
+  const cultiveraSuggestions = restockPreview && restockPreview.ok ? (restockPreview.suggestions ?? null) : null;
   // S34: the groups the SAME dry run built (null = no preview -> no panel).
   const previewGroups = restockPreview && restockPreview.ok ? restockPreview.groups : null;
 
@@ -1898,6 +1901,9 @@ export default async function CatalogDraftsPage({
                         ) : null}
                         {previewVerdicts?.get(d.id) ? (
                           <RestockPreviewChip verdict={previewVerdicts.get(d.id)!} />
+                        ) : null}
+                        {cultiveraSuggestions?.get(d.id) ? (
+                          <CultiveraSuggestionChip suggestion={cultiveraSuggestions.get(d.id)!} />
                         ) : null}
                         {productMemories?.get(d.id) ? (
                           <KnownProductChip memory={productMemories.get(d.id)!} now={now} />

@@ -732,6 +732,7 @@ import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core
 import { __runCultiveraOnboardingCoreTests } from "../../src/lib/inventory/cultivera-onboarding-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
+import { __runCultiveraIntakeSuggestionCoreTests } from "../../src/lib/inventory/cultivera-intake-suggestion-core";
 import { __runCultiveraCardRefreshCoreTests } from "../../src/lib/inventory/cultivera-card-refresh-core";
 import { __runCultiveraReceivedFlagCoreTests } from "../../src/lib/inventory/cultivera-received-flag-core";
 import { __runReceivingTableCoreTests } from "../../src/lib/inventory/receiving-table-core";
@@ -1538,6 +1539,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
+  assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 57);
   assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   assertRan("receiving-table-core", __runReceivingTableCoreTests(), 88); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
