@@ -44,6 +44,7 @@ import {
   type RestockVerdict,
   type VendorIdInputs,
 } from "@/lib/inventory/vendor-identity-core";
+import { suggestCultiveraMatches, type IntakeSuggestion } from "@/lib/inventory/cultivera-intake-suggestion-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -124,6 +125,11 @@ export type RestockPreviewResult =
       /** S34: the groups the SAME dry run built (one per card Approve will make or join). */
       groups: PreviewGroupView[];
       matchedByVendorId: boolean;
+      /**
+       * R50 S4: "Looks like Cultivera product X" for rows whose verdict is
+       * "new" (display only - never read by Approve). Absent/empty = none.
+       */
+      suggestions?: Map<string, IntakeSuggestion>;
     }
   | { ok: false; reason: "flag_off" | "read_incomplete" | "too_many" };
 
@@ -151,6 +157,19 @@ type PreviewVariantRow = {
  * pure planner the staging uses (previewRestockVerdicts / S34 previewMasteringGroups - the same body). Nothing live yet ->
  * every usable row is "New card" (true: there is no card to join).
  */
+/**
+ * R50 S4: the suggestions, isolated - a failure here never costs the
+ * preview (the verdicts are already computed) and never blocks anything.
+ */
+export function safeSuggestions(input: Parameters<typeof suggestCultiveraMatches>[0]): Map<string, IntakeSuggestion> {
+  try {
+    return suggestCultiveraMatches(input);
+  } catch (err) {
+    console.error("[restock-preview] Cultivera suggestions failed (preview unaffected):", err);
+    return new Map();
+  }
+}
+
 export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise<RestockPreviewResult> {
   if (!vendorIdIdentityEnabled(process.env[VENDOR_ID_IDENTITY_ENV])) return { ok: false, reason: "flag_off" };
   const categories = previewCategories(drafts.map((d) => d.category));
@@ -235,7 +254,13 @@ export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise
     }));
     const vendorIds = await loadVendorIdInputs(admin, { drafts, liveCards });
     const dry = previewMasteringGroups({ drafts, liveCards, vendorIds });
-    return { ok: true, verdicts: dry.verdicts, groups: dry.groups, matchedByVendorId: Boolean(vendorIds) };
+    return {
+      ok: true,
+      verdicts: dry.verdicts,
+      groups: dry.groups,
+      matchedByVendorId: Boolean(vendorIds),
+      suggestions: safeSuggestions({ drafts, liveCards, verdicts: dry.verdicts, vendorIds }),
+    };
   } catch (err) {
     console.error("[restock-preview] preview failed (display unaffected):", err);
     return { ok: false, reason: "read_incomplete" };
