@@ -946,8 +946,8 @@ describe("S13 wiring", () => {
     // R37 S5: setDeliveryBrandAction + setDraftBrandAction too (5 in total).
     // R37 S6: lookupAgainAction ("Search again") too (6 in total).
     // R50 S3: startCultiveraOnboardingAction too (7 in total).
-    // R50 S12b: runWciaBackfillAction too (8 in total).
-    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(8);
+    // R50 S12b: runWciaBackfillAction too; R50 S13: runCoaArchiveBackfillAction too (9 in total).
+    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(9);
   });
   it("lookupAllAction (behavioural): enqueues and redirects with lookup=started, then lookup=exists", async () => {
     seedDrafts(state.db, 2);
