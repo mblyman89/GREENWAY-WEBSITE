@@ -33,6 +33,7 @@ declare
   u_s   uuid := gen_random_uuid();   -- "Stephen", admin
   u_g   uuid := gen_random_uuid();   -- a manager
   u_o2  uuid := gen_random_uuid();   -- a second, INACTIVE owner row
+  u_o3  uuid := gen_random_uuid();   -- a second ACTIVE owner (result must come from the approver)
   emp   uuid;
   req   uuid;
   req2  uuid;
@@ -42,10 +43,11 @@ declare
   t     text;
   n     int;
 begin
-  insert into auth.users (id, email) values (u_m, 'm0271@x.test'), (u_s, 's0271@x.test'), (u_g, 'g0271@x.test'), (u_o2, 'o0271@x.test');
+  insert into auth.users (id, email) values (u_m, 'm0271@x.test'), (u_s, 's0271@x.test'), (u_g, 'g0271@x.test'), (u_o2, 'o0271@x.test'), (u_o3, 'p0271@x.test');
   insert into public.staff_profiles (id, email, role, active) values
     (u_m, 'm0271@x.test', 'owner', true), (u_s, 's0271@x.test', 'admin', true),
-    (u_g, 'g0271@x.test', 'manager', true), (u_o2, 'o0271@x.test', 'owner', false)
+    (u_g, 'g0271@x.test', 'manager', true), (u_o2, 'o0271@x.test', 'owner', false),
+    (u_o3, 'p0271@x.test', 'owner', true)
     on conflict (id) do update set role = excluded.role, active = excluded.active;
 
   -- 1. ach_actor_is_owner ---------------------------------------------------
@@ -77,6 +79,8 @@ begin
   -- an old owner stamp cannot carry a later change (same bank_changed_at)
   perform pg_temp.must_fail(format($q$update public.employees set bank_account_number = 'encv1:b' where id = %L$q$, emp), 'must be stamped');
   perform pg_temp.must_fail(format($q$update public.employees set bank_account_number = 'encv1:b', bank_changed_by = %L where id = %L$q$, u_m, emp), 'must be stamped');
+  -- the account TYPE alone is a bank change too
+  perform pg_temp.must_fail(format($q$update public.employees set bank_account_type = 'savings' where id = %L$q$, emp), 'must be stamped');
   -- non-bank edits pass with no stamp
   update public.employees set full_name = 'Probe 0271 Renamed' where id = emp;
   -- clearing banking is a change too
@@ -108,6 +112,7 @@ begin
   perform pg_temp.must_fail(format($q$delete from public.ach_change_requests where id = %L$q$, req), 'ACH_REQUEST_KEEP');
   perform pg_temp.must_fail(format($q$update public.ach_change_requests set payload_enc = 'encv1:p:y' where id = %L$q$, req), 'ACH_REQUEST_IMMUTABLE');
   perform pg_temp.must_fail(format($q$update public.ach_change_requests set base_version = 'ver-2' where id = %L$q$, req), 'ACH_REQUEST_IMMUTABLE');
+  perform pg_temp.must_fail(format($q$update public.ach_change_requests set summary = '[]' where id = %L$q$, req), 'ACH_REQUEST_IMMUTABLE');
   -- raw status writes go through the same guard
   perform pg_temp.must_fail(format($q$update public.ach_change_requests set status = 'approved', decided_by = %L, decided_at = now() where id = %L$q$, u_s, req), 'ACH_OWNER_ONLY');
   perform pg_temp.must_fail(format($q$update public.ach_change_requests set status = 'withdrawn', decided_by = %L, decided_at = now() where id = %L$q$, u_m, req), 'ACH_REQUEST_WITHDRAW');
@@ -119,6 +124,8 @@ begin
   perform pg_temp.must_fail(format(t, req, u_m, 'maybe', null, 'ver-1'), 'ACH_REQUEST_DECISION');
   perform pg_temp.must_fail(format(t, gen_random_uuid(), u_m, 'approved', null, 'ver-1'), 'ACH_REQUEST_NOT_FOUND');
   perform pg_temp.must_fail(format(t, req, u_s, 'approved', null, 'ver-1'), 'ACH_OWNER_ONLY');
+  -- who-may-decide is checked BEFORE staleness: an admin never learns more than "owner only"
+  perform pg_temp.must_fail(format(t, req, u_s, 'approved', null, 'ver-2'), 'ACH_OWNER_ONLY');
   perform pg_temp.must_fail(format(t, req, u_g, 'rejected', null, 'ver-1'), 'ACH_OWNER_ONLY');
   perform pg_temp.must_fail(format(t, req, u_o2, 'approved', null, 'ver-1'), 'ACH_OWNER_ONLY');
   perform pg_temp.must_fail(format(t, req, u_m, 'withdrawn', null, 'ver-1'), 'ACH_REQUEST_WITHDRAW');
@@ -136,10 +143,13 @@ begin
   assert r.status = 'approved' and r.decided_by = u_m and r.decided_at is not null and r.decision_note is null,
     'decision recorded; an empty note is stored as no note';
   perform pg_temp.must_fail(format($q$select public.ach_request_decide(%L, %L, 'rejected', null, 'ver-1')$q$, req, u_m), 'ACH_REQUEST_FINAL');
+  -- final is checked before staleness too
+  perform pg_temp.must_fail(format($q$select public.ach_request_decide(%L, %L, 'approved', null, 'ver-2')$q$, req, u_m), 'ACH_REQUEST_FINAL');
   perform pg_temp.must_fail(format($q$update public.ach_change_requests set decision_note = 'changed my mind' where id = %L$q$, req), 'ACH_REQUEST_FINAL');
   perform pg_temp.must_fail(format($q$update public.ach_change_requests set status = 'rejected' where id = %L$q$, req), 'ACH_REQUEST_FINAL');
   -- result: once, by the owner who approved, ref XOR error
   perform pg_temp.must_fail(format($q$select public.ach_request_record_result(%L, %L, 'ok', null)$q$, req, u_s), 'ACH_OWNER_ONLY');
+  perform pg_temp.must_fail(format($q$select public.ach_request_record_result(%L, %L, 'ok', null)$q$, req, u_o3), 'was not approved by this owner');
   perform pg_temp.must_fail(format($q$select public.ach_request_record_result(%L, %L, 'ok', 'err')$q$, req, u_m), 'ACH_REQUEST_RESULT');
   perform pg_temp.must_fail(format($q$select public.ach_request_record_result(%L, %L, null, null)$q$, req, u_m), 'ACH_REQUEST_RESULT');
   perform public.ach_request_record_result(req, u_m, 'vendor_bank_details:v-1', null);
@@ -202,6 +212,10 @@ begin
   select count(*) into n from pg_proc where proname in ('ach_actor_is_owner', 'ach_write_by_owner') and prosecdef
      and array_to_string(proconfig, ',') like '%search_path=public, pg_temp%';
   assert n = 2, 'owner lookups are security definer with search_path pinned';
+  select count(*) into n from information_schema.routine_privileges
+   where routine_schema = 'public' and routine_name in ('ach_actor_is_owner', 'ach_write_by_owner')
+     and grantee in ('anon', 'PUBLIC');
+  assert n = 0, format('anon / PUBLIC must not execute the owner lookups, %s grants', n);
 
   -- 7. D-5 policies read is_admin(), not is_manager() -------------------------
   select count(*) into n from pg_policies
