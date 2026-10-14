@@ -20,6 +20,7 @@ describe("keyed-hash", () => {
       vendorEsignToken: "greenway/r39/vendor-esign-token/v1",
       vendorEsignOtp: "greenway/r39/vendor-esign-otp/v1",
       vendorEsignBrowser: "greenway/r39/vendor-esign-browser/v1",
+      achFileEntrySet: "greenway/r41/ach-file-entry-set/v1",
     });
   });
   it("a fixed key gives a fixed fingerprint (detects any change to salt, label or algorithm)", () => {

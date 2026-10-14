@@ -35,6 +35,9 @@ export const KEYED_HASH_PURPOSES = {
   vendorEsignToken: "greenway/r39/vendor-esign-token/v1",
   vendorEsignOtp: "greenway/r39/vendor-esign-otp/v1",
   vendorEsignBrowser: "greenway/r39/vendor-esign-browser/v1",
+  // R41 S3: the duplicate-file key (sorted routing|account|cents of every
+  // entry) holds account numbers, so ach_files keeps only this keyed hash.
+  achFileEntrySet: "greenway/r41/ach-file-entry-set/v1",
 } as const;
 export type KeyedHashPurpose = keyof typeof KEYED_HASH_PURPOSES;
 
