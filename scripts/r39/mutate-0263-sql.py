@@ -8,6 +8,12 @@ is re-applied at the end and the control re-run.
 
     python3 scripts/r39/mutate-0263-sql.py   (DB r39; uses sudo -u postgres)
 """
+# R41 S0 NOTE: migration 0271 (owner authority) REPLACES ach_auth_release_hold()
+# and the 0263 pg-check now tests the 0271 owner rules. This script re-applies
+# 0263's own body, so its control run is only valid on a database WITHOUT 0271
+# (and a 0263-era copy of the check, git a8110d29^). Its last result (80/80)
+# is R39 history. The live release rules are mutation-tested by
+# scripts/r41/mutate-0271-sql.py and scripts/r41/mutate-owner-parity.py.
 import subprocess, sys
 
 DB = "r39"
