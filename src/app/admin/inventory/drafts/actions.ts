@@ -640,3 +640,27 @@ export async function runWciaBackfillAction(formData: FormData) {
   revalidatePath("/admin/inventory");
   redirect(draftsHref({ extra }));
 }
+
+/**
+ * R50 S13 - "Save a copy of every lab certificate". Downloads each COA PDF
+ * linked in the vendors' transfer files (lab_results.coa_url) into the private
+ * `coa` bucket, resumable like S12b. Only adds the stored copy; never changes
+ * a lab result's facts, a lot, stock, price or the menu.
+ */
+export async function runCoaArchiveBackfillAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { runCoaArchiveBackfill } = await import("@/lib/inventory/coa-archive-backfill");
+  const { coaBackfillNote, coaBackfillTone } = await import("@/lib/inventory/coa-archive-backfill-core");
+  const raw = formData.get("cursor");
+  let extra: Record<string, string>;
+  try {
+    const run = await runCoaArchiveBackfill(typeof raw === "string" ? raw : null, session.userId);
+    extra = { coa_bf: coaBackfillTone(run), coa_bf_msg: coaBackfillNote(run).slice(0, 700), cv_page: "1" };
+    if (run.next && !(run.ok && run.done)) extra.coa_bf_next = run.next;
+  } catch (err) {
+    console.error("[drafts] coa archive backfill failed:", err);
+    extra = { coa_bf: "warn", coa_bf_msg: `Stopped: ${(err instanceof Error ? err.message : String(err)).slice(0, 300)}`, cv_page: "1" };
+  }
+  revalidatePath("/admin/inventory/drafts");
+  redirect(draftsHref({ extra }));
+}
