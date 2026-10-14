@@ -1494,7 +1494,9 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     carrier email-to-text gateways are closing (T-Mobile tmomail.net Dec 2024, AT&T txt.att.net Jun 2025,
     Verizon vtext.com Mar 31 2027) and a real SMS provider needs A2P 10DLC carrier registration (days to
     weeks) — not something to start two weeks before go-live. The page says this in plain words.
-  * **Claim before send (rule 12).** New cron `/api/cron/cutover-watch`, every 5 min (288/day; pinned in the
+  * **Claim before send (rule 12).** New cron `/api/cron/cutover-watch`, every 5 min at :02/:07/… (`2-59/5`: L-33 bans two identical
+    expressions, so it is offset off content-schedule; the L-34 parser learned `A-B/N` with its own
+    test-the-test cases; 288/day; pinned in the
     L-34 cadence map, the usage-5 cron count 7 → 8 and rule 12's schedule text). Each alert's key is
     INSERTED into `compliance_reminder_log` (UNIQUE dedupe_key) before sending; a doubled tick loses the
     insert and sends nothing. A claim the database refuses for another reason sends nothing (a send without
