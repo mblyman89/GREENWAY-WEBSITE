@@ -1447,4 +1447,4 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     a one-cell CSV and read as zero units — now refused by a header check naming the missing columns.
   * **Tests.** Core self-tests 95 (runner floor 95), vitest 38 (loader on the postgrest fake + a real xlsx in
     a storage mock, all four actions, CSV route, page render incl. roles, wiring pins, real-export pin), guide
-    67 → 74 pins updated. Mutants 26/26 killed (one survivor, "GO (explained) with zero lines", pinned).
+    72 → 74 pins updated. Mutants 26/26 killed (one survivor, "GO (explained) with zero lines", pinned).
