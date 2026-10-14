@@ -9,7 +9,7 @@
  * This file pins the WIRING: that the pure validator is the one gate every
  * builder, page and save path goes through, and that migration 0272 does what
  * its header says. The behaviour itself is proven by the pure self-tests
- * (timberland-originator-core 68, nacha-core 76, timberland-preview-core 19),
+ * (timberland-originator-core 68, nacha-core 87 since R41 S3, timberland-preview-core 19),
  * run here and in scripts/compliance/run-pure-selftests.ts.
  */
 import { describe, expect, it } from "vitest";
@@ -31,10 +31,10 @@ describe("pure cores: self-tests pass with their floors", () => {
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(68);
   });
-  it("nacha-core >= 76", () => {
+  it("nacha-core >= 87 (R41 S3 raised it from 76)", () => {
     const r = __runNachaCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(76);
+    expect(r.passed).toBeGreaterThanOrEqual(87);
   });
   it("timberland-preview-core >= 19", () => {
     const r = __runTimberlandPreviewCoreTests();
@@ -44,7 +44,7 @@ describe("pure cores: self-tests pass with their floors", () => {
   it("all three are registered in run-pure-selftests with those floors", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
     expect(src).toMatch(/assertRan\("timberland-originator-core", __runTimberlandOriginatorCoreTests\(\), 68\)/);
-    expect(src).toMatch(/assertRan\("nacha-core", __runNachaCoreTests\(\), 76\)/);
+    expect(src).toMatch(/assertRan\("nacha-core", __runNachaCoreTests\(\), 87\)/);
     expect(src).toMatch(/assertRan\("timberland-preview-core", __runTimberlandPreviewCoreTests\(\), 19\)/);
   });
 });

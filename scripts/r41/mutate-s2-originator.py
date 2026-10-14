@@ -2,7 +2,7 @@
 """scripts/r41/mutate-s2-originator.py - R41 S2: test the tests for the
 Timberland originator validator, its wiring, and the "what Timberland sees"
 preview. Each mutant changes ONE thing. The S2 vitest files OR one of the pure
-self-tests (timberland-originator-core 68, nacha-core 76,
+self-tests (timberland-originator-core 68, nacha-core 87 (R41 S3),
 timberland-preview-core 19) must then FAIL. Files are restored after each
 mutant and checked byte-for-byte at the end; a control run must pass.
 
@@ -37,7 +37,7 @@ SELF = ["npx", "tsx", "-e",
         "import {__runTimberlandOriginatorCoreTests as a} from './src/lib/payments/timberland-originator-core';"
         "import {__runNachaCoreTests as b} from './src/lib/payments/nacha-core';"
         "import {__runTimberlandPreviewCoreTests as c} from './src/lib/payments/timberland-preview-core';"
-        "const r=[a(),b(),c()]; const f=[68,76,19]; console.log(JSON.stringify(r));"
+        "const r=[a(),b(),c()]; const f=[68,87,19]; console.log(JSON.stringify(r));"
         "if (r.some((x,i)=>x.failed>0||x.passed<f[i])) process.exit(1);"]
 
 M = [
