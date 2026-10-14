@@ -28,8 +28,7 @@ const base = {
   form,
   record: { status: "on_hold", change_entered_by: "michael" },
   contacts: [phone("p", 200)],
-  actorUserId: "stephen",
-  actorCanManage: true,
+  actorIsOwner: true,
   today,
 };
 
@@ -69,12 +68,15 @@ describe("vault-release-core", () => {
     }
   });
 
-  it("dual vs solo follows who entered the change; solo needs the reason and notifies", () => {
-    const dual = planVaultRelease(base);
-    expect(dual.ok && dual.verdict.mode).toBe("dual");
-    expect(planVaultRelease({ ...base, actorUserId: "michael" }).ok).toBe(false);
-    const solo = planVaultRelease({ ...base, actorUserId: "michael", form: { ...form, reason: "Stephen is out until the 20th" } });
-    expect(solo.ok && solo.verdict).toEqual({ ok: true, mode: "solo", notifyOther: true });
+  it("R41 S0 (D-6): only the owner releases; mode is owner; no reason needed; a non-owner is refused even with a reason", () => {
+    const own = planVaultRelease(base);
+    expect(own.ok && own.verdict).toEqual({ ok: true, mode: "owner" });
+    // Who entered the change no longer matters: the owner may release his own change.
+    expect(planVaultRelease({ ...base, record: { status: "on_hold", change_entered_by: "stephen" } }).ok).toBe(true);
+    expect(planVaultRelease({ ...base, record: { status: "on_hold", change_entered_by: null } }).ok).toBe(true);
+    const admin = planVaultRelease({ ...base, actorIsOwner: false, form: { ...form, reason: "Michael is out until the 20th" } });
+    expect(admin.ok).toBe(false);
+    if (!admin.ok) expect(admin.refusal).toMatch(/Only Michael \(the owner\) releases/);
   });
 
   it("the choice list shows which numbers qualify, using the same rule", () => {

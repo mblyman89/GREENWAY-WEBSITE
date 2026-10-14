@@ -20,7 +20,6 @@ import { POST_APPLY_CHECKS } from "../../scripts/compliance/verify-migrations-ex
 import {
   CALLBACK_METHODS,
   MIN_CALLBACK_NOTE_CHARS,
-  MIN_SOLO_REASON_CHARS,
   releaseVerdict,
 } from "@/lib/payments/ach-authorization-core";
 
@@ -37,29 +36,45 @@ const code = (s: string) =>
     .map((l) => (l.indexOf("--") === -1 ? l : l.slice(0, l.indexOf("--"))))
     .join("\n");
 const SQLC = code(SQL);
+/**
+ * R41 S0: 0271 replaces vendor_bank_guard() (owner-only release, no solo
+ * reason). The LIVE trigger body is 0271's, so the release rules are compared
+ * against it; the 0259-only rules (delete guard, statuses, rollback) still
+ * come from 0259.
+ */
+const SQL71C = code(read("supabase/migrations/0271_ach_owner_authority.sql"));
+const GUARD71 = (() => {
+  const i = SQL71C.indexOf("create or replace function public.vendor_bank_guard()");
+  return SQL71C.slice(i, SQL71C.indexOf("end $$;", i));
+})();
 
 const base = {
-  actorUserId: "s",
-  actorCanManage: true,
-  changeEnteredByUserId: "m",
+  actorIsOwner: true,
   callback: { done: true, method: "phone" as const, numberUnchangedForDays: 400, note: "x".repeat(MIN_CALLBACK_NOTE_CHARS) },
   reason: "",
 };
 
-describe("0259 and releaseVerdict() state the same rules", () => {
+describe("0259 (as replaced by 0271) and releaseVerdict() state the same rules", () => {
+  it("0271 really replaces the 0259 guard function (same name), so it is the live one", () => {
+    expect(GUARD71.length).toBeGreaterThan(500);
+    expect(SQLC).toContain("create or replace function public.vendor_bank_guard()");
+  });
+
   it("the callback-note minimum is the same number in both, and the boundary agrees", () => {
     expect(MIN_CALLBACK_NOTE_CHARS).toBe(10);
     expect(SQLC).toMatch(/length\(trim\(new\.release_callback_note\)\), 0\) < 10 then/);
+    expect(GUARD71).toMatch(/length\(trim\(new\.release_callback_note\)\), 0\) < 10 then/);
     expect(releaseVerdict(base).ok).toBe(true);
     expect(releaseVerdict({ ...base, callback: { ...base.callback, note: "x".repeat(9) } }).ok).toBe(false);
   });
 
-  it("the solo-reason minimum is the same number in both, and the boundary agrees", () => {
-    expect(MIN_SOLO_REASON_CHARS).toBe(20);
-    expect(SQLC).toMatch(/is_solo and coalesce\(length\(trim\(new\.release_reason\)\), 0\) < 20 then/);
-    const solo = { ...base, actorUserId: "m" };
-    expect(releaseVerdict({ ...solo, reason: "r".repeat(20) })).toMatchObject({ ok: true, mode: "solo" });
-    expect(releaseVerdict({ ...solo, reason: "r".repeat(19) }).ok).toBe(false);
+  it("R41 S0 (D-6): owner only, in both; no 20-character solo reason in either", () => {
+    expect(GUARD71).toContain("if not public.ach_write_by_owner(new.released_by) then");
+    expect(GUARD71).not.toMatch(/is_solo/);
+    expect(GUARD71).not.toMatch(/release_reason\)\), 0\) < 20/);
+    expect(releaseVerdict({ ...base, reason: "" })).toEqual({ ok: true, mode: "owner" });
+    const admin = releaseVerdict({ ...base, actorIsOwner: false, reason: "r".repeat(40) });
+    expect(admin.ok).toBe(false);
   });
 
   it("the callback-method list is identical, in both directions", () => {
@@ -69,25 +84,20 @@ describe("0259 and releaseVerdict() state the same rules", () => {
     expect(sql).toEqual([...CALLBACK_METHODS].sort());
   });
 
-  it("the release-mode list is exactly the modes releaseVerdict can return", () => {
-    const m = SQLC.match(/release_mode in \(([^)]*)\)/);
-    expect(m).not.toBeNull();
-    const sql = [...m![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]).sort();
+  it("the only mode releaseVerdict can return is the one mode the 0271 trigger accepts; the column still allows old history", () => {
+    const req = GUARD71.match(/new\.release_mode is distinct from '([a-z_]+)' then/);
+    expect(req).not.toBeNull();
     const modes = new Set<string>();
-    for (const actor of ["m", "s"]) {
-      for (const author of ["m", null]) {
-        const v = releaseVerdict({ ...base, actorUserId: actor, changeEnteredByUserId: author, reason: "r".repeat(25) });
+    for (const owner of [true, false]) {
+      for (const reason of ["", "r".repeat(25)]) {
+        const v = releaseVerdict({ ...base, actorIsOwner: owner, reason });
         if (v.ok) modes.add(v.mode);
       }
     }
-    expect([...modes].sort()).toEqual(sql);
-  });
-
-  it("an unknown author is solo in both (never a silent dual release)", () => {
-    expect(SQLC).toMatch(/is_solo := new\.change_entered_by is null or new\.change_entered_by = new\.released_by;/);
-    const v = releaseVerdict({ ...base, changeEnteredByUserId: null, reason: "r".repeat(25) });
-    expect(v).toMatchObject({ ok: true, mode: "solo", notifyOther: true });
-    expect(releaseVerdict({ ...base, changeEnteredByUserId: null }).ok).toBe(false);
+    expect([...modes]).toEqual([req![1]]);
+    const shape = SQL71C.match(/vbd_release_mode_shape\s+check \(release_mode is null or release_mode in \(([^)]*)\)\)/);
+    expect(shape).not.toBeNull();
+    expect([...shape![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]).sort()).toEqual(["dual", "owner", "solo"]);
   });
 
   it("the status list the trigger knows equals the 0258 status check", () => {

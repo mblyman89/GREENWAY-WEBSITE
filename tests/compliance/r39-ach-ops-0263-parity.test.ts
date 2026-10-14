@@ -22,7 +22,6 @@ import {
   AUTHORIZATION_STATES,
   CALLBACK_METHODS,
   MIN_CALLBACK_NOTE_CHARS,
-  MIN_SOLO_REASON_CHARS,
   validateMicroEntryCents,
 } from "@/lib/payments/ach-authorization-core";
 import { MIN_RESOLUTION_NOTE_CHARS, NOTICE_MAX_AGE_DAYS } from "@/lib/payments/ach-return-log-core";
@@ -75,13 +74,24 @@ describe("0263 numbers agree with the app cores", () => {
     expect(fnBody("ach_notice_log")).toContain("p_received_on > today");
   });
 
-  it("hold release: callback methods, the 10-character note and the 20-character solo reason", () => {
-    const body = fnBody("ach_auth_release_hold");
+  it("hold release (as replaced by 0271): callback methods, the 10-character note, owner only, no solo reason", () => {
+    // R41 S0: 0271 replaces ach_auth_release_hold with the same signature, so
+    // the LIVE body is 0271's; 0263's original must still exist for the replace.
+    expect(fnBody("ach_auth_release_hold")).toContain("p_reason  text");
+    const s71 = code(readFileSync(join(ROOT, "supabase/migrations/0271_ach_owner_authority.sql"), "utf8"));
+    const i = s71.indexOf("create or replace function public.ach_auth_release_hold(");
+    expect(i, "0271 does not replace ach_auth_release_hold").toBeGreaterThan(-1);
+    const body = s71.slice(i, s71.indexOf("end $$;", i));
     const m = /p_method not in \(([^)]*)\)/.exec(body);
     expect(m, "method list not found").not.toBeNull();
     expect(quoted(m![1]).sort()).toEqual([...CALLBACK_METHODS].sort());
     expect(body).toContain(`coalesce(length(trim(p_note)), 0) < ${MIN_CALLBACK_NOTE_CHARS} then`);
-    expect(body).toContain(`is_solo and coalesce(length(trim(p_reason)), 0) < ${MIN_SOLO_REASON_CHARS} then`);
+    expect(body).toContain("if not public.ach_write_by_owner(p_actor) then");
+    expect(body).not.toMatch(/is_solo/);
+    expect(body).not.toMatch(/length\(trim\(p_reason\)\), 0\) </);
+    expect(body).toContain("return 'owner';");
+    // The owner check comes before the row is even read (no information leak).
+    expect(body.indexOf("ach_write_by_owner(p_actor)")).toBeLessThan(body.indexOf("for update"));
   });
 
   it("voided-check callback pass needs the same 10-character note", () => {
