@@ -38,29 +38,34 @@
 37 killed p_note: f.note || null,
 38 killed createHash("sha256").update([...ids].sort().join(","), "utf8")
 39 killed if (input.expect && input.expect !== fp) return
-40 killed .filter(([, v]) => !String(v ?? "").trim())
-41 killed if (missing.length) return
-42 killed .eq("method", method).eq("status", "planned");
-43 killed if (acct.archived_at) {       skipped.push
-44 killed if (a.state !== "verifying") {       skipped.push
-45 killed if (!routing || !accountNumber) return { ok: false, error: OPS_NO_KEY 
-46 killed if (!plan.ok) return loaded.skipped.length ?
-47 killed if (!/^[0-9a-f]{16}$/.test(input.fingerprint)) return
-48 killed p_eligible: p.eligible,
-49 killed p_ids: [...p.ids],
-50 killed if (data !== p.ids.length) return
-51 killed const c = checkLegalHoldReason(input.reason);   if (!c.ok) return c;
-52 killed p_on: input.on,
-53 killed if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) ret
-54 killed if (isMissing(r.error)) return emptyView(false,
-55 killed .is("resolved_at", null)
-56 killed holds: authRows.filter((a) => a.payee_type === "employee" && a.state =
-57 killed if (!open && acct.verification_status === "verified") continue;
-58 killed if (acct.archived_at) continue;
-59 killed on: v.effective_date ?? pacificDay(v.created_at),
-60 killed account_key: acct.account_key_hmac,
-61 killed payee: payeeOf(authById.get(acct.authorization_id)),
-62 killed verRows.filter((v) => v.method === m && v.status === "planned")
-63 killed payee: names.get(`${n.payee_type}:${n.employee_id ?? n.vendor_id}`)
-total 64 killed 64 survivors []
+40 killed   if (!readiness.originator) {     return { ok: false, error: `The com
+41 killed Timberland's setup (My banking tab): ${readiness.problems.join(" ")}`
+42 killed if (!live) return { ok: false, error: "This file has not been released
+43 killed fileIdModifier: live.file_id_modifier, expect: input.fingerprint
+44 killed if (fp !== input.fingerprint) return { ok: false, error: "The list of 
+45 killed sourceId: checkFileSourceId(input.method, first.plan.effective, fp),
+46 killed fileIdModifier: input.fileIdModifier });   if (!plan.ok)
+47 killed .eq("method", method).eq("status", "planned");
+48 killed if (acct.archived_at) {       skipped.push
+49 killed if (a.state !== "verifying") {       skipped.push
+50 killed if (!routing || !accountNumber) return { ok: false, error: OPS_NO_KEY 
+51 killed if (!plan.ok) return loaded.skipped.length ?
+52 killed if (!/^[0-9a-f]{16}$/.test(input.fingerprint)) return
+53 killed p_eligible: p.eligible,
+54 killed p_ids: [...p.ids],
+55 killed if (data !== p.ids.length) return
+56 killed const c = checkLegalHoldReason(input.reason);   if (!c.ok) return c;
+57 killed p_on: input.on,
+58 killed if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) ret
+59 killed if (isMissing(r.error)) return emptyView(false,
+60 killed .is("resolved_at", null)
+61 killed holds: authRows.filter((a) => a.payee_type === "employee" && a.state =
+62 killed if (!open && acct.verification_status === "verified") continue;
+63 killed if (acct.archived_at) continue;
+64 killed on: v.effective_date ?? pacificDay(v.created_at),
+65 killed account_key: acct.account_key_hmac,
+66 killed payee: payeeOf(authById.get(acct.authorization_id)),
+67 killed verRows.filter((v) => v.method === m && v.status === "planned")
+68 killed payee: names.get(`${n.payee_type}:${n.employee_id ?? n.vendor_id}`)
+total 69 killed 69 survivors []
 EXIT 0
