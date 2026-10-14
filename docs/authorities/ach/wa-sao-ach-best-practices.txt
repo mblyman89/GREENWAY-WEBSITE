@@ -1,0 +1,515 @@
+Source: https://sao.wa.gov/sites/default/files/2023-05/Best-practices-for-ACH-electronic-payments.pdf
+Fetched: 2026-10-14 (UTC) for R41 S0. pdftotext -layout; nothing retyped.
+PDF sha256: 0a40baa08689505f64beb7ffbe5743406c5d863a9a57a0e6f26dee401c0c1f46
+PDF metadata: Title "Best Practices for ACH Electronic Payments", Author "Washington State Auditor's Office", CreationDate 2026-06-10 (the URL path says 2023-05).
+-----
+Best Practices for
+ACH Electronic
+Payments
+
+Governments may pay vendors and
+employees electronically in one to three
+days using the Automated Clearing House
+(ACH) payment network. If you use this
+payment method, you need strong internal
+controls to ensure your money goes to the
+right place, because otherwise you may
+lose it. Bad actors have impersonated
+vendors and employees to trick accounting
+staff into changing banking information.
+Employees have also stolen ACH payments
+by altering banking information.
+We recommend that you implement
+strong internal controls to prevent
+ACH fraud; use this guide to help you
+understand and apply best practices.
+
+
+
+
+ June 2026                                  Best Practices for ACH Electronic Payments | 1
+Take these important first steps
+  •   Develop a detailed ACH payment policy. Your policy should
+      describe the procedures to initiate, approve, execute and reconcile
+      ACH payments. It should include your key controls to prevent and
+      detect ACH fraud and how employees should respond to known
+      or suspected fraud. Limit sharing this policy to those who need to
+      know it.
+
+      Municipal Research Services Center (MRSC) is currently developing a
+      Financial Policies Tool Kit for ACH transactions. Check the MRSC website
+      for this guidance, expected sometime in 2026.
+
+  •   Require training after hiring and annually, thereafter. Employees
+      involved with the ACH payment process will need training in social
+      engineering and ACH fraud schemes. You should:
+
+         ◦ Teach employees how to practice professional skepticism
+           and spot red flags
+
+         ◦ Educate staff on your policies and procedures, how your
+           government is set up to prevent and detect ACH fraud
+
+         ◦ Train staff on what information they can share over the
+           phone or email
+
+         ◦ Share the consequences for committing fraud
+
+
+  •   Encourage employees to be on their guard. Employees should
+      know that bad actors may impersonate vendors, fellow employees
+      and management using phone calls, emails, text messages, faxes,
+                                                                                  One red flag
+      letters and even video. Employees should proceed with caution               involves a payee
+      and verify information where necessary.                                     that requests to
+  •   Empower employees to pause and ask questions when
+                                                                                  change banking
+      something feels off. This is especially important when an                   information just
+      employee feels pressured to act quickly, act in secrecy or                  before a large
+      bypass normal procedures (potential red flags).
+                                                                                  payment.
+
+
+
+
+                                                                Best Practices for ACH Electronic Payments | 2
+Assess your financial exposure to                                               A new term in
+                                                                                the ACH industry:
+ACH fraud
+                                                                                False Pretenses. It
+  •   Understand your banking agreement. You should have signed
+                                                                                is used to describe
+      an ACH origination contract with your bank; make sure to read it.
+      Know your bank’s fraud reporting guidance and requirements,               the frauds in which
+      this information is usually in the bank’s terms and conditions.           the bad actor
+      Make sure that you understand the bank’s liability limits for
+      ACH payments. Here is a summary of dispute timeframes for
+                                                                                tricks someone
+      business-to-business transactions, per the National Automated             into sending ACH
+      Clearing House Association’s (NACHA) ACH network rules:                   payments to them
+         ◦ Dispute period for ACH debits: None once your bank                   – regardless of the
+           releases payment. An ACH debit is a “pushed payment,” one            means or tactics
+           that you initiate and send to someone else. If you report an
+           issue after the bank releases payment, your bank can request
+                                                                                they used to do it.
+           a return of funds, but the receiving bank does not have to
+           honor the request. Most of the time, the bad actors move the
+           money out quickly so that the bank has nothing to return.
+
+         ◦ Dispute period for ACH credits: one to two days.
+           An ACH credit is when someone “pulls payment” from your
+           account. If you notice an unauthorized withdrawal on your            In 2025, a court
+           bank statement, then you have a short window to dispute              ruled that banks
+           it. Each bank will communicate its deadline, but your bank
+                                                                                are not liable
+           must initiate a return by the start of the second business
+           day following the transaction in question. (Consumers                for ACH fund
+           have 60 days, but business-to-business transactions fall             transfers where
+           under different rules.)
+                                                                                the beneficiary’s
+  •   Understand your insurance coverage. Read your policy and                  name does not
+      work with your legal counsel if you need help understanding               match, unless
+      its terms and conditions for ACH payment losses. In some                  they had actual
+      cases, you may need to report
+      losses in a certain time frame                                            knowledge at the
+      to obtain coverage. Evaluate                                              time of the transfer.
+      whether you have coverage for
+                                                  INSUR                         Read more in this
+      business email compromise                         ANCE
+      or social engineering frauds,                                             Banking Journal
+      which is often a cause of                                                 article.
+      ACH-related losses.
+
+
+
+
+                                                              Best Practices for ACH Electronic Payments | 3
+Prepare your bank accounts for
+ACH payments
+  •   Set limits. You may set daily, monthly or transactional dollar limits by
+      working with your bank. To set the limit amount, consider the amount
+      of insurance you have to cover a loss.
+
+  •   Use a dedicated bank account for ACH transactions. Maintain a zero
+      balance and restrict this account from processing any other payment
+      types. Work with your bank to block any wire transfers or check
+      payment processing.
+
+  •   Use ACH blocks. Work with your bank to place blocks on any account
+      not authorized for ACH transactions.
+
+  •   Use an ACH filter (also known as ACH positive pay). Use this tool
+      to screen ACH activity and block incoming charges before the bank
+      deducts them from your account. You can:
+
+         ◦ Set up a list of authorized vendors, dollar limits, start and end
+           dates, and payment frequency. Based on these preauthorization
+           rules, the bank will allow some transactions to clear, but will flag
+           others for your review.
+
+         ◦ Permanently block certain vendors (fraudsters tend to keep
+           trying over time).
+
+
+Segregate duties to reduce your risk
+  •   Require two people to send ACH payments. Work with your bank
+      to set this up. One employee should submit the ACH payment file to
+      your bank. Then, a second person, preferably a supervisor or manager,
+      authorizes the bank to release the funds (after verifying the accuracy
+      of the batched ACH transactions).
+
+  •   Separate accounts payable/payroll and ACH payment duties.
+      Employees who process accounts payable or payroll should not have
+      the ability to process ACH payments or alter banking information.
+
+
+
+
+                                                                 Best Practices for ACH Electronic Payments | 4
+      Some governments hire an outside company to store
+      vendor banking information and send ACH payments. In these
+      arrangements, vendors sign up directly with the company to
+      receive electronic payment. In one instance, the company even
+      included insurance coverage for losses.
+
+  •   Separate banking responsibilities and ACH payment duties.
+      Employees who may add or edit ACH blocks or filters to bank
+      accounts—or are responsible for reconciling bank account
+      activity—should not play any role in the ACH payment process.
+
+
+
+Protect the banking information
+you maintain
+  •   Restrict access to forms. Do not place ACH-related forms on
+      your public-facing website (such as sign-up forms, or to update
+      payment information). Otherwise, bad actors may use them to
+      make their requests appear legitimate.
+
+  •   Ask payees to securely share banking details. If emailing,
+      ask them to use encryption to reduce the risk of alteration during
+      transit. To avoid email scams, even with
+      encryption, you should still verify the
+      new information directly with the payee
+      (see pages 6-8 for more information on
+      verification procedures).
+
+  •   Limit access to sensitive information.
+      Securely store and protect banking
+      information. Limit permissions to view
+      or edit this sensitive information to
+      those who need it to do their job.
+
+  •   Consider a self-service payee portal.
+      You may find a payee portal a good option for vendors or
+      employees, if it is secure and you actively manage user
+      access. If you use a payee portal, you should:
+
+         ◦ Require approvals or notifications of changes
+
+         ◦ Maintain an audit trail
+
+         ◦ Adopt strong security measures, such as automatic
+           log-off after inactivity, strong password requirements
+           and multifactor authentication (to verify identity)
+
+
+
+
+                                                               Best Practices for ACH Electronic Payments | 5
+         ◦ Install all software updates and patches promptly
+
+         ◦ Perform verification procedures for any changes made
+           within the portal (see below for more information on
+           verification procedures)
+
+  •   Use secure, read-only ACH payment files. Securely create,
+      store and transmit ACH payment files to protect the sensitive
+      data. If your ACH payment file is not read-only, you should
+      implement a process to detect and review any changes
+      made between creation and submission.
+
+
+
+Set up a verification process
+  •   Assign a passcode or passphrase to payees. Payees can share this
+      information as proof of their identity when speaking with your staff.
+      However, they must protect it. For example, they should not store it
+      online, share it with other employees or email it (unless encrypted).
+
+  •   Require new vendor application forms. In addition to other
+      information you might need, ask them to provide contact
+      information so you can later verify any subsequent changes
+      to their contact, address or banking information. Designate
+      who should review this information.
+
+  •   Verify new or changing payee information. Require employees
+      to make changes in person, if possible. Contact vendors to confirm
+      changes. You should:
+
+         ◦ Verify requests to change
+           the following items:
+
+               » New or updated vendor
+                 names
+
+               » Contact names and
+                 associated phone number
+                 or email addresses
+                  (Note: Bad actors may try to
+                  change contact information
+                  before attempting to change bank
+                  information, so that you “verify” banking
+                  information changes with them)
+
+               » Mailing address and banking information
+
+
+
+
+                                                               Best Practices for ACH Electronic Payments | 6
+       ◦ Verify information by phone. Use contact information
+         that is known, reliable and you have previously used. You
+         might use your vendor master file contact information or
+         refer to the original vendor contract. Do not use contact
+         information provided with the request or in an email. Be
+         wary of using website information; you should review
+         the website in depth to ensure it is legitimate.                       XXX
+                                                                                        X
+       ◦ Authenticate the contact. Authenticate the person
+         that answers the phone, ask them questions that only
+         they would know the answer to, such as a passcode
+         or passphrase. Ask them to confirm existing payment
+         instructions that you have on file, such as the last four
+         digits of the current account number. You could also ask
+         them to supply their federal tax identification number to
+         compare it to your records.
+
+       ◦ Avoid relying on familiarity. Bad actors, aided by new
+         technology, can impersonate other people in fake video
+         or phone calls.
+
+       ◦ Verify changes even within a self-service portal. You
+         should contact the vendor by phone to verify changes,
+         even if they initiate them within your online portal.
+
+       ◦ Direct IT staff to authenticate callers, when
+         troubleshooting self-service portal log in issues.
+         Bad actors posing as employees have asked Information
+         Technology (IT) staff to reset the login credentials for
+         the self-service payroll portal, which allows them access
+         to perpetrate fraud. Even IT staff need to authenticate
+         people reaching out to them.
+
+•   Contact two people to verify changes to banking
+    information. If resources allow, consider contacting two
+    different people who work for the vendor to verify changes
+    to banking information. This prevents any one person from
+    redirecting payment to a fraudulent account. If you do this,
+    require the vendor to provide two contacts when they
+    submit a vendor application to you.
+
+•   Take additional precautions for high-dollar payments.
+    Consider verifying payee information shortly before issuing
+    any high-dollar payment, using reliable contact information.
+    Then, promptly contact the vendor and confirm they received
+    the payment. Lastly, review the ACH remittance receipt from
+    your bank.
+
+
+
+                                                             Best Practices for ACH Electronic Payments | 7
+  •   Use a validation service. Use a validation service that can verify        In one case where
+      a bank account is open and able to receive payment, the bank
+      routing number, and account ownership. Ask your bank if they
+                                                                                the validation
+      offer this service. You can also discover potential commercial            service identified a
+      validation service vendors on the NACHA website, some of which            potential ownership
+      do check account ownership. Ask potential vendors if they use a
+      direct source to check bank routing numbers, such as Lexis Nexis.         mismatch for one
+                                                                                bank account, staff
+  •   Make a red flag response plan. Ensure your staff know how
+                                                                                obtained a cancelled
+      to respond to red flags or other problems that may arise.
+      For example, your validation service provider might report a              check from the
+      potential ownership mismatch for a bank account. Your policy              vendor and
+      should direct them on how to proceed, if this occurs.
+                                                                                proceeded to
+  •   Keep a verification log. Employees should document                        issue the payment;
+      verification attempts, who they spoke with, how they contacted            it turns out they
+      them, how they authenticated the person they spoke with, date/
+      time and verification results. You may want to create a form that
+                                                                                were speaking
+      includes a checklist and approval fields. Keep this documentation         with a bad actor
+      in your files.                                                            and the cancelled
+  •   Review the verification documentation. Management should                  check was forged.
+      review and approve verification documentation before anyone
+      makes system changes.
+
+  •   Review all payee account changes. Management should
+      review all changes made to vendor or employee records that
+      took place before the ACH payment file creation. Consider
+                                                                                Another red flag
+      using an exception report and trace changes to supporting                 is a request to
+      documentation. Or use your financial system to require                    change both the
+      review/approval before the payment process will run.
+                                                                                vendor contact
+                                                                                and bank account
+Take steps to protect yourself when                                             within a short time
+using online banking                                                            period. For more
+                                                                                red flags involving
+  •   Use a dedicated, secure computer. Initiate and release ACH
+      batches with your bank, using a computer solely dedicated to              change requests,
+      online banking activity. You should:                                      read Six Signs of a
+         ◦ Restrict access to only necessary banking-related websites           Scam (PDF)
+         ◦ Remove all nonessential programs and functions,
+           including email
+
+
+
+
+                                                               Best Practices for ACH Electronic Payments | 8
+         ◦ Encrypt the computer’s hard drive
+
+         ◦ Never leave the computer unattended when logged in
+
+         ◦ Physically secure the computer when it’s not in use
+
+         ◦ Clear the computer’s cache and cookies after each
+           web session
+
+         ◦ Keep this computer updated with security patches and
+           antivirus protection
+
+  •   Use a bank that offers passkeys or tokens for authentication.
+      These options offer more security than passwords and texted/
+      emailed codes:
+
+         ◦ A passkey involves use of public-key cryptography
+           to create a unique set of information that is split
+           into two keys. The bank keeps one, and your device
+           secures/stores the other. If stolen, it’s useless.
+
+         ◦ A token is a physical device that generates
+           a code (the key). You enter this key when
+           logging into your bank account to prove
+           your identity.
+
+  •   Keep up to date with your bank’s security
+      measures. Check in with your bank every six
+      months to identify new options or services that can
+      help protect your government against ACH fraud.
+
+
+Actively monitor                                                                Starting in 2026,
+  •   Review the bank’s ACH remittance receipt. The ACH remittance              banks must do
+      receipt is the most reliable record of where you sent payments.
+      You should promptly compare the ACH remittance receipt to
+                                                                                more to identify
+      your source records. If you face resource constraints, consider           fraudulent ACH
+      spot-checking high-risk payments, such as those over a certain            transactions
+      dollar amount.
+                                                                                using a risk-based
+  •   Review your bank activity daily. You have little to no time to            approach. However,
+      identify issues with ACH transactions and report them. (Any ACH           they will not yet
+      payment pulled from your bank account by a third party will have
+      its own line on the bank statement, but payments that you initiate        verify account
+      will show as a batch.)                                                    ownership due
+                                                                                to complexities
+                                                                                involved.
+
+                                                               Best Practices for ACH Electronic Payments | 9
+•   Periodically review vendor/employee master files. Periodically
+    review your employee and vendor master files for red flags, such as
+    duplicate records. You should also look for any “matching” banking
+    information for a vendor and an employee. Some use a background
+    computer application to automatically detect matches, even if it
+    occurs for only a few days.
+
+•   Follow up when a vendor reports they did not receive payment.
+    If your records reflect you paid a vendor, but they report not receiving
+    it, follow up immediately. Bad actors may have intercepted the
+    payment. Acting promptly can aid in recovery efforts.
+
+•   Analyze ACH transactional data. Use historical and statistical data
+    to identify trends or patterns that may warrant further investigation.
+    Some governments might have the ability and resources to use
+    advanced monitoring tools to analyze activity.
+
+•   Conduct an annual review. Review your internal controls, their
+    design, operation and effectiveness. Review your policy. Check with
+    your bank, insurer, auditor and accountant for any new ways to protect
+    yourself. Review the people authorized to initiate and approve ACH
+    payments and decide if you need to make changes. Also, consider any
+    new technology or third-party service that might add protection.
+
+•   Investigate failed fraudulent attempts. This is a good time to
+    review your internal controls and share with others in your government,
+    so that no one falls for a similar scam. (You may have lucked into
+    detecting the scammer’s first attempt and want to make sure you
+    are fully prepared to detect all future attempts.)
+
+•   Use fraudulent incidents to inform your risk assessment process.
+    Analyze and quantify the extent to which your government has already
+    suffered financial losses from fraudulent ACH payments to inform fraud
+    risk assessments and prioritize and tailor countermeasures.
+
+
+
+
+                                                             Best Practices for ACH Electronic Payments | 10
+Additional resources
+    •   National Automated Clearing House Association’s (NACHA):
+
+           ◦ Account Validation Resource Center | Nacha
+             (see the whitepaper, available for download)
+
+           ◦ Protecting against cyber-fraud (PDF)
+
+           ◦ ACH Risk Management Handbook | Nacha (Cost to purchase)
+
+    •   Government Finance Officers Association’s (GFOA)
+        Electronic Vendor Fraud
+
+    •   Office of the Washington State Auditor’s
+        Segregation of Duties Guide (PDF)
+
+
+
+
+For assistance
+This resource was developed by the Center for Government
+Innovation at the Office of the Washington State Auditor.
+Please send questions, comments, or suggestions to
+Center@sao.wa.gov.
+
+
+
+
+Disclaimer
+This resource is provided for informational purposes only.
+It does not represent prescriptive guidance, legal advice,
+an audit recommendation, or audit assurance. It does not
+relieve governments of their responsibilities to assess risks,
+design appropriate controls, and make management decisions.
+
+
+
+
+                                                                 Best Practices for ACH Electronic Payments | 11
+                                    “Our vision is to increase
+                                    trust in government.
+                                    We are the public’s
+                                    window into how tax
+                                    money is spent.”
+                                      – Pat McCarthy, State Auditor
+
+
+
+
+Washington State Auditor’s Office
+P.O. Box 40031 Olympia WA 98504
+
+www.sao.wa.gov
+1-564-999-0818
+
