@@ -10,7 +10,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { loadReconcile } from "@/lib/pos/cultivera-reconcile";
-import { filterLines, parseKind, reconcileCsv } from "@/lib/pos/cultivera-reconcile-core";
+import { filterFromParams, filterLines, reconcileCsv } from "@/lib/pos/cultivera-reconcile-core";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,17 +25,7 @@ export async function GET(req: NextRequest) {
   const importId = u.searchParams.get("import") ?? "";
   const load = await loadReconcile(createSupabaseAdminClient(), importId);
   if (!load.ok) return bad(load.error, 409);
-  const lines = filterLines(
-    load.report.mismatches,
-    {
-      kind: parseKind(u.searchParams.get("kind")) || undefined,
-      vendor: u.searchParams.get("vendor") || undefined,
-      category: u.searchParams.get("category") || undefined,
-      q: u.searchParams.get("q") || undefined,
-      open: u.searchParams.get("open") === "1",
-    },
-    load.explanations,
-  );
+  const lines = filterLines(load.report.mismatches, filterFromParams((k) => u.searchParams.get(k)), load.explanations);
   const body = "\uFEFF" + reconcileCsv(lines, load.explanations);
   return new Response(body, {
     status: 200,

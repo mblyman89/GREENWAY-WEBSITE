@@ -13,6 +13,14 @@
  *   createMissingLotsAction - re-runs the import's own lot step
  *                         (backfillImportLots: adds only lots that do not
  *                         exist yet; safe to press again)     (menu.publish)
+ *   bulkExplainAction   - one note on every OPEN line in the current view
+ *                         (A2+; re-reads the lines on the server, refuses if
+ *                         the count moved since the page loaded) (menu.import)
+ *   bulkUnexplainAction - take back the notes on every explained line in the
+ *                         current view (the undo for a bulk note) (menu.import)
+ *
+ * "Save & next" is explainLineAction with next_key: after saving it returns
+ * to the page jumped to the next line without a note.
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -22,13 +30,20 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isSafeImportId } from "@/lib/inventory/import-lineage-core";
 import { backfillImportLots } from "@/lib/pos/import-service";
-import { loadReconcile, writeReconcileEvent } from "@/lib/pos/cultivera-reconcile";
+import { loadReconcile, writeReconcileEvent, writeReconcileEvents } from "@/lib/pos/cultivera-reconcile";
 import {
   RECONCILE_EXPLAIN_ACTION,
   RECONCILE_SIGNOFF_ACTION,
   RECONCILE_UNEXPLAIN_ACTION,
+  checkBulk,
+  explainedKeys,
+  filterFromParams,
+  filterLines,
+  lineAnchor,
   lineKey,
+  openKeys,
   parseExplainInput,
+  parseNoteText,
   verdictFor,
 } from "@/lib/pos/cultivera-reconcile-core";
 
@@ -67,6 +82,14 @@ export async function explainLineAction(form: FormData): Promise<void> {
   });
   if (err) redirect(back(importId, form, { error: `Your note was NOT saved: ${err}` }));
   revalidatePath(BASE);
+  // "Save & next": jump to the next line without a note (the page works out its page number).
+  const nextKey = String(form.get("next_key") ?? "");
+  if (String(form.get("next") ?? "") === "1") {
+    if (nextKey && parseExplainInput({ key: nextKey, note: "next" }).ok) {
+      redirect(back(importId, form, { notice: "Note saved. Here is the next line without a note.", jump: nextKey }) + "#" + lineAnchor(nextKey));
+    }
+    redirect(back(importId, form, { notice: "Note saved. That was the last line without a note in this view." }));
+  }
   redirect(back(importId, form, { notice: "Note saved. That line now counts as explained." }));
 }
 
@@ -143,4 +166,59 @@ export async function createMissingLotsAction(form: FormData): Promise<void> {
   }
   revalidatePath(BASE);
   redirect(back(importId, form, { notice: msg }));
+}
+
+/** The keep_* fields the page sends, read as the same filter the page used. */
+function keptFilter(form: FormData) {
+  return filterFromParams((k) => {
+    const v = form.get(`keep_${k}`);
+    return typeof v === "string" ? v : undefined;
+  });
+}
+
+async function bulk(form: FormData, verb: "explain" | "remove"): Promise<never> {
+  const session = await requirePermission("menu.import");
+  const importId = importIdOf(form);
+  if (!importId) redirect(`${BASE}?error=` + encodeURIComponent("Missing or invalid import id."));
+  let note = "";
+  if (verb === "explain") {
+    const parsed = parseNoteText(form.get("note"));
+    if (!parsed.ok) redirect(back(importId, form, { error: parsed.error }));
+    note = parsed.note;
+  }
+  if (!isSupabaseServiceConfigured) redirect(back(importId, form, { error: "Supabase is not configured." }));
+  const admin = createSupabaseAdminClient();
+  const load = await loadReconcile(admin, importId);
+  if (!load.ok) redirect(back(importId, form, { error: load.error }));
+  // Without the notes we cannot tell which lines are open: never guess.
+  if (load.notesError) redirect(back(importId, form, { error: `Nothing was saved: ${load.notesError}` }));
+  const lines = filterLines(load.report.mismatches, keptFilter(form), load.explanations);
+  const keys = verb === "explain" ? openKeys(lines, load.explanations) : explainedKeys(lines, load.explanations);
+  const chk = checkBulk({ keys, expected: form.get("expected"), confirm: form.get("confirm"), verb });
+  if (!chk.ok) redirect(back(importId, form, { error: chk.error }));
+  const err = await writeReconcileEvents(admin, {
+    importId,
+    action: verb === "explain" ? RECONCILE_EXPLAIN_ACTION : RECONCILE_UNEXPLAIN_ACTION,
+    actorId: session.userId,
+    actorEmail: session.email,
+    afters: keys.map((key) => (verb === "explain" ? { key, note, bulk: true } : { key, bulk: true })),
+  });
+  if (err) redirect(back(importId, form, { error: `Nothing was saved: ${err}` }));
+  revalidatePath(BASE);
+  redirect(
+    back(importId, form, {
+      notice:
+        verb === "explain"
+          ? `Saved your note on ${keys.length} line(s). To undo, use "Remove the notes" in the same view.`
+          : `Removed the notes from ${keys.length} line(s). They are open again.`,
+    }),
+  );
+}
+
+export async function bulkExplainAction(form: FormData): Promise<void> {
+  await bulk(form, "explain");
+}
+
+export async function bulkUnexplainAction(form: FormData): Promise<void> {
+  await bulk(form, "remove");
 }
