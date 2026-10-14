@@ -264,38 +264,31 @@ describe("resolveNotice", () => {
 
 // =========================================================================
 describe("releaseEmployeeHold", () => {
-  const base = { authId: AUTH2, actorEmail: "michael@greenwaymarijuana.com", actorLabel: "Michael", method: "phone", note: "Called Sam on file number, confirmed", reason: "", mail: mailer, env: ENV, now: NOW };
+  // R41 S0 (D-6 option B): only the owner releases, alone, with no written
+  // reason. The store sends nothing itself: the achGate wrapper emails the
+  // owner a "Was this you?" receipt after the action succeeds (D-8).
+  const base = { authId: AUTH2, actorIsOwner: true, method: "phone", note: "Called Sam on file number, confirmed", reason: "" };
 
-  it("DUAL: the other person releases; no reason needed, nobody emailed", async () => {
-    reply({ ach_auth_release_hold: "dual" });
+  it("OWNER: releases alone; no reason needed; the RPC gets a null reason; nobody emailed by the store", async () => {
+    reply({ ach_auth_release_hold: "owner" });
     const r = await store.releaseEmployeeHold({ ...base, actorId: MICHAEL });
-    expect(r.ok && r.mode).toBe("dual");
+    expect(r.ok && r.mode).toBe("owner");
     expect(rpcs("ach_auth_release_hold")[0].body).toEqual({ p_auth_id: AUTH2, p_actor: MICHAEL, p_method: "phone", p_note: "Called Sam on file number, confirmed", p_reason: null });
     expect(mails).toHaveLength(0);
   });
 
-  it("SOLO: the person who put it on hold needs 20+ chars (refused before the RPC), then Michael and the store are told", async () => {
-    const short = await store.releaseEmployeeHold({ ...base, actorId: STEPHEN, actorEmail: "stephen@greenwaymarijuana.com", reason: "too short" });
-    expect(short.ok).toBe(false);
-    expect(st.rpc).toHaveLength(0);
-    reply({ ach_auth_release_hold: "solo" });
-    const r = await store.releaseEmployeeHold({ ...base, actorId: STEPHEN, actorEmail: "stephen@greenwaymarijuana.com", actorLabel: "Stephen", reason: "Michael is away for two weeks; payroll Friday" });
-    expect(r.ok && r.mode).toBe("solo");
-    expect(rpcs("ach_auth_release_hold")[0].body.p_reason).toBe("Michael is away for two weeks; payroll Friday");
-    expect(mails).toHaveLength(1);
-    expect([...mails[0].to].sort()).toEqual(["contact@greenwaymarijuana.com", "michael@greenwaymarijuana.com"]);
-    expect(mails[0].subject).toBe("Employee ACH hold released by one person: Sam Helper");
-    expect(mails[0].html).toContain("Stephen released the ACH hold for employee Sam Helper");
-    expect(mails[0].html).toContain("ACH return R03 received");
-    expect(r.ok && r.owner).toEqual({ emailed: true, detail: "emailed 2", call: ["Greenway store at 360-443-6988"], missingPhones: ["Michael"] });
+  it("OWNER on his OWN hold: still released alone (the 20-character solo reason is gone); an optional reason is passed through", async () => {
+    st.db.tables.get("ach_authorizations")!.find((a) => a.id === AUTH2)!.hold_entered_by = MICHAEL;
+    reply({ ach_auth_release_hold: "owner" });
+    const r = await store.releaseEmployeeHold({ ...base, actorId: MICHAEL, reason: "ok" });
+    expect(r.ok).toBe(true);
+    expect(rpcs("ach_auth_release_hold")[0].body.p_reason).toBe("ok");
   });
 
-  it("an unknown actor releasing alone tells BOTH owners and the store", async () => {
-    st.db.tables.get("ach_authorizations")!.find((a) => a.id === AUTH2)!.hold_entered_by = null;
-    reply({ ach_auth_release_hold: "solo" });
-    const r = await store.releaseEmployeeHold({ ...base, actorId: MICHAEL, actorEmail: "manager@example.com", reason: "Hold predates the log; confirmed in person" });
-    expect(r.ok).toBe(true);
-    expect([...mails[0].to].sort()).toEqual(["contact@greenwaymarijuana.com", "michael@greenwaymarijuana.com", "stephen@greenwaymarijuana.com"]);
+  it("NOT the owner (Stephen, admin): refused before any RPC, even with a long reason", async () => {
+    const r = await store.releaseEmployeeHold({ ...base, actorId: STEPHEN, actorIsOwner: false, reason: "Michael is away for two weeks; payroll Friday" });
+    expect(r).toEqual({ ok: false, error: "Only Michael (the owner) releases an employee banking hold. Stephen's release goes to Michael for approval." });
+    expect(st.rpc).toHaveLength(0);
   });
 
   it("a vendor authorization, or one not on hold, is refused before the RPC", async () => {
@@ -306,10 +299,19 @@ describe("releaseEmployeeHold", () => {
     expect(st.rpc).toHaveLength(0);
   });
 
-  it("a reply that is neither solo nor dual is not success", async () => {
-    reply({ ach_auth_release_hold: "ok" });
+  it("a reply other than 'owner' (including the retired 'solo' and 'dual') is not success", async () => {
+    for (const bad of ["ok", "solo", "dual", null]) {
+      reply({ ach_auth_release_hold: bad });
+      const r = await store.releaseEmployeeHold({ ...base, actorId: MICHAEL });
+      expect(r, String(bad)).toEqual({ ok: false, error: "The database did not confirm the release. Reload the page." });
+    }
+  });
+
+  it("the database's ACH_OWNER_ONLY refusal comes back in words, not raised", async () => {
+    refuse("ach_auth_release_hold", "ACH_OWNER_ONLY: only the owner releases an employee banking hold. Send it as a request for owner approval.");
     const r = await store.releaseEmployeeHold({ ...base, actorId: MICHAEL });
-    expect(r).toEqual({ ok: false, error: "The database did not confirm the release. Reload the page." });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/owner/i);
   });
 });
 

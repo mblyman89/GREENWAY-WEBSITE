@@ -403,6 +403,8 @@ export const OPS_ERROR_TABLE: readonly (readonly [RegExp, string])[] = [
   [/ACH_RELEASE_PAYEE/, "Vendor holds are released on the Vault tab (with the callback)."],
   [/ACH_RELEASE_STATE/, "It is not on hold any more. Reload the page."],
   [/ACH_RELEASE_CALLBACK/, "Record how the employee confirmed (phone or in person) and a note of at least 10 characters."],
+  [/ACH_OWNER_ONLY/, "Only Michael (the owner) can do this. Stephen's version goes to Michael for approval."],
+  // Raised only by the R39 0263 function, before 0271 replaces it.
   [/ACH_RELEASE_SOLO/, "You put this hold on, so releasing it alone needs a written reason of at least 20 characters."],
   [/ACH_VERIFICATION_METHOD/, "Choose prenote, test credit or voided-check callback."],
   [/ACH_VERIFICATION_ACCOUNT/, "That account is archived or already verified. Reload the page."],
@@ -633,6 +635,7 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   ok(opsDbErrorMessage('column "hold_entered_by" does not exist (42703)').includes("migration 0263"), "missing column -> setup");
   ok(opsDbErrorMessage("ACH_VERIFICATION_EARLY: a prenote passes only on or after").includes("Too early"), "EARLY mapped");
   ok(opsDbErrorMessage("ACH_RELEASE_SOLO: ...").includes("20 characters"), "SOLO mapped");
+  ok(opsDbErrorMessage("23514 ACH_OWNER_ONLY: only the owner releases an employee banking hold.").startsWith("Only Michael (the owner)"), "R41 0271 OWNER_ONLY mapped in plain words");
   ok(opsDbErrorMessage('duplicate key value violates unique constraint "ach_ver_one_open_per_account"').includes("already has a check"), "unique mapped");
   ok(opsDbErrorMessage("something else").startsWith("The database refused"), "fallback");
   ok(opsDbErrorMessage("ACH_VERIFICATION_FINAL: x").includes("already finished"), "FINAL not swallowed by a broader pattern");
