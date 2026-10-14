@@ -2,8 +2,11 @@
 
 /**
  * R39 S7 — staff side of vendor e-sign (send link, cancel, countersign,
- * reject, bulk invite). settings.manage only (owner + admin: Stephen and
- * Michael, owner Q1), the same rule as the vault and the ACH card.
+ * reject, bulk invite).
+ * R41 S0: sending, cancelling and bulk-inviting only gather a signed form
+ * (settings.manage: owner + admin). Countersigning and rejecting change live
+ * ACH data, so they go through achGate: Michael (owner) acts at once with a
+ * receipt; Stephen's (admin) is sent to Michael for approval.
  *
  * Redirect targets are built here from validated ids, never from input.
  * Audit rows carry ids, states, the masked email and last-4 only.
@@ -11,7 +14,9 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePermission, type StaffSession } from "@/lib/auth/session";
+import { achGate } from "@/lib/payments/ach-gate";
+import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { resolveSiteBase } from "@/lib/auth/set-password-core";
 import { planBulkInvites, VENDOR_BULK_MAX, VENDOR_BULK_PAUSE_MS, BULK_SKIP_LABELS, type BulkSkip } from "@/lib/payments/vendor-esign-app-core";
@@ -62,6 +67,11 @@ async function inviteFor(fd: FormData, vendorId: string) {
   return inv;
 }
 
+/** The gate's answer on the vendor page (refusal, "sent to Michael", replay mismatch). */
+function replyFor(fd: FormData) {
+  return (r: RedirectOutcome): never => back(vendorIdFrom(fd), r.ok ? "ok" : "error", r.message);
+}
+
 function refresh(vendorId: string) {
   revalidatePath(`/admin/vendors/${vendorId}`);
   revalidatePath("/admin/settings/banking");
@@ -108,7 +118,10 @@ export async function cancelVendorEsignAction(fd: FormData): Promise<void> {
 }
 
 export async function countersignVendorEsignAction(fd: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_esign.countersign", fd, { reply: replyFor(fd) }, (session) => countersignVendorEsignBody(session, fd));
+}
+
+async function countersignVendorEsignBody(session: StaffSession, fd: FormData): Promise<void> {
   const vendorId = vendorIdFrom(fd);
   const inv = await inviteFor(fd, vendorId);
   if (str(fd, "callback_done") !== "on") back(vendorId, "error", "Confirm you phoned the vendor's second contact at a number already on file (not one from the form or the email).");
@@ -127,7 +140,10 @@ export async function countersignVendorEsignAction(fd: FormData): Promise<void> 
 }
 
 export async function rejectVendorEsignAction(fd: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_esign.reject", fd, { reply: replyFor(fd) }, (session) => rejectVendorEsignBody(session, fd));
+}
+
+async function rejectVendorEsignBody(session: StaffSession, fd: FormData): Promise<void> {
   const vendorId = vendorIdFrom(fd);
   const inv = await inviteFor(fd, vendorId);
   const reason = str(fd, "reason");

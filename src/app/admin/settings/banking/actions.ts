@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/auth/session";
+import type { StaffSession } from "@/lib/auth/session";
+import { achGate } from "@/lib/payments/ach-gate";
+import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   getAchCompanySettings,
@@ -14,10 +16,21 @@ const ROOT = "/admin/settings/banking";
 
 /**
  * Save the ACH originating bank / company settings. These are shared by both
- * payroll and vendor (Accounts Payable) ACH files. settings.manage only.
+ * payroll and vendor (Accounts Payable) ACH files.
+ * R41 S0: through achGate. Michael (owner) saves at once with a receipt;
+ * Stephen's (admin) change is sent to Michael for approval. 0271 guards the
+ * row: only an owner-stamped updated_by may change it.
  */
 export async function saveBankingSettingsAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate(
+    "banking_settings.save",
+    formData,
+    { reply: (r: RedirectOutcome): never => redirect(`${ROOT}?tab=company&${r.ok ? "msg" : "error"}=${encodeURIComponent(r.message)}`) },
+    (session) => saveBankingSettingsBody(session, formData),
+  );
+}
+
+async function saveBankingSettingsBody(session: StaffSession, formData: FormData): Promise<void> {
 
   const accountType = String(formData.get("company_account_type") ?? "checking").trim();
   // S-10: the account number renders MASKED (••••1234). A submission that is
