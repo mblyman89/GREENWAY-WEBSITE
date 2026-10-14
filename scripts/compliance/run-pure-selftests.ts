@@ -637,6 +637,7 @@ import { __runIntakePotencyCoreTests } from "../../src/lib/pos/intake-potency-co
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
 import { __runCardAliasCoreTests } from "../../src/lib/pos/card-alias-core";
 import { __runBarcodeMatchCoreTests } from "../../src/lib/pos/barcode-match-core";
+import { __runCutoverWeekendCoreTests } from "../../src/lib/pos/cutover-weekend-core";
 import { __runCultiveraReconcileCoreTests } from "../../src/lib/pos/cultivera-reconcile-core";
 import { __runBulkPreviewCoreTests } from "../../src/lib/inventory/bulk-preview-core";
 import { __runCutoverWatchCoreTests } from "../../src/lib/pos/cutover-watch-core";
@@ -2278,6 +2279,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 120); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
   assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28); // R50 A3: dry-run preview copy + COA URL triage
   assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37); // R50 A4: cutover failure-alert planner
+  assertRan("cutover-weekend-core", __runCutoverWeekendCoreTests(), 42); // R50 A5: the dated, timed cutover weekend on one page
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
