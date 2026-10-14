@@ -1585,3 +1585,34 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   words; wiring order pins; a failed SECOND draft page and >1,000 barcodes → none; the flag in the env ledger + `.env.example`). S32/S34/S19 count + wiring
   pins moved with comments. Mutation: 68 mutants, 67 killed, 1 documented equivalent (dropping the joined
   category from `filter_categories` — the injected variant already carries it).
+
+### A5 — The cutover weekend on one page (dated, timed, Pacific)
+
+* **Where.** The top of `/admin/menu-imports/cutover` ("The cutover weekend, on one page"), plus the printable
+  `docs/CUTOVER_WEEKEND_ONE_PAGE.md` with a tick box per step. Both are rendered from ONE pure core,
+  `src/lib/pos/cutover-weekend-core.ts`; a test compares the committed doc to the core's output byte for byte,
+  so the page and the paper cannot disagree.
+* **Five sections, 21 steps.** Before 10/30 (rehearsal #3, scanners + workbook in Excel, test sale + return,
+  test alert); Fri 10/30 (workbooks, back stock by 18:00, floor after close); Sat 10/31 (sell on Cultivera, no
+  approvals, dress rehearsal #4 in Test mode, done before 01:00); Sun 11/01 (06:00 fetch with count date 10/30 →
+  06:10 GO → 06:15 stage real → 06:20 publish → 06:40 units balance → 06:50 count apply → 07:30 checks → 08:00
+  open = point of no return → manifests/onboarding → change the Cultivera password); 11/02–11/08 daily check.
+  Three rollback checkpoints. "You are here" comes from the clock only; it never claims a step is done.
+* **Facts found while writing it (each checked in code, none assumed):**
+  * **Tick "Start fresh" on 11/01.** With it off the crawler resumes the newest UNFINISHED run
+    (`cultivera_pos_jobs.py resumable_run`), which could be a stopped 10/31 rehearsal with 10/31 data. Runs
+    never share files (one folder each), so the roadmap's "details reused from 10/31" does not happen; the
+    11/01 fetch is a full harvest (rehearsal #2a: 478 s). `CULTIVERA_CUTOVER_RUNBOOK.md` said "leave Start fresh
+    off" and is corrected.
+  * **Clocks fall back at 02:00 on Sun 11/01** (US DST end). 01:00–01:59 happens twice and Cultivera stamps
+    sales in Pacific wall time (U-49), so nothing is scheduled 01:00–03:00. The Pacific clock in the core uses
+    `Intl` with America/Los_Angeles (pinned: 11/01 14:00Z = 06:00 PST, 10/31 13:00Z = 06:00 PDT).
+  * **The units check skips test imports** ("Test imports never make lots"), so rehearsal #4 reads GO on the run
+    page and the units check happens only on 11/01.
+  * **Count before the open.** A lot that moved after the import is left alone (`moved_since_import`), so the
+    count is applied before the first sale on our register.
+  * **Stage within 90 minutes** (`MAX_HARVEST_AGE_MINUTES`; the step text uses the constant).
+* **Tests.** `cutover-weekend-core` 42 self-tests (in the runner); `r50-a5-cutover-weekend.test.tsx` 10
+  (self-test count + live runner line, copy pins, the facts read from the code they come from, every link is a
+  real admin page, doc byte for byte, the page rendered with React at a pinned clock). Mutation 26/26 killed.
+  The runner pins in A5 and A7 now require a live `assertRan` line (a commented-out call survived before).

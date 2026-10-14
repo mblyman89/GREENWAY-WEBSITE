@@ -66,7 +66,7 @@ describe("R50 A7 - self-tests", () => {
     expect(__runIntakeMasteringCoreTests().passed).toBe(327);
     const runner = src("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runBarcodeMatchCoreTests } from "../../src/lib/pos/barcode-match-core";');
-    expect(runner).toMatch(/assertRan\("barcode-match-core", __runBarcodeMatchCoreTests\(\), 34\)/);
+    expect(runner).toMatch(/^ {2}assertRan\("barcode-match-core", __runBarcodeMatchCoreTests\(\), 34\);/m); // a live call, not a comment
   });
 });
 

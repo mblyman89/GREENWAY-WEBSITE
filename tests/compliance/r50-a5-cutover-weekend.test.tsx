@@ -50,7 +50,7 @@ describe("R50 A5 · the weekend core", () => {
     expect(core.__runCutoverWeekendCoreTests()).toEqual({ passed: 42, failed: 0 });
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runCutoverWeekendCoreTests } from "../../src/lib/pos/cutover-weekend-core";');
-    expect(runner).toMatch(/assertRan\("cutover-weekend-core", __runCutoverWeekendCoreTests\(\), 42\)/);
+    expect(runner).toMatch(/^ {2}assertRan\("cutover-weekend-core", __runCutoverWeekendCoreTests\(\), 42\);/m); // a live call, not a comment
   });
 
   it("copy pins: the dates, the times and the rules the day depends on", () => {
