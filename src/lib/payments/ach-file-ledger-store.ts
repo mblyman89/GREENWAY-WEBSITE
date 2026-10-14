@@ -163,8 +163,15 @@ async function releaseLoop(
   return { ok: false, error: ledgerDbErrorMessage(MODIFIER_TAKEN_CONSTRAINT) };
 }
 
+/** What a release hands back: the exact stored bytes and the facts read from them. */
+export type Released = { ok: true; id: string; body: string; filename: string; modifier: string; fileDate: string; entryCount: number; totalCents: number };
+
+function released(id: string, s: Sealed, filename: string): Released {
+  return { ok: true, id, body: s.body, filename, modifier: s.modifier, fileDate: s.fileDate, entryCount: s.entryCount, totalCents: s.totalCents };
+}
+
 /** Vendor, prenote and test-credit files: one ach_files row. */
-export async function releaseAchFile(input: ReleaseInput & { sourceId: string }): Promise<{ ok: true; id: string; body: string; filename: string; modifier: string } | Fail> {
+export async function releaseAchFile(input: ReleaseInput & { sourceId: string }): Promise<Released | Fail> {
   if (input.kind === "payroll") return { ok: false, error: "Payroll files are released with releasePayrollAchFile." };
   const r = await releaseLoop(input, async (s) => {
     const { data, error } = await createSupabaseAdminClient()
@@ -190,13 +197,13 @@ export async function releaseAchFile(input: ReleaseInput & { sourceId: string })
     return { ok: true, id: String((data as { id: string }).id) };
   });
   if (!r.ok) return r;
-  return { ok: true, id: r.id, body: r.sealed.body, filename: input.filename, modifier: r.sealed.modifier };
+  return released(r.id, r.sealed, input.filename);
 }
 
 /** Payroll: the ledger row and the run stamp in ONE database call (0273). */
 export async function releasePayrollAchFile(
   input: Omit<ReleaseInput, "kind"> & { runId: string; overrideWarnings: boolean; overrideReason: string | null },
-): Promise<{ ok: true; id: string; body: string; filename: string; modifier: string } | Fail> {
+): Promise<Released | Fail> {
   const r = await releaseLoop({ ...input, kind: "payroll" }, async (s) => {
     const { data, error } = await createSupabaseAdminClient().rpc("ach_file_release_payroll", {
       p_run_id: input.runId,
@@ -218,7 +225,7 @@ export async function releasePayrollAchFile(
     return { ok: true, id: data };
   });
   if (!r.ok) return r;
-  return { ok: true, id: r.id, body: r.sealed.body, filename: input.filename, modifier: r.sealed.modifier };
+  return released(r.id, r.sealed, input.filename);
 }
 
 // ------------------------------------------------------------- reading -----

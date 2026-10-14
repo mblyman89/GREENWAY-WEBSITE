@@ -116,9 +116,9 @@ describe("self-tests and teaching", () => {
   it("the pure self-tests pass, at least as many as the registry floor", () => {
     const r = __runAchOpsCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(87);
+    expect(r.passed).toBeGreaterThanOrEqual(92);
     const reg = readFileSync(join(ROOT, "scripts/compliance/run-pure-selftests.ts"), "utf8");
-    expect(reg).toContain('assertRan("ach-ops-core", __runAchOpsCoreTests(), 87)');
+    expect(reg).toContain('assertRan("ach-ops-core", __runAchOpsCoreTests(), 92)');
   });
   it("the micro-entry monitoring authority is taught and nothing is left uncited", () => {
     const l = achLesson("test-credit-monitoring");

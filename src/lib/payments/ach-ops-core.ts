@@ -104,6 +104,8 @@ export function planCheckFile(input: {
   effective: string;
   todayIso: string;
   createdAt: Date;
+  /** R41 S3: the day's next free File ID Modifier, from the ach_files ledger (never a fixed letter). */
+  fileIdModifier: string;
 }): { ok: true; plan: CheckFilePlan } | { ok: false; error: string } {
   const { method, checks } = input;
   if (checks.length === 0) return { ok: false, error: `No ${method === "prenote" ? "prenotes" : "test credits"} are waiting to be sent.` };
@@ -140,7 +142,7 @@ export function planCheckFile(input: {
     companyEntryDescription: method === "prenote" ? PAYROLL_DESCRIPTION : MICRO_ENTRY_DESCRIPTION,
     effectiveDate: new Date(`${eff.date}T00:00:00Z`),
     createdAt: input.createdAt,
-    fileIdModifier: method === "prenote" ? "P" : "M",
+    fileIdModifier: input.fileIdModifier,
   });
   if (!built.ok) return { ok: false, error: built.error };
   const settlement = eff.date;
@@ -488,7 +490,7 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   ok(!imp.ok && imp.error.startsWith("Pick the date"), "impossible future date refused as a date, not rolled over");
 
   // prenote file
-  const p = planCheckFile({ method: "prenote", checks: [chk(), chk({ verificationId: "v2", accountNumber: "555", accountType: "savings" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at });
+  const p = planCheckFile({ method: "prenote", checks: [chk(), chk({ verificationId: "v2", accountNumber: "555", accountType: "savings" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" });
   ok(p.ok, "prenote file builds");
   if (p.ok) {
     const lines = p.plan.file.split("\n");
@@ -503,9 +505,16 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
     ok(p.plan.eligible > p.plan.settlement && p.plan.settlement >= p.plan.effective, "dates satisfy 0263's order");
     ok(p.plan.ids.join() === "v1,v2", "ids carried");
     ok(/^acctcheck_prenote_2026-10-13_2\.ach$/.test(p.plan.filename), "filename");
+    ok(lines[0].slice(33, 34) === "A", "R41 S3: the File ID Modifier is the one passed in");
   }
+  // R41 S3: no fixed "P"/"M" letter: the ledger's next letter goes in position 34.
+  const pc = planCheckFile({ method: "prenote", checks: [chk()], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "C" });
+  ok(pc.ok && pc.plan.file.split("\n")[0].slice(33, 34) === "C", "prenote takes the given modifier C");
+  const mc = planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: 5 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "7" });
+  ok(mc.ok && mc.plan.file.split("\n")[0].slice(33, 34) === "7", "test credit takes the given modifier 7");
+  ok(!planCheckFile({ method: "prenote", checks: [chk()], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "p" }).ok, "a lower-case modifier is refused (nacha-core)");
   // micro file
-  const m = planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: 37 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at });
+  const m = planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: 37 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" });
   ok(m.ok, "micro file builds");
   if (m.ok) {
     const lines = m.plan.file.split("\n");
@@ -516,7 +525,7 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   }
   // Each refusal is checked by its OWN words: nacha-core would refuse some of these too, with less useful words.
   const err = (r: ReturnType<typeof planCheckFile>) => (r.ok ? "" : r.error);
-  const base = { originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at };
+  const base = { originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" };
   ok(err(planCheckFile({ method: "prenote", checks: [], ...base })) === "No prenotes are waiting to be sent.", "empty refused in words");
   ok(err(planCheckFile({ method: "micro_entry", checks: [], ...base })) === "No test credits are waiting to be sent.", "empty micro refused in words");
   ok(err(planCheckFile({ method: "prenote", checks: [chk({ method: "micro_entry", microCents: 5 })], ...base })).includes("a test credit cannot go in a prenote file"), "mixed method refused");
@@ -524,11 +533,11 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   ok(err(planCheckFile({ method: "prenote", checks: [chk({ status: "sent" })], ...base })).includes("already sent"), "not planned refused");
   ok(err(planCheckFile({ method: "prenote", checks: [chk(), chk()], ...base })).endsWith("listed twice."), "same check twice refused");
   ok(err(planCheckFile({ method: "prenote", checks: [chk({ routing: "125000025" })], ...base })).includes("Fix the account before checking it"), "bad routing refused");
-  ok(!planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: 100 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "$1.00 test refused");
-  ok(!planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: null })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "missing cents refused");
-  ok(!planCheckFile({ method: "prenote", checks: [chk({ microCents: 5 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "prenote with amount refused");
-  ok(!planCheckFile({ method: "prenote", checks: [chk()], originator: ORIG, effective: "2026-10-10", todayIso: T, createdAt: at }).ok, "weekend effective refused");
-  const dup = planCheckFile({ method: "prenote", checks: [chk(), chk({ verificationId: "v2" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at });
+  ok(!planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: 100 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" }).ok, "$1.00 test refused");
+  ok(!planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: null })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" }).ok, "missing cents refused");
+  ok(!planCheckFile({ method: "prenote", checks: [chk({ microCents: 5 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" }).ok, "prenote with amount refused");
+  ok(!planCheckFile({ method: "prenote", checks: [chk()], originator: ORIG, effective: "2026-10-10", todayIso: T, createdAt: at, fileIdModifier: "A" }).ok, "weekend effective refused");
+  const dup = planCheckFile({ method: "prenote", checks: [chk(), chk({ verificationId: "v2" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at, fileIdModifier: "A" });
   ok(!dup.ok, "same account prenoted twice refused (nacha-core)");
 
   // micro cents

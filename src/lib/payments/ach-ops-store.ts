@@ -27,6 +27,7 @@ import { createHash, randomInt } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { decryptSecret, encryptSecret } from "@/lib/security/at-rest-crypto";
+import { findLiveFile, releaseAchFile } from "@/lib/payments/ach-file-ledger-store";
 import { resolveNotifyContacts, type NotifyContact } from "@/lib/payments/ach-authorization-core";
 import { phoneReminder } from "@/lib/payments/vault-release-notice-core";
 import { checkResolutionNote, noticeHoldReason, noticeOwnerEmail, parseReturnNotice, type ParsedNotice } from "@/lib/payments/ach-return-log-core";
@@ -521,17 +522,23 @@ export async function loadPlannedChecks(method: FileMethod): Promise<{ ok: true;
   return { ok: true, checks, skipped };
 }
 
+/** R41 S3: the ach_files source of one check file: its method, effective date and exact list of checks. */
+export function checkFileSourceId(method: FileMethod, effective: string, fingerprint: string): string {
+  return `${method}:${effective}:${fingerprint}`;
+}
+
 /**
- * Build the check file. Nothing is recorded: this runs on a GET download. If
- * `expect` (the fingerprint the page showed) is given and the list changed
- * since, the build is refused so the person never uploads a file that differs
- * from what they confirm.
+ * Build the check file with a given File ID Modifier. Nothing is recorded.
+ * If `expect` (the fingerprint the page showed) is given and the list changed
+ * since, the build is refused so the person never releases a file that
+ * differs from what they confirm.
  */
 export async function buildCheckFile(input: {
   method: FileMethod;
   effective: string;
   todayIso: string;
   now: Date;
+  fileIdModifier: string;
   expect?: string | null;
 }): Promise<{ ok: true; plan: CheckFilePlan; fingerprint: string; skipped: string[] } | Fail> {
   const loaded = await loadPlannedChecks(input.method);
@@ -540,15 +547,58 @@ export async function buildCheckFile(input: {
   if (input.expect && input.expect !== fp) return { ok: false, error: "The list of checks changed since this page loaded. Reload the page and download again." };
   const orig = await originatorFromSettings();
   if (!orig.ok) return orig;
-  const plan = planCheckFile({ method: input.method, checks: loaded.checks, originator: orig.originator, effective: input.effective, todayIso: input.todayIso, createdAt: input.now });
+  const plan = planCheckFile({ method: input.method, checks: loaded.checks, originator: orig.originator, effective: input.effective, todayIso: input.todayIso, createdAt: input.now, fileIdModifier: input.fileIdModifier });
   if (!plan.ok) return loaded.skipped.length ? { ok: false, error: `${plan.error} Left out: ${loaded.skipped.join("; ")}.` } : plan;
   return { ok: true, plan: plan.plan, fingerprint: fp, skipped: loaded.skipped };
 }
 
 /**
- * The person confirms the file was uploaded to Timberland. The plan is built
- * again from the database (same method and effective date) and must have the
- * same fingerprint as the file they downloaded; then ONE call marks them sent.
+ * R41 S3: RELEASE the check file once into the ach_files ledger (owner; an
+ * admin's attempt is a request). The list must still be exactly the one the
+ * page showed (fingerprint). The File ID Modifier is the day's next free one.
+ * The download route then serves these stored bytes and builds nothing.
+ */
+export async function releaseCheckFile(input: {
+  method: FileMethod;
+  effective: string;
+  fingerprint: string;
+  actorId: string;
+  todayIso: string;
+  now: Date;
+}): Promise<{ ok: true; fileId: string; modifier: string; plan: CheckFilePlan } | Fail> {
+  if (!/^[0-9a-f]{16}$/.test(input.fingerprint)) return { ok: false, error: "Reload the Operations page and use its release button." };
+  const loaded = await loadPlannedChecks(input.method);
+  if (!loaded.ok) return loaded;
+  const fp = checkListFingerprint(loaded.checks.map((c) => c.verificationId));
+  if (fp !== input.fingerprint) return { ok: false, error: "The list of checks changed since this page loaded. Reload the page and release again." };
+  const orig = await originatorFromSettings();
+  if (!orig.ok) return orig;
+  const plan = (fileIdModifier: string) =>
+    planCheckFile({ method: input.method, checks: loaded.checks, originator: orig.originator, effective: input.effective, todayIso: input.todayIso, createdAt: input.now, fileIdModifier });
+  // A first plan names the file and refuses a bad list before the ledger is touched.
+  const first = plan("A");
+  if (!first.ok) return loaded.skipped.length ? { ok: false, error: `${first.error} Left out: ${loaded.skipped.join("; ")}.` } : first;
+  const r = await releaseAchFile({
+    kind: input.method,
+    sourceId: checkFileSourceId(input.method, first.plan.effective, fp),
+    actorId: input.actorId,
+    now: input.now,
+    effectiveDate: first.plan.effective,
+    filename: first.plan.filename,
+    build: (m) => {
+      const p = plan(m);
+      return p.ok ? { ok: true, file: p.plan.file, entryCount: p.plan.entryCount, totalCents: p.plan.totalCents } : p;
+    },
+  });
+  if (!r.ok) return r;
+  return { ok: true, fileId: r.id, modifier: r.modifier, plan: { ...first.plan, file: r.body } };
+}
+
+/**
+ * The person confirms the file was uploaded to Timberland. The released
+ * file for exactly this list must exist in the ledger (R41 S3), and the list
+ * must still have the same fingerprint; then ONE call marks them sent, with
+ * the released file's name.
  */
 export async function markCheckFileSent(input: {
   method: FileMethod;
@@ -559,9 +609,11 @@ export async function markCheckFileSent(input: {
   now: Date;
 }): Promise<{ ok: true; count: number; plan: CheckFilePlan } | Fail> {
   if (!/^[0-9a-f]{16}$/.test(input.fingerprint)) return { ok: false, error: "Download the file first, then confirm it was uploaded." };
-  const built = await buildCheckFile({ method: input.method, effective: input.effective, todayIso: input.todayIso, now: input.now, expect: input.fingerprint });
+  const live = await findLiveFile(input.method, checkFileSourceId(input.method, input.effective, input.fingerprint));
+  if (!live) return { ok: false, error: "This file has not been released yet (or it was voided). Release it, download it, upload it, then confirm." };
+  const built = await buildCheckFile({ method: input.method, effective: input.effective, todayIso: input.todayIso, now: input.now, fileIdModifier: live.file_id_modifier, expect: input.fingerprint });
   if (!built.ok) return built;
-  const p = built.plan;
+  const p = { ...built.plan, filename: live.filename };
   const { data, error } = await createSupabaseAdminClient().rpc("ach_verification_mark_sent", {
     p_ids: [...p.ids],
     p_actor: input.actorId,
