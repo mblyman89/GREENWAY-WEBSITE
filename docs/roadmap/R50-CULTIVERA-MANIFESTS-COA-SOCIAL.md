@@ -1476,3 +1476,41 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     would-skip = bad-link, would-try = archived; facts: dry = real, owner-set date kept, test import refused);
     paused preview resumes; failures honest; wiring pins. Mutants 24/24 killed (one survivor, "a problem
     alone warns", pinned with a new self-test).
+
+### A4 — Failure alerts (email + phone) for the cutover jobs
+
+  * **What is watched (and nothing else).** The two jobs that run while nobody is looking at a screen: the
+    Cultivera harvest (crawler thread, 10–30 min) and the import it feeds. Every button the owner presses
+    already shows its own result on the page, so those are not alerted. Harvest started / resumed in the last
+    6 h (the Start button's audit row): **failed** (critical, once per run + finish time, so a resumed run
+    that fails again alerts again), **running past budget + 15 min** (warning; budget = the crawler's
+    `CULTIVERA_POS_BUDGET_SECONDS`, default 1800, read from the same env name on the site if set),
+    **crawler unreachable** (warning), **finished** (info: "check and import"). Imports created in the last
+    24 h: **failed** (critical), **stuck "processing" ≥ 15 min** (warning). Cancelled runs say nothing (the
+    owner did it). Test-mode imports are tagged "(test mode)".
+  * **Channels = the existing notify infrastructure.** Email through Resend (`RESEND_API_KEY`,
+    `ORDER_EMAIL_FROM`, `ORDER_STAFF_EMAILS`, via the bounded `sendStaffAlertEmail`) and Web Push to every
+    staff device (`sendPushToAll`, VAPID keys). **"Text" = phone push**, on purpose (researched 2026-10-14):
+    carrier email-to-text gateways are closing (T-Mobile tmomail.net Dec 2024, AT&T txt.att.net Jun 2025,
+    Verizon vtext.com Mar 31 2027) and a real SMS provider needs A2P 10DLC carrier registration (days to
+    weeks) — not something to start two weeks before go-live. The page says this in plain words.
+  * **Claim before send (rule 12).** New cron `/api/cron/cutover-watch`, every 5 min (288/day; pinned in the
+    L-34 cadence map, the usage-5 cron count 7 → 8 and rule 12's schedule text). Each alert's key is
+    INSERTED into `compliance_reminder_log` (UNIQUE dedupe_key) before sending; a doubled tick loses the
+    insert and sends nothing. A claim the database refuses for another reason sends nothing (a send without
+    a claim could repeat every 5 min). Every channel failing → the row says "NOT DELIVERED" and is shown red
+    on the page instead of re-sending every 5 min. No channel configured → nothing claimed, so the alert
+    fires the moment one is. Crawler text is HTML-escaped in the email and un-escaped for the plain-text push.
+    An idle tick is two indexed reads and writes nothing. Fail-closed cron auth (copied preamble).
+  * **On the cutover runbook page.** "Failure alerts (email and phone)": whether alerts can reach you (email
+    on/off with recipient count, push on/off with device count, what to set when off), the text note,
+    **Send a test alert** (menu.import; logged + audited; says plainly when no channel exists) and **Alerts
+    sent** (newest 20, real + test, each "Delivered by email and phone (…)", "Sending now",
+    "Sending was interrupted" or "Not delivered"). No migration (the log table and its channel check exist).
+  * **Tests.** Core self-tests 37 (runner floor 37). Vitest 24 on the postgrest fake with the real unique
+    rule: once by email + push and never again; two overlapping ticks → exactly one send; resumed failure →
+    new alert; no channel → nothing claimed then fires; push-only; every channel failing → not resent; claim
+    refused → nothing sent; unreachable; 6 h / 24 h windows; other audit actions ignored; budget env;
+    crawler unconfigured; idle tick writes nothing; test button both ways; log shows only cutover rows; page
+    and route wiring; wrong secret 401. Mutants 42/42 killed (3 first-round survivors — resumed-run dedupe,
+    a 0 budget, the email HTML — each pinned by a new assertion).
