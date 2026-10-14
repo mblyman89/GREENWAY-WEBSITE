@@ -1539,7 +1539,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
-  assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 57);
+  assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 58);
   assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   assertRan("receiving-table-core", __runReceivingTableCoreTests(), 88); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting

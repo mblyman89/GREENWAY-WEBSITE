@@ -87,10 +87,10 @@ afterEach(() => {
 // === 1. Pure core ============================================================
 describe("R50 S4 pure core", () => {
   it("self-tests pass with the exact count and are registered in the runner", () => {
-    expect(__runCultiveraIntakeSuggestionCoreTests().passed).toBe(57);
+    expect(__runCultiveraIntakeSuggestionCoreTests().passed).toBe(58);
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runCultiveraIntakeSuggestionCoreTests } from "../../src/lib/inventory/cultivera-intake-suggestion-core";');
-    expect(runner).toContain('assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 57);');
+    expect(runner).toContain('assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 58);');
   });
 });
 

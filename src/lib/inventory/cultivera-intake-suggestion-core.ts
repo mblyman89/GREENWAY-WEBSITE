@@ -410,6 +410,10 @@ export function __runCultiveraIntakeSuggestionCoreTests(): { passed: number; fai
     run([draft({ id: "d1", name: "x", strain_name: "Train Wreck", vendor_name: "OTHER FARM", brand_name: "Other" })], [pp]).size === 0,
     "different vendor and brand never suggested",
   );
+  ok(
+    run([draft({ id: "d1", name: "x", strain_name: "Train Wreck", vendor_name: "OTHER FARM", brand_name: "" })], [pp]).size === 0,
+    "a different vendor with no brand never suggested (the vendor link is required)",
+  );
   const viaBrand = run([draft({ id: "d1", name: "x", strain_name: "Train Wreck", vendor_name: "Grow Op Farms LLC" })], [pp]).get("d1");
   ok(viaBrand?.best.vendorLink === "brand", "vendor spelled differently links via brand");
   const vids: VendorIdInputs = {
