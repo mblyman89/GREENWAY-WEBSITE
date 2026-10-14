@@ -1516,3 +1516,33 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     crawler unconfigured; idle tick writes nothing; test button both ways; log shows only cutover rows; page
     and route wiring; wrong secret 401. Mutants 42/42 killed (3 first-round survivors — resumed-run dedupe,
     a 0 budget, the email HTML — each pinned by a new assertion).
+
+### A2+ — "Work it and fix it" helpers on the go / no-go page (owner follow-up)
+
+* **Why.** The owner: "make sure the new reconciliation page has tons of helper features and functions. If
+  something needs worked, make sure I can work it and fix it." A2 showed every line and let him note it one
+  at a time; with hundreds of lines after a real import that is too slow and too easy to lose your place.
+* **What he can do now** (`/admin/menu-imports/reconcile`, nothing here changes stock):
+  * **Progress** under the verdict: "N open, M explained (P% done)" with a bar (floors, so 100% only when
+    nothing is open) and **Start working: go to the first line without a note**.
+  * **Save & next** on every open line: saves the note, then lands on the next line without a note (wraps
+    round, skips noted ones, keeps his filters, scrolls to it and rings it gold). The jump key is validated
+    on the server; a junk key just saves without jumping.
+  * **?jump=** opens whichever page the line is on (beats ?page), used by Save & next, Start working, the
+    barcode lookup ("Go to the line and write a note" / "See its note") and the latest-notes list.
+  * **Work many lines at once**: one note on every OPEN line in the current view (all pages), and **Remove the
+    notes** (the undo) on every noted line in the view. The page sends the count he saw; the server re-reads
+    the lines with the same filter and refuses if the count moved ("Nothing was saved"), if the box is not
+    ticked, over 500 lines, or if his notes cannot be read (never guesses which lines are open). One
+    all-or-nothing insert, one audit row per line, each marked `bulk: true`.
+  * **Note suggestions** (click the note box): his own latest notes first, then ready-made notes for that
+    kind of line. **Your latest notes** list with a link back to each line.
+  * **Open column** in the vendor and category tables: a link to just that group's lines still needing a
+    note; a tick when a red group is fully explained.
+  * The page, the CSV download and the bulk buttons read the filter with ONE function (`filterFromParams`),
+    so all three always act on the same lines.
+* **Tests.** Core self-tests 95 → 120 (runner floor 120). New `r50-a2-helpers.test.tsx`, 18 behavioural tests
+  on the same postgrest fake + real .xlsx as A2 (bulk: only open lines, filters honoured, stale count
+  refused and nothing written, no tick / short note / bad id / notes unreadable / failed insert, the 500 cap,
+  undo; Save & next; jump paging + highlight; open counts; suggestions order; CSV filter). A2's gate pin
+  moves 2 → 3 menu.import (the shared bulk helper). Mutants 45/45 killed.

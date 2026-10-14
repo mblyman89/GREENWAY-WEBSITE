@@ -138,6 +138,7 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
             <li><b>Cultivera&apos;s side</b> is the exact file the import made the lots from (kept on the import). <b>Our side</b> is every lot on that import, wherever &quot;Rebuild deliveries&quot; moved it.</li>
             <li>It compares the <b>received</b> quantity (what the import wrote). On-hand moves with every sale and with the count, so it is shown but never decides.</li>
             <li><b>GO</b> = every barcode matches. <b>GO (explained)</b> = every line left has your note saying why it is fine. <b>NO-GO</b> = something is unexplained, or something could not be read.</li>
+            <li><b>Working the list:</b> press <b>Start working</b> under the verdict, then <b>Save &amp; next</b> on each line - it saves your note and takes you to the next line without one. Click the note box for ready-made notes. Many lines with the same reason? Filter to them (a vendor, a kind, a search) and use <b>Work many lines at once</b>; <b>Remove the notes</b> there is the undo.</li>
             <li>Nothing on this page changes stock. The only button that writes lots is &quot;Create the missing lots&quot;, which adds only lots that do not exist yet.</li>
           </ul>
         </details>
