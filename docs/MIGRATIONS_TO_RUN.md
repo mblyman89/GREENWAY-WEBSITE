@@ -2373,3 +2373,64 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0264_loyalty_consent_text.rollback.sql`.
   This forgets the saved wording, so export Loyalty signups first.
+
+## R41 — 0271 — ACH owner authority (owner approves; admin stop actions; review list)
+
+- [ ] `0271_ach_owner_authority.sql` puts your decision D-6 (option B) into
+  the database. In your words: "I trust Stephen, he can make and and approve
+  all actions, it should send me alerts and let me know in the back office to
+  review them and check them off the list", and then "I think I like option b
+  better now that I think of it. Please build it that way."
+  - **Only the owner can make ACH banking live.** The database refuses
+    anyone else for each of these: releasing vendor banking from hold,
+    marking it verified, archiving it, changing an employee's direct deposit
+    numbers, changing the company ACH settings, making an ACH authorization
+    active, marking an account verified, and releasing an employee hold.
+    The dual/solo release split is retired. An owner release still needs
+    how the payee was called back plus a 10+ character note, but no solo
+    reason.
+  - **Admin stop actions still work at once.** Putting vendor banking on
+    hold and logging a bank return or change notice are not limited. The
+    app adds each one to your **review list** and emails you.
+  - **Requests.** A new table, `ach_change_requests`, holds every admin
+    change that waits for you. A request can never be deleted, and what it
+    asks for can never be edited. Only you approve, reject or supersede it.
+    Only the person who asked can withdraw it. A request whose record
+    changed after it was made is refused as **stale** (D-7). The result of
+    an approval is written once. Every step goes into an append-only log,
+    `ach_change_request_events`.
+  - **Review list.** A new table, `ach_owner_reviews`. You tick each item
+    off once, with an optional note. Items cannot be edited or deleted.
+  - **D-5:** managers can no longer drop ACH documents. Only owner and
+    admin can.
+  - Two new columns, `employees.bank_changed_by` and `bank_changed_at`,
+    record who changed an employee's bank numbers.
+
+  Apply it **after 0263**. It is safe to re-run.
+
+  **Before you apply it:** if the vault holds any vendor banking that is
+  ON HOLD, it will need **your** release afterwards. Releases already done
+  stay as they are.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_proc where proname in
+           ('ach_actor_is_owner', 'ach_write_by_owner', 'ach_request_decide', 'ach_request_record_result',
+            'employees_bank_owner_guard', 'ach_company_settings_owner_guard', 'ach_auth_owner_guard',
+            'ach_acct_owner_guard')) as fns,
+         (select count(*) from pg_tables where schemaname = 'public' and tablename in
+           ('ach_change_requests', 'ach_change_request_events', 'ach_owner_reviews')) as tables;
+  -- fns | tables
+  -- 8   | 3
+  ```
+
+  For the full proof, paste `scripts/recon/ach-owner-authority-0271-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0271 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0271_ach_owner_authority.rollback.sql`.
+  It **refuses** once any request or review item exists, once any vendor
+  banking or employee hold has been released by the owner, or once any
+  employee bank change has been stamped. Those are records. Otherwise it
+  puts back the 0259 vault guard, the 0263 hold release and the 0258
+  manager-drop rules exactly as they were.
