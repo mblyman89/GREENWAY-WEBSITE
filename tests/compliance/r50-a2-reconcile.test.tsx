@@ -176,7 +176,7 @@ describe("A2 pure core self-tests", () => {
   it("passes every self-test", () => {
     const res = core.__runCultiveraReconcileCoreTests();
     expect(res.failed).toBe(0);
-    expect(res.passed).toBeGreaterThanOrEqual(94);
+    expect(res.passed).toBeGreaterThanOrEqual(95);
   });
 });
 
@@ -569,7 +569,7 @@ describe("A2 wiring pins", () => {
     expect(read("src/app/admin/menu-imports/page.tsx")).toContain('href="/admin/menu-imports/reconcile"');
   });
   it("registered in the pure runner", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-reconcile-core", __runCultiveraReconcileCoreTests\(\), 94\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("cultivera-reconcile-core", __runCultiveraReconcileCoreTests\(\), 95\)/);
   });
 });
 
