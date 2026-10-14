@@ -414,6 +414,12 @@ describe("source pins: downloads never build, builders never pick their own lett
       expect([...c.matchAll(/"Cache-Control": "no-store"/g)].length, p).toBeGreaterThanOrEqual(2);
     }
   });
+  it("each route reads the RIGHT file: payroll by run id (kind payroll), the files list by row id, the check file by its list", () => {
+    expect(code(read(ROUTES[0]))).toContain('const res = await readLiveFileForSource("payroll", id);');
+    expect(code(read(ROUTES[1]))).toContain("const res = await readAchFileForDownload(id);");
+    expect(code(read(ROUTES[2]))).toContain('const res = await readLiveFileForSource(method, checkFileSourceId(method, q.get("effective") ?? "", fp));');
+    for (const p of ROUTES) expect(code(read(p)), p).toContain("return new Response(res.body, {");
+  });
   it("no builder hard-codes a File ID Modifier any more (the old prenote P / test-credit M / payroll A)", () => {
     for (const p of ["src/lib/payments/ach-ops-core.ts", "src/lib/payments/ach-ops-store.ts", "src/lib/payroll/payroll-store.ts", "src/app/admin/vendor-payments/actions.ts"]) {
       const c = code(read(p)).replace(/export function __run\w+Tests[\s\S]*$/, "");
@@ -481,5 +487,21 @@ describe("0273 SQL text pins", () => {
   });
   it("the rollback refuses while released files exist", () => {
     expect(RB).toContain("ROLLBACK REFUSED: ach_files holds released ACH files");
+  });
+});
+
+// =========================================================================
+describe("test the tests", () => {
+  it("scripts/r41/mutate-s3-app.last.log: every mutant killed, control passed, the log covers the script's full list", () => {
+    const script = read("scripts/r41/mutate-s3-app.py");
+    const log = read("scripts/r41/mutate-s3-app.last.log");
+    const listed = script.slice(script.indexOf("M = ["), script.indexOf("\n]\n")).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
+    const m = /total (\d+) killed (\d+) survivors \[\]/.exec(log);
+    expect(m, "clean summary line").not.toBeNull();
+    expect(Number(m![1])).toBe(listed);
+    expect(Number(m![2])).toBe(listed);
+    expect(listed).toBeGreaterThanOrEqual(20);
+    expect(log).toContain("control pass");
+    expect(log).not.toMatch(/SURVIVED|ANCHOR/);
   });
 });
