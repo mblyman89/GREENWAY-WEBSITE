@@ -76,6 +76,17 @@ M = [
     ("rls-off", "alter table public.ach_files enable row level security;", ""),
 ]
 
+# Supabase's default privileges before the Data API change (changelog 45329:
+# "select, insert, update, and delete are granted to every table in the public
+# schema to the anon, authenticated and service_role roles"). Projects created
+# before it keep them until October 30, 2026, so 0273's revokes must hold
+# against them. Set for this run only; removed again at the end.
+SUPA_DEFAULTS = "alter default privileges for role postgres in schema public grant select, insert, update, delete on tables to anon, authenticated, service_role"
+SUPA_UNDO = "alter default privileges for role postgres in schema public revoke select, insert, update, delete on tables from anon, authenticated, service_role"
+d = subprocess.run(["psql", PGURL, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-c", SUPA_DEFAULTS], capture_output=True, text=True)
+if d.returncode:
+    sys.exit(f"could not set the Supabase default privileges: {d.stderr}")
+
 src = open(MIG).read()
 if not control("before"):
     sys.exit(2)
@@ -103,6 +114,8 @@ for name, a, b in M:
         surv.append(name)
 
 assert open(MIG).read() == src
-ctl = control("after")
+ctl = control("after (Supabase defaults)")
+subprocess.run(["psql", PGURL, "-X", "-q", "-c", SUPA_UNDO], capture_output=True)
+ctl = control("after (plain Postgres)") and ctl
 print(f"total {len(M)} killed {len(M) - len(surv)} survivors {surv}")
 sys.exit(1 if surv or not ctl else 0)
