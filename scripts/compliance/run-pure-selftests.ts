@@ -2275,7 +2275,7 @@ __runLiquidVolumeTests();
   assertRan("card-alias-core", __runCardAliasCoreTests(), 44); // R50 A1: one-click accept of a Cultivera suggestion (permanent decision, re-verified)
   assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 95); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
   assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28); // R50 A3: dry-run preview copy + COA URL triage
-  assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 26); // R50 A4: cutover failure-alert planner
+  assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 29); // R50 A4: cutover failure-alert planner
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

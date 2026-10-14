@@ -202,6 +202,23 @@ export function testAlert(nowIso: string): WatchAlert {
   };
 }
 
+/** Undo escapeHtml for the phone push (a notification is plain text, not HTML). */
+export function plainText(s: string): string {
+  return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
+
+const COLOR: Record<WatchUrgency, string> = { critical: "#b91c1c", warning: "#b45309", info: "#12351f" };
+
+/** The alert email. Subject + body are already safe HTML (crawler / database text was escaped by the planner). */
+export function alertHtml(a: WatchAlert, linkUrl: string): string {
+  return `<div style="font-family:system-ui,Arial,sans-serif;color:#111;max-width:560px">
+  <h2 style="color:${COLOR[a.urgency]};margin-bottom:4px">${escapeHtml(a.subject)}</h2>
+  <p style="line-height:1.5">${a.body}</p>
+  <p><a href="${escapeHtml(linkUrl)}" style="display:inline-block;background:#12351f;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">${escapeHtml(a.linkLabel)}</a></p>
+  <p style="color:#555;font-size:13px">${escapeHtml(a.footnote)}</p>
+</div>`;
+}
+
 export type WatchChannels = { emailConfigured: boolean; emailRecipients: number; pushConfigured: boolean; pushDevices: number | null };
 
 /** Plain-language channel status for the runbook page. */
@@ -214,7 +231,7 @@ export function channelSummary(c: WatchChannels): { ok: boolean; lines: string[]
   );
   if (!c.pushConfigured) lines.push("Phone push: off - the VAPID keys are not set.");
   else if (c.pushDevices === null) lines.push("Phone push: on, but the device list could not be read.");
-  else if (c.pushDevices === 0) lines.push("Phone push: on, but no phone has turned on notifications yet (Compliance -> Calendar -> turn on notifications, on your phone).");
+  else if (c.pushDevices === 0) lines.push("Phone push: on, but no phone has turned on notifications yet (open this page on your phone and press Turn on under Deadline push notifications).");
   else lines.push(`Phone push: on (${c.pushDevices} device${c.pushDevices === 1 ? "" : "s"}).`);
   const pushReady = c.pushConfigured && (c.pushDevices ?? 0) > 0;
   return { ok: c.emailConfigured || pushReady, lines };
@@ -294,5 +311,9 @@ export function __runCutoverWatchCoreTests(): { passed: number; failed: number }
   ok(channelSummary({ emailConfigured: false, emailRecipients: 0, pushConfigured: true, pushDevices: null }).lines[1].includes("could not be read"), "device read failure said");
   ok(WATCH_TEXT_NOTE.includes("A2P 10DLC") && WATCH_TEXT_NOTE.includes("Mar 31, 2027"), "text note");
   ok(escapeHtml(`a"'&`) === "a&quot;&#39;&amp;", "escape quotes");
+  ok(plainText(escapeHtml(`x <b>"y"</b> & 'z' &lt;`)) === `x <b>"y"</b> & 'z' &lt;`, "plainText undoes escapeHtml exactly (amp last)");
+  const html = alertHtml(failedRun[0], "https://www.example.com/admin/menu-imports/fetch/r?a=1&b=2");
+  ok(html.includes("#b91c1c") && html.includes("&lt;b&gt;401") && !html.includes("<b>401") && html.includes("a=1&amp;b=2") && html.includes("Open the harvest"), "alertHtml: colour, escaped body kept, link escaped");
+  ok(alertHtml(done[0], "u").includes("#12351f") && alertHtml(un[0], "u").includes("#b45309"), "alertHtml: info + warning colours");
   return { passed, failed };
 }
