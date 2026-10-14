@@ -504,4 +504,20 @@ describe("test the tests", () => {
     expect(log).toContain("control pass");
     expect(log).not.toMatch(/SURVIVED|ANCHOR/);
   });
+
+  it("scripts/r41/mutate-0273-sql.last.log: every SQL mutant killed, controls passed under Supabase defaults and plain Postgres", () => {
+    const script = read("scripts/r41/mutate-0273-sql.py");
+    const log = read("scripts/r41/mutate-0273-sql.last.log");
+    const start = script.indexOf("\nM = [");
+    const listed = script.slice(start, script.indexOf("\n]\n", start)).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
+    const m = /total (\d+) killed (\d+) survivors \[\]/.exec(log);
+    expect(m, "clean summary line").not.toBeNull();
+    expect(Number(m![1])).toBe(listed);
+    expect(Number(m![2])).toBe(listed);
+    expect(listed).toBeGreaterThanOrEqual(30);
+    expect(log).toContain("control (before) pass");
+    expect(log).toContain("control (after (Supabase defaults)) pass");
+    expect(log).toContain("control (after (plain Postgres)) pass");
+    expect(log).not.toMatch(/SURVIVED|ANCHOR|control .* FAIL/);
+  });
 });
