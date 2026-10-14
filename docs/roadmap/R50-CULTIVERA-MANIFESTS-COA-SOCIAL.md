@@ -1342,3 +1342,39 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
     preview still shows (`safeSuggestions`).
   * **Tests.** pure 58 and vitest 13. Mutants 28/28 (one survivor, "vendor link off", was found and
     pinned). The related suites (41 files) pass.
+
+### S7 — social-media COA crawler: DROPPED by the owner (2026-10, this round)
+  * **Owner's words:** "Cultivera stores the JSON, not the coa, but the coa is embedded in the JSON, so we
+    can still get them all using the jsons we fetch. We don't need to build the social media crawler."
+  * **Verified on disk before acting.**
+    - Each WCIA transfer line carries `lab_result_data.coa`, the lab's own PDF link, plus the full potency,
+      for example `https://certs.conflabs.com/full/WA-…pdf` in `tests/fixtures/coa/transfer.json` and the
+      `cv*.wcia.json` fixtures.
+    - S3b/S12b already save that link as `lab_results.coa_url`.
+    - The JSON holds the link, not the PDF bytes, so S13 below downloads each linked PDF once.
+  * **S5 (COA harvest)** is therefore satisfied by S12b and S13; no crawler is needed.
+
+### S13 — keep a private copy of every lab certificate, one button (this PR)
+  * **Button.** "Save a copy of every lab certificate", in the Cultivera manifests section of Onboarding.
+  * **What it does.**
+    - Walks `lab_results` that have a `coa_url` and no stored copy, in id order (keyset), four at a time.
+    - Downloads each PDF into the private `coa` bucket, at the same path delivery intake has always used
+      (`<labId>/<labtest id>.pdf`).
+    - Records it with a compare-and-set on an empty `coa_storage_path`.
+    - Stops before 200 s and hands back a checkpoint; Continue resumes from it.
+    - Writes one audit row per click (`lab.coa_archive_backfill_run`).
+  * **Stricter than the per-delivery archive (bulk and unattended).**
+    - https only, and never a private, loopback, link-local or internal host, re-checked on every redirect
+      (no SSRF).
+    - The bytes must start with `%PDF-` within 1 KB, so an HTML "not found" page is never stored as a
+      certificate.
+    - 25 MB cap and a 20 s timeout.
+    - Failed links stay unarchived and are retried on the next run.
+  * **Writes only** the storage object and `coa_storage_path`, `coa_file_bytes` and `coa_archived_at`. Never
+    potency, lots, stock, status, cost, CCRS, price, menu, drafts or accounting. Receiving's own archive
+    (`coa-archive.ts`) is unchanged.
+  * **Tests.**
+    - Pure: 52 assertions.
+    - vitest: 13, against the real postgrest-js fake and the real fixture COA links.
+    - Mutants: 25/25 (three survivors found and pinned: the cursor filter, byte counting, and the tone for
+      a bad link alone).
