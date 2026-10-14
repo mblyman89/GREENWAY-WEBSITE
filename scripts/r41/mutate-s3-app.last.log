@@ -1,0 +1,31 @@
+control (before) pass
+killed   download-calls-generate
+killed   constant-modifier
+killed   duplicate-key-order-sensitive
+killed   sha-check-skipped
+killed   row-facts-not-rechecked
+killed   voided-served-by-id
+killed   voided-served-by-source
+killed   voided-found-live
+killed   key-check-removed
+killed   roundtrip-removed
+killed   built-not-checked
+killed   no-crlf
+killed   utc-day
+killed   used-letters-all-days
+killed   no-retry
+killed   one-try
+killed   payroll-via-insert
+killed   payroll-wrong-sha
+killed   hmac-purpose
+killed   void-reason-unchecked
+killed   constraint-name-drift
+killed   check-file-fixed-letter
+killed   payroll-clock-not-release-time
+killed   vendor-records-on-failure
+killed   payroll-route-wrong-kind
+killed   files-route-no-nosniff
+killed   check-route-builds
+control pass
+total 27 killed 27 survivors []
+EXIT 0
