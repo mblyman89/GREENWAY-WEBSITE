@@ -107,7 +107,7 @@ afterEach(() => {
 describe("S19 pure cores", () => {
   it("self-tests pass with exact counts (a deleted check turns this red)", () => {
     expect(__runVendorIdentityCoreTests().passed).toBe(74);
-    expect(__runIntakeMasteringCoreTests().passed).toBe(222); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2); R35 #6: +6 (effects/aroma rollup); R50 S3c: +4 masteredSingletonText
+    expect(__runIntakeMasteringCoreTests().passed).toBe(271); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2); R35 #6: +6 (effects/aroma rollup); R50 S3c: +4 masteredSingletonText; R50 A1: +49 (card alias)
     expect(__runIntakeMenuStagingCoreTests().passed).toBe(77); // R35 #6: +3 (effects/aroma carried)
     expect(__runRestockPreviewViewTests().passed).toBe(11);
   });
