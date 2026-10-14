@@ -232,6 +232,9 @@ export function __runCoaArchiveBackfillCoreTests(): { passed: number; failed: nu
   ok(t.checked === 3 && t.outcomes.archived === 1 && t.outcomes["not-pdf"] === 1 && t.outcomes.changed === 1, "outcomes counted");
   ok(t.bytes === 2 * 1024 * 1024, "bytes only for saved copies");
   ok(t.problems.length === 1 && t.problems[0] === "WA-2: not-pdf (text/html)", "only real problems listed");
+  ok(addCoaOutcome(emptyCoaTotals(), "X", "changed", null, 500).bytes === 0, "bytes never counted for a copy we did not save");
+  const badOnly = addCoaOutcome(emptyCoaTotals(), "B", "bad-link", "not-https");
+  ok(coaBackfillTone({ ok: true, done: true, next: null, totals: badOnly, elapsedMs: 1 }) === "warn", "an unusable link makes it warn");
   let many = emptyCoaTotals();
   for (let i = 0; i < 9; i++) many = addCoaOutcome(many, `L${i}`, "fetch-failed", null);
   ok(many.problems.length === COA_BACKFILL_MAX_PROBLEMS, "problems capped");
