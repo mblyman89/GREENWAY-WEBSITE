@@ -15,6 +15,14 @@ import { rebuildCutoverDeliveryAction, sendCutoverTestAlertAction } from "../act
 import { readRecentWatchAlerts, readWatchChannels } from "@/lib/pos/cutover-watch";
 import { WATCH_TEXT_NOTE, channelSummary } from "@/lib/pos/cutover-watch-core";
 import { formatDateTime } from "@/lib/pos/format";
+import {
+  CUTOVER_DOC,
+  WEEKEND_DAY_LABEL,
+  WEEKEND_ROLLBACK,
+  WEEKEND_STEPS,
+  weekendNow,
+  type WeekendDay,
+} from "@/lib/pos/cutover-weekend-core";
 
 /**
  * S18 - the Cultivera cutover runbook, in the app (bible 7.3 / 7.4). Linked
@@ -28,6 +36,11 @@ export const dynamic = "force-dynamic";
 // Each Rebuild press is one staging run; inherit a generous ceiling (server
 // actions inherit the page's segment config).
 export const maxDuration = 300;
+
+/** "You are here" from the server clock (repo pattern: Date.now() inside a helper). */
+function weekendNowFromClock() {
+  return weekendNow(Date.now());
+}
 
 export default async function CutoverRunbookPage({
   searchParams,
@@ -44,6 +57,9 @@ export default async function CutoverRunbookPage({
   // R50 A4: the failure-alert channels and the alerts already sent.
   const [channels, recent] = await Promise.all([readWatchChannels(), readRecentWatchAlerts(20)]);
   const chan = channelSummary(channels);
+  // R50 A5: the dated weekend plan; "you are here" from the clock only (never claims a step is done).
+  const now = weekendNowFromClock();
+  const days: WeekendDay[] = ["before", "2026-10-30", "2026-10-31", "2026-11-01", "after"];
 
   return (
     <div>
@@ -97,6 +113,61 @@ export default async function CutoverRunbookPage({
               No real Cultivera upload is waiting. Start at step 2 when you are ready.
             </p>
           )}
+        </section>
+
+        {/* R50 A5: the weekend on one page (dated, timed, Pacific) */}
+        <section id="cutover-weekend" className="rounded-xl border border-[var(--admin-accent)]/40 bg-[#0a0a0a] p-5" data-testid="cutover-weekend">
+          <h2 className="text-sm font-semibold text-white">The cutover weekend, on one page</h2>
+          <p className="mt-1 text-sm text-[var(--admin-accent)]" data-testid="cutover-weekend-now">{now.headline}</p>
+          <p className="mt-1 text-xs text-white/40">
+            All times are Pacific. This page knows the clock, not what you have done, so tick things off yourself.
+          </p>
+          {days.map((d) => (
+            <div key={d} className="mt-4">
+              <h3 className={d === now.day ? "text-xs font-semibold uppercase tracking-wide text-[var(--admin-accent)]" : "text-xs font-semibold uppercase tracking-wide text-white/50"}>
+                {WEEKEND_DAY_LABEL[d]}
+                {d === now.day ? " (today)" : ""}
+              </h3>
+              <ol className="mt-2 space-y-2">
+                {WEEKEND_STEPS.filter((st) => st.day === d).map((st) => (
+                  <li
+                    key={st.key}
+                    data-step={st.key}
+                    className={st.key === now.nextTimedKey ? "rounded-lg border border-[var(--admin-accent)]/60 px-3 py-2 text-sm" : "rounded-lg border border-white/10 px-3 py-2 text-sm"}
+                  >
+                    <p className="font-semibold text-white">
+                      {st.at ? <span className="mr-2 font-mono text-[var(--admin-gold)]">{st.at}</span> : null}
+                      {st.title}
+                      {st.key === now.nextTimedKey ? <span className="ml-2 text-xs text-[var(--admin-accent)]">next</span> : null}
+                    </p>
+                    <p className="text-white/60">{st.detail}</p>
+                    <p className="text-xs text-white/40">
+                      Check: {st.check}
+                      {st.href && st.linkLabel ? (
+                        <>
+                          {" \u00b7 "}
+                          <Link href={st.href} className="text-[var(--admin-accent)] hover:underline">
+                            {st.linkLabel}
+                          </Link>
+                        </>
+                      ) : null}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+          <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-white/50">If something goes wrong</h3>
+          <ul className="mt-2 space-y-1 text-sm" data-testid="cutover-weekend-rollback">
+            {WEEKEND_ROLLBACK.map((r) => (
+              <li key={r.when} className="text-white/70">
+                <span className="font-semibold text-white">{r.when}:</span> {r.what}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-xs text-white/40">
+            The printable copy is in the repo at <code className="rounded bg-black/40 px-1">{CUTOVER_DOC}</code>.
+          </p>
         </section>
 
         {/* R50 A2: the go / no-go units check */}
