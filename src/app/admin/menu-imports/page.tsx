@@ -331,7 +331,8 @@ export default async function MenuImportsPage({
             <p className="mt-2 text-xs text-white/40">
               The count fetch: set the count date (10/30) and press after the store closes on 10/31 and before it opens
               on 11/01. It also reads Cultivera&apos;s Sales Details for 10/31, which the{" "}
-              <Link href="/admin/menu-imports/count" className="underline">count page</Link> takes off the shelf count.
+              <Link href="/admin/menu-imports/count" className="underline">count page</Link> takes off the shelf count. After you publish, the{" "}
+              <Link href="/admin/menu-imports/reconcile" className="underline">go / no-go check</Link> shows whether every Cultivera unit became a lot.
             </p>
             </>
           ) : (

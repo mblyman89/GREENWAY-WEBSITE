@@ -93,6 +93,18 @@ export default async function CutoverRunbookPage({
           )}
         </section>
 
+        {/* R50 A2: the go / no-go units check */}
+        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="cutover-reconcile">
+          <h2 className="text-sm font-semibold text-white">Do the units balance?</h2>
+          <p className="mt-2 text-sm text-white/60">
+            After you publish the Cultivera import (and again after rebuilding deliveries), check that every unit in
+            Cultivera&apos;s file became a unit on a lot. Green means go.{" "}
+            <Link href="/admin/menu-imports/reconcile" className="text-[var(--admin-accent)] hover:underline">
+              Open the go / no-go check
+            </Link>
+          </p>
+        </section>
+
         {/* Still to rebuild */}
         {status.enabled && (
           <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
