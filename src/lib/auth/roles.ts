@@ -68,6 +68,8 @@ export type Permission =
   | "users.manage"
   | "audit.view"
   | "settings.manage"
+  | "ach.act"
+  | "ach.request"
   | "staffing.manage"
   | "timeclock.use"
   | "medical.manage"
@@ -244,6 +246,17 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // same word; nav-gate-core.test.ts asserts all of it.
   "audit.view": ["owner"],
   "settings.manage": ["owner", "admin"],
+  // R41 S0: ACH authority. Owner decisions, verbatim (rounds 5 and 6):
+  //   Michael acts alone on everything; Stephen (admin) gathers and records,
+  //   and his live ACH changes wait for Michael's approval. D-6 final:
+  //   "I think I like option b better now that I think of it. Please build it
+  //   that way." (option B: Stephen's stop-the-money actions take effect at
+  //   once and land on Michael's review list.)
+  // ach.act MUST stay equal to ["owner"]: migration 0271's
+  // ach_actor_is_owner() is the same rule inside the database, and a vitest
+  // pins both. The routing itself lives in src/lib/auth/ach-authority-core.ts.
+  "ach.act": ["owner"],
+  "ach.request": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
   // Task S-b: the time clock previously piggybacked on "loyalty.view" as a
   // proxy for "any active floor staff". A scoped permission keeps the matrix
@@ -290,6 +303,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "users.manage": "Manage staff & roles",
   "audit.view": "Read the Security Log (who did what, and when)",
   "settings.manage": "Change settings",
+  "ach.act": "Change live ACH banking alone (owner only)",
+  "ach.request": "Ask for ACH banking changes (owner approves)",
   "staffing.manage": "Manage employees, shifts & time clock",
   "timeclock.use": "Clock in & out (time clock)",
   "medical.manage": "Issue & manage medical recognition cards (consultant)",
@@ -330,6 +345,8 @@ export const ALL_PERMISSIONS: Permission[] = [
   "users.manage",
   "audit.view",
   "settings.manage",
+  "ach.act",
+  "ach.request",
 ];
 
 /**
