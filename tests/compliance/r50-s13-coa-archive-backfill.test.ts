@@ -109,8 +109,8 @@ beforeEach(() => {
 
 describe("R50 S13 — the pure core", () => {
   it("self-tests pass at the runner floor", () => {
-    expect(core.__runCoaArchiveBackfillCoreTests()).toEqual({ passed: 50, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 50);');
+    expect(core.__runCoaArchiveBackfillCoreTests()).toEqual({ passed: 52, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);');
   });
   it("every real COA link in the stored transfer file is accepted as-is", () => {
     expect(REAL_LINKS.length).toBeGreaterThan(3);
@@ -249,6 +249,15 @@ describe("R50 S13 — the backfill store", () => {
     expect(st.db.rows("lab_results").every((l) => l.coa_storage_path)).toBe(true);
     // Fetch order = id order.
     expect(fetched).toEqual(Array.from({ length: 9 }, (_, i) => `https://certs.conflabs.com/full/L${i + 1}.pdf`));
+  });
+
+  it("a page of failing links is not re-read: each failing link is tried exactly once per run", async () => {
+    for (let i = 1; i <= 5; i++) lab(i, `https://certs.example.com/dead${i}.pdf`);
+    const r = await run(null, { pageSize: 2 });
+    expect(r.ok && r.done).toBe(true);
+    expect(r.totals.outcomes["fetch-failed"]).toBe(5);
+    expect(fetched).toHaveLength(5);
+    expect(new Set(fetched).size).toBe(5);
   });
 
   it("a database read failure stops honestly with the checkpoint and is audited", async () => {
