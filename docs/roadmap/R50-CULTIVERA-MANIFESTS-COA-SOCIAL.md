@@ -1580,8 +1580,8 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   matched by name. Every other lot is planned exactly as before (pinned byte-for-byte in the self-tests).
 * **Tests.** New `barcode-match-core.ts` (34 self-tests, in the runner; a lot claimed by two live cards lists both, so it is `ambiguous`). Planner self-tests 271 → 327 (+56:
   join, beats name / ambiguous / alias, every unsafe reason byte-identical, absent/empty byte-identical,
-  already-a-size wins, mixed delivery, preview). New `r50-a7-barcode-first.test.ts` (12: the loader on the real
+  already-a-size wins, mixed delivery, preview). New `r50-a7-barcode-first.test.ts` (13: the loader on the real
   postgrest-js client — reads, own-lot exclusion, flag/empty/failed/missing table → none; end to end; owner
-  words; wiring order pins; a failed SECOND draft page and >1,000 barcodes → none). S32/S34/S19 count + wiring
-  pins moved with comments. Mutation: 64 mutants, 63 killed, 1 documented equivalent (dropping the joined
+  words; wiring order pins; a failed SECOND draft page and >1,000 barcodes → none; the flag in the env ledger + `.env.example`). S32/S34/S19 count + wiring
+  pins moved with comments. Mutation: 68 mutants, 67 killed, 1 documented equivalent (dropping the joined
   category from `filter_categories` — the injected variant already carries it).

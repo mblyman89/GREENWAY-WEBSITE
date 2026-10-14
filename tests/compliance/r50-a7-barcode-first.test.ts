@@ -238,4 +238,15 @@ describe("R50 A7 - wiring pins", () => {
     expect(vendor).toBeGreaterThan(bc);
     expect(match).toBeGreaterThan(bc);
   });
+
+  it("the flag is in the env ledger (row + checklist) and .env.example, and the self-test result is runner-shaped", () => {
+    const ledger = src("docs/INTAKE_PIPELINE_ENV_LEDGER.md");
+    expect(ledger).toMatch(/^\| `INTAKE_BARCODE_FIRST` \| R50-A7 \| on \|/m);
+    expect(ledger).toContain("- `INTAKE_BARCODE_FIRST` = `on` (same as unset).");
+    expect(ledger).toContain("`BARCODE_FIRST_ENV` (`src/lib/pos/barcode-match-core.ts`)");
+    expect(src(".env.example")).toMatch(/^# INTAKE_BARCODE_FIRST=on$/m);
+    const core = src("src/lib/pos/barcode-match-core.ts");
+    expect(core).toContain("export function __runBarcodeMatchCoreTests(): { passed: number; failed: number } {");
+    expect(core).not.toContain("process.env");
+  });
 });
