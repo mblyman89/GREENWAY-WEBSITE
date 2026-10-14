@@ -490,6 +490,13 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ach_authorization_events", disposition: "KEEP", because: "The append-only audit trail of every ACH authorization change." },
   { table: "ach_verifications", disposition: "KEEP", because: "Prenote and test-credit results that prove each account was verified." },
   { table: "ach_return_notices", disposition: "KEEP", because: "Returns and change notices from Timberland, part of the payment record." },
+  // R41 S0 (0271). Owner-approval records: who asked for which ACH change,
+  // what the owner decided, and the stop actions he checked off. The database
+  // refuses to delete them (ACH_REQUEST_KEEP, ACH_REVIEW_KEEP and the
+  // append-only event trigger), so a reset that tried would fail part-way.
+  { table: "ach_change_requests", disposition: "KEEP", because: "Stephen's ACH change requests and Michael's decisions: the dual-control record." },
+  { table: "ach_change_request_events", disposition: "KEEP", because: "The append-only trail of every ACH request step (asked, approved, rejected, withdrawn, done)." },
+  { table: "ach_owner_reviews", disposition: "KEEP", because: "Stephen's urgent stop actions and when Michael checked each one off." },
   // R39 (0261). The database refuses to delete a signed e-sign session
   // (ACH_ESIGN_KEEP) and the session points at the kept documents with
   // on delete restrict, so a reset that tried to wipe it would fail part-way.
