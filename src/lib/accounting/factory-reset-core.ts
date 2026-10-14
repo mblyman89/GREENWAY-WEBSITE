@@ -537,6 +537,14 @@ export const TABLE_RULES: readonly TableRule[] = [
   // a wipe the card keys it names are gone, so each answer simply reads as
   // stale and the planner asks again - it is never applied to other cards.
   { table: "intake_merge_decisions", disposition: "KEEP", because: "Your answers for products that looked like more than one menu card (join card X, or keep separate). They are decisions about products and keep applying to future deliveries; if the cards they name are gone, the store simply asks you again." },
+  // intake_card_aliases (0270, R50 A1): the owner's "this product IS that
+  // live card" answers for a product the exact restock rule matched to NO
+  // card (S4's "Looks like Cultivera product X", accepted). Human decisions
+  // about PRODUCTS, like intake_merge_decisions above, so KEEP. Its only FK
+  // is decided_by -> staff_profiles (KEEP); card_key is a stamp, never a
+  // foreign key into the wiped menu tables. After a wipe the cards it names
+  // are gone, so each alias reads as stale and is never applied.
+  { table: "intake_card_aliases", disposition: "KEEP", because: "Your \"yes, this is that product\" answers for deliveries spelled a little differently from an existing menu card. They are decisions about products and keep applying to future deliveries; if the card they name is gone, the product is simply added as its own card again." },
   // lookup_jobs / lookup_job_items (0242, bible S13): the record of each
   // "Look up all N products on this manifest" press. KEEP, not WIPE: the
   // 0240 wipe list is fixed SQL, and these tables hold no money, stock or
