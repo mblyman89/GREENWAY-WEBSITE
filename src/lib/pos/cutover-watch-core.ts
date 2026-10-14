@@ -237,6 +237,36 @@ export function channelSummary(c: WatchChannels): { ok: boolean; lines: string[]
   return { ok: c.emailConfigured || pushReady, lines };
 }
 
+/** Recipients text the server writes on the claim row, and when every channel failed. */
+export const WATCH_CLAIM_PENDING = "claimed - sending";
+export const WATCH_UNDELIVERED = "NOT DELIVERED - every channel failed";
+
+export type WatchLogView = { label: string; tone: "ok" | "bad" | "wait"; isTest: boolean; what: string };
+
+/** One row of the "alerts sent" list on the runbook page, in plain words. */
+export function describeWatchLog(row: { dedupe_key: string; stage: string; channel: string; recipients: string | null }, nowMs: number, sentAt: string): WatchLogView {
+  const isTest = row.stage === WATCH_TEST_STAGE;
+  const kind = row.dedupe_key.split(":")[1] ?? "";
+  const WHAT: Record<string, string> = {
+    "harvest-failed": "Harvest failed",
+    "harvest-done": "Harvest finished",
+    "harvest-slow": "Harvest too slow",
+    "harvest-unreachable": "Crawler unreachable",
+    "import-failed": "Import failed",
+    "import-stuck": "Import stuck",
+    test: "Test alert",
+  };
+  const what = WHAT[kind] ?? "Alert";
+  if (row.recipients === WATCH_UNDELIVERED) return { label: "Not delivered - check the channels above, then press Send a test alert", tone: "bad", isTest, what };
+  if (row.recipients === WATCH_CLAIM_PENDING) {
+    const t = Date.parse(sentAt);
+    const old = Number.isFinite(t) && nowMs - t > 5 * 60_000;
+    return old ? { label: "Sending was interrupted - it may not have arrived", tone: "bad", isTest, what } : { label: "Sending now", tone: "wait", isTest, what };
+  }
+  const via = row.channel === "email+push" ? "email and phone" : row.channel === "push" ? "phone" : "email";
+  return { label: `Delivered by ${via}${row.recipients ? ` (${row.recipients})` : ""}`, tone: "ok", isTest, what };
+}
+
 export const WATCH_TEXT_NOTE =
   "Texts: phone push notifications are the text alert. Carrier email-to-text gateways cannot be relied on (T-Mobile closed tmomail.net in Dec 2024, AT&T closed txt.att.net in Jun 2025, Verizon closes vtext.com on Mar 31, 2027), and a real SMS provider needs A2P 10DLC carrier registration, which takes days to weeks.";
 
@@ -315,5 +345,14 @@ export function __runCutoverWatchCoreTests(): { passed: number; failed: number }
   const html = alertHtml(failedRun[0], "https://www.example.com/admin/menu-imports/fetch/r?a=1&b=2");
   ok(html.includes("#b91c1c") && html.includes("&lt;b&gt;401") && !html.includes("<b>401") && html.includes("a=1&amp;b=2") && html.includes("Open the harvest"), "alertHtml: colour, escaped body kept, link escaped");
   ok(alertHtml(done[0], "u").includes("#12351f") && alertHtml(un[0], "u").includes("#b45309"), "alertHtml: info + warning colours");
+  const T = "2026-10-31T16:00:00Z";
+  const d1 = describeWatchLog({ dedupe_key: `cutover:harvest-failed:${RID}:x`, stage: WATCH_STAGE, channel: "email+push", recipients: "a@b.com, 1 push device(s)" }, now, T);
+  ok(d1.tone === "ok" && d1.what === "Harvest failed" && d1.label === "Delivered by email and phone (a@b.com, 1 push device(s))" && !d1.isTest, "log: delivered both");
+  ok(describeWatchLog({ dedupe_key: "cutover:import-stuck:i", stage: WATCH_STAGE, channel: "push", recipients: "1" }, now, T).label.startsWith("Delivered by phone"), "log: push only");
+  const bad = describeWatchLog({ dedupe_key: "cutover:test:z", stage: WATCH_TEST_STAGE, channel: "email", recipients: WATCH_UNDELIVERED }, now, T);
+  ok(bad.tone === "bad" && bad.isTest && bad.what === "Test alert" && bad.label.includes("Not delivered"), "log: undelivered test");
+  ok(describeWatchLog({ dedupe_key: "cutover:harvest-done:r", stage: WATCH_STAGE, channel: "email", recipients: WATCH_CLAIM_PENDING }, now, "2026-10-31T15:57:00Z").tone === "wait", "log: claimed 3 min ago = sending");
+  ok(describeWatchLog({ dedupe_key: "cutover:harvest-done:r", stage: WATCH_STAGE, channel: "email", recipients: WATCH_CLAIM_PENDING }, now, "2026-10-31T15:54:00Z").tone === "bad", "log: claimed 6 min ago = interrupted");
+  ok(describeWatchLog({ dedupe_key: "weird", stage: WATCH_STAGE, channel: "email", recipients: null }, now, T).what === "Alert", "log: unknown key named Alert");
   return { passed, failed };
 }

@@ -914,3 +914,34 @@ export async function refileFromTypeCheck(formData: FormData): Promise<void> {
   const label = parsed.houseType ? `${parsed.houseType} (${parsed.websiteCategory})` : parsed.websiteCategory;
   redirect(typeCheckReturnHref(importId, `Re-filed "${productName}" as ${label}.`));
 }
+
+/**
+ * R50 A4: "Send a test alert" on the cutover runbook. Proves the email and the
+ * phone push reach the owner BEFORE the cutover night. Its own key per press
+ * (testAlert), so it always sends; logged like a real alert so the page shows
+ * whether it was delivered. Same permission as opening the runbook.
+ */
+export async function sendCutoverTestAlertAction(): Promise<void> {
+  const session = await requirePermission("menu.import");
+  const dest = "/admin/menu-imports/cutover";
+  const { sendCutoverTestAlert } = await import("@/lib/pos/cutover-watch");
+  const r = await sendCutoverTestAlert();
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cutover_watch.test_alert_sent",
+    entityType: "cutover_watch",
+    entityId: null,
+    after: { sent: r.sent, undelivered: r.undelivered, unsentNoChannel: r.unsentNoChannel, notes: r.notes.slice(0, 5) },
+  });
+  revalidatePath(dest);
+  if (r.sent === 1) {
+    redirect(dest + "?notice=" + encodeURIComponent("Test alert sent. Check your email and your phone; it is listed under Alerts sent below.") + "#cutover-alerts");
+  }
+  const why = r.unsentNoChannel
+    ? "No alert channel is set up yet: see Alert channels below."
+    : r.undelivered
+      ? `The test alert was not delivered by any channel (${r.notes.join("; ") || "no detail"}).`
+      : `The test alert could not be sent (${r.notes.join("; ") || "no detail"}).`;
+  redirect(dest + "?error=" + encodeURIComponent(why) + "#cutover-alerts");
+}

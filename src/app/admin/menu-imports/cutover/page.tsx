@@ -11,7 +11,10 @@ import {
   CUTOVER_RUNBOOK_DOC,
   CUTOVER_RUNBOOK_STEPS,
 } from "@/lib/inventory/cutover-guard-core";
-import { rebuildCutoverDeliveryAction } from "../actions";
+import { rebuildCutoverDeliveryAction, sendCutoverTestAlertAction } from "../actions";
+import { readRecentWatchAlerts, readWatchChannels } from "@/lib/pos/cutover-watch";
+import { WATCH_TEXT_NOTE, channelSummary, describeWatchLog } from "@/lib/pos/cutover-watch-core";
+import { formatDateTime } from "@/lib/pos/format";
 
 /**
  * S18 - the Cultivera cutover runbook, in the app (bible 7.3 / 7.4). Linked
@@ -38,6 +41,10 @@ export default async function CutoverRunbookPage({
     ? await readCutoverStatus()
     : { enabled: false, blocking: null, done: false, pending: [] };
   const blocking = status.blocking !== null && status.blocking !== "unknown" ? status.blocking : null;
+  // R50 A4: the failure-alert channels and the alerts already sent.
+  const [channels, recent] = await Promise.all([readWatchChannels(), readRecentWatchAlerts(20)]);
+  const chan = channelSummary(channels);
+  const nowMs = Date.now();
 
   return (
     <div>
@@ -103,6 +110,58 @@ export default async function CutoverRunbookPage({
               Open the go / no-go check
             </Link>
           </p>
+        </section>
+
+        {/* R50 A4: failure alerts */}
+        <section id="cutover-alerts" className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="cutover-alerts">
+          <h2 className="text-sm font-semibold text-white">Failure alerts (email and phone)</h2>
+          <p className="mt-2 text-sm text-white/60">
+            Every 5 minutes the site checks the Cultivera harvest and the imports. If a harvest fails, runs too long or
+            cannot be reached, or an import fails or gets stuck, you get one email and one phone notification for it.
+            You also get one when a harvest finishes, so you know it is ready to import. You do not have to keep this
+            page open.
+          </p>
+          <div className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-sm" data-testid="cutover-alerts-channels">
+            <p className={chan.ok ? "font-semibold text-[var(--admin-accent)]" : "font-semibold text-[var(--admin-orange)]"}>
+              {chan.ok ? "Alerts can reach you." : "Alerts cannot reach you yet."}
+            </p>
+            <ul className="mt-1 list-disc pl-5 text-white/70">
+              {chan.lines.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-white/40">{WATCH_TEXT_NOTE}</p>
+          </div>
+          <form action={sendCutoverTestAlertAction} className="mt-3">
+            <Button type="submit" variant="neutral" size="sm" data-testid="cutover-alerts-test">
+              Send a test alert
+            </Button>
+            <span className="ml-3 text-xs text-white/40">Do this once before the cutover night, on the phone you will carry.</span>
+          </form>
+          <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-white/50">Alerts sent (newest first)</h3>
+          {recent.error ? (
+            <p className="mt-2 text-sm text-[var(--admin-orange)]">The alert list could not be read: {recent.error}</p>
+          ) : recent.rows.length === 0 ? (
+            <p className="mt-2 text-sm text-white/60">None yet.</p>
+          ) : (
+            <ul className="mt-2 space-y-2" data-testid="cutover-alerts-log">
+              {recent.rows.map((r) => {
+                const v = describeWatchLog(r, nowMs, r.sent_at);
+                const tone = v.tone === "ok" ? "text-[var(--admin-accent)]" : v.tone === "bad" ? "text-red-300" : "text-white/60";
+                return (
+                  <li key={r.dedupe_key} className="rounded-lg border border-white/10 px-3 py-2 text-sm">
+                    <p className="text-white/80">
+                      <span className="font-semibold text-white">{v.what}</span>
+                      {v.isTest ? <span className="ml-2 text-xs text-white/40">(test)</span> : null}
+                      <span className="ml-2 text-xs text-white/40">{formatDateTime(r.sent_at)}</span>
+                    </p>
+                    {r.subject ? <p className="text-white/60">{r.subject}</p> : null}
+                    <p className={`text-xs ${tone}`}>{v.label}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
 
         {/* Still to rebuild */}

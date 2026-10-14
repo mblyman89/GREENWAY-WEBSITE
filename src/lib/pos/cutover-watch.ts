@@ -31,6 +31,8 @@ import { getPosRun, isValidRunId } from "@/lib/pos/cultivera-fetch-client";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import {
   WATCH_AUDIT_ACTIONS,
+  WATCH_CLAIM_PENDING,
+  WATCH_UNDELIVERED,
   WATCH_IMPORT_LOOKBACK_HOURS,
   WATCH_RUN_LOOKBACK_HOURS,
   WATCH_STAGE,
@@ -116,9 +118,9 @@ export async function readRecentWatchAlerts(limit = 20): Promise<{ rows: WatchLo
   }
 }
 
-/** Placeholder written by the claim; replaced by the real recipients after sending. */
-export const CLAIM_PENDING = "claimed - sending";
-export const UNDELIVERED = "NOT DELIVERED - every channel failed";
+/** Placeholder written by the claim (replaced after sending), and the every-channel-failed marker. */
+const CLAIM_PENDING = WATCH_CLAIM_PENDING;
+const UNDELIVERED = WATCH_UNDELIVERED;
 
 type Claim = "claimed" | "taken" | "error";
 
