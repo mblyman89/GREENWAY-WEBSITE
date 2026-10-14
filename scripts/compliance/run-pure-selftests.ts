@@ -926,6 +926,7 @@ import { __runAchOpsCoreTests } from "../../src/lib/payments/ach-ops-core";
 import { __runAchOpsUiCoreTests } from "../../src/lib/payments/ach-ops-ui-core";
 import { __runAchAuthorityCoreTests } from "../../src/lib/auth/ach-authority-core";
 import { __runAchGateCoreTests } from "../../src/lib/payments/ach-gate-core";
+import { __runTimberlandProfileCoreTests } from "../../src/lib/payments/timberland-profile-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
@@ -2240,6 +2241,7 @@ __runLiquidVolumeTests();
   assertRan("ach-ops-ui-core", __runAchOpsUiCoreTests(), 17); // R39 S7: Operations page words (site URL, who was told, urgency, monitor, owner/request hint (R41 S0))
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 115); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails
   assertRan("ach-gate-core", __runAchGateCoreTests(), 135); // R41 S0: versions, redirect outcomes, replay match, supersede, payload parse, vendor build outcome
+  assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42); // R41 S1: every Timberland term readable in its own quote; 14 drift mutants; Q1, Q3-Q14
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
