@@ -132,6 +132,8 @@ export function buildRebuiltRefreshStagingPlan(inputs: {
     hasChanges: refresh.refreshed.length > 0,
     diagnostics: [...injection.diagnostics, ...refresh.diagnostics],
     lotFactsByKey: lotFactsFromInjected(injection.items),
+    // R50 A1: a refresh never adds or merges a card, so no alias can apply.
+    unmatchedIdentities: [],
     refresh,
   };
 }

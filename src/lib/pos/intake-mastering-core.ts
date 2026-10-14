@@ -149,6 +149,16 @@ export type IntakeMasteringInputs = {
    * Absent = byte-identical behaviour to before S32.
    */
   mergeDecisions?: ReadonlyMap<string, MergeDecision>;
+  /**
+   * R50 A1: the owner's remembered "this product IS that live card" answer
+   * (intake_card_aliases, 0270) for an identity the exact rule matched to NO
+   * live card - S4's "Looks like Cultivera product X", accepted. identity ->
+   * card key. Applied ONLY when the exact rule finds zero cards AND the card
+   * is still a valid merge target with the same category axis (aliasTarget);
+   * otherwise it is STALE and the product is added as its own card exactly
+   * as before. Absent = byte-identical behaviour to before A1.
+   */
+  cardAliases?: ReadonlyMap<string, string>;
 };
 
 /**
@@ -271,6 +281,13 @@ export type IntakeMasteringPlan = {
    * Only lots with at least one non-null fact appear here.
    */
   lotFactsByKey: Map<string, LotFactBundle>;
+  /**
+   * R50 A1: the identities (vendor|categoryAxis|family) of the groups the
+   * exact rule matched to NO live card and no alias joined, first-seen
+   * order - the only identities a saved alias could apply to, so staging
+   * reads aliases for exactly these (zero reads when empty).
+   */
+  unmatchedIdentities: string[];
 };
 
 // --- Family normalization (mirrors transform.ts :265-269 and :734-775) -----
@@ -518,6 +535,8 @@ export type LiveMergeIndex = {
   byName: Map<string, LiveCardCandidate[]>;
   byVendorId: Map<string, LiveCardCandidate[]>;
   vidsByCard: Map<string, Set<string>>;
+  /** R50 A1: card key -> card, for every card that may be a merge target at all. */
+  eligible: Map<string, LiveCardCandidate>;
 };
 
 export function buildLiveMergeIndex(
@@ -537,6 +556,7 @@ export function buildLiveMergeIndex(
   const byName = new Map<string, LiveCardCandidate[]>();
   const byVendorId = new Map<string, LiveCardCandidate[]>();
   const vidsByCard = new Map<string, Set<string>>();
+  const eligible = new Map<string, LiveCardCandidate>();
   for (const card of liveCards) {
     if (card.hidden) continue;
     if (card.variants.length > 0 && card.variants.every((v) => v.medical)) continue;
@@ -556,6 +576,7 @@ export function buildLiveMergeIndex(
     const list = byName.get(key) ?? [];
     list.push(card);
     byName.set(key, list);
+    if (!eligible.has(card.source_item_id)) eligible.set(card.source_item_id, card);
     if (vendorIds) {
       const vids = cardVendorIds(card, vendorIds.lotVendorIdsByKey);
       vidsByCard.set(card.source_item_id, vids);
@@ -567,7 +588,29 @@ export function buildLiveMergeIndex(
       }
     }
   }
-  return { variantLotKeys, byName, byVendorId, vidsByCard };
+  return { variantLotKeys, byName, byVendorId, vidsByCard, eligible };
+}
+
+/**
+ * R50 A1: the live card a saved alias points at, or why it cannot be used.
+ *   none   no alias saved for this identity.
+ *   stale  the card is gone from the menu, hidden, medical-only, has no
+ *          vendor / a vague name (never a merge target, same rule as
+ *          buildLiveMergeIndex), or now sits in a different category axis.
+ *   join   the card, unchanged rules: it is a valid merge target.
+ * Only ever consulted when the exact rule matched ZERO cards.
+ */
+export function aliasTarget(
+  live: LiveMergeIndex,
+  aliasCardKey: string | null | undefined,
+  category: string,
+): { kind: "none" } | { kind: "stale"; cardKey: string } | { kind: "join"; card: LiveCardCandidate } {
+  const key = typeof aliasCardKey === "string" ? aliasCardKey.trim() : "";
+  if (!key) return { kind: "none" };
+  const card = live.eligible.get(key);
+  if (!card) return { kind: "stale", cardKey: key };
+  if (groupingCategoryAxis(card.category) !== groupingCategoryAxis(category)) return { kind: "stale", cardKey: key };
+  return { kind: "join", card };
 }
 
 /**
@@ -698,6 +741,7 @@ export function previewRestockVerdicts(input: {
   drafts: RestockPreviewDraft[];
   liveCards: LiveCardCandidate[];
   vendorIds?: VendorIdInputs;
+  cardAliases?: ReadonlyMap<string, string>;
 }): Map<string, RestockVerdict> {
   return previewMasteringGroups(input).verdicts;
 }
@@ -712,6 +756,8 @@ export function previewMasteringGroups(input: {
   drafts: RestockPreviewDraft[];
   liveCards: LiveCardCandidate[];
   vendorIds?: VendorIdInputs;
+  /** R50 A1: saved aliases - the SAME rule as the planner (aliasTarget, zero exact matches only). */
+  cardAliases?: ReadonlyMap<string, string>;
 }): { verdicts: Map<string, RestockVerdict>; groups: PreviewGroupView[] } {
   const out = new Map<string, RestockVerdict>();
   const views: PreviewGroupView[] = [];
@@ -763,7 +809,20 @@ export function previewMasteringGroups(input: {
       vendorIds: g.rows.map((r) => input.vendorIds?.vendorIdByLotKey.get(r.pos_product_key?.trim() ?? "")),
     });
     let verdict: RestockVerdict;
-    if (m.cards.length === 1) {
+    // R50 A1: same rule as buildIntakeMasteringPlan - only with zero exact matches.
+    const alias = m.cards.length === 0 ? aliasTarget(live, input.cardAliases?.get(g.identity), g.category) : null;
+    const aliasCard = alias?.kind === "join" ? alias.card : null;
+    if (aliasCard) {
+      verdict = {
+        kind: "joins",
+        cardKey: aliasCard.source_item_id,
+        cardName: aliasCard.name,
+        fromCultivera: isCultiveraCardKey(aliasCard.source_item_id),
+        matchedBy: "name",
+        vendorRecordDiffers: false,
+        byAlias: true,
+      };
+    } else if (m.cards.length === 1) {
       const card = m.cards[0];
       verdict = {
         kind: "joins",
@@ -788,7 +847,7 @@ export function previewMasteringGroups(input: {
       draftIds: g.rows.map((r) => r.id),
       sizes: [...ladderSort(sized), ...Array.from({ length: unknown }, () => PREVIEW_SIZE_UNKNOWN)],
       verdict,
-      ...(m.cards.length === 1 ? { liveCard: liveCardView(m.cards[0]) } : {}),
+      ...(aliasCard ? { liveCard: liveCardView(aliasCard) } : m.cards.length === 1 ? { liveCard: liveCardView(m.cards[0]) } : {}),
     });
   }
   return { verdicts: out, groups: views };
@@ -945,6 +1004,8 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
   const mergesByCardKey = new Map<string, MasteredVariant[]>();
   const mergeCategoriesByCardKey = new Map<string, string[]>();
   let mergedVariantCount = 0;
+  // R50 A1: groups with no exact match that no alias joined (see the plan type).
+  const unmatchedIdentities: string[] = [];
 
   // Group eligible planned items by identity, preserving first-seen order.
   type Group = {
@@ -1048,11 +1109,19 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
         : ({ kind: "none" } as MergeDecisionVerdict);
     const decidedTarget =
       verdict.kind === "join" ? liveMatches.find((c) => c.source_item_id === verdict.targetKey) ?? null : null;
+    // R50 A1: a remembered "this product IS that card" answer - consulted
+    // ONLY when the exact rule matched no card at all.
+    const alias =
+      liveMatches.length === 0
+        ? aliasTarget(live, inputs.cardAliases?.get(group.identity), group.category)
+        : ({ kind: "none" } as const);
+    const aliasCard = alias.kind === "join" ? alias.card : null;
 
-    if (liveMatches.length === 1 || decidedTarget) {
+    if (liveMatches.length === 1 || decidedTarget || aliasCard) {
       // RESTOCK MERGE — append this group's lots to the one matching live card
-      // (S32: or to the card a human chose for a multi-card match).
-      const target = decidedTarget ?? liveMatches[0];
+      // (S32: or to the card a human chose for a multi-card match; R50 A1: or
+      // to the card a human said this product is).
+      const target = decidedTarget ?? aliasCard ?? liveMatches[0];
       const list = mergesByCardKey.get(target.source_item_id) ?? [];
       list.push(...sortVariants(variants));
       mergesByCardKey.set(target.source_item_id, list);
@@ -1084,9 +1153,27 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
                 decision: verdict.kind === "join" && verdict.keptSeparate ? "separate" : "join",
               }
             : {}),
+          // R50 A1: joined because a human said this product IS that card.
+          ...(aliasCard ? { alias: true, identity: group.identity } : {}),
         },
       });
       continue;
+    }
+
+    if (liveMatches.length === 0) {
+      unmatchedIdentities.push(group.identity);
+      if (alias.kind === "stale") {
+        diagnostics.push({
+          severity: "info",
+          code: "intake_master_alias_stale",
+          message: `You said “${group.display}” is the live card ${alias.cardKey}, but that card is no longer on the menu as a place to add stock (removed, hidden, medical-only or a different category), so this delivery was added as its own card, exactly as before.`,
+          context: {
+            identity: group.identity,
+            card_key: alias.cardKey,
+            lots: group.items.map((i) => i.source_item_id),
+          },
+        });
+      }
     }
 
     if (liveMatches.length > 1 && verdict.kind === "separate") {
@@ -1228,6 +1315,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     addedCardCount: newCards.length,
     mergedVariantCount,
     lotFactsByKey,
+    unmatchedIdentities,
   };
 }
 
@@ -2361,6 +2449,114 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(real.description === "Real copy.", "S3c: real copy never overwritten");
     const novendor = masteredSingletonText({ ...inj.items[0], vendor_name: null });
     assert(novendor.name === inj.items[0].name && novendor.description === inj.items[0].description, "S3c: no vendor = unchanged");
+  }
+
+  // R50 A1: a saved "this product IS that card" alias - applied ONLY with
+  // zero exact matches, only to a still-valid merge target in the same axis.
+  {
+    const base = () => [draft({})];
+    const enr = (): [string, DraftEnrichment][] => [["d1", enrich({})]];
+    const p0 = plan(base(), enr());
+    const ID = p0.unmatchedIdentities[0];
+    assert(p0.unmatchedIdentities.length === 1 && ID === "fairwinds-llc|flower|blue-dream", "A1: unmatched identity listed (vendor|axis|family)");
+    const spelled = live({ source_item_id: "pos-0123456789ab", name: "Blue Drem", strain_name: "Blue Drem" });
+    const withAlias = (cards: LiveCardCandidate[], key: string | undefined, drafts = base(), e = enr()) =>
+      buildIntakeMasteringPlan({
+        drafts,
+        existingKeys: new Set(),
+        enrichmentByDraftId: new Map(e),
+        liveCards: cards,
+        ...(key === undefined ? {} : { cardAliases: new Map([[ID, key]]) }),
+      });
+    // exact rule alone: the misspelled card is NOT a match
+    const noAlias = withAlias([spelled], undefined);
+    assert(noAlias.newCards.length === 1 && noAlias.mergesByCardKey.size === 0, "A1: without the alias the misspelling is a new card");
+    assert(noAlias.unmatchedIdentities.join() === ID, "A1: ... and its identity is listed for the alias read");
+    // alias applied
+    const joined = withAlias([spelled], "pos-0123456789ab");
+    assert(joined.newCards.length === 0, "A1: alias -> no new card");
+    assert(joined.mergesByCardKey.get("pos-0123456789ab")?.length === 1, "A1: alias -> the lot joins the chosen card");
+    assert(joined.mergedVariantCount === 1, "A1: merged count");
+    const rd = joined.diagnostics.find((d) => d.code === "intake_master_restock");
+    assert(rd?.context?.alias === true && rd?.context?.identity === ID && rd?.context?.card_key === "pos-0123456789ab", "A1: restock diagnostic says alias + identity");
+    assert(joined.unmatchedIdentities.length === 0, "A1: an applied alias is no longer unmatched");
+    assert(joined.mergeCategoriesByCardKey.get("pos-0123456789ab")?.includes("flower") === true, "A1: categories carried like any merge");
+    // the key is trimmed
+    assert(withAlias([spelled], "  pos-0123456789ab  ").newCards.length === 0, "A1: alias key trimmed");
+    // stale cases -> exactly the no-alias plan + one info diagnostic
+    const staleCases: [string, LiveCardCandidate[], string][] = [
+      ["card gone", [spelled], "pos-ffffffffffff"],
+      ["hidden", [{ ...spelled, hidden: true }], "pos-0123456789ab"],
+      ["medical-only", [{ ...spelled, variants: [{ source_variant_id: "X-onboarded", medical: true }] }], "pos-0123456789ab"],
+      ["blank vendor", [{ ...spelled, vendor_name: "  " }], "pos-0123456789ab"],
+      ["other axis", [{ ...spelled, category: "edible" }], "pos-0123456789ab"],
+    ];
+    for (const [label, cards, key] of staleCases) {
+      const st = withAlias(cards, key);
+      assert(st.newCards.length === 1 && st.mergesByCardKey.size === 0, `A1: stale (${label}) -> its own card`);
+      const sd = st.diagnostics.filter((d) => d.code === "intake_master_alias_stale");
+      assert(sd.length === 1 && sd[0].severity === "info" && sd[0].context?.card_key === key.trim() && sd[0].context?.identity === ID, `A1: stale (${label}) -> one info diagnostic`);
+      assert(st.unmatchedIdentities.join() === ID, `A1: stale (${label}) stays unmatched`);
+      const plain = withAlias(cards, undefined);
+      assert(JSON.stringify(st.newCards) === JSON.stringify(plain.newCards), `A1: stale (${label}) new card identical to no alias`);
+    }
+    // blank alias = none (no diagnostic)
+    const blank = withAlias([spelled], "   ");
+    assert(blank.newCards.length === 1 && !blank.diagnostics.some((d) => d.code === "intake_master_alias_stale"), "A1: blank alias = no alias, no diagnostic");
+    // pack folds onto the single axis (same rule as the exact match)
+    const packDraft = [draft({ name: "Blue Dream Preroll 5pk" })];
+    const packEnr: [string, DraftEnrichment][] = [["d1", enrich({ websiteCategory: "preroll-pack" })]];
+    const packId = plan(packDraft, packEnr).unmatchedIdentities[0];
+    assert(packId === "fairwinds-llc|preroll|blue-dream", "A1: a pack's identity is on the single axis");
+    const packJoin = buildIntakeMasteringPlan({
+      drafts: packDraft,
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map(packEnr),
+      liveCards: [{ ...spelled, category: "preroll" }],
+      cardAliases: new Map([[packId, "pos-0123456789ab"]]),
+    });
+    assert(packJoin.newCards.length === 0 && packJoin.mergesByCardKey.has("pos-0123456789ab"), "A1: pack alias joins the single-axis card");
+    // an exact single match always wins over an alias
+    const exact = live({ source_item_id: "card-exact" });
+    const both = withAlias([exact, spelled], "pos-0123456789ab");
+    assert(both.mergesByCardKey.has("card-exact") && !both.mergesByCardKey.has("pos-0123456789ab"), "A1: exact match wins; alias never consulted");
+    assert(!both.diagnostics.some((d) => d.context?.alias === true), "A1: exact match diagnostic has no alias flag");
+    // two exact matches: still ambiguous, alias never consulted
+    const amb = withAlias([exact, live({ source_item_id: "card-exact-2" }), spelled], "pos-0123456789ab");
+    assert(amb.newCards.length === 1 && amb.mergesByCardKey.size === 0, "A1: ambiguous stays a new card (alias ignored)");
+    assert(amb.diagnostics.some((d) => d.code === "intake_master_merge_ambiguous") && amb.unmatchedIdentities.length === 0, "A1: ambiguous is not 'unmatched'");
+    // byte-identical when absent / empty
+    const a = withAlias([spelled], undefined);
+    const b = buildIntakeMasteringPlan({ drafts: base(), existingKeys: new Set(), enrichmentByDraftId: new Map(enr()), liveCards: [spelled], cardAliases: new Map() });
+    const ser = (x: IntakeMasteringPlan) => JSON.stringify({ ...x, mergesByCardKey: [...x.mergesByCardKey], mergeCategoriesByCardKey: [...x.mergeCategoriesByCardKey], lotFactsByKey: [...x.lotFactsByKey] });
+    assert(ser(a) === ser(b), "A1: empty alias map is byte-identical to none");
+    // an alias for ANOTHER identity changes nothing
+    const other = buildIntakeMasteringPlan({ drafts: base(), existingKeys: new Set(), enrichmentByDraftId: new Map(enr()), liveCards: [spelled], cardAliases: new Map([["x|flower|y", "pos-0123456789ab"]]) });
+    assert(ser(other) === ser(a), "A1: an alias for another identity changes nothing");
+
+    // aliasTarget directly
+    const idx = buildLiveMergeIndex([spelled]);
+    assert(aliasTarget(idx, undefined, "flower").kind === "none" && aliasTarget(idx, null, "flower").kind === "none", "A1: aliasTarget none");
+    const jt = aliasTarget(idx, "pos-0123456789ab", "flower");
+    assert(jt.kind === "join" && jt.card === spelled, "A1: aliasTarget join");
+    assert(aliasTarget(idx, "pos-0123456789ab", "edible").kind === "stale", "A1: aliasTarget other axis stale");
+    assert(idx.eligible.size === 1 && buildLiveMergeIndex([{ ...spelled, hidden: true }]).eligible.size === 0, "A1: eligible = merge targets only");
+
+    // preview: the SAME rule, so the chip and Approve agree
+    const row: RestockPreviewDraft = { id: "r1", pos_product_key: "LOT-A", name: "Blue Dream 1g", brand_name: "Fairwinds", vendor_name: "Fairwinds LLC", strain_name: "Blue Dream", category: "flower" };
+    const pv0 = previewMasteringGroups({ drafts: [row], liveCards: [spelled] });
+    assert(pv0.verdicts.get("r1")?.kind === "new" && pv0.groups[0].identity === ID, "A1 preview: new without alias; group identity = planner identity");
+    const pv1 = previewMasteringGroups({ drafts: [row], liveCards: [spelled], cardAliases: new Map([[ID, "pos-0123456789ab"]]) });
+    const v1 = pv1.verdicts.get("r1");
+    assert(v1?.kind === "joins" && v1.byAlias === true && v1.cardKey === "pos-0123456789ab" && v1.fromCultivera, "A1 preview: joins byAlias");
+    assert(pv1.groups[0].liveCard?.key === "pos-0123456789ab", "A1 preview: the joined card is shown");
+    const pv2 = previewMasteringGroups({ drafts: [row], liveCards: [{ ...spelled, hidden: true }], cardAliases: new Map([[ID, "pos-0123456789ab"]]) });
+    assert(pv2.verdicts.get("r1")?.kind === "new", "A1 preview: stale alias -> new");
+    const pv3 = previewMasteringGroups({ drafts: [row], liveCards: [exact, spelled], cardAliases: new Map([[ID, "pos-0123456789ab"]]) });
+    const v3 = pv3.verdicts.get("r1");
+    assert(v3?.kind === "joins" && v3.cardKey === "card-exact" && !v3.byAlias, "A1 preview: exact match wins");
+    const pvNone = previewMasteringGroups({ drafts: [row], liveCards: [exact] });
+    assert(!("byAlias" in (pvNone.verdicts.get("r1") ?? {})), "A1 preview: a normal join carries no byAlias key (unchanged shape)");
   }
 
   return { passed };

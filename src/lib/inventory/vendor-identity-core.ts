@@ -219,6 +219,8 @@ export type RestockVerdict =
       matchedBy: MatchedBy;
       /** The card's lots belong to a DIFFERENT vendor row (same name). */
       vendorRecordDiffers: boolean;
+      /** R50 A1: joins only because the owner saved "this product is that card". */
+      byAlias?: boolean;
     }
   | { kind: "ambiguous"; cardKeys: string[] }
   | { kind: "new" }
@@ -230,7 +232,7 @@ export type RestockVerdict =
 export function restockChipCopy(v: RestockVerdict): string {
   switch (v.kind) {
     case "joins":
-      return `Restock \u2192 joins live card '${v.cardName}' (${v.fromCultivera ? "from Cultivera import" : "from receiving"})`;
+      return `Restock \u2192 joins live card '${v.cardName}' (${v.byAlias ? "you said it is this product" : v.fromCultivera ? "from Cultivera import" : "from receiving"})`;
     case "ambiguous":
       return `Ambiguous: ${v.cardKeys.length} live cards match \u2014 adds a new card`;
     case "new":
@@ -248,6 +250,8 @@ export function restockChipCopy(v: RestockVerdict): string {
 export function restockChipDetail(v: RestockVerdict): string {
   switch (v.kind) {
     case "joins":
+      if (v.byAlias)
+        return "Approving adds this lot as a size/restock on that card, because you said this product is that card. Use \u201cForget\u201d on the row to undo the choice; nothing already on the menu changes.";
       if (v.vendorRecordDiffers)
         return "Approving adds this lot as a size/restock on that card (the names match). The card's lots are filed under a different vendor record with the same name \u2014 merge the two vendor records under Vendors so future matches are exact.";
       return v.matchedBy === "vendor_id"

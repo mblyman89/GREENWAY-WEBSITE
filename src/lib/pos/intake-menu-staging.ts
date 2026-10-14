@@ -109,6 +109,7 @@ import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 // S32: remembered answers for products that matched 2+ live cards.
 import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
+import { loadCardAliases } from "@/lib/pos/card-alias-store";
 import { mergeAmbiguousIdentities } from "@/lib/pos/merge-review-core";
 import { lotPackageLabel, type MergeDecision } from "@/lib/pos/intake-mastering-core";
 import type { ApprovedDraftForInjection, DraftEnrichment } from "@/lib/pos/draft-injection-core";
@@ -528,16 +529,26 @@ export async function stageIntakeMenuVersionForManifest(
     // applied (intake-mastering-core mergeDecisionVerdict).
     // (R50 S3c: a refresh plan never merges, so it never raises merge_ambiguous.)
     const ambiguousIdentities = refreshMode ? [] : mergeAmbiguousIdentities(firstPlan.diagnostics);
-    const mergeDecisions =
-      ambiguousIdentities.length > 0 ? await loadMergeDecisions(ambiguousIdentities) : new Map<string, MergeDecision>();
+    // R50 A1: a remembered "this product IS that card" answer can only apply
+    // where the exact rule matched NO live card, so read aliases for exactly
+    // those identities (the planner lists them) - zero reads otherwise. Any
+    // failed read (or 0270 not applied) = no aliases = the plan as before. A
+    // stale alias (card gone / hidden / other category) is never applied
+    // (intake-mastering-core aliasTarget). A refresh plan never merges.
+    const unmatchedIdentities = refreshMode ? [] : firstPlan.unmatchedIdentities;
+    const [mergeDecisions, cardAliases] = await Promise.all([
+      ambiguousIdentities.length > 0 ? loadMergeDecisions(ambiguousIdentities) : Promise.resolve(new Map<string, MergeDecision>()),
+      unmatchedIdentities.length > 0 ? loadCardAliases(unmatchedIdentities) : Promise.resolve(new Map<string, string>()),
+    ]);
     let plan =
-      mergeDecisions.size > 0
+      mergeDecisions.size > 0 || cardAliases.size > 0
         ? buildIntakeStagedVersionPlan({
             publishedItems,
             approvedDrafts: drafts,
             enrichmentByDraftId,
             vendorIds,
             mergeDecisions,
+            cardAliases,
           })
         : firstPlan;
 
@@ -584,6 +595,7 @@ export async function stageIntakeMenuVersionForManifest(
                 enrichmentByDraftId,
                 vendorIds,
                 mergeDecisions,
+                cardAliases,
               })
           : null;
       const replanPartition = replan ? partitionFactFlags(replan.diagnostics, factReviews) : null;
