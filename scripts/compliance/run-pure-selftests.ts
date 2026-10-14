@@ -2273,7 +2273,7 @@ __runLiquidVolumeTests();
   assertRan("scanner-setup-core", __runScannerSetupCoreTests(), 48); // R50 S11b: Tera D5100 + DuraScan D760 setup barcodes, guides, test box
   assertRan("card-alias-core", __runCardAliasCoreTests(), 44); // R50 A1: one-click accept of a Cultivera suggestion (permanent decision, re-verified)
   assertRan("cultivera-reconcile-core", __runCultiveraReconcileCoreTests(), 95); // R50 A2: go/no-go — Cultivera units = our lots, by vendor/category
-  assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 27); // R50 A3: dry-run preview copy + COA URL triage
+  assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28); // R50 A3: dry-run preview copy + COA URL triage
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -166,6 +166,8 @@ export function __runBulkPreviewCoreTests(): { passed: number; failed: number } 
   ok(wciaPreviewNote(paused).includes("Continue preview"), "wcia: paused preview says it is partial");
   const probs: WciaBackfillRun = { ok: true, done: true, next: null, totals: { ...totals, unreadable: 1, problems: ["CV-1: bad json"] }, elapsedMs: 1 };
   ok(wciaPreviewTone(probs) === "warn" && wciaPreviewNote(probs).includes("CV-1: bad json") && wciaPreviewNote(probs).includes("1 with an unreadable file"), "wcia: problems warn + named");
+  const probOnly: WciaBackfillRun = { ok: true, done: true, next: null, totals: { ...totals, problems: ["CV-2: a lot could not be linked"] }, elapsedMs: 1 };
+  ok(wciaPreviewTone(probOnly) === "warn", "wcia: a problem alone warns");
   const stop: WciaBackfillRun = { ok: false, error: "the Cultivera manifests could not be read (boom)", next: null, totals };
   ok(wciaPreviewTone(stop) === "warn" && wciaPreviewNote(stop).includes("stopped: the Cultivera manifests could not be read"), "wcia: failed read honest");
   const one: WciaBackfillRun = { ...done, totals: { ...totals, manifests: 1, linked: 1, created: 1, reused: 0 } };
