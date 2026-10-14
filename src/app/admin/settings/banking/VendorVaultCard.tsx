@@ -24,7 +24,6 @@ import { releasePhoneChoices } from "@/lib/payments/vault-release-core";
 import {
   CONTACT_LOOKBACK_DAYS,
   MIN_CALLBACK_NOTE_CHARS,
-  MIN_SOLO_REASON_CHARS,
 } from "@/lib/payments/ach-authorization-core";
 import type { VendorBankRecord, VendorContact } from "@/lib/payments/payee-banking-store";
 import {
@@ -64,7 +63,7 @@ export function VendorVaultCard({
   contactsReady,
   controlsReady,
   staffNames,
-  actorUserId,
+  viewerIsOwner,
   today,
 }: {
   record: VendorBankRecord;
@@ -72,7 +71,8 @@ export function VendorVaultCard({
   contactsReady: boolean;
   controlsReady: boolean;
   staffNames: Map<string, string>;
-  actorUserId: string;
+  /** R41 S0: Michael releases at once; Stephen's release is sent to Michael for approval. */
+  viewerIsOwner: boolean;
   today: string;
 }) {
   const badge = vendorBankingBadge({
@@ -86,9 +86,6 @@ export function VendorVaultCard({
   const phones = releasePhoneChoices(contacts, today);
   const qualifying = phones.filter((p) => p.qualifies);
   const name = (id: string | null) => (id ? staffNames.get(id) ?? "a staff member" : "unknown");
-  // Solo = the person who entered the change (or an unknown author) releases
-  // it. Same rule as releaseVerdict() and the 0259 trigger; the server decides.
-  const willBeSolo = record.change_entered_by === null || record.change_entered_by === actorUserId;
 
   return (
     <article className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4">
@@ -136,7 +133,7 @@ export function VendorVaultCard({
           <div>
             <dt className="inline font-semibold text-white/60">Released: </dt>
             <dd className="inline">
-              {name(record.released_by)} · {when(record.released_at)} · {record.release_mode === "solo" ? "SOLO" : "dual"} ·{" "}
+              {name(record.released_by)} · {when(record.released_at)} · {record.release_mode === "owner" ? "owner" : record.release_mode === "solo" ? "SOLO (before R41)" : "dual"} ·{" "}
               {record.release_callback_method === "in_person" ? "in person" : "phone callback"}
             </dd>
           </div>
@@ -223,31 +220,12 @@ export function VendorVaultCard({
                   placeholder="Who you spoke with and what they confirmed, e.g. Maria in AR read back the account ending 4821"
                 />
               </div>
-              {willBeSolo ? (
-                <div className="sm:col-span-2">
-                  <label className={smallLabel} htmlFor={`r-${record.id}`}>
-                    Solo release reason ({MIN_SOLO_REASON_CHARS}+ characters)
-                  </label>
-                  <input
-                    id={`r-${record.id}`}
-                    name="release_reason"
-                    className={smallInput}
-                    minLength={MIN_SOLO_REASON_CHARS}
-                    required
-                    placeholder="Why the other owner isn't releasing this, e.g. Stephen is away and the invoice is due Friday"
-                  />
-                  <p className="mt-1 text-[0.7rem] text-amber-200/80">
-                    {record.change_entered_by === null
-                      ? "Nobody is recorded as entering these numbers, so any release counts as SOLO."
-                      : "You entered these numbers, so releasing them yourself is a SOLO release."}{" "}
-                    The other owner and the store are emailed and listed to call.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-[0.7rem] text-emerald-300/80 sm:col-span-2">
-                  {name(record.change_entered_by)} entered these numbers, so your release is the second person — a DUAL release.
-                </p>
-              )}
+              <p className="text-[0.7rem] text-white/60 sm:col-span-2">
+                {viewerIsOwner
+                  ? "You are the owner: the hold is released as soon as you press the button, and you get a \u201cWas this you?\u201d email."
+                  : "This is sent to Michael for approval. Nothing changes until he approves."}
+                {record.change_entered_by ? ` Numbers entered by ${name(record.change_entered_by)}.` : ""}
+              </p>
               <label className="flex items-start gap-2 text-xs text-white/70 sm:col-span-2">
                 <input type="checkbox" name="confirmed" value="yes" required className="mt-0.5" />
                 <span>
@@ -256,7 +234,7 @@ export function VendorVaultCard({
                 </span>
               </label>
               <div className="sm:col-span-2">
-                <button type="submit" className={btnGo}>Release hold</button>
+                <button type="submit" className={btnGo}>{viewerIsOwner ? "Release hold" : "Send release to Michael"}</button>
               </div>
             </form>
           </details>

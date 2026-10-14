@@ -1,7 +1,12 @@
 "use server";
 
 /**
- * SLICE 80 — Payee banking vault actions (settings.manage = owner + admin ONLY).
+ * SLICE 80 — Payee banking vault actions.
+ * R41 S0 — every action goes through achGate (src/lib/payments/ach-gate.ts):
+ * Michael (owner) acts at once and gets a "Was this you?" receipt; Stephen's
+ * (admin) changes wait for Michael's approval; putting banking ON HOLD is a
+ * stop action, so Stephen's takes effect at once and lands on Michael's
+ * review list (owner decision D-6, option B). Everyone else: no access.
  * SLICE 94 — the vault moved to /admin/settings/banking (the "Banking" page in
  * the Admin menu is now the vault door: Vendors | Employees | My banking).
  * Same actions, same audits, new home; old /admin/settings/payees links redirect.
@@ -16,7 +21,10 @@
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/auth/session";
+import type { StaffSession } from "@/lib/auth/session";
+import { achAuthority } from "@/lib/auth/ach-authority-core";
+import { achGate } from "@/lib/payments/ach-gate";
+import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   describeBankChange,
@@ -35,14 +43,6 @@ import {
   saveVendorBankDetails,
 } from "@/lib/payments/payee-banking-store";
 import { planVaultRelease } from "@/lib/payments/vault-release-core";
-import {
-  buildSoloReleaseNotice,
-  phoneReminder,
-  soloNoticeRecipients,
-} from "@/lib/payments/vault-release-notice-core";
-import { resolveNotifyContacts } from "@/lib/payments/ach-authorization-core";
-import { sendStaffAlertEmail } from "@/lib/orders/staff-alert-email";
-import { can } from "@/lib/auth/roles";
 import { maskAccountTail } from "@/lib/security/at-rest-crypto";
 import { pacificToday } from "@/lib/reports/timezone";
 import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
@@ -57,6 +57,11 @@ function back(tab: "vendors" | "employees", qs: { msg?: string; error?: string }
   if (qs.error) p.set("error", qs.error);
   revalidatePath(ROOT);
   redirect(`${ROOT}?${p.toString()}`);
+}
+
+/** The gate's answer (refusal, "sent to Michael", replay mismatch) on the same tab. */
+function replyTo(tab: "vendors" | "employees") {
+  return (r: RedirectOutcome): never => back(tab, r.ok ? { msg: r.message } : { error: r.message });
 }
 
 /** Snapshot helper: vault record → masked audit shape (or null). */
@@ -83,7 +88,10 @@ function snap(rec: {
 // ---------------------------------------------------------------------------
 
 export async function saveVendorBankingAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_bank.save", formData, { reply: replyTo("vendors") }, (session) => saveVendorBankingBody(session, formData));
+}
+
+async function saveVendorBankingBody(session: StaffSession, formData: FormData): Promise<void> {
 
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Pick a vendor first." });
@@ -143,7 +151,10 @@ export async function saveVendorBankingAction(formData: FormData): Promise<void>
 
 /** Put banking on hold, or re-open archived / revoked banking on hold. */
 export async function holdVendorBankAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_bank.hold", formData, { reply: replyTo("vendors") }, (session) => holdVendorBankBody(session, formData));
+}
+
+async function holdVendorBankBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   const reason = String(formData.get("hold_reason") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Missing vendor." });
@@ -167,18 +178,23 @@ export async function holdVendorBankAction(formData: FormData): Promise<void> {
 }
 
 /**
- * Release a hold (R39 S3). Gated by planVaultRelease -> releaseVerdict: a
- * phone number picked from the vendor's contacts on file 90+ days (or in
- * person), a note, and for a solo release a written reason plus a notice to
- * the other owner and the store. The database (0259) checks the same rules.
+ * Release a hold (R39 S3, R41 S0). Gated by planVaultRelease -> releaseVerdict:
+ * a phone number picked from the vendor's contacts on file 90+ days (or in
+ * person) and a note. R41 S0: only Michael (the owner) releases; Stephen's
+ * release arrives here only when Michael approves it, and then runs as
+ * Michael. No reason is required (owner round 6). The database (0271
+ * vendor_bank_guard) checks the same rules.
  */
 export async function releaseVendorBankHoldAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_bank.release", formData, { reply: replyTo("vendors") }, (session) => releaseVendorBankHoldBody(session, formData));
+}
+
+async function releaseVendorBankHoldBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Missing vendor." });
 
   const [vault, contacts] = await Promise.all([getVendorBankDetails(vendorId), listVendorContacts(vendorId)]);
-  if (!vault.tableReady) back("vendors", { error: "The banking vault table is not ready — apply migration 0143 first." });
+  if (!vault.tableReady) back("vendors", { error: "The banking vault table is not ready \u2014 apply migration 0143 first." });
 
   const plan = planVaultRelease({
     form: {
@@ -190,8 +206,7 @@ export async function releaseVendorBankHoldAction(formData: FormData): Promise<v
     },
     record: vault.record ? { status: vault.record.status, change_entered_by: vault.record.change_entered_by } : null,
     contacts: contacts.contacts,
-    actorUserId: session.profile.id,
-    actorCanManage: can(session.profile.role, "settings.manage"),
+    actorIsOwner: achAuthority(session.profile.role) === "act",
     today: pacificToday(),
   });
   if (!plan.ok) back("vendors", { error: plan.refusal });
@@ -206,34 +221,10 @@ export async function releaseVendorBankHoldAction(formData: FormData): Promise<v
   });
   if (!res.ok) back("vendors", { error: res.error });
 
-  // Solo release: tell the other owner and the store (owner answer Q9).
-  let notice: { emailed: boolean; detail: string; call: string[]; missingPhones: string[] } | null = null;
-  if (plan.verdict.mode === "solo") {
-    const book = resolveNotifyContacts(process.env);
-    const recipients = soloNoticeRecipients(session.email, book.contacts);
-    const msg = buildSoloReleaseNotice({
-      vendorName: res.before.vendor_name,
-      accountTail: maskAccountTail(res.before.account_number),
-      releasedByLabel: session.profile.full_name || session.email,
-      method: plan.method,
-      callbackNote: plan.note,
-      reason: plan.reason ?? "",
-      whenPacific: new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" }),
-    });
-    const apiKey = process.env.RESEND_API_KEY ?? "";
-    const from = process.env.ORDER_EMAIL_FROM ?? "";
-    const sent =
-      apiKey && from
-        ? await sendStaffAlertEmail({ apiKey, from, to: recipients.map((r) => r.email), subject: msg.subject, html: msg.html })
-        : ({ ok: false, detail: "RESEND_API_KEY or ORDER_EMAIL_FROM is not set", didTimeout: false } as const);
-    const pr = phoneReminder(recipients);
-    notice = { emailed: sent.ok, detail: sent.ok ? `emailed ${recipients.length}` : sent.detail, call: pr.call, missingPhones: pr.missing };
-  }
-
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: plan.verdict.mode === "solo" ? "payee_banking.vendor.release_solo" : "payee_banking.vendor.release",
+    action: "payee_banking.vendor.release",
     entityType: "vendor_bank_details",
     entityId: vendorId,
     before: snap(res.before),
@@ -248,25 +239,19 @@ export async function releaseVendorBankHoldAction(formData: FormData): Promise<v
       callback_note: plan.note,
       release_reason: plan.reason,
       record_stored_on_row: res.recordStored,
-      notice,
+      // Who entered the change (Stephen or Michael) stays on the row as change_entered_by.
+      change_entered_by: res.before.change_entered_by ?? null,
     },
   }).catch(() => {});
 
-  if (notice) {
-    const parts = [
-      notice.emailed
-        ? "Hold released (solo). Stephen/Michael and the store were emailed."
-        : `Hold released (solo), but the notice email FAILED (${notice.detail}). Tell the other owner yourself now.`,
-    ];
-    if (notice.call.length) parts.push(`Also call: ${notice.call.join("; ")}.`);
-    if (notice.missingPhones.length) parts.push(`No phone set for ${notice.missingPhones.join(", ")} (ACH_NOTIFY_*_PHONE).`);
-    back("vendors", { msg: parts.join(" ") });
-  }
-  back("vendors", { msg: "Hold released (second-person check). This vendor can be paid again." });
+  back("vendors", { msg: "Hold released by Michael (the owner). This vendor can be paid again." });
 }
 
 export async function markVendorBankVerifiedAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_bank.verify", formData, { reply: replyTo("vendors") }, (session) => markVendorBankVerifiedBody(session, formData));
+}
+
+async function markVendorBankVerifiedBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Missing vendor." });
@@ -294,7 +279,10 @@ export async function markVendorBankVerifiedAction(formData: FormData): Promise<
 
 /** Archive (owner answer Q7: delete becomes archive). The row and its history stay. */
 export async function archiveVendorBankingAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_bank.archive", formData, { reply: replyTo("vendors") }, (session) => archiveVendorBankingBody(session, formData));
+}
+
+async function archiveVendorBankingBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   const reason = String(formData.get("archive_reason") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Missing vendor." });
@@ -320,7 +308,10 @@ export async function archiveVendorBankingAction(formData: FormData): Promise<vo
 // ---------------------------------------------------------------------------
 
 export async function addVendorContactAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_contact.add", formData, { reply: replyTo("vendors") }, (session) => addVendorContactBody(session, formData));
+}
+
+async function addVendorContactBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   const kind = String(formData.get("contact_kind") ?? "") === "email" ? "email" : "phone";
   const raw = String(formData.get("contact_value") ?? "").trim();
@@ -370,7 +361,10 @@ export async function addVendorContactAction(formData: FormData): Promise<void> 
 }
 
 export async function retireVendorContactAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("vendor_contact.retire", formData, { reply: replyTo("vendors") }, (session) => retireVendorContactBody(session, formData));
+}
+
+async function retireVendorContactBody(session: StaffSession, formData: FormData): Promise<void> {
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
   const contactId = String(formData.get("contact_id") ?? "").trim();
   if (!vendorId || !contactId) back("vendors", { error: "Missing contact." });
@@ -392,7 +386,10 @@ export async function retireVendorContactAction(formData: FormData): Promise<voi
 // ---------------------------------------------------------------------------
 
 export async function saveEmployeeBankingAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("employee_bank.save", formData, { reply: replyTo("employees") }, (session) => saveEmployeeBankingBody(session, formData));
+}
+
+async function saveEmployeeBankingBody(session: StaffSession, formData: FormData): Promise<void> {
 
   const employeeId = String(formData.get("employee_id") ?? "").trim();
   if (!employeeId) back("employees", { error: "Pick an employee first." });
@@ -454,7 +451,10 @@ export async function saveEmployeeBankingAction(formData: FormData): Promise<voi
 }
 
 export async function clearEmployeeBankingAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  return achGate("employee_bank.clear", formData, { reply: replyTo("employees") }, (session) => clearEmployeeBankingBody(session, formData));
+}
+
+async function clearEmployeeBankingBody(session: StaffSession, formData: FormData): Promise<void> {
   const employeeId = String(formData.get("employee_id") ?? "").trim();
   if (!employeeId) back("employees", { error: "Missing employee." });
 

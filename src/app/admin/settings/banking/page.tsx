@@ -167,7 +167,8 @@ export default async function BankingVaultPage({
               "Only the owner and admins can see or edit this page — the vendor vault table refuses everyone else at the database itself, even with a direct connection.",
               "Vendor ACH payments and payroll runs pull banking FROM the vault. The pay screens have no bank-number fields to tamper with.",
               "New or changed bank numbers go ON HOLD automatically — the database itself enforces it. To release, call the vendor at a number that has been on file at least 90 days (never one from the email asking for the change), or confirm in person, and write who you spoke with.",
-              "Stephen or Michael can release. If the same person who typed the numbers releases them, that's a SOLO release: it needs a written reason, and the other owner and the store are emailed and listed to call.",
+              "Michael, the owner, can make and release any ACH change himself. Stephen gathers and records ACH information; anything he adds, changes, removes or releases waits for Michael's approval. Every change is logged with who entered it and who approved it.",
+              "Putting banking ON HOLD only stops money, so Stephen's hold takes effect at once; Michael is emailed and it goes on his review list to check off.",
               "Banking is never deleted. Archive stops payments and keeps the record and its history; archived and revoked banking can only come back on hold.",
               "Every add, change, hold, release, archive, and contact change is written to the audit log with masked numbers — a permanent who-changed-what trail.",
               "My banking (third tab) holds YOUR originating bank and the NACHA IDs your bank assigns — set once, shared by Payroll and Accounts Payable.",
@@ -343,7 +344,7 @@ export default async function BankingVaultPage({
                           contactsReady={vendorContacts.tableReady}
                           controlsReady={vault.controlsReady}
                           staffNames={staffNames}
-                          actorUserId={session.profile.id}
+                          viewerIsOwner={session.profile.role === "owner"}
                           today={today}
                         />
                       ))}
@@ -365,7 +366,7 @@ export default async function BankingVaultPage({
                           contactsReady={vendorContacts.tableReady}
                           controlsReady={vault.controlsReady}
                           staffNames={staffNames}
-                          actorUserId={session.profile.id}
+                          viewerIsOwner={session.profile.role === "owner"}
                           today={today}
                         />
                       ))}
@@ -383,7 +384,7 @@ export default async function BankingVaultPage({
                         contactsReady={vendorContacts.tableReady}
                         controlsReady={vault.controlsReady}
                         staffNames={staffNames}
-                        actorUserId={session.profile.id}
+                        viewerIsOwner={session.profile.role === "owner"}
                         today={today}
                       />
                     ))}
