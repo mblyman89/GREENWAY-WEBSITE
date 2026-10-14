@@ -30,9 +30,9 @@
 29 killed if (i.outcome !== "passed" && i.outcome !== "failed" && i.outcome !== 
 30 killed if (!(CALLBACK_METHODS as readonly string[]).includes(method)) return
 31 killed if (note.length < MIN_CALLBACK_NOTE_CHARS) return { ok: false, error: 
-32 killed const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId
-33 killed const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId
-34 killed if (solo && reason.length < MIN_SOLO_REASON_CHARS) {
+32 killed if (!i.actorIsOwner) return { ok: false, error: "Only Michael
+33 killed if (!i.actorIsOwner) return { ok: false, error: "Only Michael
+34 killed [/ACH_OWNER_ONLY/, 
 35 killed for (const t of [note, reason]) if
 36 killed if (r.state !== "active") continue;
 37 killed if (days < 0) out.push
@@ -57,3 +57,4 @@
 56 killed [/ACH_AUTH_TRANSITION|ach_auth_guard/, 
 57 killed [/ACH_VERIFICATION_NOTE|ach_ver_note_shape/, 
 total 58 killed 58 survivors []
+EXIT 0

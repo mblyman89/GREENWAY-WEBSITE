@@ -33,12 +33,13 @@ M = [
     # release
     ('if (a.payee_type !== "employee") return', 'if (false) return'),
     ('if (a.state !== "on_hold") return', 'if (false) return'),
-    ('holdEnteredBy: a.hold_entered_by,', 'holdEnteredBy: "someone-else",'),
-    ('p_reason: f.solo ? f.reason : f.reason || null,', 'p_reason: f.reason,'),
-    ('const mode = data === "solo" ? "solo" : data === "dual" ? "dual" : null;', 'const mode = data === "solo" ? "solo" : "dual";'),
-    ('if (mode === "solo") {\n    const book', 'if (mode === "dual") {\n    const book'),
-    ('const to = soloNoticeRecipients(input.actorEmail, book);', 'const to = [book.stephen, book.michael, book.store];'),
-    ('`The hold was: ${a.hold_reason ?? "(no reason recorded)"}`,', '`The hold was: (not shown)`,'),
+    # R41 S0 (D-6): owner only; 'owner' is the only success reply
+    ('actorIsOwner: input.actorIsOwner, method: input.method', 'actorIsOwner: true, method: input.method'),
+    ('p_reason: f.reason || null,', 'p_reason: f.reason,'),
+    ('if (data !== "owner") return', 'if (!data) return'),
+    ('if (data !== "owner") return', 'if (data !== "owner" && data !== "solo") return'),
+    ('return { ok: true, mode: "owner", before: a };', 'return { ok: true, mode: "owner", before: { ...a, state: "active" } };'),
+    ('p_actor: input.actorId,\n    p_method: f.method,', 'p_actor: input.actorId,\n    p_method: "phone",'),
     ('if (!data) return { ok: false, error: opsDbErrorMessage("ACH_RELEASE_NOT_FOUND") };', ''),
     # checks
     ('const cents = method === "micro_entry" ? pickMicroCents(', 'const cents = method !== "prenote" ? pickMicroCents('),

@@ -92,12 +92,23 @@ describe("pinned to 0258", () => {
     expect(flat).toContain("event_kind text not null check (event_kind ~ '^[a-z][a-z_]{2,48}$')");
     for (const k of Object.values(INTAKE_EVENTS)) expect(k).toMatch(/^[a-z][a-z_]{2,48}$/);
   });
-  it("managers may only insert document_dropped events and received/unlinked documents", () => {
+  it("managers may only insert document_dropped events and received/unlinked documents (0258 as written; 0271 removes managers)", () => {
     expect(flat).toContain("(public.is_manager() and event_kind = 'document_dropped' and actor_id = auth.uid())");
     expect(INTAKE_EVENTS.dropped).toBe("document_dropped");
     expect(flat).toContain("intake_status = 'received' and authorization_id is null and archived_at is null and uploaded_by = auth.uid()");
   });
-  it("bucket is private, admins read, managers drop", () => {
+  it("R41 S0 (D-5): 0271 re-creates the same drop policies for owner/admin only (is_admin = owner, admin)", () => {
+    const f71 = readFileSync(join(process.cwd(), "supabase/migrations/0271_ach_owner_authority.sql"), "utf8")
+      .split("\n").map((l) => (l.indexOf("--") === -1 ? l : l.slice(0, l.indexOf("--")))).join(" ").replace(/\s+/g, " ");
+    expect(f71).toContain("create policy ach_docs_manager_drop on storage.objects for insert with check (bucket_id = 'ach-docs' and public.is_admin());");
+    expect(f71).toContain("drop policy if exists ach_docs_manager_drop on storage.objects;");
+    expect(f71).toMatch(/create policy ach_documents_manager_drop on public\.ach_authorization_documents for insert with check \( public\.is_admin\(\) and intake_status = 'received' and authorization_id is null and archived_at is null and uploaded_by = auth\.uid\(\) \);/);
+    expect(f71).toContain("create policy ach_events_insert on public.ach_authorization_events for insert with check (public.is_admin());");
+    expect(f71).not.toMatch(/is_manager\(\)/);
+    const f01 = readFileSync(join(process.cwd(), "supabase/migrations/0001_slice1_foundation.sql"), "utf8");
+    expect(f01).toContain("where id = auth.uid() and active = true and role in ('owner','admin')");
+  });
+  it("bucket is private, admins read, managers drop (0258 as written; 0271 narrows the drop)", () => {
     expect(flat).toContain("values ('ach-docs', 'ach-docs', false)");
     expect(flat).toContain("for select using (bucket_id = 'ach-docs' and public.is_admin())");
     expect(flat).toContain("for insert with check (bucket_id = 'ach-docs' and public.is_manager())");
@@ -530,9 +541,9 @@ describe("S5 helpers: gaps found by the second mutation run", () => {
     expect(planAccountRows([A], [""], { encrypt: enc, hmacKey: () => "not-hex" }).ok).toBe(false);
     expect(last4("12-34")).toBe("1234");
   });
-  it("only managers and up may drop documents; only owner/admin may review", () => {
-    for (const r of ["owner", "admin", "manager"]) expect(canDropDocuments(r)).toBe(true);
-    for (const r of ["content_editor", "budtender", "", null]) expect(canDropDocuments(r)).toBe(false);
+  it("R41 S0 (D-5): only the owner and admin may drop documents; only owner/admin may review", () => {
+    for (const r of ["owner", "admin"]) expect(canDropDocuments(r)).toBe(true);
+    for (const r of ["manager", "content_editor", "budtender", "", null, "Owner", " owner"]) expect(canDropDocuments(r)).toBe(false);
     expect(canReviewDocuments("manager")).toBe(false);
     expect(canReviewDocuments("admin")).toBe(true);
   });
