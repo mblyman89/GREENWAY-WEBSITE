@@ -41,7 +41,9 @@ export type VendorBankRecord = {
   change_entered_at: string | null;
   released_by: string | null;
   released_at: string | null;
-  release_mode: "dual" | "solo" | null;
+  // Mirrors 0271 vbd_release_mode_shape: 'owner' for every release from R41 S0
+  // on; 'dual' / 'solo' stay readable because older rows keep their history.
+  release_mode: "dual" | "solo" | "owner" | null;
   release_callback_method: "phone" | "in_person" | null;
   release_callback_note: string | null;
   release_reason: string | null;
