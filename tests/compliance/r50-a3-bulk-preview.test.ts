@@ -129,8 +129,8 @@ beforeEach(() => {
 
 describe("R50 A3 - the pure core", () => {
   it("self-tests pass at the runner floor", () => {
-    expect(pv.__runBulkPreviewCoreTests()).toEqual({ passed: 27, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 27)');
+    expect(pv.__runBulkPreviewCoreTests()).toEqual({ passed: 28, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("bulk-preview-core", __runBulkPreviewCoreTests(), 28)');
   });
 });
 

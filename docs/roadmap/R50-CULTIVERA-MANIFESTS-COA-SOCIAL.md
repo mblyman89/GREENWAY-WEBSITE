@@ -1448,3 +1448,31 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   * **Tests.** Core self-tests 95 (runner floor 95), vitest 38 (loader on the postgrest fake + a real xlsx in
     a storage mock, all four actions, CSV route, page render incl. roles, wiring pins, real-export pin), guide
     72 → 74 pins updated. Mutants 26/26 killed (one survivor, "GO (explained) with zero lines", pinned).
+
+### A3 — "Preview first (writes nothing)" before every bulk apply
+
+  * **Survey (read first, not assumed).** These already previewed: rebuild deliveries (S2c digest), the
+    count, strains, the legacy removal list and Clean Slate (counts + typed phrase). Three bulk buttons
+    had **no** preview: S12b "Attach vendor lab results to every Cultivera manifest", S13 "Save a copy of
+    every lab certificate" (both on Product Onboarding → Cultivera manifests) and R15a "Fill received dates
+    & cannabinoids from the spreadsheet" (import page). "Backfill lots" reuses the idempotent lot creation
+    and is already shown by A2's reconcile page.
+  * **How.** Not a second copy of the logic: the SAME functions take `dryRun` and stop right before the
+    first write. `attachWciaLabResults` reads the vendor file, the lots and the exact-id lab lookup, then
+    counts would-create / would-reuse / would-link; `runWciaBackfill` passes it through, writes no timeline
+    line and no audit, and keeps its own resumable cursor (`lab_pv_next`, "Continue preview").
+    `previewCoaArchiveBackfill` walks the same candidate query (link set, no stored copy, id keyset, cap
+    20,000 rows, says so when capped) through the same URL check — no download, no upload. `fillImportLotFacts`
+    re-reads the stored workbooks and runs the same `planLotFactFill`, then returns its counts.
+  * **Copy.** `bulk-preview-core.ts`: every message starts "Preview - nothing was written.", speaks in
+    would-words, names problems, unusable links by reason and the top hosts, and says the real run fills
+    blanks only, so anything filled in the meantime is skipped (never overwritten). Tone is info / warn,
+    never "done".
+  * **Gates.** Same permission as the real button (`inventory.manage`); no audit, no revalidate. Receiving
+    never takes the dry-run path.
+  * **Tests.** Core self-tests 28 (runner floor 28). Vitest 15 on the postgrest fake: each preview makes
+    zero writes / audits / uploads / fetches, and its counts **equal what the real run then does** on the
+    same data (lab results incl. reuse, kept certificate, destroyed lot; certificates: candidates = checked,
+    would-skip = bad-link, would-try = archived; facts: dry = real, owner-set date kept, test import refused);
+    paused preview resumes; failures honest; wiring pins. Mutants 24/24 killed (one survivor, "a problem
+    alone warns", pinned with a new self-test).
