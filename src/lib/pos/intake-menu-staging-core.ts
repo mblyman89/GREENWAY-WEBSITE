@@ -57,6 +57,7 @@ import type {
   InjectionDiagnostic,
 } from "@/lib/pos/draft-injection-core";
 import type { VendorIdInputs } from "@/lib/inventory/vendor-identity-core";
+import type { BarcodeInputs } from "@/lib/pos/barcode-match-core";
 import {
   buildIntakeMasteringPlan,
   type LotFactBundle,
@@ -243,6 +244,11 @@ export type IntakeStagingInputs = {
    * valid merge target. Absent or empty = today's behaviour, byte for byte.
    */
   cardAliases?: ReadonlyMap<string, string>;
+  /**
+   * R50 A7: barcode-first inputs (barcode-match-core). Absent = today's
+   * behaviour, byte for byte.
+   */
+  barcodes?: BarcodeInputs;
 };
 
 /**
@@ -500,6 +506,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     vendorIds: inputs.vendorIds,
     mergeDecisions: inputs.mergeDecisions,
     cardAliases: inputs.cardAliases,
+    barcodes: inputs.barcodes,
     liveCards: items
       .filter((it) => it.origin === "carried")
       .map((it) => ({

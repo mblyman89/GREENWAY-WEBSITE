@@ -46,6 +46,14 @@ import {
 } from "@/lib/inventory/vendor-identity-core";
 import { suggestCultiveraMatches, type IntakeSuggestion } from "@/lib/inventory/cultivera-intake-suggestion-core";
 import { loadCardAliases } from "@/lib/pos/card-alias-store";
+import {
+  BARCODE_FIRST_ENV,
+  barcodeFirstEnabled,
+  barcodesToRead,
+  buildBarcodeInputs,
+  draftLotIdsToRead,
+  type BarcodeInputs,
+} from "@/lib/pos/barcode-match-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -103,6 +111,54 @@ export async function loadVendorIdInputs(
     return buildVendorIdInputs({ draftLots, liveLots });
   } catch (err) {
     console.error("[restock-preview] vendor id lookup threw (name rule used):", err);
+    return undefined;
+  }
+}
+
+/** R50 A7: the columns the barcode reads need (inventory_lots, 0023). */
+export const LOT_BARCODE_COLUMNS = "id, pos_product_key, lot_code, vendor_id";
+
+type LotBarcodeRow = { id: string; pos_product_key: string | null; lot_code: string | null; vendor_id: string | null };
+
+/**
+ * R50 A7: barcode-first inputs, or undefined (= the plan before A7).
+ * Two bounded reads: the drafts' own lots (by id) for their barcodes, then
+ * the lots carrying those barcodes. Flag off, nothing live, over the cap, or
+ * ANY failed page -> undefined; a partial set is never used.
+ */
+export async function loadBarcodeInputs(
+  admin: Admin,
+  input: { drafts: Array<{ pos_product_key: string | null; lot_id?: string | null }>; liveCards: LiveCardCandidate[] },
+): Promise<BarcodeInputs | undefined> {
+  if (!barcodeFirstEnabled(process.env[BARCODE_FIRST_ENV])) return undefined;
+  if (input.liveCards.length === 0) return undefined;
+  try {
+    const ids = draftLotIdsToRead(input.drafts);
+    if (ids.length === 0) return undefined;
+    let failed = false;
+    const read = (col: "id" | "lot_code") => async (chunk: string[], from: number, to: number) => {
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select(LOT_BARCODE_COLUMNS)
+        .in(col, chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        console.error("[restock-preview] lot barcode read failed (name rule used):", error.message);
+        failed = true;
+        return [];
+      }
+      return (data as unknown as LotBarcodeRow[] | null) ?? [];
+    };
+    const draftLots = await chunkedIn<string, LotBarcodeRow>(ids, read("id"));
+    if (failed) return undefined;
+    const { barcodes, overCap } = barcodesToRead(draftLots);
+    if (barcodes.length === 0 || overCap) return undefined;
+    const liveLots = await chunkedIn<string, LotBarcodeRow>(barcodes, read("lot_code"));
+    if (failed) return undefined;
+    return buildBarcodeInputs({ drafts: input.drafts, draftLots, liveLots, liveCards: input.liveCards });
+  } catch (err) {
+    console.error("[restock-preview] barcode lookup threw (name rule used):", err);
     return undefined;
   }
 }
@@ -253,15 +309,19 @@ export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise
       hidden: r.hidden === true,
       variants: byItem.get(r.id) ?? [],
     }));
-    const vendorIds = await loadVendorIdInputs(admin, { drafts, liveCards });
-    const first = previewMasteringGroups({ drafts, liveCards, vendorIds });
+    const [vendorIds, barcodes] = await Promise.all([
+      loadVendorIdInputs(admin, { drafts, liveCards }),
+      // R50 A7: the same barcode-first inputs the staging planner gets.
+      loadBarcodeInputs(admin, { drafts, liveCards }),
+    ]);
+    const first = previewMasteringGroups({ drafts, liveCards, vendorIds, barcodes });
     // R50 A1: saved "this product IS that card" answers, read only for the
     // groups the exact rule matched to no card ("new"); the SAME aliasTarget
     // rule as the staging planner, so the chip and Approve agree. Any failed
     // read (or 0270 not applied) = no aliases = the first dry run.
     const newIdentities = first.groups.filter((g) => g.verdict.kind === "new").map((g) => g.identity);
     const cardAliases = newIdentities.length > 0 ? await loadCardAliases(newIdentities) : new Map<string, string>();
-    const dry = cardAliases.size > 0 ? previewMasteringGroups({ drafts, liveCards, vendorIds, cardAliases }) : first;
+    const dry = cardAliases.size > 0 ? previewMasteringGroups({ drafts, liveCards, vendorIds, cardAliases, barcodes }) : first;
     return {
       ok: true,
       verdicts: dry.verdicts,
