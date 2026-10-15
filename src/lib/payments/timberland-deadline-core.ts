@@ -261,6 +261,37 @@ export function planDeadlineReminders(todayIso: string, files: readonly Deadline
   return out;
 }
 
+/** The 1 pm Pacific nudge on deadline day (plan S5: "remind on deadline-day morning and at 1 pm"). */
+export const AFTERNOON_REMINDER = { hour: 13, minute: 0 } as const;
+
+export type AfternoonReminder = { dedupeKey: string; stage: "deadline_1pm"; subject: string; body: string; urgency: "critical" };
+
+/**
+ * The afternoon pass. A cron tick is a request to consider, never a command
+ * (AGENTS.md rule 12): this plans a reminder only when it is the file's
+ * deadline day in Pacific time, at or after 1:00 pm Pacific and before the
+ * 4:00 pm cutoff, for files still released or uploaded (not bank_approved,
+ * not voided). The dedupe key is per file, so a second tick is a no-op.
+ */
+export function planAfternoonDeadlineReminders(nowUtc: Date, files: readonly DeadlineFile[]): AfternoonReminder[] {
+  const today = pacificDayKey(nowUtc);
+  const from = new Date(pacificWallTimeToUtcISO(today, { h: AFTERNOON_REMINDER.hour, m: AFTERNOON_REMINDER.minute, s: 0, ms: 0 }));
+  const out: AfternoonReminder[] = [];
+  for (const f of files) {
+    if (f.status !== "released" && f.status !== "uploaded") continue;
+    const dl = latestUploadAndApproval(f.effectiveDate);
+    if (dl.day !== today || nowUtc < from || nowUtc >= dl.cutoffUtc) continue;
+    out.push({
+      dedupeKey: `ach-deadline:${f.id}:1pm`,
+      stage: "deadline_1pm",
+      subject: `1 pm check: ${f.filename} must be approved at Timberland by 3:30 pm`,
+      body: `${f.filename} (${f.kind}, effective ${shortDate(f.effectiveDate)}) is still marked ${f.status} here. Upload AND approve it at Timberland by ${dl.text}, then mark it here. After 4:00 pm it will not be paid on time.`,
+      urgency: "critical",
+    });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------ self-tests ---
 
 export function __runTimberlandDeadlineCoreTests(): { passed: number; failed: number } {
@@ -366,6 +397,18 @@ export function __runTimberlandDeadlineCoreTests(): { passed: number; failed: nu
   ok(rem.length === 2 && rem[0].dedupeKey === "ach-deadline:a:today" && rem[0].subject.includes("by 3:30 pm"), "deadline-day reminder for a released file");
   ok(rem[1].dedupeKey === "ach-deadline:c:missed" && rem[1].urgency === "critical", "missed deadline for a file still only uploaded");
   ok(planDeadlineReminders("2026-10-24", files).length === 0, "no reminder after the effective date");
+  // Afternoon (1 pm) pass: Wed Oct 21 2026 is file a's deadline day (PDT).
+  const aft = (h: number, m: number, day = "2026-10-21") => planAfternoonDeadlineReminders(pt(day, h, m), files);
+  ok(aft(12, 59).length === 0, "1 pm pass: 12:59 Pacific plans nothing");
+  ok(aft(13, 0).length === 1 && aft(13, 0)[0].dedupeKey === "ach-deadline:a:1pm" && aft(13, 0)[0].urgency === "critical", "1 pm pass: 1:00 pm Pacific plans the released file only");
+  ok(aft(15, 59).length === 1 && aft(16, 0).length === 0, "1 pm pass: stops at the 4:00 pm cutoff");
+  ok(aft(13, 0, "2026-10-20").map((r) => r.dedupeKey).join() === "ach-deadline:c:1pm" && aft(13, 0, "2026-10-22").length === 0, "1 pm pass: only on each file's own deadline day (c is due Tue Oct 20, a on Wed Oct 21)");
+  // PST week: effective Wed Nov 4 -> deadline Mon Nov 2 (after the Nov 1 change).
+  const pst: DeadlineFile[] = [{ id: "n", kind: "vendor", status: "uploaded", filename: "n.ach", effectiveDate: "2026-11-04" }];
+  ok(planAfternoonDeadlineReminders(new Date("2026-11-02T20:00:00Z"), pst).length === 0, "1 pm pass, PST: the 20:00 UTC tick is noon Pacific: nothing");
+  ok(planAfternoonDeadlineReminders(new Date("2026-11-02T21:00:00Z"), pst).length === 1, "1 pm pass, PST: the 21:00 UTC tick is 1 pm Pacific: sent");
+  ok(planAfternoonDeadlineReminders(new Date("2026-10-21T20:00:00Z"), files).length === 1, "1 pm pass, PDT: the 20:00 UTC tick is 1 pm Pacific: sent");
+
   let threw = false;
   try {
     creditEffectiveDateFor("2026-13-01");
