@@ -50,6 +50,7 @@ import { decryptSecret } from "@/lib/security/at-rest-crypto";
 import * as vault from "../vault-actions";
 import * as ops from "../ops-actions";
 import * as files from "../file-actions";
+import * as comms from "../comms-actions";
 import * as docs from "../document-actions";
 import * as company from "../actions";
 import * as payroll from "../../../payroll/actions";
@@ -101,6 +102,8 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "ach_file.mark_uploaded": (fd) => files.markAchFileUploadedAction(fd),
   "ach_file.mark_bank_approved": (fd) => files.markAchFileBankApprovedAction(fd),
   "ach_file.confirm_funding": (fd) => files.confirmAchFileFundingAction(fd),
+  "timberland_comms.log": (fd) => comms.addTimberlandCommsAction(fd),
+  "timberland_comms.done": (fd) => comms.closeTimberlandCommsAction(fd),
 };
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
