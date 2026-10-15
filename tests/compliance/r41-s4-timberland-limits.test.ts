@@ -399,7 +399,8 @@ describe("source pins", () => {
 
   it("the 80% notes reach the person: payroll notes and the vendor form", () => {
     expect(code(read("src/lib/payroll/payroll-store.ts"))).toContain("notes: [...notes, ...released.limitWarnings]");
-    expect(code(read("src/app/admin/vendor-payments/actions.ts"))).toContain("limitWarnings: released.limitWarnings,");
+    // The RETURNED object (the audit row carries them too; that alone would not reach the form).
+    expect(code(read("src/app/admin/vendor-payments/actions.ts"))).toMatch(/return \{\s*problems: \[\],\s*warnings,\s*limitWarnings: released\.limitWarnings,\s*file: released\.body,/);
     expect(read("src/app/admin/vendor-payments/VendorAchForm.tsx")).toContain("state.limitWarnings?.map(");
   });
 });
