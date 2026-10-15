@@ -221,7 +221,7 @@ describe("File ID Modifier: the day's next free letter", () => {
     st.db.before = (req) => {
       if (!raced && req.method === "POST" && req.table === "ach_files") {
         raced = true;
-        files().push({ id: st.db.nextId(), kind: "prenote", source_id: "racer", file_date: "2026-10-05", file_id_modifier: "A", status: "released", sha256: "x", entry_set_hmac: "y", effective_date: EFFECTIVE });
+        files().push({ id: st.db.nextId(), kind: "prenote", source_id: "racer", file_date: "2026-10-05", file_id_modifier: "A", status: "released", sha256: "x", entry_set_hmac: "y", effective_date: EFFECTIVE, total_cents: 0 });
       }
       return base(req);
     };

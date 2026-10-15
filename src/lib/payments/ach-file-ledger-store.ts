@@ -132,6 +132,38 @@ export const LIMITS_READ_CAP = 2000;
 export const LIMITS_READ_FAILED =
   "Timberland limit check: the list of files already released could not be read, so this file was NOT released (the limits are never skipped). Try again in a minute.";
 
+const LIMIT_KINDS = new Set(["payroll", "vendor", "prenote", "micro_entry"]);
+const LIVE_STATUSES = new Set(["released", "uploaded", "bank_approved"]);
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * One ach_files row as the limit check needs it, or null when anything is
+ * missing or odd (a null amount is never read as $0; an unknown kind or a
+ * voided row here means the filter did not hold). PostgREST sends bigint as
+ * a JSON number; a digit string is accepted too.
+ */
+export function limitRowFrom(r: Record<string, unknown>): LedgerFileForLimits | null {
+  const c = r.total_cents;
+  const cents = typeof c === "number" ? c : typeof c === "string" && /^\d{1,15}$/.test(c) ? Number(c) : NaN;
+  if (!Number.isSafeInteger(cents) || cents < 0) return null;
+  if (typeof r.id !== "string" || !r.id) return null;
+  if (typeof r.kind !== "string" || !LIMIT_KINDS.has(r.kind)) return null;
+  if (typeof r.status !== "string" || !LIVE_STATUSES.has(r.status)) return null;
+  if (typeof r.file_date !== "string" || !ISO_DAY.test(r.file_date)) return null;
+  if (typeof r.effective_date !== "string" || !ISO_DAY.test(r.effective_date)) return null;
+  const sd = r.settlement_date;
+  if (sd !== null && sd !== undefined && (typeof sd !== "string" || !ISO_DAY.test(sd))) return null;
+  return {
+    id: r.id,
+    kind: r.kind as LedgerFileForLimits["kind"],
+    status: r.status as LedgerFileForLimits["status"],
+    fileDate: r.file_date,
+    effectiveDate: r.effective_date,
+    settlementDate: typeof sd === "string" ? sd : null,
+    totalCents: cents,
+  };
+}
+
 /**
  * Every non-voided ach_files row that can count toward a limit for a file
  * released on `fileDate`: anything uploaded, effective or settling on or
@@ -149,19 +181,9 @@ export async function readLedgerForLimits(fileDate: string): Promise<{ ok: true;
   if (data.length > LIMITS_READ_CAP) return { ok: false, error: LIMITS_READ_FAILED };
   const ledger: LedgerFileForLimits[] = [];
   for (const r of data as Record<string, unknown>[]) {
-    const cents = Number(r.total_cents);
-    if (!Number.isSafeInteger(cents) || cents < 0 || typeof r.file_date !== "string" || typeof r.effective_date !== "string") {
-      return { ok: false, error: LIMITS_READ_FAILED };
-    }
-    ledger.push({
-      id: String(r.id),
-      kind: r.kind as LedgerFileForLimits["kind"],
-      status: r.status as LedgerFileForLimits["status"],
-      fileDate: r.file_date,
-      effectiveDate: r.effective_date,
-      settlementDate: typeof r.settlement_date === "string" ? r.settlement_date : null,
-      totalCents: cents,
-    });
+    const row = limitRowFrom(r);
+    if (!row) return { ok: false, error: LIMITS_READ_FAILED };
+    ledger.push(row);
   }
   return { ok: true, ledger };
 }
