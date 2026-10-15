@@ -130,7 +130,7 @@ async function pagedRead(table: string, cols: string): Promise<{ ok: true; rows:
   const sb = createSupabaseAdminClient();
   const { rows, verdict } = await pagedAllChecked<Row>(async (from, to) => {
     const { data, error } = await sb.from(table).select(cols).order("id", { ascending: true }).range(from, to);
-    return { rows: (data ?? []) as Row[], ok: !error };
+    return { rows: (data ?? []) as unknown as Row[], ok: !error };
   });
   if (!verdict.complete) return { ok: false, error: `The ${table.replace(/_/g, " ")} list could not be read in full, so nobody was screened (a partial screen would look complete).` };
   return { ok: true, rows };
