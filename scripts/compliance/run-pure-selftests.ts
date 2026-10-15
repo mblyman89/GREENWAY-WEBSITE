@@ -691,6 +691,7 @@ import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-l
 // R21 (C): the enrichment media-library picker (pickable, search, order, copy).
 import { __runLibraryPickerCoreTests } from "../../src/lib/media/library-picker-core";
 import { __runImageRecommendCoreTests } from "../../src/lib/catalog/image-recommend-core";
+import { __runGeminiRequestCoreTests } from "../../src/lib/ai/gemini-request-core";
 import { __runMasteringPreviewCoreTests } from "../../src/lib/inventory/mastering-preview-core";
 // R22 (S37): the lot page's fill-only-when-empty product-link + attach-COA doors.
 import { __runLotLinkCoreTests } from "../../src/lib/inventory/lot-link-core";
@@ -2316,6 +2317,7 @@ __runLiquidVolumeTests();
   assertRan("cutover-weekend-core", __runCutoverWeekendCoreTests(), 42); // R50 A5: the dated, timed cutover weekend on one page
   assertRan("cutover-drift-core", __runCutoverDriftCoreTests(), 48); // R50 A6: daily drift check 11/02-11/08 (on hand vs Cultivera + every recorded change)
   assertRan("image-recommend-core", __runImageRecommendCoreTests(), 18); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
+  assertRan("gemini-request-core", __runGeminiRequestCoreTests(), 10); // R51 D1: Gemini Interactions body (system_instruction, url_context, service_tier, seed, response_format)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
