@@ -606,7 +606,7 @@ export const ACH_FRAUD_PROCEDURE: readonly { readonly rule: string; readonly enf
   { rule: "Test credits are monitored for unusual volume or returns.", enforcedBy: "/admin/settings/banking/operations#monitor" },
   { rule: "Every active payee authorization is reviewed at least once a year.", enforcedBy: "/admin/settings/banking/operations#reviews" },
   { rule: "Payroll files are guarded: one file per two-week period, one payment per employee, amount ceilings, and a warning when an account changed since the last payment.", enforcedBy: "/admin/payroll" },
-  { rule: "Michael is Greenway's only Timberland user. He uploads and approves files with his login plus a text code or token. Timberland's dual approval is off (signed Schedule C), by the owner's choice. Timberland never calls back on ACH files. Our call-backs to payees, at numbers on file 90+ days, before any bank change are what stop 'change my account' fraud.", enforcedBy: "/admin/settings/banking/operations#files" },
+  { rule: "Michael is Greenway's only Timberland user. He uploads and approves files with his login plus a text code or token. Timberland's dual approval is off (signed Schedule C), by the owner's choice. Timberland never calls back on ACH files. Our call-backs to payees, at numbers on file 90+ days, before any bank change are what stop 'change my account' fraud.", enforcedBy: null },
   { rule: "We check each month's bank statement against our ACH files and report anything unknown to Timberland the same day.", enforcedBy: "/admin/settings/banking/calendar" },
   { rule: "Each of us uses our own login. Logins and passkeys are never shared.", enforcedBy: null },
 ];
