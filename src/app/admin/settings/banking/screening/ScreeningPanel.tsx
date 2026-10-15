@@ -143,7 +143,7 @@ export function ScreeningPanel({
                           <div className="text-white/40">matched &ldquo;{m.screenedName}&rdquo;</div>
                         </td>
                         <td className="py-1 pr-2">
-                          {m.list === "SDN" ? "SDN" : "Consolidated"} #{m.entNum} \u00b7 {m.sdnType ?? "entity"} \u00b7 {m.program ?? "\u2014"}
+                          {`${m.list === "SDN" ? "SDN" : "Consolidated"} #${m.entNum} \u00b7 ${m.sdnType ?? "entity"} \u00b7 ${m.program ?? "\u2014"}`}
                         </td>
                         <td className="py-1">{m.remarks ?? "\u2014"}</td>
                       </tr>
