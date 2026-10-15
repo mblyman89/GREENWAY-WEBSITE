@@ -81,10 +81,16 @@ export type AchFileRow = {
   voided_by: string | null;
   voided_at: string | null;
   voided_reason: string | null;
+  /** R41 S6 (0274): who marked it uploaded to Timberland, and when. */
+  uploaded_by: string | null;
+  uploaded_at: string | null;
+  /** R41 S6 (0274): who marked it approved in Timberland's portal, and when. */
+  approved_at_bank_by: string | null;
+  approved_at_bank_at: string | null;
 };
 
 const ROW_COLS =
-  "id, kind, source_id, file_date, file_id_modifier, filename, effective_date, entry_count, total_cents, sha256, status, released_by, released_at, voided_by, voided_at, voided_reason";
+  "id, kind, source_id, file_date, file_id_modifier, filename, effective_date, entry_count, total_cents, sha256, status, released_by, released_at, voided_by, voided_at, voided_reason, uploaded_by, uploaded_at, approved_at_bank_by, approved_at_bank_at";
 
 export type Sealed = {
   body: string;
@@ -483,4 +489,31 @@ export async function voidAchFile(input: { fileId: string; actorId: string; reas
   const kind = String(data ?? "") as AchFileKind;
   if (!["payroll", "vendor", "prenote", "micro_entry"].includes(kind)) return { ok: false, error: "The database did not confirm the void. Reload the page." };
   return { ok: true, kind, reason: c.reason };
+}
+
+// ----------------------------------------------------------- bank steps -----
+// R41 S6 (0274). After the owner uploads the released file in Timberland's
+// cash management portal, and again after approving it there, the app records
+// the step. The database refuses anyone but the owner, refuses the steps out
+// of order, and never changes a stamp once set. Timberland's dual approval is
+// off (signed Schedule C), so the same owner may record both steps.
+
+export type AchBankStep = "uploaded" | "bank_approved";
+
+const BANK_STEP_RPC: Record<AchBankStep, string> = {
+  uploaded: "ach_file_mark_uploaded",
+  bank_approved: "ach_file_mark_bank_approved",
+};
+
+/** Record one Timberland step for a file. Returns the file's kind on success. */
+export async function markAchFileBankStep(input: { fileId: string; actorId: string; step: AchBankStep }): Promise<{ ok: true; kind: AchFileKind } | Fail> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const fn = BANK_STEP_RPC[input.step];
+  if (!fn) return { ok: false, error: "Unknown bank step." };
+  if (!/^[0-9a-f-]{36}$/i.test(input.fileId)) return { ok: false, error: ledgerDbErrorMessage("ACH_FILE_NOT_FOUND") };
+  const { data, error } = await createSupabaseAdminClient().rpc(fn, { p_file_id: input.fileId, p_actor: input.actorId });
+  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };
+  const kind = String(data ?? "") as AchFileKind;
+  if (!["payroll", "vendor", "prenote", "micro_entry"].includes(kind)) return { ok: false, error: "The database did not confirm the bank step. Reload the page." };
+  return { ok: true, kind };
 }
