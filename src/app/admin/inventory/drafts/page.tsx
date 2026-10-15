@@ -1623,7 +1623,9 @@ export default async function CatalogDraftsPage({
                         readFailed={!waitingRead.ok}
                       />
                     )}
-                    {imageRead?.views.get(d.id) && (
+                    {/* R51: v2 layout only - there the lookup zone sits OUTSIDE the
+                        approve form (forms cannot nest). */}
+                    {v2Row && imageRead?.views.get(d.id) && (
                       <OnboardingImagesPanel
                         draftId={d.id}
                         productName={builtName ?? (d.name || "")}
@@ -1646,6 +1648,9 @@ export default async function CatalogDraftsPage({
                       kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
                       manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
                       wide={v2Row}
+                      importImageAction={v2Row ? importOnboardingImageAction : undefined}
+                      returnManifest={focus.manifestId}
+                      returnStatus={view}
                     />
                     </>
                   );

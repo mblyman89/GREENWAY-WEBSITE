@@ -107,7 +107,7 @@ Respond with ONLY a JSON object (no prose, no code fences) with EXACTLY these ke
   "category": "flower|pre-roll|vape|concentrate|edible|beverage|tincture|topical|capsule|accessory|other or empty string",
   "potency_ratio": "printed cannabinoid ratio like 1:1 or 20:1, or empty string",
   "size": "printed net size like 12oz / 3.5g / 10pk, or empty string",
-  "image_candidates": ["direct http(s) image URLs of THIS product; [] if unsure"]
+  "image_candidates": ["direct http(s) photo-file URLs of THIS product from pages you opened (not page URLs); [] if unsure"]
 }`;
 
 /**
