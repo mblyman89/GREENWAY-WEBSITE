@@ -31,6 +31,7 @@ import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
 import { listVendors } from "@/lib/vendors/store";
 import { checkMarkDone, isTaskDoneNow, normalizeAchDoneMap, type AchDoneMap } from "@/lib/payments/ach-calendar-core";
 import type { GuideEmployee, GuideSnapshot } from "@/lib/payments/ach-guide-core";
+import { DUAL_NOTE_DISMISS_KEY, normalizeDualNoteDismiss, type DualNoteDismiss } from "@/lib/payments/timberland-bank-steps-core";
 
 export const ACH_CALENDAR_KEY = "ach_calendar_done";
 const ACH_CALENDAR_LABEL = "ACH calendar - completed periods (R40)";
@@ -182,4 +183,38 @@ export async function loadGuideSnapshot(todayIso: string): Promise<{ snapshot: G
     lastPayroll: run ? { id: run.id, payDate: run.pay_date, generated: Boolean(run.nacha_filename) } : null,
   };
   return { snapshot, problems, ops };
+}
+
+// ---------------------------------------------------------------------------
+// R41 S6: "Don't show again" on the grey dual-approval line. site_settings
+// key ach_dual_approval_note_dismissed. An unreadable value means "show it"
+// (more information, never less). The dismissal lasts for the calendar year.
+// ---------------------------------------------------------------------------
+
+export async function getDualNoteDismiss(): Promise<{ dismiss: DualNoteDismiss | null; readError: string | null }> {
+  if (!isSupabaseServiceConfigured) return { dismiss: null, readError: "Database is not configured." };
+  try {
+    const { data, error } = await createSupabaseAdminClient().from("site_settings").select("value_json").eq("key", DUAL_NOTE_DISMISS_KEY).maybeSingle();
+    if (error) return { dismiss: null, readError: error.message };
+    return { dismiss: normalizeDualNoteDismiss(data?.value_json ?? null), readError: null };
+  } catch (e) {
+    return { dismiss: null, readError: e instanceof Error ? e.message : "read failed" };
+  }
+}
+
+export async function setDualNoteDismiss(value: DualNoteDismiss): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database is not configured." };
+  if (!normalizeDualNoteDismiss(value)) return { ok: false, error: "That dismissal could not be read back, so it was not saved." };
+  try {
+    const { error } = await createSupabaseAdminClient()
+      .from("site_settings")
+      .upsert(
+        { key: DUAL_NOTE_DISMISS_KEY, label: "ACH: dual-approval note dismissed for the year (R41 S6)", value_json: value as unknown as Record<string, unknown>, updated_by: null },
+        { onConflict: "key" },
+      );
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Save failed." };
+  }
 }
