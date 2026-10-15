@@ -23,6 +23,7 @@
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
 import { extractCitations, extractSearchSuggestions, type WebCitation } from "./grounding-core";
+import { buildGeminiInteractionBody, shouldRetryWithoutSchema } from "./gemini-request-core";
 import {
   modelForTask,
   getBudgetStatus,
@@ -624,6 +625,11 @@ export type WebSearchOptions = {
   temperature?: number;
   maxTokens?: number;
   context?: AiContext;
+  /**
+   * R51 D1: optional JSON schema -> Gemini `response_format` (structured
+   * output alongside google_search / url_context). Ignored on non-Gemini.
+   */
+  jsonSchema?: Record<string, unknown> | null;
 };
 
 export type WebSearchResult = {
@@ -848,46 +854,53 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
   // opts.temperature but otherwise leave it at Gemini's default of 1.0.
   if (IS_GEMINI_WEBSEARCH) {
     try {
-      const body: Record<string, unknown> = {
+      // R51 D1 (gemini-request-core.ts, self-tested): system_instruction sent
+      // on its own; tools google_search + url_context (url_context lets the
+      // model open the pages / photos it cites - AI_GEMINI_URL_CONTEXT=off
+      // drops it); optional service_tier (AI_GEMINI_SERVICE_TIER), seed
+      // (AI_GEMINI_SEED) and response_format (opts.jsonSchema).
+      // thinking_level stays "low" by default: Gemini 3+ defaults to "high",
+      // which with live grounding ran past Vercel Hobby's 300s ceiling.
+      // Override via AI_THINKING_LEVEL (minimal|low|medium|high). Temperature
+      // only when the caller asks (Google warns against low temperature on
+      // Gemini 3+ - looping).
+      const geminiEnv = {
+        AI_THINKING_LEVEL: process.env.AI_THINKING_LEVEL,
+        AI_GEMINI_URL_CONTEXT: process.env.AI_GEMINI_URL_CONTEXT,
+        AI_GEMINI_SERVICE_TIER: process.env.AI_GEMINI_SERVICE_TIER,
+        AI_GEMINI_SEED: process.env.AI_GEMINI_SEED,
+      };
+      const bodyInput = {
         model,
-        // Combine the system framing and the user ask into one input string;
-        // Gemini 3 responds best to a single, direct instruction block.
-        input: `${opts.system}\n\n${opts.user}`,
-        tools: [{ type: "google_search" }],
-        generation_config: {
-          max_output_tokens: opts.maxTokens ?? 900,
-          // Gemini 3 defaults to thinking_level "high" (its SLOWEST setting):
-          // combined with live google_search grounding that regularly ran past
-          // Vercel Hobby's 300s function ceiling and got the whole function
-          // killed (the browser then shows "unexpected response from server").
-          // "low" is Google's latency-minimizing setting (per the official
-          // Gemini 3 docs it is the recommended choice for high-throughput,
-          // latency-sensitive calls) and is the owner's chosen default here.
-          // It still reasons over the grounded search sources, just with far
-          // less deliberation, so first-token latency is much lower. Override
-          // via AI_THINKING_LEVEL (e.g. "medium"/"high") without a code change.
-          thinking_level: process.env.AI_THINKING_LEVEL ?? "low",
-          // Only set temperature when the caller explicitly asks; otherwise
-          // let Gemini use its recommended default (1.0).
-          ...(typeof opts.temperature === "number"
-            ? { temperature: opts.temperature }
-            : {}),
-        },
+        system: opts.system,
+        user: opts.user,
+        maxTokens: opts.maxTokens,
+        temperature: opts.temperature,
+        jsonSchema: opts.jsonSchema ?? null,
       };
       // Hard timeout so a slow grounding run fails FAST with a friendly message
       // instead of hanging until Vercel kills the function at 300s.
-      const res = await fetchWithTimeout(
-        GEMINI_INTERACTIONS_URL,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": GEMINI_API_KEY,
+      const send = (b: Record<string, unknown>) =>
+        fetchWithTimeout(
+          GEMINI_INTERACTIONS_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": GEMINI_API_KEY,
+            },
+            body: JSON.stringify(b),
           },
-          body: JSON.stringify(body),
-        },
-        AI_WEBSEARCH_TIMEOUT_MS,
-      );
+          AI_WEBSEARCH_TIMEOUT_MS,
+        );
+      let res = await send(buildGeminiInteractionBody(bodyInput, geminiEnv));
+      if (!res.ok && res.status === 400 && bodyInput.jsonSchema) {
+        const firstDetail = await res.clone().text().catch(() => "");
+        if (shouldRetryWithoutSchema(res.status, firstDetail, true)) {
+          // A model that refuses schema + tools together still answers.
+          res = await send(buildGeminiInteractionBody({ ...bodyInput, jsonSchema: null }, geminiEnv));
+        }
+      }
 
       if (res.ok) {
         const payload = (await res.json()) as {
