@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """scripts/r41/mutate-s11-app.py - R41 S11: test the tests for OFAC sanctions
 screening (the pure core, the download/store, the actions, the cron route and
-the panel).
+the panel), and the Round 12 "Vendors to follow up" search and collapse.
 
 Each mutant changes ONE thing; then the pure self-tests (run-pure-selftests.ts)
 OR the S11 vitest file must FAIL. Files are restored after each mutant and
@@ -19,6 +19,8 @@ STORE = "src/lib/payments/ofac-screening-store.ts"
 ACT = "src/app/admin/settings/banking/screening-actions.ts"
 CRON = "src/app/api/cron/ofac-screening/route.ts"
 PANEL = "src/app/admin/settings/banking/screening/ScreeningPanel.tsx"
+ENROLL = "src/lib/payments/vendor-ach-enrollment-core.ts"
+FOLLOW = "src/app/admin/settings/banking/VendorFollowUpSection.tsx"
 T = [
     "tests/compliance/r41-s11-ofac.test.tsx",
 ]
@@ -65,6 +67,14 @@ M = [
     ("panel loses the never-blocks line", PANEL, "<strong>Screening never blocks a payment.</strong>", "<strong>Screening results.</strong>"),
     ("admin sees Record decision", PANEL, '{isOwner ? "Record decision" : "Send to Michael for approval"}', '{"Record decision"}'),
     ("true match shows a form", PANEL, '{item.status.status === "needs_review" ? (', '{item.status.status !== "clear" ? ('),
+    # --- Round 12: vendors to follow up (search + collapse) ---
+    ("search matches ANY word", ENROLL, "    return words.every((w) => hay.includes(w));", "    return words.some((w) => hay.includes(w));"),
+    ("search is case-sensitive", ENROLL, '    .toLowerCase()\n    .replace(/[\'\\u2019]/g, "")', '    .replace(/[\'\\u2019]/g, "")'),
+    ("search ignores the status label", ENROLL, "foldForSearch([r.label, r.nextStep, ...r.warnings].join(\" \"))", "foldForSearch([r.nextStep, ...r.warnings].join(\" \"))"),
+    ("blank search hides every row", ENROLL, "  if (words.length === 0) return [...rows];", "  if (words.length === 0) return [];"),
+    ("section opens by default", FOLLOW, "  const [open, setOpen] = useState(false);", "  const [open, setOpen] = useState(true);"),
+    ("list not filtered", FOLLOW, "  const shown = filterVendorFollowUp(rows, query);", "  const shown = filterVendorFollowUp(rows, \"\");"),
+    ("no search box", FOLLOW, '                type="search"', '                type="hidden"'),
 ]
 
 files = sorted({m[1] for m in M})
