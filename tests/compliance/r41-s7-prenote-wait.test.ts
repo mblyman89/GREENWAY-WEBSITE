@@ -324,3 +324,27 @@ describe("wiring pins", () => {
     expect(core.__runTimberlandPrenoteCoreTests()).toEqual({ passed: 38, failed: 0 });
   });
 });
+
+// =========================================================================
+describe("S7 mutation runs (test the tests)", () => {
+  const pin = (scriptPath: string, logPath: string, floor: number) => {
+    const script = read(scriptPath);
+    const log = read(logPath);
+    const start = script.indexOf("\nM = [");
+    const listed = script.slice(start, script.indexOf("\n]\n", start)).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
+    const m = /total (\d+) killed (\d+) survivors \[\]/.exec(log);
+    expect(m, "clean summary line").not.toBeNull();
+    expect(Number(m![1])).toBe(listed);
+    expect(Number(m![2])).toBe(listed);
+    expect(listed).toBeGreaterThanOrEqual(floor);
+    expect(log).toContain("control (before) pass");
+    expect(log).toContain("control (after) pass");
+    expect(log).not.toMatch(/SURVIVED|ANCHOR|control .* FAIL/);
+  };
+  it("scripts/r41/mutate-s7-app.last.log: every app mutant killed (6 to 3, calendar days, gate bypassed, ...), controls pass", () => {
+    pin("scripts/r41/mutate-s7-app.py", "scripts/r41/mutate-s7-app.last.log", 23);
+  });
+  it("scripts/r41/mutate-0275-sql.last.log: every SQL mutant killed, controls pass (0263 check too)", () => {
+    pin("scripts/r41/mutate-0275-sql.py", "scripts/r41/mutate-0275-sql.last.log", 11);
+  });
+});

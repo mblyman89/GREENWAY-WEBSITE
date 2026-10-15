@@ -87,6 +87,9 @@ begin
   perform pg_temp.must_fail(format(t, format('array[%L]::uuid[]', p1), u_m, td - 1, td, td + 7), '23514');
   select status into r from public.ach_verifications where id = p1;
   assert r.status <> 'sent', 'a refused prenote stays unsent';
+  -- 3b. a direct write to 'sent' with no dates (bypassing mark_sent) is refused too: no dates, no proof of the wait
+  perform pg_temp.must_fail(format($q$update public.ach_verifications set status = 'sent' where id = %L$q$, p1), 'ACH_VERIFICATION_TIMBERLAND_WAIT');
+  perform pg_temp.must_fail(format($q$update public.ach_verifications set status = 'sent', settlement_date = %L where id = %L$q$, td, p1), 'ACH_VERIFICATION_TIMBERLAND_WAIT');
 
   -- 4. exactly the floor (settlement + 8) is accepted
   n := public.ach_verification_mark_sent(array[p1], u_m, td - 1, td, td + 8, 'probe-0275.ach');

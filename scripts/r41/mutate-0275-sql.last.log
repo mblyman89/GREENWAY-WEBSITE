@@ -1,0 +1,14 @@
+control (before) pass
+killed   nacha-three-days  (PL/pgSQL function inline_code_block line 43 at PERFORM)
+killed   floor-off-by-one  (PL/pgSQL function inline_code_block line 45 at PERFORM)
+killed   floor-too-strict  (PL/pgSQL function inline_code_block line 55 at assignment)
+killed   floor-from-effective  (PL/pgSQL function inline_code_block line 45 at PERFORM)
+killed   null-dates-pass  (PL/pgSQL function inline_code_block line 51 at PERFORM)
+killed   micro-entries-too  (PL/pgSQL function inline_code_block line 61 at assignment)
+killed   never-fires  (PL/pgSQL function inline_code_block line 43 at PERFORM)
+killed   wrong-errcode  (PL/pgSQL function inline_code_block line 47 at PERFORM)
+killed   wrong-code-word  (PL/pgSQL function inline_code_block line 43 at PERFORM)
+killed   browser-may-call  (CONTEXT:  PL/pgSQL function inline_code_block line 33 at ASSERT)
+killed   search-path-open  (CONTEXT:  PL/pgSQL function inline_code_block line 36 at ASSERT)
+control (after) pass
+total 11 killed 11 survivors []
