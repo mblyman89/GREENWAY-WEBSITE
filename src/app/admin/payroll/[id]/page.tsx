@@ -20,6 +20,7 @@ import {
 import { PayrollSourceDocPanel } from "@/components/admin/payroll/PayrollSourceDocPanel";
 import { PayrollGuardrailPanel } from "@/components/admin/payroll/PayrollGuardrailPanel";
 import { OriginatorNotReady } from "@/components/admin/payroll/OriginatorNotReady";
+import { payDateLine } from "@/components/admin/payroll/PayDateDeadlineField";
 import { saveRunLinesAction, generateRunAction, uploadSourceDocAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -159,6 +160,20 @@ export default async function PayrollRunPage({
         <StatCard label="Total taxes" value={`$${centsToDollars(run.total_taxes_cents)}`} accent="muted" />
         <StatCard label="Total gross" value={`$${centsToDollars(run.total_gross_cents)}`} accent="gold" />
       </div>
+
+      {/* R41 S5: the Timberland deadline for this payday (checked again, with
+          the server clock, when the file is released; no override). */}
+      {run.status === "draft" ? (() => {
+        const line = payDateLine(run.pay_date, new Date());
+        return line ? (
+          <div
+            data-testid="run-deadline"
+            className={`rounded-[var(--admin-radius)] border px-4 py-3 text-sm ${line.tone === "bad" ? "border-[var(--admin-danger)] bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]" : "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text)]"}`}
+          >
+            {line.text}
+          </div>
+        ) : null;
+      })() : null}
 
       {!originatorReady ? <OriginatorNotReady problems={readiness.problems} tail="before generating a file. You can still enter amounts now." /> : null}
 

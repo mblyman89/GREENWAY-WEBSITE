@@ -14,6 +14,7 @@ import {
 } from "@/lib/payroll/payroll-store";
 import { centsToDollars } from "@/lib/payroll/payroll-core";
 import { OriginatorNotReady } from "@/components/admin/payroll/OriginatorNotReady";
+import { PayDateDeadlineField } from "@/components/admin/payroll/PayDateDeadlineField";
 import {
   reconcilePayroll,
   formatDiff,
@@ -63,7 +64,7 @@ export default async function PayrollPage({
   // R41 S2: the one Timberland readiness answer (the builder uses the same check).
   const originatorReady = readiness.ready;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = pacificToday(); // R41 S5: Pacific, not UTC (after 5 pm Pacific UTC is already tomorrow)
 
   // P6b — reconcile each completed run against the Main-account ACH debit.
   const reconcileResult: PayrollReconcileResult = reconcilePayroll(
@@ -125,8 +126,9 @@ export default async function PayrollPage({
             <Field label="Label" help="Optional, e.g. “Period ending 6/14”">
               <Input name="label" placeholder="Pay period ending…" />
             </Field>
-            <Field label="Pay date" help="ACH effective date" required>
-              <Input type="date" name="pay_date" defaultValue={today} />
+            <Field label="Pay date" help="Payday. If it is not a banking day, the bank date is the banking day before (Timberland Schedule D)." required>
+              {/* R41 S5: no default date; the Timberland deadline shows as you pick. */}
+              <PayDateDeadlineField nowIso={new Date().toISOString()} />
             </Field>
             <Button type="submit" variant="save" size="sm" disabled={!originatorReady}>
               Create run
