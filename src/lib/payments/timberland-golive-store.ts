@@ -17,6 +17,8 @@ import { loadGuideSnapshot } from "@/lib/payments/ach-guide-store";
 import { loadTimberlandRoomLeft, readFirstFileGate, readOpenFilesForDeadlines } from "@/lib/payments/ach-file-ledger-store";
 import { latestUploadAndApproval } from "@/lib/payments/timberland-deadline-core";
 import type { GoLiveInput, GoLiveStaff } from "@/lib/payments/timberland-golive-core";
+import { readTimberlandComms } from "@/lib/payments/timberland-comms-store";
+import { loggedFacts } from "@/lib/payments/timberland-obligations-core";
 
 export const STAFF_READ_CAP = 500;
 export const INBOX_READ_CAP = 500;
@@ -55,14 +57,19 @@ export async function loadGoLiveInput(todayIso: string, nowUtc: Date): Promise<G
       return null;
     }
   };
-  const [guide, staff, inbox, gate, room, open] = await Promise.all([
+  const [guide, staff, inbox, gate, room, open, comms] = await Promise.all([
     safe(() => loadGuideSnapshot(todayIso)),
     safe(readStaff),
     safe(readInbox),
     safe(() => readFirstFileGate(todayIso)),
     safe(() => loadTimberlandRoomLeft(todayIso)),
     safe(() => readOpenFilesForDeadlines(todayIso)),
+    safe(readTimberlandComms),
   ]);
+  // R41 S10: a Timberland log entry (0277, owner-stamped) is as good as the
+  // calendar tick for the three Timberland facts. A failed log read adds
+  // nothing (the calendar alone decides), so it can never turn a gate green.
+  const logged = comms && comms.ok ? loggedFacts(comms.rows) : null;
   const s = guide?.snapshot ?? null;
   const t = s?.timberlandSetup ?? null;
 
@@ -81,10 +88,10 @@ export async function loadGoLiveInput(todayIso: string, nowUtc: Date): Promise<G
     nowUtc,
     // A failed guide read is red (false), never green; the page shows the guide's own read problems.
     contractOnFile: Boolean(s?.timberlandAgreementDone),
-    countersigned: Boolean(t?.countersigned),
-    scheduleGEmail: Boolean(t?.scheduleGEmail),
-    accessReady: Boolean(t?.accessReady),
-    dualApprovalOn: Boolean(t?.dualApprovalOn),
+    countersigned: Boolean(t?.countersigned) || Boolean(logged?.countersigned),
+    scheduleGEmail: Boolean(t?.scheduleGEmail) || Boolean(logged?.scheduleGEmail),
+    accessReady: Boolean(t?.accessReady) || Boolean(logged?.accessReady),
+    dualApprovalOn: Boolean(t?.dualApprovalOn) || Boolean(logged?.dualApprovalOn),
     staff,
     achRoles: rolesForPermission("ach.request"),
     waitingForOwner: inbox,
