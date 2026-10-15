@@ -79,7 +79,8 @@ begin
   assert r.funding_confirmed_by = u_m and r.funding_confirmed_at is not null and r.funding_confirmed_amount_cents = 50000 and r.status = 'released', 'confirmed once, status unchanged';
 
   -- 4. set once: never again, never changed, never cleared
-  perform pg_temp.must_fail(format($q$select public.ach_file_confirm_funding(%L, %L, 90000)$q$, f1, u_m), 'ACH_FUNDING_FINAL');
+  -- the function's own refusal (its wording), not only the guard behind it
+  perform pg_temp.must_fail(format($q$select public.ach_file_confirm_funding(%L, %L, 90000)$q$, f1, u_m), 'ACH_FUNDING_FINAL: the funding for ACH file');
   perform pg_temp.must_fail(format($q$update public.ach_files set funding_confirmed_amount_cents = 90000 where id = %L$q$, f1), 'ACH_FUNDING_FINAL');
   perform pg_temp.must_fail(format($q$update public.ach_files set funding_confirmed_by = %L where id = %L$q$, u_s, f1), 'ACH_FUNDING_FINAL');
   perform pg_temp.must_fail(format($q$update public.ach_files set funding_confirmed_at = now() - interval '1 day' where id = %L$q$, f1), 'ACH_FUNDING_FINAL');
