@@ -121,12 +121,14 @@ begin
   perform pg_temp.must_fail(format(t, format('array[%L]::uuid[]', v1), u_m, td - 2, td - 3, td + 1), 'ACH_VERIFICATION_DATES');
   perform pg_temp.must_fail(format(t, format('array[%L]::uuid[]', v1), u_m, td - 3, td - 2, td - 2), 'ACH_VERIFICATION_DATES');
   perform pg_temp.must_fail(format(t, format('array[%L]::uuid[]', v1), u_m, null, td - 2, td + 1), 'ACH_VERIFICATION_DATES');
-  perform pg_temp.must_fail(format(t, format('array[%L, %L]::uuid[]', v1, gen_random_uuid()), u_m, td - 3, td - 2, td + 1), 'ACH_VERIFICATION_NOT_FOUND');
+  perform pg_temp.must_fail(format(t, format('array[%L, %L]::uuid[]', v1, gen_random_uuid()), u_m, td - 3, td - 2, td + 6), 'ACH_VERIFICATION_NOT_FOUND');
+  -- R41 S7 (0275): a prenote with Nacha's 3-day wait is refused; Timberland needs 6 banking days (>= 8 calendar days)
+  perform pg_temp.must_fail(format(t, format('array[%L]::uuid[]', v1), u_m, td - 1, td, td + 7), 'ACH_VERIFICATION_TIMBERLAND_WAIT');
   -- prenote sent with a live day in the FUTURE
-  n := public.ach_verification_mark_sent(array[v1], u_m, td - 1, td, td + 3, 'prenote.ach');
+  n := public.ach_verification_mark_sent(array[v1], u_m, td - 1, td, td + 8, 'prenote.ach');
   assert n = 1, 'one marked sent';
   select * into r from public.ach_verifications where id = v1;
-  assert r.status = 'sent' and r.eligible_on = td + 3 and r.settlement_date = td, 'prenote sent with its dates';
+  assert r.status = 'sent' and r.eligible_on = td + 8 and r.settlement_date = td, 'prenote sent with its dates';
   perform pg_temp.must_fail(format(t, format('array[%L]::uuid[]', v1), u_m, td - 3, td - 2, td + 1), 'ACH_VERIFICATION_STATE');
 
   -- ===== verification guard ==================================================
@@ -151,11 +153,11 @@ begin
 
   -- resend the prenote; this time it settled long enough ago
   v3 := public.ach_verification_start(a1, u_m, 'prenote', null);
-  perform public.ach_verification_mark_sent(array[v3, v2], u_m, td - 6, td - 5, td, 'verify-2.ach');
+  perform public.ach_verification_mark_sent(array[v3, v2], u_m, td - 10, td - 9, td, 'verify-2.ach');
   select eligible_on into d from public.ach_verifications where id = v2;
-  assert d = td - 4, format('micro entry eligible the day after settlement, got %s', d);
+  assert d = td - 8, format('micro entry eligible the day after settlement, got %s', d);
   select count(*) into n from public.ach_authorization_events where authorization_id = auth1 and event_kind = 'verification_sent'
-     and (detail ->> 'eligible_on')::date = td - 4;
+     and (detail ->> 'eligible_on')::date = td - 8;
   assert n = 1, 'micro event records its own eligible day';
   t := public.ach_verification_finish(v3, u_m, 'passed', null, null);
   assert t = 'verifying', format('one of two verified -> still verifying, got %s', t);
@@ -297,7 +299,7 @@ begin
   -- ===== a notice answers a prenote: the check fails =========================
   w2 := public.ach_verification_start(b1, u_m, 'prenote', null);
   perform pg_temp.must_fail(format(log_, u_m, 'employee', emp2, 'R03', td, null, 0, trace, null, null, null, 'Prenote returned R03', w2), 'not waiting for an answer');
-  perform public.ach_verification_mark_sent(array[w2], u_m, td - 2, td - 1, td + 2, 'prenote-3.ach');
+  perform public.ach_verification_mark_sent(array[w2], u_m, td - 2, td - 1, td + 7, 'prenote-3.ach');
   perform pg_temp.must_fail(format(log_, u_m, 'employee', emp, 'R03', td, null, 0, trace, null, null, null, 'Prenote returned R03', w2), 'different payee');
   perform pg_temp.must_fail(format(log_, u_m, 'vendor', ven, 'R03', td, null, 0, trace, null, null, null, 'Prenote returned R03', w2), 'different payee');
   perform pg_temp.must_fail(format(log_, u_m, 'employee', emp2, 'R03', td, null, 0, trace, null, null, null, 'Prenote returned R03', gen_random_uuid()), 'ACH_NOTICE_VERIFICATION');
@@ -318,7 +320,7 @@ begin
   select state into t from public.ach_authorizations where id = auth2;
   assert t = 'verifying', format('failed account -> verifying, got %s', t);
   w2 := public.ach_verification_start(b1, u_m, 'prenote', null);
-  perform public.ach_verification_mark_sent(array[w2], u_m, td - 6, td - 5, td - 1, 'prenote-4.ach');
+  perform public.ach_verification_mark_sent(array[w2], u_m, td - 10, td - 9, td - 1, 'prenote-4.ach');
   -- a payroll return (not this prenote) holds the authorization: the prenote cannot pass while held
   perform public.ach_notice_log(u_s, 'employee', emp2, 'R01', td, td - 2, 2000, trace, null, null, null, 'Payroll return R01 while checking', null);
   perform pg_temp.must_fail(format($q$select public.ach_verification_finish(%L, %L, 'passed', null, null)$q$, w2, u_m), 'release the hold before passing');

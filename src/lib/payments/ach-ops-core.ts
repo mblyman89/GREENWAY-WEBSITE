@@ -439,6 +439,7 @@ export const OPS_ERROR_TABLE: readonly (readonly [RegExp, string])[] = [
   [/ACH_VERIFICATION_NOTE|ach_ver_note_shape/, "Write a short note: who confirmed and how (a pass by callback needs 10+ characters; a fail or cancel needs 5+)."],
   [/ACH_VERIFICATION_NOTICE/, "The bank answered this check with a return or change notice, so it cannot pass. Fix the account and start a new check."],
   [/ACH_VERIFICATION_AMOUNT/, "That is not the amount that was sent. Ask the person to look again; do not guess."],
+  [/ACH_VERIFICATION_TIMBERLAND_WAIT/, `The prenote's first live day is too soon. Timberland needs ${PRENOTE_WAIT_WORDS}, so the database refused it.`],
   [/ACH_VERIFICATION_EARLY/, `Too early: a prenote passes only on or after its wait day (${PRENOTE_WAIT_WORDS}).`],
   [/ACH_LEGAL_HOLD/, "Legal hold: give a reason of at least 10 characters (or it is already in that state; reload)."],
   [/ACH_REVIEW/, "Only an active authorization is reviewed, and the note needs at least 10 characters."],
@@ -667,6 +668,7 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   ok(opsDbErrorMessage('Could not find the function public.ach_notice_log(p_actor, ...)').includes("migration 0263"), "missing fn -> setup");
   ok(opsDbErrorMessage('column "hold_entered_by" does not exist (42703)').includes("migration 0263"), "missing column -> setup");
   ok(opsDbErrorMessage("ACH_VERIFICATION_EARLY: a prenote passes only on or after").includes("Too early"), "EARLY mapped");
+  ok(opsDbErrorMessage("ACH_VERIFICATION_TIMBERLAND_WAIT: a prenote's first live day must be").includes("Timberland needs 6 banking days"), "TIMBERLAND_WAIT mapped");
   ok(opsDbErrorMessage("ACH_RELEASE_SOLO: ...").includes("20 characters"), "SOLO mapped");
   ok(opsDbErrorMessage("23514 ACH_OWNER_ONLY: only the owner releases an employee banking hold.").startsWith("Only Michael (the owner)"), "R41 0271 OWNER_ONLY mapped in plain words");
   ok(opsDbErrorMessage('duplicate key value violates unique constraint "ach_ver_one_open_per_account"').includes("already has a check"), "unique mapped");
