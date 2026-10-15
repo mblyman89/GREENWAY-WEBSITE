@@ -51,6 +51,7 @@ import {
   type LedgerFileForLimits,
 } from "@/lib/payments/timberland-limits-core";
 import { checkEffectiveDateForTimberland, latestUploadAndApproval, type DeadlineFile } from "@/lib/payments/timberland-deadline-core";
+import { firstFileGate, FIRST_FILE_LOCKED_PREFIX, type FirstFileGate, type GatePassedPrenote, type GatePrenoteFile } from "@/lib/payments/timberland-prenote-core";
 
 type Fail = { ok: false; error: string };
 
@@ -202,6 +203,45 @@ export async function loadTimberlandRoomLeft(today: string): Promise<{ ok: true;
   return { ok: true, room: roomLeft(r.ledger, today) };
 }
 
+/** R41 S7: how many prenote files / passed prenotes the gate reads. More than this is refused, never cut short. */
+const GATE_READ_CAP = 500;
+export const FIRST_FILE_READ_FAILED = `${FIRST_FILE_LOCKED_PREFIX} The prenote records could not be read, so the site cannot prove the first-file test passed. Nothing was released. Try again.`;
+
+const isoDay = (v: unknown): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+
+/**
+ * R41 S7: the first-file gate (Timberland agreement section 6 + Brenda's
+ * answer 10). Reads every prenote file in the ledger and every PASSED prenote
+ * check. Errors, odd rows and over-cap reads are errors, never "open".
+ */
+export async function readFirstFileGate(todayIso: string): Promise<{ ok: true; gate: FirstFileGate } | Fail> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: NOT_CONFIGURED };
+  const admin = createSupabaseAdminClient();
+  const [f, v] = await Promise.all([
+    admin.from("ach_files").select("id, status, effective_date, filename").eq("kind", "prenote").limit(GATE_READ_CAP + 1),
+    admin.from("ach_verifications").select("settlement_date").eq("method", "prenote").eq("status", "passed").limit(GATE_READ_CAP + 1),
+  ]);
+  if (f.error || v.error || !Array.isArray(f.data) || !Array.isArray(v.data)) return { ok: false, error: FIRST_FILE_READ_FAILED };
+  if (f.data.length > GATE_READ_CAP || v.data.length > GATE_READ_CAP) return { ok: false, error: FIRST_FILE_READ_FAILED };
+  const files: GatePrenoteFile[] = [];
+  for (const r of f.data as Record<string, unknown>[]) {
+    const eff = isoDay(r.effective_date);
+    if (typeof r.id !== "string" || typeof r.status !== "string" || typeof r.filename !== "string" || !eff) return { ok: false, error: FIRST_FILE_READ_FAILED };
+    files.push({ id: r.id, status: r.status, effectiveDate: eff, filename: r.filename });
+  }
+  const passed: GatePassedPrenote[] = [];
+  for (const r of v.data as Record<string, unknown>[]) {
+    const s = isoDay(r.settlement_date);
+    if (!s) return { ok: false, error: FIRST_FILE_READ_FAILED };
+    passed.push({ settlementDate: s });
+  }
+  try {
+    return { ok: true, gate: firstFileGate(todayIso, files, passed) };
+  } catch {
+    return { ok: false, error: FIRST_FILE_READ_FAILED };
+  }
+}
+
 type ReleaseInput = {
   kind: AchFileKind;
   actorId: string;
@@ -238,6 +278,16 @@ async function releaseLoop(
   const deadline = checkEffectiveDateForTimberland(input.effectiveDate, input.now);
   if (!deadline.ok) return { ok: false, error: `Timberland deadline: this file was NOT released. ${deadline.error}` };
   const fileDate = pacificDayKey(input.now);
+  // R41 S7: the first-file gate. Until one prenote file is approved at
+  // Timberland AND its section 6 wait (6 banking days after settlement) is
+  // over AND a prenote from it is marked passed, only prenote files may be
+  // released. Payroll, vendor and test-credit files all move money. Not
+  // overridable; a failed read refuses.
+  if (input.kind !== "prenote") {
+    const gate = await readFirstFileGate(fileDate);
+    if (!gate.ok) return gate;
+    if (!gate.gate.open) return { ok: false, error: `This file was NOT released. ${gate.gate.line}` };
+  }
   for (let attempt = 0; attempt < MODIFIER_RETRIES; attempt++) {
     const used = await usedModifiers(fileDate);
     if (!used.ok) return used;
