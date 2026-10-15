@@ -103,6 +103,8 @@ export const ACH_ACTIONS = {
   // R41 S6: recording the two Timberland steps (upload, then approve in the portal) is the owner's record.
   "ach_file.mark_uploaded": { cls: "live", label: "Record that an ACH file was uploaded to Timberland" },
   "ach_file.mark_bank_approved": { cls: "live", label: "Record that an ACH file was approved in Timberland's portal" },
+  // R41 S9: the record that the money for a file was in the account (section 16) is the owner's statement.
+  "ach_file.confirm_funding": { cls: "live", label: "Record that the money for an ACH file is in the account" },
 } as const satisfies Record<string, { cls: "live" | "stop"; label: string }>;
 
 export type AchActionKind = keyof typeof ACH_ACTIONS;

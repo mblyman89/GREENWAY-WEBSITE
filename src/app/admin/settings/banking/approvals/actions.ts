@@ -100,6 +100,7 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "ach_file.void": (fd) => files.voidAchFileAction(fd),
   "ach_file.mark_uploaded": (fd) => files.markAchFileUploadedAction(fd),
   "ach_file.mark_bank_approved": (fd) => files.markAchFileBankApprovedAction(fd),
+  "ach_file.confirm_funding": (fd) => files.confirmAchFileFundingAction(fd),
 };
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();

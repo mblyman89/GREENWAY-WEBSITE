@@ -15,6 +15,12 @@
  * again, keeps the order (released -> uploaded -> bank_approved) and never
  * changes a stamp. Timberland's dual approval is off (signed Schedule C), so
  * the same owner may record both steps.
+ *
+ * R41 S9 (0276): Confirm funding records that the owner looked at the
+ * account and saw at least the file total (section 14/16; the app cannot
+ * read the balance). Owner only through achGate; the 0276 trigger checks the
+ * owner again, allows it once per file, only while released or uploaded, and
+ * never for less than the file total. It never blocks an upload.
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -22,7 +28,8 @@ import type { StaffSession } from "@/lib/auth/session";
 import { achGate } from "@/lib/payments/ach-gate";
 import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
-import { markAchFileBankStep, voidAchFile } from "@/lib/payments/ach-file-ledger-store";
+import { confirmAchFileFunding, markAchFileBankStep, readAchFileForFunding, voidAchFile } from "@/lib/payments/ach-file-ledger-store";
+import { checkFundingForm, usd } from "@/lib/payments/timberland-funding-core";
 import { requirePermission } from "@/lib/auth/session";
 import { pacificToday } from "@/lib/reports/timezone";
 import { setDualNoteDismiss } from "@/lib/payments/ach-guide-store";
@@ -102,6 +109,29 @@ async function markBankStepBody(session: StaffSession, fd: FormData, step: "uplo
         ? "Recorded: uploaded to Timberland. Now approve it in Timberland's portal, then press Mark approved."
         : "Recorded: approved at Timberland. Watch the bank feed for the settlement debit on the effective date.",
   });
+}
+
+export async function confirmAchFileFundingAction(fd: FormData): Promise<void> {
+  return achGate("ach_file.confirm_funding", fd, { reply: (r: RedirectOutcome): never => back(r.ok ? { msg: r.message } : { error: r.message }) }, (session) => confirmFundingBody(session, fd));
+}
+
+async function confirmFundingBody(session: StaffSession, fd: FormData): Promise<void> {
+  const fileId = str(fd, "file_id");
+  const file = await readAchFileForFunding(fileId);
+  if (!file.ok) back({ error: file.error });
+  const form = checkFundingForm({ totalCents: file.totalCents, amount: str(fd, "amount"), confirm: str(fd, "confirm") });
+  if (!form.ok) back({ error: form.error });
+  const r = await confirmAchFileFunding({ fileId, actorId: session.profile.id, amountCents: form.amountCents });
+  if (!r.ok) back({ error: r.error });
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ach.file.funding_confirmed",
+    entityType: "ach_files",
+    entityId: fileId,
+    after: { kind: r.kind, amount_cents: form.amountCents, file_total_cents: file.totalCents },
+  }).catch(() => {});
+  back({ msg: `Recorded: you saw ${usd(form.amountCents)} in the account. Keep it there through 9:00 am Pacific on the settlement date (you get a reminder at 8:00 am).` });
 }
 
 /**
