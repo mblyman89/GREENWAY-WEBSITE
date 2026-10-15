@@ -188,6 +188,7 @@ export function AiLookupPanel({
   const [saveReceipt, setSaveReceipt] = useState<{ receipt: AttachReceipt; sentence: string; notes: string[] } | null>(null);
   const [pending, startTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
+  const [importPending, startImportTransition] = useTransition();
 
   function up<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
@@ -698,23 +699,31 @@ export function AiLookupPanel({
                         <ul className="mt-1 space-y-0.5" data-testid="ai-image-import-list">
                           {data.imageCandidates.map((u, i) => (
                             <li key={`imp-${i}`}>
-                              <form action={importImageAction} className="flex items-center gap-1">
-                                <input type="hidden" name="draft_id" value={draftId} />
-                                <input type="hidden" name="image_url" value={u} />
-                                <input type="hidden" name="label" value={productName.slice(0, 200)} />
-                                <input type="hidden" name="return_manifest" value={returnManifest ?? ""} />
-                                <input type="hidden" name="return_status" value={returnStatus} />
+                              <div className="flex items-center gap-1">
                                 <span className="min-w-0 flex-1 truncate" title={u}>
                                   Photo {i + 1}: {u.replace(/^https?:\/\//, "").slice(0, 60)}
                                 </span>
+                                {/* No <form> / named inputs here (this panel may sit inside
+                                    the approve form - s11 pin): the button builds the
+                                    FormData and calls the server action itself. */}
                                 <button
-                                  type="submit"
-                                  className="shrink-0 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/50 bg-[var(--admin-accent-soft)] px-1.5 text-[10px] font-semibold text-[var(--admin-accent)]"
+                                  type="button"
+                                  disabled={importPending}
+                                  onClick={() => {
+                                    const fd = new FormData();
+                                    fd.set("draft_id", draftId);
+                                    fd.set("image_url", u);
+                                    fd.set("label", productName.slice(0, 200));
+                                    fd.set("return_manifest", returnManifest ?? "");
+                                    fd.set("return_status", returnStatus);
+                                    startImportTransition(() => importImageAction(fd));
+                                  }}
+                                  className="shrink-0 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/50 bg-[var(--admin-accent-soft)] px-1.5 text-[10px] font-semibold text-[var(--admin-accent)] disabled:opacity-50"
                                   data-testid="ai-image-import"
                                 >
-                                  Import & attach
+                                  {importPending ? "Importing\u2026" : "Import & attach"}
                                 </button>
-                              </form>
+                              </div>
                             </li>
                           ))}
                         </ul>
