@@ -1648,7 +1648,7 @@ export default async function CatalogDraftsPage({
                       kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
                       manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
                       wide={v2Row}
-                      importImageAction={v2Row ? importOnboardingImageAction : undefined}
+                      importImageAction={importOnboardingImageAction}
                       returnManifest={focus.manifestId}
                       returnStatus={view}
                     />

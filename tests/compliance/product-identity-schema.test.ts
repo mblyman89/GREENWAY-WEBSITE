@@ -290,14 +290,27 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     // purpose): the search-history bar reads catalog_product_drafts.identity_key
     // for this delivery's sibling rows; a missing 0234 column is "no siblings,
     // complete" (pinned by r37-search-history "pre-0234 column missing").
+    // R51 added the seventh guarded reader on purpose (pin updated on
+    // purpose): the onboarding photo recommender reads identity_key +
+    // image_media_ids from product_enrichments / kb_products; any error
+    // (pre-0234 included) skips that table = "nothing on record" (pinned by
+    // the "R51" test below).
     expect(offenders.sort()).toEqual([
       "src/lib/catalog/attach-facts.ts",
+      "src/lib/catalog/image-memory-server.ts",
       "src/lib/catalog/lookup-history-server.ts",
       "src/lib/catalog/menu-kb-link-server.ts",
       "src/lib/enrichment/command-center.ts",
       "src/lib/inventory/coa-extract.ts",
       "src/lib/products/masters-store.ts",
     ]);
+  });
+
+  it("R51: the onboarding photo recommender's identity read is guarded for pre-0234", () => {
+    const sel = /\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b[^)]*\)/g;
+    const src = readFileSync(path.join(ROOT, "src/lib/catalog/image-memory-server.ts"), "utf8");
+    expect(src.match(sel) ?? []).toEqual(['.select("identity_key, image_media_ids")']);
+    expect(src).toContain("if (error) continue;");
   });
 
   it("R25 C: the menu-card KB link readers are guarded for pre-0234", () => {

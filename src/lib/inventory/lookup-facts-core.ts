@@ -871,6 +871,12 @@ licensed-menu pages that name them). Their lineage, potency, terpenes, size,
 and imagery can differ from the generic strain. Only widen to the general
 community when the vendor says nothing.
 
+PHOTOS ("images"): give the full-size photo FILE itself (a .jpg/.jpeg/.png/
+.webp or CDN image link) taken from a brand, retailer or licensed-menu page you
+actually opened - never the page URL, never logos, icons or banners. When you
+can open URLs, open each photo and keep only those that really show THIS
+product's package or flower. A person reviews every photo before it is used.
+
 Return ONLY the JSON object in the exact shape requested.
 `.trim();
 
