@@ -302,7 +302,8 @@ describe("gated kinds are wired once", () => {
     const g = read("src/lib/payments/ach-gate-core.ts");
     expect(g).toContain('"timberland_comms.log": { targetType: "timberland_comms", idField: null, version: null }');
     expect(g).toContain('"timberland_comms.done": { targetType: "timberland_comms", idField: "comms_id", version: { table: "ach_timberland_comms", key: "closes_id", cols: ["id"] } }');
-    expect(g).toContain('  "timberland_comms",\n] as const;');
+    // R41 S11 appended "ofac_review" after it (0278), so it is no longer the last entry.
+    expect(g).toContain('  "timberland_comms",\n');
     const r = read("src/app/admin/settings/banking/approvals/actions.ts");
     expect(r).toContain('"timberland_comms.log": (fd) => comms.addTimberlandCommsAction(fd)');
     expect(r).toContain('"timberland_comms.done": (fd) => comms.closeTimberlandCommsAction(fd)');
