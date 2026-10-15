@@ -241,3 +241,62 @@ Order rationale: P1 delivers every *explicit* owner ask that doesn't need a data
 - [S13] IETF RFC 8081 — The "font" Top-Level Media Type: https://www.rfc-editor.org/rfc/rfc8081
 - [S14] W3C — WOFF File Format 2.0 (signature 0x774F4632 'wOF2'): https://www.w3.org/TR/WOFF2/
 - Repo: `node_modules/next/dist/docs/01-app/01-getting-started/13-fonts.md` (Next.js 16 font docs); prior roadmaps R41, R42, R44, R45–R48.
+
+---
+
+## 10. R53 addendum — owner asks of R53, what shipped, and the updated roadmap
+
+### 10.1 Owner asks (R53 message, summarised) → status
+| # | Ask | Status after R53 |
+|---|-----|------------------|
+| 1 | One picture per banner; dropping old phone pictures is fine | **Shipped (Slice 1).** `normalizeDesign` drops `image.srcMobile`; `normalizeHomeSlideAdvanced` drops `imageMobile`. Both pickers removed. Old phone pictures disappear the next time a draft is saved (the live value is normalized on read too). Re-attach is not needed: phones use the main picture. |
+| 2 | Studio first + open; basic mode under it, collapsed | **Shipped (Slice 1)**, home carousel. The studio opens by default (`DesignCard` `open=true`). Basic mode is a native `<details>`, so closed fields still post with the form. |
+| 3 | Undo / Redo button | **Already existed** (R41: `BannerStudio.tsx` ↶ Undo / ↷ Redo, 60 steps, Ctrl/⌘+Z, Ctrl+Shift+Z / Ctrl+Y). R53: shortcuts ignore keys typed while editing text on the canvas. |
+| 4 | Arrow keys move the selected object | **Fixed (Slice 1).** Arrow nudge existed, but `startDrag` called `preventDefault()` on pointerdown, which blocks focus-on-click, so arrows only worked after Tab. The item now focuses itself on click. |
+| 5 | Double-click to type, Enter = new line | **Shipped (Slice 2).** `contenteditable="plaintext-only"` [S1]; Esc or click-away commits as one change. Eyebrow/title/description boxes write the slide's own fields. |
+| 6 | Enterprise icon library | **Installed:** `@phosphor-icons/react@2.1.10` (MIT, 9,000+ icons, 6 weights) [S15][S16]. Not used in the UI yet; the icon layer is R57. |
+| 7 | More libraries (fonts, objects, elements) | Researched below (§10.2). |
+| 8 | Scheduler: end date, weekly repeat, fallback banner, calendar + same-day warning | End date **already exists** (`scheduleEnd`, now in its own 🗓️ Schedule box at the top level). The rest is planned in §10.3 (new phase R55-S). |
+| 9 | Reports: compare banners by clicks | Planned in §10.4 (phase R57-R). The R47 click table and page already exist. |
+| 10 | One editor, one rule set for every banner | Planned in §10.5 (phase R58, made explicit). |
+
+### 10.2 Library research (verified with `npm view` this round; licences are all commercial-use OK)
+| Need | Pick | Version / licence | Why / notes |
+|------|------|-------------------|-------------|
+| Icons (UI + banner icon layer) | **@phosphor-icons/react** ✅ installed | 2.1.10 / MIT | 9,000+ icons in thin/light/regular/bold/fill/duotone, so one icon can match any banner weight [S15]. The Next 16 local docs say to import per icon path (`@phosphor-icons/react/dist/csr/Triangle`) to keep builds fast (`node_modules/next/dist/docs/01-app/02-guides/local-development.md` §icons). |
+| Icons, alternatives | lucide-react / @tabler/icons-react | 1.57.0 ISC / 3.49.0 MIT | Lucide has 1,800+ outline icons and is on Next's `optimizePackageImports` list. Tabler has 6,200+ outline + filled icons [S15]. Not installed, so we keep one set. |
+| Brand logos (Instagram, Google…) | simple-icons | 16.35.0 / CC0-1.0 | Phosphor has few brand marks. Logos stay subject to each brand's trademark rules. |
+| "Everything" icon search (200k+ icons across sets) | @iconify/react + @iconify/json | 6.0.2 MIT / 2.2.543 MIT | **Do not bundle** (the JSON is very large). Only consider it later as an admin-side search that copies the picked SVG into the design. Each set inside has its own licence, which must be shown per icon. |
+| Fonts library | **Fontsource** (`@fontsource/*`, `@fontsource-variable/*`) | e.g. inter 5.3.0 / OFL-1.1 | Self-hosted npm packages of the Google Fonts catalogue, no third-party requests [S17]. Next's own `next/font/google` also self-hosts at build time. The site already uses it, so new **curated** fonts are cheapest added there. Owner-uploaded fonts stay as R55 (FontFace + `@font-face`). |
+| Shapes / elements | **Built in-house** (pure SVG/CSS) | — | Rectangle, rounded box, circle, pill, line/divider, badge/starburst, arrow, ribbon. These are simple SVG paths stored in the design JSON (R54), so there is no dependency and no licence risk. Canvas frameworks (Konva, Polotno) were rejected in R52 §5 [S9][S10]. |
+| Calendar view | Build a light month grid in-house; fall back to react-big-calendar | — / 1.20.0 MIT | A month grid of chips is ~150 lines and fits the admin style. Take react-big-calendar only if week/day views are wanted. |
+| Repeat rules | `rrule` (iCalendar RFC 5545) — **optional** | 2.8.1 / BSD-3-Clause | Owner asks are covered by a tiny pure core (days-of-week + daily time window). Only add rrule if "2nd Tuesday of the month"-style rules are wanted. |
+
+### 10.3 Scheduler v2 (new phase **R55-S**, one slice; pure core + UI, no SQL — lives in the `advanced` JSON)
+- **Model** (`schedule-core.ts`, pure + self-tests): `{ start, end, repeat: { days: ("mon"…"sun")[], from?: "HH:MM", to?: "HH:MM" } | null, tz: "America/Los_Angeles" }`. `isLiveAt(now)` = inside start–end **and** (no repeat **or** today's weekday is in `days` and the time is inside from–to). For example: every Wednesday, 7am–11pm.
+- **Fallback banner:** each banner area gets one slide marked `fallback: true`. It shows **only when no other slide is live**, so an expired banner can never leave the carousel empty. The editor warns "No fallback banner set" when none exists.
+- **Calendar:** a 6-week month grid on the carousel admin page with one coloured chip per slide on each live day. A ⚠️ badge shows on any day where 2+ scheduled slides **start** (and a softer note where 2+ overlap). Clicking a chip scrolls to that slide's card.
+- **Reused by every banner area** through the R58 universal editor (§10.5).
+
+### 10.4 Reports: banner comparison (new phase **R57-R**, one slice)
+- The data already exists: `website_click_events` (migration 0268) and `src/app/admin/reports/website/page.tsx` (R47-S2), which lists clicks per banner and button.
+- **Add:** a "Compare banners" table with one row per slide: total clicks, clicks per day live (fair across different schedule lengths), the top button, and a trend arrow against the previous period. A ⭐ marks the best performer.
+- **Needed for click-through rate:** impressions (slide shown) are **not** recorded today. One option is an optional, privacy-safe `slide_view` event (same no-cookie/GPC rules as clicks) with a small idempotent migration. Without it, the report compares clicks per live-day, which is still fair.
+
+### 10.5 One universal banner editor (phase **R58**, made explicit)
+- **Goal (owner):** "one design, one set of tools and rules … for any and all banner editors". It covers home carousel, shop carousel, loyalty hero, specials, page top-hero banners and lower section banners.
+- **How:** extract the R53 home card layout into `<UniversalBannerEditor area=… />`. It contains, in order: picture + alt → Design Studio (open) → Schedule v2 → Basic mode (`<details>`, collapsed) → Save/Publish.
+  - Each area supplies only a small **adapter**: load/save functions, the area's preset (hero/section), and its legacy fields.
+  - All rules stay in the shared pure cores (`banner-design-core`, `schedule-core`, the WAC/contrast checks). So a new rule or tool lands everywhere at once.
+- **Order:** home carousel (done first, R53) → shop carousel → loyalty hero → specials → page heroes → section banners. Each move is a small, mostly delete-heavy slice, since the bespoke editors go away.
+- **Single-picture rule** (R53) now applies to every area the same way. ShopBannerEditor and LoyaltyHeroEditor still have their own legacy `imageMobile` fields, which are removed when each area moves onto the universal editor.
+
+### 10.6 Updated phase order
+R53 ✅ (studio-first card, single picture, arrow-key fix, inline typing, icon library) → **R54** layers v2 + shapes → **R55** fonts/effects + **R55-S** scheduler v2 → **R56** transform/multi-select → **R57** assets/icons (Phosphor picker) + **R57-R** banner comparison report → **R58** universal editor rollout → R59 stretch.
+
+### 10.7 R53 sources
+- [S15] allsvgicons.com — Best free SVG icon libraries 2026 (counts, licences): https://allsvgicons.com/blog/best-free-svg-icon-libraries-2026
+- [S16] npm — @phosphor-icons/react (import-performance note): https://www.npmjs.com/package/@phosphor-icons/react
+- [S17] GitHub — fontsource/fontsource ("Self-host Open Source fonts in neatly bundled NPM packages"): https://github.com/fontsource/fontsource
+- `npm view` (this round): @phosphor-icons/react 2.1.10 MIT; lucide-react 1.57.0 ISC; @tabler/icons-react 3.49.0 MIT; simple-icons 16.35.0 CC0-1.0; @iconify/react 6.0.2 MIT; @iconify/json 2.2.543 MIT; @fontsource-variable/inter 5.3.0 OFL-1.1; react-big-calendar 1.20.0 MIT; rrule 2.8.1 BSD-3-Clause.
+- Repo: `node_modules/next/dist/docs/01-app/02-guides/local-development.md` (icon import guidance); `.../optimizePackageImports.md` (lucide-react listed).

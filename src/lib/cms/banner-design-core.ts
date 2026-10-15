@@ -540,7 +540,8 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
       saturation: num(im.saturation, 100, 0, 200),
       blur: num(im.blur, 0, 0, 12),
       flip: bool(im.flip, false),
-      ...(safeImageSrc(im.srcMobile) ? { srcMobile: safeImageSrc(im.srcMobile)! } : {}),
+      // R53: one picture per banner (owner, dev phase) — any old R42 phone
+      // picture (srcMobile) is dropped here, so phones use the main picture.
     },
     overlay: {
       kind: pick(ov.kind, OVERLAY_KINDS, "none"),
@@ -1386,10 +1387,8 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   const plain = defaultDesign("section");
   ok(!("srcMobile" in normalizeDesign(plain)!.image), "no srcMobile key unless set (byte-identical)");
   ok(J(normalizeDesign(JSON.parse(J(plain)))) === J(plain), "plain design round trip unchanged");
-  const withPhone = normalizeDesign({ ...plain, image: { ...plain.image, srcMobile: " /brand/phone.webp " } })!;
-  ok(withPhone.image.srcMobile === "/brand/phone.webp", "site-relative phone picture kept (trimmed)");
-  ok(Object.keys(withPhone.image).at(-1) === "srcMobile", "srcMobile appended last");
-  ok(J(normalizeDesign(JSON.parse(J(withPhone)))) === J(withPhone), "phone picture round trip");
+  const withPhone = normalizeDesign({ ...plain, image: { ...plain.image, srcMobile: "/brand/phone.webp" } })!;
+  ok(!("srcMobile" in withPhone.image), "R53: old phone picture dropped (single picture)");
   const sb = "https://abc123.supabase.co/storage/v1/object/public/media/x.png";
   ok(safeImageSrc(sb) === sb, "supabase public storage ok");
   ok(
@@ -1406,8 +1405,8 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     ].every((v) => safeImageSrc(v) === null),
     "unsafe phone pictures refused",
   );
-  ok(!("srcMobile" in normalizeDesign({ ...plain, image: { ...plain.image, srcMobile: "https://evil.co/x.png" } })!.image), "unsafe phone picture dropped");
-  ok(mobileImageSrc(withPhone, "/main.webp") === "/brand/phone.webp" && mobileImageSrc(plain, "/main.webp") === "/main.webp", "mobileImageSrc fallback");
+  ok(mobileImageSrc(withPhone, "/main.webp") === "/main.webp", "mobileImageSrc → main picture");
+  ok(J(normalizeDesign(JSON.parse(J(withPhone)))) === J(plain), "R53: design with old phone picture normalizes to the plain design");
 
   // R47: ensureBoundBoxes — eyebrow ticked on after the design was made.
   {

@@ -19,7 +19,7 @@ import { Button } from "@/components/admin/ui";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { LinkPicker, type PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { checkHref, describeHref } from "@/lib/cms/link-target-core";
-import { designFromLegacy, type BannerDesign, type DesignPreset } from "@/lib/cms/banner-design-core";
+import { designFromLegacy, type BannerDesign, type DesignBind, type DesignPreset } from "@/lib/cms/banner-design-core";
 import {
   MAX_SPECIALS_HERO_BUTTONS,
   MAX_SPECIALS_HERO_BUTTON_LABEL,
@@ -233,6 +233,7 @@ export function DesignCard({
   seed,
   posts,
   mediaChoices,
+  onLegacyEdit,
 }: {
   title: string;
   description: string;
@@ -247,8 +248,11 @@ export function DesignCard({
   posts: PickerPost[];
   /** R42 Q4: media library choices for the optional phone picture. */
   mediaChoices?: MediaChoice[];
+  /** R53: double-click editing of a bound text box writes the banner's own field. */
+  onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  // R53: the studio is open by default (owner: studio first, basic second).
+  const [open, setOpen] = useState(true);
   const on = !!design?.enabled;
   return (
     <div className={CARD}>
@@ -291,6 +295,7 @@ export function DesignCard({
               imageAlt={imageAlt}
               posts={posts}
               mediaChoices={mediaChoices}
+              onLegacyEdit={onLegacyEdit}
             />
           ) : null}
         </div>

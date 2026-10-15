@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ConfirmDialog } from "@/components/admin/ux";
-import { checkDesign, mobileImageSrc, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
+import { checkDesign, mobileImageSrc, type BannerDesign, type DesignBind, type DesignDevice } from "@/lib/cms/banner-design-core";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { StudioCanvas, type StudioSelection } from "./StudioCanvas";
 import { TextBoxPanel } from "./TextBoxPanel";
@@ -37,6 +37,7 @@ export function BannerStudio({
   imageAlt,
   posts,
   mediaChoices,
+  onLegacyEdit,
 }: {
   design: BannerDesign;
   onChange: (d: BannerDesign) => void;
@@ -46,10 +47,12 @@ export function BannerStudio({
   posts: PickerPost[];
   /** R42 Q4: media library choices for the optional phone picture. */
   mediaChoices?: MediaChoice[];
+  /** R53: double-click editing of a bound box writes the banner's own field (omit = bound boxes not inline-editable). */
+  onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
 }) {
   const [device, setDevice] = useState<DesignDevice>("desktop");
-  // R42 Q4: the picture for the device being edited (phone picture when set).
-  const deviceSrc = device === "mobile" ? mobileImageSrc(design, imageSrc) : imageSrc;
+  // R53: one picture per banner (the R42 phone picture was removed).
+  const deviceSrc = imageSrc;
   const [tab, setTab] = useState<Tab>("text");
   const [selection, setSelection] = useState<StudioSelection>(null);
   const [pendingDelete, setPendingDelete] = useState<NonNullable<StudioSelection> | null>(null);
@@ -105,7 +108,7 @@ export function BannerStudio({
     if (!el) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select")) return;
+      if (t.closest("input, textarea, select") || t.isContentEditable) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) {
@@ -281,10 +284,11 @@ export function BannerStudio({
           onSelect={select}
           onChange={change}
           onRequestDelete={setPendingDelete}
+          onLegacyEdit={onLegacyEdit}
         />
       </div>
       <p className="text-[0.7rem] text-white/45">
-        Drag text and buttons to move them · drag the green handle to change wrap width · arrow keys nudge (Shift = bigger steps) · hold Alt to stop snapping · Delete removes.
+        Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · click an item, then arrow keys nudge it (Shift = bigger steps) · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
       </p>
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-white/10">

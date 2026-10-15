@@ -263,17 +263,94 @@ export function CarouselSlideCard({
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className={labelCls}>Image alt text (for accessibility)</label>
-            <input
-              className={inputCls}
-              name="image_alt"
-              value={imageAlt}
-              onChange={(e) => setImageAlt(e.target.value)}
-              placeholder="Describe the image briefly"
-            />
+        <div>
+          <label className={labelCls}>Image alt text (for accessibility)</label>
+          <input
+            className={inputCls}
+            name="image_alt"
+            value={imageAlt}
+            onChange={(e) => setImageAlt(e.target.value)}
+            placeholder="Describe the image briefly"
+          />
+        </div>
+
+        <DesignCard
+          mediaChoices={mediaChoices}
+          title="Design Studio"
+          description="Design the slide right on the picture: drag text and buttons, double-click any text to type on it (Enter = new line), click an item then use the arrow keys to nudge it (Shift = bigger steps), and Undo / Redo any change. Studio buttons replace the two classic buttons. Untick to go back to the classic look (Basic mode below)."
+          design={adv?.design ?? null}
+          onChange={(dsg: BannerDesign | null) =>
+            setAdv((cur) => {
+              const next: HomeSlideAdvanced = { ...(cur ?? defaultHomeSlideAdvanced()) };
+              if (dsg) next.design = dsg;
+              else delete next.design;
+              return next;
+            })
+          }
+          legacy={homeLegacyWords(words, adv)}
+          imageSrc={image}
+          imageAlt={imageAlt}
+          preset="hero"
+          seed={{
+            ...homeLegacyWords(words, adv),
+            textAlign: layout.textAlign,
+            verticalAlign: layout.verticalAlign,
+            imageFocus: layout.imageFocus,
+            buttons: [
+              { label: cta0Label, href: cta0Href, variant: cta0Variant === "outline" ? "outline" : "solid" },
+              { label: cta1Label, href: cta1Href, variant: cta1Variant === "outline" ? "outline" : "solid" },
+            ].filter((b) => b.label.trim() && b.href.trim()) as {
+              label: string;
+              href: string;
+              variant: "solid" | "outline";
+            }[],
+          }}
+          posts={posts}
+          onLegacyEdit={(bind, text) => {
+            if (bind === "eyebrow") setEyebrow(text);
+            else if (bind === "title") setTitle(text);
+            else setDescription(text);
+          }}
+        />
+
+        <div className="rounded-lg border border-white/10 p-3">
+          <span className={labelCls}>🗓️ Schedule — show only between (optional, your local time)</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs text-white/60">
+              Start
+              <input
+                type="datetime-local"
+                className={`${inputCls} mt-1`}
+                value={toLocalInput(adv?.scheduleStart ?? null)}
+                onChange={(e) => patchAdv({ scheduleStart: fromLocalInput(e.target.value) })}
+              />
+            </label>
+            <label className="text-xs text-white/60">
+              End
+              <input
+                type="datetime-local"
+                className={`${inputCls} mt-1`}
+                value={toLocalInput(adv?.scheduleEnd ?? null)}
+                onChange={(e) => patchAdv({ scheduleEnd: fromLocalInput(e.target.value) })}
+              />
+            </label>
           </div>
+          <p className="mt-1 text-xs text-white/40">
+            Outside these times the slide is hidden from visitors (staff preview still shows it).
+          </p>
+        </div>
+
+        {/* R53: Basic mode — collapsed under the studio. A native <details>
+            keeps every field inside the form, so closed fields still save. */}
+        <details className="rounded-lg border border-white/10 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-white">
+            Basic mode{" "}
+            <span className="font-normal text-white/50">
+              (classic words, buttons, fonts, colours, focus and centring)
+            </span>
+          </summary>
+          <div className="mt-4 space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <span className={labelCls}>Image focus</span>
@@ -412,7 +489,7 @@ export function CarouselSlideCard({
             <span>
               ✨ Advanced options{" "}
               <span className="font-normal text-white/50">
-                (fonts, colours, phone picture, focus, centring, schedule, custom design)
+                (fonts, colours, focus, centring)
               </span>
             </span>
             <span className="text-white/50">{advOpen ? "▾" : "▸"}</span>
@@ -439,16 +516,6 @@ export function CarouselSlideCard({
                   title="Description"
                   line={(adv ?? defaultHomeSlideAdvanced()).description}
                   onChange={(p) => patchLine("description", p)}
-                />
-              </div>
-
-              <div>
-                <span className={labelCls}>Phone picture (optional — a taller crop for phones)</span>
-                <ContentImageField
-                  value={adv?.imageMobile ?? ""}
-                  onChange={(v) => patchAdv({ imageMobile: v })}
-                  mediaChoices={mediaChoices}
-                  allowVideo
                 />
               </div>
 
@@ -491,67 +558,6 @@ export function CarouselSlideCard({
                 </div>
               </div>
 
-              <div>
-                <span className={labelCls}>Show only between (optional, your local time)</span>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="text-xs text-white/60">
-                    Start
-                    <input
-                      type="datetime-local"
-                      className={`${inputCls} mt-1`}
-                      value={toLocalInput(adv?.scheduleStart ?? null)}
-                      onChange={(e) => patchAdv({ scheduleStart: fromLocalInput(e.target.value) })}
-                    />
-                  </label>
-                  <label className="text-xs text-white/60">
-                    End
-                    <input
-                      type="datetime-local"
-                      className={`${inputCls} mt-1`}
-                      value={toLocalInput(adv?.scheduleEnd ?? null)}
-                      onChange={(e) => patchAdv({ scheduleEnd: fromLocalInput(e.target.value) })}
-                    />
-                  </label>
-                </div>
-                <p className="mt-1 text-xs text-white/40">
-                  Outside these times the slide is hidden from visitors (staff preview still shows it).
-                </p>
-              </div>
-
-              <DesignCard
-                mediaChoices={mediaChoices}
-                title="Custom design (optional)"
-                description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The eyebrow, title and description above still supply the words. With custom design on, the buttons you add in the studio replace the two buttons above. Turn it off any time to go back to the classic look."
-                design={adv?.design ?? null}
-                onChange={(dsg: BannerDesign | null) =>
-                  setAdv((cur) => {
-                    const next: HomeSlideAdvanced = { ...(cur ?? defaultHomeSlideAdvanced()) };
-                    if (dsg) next.design = dsg;
-                    else delete next.design;
-                    return next;
-                  })
-                }
-                legacy={homeLegacyWords(words, adv)}
-                imageSrc={image || adv?.imageMobile || ""}
-                imageAlt={imageAlt}
-                preset="hero"
-                seed={{
-                  ...homeLegacyWords(words, adv),
-                  textAlign: layout.textAlign,
-                  verticalAlign: layout.verticalAlign,
-                  imageFocus: layout.imageFocus,
-                  buttons: [
-                    { label: cta0Label, href: cta0Href, variant: cta0Variant === "outline" ? "outline" : "solid" },
-                    { label: cta1Label, href: cta1Href, variant: cta1Variant === "outline" ? "outline" : "solid" },
-                  ].filter((b) => b.label.trim() && b.href.trim()) as {
-                    label: string;
-                    href: string;
-                    variant: "solid" | "outline";
-                  }[],
-                }}
-                posts={posts}
-              />
-
               {adv ? (
                 <button
                   type="button"
@@ -564,6 +570,9 @@ export function CarouselSlideCard({
             </div>
           ) : null}
         </div>
+
+          </div>
+        </details>
 
         {/* Enable + actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
