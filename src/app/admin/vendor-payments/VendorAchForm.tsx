@@ -13,6 +13,7 @@
  */
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { Button, Field, Input, Select } from "@/components/admin/ui";
+import { checkEffectiveDateForTimberland } from "@/lib/payments/timberland-deadline-core";
 import {
   buildVendorAchAction,
   loadPayableOptionsAction,
@@ -33,11 +34,17 @@ export function VendorAchForm({
   settingsComplete,
   companyName,
   viewerIsOwner,
+  earliestEffective,
+  nowIso,
 }: {
   settingsComplete: boolean;
   companyName: string;
   /** R41 S0 / D-4: Michael builds the file; Stephen's batch is sent to Michael for approval. */
   viewerIsOwner: boolean;
+  /** R41 S5: the earliest effective date Timberland's deadline still allows (computed on the server). */
+  earliestEffective: string;
+  /** R41 S5: the server clock for the first render (the browser clock after). */
+  nowIso: string;
 }) {
   const [payables, setPayables] = useState<PayableOption[] | null>(null);
   const [rows, setRows] = useState<Row[]>([{ id: 1, manifestId: "", amount: "" }]);
@@ -47,7 +54,17 @@ export function VendorAchForm({
     null,
   );
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // R41 S5: default to the earliest workable date (never "today", which is
+  // always too late for Timberland), and show the deadline as the date
+  // changes. The server checks again when the file is released.
+  const [effective, setEffective] = useState(earliestEffective);
+  const [now, setNow] = useState(() => new Date(nowIso));
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const effectiveCheck = useMemo(() => (effective ? checkEffectiveDateForTimberland(effective, now) : null), [effective, now]);
 
   useEffect(() => {
     let alive = true;
@@ -116,8 +133,16 @@ export function VendorAchForm({
     <form action={formAction} className="space-y-5">
       {/* Effective date + originator */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Effective date" help="When funds should settle">
-          <Input type="date" name="effectiveDate" defaultValue={today} />
+        <Field label="Effective date" help="The day the vendor is paid. Timberland needs the file 2 banking days before, by 4:00 pm Pacific." required>
+          <Input type="date" name="effectiveDate" required min={earliestEffective} value={effective} onChange={(e) => setEffective(e.target.value)} />
+          {effectiveCheck ? (
+            <span
+              data-testid="vendor-effective-deadline"
+              className={`mt-1 block text-xs ${effectiveCheck.ok ? (effectiveCheck.warning ? "text-[var(--admin-gold)]" : "text-[var(--admin-text-muted)]") : "text-[var(--admin-danger)]"}`}
+            >
+              {effectiveCheck.ok ? effectiveCheck.warning ?? `Upload and approve at Timberland by ${effectiveCheck.deadline.text}.` : effectiveCheck.error}
+            </span>
+          ) : null}
         </Field>
         <div className="sm:col-span-2 flex items-end text-xs text-[var(--admin-text-faint)]">
           Originator: {companyName || "(set on Payroll page)"}
@@ -361,6 +386,10 @@ export function VendorAchForm({
               {state.warnings.length} partial payment(s) included — balances remain outstanding.
             </p>
           )}
+          {state.uploadBy ? (
+            <p className="mt-1 text-xs text-[var(--admin-text)]">Upload and approve at Timberland by {state.uploadBy}.</p>
+          ) : null}
+          {state.deadlineWarning ? <p className="mt-1 text-xs font-semibold text-[var(--admin-gold)]">{state.deadlineWarning}</p> : null}
           {state.limitWarnings?.map((m, k) => (
             <p key={k} className="mt-1 text-xs text-[var(--admin-gold)]">
               {m}

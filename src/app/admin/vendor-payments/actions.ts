@@ -64,6 +64,7 @@ import { optOutPayRefusal } from "@/lib/payments/vendor-ach-enrollment-core";
 import { listVendorAchFlags } from "@/lib/payments/vendor-ach-enrollment-store";
 import { maskAccountTail } from "@/lib/security/at-rest-crypto";
 import { releaseAchFile } from "@/lib/payments/ach-file-ledger-store";
+import { checkEffectiveDateForTimberland } from "@/lib/payments/timberland-deadline-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 
 export type PayableOption = {
@@ -127,6 +128,10 @@ export type VendorPayFormResult = {
   warnings?: { index: number | null; message: string }[];
   /** R41 S4: gold notes when a released file takes Timberland's daily or monthly room to 80% or more. */
   limitWarnings?: string[];
+  /** R41 S5: "Wed Oct 21, 3:30 pm Pacific (bank cutoff 4:00 pm)": upload AND approve at Timberland by then. */
+  uploadBy?: string;
+  /** R41 S5: set when released after our 3:30 pm target (still before the 4:00 pm cutoff). */
+  deadlineWarning?: string | null;
   file?: string;
   filename?: string;
   totalCents?: number;
@@ -522,10 +527,19 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
     return { problems: preProblems, warnings };
   }
 
+  // R41 S5: the effective date is REQUIRED and must meet Timberland's
+  // deadline (Schedule A: uploaded and approved 2 usable banking days ahead,
+  // by 4:00 pm Pacific). No fallback to today: a blank or late date is refused
+  // with the earliest date that still works. releaseLoop checks it again with
+  // the same clock, so this cannot be skipped.
   const effectiveDateRaw = String(formData.get("effectiveDate") ?? "").trim();
   const now = new Date();
-  const effectiveDate = effectiveDateRaw ? new Date(`${effectiveDateRaw}T00:00:00Z`) : now;
-  const effectiveYmd = effectiveDate.toISOString().slice(0, 10);
+  const deadline = checkEffectiveDateForTimberland(effectiveDateRaw, now);
+  if (!deadline.ok) {
+    return { problems: [{ index: null, vendorName: null, message: `Effective date: ${deadline.error}` }], warnings };
+  }
+  const effectiveYmd = deadline.date;
+  const effectiveDate = new Date(`${effectiveYmd}T00:00:00Z`);
 
   // R41 S3: the file is RELEASED ONCE into the ach_files ledger (0273) with
   // today's next File ID Modifier, BEFORE any payment is recorded: a
@@ -611,6 +625,8 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
       manifests: rows.map((r) => r.manifestId),
       partials: warnings.length,
       limitWarnings: released.limitWarnings,
+      effectiveDate: effectiveYmd,
+      uploadBy: released.uploadBy,
     },
   }).catch(() => {});
 
@@ -618,6 +634,8 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
     problems: [],
     warnings,
     limitWarnings: released.limitWarnings,
+    uploadBy: released.uploadBy,
+    deadlineWarning: released.deadlineWarning,
     file: released.body,
     filename: released.filename,
     totalCents: released.totalCents,

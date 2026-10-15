@@ -20,6 +20,7 @@ import {
 import { VendorReconcileSection } from "@/components/admin/payments/VendorReconcileSection";
 import { VendorAchForm } from "./VendorAchForm";
 import { ManualPaymentForm } from "./ManualPaymentForm";
+import { earliestEffectiveDate } from "@/lib/payments/timberland-deadline-core";
 
 export const dynamic = "force-dynamic";
 
@@ -160,6 +161,8 @@ export default async function VendorPaymentsPage({
                 settingsComplete={originatorReady}
                 companyName={settings.company_name}
                 viewerIsOwner={achSide === "act"}
+                earliestEffective={earliestEffectiveDate(new Date())}
+                nowIso={new Date().toISOString()}
               />
             )}
           </Card>
