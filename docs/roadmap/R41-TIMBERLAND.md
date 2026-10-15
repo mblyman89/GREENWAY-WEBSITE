@@ -25,7 +25,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S7 | Section 6 prenote wait (6 banking days from settlement) and the first-file gate | #1381 | 0275 |
 | S8 | Docs, help, concierge, test plan, yearly tasks, agreement entries in the Legal library | #1382 | none |
 | S9 | Get rolling: go-live readiness board, file checker, funding helper (owner confirms funding; 8 am settlement-day reminder) | #1383 | 0276 |
-| S10 | Obligation clocks: Timberland communications log, what is due to Timberland, STOP card on every banking page, fees card | this branch | 0277 |
+| S10 | Obligation clocks: Timberland communications log, what is due to Timberland, STOP card on every banking page, fees card | #1384 | 0277 |
+| S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | this branch | 0278 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -141,3 +142,45 @@ Michael sends Brenda one email at the end of the full build. It holds:
   - `tests/compliance/r41-s10-obligations.test.tsx`.
   - Mutation runs: `mutate-s10-app.py` (25 of 25 killed) and `mutate-0277-sql.py` (15 of 15 killed). The SQL run simulates Supabase's default privileges, so removing the revoke is caught.
   - Manual tests T-365 to T-367.
+
+## S11 in detail
+
+- **Why.** Timberland ACH agreement, section 3: "It shall be the responsibility of Company to obtain information regarding such OFAC enforced sanctions." The owner's rule: strict is fine, but it must never block paying vendors or employees.
+- **Never a payment gate.** Payroll, the vendor file builder and the file checker never import the screening module or read its tables.
+  - A vitest pins the full list of files that mention them.
+  - The pg-check asserts that no other database function reads them.
+  - A possible match is a review item and an email, nothing more.
+- **Source data.** OFAC's own published data files (SDN.CSV, ALT.CSV, CONS_PRIM.CSV, CONS_ALT.CSV), downloaded each morning.
+  - The download sends a User-Agent header, as OFAC's 2024-05-16 technical notice requires.
+  - SDN.CSV is checked against OFAC's published SHA-256 Digest when it is present; a mismatch refuses.
+  - All four files are checked by structure: exact field counts, ASCII only, and the 0x1A end-of-file mark. A cut-short file refuses.
+  - OFAC FAQ 287 says the search website "should not be utilized by automated systems", so the website is not used.
+- **Scoring.** `ofac-screening-core.ts` (96 self-tests) follows FAQ 249:
+  - Jaro-Winkler on the whole name;
+  - per name part, Jaro-Winkler and Soundex (the NARA rules, mirrored);
+  - the higher score kept.
+
+  The threshold is 0.85. OFAC sets none: "OFAC cannot make such a recommendation because each search has its own unique set of facts surrounding it." Weak aliases and vessel or aircraft entries are not screened (data specification).
+- **Who is screened.** Every active employee (HR and W-2 names) and every active vendor (display, legal and DBA names), plus the account-holder name on bank records and the payee name on ACH authorizations.
+  - Reads are paged by id past PostgREST's 1,000-row cap (SLICE 5C).
+  - An unfinished read fails the run rather than screening part of the list.
+  - Measured against the 2026-10 lists: 39,117 names, about 84 ms per payee name.
+- **Migration 0278.** All three tables are append-only, including TRUNCATE.
+  - `ofac_screening_runs` and `ofac_screening_results` are written in one call, `ofac_record_run`. Results must belong to a successful run.
+  - `ofac_match_reviews` takes one owner-stamped review per result.
+  - A review's note must be 20 to 2,000 characters with no run of 7 or more digits.
+  - service_role gets select and insert only; nothing is security definer.
+  - A new gated kind, `ofac_review.record`: an admin's review becomes a request for Michael.
+- **Review rules (OFAC FAQ 5).**
+  - A "not a match" covers later screens only when every current match key (list entry plus payee name) was in that review. A new list entry or a new name asks again.
+  - A true match stays red on every later screen.
+- **Daily cron.** `/api/cron/ofac-screening` runs at 13:30 UTC (6:30 am PDT).
+  - When something needs review, it emails Michael once whenever the set of matches changes, and again weekly while matches wait.
+  - When a screen fails, it emails once per Pacific day.
+  - Each email is claimed in `compliance_reminder_log` first; a failed send removes the claim.
+  - The page warns when the last successful screen is 3 or more days old.
+- **Vendor follow-up list.** On Banking > Vendors, "Vendors to follow up" is now a collapsible section with a vendor search box.
+- **Tests.**
+  - `tests/compliance/r41-s11-ofac.test.tsx`, using real-format OFAC fixtures (real public records).
+  - Mutation runs: `mutate-s11-app.py` and `mutate-0278-sql.py` (Supabase default privileges simulated).
+  - Manual tests T-368 to T-370.
