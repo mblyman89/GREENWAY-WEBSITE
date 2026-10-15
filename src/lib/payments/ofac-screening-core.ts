@@ -68,8 +68,6 @@ export const JW_PREFIX_SCALE = 0.1;
 export const JW_MAX_PREFIX = 4;
 /** At most this many list entries are kept per payee (highest scores first). */
 export const MAX_MATCHES_KEPT = 10;
-/** A daily run screens again when the lists or the payees changed, and at least this often anyway. */
-export const RESCREEN_AT_LEAST_EVERY_DAYS = 30;
 /** The page turns amber when the last successful screen is older than this. */
 export const STALE_AFTER_DAYS = 3;
 
@@ -535,19 +533,6 @@ export function parseOfacDigest(header: string | null | undefined): string | nul
   return m ? m[1].toLowerCase() : null;
 }
 
-export type LastRun = { ranAt: string; listSha256: string; payeesSha256: string } | null;
-
-/** Run when forced, when there is no run yet, when the lists or payees changed, or at least every 30 days. */
-export function shouldRun(last: LastRun, listSha256: string, payeesSha256: string, now: Date, force: boolean): { run: boolean; why: string } {
-  if (force) return { run: true, why: "Screen now was pressed." };
-  if (!last) return { run: true, why: "No screening has run yet." };
-  if (last.listSha256 !== listSha256) return { run: true, why: "OFAC published a changed list." };
-  if (last.payeesSha256 !== payeesSha256) return { run: true, why: "A payee was added, removed or renamed." };
-  const ageDays = (now.getTime() - Date.parse(last.ranAt)) / 86400000;
-  if (!(ageDays < RESCREEN_AT_LEAST_EVERY_DAYS)) return { run: true, why: `The last screen is ${RESCREEN_AT_LEAST_EVERY_DAYS} or more days old.` };
-  return { run: false, why: "Nothing changed since the last screen (same OFAC lists, same payees)." };
-}
-
 // ──────────────────────────────────────────────────────────── reviews ──
 
 export type ReviewDecision = "not_a_match" | "true_match";
@@ -805,16 +790,6 @@ export function __runOfacScreeningCoreTests(): { passed: number; failed: number 
   ok(parseOfacDigest(`sha-256${hex}`) === hex, "digest: OFAC's form (no =)");
   ok(parseOfacDigest(`SHA-256=${hex.toUpperCase()}`) === hex, "digest: RFC form");
   ok(parseOfacDigest("md5=abc") === null && parseOfacDigest(null) === null && parseOfacDigest(`sha-256${hex}0`) === null, "digest: anything else is not recognised");
-  const now = new Date("2026-10-20T13:30:00Z");
-  const last = { ranAt: "2026-10-19T13:30:00Z", listSha256: "L", payeesSha256: "P" };
-  ok(shouldRun(null, "L", "P", now, false).run, "run: first time");
-  ok(shouldRun(last, "L2", "P", now, false).run && /changed list/.test(shouldRun(last, "L2", "P", now, false).why), "run: list changed");
-  ok(shouldRun(last, "L", "P2", now, false).run, "run: payees changed");
-  ok(!shouldRun(last, "L", "P", now, false).run, "skip: nothing changed");
-  ok(shouldRun(last, "L", "P", now, true).run, "run: forced");
-  ok(shouldRun({ ...last, ranAt: "2026-09-20T13:30:00Z" }, "L", "P", now, false).run, "run: 30 days");
-  ok(!shouldRun({ ...last, ranAt: "2026-09-20T13:30:01Z" }, "L", "P", now, false).run, "skip: just under 30 days");
-  ok(shouldRun({ ...last, ranAt: "garbage" }, "L", "P", now, false).run, "run: unreadable last time");
   ok(payeeSetText([{ payeeType: "vendor", payeeId: "b", label: "", names: ["Y"] }, { payeeType: "vendor", payeeId: "a", label: "", names: ["x", "X"] }]) === "vendor:a:X\nvendor:b:Y", "payee set text sorted, normalized");
 
   // review status
@@ -855,9 +830,10 @@ export function __runOfacScreeningCoreTests(): { passed: number; failed: number 
   ok(/TRUE match/.test(screeningEmail({ ...sum, trueMatches: 1 }, "L")?.subject ?? ""), "email: true match");
   ok(/no name to screen/.test(screeningEmail({ ...sum, unscreenable: 2 }, "L")?.subject ?? ""), "email: unscreenable");
   ok(/Payments are not affected/.test(screeningFailedEmail("x", "L").text), "failure email: payments not affected");
+  const now = new Date("2026-10-20T13:30:00Z");
   ok(staleness(null, now).stale, "stale: never run");
   ok(!staleness("2026-10-18T13:31:00Z", now).stale && staleness("2026-10-17T13:30:00Z", now).stale, "stale: 3 days");
-  ok(MATCH_THRESHOLD === 0.85 && RESCREEN_AT_LEAST_EVERY_DAYS === 30 && STALE_AFTER_DAYS === 3, "constants");
+  ok(MATCH_THRESHOLD === 0.85 && STALE_AFTER_DAYS === 3, "constants");
   ok(OFAC_FILES.join(",") === "SDN.CSV,ALT.CSV,CONS_PRIM.CSV,CONS_ALT.CSV" && OFAC_FIELD_COUNT["SDN.CSV"] === 12 && OFAC_FIELD_COUNT["CONS_ALT.CSV"] === 5, "files and field counts");
 
   return { passed, failed };

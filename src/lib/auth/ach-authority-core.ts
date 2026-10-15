@@ -108,6 +108,8 @@ export const ACH_ACTIONS = {
   // R41 S10 (0277): the Timberland log starts the contract clocks, so what is in it is the owner's record.
   "timberland_comms.log": { cls: "live", label: "Add an entry to the Timberland communications log" },
   "timberland_comms.done": { cls: "live", label: "Mark a Timberland log item done" },
+  // R41 S11 (0278): the decision on a possible OFAC match is the owner's record (OFAC FAQ 5). It never blocks a payment.
+  "ofac_review.record": { cls: "live", label: "Record a decision on a possible OFAC sanctions match" },
 } as const satisfies Record<string, { cls: "live" | "stop"; label: string }>;
 
 export type AchActionKind = keyof typeof ACH_ACTIONS;
