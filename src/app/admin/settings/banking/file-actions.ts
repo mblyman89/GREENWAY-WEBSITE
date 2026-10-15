@@ -23,6 +23,10 @@ import { achGate } from "@/lib/payments/ach-gate";
 import type { RedirectOutcome } from "@/lib/payments/ach-gate-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { markAchFileBankStep, voidAchFile } from "@/lib/payments/ach-file-ledger-store";
+import { requirePermission } from "@/lib/auth/session";
+import { pacificToday } from "@/lib/reports/timezone";
+import { setDualNoteDismiss } from "@/lib/payments/ach-guide-store";
+import { dismissValue } from "@/lib/payments/timberland-bank-steps-core";
 
 const FILES = "/admin/settings/banking/operations";
 
@@ -98,4 +102,27 @@ async function markBankStepBody(session: StaffSession, fd: FormData, step: "uplo
         ? "Recorded: uploaded to Timberland. Now approve it in Timberland's portal, then press Mark approved."
         : "Recorded: approved at Timberland. Watch the bank feed for the settlement debit on the effective date.",
   });
+}
+
+/**
+ * R41 S6: "Don't show again" on the grey dual-approval line. The owner's
+ * choice only (it is information about his own setup, not an ACH action, so
+ * it is not an achGate kind). Logged in the audit trail; it lasts for the
+ * calendar year, then the note comes back.
+ */
+export async function dismissDualApprovalNoteAction(): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  if (session.profile.role !== "owner") back({ error: "Only the owner can hide this note." });
+  const value = dismissValue(pacificToday(), new Date().toISOString(), session.email);
+  const r = await setDualNoteDismiss(value);
+  if (!r.ok) back({ error: `The note was not hidden: ${r.error}` });
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ach.dual_approval_note.dismissed",
+    entityType: "site_settings",
+    entityId: "ach_dual_approval_note_dismissed",
+    after: { year: value.year },
+  }).catch(() => {});
+  back({ msg: `Hidden for ${value.year}. It comes back in January, before the year-end Timberland review.` });
 }
