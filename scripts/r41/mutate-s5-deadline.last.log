@@ -1,0 +1,31 @@
+control (before) pass
+killed   two-to-one
+killed   prior-to-next
+killed   utc-not-pacific
+killed   margin-dropped
+killed   cutoff-gte-to-gt
+killed   earliest-at-cutoff
+killed   q9-check-removed
+killed   same-day-allowed
+killed   earliest-skips-a-day
+killed   afternoon-noon
+killed   afternoon-at-cutoff
+killed   afternoon-before-1pm
+killed   afternoon-approved-too
+killed   release-deadline-removed
+killed   open-cap-ignored
+killed   open-odd-row-skipped
+killed   open-read-error-empty
+killed   payroll-uses-payday
+killed   payroll-refusal-ignored
+killed   reconcile-uses-payday
+killed   vendor-check-ignored
+killed   check-file-deadline-removed
+killed   page-release-not-gated
+killed   claim-not-released
+killed   claim-error-ignored
+killed   unreadable-ledger-200
+killed   cron-one-tick
+killed   daily-reminders-dropped
+control (after) pass
+total 28 killed 28 survivors []
