@@ -498,6 +498,22 @@ describe("go-live board: strict store (unread is never green)", () => {
 });
 
 // =========================================================================
+describe("S9 docs", () => {
+  it("TEST-PLAN has T-362, T-363, T-364, the manual lists them, the roadmap has the S9 row", () => {
+    const tp = read("docs/audit/TEST-PLAN.md");
+    const man = read("docs/audit/test-manual/index.html");
+    for (const t of ["T-362", "T-363", "T-364"]) {
+      expect(tp).toContain(`- **${t} (`);
+      expect(man).toContain(`data-test="${t}"`);
+    }
+    const r = read("docs/roadmap/R41-TIMBERLAND.md");
+    expect(r).toContain("| S9 | Get rolling");
+    expect(r).toContain("## S9 in detail");
+    expect(read("docs/MIGRATIONS_TO_RUN.md")).toContain("## R41 \u2014 0276 \u2014 Owner confirms a file's funding");
+  });
+});
+
+// =========================================================================
 describe("S9 mutation runs (test the tests)", () => {
   const pin = (scriptPath: string, logPath: string, floor: number) => {
     const script = read(scriptPath);
