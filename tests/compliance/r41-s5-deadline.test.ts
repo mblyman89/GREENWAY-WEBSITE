@@ -17,7 +17,7 @@ import { FakePostgrest, type FakeRequest } from "./helpers/fake-postgrest";
 
 const st = vi.hoisted(() => ({
   db: null as unknown as import("./helpers/fake-postgrest").FakePostgrest,
-  emails: [] as { subject: string; html: string; to: string[] }[],
+  emails: [] as { subject: string; html: string; to: string[]; logAt: number }[],
   emailOk: true,
 }));
 
@@ -35,7 +35,7 @@ vi.mock("@/lib/supabase/admin", async () => {
 vi.mock("@/lib/auth/session", () => ({ getStaffSession: async () => null, requirePermission: async () => ({}) }));
 vi.mock("@/lib/orders/staff-alert-email", () => ({
   sendStaffAlertEmail: async (p: { subject: string; html: string; to: string[] }) => {
-    st.emails.push(p);
+    st.emails.push({ ...p, logAt: st.db.log.length });
     return st.emailOk ? { ok: true, recipients: p.to.length } : { ok: false, detail: "provider returned 500", didTimeout: false };
   },
 }));
@@ -352,6 +352,8 @@ describe("reminders", () => {
         expect(st.db.rows("compliance_reminder_log").map((r) => r.dedupe_key)).toEqual(["ach-deadline:a:1pm"]);
         const claimAt = st.db.log.findIndex((x) => x.method === "POST" && x.url.pathname.endsWith("/compliance_reminder_log"));
         expect(claimAt).toBeGreaterThan(-1);
+        expect(claimAt).toBeLessThan(st.emails[0].logAt); // claimed BEFORE the email went out
+        expect(st.emails[0].to).toEqual(["michael@greenwaymarijuana.com"]);
         vi.setSystemTime(new Date("2026-10-21T21:00:00Z")); // the 21:00 UTC tick = 2 pm PDT
         const again = await call();
         expect(again.status).toBe(200);
