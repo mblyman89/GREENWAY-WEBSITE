@@ -50,6 +50,10 @@
     {
       "path": "/api/cron/ach-funding-8am",
       "schedule": "0 15-16/1 * * *"
+    },
+    {
+      "path": "/api/cron/ofac-screening",
+      "schedule": "30 13 * * *"
     }
   ]
 }

@@ -2266,7 +2266,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 64); // R41 S9: funding helper (file + $50 fee + own buffer, 9:00 am settlement, 8 am reminder)
   assertRan("timberland-golive-core", __runTimberlandGoLiveCoreTests(), 43); // R41 S9: go-live readiness board (14 gates; never blocks checks)
   assertRan("timberland-obligations-core", __runTimberlandObligationsCoreTests(), 69); // R41 S10: obligation clocks (comms log + NOC), fees, STOP card letter
-  assertRan("ofac-screening-core", __runOfacScreeningCoreTests(), 95); // R41 S11: OFAC list parsing, Jaro-Winkler + Soundex screening, review status (never blocks payment)
+  assertRan("ofac-screening-core", __runOfacScreeningCoreTests(), 96); // R41 S11: OFAC list parsing, Jaro-Winkler + Soundex screening, review status (never blocks payment)
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
