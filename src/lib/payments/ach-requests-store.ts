@@ -139,6 +139,11 @@ export async function labelForTarget(kind: AchActionKind, targetId: string | nul
       const f = await one("ach_files", "filename,file_date,file_id_modifier", targetId);
       if (f) return `ACH file ${txt(f.filename)} (${txt(f.file_date)} ${txt(f.file_id_modifier)})`.slice(0, 200);
     }
+    if (t === "timberland_comms") {
+      if (!targetId) return "New Timberland log entry";
+      const c = await one("ach_timberland_comms", "entry_type,received_on", targetId);
+      if (c) return `Timberland log: ${txt(c.entry_type).replace(/_/g, " ")} (${txt(c.received_on)})`.slice(0, 200);
+    }
     if (!targetId) return fallback;
     let label = "";
     if (t === "vendor") label = txt((await one("vendors", "display_name", targetId))?.display_name);

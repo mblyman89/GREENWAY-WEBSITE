@@ -547,7 +547,32 @@ export function payeeReversalNotice(i: { payee: string; amountText: string; paid
   ].join("\n");
 }
 
-// ─────────────────────────────────────────────────────────────── self-tests ──
+// ───────────────────────────────────────────────────────── database errors ──
+
+const COMMS_ERROR_TABLE: readonly [RegExp, string][] = [
+  [/ACH_COMMS_APPEND_ONLY/, "The Timberland log is never changed or deleted. Add a new entry that corrects it."],
+  [/ACH_OWNER_ONLY/, "Only the owner adds to the Timberland log. Send it as a request for owner approval."],
+  [/ACH_COMMS_DATE: the time/, "The time cannot be in the future."],
+  [/ACH_COMMS_DATE: the date is more than/, `The date is more than ${COMMS_MAX_AGE_DAYS} days ago. Check the year.`],
+  [/ACH_COMMS_DATE/, "The date cannot be in the future."],
+  [/atc_closes_once|ACH_COMMS_CLOSE: .*already/, "That item is already marked done."],
+  [/ACH_COMMS_CLOSE: a done entry must name/, "That item could not be found. Reload the page."],
+  [/ACH_COMMS_CLOSE: the item to close was not found/, "That item could not be found. Reload the page."],
+  [/ACH_COMMS_CLOSE: a .* entry has no clock/, "That entry has no deadline, so there is nothing to mark done."],
+  [/ACH_COMMS_CLOSE: it cannot be done before/, "It cannot be marked done before the day it arrived."],
+  [/ach_timberland_comms_summary_check/, "Write a short note (5 to 1,000 characters, and never an account or card number)."],
+  [/relation "public\.ach_timberland_comms" does not exist|Could not find the table 'public\.ach_timberland_comms'|ach_timberland_comms.*does not exist/, "The Timberland log is not set up yet: run migration 0277 (docs/MIGRATIONS_TO_RUN.md). Nothing was saved."],
+  [/atc_/, "The database refused this entry (a required date, time or amount is missing). Nothing was saved."],
+];
+
+/** Plain words for a 0277 refusal. Never echoes the raw database text. */
+export function commsDbErrorMessage(message: string | null | undefined): string {
+  const m = String(message ?? "");
+  for (const [re, text] of COMMS_ERROR_TABLE) if (re.test(m)) return text;
+  return "The Timberland log refused this. Nothing was saved. Reload the page and try again.";
+}
+
+// ───────────────────────────────────────────────────────────── self-tests ──
 
 export function __runTimberlandObligationsCoreTests(): { passed: number; failed: number } {
   let passed = 0;
@@ -647,6 +672,22 @@ export function __runTimberlandObligationsCoreTests(): { passed: number; failed:
   ok(!/[0-9]{7,}/.test(letter), "letter has no long digit run");
   ok(/\[date and time of the call\]/.test(compromiseLetter({ todayIso: today, calledAtUtc: null, whatHappened: null })), "blank call time is a visible placeholder");
   ok(/may be taken back/.test(payeeReversalNotice({ payee: "Pat", amountText: "$100.00", paidOn: "2026-10-16", reason: "sent twice" })), "payee notice");
+
+  // database errors
+  ok(/never changed/.test(commsDbErrorMessage("ACH_COMMS_APPEND_ONLY: the Timberland log is never changed or deleted.")), "db: append-only");
+  ok(/Only the owner/.test(commsDbErrorMessage("ACH_OWNER_ONLY: only the owner adds to the Timberland log.")), "db: owner only");
+  ok(/time cannot/.test(commsDbErrorMessage("ACH_COMMS_DATE: the time cannot be in the future.")), "db: future time");
+  ok(/400 days/.test(commsDbErrorMessage("ACH_COMMS_DATE: the date is more than 400 days ago (2025-01-01). Check the year.")), "db: too old");
+  ok(/date cannot be in the future/.test(commsDbErrorMessage("ACH_COMMS_DATE: the date cannot be in the future (2027-01-01).")), "db: future date");
+  ok(/already marked done/.test(commsDbErrorMessage('duplicate key value violates unique constraint "atc_closes_once"')), "db: closed twice");
+  ok(/no deadline/.test(commsDbErrorMessage("ACH_COMMS_CLOSE: a access_ready entry has no clock to close.")), "db: nothing to close");
+  ok(/before the day it arrived/.test(commsDbErrorMessage("ACH_COMMS_CLOSE: it cannot be done before it arrived (2026-10-20).")), "db: done before arrival");
+  ok(/could not be found/.test(commsDbErrorMessage("ACH_COMMS_CLOSE: the item to close was not found.")), "db: not found");
+  ok(/run migration 0277/.test(commsDbErrorMessage('relation "public.ach_timberland_comms" does not exist')), "db: missing table (pg)");
+  ok(/run migration 0277/.test(commsDbErrorMessage("Could not find the table 'public.ach_timberland_comms' in the schema cache")), "db: missing table (PostgREST)");
+  ok(/short note/.test(commsDbErrorMessage('new row for relation "ach_timberland_comms" violates check constraint "ach_timberland_comms_summary_check"')), "db: summary check");
+  ok(/required date, time or amount/.test(commsDbErrorMessage('new row violates check constraint "atc_time_needed"')), "db: shape check");
+  ok(/Reload the page and try again/.test(commsDbErrorMessage("boom 12345678")) && !/12345678/.test(commsDbErrorMessage("boom 12345678")), "db: unknown never echoed");
 
   return { passed, failed };
 }

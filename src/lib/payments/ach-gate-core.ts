@@ -44,6 +44,8 @@ export const TARGET_TYPES = [
   "vendor_payment",
   // R41 S3 / 0273: a released ACH file (void requests).
   "ach_file",
+  // R41 S10 / 0277: the Timberland communications log.
+  "timberland_comms",
 ] as const;
 export type TargetType = (typeof TARGET_TYPES)[number];
 
@@ -109,6 +111,10 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   "ach_file.mark_bank_approved": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
   // R41 S9: a funding request is stale once the file moved or the funding was already recorded.
   "ach_file.confirm_funding": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status", "funding_confirmed_at"] } },
+  // R41 S10: a new log entry has nothing to compare (the replay re-checks the form and the 0277 trigger).
+  "timberland_comms.log": { targetType: "timberland_comms", idField: null, version: null },
+  // A done request is stale once the item was closed by anyone ("absent" becomes a row).
+  "timberland_comms.done": { targetType: "timberland_comms", idField: "comms_id", version: { table: "ach_timberland_comms", key: "closes_id", cols: ["id"] } },
 };
 
 /** The fixed id of the single ach_company_settings row (id boolean primary key = true). */
