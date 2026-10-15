@@ -19,6 +19,7 @@
  * failed".
  */
 import "server-only";
+import { cache } from "react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { commsDbErrorMessage, type CommsInsert, type CommsRow } from "@/lib/payments/timberland-obligations-core";
@@ -91,4 +92,26 @@ export async function closeTimberlandComms(input: { closesId: string; summary: s
   const id = (data as { id?: string } | null)?.id;
   if (!id) return { ok: false, error: "The database did not confirm it. Reload the page and check the log." };
   return { ok: true, id, closedType: String((target.data as { entry_type?: string }).entry_type ?? "") };
+}
+
+/** One read per request, shared by the banking layout (STOP card, termination banner) and the pages. */
+export const readTimberlandCommsCached = cache(readTimberlandComms);
+
+/**
+ * Returns and NOCs logged with a received date in this Pacific month (open or
+ * resolved), for the Schedule B fees card. A read failure returns null: the
+ * card then says it could not count, never "0".
+ */
+export async function countNoticesThisMonth(todayIso: string): Promise<{ returns: number; nocs: number } | null> {
+  if (!isSupabaseServiceConfigured || !/^\d{4}-\d{2}-\d{2}$/.test(todayIso)) return null;
+  const first = `${todayIso.slice(0, 7)}-01`;
+  const { data, error } = await createSupabaseAdminClient()
+    .from("ach_return_notices")
+    .select("notice_kind")
+    .gte("received_on", first)
+    .lte("received_on", todayIso)
+    .limit(5000);
+  if (error) return null;
+  const rows = (data ?? []) as { notice_kind?: string }[];
+  return { returns: rows.filter((r) => r.notice_kind === "return").length, nocs: rows.filter((r) => r.notice_kind === "noc").length };
 }

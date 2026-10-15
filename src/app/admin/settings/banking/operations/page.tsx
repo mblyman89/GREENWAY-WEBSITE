@@ -15,6 +15,10 @@
  *      R41 S6 (0274): Mark uploaded / Mark approved record the two steps at
  *      Timberland (owner; an admin's press is a request), the checklist card,
  *      and the grey dual-approval line (never red; logged yearly dismiss).
+ *   8. R41 S10 (0277): "What is due to Timberland" (ClocksPanel): the
+ *      obligation clocks, the Timberland communications log and the
+ *      Schedule B fees card. The STOP card is on every banking page
+ *      (banking/layout.tsx).
  *
  * Owner/admin only (settings.manage). The page shows last-4 only; test-credit
  * amounts are never shown (the person must read them back).
@@ -37,6 +41,8 @@ import { confirmAchFileFundingAction, dismissDualApprovalNoteAction, markAchFile
 import { fundingBadge, fundingPlan, usd } from "@/lib/payments/timberland-funding-core";
 import { getDualNoteDismiss } from "@/lib/payments/ach-guide-store";
 import { BANK_STEP_CHECKLIST, DUAL_APPROVAL_NOTE, bankStepButton, bankStepLine, dualNoteVisible } from "@/lib/payments/timberland-bank-steps-core";
+import { ClocksPanel } from "./ClocksPanel";
+import { countNoticesThisMonth, readTimberlandCommsCached } from "@/lib/payments/timberland-comms-store";
 import { monitorSummary, noticeUrgencyLabel, releaseHint } from "@/lib/payments/ach-ops-ui-core";
 import {
   finishCheckAction,
@@ -66,7 +72,15 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
   const session = await requirePermission("settings.manage");
   const sp = await searchParams;
   const today = pacificToday();
-  const [view, employees, vendors, files, dualNote] = await Promise.all([opsPageView(today), listEmployees({ includeInactive: true }), listVendors(), listAchFiles(50), getDualNoteDismiss()]);
+  const [view, employees, vendors, files, dualNote, comms, monthCounts] = await Promise.all([
+    opsPageView(today),
+    listEmployees({ includeInactive: true }),
+    listVendors(),
+    listAchFiles(50),
+    getDualNoteDismiss(),
+    readTimberlandCommsCached(),
+    countNoticesThisMonth(today),
+  ]);
   const isOwner = session.profile.role === "owner";
   const showDualNote = dualNoteVisible(dualNote.dismiss, today);
   const liveBySource = new Map(files.rows.filter((f) => f.status !== "voided").map((f) => [`${f.kind}|${f.source_id}`, f]));
@@ -118,6 +132,17 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
         <div className="flex flex-wrap gap-2">
           <BankingHelpTabs />
         </div>
+
+        {/* R41 S10: what is due to Timberland (clocks, the log, fees) */}
+        <ClocksPanel
+          todayIso={today}
+          now={new Date()}
+          isOwner={isOwner}
+          comms={comms}
+          notices={view.notices.map((n) => ({ id: n.id, notice_kind: n.notice_kind, code: n.code, received_on: n.received_on, apply_by: n.apply_by, payee: n.payee }))}
+          noticesOk={view.ready && !view.error}
+          monthCounts={monthCounts}
+        />
 
         {/* 1. Notices */}
         <section id="notices" className={card}>

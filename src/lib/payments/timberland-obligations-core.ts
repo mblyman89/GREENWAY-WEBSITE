@@ -444,7 +444,7 @@ function noticeClocks(n: NoticeClockRow, todayIso: string): Clock[] {
   const out: Clock[] = [];
   if (n.apply_by) out.push({ key: `notice:${n.id}`, commsId: null, title: `Apply bank correction ${n.code} for ${n.payee}`, dueDate: n.apply_by, dueUtc: null, dueText: dateText(n.apply_by, todayIso), tone: dateTone(n.apply_by, todayIso), action: "Apply the corrected details before this date (or before the next payment, if that is sooner), then resolve the notice.", section: "\u00a77" });
   const refuse = addCalendarDays(n.received_on, REFUSED_NOC_CALENDAR_DAYS);
-  out.push({ key: `refuse:${n.id}`, commsId: null, title: `Only if correction ${n.code} for ${n.payee} is WRONG: refuse it`, dueDate: refuse, dueUtc: null, dueText: dateText(refuse, todayIso), tone: refuse < todayIso ? "neutral" : "neutral", action: "If the correction is wrong, tell Timberland in writing before this date and ask how they want the Refused NOC sent. Otherwise ignore this line.", section: "\u00a77" });
+  out.push({ key: `refuse:${n.id}`, commsId: null, title: `Only if correction ${n.code} for ${n.payee} is WRONG: refuse it`, dueDate: refuse, dueUtc: null, dueText: dateText(refuse, todayIso), tone: "neutral", action: "If the correction is wrong, tell Timberland in writing before this date and ask how they want the Refused NOC sent. Otherwise ignore this line.", section: "\u00a77" });
   return out;
 }
 
@@ -468,6 +468,21 @@ export function terminationInEffect(comms: readonly CommsRow[]): { endsOn: strin
   const closed = closedIds(comms);
   const open = comms.filter((r) => r.entry_type === "termination_notice" && r.effective_on && !closed.has(r.id)).map((r) => r.effective_on as string).sort();
   return open.length ? { endsOn: open[0] } : null;
+}
+
+/** The newest logged compromise call that is not marked done (pre-fills the STOP card letter). */
+export function latestOpenCompromiseCall(comms: readonly CommsRow[]): string | null {
+  const closed = closedIds(comms);
+  const times = comms.filter((r) => r.entry_type === "compromise_reported" && r.occurred_at && !closed.has(r.id)).map((r) => r.occurred_at as string);
+  times.sort((a, b) => Date.parse(b) - Date.parse(a));
+  return times[0] ?? null;
+}
+
+/** The banner words while a termination notice is open. */
+export function terminationBannerText(endsOn: string, todayIso: string): string {
+  return endsOn < todayIso
+    ? `Timberland ended the ACH agreement (last day ${endsOn}). Pay by check; do not upload ACH files.`
+    : `Timberland has given notice to end the ACH agreement: the last day is ${endsOn}. Plan to pay by check after that day; do not upload a file that settles after it.`;
 }
 
 /** Facts the go-live board accepts from the log (as well as the calendar). */
@@ -688,6 +703,16 @@ export function __runTimberlandObligationsCoreTests(): { passed: number; failed:
   ok(/short note/.test(commsDbErrorMessage('new row for relation "ach_timberland_comms" violates check constraint "ach_timberland_comms_summary_check"')), "db: summary check");
   ok(/required date, time or amount/.test(commsDbErrorMessage('new row violates check constraint "atc_time_needed"')), "db: shape check");
   ok(/Reload the page and try again/.test(commsDbErrorMessage("boom 12345678")) && !/12345678/.test(commsDbErrorMessage("boom 12345678")), "db: unknown never echoed");
+
+  // STOP card + banner helpers
+  const cA = row({ id: "ca", entry_type: "compromise_reported", occurred_at: "2026-10-19T16:30:00.000Z" });
+  const cB = row({ id: "cb", entry_type: "compromise_reported", occurred_at: "2026-10-20T16:30:00.000Z" });
+  ok(latestOpenCompromiseCall([cA, cB]) === "2026-10-20T16:30:00.000Z", "letter: newest open call");
+  ok(latestOpenCompromiseCall([cA, cB, row({ id: "dn", entry_type: "done", closes_id: "cb" })]) === "2026-10-19T16:30:00.000Z", "letter: a done call is skipped");
+  ok(latestOpenCompromiseCall([]) === null, "letter: no call, no time");
+  ok(/last day is 2026-11-01/.test(terminationBannerText("2026-11-01", today)) && /given notice/.test(terminationBannerText("2026-11-01", today)), "banner: before the last day");
+  ok(/given notice/.test(terminationBannerText(today, today)), "banner: on the last day it is still notice");
+  ok(/ended the ACH agreement \(last day 2026-10-19\)/.test(terminationBannerText("2026-10-19", today)), "banner: after the last day");
 
   return { passed, failed };
 }
