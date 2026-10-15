@@ -95,6 +95,7 @@ describe("dates handed to ach_verification_mark_sent always satisfy 0263", () =>
           effective: day,
           todayIso: today,
           createdAt: new Date(`${today}T20:00:00Z`),
+          fileIdModifier: "A", // R41 S3: the ledger supplies the letter; required
         });
         expect(r.ok, `${method} ${day}`).toBe(true);
         if (!r.ok) continue;
