@@ -1,0 +1,20 @@
+supabase default privileges simulated (select, insert, update, delete to anon, authenticated, service_role)
+control (before) pass
+killed   guard-update-allowed  (PL/pgSQL function inline_code_block line 74 at PERFORM)
+killed   guard-owner-skipped  (PL/pgSQL function inline_code_block line 34 at PERFORM)
+killed   guard-future-date-allowed  (PL/pgSQL function inline_code_block line 39 at PERFORM)
+killed   guard-old-date-allowed  (PL/pgSQL function inline_code_block line 40 at PERFORM)
+killed   guard-future-time-allowed  (PL/pgSQL function inline_code_block line 42 at PERFORM)
+killed   guard-close-anything  (PL/pgSQL function inline_code_block line 66 at PERFORM)
+killed   guard-done-before-arrival  (PL/pgSQL function inline_code_block line 67 at PERFORM)
+killed   closes-twice  (PL/pgSQL function inline_code_block line 70 at PERFORM)
+killed   digits-allowed  (PL/pgSQL function inline_code_block line 45 at PERFORM)
+killed   time-not-needed  (PL/pgSQL function inline_code_block line 50 at PERFORM)
+killed   amount-not-needed  (PL/pgSQL function inline_code_block line 55 at PERFORM)
+killed   second-date-not-needed  (PL/pgSQL function inline_code_block line 52 at PERFORM)
+killed   service-role-may-update  (CONTEXT:  PL/pgSQL function inline_code_block line 26 at ASSERT)
+killed   browser-may-insert  (CONTEXT:  PL/pgSQL function inline_code_block line 28 at ASSERT)
+killed   request-target-missing  (CONTEXT:  PL/pgSQL function inline_code_block line 86 at ASSERT)
+control (after) pass
+total 15 killed 15 survivors []
+supabase default privileges removed
