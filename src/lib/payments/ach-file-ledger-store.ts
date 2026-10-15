@@ -47,6 +47,7 @@ import {
   evaluateTimberlandLimits,
   limitRefusalMessage,
   ledgerWindowStart,
+  roomLeft,
   type LedgerFileForLimits,
 } from "@/lib/payments/timberland-limits-core";
 
@@ -163,6 +164,13 @@ export async function readLedgerForLimits(fileDate: string): Promise<{ ok: true;
     });
   }
   return { ok: true, ledger };
+}
+
+/** The "Timberland room left" bar: today's in-process total and this month's, from the same read the release check uses. */
+export async function loadTimberlandRoomLeft(today: string): Promise<{ ok: true; room: ReturnType<typeof roomLeft> } | Fail> {
+  const r = await readLedgerForLimits(today);
+  if (!r.ok) return { ok: false, error: "Timberland room left could not be read (never shown as all clear). Releases are still checked and refused if over a limit." };
+  return { ok: true, room: roomLeft(r.ledger, today) };
 }
 
 type ReleaseInput = {

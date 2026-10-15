@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { pacificToday } from "@/lib/reports/timezone";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { TimberlandRoomLeft } from "@/components/admin/payments/TimberlandRoomLeft";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Button, Badge } from "@/components/admin/ui";
@@ -105,6 +107,9 @@ export default async function PayrollPage({
         {error ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">{error}</div>
         ) : null}
+
+        {/* R41 S4: Timberland's daily and monthly room (the release refuses anything over). */}
+        <TimberlandRoomLeft today={pacificToday()} />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Pay runs" value={runs.length} accent="muted" />
