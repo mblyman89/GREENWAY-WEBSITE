@@ -1,0 +1,32 @@
+control (before) pass
+killed   file-limit-gte
+killed   window-ends-day-early
+killed   prenotes-counted
+killed   entry-limit-gte
+killed   daily-limit-gte
+killed   monthly-limit-gte
+killed   window-starts-day-late
+killed   warn-strictly-over-80
+killed   voided-counted
+killed   test-credits-free
+killed   weekend-effective-not-moved
+killed   stored-settlement-ignored
+killed   month-upload-only-ledger
+killed   month-upload-only-new-file
+killed   window-start-month-only
+killed   fit-lead-one-day
+killed   higher-limit-lead-one-day
+killed   check-not-enforced
+killed   read-failure-empty-ledger
+killed   read-includes-voided
+killed   read-by-file-date-only
+killed   read-cap-ignored
+killed   null-amount-as-number
+killed   entries-not-read
+killed   warnings-dropped
+killed   room-bar-misread
+killed   payroll-notes-dropped
+killed   vendor-notes-dropped
+killed   vendor-bar-removed
+control (after) pass
+total 29 killed 29 survivors []
