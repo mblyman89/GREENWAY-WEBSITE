@@ -30,6 +30,7 @@ current ones at screening time.
 | ofac-faq-287-automated-use.txt | https://ofac.treasury.gov/faqs/287 | b576343516c11aa41d2319e0039bac78d79b1baa0449a4b506fa77a065952448 | Automated systems must use the data files, not the search website |
 | ofac-faq-5-valid-match.txt | https://ofac.treasury.gov/faqs/5 | 6230db845353f3fe510d72c58fd5fd55263940a7d43c0aa33159336ba8e80106 | How to review a possible match (Steps 1 to 6): "Many potential matches identified through screening are false positives"; "If after you review available information, you can reasonably determine the match is not valid, then you may proceed with the transaction or activity"; keep records of the review |
 | ofac-technical-notice-2024-05-16-user-agent.txt | https://ofac.treasury.gov/sdn-list-data-formats-data-schemas/ofac-technical-actions-in-reverse-chronological-order/20240516_44 | 10e37521d28c28ae35c7e23b52c33f484720334d985d2912988546a08603de0e | The files moved to `sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/{FILE}`; requests need a User-Agent header |
+| nara-soundex-system.txt | https://www.archives.gov/research/census/soundex | 29d2f580c224c448a8dd5ff799e375dd2921bdabf7ab8f93fd63e93a3a8796d4 (the HTML page) | The American Soundex coding rules and worked examples (Washington W252, Lee L000, Gutierrez G362, Pfister P236, Jackson J250, Tymczak T522, Ashcraft A261, VanDeusen V532) that `soundex()` is tested against |
 
 What the real files looked like on 2026-10-15 (checked, not assumed): SDN.CSV
 had 19,430 records, every one with exactly 12 fields; ALT.CSV 20,184 records of
@@ -52,3 +53,17 @@ How the server answers (checked 2026-10-15 with curl, not assumed):
 - HEAD on ALT.CSV, CONS_PRIM.CSV and CONS_ALT.CSV answers `400 Bad Request`, so
   those three have no published digest; the app checks their structure
   (exact field counts, ASCII, the final 0x1A) and records its own sha256.
+
+Jaro-Winkler: FAQ 249 names the method but not its constants. The app uses
+Winkler's published form, a prefix scale p = 0.1 over a common prefix of at
+most 4 characters (W. E. Winkler, "String Comparator Metrics and Enhanced
+Decision Rules in the Fellegi-Sunter Model of Record Linkage", 1990, ERIC
+ED325505). The values in the self-test (MARTHA/MARHTA 0.961111,
+DWAYNE/DUANE 0.84, DIXON/DICKSON 0.832381) were cross-checked against an
+independent implementation (the Python `jellyfish` package), not typed from
+memory. How the per-part Soundex result is blended with Jaro-Winkler is OFAC's
+undisclosed detail; the app's blend is its own and is labelled as such.
+
+A later download of SDN.CSV (the one the app's timing check used) had 19,457
+records, all of 12 fields: the list changes as OFAC publishes, so the app counts
+records each run rather than expecting a number.

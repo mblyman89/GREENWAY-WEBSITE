@@ -531,7 +531,7 @@ export function payeeSetText(payees: readonly Payee[]): string {
  */
 export function parseOfacDigest(header: string | null | undefined): string | null {
   if (!header) return null;
-  const m = /^\s*sha-256=?([0-9a-fA-F]{64})\s*$/.exec(header);
+  const m = /^\s*sha-256=?([0-9a-fA-F]{64})\s*$/i.exec(header);
   return m ? m[1].toLowerCase() : null;
 }
 
