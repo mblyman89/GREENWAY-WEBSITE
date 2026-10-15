@@ -104,6 +104,9 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   "vendor_ach.build": { targetType: "vendor_payment", idField: null, version: null },
   // R41 S3: a void request is stale once the file moved (uploaded, approved, voided).
   "ach_file.void": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
+  // R41 S6: a bank-step request is stale once the file moved (another step recorded, or voided).
+  "ach_file.mark_uploaded": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
+  "ach_file.mark_bank_approved": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
 };
 
 /** The fixed id of the single ach_company_settings row (id boolean primary key = true). */

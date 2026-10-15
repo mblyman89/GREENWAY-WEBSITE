@@ -100,6 +100,9 @@ export const ACH_ACTIONS = {
   "vendor_ach.build": { cls: "live", label: "Build a vendor ACH payment file" },
   // R41 S3: voiding a released file (it may already be at the bank) is the owner's call.
   "ach_file.void": { cls: "live", label: "Void a released ACH file" },
+  // R41 S6: recording the two Timberland steps (upload, then approve in the portal) is the owner's record.
+  "ach_file.mark_uploaded": { cls: "live", label: "Record that an ACH file was uploaded to Timberland" },
+  "ach_file.mark_bank_approved": { cls: "live", label: "Record that an ACH file was approved in Timberland's portal" },
 } as const satisfies Record<string, { cls: "live" | "stop"; label: string }>;
 
 export type AchActionKind = keyof typeof ACH_ACTIONS;

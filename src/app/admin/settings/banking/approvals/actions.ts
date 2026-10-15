@@ -98,6 +98,8 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "vendor_ach_flag.change": (fd) => flags.changeVendorAchFlagAction(fd),
   "vendor_ach.build": (fd) => ap.buildVendorAchAction(null, fd),
   "ach_file.void": (fd) => files.voidAchFileAction(fd),
+  "ach_file.mark_uploaded": (fd) => files.markAchFileUploadedAction(fd),
+  "ach_file.mark_bank_approved": (fd) => files.markAchFileBankApprovedAction(fd),
 };
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
