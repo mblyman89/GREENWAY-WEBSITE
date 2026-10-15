@@ -57,7 +57,8 @@ export async function checkFileAction(_prev: CheckerState, fd: FormData): Promis
   return { ok: true, practice: false, source: t.source, result };
 }
 
-export async function practiceRunAction(_prev: CheckerState): Promise<CheckerState> {
+export async function practiceRunAction(prev: CheckerState): Promise<CheckerState> {
+  void prev; // useActionState passes the last result; a practice run always starts fresh.
   await requirePermission("settings.manage");
   const now = new Date();
   const built = await buildPracticeFile(now);

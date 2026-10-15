@@ -936,6 +936,7 @@ import { __runTimberlandDeadlineCoreTests } from "../../src/lib/payments/timberl
 import { __runTimberlandPrenoteCoreTests } from "../../src/lib/payments/timberland-prenote-core";
 import { __runTimberlandFileCheckerCoreTests } from "../../src/lib/payments/timberland-file-checker-core";
 import { __runTimberlandFundingCoreTests } from "../../src/lib/payments/timberland-funding-core";
+import { __runTimberlandGoLiveCoreTests } from "../../src/lib/payments/timberland-golive-core";
 import { __runAchPaymentsReportCoreTests } from "../../src/lib/reports/ach-payments-report-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
@@ -2261,6 +2262,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7/Q9 strict), section 3.7 backwards plan, first-file gate
   assertRan("timberland-file-checker-core", __runTimberlandFileCheckerCoreTests(), 98); // R41 S9: check a file before upload (Nacha structure, controls, Timberland pins, deadline, ledger fingerprint, limits)
   assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 64); // R41 S9: funding helper (file + $50 fee + own buffer, 9:00 am settlement, 8 am reminder)
+  assertRan("timberland-golive-core", __runTimberlandGoLiveCoreTests(), 43); // R41 S9: go-live readiness board (14 gates; never blocks checks)
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
