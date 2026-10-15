@@ -4,6 +4,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { Badge, Button, Input, Section, Select } from "@/components/admin/ui";
 import {
   listPurchaseOrders,
@@ -101,6 +102,8 @@ export default async function PurchasingPage({
             ← Back to Product Intake Hub
           </BackLink>
         </div>
+        {/* The one pipeline bar, like every other Product Intake page. */}
+        <CatalogStageStrip current="order" />
 
         <HelpPanel
           id="purchasing-help"

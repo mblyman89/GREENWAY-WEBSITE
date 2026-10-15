@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { Button, Card, CardHeader, Section, Field, Input, Badge } from "@/components/admin/ui";
 import { listVendors } from "@/lib/vendors/store";
 import {
@@ -424,6 +425,7 @@ export default async function NewPurchaseOrderPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <CatalogStageStrip current="order" />
         {/* Status banners */}
         {settingsSaved ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
