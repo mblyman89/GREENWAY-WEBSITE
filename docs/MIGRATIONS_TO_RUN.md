@@ -2665,3 +2665,43 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0277_ach_timberland_comms.rollback.sql`.
   It refuses once the log holds any entry (they are records). Export them
   first.
+
+## R41 — 0278 — OFAC sanctions screening of payees
+
+- [ ] `0278_ofac_screening.sql` adds three tables. Together they are the
+  record of the daily check of every employee and vendor against OFAC's
+  sanctions lists (the SDN list and the Consolidated list):
+  - `ofac_screening_runs`: one row per screen, with the fingerprints of
+    the lists and the names used;
+  - `ofac_screening_results`: one row per payee per screen, either clear
+    or a possible match;
+  - `ofac_match_reviews`: your decision on a possible match ("not a match"
+    or "true match") and what you compared.
+
+  **It never blocks a payment.** Payroll, vendor files and the file checker
+  do not read these tables. A possible match shows up on the Sanctions
+  screening page and in an email for you to review. OFAC FAQ 5 says most
+  possible matches are false positives.
+  - **Never changed, never deleted.**
+  - **Only the owner records a review.** When Stephen records one, it
+    becomes a request for your approval.
+  - **Each possible match is reviewed once.**
+  - **Notes must be 20 to 2,000 characters** with no run of 7 or more
+    digits (no SSNs or account numbers).
+
+  Apply it **after 0277**. It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_class where relname like 'ofac_%' and relkind = 'r' and relrowsecurity) as tables_rls,
+         has_table_privilege('service_role', 'public.ofac_match_reviews', 'DELETE') as server_can_delete;
+  -- tables_rls | server_can_delete
+  -- 3          | f
+  ```
+
+  For the full proof, paste `scripts/recon/ofac-screening-0278-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0278 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0278_ofac_screening.rollback.sql`.
+  It refuses once any screening record exists (they are records).
