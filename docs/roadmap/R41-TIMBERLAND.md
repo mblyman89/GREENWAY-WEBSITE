@@ -24,7 +24,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S6 | Owner-only "Mark uploaded" / "Mark approved" at Timberland; honest dual-approval wording | #1380 | 0274 |
 | S7 | Section 6 prenote wait (6 banking days from settlement) and the first-file gate | #1381 | 0275 |
 | S8 | Docs, help, concierge, test plan, yearly tasks, agreement entries in the Legal library | #1382 | none |
-| S9 | Get rolling: go-live readiness board, file checker, funding helper (owner confirms funding; 8 am settlement-day reminder) | this branch | 0276 |
+| S9 | Get rolling: go-live readiness board, file checker, funding helper (owner confirms funding; 8 am settlement-day reminder) | #1383 | 0276 |
+| S10 | Obligation clocks: Timberland communications log, what is due to Timberland, STOP card on every banking page, fees card | this branch | 0277 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -105,3 +106,38 @@ Michael sends Brenda one email at the end of the full build. It holds:
     - every board deep link resolving to a real page and anchor.
   - Mutation runs: `mutate-s9-app.py` (19 of 19 killed) and `mutate-0276-sql.py` (12 of 12 killed).
   - Manual tests T-362 to T-364.
+
+## S10 in detail
+
+- **Timberland communications log** (migration 0277, `ach_timberland_comms`). It is append-only: Timberland's notices and Greenway's own calls are logged as rows, and an item is closed by adding a `done` row that names it.
+  - The guard trigger enforces:
+    - inserts only (no update or delete);
+    - the owner as the writer;
+    - a date no more than 400 days old and not in the future;
+    - a time for calls and reversals, an amount for reserve and over-limit requests, and a second date where the clock needs one;
+    - no run of 7 or more digits in the note, so no account numbers;
+    - each item closed once, and never before it arrived.
+  - Grants: the browser can only read; the server can read and insert. UPDATE, DELETE and TRUNCATE are revoked from service_role explicitly, because Supabase grants them on new public tables by default (supabase.com/docs/guides/api/securing-your-api).
+  - Two new gated kinds: `timberland_comms.log` and `timberland_comms.done`. An admin's entry becomes a request that Michael approves; the done request goes stale once the item is closed.
+- **What is due to Timberland** (Operations, `#clocks`). `timberland-obligations-core.ts` (69 self-tests) turns the log and the returns and corrections into clocks, each with the contract section and its words quoted verbatim from the mirror. Examples:
+  - section 21 reversal (strict: the earlier of 24 hours and 4:00 pm Pacific on the 5th banking day after settlement; phone Timberland, because the setup has no debit files);
+  - the Schedule F written confirmation within 1 calendar day of a compromise call;
+  - section 7 bank corrections (strict "earlier" reading; Brenda question);
+  - the 30 days in section 17 to report a statement problem;
+  - reserve demands, amendment and fee notices, over-limit requests, pre-funding and termination.
+
+  A failed read never says "Nothing is due to Timberland right now."
+- **STOP card** on every banking page (banking/layout.tsx, ACH roles only). It has:
+  - the agreement's phone number as a tel: link;
+  - when to phone;
+  - the contract words on no cancelling and reversals;
+  - a ready-to-send written confirmation letter;
+  - the $25.00 lost token fee.
+
+  A termination notice in the log shows a red banner on every banking page.
+- **Fees card** (Schedule B). It shows $50.00 a month plus $5.00 per return or correction logged this month, and the $24.00 yearly Nacha CD. If the count cannot be read, no total is shown.
+- **Go-live board.** Logged facts (countersigned, Schedule G email corrected, access ready, dual approval on) count as well as the calendar. A failed log read adds nothing.
+- **Tests.**
+  - `tests/compliance/r41-s10-obligations.test.tsx`.
+  - Mutation runs: `mutate-s10-app.py` (24 of 24 killed) and `mutate-0277-sql.py` (15 of 15 killed). The SQL run simulates Supabase's default privileges, so removing the revoke is caught.
+  - Manual tests T-365 to T-367.

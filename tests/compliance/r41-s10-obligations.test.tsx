@@ -413,3 +413,49 @@ describe("0277 content pins", () => {
     expect(rb).toMatch(/target_type = 'timberland_comms'/);
   });
 });
+
+describe("S10 docs", () => {
+  it("TEST-PLAN has T-365, T-366, T-367, the manual lists them, the roadmap has the S10 row", () => {
+    const tp = read("docs/audit/TEST-PLAN.md");
+    const man = read("docs/audit/test-manual/index.html");
+    for (const t of ["T-365", "T-366", "T-367"]) {
+      expect(tp).toContain(`- **${t} (`);
+      expect(man).toContain(`data-test="${t}"`);
+      expect(man).toContain(`"${t}": "part-b--the-results-log"`);
+    }
+    const r = read("docs/roadmap/R41-TIMBERLAND.md");
+    expect(r).toContain("| S9 | Get rolling");
+    expect(r).toContain("| #1383 | 0276 |");
+    expect(r).toContain("| S10 | Obligation clocks");
+    expect(r).toContain("## S10 in detail");
+    expect(read("docs/MIGRATIONS_TO_RUN.md")).toContain("## R41 \u2014 0277 \u2014 The Timberland communications log");
+  });
+});
+
+describe("S10 mutation runs (test the tests)", () => {
+  const pin = (scriptPath: string, logPath: string, floor: number) => {
+    const script = read(scriptPath);
+    const log = read(logPath);
+    const start = script.indexOf("\nM = [");
+    const listed = script.slice(start, script.indexOf("\n]\n", start)).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
+    const m = /total (\d+) killed (\d+) survivors \[\]/.exec(log);
+    expect(m, "clean summary line").not.toBeNull();
+    expect(Number(m![1])).toBe(listed);
+    expect(Number(m![2])).toBe(listed);
+    expect(listed).toBeGreaterThanOrEqual(floor);
+    expect(log).toContain("control (before) pass");
+    expect(log).toContain("control (after) pass");
+    expect(log).not.toMatch(/SURVIVED|ANCHOR|control .* FAIL/);
+  };
+  it("scripts/r41/mutate-s10-app.last.log: every app mutant killed, controls pass", () => {
+    pin("scripts/r41/mutate-s10-app.py", "scripts/r41/mutate-s10-app.last.log", 24);
+  });
+  it("scripts/r41/mutate-0277-sql.last.log: every SQL mutant killed, controls pass, Supabase default privileges simulated and removed", () => {
+    pin("scripts/r41/mutate-0277-sql.py", "scripts/r41/mutate-0277-sql.last.log", 15);
+    const log = read("scripts/r41/mutate-0277-sql.last.log");
+    expect(log).toContain("supabase default privileges simulated");
+    expect(log).toContain("supabase default privileges removed");
+    expect(log).toMatch(/killed {3}service-role-may-update/);
+    expect(read("scripts/r41/mutate-0277-sql.py")).toContain("https://supabase.com/docs/guides/api/securing-your-api");
+  });
+});
