@@ -105,7 +105,7 @@ gets **Import & attach**, which goes through `importImageFromUrl`: SSRF guard, M
 dedupe, saved as a media **draft** with license pending-review.
 
 **D3 — Image memory (migration 0279, idempotent).** `product_image_memory` holds identity_key, media
-asset id, last pos_product_key, source (`library|import|gemini|memory`), times confirmed, first/last
+asset id, last pos_product_key, source (`library|import|memory` (a Gemini-found photo is stored as `import`)), times confirmed, first/last
 confirmed by and at, and a unique (identity_key, media_asset_id). It is written each time a person
 attaches an image on onboarding. Recall also reads what is already on record without the table:
 product_enrichments and kb_products rows sharing the identity key. Recall still works before the owner
