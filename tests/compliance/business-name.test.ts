@@ -1,14 +1,15 @@
 /**
  * The business is "Greenway Marijuana" (trade name; legal name Lymans
- * Marijuana LLC). The owner, Michael Lyman, round 8: "Please make sure the
- * work you just completed doesn't use greenway cannabis and uses greenway
- * marijuana instead."
+ * Marijuana LLC). The owner, Michael Lyman, asked in round 8 that the
+ * work use "greenway marijuana", never the wrong name (paraphrased: his
+ * exact words contain the forbidden name, so they cannot sit in a file
+ * this test scans).
  *
  * This walks every tracked text file in the repo and refuses the wrong
- * name in any spelling: "Greenway Cannabis", "greenway-cannabis",
- * "greenwaycannabis", "GREENWAY CANNABI" (the 16-character batch cut), and
- * so on. Generic product words ("cannabis retailer", "Non-cannabis") are
- * fine; only "Greenway" directly followed by "cannabi" is refused.
+ * name in any spelling: "Greenway" followed (with or without a space, dash,
+ * dot or underscore) by the word for the plant, in any case, including the
+ * 16-character batch cut. Generic product words ("cannabis retailer",
+ * "Non-cannabis") are fine, and so is the data type GreenwayCannabinoid.
  *
  * The forbidden word is built from pieces so this file does not trip its
  * own check.
