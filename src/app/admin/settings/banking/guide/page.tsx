@@ -15,6 +15,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TimberlandRoomLeft } from "@/components/admin/payments/TimberlandRoomLeft";
 import { FirstFileToTimberland } from "@/components/admin/payments/FirstFileToTimberland";
+import { GoLiveBoard } from "@/components/admin/payments/GoLiveBoard";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge } from "@/components/admin/ui";
 import { BankingSubnav } from "../BankingHelpTabs";
@@ -102,6 +103,8 @@ export default async function AchGuidePage({ searchParams }: { searchParams: Pro
       <div className="space-y-8 px-5 py-6 sm:px-8">
         <BankingSubnav active="guide" />
         <p className="text-xs text-white/40">Today (Pacific): {today}</p>
+        {/* R41 S9: the go-live readiness board (read-only; never blocks paying by check). */}
+        <GoLiveBoard today={today} now={new Date()} />
         {/* R41 S4: Timberland's daily and monthly room (the release refuses anything over). */}
         <TimberlandRoomLeft today={today} />
         {/* R41 S7: the first-file gate and the backwards plan for the first payday (Timberland section 6). */}
