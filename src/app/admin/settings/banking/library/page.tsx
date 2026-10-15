@@ -28,6 +28,7 @@ const KIND: Record<LegalEntryKind, { word: string; tone: "gold" | "green" | "neu
   case: { word: "Court case", tone: "gold" },
   statute: { word: "Washington law", tone: "green" },
   regulation: { word: "Regulation", tone: "neutral" },
+  agreement: { word: "Timberland agreement", tone: "green" },
 };
 
 /** The short list: what to do, each tied to the entries above (ids are checked by tests). */
@@ -55,7 +56,7 @@ const PROTECT: { title: string; body: string; lawIds: string[] }[] = [
   {
     title: "Never sign away a security feature, and keep Timberland's agreement on file",
     body: "A signed waiver can move the loss to you. Keep the agreement, read its security section once a year, and show any change to your lawyer before signing.",
-    lawIds: ["rcw-62a-4a-202-b", "rcw-62a-4a-202-c"],
+    lawIds: ["rcw-62a-4a-202-b", "rcw-62a-4a-202-c", "timberland-s25-liability", "timberland-schedule-f-notice"],
   },
   {
     title: "Pay wages on payday, by check if the direct deposit is not ready",
@@ -86,7 +87,12 @@ function EntryCard({ e }: { e: LegalEntry }) {
       </blockquote>
       <p className="mb-3 text-xs text-white/40">
         Source:{" "}
-        <a href={e.source} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/70">{e.source}</a>
+        {e.kind === "agreement" ? (
+          // R41 S8: the signed agreement is private (no public URL). Never render it as a link.
+          <span data-private-source>{e.source.replace(/^private:\s*/, "")}. The repository mirror is {e.sourceFile}.</span>
+        ) : (
+          <a href={e.source} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/70">{e.source}</a>
+        )}
       </p>
 
       {e.whatHappened ? (
@@ -107,7 +113,8 @@ function EntryCard({ e }: { e: LegalEntry }) {
 export default async function AchLegalLibraryPage() {
   await requirePermission("settings.manage");
   const cases = ACH_LEGAL_LIBRARY.filter((e) => e.kind === "case");
-  const laws = ACH_LEGAL_LIBRARY.filter((e) => e.kind !== "case");
+  const laws = ACH_LEGAL_LIBRARY.filter((e) => e.kind !== "case" && e.kind !== "agreement");
+  const agreement = ACH_LEGAL_LIBRARY.filter((e) => e.kind === "agreement");
   const title = (id: string) => ACH_LEGAL_LIBRARY.find((l) => l.id === id)?.title ?? id;
 
   return (
@@ -125,6 +132,7 @@ export default async function AchLegalLibraryPage() {
               "Each case or law shows the exact words from the court or legislature's own website, then what happened, then plain English.",
               "\"How Greenway protects you\" says what the software already does, with a link to where.",
               "Use the source link to read the original. If something here looks wrong, trust the source.",
+              "\"Your Timberland agreement\" quotes the contract Greenway signed: liability, indemnity, cancellations, reversals, account numbers, the 30-day statement rule and Schedule F.",
             ]}
           >
             <p>This is education, not legal advice. Take anything that affects a real decision to a Washington business lawyer.</p>
@@ -167,6 +175,16 @@ export default async function AchLegalLibraryPage() {
         <section id="laws" className="space-y-4">
           <h2 className="text-base font-semibold text-white">Laws and regulations ({laws.length})</h2>
           {laws.map((e) => <EntryCard key={e.id} e={e} />)}
+        </section>
+
+        <section id="timberland" className="space-y-4">
+          <h2 className="text-base font-semibold text-white">Your Timberland agreement: the parts that matter most ({agreement.length})</h2>
+          <p className="text-sm text-white/70">
+            Word for word from the ACH Origination Agreement Greenway signed on 10/09/26. The signed PDF is kept by Michael, not on the website. The
+            text here comes from a redacted copy with the PDF&apos;s fingerprint (SHA-256), so anyone with the PDF can prove it matches. Section 28 lets
+            Timberland change the agreement by notice, so the Calendar has a yearly task to re-read it.
+          </p>
+          {agreement.map((e) => <EntryCard key={e.id} e={e} />)}
         </section>
 
         <section id="more-sources" className={card}>
