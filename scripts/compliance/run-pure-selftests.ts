@@ -1740,7 +1740,7 @@ __runLiquidVolumeTests();
   __runNonCannabisTests();
   __runNamingConventionTests();
   __runCcrsProductNameCoreTests();
-  assertRan("nacha-core", __runNachaCoreTests(), 87); // R41 S2: +21 (Timberland originator, SEC, shape-check refusals); R41 S3: +11 (Pacific header date/time, File ID Modifier refusals)
+  assertRan("nacha-core", __runNachaCoreTests(), 88); // R41 S8: +1 (Q14 PAYROLL discretionary default); R41 S2: +21 (Timberland originator, SEC, shape-check refusals); R41 S3: +11 (Pacific header date/time, File ID Modifier refusals)
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
   __runPayeeBankingCoreTests();
   assertRan("payroll-core", __runPayrollCoreTests(), 34);

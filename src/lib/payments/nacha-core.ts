@@ -173,6 +173,17 @@ export function fileHeaderRecord(originator: AchOriginator, created: Date, fileI
   );
 }
 
+/**
+ * R41 S8, Q14 (PAYROLL placement). Brenda's Email 1: "This is a new NACHA rule that yes
+ * requires PAYROLL be added in the discretionary data field." Her Email 2, answer 4:
+ * "4. Company entry description is good". PAYROLL is always in the Company Entry
+ * Description (54-63), which is where Nacha's 2026-03-20 rule puts it. Whether Timberland
+ * ALSO wants it in the batch Company Discretionary Data (21-40) is open question Q14.
+ * Strict default until she answers: blank. A "yes" is this one constant, and the pinned
+ * tests (r41-s8-docs, nacha-core self-test) change with it on purpose.
+ */
+export const PAYROLL_BATCH_DISCRETIONARY_DATA: string = "";
+
 /** The 5 record (Batch Header, service class 220 = credits only), 94 characters. */
 export function batchHeaderRecord(originator: AchOriginator, secCode: string, companyEntryDescription: string, effectiveDate: Date, batchNumber: number): string {
   const originDfi8 = originator.originatingDfi.replace(/\D/g, "").slice(0, 8);
@@ -180,7 +191,7 @@ export function batchHeaderRecord(originator: AchOriginator, secCode: string, co
     "5" +
     "220" + // service class code: credits only
     alpha(originator.companyName, 16) + // 5-20
-    " ".repeat(20) + // 21-40 discretionary data
+    alpha(secCode === "PPD" && companyEntryDescription === "PAYROLL" ? PAYROLL_BATCH_DISCRETIONARY_DATA : "", 20) + // 21-40 discretionary data (Q14)
     alpha(originator.companyId, 10) + // 41-50
     alpha(secCode, 3) + // 51-53
     alpha(companyEntryDescription, 10) + // 54-63
@@ -527,6 +538,7 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
     ok(h1.slice(63, 86) === "GREENWAY MARIJUANA     ", "file header 64-86 keeps the full trade name (Q11)");
     ok(h5.slice(4, 20) === "GREENWAY MARIJUA", "batch 5-20 = Brenda's 16 characters");
     ok(h5.slice(20, 40) === " ".repeat(20), "batch 21-40 discretionary stays blank (Q14 open)");
+    ok(PAYROLL_BATCH_DISCRETIONARY_DATA === "", "Q14 strict default: no PAYROLL in discretionary data until Brenda answers");
     ok(h5.slice(40, 50) === "1911234567", "batch 41-50 = Company ID");
     ok(h5.slice(79, 87) === "32517075", "batch 80-87 = Timberland ODFI");
     ok(!/(?<!1)911234567/.test(good.file), "the EIN only ever appears as 1+EIN, never on its own");

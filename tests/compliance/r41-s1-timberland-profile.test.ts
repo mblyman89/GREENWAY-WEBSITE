@@ -200,7 +200,7 @@ describe("R41 S1: provenance of the two mirrors", () => {
 
 describe("R41 S1: open questions match plan section 9", () => {
   it("Q1 and Q3-Q13 (Q2 removed by the owner), plus Q14 found in S1", () => {
-    expect(OPEN_QUESTIONS.map((q) => q.id)).toEqual(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14"]);
+    expect(OPEN_QUESTIONS.map((q) => q.id)).toEqual(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20"]);
   });
   it("only Q1 is information only, and every question has a strict default on screen", () => {
     expect(OPEN_QUESTIONS.filter((q) => q.infoOnly).map((q) => q.id)).toEqual(["Q1"]);
