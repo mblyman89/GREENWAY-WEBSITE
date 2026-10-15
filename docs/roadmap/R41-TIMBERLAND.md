@@ -23,7 +23,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S5 | Deadline: 2 banking days before the effective date, 4 pm Pacific, holidays move earlier | #1378 | none |
 | S6 | Owner-only "Mark uploaded" / "Mark approved" at Timberland; honest dual-approval wording | #1380 | 0274 |
 | S7 | Section 6 prenote wait (6 banking days from settlement) and the first-file gate | #1381 | 0275 |
-| S8 | Docs, help, concierge, test plan, yearly tasks, agreement entries in the Legal library | this branch | none |
+| S8 | Docs, help, concierge, test plan, yearly tasks, agreement entries in the Legal library | #1382 | none |
+| S9 | Get rolling: go-live readiness board, file checker, funding helper (owner confirms funding; 8 am settlement-day reminder) | this branch | 0276 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -75,3 +76,32 @@ Michael sends Brenda one email at the end of the full build. It holds:
 - Q1 (for information only; Q2 was removed by the owner in round 5);
 - Q3 to Q15, Q18 and Q20;
 - the small add-ons noted in the round reports.
+
+## S9 in detail
+
+- **Go-live readiness board** (Guide, `#go-live`). It has 14 gates, each green, red, information or "could not be read", with a deep link to the exact place to fix it.
+  - `timberland-golive-core.ts` (43 self-tests) builds the board; `timberland-golive-store.ts` reads it.
+  - A failed read is never green. The owner-inbox read is strict: the nav badge's reader turns errors into zero, so the board uses its own.
+  - The access gate enforces only what code can know: exactly one active owner, and ACH roles exactly owner and admin. It lists every person with ACH access by name so Michael can check the list himself.
+  - Dual approval at Timberland is information only.
+  - The board never blocks paying by check.
+- **File checker** (Banking > File checker). You pick the downloaded `.ach` file (read byte for byte) or paste it, and it runs the 98-rule `timberland-file-checker-core.ts` against the real company settings, the ledger fingerprint and the limits.
+  - It stores nothing. The audit row `ach.file.checked` holds only the sha256 and the rule ids.
+  - The practice run builds a $0 two-prenote file from the real settings, checks it, and never saves it.
+- **Funding helper.**
+  - Agreement section 14: "Company shall provide Financial Institution with immediately available funds not later than 9:00 a.m. PST on each Settlement Date".
+  - `timberland-funding-core.ts` (64 self-tests) shows the file total and Timberland's $50.00 monthly fee (Schedule B) as fixed lines; any extra cushion is the owner's own choice.
+  - Migration 0276 adds `ach_file_confirm_funding`, a new gated kind `ach_file.confirm_funding`:
+    - owner only;
+    - set once;
+    - released or uploaded files only;
+    - at least the file total.
+  - A confirmation records what the owner saw; it never blocks an upload.
+  - The cron `/api/cron/ach-funding-8am` (15:00 and 16:00 UTC) emails at 8:00 am Pacific on each file's settlement day, even for confirmed or bank-approved files ("still there at 9:00").
+- **Tests.**
+  - `tests/compliance/r41-s9-get-rolling.test.ts` covers:
+    - quotes against the mirror;
+    - the real stores and cron route over FakePostgrest;
+    - every board deep link resolving to a real page and anchor.
+  - Mutation runs: `mutate-s9-app.py` (19 of 19 killed) and `mutate-0276-sql.py` (12 of 12 killed).
+  - Manual tests T-362 to T-364.

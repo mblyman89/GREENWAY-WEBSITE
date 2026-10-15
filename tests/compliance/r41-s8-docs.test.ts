@@ -224,7 +224,7 @@ describe("help, concierge, test plan, roadmap", () => {
   });
   it("roadmap doc exists and lists S0..S8 with their PRs", () => {
     const r = read("docs/roadmap/R41-TIMBERLAND.md");
-    for (const pr of ["#1372", "#1373", "#1374", "#1375", "#1377", "#1378", "#1380", "#1381"]) expect(r).toContain(pr);
+    for (const pr of ["#1372", "#1373", "#1374", "#1375", "#1377", "#1378", "#1380", "#1381", "#1382"]) expect(r).toContain(pr);
     expect(r).toContain("82 FR 42597");
   });
 });
