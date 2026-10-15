@@ -20,6 +20,8 @@
  * Nothing here can move money or change a record. The guide only points.
  */
 
+import { BANNED_TIMBERLAND_CLAIMS } from "@/lib/payments/timberland-bank-steps-core";
+
 export type StepStatus = "done" | "todo" | "blocked" | "waiting" | "optional";
 
 export type GuideStep = {
@@ -697,6 +699,6 @@ export function __runAchGuideCoreTests(): { passed: number; failed: number } {
   ok(tb({ firstPrenotePassed: null }).steps.find((x) => x.id === "tb-prenote")?.status === "todo", "an unreadable prenote read is not done");
   ok(tb({ scheduleGEmail: false }).next?.id === "tb-email", "Schedule G email shows as next when not done");
   ok(buildJourneys(sampleSnapshot({ migrationsReady: false }))[1].steps.find((x) => x.id === "tb-prenote")?.status === "waiting", "prenote waits for setup");
-  ok(!green.flatMap((j) => j.steps).some((x) => /accept every security|the other owner|Stephen and Michael can upload/i.test(x.title + x.detail)), "no old Timberland claims in any step");
+  ok(!green.flatMap((j) => j.steps).some((x) => BANNED_TIMBERLAND_CLAIMS.some((b) => (x.title + x.detail).toLowerCase().includes(b.toLowerCase()))), "no old Timberland claims in any step");
   return { passed, failed };
 }
