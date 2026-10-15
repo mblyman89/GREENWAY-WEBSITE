@@ -304,6 +304,19 @@ describe("wiring pins", () => {
     expect(comp).toMatch(/method="get"/);
   });
 
+  it("every link in the First-file card lands on a real page AND a real anchor (the full suite caught /banking/files)", () => {
+    const comp = read("src/components/admin/payments/FirstFileToTimberland.tsx");
+    const hrefs = [...comp.matchAll(/href="(\/admin\/[^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs.length).toBeGreaterThanOrEqual(2);
+    expect(hrefs).not.toContain("/admin/settings/banking/files");
+    for (const h of hrefs) {
+      const [path, anchor] = h.split("#");
+      const pageFile = `src/app${path}/page.tsx`;
+      expect(existsSync(pageFile), `${h} has no page`).toBe(true);
+      if (anchor) expect(read(pageFile), `${h} anchor missing`).toContain(`id="${anchor}"`);
+    }
+  });
+
   it("the ops error table explains 0275's refusal", () => {
     expect(ops.opsDbErrorMessage("ACH_VERIFICATION_TIMBERLAND_WAIT: a prenote's first live day must be")).toMatch(/Timberland needs 6 banking days/);
   });
