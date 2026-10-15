@@ -1,0 +1,27 @@
+Specially Designated Nationals List (SDN List)
+Consolidated Sanctions List (Non-SDN Lists)
+Additional Sanctions Lists
+Search OFAC's Sanctions Lists
+Sanctions Programs and Country Information
+Recent Actions
+OFAC License Application Page
+Additional OFAC Resources
+Frequently Asked Questions
+Civil Penalties and Enforcement Information
+OFAC Reporting System
+Selected General Licenses Issued by OFAC
+Contact OFAC
+How to Search OFAC's Sanctions Lists
+249. How is the Score calculated?
+Answer
+Sanctions List Search
+will first look for potential matches based on the first letter of  input search terms and by checking for matches at least 50% or more similar based on edit distance (edit distance is the minimum number of operations required to transform the input string of characters into the string that it is being compared to on the list). Sanctions List Search then uses two matching logic algorithms, and two matching logic techniques to calculate the score. The two algorithms are Jaro-Winkler, a string difference algorithm, and Soundex, a phonetic algorithm. The first technique involves using the Jaro-Winkler algorithm to compare the entire name string entered against full name strings of potential match entries on OFAC's sanctions lists. The second technique involves splitting the name string entered into multiple name parts (for example, John Doe would be split into two name parts). Each name part is then compared to name parts on all of OFAC's sanctions lists using the Jaro-Winkler and Soundex algorithms. The search calculates a score for each name part entered, and a composite score for all name parts entered. Sanctions List Search uses both techniques each time the search is run and returns the higher of the two scores in the Score column.
+Date Released
+April 28, 2021
+Similar FAQs
+247. What does the Sanctions List Search Score mean?
+248. How do I use the Minimum Name Score field and score slider bar?
+892. What is the difference between the previous version of Sanctions List Search, and the upgraded version made live to the public on January 25, 2021?
+246. How does Sanctions List Search work?
+5. When screening for sanctions, how do I determine if I have a valid match to a name on one of OFAC’s lists?
+369. Does Sanctions List Search look for potential matches on all of the various sanctions lists that OFAC has published on its website?

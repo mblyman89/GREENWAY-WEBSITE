@@ -1,0 +1,31 @@
+Specially Designated Nationals List (SDN List)
+Consolidated Sanctions List (Non-SDN Lists)
+Additional Sanctions Lists
+Search OFAC's Sanctions Lists
+Sanctions Programs and Country Information
+Recent Actions
+OFAC License Application Page
+Additional OFAC Resources
+Frequently Asked Questions
+Civil Penalties and Enforcement Information
+OFAC Reporting System
+Selected General Licenses Issued by OFAC
+Contact OFAC
+How to Search OFAC's Sanctions Lists
+287. Who may use Sanctions List Search? Can we configure our automated system to utilize Sanctions List Search on a continual basis?
+Answer
+Sanctions List Search
+is a free tool provided by OFAC to assist the public in complying with sanctions programs. It is intended to be used by individual users that are looking for potential matches on OFAC's sanctions lists. It should not be utilized by automated systems that are configured to continually run searches through the tool. For a copy of files that can be easily interpreted by automated systems and software programs, please see the list of XML, CSV, PIP, DEL, and FF files on the
+Specially Designated Nationals (SDN)
+and
+Consolidated Sanctions List
+pages.
+Date Released
+October 10, 2014
+Similar FAQs
+369. Does Sanctions List Search look for potential matches on all of the various sanctions lists that OFAC has published on its website?
+123. Where can I find weak aliases (AKAs)?
+892. What is the difference between the previous version of Sanctions List Search, and the upgraded version made live to the public on January 25, 2021?
+467. Does the Sanctions List Search tool show historic information? For example, does it show names that have been removed from one of OFAC's sanctions lists?
+952. When operating in Afghanistan, how can I tell who is a member of the Taliban or the Haqqani Network, which are designated are Specially Designated Global Terrorists (SDGT) under U.S. counter terrorism sanctions?
+246. How does Sanctions List Search work?

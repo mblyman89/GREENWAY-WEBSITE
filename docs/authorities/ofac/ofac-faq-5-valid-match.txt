@@ -1,0 +1,115 @@
+Specially Designated Nationals List (SDN List)
+Consolidated Sanctions List (Non-SDN Lists)
+Additional Sanctions Lists
+Search OFAC's Sanctions Lists
+Sanctions Programs and Country Information
+Recent Actions
+OFAC License Application Page
+Additional OFAC Resources
+Frequently Asked Questions
+Civil Penalties and Enforcement Information
+OFAC Reporting System
+Selected General Licenses Issued by OFAC
+Contact OFAC
+Assessing OFAC Name Matches
+5. When screening for sanctions, how do I determine if I have a valid match to a name on one of OFAC’s lists?
+Answer
+When attempting to verify or disqualify potential matches to individuals or entities on OFAC's sanctions lists, organizations should follow their own sanctions compliance policies and procedures for investigating potential matches.  OFAC recommends that such procedures include the following steps:
+Step 1: Determine whether the "alert" or "hit" matches against one of OFAC's sanctions lists (or otherwise involves an OFAC sanctions program) or matches against a list maintained by other government agencies or other organizations.
+OFAC maintains the Specially Designated Nationals and Blocked Persons List (SDN List), as well as
+several other sanctions lists
+that have different associated prohibitions. OFAC also administers sanctions programs that broadly prohibit activity involving certain regions, countries, or governments. See the
+Introduction to the Office of Foreign Assets Control guide
+for more information on OFAC and its sanctions, and see the
+Sanctions Programs and Country Information page
+on OFAC's website for information on specific OFAC sanctions programs.
+Screening tools often screen against OFAC's sanctions lists as well as lists of potentially restricted persons maintained by other government agencies, screening software vendors, or internal lists maintained by the screening tool user. Some examples of non-OFAC lists maintained by other government agencies include the
+U.S. Department of Commerce's Bureau of Industry and Security (BIS) Entity List
+, the
+Federal Bureau of Investigation's (FBI) Most Wanted List
+, and the
+U.S. State Department's Debarred Parties List
+.
+If the potential match is against a list maintained by another agency, contact the relevant agency that maintains the list. OFAC does not provide guidance on potential matches unrelated to OFAC sanctions. If you are unsure which list the match relates to, consider escalating the potential match to your supervisor, compliance department, or the screening service vendor (if applicable).
+Step 2: If the "alert" or "hit" involves OFAC sanctions, next determine whether it involves a potential match to a name on one of OFAC's sanctions lists; a country, region, or government targeted by OFAC sanctions; or any other non-listed sanctions target.
+If there is a potential match to a name on one of OFAC's sanctions lists, proceed to Step 3.
+If the alert implicates some other potential nexus to OFAC sanctions, such as broad jurisdiction-based sanctions (e.g., targeting Iran), government or regime sanctions (e.g., against the Government of Cuba), or sanctions targeting another unlisted entity blocked by operation of law (see
+FAQs on OFAC's 50 Percent Rule
+), consider escalating the issue to your supervisor or compliance department before taking action because OFAC regulations may prohibit the transaction or require blocking. Carefully review the relevant
+OFAC implementing regulations
+and the
+Sanctions Programs and Country Information page
+on OFAC's website to determine the appropriate action. Keep in mind that certain transactions or activity may be authorized or exempted from OFAC sanctions. For example, some sanctions programs authorize transactions involving personal remittances, subject to certain restrictions.
+Step 3: If the "alert" or "hit" involves a potential match to a name or alias on one of OFAC's sanctions lists, evaluate the quality of the potential match.
+Start by reviewing the complete sanctions list entry for the potential match using your organization's in-house or third-party screening software, or
+OFAC's Sanctions List Service
+, or
+OFAC's Sanctions List Search Tool
+(
+Watch our OFAC Basics video: Sanctions List Search
+for guidance on how to use the tool).
+OFAC's list entries include additional information you may use for this step, such as full names, former names, known aliases, nationalities, passport, tax ID, national identification numbers, place of birth, date of birth, business registration numbers, or known addresses.
+OFAC's enhanced list data
+formats include additional information such as date of designation, and names and aliases in non-Latin character sets.
+Some listed aliases may be classified by OFAC as "weak aliases," and your screening tool may exclude these aliases as part of a risk-based decision. For additional information, see OFAC's answers to frequently asked questions on the
+Weak Aliases topic page
+on OFAC's website.
+Many potential matches identified through screening are false positives. For example, you may receive an alert when an individual or entity has a similar name or alias to a vessel identified on one of OFAC's lists.
+To verify or disqualify a potential match, compare all of the details in the OFAC listing with the information available to you about the data in your transaction or activity that led to the "alert" or "hit." This may require gathering additional information from parties involved in the transaction or activity, such as a birth certificate, driver's license, or a business's corporate registration documentation.
+Consider how much of the listed person's information matches against information for the party in your transaction or activity. If there are very few similarities between the listed party's information and information for the party in your transaction or activity, you may not have a valid match. For example, does only the first or last name match the listed name or aliases? Does the party to your transaction or activity have a different date of birth, identification number, or nationality? Is the listed address distinct from the address of the party to your transaction or activity? For address matches, note that multiple businesses may be registered or located at the same address, so an exact match on an address alone, may not be sufficient to indicate a potential match. Also consider the nature of the sanctioned person. For example, do you have a close or exact name match, but the sanctioned person is a well-known figure (e.g., sanctioned government leader) and open-source reporting and photographs do not match information (e.g., passport or driver's license) provided by the person involved in your transaction?
+If after you review available information, you can reasonably determine the match is not valid, then you may proceed with the transaction or activity.
+Alternatively, if multiple pieces of information in OFAC's listing match the person involved in your transaction or activity (e.g., name and date of birth for individuals or organization name and location for entities), proceed to Step 4.
+Step 4: Determine next steps required for a valid match.
+If you have identified an exact match, or a close match with multiple similarities (e.g., a full name, date of birth, and country location matching, but different city locations), and—after gathering and reviewing all available information—you have not identified any information that disqualifies the potential match,
+follow your organization's sanctions compliance procedures for likely matches.
+OFAC recommends organizations assess all the information available to make a risk-based decision about the validity of a potential match in line with the organization's policies, procedures, risk profile, and regulator guidance (if applicable).
+Once you determine you have identified a valid match, you should review the relevant sanctions regulations and other information available on OFAC's website to evaluate whether any OFAC authorizations or exemptions apply to the transaction or activity. If the transaction or activity is exempt or authorized by OFAC via a general or specific license, your organization may process the transaction or proceed with the activity consistent with your organization's risk tolerance and internal policies. If you determine that relevant authorizations or exemptions do not apply, proceed to Step 5.
+Step 5: Determine whether you are required to block the property, or whether you are required to reject the transaction or stop certain activity.
+If OFAC sanctions require blocking, you must freeze the assets or property pursuant to OFAC regulations. For example, blocked funds should be placed into a qualifying, segregated, interest-bearing account located at a federally insured financial institution in the United States, from which only OFAC-authorized debits may be made. See the
+relevant sanctions regulations
+for more information on holding funds in blocked accounts. If OFAC sanctions prohibit the transaction or activity, but there is no blockable interest (i.e., no SDN or other blocked person is involved), the transaction must be rejected (i.e., the activity should not proceed). For more information, see
+OFAC's FAQs about blocking and rejecting transactions
+.
+Refer to the chart below for general guidance on circumstances where each action may be appropriate. Each OFAC sanctions program is unique, so always check the applicable regulations to confirm the appropriate action.
+BLOCK
+REJECT/DO NOT PROCEED
+PROCESS OR PROCEED
+Individuals or entities on the SDN List
+Blocked governments
+Iranian financial institutions
+Cuba or certain Cuban nationals
+Entities blocked under OFAC's 50 Percent Rule
+Certain activities with individuals or entities on certain non-SDN Lists (check the specific regulations)
+Sanctioned jurisdictions but no blocked person
+Sanctioned sector or activity, but no blocked person
+Certain activities with individuals or entities on certain non-SDN Lists (check the specific regulations)
+No true OFAC nexus or match
+Transaction or activity exempt from OFAC sanctions
+Transaction or activity authorized by a general or specific license
+Step 6: Report valid matches to OFAC and maintain required records.
+Organizations should keep complete, accurate records detailing the steps taken to investigate the potential match and the information relied upon to ultimately determine whether the potential match was valid. OFAC may request these records in accordance with
+31 C.F.R. § 501.602
+.
+If you block property or reject transactions or activity due to OFAC sanctions, you must report the action to OFAC within 10 business days (see 31 C.F.R. §§
+501.603
+and
+501.604
+) and retain related records in accordance with OFAC's recordkeeping requirements (see 31 C.F.R. §
+501.601
+). Please see OFAC's answers to frequently asked questions on
+Filing Reports with OFAC
+for more information.
+You may contact the
+OFAC Compliance Hotline
+for questions related to this guidance.
+Please note that OFAC does not confirm potential matches or false positives to our sanctions lists and instead encourages organizations to make risk-based determinations consistent with the guidance above.
+Date Updated: September 9, 2026
+Date Released
+January 30, 2015
+Similar FAQs
+122. What are weak aliases (AKAs)?
+1196. What should I do if I blocked and reported property in error due to mistaken identity or typographical or similar errors?
+70. What Is This OFAC Information On My Credit Report?
+48. I just received an interdiction "alert." What do I do?
+897. How can I ask OFAC to remove me or my organization from an OFAC sanctions list?
+73. My company provides money remittance and account services via the Internet. Does OFAC have any compliance guidance for this type of business?
