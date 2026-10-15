@@ -50,6 +50,7 @@ import {
   roomLeft,
   type LedgerFileForLimits,
 } from "@/lib/payments/timberland-limits-core";
+import { checkEffectiveDateForTimberland, latestUploadAndApproval } from "@/lib/payments/timberland-deadline-core";
 
 type Fail = { ok: false; error: string };
 
@@ -221,9 +222,15 @@ type ReleaseInput = {
 async function releaseLoop(
   input: ReleaseInput,
   write: (s: Sealed) => Promise<{ ok: true; id: string } | { ok: false; message: string }>,
-): Promise<{ ok: true; id: string; sealed: Sealed; limitWarnings: string[] } | Fail> {
+): Promise<{ ok: true; id: string; sealed: Sealed; limitWarnings: string[]; deadlineWarning: string | null } | Fail> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: NOT_CONFIGURED };
   if (!isAtRestEncryptionConfigured()) return { ok: false, error: LEDGER_NO_KEY };
+  // R41 S5: Schedule A. Every file we send is a credit: it must be uploaded
+  // AND approved at Timberland 2 usable banking days before its effective
+  // date, by 4:00 pm Pacific. Checked with the release clock, before anything
+  // is read or built. Not overridable.
+  const deadline = checkEffectiveDateForTimberland(input.effectiveDate, input.now);
+  if (!deadline.ok) return { ok: false, error: `Timberland deadline: this file was NOT released. ${deadline.error}` };
   const fileDate = pacificDayKey(input.now);
   for (let attempt = 0; attempt < MODIFIER_RETRIES; attempt++) {
     const used = await usedModifiers(fileDate);
@@ -248,7 +255,7 @@ async function releaseLoop(
     });
     if (!sealed.ok) return sealed;
     const w = await write(sealed.sealed);
-    if (w.ok) return { ok: true, id: w.id, sealed: sealed.sealed, limitWarnings: limits.warnings.map((x) => x.message) };
+    if (w.ok) return { ok: true, id: w.id, sealed: sealed.sealed, limitWarnings: limits.warnings.map((x) => x.message), deadlineWarning: deadline.warning };
     if (!w.message.includes(MODIFIER_TAKEN_CONSTRAINT)) return { ok: false, error: ledgerDbErrorMessage(w.message) };
   }
   return { ok: false, error: ledgerDbErrorMessage(MODIFIER_TAKEN_CONSTRAINT) };
@@ -266,10 +273,26 @@ export type Released = {
   totalCents: number;
   /** Gold 80% notes from the Timberland limit check (the file was released). */
   limitWarnings: string[];
+  /** R41 S5: set when released after our 3:30 pm target (before the 4:00 pm cutoff): upload and approve now. */
+  deadlineWarning: string | null;
+  /** R41 S5: upload and approve at Timberland by this (our 3:30 pm target; bank cutoff 4:00 pm). */
+  uploadBy: string;
 };
 
-function released(id: string, s: Sealed, filename: string, limitWarnings: string[]): Released {
-  return { ok: true, id, body: s.body, filename, modifier: s.modifier, fileDate: s.fileDate, entryCount: s.entryCount, totalCents: s.totalCents, limitWarnings };
+function released(id: string, s: Sealed, filename: string, r: { limitWarnings: string[]; deadlineWarning: string | null }): Released {
+  return {
+    ok: true,
+    id,
+    body: s.body,
+    filename,
+    modifier: s.modifier,
+    fileDate: s.fileDate,
+    entryCount: s.entryCount,
+    totalCents: s.totalCents,
+    limitWarnings: r.limitWarnings,
+    deadlineWarning: r.deadlineWarning,
+    uploadBy: latestUploadAndApproval(s.effectiveDate).text,
+  };
 }
 
 /** Vendor, prenote and test-credit files: one ach_files row. */
@@ -299,7 +322,7 @@ export async function releaseAchFile(input: ReleaseInput & { sourceId: string })
     return { ok: true, id: String((data as { id: string }).id) };
   });
   if (!r.ok) return r;
-  return released(r.id, r.sealed, input.filename, r.limitWarnings);
+  return released(r.id, r.sealed, input.filename, r);
 }
 
 /** Payroll: the ledger row and the run stamp in ONE database call (0273). */
@@ -327,7 +350,7 @@ export async function releasePayrollAchFile(
     return { ok: true, id: data };
   });
   if (!r.ok) return r;
-  return released(r.id, r.sealed, input.filename, r.limitWarnings);
+  return released(r.id, r.sealed, input.filename, r);
 }
 
 // ------------------------------------------------------------- reading -----
