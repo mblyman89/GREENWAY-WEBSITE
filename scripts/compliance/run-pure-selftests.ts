@@ -931,6 +931,7 @@ import { __runTimberlandOriginatorCoreTests } from "../../src/lib/payments/timbe
 import { __runTimberlandPreviewCoreTests } from "../../src/lib/payments/timberland-preview-core";
 import { __runAchFileLedgerCoreTests } from "../../src/lib/payments/ach-file-ledger-core";
 import { __runTimberlandLimitsCoreTests } from "../../src/lib/payments/timberland-limits-core";
+import { __runTimberlandDeadlineCoreTests } from "../../src/lib/payments/timberland-deadline-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
@@ -2250,6 +2251,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
   assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 43); // R41 S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason
   assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
+  assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 65); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays, section 3.7 table, reminders
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
