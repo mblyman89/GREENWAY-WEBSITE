@@ -42,7 +42,7 @@ const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*
 
 const KEY = "s3-ledger-test-key-0123456789abcdef!!";
 const NOW = new Date("2026-10-05T17:00:00Z"); // Monday 10:00 Pacific
-const EFFECTIVE = "2026-10-06";
+const EFFECTIVE = "2026-10-08"; // R41 S5: Mon 10:00 Pacific release, 2 banking days + after-cutoff cases still fit
 const STEPHEN = "11111111-1111-4111-8111-111111111111";
 const RUN = "3f2b1c0d-1111-4222-8333-444455556666";
 const ACCT = "0012345678";
