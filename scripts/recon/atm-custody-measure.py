@@ -124,7 +124,7 @@ print(f"    settlement {fmt(settle)} vs {fmt(d_settle)}  ->  "
 
 print()
 print("=" * 74)
-print("3) CASH LOAD  --  Greenway cannabis cash physically put INTO the machine")
+print("3) CASH LOAD  --  Greenway Marijuana cash physically put INTO the machine")
 print("=" * 74)
 cl = rows("ATM Cash Load Report-5.1.26-8.23.26.csv")
 load = 0

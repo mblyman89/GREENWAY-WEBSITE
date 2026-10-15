@@ -102,7 +102,7 @@ export function PromoGrid({
         <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
           <SectionBanner
             imageSrc={content?.categoryImage || "/home/category-banner.webp"}
-            imageAlt="Greenway cannabis product categories"
+            imageAlt="Greenway Marijuana product categories"
             eyebrow={content?.categoryEyebrow || "Browse the Menu"}
             title={content?.categoryTitle || "Shop by Category"}
             subtitle={
