@@ -933,6 +933,7 @@ import { __runAchFileLedgerCoreTests } from "../../src/lib/payments/ach-file-led
 import { __runTimberlandBankStepsCoreTests } from "../../src/lib/payments/timberland-bank-steps-core";
 import { __runTimberlandLimitsCoreTests } from "../../src/lib/payments/timberland-limits-core";
 import { __runTimberlandDeadlineCoreTests } from "../../src/lib/payments/timberland-deadline-core";
+import { __runTimberlandPrenoteCoreTests } from "../../src/lib/payments/timberland-prenote-core";
 import { __runAchPaymentsReportCoreTests } from "../../src/lib/reports/ach-payments-report-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
@@ -2255,6 +2256,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-bank-steps-core", __runTimberlandBankStepsCoreTests(), 28); // R41 S6: honest Timberland wording, bank-step buttons in order, yearly dismiss of the grey line
   assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
   assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 71); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays, section 3.7 table, reminders
+  assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 36); // R41 S7: section 6 six usable days from settlement (Q7/Q9 strict), section 3.7 backwards plan, first-file gate
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders

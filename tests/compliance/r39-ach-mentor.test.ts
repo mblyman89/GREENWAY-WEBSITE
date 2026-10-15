@@ -84,10 +84,10 @@ describe("ACH mentor coverage", () => {
 
 describe("Q3 - the plain-English prenote answer says what the sources say", () => {
   const p = PRENOTE_VS_TEST_CREDIT.plain;
-  it("prenote: $0, proves existence not ownership, three banking days", () => {
+  it("prenote: $0, proves existence not ownership, six banking days (Timberland) with Nacha's three named as the minimum", () => {
     expect(p).toContain("$0.00");
     expect(p).toMatch(/does not\s+prove the person who gave it to you OWNS it/);
-    expect(p).toContain("three banking days");
+    expect(p).toContain("six banking days (Timberland's agreement, section 6; Nacha's own minimum is three)");
   });
   it("test credit: under $1, ACCTVERIFY, never taken back (credits only)", () => {
     expect(p).toContain("less than $1.00");

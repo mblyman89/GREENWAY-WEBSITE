@@ -26,12 +26,12 @@ import {
   allocateSplit,
   fedAchClosures,
   isFedAchBankingDay,
-  prenoteLiveEligibleDate,
+  nachaMinPrenoteLiveDate,
   retentionVerdict,
   transactionCodeFor,
   weekday,
   NOC_DEADLINE_BANKING_DAYS,
-  PRENOTE_WAIT_BANKING_DAYS,
+  NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS,
   RETURN_WINDOW_BANKING_DAYS,
   REVERSAL_WINDOW_BANKING_DAYS,
   WAC_RETENTION_YEARS,
@@ -116,7 +116,7 @@ describe("FRB holiday table is the mirrored FRB table, not memory", () => {
 describe("timing constants are the numbers in the quoted sources", () => {
   it("prenote 3, returns 2nd day, NOC 6, reversal 5, descriptions", () => {
     expect(quote("ach-prenote-three-banking-days")).toContain("three (3) banking days");
-    expect(PRENOTE_WAIT_BANKING_DAYS).toBe(3);
+    expect(NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS).toBe(3);
     expect(quote("ach-returns-second-banking-day")).toContain("second banking day");
     expect(RETURN_WINDOW_BANKING_DAYS).toBe(2);
     expect(quote("ach-noc-six-banking-days")).toContain("six banking days");
@@ -140,7 +140,7 @@ describe("timing constants are the numbers in the quoted sources", () => {
 
   it("a prenote that settles before a long weekend waits for banking days, not calendar days", () => {
     // Fri Jul 2 2027; Mon Jul 5 is closed (Jul 4 Sunday) -> Tue 6, Wed 7, Thu 8.
-    expect(prenoteLiveEligibleDate("2027-07-02")).toBe("2027-07-08");
+    expect(nachaMinPrenoteLiveDate("2027-07-02")).toBe("2027-07-08");
   });
 });
 

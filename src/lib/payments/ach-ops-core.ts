@@ -28,7 +28,6 @@ import {
   daysBetween,
   isFedAchBankingDay,
   nextBankingDayOnOrAfter,
-  prenoteLiveEligibleDate,
   retentionVerdict,
   validateMicroEntryCents,
   type CallbackMethod,
@@ -37,6 +36,7 @@ import {
 } from "./ach-authorization-core";
 import { buildNachaFile, isValidRouting, type AchEntry, type AchOriginator } from "./nacha-core";
 import { checkEffectiveDateForTimberland, earliestEffectiveDate } from "./timberland-deadline-core";
+import { PRENOTE_WAIT_WORDS, prenoteLiveUploadDay } from "./timberland-prenote-core";
 
 // ---------------------------------------------------------------------------
 // 1. Account-check files
@@ -70,7 +70,7 @@ export type CheckFilePlan = {
   effective: string;
   /** A credit dated for a banking day settles that day (FedACH). */
   settlement: string;
-  /** The day passed to mark_sent as p_eligible (prenote: 3 banking days after settlement). */
+  /** The day passed to mark_sent as p_eligible (prenote: Timberland section 6, 6 banking days after settlement; R41 S7). */
   eligible: string;
   /** Plain words for the page after the download. */
   next: string;
@@ -163,7 +163,7 @@ export function planCheckFile(input: {
   });
   if (!built.ok) return { ok: false, error: built.error };
   const settlement = eff.date;
-  const eligible = method === "prenote" ? prenoteLiveEligibleDate(settlement) : addCalendarDays(settlement, 1);
+  const eligible = method === "prenote" ? prenoteLiveUploadDay(settlement) : addCalendarDays(settlement, 1);
   const next =
     method === "prenote"
       ? `Upload this file to Timberland. If no return or change notice comes back by ${eligible}, mark each prenote passed on or after that day.`
@@ -224,7 +224,7 @@ export function checkNextStep(r: CheckRow, todayIso: string): CheckStep {
   if (r.method === "prenote") {
     return todayIso >= r.eligible_on
       ? { kind: "pass_prenote", text: `No answer is needed for a prenote: if Timberland sent no return or change notice by ${r.eligible_on}, mark it passed.` }
-      : { kind: "wait", until: r.eligible_on, text: `Sent. Wait until ${r.eligible_on} (3 banking days after it settles) for any return.` };
+      : { kind: "wait", until: r.eligible_on, text: `Sent. Wait until ${r.eligible_on} (${PRENOTE_WAIT_WORDS}) for any return.` };
   }
   return todayIso >= r.eligible_on
     ? { kind: "ask_amount", text: "Ask the person what amount (under $1) arrived and type it in. Silence is NOT a pass for a test credit." }
@@ -439,7 +439,7 @@ export const OPS_ERROR_TABLE: readonly (readonly [RegExp, string])[] = [
   [/ACH_VERIFICATION_NOTE|ach_ver_note_shape/, "Write a short note: who confirmed and how (a pass by callback needs 10+ characters; a fail or cancel needs 5+)."],
   [/ACH_VERIFICATION_NOTICE/, "The bank answered this check with a return or change notice, so it cannot pass. Fix the account and start a new check."],
   [/ACH_VERIFICATION_AMOUNT/, "That is not the amount that was sent. Ask the person to look again; do not guess."],
-  [/ACH_VERIFICATION_EARLY/, "Too early: a prenote passes only on or after its wait day (3 banking days after it settles)."],
+  [/ACH_VERIFICATION_EARLY/, `Too early: a prenote passes only on or after its wait day (${PRENOTE_WAIT_WORDS}).`],
   [/ACH_LEGAL_HOLD/, "Legal hold: give a reason of at least 10 characters (or it is already in that state; reload)."],
   [/ACH_REVIEW/, "Only an active authorization is reviewed, and the note needs at least 10 characters."],
   [/ACH_AUTH_TRANSITION|ach_auth_guard/, "The authorization cannot move that way. Reload the page."],
@@ -524,7 +524,7 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
     ok(e6.length === 2 && e6[0].slice(1, 3) === "23" && e6[1].slice(1, 3) === "33", "codes 23 / 33");
     ok(e6.every((l) => l.slice(29, 39) === "0000000000"), "amount zero");
     ok(p.plan.totalCents === 0 && p.plan.entryCount === 2, "totals");
-    ok(p.plan.settlement === "2026-10-13" && p.plan.eligible === "2026-10-16", "eligible = 3 banking days after settlement");
+    ok(p.plan.settlement === "2026-10-13" && p.plan.eligible === "2026-10-21", "eligible = 6 banking days after settlement (Timberland section 6)");
     ok(p.plan.eligible > p.plan.settlement && p.plan.settlement >= p.plan.effective, "dates satisfy 0263's order");
     ok(p.plan.ids.join() === "v1,v2", "ids carried");
     ok(/^acctcheck_prenote_2026-10-13_2\.ach$/.test(p.plan.filename), "filename");

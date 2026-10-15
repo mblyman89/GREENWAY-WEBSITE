@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { dfiId8, isValidRouting } from "@/lib/payments/nacha-core";
-import { PRENOTE_WAIT_BANKING_DAYS as NACHA_PRENOTE_WAIT } from "@/lib/payments/ach-authorization-core";
+import { NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS as NACHA_PRENOTE_WAIT } from "@/lib/payments/ach-authorization-core";
 import {
   ALLOWED_SEC,
   CREDIT_LEAD_BANKING_DAYS,

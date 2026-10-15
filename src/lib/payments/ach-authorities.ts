@@ -369,10 +369,12 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "entries prior to initiating future Entries to the Receiver’s account. If an ACH Return is " +
     "received the Originator must reach out to the Receiver for updated account information.",
     whatItMeansHere:
-    "The waiting rule the system enforces. Once a prenote settles, the payee stays in Prenote " +
-    "Sent for three banking days; if a return or a Notification of Change arrives, the payee goes " +
-    "ON HOLD and the details are fixed first. Banking days are FedACH days, which is why the " +
-    "system uses the Federal Reserve holiday list and not the calendar.",
+    "Nacha's MINIMUM wait, as a bank summarises it. Greenway's own bank asks for more: " +
+    "Timberland's signed agreement (section 6) says live dollar entries wait at least 6 banking " +
+    "days after the prenote settles, so the system holds the payee in Prenote Sent for six (R41 " +
+    "S7) and proves that date is never earlier than this three-day floor. If a return or a " +
+    "Notification of Change arrives, the payee goes ON HOLD and the details are fixed first. " +
+    "Banking days are FedACH days, from the Federal Reserve holiday list, not the calendar.",
   },
   {
     id: "ach-returns-second-banking-day",
@@ -384,10 +386,11 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "The RDFI must return the entry in time for Simmons Bank (ODFI) to receive it, by the opening " +
     "of business on the second banking day following the settlement date.",
     whatItMeansHere:
-    "This is WHY the prenote wait is three banking days: a bank that is going to reject the " +
-    "account must do so by the opening of business on the second banking day after settlement. By " +
-    "the third banking day any timely rejection has already arrived, so the ready date is " +
-    "settlement plus three FedACH banking days.",
+    "This is WHY Nacha's minimum prenote wait is three banking days: a bank that is going to " +
+    "reject the account must do so by the opening of business on the second banking day after " +
+    "settlement, so by the third banking day any timely rejection has already arrived. " +
+    "Timberland's agreement adds margin on top (six banking days, section 6), and the system uses " +
+    "Timberland's six.",
   },
   {
     id: "ach-noc-six-banking-days",
@@ -519,9 +522,10 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "Responding to the financial industry’s support for shortening that period, the Rule will " +
     "make the waiting period three banking days.",
     whatItMeansHere:
-    "History, quoted so an older article or a long-serving bookkeeper saying \"six days\" does not " +
-    "cause confusion. The wait used to be six banking days; the Rules cut it to three. The system " +
-    "uses three, which matches the 2024 bank summaries quoted next to this one.",
+    "History, so the two numbers do not confuse anyone. The Nacha wait used to be six banking " +
+    "days; the Rules cut it to three. Timberland's 2026 agreement with Greenway (section 6) still " +
+    "asks for six banking days after settlement, and a bank may ask for more than the Rules. The " +
+    "system therefore uses six for Greenway, and shows three only as Nacha's floor.",
   },
   {
     id: "ach-payroll-description",
