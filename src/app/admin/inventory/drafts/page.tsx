@@ -43,6 +43,10 @@ import { AiLookupPanel } from "./AiLookupPanel";
 // R23 (items 2 + 6): "Facts waiting for you" - attach in the row's AI card.
 import { attachWaitingFactAction } from "./ai-lookup-actions";
 import { WaitingFactsPanel } from "@/components/admin/catalog/WaitingFactsPanel";
+import { OnboardingImagesPanel } from "@/components/admin/catalog/OnboardingImagesPanel";
+import { loadOnboardingImageRecommendations, type OnboardingImagesRead } from "@/lib/catalog/image-memory-server";
+import { imageResultBanner } from "@/lib/catalog/image-recommend-core";
+import { attachOnboardingImageAction, importOnboardingImageAction } from "./image-actions";
 import { buildWaitingFacts, waitingResultBanner } from "@/lib/catalog/waiting-facts-core";
 import { loadWaitingSuggestions, waitingKeyForDraft } from "@/lib/catalog/waiting-facts-server";
 // R23 (item 5): the approved row opens too.
@@ -228,7 +232,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -343,7 +347,7 @@ export default async function CatalogDraftsPage({
           })),
         )
       : [];
-  const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg) ?? waitingResultBanner(sp.wf, sp.wf_msg);
+  const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg) ?? waitingResultBanner(sp.wf, sp.wf_msg) ?? imageResultBanner(sp.img, sp.img_msg);
   // R37 S4: the outcome of "Re-read lab certificates (LlamaParse)".
   const coaAllBanner = deliveryCoaBanner(sp as Record<string, unknown>);
   // R37 S5: the delivery brand field + its result banner.
@@ -529,7 +533,7 @@ export default async function CatalogDraftsPage({
   // the approved tab recalls memory too, so its opened row shows the facts.
   const rowsOpen = view === "draft" || view === "approved";
   const waitingKeys = new Map(drafts.map((d) => [d.id, waitingKeyForDraft(d)] as const));
-  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels, unitWeightsG: lotUnitWeightsG }, shadowSummary, productMemories, waitingRead, labViews] = await Promise.all([
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels, unitWeightsG: lotUnitWeightsG }, shadowSummary, productMemories, waitingRead, labViews, imageRead] = await Promise.all([
     loadStrainTypeSignals(drafts),
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
     kbFirst && rowsOpen
@@ -548,6 +552,9 @@ export default async function CatalogDraftsPage({
     // R30: each row's stored lab-certificate read (terpenes chip + the
     // Product facts panel's lab block) and the strain library's terpenes.
     rowsOpen ? loadLabViewsForDrafts(drafts) : Promise.resolve(null),
+    // R51 (items 2-5): library photo recommendations (memory > on record >
+    // name match, with confidence) for each open row. Never throws.
+    rowsOpen ? loadOnboardingImageRecommendations(drafts, waitingKeys) : Promise.resolve(null as OnboardingImagesRead | null),
   ]);
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
 
@@ -1614,6 +1621,19 @@ export default async function CatalogDraftsPage({
                         returnManifest={focus.manifestId}
                         returnStatus={view}
                         readFailed={!waitingRead.ok}
+                      />
+                    )}
+                    {imageRead?.views.get(d.id) && (
+                      <OnboardingImagesPanel
+                        draftId={d.id}
+                        productName={builtName ?? (d.name || "")}
+                        view={imageRead.views.get(d.id)!}
+                        attachAction={attachOnboardingImageAction}
+                        importAction={importOnboardingImageAction}
+                        returnManifest={focus.manifestId}
+                        returnStatus={view}
+                        libraryFailed={!imageRead.libraryOk}
+                        memoryMissing={imageRead.memoryMissing}
                       />
                     )}
                     <AiLookupPanel

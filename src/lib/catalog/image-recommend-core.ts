@@ -273,6 +273,15 @@ export function isImageMemoryTableMissing(err: { code?: string | null; message?:
 // Self-test (registered in scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
+/** The Attach / Import result banner (?img=&img_msg= from image-actions). */
+export function imageResultBanner(code: unknown, msg: unknown): { tone: "ok" | "info" | "error"; text: string } | null {
+  if (code !== "attached" && code !== "already" && code !== "error") return null;
+  const m = typeof msg === "string" ? msg.replace(/\s+/g, " ").trim().slice(0, 300) : "";
+  if (code === "attached") return { tone: "ok", text: m || "Photo attached to this product." };
+  if (code === "already") return { tone: "info", text: m || "That photo was already on this product." };
+  return { tone: "error", text: m || "That photo could not be attached just now. Try again." };
+}
+
 export function __runImageRecommendCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -336,5 +345,6 @@ export function __runImageRecommendCoreTests(): { passed: number; failed: number
   ok(!isImageMemoryTableMissing({ code: "23505", message: "product_image_memory dup" }), "other error is real");
   const lim = recommendImages({ assets: Array.from({ length: 20 }, (_, i) => A(`b${i}`, { title: "Phat Panda Blue Dream" })), product });
   ok(lim.items.length === MAX_RECOMMENDATIONS && lim.matched === 20, "cap + matched count");
+  ok(imageResultBanner("attached", "")?.tone === "ok" && imageResultBanner("nope", "x") === null, "result banner codes");
   return { passed, failed };
 }

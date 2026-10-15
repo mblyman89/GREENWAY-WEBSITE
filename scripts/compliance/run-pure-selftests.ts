@@ -2315,7 +2315,7 @@ __runLiquidVolumeTests();
   assertRan("cutover-watch-core", __runCutoverWatchCoreTests(), 37); // R50 A4: cutover failure-alert planner
   assertRan("cutover-weekend-core", __runCutoverWeekendCoreTests(), 42); // R50 A5: the dated, timed cutover weekend on one page
   assertRan("cutover-drift-core", __runCutoverDriftCoreTests(), 48); // R50 A6: daily drift check 11/02-11/08 (on hand vs Cultivera + every recorded change)
-  assertRan("image-recommend-core", __runImageRecommendCoreTests(), 17); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
+  assertRan("image-recommend-core", __runImageRecommendCoreTests(), 18); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
