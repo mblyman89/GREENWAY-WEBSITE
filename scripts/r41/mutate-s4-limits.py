@@ -62,8 +62,8 @@ M = [
     ("warnings-dropped", LS, "limitWarnings: limits.warnings.map((x) => x.message)", "limitWarnings: []"),
     ("room-bar-misread", LS, "return { ok: true, room: roomLeft(r.ledger, today) };", "return { ok: true, room: roomLeft([], today) };"),
     # --- the people see it ---
-    ("payroll-notes-dropped", PS, "notes: [...notes, ...released.limitWarnings]", "notes"),
-    ("vendor-notes-dropped", VA, "    limitWarnings: released.limitWarnings,\n    file: released.body,", "    file: released.body,"),
+    ("payroll-notes-dropped", PS, "notes: [...notes, ...released.limitWarnings, ...deadlineNotes]", "notes: [...notes, ...deadlineNotes]"),
+    ("vendor-notes-dropped", VA, "    limitWarnings: released.limitWarnings,\n    uploadBy: released.uploadBy,\n    deadlineWarning", "    uploadBy: released.uploadBy,\n    deadlineWarning"),
     ("vendor-bar-removed", VP, "        <TimberlandRoomLeft today={pacificToday()} />\n", ""),
 ]
 
