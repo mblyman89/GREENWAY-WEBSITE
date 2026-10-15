@@ -204,9 +204,8 @@ describe("funding store", () => {
     expect(r.ok && r.files.find((x) => x.id === "e")!.fundingConfirmedAmountCents).toBe(200_000);
     const get = st.db.log.find((x) => x.method === "GET")!;
     expect(get.url.searchParams.get("status")).toBe("in.(released,uploaded,bank_approved)");
-    expect(get.url.searchParams.get("effective_date")).toBeNull(); // two filters: check both appear
-    expect(get.url.search).toContain("effective_date=gte.2026-10-14");
-    expect(get.url.search).toContain("effective_date=lte.2026-10-21");
+    expect(get.url.searchParams.getAll("effective_date")).toEqual(["gte.2026-10-14", "lte.2026-10-21"]);
+    expect(get.url.searchParams.get("limit")).toBe(String(ledger.OPEN_FILES_READ_CAP + 1));
     files().push({ id: "x", kind: "payroll", status: "released", filename: null, total_cents: 1, effective_date: "2026-10-21" });
     expect((await ledger.readFilesForFundingReminder("2026-10-21")).ok).toBe(false);
     st.db.before = () => ({ status: 500, body: { message: "down" } });
@@ -358,7 +357,8 @@ describe("confirm funding: a gated, owner-only ACH kind in all four places", () 
     expect(m).toContain("if f.funding_confirmed_at is not null then");
     expect(m).toContain("revoke all on function public.ach_file_confirm_funding(uuid, uuid, bigint) from public, anon, authenticated;");
     expect(m).toContain("grant execute on function public.ach_file_confirm_funding(uuid, uuid, bigint) to service_role;");
-    expect(m).not.toMatch(/security definer/i);
+    expect(m.replace(/--.*$/gm, "")).not.toMatch(/security definer/i);
+    expect(m).toContain("set search_path = public, pg_temp");
     expect(existsSync("supabase/rollbacks/0276_ach_file_funding_confirm.rollback.sql")).toBe(true);
     expect(read("scripts/compliance/verify-migrations-execute.ts")).toContain('{ file: "scripts/recon/ach-file-funding-0276-pg-check.sql", mustPrint: "ACH 0276 CHECK PASSED" }');
     expect(read("docs/MIGRATIONS_TO_RUN.md")).toContain("0276_ach_file_funding_confirm.sql");
