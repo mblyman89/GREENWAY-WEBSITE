@@ -541,7 +541,8 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
   });
 
   it("R41 S3: confirm sent sends the RELEASED file's name, and the released letter is the one rebuilt", async () => {
-    st.db.rows("ach_files").push({ id: "x", kind: "vendor", source_id: "other", file_date: "2026-10-05", file_id_modifier: "A", status: "released" });
+    // Every NOT NULL column the S4 limit read uses (0273); a row missing them makes the limit check refuse (fail closed).
+    st.db.rows("ach_files").push({ id: "x", kind: "vendor", source_id: "other", file_date: "2026-10-05", file_id_modifier: "A", status: "released", effective_date: "2026-10-06", settlement_date: null, total_cents: 12345 });
     const fp = store.checkListFingerprint([VER1]);
     const r = await releasePrenote(fp);
     expect(r.modifier).toBe("B");

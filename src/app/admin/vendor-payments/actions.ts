@@ -125,6 +125,8 @@ export type VendorPayFormResult = {
   problems: { index: number | null; vendorName: string | null; message: string }[];
   /** Non-blocking notices (e.g. partial-payment warnings) — the file still built. */
   warnings?: { index: number | null; message: string }[];
+  /** R41 S4: gold notes when a released file takes Timberland's daily or monthly room to 80% or more. */
+  limitWarnings?: string[];
   file?: string;
   filename?: string;
   totalCents?: number;
@@ -608,12 +610,14 @@ async function buildVendorAchBody(session: StaffSession, formData: FormData): Pr
       recordCount: built.recordCount,
       manifests: rows.map((r) => r.manifestId),
       partials: warnings.length,
+      limitWarnings: released.limitWarnings,
     },
   }).catch(() => {});
 
   return {
     problems: [],
     warnings,
+    limitWarnings: released.limitWarnings,
     file: released.body,
     filename: released.filename,
     totalCents: released.totalCents,
