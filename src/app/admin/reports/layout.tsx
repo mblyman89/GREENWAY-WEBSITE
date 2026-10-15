@@ -9,11 +9,14 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { ReportTabs } from "@/components/admin/reports/ReportTabs";
+import { can } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportsLayout({ children }: { children: React.ReactNode }) {
-  await requirePermission("reports.view");
+  const session = await requirePermission("reports.view");
+  // R41 round 9: the ACH Payments tab shows for owner and admin only.
+  const showAchTab = can(session.profile.role, "ach.request");
   return (
     <div>
       <AdminPageHeader
@@ -22,7 +25,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
         breadcrumbs={<Breadcrumbs items={[{ label: "Reports" }]} />}
       />
       <div className="space-y-5 px-5 py-6 sm:px-8">
-        <ReportTabs />
+        <ReportTabs showAchTab={showAchTab} />
         {children}
       </div>
     </div>

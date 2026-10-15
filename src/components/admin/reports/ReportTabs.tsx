@@ -34,11 +34,23 @@ export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports/accounting", label: "Accounting (Sage 50)", icon: "📒" },
 ];
 
-export function ReportTabs() {
+/**
+ * R41 round 9: the ACH Payments tab is OWNER AND ADMIN ONLY. It is not in
+ * REPORT_TABS; the layout passes showAchTab (can(role, "ach.request")) and
+ * the page itself checks the same permission, so hiding the link is not the
+ * only guard.
+ */
+export const ACH_REPORT_TAB: ReportTab = { href: "/admin/reports/ach-payments", label: "ACH Payments", icon: "🏦" };
+
+export function reportTabsFor(showAchTab: boolean): ReportTab[] {
+  return showAchTab ? [...REPORT_TABS, ACH_REPORT_TAB] : REPORT_TABS;
+}
+
+export function ReportTabs({ showAchTab = false }: { showAchTab?: boolean }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-wrap gap-1.5 border-b border-white/10 pb-3">
-      {REPORT_TABS.map((tab) => {
+      {reportTabsFor(showAchTab).map((tab) => {
         const active =
           tab.href === "/admin/reports"
             ? pathname === "/admin/reports"
