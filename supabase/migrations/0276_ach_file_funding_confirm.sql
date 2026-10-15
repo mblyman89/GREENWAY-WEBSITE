@@ -3,9 +3,9 @@
 -- =============================================================================
 -- Plan: R41-TIMBERLAND-SLICE-PLAN v4 section S9, point 4 (funding helper).
 --
--- Timberland's ACH agreement, section 14: "Company will pay Financial
--- Institution in immediately available funds not later than 9:00 a.m. PST on
--- each Settlement Date". Section 16: "Company will maintain in the Account
+-- Timberland's ACH agreement, section 14: "Company shall provide Financial
+-- Institution with immediately available funds not later than 9:00 a.m. PST
+-- on each Settlement Date". Section 16: "Company will maintain in the Account
 -- immediately available funds sufficient to cover all credit Entries
 -- originated". The app cannot read the balance (no bank feed, and none is
 -- assumed), so the owner looks, then records what he saw:

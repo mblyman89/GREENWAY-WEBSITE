@@ -170,8 +170,13 @@ export const LEDGER_ERROR_TABLE: readonly (readonly [RegExp, string])[] = [
   [/ACH_FILE_NOT_FOUND/, "That ACH file was not found."],
   [/ACH_BANK_STEP_FINAL/, "Who uploaded or approved this file at Timberland, and when, is already recorded and never changes."],
   [/ACH_BANK_STEP/, "Do the bank steps in order: release, then mark uploaded, then mark approved at Timberland."],
+  [/ACH_FUNDING_FINAL/, "The funding for this file is already confirmed (who, when and the amount never change)."],
+  [/ACH_FUNDING_SHORT/, "The amount you confirm must cover the whole file total. Check the balance again, or move money first."],
+  [/ACH_FUNDING/, "Funding is confirmed only on a file that is released or uploaded (not approved at Timberland yet, not voided), on its own."],
+  [/ACH_OWNER_ONLY: only the owner confirms the funding/, "Only the owner confirms that the money is in the account. Send it as a request for owner approval."],
   [/ACH_OWNER_ONLY/, "Only the owner releases, voids, or marks ACH files uploaded or approved at Timberland. Send it as a request for owner approval."],
   [/ach_file_mark_(uploaded|bank_approved).*does not exist|Could not find the function public\.ach_file_mark_/, "The Timberland bank steps are not set up yet: run migration 0274 (docs/MIGRATIONS_TO_RUN.md). Nothing was changed."],
+  [/ach_file_confirm_funding.*does not exist|Could not find the function public\.ach_file_confirm_funding/, "Recording the funding check is not set up yet: run migration 0276 (docs/MIGRATIONS_TO_RUN.md). Nothing was changed."],
   [/relation "public\.ach_files" does not exist|ach_file_release.*does not exist|Could not find the function public\.ach_file_/, "The ACH file ledger is not set up yet: run migration 0273 (docs/MIGRATIONS_TO_RUN.md). No file was released."],
 ];
 
@@ -273,6 +278,14 @@ export function __runAchFileLedgerCoreTests(): { passed: number; failed: number 
   ok(/in order: release, then mark uploaded/.test(ledgerDbErrorMessage("ACH_BANK_STEP: ACH file x has no upload recorded")), "bank steps out of order, in words");
   ok(/run migration 0274/.test(ledgerDbErrorMessage("Could not find the function public.ach_file_mark_uploaded(p_actor, p_file_id) in the schema cache")), "missing 0274 function names 0274, not 0273");
   ok(/run migration 0274/.test(ledgerDbErrorMessage("function public.ach_file_mark_bank_approved(uuid, uuid) does not exist")), "missing 0274 function (pg wording) names 0274");
+  // S9 (0276): funding confirmation errors, each in its own words (order in the table matters).
+  ok(/already confirmed/.test(ledgerDbErrorMessage("ACH_FUNDING_FINAL: the funding for ACH file x was already confirmed.")), "funding set once, in words (not the generic funding message)");
+  ok(/cover the whole file total/.test(ledgerDbErrorMessage("ACH_FUNDING_SHORT: the amount confirmed is less than the file total.")), "short funding, in words (not the generic funding message)");
+  ok(/released or uploaded/.test(ledgerDbErrorMessage("ACH_FUNDING: funding is confirmed only on a released or uploaded file, on its own (status voided).")), "funding on the wrong status, in words");
+  ok(/Only the owner confirms that the money is in the account/.test(ledgerDbErrorMessage("ACH_OWNER_ONLY: only the owner confirms the funding. Send it as a request for owner approval.")), "owner-only funding names the funding, not release/void");
+  ok(/Only the owner releases, voids/.test(ledgerDbErrorMessage("ACH_OWNER_ONLY: only the owner voids an ACH file.")), "other owner-only errors keep the release/void message");
+  ok(/run migration 0276/.test(ledgerDbErrorMessage("Could not find the function public.ach_file_confirm_funding(p_actor, p_amount_cents, p_file_id) in the schema cache")), "missing 0276 function names 0276, not 0273");
+  ok(/run migration 0276/.test(ledgerDbErrorMessage("function public.ach_file_confirm_funding(uuid, uuid, bigint) does not exist")), "missing 0276 function (pg wording) names 0276");
   ok(/run migration 0273/.test(ledgerDbErrorMessage("Could not find the function public.ach_file_void(p_actor) in the schema cache")), "missing 0273 function still names 0273");
   ok(/marks ACH files uploaded or approved/.test(ledgerDbErrorMessage("ACH_OWNER_ONLY: only the owner records the upload")), "owner-only covers the bank steps");
   ok(MODIFIER_TAKEN_CONSTRAINT === "ach_files_day_modifier_key", "the retry constraint name");

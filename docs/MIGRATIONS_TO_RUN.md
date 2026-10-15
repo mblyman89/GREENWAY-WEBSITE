@@ -2589,3 +2589,39 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0275_ach_prenote_timberland_wait.rollback.sql`.
   It drops the trigger and its function. Nothing is deleted.
+
+## R41 — 0276 — Owner confirms a file's funding
+
+- [ ] `0276_ach_file_funding_confirm.sql` lets you record that you checked
+  the money was there before you uploaded a file. Your signed ACH agreement,
+  section 14, says you pay Timberland "in immediately available funds not
+  later than 9:00 a.m. PST on each Settlement Date". The site cannot read
+  your bank balance (there is no bank feed, and none is assumed). You look,
+  then you record what you saw.
+  - **What it records.** Who confirmed, when, and the amount you saw
+    collected. It is set once and never changes.
+  - **The rules.** Only the owner may confirm. Only a released or uploaded
+    file may be confirmed. The amount must cover the file total; one cent
+    short is refused.
+  - **It never blocks anything.** An upload, or paying by check, is never
+    stopped by a missing confirmation. The site warns you instead.
+  - It replaces the ACH file guard. Every 0273 and 0274 rule is kept: the
+    0274 body is copied in by a script, not retyped.
+
+  Apply it **after 0275**. It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_proc where proname = 'ach_file_confirm_funding') as fn,
+         has_function_privilege('authenticated', 'public.ach_file_confirm_funding(uuid, uuid, bigint)', 'EXECUTE') as browser_can_run;
+  -- fn | browser_can_run
+  -- 1  | f
+  ```
+
+  For the full proof, paste `scripts/recon/ach-file-funding-0276-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0276 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0276_ach_file_funding_confirm.rollback.sql`.
+  It drops the function and puts the 0274 guard back. Funding stamps
+  already recorded stay. Nothing is deleted.
