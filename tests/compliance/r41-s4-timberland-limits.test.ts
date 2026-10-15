@@ -12,7 +12,8 @@
  * read's shape, source pins, and the mutation log.
  *
  * Today in these tests is Mon Oct 5, 2026 10:00 Pacific; the new file is
- * effective Tue Oct 6 (settles that day).
+ * effective Wed Oct 7 (settles that day; the earliest date S5's 2-banking-day
+ * deadline allows for a Monday-morning release).
  */
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -45,7 +46,7 @@ const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*
 const KEY = "s4-limits-test-key-0123456789abcdef!!";
 const NOW = new Date("2026-10-05T17:00:00Z"); // Monday 10:00 Pacific
 const TODAY = "2026-10-05";
-const EFFECTIVE = "2026-10-06";
+const EFFECTIVE = "2026-10-07"; // R41 S5: the earliest a Mon 10:00 Pacific release may use (2 banking days)
 const MICHAEL = "22222222-2222-4222-8222-222222222222";
 const RUN = "3f2b1c0d-1111-4222-8333-444455556666";
 
@@ -182,8 +183,9 @@ describe("daily in-process limit (section 26: outstanding at any time)", () => {
     expect(b.ok).toBe(false);
     const msg = b.ok ? "" : b.error;
     expect(msg).toContain(`On ${limits.friendlyDate(TODAY)} this file would put $60,000.01 in process at Timberland, over the $50,000.00 daily limit`);
-    // The first file settles Tue Oct 6; the second fits from Wed Oct 7 with the 2-banking-day lead (Fri Oct 9).
-    expect(msg).toContain(`It would fit if uploaded on ${limits.friendlyDate("2026-10-07")} with effective date ${limits.friendlyDate("2026-10-09")}.`);
+    // The first file settles Wed Oct 7; the second fits from Thu Oct 8. Two banking days on is
+    // Mon Oct 12 = Columbus Day (FRB holiday), so the effective date is Tue Oct 13.
+    expect(msg).toContain(`It would fit if uploaded on ${limits.friendlyDate("2026-10-08")} with effective date ${limits.friendlyDate("2026-10-13")}.`);
     expect(msg).toContain(`it can cover an upload on ${limits.friendlyDate("2026-10-07")} or later`);
     expect(files()).toHaveLength(1);
     expect(posts()).toHaveLength(1);

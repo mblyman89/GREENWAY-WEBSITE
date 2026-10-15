@@ -37,7 +37,7 @@ const { encryptSecret, decryptSecret } = await import("@/lib/security/at-rest-cr
 
 const KEY = "ops-behaviour-key-0123456789abcdef!!";
 const TODAY = "2026-10-05"; // a Monday
-const EFFECTIVE = "2026-10-06";
+const EFFECTIVE = "2026-10-08"; // R41 S5: 2 banking days after a Mon 10:00 Pacific release
 const NOW = new Date("2026-10-05T17:00:00Z");
 const STEPHEN = "11111111-1111-4111-8111-111111111111";
 const MICHAEL = "22222222-2222-4222-8222-222222222222";
@@ -400,7 +400,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     if (!r.ok) return;
     expect(st.rpc).toHaveLength(0);
     expect(r.plan.ids).toEqual([VER1]);
-    expect(r.plan.filename).toBe("acctcheck_prenote_2026-10-06_1.ach");
+    expect(r.plan.filename).toBe("acctcheck_prenote_2026-10-08_1.ach");
     expect(r.plan.totalCents).toBe(0);
     const lines = r.plan.file.split(/\r?\n/).filter(Boolean);
     expect(lines[0].charAt(33)).toBe("A"); // R41 S3: the modifier given, never a fixed P/M
@@ -462,7 +462,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: b.fingerprint, actorId: MICHAEL, todayIso: TODAY, now: NOW });
     expect(r.ok && r.count).toBe(1);
     expect(rpcs("ach_verification_mark_sent")[0].body).toEqual({
-      p_ids: [VER1], p_actor: MICHAEL, p_effective: EFFECTIVE, p_settlement: EFFECTIVE, p_eligible: b.plan.eligible, p_filename: "acctcheck_prenote_2026-10-06_1.ach",
+      p_ids: [VER1], p_actor: MICHAEL, p_effective: EFFECTIVE, p_settlement: EFFECTIVE, p_eligible: b.plan.eligible, p_filename: "acctcheck_prenote_2026-10-08_1.ach",
     });
     expect(b.plan.eligible > EFFECTIVE).toBe(true);
   });
@@ -479,7 +479,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW, fileIdModifier: "A" });
     if (!b.ok) throw new Error(b.error);
     expect(b.plan.ids).toEqual([VER1, VER2]);
-    expect(b.plan.filename).toBe("acctcheck_prenote_2026-10-06_2.ach");
+    expect(b.plan.filename).toBe("acctcheck_prenote_2026-10-08_2.ach");
     await releasePrenote(b.fingerprint);
     reply({ ach_verification_mark_sent: 2 });
     const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: b.fingerprint, actorId: MICHAEL, todayIso: TODAY, now: NOW });
@@ -532,7 +532,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     const r = await releasePrenote(fp);
     const rows = st.db.rows("ach_files");
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: "prenote", source_id: store.checkFileSourceId("prenote", EFFECTIVE, fp), file_date: "2026-10-05", file_id_modifier: "A", filename: "acctcheck_prenote_2026-10-06_1.ach", entry_count: 1, total_cents: 0, counts_toward_limit: false, released_by: STEPHEN });
+    expect(rows[0]).toMatchObject({ kind: "prenote", source_id: store.checkFileSourceId("prenote", EFFECTIVE, fp), file_date: "2026-10-05", file_id_modifier: "A", filename: "acctcheck_prenote_2026-10-08_1.ach", entry_count: 1, total_cents: 0, counts_toward_limit: false, released_by: STEPHEN });
     expect(String(rows[0].body_enc)).toMatch(/^encv1:/);
     expect(decryptSecret(String(rows[0].body_enc))).toBe(r.plan.file);
     expect(r.plan.file).toContain("\r\n");
@@ -549,7 +549,7 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     expect(r.plan.file.split("\r\n")[0].charAt(33)).toBe("B");
     reply({ ach_verification_mark_sent: 1 });
     const m = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: fp, actorId: MICHAEL, todayIso: TODAY, now: NOW });
-    expect(m.ok && m.plan.filename).toBe("acctcheck_prenote_2026-10-06_1.ach");
+    expect(m.ok && m.plan.filename).toBe("acctcheck_prenote_2026-10-08_1.ach");
     // The confirm-time rebuild carries the released letter (the header clock is the confirm time; the bytes uploaded are the stored ones).
     expect(m.ok && m.plan.file.split(/\r?\n/)[0].charAt(33)).toBe("B");
     expect(m.ok && m.plan.ids).toEqual([VER1]);
