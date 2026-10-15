@@ -63,6 +63,15 @@ type Props = {
   manifestStrainType?: string | null;
   /** S41: fill the detail row's "AI lookup" zone instead of the fixed w-80. */
   wide?: boolean;
+  /**
+   * R51 D2: "Import & attach" per found photo (the server action fetches it
+   * through importImageFromUrl - SSRF guard, MIME sniff, saved as an
+   * unpublished draft with rights pending - attaches it and remembers it).
+   * Only passed where this panel is outside the approve form.
+   */
+  importImageAction?: (formData: FormData) => Promise<void>;
+  returnManifest?: string | null;
+  returnStatus?: string;
 };
 
 type Ok = Extract<ProductLookupActionResult, { ok: true }>;
@@ -163,6 +172,9 @@ export function AiLookupPanel({
   kbStrainType = null,
   manifestStrainType = null,
   wide = false,
+  importImageAction,
+  returnManifest = null,
+  returnStatus = "draft",
 }: Props) {
   const initialQuery = [productName, vendorOrBrand].filter(Boolean).join(" ").trim();
   const [query, setQuery] = useState(initialQuery);
@@ -682,6 +694,31 @@ export function AiLookupPanel({
                           );
                         })}
                       </div>
+                      {importImageAction ? (
+                        <ul className="mt-1 space-y-0.5" data-testid="ai-image-import-list">
+                          {data.imageCandidates.map((u, i) => (
+                            <li key={`imp-${i}`}>
+                              <form action={importImageAction} className="flex items-center gap-1">
+                                <input type="hidden" name="draft_id" value={draftId} />
+                                <input type="hidden" name="image_url" value={u} />
+                                <input type="hidden" name="label" value={productName.slice(0, 200)} />
+                                <input type="hidden" name="return_manifest" value={returnManifest ?? ""} />
+                                <input type="hidden" name="return_status" value={returnStatus} />
+                                <span className="min-w-0 flex-1 truncate" title={u}>
+                                  Photo {i + 1}: {u.replace(/^https?:\/\//, "").slice(0, 60)}
+                                </span>
+                                <button
+                                  type="submit"
+                                  className="shrink-0 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/50 bg-[var(--admin-accent-soft)] px-1.5 text-[10px] font-semibold text-[var(--admin-accent)]"
+                                  data-testid="ai-image-import"
+                                >
+                                  Import & attach
+                                </button>
+                              </form>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   )}
 

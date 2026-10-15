@@ -933,7 +933,7 @@ Use "value": null and "confidence": 0 for anything you did not find.
   "allergens": ${F('["..."]')},
   "brand_description": ${F('"what the brand says about itself, or null"')},
   "awards": ${F('["award name + year"]')},
-  "images": ${F('["direct http(s) image URLs of THIS product; [] if unsure"]')}
+  "images": ${F('["direct http(s) photo-file URLs of THIS product from pages you opened (not page URLs); [] if unsure"]')}
 }`;
 
 // ---------------------------------------------------------------------------

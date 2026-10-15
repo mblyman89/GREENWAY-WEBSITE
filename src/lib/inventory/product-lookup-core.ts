@@ -354,6 +354,11 @@ also report everything you can find:
   show THIS product from reputable sources (the maker's site, the brand page,
   a licensed menu). Absolute URLs only. Do NOT include logos, icons, banners,
   or unrelated images. Do NOT fabricate URLs — return [] if you have none.
+  Prefer the full-size photo file itself (ending .jpg/.jpeg/.png/.webp, or a
+  CDN image link) taken from a page you actually opened, never the page URL.
+  When you can open URLs, open each image and keep only those that really
+  show THIS product's package or flower. A person reviews every image before
+  it is used.
 
 Return your findings in the exact JSON shape requested. Favor giving the
 retailer MORE to review (honestly graded by confidence) over giving them a bare
