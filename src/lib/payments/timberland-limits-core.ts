@@ -267,6 +267,23 @@ export function limitRefusalMessage(r: LimitResult): string {
   return parts.join(" ");
 }
 
+/** How many calendar days before the release day a file's effective date can be while it still settles on or after that day (Sat + Sun + a Monday holiday is 3; 7 leaves room). */
+export const LEDGER_LOOKBACK_DAYS = 7;
+
+/**
+ * The oldest date a ledger row must touch (upload, effective or settlement
+ * on or after it) to matter for a file released on `fileDate`: the first of
+ * that month (monthly limit) or a week back (daily window), whichever is
+ * earlier. Rows that touch nothing on or after it can count toward no day
+ * and no month the check (or its earliest-fit search) looks at.
+ */
+export function ledgerWindowStart(fileDate: string): string {
+  if (!ISO.test(fileDate)) throw new Error(`ledgerWindowStart: bad date ${fileDate}`);
+  const first = `${fileDate.slice(0, 7)}-01`;
+  const back = addCalendarDays(fileDate, -LEDGER_LOOKBACK_DAYS);
+  return back < first ? back : first;
+}
+
 /** "Timberland room left" for today and this month. */
 export function roomLeft(ledger: readonly LedgerFileForLimits[], today: string): {
   todayInProcessCents: number;
@@ -433,6 +450,13 @@ export function __runTimberlandLimitsCoreTests(): { passed: number; failed: numb
     threw = true;
   }
   ok(threw, "a malformed date throws");
+  ok(ledgerWindowStart("2026-10-19") === "2026-10-01", "window start: the first of the month when that is earlier");
+  ok(ledgerWindowStart("2026-10-03") === "2026-09-26", "window start: a week back early in the month");
+  ok(ledgerWindowStart("2026-10-08") === "2026-10-01", "window start: the 8th reaches the 1st either way");
+  // A row effective Sat Oct 10 settles Tue Oct 13 (Columbus Day Mon Oct 12): still in process on the 13th,
+  // and its effective date is inside the window read for a file released on the 13th.
+  const sat = row({ fileDate: "2026-10-08", effectiveDate: "2026-10-10", totalCents: 1 });
+  ok(settlementOf(sat) === "2026-10-13" && inProcessOn(sat, "2026-10-13") && sat.effectiveDate >= ledgerWindowStart("2026-10-13"), "window start covers a weekend + holiday settlement");
 
   return { passed, failed };
 }

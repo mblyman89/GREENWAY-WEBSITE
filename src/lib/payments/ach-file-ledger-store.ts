@@ -42,6 +42,13 @@ import {
   type AchFileKind,
   type AchFileStatus,
 } from "@/lib/payments/ach-file-ledger-core";
+import {
+  entryAmountsFromFile,
+  evaluateTimberlandLimits,
+  limitRefusalMessage,
+  ledgerWindowStart,
+  type LedgerFileForLimits,
+} from "@/lib/payments/timberland-limits-core";
 
 type Fail = { ok: false; error: string };
 
@@ -119,6 +126,45 @@ async function usedModifiers(fileDate: string): Promise<{ ok: true; used: string
   return { ok: true, used: ((data ?? []) as { file_id_modifier: string }[]).map((r) => r.file_id_modifier) };
 }
 
+/** Most ledger rows one limit check will read; more than this and the check refuses (never a partial total). */
+export const LIMITS_READ_CAP = 2000;
+export const LIMITS_READ_FAILED =
+  "Timberland limit check: the list of files already released could not be read, so this file was NOT released (the limits are never skipped). Try again in a minute.";
+
+/**
+ * Every non-voided ach_files row that can count toward a limit for a file
+ * released on `fileDate`: anything uploaded, effective or settling on or
+ * after ledgerWindowStart(fileDate). Fails closed.
+ */
+export async function readLedgerForLimits(fileDate: string): Promise<{ ok: true; ledger: LedgerFileForLimits[] } | Fail> {
+  const start = ledgerWindowStart(fileDate);
+  const { data, error } = await createSupabaseAdminClient()
+    .from("ach_files")
+    .select("id, kind, status, file_date, effective_date, settlement_date, total_cents")
+    .neq("status", "voided")
+    .or(`file_date.gte.${start},effective_date.gte.${start},settlement_date.gte.${start}`)
+    .limit(LIMITS_READ_CAP + 1);
+  if (error || !Array.isArray(data)) return { ok: false, error: LIMITS_READ_FAILED };
+  if (data.length > LIMITS_READ_CAP) return { ok: false, error: LIMITS_READ_FAILED };
+  const ledger: LedgerFileForLimits[] = [];
+  for (const r of data as Record<string, unknown>[]) {
+    const cents = Number(r.total_cents);
+    if (!Number.isSafeInteger(cents) || cents < 0 || typeof r.file_date !== "string" || typeof r.effective_date !== "string") {
+      return { ok: false, error: LIMITS_READ_FAILED };
+    }
+    ledger.push({
+      id: String(r.id),
+      kind: r.kind as LedgerFileForLimits["kind"],
+      status: r.status as LedgerFileForLimits["status"],
+      fileDate: r.file_date,
+      effectiveDate: r.effective_date,
+      settlementDate: typeof r.settlement_date === "string" ? r.settlement_date : null,
+      totalCents: cents,
+    });
+  }
+  return { ok: true, ledger };
+}
+
 type ReleaseInput = {
   kind: AchFileKind;
   actorId: string;
@@ -131,13 +177,21 @@ type ReleaseInput = {
 };
 
 /**
- * The shared loop: next letter, build, seal, write. `write` returns the new
- * row id, or the database error message.
+ * The shared loop: next letter, read the ledger, build, check Timberland's
+ * limits (R41 S4, a hard block), seal, write. `write` returns the new row id,
+ * or the database error message.
+ *
+ * Why the limit check is race-safe without a lock: the ledger is read AFTER
+ * the day's used letters, in the same attempt. Two releases on the same
+ * Pacific day either (a) see each other's row, or (b) read the same used
+ * letters, pick the same letter, and the loser hits
+ * ach_files_day_modifier_key, starts again, and re-reads the ledger with the
+ * winner's row in it.
  */
 async function releaseLoop(
   input: ReleaseInput,
   write: (s: Sealed) => Promise<{ ok: true; id: string } | { ok: false; message: string }>,
-): Promise<{ ok: true; id: string; sealed: Sealed } | Fail> {
+): Promise<{ ok: true; id: string; sealed: Sealed; limitWarnings: string[] } | Fail> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: NOT_CONFIGURED };
   if (!isAtRestEncryptionConfigured()) return { ok: false, error: LEDGER_NO_KEY };
   const fileDate = pacificDayKey(input.now);
@@ -146,8 +200,15 @@ async function releaseLoop(
     if (!used.ok) return used;
     const next = nextFileIdModifier(used.used);
     if (!next.ok) return next;
+    const ledger = await readLedgerForLimits(fileDate);
+    if (!ledger.ok) return ledger;
     const built = input.build(next.modifier);
     if (!built.ok) return built;
+    const limits = evaluateTimberlandLimits(
+      { kind: input.kind, fileDate, effectiveDate: input.effectiveDate, totalCents: built.totalCents, entryAmountsCents: entryAmountsFromFile(built.file) },
+      ledger.ledger,
+    );
+    if (!limits.ok) return { ok: false, error: limitRefusalMessage(limits) };
     const sealed = sealFile(built.file, {
       fileDate,
       modifier: next.modifier,
@@ -157,17 +218,28 @@ async function releaseLoop(
     });
     if (!sealed.ok) return sealed;
     const w = await write(sealed.sealed);
-    if (w.ok) return { ok: true, id: w.id, sealed: sealed.sealed };
+    if (w.ok) return { ok: true, id: w.id, sealed: sealed.sealed, limitWarnings: limits.warnings.map((x) => x.message) };
     if (!w.message.includes(MODIFIER_TAKEN_CONSTRAINT)) return { ok: false, error: ledgerDbErrorMessage(w.message) };
   }
   return { ok: false, error: ledgerDbErrorMessage(MODIFIER_TAKEN_CONSTRAINT) };
 }
 
 /** What a release hands back: the exact stored bytes and the facts read from them. */
-export type Released = { ok: true; id: string; body: string; filename: string; modifier: string; fileDate: string; entryCount: number; totalCents: number };
+export type Released = {
+  ok: true;
+  id: string;
+  body: string;
+  filename: string;
+  modifier: string;
+  fileDate: string;
+  entryCount: number;
+  totalCents: number;
+  /** Gold 80% notes from the Timberland limit check (the file was released). */
+  limitWarnings: string[];
+};
 
-function released(id: string, s: Sealed, filename: string): Released {
-  return { ok: true, id, body: s.body, filename, modifier: s.modifier, fileDate: s.fileDate, entryCount: s.entryCount, totalCents: s.totalCents };
+function released(id: string, s: Sealed, filename: string, limitWarnings: string[]): Released {
+  return { ok: true, id, body: s.body, filename, modifier: s.modifier, fileDate: s.fileDate, entryCount: s.entryCount, totalCents: s.totalCents, limitWarnings };
 }
 
 /** Vendor, prenote and test-credit files: one ach_files row. */
@@ -197,7 +269,7 @@ export async function releaseAchFile(input: ReleaseInput & { sourceId: string })
     return { ok: true, id: String((data as { id: string }).id) };
   });
   if (!r.ok) return r;
-  return released(r.id, r.sealed, input.filename);
+  return released(r.id, r.sealed, input.filename, r.limitWarnings);
 }
 
 /** Payroll: the ledger row and the run stamp in ONE database call (0273). */
@@ -225,7 +297,7 @@ export async function releasePayrollAchFile(
     return { ok: true, id: data };
   });
   if (!r.ok) return r;
-  return released(r.id, r.sealed, input.filename);
+  return released(r.id, r.sealed, input.filename, r.limitWarnings);
 }
 
 // ------------------------------------------------------------- reading -----

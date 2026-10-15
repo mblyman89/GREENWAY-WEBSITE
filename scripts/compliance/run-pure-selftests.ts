@@ -2249,7 +2249,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 68); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
   assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 43); // R41 S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason
-  assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 53); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
+  assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
