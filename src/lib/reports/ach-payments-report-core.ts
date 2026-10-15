@@ -278,6 +278,11 @@ function safeDeadlineDay(effective: string): string | null {
 
 type Pooled = BankWithdrawal & { used: boolean };
 
+/** The debits no earlier step has claimed, as plain withdrawals. */
+function unusedDebits(pool: Pooled[]): BankWithdrawal[] {
+  return pool.filter((w) => !w.used).map((w) => ({ transactionId: w.transactionId, amountCents: w.amountCents, date: w.date, description: w.description, pending: w.pending }));
+}
+
 /** Exact amount in the window first (earliest date), else the closest within tolerance. */
 export function pickDebit(pool: Pooled[], expected: number, lo: string, hi: string, tol: number): { w: Pooled; exact: boolean } | null {
   let exact: Pooled | null = null;
@@ -455,7 +460,7 @@ export function buildAchReport(input: AchReportInput): AchReport {
       method: rec.method,
       reference: rec.reference ?? rec.achBatchRef,
     })),
-    pool.filter((w) => !w.used).map(({ used: _u, ...w }) => w),
+    unusedDebits(pool),
     { todayIso },
   );
   const usedIds = new Set<string>();
@@ -532,7 +537,7 @@ export function buildAchReport(input: AchReportInput): AchReport {
   const legacyRuns = paidRuns.filter((r) => !fileBySource.has(`payroll:${r.runId}`));
   const payrollResult = reconcilePayroll(
     legacyRuns.map((r) => ({ runId: r.runId, label: r.label, payDate: r.bankDate, totalNetCents: r.totalNetCents, status: r.status, entryCount: r.entryCount })),
-    pool.filter((w) => !w.used).map(({ used: _u, ...w }) => w),
+    unusedDebits(pool),
     { todayIso },
   );
   const legacyById = new Map(payrollResult.runs.map((m) => [m.runId, m]));
@@ -899,7 +904,7 @@ export function __runAchPaymentsReportCoreTests(): { passed: number; failed: num
         withdrawals: [wd("t1", 30_000, "2026-10-23")],
       }),
     );
-    ok(r.files[0].stage === "cleared" && r.files[0].match?.matchedTo.includes("2 payments"), "vendor file total match");
+    ok(r.files[0].stage === "cleared" && r.files[0].match?.matchedTo.includes("2 payments") === true, "vendor file total match");
     ok(r.payments.length === 2 && r.payments.every((p) => p.status === "cleared" && p.date === "2026-10-23"), "vendor payments cleared, dated by effective date");
     ok(r.summary.sentVendorCents === 30_000, "vendor sent total");
   }
