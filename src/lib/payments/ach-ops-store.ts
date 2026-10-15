@@ -41,6 +41,7 @@ import {
   opsDbErrorMessage,
   pickMicroCents,
   planCheckFile,
+  checkEffectiveDateForRelease,
   retentionLine,
   reviewList,
   type CheckFilePlan,
@@ -567,6 +568,10 @@ export async function releaseCheckFile(input: {
   now: Date;
 }): Promise<{ ok: true; fileId: string; modifier: string; plan: CheckFilePlan } | Fail> {
   if (!/^[0-9a-f]{16}$/.test(input.fingerprint)) return { ok: false, error: "Reload the Operations page and use its release button." };
+  // R41 S5: Timberland's deadline (Schedule A) before anything is read. The
+  // ledger's releaseLoop checks it again with the same clock.
+  const timely = checkEffectiveDateForRelease(input.effective, input.now);
+  if (!timely.ok) return { ok: false, error: `Timberland deadline: this file was NOT released. ${timely.error}` };
   const loaded = await loadPlannedChecks(input.method);
   if (!loaded.ok) return loaded;
   const fp = checkListFingerprint(loaded.checks.map((c) => c.verificationId));
