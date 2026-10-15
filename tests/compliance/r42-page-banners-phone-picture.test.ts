@@ -81,14 +81,16 @@ describe("R42 Q4 — optional separate phone picture", () => {
     expect(mobileImageSrc(d, "/a.webp")).toBe("/a.webp");
   });
 
-  it("keeps a safe site path or Supabase public URL; drops anything else", () => {
+  // R53 (owner, dev phase): one picture per banner — every phone picture is
+  // now dropped on normalize, safe or not; phones use the main picture.
+  it("R53: drops every phone picture (safe ones too); safeImageSrc rules unchanged", () => {
     const keep = ["/media/p.webp", "https://abc.supabase.co/storage/v1/object/public/media/p.webp"];
     const drop = ["//evil.com/x.png", "http://abc.supabase.co/storage/v1/object/public/m/p.webp", "https://evil.com/p.webp", "javascript:alert(1)", "/a\\b.png", "https://u:p@abc.supabase.co/storage/v1/object/public/m/p.webp"];
     for (const v of keep) {
       expect(safeImageSrc(v)).toBe(v);
       const d = normalizeDesign({ ...base(), image: { ...base().image, srcMobile: v } })!;
-      expect(d.image.srcMobile).toBe(v);
-      expect(mobileImageSrc(d, "/main.webp")).toBe(v);
+      expect("srcMobile" in d.image).toBe(false);
+      expect(mobileImageSrc(d, "/main.webp")).toBe("/main.webp");
     }
     for (const v of drop) {
       expect(safeImageSrc(v)).toBeNull();
