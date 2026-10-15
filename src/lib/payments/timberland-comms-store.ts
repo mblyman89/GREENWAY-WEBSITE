@@ -23,6 +23,7 @@ import { cache } from "react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { commsDbErrorMessage, type CommsInsert, type CommsRow } from "@/lib/payments/timberland-obligations-core";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 
 type Fail = { ok: false; error: string };
 
@@ -99,19 +100,25 @@ export const readTimberlandCommsCached = cache(readTimberlandComms);
 
 /**
  * Returns and NOCs logged with a received date in this Pacific month (open or
- * resolved), for the Schedule B fees card. A read failure returns null: the
- * card then says it could not count, never "0".
+ * resolved), for the Schedule B fees card. Read in pages ordered by the unique
+ * id (pagedAllChecked), because PostgREST silently caps one response at 1,000
+ * rows (SLICE 5C). A failed page or an unfinished read returns null: the card
+ * then says it could not count, never a short total.
  */
 export async function countNoticesThisMonth(todayIso: string): Promise<{ returns: number; nocs: number } | null> {
   if (!isSupabaseServiceConfigured || !/^\d{4}-\d{2}-\d{2}$/.test(todayIso)) return null;
   const first = `${todayIso.slice(0, 7)}-01`;
-  const { data, error } = await createSupabaseAdminClient()
-    .from("ach_return_notices")
-    .select("notice_kind")
-    .gte("received_on", first)
-    .lte("received_on", todayIso)
-    .limit(5000);
-  if (error) return null;
-  const rows = (data ?? []) as { notice_kind?: string }[];
+  const sb = createSupabaseAdminClient();
+  const { rows, verdict } = await pagedAllChecked<{ notice_kind?: string }>(async (from, to) => {
+    const { data, error } = await sb
+      .from("ach_return_notices")
+      .select("id, notice_kind")
+      .gte("received_on", first)
+      .lte("received_on", todayIso)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return { rows: (data ?? []) as { notice_kind?: string }[], ok: !error };
+  });
+  if (!verdict.complete) return null;
   return { returns: rows.filter((r) => r.notice_kind === "return").length, nocs: rows.filter((r) => r.notice_kind === "noc").length };
 }
