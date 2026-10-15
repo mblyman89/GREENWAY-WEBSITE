@@ -1318,7 +1318,9 @@ describe("D-65 — the connections survive the reset", () => {
     //   +3  R41 S11 / 0278: ofac_screening_runs, ofac_screening_results,
     //       ofac_match_reviews (the sanctions screening record; append-only,
     //       the database refuses DELETE)
-    expect(plan.keep.length).toBe(162);
+    //   +1  R51 / 0279: product_image_memory (the photos a person attached
+    //       to each product on onboarding; KEEP with media_assets it points at)
+    expect(plan.keep.length).toBe(163);
     expect(plan.wipe.length).toBe(139);
   });
 

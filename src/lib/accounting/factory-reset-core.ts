@@ -828,6 +828,11 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "shop_carousel_slides", disposition: "KEEP", because: "Shop page carousel you built." },
   { table: "media_assets", disposition: "KEEP", because: "Your uploaded photographs and artwork." },
   { table: "media_usages", disposition: "KEEP", because: "Where each image is used." },
+  // product_image_memory (0279, R51): which library photo a person attached
+  // to which product on onboarding, by identity key. KEEP with the media it
+  // points at (FK to media_assets, KEEP); it is a decision about products,
+  // like intake_card_aliases, and holds no money or stock.
+  { table: "product_image_memory", disposition: "KEEP", because: "The photos you attached to each product on onboarding, so the next delivery of the same product recommends them first." },
   { table: "newsletter_assets", disposition: "KEEP", because: "Artwork you uploaded for customer newsletters." },
   { table: "seo_entries", disposition: "KEEP", because: "Your titles and meta descriptions." },
   { table: "content_releases", disposition: "KEEP", because: "Named groups of website changes you planned to go live together." },
