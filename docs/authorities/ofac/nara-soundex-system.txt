@@ -1,0 +1,66 @@
+The Soundex Indexing System
+Updated January 9, 2024
+To use the census soundex to locate information about a person, you must know his or her full name and the state or territory in which he or she lived at the time of the census. It is also helpful to know the full name of the
+head of the household
+in which the person lived because census takers recorded information under that name.
+The soundex is a coded surname (last name) index based on the way a surname sounds rather than the way it is spelled. Surnames that sound the same, but are spelled differently, like SMITH and SMYTH, have the same code and are filed together. The soundex coding system was developed so that you can find a surname even though it may have been recorded under various spellings.
+To search for a particular surname, you must first work out its code.
+Basic Soundex Coding Rule
+Every soundex code consists of a letter and three numbers, such as W-252. The letter is always the first letter of the surname. The numbers are assigned to the remaining letters of the surname according to the soundex guide shown below. Zeroes are added at the end if necessary to produce a four-character code. Additional letters are disregarded. Examples:
+Washington
+is coded W-252 (W, 2 for the S, 5 for the N, 2 for the G, remaining letters disregarded).
+Lee
+is coded L-000 (L, 000 added).
+Soundex Coding Guide
+See also this
+Online Soundex Calculator
+provided by "Maine Genealogy"
+Maine Genealogy is a free genealogy site provided for informational purposes only and does not imply endorsement of any organization, program, or person by the National Archives and Records Administration.
+Number
+Represents the Letters
+1
+B, F, P, V
+2
+C, G, J, K, Q, S, X, Z
+3
+D, T
+4
+L
+5
+M, N
+6
+R
+Disregard the letters A, E, I, O, U, H, W, and Y.
+Additional Soundex Coding Rules
+Names With Double Letters
+If the surname has any double letters, they should be treated as one letter. For example:
+Gutierrez
+is coded G-362 (G, 3 for the T, 6 for the first R, second R ignored, 2 for the Z).
+Names with Letters Side-by-Side that have the Same Soundex Code Number
+If the surname has different letters side-by-side that have the same number in the soundex coding guide, they should be treated as one letter. Examples:
+Pfister
+is coded as P-236 (P, F ignored, 2 for the S, 3 for the T, 6 for the R).
+Jackson
+is coded as J-250 (J, 2 for the C, K ignored, S ignored, 5 for the N, 0 added).
+Tymczak
+is coded as T-522 (T, 5 for the M, 2 for the C, Z ignored, 2 for the K). Since the vowel "A" separates the Z and K, the K is coded.
+Names with Prefixes
+If a surname has a prefix, such as Van, Con, De, Di, La, or Le, code both with and without the prefix because the surname might be listed under either code. Note, however, that Mc and Mac are
+not
+considered prefixes.
+For example,
+VanDeusen
+might be coded two ways:
+V-532 (V, 5 for N, 3 for D, 2 for S)
+or
+D-250 (D, 2 for the S, 5 for the N, 0 added).
+Consonant Separators
+If a vowel (A, E, I, O, U) separates two consonants that have the same soundex code, the consonant to the right of the vowel is coded. Example:
+Tymczak
+is coded as T-522 (T, 5 for the M, 2 for the C, Z ignored (see "Side-by-Side" rule above), 2 for the K). Since the vowel "A" separates the Z and K, the K is coded.
+If "H" or "W" separate two consonants that have the same soundex code, the consonant to the right of the vowel is
+not
+coded. Example:
+Ashcraft
+is coded A-261 (A, 2 for the S, C ignored, 6 for the R, 1 for the F). It is not coded A-226.
+This page was last reviewed on January 9, 2024.
