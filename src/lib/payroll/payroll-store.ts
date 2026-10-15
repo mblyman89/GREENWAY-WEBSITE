@@ -19,6 +19,7 @@ import {
 } from "@/lib/payroll/payroll-core";
 import { buildNachaFile } from "@/lib/payments/nacha-core";
 import { releasePayrollAchFile } from "@/lib/payments/ach-file-ledger-store";
+import { creditEffectiveDateFor, payrollDeadlineFor } from "@/lib/payments/timberland-deadline-core";
 import { originatorReadiness, type OriginatorReadiness, type TimberlandStamp } from "@/lib/payments/timberland-originator-core";
 import { listEmployeeDepositPlans } from "@/lib/payroll/employee-deposit-plans-store";
 import {
@@ -582,6 +583,21 @@ export async function generatePayrollNacha(
   if (!detail) return { ok: false, error: "Payroll run not found." };
   if (detail.run.status !== "draft") return { ok: false, error: "This run already has its ACH file. Download it, or void it (owner, with a reason) to release a new one." };
 
+  // R41 S5: the Timberland deadline, before any other work. Schedule D: a
+  // payday that is not a usable banking day moves the bank (effective) date
+  // to the PRIOR usable day for credits. Schedule A: the file must be
+  // uploaded and approved 2 banking days before that, by 4:00 pm Pacific.
+  // Missed = pay this run by check (no override).
+  const now = new Date();
+  let deadline: ReturnType<typeof payrollDeadlineFor>;
+  try {
+    deadline = payrollDeadlineFor(detail.run.pay_date, now);
+  } catch (e) {
+    return { ok: false, error: `Payday ${detail.run.pay_date} cannot be checked against the bank calendar: ${(e as Error).message}` };
+  }
+  if (!deadline.check.ok) return { ok: false, error: deadline.line };
+  const bankEffective = deadline.effective;
+
   const lines: PayrollLineInput[] = detail.lines.map((l) => ({
     employeeId: l.employee_id ?? l.id,
     employeeName: l.employee_name,
@@ -642,15 +658,16 @@ export async function generatePayrollNacha(
   // same database call that writes the ledger row, so the stamp and the file
   // can never disagree. The download serves these stored bytes and never
   // comes back here.
-  const effectiveDate = new Date(`${detail.run.pay_date}T00:00:00Z`);
+  // R41 S5: the builder and the ledger both get the BANK effective date
+  // (Schedule D prior-day shift), never the raw payday.
+  const effectiveDate = new Date(`${bankEffective}T00:00:00Z`);
   const filename = `payroll_${detail.run.pay_date}_${runId.slice(0, 8)}.ach`;
   if (!actorId) return { ok: false, error: "Only the owner releases a payroll ACH file." };
-  const now = new Date();
   const released = await releasePayrollAchFile({
     runId,
     actorId,
     now,
-    effectiveDate: detail.run.pay_date,
+    effectiveDate: bankEffective,
     filename,
     overrideWarnings: !!opts.overrideWarnings,
     overrideReason: opts.overrideWarnings ? (opts.overrideReason ?? null) : null,
@@ -674,7 +691,9 @@ export async function generatePayrollNacha(
   if (!released.ok) return { ok: false, error: released.error };
 
   // R41 S4: the 80% Timberland-limit notes ride along (the file was released).
-  return { ok: true, filename: released.filename, file: released.body, totalCents: released.totalCents, entryCount: released.entryCount, notes: [...notes, ...released.limitWarnings], splitsReady: deposit.tableReady };
+  // R41 S5: the upload-by line (and the late warning, when past 3:30 pm) too.
+  const deadlineNotes = [deadline.line, ...(released.deadlineWarning ? [released.deadlineWarning] : [])];
+  return { ok: true, filename: released.filename, file: released.body, totalCents: released.totalCents, entryCount: released.entryCount, notes: [...notes, ...released.limitWarnings, ...deadlineNotes], splitsReady: deposit.tableReady };
 }
 
 // ---------------------------------------------------------------------------
@@ -698,6 +717,15 @@ export type PayrollReconcileInputs = {
  * defensively). Returns empty/flagged inputs when the DB isn't configured or no
  * Main account is tagged, so the page shows guidance instead of crashing.
  */
+/** R41 S5: the bank effective date of a payday (Schedule D); outside the FRB calendar's years, the payday itself. */
+function bankDateForReconcile(payDate: string): string {
+  try {
+    return creditEffectiveDateFor(payDate);
+  } catch {
+    return payDate;
+  }
+}
+
 export async function getPayrollReconcileInputs(
   runLimit = 200,
 ): Promise<PayrollReconcileInputs> {
@@ -711,7 +739,9 @@ export async function getPayrollReconcileInputs(
     .map((r) => ({
       runId: r.id,
       label: r.label,
-      payDate: r.pay_date,
+      // R41 S5: the debit posts on the BANK effective date, which Schedule D
+      // moves to the prior usable day when payday is not one.
+      payDate: bankDateForReconcile(r.pay_date),
       totalNetCents: r.total_net_cents,
       status: r.status,
       entryCount: r.entry_count,
