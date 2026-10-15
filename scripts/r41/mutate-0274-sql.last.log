@@ -1,0 +1,26 @@
+control (before) pass
+killed   upload-from-any-status  (PL/pgSQL function inline_code_block line 51 at PERFORM)
+killed   approve-from-any-status  (PL/pgSQL function inline_code_block line 72 at PERFORM)
+killed   upload-no-stamp  (PL/pgSQL function inline_code_block line 42 at PERFORM)
+killed   approve-wrong-kind  (CONTEXT:  PL/pgSQL function inline_code_block line 69 at ASSERT)
+killed   not-found-silent  (PL/pgSQL function inline_code_block line 46 at PERFORM)
+killed   admin-may-upload  (PL/pgSQL function inline_code_block line 42 at PERFORM)
+killed   admin-may-approve  (PL/pgSQL function inline_code_block line 65 at PERFORM)
+killed   admin-may-void  (PL/pgSQL function inline_code_block line 83 at PERFORM)
+killed   admin-may-release  (PL/pgSQL function inline_code_block line 95 at PERFORM)
+killed   uploaded-by-may-change  (PL/pgSQL function inline_code_block line 54 at PERFORM)
+killed   uploaded-at-may-change  (PL/pgSQL function inline_code_block line 55 at PERFORM)
+killed   approved-by-may-change  (PL/pgSQL function inline_code_block line 73 at PERFORM)
+killed   upload-stamp-without-step  (PL/pgSQL function inline_code_block line 60 at PERFORM)
+killed   approve-stamp-without-step  (PL/pgSQL function inline_code_block line 61 at PERFORM)
+killed   approve-without-upload  (PL/pgSQL function inline_code_block line 80 at PERFORM)
+killed   insert-pre-stamped  (PL/pgSQL function inline_code_block line 35 at PERFORM)
+killed   delete-allowed  (PL/pgSQL function inline_code_block line 92 at PERFORM)
+killed   voided-may-change  (PL/pgSQL function inline_code_block line 93 at PERFORM)
+killed   totals-may-change  (PL/pgSQL function inline_code_block line 94 at PERFORM)
+killed   backwards-ok  (PL/pgSQL function inline_code_block line 74 at PERFORM)
+killed   browser-may-upload  (CONTEXT:  PL/pgSQL function inline_code_block line 29 at ASSERT)
+killed   browser-may-approve  (CONTEXT:  PL/pgSQL function inline_code_block line 30 at ASSERT)
+control (after) pass
+total 22 killed 22 survivors []
+EXIT 0
