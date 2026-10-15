@@ -51,6 +51,7 @@ import * as vault from "../vault-actions";
 import * as ops from "../ops-actions";
 import * as files from "../file-actions";
 import * as comms from "../comms-actions";
+import * as screening from "../screening-actions";
 import * as docs from "../document-actions";
 import * as company from "../actions";
 import * as payroll from "../../../payroll/actions";
@@ -104,6 +105,7 @@ const REPLAY: { readonly [K in AchActionKind]: (fd: FormData, targetId: string |
   "ach_file.confirm_funding": (fd) => files.confirmAchFileFundingAction(fd),
   "timberland_comms.log": (fd) => comms.addTimberlandCommsAction(fd),
   "timberland_comms.done": (fd) => comms.closeTimberlandCommsAction(fd),
+  "ofac_review.record": (fd) => screening.recordOfacReviewAction(fd),
 };
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();

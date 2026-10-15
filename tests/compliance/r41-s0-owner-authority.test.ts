@@ -307,6 +307,8 @@ const GATED_FILES: Record<string, string[]> = {
   "src/app/admin/settings/banking/file-actions.ts": ["ach_file.void", "ach_file.mark_uploaded", "ach_file.mark_bank_approved", "ach_file.confirm_funding"],
   // R41 S10: the Timberland communications log (0277).
   "src/app/admin/settings/banking/comms-actions.ts": ["timberland_comms.log", "timberland_comms.done"],
+  // R41 S11: a decision on a possible OFAC match (0278).
+  "src/app/admin/settings/banking/screening-actions.ts": ["ofac_review.record"],
 };
 
 describe("every ACH kind is gated exactly once, and the approval replay covers every kind", () => {

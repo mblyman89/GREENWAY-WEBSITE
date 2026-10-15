@@ -46,6 +46,8 @@ export const TARGET_TYPES = [
   "ach_file",
   // R41 S10 / 0277: the Timberland communications log.
   "timberland_comms",
+  // R41 S11 / 0278: a decision on a possible OFAC match.
+  "ofac_review",
 ] as const;
 export type TargetType = (typeof TARGET_TYPES)[number];
 
@@ -115,6 +117,8 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   "timberland_comms.log": { targetType: "timberland_comms", idField: null, version: null },
   // A done request is stale once the item was closed by anyone ("absent" becomes a row).
   "timberland_comms.done": { targetType: "timberland_comms", idField: "comms_id", version: { table: "ach_timberland_comms", key: "closes_id", cols: ["id"] } },
+  // R41 S11: a review request is stale once that result was reviewed by anyone ("absent" becomes a row).
+  "ofac_review.record": { targetType: "ofac_review", idField: "result_id", version: { table: "ofac_match_reviews", key: "result_id", cols: ["id"] } },
 };
 
 /** The fixed id of the single ach_company_settings row (id boolean primary key = true). */
