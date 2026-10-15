@@ -107,6 +107,8 @@ export const KIND_SPECS: Readonly<Record<AchActionKind, KindSpec>> = {
   // R41 S6: a bank-step request is stale once the file moved (another step recorded, or voided).
   "ach_file.mark_uploaded": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
   "ach_file.mark_bank_approved": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status"] } },
+  // R41 S9: a funding request is stale once the file moved or the funding was already recorded.
+  "ach_file.confirm_funding": { targetType: "ach_file", idField: "file_id", version: { table: "ach_files", key: "id", cols: ["status", "funding_confirmed_at"] } },
 };
 
 /** The fixed id of the single ach_company_settings row (id boolean primary key = true). */

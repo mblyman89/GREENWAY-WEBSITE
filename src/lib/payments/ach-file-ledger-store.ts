@@ -50,6 +50,7 @@ import {
   roomLeft,
   type LedgerFileForLimits,
 } from "@/lib/payments/timberland-limits-core";
+import type { FundingFileState } from "@/lib/payments/timberland-funding-core";
 import { checkEffectiveDateForTimberland, latestUploadAndApproval, type DeadlineFile } from "@/lib/payments/timberland-deadline-core";
 import { firstFileGate, FIRST_FILE_LOCKED_PREFIX, type FirstFileGate, type GatePassedPrenote, type GatePrenoteFile } from "@/lib/payments/timberland-prenote-core";
 
@@ -88,10 +89,16 @@ export type AchFileRow = {
   /** R41 S6 (0274): who marked it approved in Timberland's portal, and when. */
   approved_at_bank_by: string | null;
   approved_at_bank_at: string | null;
+  /** The day money changes hands, when recorded (else the next banking day on or after the effective date). */
+  settlement_date: string | null;
+  /** R41 S9 (0276): the owner's record that the money was in the account, once. */
+  funding_confirmed_by: string | null;
+  funding_confirmed_at: string | null;
+  funding_confirmed_amount_cents: number | null;
 };
 
 const ROW_COLS =
-  "id, kind, source_id, file_date, file_id_modifier, filename, effective_date, entry_count, total_cents, sha256, status, released_by, released_at, voided_by, voided_at, voided_reason, uploaded_by, uploaded_at, approved_at_bank_by, approved_at_bank_at";
+  "id, kind, source_id, file_date, file_id_modifier, filename, effective_date, entry_count, total_cents, sha256, status, released_by, released_at, settlement_date, funding_confirmed_by, funding_confirmed_at, funding_confirmed_amount_cents, voided_by, voided_at, voided_reason, uploaded_by, uploaded_at, approved_at_bank_by, approved_at_bank_at";
 
 export type Sealed = {
   body: string;
@@ -566,4 +573,94 @@ export async function markAchFileBankStep(input: { fileId: string; actorId: stri
   const kind = String(data ?? "") as AchFileKind;
   if (!["payroll", "vendor", "prenote", "micro_entry"].includes(kind)) return { ok: false, error: "The database did not confirm the bank step. Reload the page." };
   return { ok: true, kind };
+}
+
+/**
+ * R41 S9 (0276): the owner records that he looked at the Timberland account
+ * and the money for this file was there. The app cannot read the balance (no
+ * bank feed), so this is his statement, stamped once. The database refuses a
+ * non-owner, a second confirmation, an amount under the file total, and any
+ * file that is not released or uploaded.
+ */
+export async function confirmAchFileFunding(input: { fileId: string; actorId: string; amountCents: number }): Promise<{ ok: true; kind: AchFileKind } | Fail> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  if (!/^[0-9a-f-]{36}$/i.test(input.fileId)) return { ok: false, error: ledgerDbErrorMessage("ACH_FILE_NOT_FOUND") };
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) return { ok: false, error: ledgerDbErrorMessage("ACH_FUNDING_SHORT") };
+  const { data, error } = await createSupabaseAdminClient().rpc("ach_file_confirm_funding", {
+    p_file_id: input.fileId,
+    p_actor: input.actorId,
+    p_amount_cents: input.amountCents,
+  });
+  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };
+  const kind = String(data ?? "") as AchFileKind;
+  if (!["payroll", "vendor", "prenote", "micro_entry"].includes(kind)) return { ok: false, error: "The database did not confirm the funding. Reload the page." };
+  return { ok: true, kind };
+}
+
+/** One file's total and status, for the funding form (re-read on the server, never trusted from the form). */
+export async function readAchFileForFunding(fileId: string): Promise<{ ok: true; totalCents: number; status: string } | Fail> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  if (!/^[0-9a-f-]{36}$/i.test(fileId)) return { ok: false, error: ledgerDbErrorMessage("ACH_FILE_NOT_FOUND") };
+  const { data, error } = await createSupabaseAdminClient().from("ach_files").select("total_cents, status").eq("id", fileId).maybeSingle();
+  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };
+  const r = data as { total_cents?: unknown; status?: unknown } | null;
+  if (!r) return { ok: false, error: ledgerDbErrorMessage("ACH_FILE_NOT_FOUND") };
+  const cents = Number(r.total_cents);
+  if (!Number.isSafeInteger(cents) || cents < 0 || typeof r.status !== "string") return { ok: false, error: "That ACH file row could not be read. Nothing was recorded." };
+  return { ok: true, totalCents: cents, status: r.status };
+}
+
+/** How far back an effective date can be and still settle today (a weekend plus a Monday holiday is 3; 7 is safe). */
+export const FUNDING_LOOKBACK_DAYS = 7;
+
+/**
+ * Files that may settle today, for the 8 am funding reminder. Reads every
+ * non-voided file whose effective date is within FUNDING_LOOKBACK_DAYS before
+ * today through today; the pure planner keeps only those whose settlement day
+ * is today. Fails loudly on an unreadable row or more than the cap.
+ */
+export async function readFilesForFundingReminder(todayIso: string): Promise<{ ok: true; files: FundingFileState[] } | Fail> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: NOT_CONFIGURED };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(todayIso)) return { ok: false, error: "Bad date." };
+  const from = new Date(Date.parse(`${todayIso}T00:00:00Z`) - FUNDING_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const { data, error } = await createSupabaseAdminClient()
+    .from("ach_files")
+    .select("id, kind, status, filename, total_cents, effective_date, settlement_date, funding_confirmed_at, funding_confirmed_amount_cents")
+    .in("status", ["released", "uploaded", "bank_approved"])
+    .gte("effective_date", from)
+    .lte("effective_date", todayIso)
+    .limit(OPEN_FILES_READ_CAP + 1);
+  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };
+  const rows = (data ?? []) as Record<string, unknown>[];
+  if (rows.length > OPEN_FILES_READ_CAP) return { ok: false, error: `More than ${OPEN_FILES_READ_CAP} files may settle today; the list was not trusted.` };
+  const files: FundingFileState[] = [];
+  for (const r of rows) {
+    const total = Number(r.total_cents);
+    const amt = r.funding_confirmed_amount_cents === null || r.funding_confirmed_amount_cents === undefined ? null : Number(r.funding_confirmed_amount_cents);
+    const sd = r.settlement_date;
+    const ok =
+      typeof r.id === "string" &&
+      typeof r.kind === "string" &&
+      typeof r.status === "string" &&
+      typeof r.filename === "string" &&
+      Number.isSafeInteger(total) &&
+      total >= 0 &&
+      typeof r.effective_date === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(r.effective_date) &&
+      (sd === null || sd === undefined || (typeof sd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sd))) &&
+      (amt === null || Number.isSafeInteger(amt));
+    if (!ok) return { ok: false, error: "An ACH file row could not be read for the funding check." };
+    files.push({
+      id: r.id as string,
+      kind: r.kind as string,
+      status: r.status as string,
+      filename: r.filename as string,
+      totalCents: total,
+      effectiveDate: r.effective_date as string,
+      settlementDate: typeof sd === "string" ? sd : null,
+      fundingConfirmedAt: typeof r.funding_confirmed_at === "string" ? r.funding_confirmed_at : null,
+      fundingConfirmedAmountCents: amt,
+    });
+  }
+  return { ok: true, files };
 }
