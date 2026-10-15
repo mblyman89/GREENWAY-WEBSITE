@@ -751,5 +751,10 @@ export function __runAchCalendarCoreTests(): { passed: number; failed: number } 
     threw = true;
   }
   ok(threw, "bad date throws");
+  // R41 S8: the four yearly Timberland tasks are annual, due at year-end, and upcoming (not nagging) in October.
+  const s8 = ["timberland_agreement_reread", "timberland_limits_reconfirm", "timberland_name_id_reconfirm", "timberland_schedule_f_selfcheck"] as const;
+  ok(s8.every((id) => ACH_CAL_TASKS.find((t) => t.id === id)?.cadence === "annual"), "S8 tasks are yearly");
+  ok(s8.every((id) => none.find((e) => e.task.id === id)?.status === "upcoming"), "S8 tasks upcoming in October, due 12-31");
+  ok(!rem.some((r) => s8.some((id) => r.dedupeKey.includes(id))), "S8 tasks do not nag before they are due");
   return { passed, failed };
 }

@@ -2259,7 +2259,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7/Q9 strict), section 3.7 backwards plan, first-file gate
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
-  assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
+  assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 31); // R40: ACH guide journeys, blockers, explainer; R41 S6: Timberland setup journey
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 114); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 28); // R47: home carousel advanced options
