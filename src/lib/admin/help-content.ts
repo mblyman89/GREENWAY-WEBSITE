@@ -739,12 +739,12 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I keep track of ACH record keeping and yearly to-dos?",
-        a: "Banking → Calendar & reminders lists what is due: the monthly bank-statement check, the quarterly Nacha rule check, the yearly reviews, the Timberland agreement and the written fraud procedure. Press 'Mark done' when you finish a task. It is saved with your name and date, and Stephen, Michael and the store are emailed when something is due or overdue. It also lists every Nacha rule change with the exact words and whether our code already handles it.",
+        a: "Banking → Calendar & reminders lists what is due: the monthly bank-statement check, the quarterly Nacha rule check, the yearly reviews (including re-reading the Timberland agreement, re-confirming Timberland's limits and Greenway's company name/ID with Brenda, and the Schedule F security self-check), the Timberland agreement and the written fraud procedure. Press 'Mark done' when you finish a task. It is saved with your name and date, and Stephen, Michael and the store are emailed when something is due or overdue. It also lists every Nacha rule change with the exact words and whether our code already handles it.",
         href: "/admin/settings/banking/calendar",
       },
       {
         q: "Where can I read the court cases and laws about ACH fraud, and how do I protect the business?",
-        a: "Banking → Legal library. Each court case and Washington law is quoted word for word from the court's or legislature's own website, then explained in plain English, with how Greenway already protects you. It opens with seven things to do to protect the business. It is education, not legal advice: ask a Washington business lawyer before a real decision.",
+        a: "Banking → Legal library. Each court case and Washington law is quoted word for word from the court's or legislature's own website, then explained in plain English, with how Greenway already protects you. It opens with seven things to do to protect the business. Its last section, 'Your Timberland agreement', quotes the agreement Greenway signed on 10/09/26 word for word: liability, indemnity, cancelling a file, reversals, account numbers, the 30-day statement rule and the Schedule F security notice. It is education, not legal advice: ask a Washington business lawyer before a real decision.",
         href: "/admin/settings/banking/library",
       },
       {
