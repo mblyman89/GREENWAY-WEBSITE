@@ -48,6 +48,7 @@ import {
   saveVendorBankingAction,
 } from "./vault-actions";
 import { VendorVaultCard } from "./VendorVaultCard";
+import { VendorFollowUpSection } from "./VendorFollowUpSection";
 import { VendorParticipationPanel } from "./VendorParticipationPanel";
 import { BankingHelpTabs } from "./BankingHelpTabs";
 import { participationRows } from "@/lib/payments/vendor-esign-store";
@@ -282,37 +283,9 @@ export default async function BankingVaultPage({
 
                 {participation ? <VendorParticipationPanel ready={participation.ready} rows={participation.rows} /> : null}
 
-                {/* R39 S4: vendors to follow up (owner: "flagged or known to me in some way") */}
+                {/* R39 S4: vendors to follow up (owner: "flagged or known to me in some way"). R41 Round 12: collapsible + search. */}
                 {flagsReady ? (
-                  <section className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/25 bg-[var(--admin-orange)]/[0.04] p-4">
-                    <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-white/60">
-                      Vendors to follow up ({followUp.length})
-                    </h2>
-                    <p className="mb-3 text-xs text-white/50">
-                      Most urgent first. {optedOutCount > 0 ? `${optedOutCount} vendor${optedOutCount === 1 ? "" : "s"} opted out of ACH (not listed). ` : ""}
-                      Flag or opt out a vendor on its own page.
-                    </p>
-                    {followUp.length === 0 ? (
-                      <p className="text-sm text-white/60">Nothing to chase. Every vendor is ACH-ready or opted out.</p>
-                    ) : (
-                      <ul className="divide-y divide-white/5">
-                        {followUp.map((r) => (
-                          <li key={r.vendorId} className="flex flex-wrap items-start justify-between gap-2 py-2">
-                            <div className="min-w-0">
-                              <Link href={`/admin/vendors/${r.vendorId}`} className="text-sm font-semibold text-white hover:underline">
-                                {r.name}
-                              </Link>
-                              <p className="text-xs text-white/50">{r.nextStep}</p>
-                              {r.warnings.map((w) => (
-                                <p key={w} className="text-xs text-[var(--admin-orange)]">{w}</p>
-                              ))}
-                            </div>
-                            <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs text-white/70">{r.label}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
+                  <VendorFollowUpSection rows={followUp} optedOutCount={optedOutCount} />
                 ) : vendors.length > 0 ? (
                   <p className="text-xs text-white/40">
                     {"The \u201cneeds bank info\u201d and \u201copted out\u201d flags turn on after migration 0258 is applied."}

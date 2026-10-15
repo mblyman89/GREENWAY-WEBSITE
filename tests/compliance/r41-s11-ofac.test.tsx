@@ -74,6 +74,8 @@ vi.mock("@/lib/payments/ach-gate", () => ({
 const core = await import("@/lib/payments/ofac-screening-core");
 const store = await import("@/lib/payments/ofac-screening-store");
 const { ScreeningPanel } = await import("@/app/admin/settings/banking/screening/ScreeningPanel");
+const { VendorFollowUpSection } = await import("@/app/admin/settings/banking/VendorFollowUpSection");
+const enroll = await import("@/lib/payments/vendor-ach-enrollment-core");
 
 const read = (p: string) => readFileSync(p, "utf8");
 const flat = (s: string) => s.replace(/\s+/g, " ");
@@ -641,11 +643,63 @@ describe("0278 content pins", () => {
 });
 
 // =========================================================================
+describe("Round 12: Vendors to follow up is collapsible and searchable", () => {
+  type Row = import("@/lib/payments/vendor-ach-enrollment-core").VendorFollowUpRow;
+  const row = (name: string, label = "Needs bank info", nextStep = "Ask for a voided check.", warnings: string[] = []): Row => ({ vendorId: `v-${name.replace(/\W/g, "")}`, name, state: "needs_bank_info", label, nextStep, warnings });
+  const rows = [row("\u00c9vergreen Supply LLC"), row("O'Brien Farms", "On hold", "Release the hold after the callback."), row("Cascade Grow", "Not verified", "Call back on a known number.", ["Bank info changed since it was verified"])];
+  it("filter: every word must match (name, status, next step, warning); accents, case and apostrophes ignored; order kept", () => {
+    const f = (q: string) => enroll.filterVendorFollowUp(rows, q).map((r) => r.name);
+    expect(f("")).toEqual(rows.map((r) => r.name));
+    expect(f("  ")).toEqual(rows.map((r) => r.name));
+    expect(f("EVERGREEN")).toEqual(["\u00c9vergreen Supply LLC"]);
+    expect(f("supply ever")).toEqual(["\u00c9vergreen Supply LLC"]);
+    expect(f("evergreen cascade")).toEqual([]);
+    expect(f("obrien")).toEqual(["O'Brien Farms"]);
+    expect(f("O\u2019Brien")).toEqual(["O'Brien Farms"]);
+    expect(f("on hold")).toEqual(["O'Brien Farms"]);
+    expect(f("callback")).toEqual(["O'Brien Farms"]);
+    expect(f("changed")).toEqual(["Cascade Grow"]);
+    expect(f("r")).toEqual(rows.map((r) => r.name));
+  });
+  it("renders closed by default (the vault is right below), with the count in the header and a labelled search box", () => {
+    const html = renderToStaticMarkup(<VendorFollowUpSection rows={rows} optedOutCount={2} />);
+    expect(html).toMatch(/^<details id="vendor-follow-up"/);
+    expect(html).not.toMatch(/^<details[^>]* open=""/);
+    expect(html).toContain("<summary");
+    expect(html).toContain("Vendors to follow up (3)</h2>");
+    expect(html).toContain('type="search"');
+    expect(html).toContain("Search vendors to follow up</label>");
+    expect(html).toContain('placeholder="Search by vendor name, status or next step"');
+    expect(html).toContain("2 vendors opted out of ACH (not listed).");
+    for (const r of rows) expect(html).toContain(`href="/admin/vendors/${r.vendorId}"`);
+    expect(html).toContain("Bank info changed since it was verified");
+    expect(html).toContain("max-h-[32rem]");
+  });
+  it("an empty list says so and shows no search box", () => {
+    const html = renderToStaticMarkup(<VendorFollowUpSection rows={[]} optedOutCount={0} />);
+    expect(html).toContain("Vendors to follow up (0)</h2>");
+    expect(html).toContain("Nothing to chase. Every vendor is ACH-ready or opted out.");
+    expect(html).not.toContain('type="search"');
+  });
+  it("the component remembers open/closed on this device, writes nothing to the server, and the page uses it", () => {
+    const c = read("src/app/admin/settings/banking/VendorFollowUpSection.tsx");
+    expect(c.startsWith('"use client";')).toBe(true);
+    expect(c).toContain('export const FOLLOW_UP_OPEN_KEY = "greenway.banking.vendorFollowUp.open";');
+    expect(c).toContain('window.localStorage.setItem(FOLLOW_UP_OPEN_KEY, now ? "1" : "0");');
+    expect(c).toContain("const shown = filterVendorFollowUp(rows, query);");
+    expect(c).not.toMatch(/fetch\(|action=|use server/);
+    const p = read("src/app/admin/settings/banking/page.tsx");
+    expect(p).toContain("<VendorFollowUpSection rows={followUp} optedOutCount={optedOutCount} />");
+    expect(p).not.toContain("{followUp.map(");
+  });
+});
+
+// =========================================================================
 describe("S11 docs", () => {
-  it("TEST-PLAN has T-368..T-370, the manual lists them, the roadmap has the S11 row; MIGRATIONS_TO_RUN has 0278", () => {
+  it("TEST-PLAN has T-368..T-371, the manual lists them, the roadmap has the S11 row; MIGRATIONS_TO_RUN has 0278", () => {
     const tp = read("docs/audit/TEST-PLAN.md");
     const man = read("docs/audit/test-manual/index.html");
-    for (const t of ["T-368", "T-369", "T-370"]) {
+    for (const t of ["T-368", "T-369", "T-370", "T-371"]) {
       expect(tp).toContain(`- **${t} (`);
       expect(man).toContain(`data-test="${t}"`);
       expect(man).toContain(`"${t}": "part-b--the-results-log"`);

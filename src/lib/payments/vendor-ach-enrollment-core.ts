@@ -300,6 +300,33 @@ export function vendorFollowUpList(
   return rows.sort((a, b) => rank(a.state) - rank(b.state) || a.name.localeCompare(b.name));
 }
 
+/** Fold for search: lower case, accents off, punctuation to spaces (so "O'Brien" finds "obrien" and "o brien"). */
+function foldForSearch(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/['\u2019]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * R41 (owner request, Round 12): the search box on "Vendors to follow up".
+ * Every word typed must appear in the vendor's name, status label, next step
+ * or a warning (any order, case and accents ignored). A blank search keeps
+ * every row. The order is never changed (most urgent first).
+ */
+export function filterVendorFollowUp(rows: readonly VendorFollowUpRow[], query: string): VendorFollowUpRow[] {
+  const words = foldForSearch(query).split(" ").filter(Boolean);
+  if (words.length === 0) return [...rows];
+  return rows.filter((r) => {
+    const name = foldForSearch(r.name);
+    const hay = ` ${name} ${name.replace(/ /g, "")} ${foldForSearch([r.label, r.nextStep, ...r.warnings].join(" "))} `;
+    return words.every((w) => hay.includes(w));
+  });
+}
+
 export function __runVendorAchEnrollmentTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -398,6 +425,20 @@ export function __runVendorAchEnrollmentTests(): { passed: number; failed: numbe
   // pay refusal
   ok(optOutPayRefusal(F(), "Acme") === null, "not opted out -> no refusal");
   ok((optOutPayRefusal(F({ optedOut: true, optedOutReason: "checks" }), "Acme") ?? "").includes("Acme opted out of ACH (checks)"), "opted out -> refusal");
+
+  // filterVendorFollowUp (R41 Round 12: the search box)
+  const fr = (name: string, label = "Needs bank info", nextStep = "Ask for a voided check.", warnings: string[] = []): VendorFollowUpRow => ({ vendorId: name, name, state: "needs_bank_info", label, nextStep, warnings });
+  const list = [fr("Évergreen Supply LLC"), fr("O'Brien Farms", "On hold"), fr("Cascade Grow", "Not verified", "Call back on a known number.", ["Bank info changed"])];
+  ok(filterVendorFollowUp(list, "").length === 3 && filterVendorFollowUp(list, "   ").length === 3, "blank search keeps every row");
+  ok(filterVendorFollowUp(list, "evergreen").map((r) => r.name).join() === "\u00c9vergreen Supply LLC", "accents ignored");
+  ok(filterVendorFollowUp(list, "SUPPLY ever").length === 1, "every word, any order, any case");
+  ok(filterVendorFollowUp(list, "evergreen cascade").length === 0, "all words must match (not any)");
+  ok(filterVendorFollowUp(list, "obrien").length === 1 && filterVendorFollowUp(list, "o'brien").length === 1, "apostrophes ignored");
+  ok(filterVendorFollowUp(list, "on hold").map((r) => r.name).join() === "O'Brien Farms", "matches the status label");
+  ok(filterVendorFollowUp(list, "changed").map((r) => r.name).join() === "Cascade Grow", "matches a warning");
+  ok(filterVendorFollowUp(list, "zzz").length === 0, "no match is an empty list");
+  ok(filterVendorFollowUp(list, "a").map((r) => r.name).join("|") === list.map((r) => r.name).join("|"), "order kept");
+  ok(filterVendorFollowUp(list, "") !== list, "a copy, never the caller's array");
 
   console.log(`vendor-ach-enrollment: ${passed} passed, ${failed} failed`);
   return { passed, failed };

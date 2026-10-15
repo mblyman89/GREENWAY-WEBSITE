@@ -2239,7 +2239,7 @@ __runLiquidVolumeTests();
   assertRan("ach-authorization-core", __runAchAuthorizationCoreTests(), 75); // R39 S1: FedACH days, prenote/NOC/return/reversal clocks, splits, release, retention, codes; R41 S0: owner-only release (11 dual/solo release checks -> 12 owner checks)
   assertRan("vault-release-notice-core", __runVaultReleaseNoticeCoreTests(), 17); // R39 S3: solo-release notice recipients, masking, escaping, phone reminder
   assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
-  assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 49); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
+  assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 59); // R39 S4: needs bank info / opted out card + 0258 CHECK planner; R41 Round 12: follow-up search (10)
   assertRan("employee-ach-card", __runEmployeeAchCardTests(), 29); // R39 S4: employee file card agrees with planPayrollEntries
   assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 122); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
   assertRan("keyed-hash", __runKeyedHashTests(), 9); // R39 S5: HKDF-separated HMAC keys (RFC 5869 / RFC 4231 vectors)
