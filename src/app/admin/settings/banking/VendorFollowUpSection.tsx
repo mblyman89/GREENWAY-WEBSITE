@@ -12,20 +12,23 @@
  * The order is unchanged: most urgent first. Nothing here writes anything.
  */
 import Link from "next/link";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { filterVendorFollowUp, type VendorFollowUpRow } from "@/lib/payments/vendor-ach-enrollment-core";
 
 /** localStorage key for open/closed on this device. */
 export const FOLLOW_UP_OPEN_KEY = "greenway.banking.vendorFollowUp.open";
 
 export function VendorFollowUpSection({ rows, optedOutCount }: { rows: VendorFollowUpRow[]; optedOutCount: number }) {
-  const [open, setOpen] = useState(false);
+  // Uncontrolled <details>: the server renders it closed; after mount we
+  // reopen it on the DOM node if this device last left it open (no React
+  // state, so no hydration mismatch and no setState inside an effect).
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [query, setQuery] = useState("");
   const searchId = useId();
 
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(FOLLOW_UP_OPEN_KEY) === "1") setOpen(true);
+      if (detailsRef.current && window.localStorage.getItem(FOLLOW_UP_OPEN_KEY) === "1") detailsRef.current.open = true;
     } catch {
       /* private mode: stays closed */
     }
@@ -37,10 +40,9 @@ export function VendorFollowUpSection({ rows, optedOutCount }: { rows: VendorFol
   return (
     <details
       id="vendor-follow-up"
-      open={open}
+      ref={detailsRef}
       onToggle={(e) => {
         const now = (e.currentTarget as HTMLDetailsElement).open;
-        setOpen(now);
         try {
           window.localStorage.setItem(FOLLOW_UP_OPEN_KEY, now ? "1" : "0");
         } catch {
