@@ -42,6 +42,10 @@
     {
       "path": "/api/cron/ach-approvals-reminder",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/ach-deadline-1pm",
+      "schedule": "0 20-21/1 * * *"
     }
   ]
 }
