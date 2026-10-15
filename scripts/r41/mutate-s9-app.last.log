@@ -1,0 +1,22 @@
+control (before) pass
+killed   deadline 9:00 -> 10:00
+killed   monthly fee line dropped to 0
+killed   form accepts less than the file total
+killed   reminder window opens before 8 am
+killed   reminder sent after the 9:00 deadline
+killed   bank-approved files get no reminder
+killed   reminder hour 8 -> 7
+killed   store sends the wrong amount
+killed   reminder read misses today's files
+killed   unreadable ledger is silent
+killed   failed email keeps the claim
+killed   checker audits the raw text
+killed   staff read error counts as no staff
+killed   inbox read error counts as zero
+killed   broken staff row accepted
+killed   unreadable match card counts as confirmed
+killed   two owners accepted
+killed   a third ACH role accepted
+killed   passed deadline not red
+control (after) pass
+total 19 killed 19 survivors []
