@@ -1,0 +1,28 @@
+Specially Designated Nationals List (SDN List)
+Consolidated Sanctions List (Non-SDN Lists)
+Additional Sanctions Lists
+Search OFAC's Sanctions Lists
+Sanctions Programs and Country Information
+Recent Actions
+OFAC License Application Page
+Additional OFAC Resources
+Frequently Asked Questions
+Civil Penalties and Enforcement Information
+OFAC Reporting System
+Selected General Licenses Issued by OFAC
+Contact OFAC
+Technical Notice:  403 Errors on Redirect to OFAC Sanctions List Data
+Release Date
+05/16/2024
+Recent Actions Body
+On May 6, 2024, OFAC launched its Sanctions List Service (SLS) application (
+https://sanctionslist.ofac.treas.gov/Home/index.html
+).  When SLS was launched, OFAC implemented URL redirects that automatically diverted traffic headed to the prior hosted location of OFAC's sanctions list data files, to the new SLS-hosted location.
+Therefore, users visiting a file hosted at the following URL:
+https:// www. treasury.gov/ofac/downloads/{FILE_NAME.EXTENSION}
+would be automatically diverted to the following new URL:
+https:// sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/{FILE_NAME.EXTENSION}
+OFAC has received reports that users with automated processes designed to download sanctions data files at the old URLs, are now receiving "403 errors" when attempting to access the SLS hosted files, via the above-mentioned automatic redirects. Internal testing conducted by OFAC found that the new SLS host requires all requests to have a "User-Agent" entry in the request's header (e.g. identifies the request as coming from as Chrome, Mozilla, etc.).  Applications written in .NET (and potentially other languages), do not specify a User-Agent by default. Therefore, users will need to explicitly add the User-Agent value to their HTTP request headers to avoid receiving this 403 error.
+For additional technical support on this or other matters, please contact OFAC at
+[OFAC contact email omitted from this public repo]
+.

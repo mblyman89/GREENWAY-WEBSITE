@@ -1,0 +1,26 @@
+Specially Designated Nationals List (SDN List)
+Consolidated Sanctions List (Non-SDN Lists)
+Additional Sanctions Lists
+Search OFAC's Sanctions Lists
+Sanctions Programs and Country Information
+Recent Actions
+OFAC License Application Page
+Additional OFAC Resources
+Frequently Asked Questions
+Civil Penalties and Enforcement Information
+OFAC Reporting System
+Selected General Licenses Issued by OFAC
+Contact OFAC
+How to Search OFAC's Sanctions Lists
+247. What does the Sanctions List Search Score mean?
+Answer
+The score field indicates the similarity between the name entered and resulting matches on one of OFAC's sanctions lists. It is calculated using two matching logic algorithms: one based upon phonetics, and a second based upon the similarity of the characters in the two strings. The slider bar defaults to a score of 100, which indicates an exact match.  Lower scores indicate potential matches.
+Date Released
+April 28, 2021
+Similar FAQs
+249. How is the Score calculated?
+248. How do I use the Minimum Name Score field and score slider bar?
+246. How does Sanctions List Search work?
+892. What is the difference between the previous version of Sanctions List Search, and the upgraded version made live to the public on January 25, 2021?
+253. When conducting a search using the ID field, does Sanctions List Search account for variations in non-alphanumeric characters?
+250. Does OFAC recommend a specific match threshold score?
