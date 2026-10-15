@@ -23,7 +23,8 @@ import { opsPageView, type OpsView } from "@/lib/payments/ach-ops-store";
 import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
 import { readVendorAchFlags, vendorFollowUpList } from "@/lib/payments/vendor-ach-enrollment-core";
 import { participationRows } from "@/lib/payments/vendor-esign-store";
-import { getAchCompanySettings, getCompanyEin, listPayrollRuns } from "@/lib/payroll/payroll-store";
+import { getAchCompanySettings, getCompanyEin, getTimberlandStamp, listPayrollRuns } from "@/lib/payroll/payroll-store";
+import { BANK_DUAL_APPROVAL_ON_FILE } from "@/lib/payments/timberland-profile-core";
 import { originatorReadiness } from "@/lib/payments/timberland-originator-core";
 import { listEmployeeDepositPlans } from "@/lib/payroll/employee-deposit-plans-store";
 import { employeeAchCard } from "@/lib/payroll/employee-ach-card-core";
@@ -148,6 +149,14 @@ export async function loadGuideSnapshot(todayIso: string): Promise<{ snapshot: G
   const llama = isLlamaParseConfigured();
   const run = runs[0] ?? null;
 
+  // R41 S6: Timberland setup. The S2 stamp and a passed prenote are read; a
+  // failed read is null (shown as "could not be read", never as done).
+  const stamp = await safe("Timberland stamp", () => getTimberlandStamp(), { columnsReady: false, stamp: null, error: "read failed" });
+  if (stamp.error) problems.push(`Timberland stamp: ${stamp.error}`);
+  const matchConfirmed = stamp.error ? null : Boolean(stamp.columnsReady && stamp.stamp?.confirmedAt);
+  const prenote = await safe("Prenote results", () => readFirstPrenotePassed(), { ok: false as const, error: "read failed" });
+  if (!prenote.ok) problems.push(`Prenote results: ${prenote.error}`);
+
   const snapshot: GuideSnapshot = {
     todayIso,
     // opsPageView reports ready=false exactly when the 0258-0263 tables are
@@ -181,6 +190,15 @@ export async function loadGuideSnapshot(todayIso: string): Promise<{ snapshot: G
       reviewsMissing: (ops?.reviews ?? []).filter((r) => r.status === "missing_date").length,
     },
     lastPayroll: run ? { id: run.id, payDate: run.pay_date, generated: Boolean(run.nacha_filename) } : null,
+    timberlandSetup: {
+      accessReady: isTaskDoneNow("timberland_access_ready", todayIso, done.map),
+      usersPhones: isTaskDoneNow("timberland_users_phones", todayIso, done.map),
+      scheduleGEmail: isTaskDoneNow("timberland_schedule_g_email", todayIso, done.map),
+      countersigned: isTaskDoneNow("timberland_countersigned_copy", todayIso, done.map),
+      matchConfirmed,
+      firstPrenotePassed: prenote.ok ? prenote.passed : null,
+      dualApprovalOn: BANK_DUAL_APPROVAL_ON_FILE,
+    },
   };
   return { snapshot, problems, ops };
 }
@@ -217,4 +235,12 @@ export async function setDualNoteDismiss(value: DualNoteDismiss): Promise<{ ok: 
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Save failed." };
   }
+}
+
+/** R41 S6: has any prenote check passed? (ach_verifications, 0258/0263). Errors are errors, never "no". */
+async function readFirstPrenotePassed(): Promise<{ ok: true; passed: boolean } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database is not configured." };
+  const { data, error } = await createSupabaseAdminClient().from("ach_verifications").select("id").eq("method", "prenote").eq("status", "passed").limit(1);
+  if (error) return { ok: false, error: error.message.slice(0, 200) };
+  return { ok: true, passed: (data ?? []).length > 0 };
 }

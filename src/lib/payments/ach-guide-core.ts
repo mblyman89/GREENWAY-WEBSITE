@@ -32,7 +32,7 @@ export type GuideStep = {
   hrefLabel: string;
 };
 
-export type JourneyId = "setup" | "employees" | "vendors" | "payday";
+export type JourneyId = "setup" | "timberland" | "employees" | "vendors" | "payday";
 
 export type Journey = {
   id: JourneyId;
@@ -116,6 +116,18 @@ export type GuideSnapshot = {
   };
   /** Most recent payroll run, if any. */
   lastPayroll: { id: string; payDate: string; generated: boolean } | null;
+  /** R41 S6: the "Timberland setup" checklist. null = could not be read (never shown as done). */
+  timberlandSetup: {
+    accessReady: boolean;
+    usersPhones: boolean;
+    scheduleGEmail: boolean;
+    countersigned: boolean;
+    /** S2: "Timberland confirmed on ___" stamp is set. */
+    matchConfirmed: boolean | null;
+    /** A prenote check has passed (S7 builds the 6-banking-day wait on top). */
+    firstPrenotePassed: boolean | null;
+    dualApprovalOn: boolean;
+  };
 };
 
 // ───────────────────────────────────────────────────────────── links ───────
@@ -130,6 +142,7 @@ export const GUIDE_LINKS = {
   holds: "/admin/settings/banking/operations#holds",
   checks: "/admin/settings/banking/operations#checks",
   reviews: "/admin/settings/banking/operations#reviews",
+  files: "/admin/settings/banking/operations#files",
   records: "/admin/settings/banking/operations#records",
   calendar: "/admin/settings/banking/calendar",
   fraudProcedure: "/admin/settings/banking/calendar#fraud-procedure",
@@ -219,7 +232,7 @@ export function buildJourneys(s: GuideSnapshot): Journey[] {
     {
       id: "timberland",
       title: "Timberland agreement and security procedures",
-      detail: s.timberlandAgreementDone ? "Recorded as on file." : "Get a copy of the signed ACH agreement, accept every security option (dual control), then mark it done on the calendar.",
+      detail: s.timberlandAgreementDone ? "Recorded as on file." : "Keep the signed ACH agreement on file, read Schedules F and G (token or text code), then mark it done on the calendar.",
       status: st(s.timberlandAgreementDone),
       href: GUIDE_LINKS.calendar,
       hrefLabel: "Open the calendar",
@@ -358,15 +371,48 @@ export function buildJourneys(s: GuideSnapshot): Journey[] {
     },
     {
       id: "pay-approve",
-      title: "The other owner approves the file at Timberland (dual control)",
-      detail: "One of you uploads, the other approves. This is the single best protection against a stolen login (Patco, Choice Escrow).",
+      title: "Upload and approve the file at Timberland, then mark both steps",
+      detail: "You upload the released file in Timberland's cash management portal and approve it with your token or text code, then press Mark uploaded and Mark approved on Operations. Timberland's dual approval is off by your choice.",
       status: "optional",
-      href: GUIDE_LINKS.library,
-      hrefLabel: "Why (the cases)",
+      href: GUIDE_LINKS.files,
+      hrefLabel: "Open released files",
     },
   ]);
 
-  return [setup, employees, vendors, payday];
+  const t = s.timberlandSetup;
+  const unread = "Could not be read. Reload the page; this is not counted as done.";
+  const timberland = journey("timberland", "Timberland setup", "Michael is Greenway's only Timberland user. These make sure Timberland's side matches ours.", [
+    { id: "tb-access", title: "Cash management access is ready (Brenda)", detail: t.accessReady ? "Recorded on the calendar." : "Brenda will tell you when the separate cash management login is set up. Then press Done on the calendar.", status: st(t.accessReady), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
+    { id: "tb-users", title: "Users and phones are correct (Michael only)", detail: t.usersPhones ? "Recorded on the calendar." : "Check the portal lists Michael only, and the text-code phone is yours.", status: st(t.usersPhones), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
+    { id: "tb-email", title: "Schedule G email corrected", detail: t.scheduleGEmail ? "Recorded on the calendar." : "You are telling Brenda. Until she confirms, watch the portal for security notices.", status: st(t.scheduleGEmail), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
+    { id: "tb-countersigned", title: "Countersigned agreement on file", detail: t.countersigned ? "Recorded on the calendar." : "Ask Brenda for the copy with Timberland's countersignature.", status: st(t.countersigned), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
+    {
+      id: "tb-dual",
+      title: "Dual approval at Timberland",
+      detail: t.dualApprovalOn ? "On at Timberland: a second Timberland user approves each file." : "Off by choice (signed Schedule C). Optional: Timberland offers it if you ever want a second approver at the bank.",
+      status: "optional",
+      href: GUIDE_LINKS.files,
+      hrefLabel: "Open released files",
+    },
+    {
+      id: "tb-match",
+      title: "Timberland confirmed our setup (match card)",
+      detail: t.matchConfirmed === null ? unread : t.matchConfirmed ? "The \"Timberland confirmed on ___\" stamp is set on My banking." : "On My banking, read the match card to Timberland and record their confirmation.",
+      status: st(t.matchConfirmed === true),
+      href: GUIDE_LINKS.company,
+      hrefLabel: "Open My banking",
+    },
+    {
+      id: "tb-prenote",
+      title: "First prenote approved",
+      detail: t.firstPrenotePassed === null ? unread : t.firstPrenotePassed ? "A prenote has passed." : "Send a prenote for the first account and record the result when it passes.",
+      status: !ready ? "waiting" : st(t.firstPrenotePassed === true),
+      href: GUIDE_LINKS.checks,
+      hrefLabel: "Open account checks",
+    },
+  ]);
+
+  return [setup, timberland, employees, vendors, payday];
 }
 
 // ──────────────────────────────────────────────────────────── blockers ─────
@@ -583,6 +629,7 @@ export function sampleSnapshot(over: Partial<GuideSnapshot> = {}): GuideSnapshot
     vendorEsignInvitesOpen: 0,
     ops: { notices: [], holds: [], checksPlanned: 0, checksWaiting: [], checksActionable: [], reviewsOverdue: 0, reviewsMissing: 0 },
     lastPayroll: { id: "r1", payDate: "2026-10-10", generated: true },
+    timberlandSetup: { accessReady: true, usersPhones: true, scheduleGEmail: true, countersigned: true, matchConfirmed: true, firstPrenotePassed: true, dualApprovalOn: false },
     ...over,
   };
 }
@@ -598,7 +645,7 @@ export function __runAchGuideCoreTests(): { passed: number; failed: number } {
     }
   };
   const green = buildJourneys(sampleSnapshot());
-  ok(green.length === 4, "four journeys");
+  ok(green.length === 5, "five journeys (R41 S6 adds Timberland setup)");
   ok(green.every((j) => j.percent === 100 && j.next === null), "all green when everything is done");
   ok(buildBlockers(sampleSnapshot()).length === 0, "no blockers when all is well");
   ok(green[0].steps.find((s) => s.id === "llamaparse")?.status === "optional", "DPA optional without LlamaParse");
@@ -606,7 +653,7 @@ export function __runAchGuideCoreTests(): { passed: number; failed: number } {
   const fresh = sampleSnapshot({ migrationsReady: false, migrationError: "One-time setup needed: apply migrations 0258 to 0263", encryptionConfigured: false, companyAchComplete: false, companyMissing: ["Company ID"] });
   const fj = buildJourneys(fresh);
   ok(fj[0].percent < 100 && fj[0].next?.id === "migrations", "setup next = migrations");
-  ok(fj[1].steps.every((s) => s.status === "waiting"), "employee steps wait for setup");
+  ok(fj[2].steps.every((s) => s.status === "waiting"), "employee steps wait for setup");
   const fb = buildBlockers(fresh);
   ok(fb.slice(0, 3).every((b) => b.severity === "stops_all"), "stops_all first");
   ok(fb.some((b) => b.problem.includes("Company ID")), "names missing company field");
@@ -621,7 +668,7 @@ export function __runAchGuideCoreTests(): { passed: number; failed: number } {
   ok(bb.length === 1 && bb[0].who === "Bo", "inactive employees ignored");
   ok(bb[0].fallback === PAY_BY_CHECK_FALLBACK, "wage fallback offered");
   ok(bb[0].href === GUIDE_LINKS.checks, "verifying -> account checks");
-  ok(buildJourneys(blockedEmp)[3].steps.find((s) => s.id === "pay-ready")?.status === "blocked", "payday blocked");
+  ok(buildJourneys(blockedEmp)[4].steps.find((s) => s.id === "pay-ready")?.status === "blocked", "payday blocked");
 
   const held = sampleSnapshot({ ops: { ...sampleSnapshot().ops, holds: [{ id: "h1", payee: "Bo", employeeId: "e2" }] }, employees: blockedEmp.employees });
   const hb = buildBlockers(held);
@@ -640,5 +687,16 @@ export function __runAchGuideCoreTests(): { passed: number; failed: number } {
   ok(new Set(EXPLAIN_RULE_IDS).size === EXPLAIN_RULE_IDS.length, "rule ids unique");
   const dpa = buildJourneys(sampleSnapshot({ llamaParseConfigured: true }));
   ok(dpa[0].steps.find((s) => s.id === "llamaparse")?.status === "todo" && dpa[0].percent < 100, "DPA counts when LlamaParse is on");
+  // R41 S6: Timberland setup
+  const tb = (o: Partial<GuideSnapshot["timberlandSetup"]>) => buildJourneys(sampleSnapshot({ timberlandSetup: { ...sampleSnapshot().timberlandSetup, ...o } }))[1];
+  ok(green[1].id === "timberland" && green[1].percent === 100, "Timberland setup is the second journey and green when all true");
+  ok(green[1].steps.map((x) => x.id).join(",") === "tb-access,tb-users,tb-email,tb-countersigned,tb-dual,tb-match,tb-prenote", "Timberland setup items in the plan's order");
+  ok(tb({ dualApprovalOn: false }).steps.find((x) => x.id === "tb-dual")?.status === "optional" && /Off by choice/.test(tb({}).steps.find((x) => x.id === "tb-dual")!.detail), "dual approval: optional, off by choice, never red");
+  ok(tb({}).total === 6, "dual approval never counts against you");
+  ok(tb({ matchConfirmed: null }).steps.find((x) => x.id === "tb-match")?.status === "todo", "an unreadable stamp is not done");
+  ok(tb({ firstPrenotePassed: null }).steps.find((x) => x.id === "tb-prenote")?.status === "todo", "an unreadable prenote read is not done");
+  ok(tb({ scheduleGEmail: false }).next?.id === "tb-email", "Schedule G email shows as next when not done");
+  ok(buildJourneys(sampleSnapshot({ migrationsReady: false }))[1].steps.find((x) => x.id === "tb-prenote")?.status === "waiting", "prenote waits for setup");
+  ok(!green.flatMap((j) => j.steps).some((x) => /accept every security|the other owner|Stephen and Michael can upload/i.test(x.title + x.detail)), "no old Timberland claims in any step");
   return { passed, failed };
 }

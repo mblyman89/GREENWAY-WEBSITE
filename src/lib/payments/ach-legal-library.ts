@@ -75,7 +75,7 @@ export const ACH_LEGAL_LIBRARY: readonly LegalEntry[] = [
     quote: "These collective failures, taken as a whole, rendered Ocean Bank's security procedures commercially unreasonable.",
     whatHappened: "Over seven days, criminals using Patco's online-banking credentials made six withdrawals totaling $588,851.26. The bank's own system scored them far riskier than Patco's normal activity but let them through. The appeals court held the bank's security was not commercially reasonable and sent the case back.",
     plainEnglish: "Under the funds-transfer law (UCC Article 4A, in Washington RCW 62A.4A-202), a bank generally carries an unauthorized loss unless its security procedure was 'commercially reasonable' and it followed it. Patco won its appeal on that point, but it took years of litigation. The lesson for a small business is practical: use every security option your bank offers, because that is what courts look at.",
-    howWeProtectYou: "Ask Timberland which security procedures it offers for ACH origination (dual approval, tokens, call-backs, limits) and turn them on. The checklist in the Guide tab reminds you every year.",
+    howWeProtectYou: "Timberland's procedure is your login plus a token or text code for every file (Schedule F), and limits (Schedule C). Timberland does not do call-backs for ACH, so Greenway calls payees back before any bank change. Dual approval is offered and is off by the owner's choice. The year-end calendar task reviews it.",
     appLink: "/admin/settings/banking?tab=company",
   },
   {
@@ -89,7 +89,7 @@ export const ACH_LEGAL_LIBRARY: readonly LegalEntry[] = [
     quote: "Rather, this appears to be a case where “an informed customer refuses a security procedure that is commercially reasonable and suitable for that customer and insists on using a higher-risk procedure because it is more convenient or cheaper[,]” in which case “the customer has voluntarily assumed the risk of failure of the procedure",
     whatHappened: "A small title company declined its bank's offer of 'dual control' (a second person must approve each transfer) and signed a waiver, because often only one employee was in the office. Internet fraudsters then sent a $440,000 wire from its account. The court held the company had to bear the loss, because it had turned down the stronger protection.",
     plainEnglish: "If your bank offers a security feature and you refuse it because it is inconvenient, the loss from a fraud it would have stopped is likely yours. 'We are a small shop' did not help this company.",
-    howWeProtectYou: "Accept every security procedure Timberland offers, especially dual approval. In Greenway's system Michael, the owner, makes and releases every ACH change himself; anything Stephen adds, changes, removes or releases waits for Michael's approval, and every change is logged with who entered it and who approved it.",
+    howWeProtectYou: "Timberland offers dual approval, and Greenway's owner has chosen to leave it off and be the only Timberland user, knowing this case. The protections instead: his login plus a token or text code for every file, receipts for every ACH action, holds and call-backs before any bank change, and limits. In Greenway's system Michael, the owner, makes and releases every ACH change himself; anything Stephen adds, changes, removes or releases waits for Michael's approval, and every change is logged.",
     appLink: "/admin/settings/banking/operations#holds",
   },
   {
