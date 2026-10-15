@@ -1,0 +1,24 @@
+control (before) pass
+killed   q14-payroll-in-discretionary
+killed   q14-applies-to-ccd-too
+killed   q18-default-lenient
+killed   q20-id-renamed
+killed   task-cadence-once
+killed   task-quote-altered
+killed   task-link-dead-anchor
+killed   task-law-id-unknown
+killed   task-dropped
+killed   lib-kind-statute
+killed   lib-source-url
+killed   lib-quote-char
+killed   lib-protect-dishonest
+killed   page-section-renamed
+killed   page-private-source-linked
+killed   page-agreement-in-laws
+killed   help-dropped
+killed   kb-link-dropped
+killed   plan-t360-dropped
+killed   roadmap-pr-dropped
+killed   fr-quote-altered
+control (after) pass
+total 21 killed 21 survivors []
