@@ -2554,3 +2554,38 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0274_ach_file_bank_steps.rollback.sql`.
   It drops the two functions and puts the 0273 guard back. Files already
   marked uploaded or approved keep their stamps. Nothing is deleted.
+
+## R41 — 0275 — Timberland's prenote wait, floored in the database
+
+- [ ] `0275_ach_prenote_timberland_wait.sql` makes the database hold the
+  site to Timberland's prenote wait. Your signed ACH agreement, section 6,
+  says you will not send live payments "until at least 6 banking days
+  following the settlement date of the prenotification Entry".
+  - **What the site does.** When a prenote file is marked sent, the site
+    works out the first day a live file may be uploaded: 6 banking days
+    after the prenote settles, counting only days Timberland can use.
+  - **What the database adds.** The database has no bank holiday calendar,
+    so it checks a floor instead: the first live day must be at least 8
+    calendar days after settlement. Six banking days always cross a
+    weekend, so a correct day is never refused. Nacha's shorter 3-day wait
+    is refused.
+  - **Micro entries are not affected.** Section 6 is about prenotes only.
+  - Add-only: one new trigger. Nothing from 0263 is replaced. Prenotes
+    already sent keep their dates.
+
+  Apply it **after 0263** (any order with 0271 to 0274). It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_trigger where tgname = 'trg_ach_verification_timberland_wait') as trg,
+         (select count(*) from pg_proc where proname = 'ach_verification_timberland_wait') as fn;
+  -- trg | fn
+  -- 1   | 1
+  ```
+
+  For the full proof, paste `scripts/recon/ach-prenote-wait-0275-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0275 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0275_ach_prenote_timberland_wait.rollback.sql`.
+  It drops the trigger and its function. Nothing is deleted.

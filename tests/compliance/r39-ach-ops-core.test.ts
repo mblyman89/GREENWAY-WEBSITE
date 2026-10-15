@@ -119,7 +119,7 @@ describe("self-tests and teaching", () => {
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(96);
     const reg = readFileSync(join(ROOT, "scripts/compliance/run-pure-selftests.ts"), "utf8");
-    expect(reg).toContain('assertRan("ach-ops-core", __runAchOpsCoreTests(), 96)');
+    expect(reg).toContain('assertRan("ach-ops-core", __runAchOpsCoreTests(), 97)');
   });
   it("the micro-entry monitoring authority is taught and nothing is left uncited", () => {
     const l = achLesson("test-credit-monitoring");

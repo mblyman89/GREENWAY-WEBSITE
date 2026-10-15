@@ -2245,7 +2245,7 @@ __runLiquidVolumeTests();
   assertRan("no-track-paths", __runNoTrackPathTests(), 8); // R39 S7: no analytics where the URL holds a token
   assertRan("vendor-proof-shrink", __runVendorProofShrinkTests(), 14); // R39 S7: phone photo -> under Vercel's 4.5 MB body cap
   assertRan("ach-return-log-core", __runAchReturnLogCoreTests(), 37); // R39 S7: returns / NOC log (parse, hold reason, owner email, urgency)
-  assertRan("ach-ops-core", __runAchOpsCoreTests(), 96); // R39 S7: account-check files, release/review/legal-hold forms, test-credit monitoring, 0263 errors. R41 S3: +5 (the ledger File ID Modifier, no fixed P/M) R41 S5: +4 (the default and the release check use the Timberland deadline; the "a day ahead" wording is gone)
+  assertRan("ach-ops-core", __runAchOpsCoreTests(), 97); // R39 S7: account-check files, release/review/legal-hold forms, test-credit monitoring, 0263 errors. R41 S3: +5 (the ledger File ID Modifier, no fixed P/M) R41 S5: +4 (the default and the release check use the Timberland deadline; the "a day ahead" wording is gone) R41 S7: +1 (0275 TIMBERLAND_WAIT mapped)
   assertRan("ach-ops-ui-core", __runAchOpsUiCoreTests(), 17); // R39 S7: Operations page words (site URL, who was told, urgency, monitor, owner/request hint (R41 S0))
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 130); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails; S6: two bank-step kinds
   assertRan("ach-gate-core", __runAchGateCoreTests(), 145); // R41 S0: versions, redirect outcomes, replay match, supersede, payload parse, vendor build outcome; S6: two bank-step specs
@@ -2256,7 +2256,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-bank-steps-core", __runTimberlandBankStepsCoreTests(), 28); // R41 S6: honest Timberland wording, bank-step buttons in order, yearly dismiss of the grey line
   assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
   assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 71); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays, section 3.7 table, reminders
-  assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 36); // R41 S7: section 6 six usable days from settlement (Q7/Q9 strict), section 3.7 backwards plan, first-file gate
+  assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7/Q9 strict), section 3.7 backwards plan, first-file gate
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders

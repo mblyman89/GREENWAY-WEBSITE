@@ -67,6 +67,18 @@ export function prenoteLiveUploadDay(settlement: string): string {
   return addUsableDays(settlement, PRENOTE_WAIT_BANKING_DAYS);
 }
 
+/**
+ * The database cannot see the Federal Reserve calendar, so migration 0275
+ * enforces a calendar-day FLOOR that is always at or before the real day:
+ * six weekdays cannot fit without crossing a weekend, so the sixth usable day
+ * after any date is at least 8 calendar days later (holidays and Q9 Fridays
+ * only push it further). The self-test proves this for every day 2026-2028.
+ * The app writes the exact day; the database refuses anything earlier than
+ * the floor, so a bug or a hand-typed RPC can never shorten the wait to
+ * Nacha's three days.
+ */
+export const PRENOTE_DB_FLOOR_CALENDAR_DAYS = 8;
+
 /** Plain words for the wait, used by the Account checks page and the errors. */
 export const PRENOTE_WAIT_WORDS = `${PRENOTE_WAIT_BANKING_DAYS} banking days after it settles (Timberland agreement section 6)`;
 
@@ -245,6 +257,18 @@ export function __runTimberlandPrenoteCoreTests(): { passed: number; failed: num
   for (const s of ["2026-10-13", "2026-11-24", "2026-12-24", "2027-07-02", "2027-12-20"]) {
     ok(prenoteLiveUploadDay(s) > nachaMinPrenoteLiveDate(s), `Timberland day is after Nacha's floor (${s})`);
   }
+
+  // the 0275 database floor is never later than the real day (every day 2026-01-01 .. 2028-12-15).
+  let floorOk = true;
+  let tightest = 99;
+  for (let t = Date.parse("2026-01-01T00:00:00Z"); t <= Date.parse("2028-12-15T00:00:00Z"); t += 86_400_000) {
+    const d = new Date(t).toISOString().slice(0, 10);
+    const gap = Math.round((Date.parse(`${prenoteLiveUploadDay(d)}T00:00:00Z`) - t) / 86_400_000);
+    if (gap < PRENOTE_DB_FLOOR_CALENDAR_DAYS) floorOk = false;
+    tightest = Math.min(tightest, gap);
+  }
+  ok(floorOk, "0275 floor (8 calendar days) never refuses a correct Timberland day");
+  ok(tightest === PRENOTE_DB_FLOOR_CALENDAR_DAYS, "the floor is tight (some settlement day is exactly 8 days from its live day)");
 
   // section 3.7 backwards table.
   const table: [string, string, string, string][] = [
