@@ -75,11 +75,14 @@ URLs come from `google_search` web results + retailer/brand pages, verified via 
 URL-context content is billed as input tokens. The owner's monthly budget guard (`getBudgetStatus`)
 already runs before every call. [S3][S5]
 
-**R8 — Image-recommendation practice (DAM / PIM).** Akeneo, Salsify and Bynder-style PIM↔DAM links
-match assets to products by rules over asset metadata (filename/SKU/brand tokens). Each match carries
-a confidence and goes to a human to approve. A confirmed link is stored as a durable product↔asset
-relationship that later imports reuse. That is the pattern used here: memory first (human-confirmed),
-then metadata scoring, shown as a confidence %. Nothing auto-attaches. [S8][S9]
+**R8 — Asset↔product linking practice (PIM/DAM).** Akeneo's Asset Manager links assets to products
+with "product link rules" built from asset attributes. Those attributes are usually taken from the
+filename or asset code ("most of you use a naming convention … the SKU of the product corresponding to
+the asset"), and once made, the link is stored on the product. We use the same signal (asset title,
+filename, alt text and tags against product words). The difference is AGENTS.md's drafts-only rule: a
+match is a **recommendation with a confidence %** that a person attaches, never an automatic link.
+A link a person confirms is remembered by identity key, so later intakes and the Cultivera import
+get it back first. [S8]
 
 ## 3. Design
 
@@ -137,6 +140,5 @@ product. It records the usage, writes memory and audits `catalog_draft.image_att
 - [S4] Interactions breaking changes, May 2026 (steps, response_format, Api-Revision timeline) — https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026
 - [S5] URL context tool — https://ai.google.dev/gemini-api/docs/url-context
 - [S6] Image generation guide (image search limited to image models) — https://ai.google.dev/gemini-api/docs/image-generation
-- [S7] Google AI developer forum, image-search grounding regressions (Mar–Apr 2026) — https://discuss.ai.google.dev
-- [S8] Akeneo PIM, asset ↔ product link rules — https://help.akeneo.com/serenity-take-the-power-over-your-products/serenity-asset-manager
-- [S9] Salsify / Bynder DAM-PIM connector (human-approved product-asset matching) — https://www.bynder.com/en/integrations/salsify/
+- [S7] Google AI Developers Forum threads on image-search grounding returning no data (Mar–Apr 2026), found by forum search — https://discuss.ai.google.dev
+- [S8] Akeneo, "About the product link rules" — https://help.akeneo.com/serenity-build-your-catalog/36-serenity-about-the-product-link-rules
