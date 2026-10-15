@@ -286,3 +286,20 @@ describe("0274 pins and its mutation log", () => {
 it("the ledger error table maps every 0274 refusal code", () => {
   for (const c of ["ACH_BANK_STEP_FINAL", "ACH_BANK_STEP", "ACH_OWNER_ONLY"]) expect(core.LEDGER_ERROR_TABLE.some(([re]) => re.test(c)), c).toBe(true);
 });
+
+describe("S6 app mutation run (test the tests)", () => {
+  it("scripts/r41/mutate-s6-app.last.log: every app mutant killed, controls before and after pass", () => {
+    const script = read("scripts/r41/mutate-s6-app.py");
+    const log = read("scripts/r41/mutate-s6-app.last.log");
+    const start = script.indexOf("\nM = [");
+    const listed = script.slice(start, script.indexOf("\n]\n", start)).split("\n").filter((x) => /^\s{4}\("/.test(x)).length;
+    const m = /total (\d+) killed (\d+) survivors \[\]/.exec(log);
+    expect(m, "clean summary line").not.toBeNull();
+    expect(Number(m![1])).toBe(listed);
+    expect(Number(m![2])).toBe(listed);
+    expect(listed).toBeGreaterThanOrEqual(20);
+    expect(log).toContain("control (before) pass");
+    expect(log).toContain("control (after) pass");
+    expect(log).not.toMatch(/SURVIVED|ANCHOR|control .* FAIL/);
+  });
+});

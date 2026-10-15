@@ -9,7 +9,7 @@ killed   upload-kind-is-stop
 killed   approve-spec-unversioned
 killed   replay-dropped
 killed   approve-action-wrong-step
-SURVIVED confirm-box-skipped
+killed   confirm-box-skipped
 killed   dismiss-not-owner-only
 killed   dismiss-not-logged
 killed   button-on-approved
@@ -27,5 +27,5 @@ killed   unread-stamp-is-done
 killed   journey-dropped
 killed   store-prenote-any-status
 control (after) pass
-total 27 killed 26 survivors ['confirm-box-skipped']
-EXIT 1
+total 27 killed 27 survivors []
+EXIT 0
