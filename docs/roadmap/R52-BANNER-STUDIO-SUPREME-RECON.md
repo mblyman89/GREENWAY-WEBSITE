@@ -132,7 +132,7 @@ design.layers: Layer[]   // cap 40 (perf-tested), replaces boxes/buttons
 - **Text layer** = today's `DesignTextBox` fields + new: `strokeWidth`, `strokeColor`, `strokeMode: "outside"|"center"` (paint-order, R6); `fill: {kind:"solid"|"linear"|"radial", stops[], angle}` (background-clip:text, R13); `shadows: Shadow[]` (≤4 layered text-shadows, incl. glow/neon/long-shadow presets); `highlight` (per-line box-decoration-break pill); `features: {liga, dlig, smcp, onum, tnum, ss01…ss20, swsh}` (font-feature-settings, R13); `axes: Record<tag, number>` (R8); `fitMode: "grow"|"shrink"|"fixed"` (R9); `textVAlign`; `curve` (later, SVG textPath).
 - **Shape layer** = `shape: "rect"|"ellipse"|"line"|"triangle"|"polygon"|"star"|"arrow"|"blob"`, `sides`, `fill` (solid/gradient/none), `border {width, color, style: solid|dashed|dotted, radius}`, `shadow` (box-shadow or `filter: drop-shadow` for non-rect clip-paths), `blur` (backdrop-filter "glass" card). Render: plain `<div>` + `clip-path: polygon()` / `border-radius` — zero JS, Baseline 2020 (R13). Lines and stars render as inline SVG.
 - **Image/sticker layer** = a second picture (logo, product cut-out, badge PNG/WebP/SVG-sanitised) from the Media Library, with fit, radius, border, drop-shadow, flip, filters.
-- **Icon layer** = curated icon set (e.g. lucide, already a common React dep — verify in package.json at build time) rendered as inline SVG with fill/stroke colour.
+- **Icon layer** = curated icon set rendered (note: `package.json` has **no** icon library today — verified; adding one such as lucide-react, ISC-licensed, is a P5 dependency decision for the owner) rendered as inline SVG with fill/stroke colour.
 - **Button layer** = today's `DesignButton` + rotation/opacity/z-order.
 - **Group** = `{type:"group", children ids}`; moving a group moves members; Layers panel shows it as a folder.
 
@@ -174,7 +174,7 @@ Rules: studio `open` initialises to `design?.enabled ?? true` for new slides and
 1. Studio "Picture" panel shows **one** `ContentImageField` bound to the slide's main `image` (video allowed, R44).
 2. Under it: "Focus — computer" and "Focus — phone" pickers (already exist: `focusX/Y`, `focusXMobile/YMobile`) + zoom per device (add `zoomMobile`).
 3. `adv.imageMobile` and `design.image.srcMobile` stop being *offered*; existing values keep rendering (no silent change to live slides). A one-time notice on affected slides: "This slide still uses a separate phone picture. [Use main picture for both] [Keep]".
-4. Public render: one `<img>`/`BannerMedia` element (not two toggled by CSS), so phones never download the desktop art twice and LCP improves (today DesignedBanner renders two lazily-toggled media elements — §1 / A3).
+4. Public render: one `<img>`/`BannerMedia` element (not two toggled by CSS), so the markup is simpler. (Verified: DesignedBanner.tsx:96–115 only renders the two CSS-toggled media elements *when* a phone picture exists, and both are lazy so browsers skip the hidden one — R42 Q4 comment. So this is a simplification win, not a bandwidth fix.)
 
 ---
 
@@ -203,7 +203,7 @@ Order rationale: P1 delivers every *explicit* owner ask that doesn't need a data
 
 **Performance guard-rails (all phases):** public banner stays pure CSS/HTML (no editor JS shipped to visitors); ≤ 40 layers; custom fonts preloaded only for slide 1; shapes via CSS, not images; a `checkDesign` warning when a slide uses > 3 font families or > 2 custom fonts (each is a download).
 
-**Compliance guard-rails:** Washington WAC 314-55-155 advertising rules already enforced by the R47 publish-time lint must run over **all** text layers (incl. new ones) and over alt text of sticker images; contrast checks extend to text-over-shape (compute against the shape's fill when a text layer sits above a shape in z-order).
+**Compliance guard-rails:** Washington WAC 314-55-155 checks already in `checkDesign` (e.g. `LEGAL_TOO_SMALL`, banner-design-core.ts:1093) and the R47 publish-time lint must run over **all** text layers (incl. new ones) and over alt text of sticker images; contrast checks extend to text-over-shape (compute against the shape's fill when a text layer sits above a shape in z-order).
 
 ---
 
