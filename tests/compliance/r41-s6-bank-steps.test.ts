@@ -23,9 +23,11 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/env", async (orig) => ({ ...((await orig()) as object), isSupabaseServiceConfigured: true }));
 vi.mock("@/lib/supabase/admin", async () => {
   const { PostgrestClient } = await import("@supabase/postgrest-js");
+  // R41 S7: the first-file test is already passed in this suite (see helpers/first-file-gate-fake.ts).
+  const { withOpenFirstFileGate } = await import("./helpers/first-file-gate-fake");
   return {
     createSupabaseAdminClient: () => {
-      const pg = new PostgrestClient("http://fake.supabase.local/rest/v1", { fetch: st.db.fetch as typeof fetch });
+      const pg = new PostgrestClient("http://fake.supabase.local/rest/v1", { fetch: withOpenFirstFileGate(st.db.fetch) as typeof fetch });
       return { from: (t: string) => pg.from(t), rpc: (fn: string, args: Record<string, unknown>) => pg.rpc(fn, args) };
     },
   };
