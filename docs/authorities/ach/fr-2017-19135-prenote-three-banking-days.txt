@@ -3,6 +3,12 @@
 - Source (official, Government Publishing Office): https://www.govinfo.gov/content/pkg/FR-2017-09-11/html/2017-19135.htm
 - Found via https://www.federalregister.gov/citation/82-FR-42597 (FR Doc 2017-19135, pages 42597-42609).
 - Fetched 2026-10-15. sha256 of the fetched HTML: f4409505f20e424e20263ffe1e75dfeea3a1f2a96e823fcc0ab05f41a561ad42
+  That raw-HTML hash is NOT reproducible: the page's e-mail links are re-scrambled by its CDN on every fetch
+  (two fetches minutes apart differed in 389 bytes, all inside those links). The reproducible fingerprint is the
+  sha256 of the page's <pre> text with tags removed and HTML entities decoded (Python: html.unescape(re.sub("<[^>]+>",
+  "", pre))): 2e85e0069b95b34e885852aef92d38df1427399155f5b30631b622ae451643fa (same on both re-fetches, 2026-10-15).
+- Where amendment 9 sits: under the heading "A. 2014 NACHA Operating Rules & Guidelines Book Changes" (before
+  "B. 2015 NACHA Operating Rules & Guidelines Book Changes"). That is the basis for saying Nacha cut the wait in 2014.
 - What is mirrored: the heading block (lines 1-25 of the page, minus the contact lines) and amendment 9 of the
   2014 NACHA rule changes, copied byte for byte with the original line breaks. The "FOR FURTHER INFORMATION
   CONTACT" block (staff phone numbers and email addresses) is left out because this repository is public.
