@@ -563,7 +563,7 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
     const i6 = rows.findIndex((r) => r[0] === "6");
     const has = (f: string, re: RegExp) => checkBuiltFileShape(f, GW).some((m) => re.test(m));
     ok(checkBuiltFileShape(good.file, GW).length === 0, "shape: a good file has no problems");
-    ok(has(put(i5, 4, "GREENWAY CANNABI"), /Company Name is not/), "shape: a wrong batch name is caught");
+    ok(has(put(i5, 4, "GREENWAY DISPENS"), /Company Name is not/), "shape: a wrong batch name is caught");
     ok(has(put(i5, 79, "12500010"), /Originating DFI is not Timberland/), "shape: a wrong batch ODFI is caught");
     ok(has(put(i5, 40, "1999999999"), /batch Company ID/), "shape: a wrong batch Company ID is caught");
     ok(has(put(i5, 50, "CTX"), /entry type "CTX"/), "shape: a restricted SEC in the batch is caught");

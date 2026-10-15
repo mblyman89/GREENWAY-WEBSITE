@@ -431,8 +431,8 @@ export function __runTimberlandOriginatorCoreTests(): { passed: number; failed: 
   ok(only(greenwayTestOriginator({ companyName: "GREENWAY MARIJUANA LLC" }), "companyName"), "a longer name with the right first 16 is refused");
   ok(only(greenwayTestOriginator({ companyName: "GREENWAY MARIJUAN" }), "companyName"), "17 characters refused");
   ok(only(greenwayTestOriginator({ companyName: "" }), "companyName"), "blank name refused");
-  ok(validateOriginator(greenwayTestOriginator({ companyName: "Greenway Cannabis" }))[0]!.message.includes(BATCH_COMPANY_NAME), "the name refusal quotes Brenda's name");
-  ok(validateOriginator(greenwayTestOriginator({ companyName: "Greenway Cannabis" }))[0]!.message.includes('puts "GREENWAY CANNABI" in the batch header'), "the name refusal shows what the batch would print");
+  ok(validateOriginator(greenwayTestOriginator({ companyName: "Greenway Dispensary" }))[0]!.message.includes(BATCH_COMPANY_NAME), "the name refusal quotes Brenda's name");
+  ok(validateOriginator(greenwayTestOriginator({ companyName: "Greenway Dispensary" }))[0]!.message.includes('puts "GREENWAY DISPENS" in the batch header'), "the name refusal shows what the batch would print");
   ok(ACCEPTED_COMPANY_NAMES.every((n) => alpha(n, 16) === BATCH_COMPANY_NAME), "both accepted names cut to Brenda's 16");
   // all wrong at once
   ok(validateOriginator({ destinationRouting: "", destinationName: "", immediateOrigin: "", companyName: "", companyId: "", originatingDfi: "", companyEin: "" }).length === 7, "an empty originator reports all seven fields");

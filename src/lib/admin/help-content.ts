@@ -46,7 +46,7 @@ export const HELP_CATEGORIES: { name: HelpCategory; blurb: string }[] = [
   { name: "Start here", blurb: "The big picture and the order to do things in." },
   {
     name: "Website & online ordering",
-    blurb: "Your public greenwaycannabis site and the orders customers place on it.",
+    blurb: "Your public greenwaymarijuana.com site and the orders customers place on it.",
   },
   {
     name: "Point of sale",
@@ -128,7 +128,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Your public website",
     icon: "🌐",
     category: "Website & online ordering",
-    intro: "The greenwaycannabis site your customers browse.",
+    intro: "The greenwaymarijuana.com site your customers browse.",
     items: [
       {
         q: "How does my website get its products?",

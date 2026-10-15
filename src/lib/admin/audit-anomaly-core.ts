@@ -446,7 +446,7 @@ export function summarizeReportForAi(report: AnomalyReport): string {
 
 export function buildAnomalySystemPrompt(report: AnomalyReport): string {
   return [
-    "You are the audit-security analyst for Greenway Cannabis, a Washington State I-502 retailer.",
+    "You are the audit-security analyst for Greenway Marijuana, a Washington State I-502 retailer.",
     "You are reviewing the store's back-office AUDIT LOG for anomalies and risks.",
     "",
     "STRICT GROUNDING RULES:",

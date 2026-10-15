@@ -64,7 +64,7 @@ function defaultDay(): DayHours {
 }
 
 export const DEFAULT_STORE_PROFILE: StoreProfile = {
-  storeName: "Greenway Cannabis",
+  storeName: "Greenway Marijuana",
   legalEntity: "",
   phone: "",
   email: "",
