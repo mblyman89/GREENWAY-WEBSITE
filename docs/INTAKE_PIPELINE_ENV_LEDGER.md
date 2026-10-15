@@ -44,11 +44,14 @@ These are read by `src/lib/ai/provider.ts` and `src/lib/ai/router.ts`. They pred
 | `AI_BASE_URL` | `OPENAI_BASE_URL`, else `https://api.openai.com/v1` | Chat endpoint. |
 | `AI_MODEL` | `OPENAI_MODEL`, else `gpt-4o-mini` | Light model. |
 | `AI_VISION_MODEL` | `OPENAI_VISION_MODEL`, else `AI_MODEL` | Vision model. |
-| `AI_MODEL_HEAVY` | `OPENAI_MODEL_HEAVY`, else `gpt-4o` | The web-search lookup model. An id starting with `gemini` switches to Google `google_search` grounding. |
+| `AI_MODEL_HEAVY` | `OPENAI_MODEL_HEAVY`, else `gpt-4o` | The web-search lookup model. An id starting with `gemini` switches to Google `google_search` grounding. **R51 recommendation:** `gemini-4-argon` (Google's frontier model, GA 2026-10-13; see R51 bible R1). |
 | `AI_GEMINI_API_KEY` | `AI_API_KEY` | Google key for the Gemini path. |
 | `AI_GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/interactions` | Gemini Interactions endpoint. |
 | `AI_GEMINI_OPENAI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini built-in-knowledge fallback. |
-| `AI_THINKING_LEVEL` | `low` | Gemini thinking level. |
+| `AI_THINKING_LEVEL` | `low` | Gemini thinking level (`minimal`/`low`/`medium`/`high`; anything else = `low`). R51: `medium` for the best research, `low` while on Vercel Hobby's 300 s limit. |
+| `AI_GEMINI_URL_CONTEXT` | on | R51: adds the `url_context` tool so Gemini opens the pages and photos it cites. `off` removes it. |
+| `AI_GEMINI_SERVICE_TIER` | unset (Google default) | R51: `flex`/`standard`/`priority`/`deferred`. `priority` is the enterprise choice (faster, costs more). Not sent when unset. |
+| `AI_GEMINI_SEED` | unset | R51: an integer seed, for more repeatable answers. |
 | `AI_WEBSEARCH_TIMEOUT_MS` | `290000` | One lookup's HTTP ceiling. Keep it below the drafts page `maxDuration` (300 s). |
 | `AI_MODE` | `maintenance` | `sprint` sends heavy tasks to `AI_MODEL_HEAVY`. |
 | `AI_MONTHLY_TOKEN_BUDGET` | `0` (no cap) | Monthly token cap. |
