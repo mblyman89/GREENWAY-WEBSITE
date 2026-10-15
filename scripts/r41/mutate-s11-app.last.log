@@ -1,0 +1,46 @@
+control (before) pass
+killed   missing end-of-file mark accepted
+killed   wrong field count accepted
+killed   non-ASCII accepted
+killed   score keeps the LOWER of the two techniques
+killed   threshold off by one point
+killed   vessels screened
+killed   aliases dropped
+killed   Consolidated list dropped
+killed   payee with no name silently passed
+killed   true match clears on a later review
+killed   partial review covers a new match
+killed   note shorter than 20 accepted
+killed   digits in note accepted
+killed   email says payments are blocked
+killed   weekly reminder key never changes
+killed   stale after 30 days
+killed   no User-Agent sent
+killed   digest mismatch ignored
+killed   HTTP error accepted
+killed   partial payee read screens part of the list
+killed   payees not paged by id
+killed   terminated employees screened
+killed   bank-record names not screened
+killed   failed run not recorded
+killed   cron run stamped with an actor
+killed   earlier reviews ignored
+killed   review not stamped with the actor
+killed   clear result reviewable
+killed   bad review form still written
+killed   screen now redirects to the wrong anchor
+killed   cron email claim not removed on failure
+killed   cron failure answers 200
+killed   cron failure email every run
+killed   panel loses the never-blocks line
+killed   admin sees Record decision
+killed   true match shows a form
+killed   search matches ANY word
+killed   search is case-sensitive
+killed   search ignores the status label
+killed   blank search hides every row
+killed   section opens by default
+killed   list not filtered
+killed   no search box
+control (after) pass
+total 43 killed 43 survivors []
