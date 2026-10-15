@@ -1,0 +1,27 @@
+control (before) pass
+killed   reversal takes the LATER of the two limits
+killed   compromise confirmation 2 days
+killed   reserve counted in calendar days
+killed   auth copy one banking day short
+killed   over-limit lead 1 day
+killed   statement window 31 days
+killed   refused NOC window 14 days
+killed   done items still shown
+killed   termination not red
+killed   reversal says send a file
+killed   fees miss the per-item charge
+killed   closed termination still in effect
+killed   entry not stamped with the actor
+killed   read failure looks like an empty log
+killed   read not capped
+killed   unknown item still closed
+killed   notice count failure is zero
+killed   notice count from the wrong month
+killed   bad form still written
+killed   redirect away from #clocks
+killed   STOP card hidden from staff check skipped
+killed   no termination banner
+killed   failed read says nothing is due
+killed   failed log read turns gates green
+control (after) pass
+total 24 killed 24 survivors []
