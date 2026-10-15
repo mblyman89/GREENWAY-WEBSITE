@@ -179,8 +179,8 @@ Michael sends Brenda one email at the end of the full build. It holds:
   - When a screen fails, it emails once per Pacific day.
   - Each email is claimed in `compliance_reminder_log` first; a failed send removes the claim.
   - The page warns when the last successful screen is 3 or more days old.
-- **Vendor follow-up list.** On Banking > Vendors, "Vendors to follow up" is now a collapsible section with a vendor search box.
+- **Vendor follow-up list (owner request).** On Banking > Vendors, "Vendors to follow up" is now a collapsible section, closed by default so the vault records are right below it; the browser remembers open or closed on that device. A search box filters by vendor name, status, next step or warning (every word must match; accents, case and apostrophes ignored), keeps the most-urgent-first order and shows "X of N shown". The list scrolls inside a fixed height. Nothing is written to the server.
 - **Tests.**
   - `tests/compliance/r41-s11-ofac.test.tsx`, using real-format OFAC fixtures (real public records).
   - Mutation runs: `mutate-s11-app.py` and `mutate-0278-sql.py` (Supabase default privileges simulated).
-  - Manual tests T-368 to T-370.
+  - Manual tests T-368 to T-371.
