@@ -1575,19 +1575,30 @@ describe("the migration list is ordered the way the database will see it", () =>
     // (scripts/recon/ach-files-0273-pg-check.sql passes, re-run is clean,
     // rollback refuses with a row, rollback then re-apply is clean); CI's
     // migrations job runs every file in order. The owner applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0273_/);
+    // R41 S6 added 0274_ach_file_bank_steps.sql (two server-only functions
+    // that record the owner's upload and approval in the Timberland portal,
+    // released -> uploaded -> bank_approved, each stamp set once by the
+    // owner; the 0273 guard body replaced with every 0273 rule kept; no new
+    // table, so nothing for factory-reset-core). The tripwire FIRED and was
+    // HONOURED: 274 .sql files, gapless. Executed against a local Postgres
+    // 15 with 0001-0273 applied (scripts/recon/ach-file-bank-steps-0274-pg-
+    // check.sql passes, re-run is clean, the 0273 check still passes, the
+    // rollback makes the 0274 check fail and re-apply is clean); CI's
+    // migrations job runs every file in order. The owner applies it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0274_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0273_ach_files.sql");
-    expect(listed[listed.length - 2]).toBe("0272_ach_company_timberland_confirmed.sql");
-    expect(listed[listed.length - 3]).toBe("0271_ach_owner_authority.sql");
-    expect(listed[listed.length - 4]).toBe("0270_intake_card_aliases.sql");
-    expect(listed[listed.length - 5]).toBe("0269_product_tags.sql");
-    expect(listed[listed.length - 6]).toBe("0268_home_slide_advanced_click_events.sql");
-    expect(listed[listed.length - 7]).toBe("0267_content_schedule_releases.sql");
-    expect(listed[listed.length - 8]).toBe("0266_media_blur_placeholder.sql");
-    expect(listed[listed.length - 9]).toBe("0265_media_bucket_video_large_uploads.sql");
-    expect(listed[listed.length - 10]).toBe("0264_loyalty_consent_text.sql");
+    expect(listed[listed.length - 1]).toBe("0274_ach_file_bank_steps.sql");
+    expect(listed[listed.length - 2]).toBe("0273_ach_files.sql");
+    expect(listed[listed.length - 3]).toBe("0272_ach_company_timberland_confirmed.sql");
+    expect(listed[listed.length - 4]).toBe("0271_ach_owner_authority.sql");
+    expect(listed[listed.length - 5]).toBe("0270_intake_card_aliases.sql");
+    expect(listed[listed.length - 6]).toBe("0269_product_tags.sql");
+    expect(listed[listed.length - 7]).toBe("0268_home_slide_advanced_click_events.sql");
+    expect(listed[listed.length - 8]).toBe("0267_content_schedule_releases.sql");
+    expect(listed[listed.length - 9]).toBe("0266_media_blur_placeholder.sql");
+    expect(listed[listed.length - 10]).toBe("0265_media_bucket_video_large_uploads.sql");
+    expect(listed[listed.length - 11]).toBe("0264_loyalty_consent_text.sql");
     expect(listed[listed.length - 11]).toBe("0263_ach_operations.sql");
     expect(listed[listed.length - 12]).toBe("0262_vendor_ach_esign.sql");
     expect(listed[listed.length - 13]).toBe("0261_ach_esign.sql");

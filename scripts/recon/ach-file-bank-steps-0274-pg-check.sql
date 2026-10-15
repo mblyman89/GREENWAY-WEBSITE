@@ -29,6 +29,7 @@ do $$
 declare
   u_m   uuid := gen_random_uuid();   -- "Michael", owner
   u_s   uuid := gen_random_uuid();   -- "Stephen", admin
+  u_o   uuid := gen_random_uuid();   -- a second owner (releases f1, so the upload stamp must name the ACTOR, not the releaser)
   f1    uuid;
   f2    uuid;
   f3    uuid;
@@ -37,15 +38,15 @@ declare
   k     text;
   ins   text;
 begin
-  insert into auth.users (id, email) values (u_m, 'm0274@x.test'), (u_s, 's0274@x.test');
+  insert into auth.users (id, email) values (u_m, 'm0274@x.test'), (u_s, 's0274@x.test'), (u_o, 'o0274@x.test');
   insert into public.staff_profiles (id, email, role, active) values
-    (u_m, 'm0274@x.test', 'owner', true), (u_s, 's0274@x.test', 'admin', true)
+    (u_m, 'm0274@x.test', 'owner', true), (u_s, 's0274@x.test', 'admin', true), (u_o, 'o0274@x.test', 'owner', true)
     on conflict (id) do update set role = excluded.role, active = excluded.active;
   perform set_config('request.jwt.claim.sub', '', true);   -- service role (the app path)
 
   ins := $q$insert into public.ach_files (kind, source_id, file_date, file_id_modifier, filename, effective_date, entry_count, total_cents, counts_toward_limit, sha256, entry_set_hmac, body_enc, released_by)
     values ('vendor', %L, '2026-10-20', %L, 'f.ach', '2026-10-23', 1, %s, true, %L, %L, 'encv1:x:y', %L) returning id$q$;
-  execute format(ins, 'v-0274-1', 'A', 500, pg_temp.h('1'), pg_temp.h('a'), u_m) into f1;
+  execute format(ins, 'v-0274-1', 'A', 500, pg_temp.h('1'), pg_temp.h('a'), u_o) into f1;
   execute format(ins, 'v-0274-2', 'B', 600, pg_temp.h('2'), pg_temp.h('b'), u_m) into f2;
   execute format(ins, 'v-0274-3', 'C', 700, pg_temp.h('3'), pg_temp.h('c'), u_m) into f3;
 
@@ -105,7 +106,8 @@ begin
   alter table public.ach_files enable trigger trg_ach_files_guard;
   perform pg_temp.must_fail(format($q$select public.ach_file_mark_bank_approved(%L, %L)$q$, f3, u_m), 'has no upload recorded');
 
-  -- 8. void still works after each step, and a voided file takes no bank step
+  -- 8. void still works after each step (owner only), and a voided file takes no bank step
+  perform pg_temp.must_fail(format($q$select public.ach_file_void(%L, %L, 'bank approved but wrong vendor')$q$, f1, u_s), 'ACH_OWNER_ONLY');
   perform public.ach_file_void(f1, u_m, 'bank approved but wrong vendor');
   select status, approved_at_bank_by into r from public.ach_files where id = f1;
   assert r.status = 'voided' and r.approved_at_bank_by = u_m, 'void keeps the bank stamps';
