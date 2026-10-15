@@ -66,3 +66,178 @@ Searched R41 bible, R42, R44, R45–R48 for custom fonts, layers, z-index, inlin
 - **R8 Variable fonts.** One file holds a range of weight/width/slant/optical size; registered axes are `wght wdth slnt ital opsz`, custom axes are UPPER-case (e.g. `GRAD`); prefer `font-weight`/`font-stretch`/`font-style: oblique Ndeg` over `font-variation-settings`; `font-synthesis: none` stops fake bold/italic [S8]. → Weight becomes a 1–1000 slider when the font is variable; "Width" and "Slant" sliders appear only when the font file has those axes (read with the FontFace once loaded, or declared by the uploader).
 - **R9 Professional SDK baseline (Polotno, a commercial Canva-style SDK).** Inline on-canvas editing; numeric weight; per-span rich formatting; rotation; curved text; strokes with line-join; shadows; gradient fills; "highlight" backgrounds per line; text-box border; fit modes (grow box / shrink font / ellipsis); RTL; super/subscript; lists [S9]. → This is the feature bar for "top notch". We match most of it with CSS; per-span rich text and curved text are deliberately later phases (§6).
 - **R10 Canva/Figma layer naming** (from R3/R4) and Polotno's "unified schema for text, image, shapes" (R9) all point to the same architecture: **one ordered list of layers**, each with a `type`. That is the core recommendation in §4.
+- **R11 Inline-edit precedent.** Konva's official "Editable Text" demo: double-click/double-tap → hide the drawn text → place a styled `<textarea>` exactly over it → Esc cancels, click-outside commits. Konva states canvas cannot edit text natively and lists the overlay's limits: reflow during resize, font metrics changing after a late web-font load, no per-character styling, and **keystrokes must fold into the same undo stack** [S10]. Our canvas is DOM, not `<canvas>`, so we can edit *the real element* with `plaintext-only` (R1) and avoid the reflow/metrics mismatch completely. Note: in Konva's demo plain Enter *commits*; the owner wants Enter = **new line**, so we commit on click-outside / Esc-to-keep / Ctrl+Enter, matching Canva and Figma text boxes.
+- **R12 One picture vs. two.** web.dev: `srcset` = suggestions, `<picture>` = commands; use `<picture>` only when you need a genuinely *different crop/content* per screen; one `alt` must describe both [S11]. → The owner's "one upload" default is the industry-recommended default; the studio already crops one picture per device via `object-position` focus + zoom. Keep a hidden "Advanced: different phone picture" escape hatch (off by default) so no existing slide loses its art.
+- **R13 Baseline status of every CSS effect we plan to use** (MDN Baseline banners, fetched this round): `clip-path` (shapes) Jan 2020; `mix-blend-mode` Jan 2020; `background-clip: text` (gradient/image-filled text) Jul 2015; `text-shadow` (multi-layer) Jul 2015; `filter` (drop-shadow, blur, hue) Sep 2016; `font-feature-settings` (ligatures, small caps, stylistic sets) Apr 2017; `text-wrap` (balance) Mar 2024; `paint-order` Mar 2024; `FontFace()` Jan 2020; `contenteditable="plaintext-only"` Mar 2025 (newly) [S6, S8, S12]. Every effect in the roadmap renders in all current browsers with **no JS on the public site** — essential for LCP on the hero.
+- **R14 Font file identification** — RFC 8081 (the `font/*` media types): TrueType/OpenType start with sfnt version `0x00010000` or `'OTTO'`; WOFF's header signature MUST be `0x774F4646 'wOFF'`; WOFF2's MUST be `0x774F4632 'wOF2'` [S13, S14]. These four signatures become `isFont()` in `file-signature-core.ts`, mirroring the existing `isPng/isWebp` checks. Media types to store: `font/woff2`, `font/woff`, `font/ttf`, `font/otf`.
+- **R15 Next.js 16 fonts (read from `node_modules/next/dist/docs/01-app/01-getting-started/13-fonts.md`).** `next/font` self-hosts at **build time** ("no requests are sent to Google by the browser"), and `next/font/local` resolves paths relative to the calling file. Both need the file present at build. **Owner-uploaded fonts therefore cannot use `next/font`** — they arrive after deploy. Correct approach: a server-rendered `<style>` with `@font-face` rules emitted only for the custom fonts the page's published designs actually reference, plus `<link rel="preload" as="font" crossorigin>` for the hero's first slide only. The repo sets **no CSP header** today (grep for `font-src` found nothing), so Supabase-hosted fonts are not blocked; if a CSP is added later it must include the Storage origin in `font-src`.
+
+---
+
+## 3. Gap matrix — Greenway Banner Studio vs. professional editors
+
+Legend: ✅ have · 🟡 partial · ❌ missing. Pro column = what Canva / Figma / Polotno document (§2).
+
+| Capability | Greenway today | Pro tools | Owner asked |
+|---|---|---|---|
+| Studio first & open | ❌ buried under Advanced, collapsed (A1, A2) | — | ✅ yes |
+| Basic mode collapsed below studio | ❌ | — | ✅ yes |
+| One picture for both devices | 🟡 core supports it; UI shows 3 uploads (A3) | `<picture>` only for real art direction (R12) | ✅ yes |
+| Double-click to edit on canvas | ❌ (A4) | ✅ all (R9, R11) | ✅ yes |
+| Enter = new line on canvas | ❌ (A5); model already supports `\n` | ✅ | ✅ yes |
+| Shapes / simple elements | ❌ (A12) | ✅ rect, ellipse, line, polygon, star, arrow, icon | ✅ yes |
+| Fill / border / radius / shadow on elements | ❌ | ✅ | ✅ yes |
+| Layer order (front/back) | ❌ fixed order (A6) | ✅ 4 commands + ] [ shortcuts (R4) | ✅ yes |
+| Upload own fonts | ❌ (A13) | ✅ OTF/TTF/WOFF, licence check (R3) | ✅ yes |
+| Variable-font axes, OpenType features | ❌ | ✅ numeric weight (R9), axes (R8) | ✅ "more font features" |
+| Text effects: stroke width, gradient fill, multi-shadow, glow, highlight, curved | 🟡 4 shadow presets, 1-px outline | ✅ (R9) | ✅ "font effects" |
+| Rotation / flip of objects | ❌ (A7) | ✅ | implied |
+| Corner resize, height | ❌ (A8) | ✅ | implied |
+| Multi-select, group, lock, align, distribute | ❌ (A9) | ✅ (R4) | implied "expert tools" |
+| Copy/paste, duplicate, Alt-drag | 🟡 duplicate button only (A10) | ✅ | implied |
+| Smart guides to other objects | 🟡 frame 0/50/100 only (A11) | ✅ | implied |
+| Layers panel (names, eye, lock, drag-to-reorder) | ❌ | ✅ | implied |
+| Undo/redo | ✅ 60 steps | ✅ | — |
+| Per-device positions | ✅ desktop + phone overrides | ✅ (responsive variants) | — |
+| Contrast / accessibility checks | ✅ WCAG warnings | 🟡 rare | — (our edge) |
+| AI placement suggestion | ✅ | 🟡 | — (our edge) |
+| Video backgrounds | ✅ (R44) | ✅ | — |
+| Blend modes / image filters on objects | 🟡 picture only | ✅ | implied |
+| Rich text inside one box (bold one word) | ❌ | ✅ Polotno per-span (R9) | implied |
+
+**Read-out:** the foundations (per-device geometry, container-query scaling, undo, contrast checks, AI, safe-URL normalisation) are already better than many SaaS editors. The gaps are about *object types*, *layering* and *direct manipulation*, which is exactly what the owner listed.
+
+---
+
+## 4. Architecture recommendation (the core of the plan)
+
+### 4.1 One ordered `layers[]` list — Banner Design **v2**
+Today: `boxes[]` (≤8) then `buttons[]` (≤4) — two lists, so "in front / behind" is impossible across types. Recommendation (Figma/Canva/Polotno all do this — R4, R9, R10):
+
+```ts
+type LayerBase = {
+  id: string; name: string;               // shown in the Layers panel
+  type: "text" | "button" | "shape" | "image" | "icon" | "group";
+  x: number; y: number; w: number; h?: number;      // % of frame (h optional for text = auto)
+  mx?: number; my?: number; mw?: number; mh?: number; // phone overrides (existing pattern)
+  rotate: number;  rotateMobile?: number;           // degrees
+  opacity: number; blend: BlendMode;                // mix-blend-mode (R13)
+  locked: boolean; hidden: boolean; hideOnMobile: boolean;
+  groupId?: string;
+};
+// Array order IS the z-order: index 0 = back, last = front (Figma's model).
+design.layers: Layer[]   // cap 40 (perf-tested), replaces boxes/buttons
+```
+
+- **Text layer** = today's `DesignTextBox` fields + new: `strokeWidth`, `strokeColor`, `strokeMode: "outside"|"center"` (paint-order, R6); `fill: {kind:"solid"|"linear"|"radial", stops[], angle}` (background-clip:text, R13); `shadows: Shadow[]` (≤4 layered text-shadows, incl. glow/neon/long-shadow presets); `highlight` (per-line box-decoration-break pill); `features: {liga, dlig, smcp, onum, tnum, ss01…ss20, swsh}` (font-feature-settings, R13); `axes: Record<tag, number>` (R8); `fitMode: "grow"|"shrink"|"fixed"` (R9); `textVAlign`; `curve` (later, SVG textPath).
+- **Shape layer** = `shape: "rect"|"ellipse"|"line"|"triangle"|"polygon"|"star"|"arrow"|"blob"`, `sides`, `fill` (solid/gradient/none), `border {width, color, style: solid|dashed|dotted, radius}`, `shadow` (box-shadow or `filter: drop-shadow` for non-rect clip-paths), `blur` (backdrop-filter "glass" card). Render: plain `<div>` + `clip-path: polygon()` / `border-radius` — zero JS, Baseline 2020 (R13). Lines and stars render as inline SVG.
+- **Image/sticker layer** = a second picture (logo, product cut-out, badge PNG/WebP/SVG-sanitised) from the Media Library, with fit, radius, border, drop-shadow, flip, filters.
+- **Icon layer** = curated icon set (e.g. lucide, already a common React dep — verify in package.json at build time) rendered as inline SVG with fill/stroke colour.
+- **Button layer** = today's `DesignButton` + rotation/opacity/z-order.
+- **Group** = `{type:"group", children ids}`; moving a group moves members; Layers panel shows it as a folder.
+
+### 4.2 Back-compat (no data loss, no migration needed)
+`normalizeDesign()` already returns a canonical object from any jsonb. v2 adds **`version: 2`**; when it reads a v1 object it builds `layers = [...boxes.map(toTextLayer), ...buttons.map(toButtonLayer)]` — which **reproduces today's exact paint order**, so every live banner looks identical. `DesignedBanner` renders v2 only; v1 → v2 is done in memory. Jsonb columns (`draft_advanced`, `advanced`, the shop/loyalty/section/specials equivalents) need **no SQL migration**. Byte-identical test pins (pattern from R42: "no srcMobile key unless set") extend to "v1 in → identical render tree out".
+
+### 4.3 Custom fonts
+- **Table** `custom_fonts` (migration, idempotent, owner-applied): `id, family, file_path, format, weight_range, style, is_variable, axes jsonb, licence_note, uploaded_by, created_at, archived`.
+- **Upload** reuses the R44 direct-to-Storage pipeline (`upload-policy-core`): new `UploadKind "font"`, cap 2 MB, `isFont()` magic-byte check (R14), extension allow-list `.woff2 .woff .ttf .otf`, licence-confirmation checkbox (Canva norm, R3). Recommend owners upload WOFF2 (smallest); optional later: server-side TTF→WOFF2 conversion in a background job, never on the request path (R7).
+- **Editor**: `FontFace(family, url)` → `document.fonts.add()` (R2); show a live sample, detected weight range, and axes.
+- **Public site**: `@font-face { font-display: swap }` emitted server-side only for fonts used on that page; preload only for the first hero slide (protects LCP, which R45–R48 already optimised with `fetchPriority`).
+- **Font picker**: grouped "Your fonts / Greenway curated / System", search, live preview of the actual text, recent fonts, and **Brand fonts** (owner pins heading/body fonts once → one-click on every banner).
+- **Curated library growth**: add more `next/font/google` families (they cost nothing at runtime unless used, because next/font only emits CSS for imported fonts — but each still adds build-time downloads; keep ≤ 40).
+
+### 4.4 Inline editing
+DOM-native: double-click (or Enter on a selected text layer, or F2) → the rendered element gets `contenteditable="plaintext-only"`, `spellcheck`, caret at click point, selection outline changes to "editing" colour; **Enter inserts a newline**, Shift+Enter too; **Esc or click-outside commits** (Esc commits — Figma behaviour — and Ctrl+Z reverts); on commit read `innerText`, clamp to `MAX_BOX_TEXT`, push **one** undo step (R11 warning). Bound boxes (eyebrow/title/subtitle bound to basic fields) write through to the basic field so the two stay in sync. Fallback for very old Firefox: textarea overlay (R11). Accessibility: `role="textbox" aria-multiline="true"` while editing; the side-panel textarea remains as the WCAG 2.5.7 non-drag alternative (R5).
+
+### 4.5 Canvas interaction model (expert tools)
+Transformer with 8 handles + rotation knob (Shift = 15° snaps; Alt = from centre; Shift on corner = keep ratio); marquee + Shift-click multi-select; Ctrl/⌘+G group, Ctrl/⌘+Shift+G ungroup; lock (Ctrl/⌘+Shift+L); copy/paste/duplicate (Ctrl/⌘+C/V/D), Alt-drag duplicate; **z-order: Ctrl/⌘+] / [ and ] / [** (Figma, R4) plus right-click menu with the same four words; align (left/centre/right/top/middle/bottom) to frame or to selection; distribute horizontally/vertically; smart guides to every other layer's edges/centres with equal-spacing indicators; rulers + optional 12-column grid and safe-area overlay (phone notch, carousel arrows/dots area); zoom 25–400 % & fit; nudge 1 % / Shift 5 % (existing). Each drag action keeps a numeric field equivalent (WCAG 2.5.7, R5).
+
+### 4.6 UI restructure of the slide card (owner's items 1–4, 9)
+```
+┌ Slide 3 ─ [Live ●] [Unsaved]                         [Save draft] [Publish] ┐
+│ 🎨 Custom Design Studio  (open by default; ☑ Use custom design = checked)   │
+│   ┌ Picture (ONE upload: computer + phone) · alt text · focus per device ┐ │
+│   ├ Toolbar: + Text ▾ | + Shape ▾ | + Image | + Icon | + Button | Fonts │ │
+│   ├ Canvas (Computer | Phone) — double-click text to type                │ │
+│   └ Right rail tabs: Selected · Layers · Picture & shade · Checks       ┘ │
+│ ▸ Basic mode (words, buttons, line styles)      — collapsed, click to open │
+│ ▸ Schedule & visibility (start/end, enabled)    — collapsed, shows summary │
+│ ▸ Advanced: different phone picture (rare)      — collapsed, off           │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+Rules: studio `open` initialises to `design?.enabled ?? true` for new slides and is *remembered per slide* in `localStorage`; ticking "Use custom design" always opens it (owner item 8); unticking keeps data (reversible) but shows the basic render; the schedule (currently inside Advanced — `home-slide-advanced-core.ts:68`) moves to its own always-reachable row so collapsing Basic never hides it.
+
+---
+
+## 5. Single-picture plan (owner item 3) in detail
+1. Studio "Picture" panel shows **one** `ContentImageField` bound to the slide's main `image` (video allowed, R44).
+2. Under it: "Focus — computer" and "Focus — phone" pickers (already exist: `focusX/Y`, `focusXMobile/YMobile`) + zoom per device (add `zoomMobile`).
+3. `adv.imageMobile` and `design.image.srcMobile` stop being *offered*; existing values keep rendering (no silent change to live slides). A one-time notice on affected slides: "This slide still uses a separate phone picture. [Use main picture for both] [Keep]".
+4. Public render: one `<img>`/`BannerMedia` element (not two toggled by CSS), so phones never download the desktop art twice and LCP improves (today DesignedBanner renders two lazily-toggled media elements — §1 / A3).
+
+---
+
+## 6. Phased roadmap (each slice = branch → PR → rebase-merge; pure cores with `__run…Tests()`)
+
+| Phase | Slice | What ships | Risk | Value | Size |
+|---|---|---|---|---|---|
+| **P1 "Owner's quick wins"** | R53-1 | Card restructure §4.6; studio open by default & auto-open on tick; Basic collapsed; schedule row | Low | ★★★★★ | S |
+| | R53-2 | Single-picture UI §5 (+ `zoomMobile`, notice for legacy phone pictures, one media element) | Low-Med | ★★★★★ | S-M |
+| | R53-3 | Inline double-click editing §4.4 (Enter = newline, one undo step, bound-field sync) | Med | ★★★★★ | M |
+| **P2 "Layers"** | R54-1 | Design v2 `layers[]` + normaliser + render parity tests (v1 ≡ v2 pixels via snapshot of style objects) | Med-High | ★★★★★ | L |
+| | R54-2 | Layers panel (names, eye, lock, ▲▼ + drag reorder), z-order commands & shortcuts, right-click menu | Med | ★★★★★ | M |
+| | R54-3 | Shapes: rect/ellipse/line/triangle/polygon/star/arrow; fill (solid/gradient), border, radius, shadow, opacity, blend, glass blur | Med | ★★★★★ | M |
+| **P3 "Typography"** | R55-1 | Custom font upload (migration `custom_fonts`, `isFont`, Storage, licence tick, FontFace preview, server `@font-face`) | Med | ★★★★★ | M-L |
+| | R55-2 | Font picker v2 (search, groups, live preview, brand fonts) + 10–20 more curated families | Low | ★★★★ | M |
+| | R55-3 | Text effects: stroke width/colour/outside, gradient & image fill, multi-shadow builder + presets (neon, long shadow, 3-D, retro), highlight, OpenType features, variable axes, fit modes | Med | ★★★★★ | M-L |
+| **P4 "Direct manipulation"** | R56-1 | Transformer: 8 handles, height, rotation, aspect lock | Med | ★★★★ | M |
+| | R56-2 | Multi-select, marquee, group/ungroup, lock, copy/paste/duplicate, Alt-drag | Med | ★★★★ | M |
+| | R56-3 | Smart guides, equal-spacing, align/distribute, rulers/grid/safe-area, canvas zoom | Low-Med | ★★★★ | M |
+| **P5 "Assets"** | R57-1 | Image/sticker layers, icon layers, SVG sanitising (reuse `file-signature-core` SVG check) | Med | ★★★★ | M |
+| | R57-2 | Saved styles ("Text styles", "Shape styles"), reusable **components/templates** across slides & pages, brand colour palette | Low | ★★★★ | M |
+| **P6 "Rollout"** | R58 | Apply card pattern to ShopBannerEditor, LoyaltyHeroEditor, SpecialsPresentationEditor, SectionCard; lift limits per page | Low (shared code) | ★★★★★ | M |
+| **P7 "Stretch"** | R59 | Per-word rich text (spans), curved text (SVG textPath), entrance animations (respecting `prefers-reduced-motion`), A/B variants fed by R47 click analytics | High | ★★★ | L |
+
+Order rationale: P1 delivers every *explicit* owner ask that doesn't need a data-model change, inside one or two rounds. P2 must precede shapes/z-order because layering across types is impossible with two separate arrays. Fonts (P3) are independent of P2 and can run in parallel if desired.
+
+**Performance guard-rails (all phases):** public banner stays pure CSS/HTML (no editor JS shipped to visitors); ≤ 40 layers; custom fonts preloaded only for slide 1; shapes via CSS, not images; a `checkDesign` warning when a slide uses > 3 font families or > 2 custom fonts (each is a download).
+
+**Compliance guard-rails:** Washington WAC 314-55-155 advertising rules already enforced by the R47 publish-time lint must run over **all** text layers (incl. new ones) and over alt text of sticker images; contrast checks extend to text-over-shape (compute against the shape's fill when a text layer sits above a shape in z-order).
+
+---
+
+## 7. Testing & safety plan
+- Pure cores: `banner-layers-core.ts` (v1→v2, z-order ops, group math, align/distribute), `font-registry-core.ts` (signature, family-name sanitising, `@font-face` string building with CSS-escaping), `text-effects-core.ts` (shadow/stroke/gradient → style object), each with `__run…Tests()` registered in `scripts/compliance/run-pure-selftests.ts`.
+- Pins: "v1 design renders identical style objects after v2", "no new keys unless set" (byte-identical jsonb, R42 precedent), "unsafe font URL dropped", "font family name cannot inject CSS (`}` `;` `"` stripped)".
+- Manual QA script per slice for the owner (desktop + phone, keyboard-only pass).
+
+---
+
+## 8. Expert opinion
+
+1. **Don't buy a canvas SDK; evolve ours.** Polotno/Konva are `<canvas>` engines: their output is a picture or must be re-exported to HTML (Konva notes export-fidelity and text-reflow problems, R11). Our banner must be live, indexable, accessible HTML with an `<h1>`, real links, container-query scaling and WCAG checks — which our DOM studio already does. Every effect the owner wants exists in Baseline CSS (R13). Building on the DOM keeps the hero fast and SEO-safe and keeps one renderer for editor and site (true WYSIWYG).
+2. **The single most important change is `layers[]` (P2).** It unlocks z-order, shapes, stickers, icons, groups and future types with one model. Do it once, carefully, with parity tests, and every later feature becomes small.
+3. **Ship P1 first and fast.** The four UI asks (studio first/open, basic collapsed, one picture, auto-open) plus inline editing are low risk and change the daily experience most.
+4. **Custom fonts: WOFF2 + licence tick + browser-side sanitising is the professional standard** (Canva requires embedding rights; browsers run OTS on every web font — R3, R7). Never parse font files on our server request path.
+5. **Keep the guard-rails as a differentiator.** Contrast warnings, WAC lint, AI placement and per-device geometry are things Canva doesn't do for a cannabis retailer's website. "No limits" in creativity should still mean "can't accidentally publish something illegible or non-compliant".
+6. **Copy-to-all is cheap by design.** Because DesignCard/BannerStudio/DesignedBanner are shared (§1.10), P2–P5 automatically upgrade Shop, Loyalty, Specials and Section banners; P6 is mostly the card layout.
+
+---
+
+## 9. Sources (fetched this round)
+- [S1] Web Platform DX — contenteditable="plaintext-only" (Baseline newly available 2025-03-04): https://web-platform-dx.github.io/web-features-explorer/features/contenteditable-plaintextonly
+- [S2] MDN — FontFace() constructor: https://developer.mozilla.org/en-US/docs/Web/API/FontFace/FontFace
+- [S3] Canva Help — Upload formats and requirements (fonts: OTF/TTF/WOFF, embedding licence, 500 per Brand Kit): https://www.canva.com/help/upload-formats-requirements
+- [S4] Figma Learn — Select, move, and order objects (bring forward/front, send backward/back, shortcuts, group, align, lock): https://help.figma.com/hc/en-us/articles/1500004292221-Select-move-and-order-objects-in-FigJam
+- [S5] W3C WAI — Understanding SC 2.5.7 Dragging Movements: https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html
+- [S6] MDN — paint-order: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/paint-order
+- [S7] OpenType Sanitizer (OTS), GitHub: https://github.com/khaledhosny/ots
+- [S8] MDN — Variable fonts guide: https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Fonts/Variable_fonts
+- [S9] Polotno SDK — Text editing features: https://polotno.com/sdk/product/features/text-editing
+- [S10] Konva — Editable Text demo and limits: https://konvajs.org/docs/sandbox/Editable_Text.html
+- [S11] web.dev — The picture element: https://web.dev/learn/design/picture-element
+- [S12] MDN Baseline pages: clip-path, mix-blend-mode, background-clip, text-wrap, font-feature-settings, filter, text-shadow — https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/{name}
+- [S13] IETF RFC 8081 — The "font" Top-Level Media Type: https://www.rfc-editor.org/rfc/rfc8081
+- [S14] W3C — WOFF File Format 2.0 (signature 0x774F4632 'wOF2'): https://www.w3.org/TR/WOFF2/
+- Repo: `node_modules/next/dist/docs/01-app/01-getting-started/13-fonts.md` (Next.js 16 font docs); prior roadmaps R41, R42, R44, R45–R48.
