@@ -167,6 +167,15 @@ describe("the release choke point (releaseLoop) enforces Schedule A with the rel
     expect(!late.ok && late.error).toMatch(/Too late for Wed Nov 4/);
   });
 
+  it("the Pacific day decides, not UTC: 6 pm PDT Wed Oct 21 is already Oct 22 in UTC", async () => {
+    const evening = new Date("2026-10-22T01:00:00Z"); // 6:00 pm PDT, Wed Oct 21
+    const thu = await vendor("2026-10-22", evening);
+    expect(!thu.ok && thu.error).toMatch(/Too late for Thu Oct 22/); // UTC would call it "same day"
+    const wed = await vendor("2026-10-21", evening, "b2");
+    expect(!wed.ok && wed.error).toMatch(/Same Day ACH/); // UTC would call it "already passed"
+    expect(writes()).toHaveLength(0);
+  });
+
   it("DST end week: Fri Oct 30 is still PDT, so 4:00 pm is 23:00Z", async () => {
     expect((await vendor("2026-11-03", new Date("2026-10-30T22:59:00Z"))).ok).toBe(true);
     expect((await vendor("2026-11-03", new Date("2026-10-30T23:00:00Z"), "b2")).ok).toBe(false);

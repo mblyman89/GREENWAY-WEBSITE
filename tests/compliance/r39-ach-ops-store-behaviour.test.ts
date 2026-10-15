@@ -568,6 +568,17 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     expect(st.rpc).toHaveLength(0);
   });
 
+  it("R41 S5: past the Timberland deadline the release is refused before anything is read; nothing is written", async () => {
+    // EFFECTIVE Thu Oct 8 -> upload and approve by Tue Oct 6, 4:00 pm PDT (23:00Z).
+    st.db.log.length = 0;
+    const late = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1]), actorId: STEPHEN, todayIso: "2026-10-06", now: new Date("2026-10-06T23:00:00Z") });
+    expect(late.ok === false && late.error).toMatch(/^Timberland deadline: this file was NOT released\. Too late for Thu Oct 8/);
+    expect(st.db.log).toHaveLength(0);
+    expect(st.db.rows("ach_files")).toHaveLength(0);
+    const onTime = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1]), actorId: STEPHEN, todayIso: "2026-10-06", now: new Date("2026-10-06T22:59:00Z") });
+    expect(onTime.ok).toBe(true);
+  });
+
   it("R41 S3: release refuses a stale or malformed fingerprint and a missing key; nothing is written", async () => {
     const bad = await store.releaseCheckFile({ method: "prenote", effective: EFFECTIVE, fingerprint: store.checkListFingerprint([VER1, VER2]), actorId: STEPHEN, todayIso: TODAY, now: NOW });
     expect(bad.ok === false && bad.error).toMatch(/changed since this page loaded/);
