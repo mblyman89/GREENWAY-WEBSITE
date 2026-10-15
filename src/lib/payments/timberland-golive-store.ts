@@ -18,7 +18,8 @@ import { loadTimberlandRoomLeft, readFirstFileGate, readOpenFilesForDeadlines } 
 import { latestUploadAndApproval } from "@/lib/payments/timberland-deadline-core";
 import type { GoLiveInput, GoLiveStaff } from "@/lib/payments/timberland-golive-core";
 
-const STAFF_READ_CAP = 500;
+export const STAFF_READ_CAP = 500;
+export const INBOX_READ_CAP = 500;
 
 async function readStaff(): Promise<GoLiveStaff[] | null> {
   if (!isSupabaseServiceConfigured) return null;
@@ -33,15 +34,17 @@ async function readStaff(): Promise<GoLiveStaff[] | null> {
   return out;
 }
 
+/** Same tables and filters as countWaitingForOwner, but an error or an over-cap read is null (unread), never zero. */
 async function readInbox(): Promise<{ pending: number; toReview: number } | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
   const [p, r] = await Promise.all([
-    admin.from("ach_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("ach_owner_reviews").select("id", { count: "exact", head: true }).is("checked_off_at", null),
+    admin.from("ach_change_requests").select("id").eq("status", "pending").limit(INBOX_READ_CAP + 1),
+    admin.from("ach_owner_reviews").select("id").is("checked_off_at", null).limit(INBOX_READ_CAP + 1),
   ]);
-  if (p.error || r.error || typeof p.count !== "number" || typeof r.count !== "number") return null;
-  return { pending: p.count, toReview: r.count };
+  if (p.error || r.error || !Array.isArray(p.data) || !Array.isArray(r.data)) return null;
+  if (p.data.length > INBOX_READ_CAP || r.data.length > INBOX_READ_CAP) return null;
+  return { pending: p.data.length, toReview: r.data.length };
 }
 
 export async function loadGoLiveInput(todayIso: string, nowUtc: Date): Promise<GoLiveInput> {
