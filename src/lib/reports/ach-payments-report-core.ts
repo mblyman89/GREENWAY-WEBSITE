@@ -845,6 +845,11 @@ export function __runAchPaymentsReportCoreTests(): { passed: number; failed: num
     ok(r.attention.some((a) => a.includes("today by 4:00 pm Pacific")), "due-today attention");
     ok(r.funding.length === 2 && r.summary.fundingNeededCents === 500_000, "funding calendar sums upcoming files");
   }
+  // 4b. a file whose settlement date already passed is no longer "money needed"
+  {
+    const r = buildAchReport(base({ todayIso: "2026-10-21", files: [file({ id: "past", status: "uploaded", effectiveDate: "2026-10-20" })] }));
+    ok(r.files[0].stage === "uploaded" && r.funding.length === 0 && r.summary.fundingNeededCents === 0, "past settlement dates are not in the funding calendar");
+  }
   {
     const r = buildAchReport(base({ todayIso: "2026-10-22", files: [file({ id: "rel", status: "released" })] }));
     ok(r.files[0].overdue && !r.files[0].dueToday, "overdue the day after the deadline");
