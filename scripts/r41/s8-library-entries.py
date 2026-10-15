@@ -35,9 +35,9 @@ entries = f'''
             "happen before a file leaves Greenway."
         ),
         howWeProtectYou=(
-            "Every file is checked by the app before it can be released: Timberland's limits, its deadlines, its "
-            "file layout, the 6-day prenote wait and the first-file test, holds on any bank change, and a "
-            "fingerprinted copy that is never rebuilt. Nothing relies on Timberland catching a mistake."
+            "Before a file can be released, the app checks it against Timberland's limits, its deadlines and the "
+            "first-file prenote gate. A released file's bytes never change (the database refuses), and the app only "
+            "serves a file that still matches its SHA-256 fingerprint."
         ),
         appLink="/admin/settings/banking/operations#files",
     ),
@@ -59,9 +59,9 @@ entries = f'''
             "bank's legal bill."
         ),
         howWeProtectYou=(
-            "No one is paid by ACH without a signed authorization on file, and every new account is checked with a "
-            "prenote or test credit before real money goes to it. Bank changes go on hold until a call-back at a "
-            "number on file for 90 days."
+            "Only an active authorization is paid. For employees, only Michael (the owner) can make it active or mark "
+            "an account verified (prenote, test credit, or voided check plus call-back). For vendors, the vault pays "
+            "only an active record. Any bank change goes on hold until a call-back at a number on file 90+ days, or in person."
         ),
         appLink="/admin/settings/banking/operations#checks",
     ),
@@ -81,8 +81,9 @@ entries = f'''
             "not have to succeed and owes you nothing if it fails. The time to catch a mistake is before the upload."
         ),
         howWeProtectYou=(
-            "A released file can be voided in the app, with a written reason, only until you record that you "
-            "uploaded it. After that the app shows the honest answer: call Timberland at once."
+            "Voiding a file in the app (owner only, with a written reason) keeps the record, but it cannot pull back a "
+            "file already uploaded. If the file is at Timberland, phone 1-800-562-8761 at once: under this section "
+            "Timberland is not liable if the cancellation fails."
         ),
         appLink="/admin/settings/banking/operations#files",
     ),
@@ -126,8 +127,9 @@ entries = f'''
             "account number. If the number is wrong, the name will not save the payment."
         ),
         howWeProtectYou=(
-            "Bank numbers are re-keyed blind from the signed form, checked against the routing number's check digit, "
-            "and verified with a prenote or test credit before the first live payment."
+            "Timberland pays by account number alone, so the app checks every routing number's check digit and pays only "
+            "verified, active records: employee accounts by prenote, test credit, or voided check plus call-back; "
+            "vendor records by a call-back at a number on file."
         ),
         appLink="/admin/settings/banking/operations#checks",
     ),
