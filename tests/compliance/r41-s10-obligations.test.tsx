@@ -256,6 +256,16 @@ describe("store (real postgrest-js against FakePostgrest)", () => {
     st.db.before = () => ({ status: 500, body: { message: "down" } });
     expect(await store.countNoticesThisMonth(today)).toBeNull();
   });
+  it("the count reads every page past PostgREST's 1,000-row cap, and a failed later page is null (SLICE 5C)", async () => {
+    const rows = st.db.rows("ach_return_notices");
+    for (let i = 0; i < 1203; i++) rows.push({ id: `id-${String(i).padStart(5, "0")}`, notice_kind: i % 3 === 0 ? "noc" : "return", received_on: "2026-10-05" });
+    expect(await store.countNoticesThisMonth(today)).toEqual({ returns: 802, nocs: 401 });
+    const gets = st.db.log.filter((x) => x.method === "GET" && x.table === "ach_return_notices");
+    expect(gets.length).toBe(2);
+    expect(gets.every((g) => g.url.searchParams.get("order") === "id.asc")).toBe(true);
+    st.db.before = (req) => (req.method === "GET" && req.url.searchParams.get("offset") === "1000" ? { status: 500, body: { message: "timeout" } } : undefined);
+    expect(await store.countNoticesThisMonth(today)).toBeNull();
+  });
 });
 
 // =========================================================================

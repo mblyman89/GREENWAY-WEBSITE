@@ -45,7 +45,8 @@ M = [
     ("read failure looks like an empty log", STORE, "  if (error) return { ok: false, error: dbErr(error) };\n  const rows = (data ?? []) as CommsRow[];", "  if (error) return { ok: true, rows: [], capped: false };\n  const rows = (data ?? []) as CommsRow[];"),
     ("read not capped", STORE, "    .limit(COMMS_READ_CAP);", "    ;"),
     ("unknown item still closed", STORE, '  if (!target.data) return { ok: false, error: "That item could not be found. Reload the page." };', ""),
-    ("notice count failure is zero", STORE, "  if (error) return null;\n  const rows = (data ?? []) as { notice_kind?: string }[];", "  if (error) return { returns: 0, nocs: 0 };\n  const rows = (data ?? []) as { notice_kind?: string }[];"),
+    ("notice count failure is zero", STORE, "  if (!verdict.complete) return null;", "  if (!verdict.complete) return { returns: 0, nocs: 0 };"),
+    ("notice count ignores a failed page", STORE, "    return { rows: (data ?? []) as { notice_kind?: string }[], ok: !error };", "    return { rows: (data ?? []) as { notice_kind?: string }[], ok: true };"),
     ("notice count from the wrong month", STORE, '    .gte("received_on", first)', '    .gte("received_on", "2000-01-01")'),
     # --- actions ---
     ("bad form still written", ACT, "  const form = checkCommsForm((k) => fd.get(k) as string | null, pacificToday(), new Date());\n  if (!form.ok) back({ error: form.error });", "  const form = checkCommsForm((k) => fd.get(k) as string | null, pacificToday(), new Date());\n  if (!form.ok) return;"),
