@@ -50,7 +50,7 @@ import {
   roomLeft,
   type LedgerFileForLimits,
 } from "@/lib/payments/timberland-limits-core";
-import { checkEffectiveDateForTimberland, latestUploadAndApproval } from "@/lib/payments/timberland-deadline-core";
+import { checkEffectiveDateForTimberland, latestUploadAndApproval, type DeadlineFile } from "@/lib/payments/timberland-deadline-core";
 
 type Fail = { ok: false; error: string };
 
@@ -430,6 +430,44 @@ export async function listAchFiles(limit = 50): Promise<{ tableReady: boolean; r
     return { tableReady: !missing, rows: [], error: missing ? null : ledgerDbErrorMessage(error.message) };
   }
   return { tableReady: true, rows: (data ?? []) as AchFileRow[], error: null };
+}
+
+// ------------------------------------------------------- deadlines (S5) ---
+
+export const OPEN_FILES_READ_CAP = 500;
+
+/**
+ * R41 S5: every file still waiting on Timberland (released or uploaded,
+ * effective today or later) for the deadline reminders. Uses the
+ * ach_files_open_idx partial index (0273). Fails CLOSED: a read error, an
+ * unexpected row, or more rows than the cap is an error the caller must
+ * report, never an empty list (rule 46: silence is not "all clear").
+ */
+export async function readOpenFilesForDeadlines(todayIso: string): Promise<{ ok: true; files: DeadlineFile[] } | Fail> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: NOT_CONFIGURED };
+  const { data, error } = await createSupabaseAdminClient()
+    .from("ach_files")
+    .select("id, kind, status, filename, effective_date")
+    .in("status", ["released", "uploaded"])
+    .gte("effective_date", todayIso)
+    .order("effective_date", { ascending: true })
+    .limit(OPEN_FILES_READ_CAP + 1);
+  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };
+  const rows = (data ?? []) as Record<string, unknown>[];
+  if (rows.length > OPEN_FILES_READ_CAP) return { ok: false, error: `More than ${OPEN_FILES_READ_CAP} files are waiting on Timberland; the list was not trusted.` };
+  const files: DeadlineFile[] = [];
+  for (const r of rows) {
+    const ok =
+      typeof r.id === "string" &&
+      typeof r.kind === "string" &&
+      (r.status === "released" || r.status === "uploaded") &&
+      typeof r.filename === "string" &&
+      typeof r.effective_date === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(r.effective_date);
+    if (!ok) return { ok: false, error: "An ACH file row could not be read (missing id, kind, status, filename or effective date)." };
+    files.push({ id: r.id as string, kind: r.kind as string, status: r.status as string, filename: r.filename as string, effectiveDate: r.effective_date as string });
+  }
+  return { ok: true, files };
 }
 
 // ---------------------------------------------------------------- void -----

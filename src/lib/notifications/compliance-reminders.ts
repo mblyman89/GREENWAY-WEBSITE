@@ -46,6 +46,8 @@ import { evaluateAchCalendar, planAchCalendarReminders } from "@/lib/payments/ac
 import { getAchDoneMap } from "@/lib/payments/ach-guide-store";
 import { opsPageView } from "@/lib/payments/ach-ops-store";
 import { isLlamaParseConfigured } from "@/lib/inbound-email/llamaparse-provider";
+import { planDeadlineReminders } from "@/lib/payments/timberland-deadline-core";
+import { readOpenFilesForDeadlines } from "@/lib/payments/ach-file-ledger-store";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
@@ -381,6 +383,28 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
   } catch (e) {
     result.notes.push(
       `ACH calendar planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
+    );
+  }
+
+  // 7) R41 S5 - Timberland deadlines (Schedule A: uploaded AND approved 2
+  //    banking days before the effective date, by 4:00 pm Pacific). For every
+  //    file still released/uploaded: a morning reminder on its deadline day,
+  //    and one critical note if the deadline passed while it is still not
+  //    bank_approved. The 1 pm pass is its own cron
+  //    (/api/cron/ach-deadline-1pm). Own try/catch; an unreadable ledger is
+  //    reported, never treated as "nothing due" (rule 46).
+  try {
+    const open = await readOpenFilesForDeadlines(todayIso);
+    if (!open.ok) {
+      result.notes.push(`Timberland deadline reminders: the ACH files could not be read (${open.error}). Check Banking > ACH files by hand today.`);
+    } else {
+      for (const d of planDeadlineReminders(todayIso, open.files)) {
+        reminders.push({ ...d, weekKey: null, linkPath: "/admin/settings/banking/operations", linkLabel: "Open ACH files", footnote: "Timberland cutoff: 4:00 pm Pacific, 2 banking days before the effective date (Schedule A). Our target is 3:30 pm." });
+      }
+    }
+  } catch (e) {
+    result.notes.push(
+      `Timberland deadline planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
     );
   }
 
