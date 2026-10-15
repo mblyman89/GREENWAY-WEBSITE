@@ -2515,3 +2515,42 @@ in Vercel.
   It **refuses** once any file has been released, or once an approval
   request targets a file. Those are payment records. Otherwise it drops the
   table and the two functions and puts the 0271 request target list back.
+
+## R41 — 0274 — ACH file bank steps: mark uploaded, mark approved at Timberland
+
+- [ ] `0274_ach_file_bank_steps.sql` lets the site record the two steps you
+  take at Timberland after you release a file:
+  - **Mark uploaded.** After you upload the file in Timberland's cash
+    management portal, you press "Mark uploaded". The file moves from
+    released to uploaded, with your name and the time.
+  - **Mark approved at bank.** After you approve the file in the portal,
+    you press "Mark approved". The file moves from uploaded to
+    bank_approved, with your name and the time.
+  - **Owner only.** The database refuses either step from anyone who is
+    not the owner. An admin's press becomes a request for your approval.
+  - **In order, once.** Approved needs an upload first. A stamp is never
+    changed once set, and a new file can never arrive pre-stamped.
+  - **No second-person rule.** Timberland's dual approval is off (signed
+    Schedule C) and you are the only Timberland user, so the same owner may
+    record both steps.
+  - No new table. It replaces the `ach_files` guard (every 0273 rule is
+    kept) and adds two server-only functions.
+
+  Apply it **after 0273**. It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_proc where proname in ('ach_file_mark_uploaded', 'ach_file_mark_bank_approved')) as fns,
+         (select count(*) from pg_proc where proname = 'ach_files_guard'
+            and prosrc like '%ACH_BANK_STEP_FINAL%') as guard;
+  -- fns | guard
+  -- 2   | 1
+  ```
+
+  For the full proof, paste `scripts/recon/ach-file-bank-steps-0274-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0274 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0274_ach_file_bank_steps.rollback.sql`.
+  It drops the two functions and puts the 0273 guard back. Files already
+  marked uploaded or approved keep their stamps. Nothing is deleted.
