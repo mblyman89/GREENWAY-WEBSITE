@@ -195,8 +195,9 @@ export type FirstPayrollCheck =
 /**
  * Can a first live payday still be made, given now? The prenote file must
  * still be releasable for its effective date (Schedule A cutoff). If not, the
- * earliest workable first payday is given (Fridays first, because Greenway
- * pays on Fridays; any usable day is accepted if typed).
+ * earliest workable first payday is given: the earliest bank date a live
+ * file could carry (any usable banking day; Greenway's Friday paydays are
+ * typed by the owner, never picked by the site).
  */
 export function checkFirstPayday(raw: string | null | undefined, nowUtc: Date): FirstPayrollCheck {
   const earliestPrenoteEffective = earliestEffectiveDate(nowUtc);
