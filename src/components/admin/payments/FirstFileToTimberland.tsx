@@ -43,7 +43,7 @@ export async function FirstFileToTimberland({ today, firstPayday, now }: { today
           <p>{gate.gate.line}</p>
           <p className="mt-2 flex flex-wrap gap-3 text-xs">
             <Link href="/admin/settings/banking/operations#checks" className="font-semibold text-emerald-300 underline">Account checks →</Link>
-            <Link href="/admin/settings/banking/files" className="font-semibold text-emerald-300 underline">ACH files →</Link>
+            <Link href="/admin/settings/banking/operations#files" className="font-semibold text-emerald-300 underline">Released ACH files →</Link>
           </p>
         </div>
       )}
