@@ -688,6 +688,9 @@ describe("Round 12: Vendors to follow up is collapsible and searchable", () => {
     expect(c).toContain('window.localStorage.setItem(FOLLOW_UP_OPEN_KEY, now ? "1" : "0");');
     expect(c).toContain("const shown = filterVendorFollowUp(rows, query);");
     expect(c).not.toMatch(/fetch\(|action=|use server/);
+    // Reopened on the DOM node after mount (uncontrolled), never via setState in an effect.
+    expect(c).toContain('if (detailsRef.current && window.localStorage.getItem(FOLLOW_UP_OPEN_KEY) === "1") detailsRef.current.open = true;');
+    expect(c).not.toMatch(/setOpen|open=\{/);
     const p = read("src/app/admin/settings/banking/page.tsx");
     expect(p).toContain("<VendorFollowUpSection rows={followUp} optedOutCount={optedOutCount} />");
     expect(p).not.toContain("{followUp.map(");

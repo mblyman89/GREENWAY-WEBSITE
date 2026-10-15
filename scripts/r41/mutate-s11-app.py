@@ -72,7 +72,7 @@ M = [
     ("search is case-sensitive", ENROLL, '    .toLowerCase()\n    .replace(/[\'\\u2019]/g, "")', '    .replace(/[\'\\u2019]/g, "")'),
     ("search ignores the status label", ENROLL, "foldForSearch([r.label, r.nextStep, ...r.warnings].join(\" \"))", "foldForSearch([r.nextStep, ...r.warnings].join(\" \"))"),
     ("blank search hides every row", ENROLL, "  if (words.length === 0) return [...rows];", "  if (words.length === 0) return [];"),
-    ("section opens by default", FOLLOW, "  const [open, setOpen] = useState(false);", "  const [open, setOpen] = useState(true);"),
+    ("section opens by default", FOLLOW, '      ref={detailsRef}', '      ref={detailsRef}\n      open'),
     ("list not filtered", FOLLOW, "  const shown = filterVendorFollowUp(rows, query);", "  const shown = filterVendorFollowUp(rows, \"\");"),
     ("no search box", FOLLOW, '                type="search"', '                type="hidden"'),
 ]
