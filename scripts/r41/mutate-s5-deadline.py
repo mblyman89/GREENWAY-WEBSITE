@@ -47,10 +47,15 @@ M = [
     ("earliest-at-cutoff", DC, "if (nowUtc.getTime() < latestUploadAndApproval(eff).cutoffUtc.getTime()) return eff;", "if (nowUtc.getTime() <= latestUploadAndApproval(eff).cutoffUtc.getTime()) return eff;"),
     ("q9-check-removed", DC, "  if (isQ9Friday(d)) {\n    return { ok: false, rule: \"q9_friday\"", "  if (false) {\n    return { ok: false, rule: \"q9_friday\""),
     ("same-day-allowed", DC, "if (d === today) return { ok: false, rule: \"same_day\"", "if (false) return { ok: false, rule: \"same_day\""),
-    ("utc-earliest", DC, "const today = pacificDayKey(nowUtc);\n  for (let i = 0; i < 40; i++) {", "const today = nowUtc.toISOString().slice(0, 10);\n  for (let i = 0; i < 40; i++) {"),
+    # (A UTC day in earliestEffectiveDate / the 1 pm planner is an EQUIVALENT
+    # mutant: probed every 15 min, Sep 2026 - Sep 2028, 70,176 instants, 0
+    # differences - UTC runs ahead only after 4/5 pm Pacific, past the cutoff,
+    # and 1-4 pm Pacific never crosses UTC midnight. Replaced, not counted.)
+    ("earliest-lead-one", DC, "const eff = addUsableDays(today, CREDIT_LEAD_BANKING_DAYS + i);", "const eff = addUsableDays(today, 1 + i);"),
     ("afternoon-noon", DC, "AFTERNOON_REMINDER = { hour: 13, minute: 0 }", "AFTERNOON_REMINDER = { hour: 12, minute: 0 }"),
     ("afternoon-at-cutoff", DC, "nowUtc < from || nowUtc >= dl.cutoffUtc) continue;", "nowUtc < from || nowUtc > dl.cutoffUtc) continue;"),
-    ("afternoon-utc-day", DC, "const today = pacificDayKey(nowUtc);\n  const from", "const today = nowUtc.toISOString().slice(0, 10);\n  const from"),
+    ("afternoon-before-1pm", DC, "nowUtc < from || nowUtc >= dl.cutoffUtc) continue;", "nowUtc >= dl.cutoffUtc) continue;"),
+    ("afternoon-approved-too", DC, "if (f.status !== \"released\" && f.status !== \"uploaded\") continue;\n    const dl = latestUploadAndApproval(f.effectiveDate);\n    if (dl.day !== today ||", "const dl = latestUploadAndApproval(f.effectiveDate);\n    if (dl.day !== today ||"),
     # --- the store: the one choke point ---
     ("release-deadline-removed", LS, "  if (!deadline.ok) return { ok: false, error: `Timberland deadline: this file was NOT released. ${deadline.error}` };\n", ""),
     ("open-cap-ignored", LS, "if (rows.length > OPEN_FILES_READ_CAP) return", "if (false) return"),
