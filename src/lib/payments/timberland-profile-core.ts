@@ -543,6 +543,28 @@ export const OPEN_QUESTIONS: readonly OpenQuestion[] = [
     strictDefault: "Recorded, not decided. Nothing in S1 changes the file: PAYROLL stays in the Company Entry Description. Found in R41 S1; ask Brenda before the file-builder slice.",
     affects: [],
   },
+  // R41 S8: the add-ons held for the end-of-build email. Q16 (file name), Q17 (duplicate
+  // files) and Q19 (upload or approval by 4 pm) are NOT here: Brenda's Email 2 already
+  // answers them (answers 8, 9 and 7; see fileNameRequirements, bankRejectsDuplicateFiles
+  // and uploadCutoff). Q18 is half answered (answer 6: prenotes do not count).
+  {
+    id: "Q15",
+    label: "Section 16 says Timberland will debit the account \"in the amount of each file\". Will the statement show one debit per file, or one per payment?",
+    strictDefault: "The ACH Payments report matches one debit per file first, then one per payment, and says plainly when no bank row is found. No code change either way.",
+    affects: [],
+  },
+  {
+    id: "Q18",
+    label: "Prenotes do not count toward the limits (answer 6). Do test credits (amounts under $1) count?",
+    strictDefault: "Test credits COUNT toward the daily and monthly limits (the stricter reading).",
+    affects: ["prenotesCount"],
+  },
+  {
+    id: "Q20",
+    label: "Section 6 says live entries wait \"at least 6 banking days\" after a prenote settles. Nacha cut its own wait to the third banking day in 2014 (82 FR 42597). Does Timberland want 6, or the current Nacha 3?",
+    strictDefault: "6 banking days, exactly as signed (section 6). The database floor (0275) and the first-file gate stay on 6.",
+    affects: ["prenoteWaitBankingDays"],
+  },
 ];
 
 /**
@@ -744,7 +766,7 @@ export function __runTimberlandProfileCoreTests(): { passed: number; failed: num
 
   // Open questions
   const ids = OPEN_QUESTIONS.map((x) => x.id);
-  ok(JSON.stringify(ids) === JSON.stringify(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14"]), "Q1, Q3-Q13 (Q2 removed) plus Q14");
+  ok(JSON.stringify(ids) === JSON.stringify(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20"]), "Q1, Q3-Q13 (Q2 removed), Q14, then the S8 add-ons Q15, Q18, Q20");
   ok(OPEN_QUESTIONS.every((x) => x.label.length > 10 && x.strictDefault.length > 10), "every question has a label and a strict default");
   ok(OPEN_QUESTIONS.every((x) => x.affects.every((k) => k in TIMBERLAND_PROFILE)), "every affected fact exists");
   ok(OPEN_QUESTIONS.filter((x) => x.infoOnly).map((x) => x.id).join() === "Q1", "only Q1 is information only");
