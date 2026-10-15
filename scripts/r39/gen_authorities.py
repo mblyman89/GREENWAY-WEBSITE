@@ -105,13 +105,14 @@ META = {
         "Nothing is deposited, nothing is printed, and the payee usually never sees it. The second sentence matters most: a prenote that goes "
         "through proves the account EXISTS, not that it belongs to the payee. The callback is still required."),
     "prenote-three-banking-days": ("industry_guidance", None,
-        "The waiting rule the system enforces. Once a prenote settles, the payee stays in Prenote Sent for three banking days; if a return or a "
-        "Notification of Change arrives, the payee goes ON HOLD and the details are fixed first. Banking days are FedACH days, which is why the "
-        "system uses the Federal Reserve holiday list and not the calendar."),
+        "Nacha's MINIMUM wait, as a bank summarises it. Greenway's own bank asks for more: Timberland's signed agreement (section 6) says live "
+        "dollar entries wait at least 6 banking days after the prenote settles, so the system holds the payee in Prenote Sent for six (R41 S7) "
+        "and proves that date is never earlier than this three-day floor. If a return or a Notification of Change arrives, the payee goes ON "
+        "HOLD and the details are fixed first. Banking days are FedACH days, from the Federal Reserve holiday list, not the calendar."),
     "returns-second-banking-day": ("industry_guidance", None,
-        "This is WHY the prenote wait is three banking days: a bank that is going to reject the account must do so by the opening of business on "
-        "the second banking day after settlement. By the third banking day any timely rejection has already arrived, so the ready date is "
-        "settlement plus three FedACH banking days."),
+        "This is WHY Nacha's minimum prenote wait is three banking days: a bank that is going to reject the account must do so by the opening "
+        "of business on the second banking day after settlement, so by the third banking day any timely rejection has already arrived. "
+        "Timberland's agreement adds margin on top (six banking days, section 6), and the system uses Timberland's six."),
     "noc-six-banking-days": ("industry_guidance", None,
         "When a payee's bank sends a Notification of Change (it fixed a wrong digit or account type on its end), Greenway must update the vault "
         "before the next payment or within six banking days. Payroll is recurring, so the system computes that due date and blocks the next "
@@ -140,8 +141,9 @@ META = {
         "or 33 (savings). The debit codes appear in the quote only because they share the sentence; the system has no code path that can produce "
         "27, 28, 37 or 38."),
     "prenote-wait-history": ("industry_guidance", None,
-        "History, quoted so an older article or a long-serving bookkeeper saying \"six days\" does not cause confusion. The wait used to be six "
-        "banking days; the Rules cut it to three. The system uses three, which matches the 2024 bank summaries quoted next to this one."),
+        "History, so the two numbers do not confuse anyone. The Nacha wait used to be six banking days; the Rules cut it to three. Timberland's "
+        "2026 agreement with Greenway (section 6) still asks for six banking days after settlement, and a bank may ask for more than the Rules. "
+        "The system therefore uses six for Greenway, and shows three only as Nacha's floor."),
     "payroll-description": ("industry_guidance", None,
         "From March 20, 2026 a payroll batch must say PAYROLL in capitals. The payroll file builder already defaults to PAYROLL; this authority is "
         "why it may not be changed to something friendlier like \"PAY\" or \"WAGES\", and why a test fails if it is."),

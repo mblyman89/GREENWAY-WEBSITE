@@ -32,7 +32,7 @@ export const PRENOTE_VS_TEST_CREDIT: AchLesson = {
     "Both are ways to make sure a bank account number is real before a paycheck or vendor payment goes to it. " +
     "A PRENOTE is a $0.00 practice entry. No money moves. Timberland sends it through the banking system, and if " +
     "the account number is wrong the other bank sends it back, usually within two banking days. If nothing comes " +
-    "back after three banking days, you may send real money. A prenote proves the account EXISTS. It does not " +
+    "back after six banking days (Timberland's agreement, section 6; Nacha's own minimum is three), you may send real money. A prenote proves the account EXISTS. It does not " +
     "prove the person who gave it to you OWNS it. " +
     "A TEST CREDIT (Nacha calls it a micro-entry) is a real deposit of less than $1.00 - say 23 cents - labelled " +
     "ACCTVERIFY on the payee's statement. The payee tells you the amount they saw. That proves the account exists " +
@@ -89,18 +89,19 @@ export const ACH_FUNCTION_LESSONS: readonly AchLesson[] = [
     authorities: ["ach-fedach-saturday-sunday"],
   },
   {
-    key: "prenoteLiveEligibleDate",
-    title: "When a prenoted account can be paid",
+    key: "nachaMinPrenoteLiveDate",
+    title: "Nacha's minimum wait after a prenote",
     plain:
-      "Three banking days after the prenote settles. Before 2021 the rule was six days; Nacha shortened it. If a " +
-      "return or a correction notice comes back, the account is not ready at all until it is fixed.",
+      "Three banking days after the prenote settles is Nacha's MINIMUM. Before 2021 the rule was six days; Nacha shortened it. " +
+      "Greenway's bank asks for more: Timberland's agreement (section 6) says six banking days after settlement, and the system " +
+      "uses six. This three-day date is shown only to prove Timberland's date is never earlier.",
     authorities: ["ach-prenote-three-banking-days", "ach-prenote-wait-history"],
   },
   {
     key: "prenoteOutcome",
     title: "Is this prenote done?",
     plain:
-      "Waiting, ready, or blocked. A return means the account number is wrong: get new details from the payee. A " +
+      "Waiting until its stored first live day (six banking days after it settles, Timberland section 6), ready, or blocked. A return means the account number is wrong: get new details from the payee. A " +
       "correction notice (NOC) means the bank told us the right numbers: apply them, call the payee, then release.",
     authorities: ["ach-prenote-three-banking-days", "ach-noc-no-new-authorization"],
   },
@@ -365,7 +366,7 @@ export const ACH_PLUMBING_FUNCTIONS: Readonly<Record<string, string>> = {
 export const ACH_STATE_LESSONS: Readonly<Record<AuthorizationState, string>> = {
   draft: "Entered but not signed. Nothing can be paid.",
   signed: "Signed form on file. The account still has to be checked (prenote or test credit).",
-  verifying: "The prenote or test credit is on its way. Usually three banking days.",
+  verifying: "The prenote or test credit is on its way. A prenote waits six banking days after it settles (Timberland).",
   active: "Ready. Payments may go to this account.",
   on_hold: "Something changed or bounced. Call the payee at a number on file, then release.",
   revoked: "The payee withdrew permission. Pay by check until a new form is signed.",

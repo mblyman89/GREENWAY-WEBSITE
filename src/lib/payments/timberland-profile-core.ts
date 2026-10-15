@@ -29,7 +29,7 @@
  */
 
 import { dfiId8, isValidRouting } from "./nacha-fields-core";
-import { PRENOTE_WAIT_BANKING_DAYS as NACHA_PRENOTE_WAIT_BANKING_DAYS } from "./ach-authorization-core";
+import { NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS as NACHA_PRENOTE_WAIT_BANKING_DAYS } from "./ach-authorization-core";
 
 // ───────────────────────────────────────────────────────────────────────────
 // 1. Sources and citations

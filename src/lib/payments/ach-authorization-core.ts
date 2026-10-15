@@ -148,19 +148,26 @@ export function nextBankingDayOnOrAfter(iso: string): string {
 // 3. Timing rules
 // ───────────────────────────────────────────────────────────────────────────
 
-export const PRENOTE_WAIT_BANKING_DAYS = 3; // ach-prenote-three-banking-days
+/**
+ * Nacha's MINIMUM prenote wait (3 banking days after settlement). R41 S7:
+ * Library and legal text only. Greenway's binding wait is Timberland's
+ * agreement section 6 (6 banking days after settlement), computed by
+ * timberland-prenote-core.ts; it can never be shorter than this floor.
+ */
+export const NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS = 3; // ach-prenote-three-banking-days
 export const RETURN_WINDOW_BANKING_DAYS = 2; // ach-returns-second-banking-day
 export const NOC_DEADLINE_BANKING_DAYS = 6; // ach-noc-six-banking-days
 export const REVERSAL_WINDOW_BANKING_DAYS = 5; // ach-reversal-five-banking-days
 
 /**
- * Earliest date a LIVE credit may be sent to an account that was prenoted,
- * given the prenote's settlement date: three banking days after settlement,
- * and only if no return or NOC arrived. Counted as banking days AFTER the
- * settlement date (settlement day itself is day 0).
+ * The Nacha FLOOR for a live credit to a prenoted account: three banking days
+ * after the prenote's settlement date (settlement day is day 0). NOT the day
+ * Greenway uses: Timberland's agreement section 6 requires six
+ * (timberland-prenote-core.prenoteLiveUploadDay). Kept so the Library can show
+ * the Nacha rule and so the Timberland day is proven to be at or after it.
  */
-export function prenoteLiveEligibleDate(prenoteSettlementDate: string): string {
-  return addBankingDays(prenoteSettlementDate, PRENOTE_WAIT_BANKING_DAYS);
+export function nachaMinPrenoteLiveDate(prenoteSettlementDate: string): string {
+  return addBankingDays(prenoteSettlementDate, NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS);
 }
 
 export type PrenoteOutcome =
@@ -169,16 +176,20 @@ export type PrenoteOutcome =
   | { kind: "blocked_return"; code: string }
   | { kind: "blocked_noc"; code: string };
 
+/**
+ * Is a sent prenote done? `eligibleOn` is the stored first live day (R41 S7:
+ * Timberland's 6 banking days after settlement, written by the app and floored
+ * by migration 0275). A return or NOC blocks whatever the date.
+ */
 export function prenoteOutcome(input: {
-  settlementDate: string;
+  eligibleOn: string;
   today: string;
   returnCode?: string | null;
   nocCode?: string | null;
 }): PrenoteOutcome {
   if (input.returnCode) return { kind: "blocked_return", code: input.returnCode };
   if (input.nocCode) return { kind: "blocked_noc", code: input.nocCode };
-  const eligibleOn = prenoteLiveEligibleDate(input.settlementDate);
-  return input.today >= eligibleOn ? { kind: "eligible" } : { kind: "wait", eligibleOn };
+  return input.today >= input.eligibleOn ? { kind: "eligible" } : { kind: "wait", eligibleOn: input.eligibleOn };
 }
 
 /** Last day a return is expected for an entry settled on `settlementDate`. */
@@ -702,11 +713,11 @@ export function __runAchAuthorizationCoreTests(): { passed: number; failed: numb
   ok(nextBankingDayOnOrAfter("2026-11-26") === "2026-11-27", "Thanksgiving -> Friday");
 
   // timing
-  ok(prenoteLiveEligibleDate("2026-11-24") === "2026-11-30", "prenote Tue Nov 24 +3 skips Thanksgiving/weekend");
-  ok(prenoteOutcome({ settlementDate: "2026-11-24", today: "2026-11-27" }).kind === "wait", "prenote waits");
-  ok(prenoteOutcome({ settlementDate: "2026-11-24", today: "2026-11-30" }).kind === "eligible", "prenote eligible on day 3");
-  ok(prenoteOutcome({ settlementDate: "2026-11-24", today: "2027-01-01", returnCode: "R03" }).kind === "blocked_return", "return blocks forever");
-  ok(prenoteOutcome({ settlementDate: "2026-11-24", today: "2027-01-01", nocCode: "C01" }).kind === "blocked_noc", "NOC blocks");
+  ok(nachaMinPrenoteLiveDate("2026-11-24") === "2026-11-30", "Nacha floor: prenote Tue Nov 24 +3 skips Thanksgiving/weekend");
+  ok(prenoteOutcome({ eligibleOn: "2026-12-03", today: "2026-12-02" }).kind === "wait", "prenote waits the day before");
+  ok(prenoteOutcome({ eligibleOn: "2026-12-03", today: "2026-12-03" }).kind === "eligible", "prenote eligible on its day");
+  ok(prenoteOutcome({ eligibleOn: "2026-12-03", today: "2027-01-01", returnCode: "R03" }).kind === "blocked_return", "return blocks forever");
+  ok(prenoteOutcome({ eligibleOn: "2026-12-03", today: "2027-01-01", nocCode: "C01" }).kind === "blocked_noc", "NOC blocks");
   ok(returnWindowCloses("2026-12-24") === "2026-12-29", "returns: Dec 24 +2 skips Christmas");
   ok(nocApplyBy("2026-03-02", null) === "2026-03-10", "NOC +6 banking days");
   ok(nocApplyBy("2026-03-02", "2026-03-06") === "2026-03-06", "NOC: earlier next entry wins");
