@@ -1315,7 +1315,10 @@ describe("D-65 — the connections survive the reset", () => {
     //       database refuses DELETE, so a WIPE rule would fail part-way)
     //   +1  R41 S10 / 0277: ach_timberland_comms (the Timberland
     //       communications log; append-only, the database refuses DELETE)
-    expect(plan.keep.length).toBe(159);
+    //   +3  R41 S11 / 0278: ofac_screening_runs, ofac_screening_results,
+    //       ofac_match_reviews (the sanctions screening record; append-only,
+    //       the database refuses DELETE)
+    expect(plan.keep.length).toBe(162);
     expect(plan.wipe.length).toBe(139);
   });
 

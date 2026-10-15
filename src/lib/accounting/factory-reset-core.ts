@@ -498,6 +498,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ach_change_request_events", disposition: "KEEP", because: "The append-only trail of every ACH request step (asked, approved, rejected, withdrawn, done)." },
   { table: "ach_owner_reviews", disposition: "KEEP", because: "Stephen's urgent stop actions and when Michael checked each one off." },
   { table: "ach_files", disposition: "KEEP", because: "Every ACH file released to the bank, its exact encrypted bytes and fingerprint (payment records, kept forever; the database refuses DELETE)." },
+  { table: "ofac_screening_runs", disposition: "KEEP", because: "Every OFAC sanctions screen of the payees (OFAC FAQ 5 asks for complete records); append-only, the database refuses DELETE." },
+  { table: "ofac_screening_results", disposition: "KEEP", because: "Each payee's result in each OFAC screen (clear or a possible match); append-only, the database refuses DELETE." },
+  { table: "ofac_match_reviews", disposition: "KEEP", because: "The owner's recorded decision on each possible OFAC match (the review record OFAC FAQ 5 asks for); append-only, the database refuses DELETE." },
   { table: "ach_timberland_comms", disposition: "KEEP", because: "What Timberland told Greenway and when (fee and amendment notices, reserve demands, compromise reports): a record kept forever; the database refuses DELETE." },
   // R39 (0261). The database refuses to delete a signed e-sign session
   // (ACH_ESIGN_KEEP) and the session points at the kept documents with

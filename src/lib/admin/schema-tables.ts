@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 298 tables across 277 migrations at the time of writing.
+ * Measured 301 tables across 278 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -226,6 +226,9 @@ export const SCHEMA_TABLES: readonly string[] = [
   "noncannabis_products",
   "noncannabis_sku_sequences",
   "obligation_waivers",
+  "ofac_match_reviews",
+  "ofac_screening_results",
+  "ofac_screening_runs",
   "order_events",
   "order_lines",
   "order_name_pool",
