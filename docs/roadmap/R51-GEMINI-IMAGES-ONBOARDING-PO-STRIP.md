@@ -28,23 +28,115 @@
 | # | Item | Status |
 |---|------|--------|
 | 1 | PO pages get the one pipeline bar (`CatalogStageStrip current="order"`) | DONE (S1) |
-| 2 | Gemini searches for product IMAGES as well as info | see §3 |
-| 3 | Attach images on the onboarding page (intake drafts + Cultivera rows) | see §3 |
-| 4 | KB remembers past image attachments per product | see §3 |
-| 5 | Recommend images from Content → Media (published AND unpublished) with confidence | see §3 |
-| 6 | Gemini API upgraded to the most enterprise-grade, accurate path | see §2 |
+| 2 | Gemini searches for product IMAGES as well as info | S2–S4 |
+| 3 | Attach images on the onboarding page (intake drafts + Cultivera rows) | S2–S4 |
+| 4 | KB remembers past image attachments per product | S2–S4 |
+| 5 | Recommend images from Content → Media (published AND unpublished) with confidence | S2–S4 |
+| 6 | Gemini API upgraded to the most enterprise-grade, accurate path | S2 |
 
 Testing budget: owner-mandated **bare minimum** (tsc 0, eslint 0 on touched files, one small pure
 self-test per core). The owner does the main testing.
 
-## 2. Research log (grounded — see §4 sources)
+## 2. Research log (grounded — see §4 sources; all read 2026-10-15)
 
-_Filled in as research lands._
+**R1 — Model.** The Interactions API model list names `gemini-4-argon` ("Our new frontier model, built to
+solve the hardest problems with depth and precision … knowledge work"), GA 2026-10-13. Its model page lists
+Search grounding, URL context, Structured outputs, Thinking, Batch/Flex/Priority. `gemini-3.8-flash` is "Our most
+intelligent Flash model". The app already picks the model from `AI_MODEL_HEAVY`, so the upgrade is an env
+change, and nothing is hard-coded. [S1][S2]
+
+**R2 — Request fields we were not using.** CreateInteraction accepts `system_instruction` (a separate
+field, instead of gluing the system text onto the user text), `response_format` (JSON schema enforcement),
+`service_tier` (`flex|standard|priority|deferred`), `generation_config.seed`, `thinking_level`
+(`minimal|low|medium|high`) and `tools` including `google_search` and `url_context`. [S2]
+
+**R3 — Structured output + tools together.** Gemini 3+ models may combine structured outputs with the
+built-in tools (Google Search, URL context). The current schema is
+`response_format: {type:"text", mime_type:"application/json", schema:{…}}`, and the answer is read
+from `output_text`. [S3][S4]
+
+**R4 — Api-Revision.** The May-2026 migration guide says the new `steps` schema became the default
+on May 26. The legacy schema was removed June 8, 2026, and after that the "Api-Revision header [is]
+ignored". So sending it today does nothing, and we do not send it. Our parser already reads `steps`. [S4]
+
+**R5 — URL context.** `{type:"url_context"}` lets the model fetch up to 20 URLs per request (34 MB
+each). It reads HTML, PDF **and images (png/jpeg/bmp/webp)**. Each URL comes back as a `url_context_result`
+with a status (success / error / unsafe). This lets Gemini *open* a candidate product photo and
+check it is the product, instead of guessing from a URL string. [S5]
+
+**R6 — Image search: not used.** The API reference lists `google_search.search_types: ["image_search"]`
+("Image bytes are returned"). But the image-generation guide limits image search to the image models
+(Nano Banana 2.1 / 3.1 Flash Image), and it uses the results as *generation context* that is not
+returned to the caller. Forum threads (Mar–Apr 2026) also report image grounding returning nothing.
+So it cannot give a text model a list of product-photo URLs, and we do not depend on it. Product image
+URLs come from `google_search` web results + retailer/brand pages, verified via `url_context`. [S2][S6][S7]
+
+**R7 — Cost.** Gemini 3+ grounding bills per search query (5,000 free per month, then $14 per 1,000).
+URL-context content is billed as input tokens. The owner's monthly budget guard (`getBudgetStatus`)
+already runs before every call. [S3][S5]
+
+**R8 — Image-recommendation practice (DAM / PIM).** Akeneo, Salsify and Bynder-style PIM↔DAM links
+match assets to products by rules over asset metadata (filename/SKU/brand tokens). Each match carries
+a confidence and goes to a human to approve. A confirmed link is stored as a durable product↔asset
+relationship that later imports reuse. That is the pattern used here: memory first (human-confirmed),
+then metadata scoring, shown as a confidence %. Nothing auto-attaches. [S8][S9]
 
 ## 3. Design
 
-_Filled in as design is grounded._
+**D1 — Gemini upgrade (`src/lib/ai/provider.ts`, additive).**
+- The Gemini branch sends `system_instruction` separately.
+- Tools are `google_search` + `url_context`. `AI_GEMINI_URL_CONTEXT=off` turns url_context off.
+- Optional `service_tier` from `AI_GEMINI_SERVICE_TIER`. It is not sent when unset. `priority` is the
+  enterprise choice.
+- Optional `seed` from `AI_GEMINI_SEED`.
+- Callers may pass a JSON schema (`opts.jsonSchema`) that becomes `response_format`. A 400 that
+  mentions the schema retries once without it, so a model that refuses the combination still answers.
+- Recommended env: `AI_MODEL_HEAVY=gemini-4-argon`, `AI_THINKING_LEVEL=medium` (or `low` while on
+  Vercel Hobby's 300 s limit).
+
+**D2 — Images from Gemini.** The lookup prompt asks for `image_candidates` as *direct* product-photo
+URLs from the brand, retailer or menu pages it actually read. With url_context on, it is told to open
+each one and keep only those that show THIS product. The result is the existing reviewable
+`image_candidates` list (no new storage of grounded results). On the onboarding row, each candidate
+gets **Import & attach**, which goes through `importImageFromUrl`: SSRF guard, MIME sniff, content-hash
+dedupe, saved as a media **draft** with license pending-review.
+
+**D3 — Image memory (migration 0279, idempotent).** `product_image_memory` holds identity_key, media
+asset id, last pos_product_key, source (`library|import|gemini|memory`), times confirmed, first/last
+confirmed by and at, and a unique (identity_key, media_asset_id). It is written each time a person
+attaches an image on onboarding. Recall also reads what is already on record without the table:
+product_enrichments and kb_products rows sharing the identity key. Recall still works before the owner
+applies 0279; it just has fewer memories.
+
+**D4 — Recommendations with confidence (`src/lib/catalog/image-recommend-core.ts`, pure).**
+Every pickable library asset (draft + published, never archived) is scored for the draft:
+- **remembered** (a person attached it to this identity before): 97%, the same constant as R32
+  remembered picks.
+- **on the card already** (current gallery at the suggestion key): shown as attached.
+- **name match**: the share of product-name words found in the asset text (title, filename, alt text,
+  tags), plus a brand/vendor bonus. A brand that disagrees halves the score. A category word adds a
+  little.
+- The score is shown as a % with band **High ≥ 80 / Medium ≥ 55 / Low ≥ 35**. Below 35 is not shown.
+  Draft and rights-pending badges are honest.
+
+**D5 — Onboarding UI.** On every draft row (intake and Cultivera re-onboard rows share the page), a
+"Product images" panel shows:
+- remembered images, then recommendations with confidence badges, each with **Attach**;
+- an "Import from web" URL box for Gemini's candidates.
+
+The action (`inventory.manage`) re-reads the draft on the server. It resolves the key with
+`suggestionTargetKey` (the same key the S07 door uses) and attaches to the product_enrichments gallery
+(the `attachMatchedMedia` pattern). When the draft has a `kb_product_id` it also attaches to that KB
+product. It records the usage, writes memory and audits `catalog_draft.image_attached`.
 
 ## 4. Sources
 
-_Filled in as research lands._
+- [S1] Gemini 4 Argon model page — https://ai.google.dev/gemini-api/docs/models/gemini-4-argon
+- [S2] Interactions API reference (CreateInteraction, Tool.GoogleSearch.search_types, UrlContext, service_tier) — https://ai.google.dev/api/interactions-api
+- [S3] Grounding with Google Search — https://ai.google.dev/gemini-api/docs/google-search
+- [S4] Interactions breaking changes, May 2026 (steps, response_format, Api-Revision timeline) — https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026
+- [S5] URL context tool — https://ai.google.dev/gemini-api/docs/url-context
+- [S6] Image generation guide (image search limited to image models) — https://ai.google.dev/gemini-api/docs/image-generation
+- [S7] Google AI developer forum, image-search grounding regressions (Mar–Apr 2026) — https://discuss.ai.google.dev
+- [S8] Akeneo PIM, asset ↔ product link rules — https://help.akeneo.com/serenity-take-the-power-over-your-products/serenity-asset-manager
+- [S9] Salsify / Bynder DAM-PIM connector (human-approved product-asset matching) — https://www.bynder.com/en/integrations/salsify/
