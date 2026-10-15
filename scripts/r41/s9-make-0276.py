@@ -121,6 +121,9 @@ begin
   if f.status not in ('released', 'uploaded') then
     raise exception 'ACH_FILE_TRANSITION: ACH file % is %, so its funding cannot be confirmed.', p_file_id, f.status;
   end if;
+  if not public.ach_actor_is_owner(p_actor) then
+    raise exception 'ACH_OWNER_ONLY: only the owner confirms the funding. Send it as a request for owner approval.';
+  end if;
   if f.funding_confirmed_at is not null then
     raise exception 'ACH_FUNDING_FINAL: the funding for ACH file % was already confirmed.', p_file_id;
   end if;
