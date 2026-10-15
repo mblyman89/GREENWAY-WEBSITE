@@ -576,6 +576,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
     expect(runsPerDay("5-2/5 * * * *")).toBeNull();
     expect(runsPerDay("2-60/5 * * * *")).toBeNull();
     expect(runsPerDay("2-59/0 * * * *")).toBeNull();
+    expect(runsPerDay("0 20-21/1 * * *")).toBe(2); // R41 S5: 20:00 and 21:00 UTC
     expect(stepMinutes("*/2 * * * *")).toBe(2);
     expect(stepMinutes("0 12 * * *")).toBeNull();
   });
@@ -603,6 +604,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       "/api/cron/leafly-menu-sync": 96, //  every 15 minutes
       "/api/cron/lookup-jobs": 1440, //    every minute (S13 batch lookup worker)
       "/api/cron/content-schedule": 288, // every 5 minutes (R46 scheduled publish; editor snaps times to the same grid)
+      "/api/cron/ach-deadline-1pm": 2, //  20:00 and 21:00 UTC = 1 pm Pacific in PDT / PST (R41 S5); the pure planner sends only from 1:00 pm Pacific to the 4:00 pm cutoff, each file claimed once
       "/api/cron/cutover-watch": 288, //   every 5 minutes at :02, :07 ... (offset off content-schedule's minutes; R50 A4: harvest / import failure alerts; each alert claimed once, an idle tick sends nothing)
     };
     for (const c of crons) {
