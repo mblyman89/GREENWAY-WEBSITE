@@ -2625,3 +2625,43 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0276_ach_file_funding_confirm.rollback.sql`.
   It drops the function and puts the 0274 guard back. Funding stamps
   already recorded stay. Nothing is deleted.
+
+## R41 — 0277 — The Timberland communications log
+
+- [ ] `0277_ach_timberland_comms.sql` adds one table, `ach_timberland_comms`.
+  It records what Timberland told you, or what you reported to Timberland,
+  and when. Some of these start a clock in your signed agreement:
+  - a fee or amendment notice (sections 24 and 28);
+  - a reserve demand: 10 banking days (section 22);
+  - a request for an authorization copy: 5 banking days (section 5);
+  - a termination notice: 3 calendar days (section 30);
+  - a compromise you reported by phone: written confirmation within 1
+    calendar day (Schedule F).
+
+  The site works out each due date from the agreement. The table keeps the
+  record.
+  - **Never changed, never deleted.** A mistake is fixed by a new entry that
+    says so. Pressing "Done" on a clock adds a "done" entry. It closes that
+    item once.
+  - **Only the owner adds entries.** When Stephen presses the button, it
+    becomes a request for your approval.
+  - **Summaries refuse any run of 7 or more digits**, so no account or
+    routing numbers go in. 1-800-562-8761 is fine.
+
+  Apply it **after 0276**. It is safe to re-run.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_class where relname = 'ach_timberland_comms' and relrowsecurity) as table_rls,
+         has_table_privilege('service_role', 'public.ach_timberland_comms', 'DELETE') as server_can_delete;
+  -- table_rls | server_can_delete
+  -- 1         | f
+  ```
+
+  For the full proof, paste `scripts/recon/ach-timberland-comms-0277-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0277 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0277_ach_timberland_comms.rollback.sql`.
+  It refuses once the log holds any entry (they are records). Export them
+  first.
