@@ -752,6 +752,16 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "It is not signed inside the back office. LlamaParse (the optional scanner for paper ACH forms) uses a DocuSign form. Open Banking → Calendar & reminders → 'LlamaParse data protection agreement', press the button, fill in Greenway's details and sign, then save the signed copy and mark the task done. You only need it if LlamaParse is turned on.",
         href: "/admin/settings/banking/calendar#llamaparse",
       },
+      {
+        q: "How do I check an ACH file before I upload it to Timberland?",
+        a: "Banking \u2192 File checker. On ACH operations press Download on the file (do not open or edit it), then pick it on the File checker and press 'Check this file'. It re-checks every record, count and total, Timberland's routing number and Greenway's Company ID, credits only, the PAYROLL description, the upload deadline and the $50,000 limits, and that it is byte for byte the file you released and not yet uploaded or voided. Green means upload it. Red means do not. Timberland cannot cancel a file once it has it (agreement section 18), so this is the last check. 'Practice run' builds a $0 file from your real settings so you can see a passing result; nothing is saved.",
+        href: "/admin/settings/banking/checker",
+      },
+      {
+        q: "How do I confirm the money is in the account for an ACH file?",
+        a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the app cannot see it), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date; until Brenda answers question 6, the app asks you to have it there before you upload too. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
+        href: "/admin/settings/banking/operations#files",
+      },
     ],
   },
 
