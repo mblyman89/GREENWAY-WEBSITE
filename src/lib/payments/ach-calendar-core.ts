@@ -34,7 +34,12 @@ export type AchCalTaskId =
   | "rule_watch"
   | "fraud_procedure_review"
   | "timberland_annual_review"
-  | "retention_review";
+  | "retention_review"
+  // R41 S6: the Guide's "Timberland setup" checklist (one-time; done by hand until the S10 communications log)
+  | "timberland_access_ready"
+  | "timberland_users_phones"
+  | "timberland_schedule_g_email"
+  | "timberland_countersigned_copy";
 
 export type Cadence = "once" | "monthly" | "quarterly" | "annual";
 
@@ -81,12 +86,13 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
   {
     id: "timberland_agreement_on_file",
     cadence: "once",
-    title: "Timberland ACH agreement signed and security procedures accepted",
-    why: "Your bank agreement sets the security procedure (passwords, tokens, dual approval, callbacks). Under RCW 62A.4A-202, if you turn down a procedure the bank offered and a thief gets through, the loss can be yours (Choice Escrow).",
+    title: "Timberland ACH agreement on file and security procedures understood",
+    why: "Your bank agreement sets the security procedure: your login, plus a token or a text code to approve each file (Schedule F). Timberland also offers dual approval; it is off by your choice (signed Schedule C). Under RCW 62A.4A-202, if you turn down a procedure the bank offered and a thief gets through, the loss can be yours (Choice Escrow).",
     steps: [
-      "Ask Timberland for a copy of the signed ACH origination / Cash Management agreement and the security-procedure schedule.",
-      "Accept every security option they offer, especially dual control (one person uploads, the other approves).",
-      "Keep the copy with your banking records, then press \"Done\".",
+      "Keep the signed ACH origination / Cash Management agreement (Schedules A to G) with your banking records, and ask Timberland for its countersigned copy.",
+      "Read Schedule F (security procedures) and Schedule G (token or text code). Keep your token or phone safe.",
+      "Dual approval is optional and off by your choice. If you ever want a second approver at the bank, ask Timberland.",
+      "Press \"Done\".",
     ],
     href: "/admin/settings/banking?tab=company",
     hrefLabel: "Open My banking",
@@ -158,10 +164,10 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
     id: "timberland_annual_review",
     cadence: "annual",
     title: "Year-end: review the Timberland agreement and who can approve",
-    why: "People change. Make sure only Stephen and Michael can upload and approve ACH files at Timberland, that dual control is still on, and that the agreement has not been replaced with terms you have not read.",
+    why: "Michael is Greenway's only Timberland user (Appendix B). Once a year, make sure that is still true, that the phone for the text code is still yours, and that the agreement has not been replaced with terms you have not read. The dual-approval note on Operations comes back each January for this review.",
     steps: [
-      "Log in to Timberland's business portal and list the users who can upload or approve ACH.",
-      "Remove anyone who should not be there. Confirm dual control is still on.",
+      "Log in to Timberland's cash management portal and list the users who can upload or approve ACH. It should be Michael only.",
+      "Remove anyone who should not be there. Check the phone number for the text code and the token. Dual approval stays off unless you choose to turn it on.",
       "Ask Timberland whether the agreement or security procedure changed this year; read any change.",
       "Press \"Done\" for the year.",
     ],
@@ -181,6 +187,47 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
     ],
     href: "/admin/settings/banking/operations#records",
     hrefLabel: "Open Records",
+    lawIds: [],
+  },
+  // R41 S6: Timberland setup (Guide checklist). One-time; press Done when true.
+  {
+    id: "timberland_access_ready",
+    cadence: "once",
+    title: "Timberland: cash management access is ready",
+    why: "Timberland's cash management portal is a separate login from online banking. Brenda said she will tell you when it is set up. No file can be uploaded until it is.",
+    steps: ["Wait for Brenda's message that the cash management access is set up.", "Log in once and confirm you can see the ACH upload screen.", "Press \"Done\"."],
+    href: "/admin/settings/banking?tab=company",
+    hrefLabel: "Open My banking",
+    lawIds: [],
+  },
+  {
+    id: "timberland_users_phones",
+    cadence: "once",
+    title: "Timberland: users and phones are correct (Michael only)",
+    why: "Appendix B lists one Timberland user, Michael Lyman, who enters and approves. Schedule G sends the approval code to his phone by text or call. A wrong phone means no code, and no file.",
+    steps: ["In the portal, check the user list shows Michael only.", "Check the phone number for the text code is yours.", "Press \"Done\"."],
+    href: "/admin/settings/banking?tab=company",
+    hrefLabel: "Open My banking",
+    lawIds: [],
+  },
+  {
+    id: "timberland_schedule_g_email",
+    cadence: "once",
+    title: "Timberland: Schedule G email corrected",
+    why: "The email on the signed Schedule G is misspelled, so Timberland's security notices may not reach you. You are telling Brenda yourself. Until she confirms, watch the portal for notices.",
+    steps: ["Ask Brenda to correct the Schedule G email.", "When she confirms, write who confirmed and when in the note.", "Press \"Done\"."],
+    href: "/admin/settings/banking?tab=company",
+    hrefLabel: "Open My banking",
+    lawIds: [],
+  },
+  {
+    id: "timberland_countersigned_copy",
+    cadence: "once",
+    title: "Timberland: countersigned agreement on file",
+    why: "Our copy of the ACH agreement is signed by Greenway. Ask Timberland for the copy with its countersignature, and keep it with your banking records.",
+    steps: ["Ask Brenda for the countersigned copy.", "Keep it privately (never in the website's code).", "Press \"Done\"."],
+    href: "/admin/settings/banking?tab=company",
+    hrefLabel: "Open My banking",
     lawIds: [],
   },
 ];
@@ -559,7 +606,7 @@ export const ACH_FRAUD_PROCEDURE: readonly { readonly rule: string; readonly enf
   { rule: "Test credits are monitored for unusual volume or returns.", enforcedBy: "/admin/settings/banking/operations#monitor" },
   { rule: "Every active payee authorization is reviewed at least once a year.", enforcedBy: "/admin/settings/banking/operations#reviews" },
   { rule: "Payroll files are guarded: one file per two-week period, one payment per employee, amount ceilings, and a warning when an account changed since the last payment.", enforcedBy: "/admin/payroll" },
-  { rule: "At Timberland, we accept every security procedure offered, including dual control, and only Stephen and Michael can upload or approve ACH files.", enforcedBy: null },
+  { rule: "Michael is Greenway's only Timberland user. He uploads and approves files with his login plus a text code or token. Timberland's dual approval is off (signed Schedule C), by the owner's choice. Timberland never calls back on ACH files. Our call-backs to payees, at numbers on file 90+ days, before any bank change are what stop 'change my account' fraud.", enforcedBy: "/admin/settings/banking/operations#files" },
   { rule: "We check each month's bank statement against our ACH files and report anything unknown to Timberland the same day.", enforcedBy: "/admin/settings/banking/calendar" },
   { rule: "Each of us uses our own login. Logins and passkeys are never shared.", enforcedBy: null },
 ];

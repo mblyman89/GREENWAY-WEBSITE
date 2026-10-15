@@ -114,8 +114,9 @@ ENTRIES = [
             "practical: use every security option your bank offers, because that is what courts look at."
         ),
         howWeProtectYou=(
-            "Ask Timberland which security procedures it offers for ACH origination (dual approval, tokens, "
-            "call-backs, limits) and turn them on. The checklist in the Guide tab reminds you every year."
+            "Timberland's procedure is your login plus a token or text code for every file (Schedule F), and limits "
+            "(Schedule C). Timberland does not do call-backs for ACH, so Greenway calls payees back before any bank "
+            "change. Dual approval is offered and is off by the owner's choice. The year-end calendar task reviews it."
         ),
         appLink="/admin/settings/banking?tab=company",
     ),
@@ -140,9 +141,11 @@ ENTRIES = [
             "fraud it would have stopped is likely yours. 'We are a small shop' did not help this company."
         ),
         howWeProtectYou=(
-            "Accept every security procedure Timberland offers, especially dual approval. In Greenway's system "
-            "Michael, the owner, makes and releases every ACH change himself; anything Stephen adds, changes, removes "
-            "or releases waits for Michael's approval, and every change is logged with who entered it and who approved it."
+            "Timberland offers dual approval, and Greenway's owner has chosen to leave it off and be the only "
+            "Timberland user, knowing this case. The protections instead: his login plus a token or text code for "
+            "every file, receipts for every ACH action, holds and call-backs before any bank change, and limits. "
+            "In Greenway's system Michael, the owner, makes and releases every ACH change himself; anything Stephen "
+            "adds, changes, removes or releases waits for Michael's approval, and every change is logged."
         ),
         appLink="/admin/settings/banking/operations#holds",
     ),

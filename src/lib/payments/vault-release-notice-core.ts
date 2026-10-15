@@ -40,7 +40,7 @@ export function whoIsActing(actorEmail: string | null | undefined, book: NotifyB
   return null;
 }
 
-/** The other owner plus the store; both owners plus the store when the actor is unknown. */
+/** Whichever of Stephen or Michael did not act, plus the store; both plus the store when the actor is unknown. */
 export function soloNoticeRecipients(actorEmail: string | null | undefined, book: NotifyBook = ACH_NOTIFY_PUBLIC): readonly NotifyContact[] {
   const who = whoIsActing(actorEmail, book);
   if (who === "stephen") return [book.michael, book.store];

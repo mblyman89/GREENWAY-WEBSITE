@@ -12,6 +12,9 @@
  *   6. Records: retention and legal hold (owner Q7/Q8: archive, never delete).
  *   7. R41 S3: released ACH files (ach_files, 0273): download the stored
  *      bytes, void with a reason (owner). Kept forever.
+ *      R41 S6 (0274): Mark uploaded / Mark approved record the two steps at
+ *      Timberland (owner; an admin's press is a request), the checklist card,
+ *      and the grey dual-approval line (never red; logged yearly dismiss).
  *
  * Owner/admin only (settings.manage). The page shows last-4 only; test-credit
  * amounts are never shown (the person must read them back).
@@ -30,7 +33,9 @@ import { ACH_CODES } from "@/lib/payments/ach-authorization-core";
 import { checkEffectiveDate, checkEffectiveDateForRelease, defaultCheckEffectiveDate } from "@/lib/payments/ach-ops-core";
 import { checkFileSourceId, checkListFingerprint, opsPageView } from "@/lib/payments/ach-ops-store";
 import { listAchFiles } from "@/lib/payments/ach-file-ledger-store";
-import { voidAchFileAction } from "../file-actions";
+import { dismissDualApprovalNoteAction, markAchFileBankApprovedAction, markAchFileUploadedAction, voidAchFileAction } from "../file-actions";
+import { getDualNoteDismiss } from "@/lib/payments/ach-guide-store";
+import { BANK_STEP_CHECKLIST, DUAL_APPROVAL_NOTE, bankStepButton, bankStepLine, dualNoteVisible } from "@/lib/payments/timberland-bank-steps-core";
 import { monitorSummary, noticeUrgencyLabel, releaseHint } from "@/lib/payments/ach-ops-ui-core";
 import {
   finishCheckAction,
@@ -60,7 +65,9 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
   const session = await requirePermission("settings.manage");
   const sp = await searchParams;
   const today = pacificToday();
-  const [view, employees, vendors, files] = await Promise.all([opsPageView(today), listEmployees({ includeInactive: true }), listVendors(), listAchFiles(50)]);
+  const [view, employees, vendors, files, dualNote] = await Promise.all([opsPageView(today), listEmployees({ includeInactive: true }), listVendors(), listAchFiles(50), getDualNoteDismiss()]);
+  const isOwner = session.profile.role === "owner";
+  const showDualNote = dualNoteVisible(dualNote.dismiss, today);
   const liveBySource = new Map(files.rows.filter((f) => f.status !== "voided").map((f) => [`${f.kind}|${f.source_id}`, f]));
   // R41 S5: Timberland's deadline (2 usable banking days, 4:00 pm Pacific) decides the default and what is allowed.
   //    The date in the address only has to be a real future banking day, so a
@@ -71,7 +78,9 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
   const effective = effChecked.ok ? effChecked.date : defaultCheckEffectiveDate(now);
   const effTimely = checkEffectiveDateForRelease(effective, now);
   const effError = sp.eff && !effChecked.ok ? effChecked.error : null;
-  const staff = await resolveStaffNames(view.holds.map((h) => h.hold_entered_by).filter((x): x is string => Boolean(x)));
+  const staff = await resolveStaffNames(
+    [...view.holds.map((h) => h.hold_entered_by), ...files.rows.flatMap((f) => [f.uploaded_by, f.approved_at_bank_by])].filter((x): x is string => Boolean(x)),
+  );
   const sentChecks = view.checks.filter((c) => c.open?.status === "sent");
   const mon = monitorSummary(view.monitor);
   const codes = Object.entries(ACH_CODES);
@@ -405,6 +414,23 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
           <p className="mb-3 text-xs text-white/50">
             Every file the site released, kept forever. A download is always the same bytes, checked against their fingerprint first. A voided file is never served again and its File ID Modifier is never reused that day.
           </p>
+          {showDualNote ? (
+            <div id="dual-approval-note" className="mb-3 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/55">
+              <p>{DUAL_APPROVAL_NOTE}</p>
+              {isOwner ? (
+                <form action={dismissDualApprovalNoteAction} className="mt-1">
+                  <button className="text-xs font-semibold text-white/60 underline hover:text-white/80">Don&apos;t show again this year</button>
+                </form>
+              ) : null}
+            </div>
+          ) : null}
+          <details id="bank-steps" className="mb-3 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/70">
+            <summary className="cursor-pointer font-semibold text-white">Sending a file to Timberland: the checklist</summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs">
+              {BANK_STEP_CHECKLIST.map((c) => <li key={c.id}>{c.text}</li>)}
+            </ol>
+            <p className="mt-2 text-xs text-white/50">All of it before the upload deadline shown when the file was released (2 banking days before the effective date, 4:00 pm Pacific; we aim for 3:30 pm).</p>
+          </details>
           {!files.tableReady ? <p className="text-sm text-amber-200">The ACH file ledger is not set up yet: run migration 0273 (docs/MIGRATIONS_TO_RUN.md).</p> : null}
           {files.error ? <p role="alert" className="text-sm text-red-300">{files.error}</p> : null}
           {files.rows.length ? (
@@ -420,11 +446,22 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                     <td>{f.effective_date}</td>
                     <td>{f.entry_count}</td>
                     <td>${(Number(f.total_cents) / 100).toFixed(2)}</td>
-                    <td>{f.status === "voided" ? <Badge tone="danger">voided</Badge> : <Badge tone="green">{f.status.replace("_", " ")}</Badge>}{f.voided_reason ? <div className="text-xs text-white/40">{f.voided_reason}</div> : null}</td>
+                    <td>{f.status === "voided" ? <Badge tone="danger">voided</Badge> : <Badge tone="green">{f.status.replace("_", " ")}</Badge>}{f.voided_reason ? <div className="text-xs text-white/40">{f.voided_reason}</div> : null}{(() => { const line = bankStepLine(f, (id) => staff.get(id) ?? "a staff member"); return line ? <div className="text-xs text-white/40">{line}</div> : null; })()}</td>
                     <td className="space-y-2">
                       {f.status !== "voided" ? (
                         <>
                           <a href={`/admin/settings/banking/files/${f.id}/download`} className="block text-xs font-semibold text-emerald-300 hover:underline">Download</a>
+                          {(() => {
+                            const b = bankStepButton(f.status, isOwner);
+                            if (!b) return null;
+                            return (
+                              <form action={b.step === "uploaded" ? markAchFileUploadedAction : markAchFileBankApprovedAction} className="flex flex-col gap-1 text-xs">
+                                <input type="hidden" name="file_id" value={f.id} />
+                                <label className="flex items-center gap-2"><input type="checkbox" name="confirm" value="yes" required /> {b.confirm}</label>
+                                <button className={btnPrimary}>{b.label}</button>
+                              </form>
+                            );
+                          })()}
                           <form action={voidAchFileAction} className="flex flex-col gap-1 text-xs">
                             <input type="hidden" name="file_id" value={f.id} />
                             <input name="reason" required minLength={10} maxLength={500} placeholder="Why void it (10+ characters)" className={inputCls} />
