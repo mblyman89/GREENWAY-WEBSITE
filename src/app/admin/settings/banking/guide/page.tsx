@@ -14,6 +14,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TimberlandRoomLeft } from "@/components/admin/payments/TimberlandRoomLeft";
+import { FirstFileToTimberland } from "@/components/admin/payments/FirstFileToTimberland";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge } from "@/components/admin/ui";
 import { BankingSubnav } from "../BankingHelpTabs";
@@ -64,7 +65,7 @@ const ENV_VARS: { name: string; what: string; set: boolean }[] = [
 
 const MIGRATIONS = ["0258", "0259", "0260", "0261", "0262", "0263"];
 
-export default async function AchGuidePage({ searchParams }: { searchParams: Promise<{ explain?: string }> }) {
+export default async function AchGuidePage({ searchParams }: { searchParams: Promise<{ explain?: string; firstPayday?: string }> }) {
   await requirePermission("settings.manage");
   const sp = await searchParams;
   const today = pacificToday();
@@ -103,6 +104,8 @@ export default async function AchGuidePage({ searchParams }: { searchParams: Pro
         <p className="text-xs text-white/40">Today (Pacific): {today}</p>
         {/* R41 S4: Timberland's daily and monthly room (the release refuses anything over). */}
         <TimberlandRoomLeft today={today} />
+        {/* R41 S7: the first-file gate and the backwards plan for the first payday (Timberland section 6). */}
+        <FirstFileToTimberland today={today} firstPayday={sp.firstPayday} now={new Date()} />
 
         {problems.length ? (
           <div role="alert" className="rounded-[var(--admin-radius)] border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
