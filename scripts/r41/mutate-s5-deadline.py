@@ -51,7 +51,9 @@ M = [
     # mutant: probed every 15 min, Sep 2026 - Sep 2028, 70,176 instants, 0
     # differences - UTC runs ahead only after 4/5 pm Pacific, past the cutoff,
     # and 1-4 pm Pacific never crosses UTC midnight. Replaced, not counted.)
-    ("earliest-lead-one", DC, "const eff = addUsableDays(today, CREDIT_LEAD_BANKING_DAYS + i);", "const eff = addUsableDays(today, 1 + i);"),
+    # (Starting the search at today+1 is ALSO equivalent: that first candidate's
+    # deadline is always a past day, so the loop skips it - run 2 showed it.)
+    ("earliest-skips-a-day", DC, "const eff = addUsableDays(today, CREDIT_LEAD_BANKING_DAYS + i);", "const eff = addUsableDays(today, CREDIT_LEAD_BANKING_DAYS + 1 + i);"),
     ("afternoon-noon", DC, "AFTERNOON_REMINDER = { hour: 13, minute: 0 }", "AFTERNOON_REMINDER = { hour: 12, minute: 0 }"),
     ("afternoon-at-cutoff", DC, "nowUtc < from || nowUtc >= dl.cutoffUtc) continue;", "nowUtc < from || nowUtc > dl.cutoffUtc) continue;"),
     ("afternoon-before-1pm", DC, "nowUtc < from || nowUtc >= dl.cutoffUtc) continue;", "nowUtc >= dl.cutoffUtc) continue;"),
