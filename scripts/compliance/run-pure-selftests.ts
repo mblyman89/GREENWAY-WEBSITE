@@ -930,6 +930,7 @@ import { __runTimberlandProfileCoreTests } from "../../src/lib/payments/timberla
 import { __runTimberlandOriginatorCoreTests } from "../../src/lib/payments/timberland-originator-core";
 import { __runTimberlandPreviewCoreTests } from "../../src/lib/payments/timberland-preview-core";
 import { __runAchFileLedgerCoreTests } from "../../src/lib/payments/ach-file-ledger-core";
+import { __runTimberlandBankStepsCoreTests } from "../../src/lib/payments/timberland-bank-steps-core";
 import { __runTimberlandLimitsCoreTests } from "../../src/lib/payments/timberland-limits-core";
 import { __runTimberlandDeadlineCoreTests } from "../../src/lib/payments/timberland-deadline-core";
 import { __runAchPaymentsReportCoreTests } from "../../src/lib/reports/ach-payments-report-core";
@@ -2251,6 +2252,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 68); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
   assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 49); // R41 S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason; S6: bank-step errors, 0274 missing named
+  assertRan("timberland-bank-steps-core", __runTimberlandBankStepsCoreTests(), 28); // R41 S6: honest Timberland wording, bank-step buttons in order, yearly dismiss of the grey line
   assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
   assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 71); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays, section 3.7 table, reminders
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
