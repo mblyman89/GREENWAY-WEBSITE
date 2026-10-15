@@ -12,6 +12,8 @@ export const BANKING_HELP_TABS = [
   { key: "library", href: "/admin/settings/banking/library", label: "Legal library" },
   // R41 S9: the last check before a file goes to Timberland (section 18: no cancelling after upload).
   { key: "checker", href: "/admin/settings/banking/checker", label: "File checker" },
+  // R41 S11: the daily OFAC screen of every payee (never blocks a payment).
+  { key: "screening", href: "/admin/settings/banking/screening", label: "Sanctions screening" },
 ] as const;
 
 export type BankingHelpTabKey = (typeof BANKING_HELP_TABS)[number]["key"];

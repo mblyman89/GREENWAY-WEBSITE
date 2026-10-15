@@ -758,6 +758,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/settings/banking/checker",
       },
       {
+        q: "How does the OFAC sanctions screening work, and can it stop a payment?",
+        a: "Banking \u2192 Sanctions screening. Every morning the site downloads OFAC's SDN and Consolidated lists and checks every employee and vendor name against them (the way OFAC's FAQ 249 describes: Jaro-Winkler and Soundex). It never stops a payment: payroll and vendor files run as usual. If a name looks similar to a list entry, it shows under Possible matches and Michael gets an email. Compare the details in the Remarks column (date of birth, country, business location). Most are false positives (OFAC FAQ 5): record 'Not a match' with what you compared. If several details match, record 'True match', do not send them money, and call your attorney and Timberland at 1-800-562-8761. Only the owner records a decision; Stephen's goes to Michael for approval. Every decision is kept and never changed. 'Screen now' runs it at once.",
+        href: "/admin/settings/banking/screening",
+      },
+      {
         q: "How do I confirm the money is in the account for an ACH file?",
         a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the app cannot see it), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date; until Brenda answers question 6, the app asks you to have it there before you upload too. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",
