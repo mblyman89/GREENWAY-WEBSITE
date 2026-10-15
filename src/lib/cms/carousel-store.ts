@@ -13,6 +13,7 @@
  * configured — so the homepage hero never renders blank.
  */
 import "server-only";
+import { pickLiveWithFallback } from "./banner-schedule-core";
 import { draftMode } from "next/headers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -204,13 +205,16 @@ export async function getCarouselForRender(): Promise<RenderSlide[]> {
     });
 
     const now = Date.now();
-    const resolved = visible
+    const withContent = visible
       .map((row) => resolveForRender(row, preview))
-      // R47: the optional Start / End window (outside it the slide is hidden;
-      // staff preview shows it anyway so it can be checked before it starts).
-      .filter((s) => preview || isHomeSlideLiveAt(s.advanced, now))
       // A slide with no image AND no text is not worth rendering.
       .filter((s) => s.image || s.title || s.eyebrow || s.description);
+    // R47 + R54: schedule (start/end, weekly repeat, daily window) and the
+    // fallback rule. Fallback slides show only when no regular slide is live.
+    // Staff preview shows everything so it can be checked before it starts.
+    const resolved = preview
+      ? withContent
+      : pickLiveWithFallback(withContent, (s) => s.advanced?.fallback === true, (s) => isHomeSlideLiveAt(s.advanced, now));
 
     if (resolved.length === 0) return CAROUSEL_FALLBACK_SLIDES;
     const shown = resolved.slice(0, MAX_CAROUSEL_SLIDES);

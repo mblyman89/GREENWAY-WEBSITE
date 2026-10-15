@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SectionCard } from "@/components/admin/SectionCard";
 import { CarouselSlideCard } from "@/components/admin/CarouselSlideCard";
+import { BannerScheduleCalendar } from "@/components/admin/BannerScheduleCalendar";
+import { homeSlideSchedule, normalizeHomeSlideAdvanced } from "@/lib/cms/home-slide-advanced-core";
 import { type MediaChoice } from "@/components/admin/ContentImageField";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -309,6 +311,18 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   const sched = await openSchedulesByTarget("carousel_slide");
   const nowIso = new Date().toISOString();
   const atCap = slides.length >= MAX_CAROUSEL_SLIDES;
+  // R54: calendar of the PUBLISHED schedule (what visitors get).
+  const calendarBanners = slides
+    .filter((s) => s.enabled && s.status === "published")
+    .map((s) => {
+      const adv = normalizeHomeSlideAdvanced(s.advanced ?? null);
+      return {
+        id: s.id,
+        label: s.title || s.eyebrow || s.slide_key,
+        schedule: adv ? homeSlideSchedule(adv) : { start: null, end: null, days: [], from: null, to: null },
+        fallback: adv?.fallback === true,
+      };
+    });
 
   return (
     <div className="space-y-5">
@@ -327,6 +341,8 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
           </form>
         </div>
       </div>
+
+      {slides.length > 0 ? <BannerScheduleCalendar banners={calendarBanners} anchorPrefix="slide-" nowMs={Date.parse(nowIso)} /> : null}
 
       {slides.length === 0 ? (
         <EmptyState

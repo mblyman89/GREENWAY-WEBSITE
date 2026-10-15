@@ -18,6 +18,7 @@ import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { probeImageDimensions } from "./image-dimensions";
 import { makeBlurDataUrl, saveBlurForAsset } from "./blur-server";
+import { optimizeImageBuffer } from "./image-optimize-server";
 
 /** Public bucket for site imagery (public = true after migration 0012). */
 const MEDIA_BUCKET = "media";
@@ -73,10 +74,19 @@ export type UploadMediaInput = {
   source?: string;
   /** e.g. "pending-review" for harvested images awaiting a rights check. */
   licenseStatus?: string;
+  /** R54: false = store the bytes exactly as given (default: web-optimise big JPEG/PNG/WebP). */
+  optimize?: boolean;
 };
 
-export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> {
+export async function uploadMedia(rawInput: UploadMediaInput): Promise<MediaAsset> {
   const admin = createSupabaseAdminClient();
+  // R54 Slice A: one web-ready master (WebP, ≤ 3840 px) for every upload path
+  // that goes through here. Skips GIF/SVG/PDF; any failure keeps the original.
+  let input = rawInput;
+  if (rawInput.optimize !== false && rawInput.mimeType.startsWith("image/")) {
+    const opt = await optimizeImageBuffer({ buffer: rawInput.buffer, mime: rawInput.mimeType, filename: rawInput.filename });
+    if (opt) input = { ...rawInput, buffer: opt.buffer, mimeType: opt.mime, filename: opt.filename };
+  }
   const hash = crypto.createHash("sha256").update(input.buffer).digest("hex");
   const ext = extFromFilename(input.filename) || extFromMime(input.mimeType);
   const folder = input.usageType ? input.usageType.replace(/[^a-z0-9-]/gi, "-") : "uploads";

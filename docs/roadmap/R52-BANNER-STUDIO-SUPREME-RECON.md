@@ -300,3 +300,46 @@ R53 ✅ (studio-first card, single picture, arrow-key fix, inline typing, icon l
 - [S17] GitHub — fontsource/fontsource ("Self-host Open Source fonts in neatly bundled NPM packages"): https://github.com/fontsource/fontsource
 - `npm view` (this round): @phosphor-icons/react 2.1.10 MIT; lucide-react 1.57.0 ISC; @tabler/icons-react 3.49.0 MIT; simple-icons 16.35.0 CC0-1.0; @iconify/react 6.0.2 MIT; @iconify/json 2.2.543 MIT; @fontsource-variable/inter 5.3.0 OFL-1.1; react-big-calendar 1.20.0 MIT; rrule 2.8.1 BSD-3-Clause.
 - Repo: `node_modules/next/dist/docs/01-app/02-guides/local-development.md` (icon import guidance); `.../optimizePackageImports.md` (lucide-react listed).
+
+---
+
+## 11. R54 — what shipped
+
+### 11.1 Slice A — automatic web-format conversion at upload (owner's new ask)
+**Research finding (not a guess):**
+- **SVG is the wrong target for photos.** SVG is a vector format for logos and icons; a photo inside an SVG is still the same pixels. Raster banners belong in WebP/AVIF.
+- **Delivery was already professional.** `next.config.ts` `images.formats: ["image/avif","image/webp"]` (R45-S2) makes next/image serve AVIF (or WebP) at the right width per device.
+- **What was missing was a web-ready master.** Uploads stored originals up to 50 MB. Vercel only optimises jpeg/png/webp/avif sources of at most **8192 px per side**, with a 10 MB maximum transformed output [S18]. Huge masters also make every cache-miss transform slower.
+
+**Shipped (`image-optimize-core.ts` pure + `image-optimize-server.ts` sharp):**
+- On upload, JPEG/PNG (and big WebP) are converted to **WebP**, longest side **≤ 3840 px**. 3840 is the largest default next/image `deviceSize` (Next 16 `image.md`), so 4K/retina stays sharp.
+- Processing: EXIF-rotated, metadata stripped. Quality is 82 for photos and 90 for PNG graphics.
+- **Kept as-is:** GIF (may be animated) and SVG (vector).
+- **Safety rules:**
+  - An optimised copy is kept only if it is smaller (or had to shrink).
+  - `limitInputPixels` guards against decompression bombs.
+  - Any failure keeps the original, so an upload is never blocked.
+- **Wired in two places:**
+  1. Media Library drag-and-drop (direct-to-Storage path, `finishDirectUploadAction`). It replaces the object with a `.webp` key and the dropzone shows the saving ("12.0 MB → 640 KB WebP (95% smaller)").
+  2. `uploadMedia()`, the shared server path used by blog/products/vendors/AI images and others. Opt-out: `optimize:false`.
+- **Not converted:** files uploaded before R54. They still get AVIF/WebP at delivery through next/image, and re-uploading one makes a web master. A one-click "optimise existing library" batch is a candidate later slice.
+
+### 11.2 Slice B — Schedule v2 (R55-S pulled forward)
+- **`banner-schedule-core.ts`** (pure, shared by every banner area for R58):
+  - start/end
+  - **repeat on weekdays**
+  - optional **daily window** (wraps midnight; the early hours belong to the previous day's run)
+  - all read in **store time, America/Los_Angeles**, because Vercel servers run in UTC
+- **Fallback slide:** shows only when no regular slide is live, and its own schedule is ignored. Applied on the homepage (`carousel-store`) and in Reports' live-slot list.
+- **Calendar** (Carousel tab, server-rendered, no JS):
+  - this month and next, built from published slides
+  - coloured chips that link to each slide, with ▶ on start days
+  - **⚠️ on days where 2+ slides start** (the panel auto-opens when there's a clash)
+  - a warning when no fallback is set
+- **Storage:** the new fields live in the advanced JSON (`scheduleDays`, `scheduleFrom`, `scheduleTo`, `fallback`). No migration. They are only written when used, so older slides serialize byte-identically.
+
+### 11.3 Next
+R55 fonts/effects → R54 layers v2 + shapes (deferred from R54) → R56 → R57 + reports compare → R58 universal rollout.
+
+- [S18] Vercel — Limits and Pricing for Image Optimization (8192 px source cap, 10 MB output, formats): https://vercel.com/docs/image-optimization/limits-and-pricing
+- [S19] sharp — Output options (webp quality/effort): https://sharp.pixelplumbing.com/api-output
