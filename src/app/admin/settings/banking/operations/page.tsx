@@ -27,7 +27,7 @@ import { listEmployees } from "@/lib/staffing/store";
 import { listVendors } from "@/lib/vendors/store";
 import { resolveStaffNames } from "@/lib/promotions/promotions-store";
 import { ACH_CODES } from "@/lib/payments/ach-authorization-core";
-import { checkEffectiveDate, defaultCheckEffectiveDate } from "@/lib/payments/ach-ops-core";
+import { checkEffectiveDate, checkEffectiveDateForRelease, defaultCheckEffectiveDate } from "@/lib/payments/ach-ops-core";
 import { checkFileSourceId, checkListFingerprint, opsPageView } from "@/lib/payments/ach-ops-store";
 import { listAchFiles } from "@/lib/payments/ach-file-ledger-store";
 import { voidAchFileAction } from "../file-actions";
@@ -62,8 +62,14 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
   const today = pacificToday();
   const [view, employees, vendors, files] = await Promise.all([opsPageView(today), listEmployees({ includeInactive: true }), listVendors(), listAchFiles(50)]);
   const liveBySource = new Map(files.rows.filter((f) => f.status !== "voided").map((f) => [`${f.kind}|${f.source_id}`, f]));
+  // R41 S5: Timberland's deadline (2 usable banking days, 4:00 pm Pacific) decides the default and what is allowed.
+  //    The date in the address only has to be a real future banking day, so a
+  //    file released in time can still be downloaded and confirmed after the
+  //    cutoff; the timed check decides whether "Release the file" is offered.
+  const now = new Date();
   const effChecked = checkEffectiveDate(sp.eff ?? "", today);
-  const effective = effChecked.ok ? effChecked.date : defaultCheckEffectiveDate(today);
+  const effective = effChecked.ok ? effChecked.date : defaultCheckEffectiveDate(now);
+  const effTimely = checkEffectiveDateForRelease(effective, now);
   const effError = sp.eff && !effChecked.ok ? effChecked.error : null;
   const staff = await resolveStaffNames(view.holds.map((h) => h.hold_entered_by).filter((x): x is string => Boolean(x)));
   const sentChecks = view.checks.filter((c) => c.open?.status === "sent");
@@ -304,6 +310,15 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
               <button className={btnGhost}>Use this date</button>
             </form>
             {effError ? <p role="alert" className="mb-2 text-xs text-red-300">{effError} Using {effective}.</p> : null}
+            {effTimely.ok ? (
+              <p className={`mb-2 text-xs ${effTimely.warning ? "text-amber-300" : "text-white/60"}`}>
+                {effTimely.warning ?? `Upload and approve at Timberland by ${effTimely.uploadBy}.`}
+              </p>
+            ) : (
+              <p role="alert" className="mb-2 text-xs text-red-300">
+                New files cannot use {effective}: {effTimely.error}
+              </p>
+            )}
             {(["prenote", "micro_entry"] as const).map((m) => {
               const ids = view.planned[m];
               if (!ids.length) return <p key={m} className="text-xs text-white/50">{m === "prenote" ? "No prenotes" : "No test credits"} waiting.</p>;
@@ -321,7 +336,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                       <span className="text-white/50">Not released yet.</span>
                     )}
                   </p>
-                  {!live ? (
+                  {!live && effTimely.ok ? (
                     <form action={releaseCheckFileAction} className="flex flex-wrap items-center gap-2 text-xs">
                       <input type="hidden" name="method" value={m} />
                       <input type="hidden" name="effective" value={effective} />

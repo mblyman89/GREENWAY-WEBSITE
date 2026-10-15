@@ -36,6 +36,7 @@ import {
   type VerificationMethod,
 } from "./ach-authorization-core";
 import { buildNachaFile, isValidRouting, type AchEntry, type AchOriginator } from "./nacha-core";
+import { checkEffectiveDateForTimberland, earliestEffectiveDate } from "./timberland-deadline-core";
 
 // ---------------------------------------------------------------------------
 // 1. Account-check files
@@ -75,9 +76,25 @@ export type CheckFilePlan = {
   next: string;
 };
 
-/** The default effective date: the next banking day after today. */
-export function defaultCheckEffectiveDate(todayIso: string): string {
-  return nextBankingDayOnOrAfter(addCalendarDays(todayIso, 1));
+/**
+ * R41 S5: the default effective date is the earliest one Timberland's
+ * deadline still allows (Schedule A: uploaded and approved 2 usable banking
+ * days before, by 4:00 pm Pacific). It was "the next banking day", which is
+ * always too late.
+ */
+export function defaultCheckEffectiveDate(nowUtc: Date): string {
+  return earliestEffectiveDate(nowUtc);
+}
+
+/**
+ * R41 S5: the timed check, used where a file is RELEASED (the page and
+ * releaseCheckFile; releaseLoop checks again). Not used by planCheckFile,
+ * which is also re-run when the person confirms the upload, possibly after
+ * the cutoff of a file that did go in on time.
+ */
+export function checkEffectiveDateForRelease(raw: string | null | undefined, nowUtc: Date): { ok: true; date: string; uploadBy: string; warning: string | null } | { ok: false; error: string } {
+  const c = checkEffectiveDateForTimberland(raw, nowUtc);
+  return c.ok ? { ok: true, date: c.date, uploadBy: c.deadline.text, warning: c.warning } : { ok: false, error: c.error };
 }
 
 export function checkEffectiveDate(raw: string | null | undefined, todayIso: string): { ok: true; date: string } | { ok: false; error: string } {
@@ -85,7 +102,7 @@ export function checkEffectiveDate(raw: string | null | undefined, todayIso: str
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`)) || new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) !== d) {
     return { ok: false, error: "Pick the date the bank should post the entries." };
   }
-  if (d <= todayIso) return { ok: false, error: "Pick a date after today; the bank needs the file at least a day ahead." };
+  if (d <= todayIso) return { ok: false, error: "Pick a date after today; Timberland needs the file uploaded and approved at least 2 banking days ahead, by 4:00 pm Pacific (Schedule A)." };
   if (!isFedAchBankingDay(d)) return { ok: false, error: `${d} is not a banking day (weekend or Federal Reserve holiday). Try ${nextBankingDayOnOrAfter(d)}.` };
   if (daysBetween(todayIso, d) > MAX_EFFECTIVE_DAYS_AHEAD) return { ok: false, error: `That is more than ${MAX_EFFECTIVE_DAYS_AHEAD} days away. Check the date.` };
   return { ok: true, date: d };
@@ -477,7 +494,13 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   const at = new Date("2026-10-09T17:00:00Z");
 
   // effective dates
-  ok(defaultCheckEffectiveDate(T) === "2026-10-13", "Fri -> next banking day skips weekend and Columbus Day (Mon 10-12)");
+  // R41 S5: Fri Oct 9 10:00 PT -> upload today, 2 usable days on = Tue Oct 13 is only 1 (Columbus Day Mon 10-12), so Wed Oct 14.
+  ok(defaultCheckEffectiveDate(at) === "2026-10-14", "default = earliest Timberland allows: Fri 10:00 -> Wed 10-14 (skips the weekend and Columbus Day)");
+  ok(defaultCheckEffectiveDate(new Date("2026-10-09T23:00:00Z")) === "2026-10-15", "after the 4:00 pm cutoff Friday the default moves a day: Thu 10-15");
+  ok(!checkEffectiveDateForRelease("2026-10-13", at).ok, "release check: Tue 10-13 is 1 banking day out -> refused");
+  const relS5 = checkEffectiveDateForRelease("2026-10-14", at);
+  ok(relS5.ok && relS5.uploadBy === "Fri Oct 9, 3:30 pm Pacific (bank cutoff 4:00 pm)" && relS5.warning === null, "release check: Wed 10-14 ok, upload by Fri 3:30 pm");
+  ok(/2 banking days ahead, by 4:00 pm Pacific \(Schedule A\)/.test((checkEffectiveDate("2026-10-09", T) as { error: string }).error ?? ""), "the old 'a day ahead' wording is gone");
   ok(checkEffectiveDate("2026-10-09", T).ok === false, "today refused");
   ok(checkEffectiveDate("2026-10-10", T).ok === false, "Saturday refused");
   ok(checkEffectiveDate("2026-10-12", T).ok === false, "FRB holiday refused");

@@ -2242,7 +2242,7 @@ __runLiquidVolumeTests();
   assertRan("no-track-paths", __runNoTrackPathTests(), 8); // R39 S7: no analytics where the URL holds a token
   assertRan("vendor-proof-shrink", __runVendorProofShrinkTests(), 14); // R39 S7: phone photo -> under Vercel's 4.5 MB body cap
   assertRan("ach-return-log-core", __runAchReturnLogCoreTests(), 37); // R39 S7: returns / NOC log (parse, hold reason, owner email, urgency)
-  assertRan("ach-ops-core", __runAchOpsCoreTests(), 92); // R39 S7: account-check files, release/review/legal-hold forms, test-credit monitoring, 0263 errors. R41 S3: +5 (the ledger File ID Modifier, no fixed P/M)
+  assertRan("ach-ops-core", __runAchOpsCoreTests(), 96); // R39 S7: account-check files, release/review/legal-hold forms, test-credit monitoring, 0263 errors. R41 S3: +5 (the ledger File ID Modifier, no fixed P/M) R41 S5: +4 (the default and the release check use the Timberland deadline; the "a day ahead" wording is gone)
   assertRan("ach-ops-ui-core", __runAchOpsUiCoreTests(), 17); // R39 S7: Operations page words (site URL, who was told, urgency, monitor, owner/request hint (R41 S0))
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 115); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails
   assertRan("ach-gate-core", __runAchGateCoreTests(), 135); // R41 S0: versions, redirect outcomes, replay match, supersede, payload parse, vendor build outcome
