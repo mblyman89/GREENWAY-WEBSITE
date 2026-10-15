@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { Badge, Button, Card } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import {
@@ -93,6 +94,7 @@ export default async function PurchaseOrderDetailPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <CatalogStageStrip current="order" />
         {sent ? (
           <div className="rounded-[var(--admin-radius)] border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
             Purchase order emailed to the vendor and marked as Sent.
