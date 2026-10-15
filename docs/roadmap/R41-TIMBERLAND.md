@@ -139,5 +139,5 @@ Michael sends Brenda one email at the end of the full build. It holds:
 - **Go-live board.** Logged facts (countersigned, Schedule G email corrected, access ready, dual approval on) count as well as the calendar. A failed log read adds nothing.
 - **Tests.**
   - `tests/compliance/r41-s10-obligations.test.tsx`.
-  - Mutation runs: `mutate-s10-app.py` (24 of 24 killed) and `mutate-0277-sql.py` (15 of 15 killed). The SQL run simulates Supabase's default privileges, so removing the revoke is caught.
+  - Mutation runs: `mutate-s10-app.py` (25 of 25 killed) and `mutate-0277-sql.py` (15 of 15 killed). The SQL run simulates Supabase's default privileges, so removing the revoke is caught.
   - Manual tests T-365 to T-367.

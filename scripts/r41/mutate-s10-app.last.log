@@ -16,6 +16,7 @@ killed   read failure looks like an empty log
 killed   read not capped
 killed   unknown item still closed
 killed   notice count failure is zero
+killed   notice count ignores a failed page
 killed   notice count from the wrong month
 killed   bad form still written
 killed   redirect away from #clocks
@@ -24,4 +25,4 @@ killed   no termination banner
 killed   failed read says nothing is due
 killed   failed log read turns gates green
 control (after) pass
-total 24 killed 24 survivors []
+total 25 killed 25 survivors []
