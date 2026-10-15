@@ -110,16 +110,6 @@ function cleanIso(v: unknown): string | null {
   return t;
 }
 
-/** Same rule as the Shop banner picture fields: a site path or an https URL. */
-function cleanImage(v: unknown): string {
-  if (typeof v !== "string") return "";
-  const t = v.trim().slice(0, 2000);
-  if (!t) return "";
-  if (t.startsWith("/") && !t.startsWith("//")) return t;
-  if (/^https:\/\//i.test(t)) return t;
-  return "";
-}
-
 /** Coerce anything into a valid advanced value; null/garbage → null (classic). */
 export function normalizeHomeSlideAdvanced(raw: unknown): HomeSlideAdvanced | null {
   if (typeof raw === "string") {
@@ -135,7 +125,8 @@ export function normalizeHomeSlideAdvanced(raw: unknown): HomeSlideAdvanced | nu
     eyebrow: normalizeLine(raw.eyebrow),
     title: normalizeLine(raw.title),
     description: normalizeLine(raw.description),
-    imageMobile: cleanImage(raw.imageMobile),
+    // R53: single picture — old phone pictures are dropped (owner OK'd re-attaching).
+    imageMobile: "",
     imageFocus: isImageFocus(raw.imageFocus) ? raw.imageFocus : null,
     imageFocusMobile: isImageFocus(raw.imageFocusMobile) ? raw.imageFocusMobile : null,
     textAlign: isTextAlign(raw.textAlign) ? raw.textAlign : null,
@@ -241,8 +232,8 @@ export function __runHomeSlideAdvancedCoreTests(): { passed: number; failed: num
   ok(n.eyebrow.scriptScale === 2, "script scale clamped");
   ok(n.title.font === "" && n.title.color === "", "unknown font/colour → classic");
   ok(n.imageMobile === "", "unsafe phone picture dropped");
-  ok(normalizeHomeSlideAdvanced({ imageMobile: "/brand/a.webp" })!.imageMobile === "/brand/a.webp", "site path kept");
-  ok(normalizeHomeSlideAdvanced({ imageMobile: "https://x.supabase.co/a.mp4" })!.imageMobile.startsWith("https://"), "https kept (video ok)");
+  ok(normalizeHomeSlideAdvanced({ imageMobile: "/brand/a.webp" })!.imageMobile === "", "R53: phone picture dropped (single picture)");
+  ok(isClassicEquivalent(normalizeHomeSlideAdvanced({ imageMobile: "/brand/a.webp" })), "R53: phone-picture-only slide is classic again");
   ok(n.imageFocus === "top" && n.imageFocusMobile === null, "focus validated");
   ok(n.textAlign === "center" && n.verticalAlign === "bottom", "align validated");
   ok(n.scheduleStart !== null && n.scheduleEnd === null, "schedule validated");

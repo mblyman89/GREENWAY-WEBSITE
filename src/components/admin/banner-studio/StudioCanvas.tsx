@@ -19,6 +19,12 @@
  *    Tab to an item, arrows move 0.5% (Shift = 5%), Delete removes (asks
  *    first), Escape deselects. The side panels also have X/Y number boxes.
  *  - On "Phone" every move writes the phone overrides (mx/my/mw) only.
+ *  - R53: clicking an item focuses it, so the arrow keys work straight away
+ *    (before, pointerdown's preventDefault stopped focus, so only Tab worked).
+ *  - R53: double-click a text box to type on the canvas. contenteditable
+ *    "plaintext-only" (Enter = new line, no pasted formatting); Esc or
+ *    clicking away commits as ONE change (one undo step for free-text boxes).
+ *    Bound boxes (eyebrow/title/description) write the banner's own field.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import {
@@ -35,6 +41,7 @@ import {
   resolveBoxText,
   roleInfo,
   type BannerDesign,
+  type DesignBind,
   type DesignDevice,
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
@@ -72,6 +79,7 @@ export function StudioCanvas({
   onChange,
   onRequestDelete,
   ghost = null,
+  onLegacyEdit,
 }: {
   design: BannerDesign;
   device: DesignDevice;
@@ -84,7 +92,11 @@ export function StudioCanvas({
   onRequestDelete: (s: NonNullable<StudioSelection>) => void;
   /** R41 S8: an AI suggestion to preview as a dotted "ghost" (zone + focal point). Display only. */
   ghost?: { zone: { x: number; y: number; w: number; h: number }; focusX: number; focusY: number } | null;
+  /** R53: inline edit of a bound box (eyebrow/title/subtitle) → the banner's own field. */
+  onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
 }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const editDone = useRef(false);
   const outerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [availW, setAvailW] = useState(800);
@@ -116,10 +128,15 @@ export function StudioCanvas({
 
   function startDrag(e: RPointerEvent<HTMLElement>, target: "box" | "button", id: string, mode: "move" | "resize") {
     if (e.button !== 0) return;
+    if (editing && editing === id) return; // typing: let the caret move normally
     const frame = frameRef.current;
     if (!frame) return;
     e.preventDefault();
     e.stopPropagation();
+    // R53: preventDefault blocks the browser's focus-on-click — focus the item
+    // ourselves so the arrow keys nudge it right after a click.
+    const itemEl = (mode === "resize" ? e.currentTarget.parentElement : e.currentTarget) as HTMLElement | null;
+    itemEl?.focus({ preventScroll: true });
     onSelect({ target, id });
     const rect = frame.getBoundingClientRect();
     const itemRect = (mode === "resize" ? (e.currentTarget.parentElement as HTMLElement) : e.currentTarget).getBoundingClientRect();
@@ -231,7 +248,34 @@ export function StudioCanvas({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
 
+  function startEdit(id: string) {
+    const b = designRef.current.boxes.find((x) => x.id === id);
+    if (!b || (b.bind && !onLegacyEdit)) return;
+    editDone.current = false;
+    setEditing(id);
+  }
+
+  function commitEdit(el: HTMLElement, id: string) {
+    if (editDone.current) return;
+    editDone.current = true;
+    setEditing(null);
+    // innerText turns the line breaks the browser inserted into "\n".
+    const text = el.innerText.replace(/\r\n?/g, "\n").replace(/\n$/, "");
+    const d = designRef.current;
+    const b = d.boxes.find((x) => x.id === id);
+    if (!b || text === resolveBoxText(b, legacy)) return;
+    if (b.bind) onLegacyEdit?.(b.bind, text);
+    else onChange({ ...d, boxes: d.boxes.map((x) => (x.id === id ? { ...x, text } : x)) });
+  }
+
   function onItemKey(e: React.KeyboardEvent, target: "box" | "button", id: string) {
+    if (editing === id) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        commitEdit(e.currentTarget as HTMLElement, id);
+      }
+      return; // every other key types (Enter = new line)
+    }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (dirs[e.key]) {
       e.preventDefault();
@@ -303,19 +347,54 @@ export function StudioCanvas({
                 if (device === "mobile" && b.hideOnMobile) return null;
                 const text = resolveBoxText(b, legacy);
                 const sel = isSel("box", b.id);
+                const isEd = editing === b.id;
+                if (isEd) {
+                  // Remounts (new key) on enter/exit so React never fights the
+                  // browser over the text nodes the user is typing into.
+                  return (
+                    <div
+                      key={`${b.id}-edit`}
+                      ref={(el) => {
+                        if (el && document.activeElement !== el) {
+                          el.focus({ preventScroll: true });
+                          const r = document.createRange();
+                          r.selectNodeContents(el);
+                          r.collapse(false); // caret at the end
+                          const s = window.getSelection();
+                          s?.removeAllRanges();
+                          s?.addRange(r);
+                        }
+                      }}
+                      contentEditable="plaintext-only"
+                      suppressContentEditableWarning
+                      role="textbox"
+                      aria-multiline="true"
+                      aria-label={`Editing ${roleInfo(b.role).label}. Enter for a new line, Escape to finish.`}
+                      style={{ ...css(boxStyle(b)), cursor: "text", outline: "2px solid #ffd700", outlineOffset: 2, minHeight: "1em", userSelect: "text", WebkitUserSelect: "text" }}
+                      className="gw-dbox"
+                      onKeyDown={(e) => onItemKey(e, "box", b.id)}
+                      onBlur={(e) => commitEdit(e.currentTarget, b.id)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      {text}
+                    </div>
+                  );
+                }
                 return (
                   <div
                     key={b.id}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${roleInfo(b.role).label}: ${text.slice(0, 40) || "empty"}. Drag or use arrow keys to move.`}
+                    aria-label={`${roleInfo(b.role).label}: ${text.slice(0, 40) || "empty"}. Drag or use arrow keys to move. Double-click to type.`}
                     aria-pressed={sel}
+                    title={b.bind && !onLegacyEdit ? undefined : "Double-click to type on the banner"}
                     style={{ ...css(boxStyle(b)), cursor: "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "1px dashed rgba(255,255,255,0.35)", outlineOffset: 2, minHeight: "1em" }}
                     className="gw-dbox"
                     onPointerDown={(e) => startDrag(e, "box", b.id, "move")}
                     onPointerMove={onPointerMove}
                     onPointerUp={endDrag}
                     onPointerCancel={endDrag}
+                    onDoubleClick={() => startEdit(b.id)}
                     onKeyDown={(e) => onItemKey(e, "box", b.id)}
                     onFocus={() => onSelect({ target: "box", id: b.id })}
                   >
