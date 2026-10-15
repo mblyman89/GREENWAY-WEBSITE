@@ -168,14 +168,17 @@ export const LEDGER_ERROR_TABLE: readonly (readonly [RegExp, string])[] = [
   [/ACH_FILE_REASON/, "Say why this file is voided (10+ characters)."],
   [/ACH_FILE_ALREADY_RELEASED/, "This payroll run already has its file. Download it, or void it (owner, with a reason) to release a new one."],
   [/ACH_FILE_NOT_FOUND/, "That ACH file was not found."],
-  [/ACH_OWNER_ONLY/, "Only the owner releases or voids ACH files. Send it as a request for owner approval."],
+  [/ACH_BANK_STEP_FINAL/, "Who uploaded or approved this file at Timberland, and when, is already recorded and never changes."],
+  [/ACH_BANK_STEP/, "Do the bank steps in order: release, then mark uploaded, then mark approved at Timberland."],
+  [/ACH_OWNER_ONLY/, "Only the owner releases, voids, or marks ACH files uploaded or approved at Timberland. Send it as a request for owner approval."],
+  [/ach_file_mark_(uploaded|bank_approved).*does not exist|Could not find the function public\.ach_file_mark_/, "The Timberland bank steps are not set up yet: run migration 0274 (docs/MIGRATIONS_TO_RUN.md). Nothing was changed."],
   [/relation "public\.ach_files" does not exist|ach_file_release.*does not exist|Could not find the function public\.ach_file_/, "The ACH file ledger is not set up yet: run migration 0273 (docs/MIGRATIONS_TO_RUN.md). No file was released."],
 ];
 
 export function ledgerDbErrorMessage(message: string | null | undefined): string {
   const m = String(message ?? "");
   for (const [re, text] of LEDGER_ERROR_TABLE) if (re.test(m)) return text;
-  return "The ACH file ledger refused this. Nothing was released. Reload the page and try again.";
+  return "The ACH file ledger refused this. Nothing was changed. Reload the page and try again.";
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +268,13 @@ export function __runAchFileLedgerCoreTests(): { passed: number; failed: number 
   ok(/Duplicate refused: a file with exactly these payments/.test(ledgerDbErrorMessage('violates unique constraint "ach_files_no_duplicate_entries"')), "duplicate entries in words");
   ok(/Only the owner/.test(ledgerDbErrorMessage("ACH_OWNER_ONLY: only the owner")), "owner-only in words");
   ok(/run migration 0273/.test(ledgerDbErrorMessage('relation "public.ach_files" does not exist')), "missing migration in words");
-  ok(/Nothing was released/.test(ledgerDbErrorMessage("something else")), "unknown error is generic, never raw");
+  ok(/Nothing was changed/.test(ledgerDbErrorMessage("something else")), "unknown error is generic, never raw");
+  ok(/already recorded and never changes/.test(ledgerDbErrorMessage("ACH_BANK_STEP_FINAL: who uploaded")), "a set bank stamp is final, in words (not the order message)");
+  ok(/in order: release, then mark uploaded/.test(ledgerDbErrorMessage("ACH_BANK_STEP: ACH file x has no upload recorded")), "bank steps out of order, in words");
+  ok(/run migration 0274/.test(ledgerDbErrorMessage("Could not find the function public.ach_file_mark_uploaded(p_actor, p_file_id) in the schema cache")), "missing 0274 function names 0274, not 0273");
+  ok(/run migration 0274/.test(ledgerDbErrorMessage("function public.ach_file_mark_bank_approved(uuid, uuid) does not exist")), "missing 0274 function (pg wording) names 0274");
+  ok(/run migration 0273/.test(ledgerDbErrorMessage("Could not find the function public.ach_file_void(p_actor) in the schema cache")), "missing 0273 function still names 0273");
+  ok(/marks ACH files uploaded or approved/.test(ledgerDbErrorMessage("ACH_OWNER_ONLY: only the owner records the upload")), "owner-only covers the bank steps");
   ok(MODIFIER_TAKEN_CONSTRAINT === "ach_files_day_modifier_key", "the retry constraint name");
 
   console.log(`ach-file-ledger-core: ${passed} passed, ${failed} failed`);

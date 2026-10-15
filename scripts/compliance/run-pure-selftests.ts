@@ -2250,7 +2250,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42); // R41 S1: every Timberland term readable in its own quote; 14 drift mutants; Q1, Q3-Q14
   assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 68); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
-  assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 43); // R41 S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason
+  assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 49); // R41 S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason; S6: bank-step errors, 0274 missing named
   assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
   assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 71); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays, section 3.7 table, reminders
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
