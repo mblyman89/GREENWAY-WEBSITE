@@ -12,8 +12,8 @@
  * check cannot be overridden.
  *
  * The first render uses the server's clock (nowIso) so the server HTML and
- * the browser agree; after that it uses the browser clock, ticking once a
- * minute so a page left open past 4:00 pm turns red on its own.
+ * the browser agree; after that it uses the browser clock, ticking every
+ * 15 seconds so a page left open past 4:00 pm turns red on its own.
  */
 import { useEffect, useState } from "react";
 import { Input } from "@/components/admin/ui";
@@ -36,8 +36,8 @@ export function PayDateDeadlineField({ nowIso }: { nowIso: string }) {
   const [value, setValue] = useState("");
   const [now, setNow] = useState(() => new Date(nowIso));
   useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 60_000);
+    // The first render uses the server clock (seconds old); the browser clock takes over within 15 s.
+    const t = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(t);
   }, []);
   const line = payDateLine(value, now);

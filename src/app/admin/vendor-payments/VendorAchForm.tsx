@@ -60,8 +60,8 @@ export function VendorAchForm({
   const [effective, setEffective] = useState(earliestEffective);
   const [now, setNow] = useState(() => new Date(nowIso));
   useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 60_000);
+    // The first render uses the server clock (seconds old); the browser clock takes over within 15 s.
+    const t = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(t);
   }, []);
   const effectiveCheck = useMemo(() => (effective ? checkEffectiveDateForTimberland(effective, now) : null), [effective, now]);
