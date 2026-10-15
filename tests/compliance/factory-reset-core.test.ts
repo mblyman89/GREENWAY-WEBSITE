@@ -1313,7 +1313,9 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R41 S3 / 0273: ach_files (every released ACH file, its encrypted
     //       bytes and fingerprint; payment records kept forever, and the
     //       database refuses DELETE, so a WIPE rule would fail part-way)
-    expect(plan.keep.length).toBe(158);
+    //   +1  R41 S10 / 0277: ach_timberland_comms (the Timberland
+    //       communications log; append-only, the database refuses DELETE)
+    expect(plan.keep.length).toBe(159);
     expect(plan.wipe.length).toBe(139);
   });
 
