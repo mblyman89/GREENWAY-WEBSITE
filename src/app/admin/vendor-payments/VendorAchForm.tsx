@@ -361,6 +361,11 @@ export function VendorAchForm({
               {state.warnings.length} partial payment(s) included — balances remain outstanding.
             </p>
           )}
+          {state.limitWarnings?.map((m, k) => (
+            <p key={k} className="mt-1 text-xs text-[var(--admin-gold)]">
+              {m}
+            </p>
+          ))}
           <div className="mt-2">
             <Button type="button" variant="confirm" size="sm" onClick={download}>
               Download {state.filename}

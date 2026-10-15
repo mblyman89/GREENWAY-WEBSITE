@@ -673,7 +673,8 @@ export async function generatePayrollNacha(
   });
   if (!released.ok) return { ok: false, error: released.error };
 
-  return { ok: true, filename: released.filename, file: released.body, totalCents: released.totalCents, entryCount: released.entryCount, notes, splitsReady: deposit.tableReady };
+  // R41 S4: the 80% Timberland-limit notes ride along (the file was released).
+  return { ok: true, filename: released.filename, file: released.body, totalCents: released.totalCents, entryCount: released.entryCount, notes: [...notes, ...released.limitWarnings], splitsReady: deposit.tableReady };
 }
 
 // ---------------------------------------------------------------------------
