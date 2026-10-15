@@ -1,0 +1,65 @@
+# 31 CFR Part 210 final rule (Treasury, Bureau of the Fiscal Service), 82 FR 42597 (September 11, 2017). EXCERPT MIRROR
+
+- Source (official, Government Publishing Office): https://www.govinfo.gov/content/pkg/FR-2017-09-11/html/2017-19135.htm
+- Found via https://www.federalregister.gov/citation/82-FR-42597 (FR Doc 2017-19135, pages 42597-42609).
+- Fetched 2026-10-15. sha256 of the fetched HTML: f4409505f20e424e20263ffe1e75dfeea3a1f2a96e823fcc0ab05f41a561ad42
+- What is mirrored: the heading block (lines 1-25 of the page, minus the contact lines) and amendment 9 of the
+  2014 NACHA rule changes, copied byte for byte with the original line breaks. The "FOR FURTHER INFORMATION
+  CONTACT" block (staff phone numbers and email addresses) is left out because this repository is public.
+- Why it is here (R41 S8): Timberland's signed agreement, section 6, says live entries wait "at least 6 banking
+  days" after a prenote settles. This federal text shows Nacha cut its own rule from six banking days to three in
+  2014. Greenway keeps Timberland's 6 (the signed contract) until Timberland says otherwise (open question Q20).
+
+----- verbatim excerpt -----
+[Federal Register Volume 82, Number 174 (Monday, September 11, 2017)]
+[Rules and Regulations]
+[Pages 42597-42609]
+From the Federal Register Online via the Government Publishing Office [www.gpo.gov]
+
+-----------------------------------------------------------------------
+
+DEPARTMENT OF THE TREASURY
+
+Fiscal Service
+
+31 CFR Part 210
+
+RIN 1510-AA14
+
+
+Federal Government Participation in the Automated Clearing House
+
+AGENCY: Bureau of the Fiscal Service, Treasury.
+
+ACTION: Final rule.
+
+-----------------------------------------------------------------------
+
+SUMMARY: The Department of the Treasury, Bureau of the Fiscal Service 
+(Fiscal Service) is amending its regulation governing the use of the 
+Automated Clearing House (ACH) Network by Federal agencies. Our 
+regulation adopts, with some exceptions, the NACHA Operating Rules 
+developed by NACHA--The Electronic Payments Association (NACHA) as the 
+rules governing the use of the ACH Network by Federal agencies. We are 
+issuing this rule to address changes that NACHA has made to the NACHA 
+Operating Rules since the publication of the 2013 NACHA Operating Rules 
+& Guidelines book. These changes include amendments set forth in the 
+2014, 2015, and 2016 NACHA Operating Rules & Guidelines books.
+
+DATES: Effective date: September 11, 2017.
+    Applicability date: The amendment to Sec.  210.5 is applicable 
+...
+9. Prenotification Entries--Reduction in Waiting Period for Live 
+Entries
+    This amendment reduced the six banking-day waiting period between 
+initiation of a Prenotification and ``live'' Entries for Originators 
+choosing to originate Prenotes. This amendment also modified the NACHA 
+Operating Rules related to Notifications of Change to clarify the 
+Originator's obligations with respect to an NOC received in response to 
+a Prenote. This change permits an Originator that has originated a 
+Prenotification Entry to a Receiver's account to initiate subsequent 
+Entries to the Receiver's account as soon as the third Banking Day 
+following the Settlement Date of the Prenotification Entry, provided 
+that the ODFI has not received a return or NOC related to the 
+Prenotification.
+    We are accepting this amendment.
