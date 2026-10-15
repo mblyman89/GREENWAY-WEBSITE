@@ -106,6 +106,12 @@ begin
   perform pg_temp.must_fail(format(ins, 'other', today, null, null, null, 'Admin JWT, owner stamp', null, u_m), 'ACH_OWNER_ONLY');
   perform set_config('request.jwt.claim.sub', '', true);
 
+  -- 8. an admin's entry can wait for the owner: the request list takes the new target
+  select count(*) into n from pg_constraint where conname = 'ach_change_requests_target_type_check' and pg_get_constraintdef(oid) like '%timberland_comms%' and pg_get_constraintdef(oid) like '%ach_file%';
+  assert n = 1, 'request target list has timberland_comms and still ach_file';
+  insert into public.ach_change_requests (kind, target_type, payload_enc, requested_by) values ('timberland_comms.log', 'timberland_comms', 'encv1:p:y', u_s);
+  perform pg_temp.must_fail(format($q$insert into public.ach_change_requests (kind, target_type, payload_enc, requested_by) values ('timberland_comms.log', 'planet', 'encv1:p:y', %L)$q$, u_s), 'ach_change_requests_target_type_check');
+
   raise notice 'ACH 0277 CHECK PASSED';
 end $$;
 

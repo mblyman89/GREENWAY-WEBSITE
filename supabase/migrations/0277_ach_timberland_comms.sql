@@ -34,14 +34,19 @@
 --     summary              5 to 1000 characters. No run of 7+ digits (no
 --                          account or routing numbers; 1-800-562-8761 is fine).
 --     closes_id            only for entry_type 'done': the item it closes.
---                          Each item is closed at most once.
+--                          Each item is closed at most once. Only items with
+--                          a clock can be closed (a termination notice too:
+--                          withdrawn, or logged by mistake). Facts such as
+--                          'access_ready' have no clock and stay as logged.
 --     created_by           the OWNER (ach_write_by_owner, 0271). An admin's
 --                          press is a request for the owner's approval, made
 --                          in the app (achGate kind timberland_comms.log).
 --
 -- Never updated, never deleted (ACH_COMMS_APPEND_ONLY). A mistake is fixed by
--- a new row that says so. Add-only: one new table, one trigger function, no
--- change to any existing object. Not security definer. Idempotent.
+-- a new row that says so. Add-only: one new table and one trigger function;
+-- the only change to an existing object is the 0271 ach_change_requests
+-- target_type list, which gains 'timberland_comms' (as 0273 added
+-- 'ach_file'). Not security definer. Idempotent.
 -- Apply MANUALLY (standing rule), AFTER 0276.
 -- Rollback: supabase/rollbacks/0277_ach_timberland_comms.rollback.sql
 -- =============================================================================
@@ -117,7 +122,7 @@ begin
     end if;
     if target.entry_type not in ('amendment_notice', 'fee_notice', 'reserve_demand', 'auth_copy_request',
                                  'over_limit_request', 'prefunding_notice', 'compromise_reported',
-                                 'reversal_needed', 'statement_received') then
+                                 'reversal_needed', 'statement_received', 'termination_notice') then
       raise exception 'ACH_COMMS_CLOSE: a % entry has no clock to close.', target.entry_type;
     end if;
     if new.received_on < target.received_on then
@@ -133,7 +138,16 @@ create trigger trg_ach_timberland_comms_guard
   for each row execute function public.ach_timberland_comms_guard();
 
 -- -----------------------------------------------------------------------------
--- 3. RLS and grants (same pattern as 0273)
+-- 3. 0271 request target: the Timberland log (an admin's entry waits for the owner)
+-- -----------------------------------------------------------------------------
+alter table public.ach_change_requests drop constraint if exists ach_change_requests_target_type_check;
+alter table public.ach_change_requests add constraint ach_change_requests_target_type_check
+  check (target_type in ('vendor', 'employee', 'authorization', 'account', 'verification',
+                         'notice', 'document', 'contact', 'invite', 'payroll_run',
+                         'company', 'vendor_payment', 'ach_file', 'timberland_comms'));
+
+-- -----------------------------------------------------------------------------
+-- 4. RLS and grants (same pattern as 0273)
 -- -----------------------------------------------------------------------------
 alter table public.ach_timberland_comms enable row level security;
 
