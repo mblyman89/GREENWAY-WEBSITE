@@ -1,0 +1,15 @@
+control (before) pass
+killed   fn-bank-approved-allowed  (PL/pgSQL function inline_code_block line 77 at PERFORM)
+killed   fn-owner-skipped  (PL/pgSQL function inline_code_block line 40 at PERFORM)
+killed   fn-already-confirmed-skipped  (PL/pgSQL function inline_code_block line 56 at PERFORM)
+killed   fn-null-amount-allowed  (PL/pgSQL function inline_code_block line 47 at PERFORM)
+killed   guard-insert-may-carry-funding  (PL/pgSQL function inline_code_block line 35 at PERFORM)
+killed   guard-amount-may-change  (PL/pgSQL function inline_code_block line 57 at PERFORM)
+killed   guard-with-status-change  (PL/pgSQL function inline_code_block line 79 at PERFORM)
+killed   guard-owner-skipped  (PL/pgSQL function inline_code_block line 85 at PERFORM)
+killed   guard-short-allowed  (PL/pgSQL function inline_code_block line 48 at PERFORM)
+killed   guard-delete-allowed  (PL/pgSQL function inline_code_block line 88 at PERFORM)
+killed   grant-to-authenticated  (CONTEXT:  PL/pgSQL function inline_code_block line 30 at ASSERT)
+killed   revoke-dropped  (CONTEXT:  PL/pgSQL function inline_code_block line 30 at ASSERT)
+control (after) pass
+total 12 killed 12 survivors []
