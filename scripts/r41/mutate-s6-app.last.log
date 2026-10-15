@@ -1,0 +1,31 @@
+control (before) pass
+killed   rpc-names-swapped
+killed   bad-id-reaches-db
+killed   empty-reply-ok
+killed   stamp-cols-dropped
+killed   final-shadowed-by-step
+killed   missing-0274-says-0273
+killed   upload-kind-is-stop
+killed   approve-spec-unversioned
+killed   replay-dropped
+killed   approve-action-wrong-step
+SURVIVED confirm-box-skipped
+killed   dismiss-not-owner-only
+killed   dismiss-not-logged
+killed   button-on-approved
+killed   admin-button-says-mark
+killed   dismiss-forever
+killed   note-shown-when-dual-on
+killed   utc-dates
+killed   grey-line-turns-amber
+killed   page-ignores-dismiss
+killed   page-button-always-owner
+killed   old-claim-back
+killed   banned-list-shrinks
+killed   dual-step-counts
+killed   unread-stamp-is-done
+killed   journey-dropped
+killed   store-prenote-any-status
+control (after) pass
+total 27 killed 26 survivors ['confirm-box-skipped']
+EXIT 1

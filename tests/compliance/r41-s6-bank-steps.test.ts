@@ -126,7 +126,12 @@ describe("owner authority: two new live kinds, gated once, replayable, stale onc
     const s = code(read("src/app/admin/settings/banking/file-actions.ts"));
     expect(s).toMatch(/achGate\("ach_file\.mark_uploaded", fd,[\s\S]*?markBankStepBody\(session, fd, "uploaded"\)/);
     expect(s).toMatch(/achGate\("ach_file\.mark_bank_approved", fd,[\s\S]*?markBankStepBody\(session, fd, "bank_approved"\)/);
-    expect(s).toMatch(/str\(fd, "confirm"\) !== "yes"/);
+    // The confirm check must sit inside the bank-step body itself (the void
+    // action has its own; matching anywhere let a skipped box survive).
+    const body = s.slice(s.indexOf("async function markBankStepBody"), s.indexOf("export async function dismissDualApprovalNoteAction"));
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).toMatch(/const fileId = str\(fd, "file_id"\);\s*if \(str\(fd, "confirm"\) !== "yes"\) \{\s*back\(/);
+    expect(body.indexOf('str(fd, "confirm")')).toBeLessThan(body.indexOf("markAchFileBankStep("));
     expect(s).toMatch(/action: step === "uploaded" \? "ach\.file\.uploaded" : "ach\.file\.bank_approved"/);
   });
 
