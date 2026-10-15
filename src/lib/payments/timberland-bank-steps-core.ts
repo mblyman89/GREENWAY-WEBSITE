@@ -41,8 +41,8 @@ export const BANNED_TIMBERLAND_CLAIMS: readonly string[] = [
 /** The checklist card on a released file (S6). S9 items are named as such until S9 ships. */
 export const BANK_STEP_CHECKLIST: readonly { id: string; text: string }[] = [
   { id: "download", text: "Download the file from this list (the same bytes every time)." },
-  { id: "checker", text: "Run the file checker (coming in S9). Until then, compare the entry count and total below with the payroll run or vendor payment." },
-  { id: "funding", text: "Confirm the money is in the account (funding check coming in S9). Timberland debits the account for the file." },
+  { id: "checker", text: "Run the file checker (Banking > File checker) on the downloaded file. It re-checks every Timberland pin and that it is the released file. A file cannot be cancelled after upload (section 18), so this is the last check." },
+  { id: "funding", text: "Look at the balance of the account ending 6048 and press \"Confirm funding\" here. The money must be there before you upload and still there at 9:00 am Pacific on the settlement date (section 14)." },
   { id: "login", text: "Log in to Timberland's cash management portal (a separate login from online banking). Have your token or phone ready for the text code (Schedule F)." },
   { id: "upload", text: "Upload the file, then press \"Mark uploaded\" here." },
   { id: "approve", text: "Approve it in the portal with the code, then press \"Mark approved\" here." },
@@ -198,5 +198,7 @@ export function __runTimberlandBankStepsCoreTests(): { passed: number; failed: n
   ok(/Off by choice/.test(dualApprovalGuideText(false)) && /^On at Timberland/.test(dualApprovalGuideText(true)), "guide text: off by choice / on");
   ok(BANK_STEP_CHECKLIST.map((s) => s.id).join(",") === "download,checker,funding,login,upload,approve", "checklist order: download, check, fund, log in, upload, approve");
   ok(/token or phone/.test(BANK_STEP_CHECKLIST.find((s) => s.id === "login")!.text), "the login step names the token or text code");
+  ok(/File checker/.test(BANK_STEP_CHECKLIST.find((s) => s.id === "checker")!.text) && !/coming in S9/.test(BANK_STEP_CHECKLIST.map((s) => s.text).join(" ")), "S9: the checklist points at the real checker, no 'coming' text");
+  ok(/9:00 am Pacific on the settlement date/.test(BANK_STEP_CHECKLIST.find((s) => s.id === "funding")!.text) && /Confirm funding/.test(BANK_STEP_CHECKLIST.find((s) => s.id === "funding")!.text), "S9: the funding step names the button and the 9:00 am deadline");
   return { passed, failed };
 }

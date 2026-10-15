@@ -33,7 +33,8 @@ import { ACH_CODES } from "@/lib/payments/ach-authorization-core";
 import { checkEffectiveDate, checkEffectiveDateForRelease, defaultCheckEffectiveDate } from "@/lib/payments/ach-ops-core";
 import { checkFileSourceId, checkListFingerprint, opsPageView } from "@/lib/payments/ach-ops-store";
 import { listAchFiles } from "@/lib/payments/ach-file-ledger-store";
-import { dismissDualApprovalNoteAction, markAchFileBankApprovedAction, markAchFileUploadedAction, voidAchFileAction } from "../file-actions";
+import { confirmAchFileFundingAction, dismissDualApprovalNoteAction, markAchFileBankApprovedAction, markAchFileUploadedAction, voidAchFileAction } from "../file-actions";
+import { fundingBadge, fundingPlan, usd } from "@/lib/payments/timberland-funding-core";
 import { getDualNoteDismiss } from "@/lib/payments/ach-guide-store";
 import { BANK_STEP_CHECKLIST, DUAL_APPROVAL_NOTE, bankStepButton, bankStepLine, dualNoteVisible } from "@/lib/payments/timberland-bank-steps-core";
 import { monitorSummary, noticeUrgencyLabel, releaseHint } from "@/lib/payments/ach-ops-ui-core";
@@ -446,7 +447,12 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                     <td>{f.effective_date}</td>
                     <td>{f.entry_count}</td>
                     <td>${(Number(f.total_cents) / 100).toFixed(2)}</td>
-                    <td>{f.status === "voided" ? <Badge tone="danger">voided</Badge> : <Badge tone="green">{f.status.replace("_", " ")}</Badge>}{f.voided_reason ? <div className="text-xs text-white/40">{f.voided_reason}</div> : null}{(() => { const line = bankStepLine(f, (id) => staff.get(id) ?? "a staff member"); return line ? <div className="text-xs text-white/40">{line}</div> : null; })()}</td>
+                    <td>{f.status === "voided" ? <Badge tone="danger">voided</Badge> : <Badge tone="green">{f.status.replace("_", " ")}</Badge>}{f.voided_reason ? <div className="text-xs text-white/40">{f.voided_reason}</div> : null}{(() => { const line = bankStepLine(f, (id) => staff.get(id) ?? "a staff member"); return line ? <div className="text-xs text-white/40">{line}</div> : null; })()}{(() => {
+                      const fb = fundingBadge({ id: f.id, filename: f.filename, kind: f.kind, status: f.status, totalCents: Number(f.total_cents), effectiveDate: f.effective_date, settlementDate: f.settlement_date, fundingConfirmedAt: f.funding_confirmed_at, fundingConfirmedAmountCents: f.funding_confirmed_amount_cents === null ? null : Number(f.funding_confirmed_amount_cents) }, new Date());
+                      if (fb.tone === "none") return null;
+                      const cls = fb.tone === "ok" ? "text-emerald-300/80" : fb.tone === "danger" ? "text-red-300" : "text-amber-200";
+                      return <div data-funding={fb.tone} className={`text-xs ${cls}`}>{fb.text}</div>;
+                    })()}</td>
                     <td className="space-y-2">
                       {f.status !== "voided" ? (
                         <>
@@ -462,6 +468,22 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                               </form>
                             );
                           })()}
+                          {(f.status === "released" || f.status === "uploaded") && !f.funding_confirmed_at ? (() => {
+                            const plan = fundingPlan({ totalCents: Number(f.total_cents), effectiveDate: f.effective_date, settlementDate: f.settlement_date });
+                            return (
+                              <form id={`funding-${f.id}`} action={confirmAchFileFundingAction} className="flex flex-col gap-1 rounded border border-white/10 p-2 text-xs">
+                                <input type="hidden" name="file_id" value={f.id} />
+                                <p className="text-white/70">{plan.headline}</p>
+                                <ul className="text-white/50">
+                                  {plan.lines.map((l) => <li key={l.key}>{usd(l.cents)}: {l.label}</li>)}
+                                </ul>
+                                <p className="text-white/40">{plan.returnFeeNote} The app cannot see your balance: you look, then type what you saw.</p>
+                                <input name="amount" required inputMode="decimal" maxLength={20} placeholder={`Balance you saw (at least ${usd(plan.minimumCents)})`} className={inputCls} />
+                                <label className="flex items-center gap-2"><input type="checkbox" name="confirm" value="yes" required /> I looked at the account balance myself</label>
+                                <button className={btnGhost}>{isOwner ? "Confirm funding" : "Ask the owner to confirm funding"}</button>
+                              </form>
+                            );
+                          })() : null}
                           <form action={voidAchFileAction} className="flex flex-col gap-1 text-xs">
                             <input type="hidden" name="file_id" value={f.id} />
                             <input name="reason" required minLength={10} maxLength={500} placeholder="Why void it (10+ characters)" className={inputCls} />

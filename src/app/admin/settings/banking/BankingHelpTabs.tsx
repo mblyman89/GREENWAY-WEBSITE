@@ -10,6 +10,8 @@ export const BANKING_HELP_TABS = [
   { key: "guide", href: "/admin/settings/banking/guide", label: "Guide & unblocker" },
   { key: "calendar", href: "/admin/settings/banking/calendar", label: "Calendar & reminders" },
   { key: "library", href: "/admin/settings/banking/library", label: "Legal library" },
+  // R41 S9: the last check before a file goes to Timberland (section 18: no cancelling after upload).
+  { key: "checker", href: "/admin/settings/banking/checker", label: "File checker" },
 ] as const;
 
 export type BankingHelpTabKey = (typeof BANKING_HELP_TABS)[number]["key"];
