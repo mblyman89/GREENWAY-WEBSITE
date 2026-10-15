@@ -664,6 +664,12 @@ export function screeningFailedEmail(error: string, link: string): { subject: st
   };
 }
 
+/** The week number since Monday 1970-01-05, for the weekly reminder dedupe key ("w" + n). */
+export function weekKey(dayIso: string): string {
+  const days = Math.floor((Date.parse(`${dayIso}T00:00:00Z`) - Date.parse("1970-01-05T00:00:00Z")) / 86400000);
+  return `w${Math.floor(days / 7)}`;
+}
+
 export function staleness(lastRanAt: string | null, now: Date): { stale: boolean; text: string } {
   if (!lastRanAt) return { stale: true, text: "No screening has run yet." };
   const days = Math.floor((now.getTime() - Date.parse(lastRanAt)) / 86400000);
@@ -830,6 +836,7 @@ export function __runOfacScreeningCoreTests(): { passed: number; failed: number 
   ok(/TRUE match/.test(screeningEmail({ ...sum, trueMatches: 1 }, "L")?.subject ?? ""), "email: true match");
   ok(/no name to screen/.test(screeningEmail({ ...sum, unscreenable: 2 }, "L")?.subject ?? ""), "email: unscreenable");
   ok(/Payments are not affected/.test(screeningFailedEmail("x", "L").text), "failure email: payments not affected");
+  ok(weekKey("2026-10-19") === weekKey("2026-10-25") && weekKey("2026-10-25") !== weekKey("2026-10-26") && weekKey("1970-01-05") === "w0", "week key: Monday to Sunday");
   const now = new Date("2026-10-20T13:30:00Z");
   ok(staleness(null, now).stale, "stale: never run");
   ok(!staleness("2026-10-18T13:31:00Z", now).stale && staleness("2026-10-17T13:30:00Z", now).stale, "stale: 3 days");
