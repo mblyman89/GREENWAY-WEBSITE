@@ -38,12 +38,18 @@ const OFFICIAL_HOSTS = [
   "www.ecfr.gov",
 ];
 
+/** R41 S8: the Timberland agreement has no public URL; it is checked by its sha256 header instead. */
+const PUBLIC_ENTRIES = ACH_LEGAL_LIBRARY.filter((e) => e.kind !== "agreement");
+const AGREEMENT_ENTRIES = ACH_LEGAL_LIBRARY.filter((e) => e.kind === "agreement");
+const TIMBERLAND_MIRROR = "ach/timberland-ach-agreement-2026-10-09.redacted.txt";
+
 describe("R40 legal library — verbatim, sourced, linked", () => {
-  it("has the 13 entries the generator writes, with unique ids", () => {
-    expect(ACH_LEGAL_LIBRARY.length).toBe(13);
+  it("has the 20 entries the generator writes (13 public + 7 Timberland agreement, R41 S8), with unique ids", () => {
+    expect(ACH_LEGAL_LIBRARY.length).toBe(20);
     const ids = ACH_LEGAL_LIBRARY.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ACH_LEGAL_LIBRARY.filter((e) => e.kind === "case").length).toBe(4);
+    expect(ACH_LEGAL_LIBRARY.filter((e) => e.kind === "agreement").length).toBe(7);
   });
 
   it.each(ACH_LEGAL_LIBRARY.map((e) => [e.id, e] as const))("%s quote is verbatim in its mirrored source", (_id, e) => {
@@ -62,7 +68,7 @@ describe("R40 legal library — verbatim, sourced, linked", () => {
   });
 
   it("every mirrored source carries its provenance header naming the official URL", () => {
-    for (const e of ACH_LEGAL_LIBRARY) {
+    for (const e of PUBLIC_ENTRIES) {
       const head = readFileSync(join(AUTH, e.sourceFile), "utf8").slice(0, 1200);
       const host = new URL(e.source).host;
       expect(head.includes(host), `${e.sourceFile} header should name ${host}`).toBe(true);
@@ -70,7 +76,7 @@ describe("R40 legal library — verbatim, sourced, linked", () => {
   });
 
   it("every source URL is on an official court / legislature / government host", () => {
-    for (const e of ACH_LEGAL_LIBRARY) {
+    for (const e of PUBLIC_ENTRIES) {
       const u = new URL(e.source);
       expect(["http:", "https:"]).toContain(u.protocol);
       expect(OFFICIAL_HOSTS).toContain(u.host);
@@ -99,6 +105,20 @@ describe("R40 legal library — verbatim, sourced, linked", () => {
       stdio: "pipe",
     });
     expect(readFileSync(out, "utf8")).toBe(readFileSync(join(ROOT, "src", "lib", "payments", "ach-legal-library.ts"), "utf8"));
+  });
+
+  it("R41 S8: agreement entries are from the Timberland mirror, never a URL, and the mirror carries the PDF's sha256", () => {
+    expect(AGREEMENT_ENTRIES.length).toBe(7);
+    const head = readFileSync(join(AUTH, TIMBERLAND_MIRROR), "utf8").slice(0, 1200);
+    expect(head).toMatch(/sha256 of the original PDF: [0-9a-f]{64}/);
+    for (const e of AGREEMENT_ENTRIES) {
+      expect(e.sourceFile).toBe(TIMBERLAND_MIRROR);
+      expect(e.source.startsWith("private:"), `${e.id} source must say private`).toBe(true);
+      expect(() => new URL(e.source).host).not.toThrow(); // "private:" parses as a scheme...
+      expect(new URL(e.source).host).toBe(""); // ...but names no host, so it can never be mistaken for a link
+      expect(e.court).toContain("Timberland Bank ACH Origination Agreement");
+      expect(e.id.startsWith("timberland-")).toBe(true);
+    }
   });
 
   it("verified reporter citations only: Patco and Choice Escrow cite F.3d; the unpublished ones cite docket numbers", () => {

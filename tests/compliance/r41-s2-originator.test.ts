@@ -31,10 +31,10 @@ describe("pure cores: self-tests pass with their floors", () => {
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(68);
   });
-  it("nacha-core >= 87 (R41 S3 raised it from 76)", () => {
+  it("nacha-core >= 88 (R41 S3 raised it from 76 to 87; R41 S8 Q14 pin to 88)", () => {
     const r = __runNachaCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(87);
+    expect(r.passed).toBeGreaterThanOrEqual(88);
   });
   it("timberland-preview-core >= 19", () => {
     const r = __runTimberlandPreviewCoreTests();
@@ -44,7 +44,7 @@ describe("pure cores: self-tests pass with their floors", () => {
   it("all three are registered in run-pure-selftests with those floors", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
     expect(src).toMatch(/assertRan\("timberland-originator-core", __runTimberlandOriginatorCoreTests\(\), 68\)/);
-    expect(src).toMatch(/assertRan\("nacha-core", __runNachaCoreTests\(\), 87\)/);
+    expect(src).toMatch(/assertRan\("nacha-core", __runNachaCoreTests\(\), 88\)/);
     expect(src).toMatch(/assertRan\("timberland-preview-core", __runTimberlandPreviewCoreTests\(\), 19\)/);
   });
 });
