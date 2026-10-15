@@ -1,8 +1,10 @@
 import { achAuthority } from "@/lib/auth/ach-authority-core";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { pacificToday } from "@/lib/reports/timezone";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { TimberlandRoomLeft } from "@/components/admin/payments/TimberlandRoomLeft";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
@@ -114,6 +116,9 @@ export default async function VendorPaymentsPage({
         </div>
         {/* R23 item 8: the one pipeline bar, in order. */}
         <CatalogStageStrip current="pay" />
+
+        {/* R41 S4: Timberland's daily and monthly room (the release refuses anything over). */}
+        <TimberlandRoomLeft today={pacificToday()} />
 
         {/* Readiness at a glance — real state, no fabricated payables ledger. */}
         <div className="grid gap-4 sm:grid-cols-3">

@@ -13,6 +13,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { TimberlandRoomLeft } from "@/components/admin/payments/TimberlandRoomLeft";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge } from "@/components/admin/ui";
 import { BankingSubnav } from "../BankingHelpTabs";
@@ -100,6 +101,8 @@ export default async function AchGuidePage({ searchParams }: { searchParams: Pro
       <div className="space-y-8 px-5 py-6 sm:px-8">
         <BankingSubnav active="guide" />
         <p className="text-xs text-white/40">Today (Pacific): {today}</p>
+        {/* R41 S4: Timberland's daily and monthly room (the release refuses anything over). */}
+        <TimberlandRoomLeft today={today} />
 
         {problems.length ? (
           <div role="alert" className="rounded-[var(--admin-radius)] border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
