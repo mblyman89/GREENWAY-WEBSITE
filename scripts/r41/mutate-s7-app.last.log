@@ -1,0 +1,26 @@
+control (before) pass
+killed   six-to-three
+killed   calendar-days
+killed   fed-days-not-usable
+killed   five-days
+killed   ops-sends-nacha-day
+killed   floor-constant-7
+killed   plan-wait-short
+killed   plan-upload-is-settle
+killed   too-late-not-refused
+killed   gate-any-status
+killed   gate-no-wait
+killed   gate-no-pass-needed
+killed   gate-counts-voided
+killed   gate-day-early
+killed   gate-bypassed
+killed   gate-payroll-only
+killed   gate-read-error-opens
+killed   gate-reads-any-verification
+killed   gate-reads-any-file
+killed   odd-row-skipped
+killed   error-unmapped
+killed   guide-section-dropped
+killed   guide-anchor-renamed
+control (after) pass
+total 23 killed 23 survivors []
