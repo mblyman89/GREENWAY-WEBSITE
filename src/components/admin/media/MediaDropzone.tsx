@@ -152,7 +152,8 @@ export function MediaDropzone() {
         status: meta.status,
       });
       if (!fin.ok) throw new Error(fin.error);
-      patch(it.id, { state: "done", sent: file.size, message: note });
+      // R54: show the web-optimisation saving when the server converted it.
+      patch(it.id, { state: "done", sent: file.size, message: fin.note ? (note ? `${fin.note} ${note}` : fin.note) : note });
       return true;
     } catch (e) {
       const raw = (e as Error)?.message ?? String(e);

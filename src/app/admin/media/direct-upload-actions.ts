@@ -41,6 +41,9 @@ import { checkFileSignature, isJpeg, SIGNATURE_READ_BYTES, SVG_MAX_CHECK_BYTES }
 import { readObjectHead } from "@/lib/media/read-object-head";
 import { BLUR_SOURCE_MAX_BYTES, makeBlurDataUrl, saveBlurForAsset } from "@/lib/media/blur-server";
 import { wantsBlur } from "@/lib/media/blur-placeholder-core";
+import { optimizeImageBuffer } from "@/lib/media/image-optimize-server";
+import { planImageOptimize, savingsLabel, webpStorageKey } from "@/lib/media/image-optimize-core";
+import { MEDIA_UPLOAD_CACHE_CONTROL_SECONDS } from "@/lib/media/store";
 
 const BUCKET = "media";
 /** Posters are a single captured JPEG frame; anything bigger is not a poster. */
@@ -60,7 +63,7 @@ export type StartDirectUploadResult =
     }
   | { ok: false; error: string };
 
-export type FinishDirectUploadResult = { ok: true; id: string; url: string } | { ok: false; error: string };
+export type FinishDirectUploadResult = { ok: true; id: string; url: string; note?: string } | { ok: false; error: string };
 
 /**
  * Step 1: ask permission to upload ONE file. Returns a signed token for a new,
@@ -226,20 +229,60 @@ export async function finishDirectUploadAction(input: {
     }
   }
 
+  // R54 Slice A: store a web-ready master. Big JPEG/PNG/WebP → WebP, longest
+  // side ≤ 3840 px, EXIF-rotated, metadata stripped. next/image then serves
+  // AVIF/WebP per device from it. Best-effort: any failure keeps the original.
+  let finalKey = key;
+  let finalMime = storedMime;
+  let finalSize = storedSize;
+  let finalWidth = cleanDimension(input.width);
+  let finalHeight = cleanDimension(input.height);
+  let finalFilename = String(input.filename ?? "").trim().slice(0, 200) || key.split("/").pop()!;
+  let optimizedBuffer: Uint8Array | null = null;
+  let note: string | undefined;
+  if (planImageOptimize({ mime: storedMime, size: storedSize, width: finalWidth, height: finalHeight }).action === "convert") {
+    try {
+      const full = await readObjectHead(BUCKET, key, storedSize, 30000);
+      const opt = full && full.length === storedSize
+        ? await optimizeImageBuffer({ buffer: full, mime: storedMime, filename: finalFilename, width: finalWidth, height: finalHeight })
+        : null;
+      if (opt) {
+        const newKey = webpStorageKey(key);
+        const up = await bucket.upload(newKey, opt.buffer, {
+          contentType: opt.mime,
+          upsert: true,
+          cacheControl: MEDIA_UPLOAD_CACHE_CONTROL_SECONDS,
+        });
+        if (!up.error) {
+          if (newKey !== key) await removeQuietly([key]);
+          finalKey = newKey;
+          finalMime = opt.mime;
+          finalSize = opt.buffer.length;
+          finalWidth = opt.width;
+          finalHeight = opt.height;
+          finalFilename = opt.filename;
+          optimizedBuffer = opt.buffer;
+          note = savingsLabel(opt.originalBytes, opt.buffer.length);
+        }
+      }
+    } catch {
+      /* optimisation is optional — the original stays */
+    }
+  }
+
   const status = input.status === "published" ? "published" : "draft";
   const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 200) : undefined;
   const altText = typeof input.altText === "string" && input.altText.trim() ? input.altText.trim().slice(0, 500) : undefined;
   const usageType = typeof input.usageType === "string" && input.usageType.trim() ? input.usageType.trim() : undefined;
-  const filename = String(input.filename ?? "").trim().slice(0, 200) || key.split("/").pop()!;
 
   try {
     const asset = await registerUploadedMedia({
-      storageKey: key,
-      filename,
-      mimeType: storedMime,
-      sizeBytes: storedSize,
-      width: cleanDimension(input.width),
-      height: cleanDimension(input.height),
+      storageKey: finalKey,
+      filename: finalFilename,
+      mimeType: finalMime,
+      sizeBytes: finalSize,
+      width: finalWidth,
+      height: finalHeight,
       title,
       altText,
       usageType,
@@ -249,10 +292,10 @@ export async function finishDirectUploadAction(input: {
     });
     // R45-S2: tiny blur preview for banner photos (best-effort; photos over
     // 15 MB skip it so the action stays fast and inside the memory budget).
-    if (wantsBlur(storedMime) && storedSize <= BLUR_SOURCE_MAX_BYTES) {
+    if (wantsBlur(finalMime) && finalSize <= BLUR_SOURCE_MAX_BYTES) {
       try {
-        const full = await readObjectHead(BUCKET, key, storedSize, 20000);
-        const blur = full && full.length === storedSize ? await makeBlurDataUrl(full, storedMime) : null;
+        const full = optimizedBuffer ?? (await readObjectHead(BUCKET, finalKey, finalSize, 20000));
+        const blur = full && full.length === finalSize ? await makeBlurDataUrl(full, finalMime) : null;
         if (blur) await saveBlurForAsset(asset.id, blur);
       } catch {
         /* preview is optional */
@@ -266,7 +309,7 @@ export async function finishDirectUploadAction(input: {
       entityId: asset.id,
     });
     revalidatePath("/admin/media");
-    return { ok: true, id: asset.id, url: asset.public_url ?? "" };
+    return { ok: true, id: asset.id, url: asset.public_url ?? "", ...(note ? { note } : {}) };
   } catch (e) {
     return { ok: false, error: `Saved to Storage but the library entry failed: ${(e as Error).message}` };
   }

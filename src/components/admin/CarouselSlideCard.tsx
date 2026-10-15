@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
+import { WEEKDAYS, WEEKDAY_LABEL, cleanDays, describeSchedule } from "@/lib/cms/banner-schedule-core";
 import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { ensureBoundBoxes, type BannerDesign } from "@/lib/cms/banner-design-core";
@@ -16,6 +17,7 @@ import {
   defaultHomeSlideAdvanced,
   effectiveLayout,
   homeLegacyWords,
+  homeSlideSchedule,
   normalizeHomeSlideAdvanced,
   serializeHomeSlideAdvanced,
   type HomeLineStyle,
@@ -313,8 +315,9 @@ export function CarouselSlideCard({
           }}
         />
 
-        <div className="rounded-lg border border-white/10 p-3">
-          <span className={labelCls}>🗓️ Schedule — show only between (optional, your local time)</span>
+        {/* R54: Schedule v2 — dates, weekly repeat, daily window, fallback (store time). */}
+        <div className="space-y-3 rounded-lg border border-white/10 p-3">
+          <span className={labelCls}>🗓️ Schedule (optional, store time — Pacific)</span>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs text-white/60">
               Start
@@ -326,7 +329,7 @@ export function CarouselSlideCard({
               />
             </label>
             <label className="text-xs text-white/60">
-              End
+              End date
               <input
                 type="datetime-local"
                 className={`${inputCls} mt-1`}
@@ -335,9 +338,70 @@ export function CarouselSlideCard({
               />
             </label>
           </div>
-          <p className="mt-1 text-xs text-white/40">
-            Outside these times the slide is hidden from visitors (staff preview still shows it).
-          </p>
+          <div>
+            <span className="text-xs text-white/60">Repeat on (none ticked = every day)</span>
+            <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label="Repeat on weekdays">
+              {WEEKDAYS.map((d) => {
+                const on = (adv?.scheduleDays ?? []).includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => {
+                      const cur = adv?.scheduleDays ?? [];
+                      patchAdv({ scheduleDays: cleanDays(on ? cur.filter((x) => x !== d) : [...cur, d]) });
+                    }}
+                    className={`rounded-full border px-3 py-1 text-xs ${on ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black" : "border-white/20 text-white/70 hover:border-white/50"}`}
+                  >
+                    {WEEKDAY_LABEL[d]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs text-white/60">
+              Each day from (optional)
+              <input
+                type="time"
+                className={`${inputCls} mt-1`}
+                value={adv?.scheduleFrom ?? ""}
+                onChange={(e) => patchAdv({ scheduleFrom: e.target.value || null, ...(e.target.value ? {} : { scheduleTo: null }) })}
+              />
+            </label>
+            <label className="text-xs text-white/60">
+              Each day until (optional)
+              <input
+                type="time"
+                className={`${inputCls} mt-1`}
+                value={adv?.scheduleTo ?? ""}
+                onChange={(e) => patchAdv({ scheduleTo: e.target.value || null })}
+              />
+            </label>
+          </div>
+          {(adv?.scheduleFrom && !adv?.scheduleTo) || (!adv?.scheduleFrom && adv?.scheduleTo) ? (
+            <p className="text-xs text-amber-300">⚠️ Set both times for a daily window. Half a window is ignored when saved.</p>
+          ) : null}
+          <label className="flex items-start gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={!!adv?.fallback}
+              onChange={(e) => patchAdv({ fallback: e.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-[var(--admin-accent)]"
+            />
+            <span>
+              Fallback slide{" "}
+              <span className="text-xs text-white/50">
+                — shows only when no other slide is live (for example, after a promo ends and nobody has updated it yet). Its own schedule is ignored.
+              </span>
+            </span>
+          </label>
+          {adv && (adv.scheduleStart || adv.scheduleEnd || adv.scheduleDays.length || (adv.scheduleFrom && adv.scheduleTo)) ? (
+            <p className="text-xs text-white/50">
+              Summary: {describeSchedule(homeSlideSchedule(adv))}. Outside this the slide is hidden from visitors; staff preview still shows it.
+            </p>
+          ) : null}
         </div>
 
         {/* R53: Basic mode — collapsed under the studio. A native <details>

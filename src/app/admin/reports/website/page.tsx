@@ -30,6 +30,7 @@ import { listCarouselSlides } from "@/lib/cms/carousel-store";
 import { listShopCarouselSlides } from "@/lib/cms/shop-carousel-store";
 import { isSlideLiveAt } from "@/lib/cms/shop-carousel-core";
 import { isHomeSlideLiveAt, normalizeHomeSlideAdvanced } from "@/lib/cms/home-slide-advanced-core";
+import { pickLiveWithFallback } from "@/lib/cms/banner-schedule-core";
 import { listSchedules } from "@/lib/cms/content-schedule-server";
 import { TARGET_KIND_LABEL } from "@/lib/cms/content-schedule-core";
 
@@ -72,10 +73,11 @@ function fmtWhen(iso: string | null): string {
 async function liveSlots(nowMs: number): Promise<LiveSlot[]> {
   const out: LiveSlot[] = [];
   try {
-    for (const s of await listCarouselSlides()) {
-      if (!s.enabled || s.status !== "published") continue;
-      const adv = normalizeHomeSlideAdvanced(s.advanced ?? null);
-      if (!isHomeSlideLiveAt(adv, nowMs)) continue;
+    // R54: same fallback rule as the homepage (fallback shows only when nothing else is live).
+    const homeRows = (await listCarouselSlides())
+      .filter((s) => s.enabled && s.status === "published")
+      .map((s) => ({ s, adv: normalizeHomeSlideAdvanced(s.advanced ?? null) }));
+    for (const { s, adv } of pickLiveWithFallback(homeRows, (r) => r.adv?.fallback === true, (r) => isHomeSlideLiveAt(r.adv, nowMs))) {
       const designButtons = adv?.design?.enabled ? adv.design.buttons.filter((b) => b.label && b.href).length : 0;
       out.push({
         placement: "home_hero",

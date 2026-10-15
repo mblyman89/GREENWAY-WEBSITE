@@ -947,6 +947,8 @@ import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-c
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
 import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
 import { __runHomeSlideAdvancedCoreTests } from "../../src/lib/cms/home-slide-advanced-core";
+import { __runBannerScheduleCoreTests } from "../../src/lib/cms/banner-schedule-core";
+import { __runImageOptimizeCoreTests } from "../../src/lib/media/image-optimize-core";
 import { __runClickEventsTests } from "../../src/lib/analytics/click-events-core";
 import { __runStoreHoursCoreTests } from "../../src/lib/seo/store-hours-core";
 import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
@@ -2274,7 +2276,9 @@ __runLiquidVolumeTests();
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 31); // R40: ACH guide journeys, blockers, explainer; R41 S6: Timberland setup journey
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 114); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
-  assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 28); // R47: home carousel advanced options
+  assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 30); // R47: home carousel advanced options; R54 repeat/fallback
+  assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
+  assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers

@@ -36,6 +36,7 @@ import {
   type TextVAlign,
 } from "@/lib/loyalty/loyalty-hero-core";
 import { normalizeDesign, type BannerDesign } from "./banner-design-core";
+import { cleanDays, cleanHHMM, isScheduleLiveAt, type Weekday } from "./banner-schedule-core";
 
 export { IMAGE_FOCUSES, TEXT_ALIGNS, TEXT_VALIGNS };
 
@@ -67,6 +68,13 @@ export type HomeSlideAdvanced = {
   /** ISO strings; null = open. */
   scheduleStart: string | null;
   scheduleEnd: string | null;
+  /** R54: repeat on these weekdays ([] = every day), store time. */
+  scheduleDays: Weekday[];
+  /** R54: optional daily window "HH:MM" (store time); both null = all day. */
+  scheduleFrom: string | null;
+  scheduleTo: string | null;
+  /** R54: fallback slide — shows only when no other slide is live. */
+  fallback: boolean;
   /** Banner Studio design; only used when design.enabled. */
   design?: BannerDesign | null;
 };
@@ -87,6 +95,10 @@ export function defaultHomeSlideAdvanced(): HomeSlideAdvanced {
     verticalAlign: "center",
     scheduleStart: null,
     scheduleEnd: null,
+    scheduleDays: [],
+    scheduleFrom: null,
+    scheduleTo: null,
+    fallback: false,
   };
 }
 
@@ -133,6 +145,11 @@ export function normalizeHomeSlideAdvanced(raw: unknown): HomeSlideAdvanced | nu
     verticalAlign: isTextVAlign(raw.verticalAlign) ? raw.verticalAlign : "center",
     scheduleStart: cleanIso(raw.scheduleStart),
     scheduleEnd: cleanIso(raw.scheduleEnd),
+    scheduleDays: cleanDays(raw.scheduleDays),
+    // A window needs both ends; half a window is dropped.
+    scheduleFrom: cleanHHMM(raw.scheduleFrom) && cleanHHMM(raw.scheduleTo) ? cleanHHMM(raw.scheduleFrom) : null,
+    scheduleTo: cleanHHMM(raw.scheduleFrom) && cleanHHMM(raw.scheduleTo) ? cleanHHMM(raw.scheduleTo) : null,
+    fallback: raw.fallback === true,
     ...(design ? { design } : {}),
   };
 }
@@ -153,6 +170,10 @@ export function serializeHomeSlideAdvanced(a: HomeSlideAdvanced | null): string 
     verticalAlign: n.verticalAlign,
     scheduleStart: n.scheduleStart,
     scheduleEnd: n.scheduleEnd,
+    // R54: only written when used, so older slides serialize byte-identically.
+    ...(n.scheduleDays.length ? { scheduleDays: n.scheduleDays } : {}),
+    ...(n.scheduleFrom && n.scheduleTo ? { scheduleFrom: n.scheduleFrom, scheduleTo: n.scheduleTo } : {}),
+    ...(n.fallback ? { fallback: true } : {}),
     ...(n.design ? { design: n.design } : {}),
   });
 }
@@ -166,11 +187,13 @@ export function isClassicEquivalent(a: HomeSlideAdvanced | null): boolean {
 /** Is the slide inside its optional Start/End window? Bad dates = open. */
 export function isHomeSlideLiveAt(a: HomeSlideAdvanced | null | undefined, whenMs: number): boolean {
   if (!a) return true;
-  const s = a.scheduleStart ? Date.parse(a.scheduleStart) : NaN;
-  const e = a.scheduleEnd ? Date.parse(a.scheduleEnd) : NaN;
-  if (Number.isFinite(s) && whenMs < s) return false;
-  if (Number.isFinite(e) && whenMs > e) return false;
-  return true;
+  // R54: start/end + weekly repeat + daily window, in store time (banner-schedule-core).
+  return isScheduleLiveAt(homeSlideSchedule(a), whenMs);
+}
+
+/** R54: the shared schedule shape for a slide (calendar + live checks). */
+export function homeSlideSchedule(a: HomeSlideAdvanced) {
+  return { start: a.scheduleStart, end: a.scheduleEnd, days: a.scheduleDays ?? [], from: a.scheduleFrom ?? null, to: a.scheduleTo ?? null };
 }
 
 /** Resolve the effective layout knobs (advanced overrides the classic columns). */
@@ -247,6 +270,9 @@ export function __runHomeSlideAdvancedCoreTests(): { passed: number; failed: num
   ok(!isHomeSlideLiveAt({ ...d, scheduleStart: "2026-03-01T00:00:00Z" }, t), "before start hidden");
   ok(!isHomeSlideLiveAt({ ...d, scheduleEnd: "2026-01-01T00:00:00Z" }, t), "after end hidden");
   ok(isHomeSlideLiveAt({ ...d, scheduleStart: "2026-01-01T00:00:00Z", scheduleEnd: "2026-03-01T00:00:00Z" }, t), "inside window live");
+  const r = normalizeHomeSlideAdvanced({ scheduleDays: ["wed", "zz"], scheduleFrom: "07:00", scheduleTo: "bad", fallback: true })!;
+  ok(r.scheduleDays.join() === "wed" && r.scheduleFrom === null && r.scheduleTo === null && r.fallback, "R54: repeat/fallback validated (half window dropped)");
+  ok(!("scheduleDays" in JSON.parse(serializeHomeSlideAdvanced(d)!)) && isClassicEquivalent(d), "R54: unused fields not serialized");
   const L = effectiveLayout({ imageFocus: "left", textAlign: "right" }, null);
   ok(L.imageFocus === "left" && L.imageFocusMobile === "left" && L.textAlign === "right" && L.verticalAlign === "center", "classic layout passthrough");
   const L2 = effectiveLayout({ imageFocus: "left", textAlign: "right" }, n);
