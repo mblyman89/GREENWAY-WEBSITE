@@ -10,7 +10,8 @@
  *   (fill: backwards keeps each item invisible through its delay) and then
  *   drops the class.
  * • The curtain is rendered here, so it is in the server HTML from the first
- *   paint; it never takes clicks and leaves after `hold`.
+ *   paint; it sits right above the picture (smoke + items paint over it),
+ *   never takes clicks, and leaves after `hold`.
  * • Replays every time the carousel shows the slide again, and on the Studio's
  *   ▶ replay (replayKey).
  * • Reduced motion: everything is shown at once and the curtain is skipped

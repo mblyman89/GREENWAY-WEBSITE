@@ -170,8 +170,8 @@ export function DesignedBanner({
         ) : null}
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
         {/* R58: smoke / fog / haze (lazy, client-only) + words that fade in after it. */}
-        {design.smoke ? <BannerSmoke layers={design.smoke} /> : null}
         {plan.length || design.intro ? <BannerEntrances plan={plan} intro={design.intro} /> : null}
+        {design.smoke ? <BannerSmoke layers={design.smoke} /> : null}
         {(design.elements ?? []).map((el) =>
           el.hidden ? null : (
             <div

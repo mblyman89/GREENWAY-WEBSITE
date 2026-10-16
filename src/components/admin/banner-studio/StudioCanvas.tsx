@@ -395,6 +395,7 @@ export function StudioCanvas({
                 </BannerPicture>
               ) : null}
               {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
+              <StudioEntrances design={design} replayKey={replayKey} />
 
               {(design.elements ?? []).map((el) =>
                 el.hidden || (device === "mobile" && el.hideOnMobile) ? null : (
@@ -506,7 +507,6 @@ export function StudioCanvas({
               })}
 
               {design.smoke ? <BannerSmoke layers={design.smoke} replayKey={replayKey} /> : null}
-              <StudioEntrances design={design} replayKey={replayKey} />
               {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
               <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: device === "mobile" ? design.frame.heightMobile : design.frame.height }} />
             </div>
