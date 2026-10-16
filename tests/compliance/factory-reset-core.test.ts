@@ -1320,7 +1320,9 @@ describe("D-65 — the connections survive the reset", () => {
     //       the database refuses DELETE)
     //   +1  R51 / 0279: product_image_memory (the photos a person attached
     //       to each product on onboarding; KEEP with media_assets it points at)
-    expect(plan.keep.length).toBe(163);
+    //   +1  R59 / 0280: website_web_vitals (anonymous page-speed measurements;
+    //       KEEP like website_click_events)
+    expect(plan.keep.length).toBe(164);
     expect(plan.wipe.length).toBe(139);
   });
 
