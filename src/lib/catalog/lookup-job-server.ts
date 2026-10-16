@@ -48,9 +48,13 @@ import {
   alreadyKnownPromptBlock,
   kbFirstOnboardingEnabled,
   memoryRawLookup,
+  memoryResultNotice,
   shouldSkipGemini,
 } from "@/lib/catalog/fact-memory-core";
+import { buildLookupSnapshot, parseLookupSnapshot, snapshotFoundCount, type LookupSnapshot } from "./lookup-snapshot-core";
 import {
+  AI_BATCH_THINKING_LEVEL_ENV,
+  AI_BATCH_TIMEOUT_MS_ENV,
   ALL_DONE_COPY,
   DRAFT_GONE_COPY,
   LEFT_REVIEW_COPY,
@@ -61,14 +65,18 @@ import {
   MANIFEST_BATCH_LOOKUP_ENV,
   ORPHAN_FAIL_COPY,
   aiCallsOf,
+  batchThinkingLevel,
+  batchTimeoutMs,
   canStartItem,
   classifyItem,
+  failureDecision,
   isItemStatus,
   isJobStatus,
   isMissingLookupJobsTable,
   isNoSpendError,
   isUuid,
   itemErrorText,
+  itemTimeoutMs,
   leaseIsFree,
   leaseUntilIso,
   lookupItemsPerTick,
@@ -76,8 +84,12 @@ import {
   orphanDecision,
   parseItemResult,
   planEnqueue,
+  retryNote,
+  startNeedMs,
   stopsWholeJob,
   summarizeJob,
+  thinkingForAttempt,
+  type BatchThinkingLevel,
   type ItemResult,
   type JobItemView,
   type JobStatus,
@@ -289,6 +301,11 @@ export interface ManifestLookupView {
   summary: JobSummary;
   /** draft id (lower case) -> that row's item. */
   items: Map<string, JobItemView>;
+  /**
+   * R66: draft id (lower case) -> what that row's batch lookup found (the
+   * same fields the row panel shows), for done items that stored one.
+   */
+  snapshots: Map<string, LookupSnapshot>;
   /** The web lookup model, from the first item that recorded one. */
   model: string | null;
   createdAt: string | null;
@@ -313,7 +330,7 @@ export interface LookupEligible {
   truncated: number;
 }
 
-async function readItems(admin: Admin, jobId: string): Promise<JobItemView[] | null> {
+async function readItems(admin: Admin, jobId: string, snapshots?: Map<string, LookupSnapshot>): Promise<JobItemView[] | null> {
   const out: JobItemView[] = [];
   const page = 1000;
   for (let from = 0; ; from += page) {
@@ -329,6 +346,10 @@ async function readItems(admin: Admin, jobId: string): Promise<JobItemView[] | n
     for (const r of rows) {
       if (!isItemStatus(r.status)) continue;
       out.push({ draftId: r.draft_id, status: r.status, result: parseItemResult(r.result_json), error: r.error, aiCalls: aiCallsOf(r.ai_calls) });
+      if (snapshots && r.status === "done" && r.result_json && typeof r.result_json === "object") {
+        const snap = parseLookupSnapshot((r.result_json as Record<string, unknown>).snapshot);
+        if (snap) snapshots.set(String(r.draft_id).toLowerCase(), snap);
+      }
     }
     if (rows.length < page) return out;
   }
@@ -359,7 +380,8 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
     }
     const row = ((data as { id: string; status: unknown; created_at: string | null; finished_at: string | null }[] | null) ?? [])[0];
     if (!row || !isJobStatus(row.status)) return { state: "none", doneDraftIds, eligible };
-    const items = await readItems(admin, row.id);
+    const snapshots = new Map<string, LookupSnapshot>();
+    const items = await readItems(admin, row.id, snapshots);
     if (items === null) return { state: "error" };
     const byDraft = new Map<string, JobItemView>();
     for (const it of items) byDraft.set(it.draftId.toLowerCase(), it);
@@ -368,7 +390,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
       state: "job",
       doneDraftIds,
       eligible,
-      job: { jobId: row.id, status: row.status, summary: summarizeJob(items), items: byDraft, model, createdAt: row.created_at, finishedAt: row.finished_at },
+      job: { jobId: row.id, status: row.status, summary: summarizeJob(items), items: byDraft, snapshots, model, createdAt: row.created_at, finishedAt: row.finished_at },
     };
   } catch (err) {
     console.error("[lookup-jobs] page read failed:", err);
@@ -387,17 +409,31 @@ export interface TickResult {
   done: number;
   failed: number;
   requeued: number;
+  /** R66: products that failed this run and were queued for another try. */
+  retrying: number;
   aiCalls: number;
   finished: boolean;
   error?: string;
 }
 
-const EMPTY: Omit<TickResult, "ok"> = { started: 0, done: 0, failed: 0, requeued: 0, aiCalls: 0, finished: false };
+const EMPTY: Omit<TickResult, "ok"> = { started: 0, done: 0, failed: 0, requeued: 0, retrying: 0, aiCalls: 0, finished: false };
 
 /** One product, end to end. Returns what to store, or throws (the caller records the failure). */
 export interface ItemRunOutcome {
   result: ItemResult;
   aiCalls: number;
+  /**
+   * R66: what the lookup found, field by field (lookup-snapshot-core), stored
+   * beside the result so the row panel can show it. Absent = not stored.
+   */
+  snapshot?: Record<string, unknown>;
+}
+
+/** R66: how deep and how long this attempt may think (set by the tick). */
+export interface ItemRunOptions {
+  refresh?: boolean;
+  thinkingLevel?: BatchThinkingLevel;
+  timeoutMs?: number;
 }
 
 interface DraftForLookup {
@@ -457,7 +493,7 @@ export async function runOneItem(
   admin: Admin,
   draftId: string,
   actor: { userId: string | null; email: string | null },
-  opts: { refresh?: boolean } = {},
+  opts: ItemRunOptions = {},
 ): Promise<ItemRunOutcome> {
   // R37 S6: a "Search again" item forces a fresh web search, exactly like
   // the row panel's Refresh (ai-lookup-actions: refresh skips the memory
@@ -495,6 +531,10 @@ export async function runOneItem(
         extraBanned: banned,
         context: { entityType: "catalog_drafts", entityId: draftId, actorId: actor.userId, actorEmail: actor.email },
         alreadyKnown: refresh ? "" : alreadyKnownPromptBlock(memory),
+        // R66: the batch thinks deeper and waits longer than the row lookup
+        // (nobody is waiting on it); the tick sets both per attempt.
+        ...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
+        ...(typeof opts.timeoutMs === "number" ? { timeoutMs: opts.timeoutMs } : {}),
       });
     } catch (err) {
       // Budget / not-configured are refused BEFORE any request (provider.ts).
@@ -523,19 +563,34 @@ export async function runOneItem(
   }
   const attached = res.receipt.attached.length;
   const queued = res.receipt.queued.length;
+  // R66: keep everything the lookup found (the row panel's fields), not only
+  // the counts, so the row's AI Lookup opens on the batch's findings.
+  const snapshot = buildLookupSnapshot({
+    at: new Date().toISOString(),
+    result: safe,
+    sources: outcome ? outcome.sources : [],
+    model,
+    usedWebSearch: outcome ? outcome.usedWebSearch : false,
+    facts: outcome ? outcome.facts : null,
+    schema: outcome ? outcome.schema : "memory",
+    memory: !outcome && memory ? { covered: [...memory.covered], missing: [...memory.missing], notice: memoryResultNotice(memory, new Date()) } : null,
+  });
+  const parsed = parseLookupSnapshot(snapshot);
   return {
     aiCalls,
+    snapshot,
     result: {
       outcome: classifyItem({ skippedWeb: Boolean(skipWeb && memory), found: safe.found || safe.hasAnyFindings, attached, queued }),
       attached,
       queued,
       sentence: res.sentence,
       model,
+      found: parsed ? snapshotFoundCount(parsed) : 0,
     },
   };
 }
 
-type ItemRow = { id: string; draft_id: string; status: string; attempts: number | null; result_json?: unknown };
+type ItemRow = { id: string; draft_id: string; status: string; attempts: number | null; result_json?: unknown; ai_calls?: unknown };
 
 /**
  * One cron tick. Picks the oldest open job, takes its lease by CAS, sweeps
@@ -626,12 +681,20 @@ export async function runLookupJobsTick(deps: {
     // spin until the time budget runs out.
     let claimMisses = 0;
     const maxPerTick = lookupItemsPerTick(process.env[LOOKUP_ITEMS_PER_TICK_ENV]);
-    while (canStartItem({ elapsedMs: now() - t0, startedThisTick: out.started, maxPerTick })) {
-      const { data: next, error: nErr } = await admin
+    // R66: the batch's own deadline + thinking depth (Vercel env).
+    const configuredMs = batchTimeoutMs(process.env[AI_BATCH_TIMEOUT_MS_ENV]);
+    const level = batchThinkingLevel(process.env[AI_BATCH_THINKING_LEVEL_ENV]);
+    // A product that failed this run waits for the NEXT run (a natural
+    // back-off, and the rest of the delivery keeps moving).
+    const retriedHere: string[] = [];
+    while (canStartItem({ elapsedMs: now() - t0, startedThisTick: out.started, maxPerTick, itemWorstMs: startNeedMs(configuredMs) })) {
+      let nextQ = admin
         .from(LOOKUP_JOB_ITEMS_TABLE)
-        .select("id, draft_id, status, attempts, result_json")
+        .select("id, draft_id, status, attempts, result_json, ai_calls")
         .eq("job_id", job.id)
-        .eq("status", "queued")
+        .eq("status", "queued");
+      if (retriedHere.length > 0) nextQ = nextQ.not("id", "in", `(${retriedHere.join(",")})`);
+      const { data: next, error: nErr } = await nextQ
         .order("position", { ascending: true })
         .order("id", { ascending: true })
         .limit(1);
@@ -652,22 +715,43 @@ export async function runLookupJobsTick(deps: {
         continue;
       }
       out.started += 1;
+      const attemptNo = attempts + 1;
+      // Paid calls an earlier try of this product already made (R66 retries).
+      const priorCalls = aiCallsOf(item.ai_calls);
 
       let patch: Record<string, unknown>;
+      let requeue = false;
       try {
-        const r = await runItem(admin, item.draft_id, actor, { refresh: isAgainMarker(item.result_json) });
+        const r = await runItem(admin, item.draft_id, actor, {
+          refresh: isAgainMarker(item.result_json),
+          thinkingLevel: thinkingForAttempt(level, attemptNo),
+          timeoutMs: itemTimeoutMs({ configuredMs, elapsedMs: now() - t0 }),
+        });
         out.aiCalls += r.aiCalls;
         out.done += 1;
-        patch = { status: "done", result_json: r.result, ai_calls: r.aiCalls, error: null };
+        const stored = r.snapshot ? { ...r.result, snapshot: r.snapshot } : r.result;
+        patch = { status: "done", result_json: stored, ai_calls: priorCalls + r.aiCalls, error: null };
       } catch (err) {
         if (err instanceof SkipItem) {
-          patch = { status: "canceled", error: err.copy, ai_calls: 0 };
+          patch = { status: "canceled", error: err.copy, ai_calls: priorCalls };
         } else {
           const calls = aiCallsOf((err as { aiCalls?: unknown } | null)?.aiCalls);
           out.aiCalls += calls;
-          out.failed += 1;
-          patch = { status: "failed", error: itemErrorText(err), ai_calls: calls };
-          if (stopsWholeJob(err)) stopAll = itemErrorText(err);
+          if (stopsWholeJob(err)) {
+            out.failed += 1;
+            patch = { status: "failed", error: itemErrorText(err), ai_calls: priorCalls + calls };
+            stopAll = itemErrorText(err);
+          } else if (failureDecision(err, attemptNo) === "retry") {
+            // R66: tried again on a later run, one thinking step lower.
+            // result_json is left as it is (a "Search again" marker stays).
+            requeue = true;
+            out.retrying += 1;
+            retriedHere.push(item.id);
+            patch = { status: "queued", error: retryNote(itemErrorText(err), attemptNo), ai_calls: priorCalls + calls };
+          } else {
+            out.failed += 1;
+            patch = { status: "failed", error: itemErrorText(err), ai_calls: priorCalls + calls };
+          }
         }
       }
       const finishedAt = new Date(now()).toISOString();
@@ -681,7 +765,7 @@ export async function runLookupJobsTick(deps: {
       if (((stillOurs as { id: string }[] | null) ?? []).length !== 1) return { ...out, error: "lease lost" };
       await admin
         .from(LOOKUP_JOB_ITEMS_TABLE)
-        .update({ ...patch, finished_at: finishedAt, updated_at: finishedAt })
+        .update(requeue ? { ...patch, updated_at: finishedAt } : { ...patch, finished_at: finishedAt, updated_at: finishedAt })
         .eq("id", item.id)
         .eq("status", "running");
       if (stopAll) break;

@@ -64,11 +64,88 @@ export const LOOKUP_TICK_MAX_DURATION_S = 800;
 /** Work stops being STARTED after this; leaves 40 s to write the last result. */
 export const LOOKUP_TICK_BUDGET_MS = 760_000;
 /**
- * The longest one item can take: the web lookup's own abort (provider.ts
- * AI_WEBSEARCH_TIMEOUT_MS default 290 000 ms) plus ~10 s of reads/writes.
- * An item is only started when it can finish inside the budget.
+ * R66: the batch runs on the server with nobody waiting, so it gives each web
+ * lookup far more time than the interactive row lookup (whose page is capped
+ * at 300 s). AI_BATCH_TIMEOUT_MS sets that deadline (the whole Gemini attempt
+ * chain: first send + 503 retries + the one "incomplete" retry + any
+ * fallback). Default 600 s; junk -> default; clamped to 60..700 s so one item
+ * plus its reads/writes always fits the 760 s budget (800 s maxDuration).
  */
-export const LOOKUP_ITEM_WORST_MS = 300_000;
+export const AI_BATCH_TIMEOUT_MS_ENV = "AI_BATCH_TIMEOUT_MS";
+export const LOOKUP_BATCH_TIMEOUT_DEFAULT_MS = 600_000;
+export const LOOKUP_BATCH_TIMEOUT_MIN_MS = 60_000;
+export const LOOKUP_BATCH_TIMEOUT_MAX_MS = 700_000;
+/** Reads + writes around one web lookup (recall, query, attach, result row). */
+export const LOOKUP_ITEM_IO_MS = 10_000;
+/**
+ * A product started LATER in a run gets at least this long (the row lookup's
+ * own 290 s), so the batch never gives a product less time than the row does.
+ */
+export const LOOKUP_BATCH_MIN_USEFUL_MS = 290_000;
+
+export function batchTimeoutMs(raw: string | undefined | null): number {
+  const v = String(raw ?? "").trim();
+  if (!/^\d+$/.test(v)) return LOOKUP_BATCH_TIMEOUT_DEFAULT_MS;
+  const n = Number(v);
+  if (!Number.isSafeInteger(n) || n <= 0) return LOOKUP_BATCH_TIMEOUT_DEFAULT_MS;
+  return Math.min(Math.max(n, LOOKUP_BATCH_TIMEOUT_MIN_MS), LOOKUP_BATCH_TIMEOUT_MAX_MS);
+}
+
+/**
+ * The deadline one product's web lookup gets: the configured batch deadline,
+ * but never past the run's budget (it must finish and be written before the
+ * function's 800 s limit). Never below 5 s (the provider's own floor).
+ */
+export function itemTimeoutMs(input: { configuredMs: number; elapsedMs: number }): number {
+  const cfg = Number.isFinite(input.configuredMs) && input.configuredMs > 0 ? input.configuredMs : LOOKUP_BATCH_TIMEOUT_DEFAULT_MS;
+  const elapsed = Number.isFinite(input.elapsedMs) && input.elapsedMs > 0 ? input.elapsedMs : 0;
+  const left = LOOKUP_TICK_BUDGET_MS - elapsed - LOOKUP_ITEM_IO_MS;
+  return Math.max(5_000, Math.floor(Math.min(cfg, left)));
+}
+
+/**
+ * The time a run must still have to START another product: the smaller of
+ * the configured deadline and the row lookup's 290 s, plus the reads/writes.
+ */
+export function startNeedMs(configuredMs: number): number {
+  const cfg = Number.isFinite(configuredMs) && configuredMs > 0 ? configuredMs : LOOKUP_BATCH_TIMEOUT_DEFAULT_MS;
+  return Math.min(cfg, LOOKUP_BATCH_MIN_USEFUL_MS) + LOOKUP_ITEM_IO_MS;
+}
+
+/**
+ * The least time a product started later in a run is given (290 s) plus
+ * ~10 s of reads/writes. A product is only started when that fits inside the
+ * budget; the FIRST product of a run gets the full batch deadline.
+ */
+export const LOOKUP_ITEM_WORST_MS = LOOKUP_BATCH_MIN_USEFUL_MS + LOOKUP_ITEM_IO_MS;
+
+/**
+ * R66: the batch's Gemini thinking level. Unset / junk = "high" (the owner:
+ * "data is gold", time is no issue). The provider clamps it to what the
+ * model supports (gemini-models-core). The row lookup keeps AI_THINKING_LEVEL.
+ */
+export const AI_BATCH_THINKING_LEVEL_ENV = "AI_BATCH_THINKING_LEVEL";
+export const BATCH_THINKING_LEVELS = ["minimal", "low", "medium", "high"] as const;
+export type BatchThinkingLevel = (typeof BATCH_THINKING_LEVELS)[number];
+export const LOOKUP_BATCH_THINKING_DEFAULT: BatchThinkingLevel = "high";
+
+export function batchThinkingLevel(raw: string | undefined | null): BatchThinkingLevel {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return (BATCH_THINKING_LEVELS as readonly string[]).includes(v) ? (v as BatchThinkingLevel) : LOOKUP_BATCH_THINKING_DEFAULT;
+}
+
+/**
+ * A retry thinks one step less per earlier attempt (never below "low"), so
+ * a product that ran out of time or tokens finishes on the next try.
+ * attemptNo is 1-based (the claim's attempts after the increment).
+ */
+export function thinkingForAttempt(level: BatchThinkingLevel, attemptNo: number): BatchThinkingLevel {
+  const n = Number.isFinite(attemptNo) && attemptNo > 1 ? Math.floor(attemptNo) - 1 : 0;
+  const i = BATCH_THINKING_LEVELS.indexOf(level);
+  if (n === 0 || i < 0) return level;
+  const floor = BATCH_THINKING_LEVELS.indexOf("low");
+  return BATCH_THINKING_LEVELS[Math.max(Math.min(i, floor), i - n)];
+}
 /** Hard cap per run, even when lookups are fast (rate-limit courtesy, S13.8). */
 export const LOOKUP_MAX_ITEMS_PER_TICK = 12;
 
@@ -94,7 +171,7 @@ export const LOOKUP_MAX_ATTEMPTS = 2;
 export const LOOKUP_MAX_JOB_ITEMS = 200;
 
 /** May this run start another item? The first one always may. */
-export function canStartItem(input: { elapsedMs: number; startedThisTick: number; maxPerTick?: number }): boolean {
+export function canStartItem(input: { elapsedMs: number; startedThisTick: number; maxPerTick?: number; itemWorstMs?: number }): boolean {
   const started = Number.isFinite(input.startedThisTick) ? Math.max(0, Math.floor(input.startedThisTick)) : 0;
   if (started === 0) return true;
   const cap =
@@ -103,7 +180,11 @@ export function canStartItem(input: { elapsedMs: number; startedThisTick: number
       : LOOKUP_MAX_ITEMS_PER_TICK;
   if (started >= cap) return false;
   const elapsed = Number.isFinite(input.elapsedMs) ? Math.max(0, input.elapsedMs) : Number.POSITIVE_INFINITY;
-  return elapsed + LOOKUP_ITEM_WORST_MS <= LOOKUP_TICK_BUDGET_MS;
+  const worst =
+    typeof input.itemWorstMs === "number" && Number.isFinite(input.itemWorstMs) && input.itemWorstMs > 0
+      ? input.itemWorstMs
+      : LOOKUP_ITEM_WORST_MS;
+  return elapsed + worst <= LOOKUP_TICK_BUDGET_MS;
 }
 
 /** Is a job's lease free at `nowMs`? Null / junk / past = free. */
@@ -120,6 +201,42 @@ export function leaseUntilIso(nowMs: number): string {
 
 export const ORPHAN_FAIL_COPY =
   "The lookup was stopped twice before it finished (the server ran out of time). Use AI Lookup on this row instead.";
+
+/**
+ * R66: a lookup that FAILED (it threw) is tried again while it has tries
+ * left, unless trying again cannot help: the key was rejected (401/403), the
+ * account is out of credits / rate limited (429), or the budget cap /
+ * not-configured refusal (those stop the whole job). Everything else - a
+ * timeout, a 5xx, an answer cut short, a network or database blip - is
+ * requeued; the next try thinks one step less (thinkingForAttempt).
+ * Orphans keep their own rule (orphanDecision): attempts count both.
+ */
+export const LOOKUP_RETRY_MAX_ATTEMPTS = 3;
+
+export function isRetryableItemError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return true;
+  const name = "name" in err ? String((err as { name: unknown }).name) : "";
+  if (name === "SkipItem" || name === "AiBudgetExceededError" || name === "AiNotConfiguredError") return false;
+  const msg = "message" in err ? String((err as { message: unknown }).message ?? "") : "";
+  const m = /\bHTTP (\d{3})\b/.exec(msg) ?? /\((\d{3})\)/.exec(msg);
+  if (m) {
+    const code = Number(m[1]);
+    if (code === 401 || code === 403 || code === 429) return false;
+  }
+  return true;
+}
+
+export function failureDecision(err: unknown, attemptsAfterClaim: unknown): "retry" | "fail" {
+  const n = typeof attemptsAfterClaim === "number" && Number.isFinite(attemptsAfterClaim) ? attemptsAfterClaim : LOOKUP_RETRY_MAX_ATTEMPTS;
+  if (n >= LOOKUP_RETRY_MAX_ATTEMPTS) return "fail";
+  return isRetryableItemError(err) ? "retry" : "fail";
+}
+
+/** The plain error a requeued row shows until its next try. */
+export function retryNote(errText: string, attemptsAfterClaim: number): string {
+  const left = Math.max(0, LOOKUP_RETRY_MAX_ATTEMPTS - attemptsAfterClaim);
+  return `Try ${attemptsAfterClaim} did not finish (${errText.replace(/\s+/g, " ").trim().slice(0, 160)}). ${left === 1 ? "1 more try" : `${left} more tries`} queued.`.slice(0, 240);
+}
 
 /** An item still "running" when a run takes the job lease was left by a killed run. */
 export function orphanDecision(attempts: unknown): "requeue" | "fail" {
@@ -189,6 +306,11 @@ export interface ItemResult {
   /** The receipt sentence (or the memory notice). */
   sentence: string;
   model: string;
+  /**
+   * R66: how many fields the lookup found a value for (every field, not
+   * only the ones that attached or were listed). 0 for older rows.
+   */
+  found: number;
 }
 
 /** Decide the outcome from what the lookup and the write door reported. */
@@ -221,6 +343,7 @@ export function parseItemResult(raw: unknown): ItemResult | null {
     queued: count(r.queued),
     sentence: typeof r.sentence === "string" ? r.sentence.slice(0, 600) : "",
     model: typeof r.model === "string" ? r.model.slice(0, 80) : "",
+    found: count(r.found),
   };
 }
 
@@ -330,6 +453,17 @@ export function lookupAllButtonLabel(eligible: number, skippedDone: number): str
   return eligible === 1 ? "Look up the 1 product on this manifest" : `Look up all ${eligible} products on this manifest`;
 }
 
+/**
+ * R66: the second row line - how much the lookup found in total, and where
+ * to see it. Null when there is nothing to point at.
+ */
+export function itemFoundLine(item: Pick<JobItemView, "status" | "result">, hasFindings: boolean): string | null {
+  if (item.status !== "done" || !item.result || !hasFindings) return null;
+  const n = item.result.found;
+  if (n <= 0) return "Open AI Lookup below to see what the batch lookup returned.";
+  return `Found ${plural(n, "fact", "facts")} in all - open AI Lookup below to review, edit and save any of them.`;
+}
+
 export const LOOKUP_ALL_HELP =
   "Runs on the server, one product at a time. You can close this tab; refresh to see progress. Facts at 90% or better attach under your attach setting, everything else waits for you.";
 
@@ -342,7 +476,7 @@ export function jobHeadline(status: JobStatus, s: JobSummary): string {
 
 /** The per-row line on the onboarding table. */
 export function itemRowCopy(item: JobItemView): string {
-  if (item.status === "queued") return "Batch lookup: waiting";
+  if (item.status === "queued") return item.error ? `Batch lookup: trying again - ${item.error}` : "Batch lookup: waiting";
   if (item.status === "running") return "Batch lookup: looking up now";
   if (item.status === "canceled") return "Batch lookup: stopped";
   if (item.status === "failed") return `Batch lookup failed: ${item.error ?? "unknown reason"}`;
@@ -603,7 +737,7 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(itemErrorText("x".repeat(500)).length === 240, "truncated");
 
   // summary
-  const R = (o: Partial<ItemResult>): ItemResult => ({ outcome: "attached", attached: 0, queued: 0, sentence: "", model: "", ...o });
+  const R = (o: Partial<ItemResult>): ItemResult => ({ outcome: "attached", attached: 0, queued: 0, sentence: "", model: "", found: 0, ...o });
   const items: JobItemView[] = [
     { draftId: "1", status: "done", result: R({ outcome: "attached", attached: 3 }), error: null, aiCalls: 1 },
     { draftId: "2", status: "done", result: R({ outcome: "review", queued: 2 }), error: null, aiCalls: 1 },
@@ -708,6 +842,45 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(lookupDeliveryChoices([{ id: U1, label: "A", inReview: 1 }, { id: U3, label: "C", inReview: 2 }], 1).length === 1, "cap");
   ok(lookupDeliveryChoices(null).length === 0 && lookupDeliveryChoices([], 0).length === 0, "empty");
   ok(lookupDeliveryChoices([{ id: U1, label: "A", inReview: -2 }]).length === 0, "negative = none");
+
+  // R66: batch deadline, thinking, retries, found line
+  ok(batchTimeoutMs(undefined) === 600_000 && batchTimeoutMs("") === 600_000 && batchTimeoutMs("abc") === 600_000, "batch timeout unset/junk = 600s");
+  ok(batchTimeoutMs("0") === 600_000 && batchTimeoutMs("-5") === 600_000 && batchTimeoutMs("2.5") === 600_000, "batch timeout zero/negative/fraction = default");
+  ok(batchTimeoutMs("1000") === 60_000 && batchTimeoutMs("999999") === 700_000, "batch timeout clamped 60..700s");
+  ok(batchTimeoutMs(" 450000 ") === 450_000 && batchTimeoutMs("99999999999999999999") === 600_000, "batch timeout honoured / unsafe = default");
+  ok(itemTimeoutMs({ configuredMs: 600_000, elapsedMs: 0 }) === 600_000, "first item gets the full deadline");
+  ok(itemTimeoutMs({ configuredMs: 600_000, elapsedMs: 300_000 }) === 450_000, "later item bounded by the run budget");
+  ok(itemTimeoutMs({ configuredMs: 700_000, elapsedMs: 0 }) === 700_000 && LOOKUP_BATCH_TIMEOUT_MAX_MS + LOOKUP_ITEM_IO_MS <= LOOKUP_TICK_BUDGET_MS, "max deadline + io fits the budget");
+  ok(itemTimeoutMs({ configuredMs: 600_000, elapsedMs: 760_000 }) === 5_000, "never below 5s");
+  ok(itemTimeoutMs({ configuredMs: Number.NaN, elapsedMs: Number.NaN }) === 600_000, "NaN = default deadline, 0 elapsed");
+  ok(startNeedMs(600_000) === 300_000 && startNeedMs(60_000) === 70_000 && startNeedMs(Number.NaN) === 300_000, "start need");
+  ok(LOOKUP_ITEM_WORST_MS === 300_000 && LOOKUP_BATCH_MIN_USEFUL_MS === 290_000, "a later item never gets less than the row's 290s");
+  ok(canStartItem({ elapsedMs: 690_000, startedThisTick: 1, itemWorstMs: 70_000 }) === true && canStartItem({ elapsedMs: 690_001, startedThisTick: 1, itemWorstMs: 70_000 }) === false, "custom worst honoured");
+  ok(canStartItem({ elapsedMs: 460_001, startedThisTick: 1, itemWorstMs: Number.NaN }) === false && canStartItem({ elapsedMs: 460_000, startedThisTick: 1, itemWorstMs: -1 }) === true, "junk worst = 300s");
+  // a started later item always gets >= 290s
+  for (const e of [0, 100_000, 460_000]) {
+    if (canStartItem({ elapsedMs: e, startedThisTick: 1, itemWorstMs: startNeedMs(600_000) })) ok(itemTimeoutMs({ configuredMs: 600_000, elapsedMs: e }) >= 290_000, `later item at ${e}ms gets >= 290s`);
+  }
+  ok(batchThinkingLevel(undefined) === "high" && batchThinkingLevel("max") === "high" && batchThinkingLevel("") === "high", "thinking unset/junk = high");
+  ok(batchThinkingLevel(" LOW ") === "low" && batchThinkingLevel("minimal") === "minimal" && batchThinkingLevel("medium") === "medium", "thinking honoured");
+  ok(thinkingForAttempt("high", 1) === "high" && thinkingForAttempt("high", 2) === "medium" && thinkingForAttempt("high", 3) === "low", "retry thinks one step less");
+  ok(thinkingForAttempt("high", 9) === "low" && thinkingForAttempt("medium", 3) === "low" && thinkingForAttempt("low", 3) === "low", "never below low");
+  ok(thinkingForAttempt("minimal", 3) === "minimal" && thinkingForAttempt("high", Number.NaN) === "high" && thinkingForAttempt("high", 0) === "high", "minimal stays; junk attempt = first");
+  ok(isRetryableItemError(new Error("gemini google_search HTTP 503: overloaded")) && isRetryableItemError({ name: "AiLookupError", message: "timed out after 5000ms" }) && isRetryableItemError(null), "5xx / timeout / unknown retried");
+  ok(!isRetryableItemError({ name: "SkipItem" }) && !isRetryableItemError({ name: "AiBudgetExceededError" }) && !isRetryableItemError({ name: "AiNotConfiguredError" }), "skip / budget / not configured never retried");
+  ok(!isRetryableItemError(new Error("gemini google_search HTTP 429: quota")) && !isRetryableItemError(new Error("gemini fallback (403)")) && !isRetryableItemError(new Error("HTTP 401: bad key")), "401/403/429 never retried");
+  ok(isRetryableItemError(new Error("HTTP 500: x")) && isRetryableItemError(new Error("gemini fallback (504)")), "500/504 retried");
+  ok(failureDecision(new Error("x"), 1) === "retry" && failureDecision(new Error("x"), 2) === "retry" && failureDecision(new Error("x"), 3) === "fail", "three tries in all");
+  ok(failureDecision(new Error("x"), "2") === "fail" && failureDecision(new Error("HTTP 429: q"), 1) === "fail", "junk attempts / 429 = fail");
+  ok(retryNote("The AI lookup timed out.", 1) === "Try 1 did not finish (The AI lookup timed out.). 2 more tries queued.", "retry note");
+  ok(retryNote("a\n b", 2) === "Try 2 did not finish (a b). 1 more try queued." && retryNote("z".repeat(900), 1).length <= 240, "retry note singular + capped");
+  ok(itemRowCopy({ draftId: "q", status: "queued", result: null, error: "Try 1 did not finish (x). 2 more tries queued.", aiCalls: 1 }) === "Batch lookup: trying again - Try 1 did not finish (x). 2 more tries queued.", "requeued row says so");
+  const fr = parseItemResult({ outcome: "review", attached: 0, queued: 2, sentence: "s", model: "m", found: 11.6 });
+  ok(fr?.found === 11 && parseItemResult({ outcome: "review" })?.found === 0 && parseItemResult({ outcome: "review", found: -2 })?.found === 0, "found parsed; old rows = 0");
+  ok(itemFoundLine({ status: "done", result: R({ found: 9 }) }, true) === "Found 9 facts in all - open AI Lookup below to review, edit and save any of them.", "found line");
+  ok(itemFoundLine({ status: "done", result: R({ found: 1 }) }, true)?.startsWith("Found 1 fact in all") === true, "found line singular");
+  ok(itemFoundLine({ status: "done", result: R({ found: 0 }) }, true) === "Open AI Lookup below to see what the batch lookup returned.", "found line, old row");
+  ok(itemFoundLine({ status: "done", result: R({ found: 9 }) }, false) === null && itemFoundLine({ status: "failed", result: null }, true) === null && itemFoundLine({ status: "queued", result: R({ found: 3 }) }, true) === null, "found line hidden");
 
   return { passed, failed };
 }
