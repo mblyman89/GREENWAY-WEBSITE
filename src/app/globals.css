@@ -738,6 +738,262 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ---------------------------------------------------------------------------
+ * R57-S2 — banner micro-interactions (banner-motion-core). Pure CSS.
+ *  .gw-m       anything that moves on its own (paused on hidden carousel
+ *              slides; off for reduced motion, WCAG 2.3.3)
+ *  .gw-em-*    shape/icon motion (on an inner wrapper: never fights the box's
+ *              own rotate / drop shadow)        .gw-tm-*  text motion
+ *  .gw-xh-*    hover — reacts when the shopper points at the BANNER (shapes
+ *              don't take pointer events); mouse/trackpad only; off in Studio
+ *  .gw-orbit   spark travelling around a shape's border (offset-path)
+ *  .gw-beam    light travelling around the banner's border
+ *  .gw-morph   shape A ⇄ B (inline @keyframes per pair, tweened clip-path)
+ *  --gms       speed factor (slow 1.8 / fast 0.5)   --gmc  glow colour
+ * ------------------------------------------------------------------------- */
+.gw-em-breathe,
+.gw-tm-breathe {
+  animation: gw-breathe calc(3.2s * var(--gms, 1)) ease-in-out infinite;
+}
+.gw-em-glow,
+.gw-tm-glow {
+  animation: gw-glow calc(2.6s * var(--gms, 1)) ease-in-out infinite;
+}
+.gw-em-float,
+.gw-tm-float {
+  animation: gw-float calc(3.6s * var(--gms, 1)) ease-in-out infinite;
+}
+.gw-em-spin {
+  animation: gw-spin calc(8s * var(--gms, 1)) linear infinite;
+}
+.gw-em-wiggle,
+.gw-tm-wiggle {
+  animation: gw-wiggle calc(3s * var(--gms, 1)) ease-in-out infinite;
+}
+.gw-em-blob {
+  overflow: hidden;
+  animation: gw-blob calc(7s * var(--gms, 1)) ease-in-out infinite;
+}
+.gw-tm-flicker {
+  animation: gw-flicker calc(4s * var(--gms, 1)) linear infinite;
+}
+.gw-morph {
+  animation-duration: calc(4s * var(--gms, 1));
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes gw-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+@keyframes gw-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px var(--gmc, #7ed957));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px var(--gmc, #7ed957));
+  }
+}
+@keyframes gw-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8%);
+  }
+}
+@keyframes gw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes gw-wiggle {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0deg);
+  }
+  76% {
+    transform: rotate(-7deg);
+  }
+  84% {
+    transform: rotate(6deg);
+  }
+  92% {
+    transform: rotate(-3deg);
+  }
+}
+@keyframes gw-blob {
+  0%,
+  100% {
+    border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+  }
+  33% {
+    border-radius: 63% 37% 45% 55% / 55% 62% 38% 45%;
+  }
+  66% {
+    border-radius: 36% 64% 52% 48% / 62% 38% 62% 38%;
+  }
+}
+@keyframes gw-flicker {
+  0%,
+  18%,
+  22%,
+  25%,
+  53%,
+  57%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  24%,
+  55% {
+    opacity: 0.45;
+  }
+}
+.gw-orbit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(circle, #fff 0 22%, var(--gmc, #ffd700) 45%, transparent 72%);
+  box-shadow: 0 0 10px 2px var(--gmc, #ffd700);
+  offset-rotate: 0deg;
+  animation: gw-orbit calc(4s * var(--gms, 1)) linear infinite;
+}
+@keyframes gw-orbit {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+.gw-beam-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  padding: 3px;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.gw-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--gbm-w, 160px);
+  aspect-ratio: 1;
+  background: linear-gradient(to left, var(--gbm-c, #7ed957), var(--gbm-c2, #ffd700), transparent);
+  animation: gw-orbit calc(6s * var(--gms, 1)) linear infinite;
+}
+.gw-xh {
+  transition:
+    scale 260ms ease,
+    translate 260ms ease,
+    rotate 500ms ease,
+    filter 260ms ease;
+}
+@media (hover: hover) {
+  .gw-dframe:not(.gw-sframe):hover .gw-xh-grow {
+    scale: 1.08;
+  }
+  .gw-dframe:not(.gw-sframe):hover .gw-xh-lift {
+    translate: 0 -6px;
+  }
+  .gw-dframe:not(.gw-sframe):hover .gw-xh-spin {
+    rotate: 20deg;
+  }
+  .gw-dframe:not(.gw-sframe):hover .gw-xh-glow {
+    filter: drop-shadow(0 0 10px var(--gmc, #7ed957));
+  }
+}
+/* Buttons (R57): extra attention + click feel. */
+/* The sweep moves via background-position (no overflow:hidden, so the
+   Studio's selection handles on the button are never clipped). */
+.gw-ba-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%) no-repeat;
+  background-size: 300% 100%;
+  animation: gw-shine 3.2s ease-in-out infinite;
+}
+@keyframes gw-shine {
+  0% {
+    background-position: 100% 0;
+  }
+  45%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+.gw-ba-breathe {
+  animation: gw-btn-breathe 2.8s ease-in-out infinite;
+}
+@keyframes gw-btn-breathe {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 var(--gbfx, #7ed957));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px var(--gbfx, #7ed957));
+  }
+}
+.gw-bc-press:active {
+  scale: 0.93;
+  transition: scale 80ms ease;
+}
+.gw-bc-pop:active {
+  scale: 1.12;
+  transition: scale 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Slides that aren't shown don't burn battery. */
+[data-gw-slide="hidden"] .gw-m,
+[data-gw-slide="hidden"] .gw-morph,
+[data-gw-slide="hidden"] .gw-orbit,
+[data-gw-slide="hidden"] .gw-beam,
+[data-gw-slide="hidden"] .gw-ba-shine::after {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gw-m,
+  .gw-morph,
+  .gw-ba-shine::after {
+    animation: none !important;
+  }
+  .gw-orbit,
+  .gw-beam-wrap {
+    display: none;
+  }
+  .gw-xh,
+  .gw-bc-press:active,
+  .gw-bc-pop:active {
+    transition: none;
+    scale: none;
+    translate: none;
+    rotate: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * R49 S3 — dual-thumb range slider (FilterRangeSlider). Two native range
  * inputs share one track (W3C APG multi-thumb pattern via native inputs).
  * The inputs ignore pointer events; only their thumbs take them, so BOTH

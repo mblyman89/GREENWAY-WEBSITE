@@ -13,14 +13,14 @@
  *  - Drag any text box or button (pointer events + setPointerCapture, works
  *    with mouse, pen and touch). Positions are stored in % of the banner.
  *  - Drag the right-edge handle of a selected text box to change its wrap width.
- *  - Snap guides: left edge 0%, centre 50%, right edge 100% (and top/middle).
+ *  - Snap guides: banner edges/centre + R57 smart guides to other items,
+ *    equal-spacing snap and gap readouts (banner-guides-core).
  *    Hold Alt while dragging to turn snapping off.
  *  - Keyboard (WCAG 2.2 SC 2.5.7 — dragging always has a non-drag path):
  *    Tab to an item, arrows move 0.5% (Shift = 5%), Delete removes (asks
  *    first), Escape deselects. The side panels also have X/Y number boxes.
  *  - On "Phone" every move writes the phone overrides (mx/my/mw) only.
- *  - R53: clicking an item focuses it, so the arrow keys work straight away
- *    (before, pointerdown's preventDefault stopped focus, so only Tab worked).
+ *  - R53: clicking an item focuses it, so the arrow keys work straight away.
  *  - R53: double-click a text box to type on the canvas. contenteditable
  *    "plaintext-only" (Enter = new line, no pasted formatting); Esc or
  *    clicking away commits as ONE change (one undo step for free-text boxes).
@@ -33,6 +33,7 @@ import {
   DESKTOP_REF_PX,
   MOBILE_REF_PX,
   boxPosition,
+  boxMotionClass,
   boxStyle,
   buttonStyle,
   containerStyle,
@@ -49,8 +50,9 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { CanvasGuides, CanvasShape, RotateHandle, WidthHandle } from "./CanvasParts";
-import { angleFromPointer, hasRef, moveGroup, rotateItem, snapMove, type ItemRef } from "@/lib/cms/banner-arrange-core";
+import { BannerBeam, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
+import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
+import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 
@@ -80,6 +82,7 @@ type Drag = {
   rectW: number;
   rectH: number;
   pointerId: number;
+  others: GuideRect[]; // R57: the other items (for smart guides), measured at drag start
 };
 
 export function StudioCanvas({
@@ -119,7 +122,7 @@ export function StudioCanvas({
   const outerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [availW, setAvailW] = useState(800);
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
+  const [guides, setGuides] = useState<{ v: (number | GuideLine)[]; h: (number | GuideLine)[]; gaps?: GuideGap[] }>({ v: [], h: [] });
   const drag = useRef<Drag | null>(null);
   // Latest design for pointer handlers (avoid stale closures mid-drag).
   const designRef = useRef(design);
@@ -219,6 +222,7 @@ export function StudioCanvas({
       rectW: rect.width,
       rectH: rect.height,
       pointerId: e.pointerId,
+      others: mode === "move" && !inGroup ? measureOthers(frame, id) : [],
     };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -230,8 +234,9 @@ export function StudioCanvas({
     const dy = ((e.clientY - g.startY) / g.rectH) * 100;
     const snapOn = !e.altKey;
     const next: BannerDesign = JSON.parse(JSON.stringify(designRef.current));
-    const v: number[] = [];
-    const h: number[] = [];
+    const v: (number | GuideLine)[] = [];
+    const h: (number | GuideLine)[] = [];
+    let gaps: GuideGap[] = [];
     if (g.mode === "rotate") {
       onChange(rotateItem(designRef.current, { target: g.target, id: g.id }, angleFromPointer(g.cx, g.cy, e.clientX, e.clientY, e.shiftKey)));
       return;
@@ -261,9 +266,10 @@ export function StudioCanvas({
       if (device === "mobile") b.mw = half(w);
       else b.w = half(w);
     } else {
-      const sn = snapMove(g.origX + dx, g.origY + dy, g.itemWpct, g.itemHpct, snapOn);
+      const sn = smartSnap(g.origX + dx, g.origY + dy, g.itemWpct, g.itemHpct, g.others, snapOn);
       v.push(...sn.v);
       h.push(...sn.h);
+      gaps = sn.gaps;
       const { x, y } = sn;
       const item =
         g.target === "box"
@@ -272,15 +278,9 @@ export function StudioCanvas({
             ? (next.elements ?? []).find((b) => b.id === g.id)
             : next.buttons.find((b) => b.id === g.id);
       if (!item) return;
-      if (device === "mobile") {
-        item.mx = x;
-        item.my = y;
-      } else {
-        item.x = x;
-        item.y = y;
-      }
+      Object.assign(item, device === "mobile" ? { mx: x, my: y } : { x, y });
     }
-    setGuides({ v, h });
+    setGuides({ v, h, gaps });
     onChange(next);
   }
 
@@ -364,7 +364,7 @@ export function StudioCanvas({
             <div
               ref={frameRef}
               style={css(frameStyle(design))}
-              className="gw-dframe select-none border border-white/10 bg-[var(--charcoal)]"
+              className="gw-dframe gw-sframe select-none border border-white/10 bg-[var(--charcoal)]"
               onPointerDown={(e) => {
                 if (e.target === e.currentTarget) onSelect(null);
               }}
@@ -463,7 +463,7 @@ export function StudioCanvas({
                     aria-pressed={sel}
                     title={b.bind && !onLegacyEdit ? undefined : "Double-click to type on the banner"}
                     style={{ ...css(boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: outline("box", b.id, "1px dashed rgba(255,255,255,0.35)"), outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
-                    className="gw-dbox"
+                    className={`gw-dbox ${boxMotionClass(b)}`}
                     data-studio-id={b.id}
                     onPointerDown={(e) => startDrag(e, "box", b.id, "move")}
                     onPointerMove={onPointerMove}
@@ -507,7 +507,8 @@ export function StudioCanvas({
                 );
               })}
 
-              <CanvasGuides ghost={ghost} guides={guides} scale={scale} />
+              {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
+              <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: device === "mobile" ? design.frame.heightMobile : design.frame.height }} />
             </div>
           </div>
         </div>

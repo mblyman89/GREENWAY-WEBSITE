@@ -25,6 +25,8 @@
  * normalize byte-identically.
  */
 
+import { elementMotion, normalizeElementMotion, type ElementMotionFields } from "./banner-motion-core";
+
 export const MAX_ELEMENTS = 12;
 
 export type ShapeKind = "rect" | "circle" | "line" | "triangle" | "star" | "burst" | "arrow" | "diamond";
@@ -77,7 +79,7 @@ export type DesignElement = {
   /** R56: soft drop shadow (blur px, 0 = off) in any colour. */
   shadow?: number;
   shadowColor?: string;
-};
+} & ElementMotionFields;
 
 export type ElementGradient = { from: string; to: string; angle: number };
 export const ELEMENT_SHADOW_MAX = 40;
@@ -221,6 +223,8 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
     el.shadow = Math.round(sh);
     el.shadowColor = hex(raw.shadowColor, "#000000");
   }
+  // R57: micro-interactions (breathe/glow/float/spin/wiggle/blob/morph, orbit spark, hover).
+  Object.assign(el, normalizeElementMotion(raw, el.shape, isIcon));
   return el;
 }
 
@@ -305,7 +309,25 @@ export function elementStyle(el: DesignElement): StyleMap {
   if (el.opacity < 100) s.opacity = String(r4(el.opacity / 100));
   // drop-shadow follows the real outline of stars, icons, arrows (box-shadow wouldn't).
   if (el.shadow) s.filter = `drop-shadow(0 ${r4(el.shadow / 4)}px ${el.shadow}px ${rgba(el.shadowColor ?? "#000000", 70)})`;
+  // R57: motion colour + speed variables (only when motion / hover is used).
+  Object.assign(s, elementMotion(el, elementGlow(el)).vars);
   return s;
+}
+
+/** R57: the colour a shape glows / sparks in. */
+export function elementGlow(el: DesignElement): string {
+  return el.shape === "line" ? el.stroke : (el.gradient?.to ?? el.fill);
+}
+
+/** R57: hover classes for the positioned box ("" when none). */
+export function elementHoverClass(el: DesignElement): string {
+  return elementMotion(el, "").outer;
+}
+
+/** R57: CSS background for a morphing shape (fill strength + gradient respected). */
+export function morphFill(el: DesignElement): string {
+  if (el.gradient && el.fillOpacity > 0) return `linear-gradient(${el.gradient.angle}deg, ${rgba(el.gradient.from, el.fillOpacity)}, ${rgba(el.gradient.to, el.fillOpacity)})`;
+  return rgba(el.fill, Math.max(el.fillOpacity, 10));
 }
 
 /** Polygon points (viewBox 0 0 100 100) for SVG shapes; null = drawn with CSS. */

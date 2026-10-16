@@ -30,6 +30,7 @@ import {
 import { ColorField, NumberSlider, Row, Segmented, SelectField, Toggle, studioInput } from "./controls";
 import type { StudioSelection } from "./StudioCanvas";
 import { FontSelect, TextFxFields } from "./TextFxFields";
+import { TextMotionFields } from "./MotionFields";
 
 const ROLE_ICON: Record<DesignRole, string> = { eyebrow: "🏷", headline: "🅷", subhead: "💬", body: "¶", badge: "⭐", legal: "⚖️" };
 
@@ -297,6 +298,7 @@ export function TextBoxPanel({
               <NumberSlider label="Letter spacing" value={box.letterSpacing} min={-0.1} max={0.5} step={0.01} unit="em" onChange={(letterSpacing) => patch(box.id, { letterSpacing })} />
               <NumberSlider label="Line height" value={box.lineHeight} min={0.7} max={3} step={0.05} onChange={(lineHeight) => patch(box.id, { lineHeight })} />
               <TextFxFields box={box} patch={(p) => patch(box.id, p)} />
+              <TextMotionFields box={box} patch={(p) => patch(box.id, p)} />
               <Segmented<DesignBackdrop>
                 label="Box behind text (helps reading on busy photos)"
                 value={box.backdrop}

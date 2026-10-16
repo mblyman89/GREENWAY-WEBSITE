@@ -22,6 +22,7 @@ import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
 import { buttonFxStyle, normalizeButtonFx, type ButtonFx } from "@/lib/cms/button-fx-core";
+import { normalizeBeam, normalizeTextMotion, textMotion, type Beam, type TextMotionFields } from "@/lib/cms/banner-motion-core";
 import { MAX_ELEMENTS, normalizeElement, normalizeOrder, resolveLayers, type DesignElement, type LayerRef } from "@/lib/cms/banner-elements-core";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -227,7 +228,7 @@ export type DesignTextBox = {
   gradient?: DesignGradient;
   /** R56: rotation in degrees (−180…180); absent = upright. */
   rotate?: number;
-};
+} & TextMotionFields;
 
 export type DesignButton = {
   id: string;
@@ -295,6 +296,8 @@ export type BannerDesign = {
   overlay: DesignOverlay;
   boxes: DesignTextBox[];
   buttons: DesignButton[];
+  /** R57: a light that travels around the banner's border. Written only when on. */
+  beam?: Beam;
   /** R55: decorative shapes (banner-elements-core). Written only when there are any. */
   elements?: DesignElement[];
   /** R55: layer paint order, back → front (ids). Written only after the owner reorders. */
@@ -496,6 +499,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     ...(raw.locked === true ? { locked: true } : {}),
     ...normalizeTextFx(raw),
     ...rotateField(raw.rotate),
+    ...normalizeTextMotion(raw),
   };
 }
 
@@ -618,6 +622,8 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   };
   if (elements.length) out.elements = elements;
   if (order) out.order = order;
+  const beam = normalizeBeam(raw.beam);
+  if (beam) out.beam = beam;
   return out;
 }
 
@@ -983,7 +989,13 @@ export function boxStyle(box: DesignTextBox): StyleMap {
     if (box.backdrop === "pill") s.width = "auto";
     if (box.backdrop === "blur") s.backdropFilter = "blur(8px)";
   }
-  return s;
+  // R57: motion colour + speed variables (only when motion / hover is used).
+  return { ...s, ...textMotion(box, box.gradient?.to ?? box.color).vars };
+}
+
+/** R57: motion + hover classes for a text box ("" when none). */
+export function boxMotionClass(box: DesignTextBox): string {
+  return textMotion(box, "").className;
 }
 
 export const BUTTON_SIZE_PX: Record<DesignButtonSize, { h: number; hm: number; font: number; fontM: number; px: number }> = {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
+  boxMotionClass,
   boxStyle,
   buttonStyle,
   containerStyle,
@@ -15,10 +16,10 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
-import { DesignShape } from "./DesignShape";
+import { BannerBeam, ElementVisual } from "./DesignMotion";
 import { ButtonInner } from "./ButtonInner";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
-import { elementStyle } from "@/lib/cms/banner-elements-core";
+import { elementHoverClass, elementStyle } from "@/lib/cms/banner-elements-core";
 import { customFontFaceCss, customFontIdsIn } from "@/lib/cms/custom-font-core";
 // R44: a video wrapper must stay visible to assistive tech (its pause button);
 // the <video> itself is aria-hidden inside BannerVideo.
@@ -163,10 +164,10 @@ export function DesignedBanner({
               key={el.id}
               aria-hidden="true"
               style={css(withZ(elementStyle(el), el.id))}
-              className={`gw-dbox${el.hideOnMobile ? " gw-hide-sm" : ""}`}
+              className={`gw-dbox${el.hideOnMobile ? " gw-hide-sm" : ""} ${elementHoverClass(el)}`.trim()}
               {...(editable ? { "data-gw-design-element": el.id } : {})}
             >
-              <DesignShape el={el} />
+              <ElementVisual el={el} />
             </div>
           ),
         )}
@@ -180,7 +181,7 @@ export function DesignedBanner({
             <Tag
               key={b.id}
               style={css(withZ(boxStyle(b), b.id))}
-              className={`gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""}`}
+              className={`gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim()}
               {...(editable ? { "data-gw-design-box": b.id } : {})}
               {...(editable && blockKeyPrefix && suffix
                 ? { "data-gw-block": `${blockKeyPrefix}.${suffix}`, "data-gw-editable": "true" }
@@ -217,6 +218,7 @@ export function DesignedBanner({
             </Link>
           );
         })}
+        {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
       </div>
     </div>
   );
