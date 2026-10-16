@@ -868,6 +868,7 @@ import { __runLoyaltyLogoCoreTests } from "../../src/lib/loyalty/loyalty-logo-co
 import { __runAboutSideCoreTests } from "../../src/lib/about/about-side-core";
 import { __runVendorCenterCoreTests } from "../../src/lib/vendors/vendor-center-core";
 import { __runBrandKitCoreTests } from "../../src/lib/brand/brand-kit-core";
+import { __runMediaFoldersCoreTests } from "../../src/lib/media/folders-core";
 import { __runLoyaltyHeroCoreTests } from "../../src/lib/loyalty/loyalty-hero-core";
 import { __runShopCarouselCoreTests } from "../../src/lib/cms/shop-carousel-core";
 import { __runMenuSpecialFiltersTests } from "../../src/lib/menu/menu-special-filters-core";
@@ -1727,6 +1728,7 @@ __runLiquidVolumeTests();
   { const r = __runLoyaltyLogoCoreTests(); if (r.passed < 5) throw new Error("loyalty-logo-core: too few"); console.log(`loyalty-logo-core: ${r.passed} assertions passed`); }
   { const r = __runAboutSideCoreTests(); if (r.passed < 5) throw new Error("about-side-core: too few"); console.log(`about-side-core: ${r.passed} assertions passed`); }
   { const r = __runVendorCenterCoreTests(); if (r.passed < 6) throw new Error("vendor-center-core: too few"); console.log(`vendor-center-core: ${r.passed} assertions passed`); }
+  { const r = __runMediaFoldersCoreTests(); if (r.failed > 0 || r.passed < 17) throw new Error("media-folders-core: failures"); console.log(`media-folders-core: ${r.passed} assertions passed`); }
   { const r = __runBrandKitCoreTests(); if (r.passed < 9) throw new Error("brand-kit-core: too few"); console.log(`brand-kit-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyContentCoreTests(); if (r.passed < 1) throw new Error("loyalty-content-core: no assertions ran"); console.log(`loyalty-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyHeroCoreTests(); if (r.passed < 1) throw new Error("loyalty-hero-core: no assertions ran"); console.log(`loyalty-hero-core: ${r.passed} assertions passed`); }
