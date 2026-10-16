@@ -39,7 +39,11 @@ import {
   saveLoyaltyHeroDraftAction,
   publishLoyaltyHeroAction,
   restoreLoyaltyHeroRevisionAction,
+  saveLoyaltyLogoDraftAction,
+  publishLoyaltyLogoAction,
 } from "./actions";
+import { LoyaltyLogoEditor } from "@/components/admin/loyalty/LoyaltyLogoEditor";
+import { LOYALTY_LOGO_BLOCK } from "@/lib/loyalty/loyalty-logo-core";
 
 /**
  * Loyalty page editor (Admin → Website → Loyalty page), SLICE 108.
@@ -109,8 +113,12 @@ export default async function AdminLoyaltyPage({
   // R61 S2 (roadmap §15): the hero banner editor has its own tab (shown first);
   // the page wording + program terms are the second tab.
   // ✎ Edit links for a wording block (?block=loyalty.…) land on the wording tab.
-  const tab: "banner" | "wording" =
-    sp.tab === "wording" || sp.error === "consent_empty" || (sp.tab !== "banner" && !!sp.block) ? "wording" : "banner";
+  const tab: "banner" | "logo" | "wording" =
+    sp.tab === "logo"
+      ? "logo"
+      : sp.tab === "wording" || sp.error === "consent_empty" || (sp.tab !== "banner" && !!sp.block)
+        ? "wording"
+        : "banner";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -169,6 +177,7 @@ export default async function AdminLoyaltyPage({
 
   // ---- Hero banner (SLICE 123 / LOY-1): ONE richjson presentation block ----
   const heroBlock = await getContentBlock(LOYALTY_HERO_PRESENTATION_BLOCK);
+  const logoBlock = await getContentBlock(LOYALTY_LOGO_BLOCK);
   const heroRevisions = await listContentRevisions(LOYALTY_HERO_PRESENTATION_BLOCK, 15);
   // R41 S6: blog posts / newsletters for the hero design's link picker.
   const heroPosts = await listPublishedPostLinks().catch(() => []);
@@ -274,6 +283,7 @@ export default async function AdminLoyaltyPage({
           {(
             [
               { key: "banner", label: "Main banner" },
+              { key: "logo", label: "Form logo" },
               { key: "wording", label: "Page wording & terms" },
             ] as const
           ).map((t) => (
@@ -324,6 +334,18 @@ export default async function AdminLoyaltyPage({
         </section>
 
           </>
+        ) : tab === "logo" ? (
+          logoBlock ? (
+            <LoyaltyLogoEditor
+              draftJson={logoBlock.draft_value ?? null}
+              publishedJson={logoBlock.published_value ?? null}
+              mediaChoices={mediaChoices}
+              saveDraftAction={saveLoyaltyLogoDraftAction}
+              publishAction={publishLoyaltyLogoAction}
+            />
+          ) : (
+            <p className="text-sm text-[var(--admin-text-muted)]">The form logo is being set up. Refresh in a moment.</p>
+          )
         ) : (
         <LoyaltyPageEditor
           sections={sections}

@@ -14,6 +14,7 @@ import {
   resolveLoyaltyValue,
 } from "@/lib/loyalty/loyalty-content-core";
 import { LOYALTY_CONSENT_BLOCK } from "@/lib/loyalty/loyalty-consent-core";
+import { LOYALTY_LOGO_BLOCK, resolveLoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
 import {
   LOYALTY_HERO_PRESENTATION_BLOCK,
   resolveLoyaltyHeroPresentation,
@@ -62,6 +63,7 @@ export default async function LoyaltyPage() {
       LOYALTY_HERO_PRESENTATION_BLOCK,
       // SLICE 108 — editable friendly copy (signup form + program terms).
       ...LOYALTY_CONTENT_KEYS,
+      LOYALTY_LOGO_BLOCK, // R64: signup-form logo
     ]),
     isPreviewActive(),
     getPageBanners("loyalty", ["loyalty.hero"]),
@@ -100,6 +102,7 @@ export default async function LoyaltyPage() {
           birthdayHelp: resolveLoyaltyValue("loyalty.form.birthday_help", copy),
           submitLabel: resolveLoyaltyValue("loyalty.form.submit_label", copy),
           successTitle: resolveLoyaltyValue("loyalty.form.success_title", copy),
+          logo: resolveLoyaltyLogo(copy[LOYALTY_LOGO_BLOCK]),
           // R41 S5 — the owner-editable consent paragraph (byte-identical
           // default until edited + published).
           consentText: resolveLoyaltyValue(LOYALTY_CONSENT_BLOCK, copy),
