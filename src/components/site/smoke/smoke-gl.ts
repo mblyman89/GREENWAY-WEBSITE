@@ -20,6 +20,7 @@ precision highp float;
 uniform vec2 uRes;uniform float uTime;uniform int uMode;uniform vec2 uOrigin;uniform float uDir;
 uniform vec3 uC1;uniform vec3 uC2;uniform float uAmount;uniform float uSize;uniform float uRainbow;
 uniform float uLife;uniform float uFade;uniform float uAspect;
+uniform float uSwirl;uniform float uPower;uniform float uSpread;uniform float uSource;uniform float uRise;uniform float uLinger;uniform float uPuffs;uniform float uEmit;uniform float uHitT;uniform float uSpd;
 out vec4 o;
 float h(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
@@ -31,12 +32,12 @@ void main(){
  if(uMode==0){
   float H=.15+.55*uSize;vec2 p=q*vec2(2.2,3.5);
   vec2 w=vec2(fbm(p+vec2(t*.05,0.)),fbm(p+vec2(5.2,1.3)-vec2(0.,t*.07)));
-  float f=fbm(p+1.8*w+vec2(t*.04,-t*.06));
+  float f=fbm(p+uSwirl*4.09*w+vec2(t*.04,-t*.06));
   float mask=smoothstep(H,0.,uv.y+(f-.5)*.35*H);
   d=smoothstep(.25,.85,f)*mask*1.25;age=uv.y/H;
  }else if(uMode==1){
   vec2 dv=vec2(sin(uDir),cos(uDir));vec2 p=q*(1.2+1.8*(1.-uSize))-dv*t*.03;
-  vec2 w=vec2(fbm(p+t*.02),fbm(p+vec2(3.1,7.4)));float f=fbm(p+1.5*w);
+  vec2 w=vec2(fbm(p+t*.02),fbm(p+vec2(3.1,7.4)));float f=fbm(p+uSwirl*3.41*w);
   d=smoothstep(.3,.9,f)*.8;age=f;
  }else{
   vec2 r=q-vec2(uOrigin.x*uAspect,uOrigin.y);float c=cos(uDir),s=sin(uDir);
@@ -52,11 +53,31 @@ void main(){
    float up=smoothstep(L,L*.55,yy)*smoothstep(-.02,.03,p.y);
    d=(core+fil*smoothstep(.05,.2,yy)+halo*tex)*mix(1.,.5+tex,smoothstep(0.,.12,yy))*up;age=yy/L;
   }else{
-   float R=(.25+.75*uSize)*max(uAspect,1.)*1.1;vec2 adv=vec2(p.x,p.y-t*.35);
-   vec2 w=vec2(fbm(adv*3.),fbm(adv*3.+vec2(4.7,1.9)));float f=fbm(adv*2.4+1.6*w);
-   float wdt=.04+yy*.38;float x=p.x/wdt;float cone=exp(-x*x*1.4);
-   float front=uLife*R;float fm=smoothstep(front,front-.25,yy+(f-.5)*.3);
-   d=smoothstep(.2,.8,f)*1.4*cone*fm*smoothstep(-.03,.05,p.y);age=yy/R;
+   // R60 pro plume: smoke leaves the source while it pours (uEmit s, in
+   // uPuffs bursts), shoots out at the blow power then slows (exp decay),
+   // widens with the cone, floats up/sinks (rise), swirls, and thins out
+   // with age (linger). Each pixel works out WHEN its smoke left the source.
+   float R=(.35+1.05*uSize)*.62*mix(1.,max(uAspect,1.)*.85,abs(s));float k=(.45+1.6*uPower)*uSpd;
+   float T=uHitT;
+   // rise/sink bends the path (warm smoke floats up, dry ice sinks) — more the older it is.
+   float ga=length(r)/R;vec2 rr=r-vec2(0.,uRise*.22*ga*ga);
+   vec2 pp=vec2(rr.x*c-rr.y*s,rr.x*s+rr.y*c);
+   vec2 adv=pp*(2.2+1.4*uSwirl)-vec2(0.,T*.25);
+   vec2 w=vec2(fbm(adv+t*.05),fbm(adv+vec2(4.7,1.9)-t*.04));
+   float f=fbm(adv*1.1+(.6+2.2*uSwirl)*w);
+   float y2=max(pp.y+(f-.5)*(.12+.25*uSwirl)*(.3+pp.y),0.);
+   float a=-log(1.-clamp(y2/R,0.,.995))/k;
+   float wdt=.015+uSource*.11+y2*(.04+uSpread*.55)+min(a,4.)*(.02+.04*uSwirl+.05*max(uRise,0.));
+   float x=(pp.x+(f-.5)*wdt*1.6*uSwirl)/wdt;float cone=exp(-x*x*1.2);
+   // soft, billowy leading edge + tail (where the last smoke has got to).
+   float yF=R*(1.-exp(-k*T));float sf=.05+.3*yF;
+   float on=smoothstep(yF+sf*.4,yF-sf,y2);
+   if(T>uEmit){float yT=R*(1.-exp(-k*(T-uEmit)))*(1.-.75*uLinger);float st=.05+.35*yT;on*=smoothstep(yT-st*.5,yT+st,y2);}
+   float te=T-a+(f-.5)*.4;
+   if(uPuffs>1.5){float sl=uEmit/uPuffs;float ph=fract(max(te,0.)/sl);on*=mix(1.,smoothstep(0.,.2,ph)*smoothstep(.85,.45,ph),smoothstep(0.,.3,te)*step(te,uEmit+.2));}
+   float keep=exp(-max(T-max(te,0.),0.)/(.6+uLinger*4.));
+   d=smoothstep(.15,.8,f)*1.55*cone*on*keep*smoothstep(-.03,.04,pp.y)*(.7+.6/(1.+wdt*4.));
+   age=(T-max(te,0.))/(1.5+uLinger*3.)+y2/R*.4;
   }
  }
  d=clamp(d*uAmount*uFade,0.,1.);
@@ -66,7 +87,7 @@ void main(){
 }`;
 
 type U = Record<string, WebGLUniformLocation | null>;
-const NAMES = ["uRes", "uTime", "uMode", "uOrigin", "uDir", "uC1", "uC2", "uAmount", "uSize", "uRainbow", "uLife", "uFade", "uAspect"];
+const NAMES = ["uRes", "uTime", "uMode", "uOrigin", "uDir", "uC1", "uC2", "uAmount", "uSize", "uRainbow", "uLife", "uFade", "uAspect", "uSwirl", "uPower", "uSpread", "uSource", "uRise", "uLinger", "uPuffs", "uEmit", "uHitT", "uSpd"];
 
 export class GlSmoke {
   private gl: WebGL2RenderingContext;
@@ -166,11 +187,18 @@ export class GlSmoke {
       if (since < 0) continue;
       let life = 1;
       let fade = Math.min(1, since / 1.2);
-      if (l.once || l.kind === "hit") {
+      let hitT = 0;
+      if (l.kind === "hit") {
+        // R60: the plume runs on a real timeline (pour → hang → gone).
         const D = onceSeconds(l);
         const cyc = l.once ? since : since % (D + 1.5);
-        const pr = cyc / D;
-        if (l.once && pr >= 1) continue;
+        if (l.once && cyc >= D) continue;
+        hitT = cyc;
+        fade = Math.min(1, cyc * 8) * (1 - smooth(D - 1.2, D, cyc));
+      } else if (l.once) {
+        const D = onceSeconds(l);
+        const pr = since / D;
+        if (pr >= 1) continue;
         life = Math.min(1, pr / 0.45);
         life = 1 - (1 - life) * (1 - life);
         fade = Math.min(1, pr * 6) * (1 - smooth(0.6, 1, pr));
@@ -186,6 +214,16 @@ export class GlSmoke {
       gl.uniform1f(u.uRainbow, g.rainbow);
       gl.uniform1f(u.uLife, life);
       gl.uniform1f(u.uFade, fade);
+      gl.uniform1f(u.uSwirl, g.swirl);
+      gl.uniform1f(u.uPower, g.power);
+      gl.uniform1f(u.uSpread, g.spread);
+      gl.uniform1f(u.uSource, g.source);
+      gl.uniform1f(u.uRise, g.rise);
+      gl.uniform1f(u.uLinger, g.linger);
+      gl.uniform1f(u.uPuffs, g.puffs);
+      gl.uniform1f(u.uEmit, g.emit);
+      gl.uniform1f(u.uHitT, hitT);
+      gl.uniform1f(u.uSpd, g.speed);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
   }
