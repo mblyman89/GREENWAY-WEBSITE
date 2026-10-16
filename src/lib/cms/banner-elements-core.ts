@@ -72,7 +72,15 @@ export type DesignElement = {
   hidden: boolean;
   hideOnMobile: boolean;
   locked?: boolean;
+  /** R56: gradient fill (any colours); `fill` stays as the fallback. */
+  gradient?: ElementGradient;
+  /** R56: soft drop shadow (blur px, 0 = off) in any colour. */
+  shadow?: number;
+  shadowColor?: string;
 };
+
+export type ElementGradient = { from: string; to: string; angle: number };
+export const ELEMENT_SHADOW_MAX = 40;
 
 export type LayerKind = "box" | "button" | "element";
 export type LayerRef = { kind: LayerKind; id: string };
@@ -203,6 +211,16 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
     hideOnMobile: raw.hideOnMobile === true,
   };
   if (raw.locked === true) el.locked = true;
+  // R56: optional fx, written only when used (older designs byte-identical).
+  const g = raw.gradient;
+  if (isObj(g) && typeof g.from === "string" && typeof g.to === "string" && el.shape !== "line") {
+    el.gradient = { from: hex(g.from, el.fill), to: hex(g.to, el.fill), angle: Math.round(num(g.angle, 90, 0, 360)) };
+  }
+  const sh = num(raw.shadow, 0, 0, ELEMENT_SHADOW_MAX);
+  if (sh > 0) {
+    el.shadow = Math.round(sh);
+    el.shadowColor = hex(raw.shadowColor, "#000000");
+  }
   return el;
 }
 
@@ -285,6 +303,8 @@ export function elementStyle(el: DesignElement): StyleMap {
   if (el.mh !== null && el.h !== null && el.shape !== "line") s["--gmh"] = `${el.mh}%`;
   if (el.rotate) s.transform = `rotate(${el.rotate}deg)`;
   if (el.opacity < 100) s.opacity = String(r4(el.opacity / 100));
+  // drop-shadow follows the real outline of stars, icons, arrows (box-shadow wouldn't).
+  if (el.shadow) s.filter = `drop-shadow(0 ${r4(el.shadow / 4)}px ${el.shadow}px ${rgba(el.shadowColor ?? "#000000", 70)})`;
   return s;
 }
 
@@ -318,16 +338,31 @@ export function shapePoints(shape: ShapeKind): string | null {
 /** Inner visual: either a CSS box style or an SVG polygon spec. */
 export function shapeVisual(
   el: DesignElement,
-): { css: StyleMap } | { points: string; fill: string; stroke: string | null; strokeWidth: number } | { iconPath: string; fill: string } {
+): { css: StyleMap } | { points: string; fill: string; stroke: string | null; strokeWidth: number; grad?: SvgGradient } | { iconPath: string; fill: string; grad?: SvgGradient } {
   const fill = el.fillOpacity > 0 ? rgba(el.fill, el.fillOpacity) : "transparent";
-  if (el.kind === "icon") return { iconPath: isSafeIconPath(el.iconPath) ? el.iconPath : "", fill };
+  const grad = el.gradient && el.fillOpacity > 0 ? svgGradient(el.gradient, el.fillOpacity) : undefined;
+  const svgFill = grad ? `url(#${grad.id})` : fill;
+  if (el.kind === "icon") return { iconPath: isSafeIconPath(el.iconPath) ? el.iconPath : "", fill: svgFill, ...(grad ? { grad } : {}) };
   const pts = shapePoints(el.shape);
-  if (pts) return { points: pts, fill, stroke: el.strokeWidth > 0 ? el.stroke : null, strokeWidth: el.strokeWidth };
+  if (pts) return { points: pts, fill: svgFill, stroke: el.strokeWidth > 0 ? el.stroke : null, strokeWidth: el.strokeWidth, ...(grad ? { grad } : {}) };
   if (el.shape === "line") return { css: { width: "100%", height: "100%", background: el.stroke, borderRadius: "999px" } };
-  const css: StyleMap = { width: "100%", height: "100%", background: fill, boxSizing: "border-box" };
+  const bg = grad ? `linear-gradient(${el.gradient!.angle}deg, ${rgba(el.gradient!.from, el.fillOpacity)}, ${rgba(el.gradient!.to, el.fillOpacity)})` : fill;
+  const css: StyleMap = { width: "100%", height: "100%", background: bg, boxSizing: "border-box" };
   if (el.strokeWidth > 0) css.border = `${el.strokeWidth}px solid ${el.stroke}`;
   css.borderRadius = el.shape === "circle" ? "50%" : `${el.radius}px`;
   return { css };
+}
+
+/**
+ * SVG gradient for a shape/icon. The id is derived from the colours + angle,
+ * so two shapes sharing an id always define the SAME gradient (no clashes when
+ * several banners sit on one page). CSS angle → SVG rotation: CSS 90deg is
+ * left→right, which is SVG's default x1=0→x2=1, so rotate by (angle − 90).
+ */
+export type SvgGradient = { id: string; from: string; to: string; rotate: number };
+export function svgGradient(g: ElementGradient, fillOpacity = 100): SvgGradient {
+  const a = Math.round(fillOpacity);
+  return { id: `gwg-${g.from.slice(1)}-${g.to.slice(1)}-${g.angle}-${a}`, from: rgba(g.from, a), to: rgba(g.to, a), rotate: g.angle - 90 };
 }
 
 /** Element position for a device (phone overrides fall back to computer). */
@@ -412,5 +447,22 @@ export function __runBannerElementsTests(): { passed: number; failed: number } {
   ok("iconPath" in iv && iv.iconPath === "M10,20 L30 40Z" && iv.fill === "rgba(255, 255, 255, 1)", "icon visual");
   ok(elementLabel(ic, { leaf: "Leaf" }) === "Icon — Leaf" && elementLabel(defaultElement("burst")) === "Sale burst", "labels");
   ok(isSafeIconPath("M1e-3 2") && !isSafeIconPath("x".repeat(5)) && !isSafeIconPath("M".repeat(ICON_PATH_MAX + 1)), "path guard");
+  // R56-S1: gradient + shadow on shapes/icons (any colour), only when used.
+  {
+    const plain = normalizeElement({ shape: "star" }, "s")!;
+    ok(!("gradient" in plain) && !("shadow" in plain), "R56 fx absent by default");
+    const fx = normalizeElement({ shape: "star", fill: "#ff00ff", gradient: { from: "#f00", to: "nope", angle: 45.6 }, shadow: 99, shadowColor: "#123456" }, "s")!;
+    ok(fx.gradient!.from === "#ff0000" && fx.gradient!.to === "#ff00ff" && fx.gradient!.angle === 46, "R56 gradient cleaned (bad colour → fill)");
+    ok(fx.shadow === ELEMENT_SHADOW_MAX && fx.shadowColor === "#123456", "R56 shadow clamped");
+    ok(JSON.stringify(normalizeElement(JSON.parse(JSON.stringify(fx)), "s")) === JSON.stringify(fx), "R56 fx round trip");
+    const v = shapeVisual(fx) as { fill: string; grad?: SvgGradient };
+    ok(v.grad!.rotate === -44 && v.fill === `url(#${v.grad!.id})`, "R56 svg gradient wired");
+    ok(svgGradient({ from: "#000000", to: "#ffffff", angle: 90 }).id === svgGradient({ from: "#000000", to: "#ffffff", angle: 90 }).id, "R56 gradient id deterministic");
+    const rect = shapeVisual(normalizeElement({ shape: "rect", gradient: { from: "#000000", to: "#ffffff", angle: 180 } }, "r")!) as { css: StyleMap };
+    ok(rect.css.background.startsWith("linear-gradient(180deg"), "R56 css gradient for rects");
+    ok((elementStyle(fx).filter ?? "").startsWith("drop-shadow(0 10px 40px rgba(18, 52, 86, 0.7"), "R56 shadow via drop-shadow");
+    ok(!("gradient" in normalizeElement({ shape: "line", gradient: { from: "#000", to: "#fff" } }, "l")!), "R56 no gradient on lines");
+  }
+
   return { passed, failed };
 }

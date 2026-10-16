@@ -952,6 +952,7 @@ import { __runBannerScheduleCoreTests } from "../../src/lib/cms/banner-schedule-
 import { __runImageOptimizeCoreTests } from "../../src/lib/media/image-optimize-core";
 import { __runClickEventsTests } from "../../src/lib/analytics/click-events-core";
 import { __runBannerCompareTests } from "../../src/lib/analytics/banner-compare-core";
+import { __runColorInputTests } from "../../src/lib/cms/color-input-core";
 import { __runStoreHoursCoreTests } from "../../src/lib/seo/store-hours-core";
 import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
 import { __runDesignDragCoreTests } from "../../src/lib/cms/design-drag-core";
@@ -2282,7 +2283,8 @@ __runLiquidVolumeTests();
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
-  assertRan("banner-elements-core", __runBannerElementsTests(), 36); // R55-S2/S3: shapes, layers, icons
+  assertRan("banner-elements-core", __runBannerElementsTests(), 45); // R55-S2/S3: shapes, layers, icons
+  assertRan("color-input-core", __runColorInputTests(), 16); // R56-S1 any-colour input + recent colours
   assertRan("banner-compare-core", __runBannerCompareTests(), 22); // R55-S1: banner comparison
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers
