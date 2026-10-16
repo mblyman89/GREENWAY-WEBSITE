@@ -47,15 +47,18 @@ export type ClickReadResult = {
   truncated: boolean;
 };
 
-export async function readClicksSince(sinceIso: string): Promise<ClickReadResult> {
+/** Clicks from `sinceIso`; optional `untilIso` (exclusive) for the previous-period comparison (R55). */
+export async function readClicksSince(sinceIso: string, untilIso?: string): Promise<ClickReadResult> {
   if (!isSupabaseServiceConfigured) return { rows: [], missingTable: false, truncated: false };
   const admin = createSupabaseAdminClient();
   const rows: StoredClick[] = [];
   for (let from = 0; from < CLICK_REPORT_MAX_ROWS; from += PAGE) {
-    const { data, error } = await admin
+    let q = admin
       .from("website_click_events")
       .select("occurred_at,page_path,placement,slot_key,slot_label,slot_position,button_label,target_href,device")
-      .gte("occurred_at", sinceIso)
+      .gte("occurred_at", sinceIso);
+    if (untilIso) q = q.lt("occurred_at", untilIso);
+    const { data, error } = await q
       .order("occurred_at", { ascending: false })
       .order("id", { ascending: false })
       .range(from, from + PAGE - 1);
