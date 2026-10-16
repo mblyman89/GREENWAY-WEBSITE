@@ -39,6 +39,8 @@ import {
 import { HERO_COLORS, HERO_FONTS, heroFontStack, type ImageFocus } from "@/lib/loyalty/loyalty-hero-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
+import { CardEditorShell } from "@/components/admin/banner-studio/CardEditorShell";
+import { DesignedCard } from "@/components/site/DesignedCard";
 import { cardDesign } from "@/lib/cms/banner-design-core";
 
 const input =
@@ -96,6 +98,19 @@ export function TypeCardImagesEditor({
       [next[index], next[j]] = [next[j], next[index]];
       return next;
     });
+  // R63: opening a card turns its custom design ON by default (the studio is
+  // what opens). A design the owner switched off stays off (his choice).
+  const openCard = (id: string | null) => {
+    setOpenId(id);
+    if (!id) return;
+    setCards((prev) =>
+      prev.map((c) => {
+        if (c.id !== id || c.adv?.design) return c;
+        const adv = normalizeTypeCardAdvanced({ ...(c.adv ?? {}), design: newCardDesign(c) });
+        return adv ? { ...c, adv } : c;
+      }),
+    );
+  };
   const add = () => {
     if (cards.length >= MAX_TYPE_CARDS) return;
     const id = nextTypeCardId(cards);
@@ -103,7 +118,7 @@ export function TypeCardImagesEditor({
       ...cards,
       { id, label: "New card", href: "/menu", image: "", cta: DEFAULT_TYPE_CARD_CTA, enabled: true },
     ]);
-    setOpenId(id);
+    openCard(id);
   };
 
   const pickingCard = cards.find((c) => c.id === picking) ?? null;
@@ -111,156 +126,44 @@ export function TypeCardImagesEditor({
   return (
     <form action={saveAction} className="space-y-5">
       <input type="hidden" name="type_cards_json" value={json} />
-      <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="text-base">🗂️</span>
-          <h3 className="text-sm font-semibold text-white">Shop by Category — Type Cards</h3>
-          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.6rem] font-semibold text-white/50">
-            {cards.length} / {MAX_TYPE_CARDS} cards · {visible.length} showing
-          </span>
-          {dirty ? (
-            <span className="rounded-full bg-[var(--admin-gold)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-gold)]">
-              ● unsaved edits
-            </span>
-          ) : null}
-        </div>
-        <p className="mb-4 text-xs text-white/50">
-          These are the tiles under the &ldquo;Shop by Category&rdquo; banner on your homepage. Rename them,
+      {/* R63: the ONE shared card-editor UI (preview strip scrolls sideways). */}
+      <CardEditorShell
+        icon="🗂️"
+        title="Shop by Category — Type Cards"
+        count={`${cards.length} / ${MAX_TYPE_CARDS} cards · ${visible.length} showing`}
+        dirty={dirty}
+        intro={<>These are the tiles under the &ldquo;Shop by Category&rdquo; banner on your homepage. Rename them,
           change where they go, give them a photo, put them in any order, hide or delete them, or add new
           ones (up to {MAX_TYPE_CARDS}). Press Enter in a name to split it onto two lines. Pick square-ish
           photos with no words in them, because the name sits in a bar along the bottom. Changes go live
-          when you press Save.
-        </p>
-
-        {/* Live mini preview */}
-        <div className="mb-5 rounded-[var(--admin-radius)] border border-white/10 bg-black/30 p-3">
-          <p className={label}>Preview (how the tiles line up on a computer)</p>
-          {visible.length === 0 ? (
-            <p className="text-xs text-[var(--admin-gold)]">
-              No cards are showing, so the tile row is hidden on your homepage. The banner above it still
-              shows.
-            </p>
+          when you press Save.</>}
+        emptyNote="No cards are showing, so the tile row is hidden on your homepage. The banner above it still shows."
+        items={cards.map((c) => ({
+          id: c.id,
+          name: c.label || "New card",
+          sub: `→ ${describeHref(c.href, { blogTitles })}`,
+          shown: c.enabled,
+          badges: c.image ? (
+            <span className="rounded-full bg-[var(--admin-accent)]/15 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
+              photo
+            </span>
+          ) : null,
+          tile: c.adv?.design?.enabled ? (
+            <DesignedCard design={c.adv.design} imageSrc={c.image} legacy={{ title: c.label, subtitle: c.cta }} label={c.label} />
           ) : (
-            <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${Math.min(visible.length, 6)}, minmax(0, 1fr))` }}
-            >
-              {visible.map((c) => (
-                <div
-                  key={c.id}
-                  className="relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-lg border border-white/15 bg-white/5"
-                >
-                  {c.image && isVideoSrc(c.image) ? (
-                    <video
-                      src={c.image}
-                      muted
-                      loop
-                      playsInline
-                      autoPlay
-                      className="absolute inset-0 h-full w-full object-cover"
-                      style={{ objectPosition: c.adv?.imageFocus ?? "center" }}
-                    />
-                  ) : c.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- admin preview of an arbitrary media URL
-                    <img
-                      src={c.image}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                      style={{
-                        objectPosition: c.adv?.imageFocus ?? "center",
-                        ...(c.adv?.zoom ? { transform: `scale(${c.adv.zoom / 100})` } : {}),
-                      }}
-                    />
-                  ) : null}
-                  {c.adv?.dim ? (
-                    <span className="absolute inset-0 bg-black" style={{ opacity: c.adv.dim / 100 }} />
-                  ) : null}
-                  {c.adv?.textStyle === "hidden" ? null : (
-                    <div
-                      className={`relative px-1 py-1 text-center ${c.adv?.textStyle === "overlay" ? "bg-gradient-to-b from-transparent to-black/70" : "bg-black/85"}`}
-                    >
-                      <p
-                        className="whitespace-pre-line text-[0.6rem] font-black uppercase leading-tight text-white"
-                        style={{
-                          ...(c.adv?.labelFont ? { fontFamily: heroFontStack(c.adv.labelFont) } : {}),
-                          ...(c.adv?.labelColor ? { color: HERO_COLORS.find((x) => x.id === c.adv?.labelColor)?.hex } : {}),
-                        }}
-                      >
-                        {c.label || "New card"}
-                      </p>
-                      {c.cta ? (
-                        <p
-                          className="text-[0.45rem] font-black uppercase tracking-widest text-[var(--admin-accent)]"
-                          style={c.adv?.ctaColor ? { color: HERO_COLORS.find((x) => x.id === c.adv?.ctaColor)?.hex } : undefined}
-                        >
-                          {c.cta}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <ol className="space-y-2">
-          {cards.map((c, i) => {
-            const open = openId === c.id;
-            const check = checkHref(c.href);
-            return (
-              <li
-                key={c.id}
-                className={`rounded-[var(--admin-radius)] border ${c.enabled ? "border-white/10" : "border-dashed border-white/10 opacity-70"} bg-black/20`}
-              >
-                <div className="flex flex-wrap items-center gap-2 p-2">
-                  <div className="flex flex-col">
-                    <button
-                      type="button"
-                      onClick={() => move(i, -1)}
-                      disabled={i === 0}
-                      aria-label={`Move ${c.label || "card"} up`}
-                      className="rounded px-1.5 text-xs text-white/70 hover:bg-white/10 disabled:opacity-30"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(i, 1)}
-                      disabled={i === cards.length - 1}
-                      aria-label={`Move ${c.label || "card"} down`}
-                      className="rounded px-1.5 text-xs text-white/70 hover:bg-white/10 disabled:opacity-30"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                  <span className="w-5 text-center text-xs text-white/40">{i + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => setOpenId(open ? null : c.id)}
-                    aria-expanded={open}
-                    className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-white"
-                  >
-                    {(c.label || "New card").replace(/\n/g, " ")}
-                    <span className="ml-2 text-xs font-normal text-white/40">
-                      → {describeHref(c.href, { blogTitles })}
-                    </span>
-                  </button>
-                  {c.image ? (
-                    <span className="rounded-full bg-[var(--admin-accent)]/15 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
-                      photo
-                    </span>
-                  ) : null}
-                  {!c.enabled ? (
-                    <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.6rem] text-white/50">hidden</span>
-                  ) : null}
-                  <Button type="button" variant="neutral" size="sm" onClick={() => setOpenId(open ? null : c.id)}>
-                    {open ? "Close" : "Edit"}
-                  </Button>
-                </div>
-
-                {open ? (
-                  <div className="space-y-3 border-t border-white/10 p-3">
+            <ClassicTile c={c} />
+          ),
+        }))}
+        openId={openId}
+        onOpen={openCard}
+        onMove={move}
+        onShownChange={(id, enabled) => update(id, { enabled })}
+        renderEditor={(id) => {
+          const c = cards.find((x) => x.id === id);
+          if (!c) return null;
+          const check = checkHref(c.href);
+          return (
+            <>
                   {/* R61-S3: the shared Design Studio, card-shaped (one engine for every banner + card). */}
                   <DesignCard
                     mediaChoices={mediaChoices}
@@ -273,14 +176,14 @@ export function TypeCardImagesEditor({
                     imageAlt=""
                     preset="section"
                     seed={{ title: c.label, subtitle: c.cta }}
-                    makeNew={() => cardDesign({ ratio: 0.75, ratioMobile: 1.33, subtitle: !!c.cta })}
+                    makeNew={() => newCardDesign(c)}
                     posts={posts}
                     onLegacyEdit={(bind, text) => {
                       if (bind === "title") update(c.id, { label: text.slice(0, MAX_TYPE_CARD_LABEL) });
                       else if (bind === "subtitle") update(c.id, { cta: text.slice(0, MAX_TYPE_CARD_CTA) });
                     }}
                   />
-                  <BasicMode hint="name, link, photo and the classic card options" defaultOpen>
+                  <BasicMode hint="name, link, photo and the classic card options">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-3">
                       <div>
@@ -387,14 +290,11 @@ export function TypeCardImagesEditor({
                     </div>
                   </div>
                   </BasicMode>
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+            </>
+          );
+        }}
+        footer={
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="neutral" onClick={add} disabled={cards.length >= MAX_TYPE_CARDS}>
             ＋ Add card
           </Button>
@@ -405,7 +305,8 @@ export function TypeCardImagesEditor({
             Reset to the original six
           </Button>
         </div>
-      </div>
+        }
+      />
 
       <div className="flex items-center gap-3">
         <Button type="submit" variant="save" disabled={!dirty && isCustom}>
@@ -666,5 +567,68 @@ function TypeCardAdvancedEditor({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** R61-S3 / R63: the first card-shaped design for a Type card. */
+function newCardDesign(c: TypeCard) {
+  return cardDesign({ ratio: 0.75, ratioMobile: 1.33, subtitle: !!c.cta });
+}
+
+/** The classic (no custom design) mini tile for the preview strip. */
+function ClassicTile({ c }: { c: TypeCard }) {
+  return (
+                <div
+                  className="relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-lg border border-white/15 bg-white/5"
+                >
+                  {c.image && isVideoSrc(c.image) ? (
+                    <video
+                      src={c.image}
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ objectPosition: c.adv?.imageFocus ?? "center" }}
+                    />
+                  ) : c.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- admin preview of an arbitrary media URL
+                    <img
+                      src={c.image}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{
+                        objectPosition: c.adv?.imageFocus ?? "center",
+                        ...(c.adv?.zoom ? { transform: `scale(${c.adv.zoom / 100})` } : {}),
+                      }}
+                    />
+                  ) : null}
+                  {c.adv?.dim ? (
+                    <span className="absolute inset-0 bg-black" style={{ opacity: c.adv.dim / 100 }} />
+                  ) : null}
+                  {c.adv?.textStyle === "hidden" ? null : (
+                    <div
+                      className={`relative px-1 py-1 text-center ${c.adv?.textStyle === "overlay" ? "bg-gradient-to-b from-transparent to-black/70" : "bg-black/85"}`}
+                    >
+                      <p
+                        className="whitespace-pre-line text-[0.6rem] font-black uppercase leading-tight text-white"
+                        style={{
+                          ...(c.adv?.labelFont ? { fontFamily: heroFontStack(c.adv.labelFont) } : {}),
+                          ...(c.adv?.labelColor ? { color: HERO_COLORS.find((x) => x.id === c.adv?.labelColor)?.hex } : {}),
+                        }}
+                      >
+                        {c.label || "New card"}
+                      </p>
+                      {c.cta ? (
+                        <p
+                          className="text-[0.45rem] font-black uppercase tracking-widest text-[var(--admin-accent)]"
+                          style={c.adv?.ctaColor ? { color: HERO_COLORS.find((x) => x.id === c.adv?.ctaColor)?.hex } : undefined}
+                        >
+                          {c.cta}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
   );
 }
