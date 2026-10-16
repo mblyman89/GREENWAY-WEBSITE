@@ -33,6 +33,7 @@ import {
 import { isLoyaltyContentBlock } from "@/lib/loyalty/loyalty-content-core";
 import { LOYALTY_CONSENT_BLOCK, checkConsentText } from "@/lib/loyalty/loyalty-consent-core";
 import { LOYALTY_HERO_PRESENTATION_BLOCK } from "@/lib/loyalty/loyalty-hero-core";
+import { LOYALTY_LOGO_BLOCK } from "@/lib/loyalty/loyalty-logo-core";
 
 function backTo(flag: string, tab: "banner" | "wording" = "banner"): string {
   // R61 S2: the page has tabs; land back on the one the owner was using.
@@ -200,4 +201,37 @@ export async function restoreLoyaltyHeroRevisionAction(formData: FormData): Prom
   });
   revalidatePath("/admin/loyalty-page");
   redirect(backTo("restored"));
+}
+
+// R64: the signup-form logo (one richjson block, its own scope guard + tab).
+async function logoAction(formData: FormData, publish: boolean): Promise<void> {
+  const session = await requirePermission("content.edit");
+  const blockKey = String(formData.get("block_key") ?? "");
+  if (blockKey !== LOYALTY_LOGO_BLOCK) redirect("/admin/loyalty-page");
+  const block = await getContentBlock(blockKey);
+  if (!block) redirect("/admin/loyalty-page?tab=logo");
+  if (publish) {
+    await publishContentBlock(blockKey, session.userId, { actorEmail: session.email });
+  } else {
+    await saveContentDraft(blockKey, String(formData.get("draft_value") ?? ""), session.userId);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: publish ? "content.publish" : "content.draft",
+    entityType: "content_block",
+    entityId: blockKey,
+    before: publish ? { published_value: block.published_value } : { draft_value: block.draft_value },
+  });
+  revalidatePath("/admin/loyalty-page");
+  if (publish) revalidatePath("/loyalty");
+  redirect(`/admin/loyalty-page?tab=logo&${publish ? "published" : "saved"}=1`);
+}
+
+export async function saveLoyaltyLogoDraftAction(formData: FormData): Promise<void> {
+  await logoAction(formData, false);
+}
+
+export async function publishLoyaltyLogoAction(formData: FormData): Promise<void> {
+  await logoAction(formData, true);
 }

@@ -864,6 +864,7 @@ import { __runOrderNameComplianceTests } from "../../src/lib/orders/order-name-c
 import { __runNewOrderWatchCoreTests } from "../../src/lib/orders/new-order-watch-core";
 import { __runMedicalContentCoreTests } from "../../src/lib/medical/medical-content-core";
 import { __runLoyaltyContentCoreTests } from "../../src/lib/loyalty/loyalty-content-core";
+import { __runLoyaltyLogoCoreTests } from "../../src/lib/loyalty/loyalty-logo-core";
 import { __runLoyaltyHeroCoreTests } from "../../src/lib/loyalty/loyalty-hero-core";
 import { __runShopCarouselCoreTests } from "../../src/lib/cms/shop-carousel-core";
 import { __runMenuSpecialFiltersTests } from "../../src/lib/menu/menu-special-filters-core";
@@ -1720,6 +1721,7 @@ __runLiquidVolumeTests();
   assertNoFailures("order-name-compliance-core", __runOrderNameComplianceTests());
   __runNewOrderWatchCoreTests();
   { const r = __runMedicalContentCoreTests(); if (r.passed < 1) throw new Error("medical-content-core: no assertions ran"); console.log(`medical-content-core: ${r.passed} assertions passed`); }
+  { const r = __runLoyaltyLogoCoreTests(); if (r.passed < 5) throw new Error("loyalty-logo-core: too few"); console.log(`loyalty-logo-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyContentCoreTests(); if (r.passed < 1) throw new Error("loyalty-content-core: no assertions ran"); console.log(`loyalty-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyHeroCoreTests(); if (r.passed < 1) throw new Error("loyalty-hero-core: no assertions ran"); console.log(`loyalty-hero-core: ${r.passed} assertions passed`); }
   { const r = __runShopCarouselCoreTests(); if (r.passed < 1) throw new Error("shop-carousel-core: no assertions ran"); console.log(`shop-carousel-core: ${r.passed} assertions passed`); }

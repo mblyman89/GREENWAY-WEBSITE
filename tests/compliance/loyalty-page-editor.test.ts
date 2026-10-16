@@ -102,7 +102,7 @@ describe("seeds are live-look-safe (byte-identical)", () => {
     }
   });
 
-  it("the seed's loyalty blocks are all present (12 loyalty blocks total)", () => {
+  it("the seed's loyalty blocks are all present (13 loyalty blocks total)", () => {
     const loyalty = CONTENT_BLOCK_SEEDS.filter((s) => s.block_key.startsWith("loyalty."));
     // SLICE 123 (LOY-1): +1 new block (loyalty.hero.presentation, richjson) for
     // the editable hero banner. Previously 10 -> now 11. MIG-5c did NOT add or
@@ -112,7 +112,8 @@ describe("seeds are live-look-safe (byte-identical)", () => {
     // 2 hero-heading copy + 1 hero-image + 1 hero-image-mobile +
     // 1 hero-presentation + 3 signup + 3 terms.
     // R41 S5: +1 (loyalty.form.consent_text, derived from the registry) -> 12.
-    expect(loyalty.length).toBe(12);
+    // R64: +1 (loyalty.form.logo, the signup-form logo editor) -> 13.
+    expect(loyalty.length).toBe(13);
     expect(byKey.has("loyalty.form.consent_text")).toBe(true);
     expect(byKey.has("loyalty.hero.title")).toBe(true);
     expect(byKey.has("loyalty.hero.subtitle")).toBe(true);

@@ -41,6 +41,7 @@ import {
   vendorChannelBlockKey,
 } from "@/lib/vendors/vendor-relations-core";
 import { BLOG_CONTENT_BLOCKS } from "@/lib/blog/blog-content-core";
+import { LOYALTY_LOGO_BLOCK, defaultLoyaltyLogo, serializeLoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -337,6 +338,16 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "richjson",
     seo_impact: true,
     defaultValue: serializeLoyaltyHeroPresentation(defaultLoyaltyHeroPresentation()),
+  },
+  {
+    // R64: the logo at the top of the signup form (picture, size, show/hide).
+    block_key: LOYALTY_LOGO_BLOCK,
+    page: "loyalty",
+    section: "form",
+    label: "Loyalty — signup form logo",
+    help_text: "The logo at the top of the signup form. Pick any picture, set its size, or hide it.",
+    field_type: "richjson",
+    defaultValue: serializeLoyaltyLogo(defaultLoyaltyLogo()),
   },
   // ---- Loyalty editable copy (SLICE 108) -----------------------------------
   // Friendly signup-form + program-terms copy. Legal consent text and the LIVE

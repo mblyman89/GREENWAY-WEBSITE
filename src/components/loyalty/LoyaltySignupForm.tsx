@@ -7,6 +7,7 @@ import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
 import type { LoyaltyHeroPresentation } from "@/lib/loyalty/loyalty-hero-core";
 
 import { DEFAULT_CONSENT_TEXT } from "@/lib/loyalty/loyalty-consent-core";
+import { defaultLoyaltyLogo, loyaltyLogoClass, type LoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
 import { BannerMedia } from "@/components/site/BannerMedia";
 
 const defaultValues = {
@@ -63,6 +64,8 @@ type LoyaltyContent = {
    * wording. Line breaks the owner types are kept (whitespace-pre-line).
    */
   consentText?: string;
+  /** R64: the owner-editable logo above the form (blank → shipped logo). */
+  logo?: LoyaltyLogo;
 };
 
 export function LoyaltySignupForm({
@@ -79,6 +82,7 @@ export function LoyaltySignupForm({
   // R41 S5: the consent paragraph shown next to the checkbox. A blank value
   // can never render an empty disclosure — it falls back to the shipped text.
   const consentText = content?.consentText?.trim() ? content.consentText : DEFAULT_CONSENT_TEXT;
+  const logo = content?.logo ?? defaultLoyaltyLogo();
   const [values, setValues] = useState<FormValues>(defaultValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -186,15 +190,18 @@ export function LoyaltySignupForm({
 
       <div className="relative mx-auto max-w-4xl px-4 py-7 md:px-8 md:py-10 lg:py-12">
         <div className="rounded-[1.35rem] border border-white/10 bg-zinc-950/92 p-5 text-center shadow-2xl shadow-black/40 md:rounded-[2rem] md:p-7 lg:p-9">
-          <div className="mx-auto flex justify-center">
-            <Image
-              src={greenwayBusiness.assets.blackGoldLogoTransparent}
-              alt="Greenway Marijuana black and gold logo"
-              width={360}
-              height={360}
-              className="h-auto w-40 object-contain sm:w-48 md:w-56"
-            />
-          </div>
+          {logo.show ? (
+            <div className="mx-auto flex justify-center">
+              <Image
+                src={logo.src}
+                alt={logo.alt}
+                width={360}
+                height={360}
+                unoptimized={/^https:/.test(logo.src) && !/\.supabase\.co\/storage\/v1\/object\/public\//.test(logo.src)}
+                className={`h-auto object-contain ${loyaltyLogoClass(logo.size)}`}
+              />
+            </div>
+          ) : null}
 
           <h1
             className="mx-auto mt-3 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white md:mt-4 md:text-5xl"
