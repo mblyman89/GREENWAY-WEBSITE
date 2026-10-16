@@ -40,6 +40,7 @@ import { __runCampaignRulesTests } from "@/lib/marketing/campaign-rules-core";
 import { __runCompetitivePlaybookTests } from "@/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "@/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "@/lib/marketing/flux-core";
+import { __runFluxPresetsTests } from "@/lib/marketing/flux-presets-core";
 import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placements-core";
 import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
@@ -199,6 +200,9 @@ describe("embedded pure self-test suites", () => {
   });
   it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {
     expect(() => __runFluxCoreTests()).not.toThrow();
+  });
+  it("flux-presets-core (R62: general-purpose prompt templates, snippets, prompt lint)", () => {
+    expect(() => __runFluxPresetsTests()).not.toThrow();
   });
   it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {
     expect(() => __runCreativePlacementsTests()).not.toThrow();

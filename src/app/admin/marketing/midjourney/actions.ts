@@ -6,7 +6,7 @@ import { suggestBrief, isAiConfigured, type BriefSuggestion } from "@/lib/market
 import { suggestCreativeConcept, type CreativeConcept } from "@/lib/marketing/creative-ai";
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { listVendors } from "@/lib/vendors/store";
-import { generateFluxImages, getFluxCredits } from "@/lib/marketing/flux-client";
+import { checkFluxTask, getFluxCredits, submitFluxImages } from "@/lib/marketing/flux-client";
 import { publicUrlForKey, uploadMedia } from "@/lib/media/store";
 import type { FluxImageSettings } from "@/lib/marketing/flux-core";
 import { placementById } from "@/lib/marketing/creative-placements-core";
@@ -127,67 +127,87 @@ export async function suggestCreativeConceptAction(input: {
   }
 }
 
-export type FluxImageItem =
-  | { ok: true; id: string; url: string; filename: string; title: string; seed?: number; cost?: number; outputMp?: number }
-  | { ok: false; error: string };
+export type FluxTaskTicket = { ok: true; id: string; pollingUrl: string; seed?: number; cost?: number; outputMp?: number } | { ok: false; error: string };
 
-export type FluxImagesResult =
-  | { ok: true; model: string; width?: number; height?: number; warnings: string[]; items: FluxImageItem[]; totalCost: number; credits: number | null }
+export type FluxSubmitImagesResult =
+  | { ok: true; model: string; width?: number; height?: number; warnings: string[]; tasks: FluxTaskTicket[]; totalCost: number }
   | { ok: false; error: string };
 
 /**
- * R62: generate 1, 2, 3, 4 or 8 images exactly like the BFL Playground. The
- * prompt is sent verbatim; only verified per-model fields are sent. Each image
- * is saved to the media library as a DRAFT (AI output is reviewed before
- * publish). content.edit.
+ * R62: submit 1, 2, 3, 4 or 8 images exactly like the BFL Playground. The
+ * prompt is sent verbatim with only verified per-model fields. The browser
+ * then polls each task with checkFluxTaskAction (no server timeout). content.edit.
  */
-export async function generateFluxImagesAction(settings: FluxImageSettings): Promise<FluxImagesResult> {
+export async function submitFluxImagesAction(settings: FluxImageSettings): Promise<FluxSubmitImagesResult> {
   const session = await requirePermission("content.edit");
-  if (!settings || typeof settings.prompt !== "string" || !settings.prompt.trim()) {
-    return { ok: false, error: "Write a prompt first." };
-  }
+  if (!settings || typeof settings.prompt !== "string" || !settings.prompt.trim()) return { ok: false, error: "Write a prompt first." };
   if (settings.prompt.length > 20000) return { ok: false, error: "That prompt is too long (20,000 characters max)." };
-  const res = await generateFluxImages(
-    { ...settings, referenceImages: (settings.referenceImages ?? []).filter((r) => typeof r === "string" && /^https:\/\//i.test(r.trim())) },
-    { uploadedBy: session.userId, tags: ["marketing"] },
-  );
+  const referenceImages = (settings.referenceImages ?? []).filter((r) => typeof r === "string" && /^https:\/\//i.test(r.trim()));
+  const res = await submitFluxImages({ ...settings, referenceImages });
   if (!res.ok) return res;
-
-  const items: FluxImageItem[] = res.outcomes.map((o) =>
-    o.ok
-      ? {
-          ok: true,
-          id: o.asset.id,
-          url: o.asset.public_url ?? publicUrlForKey(o.asset.storage_key) ?? "",
-          filename: o.asset.filename,
-          title: o.asset.title ?? o.asset.filename,
-          seed: o.seed,
-          cost: o.cost,
-          outputMp: o.outputMp,
-        }
-      : { ok: false, error: o.error },
-  );
-  const savedIds = items.flatMap((i) => (i.ok ? [i.id] : []));
-  const saved = savedIds.length;
+  const totalCost = res.tasks.reduce((s, t) => s + (t.ok && t.cost ? t.cost : 0), 0);
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
-    action: "flux.image_generated",
+    action: "flux.image_submitted",
     entityType: "media",
-    entityId: savedIds[0] ?? null,
+    entityId: null,
     after: {
       model: res.model,
-      requested: items.length,
-      saved,
+      count: res.tasks.length,
+      accepted: res.tasks.filter((t) => t.ok).length,
       width: res.width ?? null,
       height: res.height ?? null,
-      referenceCount: (settings.referenceImages ?? []).length,
-      cost: res.totalCost,
-      mediaIds: savedIds,
+      referenceCount: referenceImages.length,
+      cost: totalCost,
     },
   }).catch(() => undefined);
-  const credits = await getFluxCredits();
-  return { ok: true, model: res.model, width: res.width, height: res.height, warnings: res.warnings, items, totalCost: res.totalCost, credits };
+  return { ok: true, model: res.model, width: res.width, height: res.height, warnings: res.warnings, tasks: res.tasks, totalCost };
+}
+
+export type FluxCheckActionResult =
+  | { state: "pending"; label?: string; progress?: number }
+  | { state: "ready"; asset: { id: string; url: string; filename: string; title: string }; draftCache?: string }
+  | { state: "failed"; error: string };
+
+/**
+ * R62: poll up to 8 FLUX tasks (image or video) in parallel, ONCE. Finished
+ * files are saved to the media library as DRAFTS. The browser repeats the call
+ * for tasks still "pending", so long jobs never hit a server time limit.
+ */
+export async function checkFluxTasksAction(
+  tasks: { pollingUrl: string; kind: "image" | "video"; prompt: string }[],
+): Promise<FluxCheckActionResult[]> {
+  const session = await requirePermission("content.edit");
+  const list = Array.isArray(tasks) ? tasks.slice(0, 8) : [];
+  return Promise.all(
+    list.map(async (t): Promise<FluxCheckActionResult> => {
+      const kind = t?.kind === "video" ? "video" : "image";
+      const res = await checkFluxTask({
+        pollingUrl: String(t?.pollingUrl ?? ""),
+        kind,
+        prompt: String(t?.prompt ?? "").slice(0, 20000),
+        uploadedBy: session.userId,
+        tags: ["marketing"],
+      });
+      if (res.state !== "ready") return res;
+      const a = res.asset;
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: kind === "video" ? "flux.video_generated" : "flux.image_generated",
+        entityType: "media",
+        entityId: a.id,
+        after: { mime: a.mime_type, size: a.size_bytes },
+      }).catch(() => undefined);
+      const dc = res.result && typeof res.result.draft_cache === "string" ? res.result.draft_cache : undefined;
+      return {
+        state: "ready",
+        asset: { id: a.id, url: a.public_url ?? publicUrlForKey(a.storage_key) ?? "", filename: a.filename, title: a.title ?? a.filename },
+        draftCache: dc,
+      };
+    }),
+  );
 }
 
 /** R62: current BFL credit balance for the studio header. content.edit. */
