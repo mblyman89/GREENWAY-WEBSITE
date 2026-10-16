@@ -60,8 +60,11 @@ describe("R41 S8 studio UI", () => {
     expect(studio).toContain("Dismiss");
   });
   it("ghost is display-only", () => {
-    expect(canvas).toContain('data-gw-ai-ghost="zone"');
-    expect(canvas).toMatch(/data-gw-ai-ghost="zone"\s+className="pointer-events-none absolute"/);
-    expect(canvas).toMatch(/data-gw-ai-ghost="focus"\s+className="pointer-events-none absolute"/);
+    // R55: the ghost markup moved to CanvasParts (StudioCanvas renders <CanvasGuides ghost=…>).
+    expect(canvas).toContain("<CanvasGuides ghost={ghost}");
+    const parts = read("src/components/admin/banner-studio/CanvasParts.tsx");
+    expect(parts).toContain('data-gw-ai-ghost="zone"');
+    expect(parts).toMatch(/data-gw-ai-ghost="zone"\s+className="pointer-events-none absolute"/);
+    expect(parts).toMatch(/data-gw-ai-ghost="focus"\s+className="pointer-events-none absolute"/);
   });
 });

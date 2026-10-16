@@ -20,6 +20,7 @@
  */
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
+import { MAX_ELEMENTS, normalizeElement, normalizeOrder, resolveLayers, type DesignElement, type LayerRef } from "@/lib/cms/banner-elements-core";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,8 @@ export type DesignTextBox = {
   wrap: DesignWrap;
   hidden: boolean;
   hideOnMobile: boolean;
+  /** R55: locked = can't be dragged/nudged by accident (still editable in the panel). */
+  locked?: boolean;
 };
 
 export type DesignButton = {
@@ -230,6 +233,8 @@ export type DesignButton = {
   newTab: boolean;
   enabled: boolean;
   hideOnMobile: boolean;
+  /** R55: see DesignTextBox.locked. */
+  locked?: boolean;
 };
 
 export type DesignOverlay = {
@@ -273,6 +278,10 @@ export type BannerDesign = {
   overlay: DesignOverlay;
   boxes: DesignTextBox[];
   buttons: DesignButton[];
+  /** R55: decorative shapes (banner-elements-core). Written only when there are any. */
+  elements?: DesignElement[];
+  /** R55: layer paint order, back → front (ids). Written only after the owner reorders. */
+  order?: string[];
 };
 
 export type DesignPreset = "section" | "hero";
@@ -467,6 +476,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     wrap: pick(raw.wrap, DESIGN_WRAPS, d.wrap),
     hidden: bool(raw.hidden, false),
     hideOnMobile: bool(raw.hideOnMobile, false),
+    ...(raw.locked === true ? { locked: true } : {}),
   };
 }
 
@@ -495,6 +505,7 @@ export function normalizeButton(raw: unknown, fallbackId: string): DesignButton 
     newTab: bool(raw.newTab, false),
     enabled: bool(raw.enabled, true),
     hideOnMobile: bool(raw.hideOnMobile, false),
+    ...(raw.locked === true ? { locked: true } : {}),
   };
 }
 
@@ -522,7 +533,17 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
     nb.id = uniqueId(nb.id, used);
     buttons.push(nb);
   }
-  return {
+  // R55: shapes + layer order (only written when used → older designs unchanged).
+  const elements: DesignElement[] = [];
+  for (const [i, e] of (Array.isArray(raw.elements) ? raw.elements : []).entries()) {
+    if (elements.length >= MAX_ELEMENTS) break;
+    const ne = normalizeElement(e, `shape-${i + 1}`);
+    if (!ne) continue;
+    ne.id = uniqueId(ne.id, used);
+    elements.push(ne);
+  }
+  const order = normalizeOrder(raw.order, [...elements, ...boxes, ...buttons].map((x) => x.id));
+  const out: BannerDesign = {
     v: DESIGN_VERSION,
     enabled: bool(raw.enabled, false),
     frame: {
@@ -552,6 +573,9 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
     boxes,
     buttons,
   };
+  if (elements.length) out.elements = elements;
+  if (order) out.order = order;
+  return out;
 }
 
 /**
@@ -1123,6 +1147,9 @@ const half = (n: number) => Math.round(n * 2) / 2;
 
 /** Apply a move (desktop writes x/y, mobile writes mx/my). Unknown id → unchanged design. */
 export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign {
+  // R55: locked items never move (Draft Mode drag included).
+  const target = move.target === "box" ? design.boxes.find((x) => x.id === move.id) : design.buttons.find((x) => x.id === move.id);
+  if (target?.locked) return design;
   const next: BannerDesign = JSON.parse(JSON.stringify(design));
   if (move.target === "box") {
     const b = next.boxes.find((x) => x.id === move.id);
@@ -1154,10 +1181,21 @@ export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign 
 }
 
 /** Keyboard alternative to dragging (WCAG 2.5.7). Step 0.5%, Shift = 5%. */
-export function nudge(design: BannerDesign, target: "box" | "button", id: string, dx: number, dy: number, device: DesignDevice, shift = false): BannerDesign {
+export function nudge(design: BannerDesign, target: "box" | "button" | "element", id: string, dx: number, dy: number, device: DesignDevice, shift = false): BannerDesign {
   const step = shift ? 5 : 0.5;
+  if (target === "element") {
+    // R55: shapes move freely (they may bleed off the edge for effect, within 0–100%).
+    const el = (design.elements ?? []).find((e) => e.id === id);
+    if (!el || el.locked) return design;
+    const cx = device === "mobile" ? (el.mx ?? el.x) : el.x;
+    const cy = device === "mobile" ? (el.my ?? el.y) : el.y;
+    const x = half(Math.min(100, Math.max(0, cx + dx * step)));
+    const y = half(Math.min(100, Math.max(0, cy + dy * step)));
+    const elements = (design.elements ?? []).map((e) => (e.id !== id ? e : device === "mobile" ? { ...e, mx: x, my: y } : { ...e, x, y }));
+    return { ...design, elements };
+  }
   const item = target === "box" ? design.boxes.find((b) => b.id === id) : design.buttons.find((b) => b.id === id);
-  if (!item) return design;
+  if (!item || item.locked) return design;
   const cx = device === "mobile" ? (item.mx ?? item.x) : item.x;
   const cy = device === "mobile" ? (item.my ?? item.y) : item.y;
   return applyMove(design, { target, id, x: cx + dx * step, y: cy + dy * step, device });
@@ -1178,9 +1216,28 @@ export function parseMoveMessage(data: unknown): (DesignMove & { owner: string }
   return { owner, target: data.target, id, x: Math.min(100, Math.max(0, x)), y: Math.min(100, Math.max(0, y)), device: data.device };
 }
 
+/** R55: every layer, back → front (default: shapes, text, buttons; or the owner's order). */
+export function designLayers(design: BannerDesign): LayerRef[] {
+  const defaults: LayerRef[] = [
+    ...(design.elements ?? []).map((e) => ({ kind: "element" as const, id: e.id })),
+    ...design.boxes.map((b) => ({ kind: "box" as const, id: b.id })),
+    ...design.buttons.map((b) => ({ kind: "button" as const, id: b.id })),
+  ];
+  return resolveLayers(defaults, design.order);
+}
+
+/**
+ * R55: z-index per id when the owner has reordered layers; null otherwise
+ * (no z-index written, so pre-R55 banners render byte-identically).
+ */
+export function layerZ(design: BannerDesign): Map<string, number> | null {
+  if (!design.order?.length) return null;
+  return new Map(designLayers(design).map((r, i) => [r.id, i + 1]));
+}
+
 /** Next free id for a new box/button (editor "Add"). */
 export function nextId(design: BannerDesign, base: string): string {
-  const used = new Set([...design.boxes.map((b) => b.id), ...design.buttons.map((b) => b.id)]);
+  const used = new Set([...design.boxes.map((b) => b.id), ...design.buttons.map((b) => b.id), ...(design.elements ?? []).map((e) => e.id)]);
   return uniqueId(cleanId(base, "item"), used);
 }
 
@@ -1428,6 +1485,25 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     const full = { ...noEye, boxes: Array.from({ length: MAX_TEXT_BOXES }, (_, i) => defaultTextBox("body", { id: `b${i}` })) };
     ok(ensureBoundBoxes(full, { eyebrow: "G" }).boxes.length === MAX_TEXT_BOXES, "R47 never exceeds box cap");
     ok(normalizeDesign(fixed) !== null, "R47 result normalizes");
+  }
+
+  // R55-S2: shapes, layer order, lock.
+  {
+    const base = defaultDesign("section");
+    ok(!("elements" in normalizeDesign(base)!) && !("order" in normalizeDesign(base)!), "R55 no shapes/order written when unused");
+    const withEl = normalizeDesign({ ...base, elements: [{ shape: "circle", id: "headline" }, { shape: "star" }, "junk"], order: ["shape-2", "headline", "nope", "headline-2"] })!;
+    ok(withEl.elements!.length === 2 && withEl.elements![0].id === "headline-2", "R55 shape ids unique vs text boxes");
+    ok(J(withEl.order) === J(["shape-2", "headline", "headline-2"]), "R55 order cleaned to known ids");
+    ok(J(normalizeDesign(JSON.parse(J(withEl)))) === J(withEl), "R55 shapes + order round trip");
+    ok(designLayers(withEl)[0].id === "shape-2" && designLayers(withEl).length === withEl.boxes.length + 2, "R55 layers follow order, all items present");
+    ok(layerZ(base) === null && layerZ(withEl)!.get("shape-2") === 1, "R55 z-index only when reordered");
+    const locked = normalizeDesign({ ...base, boxes: [{ ...base.boxes[1], locked: true }] })!;
+    ok(locked.boxes[0].locked === true && !("locked" in normalizeDesign(base)!.boxes[0]), "R55 lock kept, absent by default");
+    ok(nudge(locked, "box", locked.boxes[0].id, 1, 0, "desktop") === locked, "R55 locked box can't nudge");
+    ok(applyMove(locked, { target: "box", id: locked.boxes[0].id, x: 1, y: 1, device: "desktop" }) === locked, "R55 locked box can't move");
+    const nEl = nudge(withEl, "element", "shape-2", 1, 0, "mobile", true);
+    ok(nEl.elements![1].mx === nEl.elements![1].x + 5 && nEl.elements![1].x === withEl.elements![1].x, "R55 shape nudge writes phone override");
+    ok(nextId(withEl, "shape") === "shape" && nextId(withEl, "shape-2") === "shape-2-2", "R55 nextId knows shape ids");
   }
 
   return { passed, failed };

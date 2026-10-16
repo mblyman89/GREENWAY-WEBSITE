@@ -946,6 +946,7 @@ import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
 import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
+import { __runBannerElementsTests } from "../../src/lib/cms/banner-elements-core";
 import { __runHomeSlideAdvancedCoreTests } from "../../src/lib/cms/home-slide-advanced-core";
 import { __runBannerScheduleCoreTests } from "../../src/lib/cms/banner-schedule-core";
 import { __runImageOptimizeCoreTests } from "../../src/lib/media/image-optimize-core";
@@ -2276,11 +2277,12 @@ __runLiquidVolumeTests();
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 31); // R40: ACH guide journeys, blockers, explainer; R41 S6: Timberland setup journey
-  assertRan("banner-design-core", __runBannerDesignCoreTests(), 114); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
+  assertRan("banner-design-core", __runBannerDesignCoreTests(), 125); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 30); // R47: home carousel advanced options; R54 repeat/fallback
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
+  assertRan("banner-elements-core", __runBannerElementsTests(), 26); // R55-S2: shapes + layers
   assertRan("banner-compare-core", __runBannerCompareTests(), 22); // R55-S1: banner comparison
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers

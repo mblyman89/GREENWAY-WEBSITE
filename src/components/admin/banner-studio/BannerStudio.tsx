@@ -21,11 +21,13 @@ import { TextBoxPanel } from "./TextBoxPanel";
 import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
+import { ShapePanel } from "./ShapePanel";
+import { LayersPanel } from "./LayersPanel";
 import type { PickerPost } from "./LinkPicker";
 import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
 import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
 
-type Tab = "text" | "buttons" | "picture" | "checks";
+type Tab = "text" | "buttons" | "shapes" | "layers" | "picture" | "checks";
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
 
@@ -127,14 +129,19 @@ export function BannerStudio({
     setSelection(s);
     if (s?.target === "box" && tab !== "text") setTab("text");
     if (s?.target === "button" && tab !== "buttons") setTab("buttons");
+    // R55: shapes open their own tab (unless the owner is working in Layers).
+    if (s?.target === "element" && tab !== "shapes" && tab !== "layers") setTab("shapes");
   }
 
   function confirmDelete() {
     const s = pendingDelete;
     setPendingDelete(null);
     if (!s) return;
-    if (s.target === "box") change({ ...design, boxes: design.boxes.filter((b) => b.id !== s.id) });
-    else change({ ...design, buttons: design.buttons.filter((b) => b.id !== s.id) });
+    const order = design.order?.filter((id) => id !== s.id);
+    const rest = { ...design, ...(design.order ? { order: order?.length ? order : undefined } : {}) };
+    if (s.target === "box") change({ ...rest, boxes: design.boxes.filter((b) => b.id !== s.id) });
+    else if (s.target === "element") change({ ...rest, elements: (design.elements ?? []).filter((e) => e.id !== s.id) });
+    else change({ ...rest, buttons: design.buttons.filter((b) => b.id !== s.id) });
     setSelection(null);
   }
 
@@ -172,6 +179,7 @@ export function BannerStudio({
       image: { ...design.image, focusXMobile: null, focusYMobile: null },
       boxes: design.boxes.map((b) => ({ ...b, mx: null, my: null, mw: null })),
       buttons: design.buttons.map((b) => ({ ...b, mx: null, my: null })),
+      ...(design.elements ? { elements: design.elements.map((e) => ({ ...e, mx: null, my: null, mw: null, mh: null })) } : {}),
     });
   }
 
@@ -179,7 +187,8 @@ export function BannerStudio({
     design.image.focusXMobile !== null ||
     design.image.focusYMobile !== null ||
     design.boxes.some((b) => b.mx !== null || b.my !== null || b.mw !== null) ||
-    design.buttons.some((b) => b.mx !== null || b.my !== null);
+    design.buttons.some((b) => b.mx !== null || b.my !== null) ||
+    (design.elements ?? []).some((e) => e.mx !== null || e.my !== null || e.mw !== null || e.mh !== null);
 
   const warnCount = checkDesign(design, legacy).length;
   const tabBtn = (id: Tab, label: string) => (
@@ -288,12 +297,14 @@ export function BannerStudio({
         />
       </div>
       <p className="text-[0.7rem] text-white/45">
-        Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · click an item, then arrow keys nudge it (Shift = bigger steps) · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
+        Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · click an item, then arrow keys nudge it (Shift = bigger steps) · 🔒 locked items stay put · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
       </p>
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-white/10">
         {tabBtn("text", "✏️ Text")}
         {tabBtn("buttons", "🔘 Buttons")}
+        {tabBtn("shapes", "◆ Shapes")}
+        {tabBtn("layers", "☰ Layers")}
         {tabBtn("picture", "🖼 Picture & shade")}
         {tabBtn("checks", warnCount ? `⚠️ Checks (${warnCount})` : "✓ Checks")}
       </div>
@@ -302,6 +313,10 @@ export function BannerStudio({
           <TextBoxPanel design={design} device={device} legacy={legacy} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "buttons" ? (
           <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+        ) : tab === "shapes" ? (
+          <ShapePanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+        ) : tab === "layers" ? (
+          <LayersPanel design={design} legacy={legacy} selection={selection} onSelect={select} onChange={change} />
         ) : tab === "picture" ? (
           <ImagePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} mediaChoices={mediaChoices} />
         ) : (
@@ -311,7 +326,7 @@ export function BannerStudio({
 
       <ConfirmDialog
         open={!!pendingDelete}
-        title={pendingDelete?.target === "button" ? "Delete this button?" : "Delete this text box?"}
+        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? "Delete this shape?" : "Delete this text box?"}
         description="You can bring it back with Undo until you leave the page."
         confirmLabel="Delete"
         tone="danger"
