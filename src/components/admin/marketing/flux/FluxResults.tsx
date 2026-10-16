@@ -18,6 +18,7 @@ export function FluxResults({
   onUseAsReference,
   onReuseSeed,
   onEnhanceDraft,
+  onUseVideo,
   onRemove,
   onClear,
   emptyText,
@@ -27,6 +28,7 @@ export function FluxResults({
   onUseAsReference?: (j: FluxJob) => void;
   onReuseSeed?: (seed: number) => void;
   onEnhanceDraft?: (j: FluxJob) => void;
+  onUseVideo?: (j: FluxJob) => void;
   onRemove: (key: string) => void;
   onClear: () => void;
   emptyText: string;
@@ -89,6 +91,11 @@ export function FluxResults({
                     {j.kind === "image" && onUseAsReference && (
                       <button type="button" onClick={() => onUseAsReference(j)} className="rounded-md bg-[var(--admin-surface-2)] px-2 py-1 text-[0.68rem] font-bold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]">
                         Use as reference
+                      </button>
+                    )}
+                    {j.kind === "video" && onUseVideo && (
+                      <button type="button" onClick={() => onUseVideo(j)} className="rounded-md bg-[var(--admin-surface-2)] px-2 py-1 text-[0.68rem] font-bold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]" title="Use this clip as the source for Continue, Edit or Upscale">
+                        Use as source clip
                       </button>
                     )}
                     {j.kind === "video" && j.draftCache && onEnhanceDraft && (

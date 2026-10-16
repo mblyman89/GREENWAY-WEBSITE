@@ -128,6 +128,108 @@ export const IMAGE_SNIPPETS: SnippetGroup[] = [
   },
 ];
 
+/**
+ * Video starters (FLUX 3). BFL's video guide: describe the action and camera
+ * movement in plain language, add an "Audio:" line for sound, put spoken lines
+ * in quotes with a visible speaker, and say "no on-screen text" when you don't
+ * want captions.
+ */
+export const VIDEO_TEMPLATES: PromptSnippet[] = [
+  {
+    id: "v-shot",
+    label: "Shot: subject + action + camera",
+    text: "[Subject] [doing what] in [place]. [Camera move, e.g. slow dolly-in at eye level]. [Lighting and mood]. Audio: [ambient sound, music or effects]. No on-screen text.",
+    hint: "One clear action and one camera move per shot works best.",
+  },
+  {
+    id: "v-product",
+    label: "Product reveal",
+    text: "[Product] on [surface], slow 180-degree orbit around it, soft studio light sweeping across the surface, shallow depth of field, premium commercial look. Audio: subtle cinematic whoosh and a soft musical swell. No on-screen text.",
+  },
+  {
+    id: "v-social",
+    label: "Vertical social clip",
+    text: "Vertical handheld shot of [subject] [doing what] in [place], natural daylight, energetic and authentic, quick push-in at the end. Audio: upbeat background music and natural room sound. No on-screen text, no subtitles.",
+  },
+  {
+    id: "v-establishing",
+    label: "Establishing / b-roll",
+    text: "Wide establishing shot of [location] at [time of day], slow aerial drone glide forward, [weather and light], cinematic colour grade. Audio: [environmental ambience].",
+  },
+  {
+    id: "v-dialogue",
+    label: "Dialogue",
+    text: "Medium close-up of [speaker description] in [place], facing the camera, saying: \"[Line of dialogue]\". Static camera, soft key light. Audio: clear voice, quiet room tone. No subtitles.",
+    hint: "Quoted speech needs a visible speaker.",
+  },
+  {
+    id: "v-animate",
+    label: "Animate image 1",
+    text: "Bring image 1 to life: [what moves, e.g. hair and fabric in a light breeze, clouds drifting], gentle [camera move]. Keep the subject and composition of image 1. Audio: [sound].",
+  },
+  {
+    id: "v-edit",
+    label: "Edit instruction",
+    text: "Change [what] to [new look], keep everything else exactly the same.",
+    hint: "For the Edit mode: describe only the change.",
+  },
+];
+
+export const VIDEO_SNIPPETS: SnippetGroup[] = [
+  {
+    id: "move",
+    label: "Camera move",
+    snippets: [
+      { id: "dolly-in", label: "Dolly in", text: "slow dolly-in toward the subject" },
+      { id: "dolly-out", label: "Pull back", text: "slow pull-back revealing the wider scene" },
+      { id: "orbit", label: "Orbit", text: "smooth orbit around the subject" },
+      { id: "pan", label: "Pan", text: "slow pan from left to right" },
+      { id: "tilt", label: "Tilt up", text: "slow tilt up from the ground to the sky" },
+      { id: "tracking", label: "Tracking", text: "tracking shot following the subject at walking pace" },
+      { id: "crane", label: "Crane", text: "crane shot rising up and over the scene" },
+      { id: "handheld", label: "Handheld", text: "handheld camera with natural, subtle shake" },
+      { id: "static", label: "Locked-off", text: "static locked-off camera on a tripod" },
+      { id: "drone", label: "Drone", text: "aerial drone shot gliding forward" },
+    ],
+  },
+  {
+    id: "shot",
+    label: "Shot & lens",
+    snippets: [
+      { id: "wide", label: "Wide", text: "wide shot" },
+      { id: "medium", label: "Medium", text: "medium shot" },
+      { id: "closeup", label: "Close-up", text: "close-up" },
+      { id: "macro", label: "Macro", text: "extreme macro close-up" },
+      { id: "pov", label: "POV", text: "first-person point-of-view shot" },
+      { id: "slowmo", label: "Slow motion", text: "in slow motion" },
+      { id: "anamorphic", label: "Anamorphic", text: "anamorphic lens, cinematic flares, 2.39:1 film look" },
+    ],
+  },
+  {
+    id: "look",
+    label: "Look",
+    snippets: [
+      { id: "cinematic", label: "Cinematic", text: "cinematic colour grade, shallow depth of field" },
+      { id: "doc", label: "Documentary", text: "natural documentary style, available light" },
+      { id: "commercial", label: "Commercial", text: "polished commercial look, crisp and bright" },
+      { id: "film", label: "35mm film", text: "shot on 35mm film, natural grain" },
+      { id: "anim3d", label: "3D animation", text: "stylised 3D animation, soft global illumination" },
+      { id: "golden", label: "Golden hour", text: "warm golden-hour light" },
+    ],
+  },
+  {
+    id: "audio",
+    label: "Audio",
+    snippets: [
+      { id: "ambient", label: "Ambience", text: "Audio: natural ambient sound of the scene." },
+      { id: "music", label: "Music", text: "Audio: [upbeat / calm / cinematic] instrumental music." },
+      { id: "sfx", label: "Sound effects", text: "Audio: [specific sound effects synced to the action]." },
+      { id: "voice", label: "Voice line", text: 'The [speaker] says: "[line]".' },
+      { id: "notext", label: "No on-screen text", text: "No on-screen text, no subtitles." },
+    ],
+  },
+];
+
 /** Append a snippet to a prompt with sensible punctuation. */
 export function insertSnippet(prompt: string, snippet: string): string {
   const p = prompt.replace(/\s+$/, "");
@@ -179,8 +281,12 @@ export function __runFluxPresetsTests(): string {
   ok(promptWarnings("put image 3 here", 2).some((w) => w.includes("image 3")), "missing ref warned");
   ok(promptWarnings("combine them", 2).some((w) => w.includes("image 1")), "unnamed refs tip");
   ok(promptWarnings("image 1 on image 2", 2).length === 0, "clean prompt");
-  const all = [...IMAGE_TEMPLATES, ...IMAGE_SNIPPETS.flatMap((g) => g.snippets)];
-  ok(new Set(all.map((s) => s.id)).size === all.length, "unique ids");
+  const all = [...IMAGE_TEMPLATES, ...IMAGE_SNIPPETS.flatMap((g) => g.snippets), ...VIDEO_TEMPLATES, ...VIDEO_SNIPPETS.flatMap((g) => g.snippets)];
+  const img = [...IMAGE_TEMPLATES, ...IMAGE_SNIPPETS.flatMap((g) => g.snippets)];
+  const vid = [...VIDEO_TEMPLATES, ...VIDEO_SNIPPETS.flatMap((g) => g.snippets)];
+  ok(new Set(img.map((s) => s.id)).size === img.length, "unique image ids");
+  ok(new Set(vid.map((s) => s.id)).size === vid.length, "unique video ids");
+  ok(VIDEO_TEMPLATES.length >= 5 && VIDEO_SNIPPETS.some((g) => g.id === "audio"), "video presets present");
   ok(!all.some((s) => /cannabis|marijuana|weed|bud\b/i.test(s.text)), "general purpose (no cannabis bias)");
   return `OK flux-presets-core: ${n} assertions passed`;
 }

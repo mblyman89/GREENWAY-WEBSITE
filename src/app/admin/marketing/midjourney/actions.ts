@@ -6,7 +6,8 @@ import { suggestBrief, isAiConfigured, type BriefSuggestion } from "@/lib/market
 import { suggestCreativeConcept, type CreativeConcept } from "@/lib/marketing/creative-ai";
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { listVendors } from "@/lib/vendors/store";
-import { checkFluxTask, getFluxCredits, submitFluxImages } from "@/lib/marketing/flux-client";
+import { checkFluxTask, getFluxCredits, submitFluxImages, submitFluxVideo } from "@/lib/marketing/flux-client";
+import type { FluxVideoSettings } from "@/lib/marketing/flux-video-core";
 import { publicUrlForKey, uploadMedia } from "@/lib/media/store";
 import type { FluxImageSettings } from "@/lib/marketing/flux-core";
 import { placementById } from "@/lib/marketing/creative-placements-core";
@@ -208,6 +209,46 @@ export async function checkFluxTasksAction(
       };
     }),
   );
+}
+
+export type FluxSubmitVideoResult =
+  | { ok: true; endpoint: string; warnings: string[]; pollingUrl: string; cost?: number }
+  | { ok: false; error: string };
+
+/**
+ * R62: submit ONE FLUX 3 video task — generate (t2v / i2v / v2v), edit,
+ * upscale, or enhance a draft to full quality. The browser polls it with
+ * checkFluxTasksAction; the finished mp4 is saved as a media DRAFT. content.edit.
+ */
+export async function submitFluxVideoAction(
+  input: { kind: "generate"; settings: FluxVideoSettings } | { kind: "enhance"; draftCache: string; resolution: string; safetyTolerance: number },
+): Promise<FluxSubmitVideoResult> {
+  const session = await requirePermission("content.edit");
+  if (!input || (input.kind !== "generate" && input.kind !== "enhance")) return { ok: false, error: "Invalid request." };
+  if (input.kind === "generate" && typeof input.settings?.prompt === "string" && input.settings.prompt.length > 20000) {
+    return { ok: false, error: "That prompt is too long (20,000 characters max)." };
+  }
+  const res = await submitFluxVideo(input);
+  if (!res.ok) return res;
+  if (!res.task.ok) return { ok: false, error: res.task.error };
+  const s = input.kind === "generate" ? input.settings : null;
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "flux.video_submitted",
+    entityType: "media",
+    entityId: null,
+    after: {
+      endpoint: res.endpoint,
+      mode: s ? s.mode : "draft_enhance",
+      duration: s ? s.duration : null,
+      resolution: s ? s.resolution : input.kind === "enhance" ? input.resolution : null,
+      draft: s ? Boolean(s.draft) : false,
+      keyframes: s?.keyframes?.length ?? 0,
+      cost: res.task.cost ?? null,
+    },
+  }).catch(() => undefined);
+  return { ok: true, endpoint: res.endpoint, warnings: res.warnings, pollingUrl: res.task.pollingUrl, cost: res.task.cost };
 }
 
 /** R62: current BFL credit balance for the studio header. content.edit. */
