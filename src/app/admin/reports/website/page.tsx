@@ -10,6 +10,9 @@
  * written by the ClickTracker on the public site. No cookies, IP addresses
  * or customer ids are stored. Staff previews and visitors with Global
  * Privacy Control are not counted.
+ *
+ * R59-S4: "Page speed" now shows REAL Core Web Vitals from real visits
+ * (website_web_vitals, migration 0280) instead of only a Vercel link.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -34,6 +37,9 @@ import { isHomeSlideLiveAt, normalizeHomeSlideAdvanced } from "@/lib/cms/home-sl
 import { pickLiveWithFallback } from "@/lib/cms/banner-schedule-core";
 import { listSchedules } from "@/lib/cms/content-schedule-server";
 import { TARGET_KIND_LABEL } from "@/lib/cms/content-schedule-core";
+import { readVitalsSince } from "@/lib/analytics/web-vitals-store";
+import { summarizeVitals } from "@/lib/analytics/web-vitals-core";
+import { PageSpeedReport } from "@/components/admin/reports/PageSpeedReport";
 
 export const dynamic = "force-dynamic";
 
@@ -196,12 +202,14 @@ export default async function WebsiteReportPage({
 
   const { nowMs, sinceIso } = clickReportWindow(days);
   const prevWin = previousWindow(days, nowMs);
-  const [clicks, prevClicks, live, schedules] = await Promise.all([
+  const [clicks, prevClicks, live, schedules, vitals] = await Promise.all([
     readClicksSince(sinceIso),
     readClicksSince(prevWin.sinceIso, prevWin.untilIso),
     liveSlots(nowMs),
     listSchedules({ recentDays: days }),
+    readVitalsSince(sinceIso).catch(() => ({ rows: [], missingTable: false, truncated: false })),
   ]);
+  const speed = summarizeVitals(vitals.rows, days, nowMs);
   const comparison = compareBanners(clicks.rows, prevClicks.rows, live, days);
   const summary = summarizeClicks(clicks.rows, days, nowMs);
   const dead = deadSlots(live, clicks.rows);
@@ -338,20 +346,12 @@ export default async function WebsiteReportPage({
         )}
       </Section>
 
-      <Section title="Page speed" subtitle="How fast the site loads for real customers">
-        <p className="text-sm text-white/60">
-          Speed is measured by Vercel Speed Insights on real visits. Open{" "}
-          <a
-            href="https://vercel.com/dashboard"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[var(--admin-accent)] underline"
-          >
-            your Vercel dashboard ↗
-          </a>
-          , pick the Greenway project, then <strong>Speed Insights</strong>. Green scores (90+) are good.
-        </p>
-        <p className="mt-2 text-xs text-white/40">
+      <Section
+        title="Page speed — real visitors"
+        subtitle={`How fast the site really loads and reacts for shoppers, last ${days} days, scored like Google does (Core Web Vitals, 75th percentile).`}
+      >
+        <PageSpeedReport summary={speed} days={days} missingTable={vitals.missingTable} />
+        <p className="mt-3 text-xs text-white/40">
           For visitor counts, traffic sources and search terms, use Google Analytics and Google Search Console.
         </p>
       </Section>

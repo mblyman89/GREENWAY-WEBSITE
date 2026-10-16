@@ -324,6 +324,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "webauthn_credentials",
   "website_category_types",
   "website_click_events",
+  "website_web_vitals",
 ] as const;
 
 /** The tables the migrations create, for `buildResetPlan`. */

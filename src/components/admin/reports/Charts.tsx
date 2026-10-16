@@ -55,11 +55,14 @@ export function DayBarChart({
   color = GREEN,
   valueFormatter,
   height = 120,
+  showTotal = true,
 }: {
   data: DayPoint[];
   color?: string;
   valueFormatter?: (v: number) => string;
   height?: number;
+  /** R59: off for averages / percentiles, where a sum means nothing. */
+  showTotal?: boolean;
 }) {
   const max = Math.max(...data.map((d) => d.value), 1);
   const fmt = valueFormatter ?? ((v: number) => String(v));
@@ -87,7 +90,7 @@ export function DayBarChart({
       </div>
       <div className="mt-2 flex items-center justify-between text-[0.62rem] uppercase tracking-[0.1em] text-white/30">
         <span>{data[0]?.date}</span>
-        <span className="text-white/50">Total {fmt(total)}</span>
+        {showTotal ? <span className="text-white/50">Total {fmt(total)}</span> : null}
         <span>{data[data.length - 1]?.date}</span>
       </div>
     </div>
