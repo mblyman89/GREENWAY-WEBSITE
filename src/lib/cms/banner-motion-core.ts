@@ -34,7 +34,11 @@ export const ELEMENT_HOVERS: ElementHover[] = ["grow", "lift", "spin", "glow"];
 export const TEXT_HOVERS: TextHover[] = ["grow", "lift", "glow"];
 export const MOTION_SPEEDS: MotionSpeed[] = ["slow", "fast"];
 /** Shapes that can take part in a morph (line has no area). */
-export const MORPH_SHAPES = ["rect", "circle", "triangle", "star", "burst", "arrow", "diamond"] as const;
+export const MORPH_SHAPES = [
+  "rect", "circle", "triangle", "star", "burst", "arrow", "diamond",
+  // R58-S4 — new outlines that are "star-shaped" from the centre (ray-cast morph stays clean)
+  "pentagon", "hexagon", "octagon", "star4", "star6", "seal", "heart", "shield", "cross", "cloud",
+] as const;
 export type MorphShape = (typeof MORPH_SHAPES)[number];
 /** Shapes drawn with CSS boxes (rounded corners) — the only ones "blob" applies to. */
 export const BLOB_SHAPES = ["rect", "circle"];

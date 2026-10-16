@@ -44,12 +44,14 @@ describe("R55-S3 icons", () => {
       const src = read(f);
       expect(src, f).not.toContain("banner-icons-data");
       expect(src, f).not.toContain("@phosphor-icons");
+      expect(src, f).not.toContain("banner-objects-data");
     }
     expect(read("src/components/admin/banner-studio/ShapePanel.tsx")).toContain("defaultIcon(icon, weight, path");
   });
   it("icon paths are validated to SVG path commands only", () => {
     expect(read("src/lib/cms/banner-elements-core.ts")).toContain("if (isIcon && !isSafeIconPath(raw.iconPath)) return null;");
     expect(read("src/lib/cms/banner-icons-data.ts")).toContain("Phosphor Icons (https://phosphoricons.com), MIT License");
+    expect(read("src/lib/cms/banner-objects-data.ts")).toContain("Material Design Icons (https://pictogrammers.com), Apache");
   });
 });
 

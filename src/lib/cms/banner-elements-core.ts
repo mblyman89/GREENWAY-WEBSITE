@@ -29,7 +29,12 @@ import { elementMotion, normalizeElementMotion, type ElementMotionFields } from 
 
 export const MAX_ELEMENTS = 12;
 
-export type ShapeKind = "rect" | "circle" | "line" | "triangle" | "star" | "burst" | "arrow" | "diamond";
+export type ShapeKind =
+  | "rect" | "circle" | "line" | "triangle" | "star" | "burst" | "arrow" | "diamond"
+  // R58-S4 — bigger shape library (all polygons, so outline/orbit/morph just work)
+  | "pentagon" | "hexagon" | "octagon" | "star4" | "star6" | "seal" | "heart" | "cloud" | "bubble"
+  | "ribbon" | "tag" | "shield" | "cross" | "chevron" | "parallelogram" | "trapezoid" | "bolt"
+  | "drop" | "moon" | "half" | "arrow2" | "frame";
 export const SHAPE_KINDS: { id: ShapeKind; label: string; square: boolean }[] = [
   { id: "rect", label: "Rectangle", square: false },
   { id: "circle", label: "Circle", square: true },
@@ -39,7 +44,38 @@ export const SHAPE_KINDS: { id: ShapeKind; label: string; square: boolean }[] = 
   { id: "burst", label: "Sale burst", square: true },
   { id: "arrow", label: "Arrow", square: false },
   { id: "diamond", label: "Diamond", square: true },
+  { id: "pentagon", label: "Pentagon", square: true },
+  { id: "hexagon", label: "Hexagon", square: true },
+  { id: "octagon", label: "Octagon", square: true },
+  { id: "star4", label: "Sparkle star", square: true },
+  { id: "star6", label: "6-point star", square: true },
+  { id: "seal", label: "Seal", square: true },
+  { id: "heart", label: "Heart", square: true },
+  { id: "cloud", label: "Cloud", square: false },
+  { id: "bubble", label: "Speech bubble", square: false },
+  { id: "ribbon", label: "Ribbon", square: false },
+  { id: "tag", label: "Price tag", square: false },
+  { id: "shield", label: "Shield", square: true },
+  { id: "cross", label: "Plus", square: true },
+  { id: "chevron", label: "Chevron", square: false },
+  { id: "parallelogram", label: "Slant box", square: false },
+  { id: "trapezoid", label: "Trapezoid", square: false },
+  { id: "bolt", label: "Lightning", square: true },
+  { id: "drop", label: "Drop", square: true },
+  { id: "moon", label: "Moon", square: true },
+  { id: "half", label: "Half circle", square: false },
+  { id: "arrow2", label: "Double arrow", square: false },
+  { id: "frame", label: "Ring", square: true },
 ];
+/** R58-S4 — search words for the shape picker. */
+export const SHAPE_KEYWORDS: Partial<Record<ShapeKind, string>> = {
+  rect: "box square banner pill background", circle: "dot round oval", line: "divider rule", burst: "sale starburst explosion",
+  star: "rating favourite", seal: "badge sticker certified", star4: "twinkle shine glint", heart: "love valentine",
+  cloud: "smoke weather puff", bubble: "chat talk quote speech", ribbon: "banner label sash", tag: "price label sale",
+  shield: "badge security crest", cross: "plus add medical", chevron: "arrow next", bolt: "flash lightning energy power",
+  drop: "water oil tincture rain", moon: "night crescent sleep indica", half: "semicircle sun rise arch", arrow2: "both swap",
+  frame: "ring donut circle outline", parallelogram: "slant skew", hexagon: "honeycomb molecule thc",
+};
 const SHAPE_IDS = SHAPE_KINDS.map((s) => s.id);
 
 export const ICON_PATH_MAX = 4000;
@@ -341,7 +377,59 @@ export function shapePoints(shape: ShapeKind): string | null {
     }
     return out.join(" ");
   };
+  const poly = (sides: number, rot = -Math.PI / 2) => {
+    const pts: [number, number][] = [];
+    for (let i = 0; i < sides; i += 1) {
+      const a = rot + (2 * Math.PI * i) / sides;
+      pts.push([Math.cos(a), Math.sin(a)]);
+    }
+    return fit(pts);
+  };
   switch (shape) {
+    case "pentagon":
+      return poly(5);
+    case "hexagon":
+      return poly(6, 0);
+    case "octagon":
+      return poly(8, Math.PI / 8);
+    case "star4":
+      return star(4, 0.32);
+    case "star6":
+      return star(6, 0.55);
+    case "seal":
+      return star(12, 0.86);
+    case "heart":
+      return heartPoints();
+    case "cloud":
+      return cloudPoints();
+    case "bubble":
+      return "0,0 100,0 100,78 38,78 18,100 22,78 0,78";
+    case "ribbon":
+      return "0,0 100,0 90,50 100,100 0,100 10,50";
+    case "tag":
+      return "0,0 78,0 100,50 78,100 0,100";
+    case "shield":
+      return "50,0 100,14 96,52 82,78 50,100 18,78 4,52 0,14";
+    case "cross":
+      return "34,0 66,0 66,34 100,34 100,66 66,66 66,100 34,100 34,66 0,66 0,34 34,34";
+    case "chevron":
+      return "0,0 70,0 100,50 70,100 0,100 30,50";
+    case "parallelogram":
+      return "22,0 100,0 78,100 0,100";
+    case "trapezoid":
+      return "20,0 80,0 100,100 0,100";
+    case "bolt":
+      return "58,0 12,58 44,58 34,100 88,38 56,38 70,0";
+    case "drop":
+      return dropPoints();
+    case "moon":
+      return moonPoints();
+    case "half":
+      return halfPoints();
+    case "arrow2":
+      return "0,50 24,0 24,28 76,28 76,0 100,50 76,100 76,72 24,72 24,100";
+    case "frame":
+      return ringPoints();
     case "triangle":
       return "50,0 100,100 0,100";
     case "diamond":
@@ -355,6 +443,83 @@ export function shapePoints(shape: ShapeKind): string | null {
     default:
       return null;
   }
+}
+
+/** Scale any point cloud to fill the 0–100 box. */
+function fit(pts: [number, number][]): string {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  return pts.map(([x, y]) => `${r4(((x - x0) / (x1 - x0 || 1)) * 100)},${r4(((y - y0) / (y1 - y0 || 1)) * 100)}`).join(" ");
+}
+function heartPoints(): string {
+  const pts: [number, number][] = [];
+  for (let i = 0; i < 48; i += 1) {
+    const t = (2 * Math.PI * i) / 48;
+    pts.push([16 * Math.sin(t) ** 3, -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))]);
+  }
+  return fit(pts);
+}
+/** Cloud = outline of overlapping puffs, ray-cast from the middle (star-shaped). */
+function cloudPoints(): string {
+  const puffs: [number, number, number][] = [[24, 62, 20], [44, 44, 25], [68, 46, 21], [82, 64, 16], [52, 66, 22], [30, 72, 14], [70, 72, 14]];
+  const pts: [number, number][] = [];
+  for (let i = 0; i < 64; i += 1) {
+    const a = (2 * Math.PI * i) / 64;
+    const [dx, dy] = [Math.cos(a), Math.sin(a)];
+    let best = 0;
+    for (const [cx, cy, r] of puffs) {
+      const [ox, oy] = [52 - cx, 60 - cy];
+      const b = ox * dx + oy * dy;
+      const c = ox * ox + oy * oy - r * r;
+      const disc = b * b - c;
+      if (disc >= 0) best = Math.max(best, -b + Math.sqrt(disc));
+    }
+    pts.push([52 + best * dx, 60 + best * dy]);
+  }
+  return fit(pts);
+}
+function dropPoints(): string {
+  const pts: [number, number][] = [[0, -1.9]];
+  for (let i = 0; i <= 32; i += 1) {
+    const a = -Math.PI / 6 + ((Math.PI * 4) / 3) * (i / 32);
+    pts.push([Math.cos(a), Math.sin(a)]);
+  }
+  return fit(pts);
+}
+function moonPoints(): string {
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 32; i += 1) {
+    const a = Math.PI / 2 + Math.PI * 1.6 * (i / 32) - Math.PI * 0.3;
+    pts.push([Math.cos(a), Math.sin(a)]);
+  }
+  for (let i = 32; i >= 0; i -= 1) {
+    const a = Math.PI / 2 + Math.PI * 1.6 * (i / 32) - Math.PI * 0.3;
+    const [x, y] = [Math.cos(a) * 0.8 + 0.42, Math.sin(a) * 0.8];
+    if (Math.hypot(x, y) <= 1) pts.push([x, y]);
+  }
+  return fit(pts);
+}
+function halfPoints(): string {
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 32; i += 1) {
+    const a = Math.PI + Math.PI * (i / 32);
+    pts.push([Math.cos(a), Math.sin(a)]);
+  }
+  return fit(pts);
+}
+/** Ring: outer circle then inner circle reversed, joined by a hair-thin seam. */
+function ringPoints(): string {
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 40; i += 1) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / 40;
+    pts.push([Math.cos(a), Math.sin(a)]);
+  }
+  for (let i = 40; i >= 0; i -= 1) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / 40;
+    pts.push([Math.cos(a) * 0.72, Math.sin(a) * 0.72]);
+  }
+  return fit(pts);
 }
 
 /** Inner visual: either a CSS box style or an SVG polygon spec. */
@@ -395,7 +560,7 @@ export function elementPosition(el: DesignElement, device: "desktop" | "mobile")
 
 /** Friendly name for a shape/icon layer. */
 export function elementLabel(el: DesignElement, iconLabels: Record<string, string> = {}): string {
-  if (el.kind === "icon") return `Icon — ${iconLabels[el.icon ?? ""] ?? el.icon ?? "icon"}`;
+  if (el.kind === "icon") return `${el.icon?.startsWith("o-") ? "Object" : "Icon"} — ${iconLabels[el.icon ?? ""] ?? el.icon ?? "icon"}`;
   return SHAPE_KINDS.find((k) => k.id === el.shape)?.label ?? "Shape";
 }
 
@@ -456,6 +621,15 @@ export function __runBannerElementsTests(): { passed: number; failed: number } {
   const sv = shapeVisual(defaultElement("star", { strokeWidth: 2 }));
   ok("points" in sv && sv.points.split(" ").length === 10 && sv.stroke === "#ffffff", "star polygon 10 points + stroke");
   ok((shapePoints("burst") ?? "").split(" ").length === 28, "burst 28 points");
+  ok(SHAPE_KINDS.length >= 30 && new Set(SHAPE_KINDS.map((k) => k.id)).size === SHAPE_KINDS.length, "R58 shape library ≥30, unique ids");
+  ok(
+    SHAPE_KINDS.filter((k) => !["rect", "circle", "line"].includes(k.id)).every((k) => {
+      const nums = (shapePoints(k.id) ?? "").split(/[ ,]/).map(Number);
+      return nums.length >= 6 && nums.every((n) => Number.isFinite(n) && n >= -0.01 && n <= 100.01);
+    }),
+    "every polygon shape has finite points inside 0–100",
+  );
+  ok(normalizeElement({ id: "h", kind: "shape", shape: "heart" }, "h")?.shape === "heart", "new shapes survive normalize");
   ok(J(elementPosition(rect, "mobile")) === J({ x: 70, y: 20, w: 24, h: 40 }), "phone position");
   // R55-S3 icons
   const ic = defaultIcon("leaf", "bold", "M10,20 L30 40Z", { id: "leaf" });
