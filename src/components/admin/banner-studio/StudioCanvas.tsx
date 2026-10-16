@@ -32,6 +32,7 @@ import {
   boxPosition,
   boxMotionClass,
   boxStyle,
+  curvedBoxStyle,
   buttonStyle,
   containerStyle,
   frameStyle,
@@ -47,7 +48,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { BannerBeam, BannerSmoke, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
+import { BannerBeam, BannerSmoke, CurvedText, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
@@ -459,7 +460,7 @@ export function StudioCanvas({
                     aria-label={`${roleInfo(b.role).label}: ${text.slice(0, 40) || "empty"}. Drag or use arrow keys to move. Double-click to type.`}
                     aria-pressed={sel}
                     title={b.bind && !onLegacyEdit ? undefined : "Double-click to type on the banner"}
-                    style={{ ...css(boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: outline("box", b.id, "1px dashed rgba(255,255,255,0.35)"), outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
+                    style={{ ...css(b.curve ? curvedBoxStyle(b) : boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: outline("box", b.id, "1px dashed rgba(255,255,255,0.35)"), outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
                     className={`gw-dbox ${boxMotionClass(b)}`}
                     data-studio-id={b.id}
                     onPointerDown={(e) => startDrag(e, "box", b.id, "move")}
@@ -470,7 +471,7 @@ export function StudioCanvas({
                     onKeyDown={(e) => onItemKey(e, "box", b.id)}
                     onFocus={() => onSelect({ target: "box", id: b.id })}
                   >
-                    {text || <span style={{ opacity: 0.45 }}>(empty {roleInfo(b.role).label.toLowerCase()})</span>}
+                    {b.curve && text.trim() ? <CurvedText box={b} text={text} /> : text || <span style={{ opacity: 0.45 }}>(empty {roleInfo(b.role).label.toLowerCase()})</span>}
                     {sel && !b.locked ? <WidthHandle scale={scale} onStart={(e) => startDrag(e, "box", b.id, "resize")} onMove={onPointerMove} onEnd={endDrag} /> : null}
                     {handles("box", b.id, b.locked)}
                   </div>

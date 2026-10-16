@@ -7,6 +7,7 @@
  * All values are written only when used, so older designs never change.
  */
 import { DEFAULT_FONT_ID, STROKE_MAX, designFontFamily, type DesignShadow, type DesignTextBox } from "@/lib/cms/banner-design-core";
+import { CURVE } from "@/lib/cms/banner-curve-core";
 import { FONT_OPTIONS, type FontCategory } from "@/lib/cms/fonts";
 import { ColorField, NumberSlider, Row, Segmented, Toggle, studioInput } from "./controls";
 import { useCustomFonts } from "@/components/admin/fonts/custom-fonts-client";
@@ -57,6 +58,8 @@ export function FontSelect({ value, onChange, preview = false }: { value: string
   );
 }
 
+const CURVE_PRESETS: [number, string][] = [[0, "Straight"], [25, "Gentle arch"], [55, "Arch"], [100, "Ring"], [-30, "Smile"], [-60, "Deep smile"]];
+
 const SHADOW_OPTIONS: { value: DesignShadow; label: string; title?: string }[] = [
   { value: "none", label: "None" },
   { value: "soft", label: "Soft" },
@@ -72,6 +75,21 @@ export function TextFxFields({ box, patch }: { box: DesignTextBox; patch: (p: Pa
   const gradientBlocked = box.backdrop !== "none";
   return (
     <>
+      <NumberSlider
+        label="Curve (− smile · + arch)"
+        value={box.curve ?? 0}
+        min={CURVE.min}
+        max={CURVE.max}
+        onChange={(v) => patch({ curve: v || undefined })}
+      />
+      <div className="-mt-2 flex flex-wrap gap-1" role="group" aria-label="Curve presets">
+        {CURVE_PRESETS.map(([v, l]) => (
+          <button key={l} type="button" onClick={() => patch({ curve: v || undefined })} className={`rounded border px-2 py-0.5 text-[11px] ${(box.curve ?? 0) === v ? "border-[#ffd700] text-[#ffd700]" : "border-white/15 text-white/70 hover:border-white/40"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {box.curve ? <p className="-mt-2 text-[11px] text-white/50">Curved text sits on one line along the curve — if letters go missing at the ends, drag the box wider. Double-click types it flat; it curves again when you finish.</p> : null}
       <Segmented<DesignShadow> label="Shadow" value={box.shadow} options={SHADOW_OPTIONS} onChange={(shadow) => patch({ shadow })} />
       <NumberSlider
         label="Letter outline"
