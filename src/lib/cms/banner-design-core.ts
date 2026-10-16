@@ -902,6 +902,17 @@ export function resolveBoxText(box: Pick<DesignTextBox, "bind" | "text">, legacy
   return box.text;
 }
 
+/**
+ * R63: "free text" designs (the Specials studio). Every bound box keeps the
+ * words it shows today but becomes its own text, so the studio is never
+ * driven by outside fields (e.g. Promotions). Returns the SAME object when
+ * nothing is bound (no needless re-renders / dirty flags).
+ */
+export function unbindDesign<T extends BannerDesign | null | undefined>(design: T, legacy: { eyebrow?: string; title?: string; subtitle?: string }): T {
+  if (!design || !design.boxes.some((b) => b.bind)) return design;
+  return { ...design, boxes: design.boxes.map((b) => (b.bind ? { ...b, bind: null, text: resolveBoxText(b, legacy) } : b)) } as T;
+}
+
 // ── Rendering math (bible PART 5.3) ──────────────────────────────────────────
 
 /** Fluid px between the mobile (390) and desktop (1408) reference widths, in container units. */
@@ -1705,6 +1716,9 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     const two = boxStyle({ ...cd.boxes[0], sizeMobile: 20 }, true);
     ok(two["--gc-fontSize-m"] === cardPx(20) && two.fontSize === "var(--gc-fontSize, var(--gc-fontSize-d))", "R61 card phone text size via variable");
     ok(boxStyle(cd.boxes[0]).fontSize === interpPx(30, 30), "R61 banner text unchanged");
+    const ub = unbindDesign(cd, { title: "Doobie Tuesday", subtitle: "20% off" });
+    ok(ub !== cd && ub.boxes.every((b) => b.bind === null) && ub.boxes[0].text === "Doobie Tuesday" && ub.boxes[1].text === "20% off", "R63 unbind keeps today's words as own text");
+    ok(unbindDesign(ub, {}) === ub && unbindDesign(null, {}) === null, "R63 unbind is a no-op when nothing is bound");
     const bs = buttonStyle(defaultButton(), true);
     ok(bs.height.startsWith("var(--gc-height") && bs.padding.endsWith("cqw") && buttonStyle(defaultButton()).padding === "0 18px", "R61 card button scales; banner button unchanged");
   }
