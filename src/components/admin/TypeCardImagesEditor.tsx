@@ -38,6 +38,8 @@ import {
 } from "@/lib/cms/type-cards-core";
 import { HERO_COLORS, HERO_FONTS, heroFontStack, type ImageFocus } from "@/lib/loyalty/loyalty-hero-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
+import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
+import { cardDesign } from "@/lib/cms/banner-design-core";
 
 const input =
   "w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)] focus:outline-none";
@@ -258,7 +260,28 @@ export function TypeCardImagesEditor({
                 </div>
 
                 {open ? (
-                  <div className="grid gap-4 border-t border-white/10 p-3 md:grid-cols-2">
+                  <div className="space-y-3 border-t border-white/10 p-3">
+                  {/* R61-S3: the shared Design Studio, card-shaped (one engine for every banner + card). */}
+                  <DesignCard
+                    mediaChoices={mediaChoices}
+                    title="Card Design Studio"
+                    description="Design this card like a banner: move and style the name and small line, add shapes, stickers, animations, smoke and buttons. No buttons = the whole card is the link. Untick to go back to the classic card."
+                    design={c.adv?.design ?? null}
+                    onChange={(d) => updateAdv(c.id, { design: d ?? undefined })}
+                    legacy={{ title: c.label, subtitle: c.cta }}
+                    imageSrc={c.image}
+                    imageAlt=""
+                    preset="section"
+                    seed={{ title: c.label, subtitle: c.cta }}
+                    makeNew={() => cardDesign({ ratio: 0.75, ratioMobile: 1.33, subtitle: !!c.cta })}
+                    posts={posts}
+                    onLegacyEdit={(bind, text) => {
+                      if (bind === "title") update(c.id, { label: text.slice(0, MAX_TYPE_CARD_LABEL) });
+                      else if (bind === "subtitle") update(c.id, { cta: text.slice(0, MAX_TYPE_CARD_CTA) });
+                    }}
+                  />
+                  <BasicMode hint="name, link, photo and the classic card options" defaultOpen>
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-3">
                       <div>
                         <label className={label} htmlFor={`tc-label-${c.id}`}>
@@ -353,13 +376,17 @@ export function TypeCardImagesEditor({
                             prev.map((x) => {
                               if (x.id !== c.id) return x;
                               const next = { ...x };
-                              delete next.adv;
+                              // R61-S3: the card design is kept (it has its own switch).
+                              if (x.adv?.design) next.adv = { design: x.adv.design };
+                              else delete next.adv;
                               return next;
                             }),
                           )
                         }
                       />
                     </div>
+                  </div>
+                  </BasicMode>
                   </div>
                 ) : null}
               </li>

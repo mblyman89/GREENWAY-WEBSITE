@@ -14,6 +14,7 @@
  * card and the tile grid hides.
  */
 import { checkHref } from "@/lib/cms/link-target-core";
+import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 import {
   IMAGE_FOCUSES,
   isHeroColor,
@@ -55,6 +56,12 @@ export type TypeCardAdvanced = {
   /** Optional show window (ISO). */
   scheduleStart?: string;
   scheduleEnd?: string;
+  /**
+   * R61-S3: the owner's custom CARD design (the shared Banner Studio, card
+   * frame). Stored even when switched off (so ticking it again restores it);
+   * the public tile uses it only when `enabled`.
+   */
+  design?: BannerDesign;
 };
 
 export const TYPE_CARDS_KEY = "typeCards";
@@ -181,6 +188,8 @@ export function normalizeTypeCardAdvanced(raw: unknown): TypeCardAdvanced | unde
   if (ss) out.scheduleStart = ss;
   const se = cleanIso(raw.scheduleEnd);
   if (se) out.scheduleEnd = se;
+  const design = normalizeDesign(raw.design);
+  if (design && design.frame.card) out.design = design;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -431,6 +440,13 @@ export function __runTypeCardsTests(): { passed: number; failed: number } {
   ok(typeCardGridClass(9).endsWith("lg:grid-cols-6"), ">6 wraps at 6");
   ok(typeCardGridClass(4).includes("lg:grid-cols-4"), "four columns");
 
+  // R61-S3: card design (only card-shaped designs are kept)
+  {
+    const cd = { v: 1, enabled: true, frame: { height: 200, heightMobile: 160, radius: 16, card: { ratio: 0.75, ratioMobile: 1 } }, boxes: [], buttons: [] };
+    const kept = normalizeTypeCards([{ id: "x", label: "X", adv: { design: cd } }])[0].adv;
+    ok(!!kept?.design?.enabled && kept.design.frame.card?.ratioMobile === 1, "R61 card design kept");
+    ok(!normalizeTypeCards([{ id: "x", label: "X", adv: { design: { ...cd, frame: { height: 200 } } } }])[0].adv, "R61 non-card design dropped");
+  }
   // R47: advanced options
   ok(!("adv" in normalizeTypeCards([{ id: "x", label: "X" }])[0]), "no adv key by default");
   ok(!("adv" in normalizeTypeCards([{ id: "x", label: "X", adv: { zoom: 100, dim: 0, imageFocus: "center" } }])[0]), "all-default adv dropped");

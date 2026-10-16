@@ -131,9 +131,21 @@ export function ImagePanel({
       </div>
 
       <div className="space-y-3 rounded-md border border-white/10 p-2">
-        <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-white/60">Banner size</p>
-        <NumberSlider label="Height — computer" value={design.frame.height} min={80} max={720} step={4} unit="px" onChange={(height) => setFrame({ height })} />
-        <NumberSlider label="Height — phone" value={design.frame.heightMobile} min={80} max={720} step={4} unit="px" onChange={(heightMobile) => setFrame({ heightMobile })} />
+        {design.frame.card ? (
+          <>
+            {/* R61-S3: a card keeps a shape (width ÷ height); the page grid sets its width. */}
+            <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-white/60">Card shape (width ÷ height)</p>
+            <NumberSlider label="Shape — computer" value={design.frame.card.ratio} min={0.4} max={2.5} step={0.05} unit="" onChange={(ratio) => setFrame({ card: { ...design.frame.card!, ratio } })} />
+            <NumberSlider label="Shape — phone" value={design.frame.card.ratioMobile} min={0.4} max={2.5} step={0.05} unit="" onChange={(ratioMobile) => setFrame({ card: { ...design.frame.card!, ratioMobile } })} />
+            <p className="text-[0.65rem] text-white/45">0.75 = tall (3 by 4) · 1 = square · 1.33 = wide (4 by 3). Words and buttons grow and shrink with the card.</p>
+          </>
+        ) : (
+          <>
+            <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-white/60">Banner size</p>
+            <NumberSlider label="Height — computer" value={design.frame.height} min={80} max={720} step={4} unit="px" onChange={(height) => setFrame({ height })} />
+            <NumberSlider label="Height — phone" value={design.frame.heightMobile} min={80} max={720} step={4} unit="px" onChange={(heightMobile) => setFrame({ heightMobile })} />
+          </>
+        )}
         <NumberSlider label="Rounded corners" value={design.frame.radius} min={0} max={48} unit="px" onChange={(radius) => setFrame({ radius })} />
       </div>
       <BeamFields beam={design.beam} onChange={(beam) => onChange({ ...design, beam })} />

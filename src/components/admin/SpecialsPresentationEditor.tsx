@@ -52,6 +52,7 @@ import {
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
+import { cardDesign } from "@/lib/cms/banner-design-core";
 
 export type SpecialsRevisionVM = {
   id: string;
@@ -526,6 +527,33 @@ export function SpecialsPresentationEditor(props: Props) {
                       </div>
                     </div>
 
+                    {/* R61-S3: the shared Design Studio, card-shaped. Bound words:
+                        eyebrow = the day, title = deal title, small line = the offer. */}
+                    <div className="mb-3">
+                      <DesignCard
+                        mediaChoices={mediaChoices}
+                        title={`Card Design Studio — ${day.weekday}`}
+                        description="Design this weekday card like a banner. The day, title and offer stay tied to Promotions + the overrides below. No buttons = the whole card goes to the deal. Untick for the classic card."
+                        design={day.design ?? null}
+                        onChange={(d) => updateDay(day.weekday, { design: d ?? undefined })}
+                        legacy={{
+                          eyebrow: day.weekday,
+                          title: day.titleOverride || engine?.title || day.weekday,
+                          subtitle: day.offerOverride || engine?.offer || "",
+                        }}
+                        imageSrc={day.image ?? ""}
+                        imageAlt=""
+                        preset="section"
+                        seed={{ eyebrow: day.weekday, title: day.titleOverride || engine?.title || day.weekday }}
+                        makeNew={() => cardDesign({ ratio: 0.8, ratioMobile: 1, eyebrow: true, subtitle: true })}
+                        posts={posts}
+                        onLegacyEdit={(bind, text) => {
+                          if (bind === "title") updateDay(day.weekday, { titleOverride: text });
+                          else if (bind === "subtitle") updateDay(day.weekday, { offerOverride: text });
+                        }}
+                      />
+                    </div>
+                    <BasicMode hint="classic wording overrides and card photo" defaultOpen>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <label className="text-xs">
                         <span className="text-[var(--admin-text-muted)]">Title override</span>
@@ -579,9 +607,11 @@ export function SpecialsPresentationEditor(props: Props) {
                         />
                       </div>
                       <p className="mt-1 text-[11px] text-[var(--admin-text-muted)]">
-                        Leave blank to keep the built-in product graphic on this card.
+                        Leave blank to keep the built-in product graphic on this card. With a custom
+                        design this photo fills the whole card.
                       </p>
                     </div>
+                    </BasicMode>
                   </div>
                 );
               })}
@@ -609,6 +639,9 @@ export function SpecialsPresentationEditor(props: Props) {
                         key={weekday}
                         className="rounded-[1rem] border border-white/10 bg-[#101010] p-3"
                       >
+                        {day?.design?.enabled ? (
+                          <p className="mb-1 text-[0.6rem] font-semibold text-[#ffd700]">🎨 custom card design (see the studio)</p>
+                        ) : null}
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-[var(--orange)]">

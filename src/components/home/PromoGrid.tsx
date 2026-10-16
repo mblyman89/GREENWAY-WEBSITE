@@ -11,6 +11,7 @@ import { typeCardGridClass, type TypeCard } from "@/lib/cms/type-cards-core";
 import { isGifSrc } from "@/lib/media/gif-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { BannerMedia } from "@/components/site/BannerMedia";
+import { DesignedCard } from "@/components/site/DesignedCard";
 import { heroColorHex, heroFontStack, isScriptHeroFont } from "@/lib/loyalty/loyalty-hero-core";
 
 /**
@@ -128,6 +129,22 @@ export function PromoGrid({
               // Owner-uploaded product photo for this card, or "" -> clean
               // text-only fallback (byte-identical to the card the site shipped).
               const image = lane.image;
+              // R61-S3: a custom card design (shared Banner Studio) wins.
+              if (lane.adv?.design?.enabled) {
+                return (
+                  <DesignedCard
+                    key={lane.id}
+                    design={lane.adv.design}
+                    imageSrc={image}
+                    legacy={{ title: lane.label, subtitle: lane.cta }}
+                    href={lane.href}
+                    newTab={lane.adv.newTab}
+                    label={lane.label.replace(/\n/g, " ")}
+                    frameClassName="border shadow-lg shadow-black/30 transition duration-300 group-hover:-translate-y-0.5 group-hover:border-white/70 group-hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)]"
+                    frameExtraStyle={glowCardStyle(tone)}
+                  />
+                );
+              }
               // R47: a card with advanced options, or a video picture, takes
               // the advanced path. Everything else is byte-identical to R41.
               if (lane.adv || isVideoSrc(image)) {

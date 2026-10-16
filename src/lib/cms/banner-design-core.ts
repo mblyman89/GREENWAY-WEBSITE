@@ -39,6 +39,10 @@ export const MAX_DESIGN_BUTTONS = 4;
 export const DESKTOP_REF_PX = 1408;
 export const MOBILE_REF_PX = 390;
 export const MOBILE_BREAKPOINT_PX = 768;
+/** R61-S3: card frames are laid out at this width (computer AND phone) and scale from it. */
+export const CARD_REF_PX = 320;
+export const CARD_RATIO_MIN = 0.4;
+export const CARD_RATIO_MAX = 2.5;
 export const MAX_BOX_TEXT = 600;
 export const MAX_BUTTON_LABEL = 40;
 
@@ -302,7 +306,17 @@ export type DesignFrame = {
   height: number;
   heightMobile: number;
   radius: number;
+  /**
+   * R61-S3: CARD frame (home Type cards, Specials weekday cards). When set the
+   * frame keeps a SHAPE (width ÷ height) instead of a pixel height, everything
+   * inside scales with the card's width (CARD_REF_PX reference), and phone vs
+   * computer follows the SCREEN width (cards are always narrow). Absent = a
+   * normal banner, byte-identical to before.
+   */
+  card?: DesignCardShape;
 };
+
+export type DesignCardShape = { ratio: number; ratioMobile: number };
 
 export type BannerDesign = {
   v: 1;
@@ -477,6 +491,25 @@ export function defaultDesign(preset: DesignPreset = "section"): BannerDesign {
   };
 }
 
+/**
+ * R61-S3: a card-shaped first design (Type cards / Specials weekday cards):
+ * picture fills the card, darkest at the bottom, name + small line at the
+ * bottom. Sizes are px at CARD_REF_PX (320) and scale with the card.
+ */
+export function cardDesign(input: { ratio?: number; ratioMobile?: number; eyebrow?: boolean; subtitle?: boolean } = {}): BannerDesign {
+  const d = defaultDesign("section");
+  const ratio = Math.min(CARD_RATIO_MAX, Math.max(CARD_RATIO_MIN, input.ratio ?? 0.75));
+  d.frame = { height: d.frame.height, heightMobile: d.frame.heightMobile, radius: 16, card: { ratio, ratioMobile: Math.min(CARD_RATIO_MAX, Math.max(CARD_RATIO_MIN, input.ratioMobile ?? ratio)) } };
+  d.overlay = { kind: "gradient", color: "#000000", opacity: 85, direction: "bottom" };
+  const boxes: DesignTextBox[] = [];
+  if (input.eyebrow) boxes.push(defaultTextBox("eyebrow", { id: "eyebrow", bind: "eyebrow", x: 6, y: 6, w: 88, align: "left", size: 13, sizeMobile: 13 }));
+  boxes.push(defaultTextBox("headline", { id: "headline", bind: "title", x: 6, y: input.subtitle ? 64 : 74, w: 88, align: "center", size: 30, sizeMobile: 30, weight: 900, lineHeight: 1 }));
+  if (input.subtitle) boxes.push(defaultTextBox("subhead", { id: "subhead", bind: "subtitle", x: 6, y: 84, w: 88, align: "center", size: 15, sizeMobile: 15, weight: 800, color: "#7ed957", transform: "uppercase", letterSpacing: 0.12 }));
+  d.boxes = boxes;
+  d.buttons = [];
+  return d;
+}
+
 // ── Normalizer ───────────────────────────────────────────────────────────────
 
 export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBox | null {
@@ -632,6 +665,14 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
       height: num(fr.height, def.frame.height, 80, 720),
       heightMobile: num(fr.heightMobile, def.frame.heightMobile, 80, 720),
       radius: num(fr.radius, def.frame.radius, 0, 48),
+      ...(isObj(fr.card)
+        ? {
+            card: {
+              ratio: num(fr.card.ratio, 0.75, CARD_RATIO_MIN, CARD_RATIO_MAX),
+              ratioMobile: num(fr.card.ratioMobile, num(fr.card.ratio, 0.75, CARD_RATIO_MIN, CARD_RATIO_MAX), CARD_RATIO_MIN, CARD_RATIO_MAX),
+            },
+          }
+        : {}),
     },
     image: {
       focusX: num(im.focusX, 50, 0, 100),
@@ -887,18 +928,62 @@ function rgba(hex: string, opacityPct: number): string {
  * resolve against its nearest ANCESTOR container, so the frame (which uses
  * 100cqw for its own height) must sit inside this wrapper, not be it.
  */
-export function containerStyle(): StyleMap {
-  return { containerType: "inline-size", containerName: "gwb", width: "100%" };
+export function containerStyle(card = false): StyleMap {
+  // R61-S3: a card container is named "gwc" so the banner (gwb) phone query never
+  // fires inside it — card phone layout follows the screen (see globals.css).
+  return { containerType: "inline-size", containerName: card ? "gwc" : "gwb", width: "100%" };
+}
+
+/** R61-S3: is this a card-shaped design? */
+export function isCardDesign(design: Pick<BannerDesign, "frame">): boolean {
+  return !!design.frame.card;
+}
+
+/** R61-S3: px at the card reference width → container units (scales with the card). */
+export function cardPx(px: number): string {
+  return `${r4((px / CARD_REF_PX) * 100)}cqw`;
+}
+
+/**
+ * Size that differs computer vs phone. Banners: fluid interpPx. Cards: two
+ * container-unit values; the phone one is swapped in by globals.css.
+ */
+function dualSize(s: StyleMap, key: "fontSize" | "height", mobilePx: number, desktopPx: number, card: boolean): void {
+  if (!card) {
+    s[key] = interpPx(mobilePx, desktopPx);
+    return;
+  }
+  if (mobilePx === desktopPx) {
+    s[key] = cardPx(desktopPx);
+    return;
+  }
+  s[`--gc-${key}-d`] = cardPx(desktopPx);
+  s[`--gc-${key}-m`] = cardPx(mobilePx);
+  s[key] = `var(--gc-${key}, var(--gc-${key}-d))`;
+}
+
+/** R61-S3: the canvas reference size (px) of a design on one device. */
+export function frameRefPx(design: Pick<BannerDesign, "frame">, device: DesignDevice): { w: number; h: number } {
+  const c = design.frame.card;
+  if (c) return { w: CARD_REF_PX, h: Math.round(CARD_REF_PX / (device === "mobile" ? c.ratioMobile : c.ratio)) };
+  return device === "mobile" ? { w: MOBILE_REF_PX, h: design.frame.heightMobile } : { w: DESKTOP_REF_PX, h: design.frame.height };
 }
 
 export function frameStyle(design: BannerDesign): StyleMap {
-  return {
+  const c = design.frame.card;
+  const base: StyleMap = {
     position: "relative",
     overflow: "hidden",
     isolation: "isolate",
-    height: interpPx(design.frame.heightMobile, design.frame.height),
-    borderRadius: `${design.frame.radius}px`,
   };
+  if (c) {
+    base["--gc-ar-d"] = String(c.ratio);
+    base["--gc-ar-m"] = String(c.ratioMobile);
+    base.aspectRatio = "var(--gc-ar, var(--gc-ar-d))";
+    base.height = "auto";
+  } else base.height = interpPx(design.frame.heightMobile, design.frame.height);
+  base.borderRadius = `${design.frame.radius}px`;
+  return base;
 }
 
 export function imageStyle(design: BannerDesign): StyleMap {
@@ -977,7 +1062,7 @@ export function shadowAsFilter(textShadow: string): string {
     .join(" ");
 }
 
-export function boxStyle(box: DesignTextBox): StyleMap {
+export function boxStyle(box: DesignTextBox, card = false): StyleMap {
   const s: StyleMap = {
     position: "absolute",
     "--gx": `${box.x}%`,
@@ -988,7 +1073,6 @@ export function boxStyle(box: DesignTextBox): StyleMap {
     width: "var(--gbw, var(--gw))",
     margin: "0",
     textAlign: box.align,
-    fontSize: interpPx(box.sizeMobile, box.size),
     fontWeight: String(box.weight),
     fontStyle: box.italic ? "italic" : "normal",
     textTransform: box.transform,
@@ -998,6 +1082,7 @@ export function boxStyle(box: DesignTextBox): StyleMap {
     whiteSpace: box.wrap === "nowrap" ? "pre" : "pre-line",
     overflowWrap: box.wrap === "nowrap" ? "normal" : "anywhere",
   };
+  dualSize(s, "fontSize", box.sizeMobile, box.size, card);
   const ff = designFontFamily(box.font);
   if (ff) s.fontFamily = ff;
   if (box.rotate) s.rotate = `${box.rotate}deg`;
@@ -1041,8 +1126,8 @@ export function boxStyle(box: DesignTextBox): StyleMap {
 /** R58: style of the box that HOLDS curved text — positioning/font only;
  * paint (fill, gradient, outline, shadow) moves onto the SVG letters. */
 const CURVE_STRIP = ["backgroundImage", "WebkitBackgroundClip", "backgroundClip", "WebkitTextFillColor", "WebkitTextStroke", "paintOrder", "textShadow", "filter", "backgroundColor", "padding", "borderRadius", "backdropFilter", "textDecorationLine"];
-export function curvedBoxStyle(box: DesignTextBox): StyleMap {
-  const s = boxStyle(box);
+export function curvedBoxStyle(box: DesignTextBox, card = false): StyleMap {
+  const s = boxStyle(box, card);
   for (const k of CURVE_STRIP) delete s[k];
   s.width = "var(--gbw, var(--gw))";
   s.lineHeight = "1";
@@ -1060,7 +1145,7 @@ export const BUTTON_SIZE_PX: Record<DesignButtonSize, { h: number; hm: number; f
   lg: { h: 48, hm: 40, font: 15, fontM: 13, px: 24 },
 };
 
-export function buttonStyle(btn: DesignButton): StyleMap {
+export function buttonStyle(btn: DesignButton, card = false): StyleMap {
   const sz = BUTTON_SIZE_PX[btn.size];
   const s: StyleMap = {
     position: "absolute",
@@ -1072,9 +1157,7 @@ export function buttonStyle(btn: DesignButton): StyleMap {
     alignItems: "center",
     justifyContent: "center",
     whiteSpace: "nowrap",
-    height: interpPx(sz.hm, sz.h),
-    padding: `0 ${sz.px}px`,
-    fontSize: interpPx(sz.fontM, sz.font),
+    padding: card ? `0 ${cardPx(sz.px)}` : `0 ${sz.px}px`,
     fontWeight: "900",
     letterSpacing: btn.uppercase ? "0.12em" : "0.02em",
     textTransform: btn.uppercase ? "uppercase" : "none",
@@ -1082,6 +1165,8 @@ export function buttonStyle(btn: DesignButton): StyleMap {
     color: btn.fg,
     textDecoration: "none",
   };
+  dualSize(s, "height", sz.hm, sz.h, card);
+  dualSize(s, "fontSize", sz.fontM, sz.font, card);
   const ff = designFontFamily(btn.font);
   if (ff) s.fontFamily = ff;
   if (btn.rotate) s.rotate = `${btn.rotate}deg`;
@@ -1161,8 +1246,7 @@ export type ContrastResult = { boxId: string; device: DesignDevice; ratio: numbe
 
 /** Approximate rendered box height in % of the frame (for centers / overlap). */
 export function estimateBoxHeightPct(box: DesignTextBox, textLen: number, device: DesignDevice, design: BannerDesign): number {
-  const refW = device === "mobile" ? MOBILE_REF_PX : DESKTOP_REF_PX;
-  const frameH = device === "mobile" ? design.frame.heightMobile : design.frame.height;
+  const { w: refW, h: frameH } = frameRefPx(design, device);
   const size = device === "mobile" ? box.sizeMobile : box.size;
   const wPct = device === "mobile" ? (box.mw ?? box.w) : box.w;
   const boxPx = (wPct / 100) * refW;
@@ -1606,6 +1690,24 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(overlayStyle({ ...defaultDesign(), overlay: { kind: "none", color: "#000000", opacity: 80, direction: "left" } }) === null, "none → null");
   ok(overlayStyle({ ...defaultDesign(), overlay: { kind: "floor", color: "#000000", opacity: 80, direction: "left" } })!.background.includes("to top"), "floor fade");
   // 41 frame
+  {
+    // R61-S3: card frame (shape instead of height; sizes scale with the card)
+    const cd = cardDesign({ ratio: 0.75, subtitle: true });
+    const fs = frameStyle(cd);
+    ok(isCardDesign(cd) && fs.aspectRatio === "var(--gc-ar, var(--gc-ar-d))" && fs["--gc-ar-d"] === "0.75" && fs.height === "auto", "R61 card frame uses its shape");
+    ok(containerStyle(true).containerName === "gwc" && containerStyle().containerName === "gwb", "R61 card container is not a banner container");
+    ok(!("card" in normalizeDesign(defaultDesign())!.frame), "R61 banners store no card key");
+    const rt = normalizeDesign(JSON.parse(JSON.stringify({ ...cd, frame: { ...cd.frame, card: { ratio: 9, ratioMobile: "x" } } })))!;
+    ok(rt.frame.card?.ratio === CARD_RATIO_MAX && rt.frame.card?.ratioMobile === CARD_RATIO_MAX, "R61 card ratio clamped, phone falls back to computer");
+    ok(frameRefPx(cd, "mobile").w === CARD_REF_PX && frameRefPx(cd, "desktop").h === Math.round(CARD_REF_PX / 0.75) && frameRefPx(defaultDesign(), "mobile").h === 160, "R61 canvas reference size");
+    const hb = boxStyle(cd.boxes[0], true);
+    ok(hb.fontSize === cardPx(30) && cardPx(32) === "10cqw", "R61 card text scales with the card");
+    const two = boxStyle({ ...cd.boxes[0], sizeMobile: 20 }, true);
+    ok(two["--gc-fontSize-m"] === cardPx(20) && two.fontSize === "var(--gc-fontSize, var(--gc-fontSize-d))", "R61 card phone text size via variable");
+    ok(boxStyle(cd.boxes[0]).fontSize === interpPx(30, 30), "R61 banner text unchanged");
+    const bs = buttonStyle(defaultButton(), true);
+    ok(bs.height.startsWith("var(--gc-height") && bs.padding.endsWith("cqw") && buttonStyle(defaultButton()).padding === "0 18px", "R61 card button scales; banner button unchanged");
+  }
   ok(containerStyle().containerType === "inline-size" && !("containerType" in frameStyle(defaultDesign())), "container wraps frame (cqw resolves to ancestor)");
   // buttons
   const bst = buttonStyle(defaultButton({ style: "outline", shape: "square" }));
