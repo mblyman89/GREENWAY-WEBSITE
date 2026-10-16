@@ -13,23 +13,15 @@
  * presentation is read (normalizeSpecialsPresentation), so the client is never
  * trusted.
  */
-import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/admin/ui";
-import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { LinkPicker, type PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { checkHref, describeHref } from "@/lib/cms/link-target-core";
-import { designFromLegacy, type BannerDesign, type DesignBind, type DesignPreset } from "@/lib/cms/banner-design-core";
 import {
   MAX_SPECIALS_HERO_BUTTONS,
   MAX_SPECIALS_HERO_BUTTON_LABEL,
   type SpecialsHeroButton,
 } from "@/lib/specials/specials-presentation-core";
-
-const BannerStudio = dynamic(() => import("@/components/admin/banner-studio/BannerStudio"), {
-  ssr: false,
-  loading: () => <p className="text-xs text-[var(--admin-text-muted)]">Loading the design studio…</p>,
-});
 
 const INPUT =
   "w-full rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none";
@@ -221,85 +213,5 @@ export function HeroButtonsCard({
   );
 }
 
-export function DesignCard({
-  title,
-  description,
-  design,
-  onChange,
-  legacy,
-  imageSrc,
-  imageAlt,
-  preset,
-  seed,
-  posts,
-  mediaChoices,
-  onLegacyEdit,
-}: {
-  title: string;
-  description: string;
-  design: BannerDesign | null;
-  onChange: (d: BannerDesign | null) => void;
-  legacy: { eyebrow?: string; title?: string; subtitle?: string };
-  imageSrc: string;
-  imageAlt: string;
-  preset: DesignPreset;
-  /** Today's classic look, so turning design on starts from what's live. */
-  seed: Parameters<typeof designFromLegacy>[0];
-  posts: PickerPost[];
-  /** R42 Q4: media library choices for the optional phone picture. */
-  mediaChoices?: MediaChoice[];
-  /** R53: double-click editing of a bound text box writes the banner's own field. */
-  onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
-}) {
-  // R53: the studio is open by default (owner: studio first, basic second).
-  const [open, setOpen] = useState(true);
-  const on = !!design?.enabled;
-  return (
-    <div className={CARD}>
-      <div className="mb-1 text-sm font-semibold">🎨 {title}</div>
-      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">{description}</p>
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) => {
-            if (e.target.checked) {
-              onChange(design ? { ...design, enabled: true } : designFromLegacy({ ...seed, preset }));
-              setOpen(true);
-            } else if (design) {
-              onChange({ ...design, enabled: false });
-            }
-          }}
-          className="h-4 w-4 accent-[var(--admin-accent)]"
-        />
-        Use custom design
-      </label>
-      {design && !on ? (
-        <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-          Your custom design is saved but switched off, so the classic look shows. Tick the box to bring it back.
-        </p>
-      ) : null}
-      {on && design ? (
-        <div className="mt-3 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="neutral" size="sm" onClick={() => setOpen((v) => !v)}>
-              {open ? "Hide design studio" : "Open design studio"}
-            </Button>
-          </div>
-          {open ? (
-            <BannerStudio
-              design={design}
-              onChange={(d) => onChange(d)}
-              legacy={legacy}
-              imageSrc={imageSrc}
-              imageAlt={imageAlt}
-              posts={posts}
-              mediaChoices={mediaChoices}
-              onLegacyEdit={onLegacyEdit}
-            />
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+// R61 S1: DesignCard now lives in the ONE shared banner-editor shell.
+export { DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";

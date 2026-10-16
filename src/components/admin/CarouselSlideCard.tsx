@@ -7,7 +7,7 @@ import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
 import { WEEKDAYS, WEEKDAY_LABEL, cleanDays, describeSchedule } from "@/lib/cms/banner-schedule-core";
-import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import { DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { ensureBoundBoxes, type BannerDesign } from "@/lib/cms/banner-design-core";
 import {

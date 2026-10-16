@@ -74,6 +74,6 @@ describe("R41 S4 Specials hero", () => {
     expect(panels).toContain("<LinkPicker");
     expect(panels).toContain("disabled={list.length >= MAX_SPECIALS_HERO_BUTTONS}");
     expect(panels).toContain("Go back to the old buttons");
-    expect(panels).toContain("ssr: false");
+    expect(read("src/components/admin/banner-studio/BannerEditorShell.tsx")).toContain("ssr: false");
   });
 });

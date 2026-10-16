@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
@@ -18,7 +17,6 @@ import type {
   SectionButtonVariant,
 } from "@/lib/cms/page-sections-types";
 import {
-  designFromLegacy,
   readDesign,
   writeDesign,
   type BannerDesign,
@@ -26,12 +24,9 @@ import {
 import { checkHref, describeHref } from "@/lib/cms/link-target-core";
 import { LinkPicker, type PickerPost } from "./banner-studio/LinkPicker";
 
-// R41 S2: the Banner Studio is big and only needed when the owner opens it —
-// load it on demand (client-only; it measures the card width).
-const BannerStudio = dynamic(() => import("./banner-studio/BannerStudio"), {
-  ssr: false,
-  loading: () => <p className="text-xs text-white/50">Loading the design studio…</p>,
-});
+// R61 S1: the ONE shared banner-editor shell (same studio + Basic mode drawer
+// as the home carousel, Shop, Loyalty and Specials banners).
+import { BasicMode, DesignCard } from "./banner-studio/BannerEditorShell";
 
 /** Textarea that grows with its content (Enter = new line, bible Q8). */
 function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -133,7 +128,6 @@ export function SectionCard({
   const [cardCount, setCardCount] = useState<number>(initialCardCount);
   // R41 S2: optional custom design (settings.design). null = never created.
   const [design, setDesign] = useState<BannerDesign | null>(() => readDesign(d.settings));
-  const [studioOpen, setStudioOpen] = useState(false);
   const [pickingFor, setPickingFor] = useState<string | null>(null);
   // GW-035: friendly confirm dialog instead of the browser's window.confirm.
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -162,28 +156,15 @@ export function SectionCard({
     initialDesign ? writeDesign(d.settings, initialDesign) : d.settings,
   );
   const blogTitles = Object.fromEntries(posts.map((p) => [p.slug, p.title]));
-  const designOn = !!design?.enabled;
-
-  function toggleDesign(on: boolean) {
-    if (on) {
-      // First time: start from today's look so nothing jumps.
-      const next = design
-        ? { ...design, enabled: true }
-        : designFromLegacy({
-            eyebrow,
-            title,
-            subtitle,
-            textAlign: textAlign as "left" | "center" | "right",
-            imageFocus: imageFocus as "center" | "top" | "bottom" | "left" | "right",
-            buttons: buttons.map((b) => ({ label: b.label, href: b.href, variant: b.variant, enabled: b.enabled })),
-          });
-      setDesign(next);
-      setStudioOpen(true);
-    } else if (design) {
-      // Keep the design stored but switched off (turning on again restores it).
-      setDesign({ ...design, enabled: false });
-    }
-  }
+  // R61 S1: today's classic look, so turning the design on starts from what's live.
+  const designSeed = {
+    eyebrow,
+    title,
+    subtitle,
+    textAlign: textAlign as "left" | "center" | "right",
+    imageFocus: imageFocus as "center" | "top" | "bottom" | "left" | "right",
+    buttons: buttons.map((b) => ({ label: b.label, href: b.href, variant: b.variant, enabled: b.enabled })),
+  };
 
   const unsaved =
     !locked &&
@@ -344,17 +325,42 @@ export function SectionCard({
               />
             </div>
 
+            <div>
+              <label className={labelCls}>Image alt text (accessibility)</label>
+              <input
+                className={inputCls}
+                name="image_alt"
+                value={imageAlt}
+                onChange={(e) => setImageAlt(e.target.value)}
+                placeholder="Describe the image briefly"
+              />
+            </div>
+
+            {/* R61 S1: Design Studio first (shared shell), classic fields below. */}
+            <DesignCard
+              mediaChoices={mediaChoices}
+              title="Design Studio"
+              description="Design the banner right on the picture: drag text and buttons, double-click any text to type on it (Enter = new line), click an item then use the arrow keys to nudge it (Shift = bigger steps), and Undo / Redo any change. Studio buttons replace the classic buttons. Untick to go back to the classic look (Basic mode below)."
+              design={design}
+              onChange={setDesign}
+              legacy={{ eyebrow, title, subtitle }}
+              imageSrc={image}
+              imageAlt={imageAlt}
+              preset="section"
+              seed={designSeed}
+              posts={posts}
+              onLegacyEdit={(bind, text) => {
+                if (bind === "eyebrow") setEyebrow(text);
+                else if (bind === "title") setTitle(text);
+                else setSubtitle(text);
+              }}
+            />
+
+            <BasicMode hint="classic words, buttons, image focus and text align">
+            <p className="text-[0.7rem] text-white/45">
+              The Eyebrow / Title / Subtitle fields here still fill the studio boxes linked to them. The classic Buttons list is not used while the custom design is on — edit buttons in the studio&apos;s Buttons tab.
+            </p>
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className={labelCls}>Image alt text (accessibility)</label>
-                <input
-                  className={inputCls}
-                  name="image_alt"
-                  value={imageAlt}
-                  onChange={(e) => setImageAlt(e.target.value)}
-                  placeholder="Describe the image briefly"
-                />
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className={labelCls}>Image focus</span>
@@ -533,57 +539,7 @@ export function SectionCard({
               )}
             </div>
 
-            {/* R41 S2: Custom design (Banner Studio). */}
-            <div className="rounded-lg border border-[var(--admin-accent)]/30 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <span className="text-sm font-semibold text-white">🎨 Custom design (advanced)</span>
-                  <p className="text-xs text-white/50">
-                    Drag text and buttons anywhere, pick fonts, sizes, colors, B/I/U/S, picture focus and shade — separately for computers and phones.
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 text-sm text-white/85">
-                  <input
-                    type="checkbox"
-                    checked={designOn}
-                    onChange={(e) => toggleDesign(e.target.checked)}
-                    className="h-4 w-4 accent-[var(--admin-accent)]"
-                  />
-                  Use custom design for this banner
-                </label>
-              </div>
-              {design && !designOn ? (
-                <p className="mt-2 text-xs text-white/50">
-                  Your custom design is saved but switched off — the banner uses the classic look. Tick the box to bring it back.
-                </p>
-              ) : null}
-              {designOn && design ? (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setStudioOpen((v) => !v)}
-                    className="mb-2 text-xs font-semibold text-[var(--admin-accent)] underline"
-                    aria-expanded={studioOpen}
-                  >
-                    {studioOpen ? "▾ Hide the design studio" : "▸ Open the design studio"}
-                  </button>
-                  {studioOpen ? (
-                    <BannerStudio
-                      design={design}
-                      onChange={setDesign}
-                      legacy={{ eyebrow, title, subtitle }}
-                      imageSrc={image}
-                      imageAlt={imageAlt}
-                      posts={posts}
-                      mediaChoices={mediaChoices}
-                    />
-                  ) : null}
-                  <p className="mt-2 text-[0.7rem] text-white/45">
-                    The Eyebrow / Title / Subtitle fields above still fill the boxes linked to them. The classic Buttons list above is not used while the custom design is on — edit buttons in the studio&apos;s Buttons tab.
-                  </p>
-                </div>
-              ) : null}
-            </div>
+            </BasicMode>
 
             {/* SLICE 112: live-grid card count (Shop by Brand grid). */}
             {hasBrandGrid ? (
