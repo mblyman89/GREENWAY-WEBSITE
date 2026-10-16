@@ -48,7 +48,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { BannerBeam, BannerSmoke, CurvedText, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
+import { BannerBeam, BannerSmoke, StudioBoxText, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
@@ -471,7 +471,7 @@ export function StudioCanvas({
                     onKeyDown={(e) => onItemKey(e, "box", b.id)}
                     onFocus={() => onSelect({ target: "box", id: b.id })}
                   >
-                    {b.curve && text.trim() ? <CurvedText box={b} text={text} /> : text || <span style={{ opacity: 0.45 }}>(empty {roleInfo(b.role).label.toLowerCase()})</span>}
+                    <StudioBoxText box={b} text={text} empty={`(empty ${roleInfo(b.role).label.toLowerCase()})`} />
                     {sel && !b.locked ? <WidthHandle scale={scale} onStart={(e) => startDrag(e, "box", b.id, "resize")} onMove={onPointerMove} onEnd={endDrag} /> : null}
                     {handles("box", b.id, b.locked)}
                   </div>

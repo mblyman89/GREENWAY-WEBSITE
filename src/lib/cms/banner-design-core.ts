@@ -19,6 +19,7 @@
  * High Contrast for Text Over Images", WAC 314-55-155, Pointer Events).
  */
 import { normalizeCurve } from "./banner-curve-core";
+import { normalizeLive, type LiveText } from "./banner-live-core";
 import { normalizeReveal, normalizeSmoke, type SmokeLayer } from "./banner-atmos-core";
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
@@ -232,6 +233,8 @@ export type DesignTextBox = {
   rotate?: number;
   /** R58: curved text −100…100 (+ arch ∩, − smile ∪); absent = straight. */
   curve?: number;
+  /** R58: countdown / auto deal badge — `text` becomes a template ({left}, {offer}…). */
+  live?: LiveText;
 } & TextMotionFields;
 
 export type DesignButton = {
@@ -508,6 +511,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     ...normalizeTextFx(raw),
     ...rotateField(raw.rotate),
     ...(normalizeCurve(raw.curve) ? { curve: normalizeCurve(raw.curve) } : {}),
+    ...(normalizeLive(raw.live) ? { live: normalizeLive(raw.live) } : {}),
     ...normalizeTextMotion(raw),
   };
 }
@@ -1552,6 +1556,7 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     ok(rb.boxes[0].rotate === -12 && !("rotate" in rb.boxes[1]) && rb.buttons[0].rotate === 180, "R56: rotate only when set, clamped");
     ok(boxStyle(rb.boxes[0]).rotate === "-12deg" && boxStyle(rb.boxes[1]).rotate === undefined && buttonStyle(rb.buttons[0]).rotate === "180deg", "R56: rotate style");
     const cv = normalizeDesign({ boxes: [{ id: "c", curve: 250, strokeWidth: 3 }, { id: "f", curve: 0 }] })!;
+    ok(normalizeDesign({ boxes: [{ id: "l", live: { mode: "deal" } }] })!.boxes[0].live?.promo === "today" && !("live" in cv.boxes[0]), "R58: live only when set");
     ok(cv.boxes[0].curve === 100 && !("curve" in cv.boxes[1]), "R58: curve only when set, clamped");
     ok(curvedBoxStyle(cv.boxes[0]).WebkitTextStroke === undefined && curvedBoxStyle(cv.boxes[0]).left === boxStyle(cv.boxes[0]).left, "R58: curved holder keeps position, drops paint");
     const withEl = { ...rb, elements: [{ ...(normalizeDesign({ elements: [{ id: "s", shape: "star" }] })!.elements ?? [])[0]! }] };
