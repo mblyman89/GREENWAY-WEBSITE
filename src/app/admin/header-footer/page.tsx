@@ -193,7 +193,7 @@ export default async function HeaderFooterPage({
             title="How the Header & Footer editor works"
             steps={[
               "Pick a block below (like a 'Follow Greenway' social link) and edit its draft — nothing goes live yet.",
-              "Use the live preview to see the footer exactly as visitors will (click ✎ Edit on a highlighted spot to jump to it).",
+              "Open Preview in Website Hub to see the footer exactly as visitors will (click ✎ Edit on a highlighted spot to jump here).",
               "Click Publish on the block (or 'Publish all drafts') to update the public site. Every publish is snapshotted so you can roll back.",
             ]}
           >
@@ -306,6 +306,7 @@ export default async function HeaderFooterPage({
               returnTo="/admin/header-footer"
             />
             <ContentEditorShell
+              previewPath="/"
               blocks={blockVMs}
               aiEnabled={aiEnabled}
               mediaChoices={mediaChoices}

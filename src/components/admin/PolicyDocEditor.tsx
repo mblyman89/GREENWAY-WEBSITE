@@ -9,7 +9,7 @@
  * lets a novice edit that document safely WITHOUT ever seeing JSON:
  *   - each row is a heading or a paragraph (toggle),
  *   - add / remove / move up / move down,
- *   - a live "as customers see it" preview of the whole document,
+ *   - (R64: the side preview is gone — preview in the Website Hub),
  *   - Save draft (nothing goes live) and Publish (updates the public page),
  *   - a prominent legal-wording caution banner.
  *
@@ -73,7 +73,6 @@ export function PolicyDocEditor(props: Props) {
   } = props;
 
   const [rows, setRows] = useState<PolicyRow[]>(() => initialRows(props));
-  const [showPreview, setShowPreview] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -140,13 +139,6 @@ export function PolicyDocEditor(props: Props) {
             Live &amp; up to date
           </span>
         )}
-        <button
-          type="button"
-          onClick={() => setShowPreview((v) => !v)}
-          className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)]"
-        >
-          {showPreview ? "Hide" : "Show"} customer preview
-        </button>
         <a
           href={publicPath}
           target="_blank"
@@ -157,7 +149,7 @@ export function PolicyDocEditor(props: Props) {
         </a>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div>
         {/* ---------- Editor column ---------- */}
         <div className="space-y-3">
           <button
@@ -255,33 +247,6 @@ export function PolicyDocEditor(props: Props) {
           ) : null}
         </div>
 
-        {/* ---------- Preview column ---------- */}
-        {showPreview ? (
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-              As customers see it
-            </div>
-            <div className="max-h-[70vh] overflow-auto rounded-[var(--admin-radius-lg)] border border-white/10 bg-black p-5 text-white">
-              <div className="space-y-4 text-sm leading-7">
-                {rows.map((row) =>
-                  row.kind === "heading" ? (
-                    <h2 key={row.id} className="pt-1 text-lg font-black text-white">
-                      {row.text || <span className="text-white/40">(empty heading)</span>}
-                    </h2>
-                  ) : (
-                    <p key={row.id} className="text-white/90">
-                      {row.text || <span className="text-white/40">(empty paragraph)</span>}
-                    </p>
-                  ),
-                )}
-              </div>
-            </div>
-            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-              Preview shows plain text. Cross-references (like &ldquo;Terms of Use&rdquo;) become
-              links on the live page automatically.
-            </p>
-          </div>
-        ) : null}
       </div>
 
       {/* ---------- Save / Publish ---------- */}

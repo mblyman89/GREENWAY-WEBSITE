@@ -173,7 +173,7 @@ export default async function BrandingPage({
             title="How the Branding editor works"
             steps={[
               "Pick the Heading font (big titles) and the Body font (paragraphs) from the curated library below — each choice is a draft, so nothing goes live yet.",
-              "Use the live preview to see exactly how the new fonts look (click ✎ Edit on a highlighted spot to jump to it).",
+              "Open Preview in Website Hub to see exactly how the new fonts look (click ✎ Edit on a highlighted spot to jump here).",
               "Click Publish on the block (or 'Publish all drafts') to update the public site everywhere at once. Every publish is snapshotted so you can roll back.",
             ]}
           >
@@ -261,6 +261,7 @@ export default async function BrandingPage({
               returnTo="/admin/settings/branding"
             />
             <ContentEditorShell
+              previewPath="/"
               blocks={blockVMs}
               aiEnabled={aiEnabled}
               mediaChoices={mediaChoices}

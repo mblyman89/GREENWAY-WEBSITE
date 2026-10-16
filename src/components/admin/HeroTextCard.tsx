@@ -196,22 +196,8 @@ export async function HeroTextCard({
         returnTo={returnTo}
       />
 
-      {/* R43: compact preview link replaces the old embedded 14-page "Live
-          preview" iframe, matching every other dedicated page editor. */}
-      {publicPath ? (
-        <p className="text-sm text-[var(--admin-text-muted)]">
-          <a
-            href={`/admin/website-sync?tab=preview&path=${encodeURIComponent(publicPath)}`}
-            className="font-medium text-[var(--admin-accent)] underline-offset-2 hover:underline"
-          >
-            Preview in Website Hub ↗
-          </a>{" "}
-          to see your drafts on the real page before you publish.
-        </p>
-      ) : null}
-
       <ContentEditorShell
-        showPreview={false}
+        previewPath={publicPath || undefined}
         blocks={blockVMs}
         aiEnabled={aiEnabled}
         mediaChoices={mediaChoices}
