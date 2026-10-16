@@ -68,7 +68,7 @@ describe("R42 Q3 — builder banners on the four static pages", () => {
     const src = read("src/app/admin/pages/[slug]/page.tsx");
     expect(src).toContain('new Set(["about", "faq", "locations", "price-match"])');
     expect(src).toContain("BOTTOM_STRIP_PAGES.has(slug)");
-    expect(src).toContain("Where these show:");
+    expect(src).toContain("Where these show</summary>");
   });
 });
 

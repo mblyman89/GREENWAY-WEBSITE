@@ -16,8 +16,8 @@
  *       – an optional bigger "script size" for a cursive line,
  *   • text horizontal align + vertical align.
  *
- * A live PREVIEW renders the REAL public <LoyaltyHeroBanner> with the current
- * state, so what staff see here is exactly what shoppers get. State serializes
+ * R63: no side preview — the Design Studio canvas is the preview (same as the
+ * home carousel editor). State serializes
  * into the hidden `draft_value` of the ONE "richjson" block
  * (loyalty.hero.presentation); Save draft / Publish / Restore reuse the same
  * battle-tested content-block machinery as Site Content.
@@ -27,7 +27,6 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
-import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
@@ -313,15 +312,8 @@ export function LoyaltyHeroEditor(props: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
-        <strong>This is your Loyalty banner — fully yours to style.</strong> Pick the background
-        picture, then style the three lines of text (eyebrow, title, subtitle): choose a font, an
-        on-brand color, and where they sit. Press <strong>Enter</strong> inside a text box to stack
-        lines. The subtitle has a cursive option for a nice flourish. Nothing goes live until you
-        click <strong>Publish</strong>.
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* R63: single column, identical to the home carousel editor (no side preview). */}
+      <div>
         {/* Controls column */}
         <div className="space-y-5">
           {/* Desktop image */}
@@ -484,33 +476,6 @@ export function LoyaltyHeroEditor(props: Props) {
           </BasicMode>
         </div>
 
-        {/* Live preview column — renders the REAL public banner. */}
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-            Live preview (exactly what shoppers see)
-          </div>
-          {/* Force desktop rendering of the banner inside the preview frame so
-              staff always see the wide layout; a note points to mobile. */}
-          <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-white/10 bg-black p-3">
-            <div className="loyalty-hero-preview">
-              <LoyaltyHeroBanner presentation={pres} />
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-            This preview updates as you edit. The desktop banner is shown here; phones use the mobile
-            image and a taller shape.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs">
-            <a
-              href="/loyalty"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[var(--admin-accent)] hover:underline"
-            >
-              View live /loyalty ↗
-            </a>
-          </div>
-        </div>
       </div>
 
       {/* Save / Publish */}
