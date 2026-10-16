@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { PhoneText } from "@/components/site/PhoneText";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { greenwayBusiness } from "@/content/business";
@@ -60,6 +61,7 @@ export async function LocationsContent() {
     "locations.details.phone",
     "locations.details.hours",
     "locations.details.email",
+    "locations.phone.mode",
   ]);
   const addressText = details["locations.details.address"] || greenwayBusiness.address.full;
   const phoneText = details["locations.details.phone"] || greenwayBusiness.phone.display;
@@ -148,7 +150,7 @@ export async function LocationsContent() {
               </DetailRow>
               <DetailRow label="Phone">
                 <a href={`tel:${greenwayBusiness.phone.tel}`} className="transition hover:text-[var(--greenway)]">
-                  {phoneText}
+                  <PhoneText text={phoneText} mode={details["locations.phone.mode"]} modeKey="locations.phone.mode" />
                 </a>
               </DetailRow>
               <DetailRow label="Hours">{hoursText}</DetailRow>

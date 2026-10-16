@@ -2,12 +2,14 @@ import Link from "next/link";
 import { greenwayBusiness } from "@/content/business";
 import { getContentValues } from "@/lib/cms/render-content";
 import { selectClassName } from "@/lib/cms/content-select-core";
+import { PhoneText } from "./PhoneText";
 
 // Editable top-bar blocks (Admin -> Website -> Header & Footer):
 //   header.hours.size    — a "select" size (normal/large/xl/xxl) for the hours
 //   header.phone.display  — the phone BUTTON text overlay (the dialed number
 //                           never changes; only what the customer sees).
-const TOPBAR_BLOCKS = ["header.hours.size", "header.phone.display"] as const;
+//   header.phone.mode     — R64 desktop overlay / hover-reveal / real number.
+const TOPBAR_BLOCKS = ["header.hours.size", "header.phone.display", "header.phone.mode"] as const;
 
 export async function SecondaryBar() {
   // Resolve once (draft-aware). Seed defaults mirror the live values, so this
@@ -63,7 +65,7 @@ export async function SecondaryBar() {
           className="inline-flex h-[clamp(1.95rem,8.1vw,2.45rem)] shrink-0 items-center rounded-full bg-black px-[clamp(0.6rem,2.05vw,1.25rem)] text-[clamp(0.92rem,4.2vw,1.22rem)] font-black uppercase tracking-[-0.02em] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-10 md:text-[1.18rem] md:tracking-[0.03em] lg:text-[1.24rem]"
           aria-label={`Call Greenway at ${greenwayBusiness.phone.numeric}`}
         >
-          {phoneText}
+          <PhoneText text={phoneText} mode={values["header.phone.mode"]} modeKey="header.phone.mode" />
         </a>
       </div>
     </div>
