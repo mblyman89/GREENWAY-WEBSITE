@@ -3,12 +3,31 @@
 /**
  * R55-S2 — pieces of the Studio canvas split out to keep StudioCanvas small:
  *  • CanvasShape  — a draggable shape layer (+ corner resize handle).
- *  • CanvasGuides — the AI suggestion "ghost" and the orange snap guides.
+ *  • CanvasGuides — the AI suggestion "ghost", the orange snap guides and R57
+ *    smart guides (pink = lined up with an item, cyan = equal spacing, px gaps).
  *  • RotateHandle / WidthHandle — R56 on-canvas handles (constant screen size).
  */
 import type { CSSProperties, KeyboardEvent as RKeyboardEvent, PointerEvent as RPointerEvent } from "react";
-import { elementStyle, type DesignElement } from "@/lib/cms/banner-elements-core";
-import { DesignShape } from "@/components/site/DesignShape";
+import { elementHoverClass, elementStyle, type DesignElement } from "@/lib/cms/banner-elements-core";
+import { ElementVisual } from "@/components/site/DesignMotion";
+export { BannerBeam } from "@/components/site/DesignMotion";
+import { gapPx, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
+
+/** R57: measure every other item on the canvas (in % of the frame) for smart guides. */
+export function measureOthers(frame: HTMLElement, exceptId: string): GuideRect[] {
+  const f = frame.getBoundingClientRect();
+  if (!f.width || !f.height) return [];
+  const out: GuideRect[] = [];
+  frame.querySelectorAll<HTMLElement>("[data-studio-id]").forEach((el) => {
+    const id = el.dataset.studioId ?? "";
+    if (!id || id === exceptId) return;
+    const b = el.getBoundingClientRect();
+    out.push({ id, x: ((b.left - f.left) / f.width) * 100, y: ((b.top - f.top) / f.height) * 100, w: (b.width / f.width) * 100, h: (b.height / f.height) * 100 });
+  });
+  return out;
+}
+
+const line = (g: number | GuideLine): GuideLine => (typeof g === "number" ? { at: g, from: 0, to: 100 } : g);
 
 const css = (s: Record<string, string>) => s as unknown as CSSProperties;
 
@@ -51,7 +70,7 @@ export function CanvasShape({
         outlineOffset: 2,
         ...z,
       }}
-      className="gw-dbox"
+      className={`gw-dbox ${elementHoverClass(el)}`}
       data-studio-id={el.id}
       onPointerDown={(e) => onStart(e, "move")}
       onPointerMove={onMove}
@@ -60,7 +79,7 @@ export function CanvasShape({
       onKeyDown={onKey}
       onFocus={onFocus}
     >
-      <DesignShape el={el} />
+      <ElementVisual el={el} />
       {selected && !el.locked ? <RotateHandle scale={scale} onStart={(e) => onStart(e, "rotate")} onMove={onMove} onEnd={onEnd} /> : null}
       {selected && !el.locked ? (
         <span
@@ -92,10 +111,13 @@ export function CanvasGuides({
   ghost,
   guides,
   scale,
+  px,
 }: {
   ghost: { zone: { x: number; y: number; w: number; h: number }; focusX: number; focusY: number } | null;
-  guides: { v: number[]; h: number[] };
+  guides: { v: (number | GuideLine)[]; h: (number | GuideLine)[]; gaps?: GuideGap[] };
   scale: number;
+  /** R57: banner size in real px, for the gap readouts. */
+  px?: { refW: number; height: number };
 }) {
   return (
     <>
@@ -134,12 +156,33 @@ export function CanvasGuides({
           />
         </>
       ) : null}
-      {guides.v.map((g) => (
-        <div key={`v${g}`} aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: `${g}%`, width: 0, borderLeft: `${2 / scale}px dashed #ff7f00`, zIndex: 91 }} />
+      {guides.v.map(line).map((g, i) => (
+        <div key={`v${i}`} aria-hidden="true" className="pointer-events-none absolute" style={{ left: `${g.at}%`, top: `${g.from}%`, height: `${g.to - g.from}%`, width: 0, borderLeft: `${2 / scale}px ${g.from === 0 && g.to === 100 ? "dashed #ff7f00" : "solid #ff3ea5"}`, zIndex: 91 }} />
       ))}
-      {guides.h.map((g) => (
-        <div key={`h${g}`} aria-hidden="true" className="pointer-events-none absolute inset-x-0" style={{ top: `${g}%`, height: 0, borderTop: `${2 / scale}px dashed #ff7f00`, zIndex: 91 }} />
+      {guides.h.map(line).map((g, i) => (
+        <div key={`h${i}`} aria-hidden="true" className="pointer-events-none absolute" style={{ top: `${g.at}%`, left: `${g.from}%`, width: `${g.to - g.from}%`, height: 0, borderTop: `${2 / scale}px ${g.from === 0 && g.to === 100 ? "dashed #ff7f00" : "solid #ff3ea5"}`, zIndex: 91 }} />
       ))}
+      {(guides.gaps ?? []).map((g, i) => {
+        const across = g.axis === "x";
+        const color = g.equal ? "#22d3ee" : "#ff3ea5";
+        return (
+          <div
+            key={`g${i}`}
+            aria-hidden="true"
+            className="pointer-events-none absolute flex items-center justify-center"
+            style={{
+              ...(across ? { left: `${g.from}%`, width: `${g.to - g.from}%`, top: `${g.at}%`, height: 0, borderTop: `${1.5 / scale}px solid ${color}` } : { top: `${g.from}%`, height: `${g.to - g.from}%`, left: `${g.at}%`, width: 0, borderLeft: `${1.5 / scale}px solid ${color}` }),
+              zIndex: 92,
+            }}
+          >
+            {px ? (
+              <span style={{ background: color, color: "#000", fontSize: 11 / scale, fontWeight: 700, lineHeight: 1, padding: `${2 / scale}px ${4 / scale}px`, borderRadius: 4 / scale, whiteSpace: "nowrap" }}>
+                {gapPx(g, px)}px{g.equal ? " =" : ""}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
     </>
   );
 }

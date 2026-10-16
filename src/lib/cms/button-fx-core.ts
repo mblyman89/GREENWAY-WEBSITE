@@ -20,12 +20,14 @@ import { isSafeIconPath, type DesignElement, type ShapeKind } from "./banner-ele
 
 export type ButtonIconPos = "left" | "right" | "only";
 export type ButtonHover = "lift" | "grow" | "glow" | "darken";
-export type ButtonAttention = "pulse" | "wiggle";
+export type ButtonAttention = "pulse" | "wiggle" | "shine" | "breathe";
+export type ButtonClick = "press" | "pop";
 export type ButtonGradient = { from: string; to: string; angle: number };
 
 export const BUTTON_ICON_POS: ButtonIconPos[] = ["left", "right", "only"];
 export const BUTTON_HOVERS: ButtonHover[] = ["lift", "grow", "glow", "darken"];
-export const BUTTON_ATTENTIONS: ButtonAttention[] = ["pulse", "wiggle"];
+export const BUTTON_ATTENTIONS: ButtonAttention[] = ["pulse", "wiggle", "shine", "breathe"];
+export const BUTTON_CLICKS: ButtonClick[] = ["press", "pop"];
 export const BUTTON_SHADOW_MAX = 40;
 export const BUTTON_CORNER_MAX = 40;
 
@@ -40,6 +42,8 @@ export type ButtonFx = {
   hover?: ButtonHover;
   attention?: ButtonAttention;
   corner?: number;
+  /** R57: what a click/tap feels like (press = squish in, pop = bounce out). */
+  click?: ButtonClick;
 };
 
 type StyleMap = Record<string, string>;
@@ -84,6 +88,8 @@ export function normalizeButtonFx(raw: Record<string, unknown>, fallbackColor = 
   if (hv) out.hover = hv;
   const at = pickOpt(raw.attention, BUTTON_ATTENTIONS);
   if (at) out.attention = at;
+  const ck = pickOpt(raw.click, BUTTON_CLICKS);
+  if (ck) out.click = ck;
   if (raw.corner !== undefined && raw.corner !== null && raw.corner !== "") {
     const c = num(raw.corner, -1, 0, BUTTON_CORNER_MAX);
     if (c >= 0) out.corner = c;
@@ -99,13 +105,13 @@ export function buttonFxStyle(fx: ButtonFx & { style: string; bg: string }): Sty
   if (fx.gradient && fx.style === "solid") s.backgroundImage = `linear-gradient(${fx.gradient.angle}deg, ${fx.gradient.from}, ${fx.gradient.to})`;
   if (fx.shadow) s.boxShadow = `0 ${Math.round(fx.shadow / 4)}px ${fx.shadow}px ${rgba(fx.shadowColor ?? "#000000", 55)}`;
   if (fx.corner !== undefined) s.borderRadius = `${fx.corner}px`;
-  if (fx.hover === "glow") s["--gbfx"] = fx.style === "solid" ? (fx.gradient?.to ?? fx.bg) : fx.bg;
+  if (fx.hover === "glow" || fx.attention === "breathe") s["--gbfx"] = fx.style === "solid" ? (fx.gradient?.to ?? fx.bg) : fx.bg;
   return s;
 }
 
 /** Class names for hover / attention (CSS lives in globals.css, R56-S4). */
 export function buttonFxClass(fx: ButtonFx): string {
-  return [fx.hover ? `gw-bh-${fx.hover}` : "", fx.attention ? `gw-ba-${fx.attention}` : ""].filter(Boolean).join(" ");
+  return [fx.hover ? `gw-bh-${fx.hover}` : "", fx.attention ? `gw-ba-${fx.attention} gw-m` : "", fx.click ? `gw-bc-${fx.click}` : ""].filter(Boolean).join(" ");
 }
 
 /** True when the visible label is replaced by the icon (label → aria-label). */
@@ -243,7 +249,8 @@ export function __runButtonFxTests(): { passed: number; failed: number } {
   ok(!("backgroundImage" in buttonFxStyle({ style: "outline", bg: "#000", gradient: { from: "#000000", to: "#ffffff", angle: 0 } })), "no gradient on outline");
   const io = buttonFxStyle({ ...base, iconPath: P, iconPos: "only" });
   ok(io.gap === "0.5em" && io.aspectRatio === "1 / 1", "icon-only is square");
-  ok(buttonFxClass({ hover: "lift", attention: "wiggle" }) === "gw-bh-lift gw-ba-wiggle" && buttonFxClass({}) === "", "classes");
+  ok(buttonFxClass({ hover: "lift", attention: "wiggle", click: "press" }) === "gw-bh-lift gw-ba-wiggle gw-m gw-bc-press" && buttonFxClass({}) === "", "classes");
+  ok(normalizeButtonFx({ click: "pop", attention: "shine" }).click === "pop" && normalizeButtonFx({ click: "boom" }).click === undefined, "R57 click effect");
   ok(isIconOnly({ iconPath: P, iconPos: "only" }) && !isIconOnly({ iconPos: "only" }), "icon-only needs a path");
 
   const frame = { height: 200, heightMobile: 160, refW: 1408, refWm: 390 };

@@ -5,6 +5,7 @@
  * Focal point: click the thumbnail where the important part of the photo is;
  * the banner keeps that spot in view when it's cropped (object-position).
  */
+import { BeamFields } from "./MotionFields";
 import {
   OVERLAY_DIRECTIONS,
   OVERLAY_KINDS,
@@ -133,6 +134,7 @@ export function ImagePanel({
         <NumberSlider label="Height — phone" value={design.frame.heightMobile} min={80} max={720} step={4} unit="px" onChange={(heightMobile) => setFrame({ heightMobile })} />
         <NumberSlider label="Rounded corners" value={design.frame.radius} min={0} max={48} unit="px" onChange={(radius) => setFrame({ radius })} />
       </div>
+      <BeamFields beam={design.beam} onChange={(beam) => onChange({ ...design, beam })} />
     </div>
   );
 }

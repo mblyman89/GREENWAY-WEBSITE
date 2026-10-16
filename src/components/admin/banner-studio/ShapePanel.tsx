@@ -13,6 +13,7 @@ import { MAX_ELEMENTS, SHAPE_KINDS, defaultElement, defaultIcon, elementLabel, t
 import { DesignShape } from "@/components/site/DesignShape";
 import { ColorField, NumberSlider, Toggle } from "./controls";
 import { ElementFxFields } from "./ElementFxFields";
+import { ElementMotionFields } from "./MotionFields";
 import { BadgeStickers } from "./BadgeStickers";
 import type { StudioSelection } from "./StudioCanvas";
 
@@ -178,6 +179,7 @@ export function ShapePanel({
           ) : null}
           {el.kind !== "icon" && el.shape === "rect" ? <NumberSlider label="Rounded corners" value={el.radius} min={0} max={200} unit="px" onChange={(radius) => patch(el.id, { radius })} /> : null}
           <ElementFxFields el={el} patch={(p) => patch(el.id, p)} />
+          <ElementMotionFields el={el} patch={(p) => patch(el.id, p)} />
           <NumberSlider label="Rotate" value={el.rotate} min={-180} max={180} unit="°" onChange={(rotate) => patch(el.id, { rotate })} />
           <NumberSlider label="See-through" value={el.opacity} min={5} max={100} unit="%" onChange={(opacity) => patch(el.id, { opacity })} />
           <div className="rounded-md border border-white/10 p-2">
