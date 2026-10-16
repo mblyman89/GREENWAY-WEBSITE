@@ -29,6 +29,7 @@ import { IntroFields } from "./IntroFields";
 import { LayersPanel } from "./LayersPanel";
 import { CustomFontFaces } from "@/components/admin/fonts/CustomFontUpload";
 import { ArrangeBar } from "./ArrangeBar";
+import { useStudioDock, type DockSize } from "./useStudioDock";
 import { toggleRef, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import type { PickerPost } from "./LinkPicker";
 import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
@@ -78,6 +79,8 @@ export function BannerStudio({
     window.addEventListener("gw-studio-replay", replay);
     return () => window.removeEventListener("gw-studio-replay", replay);
   }, [replay]);
+  // R65: the canvas dock follows the scroll (see useStudioDock).
+  const { follow, saveFollow, dockSize, saveDock, dockTop, canvasMaxH } = useStudioDock();
   const [selection, setSelection] = useState<StudioSelection>(null);
   // R56: shift-click group (2+ items); empty = single selection only.
   const [group, setGroup] = useState<ItemRef[]>([]);
@@ -260,46 +263,6 @@ export function BannerStudio({
   return (
     <div ref={rootRef} className="space-y-3">
       <CustomFontFaces />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="radiogroup" aria-label="Preview size" className="flex gap-1">
-          {(["desktop", "mobile"] as DesignDevice[]).map((d) => (
-            <button
-              key={d}
-              type="button"
-              role="radio"
-              aria-checked={device === d}
-              onClick={() => setDevice(d)}
-              className={
-                device === d
-                  ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black"
-                  : "rounded-full bg-white/10 px-3 py-1 text-xs text-white/75 hover:bg-white/20"
-              }
-            >
-              {d === "desktop" ? "🖥 Computer" : "📱 Phone"}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={undo} disabled={!counts.undo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Undo (Ctrl+Z)">
-            ↶ Undo
-          </button>
-          <button type="button" onClick={redo} disabled={!counts.redo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">
-            ↷ Redo
-          </button>
-        </div>
-      </div>
-
-      {device === "mobile" ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--admin-orange)]/12 px-3 py-1.5 text-xs text-[var(--admin-orange)]">
-          <span>📱 Phone layout: moves and sizes here only change how the banner looks on phones.</span>
-          {hasPhoneOverrides ? (
-            <button type="button" className="underline" onClick={resetPhone}>
-              Reset phone layout
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="rounded-md border border-[#ffd700]/30 bg-[#ffd700]/5 px-3 py-2 text-xs text-white/80">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -331,37 +294,103 @@ export function BannerStudio({
         ) : null}
       </div>
 
-      <div className={`rounded-lg bg-black/40 p-2${demo ? " gw-demo" : ""}`}>
-        <StudioCanvas
-          ghost={ai && ai.device === device ? { zone: ai.s.textZone, focusX: ai.s.focusX, focusY: ai.s.focusY } : null}
+      {/* R65: the dock — toolbar, canvas, Replay and Arrange follow the scroll. */}
+      <div
+        className={follow ? "sticky z-30 -mx-2 space-y-2 rounded-lg border border-white/10 bg-[var(--admin-canvas)]/95 px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur" : "space-y-3"}
+        style={follow ? { top: dockTop + 8 } : undefined}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="radiogroup" aria-label="Preview size" className="flex gap-1">
+            {(["desktop", "mobile"] as DesignDevice[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="radio"
+                aria-checked={device === d}
+                onClick={() => setDevice(d)}
+                className={
+                  device === d
+                    ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black"
+                    : "rounded-full bg-white/10 px-3 py-1 text-xs text-white/75 hover:bg-white/20"
+                }
+              >
+                {d === "desktop" ? "🖥 Computer" : "📱 Phone"}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {/* R63: one-tap replay of every motion/smoke/entrance on the canvas (R65: lives in the dock so it follows too). */}
+            <button type="button" onClick={replay} className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-bold text-black hover:bg-amber-400" title="Replay all motion, entrances and smoke on the canvas">▶ Replay</button>
+            <button
+              type="button"
+              onClick={() => saveFollow(!follow)}
+              aria-pressed={follow}
+              className={follow ? "rounded-full bg-[var(--admin-accent)]/25 px-3 py-1 text-xs font-semibold text-[var(--admin-accent)]" : "rounded-full bg-white/10 px-3 py-1 text-xs text-white/75 hover:bg-white/20"}
+              title="Keep the canvas on screen while you scroll through the settings below"
+            >
+              📌 {follow ? "Following scroll" : "Follow scroll"}
+            </button>
+            {follow ? (
+              <select
+                aria-label="Canvas size while following"
+                value={dockSize}
+                onChange={(e) => saveDock(e.target.value as DockSize)}
+                className="rounded-full border border-white/15 bg-black/40 px-2 py-1 text-xs text-white/80"
+              >
+                <option value="s">Small</option>
+                <option value="m">Medium</option>
+                <option value="l">Large</option>
+              </select>
+            ) : null}
+            <button type="button" onClick={undo} disabled={!counts.undo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Undo (Ctrl+Z)">
+              ↶ Undo
+            </button>
+            <button type="button" onClick={redo} disabled={!counts.redo} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 hover:bg-white/20 disabled:opacity-30" title="Redo (Ctrl+Shift+Z)">
+              ↷ Redo
+            </button>
+          </div>
+        </div>
+
+        {device === "mobile" ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--admin-orange)]/12 px-3 py-1.5 text-xs text-[var(--admin-orange)]">
+            <span>📱 Phone layout: moves and sizes here only change how the banner looks on phones.</span>
+            {hasPhoneOverrides ? (
+              <button type="button" className="underline" onClick={resetPhone}>
+                Reset phone layout
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className={`rounded-lg bg-black/40 p-2${demo ? " gw-demo" : ""}`}>
+          <StudioCanvas
+            ghost={ai && ai.device === device ? { zone: ai.s.textZone, focusX: ai.s.focusX, focusY: ai.s.focusY } : null}
+            design={design}
+            device={device}
+            legacy={legacy}
+            imageSrc={deviceSrc}
+            imageAlt={imageAlt}
+            selection={selection}
+            onSelect={select}
+            onChange={change}
+            onRequestDelete={setPendingDelete}
+            onLegacyEdit={onLegacyEdit}
+            group={group}
+            onToggle={toggle}
+            replayKey={replayKey}
+            maxH={canvasMaxH}
+          />
+        </div>
+        <ArrangeBar
           design={design}
           device={device}
+          refs={group.length > 1 ? group : selection ? [selection] : []}
+          rootRef={rootRef}
           legacy={legacy}
-          imageSrc={deviceSrc}
-          imageAlt={imageAlt}
-          selection={selection}
-          onSelect={select}
           onChange={change}
-          onRequestDelete={setPendingDelete}
-          onLegacyEdit={onLegacyEdit}
-          group={group}
-          onToggle={toggle}
-          replayKey={replayKey}
+          onSelectMany={selectMany}
         />
       </div>
-      {/* R63: one-tap replay of every motion/smoke/entrance on the canvas. */}
-      <div className="-mt-1 flex justify-end">
-        <button type="button" onClick={replay} className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-bold text-black hover:bg-amber-400" title="Replay all motion, entrances and smoke on the canvas">▶ Replay</button>
-      </div>
-      <ArrangeBar
-        design={design}
-        device={device}
-        refs={group.length > 1 ? group : selection ? [selection] : []}
-        rootRef={rootRef}
-        legacy={legacy}
-        onChange={change}
-        onSelectMany={selectMany}
-      />
       <p className="text-[0.7rem] text-white/45">
         Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · drag the gold knob to rotate (Shift = 15° steps) · Shift-click to select several, then drag them together or use Arrange · Ctrl/⌘+C / V / D copy, paste (into any banner), duplicate · click an item, then arrow keys nudge it (Shift = bigger steps) · 🔒 locked items stay put · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
       </p>
