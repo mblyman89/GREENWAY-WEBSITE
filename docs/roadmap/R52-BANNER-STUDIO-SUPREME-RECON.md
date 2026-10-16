@@ -581,3 +581,27 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
 - **Loyalty:** the carousel editor copy in its own tab.
 - **No banner editor:** About, Price match, Locations, FAQ, Blog and Medical.
 - **Rule:** creating and editing must be identical on every page that has a banner. One shared component, one data model, one set of controls.
+
+## 16. R59: what shipped (4 slices)
+
+- **S1 Pro picture tools** (`banner-image-core`, shared `BannerPicture` so Studio = site):
+  - 14 one-click Looks with live thumbnails.
+  - Contrast, warmth, hue, sepia, vertical flip.
+  - Colour wash with 12 blend modes; duotone.
+  - Vignette (any colour), film grain, edge fade with see-through over a backdrop colour.
+  - Ken Burns (5 moves, speed).
+  - All of it is non-destructive CSS that works on video too and is written only when used.
+- **S2 Entrance animations** (`banner-enter-core`, `BannerEntrances` island; replaces R58 RevealWords):
+  - 18 effects for every text box, button, shape and icon, each with delay, length and feel (4 easings).
+  - New ✨ Animate tab: 11 whole-banner presets staggered in reading order, Remove all, ▶ Play, and a clickable timeline.
+  - Played with WAAPI. Server HTML pre-hides entering items (`.gw-enp` + `data-gw-enter`), so there is no flash.
+  - Replays each time the carousel shows the slide. Reduced motion and no-JS show the finished banner.
+- **S3 Start blank, then reveal** (`design.intro`). The banner starts covered and smoke plays over the cover; the cover leaves after a hold with one of 8 exits, and words and entrances wait for it automatically.
+  - Cover options: any colour or two-colour gradient, strength, frosted glass, and a logo or picture (brand files plus the media library), centred or filling the banner.
+  - 7 one-click recipes, each adding the matching smoke.
+  - Controls are in both the Smoke and Animate tabs.
+- **S4 Real page speed:**
+  - Migration **0280** `website_web_vitals` (apply manually; rollback in `supabase/rollbacks`).
+  - `VitalsReporter` (next/web-vitals) sends one beacon per page view to `/api/vitals`. It never runs with GPC on, on admin or no-track pages, or in staff previews.
+  - Reports > Website > Page speed shows Google p75 scoring with a pass/fail verdict, a good / needs-work / poor split per metric, phone vs tablet vs computer, the slowest site sections and a daily LCP chart.
+- **Next round:** apply the §15 restructure. Replace every old page banner editor with copies of this Studio-based home-carousel editor.
