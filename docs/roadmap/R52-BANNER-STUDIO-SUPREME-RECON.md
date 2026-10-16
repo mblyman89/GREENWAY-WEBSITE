@@ -605,3 +605,33 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   - `VitalsReporter` (next/web-vitals) sends one beacon per page view to `/api/vitals`. It never runs with GPC on, on admin or no-track pages, or in staff previews.
   - Reports > Website > Page speed shows Google p75 scoring with a pass/fail verdict, a good / needs-work / poor split per metric, phone vs tablet vs computer, the slowest site sections and a daily LCP chart.
 - **Next round:** apply the §15 restructure. Replace every old page banner editor with copies of this Studio-based home-carousel editor.
+
+## 17. R60: what shipped (2 slices)
+
+- **S1 Pro big-cloud smoke.** This changes only the bong hit and large plume effects. Joint and bowl wisps are untouched.
+  - 8 cloud looks: billowy, dense rip, slow exhale, vortex, rolling mushroom, smoke wall, puff-puff-puff, fast blast.
+  - Expert sliders: how long it pours, puffs (1–5), blow power, spread (cone width), source size, swirl/turbulence, rise or sink, hang time.
+  - 5 new one-click presets.
+  - Fog and haze get a swirl control.
+  - The WebGL plume now follows a physical emit, decelerate, rise and dissipate timeline.
+- **S2 Lottie + Rive animation layers.**
+  - **Data:** `banner-anim-core`. An animation is a banner element with `kind: "anim"`, so drag, resize, rotate, phone layout, layers, lock, copy/paste, entrances and hide-on-phones all work unchanged. A design holds at most 4 animations.
+  - **Runtimes:** both are version-pinned and MIT-licensed. Each is loaded only when a banner has that kind of file.
+    - `@lottiefiles/dotlottie-web@0.81.0` (ThorVG WASM, which runs no Lottie expressions) plays .lottie and Lottie JSON.
+    - `@rive-app/webgl2@2.44.2` plays .riv.
+  - **Player:** `AnimPlayer` is loaded through the `BannerAnim` next/dynamic door.
+    - It plays only while it is on screen, its carousel slide is shown and the browser tab is visible.
+    - "Plays by itself" animations replay each time the slide is shown again.
+    - Start modes: auto (with a delay), hover (a tap on phones), click/tap, and scroll-scrub (Lottie only).
+    - Reduced motion shows a still frame or hides the layer.
+    - An optional alt text makes the layer role="img"; without it the layer is decorative.
+  - **Studio tab "🎞️ Lottie & Rive":**
+    - Add files from the Media Library or upload them in place. Uploads use the same signed direct upload, with the server checking size and type and then proving the type from the file's bytes.
+    - The live preview reads the file and fills every control with what the file really contains:
+      - Lottie: animations, themes, state machines, markers, frame segment, and colour/text/number slots.
+      - Rive: artboards, state machines with their inputs, data-binding (view model) values, text runs, the input switched on while hovered and the trigger fired on click.
+    - Common controls: speed and direction (Lottie), fit and anchor, Replace file, and links to LottieFiles, the Rive Marketplace, the Rive editor and Lottie Creator.
+  - **Uploads:** a new "animation" upload kind (20 MB cap, advisory over 1 MB). It is recognised by signature: .riv files start with `RIVE`+v7, .lottie files are ZIPs whose first entry is manifest.json, and Lottie JSON is recognised by its header keys. Picture pickers never list animation files.
+  - Animation files must be on our own storage (`safeAnimSrc`); files from any other host are refused.
+- **No migration this round.**
+- **Next round:** replace every old page banner editor with the Studio-based editor (the §15 restructure).
