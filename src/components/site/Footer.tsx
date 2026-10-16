@@ -5,6 +5,7 @@ import { SiteText } from "@/components/site/SiteText";
 import { ComplianceWarningText } from "@/components/site/ComplianceWarningText";
 import { FooterLinkUnavailable } from "@/components/site/FooterLinkUnavailable";
 import { getContentForRender, getContentValues } from "@/lib/cms/render-content";
+import { PhoneText } from "./PhoneText";
 
 const policyLinks = [
   { label: "Privacy Policy", href: "/privacy-policy" },
@@ -30,6 +31,7 @@ const FOOTER_LINK_BLOCKS = [
   "footer.app.apple.url",
   "footer.app.google.url",
   "footer.link.unavailable.message",
+  "header.phone.mode", // R64: same desktop phone setting as the top bar
 ] as const;
 
 type FooterLinks = Record<string, string>;
@@ -200,7 +202,7 @@ async function MobileFooter({ links }: { links: FooterLinks }) {
           {greenwayBusiness.address.full}
         </Link>
         <a href={`tel:${greenwayBusiness.phone.tel}`} className="mt-3 inline-flex rounded-full bg-[var(--greenway)] px-5 py-2 text-sm font-black text-black transition hover:bg-white">
-          {greenwayBusiness.phone.display}
+          <PhoneText text={greenwayBusiness.phone.display} mode={links["header.phone.mode"]} modeKey="header.phone.mode" />
         </a>
       </div>
 

@@ -965,6 +965,27 @@ h1, h2, h3, h4, h5, h6 {
   scale: 1.12;
   transition: scale 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+/* R64: phone overlay → real number on desktop (mouse devices only). */
+.gw-ph {
+  display: inline-grid;
+  justify-items: center;
+}
+.gw-ph > span {
+  grid-area: 1 / 1;
+}
+.gw-ph-r {
+  visibility: hidden;
+}
+@media (hover: hover) and (pointer: fine) {
+  .gw-ph-real .gw-ph-o,
+  :is(a:hover, a:focus-visible) .gw-ph-hover .gw-ph-o {
+    visibility: hidden;
+  }
+  .gw-ph-real .gw-ph-r,
+  :is(a:hover, a:focus-visible) .gw-ph-hover .gw-ph-r {
+    visibility: visible;
+  }
+}
 /* R63: Studio ▶ Replay acts out hover + click effects for a moment. */
 .gw-demo .gw-bh-lift,
 .gw-demo .gw-xh-lift {

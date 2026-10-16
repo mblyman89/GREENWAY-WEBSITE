@@ -78,12 +78,26 @@ export const MEDICAL_HIDE_SELECT_OPTIONS: SelectOption[] = [
   { value: "yes", label: "Hidden", className: "" },
 ];
 
+/**
+ * R64: phone-number overlay mode (desktop / mouse devices only — phones keep
+ * the overlay and tap-to-call is unchanged). The className is applied to the
+ * <PhoneText> wrapper; CSS in globals.css (.gw-ph-*) does the work.
+ */
+export const PHONE_MODE_OPTIONS: SelectOption[] = [
+  { value: "overlay", label: "Show the overlay text (default)", className: "gw-ph-overlay" },
+  { value: "hover", label: "Desktop: reveal the real number when the mouse is over it", className: "gw-ph-hover" },
+  { value: "real", label: "Desktop: no overlay — always show the real number", className: "gw-ph-real" },
+];
+const PHONE_NOTE = "Desktop only. On phones the overlay always shows and a tap opens the phone app with the real number ready to call.";
+
 /** Registry of every select block, keyed by block_key. */
 const SELECT_SPECS: Record<string, SelectSpec> = {
   "header.hours.size": {
     options: HOURS_SIZE_OPTIONS,
     note: "How big the store-hours text is in the top green bar. Larger steps grow both the phone-size and desktop hours together.",
   },
+  "header.phone.mode": { options: PHONE_MODE_OPTIONS, note: PHONE_NOTE },
+  "locations.phone.mode": { options: PHONE_MODE_OPTIONS, note: PHONE_NOTE },
   "medical.page.hidden": {
     options: MEDICAL_HIDE_SELECT_OPTIONS,
     note: "Hide the whole Medical page. When Hidden, the page and its menu link disappear from the public site (staff pages are unaffected).",
@@ -187,6 +201,12 @@ export function __runContentSelectCoreTests(): { passed: number } {
   ok(medSpec!.options[1]!.value === "yes", "medical second option is 'yes'");
   for (const o of MEDICAL_HIDE_SELECT_OPTIONS) {
     ok(o.label.trim().length > 0, `medical option ${o.value} has a label`);
+  }
+
+  // R64 phone overlay mode: default = overlay; unknown falls back to overlay.
+  for (const k of ["header.phone.mode", "locations.phone.mode"]) {
+    ok(isSelectBlock(k) && selectDefaultValue(k) === "overlay", `${k} default overlay`);
+    ok(selectClassName(k, "hover") === "gw-ph-hover" && selectClassName(k, "bogus") === "gw-ph-overlay", `${k} classes`);
   }
 
   return { passed };

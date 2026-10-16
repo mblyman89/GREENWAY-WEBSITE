@@ -676,6 +676,16 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue: "360-BUY-WEED",
   },
   {
+    block_key: "locations.phone.mode",
+    page: "locations",
+    section: "details",
+    label: "Locations — phone overlay on desktop",
+    help_text:
+      "How the phone in the details card behaves on desktop: keep the overlay label, reveal the real number on mouse-over, or always show the real number. Phones are unaffected — a tap still opens the phone app.",
+    field_type: "select",
+    defaultValue: "",
+  },
+  {
     block_key: "locations.details.hours",
     page: "locations",
     section: "details",
@@ -1086,5 +1096,15 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     // Mirrors greenwayBusiness.phone.display (src/content/business.ts) exactly,
     // kept as a literal to match this file's convention (no runtime import).
     defaultValue: "360-BUY-WEED",
+  },
+  {
+    block_key: "header.phone.mode",
+    page: "header-footer",
+    section: "topbar",
+    label: "Phone overlay on desktop (top bar + footer)",
+    help_text:
+      "Choose how the phone button behaves on desktop: keep the overlay text (e.g. 360-BUY-WEED), reveal the real number when the mouse is over it, or turn the overlay off and always show the real number. Phones are unaffected — a tap still opens the phone app with the real number.",
+    field_type: "select",
+    defaultValue: "",
   },
 ];
