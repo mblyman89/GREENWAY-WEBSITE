@@ -400,12 +400,13 @@ export function FluxCredentialsForm({ view }: { view: CredentialsView["flux"] })
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-[var(--admin-text)]">🎨 FLUX 2 (Black Forest Labs) credentials</h2>
+        <h2 className="text-sm font-bold text-[var(--admin-text)]">🎨 FLUX (Black Forest Labs) credentials</h2>
         <SourceBadge source={view.sources.apiKey} />
       </div>
       <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
-        Powers one-click image generation in the marketing image builder. Create an API key at
-        Black Forest Labs and paste it here. The key is stored securely (admin-only) and never shown again in full.
+        Powers FLUX image and FLUX 3 video generation in Marketing → Creative Studio. Create an API key at
+        Black Forest Labs (bfl.ai) and paste it here. The model you pick below is the studio&rsquo;s default (you can switch per
+        generation). Video always uses FLUX 3 Video. The key is stored securely (admin-only) and never shown again in full.
         Leave the API base URL blank to use the global endpoint (https://api.bfl.ai).
       </p>
 
@@ -420,7 +421,7 @@ export function FluxCredentialsForm({ view }: { view: CredentialsView["flux"] })
           <Note />
         </Field>
 
-        <Field label="Model endpoint">
+        <Field label="Default image model">
           <Select value={endpoint} onChange={(e) => setEndpoint(e.target.value)}>
             {FLUX_ENDPOINTS.map((ep) => (
               <option key={ep.value} value={ep.value}>

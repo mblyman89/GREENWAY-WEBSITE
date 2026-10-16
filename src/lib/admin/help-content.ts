@@ -790,7 +790,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I generate marketing images?",
-        a: "Open the Creative Studio — it opens on the FLUX tab: pick where the image will go (website banner, social post, email header, blog hero, print), describe the idea so Greenway AI drafts the brief from your live deals, then generate with FLUX at the exact right size — saved to your Media Library as a draft. The Midjourney tab builds a copy-paste prompt from the same brief.",
+        a: "Open the Creative Studio. It opens on FLUX Image, which works like the BFL Playground: type your prompt (sent word for word), optionally add reference images (image 1, image 2…), choose the aspect ratio or a destination size, the number of images (1–4 or 8), format, safety and prompt upsampling, then Generate. Results save to your Media Library as drafts. FLUX Video makes clips (with Draft first to save credits), and the Midjourney tab builds a copy-paste prompt.",
         href: "/admin/marketing/midjourney",
       },
     ],
