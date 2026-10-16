@@ -42,7 +42,7 @@ import {
   type AspectRatio,
 } from "@/lib/marketing/midjourney-core";
 import {
-  generateFluxAction,
+  generateFluxImagesAction,
   suggestCreativeConceptAction,
   uploadFluxReferenceAction,
 } from "@/app/admin/marketing/midjourney/actions";
@@ -208,20 +208,23 @@ export function MidjourneyBuilder({
     setFluxWarnings([]);
     setFluxMeta(null);
     startFlux(async () => {
-      const res = await generateFluxAction({
-        brief,
+      // Interim (R62 slice 1): the playground-style studio replaces this in slice 2.
+      const res = await generateFluxImagesAction({
+        model: "",
+        prompt: assemblePrompt(brief).conceptText,
         outputFormat: fluxFormat,
         referenceImages: fluxRefs,
         promptUpsampling,
-        placementId: placementId || null,
       });
-      if (res.ok) {
-        setFluxAsset(res.asset);
+      const first = res.ok ? res.items.find((i) => i.ok) : undefined;
+      if (res.ok && first && first.ok) {
+        setFluxAsset({ id: first.id, url: first.url, filename: first.filename, title: first.title });
         setFluxWarnings(res.warnings);
-        setFluxMeta({ width: res.width, height: res.height, cost: res.cost });
-        toast({ tone: "success", message: `Image generated with ${res.endpoint} and saved to your media library (draft).` });
+        setFluxMeta({ width: res.width, height: res.height, cost: res.totalCost });
+        toast({ tone: "success", message: `Image generated with ${res.model} and saved to your media library (draft).` });
       } else {
-        toast({ tone: "error", message: res.error });
+        const failed = res.ok ? res.items.find((i) => !i.ok) : undefined;
+        toast({ tone: "error", message: !res.ok ? res.error : failed && !failed.ok ? failed.error : "FLUX returned no image." });
       }
     });
   }
