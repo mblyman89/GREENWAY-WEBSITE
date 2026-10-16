@@ -16,7 +16,8 @@ describe("R55-S2 shapes + layers", () => {
   const canvas = read("src/components/admin/banner-studio/StudioCanvas.tsx");
 
   it("public banner draws shapes decoratively and paints layer order with z-index only", () => {
-    expect(site).toContain("<DesignShape el={el} />");
+    expect(site).toContain("<ElementVisual el={el} />"); // R57: wraps <DesignShape> with motion
+    expect(read("src/components/site/DesignMotion.tsx")).toContain("<DesignShape el={el} />");
     expect(site).toMatch(/aria-hidden="true"\s+style=\{css\(withZ\(elementStyle\(el\), el\.id\)\)\}/);
     expect(site).toContain("const z = layerZ(design);");
   });

@@ -453,3 +453,54 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   - entrance animations (fade/slide, reduced-motion safe)
   - version history with visual diffs
   - comments / approvals
+
+## 14. R57: what shipped, logged later work, and the smoke/fog assessment
+
+### Shipped
+- **Smart spacing guides** (`banner-guides-core.ts`, 18 self-tests):
+  - Snaps the start, centre or end of a dragged item to the banner's 0/50/100 lines and to every other item's edges and centres.
+  - Dashed orange lines mark the banner; solid pink lines mark other items.
+  - Gap lines show the pixel distance, and turn cyan with "=" when spacing is equal (equal-spacing snap).
+- **Micro-interactions** (`banner-motion-core.ts`, 32 self-tests; pure CSS, no library shipped):
+  - Shapes and icons: breathe / glow / float / spin / wiggle / blob / **shape morph** (48-point clip-path tween), plus an **orbit spark** that travels the shape border (`offset-path`). Each has a slow/normal/fast speed and a hover effect (grow, lift, spin, glow).
+  - Text boxes: breathe / glow / float / wiggle / neon flicker, with hover grow / lift / glow.
+  - Banner **border beam**: two-colour light that travels around the banner edge.
+  - Buttons: new shine and breathe attention effects, plus **click feedback** (press / pop).
+  - Motion pauses on hidden carousel slides and turns off fully under `prefers-reduced-motion`.
+  - Hover effects only run on hover-capable devices and never inside the Studio canvas.
+  - Old designs are unchanged (optional fields are only written when used).
+
+### Logged for later (owner asked to defer)
+- Brand Kit / saved styles
+- Templates gallery
+- Curved text
+- Image tools: crop, masks, background removal
+- Impressions / CTR / A-B tests
+- Entrance animations
+- Version history with diffs
+- Comments / approvals
+- Countdown badges and auto badges (new / low stock / sale)
+- Larger icon library and custom SVG upload
+- **R58 Card Studio**: universal page editor, tabs and cards
+
+### Smoke / fog library assessment (researched R57)
+| Source | What it really is | Licence | Engine | Fit |
+|---|---|---|---|---|
+| **Shaders 103: smoke**, Brad Woods Digital Garden | A tutorial, not a package. A three.js `ShaderMaterial` on a twisted plane, scrolling a Perlin-noise texture with smoothstep remap and edge fade. | Tutorial (we write our own code) | WebGL via three.js | Thin wisps from a joint, blunt, pipe or bong. Moderate effort. |
+| **shaders.com `Smoke`** (`shaders` npm v4, MIT; 4.9k★) | A real stable-fluids smoke sim with an emitter point (emitFrom, direction, spread, speed, dissipation, gravity, colorA→B, mouse push). | Code MIT; presets need Pro. Telemetry is on by default (`disableTelemetry` prop). | **WebGPU only** (typegpu compute) | The most realistic "hit blown out" look. Needs a fallback where WebGPU is missing. |
+| **shadcn.io Smoke** (credit: Dov Azencot) | A volumetric GPU smoke shader component. | Repo MIT; registry download needs a shadcn.io token/account. | WebGL | Rising fog / haze. |
+| **21st.dev Spooky Smoke** (Hossain Jahed / EaseMize UI) | One about-200-line WebGL2 component: fbm noise fragment shader with a `smokeColor` prop, no dependencies. | 21st.dev registry needs login; copies found on GitHub. | Raw WebGL2 | Full-banner fog / mist background. Easiest. |
+
+**Plan (R58/R59 "Atmosphere" slice):** add one optional `design.atmosphere = {kind: "fog"|"wisp"|"plume", color, intensity, speed, origin {x,y}, direction}`.
+- **Renderer:**
+  - our own small WebGL2 canvas (no three.js), written in the style of the 21st.dev / Brad Woods shaders and not copied
+  - client-only and lazy (`next/dynamic`)
+  - paused offscreen and on hidden slides (IntersectionObserver)
+  - DPR capped at 1.5 on phones
+  - off under reduced-motion, with a static CSS gradient fallback
+- **Optional upgrade:** the "plume" kind can use shaders.com `Smoke` when `navigator.gpu` exists, with telemetry disabled.
+- **Difficulty:**
+  - fog: easy (about 1 slice)
+  - wisps from a point (joint / pipe / bong): medium
+  - realistic exhale plume: medium-hard (WebGPU path plus fallback)
+- **Risks:** mobile battery/GPU use (one shader per visible banner at most); Android WebGPU gaps; licence and telemetry, which our own WebGL avoids.
