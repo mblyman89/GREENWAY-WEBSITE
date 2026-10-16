@@ -43,6 +43,7 @@ import {
 import { BLOG_CONTENT_BLOCKS } from "@/lib/blog/blog-content-core";
 import { LOYALTY_LOGO_BLOCK, defaultLoyaltyLogo, serializeLoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
 import { VENDOR_CENTER_BLOCK } from "@/lib/vendors/vendor-center-core";
+import { BRAND_KIT_BLOCK } from "@/lib/brand/brand-kit-core";
 import { ABOUT_SIDE_BLOCK, defaultAboutSide, serializeAboutSide } from "@/lib/about/about-side-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
@@ -177,6 +178,17 @@ export type ContentBlockSeed = {
 };
 
 export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
+  // R64: the Brand hub kit (colours, logos, messaging, saved banners…). Blank
+  // on purpose: a blank kit changes nothing on the site.
+  {
+    block_key: BRAND_KIT_BLOCK,
+    page: "business",
+    section: "brand",
+    label: "Brand kit",
+    help_text: "Colours, logos, slogans, mission, about us, saved banners and brand notes. Edited in Website \u2192 Branding.",
+    field_type: "richjson",
+    defaultValue: "",
+  },
   // ---- Site-wide typography ------------------------------------------------
   {
     block_key: "site.font.heading",
