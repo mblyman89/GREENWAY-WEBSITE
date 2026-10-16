@@ -993,6 +993,19 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* R58-S2 — curved text: computer / phone arc swap (CurvedText.tsx). */
+.gw-curve-m {
+  display: none !important;
+}
+@container gwb (max-width: 767px) {
+  .gw-curve-d {
+    display: none !important;
+  }
+  .gw-curve-m {
+    display: block !important;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * R58-S1 — smoke / fog / haze canvases (banner-atmos-core, BannerSmokeClient)
  * and "words fade in after the smoke" (.gw-rvp = words start hidden; the

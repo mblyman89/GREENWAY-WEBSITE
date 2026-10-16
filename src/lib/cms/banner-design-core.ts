@@ -18,6 +18,7 @@
  * Research behind the rules: bible PART 3 (WCAG 2.2 SC 1.4.3, NN/g "Ensure
  * High Contrast for Text Over Images", WAC 314-55-155, Pointer Events).
  */
+import { normalizeCurve } from "./banner-curve-core";
 import { normalizeReveal, normalizeSmoke, type SmokeLayer } from "./banner-atmos-core";
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
@@ -229,6 +230,8 @@ export type DesignTextBox = {
   gradient?: DesignGradient;
   /** R56: rotation in degrees (−180…180); absent = upright. */
   rotate?: number;
+  /** R58: curved text −100…100 (+ arch ∩, − smile ∪); absent = straight. */
+  curve?: number;
 } & TextMotionFields;
 
 export type DesignButton = {
@@ -504,6 +507,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     ...(raw.locked === true ? { locked: true } : {}),
     ...normalizeTextFx(raw),
     ...rotateField(raw.rotate),
+    ...(normalizeCurve(raw.curve) ? { curve: normalizeCurve(raw.curve) } : {}),
     ...normalizeTextMotion(raw),
   };
 }
@@ -921,7 +925,7 @@ const SHADOWS: Record<DesignShadow, string> = {
 };
 
 /** Text-shadow value for a box (neon follows the letter/gradient colour). */
-function shadowCss(box: DesignTextBox): string {
+export function shadowCss(box: DesignTextBox): string {
   if (box.shadow !== "neon") return SHADOWS[box.shadow];
   const c = box.gradient ? box.gradient.to : box.color;
   return `0 0 4px ${rgba(c, 90)}, 0 0 12px ${rgba(c, 70)}, 0 0 28px ${rgba(c, 50)}`;
@@ -1000,6 +1004,17 @@ export function boxStyle(box: DesignTextBox): StyleMap {
   }
   // R57: motion colour + speed variables (only when motion / hover is used).
   return { ...s, ...textMotion(box, box.gradient?.to ?? box.color).vars };
+}
+
+/** R58: style of the box that HOLDS curved text — positioning/font only;
+ * paint (fill, gradient, outline, shadow) moves onto the SVG letters. */
+const CURVE_STRIP = ["backgroundImage", "WebkitBackgroundClip", "backgroundClip", "WebkitTextFillColor", "WebkitTextStroke", "paintOrder", "textShadow", "filter", "backgroundColor", "padding", "borderRadius", "backdropFilter", "textDecorationLine"];
+export function curvedBoxStyle(box: DesignTextBox): StyleMap {
+  const s = boxStyle(box);
+  for (const k of CURVE_STRIP) delete s[k];
+  s.width = "var(--gbw, var(--gw))";
+  s.lineHeight = "1";
+  return s;
 }
 
 /** R57: motion + hover classes for a text box ("" when none). */
@@ -1536,6 +1551,9 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     const rb = normalizeDesign({ boxes: [{ id: "r", rotate: -12 }, { id: "u" }], buttons: [{ id: "k", href: "/menu", rotate: 400 }] })!;
     ok(rb.boxes[0].rotate === -12 && !("rotate" in rb.boxes[1]) && rb.buttons[0].rotate === 180, "R56: rotate only when set, clamped");
     ok(boxStyle(rb.boxes[0]).rotate === "-12deg" && boxStyle(rb.boxes[1]).rotate === undefined && buttonStyle(rb.buttons[0]).rotate === "180deg", "R56: rotate style");
+    const cv = normalizeDesign({ boxes: [{ id: "c", curve: 250, strokeWidth: 3 }, { id: "f", curve: 0 }] })!;
+    ok(cv.boxes[0].curve === 100 && !("curve" in cv.boxes[1]), "R58: curve only when set, clamped");
+    ok(curvedBoxStyle(cv.boxes[0]).WebkitTextStroke === undefined && curvedBoxStyle(cv.boxes[0]).left === boxStyle(cv.boxes[0]).left, "R58: curved holder keeps position, drops paint");
     const withEl = { ...rb, elements: [{ ...(normalizeDesign({ elements: [{ id: "s", shape: "star" }] })!.elements ?? [])[0]! }] };
     const mv = parseMoveMessage({ type: "gw-design-move", owner: "specials:hero", target: "element", id: "s", x: 33, y: 44, device: "mobile" });
     ok(!!mv && mv.target === "element", "R56: element move message accepted");

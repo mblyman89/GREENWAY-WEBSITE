@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import {
   boxMotionClass,
   boxStyle,
+  curvedBoxStyle,
   buttonStyle,
   containerStyle,
   frameStyle,
@@ -20,6 +21,7 @@ import { BannerBeam, ElementVisual } from "./DesignMotion";
 import { BannerSmoke } from "./smoke/BannerSmoke";
 import { RevealWords } from "./smoke/RevealWords";
 import { ButtonInner } from "./ButtonInner";
+import { CurvedText } from "./CurvedText";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { elementHoverClass, elementStyle } from "@/lib/cms/banner-elements-core";
 import { customFontFaceCss, customFontIdsIn } from "@/lib/cms/custom-font-core";
@@ -185,14 +187,14 @@ export function DesignedBanner({
           return (
             <Tag
               key={b.id}
-              style={css(withZ(boxStyle(b), b.id))}
+              style={css(withZ(b.curve ? curvedBoxStyle(b) : boxStyle(b), b.id))}
               className={`gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim()}
               {...(editable ? { "data-gw-design-box": b.id } : {})}
               {...(editable && blockKeyPrefix && suffix
                 ? { "data-gw-block": `${blockKeyPrefix}.${suffix}`, "data-gw-editable": "true" }
                 : {})}
             >
-              {text}
+              {b.curve ? <CurvedText box={b} text={text} /> : text}
             </Tag>
           );
         })}
