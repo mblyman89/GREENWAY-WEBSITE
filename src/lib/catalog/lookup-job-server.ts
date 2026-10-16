@@ -309,6 +309,8 @@ export interface ManifestLookupView {
   /** The web lookup model, from the first item that recorded one. */
   model: string | null;
   createdAt: string | null;
+  /** R66: when the first run took the job (the ETA's start). */
+  startedAt: string | null;
   finishedAt: string | null;
 }
 
@@ -336,16 +338,24 @@ async function readItems(admin: Admin, jobId: string, snapshots?: Map<string, Lo
   for (let from = 0; ; from += page) {
     const { data, error } = await admin
       .from(LOOKUP_JOB_ITEMS_TABLE)
-      .select("draft_id, status, result_json, error, ai_calls, position")
+      .select("draft_id, status, result_json, error, ai_calls, position, started_at, finished_at")
       .eq("job_id", jobId)
       .order("position", { ascending: true })
       .order("id", { ascending: true })
       .range(from, from + page - 1);
     if (error) return null;
-    const rows = (data as { draft_id: string; status: unknown; result_json: unknown; error: string | null; ai_calls: unknown }[] | null) ?? [];
+    const rows = (data as { draft_id: string; status: unknown; result_json: unknown; error: string | null; ai_calls: unknown; started_at?: string | null; finished_at?: string | null }[] | null) ?? [];
     for (const r of rows) {
       if (!isItemStatus(r.status)) continue;
-      out.push({ draftId: r.draft_id, status: r.status, result: parseItemResult(r.result_json), error: r.error, aiCalls: aiCallsOf(r.ai_calls) });
+      out.push({
+        draftId: r.draft_id,
+        status: r.status,
+        result: parseItemResult(r.result_json),
+        error: r.error,
+        aiCalls: aiCallsOf(r.ai_calls),
+        startedAt: r.started_at ?? null,
+        finishedAt: r.finished_at ?? null,
+      });
       if (snapshots && r.status === "done" && r.result_json && typeof r.result_json === "object") {
         const snap = parseLookupSnapshot((r.result_json as Record<string, unknown>).snapshot);
         if (snap) snapshots.set(String(r.draft_id).toLowerCase(), snap);
@@ -363,7 +373,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from(LOOKUP_JOBS_TABLE)
-      .select("id, status, created_at, finished_at")
+      .select("id, status, created_at, started_at, finished_at")
       .eq("manifest_id", manifestId)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -378,7 +388,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
           ? { count: plan.total, skippedDone: plan.skippedDone, truncated: plan.truncated }
           : { count: 0, skippedDone: plan.kind === "nothing" && plan.reason === ALL_DONE_COPY ? review.length : 0, truncated: 0 };
     }
-    const row = ((data as { id: string; status: unknown; created_at: string | null; finished_at: string | null }[] | null) ?? [])[0];
+    const row = ((data as { id: string; status: unknown; created_at: string | null; started_at?: string | null; finished_at: string | null }[] | null) ?? [])[0];
     if (!row || !isJobStatus(row.status)) return { state: "none", doneDraftIds, eligible };
     const snapshots = new Map<string, LookupSnapshot>();
     const items = await readItems(admin, row.id, snapshots);
@@ -390,7 +400,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
       state: "job",
       doneDraftIds,
       eligible,
-      job: { jobId: row.id, status: row.status, summary: summarizeJob(items), items: byDraft, snapshots, model, createdAt: row.created_at, finishedAt: row.finished_at },
+      job: { jobId: row.id, status: row.status, summary: summarizeJob(items), items: byDraft, snapshots, model, createdAt: row.created_at, startedAt: row.started_at ?? null, finishedAt: row.finished_at },
     };
   } catch (err) {
     console.error("[lookup-jobs] page read failed:", err);
