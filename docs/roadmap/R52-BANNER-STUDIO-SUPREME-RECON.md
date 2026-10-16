@@ -707,3 +707,27 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
 - **S4: copy.** Updated the Integrations FLUX card, the integration guide, help content, the concierge KB and the marketing hub links.
 - **Not implemented (not in the strict OpenAPI):** the cookbook's `reference_images` for video.
 - **No migration this round.**
+
+## §20 — R63: one editor look everywhere
+
+- **S1: Shop and Loyalty banner editors match the home carousel.**
+  - Single column with the side previews removed and the intro boxes gone.
+  - Basic mode sits below the studio.
+  - "Where these show" is collapsed.
+- **S2: Specials banners.**
+  - The banner editor comes first. HeroTextCard moved into a collapsed "Classic hero text" panel below it.
+  - Side previews removed. Prices and offers notes are in a collapsed panel.
+  - `unbindDesign()` (banner-design-core) turns Promotions-bound words into normal text on load and on "make new". The studio now has full control, and the Promotions link stays for prices and the products grid.
+- **S3: `CardEditorShell` is the single card-editor UI.**
+  - It is used by the Type cards and the Specials 7-day cards.
+  - Preview strip scrolls sideways. Rows have reorder, Show and Edit.
+  - Edit opens the card with the studio on: a design is auto-created, and a design that was switched off stays off.
+  - Basic mode is collapsed.
+- **S4: motion preview.**
+  - "▶ Replay" sits under the canvas on the right. It replays entrances, the intro, smoke and once-only effects.
+  - It also briefly acts out hover and click effects through `.gw-demo` (the studio frame normally ignores hover).
+  - Picking a hover or click effect (shapes, text, buttons) previews it right away.
+- **S5: smoke origin bug.**
+  - The cause: on every settings change, `GlSmoke.destroy()` called `WEBGL_lose_context.loseContext()`. The effect then re-created the smoke on the same canvas, and `getContext()` returns that lost context permanently, so nothing drew. The preview came back only after an unrelated remount.
+  - The fix: `destroy()` now frees only the program and buffer. The context is released only on a real unmount (`destroy(true)`).
+- **No migration this round.**
