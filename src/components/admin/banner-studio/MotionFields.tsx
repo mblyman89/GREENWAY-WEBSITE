@@ -21,6 +21,7 @@ import {
   type TextHover,
   type TextMotion,
 } from "@/lib/cms/banner-motion-core";
+import { studioReplay } from "./EnterFields";
 import { ColorField, NumberSlider, Segmented, SelectField, Toggle } from "./controls";
 
 type Opt<T extends string> = T | "none";
@@ -88,7 +89,7 @@ export function ElementMotionFields({ el, patch }: { el: DesignElement; patch: (
         </div>
       ) : null}
       {el.motion || el.orbit ? <Segmented<Speed> label="Speed" value={el.motionSpeed ?? "normal"} options={SPEEDS} onChange={(v) => patch(speedPatch(v))} /> : null}
-      <SelectField<Opt<ElementHover>> label="When the mouse is over the banner" value={el.hover ?? "none"} options={hovers} onChange={(v) => patch({ hover: v === "none" ? undefined : v })} />
+      <SelectField<Opt<ElementHover>> label="When the mouse is over the banner" value={el.hover ?? "none"} options={hovers} onChange={(v) => { patch({ hover: v === "none" ? undefined : v }); studioReplay(); }} />
       <p className={hint}>Hover effects show on the live site (computer mouse); the Studio keeps things still so you can drag them.</p>
     </div>
   );
@@ -114,7 +115,7 @@ export function TextMotionFields({ box: b, patch }: { box: DesignTextBox; patch:
       <p className={title}>Motion</p>
       <SelectField<Opt<TextMotion>> label="Moves on its own" value={b.motion ?? "none"} options={opts} onChange={(v) => patch(v === "none" ? { motion: undefined, motionSpeed: undefined } : { motion: v })} />
       {b.motion ? <Segmented<Speed> label="Speed" value={b.motionSpeed ?? "normal"} options={SPEEDS} onChange={(v) => patch(speedPatch(v))} /> : null}
-      <SelectField<Opt<TextHover>> label="When the mouse is over the banner" value={b.hover ?? "none"} options={hovers} onChange={(v) => patch({ hover: v === "none" ? undefined : v })} />
+      <SelectField<Opt<TextHover>> label="When the mouse is over the banner" value={b.hover ?? "none"} options={hovers} onChange={(v) => { patch({ hover: v === "none" ? undefined : v }); studioReplay(); }} />
       {b.motion === "flicker" ? <p className={hint}>Flicker is gentle (never more than 3 flashes a second).</p> : null}
     </div>
   );

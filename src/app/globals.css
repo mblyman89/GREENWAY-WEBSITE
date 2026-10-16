@@ -965,6 +965,41 @@ h1, h2, h3, h4, h5, h6 {
   scale: 1.12;
   transition: scale 120ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+/* R63: Studio ▶ Replay acts out hover + click effects for a moment. */
+.gw-demo .gw-bh-lift,
+.gw-demo .gw-xh-lift {
+  translate: 0 -6px;
+}
+.gw-demo .gw-bh-grow,
+.gw-demo .gw-xh-grow {
+  scale: 1.08;
+}
+.gw-demo .gw-xh-spin {
+  rotate: 20deg;
+}
+.gw-demo .gw-bh-glow,
+.gw-demo .gw-xh-glow {
+  filter: drop-shadow(0 0 10px var(--gbfx, var(--gmc, #7ed957)));
+}
+.gw-demo .gw-bh-darken {
+  filter: brightness(0.85);
+}
+.gw-demo .gw-bc-press {
+  animation: gw-demo-press 0.5s ease 1.2s;
+}
+.gw-demo .gw-bc-pop {
+  animation: gw-demo-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.2s;
+}
+@keyframes gw-demo-press {
+  50% {
+    scale: 0.93;
+  }
+}
+@keyframes gw-demo-pop {
+  50% {
+    scale: 1.12;
+  }
+}
 /* Slides that aren't shown don't burn battery. */
 [data-gw-slide="hidden"] .gw-m,
 [data-gw-slide="hidden"] .gw-morph,
