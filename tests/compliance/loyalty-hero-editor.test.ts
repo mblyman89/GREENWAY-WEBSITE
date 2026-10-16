@@ -196,10 +196,10 @@ describe("the Loyalty page editor owns the hero (all tools + live preview)", () 
     expect(ed).toContain("scriptScale");
   });
 
-  it("the live preview renders the REAL public banner", () => {
+  it("R63: no side preview — the studio canvas is the preview (like the home carousel)", () => {
     const ed = read("src/components/admin/LoyaltyHeroEditor.tsx");
-    expect(ed).toContain("LoyaltyHeroBanner");
-    expect(ed).toContain("presentation={pres}");
+    expect(ed).not.toContain("<LoyaltyHeroBanner");
+    expect(ed).toContain("<DesignCard");
   });
 
   it("the admin page mounts the hero editor with specs + media + hero actions", () => {

@@ -474,12 +474,14 @@ async function SectionsTab({
       ) : null}
 
       {BOTTOM_STRIP_PAGES.has(slug) ? (
-        <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
-          <strong className="text-[var(--admin-text)]">Where these show:</strong> banners you publish
+        <details className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+          <summary className="cursor-pointer font-semibold text-[var(--admin-text)]">Where these show</summary>
+          <p className="mt-2">Banners you publish
           here appear near the bottom of the page, just above the footer. The page&apos;s own title
           area at the top stays exactly as it is (edit its words in &ldquo;Page wording&rdquo; above).
           With no banners published, the page looks the same as today.
-        </p>
+          </p>
+        </details>
       ) : null}
 
       {singleBanner ? null : (

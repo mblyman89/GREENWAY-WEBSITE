@@ -20,7 +20,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
-import { SlideView } from "@/components/menu/ShopBannerCarousel";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
@@ -560,18 +559,9 @@ function SlideCard({
       </div>
 
       {open ? (
-        <div className="grid gap-6 p-4 lg:grid-cols-2">
-          {/* Controls */}
+        <div className="p-4">
+          {/* R63: single column, identical to the home carousel editor (no side preview). */}
           <div className="space-y-5">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={draftEnabled}
-                onChange={(e) => setDraftEnabled(e.target.checked)}
-              />
-              Show this slide (when published)
-            </label>
-
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Background image (desktop)</div>
               <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
@@ -641,6 +631,41 @@ function SlideCard({
               onLegacyEdit={(bind, text) => patchBlock(bind, { text })}
             />
 
+
+            <PromotionLinkEditor
+              promotion={pres.promotion}
+              choices={promotionChoices}
+              onChange={(next) => setField("promotion", next)}
+            />
+
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Schedule (optional)</div>
+              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+                Leave blank to show it whenever it&apos;s published. Set a start/end to have the slide
+                appear and retire on its own — handy for a one-off sale.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                  Start
+                  <input
+                    type="datetime-local"
+                    value={toLocalInput(pres.scheduleStart)}
+                    onChange={(e) => setField("scheduleStart", fromLocalInput(e.target.value))}
+                    className={`mt-1.5 w-full ${INPUT_CLASS}`}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                  End
+                  <input
+                    type="datetime-local"
+                    value={toLocalInput(pres.scheduleEnd)}
+                    onChange={(e) => setField("scheduleEnd", fromLocalInput(e.target.value))}
+                    className={`mt-1.5 w-full ${INPUT_CLASS}`}
+                  />
+                </label>
+              </div>
+            </div>
+
             <BasicMode hint="classic words, fonts, buttons, text position and picture focus">
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Text position</div>
@@ -703,51 +728,15 @@ function SlideCard({
             <CtaEditor ctas={pres.ctas} onChange={(next) => setField("ctas", next)} />
             </BasicMode>
 
-            <PromotionLinkEditor
-              promotion={pres.promotion}
-              choices={promotionChoices}
-              onChange={(next) => setField("promotion", next)}
-            />
-
-            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
-              <div className="mb-1 text-sm font-semibold">Schedule (optional)</div>
-              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-                Leave blank to show it whenever it&apos;s published. Set a start/end to have the slide
-                appear and retire on its own — handy for a one-off sale.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                  Start
-                  <input
-                    type="datetime-local"
-                    value={toLocalInput(pres.scheduleStart)}
-                    onChange={(e) => setField("scheduleStart", fromLocalInput(e.target.value))}
-                    className={`mt-1.5 w-full ${INPUT_CLASS}`}
-                  />
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                  End
-                  <input
-                    type="datetime-local"
-                    value={toLocalInput(pres.scheduleEnd)}
-                    onChange={(e) => setField("scheduleEnd", fromLocalInput(e.target.value))}
-                    className={`mt-1.5 w-full ${INPUT_CLASS}`}
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Live preview + save/publish */}
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-              Live preview (exactly what shoppers see)
-            </div>
-            <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-white/10 bg-black p-3">
-              <SlideView presentation={pres} />
-            </div>
-
-            <form className="mt-4 flex flex-wrap items-center gap-3">
+            <form className="flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-4">
+              <label className="mr-auto flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draftEnabled}
+                  onChange={(e) => setDraftEnabled(e.target.checked)}
+                />
+                Show this slide (when published)
+              </label>
               <input type="hidden" name="slide_id" value={slide.id} />
               <input type="hidden" name="presentation" value={serialized} />
               <input type="hidden" name="draft_enabled" value={draftEnabled ? "1" : "0"} />
@@ -821,12 +810,6 @@ export function ShopBannerEditor(props: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
-        <strong>This is your Shop banner — now a carousel.</strong> Add up to{" "}
-        {MAX_SHOP_CAROUSEL_SLIDES} slides (great for one-off sales), style each one with its own
-        picture, fonts, colors, and buttons, and reorder them. Each slide has a live preview. Nothing
-        goes live until you <strong>Publish</strong> that slide.
-      </div>
 
       {slides.length === 0 ? (
         <div className="rounded-[var(--admin-radius-lg)] border border-dashed border-[var(--admin-border)] p-6 text-center">
