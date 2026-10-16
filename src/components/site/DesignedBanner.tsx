@@ -20,6 +20,8 @@ import { BannerMedia } from "./BannerMedia";
 import { BannerPicture } from "./BannerPicture";
 import { BannerBeam, ElementVisual } from "./DesignMotion";
 import { BannerSmoke } from "./smoke/BannerSmoke";
+import { BannerAnim } from "./anim/BannerAnim";
+import { animWantsPointer } from "@/lib/cms/banner-anim-core";
 import { BannerEntrances } from "./BannerEntrances";
 import { entrancePlan } from "@/lib/cms/banner-enter-core";
 import { ButtonInner } from "./ButtonInner";
@@ -173,7 +175,19 @@ export function DesignedBanner({
         {plan.length || design.intro ? <BannerEntrances plan={plan} intro={design.intro} /> : null}
         {design.smoke ? <BannerSmoke layers={design.smoke} /> : null}
         {(design.elements ?? []).map((el) =>
-          el.hidden ? null : (
+          el.hidden ? null : el.kind === "anim" && el.anim ? (
+            // R60: Lottie / Rive layer — a lazy client island; described for screen readers only when the owner wrote an alt.
+            <div
+              key={el.id}
+              {...(el.anim.alt ? { role: "img", "aria-label": el.anim.alt } : { "aria-hidden": true })}
+              style={css({ ...withZ(elementStyle(el), el.id), ...(animWantsPointer(el.anim) ? { pointerEvents: "auto", cursor: el.anim.start === "click" ? "pointer" : "default" } : {}) })}
+              className={`gw-dbox${el.hideOnMobile ? " gw-hide-sm" : ""}`}
+              {...(editable ? { "data-gw-design-element": el.id } : {})}
+              {...en(el.id)}
+            >
+              <BannerAnim anim={el.anim} />
+            </div>
+          ) : (
             <div
               key={el.id}
               aria-hidden="true"

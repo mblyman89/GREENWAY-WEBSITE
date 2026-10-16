@@ -32,7 +32,7 @@ type Item = {
   id: number;
   file: File;
   url: string; // object URL for preview ("" for PDFs)
-  kind: "image" | "video" | "document" | null;
+  kind: "image" | "video" | "document" | "animation" | null;
   state: ItemState;
   sent: number;
   message: string | null; // refusal / error / advisory text
@@ -84,7 +84,9 @@ export function MediaDropzone() {
 
   async function uploadOne(it: Item, meta: { title: string; usageType: string; tags: string; altText: string; status: string }, single: boolean) {
     const file = it.file;
-    const mime = file.type || "";
+    // R60: use the checked type (animation files arrive with "" or a generic type).
+    const pre = checkUpload({ filename: file.name, mime: file.type, size: file.size });
+    const mime = pre.ok ? pre.mime : file.type || "";
     patch(it.id, { state: "uploading", sent: 0, message: null });
     try {
       // Measure first (dimensions are stored in the library; poster for videos).
@@ -235,7 +237,7 @@ export function MediaDropzone() {
         </p>
         <p className="text-xs text-white/40">
           Images (PNG, JPG, WEBP, GIF, SVG) up to {UPLOAD_MAX_LABEL.image} · Videos (MP4, WEBM) up to {UPLOAD_MAX_LABEL.video} · PDF up to{" "}
-          {UPLOAD_MAX_LABEL.document}
+          {UPLOAD_MAX_LABEL.document} · Lottie (.lottie, .json) & Rive (.riv) animations up to {UPLOAD_MAX_LABEL.animation}
         </p>
         <input
           ref={inputRef}
@@ -270,7 +272,7 @@ export function MediaDropzone() {
                   ) : it.kind === "video" && it.url ? (
                     <video src={it.url} muted playsInline preload="metadata" className="h-full w-full object-cover" aria-hidden="true" />
                   ) : (
-                    <span className="text-2xl">📄</span>
+                    <span className="text-2xl">{it.kind === "animation" ? "🎞️" : "📄"}</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">

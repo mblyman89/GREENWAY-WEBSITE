@@ -152,7 +152,7 @@ export function MediaGrid({
                     <span className="absolute bottom-1.5 left-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-white">🎬 VIDEO</span>
                   </>
                 ) : (
-                  <span className="text-4xl">{m.mime_type === "application/pdf" ? "📄" : "🗂"}</span>
+                  <span className="text-4xl">{m.mime_type === "application/pdf" ? "📄" : /^application\/(octet-stream|zip\+dotlottie|json)$/.test(m.mime_type ?? "") ? "🎞️" : "🗂"}</span>
                 )}
                 {selectMode && (
                   <span

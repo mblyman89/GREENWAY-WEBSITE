@@ -25,7 +25,9 @@
   "dependencies": {
     "@capacitor/core": "8.5.0",
     "@capacitor/ios": "8.5.0",
+    "@lottiefiles/dotlottie-web": "0.81.0",
     "@phosphor-icons/react": "^2.1.10",
+    "@rive-app/webgl2": "2.44.2",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.2",
     "@supabase/ssr": "^0.12.0",

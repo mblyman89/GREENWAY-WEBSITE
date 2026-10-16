@@ -23,6 +23,7 @@ import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { ShapePanel } from "./ShapePanel";
 import { SmokePanel } from "./SmokePanel";
+import { AnimPanel } from "./AnimPanel";
 import { AnimatePanel } from "./AnimatePanel";
 import { IntroFields } from "./IntroFields";
 import { LayersPanel } from "./LayersPanel";
@@ -33,7 +34,7 @@ import type { PickerPost } from "./LinkPicker";
 import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
 import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
 
-type Tab = "text" | "buttons" | "shapes" | "animate" | "smoke" | "layers" | "picture" | "checks";
+type Tab = "text" | "buttons" | "shapes" | "anims" | "animate" | "smoke" | "layers" | "picture" | "checks";
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
 
@@ -165,7 +166,12 @@ export function BannerStudio({
     if (s?.target === "box" && tab !== "text") setTab("text");
     if (s?.target === "button" && tab !== "buttons") setTab("buttons");
     // R55: shapes open their own tab (unless the owner is working in Layers).
-    if (s?.target === "element" && tab !== "shapes" && tab !== "layers") setTab("shapes");
+    // R60: Lottie / Rive layers open the 🎞️ Animations tab.
+    const isAnim = s?.target === "element" && design.elements?.find((e) => e.id === s.id)?.kind === "anim";
+    if (s?.target === "element" && tab !== "layers") {
+      if (isAnim && tab !== "anims") setTab("anims");
+      if (!isAnim && tab !== "shapes") setTab("shapes");
+    }
   }
 
   function confirmDelete() {
@@ -352,6 +358,7 @@ export function BannerStudio({
         {tabBtn("text", "✏️ Text")}
         {tabBtn("buttons", "🔘 Buttons")}
         {tabBtn("shapes", "◆ Shapes & icons")}
+        {tabBtn("anims", "🎞️ Lottie & Rive")}
         {tabBtn("animate", "✨ Animate")}
         {tabBtn("smoke", "💨 Smoke & fog")}
         {tabBtn("layers", "☰ Layers")}
@@ -365,6 +372,8 @@ export function BannerStudio({
           <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "shapes" ? (
           <ShapePanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+        ) : tab === "anims" ? (
+          <AnimPanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "animate" ? (
           <AnimatePanel design={design} onChange={change} onSelect={select}>
             <IntroFields design={design} onChange={change} mediaChoices={mediaChoices} />
@@ -382,7 +391,7 @@ export function BannerStudio({
 
       <ConfirmDialog
         open={!!pendingDelete}
-        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? "Delete this shape or icon?" : "Delete this text box?"}
+        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? (design.elements?.find((e) => e.id === pendingDelete.id)?.kind === "anim" ? "Delete this animation?" : "Delete this shape or icon?") : "Delete this text box?"}
         description="You can bring it back with Undo until you leave the page."
         confirmLabel="Delete"
         tone="danger"

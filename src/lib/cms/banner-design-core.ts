@@ -28,6 +28,7 @@ import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
 import { buttonFxStyle, normalizeButtonFx, type ButtonFx } from "@/lib/cms/button-fx-core";
 import { normalizeBeam, normalizeTextMotion, textMotion, type Beam, type TextMotionFields } from "@/lib/cms/banner-motion-core";
+import { MAX_ANIMS } from "@/lib/cms/banner-anim-core";
 import { MAX_ELEMENTS, normalizeElement, normalizeOrder, resolveLayers, type DesignElement, type LayerRef } from "@/lib/cms/banner-elements-core";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -613,10 +614,13 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   }
   // R55: shapes + layer order (only written when used → older designs unchanged).
   const elements: DesignElement[] = [];
+  let anims = 0;
   for (const [i, e] of (Array.isArray(raw.elements) ? raw.elements : []).entries()) {
     if (elements.length >= MAX_ELEMENTS) break;
     const ne = normalizeElement(e, `shape-${i + 1}`);
     if (!ne) continue;
+    // R60: at most MAX_ANIMS Lottie/Rive players per banner (each is a WASM canvas).
+    if (ne.kind === "anim" && ++anims > MAX_ANIMS) continue;
     ne.id = uniqueId(ne.id, used);
     elements.push(ne);
   }

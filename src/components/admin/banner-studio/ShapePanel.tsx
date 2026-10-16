@@ -36,7 +36,8 @@ export function ShapePanel({
   onRequestDelete: (s: NonNullable<StudioSelection>) => void;
 }) {
   const elements = design.elements ?? [];
-  const el = selection?.target === "element" ? elements.find((e) => e.id === selection.id) : undefined;
+  // R60: animation layers are edited in the 🎞️ tab (AnimPanel).
+  const el = selection?.target === "element" ? elements.find((e) => e.id === selection.id && e.kind !== "anim") : undefined;
   const mobile = device === "mobile";
   const iconLabels = LIBRARY_LABELS;
   /** Objects are single-style artwork — only Phosphor icons have Thin/Bold/Solid. */

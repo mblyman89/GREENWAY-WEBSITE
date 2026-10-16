@@ -34,7 +34,7 @@ export function AnimatePanel({
     const btn = design.buttons.find((x) => x.id === id);
     if (btn) return `🔘 ${btn.label.slice(0, 28)}`;
     const el = design.elements?.find((x) => x.id === id);
-    return el ? `◆ ${el.kind === "icon" ? (el.icon ?? "icon") : el.shape}` : id;
+    return el ? `◆ ${el.kind === "anim" ? (el.anim?.name ?? "animation") : el.kind === "icon" ? (el.icon ?? "icon") : el.shape}` : id;
   };
   const target = (id: string): StudioSelection =>
     design.boxes.some((b) => b.id === id) ? { target: "box", id } : design.buttons.some((b) => b.id === id) ? { target: "button", id } : { target: "element", id };
