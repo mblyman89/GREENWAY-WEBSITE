@@ -635,3 +635,33 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   - Animation files must be on our own storage (`safeAnimSrc`); files from any other host are refused.
 - **No migration this round.**
 - **Next round:** replace every old page banner editor with the Studio-based editor (the §15 restructure).
+
+## 18. R61: what shipped (3 slices) — one editor everywhere
+
+- **S1: one shared editor shell.**
+  - `banner-studio/BannerEditorShell.tsx` holds `<DesignCard>` (the "Use custom design" switch plus the lazy Banner Studio) and `<BasicMode>` (the classic fields, collapsed under the Studio).
+  - Every banner editor goes through it: home carousel slides, page sections (home Types and Brands banners and every extra banner), the Shop carousel, the Loyalty hero, the Specials hero, Today's Deal, and since S3 the Type cards and Specials weekday cards.
+  - SectionCard's private Studio embed was removed.
+  - Rule from now on: improve `BannerStudio`, the shell or `DesignedBanner` once, and every page editor changes with it.
+- **S2: §15 tabs.**
+  - Home tabs: Main banner | Types banner | Brands banner | Types cards | More banners & settings.
+  - Specials tabs: Main banner | Specials banner | Specials cards.
+  - Loyalty tabs: Main banner | Page wording & terms.
+  - Old links still work: `?tab=sections`, `?tab=carousel`, `?tab=typecards`, the Specials tab keys, and ✎ Edit, which lands on the right new tab.
+  - Saves send you back to the tab you were on (`return_tab`).
+- **S3: Card Design Studio.**
+  - New optional `frame.card {ratio, ratioMobile}`. The card keeps a shape instead of a pixel height.
+  - Words, buttons and curved text scale with the card. They are laid out at `CARD_REF_PX` = 320 and use cqw units.
+  - The phone layout follows the screen (below 768px). A card container is named `gwc`, so the banner `gwb` phone query never fires inside a card.
+  - The Studio's Phone preview uses the `.gw-dcard-m` class.
+  - Stored data:
+    - Type cards: `adv.design`.
+    - Specials weekday cards: `days[].design`.
+    - Only card-shaped designs are kept. Nothing changes until the owner switches a design on.
+  - Public cards render through the new shared `DesignedCard`. A card with no buttons is one whole-card link; a card with buttons uses its buttons as the links, so there are never links inside links.
+- **No migration this round.**
+- **Other card editors that could get the Card Studio next** (checked to exist):
+  - About "Our Values" cards (`AboutCoreValuesCard`)
+  - FAQ items (`FaqItemCard`)
+  - Home "Shop by Brand" vendor tiles (`VendorGlowCard` via `HomeBrands`)
+  - Medical page cards ("What to bring", "Perks", "High-CBD", "Limits")
