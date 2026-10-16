@@ -24,6 +24,8 @@ import { WarningsPanel } from "./WarningsPanel";
 import { ShapePanel } from "./ShapePanel";
 import { LayersPanel } from "./LayersPanel";
 import { CustomFontFaces } from "@/components/admin/fonts/CustomFontUpload";
+import { ArrangeBar } from "./ArrangeBar";
+import { toggleRef, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import type { PickerPost } from "./LinkPicker";
 import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
 import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
@@ -58,6 +60,8 @@ export function BannerStudio({
   const deviceSrc = imageSrc;
   const [tab, setTab] = useState<Tab>("text");
   const [selection, setSelection] = useState<StudioSelection>(null);
+  // R56: shift-click group (2+ items); empty = single selection only.
+  const [group, setGroup] = useState<ItemRef[]>([]);
   const [pendingDelete, setPendingDelete] = useState<NonNullable<StudioSelection> | null>(null);
   const past = useRef<BannerDesign[]>([]);
   const future = useRef<BannerDesign[]>([]);
@@ -126,7 +130,27 @@ export function BannerStudio({
     return () => el.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  function toggle(r: ItemRef) {
+    const base = group.length ? group : selection ? [selection] : [];
+    const next = toggleRef(base, r);
+    if (next.length > 1) {
+      setGroup(next);
+      setSelection(next[next.length - 1]!);
+    } else {
+      setGroup([]);
+      setSelection(next[0] ?? null);
+    }
+  }
+
+  function selectMany(refs: ItemRef[]) {
+    if (refs.length > 1) {
+      setGroup(refs);
+      setSelection(refs[0]!);
+    } else select(refs[0] ?? null);
+  }
+
   function select(s: StudioSelection) {
+    setGroup([]);
     setSelection(s);
     if (s?.target === "box" && tab !== "text") setTab("text");
     if (s?.target === "button" && tab !== "buttons") setTab("buttons");
@@ -296,10 +320,21 @@ export function BannerStudio({
           onChange={change}
           onRequestDelete={setPendingDelete}
           onLegacyEdit={onLegacyEdit}
+          group={group}
+          onToggle={toggle}
         />
       </div>
+      <ArrangeBar
+        design={design}
+        device={device}
+        refs={group.length > 1 ? group : selection ? [selection] : []}
+        rootRef={rootRef}
+        legacy={legacy}
+        onChange={change}
+        onSelectMany={selectMany}
+      />
       <p className="text-[0.7rem] text-white/45">
-        Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · click an item, then arrow keys nudge it (Shift = bigger steps) · 🔒 locked items stay put · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
+        Drag text and buttons to move them · double-click text to type on it (Enter = new line, Esc or click away to finish) · drag the green handle to change wrap width · drag the gold knob to rotate (Shift = 15° steps) · Shift-click to select several, then drag them together or use Arrange · Ctrl/⌘+C / V / D copy, paste (into any banner), duplicate · click an item, then arrow keys nudge it (Shift = bigger steps) · 🔒 locked items stay put · Ctrl/⌘+Z undo · hold Alt to stop snapping · Delete removes.
       </p>
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-white/10">

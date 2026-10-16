@@ -224,6 +224,8 @@ export type DesignTextBox = {
   strokeColor?: string;
   /** R55: gradient-filled letters; `color` stays as the fallback. */
   gradient?: DesignGradient;
+  /** R56: rotation in degrees (−180…180); absent = upright. */
+  rotate?: number;
 };
 
 export type DesignButton = {
@@ -247,6 +249,8 @@ export type DesignButton = {
   hideOnMobile: boolean;
   /** R55: see DesignTextBox.locked. */
   locked?: boolean;
+  /** R56: rotation in degrees; absent = upright. */
+  rotate?: number;
 };
 
 export type DesignOverlay = {
@@ -490,6 +494,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     hideOnMobile: bool(raw.hideOnMobile, false),
     ...(raw.locked === true ? { locked: true } : {}),
     ...normalizeTextFx(raw),
+    ...rotateField(raw.rotate),
   };
 }
 
@@ -534,7 +539,14 @@ export function normalizeButton(raw: unknown, fallbackId: string): DesignButton 
     enabled: bool(raw.enabled, true),
     hideOnMobile: bool(raw.hideOnMobile, false),
     ...(raw.locked === true ? { locked: true } : {}),
+    ...rotateField(raw.rotate),
   };
+}
+
+/** R56: rotation is written only when non-zero (older designs stay byte-identical). */
+function rotateField(v: unknown): { rotate?: number } {
+  const r = num(v, 0, -180, 180, 1);
+  return r ? { rotate: r } : {};
 }
 
 /** Defensive normalizer for stored/posted JSON. Null when raw isn't an object. */
@@ -934,6 +946,7 @@ export function boxStyle(box: DesignTextBox): StyleMap {
   };
   const ff = designFontFamily(box.font);
   if (ff) s.fontFamily = ff;
+  if (box.rotate) s.rotate = `${box.rotate}deg`;
   if (box.mx !== null) s["--gmx"] = `${box.mx}%`;
   if (box.my !== null) s["--gmy"] = `${box.my}%`;
   if (box.mw !== null) s["--gmw"] = `${box.mw}%`;
@@ -1000,6 +1013,7 @@ export function buttonStyle(btn: DesignButton): StyleMap {
   };
   const ff = designFontFamily(btn.font);
   if (ff) s.fontFamily = ff;
+  if (btn.rotate) s.rotate = `${btn.rotate}deg`;
   if (btn.mx !== null) s["--gmx"] = `${btn.mx}%`;
   if (btn.my !== null) s["--gmy"] = `${btn.my}%`;
   if (btn.style === "solid") {
@@ -1204,7 +1218,7 @@ export function checkDesign(rawOrDesign: unknown, legacy: { eyebrow?: string; ti
 
 // ── Move / drag math (bible PART 5.7) ────────────────────────────────────────
 
-export type DesignMove = { target: "box" | "button"; id: string; x: number; y: number; device: DesignDevice };
+export type DesignMove = { target: "box" | "button" | "element"; id: string; x: number; y: number; device: DesignDevice };
 
 export function snapPercent(v: number, guides: number[] = [0, 50, 100], threshold = 2): number {
   for (const g of guides) if (Math.abs(v - g) <= threshold) return g;
@@ -1216,6 +1230,15 @@ const half = (n: number) => Math.round(n * 2) / 2;
 /** Apply a move (desktop writes x/y, mobile writes mx/my). Unknown id → unchanged design. */
 export function applyMove(design: BannerDesign, move: DesignMove): BannerDesign {
   // R55: locked items never move (Draft Mode drag included).
+  if (move.target === "element") {
+    // R56: shapes/icons move in Draft Mode too (free within 0–100%, like the Studio).
+    const el = (design.elements ?? []).find((e) => e.id === move.id);
+    if (!el || el.locked) return design;
+    const x = half(Math.min(100, Math.max(0, move.x)));
+    const y = half(Math.min(100, Math.max(0, move.y)));
+    const elements = (design.elements ?? []).map((e) => (e.id !== move.id ? e : move.device === "mobile" ? { ...e, mx: x, my: y } : { ...e, x, y }));
+    return { ...design, elements };
+  }
   const target = move.target === "box" ? design.boxes.find((x) => x.id === move.id) : design.buttons.find((x) => x.id === move.id);
   if (target?.locked) return design;
   const next: BannerDesign = JSON.parse(JSON.stringify(design));
@@ -1274,7 +1297,7 @@ export function parseMoveMessage(data: unknown): (DesignMove & { owner: string }
   if (!isObj(data) || data.type !== "gw-design-move") return null;
   const owner = typeof data.owner === "string" ? data.owner : "";
   if (!/^((section|shop-slide|home-slide):[0-9a-f-]{36}|specials:hero|specials:todays|loyalty:hero)$/i.test(owner)) return null;
-  if (data.target !== "box" && data.target !== "button") return null;
+  if (data.target !== "box" && data.target !== "button" && data.target !== "element") return null;
   const id = typeof data.id === "string" ? data.id : "";
   if (!/^[a-z0-9-]{1,24}$/.test(id)) return null;
   if (data.device !== "desktop" && data.device !== "mobile") return null;
@@ -1485,6 +1508,16 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(normalizeDesign({ boxes: [{ font: "comic-sans" }] })!.boxes[0].font === "site", "unknown font → site");
   ok(normalizeDesign({ boxes: [{ font: "custom:0123456789abcdef.woff2" }] })!.boxes[0].font === "custom:0123456789abcdef.woff2", "R56: uploaded font kept");
   ok((boxStyle(defaultTextBox("body", { font: "custom:0123456789abcdef.woff2" })).fontFamily ?? "").includes("gwf-0123456789abcdef"), "R56: uploaded font applied");
+  {
+    const rb = normalizeDesign({ boxes: [{ id: "r", rotate: -12 }, { id: "u" }], buttons: [{ id: "k", href: "/menu", rotate: 400 }] })!;
+    ok(rb.boxes[0].rotate === -12 && !("rotate" in rb.boxes[1]) && rb.buttons[0].rotate === 180, "R56: rotate only when set, clamped");
+    ok(boxStyle(rb.boxes[0]).rotate === "-12deg" && boxStyle(rb.boxes[1]).rotate === undefined && buttonStyle(rb.buttons[0]).rotate === "180deg", "R56: rotate style");
+    const withEl = { ...rb, elements: [{ ...(normalizeDesign({ elements: [{ id: "s", shape: "star" }] })!.elements ?? [])[0]! }] };
+    const mv = parseMoveMessage({ type: "gw-design-move", owner: "specials:hero", target: "element", id: "s", x: 33, y: 44, device: "mobile" });
+    ok(!!mv && mv.target === "element", "R56: element move message accepted");
+    const moved = applyMove(withEl, mv!);
+    ok(moved.elements![0].mx === 33 && moved.elements![0].my === 44 && moved.elements![0].x === withEl.elements[0].x, "R56: element applyMove (phone)");
+  }
   // 39 imageStyle
   const is = imageStyle({ ...defaultDesign(), image: { ...defaultDesign().image, focusX: 30, focusY: 70, zoom: 150, flip: true } });
   ok(is["--gip-d"] === "30% 70%" && is.objectPosition.includes("30% 70%") && is.transformOrigin.includes("30% 70%"), "image focus");

@@ -124,7 +124,7 @@ export async function saveDesignMoveAction(input: unknown): Promise<DesignMoveRe
   const editor = editorFor(owner, pageSlug);
   revalidatePath(publicPathFor(owner, pageSlug));
   revalidatePath(editor.href.split("?")[0]);
-  const what = move.target === "box" ? "Text" : "Button";
+  const what = move.target === "box" ? "Text" : move.target === "button" ? "Button" : "Shape";
   const where = move.device === "mobile" ? " (phone layout)" : "";
   return {
     ok: true,

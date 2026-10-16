@@ -49,7 +49,8 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { CanvasGuides, CanvasShape } from "./CanvasParts";
+import { CanvasGuides, CanvasShape, RotateHandle, WidthHandle } from "./CanvasParts";
+import { angleFromPointer, hasRef, moveGroup, rotateItem, snapMove, type ItemRef } from "@/lib/cms/banner-arrange-core";
 
 export type StudioTarget = "box" | "button" | "element";
 export type StudioSelection = { target: StudioTarget; id: string } | null;
@@ -59,7 +60,12 @@ const half = (n: number) => Math.round(n * 2) / 2;
 const SNAP = 1.5;
 
 type Drag = {
-  mode: "move" | "resize";
+  mode: "move" | "resize" | "rotate" | "group";
+  /** R56: the design when the drag began + the group being moved / rotation centre (px). */
+  from: BannerDesign;
+  refs: ItemRef[];
+  cx: number;
+  cy: number;
   target: StudioTarget;
   id: string;
   startX: number;
@@ -86,6 +92,8 @@ export function StudioCanvas({
   onRequestDelete,
   ghost = null,
   onLegacyEdit,
+  group = [],
+  onToggle,
 }: {
   design: BannerDesign;
   device: DesignDevice;
@@ -100,6 +108,9 @@ export function StudioCanvas({
   ghost?: { zone: { x: number; y: number; w: number; h: number }; focusX: number; focusY: number } | null;
   /** R53: inline edit of a bound box (eyebrow/title/subtitle) → the banner's own field. */
   onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
+  /** R56: shift-click multi-selection (2+ items) and the toggle for it. */
+  group?: ItemRef[];
+  onToggle?: (r: ItemRef) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const editDone = useRef(false);
@@ -143,21 +154,27 @@ export function StudioCanvas({
         ? !!design.buttons.find((b) => b.id === id)?.locked
         : !!(design.elements ?? []).find((b) => b.id === id)?.locked;
 
-  function startDrag(e: RPointerEvent<HTMLElement>, target: StudioTarget, id: string, mode: "move" | "resize") {
+  function startDrag(e: RPointerEvent<HTMLElement>, target: StudioTarget, id: string, mode: "move" | "resize" | "rotate") {
     if (e.button !== 0) return;
     if (editing && editing === id) return; // typing: let the caret move normally
     const frame = frameRef.current;
     if (!frame) return;
     e.preventDefault();
     e.stopPropagation();
+    // R56: Shift/Ctrl/⌘-click adds or removes the item from a group selection.
+    if (mode === "move" && (e.shiftKey || e.metaKey || e.ctrlKey) && onToggle) {
+      onToggle({ target, id });
+      return;
+    }
+    const inGroup = mode === "move" && group.length > 1 && hasRef(group, { target, id });
     // R53: preventDefault blocks the browser's focus-on-click — focus the item
     // ourselves so the arrow keys nudge it right after a click.
-    const itemEl = (mode === "resize" ? e.currentTarget.parentElement : e.currentTarget) as HTMLElement | null;
+    const itemEl = (mode === "move" ? e.currentTarget : e.currentTarget.parentElement) as HTMLElement | null;
     itemEl?.focus({ preventScroll: true });
-    onSelect({ target, id });
-    if (isLocked(target, id)) return; // R55: locked = select only
+    if (!inGroup) onSelect({ target, id });
+    if (!inGroup && isLocked(target, id)) return; // R55: locked = select only
     const rect = frame.getBoundingClientRect();
-    const itemRect = (mode === "resize" ? (e.currentTarget.parentElement as HTMLElement) : e.currentTarget).getBoundingClientRect();
+    const itemRect = (itemEl ?? e.currentTarget).getBoundingClientRect();
     const d = designRef.current;
     let origX = 0;
     let origY = 0;
@@ -183,7 +200,11 @@ export function StudioCanvas({
       origY = device === "mobile" ? (b.my ?? b.y) : b.y;
     }
     drag.current = {
-      mode,
+      mode: inGroup ? "group" : mode,
+      from: d,
+      refs: inGroup ? group : [],
+      cx: itemRect.left + itemRect.width / 2,
+      cy: itemRect.top + itemRect.height / 2,
       target,
       id,
       startX: e.clientX,
@@ -209,6 +230,14 @@ export function StudioCanvas({
     const next: BannerDesign = JSON.parse(JSON.stringify(designRef.current));
     const v: number[] = [];
     const h: number[] = [];
+    if (g.mode === "rotate") {
+      onChange(rotateItem(designRef.current, { target: g.target, id: g.id }, angleFromPointer(g.cx, g.cy, e.clientX, e.clientY, e.shiftKey)));
+      return;
+    }
+    if (g.mode === "group") {
+      onChange(moveGroup(g.from, g.refs, dx, dy, device));
+      return;
+    }
     if (g.mode === "resize" && g.target === "element") {
       const el = (next.elements ?? []).find((x) => x.id === g.id);
       if (!el) return;
@@ -230,33 +259,10 @@ export function StudioCanvas({
       if (device === "mobile") b.mw = half(w);
       else b.w = half(w);
     } else {
-      const w = g.itemWpct;
-      let x = g.origX + dx;
-      let y = g.origY + dy;
-      if (snapOn) {
-        if (Math.abs(x) <= SNAP) {
-          x = 0;
-          v.push(0);
-        } else if (Math.abs(x + w / 2 - 50) <= SNAP) {
-          x = 50 - w / 2;
-          v.push(50);
-        } else if (Math.abs(x + w - 100) <= SNAP) {
-          x = 100 - w;
-          v.push(100);
-        }
-        if (Math.abs(y) <= SNAP) {
-          y = 0;
-          h.push(0);
-        } else if (Math.abs(y + g.itemHpct / 2 - 50) <= SNAP) {
-          y = 50 - g.itemHpct / 2;
-          h.push(50);
-        } else if (Math.abs(y + g.itemHpct - 100) <= SNAP) {
-          y = 100 - g.itemHpct;
-          h.push(100);
-        }
-      }
-      x = half(Math.min(100 - Math.min(w, 100), Math.max(0, x)));
-      y = half(Math.min(100 - Math.min(g.itemHpct, 100), Math.max(0, y)));
+      const sn = snapMove(g.origX + dx, g.origY + dy, g.itemWpct, g.itemHpct, snapOn);
+      v.push(...sn.v);
+      h.push(...sn.h);
+      const { x, y } = sn;
       const item =
         g.target === "box"
           ? next.boxes.find((b) => b.id === g.id)
@@ -313,7 +319,13 @@ export function StudioCanvas({
       return; // every other key types (Enter = new line)
     }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-    if (dirs[e.key]) {
+    const many = group.length > 1 && hasRef(group, { target, id });
+    if (many && (e.key === "Delete" || e.key === "Backspace")) return; // the Arrange bar removes the whole group
+    if (dirs[e.key] && many) {
+      e.preventDefault();
+      const st = e.shiftKey ? 5 : 0.5;
+      onChange(moveGroup(designRef.current, group, dirs[e.key][0] * st, dirs[e.key][1] * st, device));
+    } else if (dirs[e.key]) {
       e.preventDefault();
       const [dx, dy] = dirs[e.key];
       onSelect({ target, id });
@@ -331,7 +343,13 @@ export function StudioCanvas({
     }
   }
 
-  const isSel = (t: StudioTarget, id: string) => selection?.target === t && selection.id === id;
+  const isSel = (t: StudioTarget, id: string) => selection?.target === t && selection.id === id && group.length < 2;
+  const inGrp = (t: StudioTarget, id: string) => group.length > 1 && hasRef(group, { target: t, id });
+  const outline = (t: StudioTarget, id: string, idle: string) => (isSel(t, id) ? "2px solid #7ed957" : inGrp(t, id) ? "2px dashed #ffd700" : idle);
+  const handles = (t: StudioTarget, id: string, locked?: boolean) =>
+    isSel(t, id) && !locked ? (
+      <RotateHandle scale={scale} onStart={(e) => startDrag(e, t, id, "rotate")} onMove={onPointerMove} onEnd={endDrag} />
+    ) : null;
 
   return (
     <div ref={outerRef} className="w-full">
@@ -384,6 +402,7 @@ export function StudioCanvas({
                     key={el.id}
                     el={el}
                     selected={isSel("element", el.id)}
+                    grouped={inGrp("element", el.id)}
                     scale={scale}
                     z={zOf(el.id)}
                     onStart={(e, mode) => startDrag(e, "element", el.id, mode)}
@@ -441,8 +460,9 @@ export function StudioCanvas({
                     aria-label={`${roleInfo(b.role).label}: ${text.slice(0, 40) || "empty"}. Drag or use arrow keys to move. Double-click to type.`}
                     aria-pressed={sel}
                     title={b.bind && !onLegacyEdit ? undefined : "Double-click to type on the banner"}
-                    style={{ ...css(boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "1px dashed rgba(255,255,255,0.35)", outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
+                    style={{ ...css(boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: outline("box", b.id, "1px dashed rgba(255,255,255,0.35)"), outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
                     className="gw-dbox"
+                    data-studio-id={b.id}
                     onPointerDown={(e) => startDrag(e, "box", b.id, "move")}
                     onPointerMove={onPointerMove}
                     onPointerUp={endDrag}
@@ -452,29 +472,8 @@ export function StudioCanvas({
                     onFocus={() => onSelect({ target: "box", id: b.id })}
                   >
                     {text || <span style={{ opacity: 0.45 }}>(empty {roleInfo(b.role).label.toLowerCase()})</span>}
-                    {sel && !b.locked ? (
-                      <span
-                        aria-hidden="true"
-                        title="Drag to change how wide the text can run before it wraps"
-                        onPointerDown={(e) => startDrag(e, "box", b.id, "resize")}
-                        onPointerMove={onPointerMove}
-                        onPointerUp={endDrag}
-                        onPointerCancel={endDrag}
-                        style={{
-                          position: "absolute",
-                          right: -8,
-                          top: "50%",
-                          width: 14,
-                          height: 28,
-                          marginTop: -14,
-                          borderRadius: 4,
-                          background: "#7ed957",
-                          cursor: "ew-resize",
-                          touchAction: "none",
-                          transform: `scale(${1 / scale})`,
-                        }}
-                      />
-                    ) : null}
+                    {sel && !b.locked ? <WidthHandle scale={scale} onStart={(e) => startDrag(e, "box", b.id, "resize")} onMove={onPointerMove} onEnd={endDrag} /> : null}
+                    {handles("box", b.id, b.locked)}
                   </div>
                 );
               })}
@@ -490,8 +489,9 @@ export function StudioCanvas({
                     tabIndex={0}
                     aria-label={`Button ${btn.label}. Drag or use arrow keys to move.`}
                     aria-pressed={sel}
-                    style={{ ...css(buttonStyle(btn)), cursor: btn.locked ? "default" : "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "none", outlineOffset: 3, ...zOf(btn.id) }}
+                    style={{ ...css(buttonStyle(btn)), cursor: btn.locked ? "default" : "move", touchAction: "none", outline: outline("button", btn.id, "none"), outlineOffset: 3, ...zOf(btn.id) }}
                     className="gw-dbox gw-dbtn"
+                    data-studio-id={btn.id}
                     onPointerDown={(e) => startDrag(e, "button", btn.id, "move")}
                     onPointerMove={onPointerMove}
                     onPointerUp={endDrag}
@@ -500,6 +500,7 @@ export function StudioCanvas({
                     onFocus={() => onSelect({ target: "button", id: btn.id })}
                   >
                     {btn.label}
+                    {handles("button", btn.id, btn.locked)}
                   </div>
                 );
               })}

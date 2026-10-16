@@ -28,7 +28,8 @@ describe("R55-S2 shapes + layers", () => {
   });
 
   it("locked items select but never drag", () => {
-    expect(canvas).toContain("if (isLocked(target, id)) return; // R55: locked = select only");
+    expect(canvas).toContain("if (!inGroup && isLocked(target, id)) return; // R55: locked = select only");
+    // R56: a group drag skips locked items inside the pure core (setPositions).
   });
 
   it("phone shape height uses the container rule", () => {

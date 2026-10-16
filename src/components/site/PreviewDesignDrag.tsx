@@ -26,7 +26,8 @@
 import { useEffect } from "react";
 import { clampDelta, deviceForFrameWidth, dropPercent, isDrag, nudgePx, type Rect } from "@/lib/cms/design-drag-core";
 
-const ITEM_SEL = "[data-gw-design-box],[data-gw-design-button]";
+// R56: shapes/icons ([data-gw-design-element]) move in Draft Mode too.
+const ITEM_SEL = "[data-gw-design-box],[data-gw-design-button],[data-gw-design-element]";
 const FRAME_SEL = "[data-gw-design-frame][data-gw-design-owner]";
 const ON_CLASS = "gw-move-on";
 
@@ -36,6 +37,7 @@ html.${ON_CLASS} ${FRAME_SEL} :is(${ITEM_SEL}) {
   outline: 2px dashed #7ed957; outline-offset: 2px; cursor: move; touch-action: none;
   user-select: none; -webkit-user-select: none;
 }
+html.${ON_CLASS} ${FRAME_SEL} [data-gw-design-element] { pointer-events: auto; }
 html.${ON_CLASS} ${FRAME_SEL} :is(${ITEM_SEL}):focus-visible { outline: 3px solid #ffd700; }
 html.${ON_CLASS} ${FRAME_SEL} :is(${ITEM_SEL})[data-gw-dragging] {
   outline: 3px solid #ffd700; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.45);
@@ -47,7 +49,7 @@ function rectOf(el: Element): Rect {
   return { left: r.left, top: r.top, width: r.width, height: r.height };
 }
 
-function itemInfo(el: HTMLElement): { frame: HTMLElement; owner: string; target: "box" | "button"; id: string } | null {
+function itemInfo(el: HTMLElement): { frame: HTMLElement; owner: string; target: "box" | "button" | "element"; id: string } | null {
   const frame = el.closest<HTMLElement>(FRAME_SEL);
   const owner = frame?.getAttribute("data-gw-design-owner") ?? "";
   const boxId = el.getAttribute("data-gw-design-box");
@@ -55,6 +57,8 @@ function itemInfo(el: HTMLElement): { frame: HTMLElement; owner: string; target:
   if (!frame || !owner) return null;
   if (btnId) return { frame, owner, target: "button", id: btnId };
   if (boxId) return { frame, owner, target: "box", id: boxId };
+  const elId = el.getAttribute("data-gw-design-element");
+  if (elId) return { frame, owner, target: "element", id: elId };
   return null;
 }
 
@@ -113,10 +117,22 @@ export function PreviewDesignDrag() {
           el.setAttribute("draggable", "false");
           el.setAttribute("aria-roledescription", "movable");
           el.setAttribute("aria-description", "Drag, or use the arrow keys then Enter to save. Escape cancels.");
+          // R56: decorative shapes are aria-hidden on the live page; a focusable
+          // item must not be, so expose them while Move is on.
+          if (el.hasAttribute("data-gw-design-element") && el.getAttribute("aria-hidden") === "true") {
+            el.removeAttribute("aria-hidden");
+            el.setAttribute("data-gw-was-hidden", "");
+            el.setAttribute("aria-label", "Shape");
+          }
         } else {
           if (el.hasAttribute("data-gw-added-tab")) {
             el.removeAttribute("tabindex");
             el.removeAttribute("data-gw-added-tab");
+          }
+          if (el.hasAttribute("data-gw-was-hidden")) {
+            el.setAttribute("aria-hidden", "true");
+            el.removeAttribute("data-gw-was-hidden");
+            el.removeAttribute("aria-label");
           }
           el.removeAttribute("aria-roledescription");
           el.removeAttribute("aria-description");
