@@ -10,7 +10,6 @@ import {
   BUTTON_SHAPES,
   BUTTON_SIZES,
   BUTTON_STYLES,
-  DESIGN_FONTS,
   MAX_BUTTON_LABEL,
   MAX_DESIGN_BUTTONS,
   defaultButton,
@@ -26,6 +25,7 @@ import { checkHref, describeHref } from "@/lib/cms/link-target-core";
 import { ColorField, NumberSlider, Row, Segmented, Toggle, studioInput } from "./controls";
 import { LinkPicker, type PickerPost } from "./LinkPicker";
 import type { StudioSelection } from "./StudioCanvas";
+import { FontSelect } from "./TextFxFields";
 
 const SIZE_LABEL: Record<DesignButtonSize, string> = { sm: "Small", md: "Medium", lg: "Large" };
 const SHAPE_LABEL: Record<DesignButtonShape, string> = { pill: "Pill", rounded: "Rounded", square: "Square" };
@@ -128,15 +128,7 @@ export function ButtonPanel({
           {btn.style === "solid" ? <ColorField label="Button color" value={btn.bg} onChange={(bg) => patch(btn.id, { bg })} /> : null}
           <ColorField label="Text color" value={btn.fg} onChange={(fg) => patch(btn.id, { fg })} />
           {btn.style !== "ghost" ? <ColorField label="Border color" value={btn.border} onChange={(border) => patch(btn.id, { border })} /> : null}
-          <Row label="Font">
-            <select className={studioInput} value={btn.font} onChange={(e) => patch(btn.id, { font: e.target.value })}>
-              {DESIGN_FONTS.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </Row>
+          <FontSelect value={btn.font} onChange={(font) => patch(btn.id, { font })} />
           <div className="rounded-md border border-white/10 p-2">
             <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-white/60">Position {mobile ? "— phone layout" : "— computer layout"}</p>
             <div className="grid grid-cols-2 gap-2">

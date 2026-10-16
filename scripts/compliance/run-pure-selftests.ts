@@ -2277,7 +2277,7 @@ __runLiquidVolumeTests();
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 31); // R40: ACH guide journeys, blockers, explainer; R41 S6: Timberland setup journey
-  assertRan("banner-design-core", __runBannerDesignCoreTests(), 125); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
+  assertRan("banner-design-core", __runBannerDesignCoreTests(), 139); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 30); // R47: home carousel advanced options; R54 repeat/fallback
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
