@@ -16,7 +16,7 @@
  * frame of fog/haze (no movement), hits skipped, words shown at once.
  */
 import { useEffect, useRef } from "react";
-import { hitEmitSeconds, hitShaderProps, onceSeconds, type SmokeLayer } from "@/lib/cms/banner-atmos-core";
+import { hitPuffWindows, hitShaderProps, onceSeconds, type SmokeLayer } from "@/lib/cms/banner-atmos-core";
 import { GlSmoke } from "./smoke-gl";
 
 type ShaderInstance = { update(id: string, p: Record<string, unknown>): void; pause(): void; resume(): void; destroy(): void; getFailureReason(): string | null };
@@ -67,8 +67,11 @@ export default function BannerSmokeClient({ layers, replayKey = 0 }: BannerSmoke
       gpuTimers.forEach((t) => window.clearTimeout(t));
       gpuTimers = [];
       const start = () => {
-        gpu?.update("hit", hitShaderProps(gpuHit, phone(), true));
-        gpuTimers.push(window.setTimeout(() => gpu?.update("hit", hitShaderProps(gpuHit, phone(), false)), (hitEmitSeconds(gpuHit) * 1000) / (gpuHit.speed === "slow" ? 0.55 : gpuHit.speed === "fast" ? 1.8 : 1)));
+        // R60: pour for the chosen length, in one or more puffs.
+        for (const [on, off] of hitPuffWindows(gpuHit)) {
+          gpuTimers.push(window.setTimeout(() => gpu?.update("hit", hitShaderProps(gpuHit, phone(), true)), on * 1000));
+          gpuTimers.push(window.setTimeout(() => gpu?.update("hit", hitShaderProps(gpuHit, phone(), false)), off * 1000));
+        }
         if (!gpuHit.once) gpuTimers.push(window.setTimeout(start, (onceSeconds(gpuHit) + 1.5) * 1000));
       };
       gpuTimers.push(window.setTimeout(start, (gpuHit.delay ?? 0) * 1000));

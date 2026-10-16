@@ -23,6 +23,7 @@ import {
 import type { BannerDesign, DesignDevice } from "@/lib/cms/banner-design-core";
 import { ColorField, NumberSlider, Segmented, SelectField, Toggle } from "./controls";
 import { IntroFields } from "./IntroFields";
+import { HitProFields } from "./HitProFields";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 
 type Speed = "slow" | "normal" | "fast";
@@ -132,7 +133,15 @@ export function SmokePanel({
             label="Type"
             value={l.kind}
             options={SMOKE_KINDS.map((k) => ({ value: k.id, label: `${k.label} — ${k.hint}` }))}
-            onChange={(kind) => patch(l.id, { kind, once: kind === "hit" || kind === "wisp" ? l.once : undefined, interactive: kind === "hit" ? l.interactive : undefined })}
+            onChange={(kind) =>
+              patch(l.id, {
+                kind,
+                once: kind === "hit" || kind === "wisp" ? l.once : undefined,
+                interactive: kind === "hit" ? l.interactive : undefined,
+                ...(kind !== "hit" ? { style: undefined, emit: undefined, puffs: undefined, power: undefined, spread: undefined, source: undefined, rise: undefined, linger: undefined } : {}),
+                ...(kind === "wisp" ? { swirl: undefined } : {}),
+              })
+            }
           />
           {l.kind === "wisp" || l.kind === "hit" ? (
             <SpotPicker layer={l} mobile={mobile} imageSrc={imageSrc} onPick={(x, y) => patch(l.id, mobile ? { mx: x, my: y } : { x, y })} />
@@ -165,6 +174,10 @@ export function SmokePanel({
             unit="%"
             onChange={(size) => patch(l.id, { size })}
           />
+          {l.kind === "fog" || l.kind === "haze" ? (
+            <NumberSlider label="Swirl / turbulence" value={l.swirl ?? 44} min={0} max={100} unit="%" onChange={(swirl) => patch(l.id, { swirl: swirl === 44 ? undefined : swirl })} />
+          ) : null}
+          {l.kind === "hit" ? <HitProFields layer={l} onPatch={(p) => patch(l.id, p)} /> : null}
           <Segmented<Speed> label="Speed" value={l.speed ?? "normal"} options={SPEEDS} onChange={(v) => patch(l.id, { speed: v === "normal" ? undefined : v })} />
           {l.kind === "hit" || l.kind === "wisp" ? (
             <Toggle label="Play once each time the slide shows (instead of looping)" checked={!!l.once} onChange={(on) => patch(l.id, { once: on ? true : undefined })} />

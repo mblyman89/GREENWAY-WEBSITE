@@ -2301,7 +2301,7 @@ __runLiquidVolumeTests();
   assertRan("button-fx-core", __runButtonFxTests(), 32); // R56-S4 button icon/gradient/shadow/hover/attention/corner + badge stickers
   assertRan("banner-guides-core", __runBannerGuidesTests(), 18); // R57-S1 smart guides: snap to other items, equal spacing, px gap readouts
   assertRan("banner-motion-core", __runBannerMotionTests(), 32); // R57-S2 micro-interactions: motion, morph, orbit spark, border beam, hover
-  assertRan("banner-atmos-core", __runBannerAtmosTests(), 20); // R58-S1 smoke / fog / haze / bong hit layers + reveal
+  assertRan("banner-atmos-core", __runBannerAtmosTests(), 32); // R58-S1 + R60-S1 pro clouds; smoke / fog / haze / bong hit layers + reveal
   assertRan("banner-curve-core", __runBannerCurveTests(), 8); // R58-S2 curved text geometry
   assertRan("banner-live-core", __runBannerLiveTests(), 16); // R58-S3 countdown + auto deal badges
   assertRan("banner-image-core", __runBannerImageTests(), 16); // R59-S1 pro picture tools
