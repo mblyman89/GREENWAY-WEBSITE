@@ -105,12 +105,12 @@ export function publicPathFor(owner: DesignOwner, pageSlug?: string | null): str
 export type MoveResult<T> = { ok: true; value: T } | { ok: false; message: string };
 
 const OFF = "Custom design is turned off for this banner, so there is nothing to move. Turn it on in the editor first.";
-const GONE = "That text box or button isn't in this banner's draft any more. Refresh the preview and try again.";
+const GONE = "That text box, button or shape isn't in this banner's draft any more. Refresh the preview and try again.";
 
 /** Apply a move to a design, refusing when design is off or the item is gone. */
 export function moveDesign(design: BannerDesign | null, move: DesignMove): MoveResult<BannerDesign> {
   if (!design || !design.enabled) return { ok: false, message: OFF };
-  const list = move.target === "box" ? design.boxes : design.buttons;
+  const list = move.target === "box" ? design.boxes : move.target === "button" ? design.buttons : (design.elements ?? []);
   if (!list.some((i) => i.id === move.id)) return { ok: false, message: GONE };
   return { ok: true, value: applyMove(design, move) };
 }

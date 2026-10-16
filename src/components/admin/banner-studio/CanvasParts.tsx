@@ -4,6 +4,7 @@
  * R55-S2 — pieces of the Studio canvas split out to keep StudioCanvas small:
  *  • CanvasShape  — a draggable shape layer (+ corner resize handle).
  *  • CanvasGuides — the AI suggestion "ghost" and the orange snap guides.
+ *  • RotateHandle / WidthHandle — R56 on-canvas handles (constant screen size).
  */
 import type { CSSProperties, KeyboardEvent as RKeyboardEvent, PointerEvent as RPointerEvent } from "react";
 import { elementStyle, type DesignElement } from "@/lib/cms/banner-elements-core";
@@ -14,6 +15,7 @@ const css = (s: Record<string, string>) => s as unknown as CSSProperties;
 export function CanvasShape({
   el,
   selected,
+  grouped = false,
   scale,
   z,
   onStart,
@@ -24,9 +26,11 @@ export function CanvasShape({
 }: {
   el: DesignElement;
   selected: boolean;
+  /** R56: part of a shift-click group (dashed gold outline). */
+  grouped?: boolean;
   scale: number;
   z: CSSProperties;
-  onStart: (e: RPointerEvent<HTMLElement>, mode: "move" | "resize") => void;
+  onStart: (e: RPointerEvent<HTMLElement>, mode: "move" | "resize" | "rotate") => void;
   onMove: (e: RPointerEvent<HTMLElement>) => void;
   onEnd: (e: RPointerEvent<HTMLElement>) => void;
   onKey: (e: RKeyboardEvent) => void;
@@ -43,11 +47,12 @@ export function CanvasShape({
         pointerEvents: "auto",
         cursor: el.locked ? "default" : "move",
         touchAction: "none",
-        outline: selected ? "2px solid #7ed957" : "1px dashed rgba(255,255,255,0.25)",
+        outline: selected ? "2px solid #7ed957" : grouped ? "2px dashed #ffd700" : "1px dashed rgba(255,255,255,0.25)",
         outlineOffset: 2,
         ...z,
       }}
       className="gw-dbox"
+      data-studio-id={el.id}
       onPointerDown={(e) => onStart(e, "move")}
       onPointerMove={onMove}
       onPointerUp={onEnd}
@@ -56,6 +61,7 @@ export function CanvasShape({
       onFocus={onFocus}
     >
       <DesignShape el={el} />
+      {selected && !el.locked ? <RotateHandle scale={scale} onStart={(e) => onStart(e, "rotate")} onMove={onMove} onEnd={onEnd} /> : null}
       {selected && !el.locked ? (
         <span
           aria-hidden="true"
@@ -135,5 +141,68 @@ export function CanvasGuides({
         <div key={`h${g}`} aria-hidden="true" className="pointer-events-none absolute inset-x-0" style={{ top: `${g}%`, height: 0, borderTop: `${2 / scale}px dashed #ff7f00`, zIndex: 91 }} />
       ))}
     </>
+  );
+}
+
+type H = {
+  scale: number;
+  onStart: (e: RPointerEvent<HTMLElement>) => void;
+  onMove: (e: RPointerEvent<HTMLElement>) => void;
+  onEnd: (e: RPointerEvent<HTMLElement>) => void;
+};
+
+/** R56: gold knob above the item — drag to rotate (Shift = 15° steps). Double-click = upright. */
+export function RotateHandle({ scale, onStart, onMove, onEnd }: H) {
+  return (
+    <span
+      aria-hidden="true"
+      title="Drag to rotate (hold Shift for 15° steps)"
+      data-studio-handle="rotate"
+      onPointerDown={onStart}
+      onPointerMove={onMove}
+      onPointerUp={onEnd}
+      onPointerCancel={onEnd}
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: -30 / scale,
+        width: 16,
+        height: 16,
+        marginLeft: -8,
+        borderRadius: 999,
+        background: "#ffd700",
+        border: "2px solid #000",
+        cursor: "grab",
+        touchAction: "none",
+        transform: `scale(${1 / scale})`,
+      }}
+    />
+  );
+}
+
+/** Text wrap-width handle (moved from StudioCanvas). */
+export function WidthHandle({ scale, onStart, onMove, onEnd }: H) {
+  return (
+    <span
+      aria-hidden="true"
+      title="Drag to change how wide the text can run before it wraps"
+      onPointerDown={onStart}
+      onPointerMove={onMove}
+      onPointerUp={onEnd}
+      onPointerCancel={onEnd}
+      style={{
+        position: "absolute",
+        right: -8,
+        top: "50%",
+        width: 14,
+        height: 28,
+        marginTop: -14,
+        borderRadius: 4,
+        background: "#7ed957",
+        cursor: "ew-resize",
+        touchAction: "none",
+        transform: `scale(${1 / scale})`,
+      }}
+    />
   );
 }
