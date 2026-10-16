@@ -24,10 +24,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ContentPreviewPanel,
-  PREVIEW_PAGES,
-} from "@/components/admin/ContentPreviewPanel";
-import {
   ContentBlocksBrowser,
   type BlockVM,
 } from "@/components/admin/ContentBlocksBrowser";
@@ -47,12 +43,11 @@ type Props = {
    */
   returnTo?: string;
   /**
-   * R43: render the big embedded "Live preview" iframe above the block list.
-   * Default true (unchanged for Page wording / Branding / Header & Footer).
-   * HeroTextCard passes false: the Specials editor previews in the Website Hub
-   * like every other dedicated page editor (a compact link replaces it).
+   * R64: the big embedded "Live preview" iframe is gone from every editor —
+   * the Website Hub's Live preview tab is the one place to preview. Pass the
+   * public path to show a compact "Preview in Website Hub ↗" link instead.
    */
-  showPreview?: boolean;
+  previewPath?: string;
 };
 
 export function ContentEditorShell({
@@ -63,7 +58,7 @@ export function ContentEditorShell({
   publishAction,
   restoreAction,
   returnTo,
-  showPreview = true,
+  previewPath,
 }: Props) {
   // Map block_key -> page so we can switch the filter to the right page.
   const pageForBlock = useMemo(() => {
@@ -74,7 +69,6 @@ export function ContentEditorShell({
 
   // Single source of truth. "all" shows everything; a page key filters.
   const [pageFilter, setPageFilter] = useState<string>("all");
-  const [previewPath, setPreviewPath] = useState<string>(PREVIEW_PAGES[0].path);
 
   // Pending block to focus once it's rendered (after a filter switch).
   const focusKeyRef = useRef<string | null>(null);
@@ -101,9 +95,6 @@ export function ContentEditorShell({
       const page = pageForBlock.get(blockKey);
       if (page) {
         setPageFilter((current) => (current === page ? current : page));
-        // Also align the preview to the same page for a coherent view.
-        const previewPage = PREVIEW_PAGES.find((p) => p.page === page);
-        if (previewPage) setPreviewPath(previewPage.path);
       }
       // Try now; if the block isn't in the DOM yet (filter just changed),
       // queue it for after the re-render.
@@ -136,22 +127,18 @@ export function ContentEditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When the editor switches the PREVIEW page manually, mirror it to the list
-  // filter so the two panels stay coherent.
-  const handleSelectPreviewPath = useCallback((path: string) => {
-    setPreviewPath(path);
-    const match = PREVIEW_PAGES.find((p) => p.path === path);
-    if (match) setPageFilter(match.page);
-  }, []);
-
   return (
     <>
-      {showPreview ? (
-        <ContentPreviewPanel
-          activePath={previewPath}
-          onSelectPath={handleSelectPreviewPath}
-          onEditBlock={handleEditBlock}
-        />
+      {previewPath ? (
+        <p className="text-sm text-[var(--admin-text-muted)]">
+          <a
+            href={`/admin/website-sync?tab=preview&path=${encodeURIComponent(previewPath)}`}
+            className="font-medium text-[var(--admin-accent)] underline-offset-2 hover:underline"
+          >
+            Preview in Website Hub ↗
+          </a>{" "}
+          to see your drafts on the real page before you publish.
+        </p>
       ) : null}
       <ContentBlocksBrowser
         blocks={blocks}

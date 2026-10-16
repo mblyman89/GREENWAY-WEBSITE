@@ -214,6 +214,7 @@ export async function PageWordingCard({
       />
 
       <ContentEditorShell
+        previewPath={publicPath || undefined}
         blocks={blockVMs}
         aiEnabled={aiEnabled}
         mediaChoices={mediaChoices}

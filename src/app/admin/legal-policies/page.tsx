@@ -117,7 +117,7 @@ export default async function LegalPoliciesPage({
             steps={[
               "Pick a tab (Privacy Policy, Terms of Use, or Consumer Health Data).",
               "Edit the page title and the body — each paragraph or heading is its own row you can change, add, remove, or reorder.",
-              "Use the live preview to see it as customers will, then Save draft (private) or Publish (updates the live page). Every publish is saved so you can roll back.",
+              "Use View live page (or the Website Hub preview) to see it as customers will, then Save draft (private) or Publish (updates the live page). Every publish is saved so you can roll back.",
             ]}
           >
             <p className="mb-2">
