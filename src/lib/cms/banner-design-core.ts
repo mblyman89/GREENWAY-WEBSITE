@@ -36,7 +36,9 @@ export const MAX_BUTTON_LABEL = 40;
 export type DesignRole = "eyebrow" | "headline" | "subhead" | "body" | "badge" | "legal";
 export type DesignAlign = "left" | "center" | "right" | "justify";
 export type DesignTransform = "none" | "uppercase" | "lowercase" | "capitalize";
-export type DesignShadow = "none" | "soft" | "strong" | "glow";
+export type DesignShadow = "none" | "soft" | "strong" | "glow" | "lift" | "neon";
+/** R55: gradient fill for text (written only when used). */
+export type DesignGradient = { from: string; to: string; angle: number };
 export type DesignBackdrop = "none" | "box" | "blur" | "pill";
 export type DesignWrap = "normal" | "balance" | "nowrap";
 export type DesignBind = "eyebrow" | "title" | "subtitle" | null;
@@ -131,7 +133,9 @@ export function roleInfo(role: DesignRole): RoleInfo {
 
 export const DESIGN_ALIGNS: DesignAlign[] = ["left", "center", "right", "justify"];
 export const DESIGN_TRANSFORMS: DesignTransform[] = ["none", "uppercase", "lowercase", "capitalize"];
-export const DESIGN_SHADOWS: DesignShadow[] = ["none", "soft", "strong", "glow"];
+export const DESIGN_SHADOWS: DesignShadow[] = ["none", "soft", "strong", "glow", "lift", "neon"];
+/** R55: outline width range in px (0 = off). */
+export const STROKE_MAX = 8;
 export const DESIGN_BACKDROPS: DesignBackdrop[] = ["none", "box", "blur", "pill"];
 export const DESIGN_WRAPS: DesignWrap[] = ["normal", "balance", "nowrap"];
 
@@ -212,6 +216,11 @@ export type DesignTextBox = {
   hideOnMobile: boolean;
   /** R55: locked = can't be dragged/nudged by accident (still editable in the panel). */
   locked?: boolean;
+  /** R55: letter outline (px) + colour. Overrides the legacy 1px `outline`. */
+  strokeWidth?: number;
+  strokeColor?: string;
+  /** R55: gradient-filled letters; `color` stays as the fallback. */
+  gradient?: DesignGradient;
 };
 
 export type DesignButton = {
@@ -477,7 +486,23 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     hidden: bool(raw.hidden, false),
     hideOnMobile: bool(raw.hideOnMobile, false),
     ...(raw.locked === true ? { locked: true } : {}),
+    ...normalizeTextFx(raw),
   };
+}
+
+/** R55: optional text effects, emitted only when actually used (old designs stay byte-identical). */
+function normalizeTextFx(raw: Record<string, unknown>): Pick<DesignTextBox, "strokeWidth" | "strokeColor" | "gradient"> {
+  const out: Pick<DesignTextBox, "strokeWidth" | "strokeColor" | "gradient"> = {};
+  const sw = num(raw.strokeWidth, 0, 0, STROKE_MAX, 0.5);
+  if (sw > 0) {
+    out.strokeWidth = sw;
+    out.strokeColor = normalizeHex(raw.strokeColor, "#000000");
+  }
+  const g = raw.gradient;
+  if (isObj(g) && typeof g.from === "string" && typeof g.to === "string") {
+    out.gradient = { from: normalizeHex(g.from, "#ffffff"), to: normalizeHex(g.to, "#7ed957"), angle: num(g.angle, 90, 0, 360, 1) };
+  }
+  return out;
 }
 
 export function normalizeButton(raw: unknown, fallbackId: string): DesignButton | null {
@@ -858,7 +883,30 @@ const SHADOWS: Record<DesignShadow, string> = {
   soft: "0 1px 3px rgba(0,0,0,0.6)",
   strong: "0 2px 6px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.9)",
   glow: "0 0 12px rgba(255,255,255,0.65)",
+  lift: "3px 3px 0 rgba(0,0,0,0.9)",
+  neon: "", // colour-matched, built in shadowCss
 };
+
+/** Text-shadow value for a box (neon follows the letter/gradient colour). */
+function shadowCss(box: DesignTextBox): string {
+  if (box.shadow !== "neon") return SHADOWS[box.shadow];
+  const c = box.gradient ? box.gradient.to : box.color;
+  return `0 0 4px ${rgba(c, 90)}, 0 0 12px ${rgba(c, 70)}, 0 0 28px ${rgba(c, 50)}`;
+}
+
+/**
+ * drop-shadow() equivalent of a text-shadow list. Gradient text paints its
+ * fill as a clipped background, and text-shadow would paint OVER it — so
+ * gradient boxes use filter: drop-shadow instead (follows the glyph alpha).
+ */
+export function shadowAsFilter(textShadow: string): string {
+  return textShadow
+    .split(/,(?![^(]*\))/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `drop-shadow(${p})`)
+    .join(" ");
+}
 
 export function boxStyle(box: DesignTextBox): StyleMap {
   const s: StyleMap = {
@@ -890,8 +938,25 @@ export function boxStyle(box: DesignTextBox): StyleMap {
   const deco = [box.underline ? "underline" : "", box.strike ? "line-through" : ""].filter(Boolean).join(" ");
   if (deco) s.textDecorationLine = deco;
   if (box.opacity < 100) s.opacity = String(r4(box.opacity / 100));
-  if (box.shadow !== "none") s.textShadow = SHADOWS[box.shadow];
-  if (box.outline) s.WebkitTextStroke = `1px ${box.backdropColor}`;
+  const gradient = box.gradient && box.backdrop === "none" ? box.gradient : null;
+  if (box.shadow !== "none") {
+    const sh = shadowCss(box);
+    if (gradient) s.filter = shadowAsFilter(sh);
+    else s.textShadow = sh;
+  }
+  if (box.strokeWidth && box.strokeWidth > 0) {
+    // paint-order puts the stroke BEHIND the fill, so thick outlines don't eat
+    // into the letters (sticker look). Width doubled because half is hidden.
+    s.WebkitTextStroke = `${r4(box.strokeWidth * 2)}px ${box.strokeColor ?? "#000000"}`;
+    s.paintOrder = "stroke fill";
+  } else if (box.outline) s.WebkitTextStroke = `1px ${box.backdropColor}`;
+  if (gradient) {
+    // `color` stays as the fallback for browsers without background-clip:text.
+    s.backgroundImage = `linear-gradient(${gradient.angle}deg, ${gradient.from}, ${gradient.to})`;
+    s.WebkitBackgroundClip = "text";
+    s.backgroundClip = "text";
+    s.WebkitTextFillColor = "transparent";
+  }
   if (box.backdrop !== "none" && box.backdropOpacity > 0) {
     s.backgroundColor = rgba(box.backdropColor, box.backdropOpacity);
     s.padding = box.backdrop === "pill" ? "0.25em 0.75em" : "0.4em 0.6em";
@@ -1504,6 +1569,29 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     const nEl = nudge(withEl, "element", "shape-2", 1, 0, "mobile", true);
     ok(nEl.elements![1].mx === nEl.elements![1].x + 5 && nEl.elements![1].x === withEl.elements![1].x, "R55 shape nudge writes phone override");
     ok(nextId(withEl, "shape") === "shape" && nextId(withEl, "shape-2") === "shape-2-2", "R55 nextId knows shape ids");
+  }
+
+  // R55-S4: text effects (stroke, gradient, new shadows).
+  {
+    const plain = defaultTextBox("headline");
+    const pn = normalizeTextBox(plain, "x")!;
+    ok(!("strokeWidth" in pn) && !("gradient" in pn), "R55 fx absent when unused");
+    const fx = normalizeTextBox({ ...plain, strokeWidth: 3.3, strokeColor: "zz", gradient: { from: "#ff0000", to: "#0000ff", angle: 400 } }, "x")!;
+    ok(fx.strokeWidth === 3.5 && fx.strokeColor === "#000000", "R55 stroke snapped, bad colour fallback");
+    ok(fx.gradient!.angle === 360 && fx.gradient!.from === "#ff0000", "R55 gradient clamped");
+    ok(J(normalizeTextBox(JSON.parse(J(fx)), "x")) === J(fx), "R55 fx round trip");
+    ok(!("strokeColor" in normalizeTextBox({ ...plain, strokeWidth: 0, strokeColor: "#fff" }, "x")!), "R55 zero stroke drops colour");
+    ok(!("gradient" in normalizeTextBox({ ...plain, gradient: { from: 1 } }, "x")!), "R55 bad gradient dropped");
+    const st = boxStyle(fx);
+    ok(st.WebkitTextStroke === "7px #000000" && st.paintOrder === "stroke fill", "R55 stroke behind fill");
+    ok(st.backgroundImage === "linear-gradient(360deg, #ff0000, #0000ff)" && st.WebkitTextFillColor === "transparent" && st.color === fx.color, "R55 gradient keeps colour fallback");
+    const gs = boxStyle({ ...fx, shadow: "soft" });
+    ok(!("textShadow" in gs) && gs.filter === "drop-shadow(0 1px 3px rgba(0,0,0,0.6))", "R55 gradient shadow via drop-shadow");
+    ok(!("backgroundImage" in boxStyle({ ...fx, backdrop: "box" })), "R55 gradient off when a backdrop box is used");
+    ok(shadowAsFilter("0 0 4px rgba(1,2,3,0.9), 0 0 12px red") === "drop-shadow(0 0 4px rgba(1,2,3,0.9)) drop-shadow(0 0 12px red)", "R55 shadow list split respects parens");
+    ok((boxStyle({ ...plain, shadow: "neon", color: "#00ff00" }).textShadow ?? "").includes("rgba(0,255,0,0.9)"), "R55 neon follows colour");
+    ok(boxStyle({ ...plain, shadow: "lift" }).textShadow === "3px 3px 0 rgba(0,0,0,0.9)", "R55 lift shadow");
+    ok(boxStyle({ ...plain, outline: true, backdropColor: "#ffffff" }).WebkitTextStroke === "1px #ffffff", "R55 legacy outline unchanged");
   }
 
   return { passed, failed };

@@ -24,6 +24,18 @@ import {
   Great_Vibes,
   Dancing_Script,
   Pacifico,
+  Archivo_Black,
+  Alfa_Slab_One,
+  Abril_Fatface,
+  Bungee,
+  Bangers,
+  Righteous,
+  Rubik_Mono_One,
+  Shrikhand,
+  Lobster,
+  Satisfy,
+  Caveat,
+  Permanent_Marker,
 } from "next/font/google";
 
 const inter = Inter({
@@ -100,6 +112,94 @@ const pacifico = Pacifico({
   display: "swap",
 });
 
+// R55-S4: display / script faces for Banner Studio. preload:false = the font
+// file is NOT preloaded on every page; the browser downloads it only when a
+// banner (or the site heading picker) actually uses it. @font-face stays
+// self-hosted and display:swap, so there's no layout-blocking request.
+const archivoBlack = Archivo_Black({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-archivo-black",
+  display: "swap",
+  preload: false,
+});
+const alfaSlabOne = Alfa_Slab_One({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-alfa-slab-one",
+  display: "swap",
+  preload: false,
+});
+const abrilFatface = Abril_Fatface({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-abril-fatface",
+  display: "swap",
+  preload: false,
+});
+const bungee = Bungee({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-bungee",
+  display: "swap",
+  preload: false,
+});
+const bangers = Bangers({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-bangers",
+  display: "swap",
+  preload: false,
+});
+const righteous = Righteous({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-righteous",
+  display: "swap",
+  preload: false,
+});
+const rubikMonoOne = Rubik_Mono_One({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-rubik-mono-one",
+  display: "swap",
+  preload: false,
+});
+const shrikhand = Shrikhand({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-shrikhand",
+  display: "swap",
+  preload: false,
+});
+const lobster = Lobster({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-lobster",
+  display: "swap",
+  preload: false,
+});
+const satisfy = Satisfy({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-satisfy",
+  display: "swap",
+  preload: false,
+});
+const caveat = Caveat({
+  subsets: ["latin"],
+  variable: "--gw-font-caveat",
+  display: "swap",
+  preload: false,
+});
+const permanentMarker = Permanent_Marker({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-permanent-marker",
+  display: "swap",
+  preload: false,
+});
+
 /**
  * A single className string declaring every font CSS variable. Spread onto the
  * <html> element so any chosen font can be referenced site-wide.
@@ -118,4 +218,16 @@ export const fontVariablesClassName = [
   greatVibes.variable,
   dancingScript.variable,
   pacifico.variable,
+  archivoBlack.variable,
+  alfaSlabOne.variable,
+  abrilFatface.variable,
+  bungee.variable,
+  bangers.variable,
+  righteous.variable,
+  rubikMonoOne.variable,
+  shrikhand.variable,
+  lobster.variable,
+  satisfy.variable,
+  caveat.variable,
+  permanentMarker.variable,
 ].join(" ");

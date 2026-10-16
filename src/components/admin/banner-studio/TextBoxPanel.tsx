@@ -10,13 +10,11 @@
  */
 import { useState } from "react";
 import {
-  DESIGN_FONTS,
   DESIGN_ROLES,
   MAX_BOX_TEXT,
   MAX_TEXT_BOXES,
   boxPosition,
   defaultTextBox,
-  designFontFamily,
   nextId,
   resolveBoxText,
   roleInfo,
@@ -25,13 +23,13 @@ import {
   type DesignBackdrop,
   type DesignDevice,
   type DesignRole,
-  type DesignShadow,
   type DesignTextBox,
   type DesignTransform,
   type DesignWrap,
 } from "@/lib/cms/banner-design-core";
 import { ColorField, NumberSlider, Row, Segmented, SelectField, Toggle, studioInput } from "./controls";
 import type { StudioSelection } from "./StudioCanvas";
+import { FontSelect, TextFxFields } from "./TextFxFields";
 
 const ROLE_ICON: Record<DesignRole, string> = { eyebrow: "🏷", headline: "🅷", subhead: "💬", body: "¶", badge: "⭐", legal: "⚖️" };
 
@@ -200,15 +198,7 @@ export function TextBoxPanel({
             </Row>
           )}
 
-          <Row label="Font">
-            <select className={studioInput} value={box.font} onChange={(e) => patch(box.id, { font: e.target.value })}>
-              {DESIGN_FONTS.map((f) => (
-                <option key={f.id} value={f.id} style={designFontFamily(f.id) ? { fontFamily: designFontFamily(f.id) ?? undefined } : undefined}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </Row>
+          <FontSelect value={box.font} onChange={(font) => patch(box.id, { font })} preview />
 
           <div className="grid grid-cols-2 gap-3">
             <NumberSlider label="Size — computer" value={box.size} min={8} max={160} unit="px" onChange={(size) => patch(box.id, { size })} />
@@ -306,17 +296,7 @@ export function TextBoxPanel({
               <NumberSlider label="Opacity" value={box.opacity} min={10} max={100} unit="%" onChange={(opacity) => patch(box.id, { opacity })} />
               <NumberSlider label="Letter spacing" value={box.letterSpacing} min={-0.1} max={0.5} step={0.01} unit="em" onChange={(letterSpacing) => patch(box.id, { letterSpacing })} />
               <NumberSlider label="Line height" value={box.lineHeight} min={0.7} max={3} step={0.05} onChange={(lineHeight) => patch(box.id, { lineHeight })} />
-              <Segmented<DesignShadow>
-                label="Shadow"
-                value={box.shadow}
-                options={[
-                  { value: "none", label: "None" },
-                  { value: "soft", label: "Soft" },
-                  { value: "strong", label: "Strong" },
-                  { value: "glow", label: "Glow" },
-                ]}
-                onChange={(shadow) => patch(box.id, { shadow })}
-              />
+              <TextFxFields box={box} patch={(p) => patch(box.id, p)} />
               <Segmented<DesignBackdrop>
                 label="Box behind text (helps reading on busy photos)"
                 value={box.backdrop}
@@ -336,7 +316,7 @@ export function TextBoxPanel({
                   ) : null}
                 </>
               ) : null}
-              <Toggle label="Thin outline around letters" checked={box.outline} onChange={(outline) => patch(box.id, { outline })} />
+              {!box.strokeWidth ? <Toggle label="Thin outline around letters" checked={box.outline} onChange={(outline) => patch(box.id, { outline })} /> : null}
             </div>
           </details>
 

@@ -50,3 +50,20 @@ describe("R55-S3 icons", () => {
     expect(read("src/lib/cms/banner-icons-data.ts")).toContain("Phosphor Icons (https://phosphoricons.com), MIT License");
   });
 });
+
+describe("R55-S4 fonts + text effects", () => {
+  const loader = read("src/lib/cms/fonts-loader.ts");
+  const panel = read("src/components/admin/banner-studio/TextBoxPanel.tsx");
+
+  it("new display/script faces are not preloaded on every page", () => {
+    for (const v of ["--gw-font-archivo-black", "--gw-font-lobster", "--gw-font-permanent-marker", "--gw-font-bungee"]) {
+      expect(loader).toContain(v);
+    }
+    expect((loader.match(/preload: false/g) ?? []).length).toBe(12);
+  });
+
+  it("text box panel uses the grouped font picker + effects block", () => {
+    expect(panel).toContain("<FontSelect value={box.font}");
+    expect(panel).toContain("<TextFxFields box={box}");
+  });
+});
