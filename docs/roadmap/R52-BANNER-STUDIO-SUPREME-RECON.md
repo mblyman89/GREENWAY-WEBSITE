@@ -391,3 +391,65 @@ R55 fonts/effects → R54 layers v2 + shapes (deferred from R54) → R56 → R57
   - impressions event, for true CTR / A-B testing in the comparison report
 - **R58 universal editor rollout:** shop/loyalty/specials/page heroes and home sections all use the Studio.
 - **Media library:** bulk re-optimize existing uploads to WebP masters.
+
+## 13. R56 — what shipped (4 slices)
+
+### 13.1 S1: any colour on every object
+- **Colour field:** accepts #hex, rgb(), hsl() or CSS colour names, plus an eyedropper (where the browser supports it). A "Your colours" row remembers recent picks.
+- **Brand palette:** brand swatches are still offered first, but are no longer the only choice.
+- **Shapes and icons:** gradient fill (two colours plus a direction) and a soft drop shadow in any colour. The drop-shadow follows the real outline of stars and icons.
+- **Code:** `color-input-core.ts` (16 self-tests); `banner-elements-core.ts` (45 self-tests).
+
+### 13.2 S2: upload any font you own
+- **Formats:** .woff2, .woff, .ttf, .otf, up to 25 MB. There's an advisory note above 1 MB, but it never blocks.
+- **Licence:** one checkbox, "I'm allowed to use this font". Who confirmed it and when are recorded on the media row (`license_status = owner-attested`) and in the audit log.
+- **Server checks:** the server sniffs the file's real bytes (wOF2 / wOFF / OTTO / TrueType; font collections are refused) before accepting it. On failure the file is removed.
+- **Serving:** files are served same-origin via the `/gw-fonts/*` rewrite, which avoids font CORS. `@font-face` uses `font-display: swap`.
+- **Where fonts appear:** "Your fonts" in every Studio font picker and in the site heading/body font pickers. The public banner only loads the fonts that design uses (React 19 hoisted, deduped `<style>`).
+- **Storage:** no migration. Fonts reuse `media_assets` (`usage_type = font`).
+- **Code:** `custom-font-core.ts` (19 self-tests).
+
+### 13.3 S3: direct manipulation
+- **Rotate:** a gold rotate knob on text, buttons and shapes (Shift = 15° steps).
+- **Groups:** Shift/Ctrl-click builds a group, which you can drag, nudge or delete together. Locked items stay put.
+- **Arrange bar:**
+  - align left/centre/right/top/middle/bottom (a single item aligns to the banner, a group to itself)
+  - distribute across/down
+  - duplicate, plus copy/paste **between banners** (Ctrl/⌘ + C / V / D)
+  - an exact rotation box
+- **Snapping:** moves snap to the banner centre and edges.
+- **Draft Mode:** in-page move now covers shapes too.
+- **Code:** `banner-arrange-core.ts` (26 self-tests).
+
+### 13.4 S4: buttons + badge stickers
+- **Button icons:** any of the 45 icons, placed before or after the text, or icon-only. Icon-only buttons keep the label for screen readers.
+- **Button styling:** gradient fill (solid buttons), shadow in any colour, and custom corner rounding (0–40 px).
+- **Hover effects:** Lift, Grow, Glow (follows the button colour) or Darken. These use individual `translate`/`scale` properties, so they stack with rotation.
+- **Draw attention:** a gentle pulse or an occasional wiggle. Both are switched off for visitors who ask for reduced motion (WCAG 2.3.3).
+- **Badge stickers:** one click adds a sale burst, % off seal, new star, hot diamond or deal tag.
+  - Each sticker is a normal shape plus a centred badge text box, so every part stays editable.
+  - The text is centred on the shape for **both** computer and phone sizes.
+- **Code:** `button-fx-core.ts` (31 self-tests). All new fields are written only when used.
+
+### 13.5 Where the Studio is used today
+Every banner placement already embeds the same Studio, so each upgrade above reaches all of them at once:
+- **Page sections:** `SectionCard`.
+- **Through `DesignCard`:** specials, shop banners, loyalty hero and the homepage carousel slides.
+
+Each one is opt-in ("custom design" toggle). The classic fields stay as the fallback and as the word source for bound boxes.
+
+### 13.6 Left to build
+- **R57 (pro tools):**
+  - curved text / text on a path
+  - smart guides to *other* objects plus spacing readouts
+  - saved styles / Brand Kit (named text and button styles, applied everywhere)
+  - template gallery ("start from" layouts)
+  - image crop, masks and frames, plus one-click background removal
+  - an impressions event, for true CTR and A/B testing
+- **R58 (universal page editor):**
+  - a layout layer for page editors that use tabs and cards: a "Card Studio" variant of the same engine (card frame, grid/stack slots, per-tab designs)
+  - one shared "Design" tab pattern across every page editor
+- **R59 (motion + collaboration):**
+  - entrance animations (fade/slide, reduced-motion safe)
+  - version history with visual diffs
+  - comments / approvals
