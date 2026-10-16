@@ -1047,10 +1047,11 @@ h1, h2, h3, h4, h5, h6 {
 .gw-enp [data-gw-enter] {
   visibility: hidden;
 }
+/* the curtain sits right above the picture: smoke, shapes, words and buttons
+   paint over it (they are later siblings), so smoke "plays with" the curtain. */
 .gw-intro {
   position: absolute;
   inset: 0;
-  z-index: 55;
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {

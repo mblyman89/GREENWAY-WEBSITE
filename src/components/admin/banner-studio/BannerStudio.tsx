@@ -24,6 +24,7 @@ import { WarningsPanel } from "./WarningsPanel";
 import { ShapePanel } from "./ShapePanel";
 import { SmokePanel } from "./SmokePanel";
 import { AnimatePanel } from "./AnimatePanel";
+import { IntroFields } from "./IntroFields";
 import { LayersPanel } from "./LayersPanel";
 import { CustomFontFaces } from "@/components/admin/fonts/CustomFontUpload";
 import { ArrangeBar } from "./ArrangeBar";
@@ -365,9 +366,11 @@ export function BannerStudio({
         ) : tab === "shapes" ? (
           <ShapePanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "animate" ? (
-          <AnimatePanel design={design} onChange={change} onSelect={select} />
+          <AnimatePanel design={design} onChange={change} onSelect={select}>
+            <IntroFields design={design} onChange={change} mediaChoices={mediaChoices} />
+          </AnimatePanel>
         ) : tab === "smoke" ? (
-          <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={() => setReplayKey((k) => k + 1)} />
+          <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={() => setReplayKey((k) => k + 1)} mediaChoices={mediaChoices} />
         ) : tab === "layers" ? (
           <LayersPanel design={design} legacy={legacy} selection={selection} onSelect={select} onChange={change} />
         ) : tab === "picture" ? (

@@ -22,6 +22,8 @@ import {
 } from "@/lib/cms/banner-atmos-core";
 import type { BannerDesign, DesignDevice } from "@/lib/cms/banner-design-core";
 import { ColorField, NumberSlider, Segmented, SelectField, Toggle } from "./controls";
+import { IntroFields } from "./IntroFields";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
 
 type Speed = "slow" | "normal" | "fast";
 const SPEEDS: { value: Speed; label: string }[] = [
@@ -40,12 +42,14 @@ export function SmokePanel({
   onChange,
   onReplay,
   imageSrc,
+  mediaChoices,
 }: {
   design: BannerDesign;
   device: DesignDevice;
   imageSrc?: string;
   onChange: (d: BannerDesign) => void;
   onReplay: () => void;
+  mediaChoices?: MediaChoice[];
 }) {
   const layers = design.smoke ?? [];
   const mobile = device === "mobile";
@@ -98,6 +102,8 @@ export function SmokePanel({
           stops when the banner is off screen, and visitors who ask for less motion see still fog or none.
         </p>
       </div>
+
+      <IntroFields design={design} onChange={onChange} mediaChoices={mediaChoices} />
 
       <div className={box}>
         <NumberSlider
