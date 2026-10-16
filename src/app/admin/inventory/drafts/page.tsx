@@ -202,12 +202,15 @@ import {
   LOOKUP_CHOOSE_NONE_COPY,
   batchLookupEntry,
   costLine,
+  itemFoundLine,
   itemRowCopy,
   jobHeadline,
   lookupBanner,
   lookupDeliveryChoices,
   progressLine,
 } from "@/lib/catalog/lookup-job-core";
+import { snapshotButtonLabel, snapshotNote, snapshotToLookupResult, snapshotWhen } from "@/lib/catalog/lookup-snapshot-core";
+import { LOOKUP_HONEST_MISS } from "@/lib/inventory/product-lookup-core";
 
 export const dynamic = "force-dynamic";
 // T-318 / T-323: the AI product lookup (a server action invoked on this route)
@@ -1564,13 +1567,24 @@ export default async function CatalogDraftsPage({
                   // approve form; ONBOARDING_V2_ROW=off keeps it inside.
                   // R19 S13: this row's line from the delivery's batch lookup.
                   const batchItem = batchLookupJob?.items.get(d.id.toLowerCase()) ?? null;
+                  // R66: everything this row's batch lookup found (not only
+                  // what attached), opened in the row's AI Lookup panel.
+                  const batchSnap = batchLookupJob?.snapshots.get(d.id.toLowerCase()) ?? null;
+                  const batchFoundLine = batchItem ? itemFoundLine(batchItem, Boolean(batchSnap?.hasAnyFindings)) : null;
                   const batchRowLine = batchItem ? (
-                    <p
-                      className={`${v2Row ? "text-left" : "max-w-[28rem] text-right"} text-xs ${batchItem.status === "failed" ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
-                      data-testid="batch-lookup-row"
-                    >
-                      {itemRowCopy(batchItem)}
-                    </p>
+                    <div className={`${v2Row ? "text-left" : "max-w-[28rem] text-right"} text-xs`}>
+                      <p
+                        className={batchItem.status === "failed" ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}
+                        data-testid="batch-lookup-row"
+                      >
+                        {itemRowCopy(batchItem)}
+                      </p>
+                      {batchFoundLine && (
+                        <p className="text-[var(--admin-accent)]" data-testid="batch-lookup-found">
+                          {batchFoundLine}
+                        </p>
+                      )}
+                    </div>
                   ) : null;
                   // R23 (item 2/6): the facts the batch lookup (pending
                   // suggestions on this product's key) and the S09 memory hold
@@ -1651,6 +1665,17 @@ export default async function CatalogDraftsPage({
                       importImageAction={importOnboardingImageAction}
                       returnManifest={focus.manifestId}
                       returnStatus={view}
+                      initialResult={
+                        batchSnap
+                          ? snapshotToLookupResult(batchSnap, {
+                              honestMiss: LOOKUP_HONEST_MISS,
+                              name: builtName ?? (d.name || ""),
+                              posProductKey: d.pos_product_key ?? "",
+                            })
+                          : null
+                      }
+                      initialNote={batchSnap ? snapshotNote(batchSnap, snapshotWhen(batchSnap.at)) : ""}
+                      closedLabel={snapshotButtonLabel(batchSnap)}
                     />
                     </>
                   );

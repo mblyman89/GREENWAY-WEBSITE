@@ -72,6 +72,16 @@ type Props = {
   importImageAction?: (formData: FormData) => Promise<void>;
   returnManifest?: string | null;
   returnStatus?: string;
+  /**
+   * R66: what this row's batch lookup found (lookup-snapshot-core
+   * snapshotToLookupResult), so the panel opens on the batch's findings - the
+   * same worksheet and "Save selected" as a row search. Absent = empty panel.
+   */
+  initialResult?: Ok | null;
+  /** R66: the line above those findings ("From the batch lookup on ..."). */
+  initialNote?: string;
+  /** R66: the closed button's text when the batch found something. */
+  closedLabel?: string;
 };
 
 type Ok = Extract<ProductLookupActionResult, { ok: true }>;
@@ -175,12 +185,17 @@ export function AiLookupPanel({
   importImageAction,
   returnManifest = null,
   returnStatus = "draft",
+  initialResult = null,
+  initialNote = "",
+  closedLabel = "AI Lookup",
 }: Props) {
   const initialQuery = [productName, vendorOrBrand].filter(Boolean).join(" ").trim();
   const [query, setQuery] = useState(initialQuery);
   const [open, setOpen] = useState(false);
-  const [data, setData] = useState<Ok | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [data, setData] = useState<Ok | null>(initialResult);
+  const [draft, setDraft] = useState<Draft | null>(() => (initialResult ? draftFromResult(initialResult) : null));
+  // R66: the batch note shows until the operator runs a search of their own.
+  const [fromBatch, setFromBatch] = useState<boolean>(Boolean(initialResult));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<null | "saved" | "saving-error">(null);
   const [saveMsg, setSaveMsg] = useState<string>("");
@@ -204,6 +219,7 @@ export function AiLookupPanel({
     setError(null);
     setData(null);
     setDraft(null);
+    setFromBatch(false);
     setSaved(null);
     setSaveMsg("");
     setSaveReceipt(null);
@@ -345,7 +361,7 @@ export function AiLookupPanel({
         className="mt-1 inline-flex items-center gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/15"
         aria-label="Open AI lookup"
       >
-        <span aria-hidden>🔍</span> AI Lookup
+        <span aria-hidden>🔍</span> {closedLabel}
       </button>
     );
   }
@@ -405,6 +421,11 @@ export function AiLookupPanel({
 
           {data && draft && (
             <div className="mt-2 max-h-[26rem] space-y-2 overflow-y-auto rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black/30 p-2 text-[11px]">
+              {fromBatch && initialNote && (
+                <p className="rounded border border-[var(--admin-accent)]/30 px-1.5 py-1 text-[10px] text-[var(--admin-text-muted)]" data-testid="lookup-from-batch">
+                  {initialNote}
+                </p>
+              )}
               {/* Headline banner: overall confidence + live-web vs. AI-knowledge. */}
               <div className="flex flex-wrap items-center justify-between gap-1">
                 <span

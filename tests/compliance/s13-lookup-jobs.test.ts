@@ -218,7 +218,7 @@ function items(db: FakePostgrest, jobId?: string): Row[] {
 
 const okResult = (n = 1): ItemRunOutcome => ({
   aiCalls: 1,
-  result: { outcome: "attached", attached: n, queued: 0, sentence: "Saved.", model: "gemini-test" },
+  result: { outcome: "attached", attached: n, queued: 0, sentence: "Saved.", model: "gemini-test", found: n },
 });
 
 /** A fake item runner: records the draft ids it ran, in order. */
@@ -275,10 +275,10 @@ describe("S13 pure core", () => {
     const r = __runLookupJobCoreTests();
     expect(r.failed).toBe(0);
     // R21: +25 for batchLookupEntry / lookupDeliveryChoices (the button is never silently absent).
-    expect(r.passed).toBe(119);
+    expect(r.passed).toBe(154);
   });
   it("the pure runner pins the same floor", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 119\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 154\)/);
   });
   it("the core is pure: no process.env, no server-only, no I/O imports", () => {
     const src = read("src/lib/catalog/lookup-job-core.ts");
@@ -664,13 +664,15 @@ describe("S13 cron tick: failures, Stop, caps", () => {
     const db = state.db;
     seedDrafts(db, 3);
     await enqueue();
+    // R66: a timeout / 5xx is now tried again (tests/compliance/r66-batch-lookup.test.ts);
+    // a rate-limit refusal (429) cannot be helped by a retry, so it fails as before.
     const r0 = runner((_id, idx) => {
-      if (idx === 1) throw named("AiLookupError", "technical detail", { friendly: "The AI lookup timed out.", aiCalls: 1 });
+      if (idx === 1) throw named("AiLookupError", "gemini google_search HTTP 429: quota", { friendly: "The AI provider is rate limiting.", aiCalls: 1 });
       return okResult();
     });
     const r = await runLookupJobsTick({ admin: admin(), runItem: r0.fn, now: () => T0 });
-    expect(r).toMatchObject({ ok: true, started: 3, done: 2, failed: 1, aiCalls: 3, finished: true });
-    expect(items(db)[1]).toMatchObject({ status: "failed", error: "The AI lookup timed out.", ai_calls: 1 });
+    expect(r).toMatchObject({ ok: true, started: 3, done: 2, failed: 1, retrying: 0, aiCalls: 3, finished: true });
+    expect(items(db)[1]).toMatchObject({ status: "failed", error: "The AI provider is rate limiting.", ai_calls: 1 });
     expect(items(db)[2].status).toBe("done");
     expect(jobs(db)[0]).toMatchObject({ status: "done", done: 3 });
   });
