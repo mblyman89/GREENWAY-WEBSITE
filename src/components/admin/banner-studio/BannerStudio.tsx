@@ -303,7 +303,7 @@ export function BannerStudio({
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-white/10">
         {tabBtn("text", "✏️ Text")}
         {tabBtn("buttons", "🔘 Buttons")}
-        {tabBtn("shapes", "◆ Shapes")}
+        {tabBtn("shapes", "◆ Shapes & icons")}
         {tabBtn("layers", "☰ Layers")}
         {tabBtn("picture", "🖼 Picture & shade")}
         {tabBtn("checks", warnCount ? `⚠️ Checks (${warnCount})` : "✓ Checks")}
@@ -326,7 +326,7 @@ export function BannerStudio({
 
       <ConfirmDialog
         open={!!pendingDelete}
-        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? "Delete this shape?" : "Delete this text box?"}
+        title={pendingDelete?.target === "button" ? "Delete this button?" : pendingDelete?.target === "element" ? "Delete this shape or icon?" : "Delete this text box?"}
         description="You can bring it back with Undo until you leave the page."
         confirmLabel="Delete"
         tone="danger"

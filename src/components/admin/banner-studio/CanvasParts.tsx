@@ -36,7 +36,7 @@ export function CanvasShape({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Shape ${el.shape}${el.locked ? " (locked)" : ""}. Drag or use arrow keys to move.`}
+      aria-label={`${el.kind === "icon" ? `Icon ${el.icon}` : `Shape ${el.shape}`}${el.locked ? " (locked)" : ""}. Drag or use arrow keys to move.`}
       aria-pressed={selected}
       style={{
         ...css(elementStyle(el)),

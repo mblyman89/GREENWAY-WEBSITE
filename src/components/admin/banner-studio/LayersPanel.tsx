@@ -7,7 +7,7 @@
  * (painted with z-index; the site's reading order is unchanged — WCAG 1.3.2).
  */
 import { designLayers, resolveBoxText, roleInfo, type BannerDesign } from "@/lib/cms/banner-design-core";
-import { SHAPE_KINDS, moveLayer, type LayerKind, type LayerMove } from "@/lib/cms/banner-elements-core";
+import { elementLabel, moveLayer, type LayerKind, type LayerMove } from "@/lib/cms/banner-elements-core";
 import type { StudioSelection } from "./StudioCanvas";
 
 const ICON: Record<LayerKind, string> = { box: "✏️", button: "🔘", element: "◆" };
@@ -40,7 +40,7 @@ export function LayersPanel({
       return { name: `Button — ${b.label}`, locked: !!b.locked, visible: b.enabled };
     }
     const e = (design.elements ?? []).find((x) => x.id === id)!;
-    return { name: SHAPE_KINDS.find((k) => k.id === e.shape)?.label ?? "Shape", locked: !!e.locked, visible: !e.hidden };
+    return { name: elementLabel(e), locked: !!e.locked, visible: !e.hidden };
   }
 
   function move(id: string, m: LayerMove) {

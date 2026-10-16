@@ -15,6 +15,11 @@
  *  • Lock — `locked: true` items can still be selected and edited in the
  *    panels but can't be dragged or nudged by accident.
  *
+ *  • R55-S3 icons — `kind: "icon"` carries the SVG path data itself (copied
+ *    from the curated Phosphor set at pick time), so the public banner needs
+ *    no icon library and no lookup table. The path is validated to SVG path
+ *    commands only (no markup can be smuggled in).
+ *
  * Elements are decorative: rendered aria-hidden, never focusable on the site.
  * Everything optional is written only when used, so banners saved before R55
  * normalize byte-identically.
@@ -35,10 +40,17 @@ export const SHAPE_KINDS: { id: ShapeKind; label: string; square: boolean }[] = 
 ];
 const SHAPE_IDS = SHAPE_KINDS.map((s) => s.id);
 
+export const ICON_PATH_MAX = 4000;
+export type ElementKind = "shape" | "icon";
+
 export type DesignElement = {
   id: string;
-  kind: "shape";
+  kind: ElementKind;
   shape: ShapeKind;
+  /** Icons only: curated icon id (e.g. "leaf"), weight and SVG path (viewBox 0 0 256 256). */
+  icon?: string;
+  iconWeight?: string;
+  iconPath?: string;
   x: number;
   y: number;
   w: number;
@@ -92,12 +104,40 @@ function rgba(h: string, pct: number): string {
   const c = hex(h, "#000000");
   return `rgba(${parseInt(c.slice(1, 3), 16)}, ${parseInt(c.slice(3, 5), 16)}, ${parseInt(c.slice(5, 7), 16)}, ${r4(pct / 100)})`;
 }
+/** True when `d` is a plain SVG path (commands + numbers only), within size. */
+export function isSafeIconPath(d: unknown): d is string {
+  return typeof d === "string" && d.length > 0 && d.length <= ICON_PATH_MAX && /^[MmLlHhVvCcSsQqTtAaZz0-9.,\-\seE]+$/.test(d);
+}
+
 export function cleanElementId(v: unknown, fallback: string): string {
   const s = typeof v === "string" ? v.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) : "";
   return s || fallback;
 }
 
 // ── defaults + normalizer ────────────────────────────────────────────────────
+
+/** A new icon layer (square, coloured with `fill`). */
+export function defaultIcon(icon: string, weight: string, path: string, overrides: Partial<DesignElement> = {}): DesignElement {
+  const { id: _id, kind: _kind, shape, ...rest } = defaultElement("rect");
+  void _id;
+  void _kind;
+  // Key order matches normalizeElement so a saved icon round-trips byte-identically.
+  return {
+    id: "icon",
+    kind: "icon",
+    shape,
+    icon,
+    iconWeight: weight,
+    iconPath: path,
+    ...rest,
+    w: 6,
+    h: null,
+    fill: "#ffffff",
+    strokeWidth: 0,
+    radius: 0,
+    ...overrides,
+  };
+}
 
 export function defaultElement(shape: ShapeKind = "rect", overrides: Partial<DesignElement> = {}): DesignElement {
   const square = SHAPE_KINDS.find((s) => s.id === shape)?.square ?? false;
@@ -128,13 +168,22 @@ export function defaultElement(shape: ShapeKind = "rect", overrides: Partial<Des
 
 export function normalizeElement(raw: unknown, fallbackId: string): DesignElement | null {
   if (!isObj(raw)) return null;
-  if (raw.kind !== undefined && raw.kind !== "shape") return null;
-  const shape = (SHAPE_IDS as string[]).includes(raw.shape as string) ? (raw.shape as ShapeKind) : "rect";
-  const d = defaultElement(shape);
+  if (raw.kind !== undefined && raw.kind !== "shape" && raw.kind !== "icon") return null;
+  const isIcon = raw.kind === "icon";
+  if (isIcon && !isSafeIconPath(raw.iconPath)) return null;
+  const shape = !isIcon && (SHAPE_IDS as string[]).includes(raw.shape as string) ? (raw.shape as ShapeKind) : "rect";
+  const d = isIcon ? defaultIcon("", "", "M0 0") : defaultElement(shape);
   const el: DesignElement = {
     id: cleanElementId(raw.id, fallbackId),
-    kind: "shape",
+    kind: isIcon ? "icon" : "shape",
     shape,
+    ...(isIcon
+      ? {
+          icon: typeof raw.icon === "string" ? raw.icon.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) : "",
+          iconWeight: raw.iconWeight === "bold" || raw.iconWeight === "fill" ? raw.iconWeight : "regular",
+          iconPath: raw.iconPath as string,
+        }
+      : {}),
     x: num(raw.x, d.x, 0, 100),
     y: num(raw.y, d.y, 0, 100),
     w: num(raw.w, d.w, 1, 100),
@@ -267,8 +316,11 @@ export function shapePoints(shape: ShapeKind): string | null {
 }
 
 /** Inner visual: either a CSS box style or an SVG polygon spec. */
-export function shapeVisual(el: DesignElement): { css: StyleMap } | { points: string; fill: string; stroke: string | null; strokeWidth: number } {
+export function shapeVisual(
+  el: DesignElement,
+): { css: StyleMap } | { points: string; fill: string; stroke: string | null; strokeWidth: number } | { iconPath: string; fill: string } {
   const fill = el.fillOpacity > 0 ? rgba(el.fill, el.fillOpacity) : "transparent";
+  if (el.kind === "icon") return { iconPath: isSafeIconPath(el.iconPath) ? el.iconPath : "", fill };
   const pts = shapePoints(el.shape);
   if (pts) return { points: pts, fill, stroke: el.strokeWidth > 0 ? el.stroke : null, strokeWidth: el.strokeWidth };
   if (el.shape === "line") return { css: { width: "100%", height: "100%", background: el.stroke, borderRadius: "999px" } };
@@ -282,6 +334,12 @@ export function shapeVisual(el: DesignElement): { css: StyleMap } | { points: st
 export function elementPosition(el: DesignElement, device: "desktop" | "mobile"): { x: number; y: number; w: number; h: number | null } {
   if (device === "mobile") return { x: el.mx ?? el.x, y: el.my ?? el.y, w: el.mw ?? el.w, h: el.h === null ? null : (el.mh ?? el.h) };
   return { x: el.x, y: el.y, w: el.w, h: el.h };
+}
+
+/** Friendly name for a shape/icon layer. */
+export function elementLabel(el: DesignElement, iconLabels: Record<string, string> = {}): string {
+  if (el.kind === "icon") return `Icon — ${iconLabels[el.icon ?? ""] ?? el.icon ?? "icon"}`;
+  return SHAPE_KINDS.find((k) => k.id === el.shape)?.label ?? "Shape";
 }
 
 export function layerLabel(kind: LayerKind): string {
@@ -342,5 +400,17 @@ export function __runBannerElementsTests(): { passed: number; failed: number } {
   ok("points" in sv && sv.points.split(" ").length === 10 && sv.stroke === "#ffffff", "star polygon 10 points + stroke");
   ok((shapePoints("burst") ?? "").split(" ").length === 28, "burst 28 points");
   ok(J(elementPosition(rect, "mobile")) === J({ x: 70, y: 20, w: 24, h: 40 }), "phone position");
+  // R55-S3 icons
+  const ic = defaultIcon("leaf", "bold", "M10,20 L30 40Z", { id: "leaf" });
+  ok(J(normalizeElement(JSON.parse(J(ic)), "x")) === J(ic), "icon round-trips");
+  ok(normalizeElement({ kind: "icon", iconPath: "M0 0\"/><script>" }, "x") === null, "unsafe icon path rejected");
+  ok(normalizeElement({ kind: "icon" }, "x") === null, "icon without path rejected");
+  ok(normalizeElement({ kind: "icon", iconPath: "M1 1", iconWeight: "huge", icon: "Le af!" }, "x")!.iconWeight === "regular", "icon weight defaulted");
+  ok(normalizeElement({ kind: "icon", iconPath: "M1 1", icon: "Le af!" }, "x")!.icon === "leaf", "icon id cleaned");
+  ok(!("icon" in normalizeElement({ shape: "star" }, "x")!), "shapes carry no icon fields");
+  const iv = shapeVisual(ic);
+  ok("iconPath" in iv && iv.iconPath === "M10,20 L30 40Z" && iv.fill === "rgba(255, 255, 255, 1)", "icon visual");
+  ok(elementLabel(ic, { leaf: "Leaf" }) === "Icon — Leaf" && elementLabel(defaultElement("burst")) === "Sale burst", "labels");
+  ok(isSafeIconPath("M1e-3 2") && !isSafeIconPath("x".repeat(5)) && !isSafeIconPath("M".repeat(ICON_PATH_MAX + 1)), "path guard");
   return { passed, failed };
 }
