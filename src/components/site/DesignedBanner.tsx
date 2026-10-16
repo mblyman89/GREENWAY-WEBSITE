@@ -6,6 +6,7 @@ import {
   containerStyle,
   frameStyle,
   imageStyle,
+  layerZ,
   overlayStyle,
   resolveBoxText,
   roleInfo,
@@ -14,6 +15,8 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
+import { DesignShape } from "./DesignShape";
+import { elementStyle } from "@/lib/cms/banner-elements-core";
 // R44: a video wrapper must stay visible to assistive tech (its pause button);
 // the <video> itself is aria-hidden inside BannerVideo.
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
@@ -83,6 +86,12 @@ export function DesignedBanner({
     if (info.html === "h2") return index === h1Index ? ("h1" as const) : ("h2" as const);
     return info.html;
   };
+  // R55: owner-chosen layer order paints via z-index; DOM/reading order stays shapes → text → buttons.
+  const z = layerZ(design);
+  const withZ = (style: Record<string, string>, id: string) => {
+    const n = z?.get(id);
+    return n ? { ...style, zIndex: String(n) } : style;
+  };
   const bindSuffix = (b: DesignTextBox) =>
     b.bind === "title" ? "title" : b.bind === "eyebrow" ? "eyebrow" : b.bind === "subtitle" ? "subtitle" : null;
 
@@ -137,6 +146,19 @@ export function DesignedBanner({
           </div>
         ) : null}
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
+        {(design.elements ?? []).map((el) =>
+          el.hidden ? null : (
+            <div
+              key={el.id}
+              aria-hidden="true"
+              style={css(withZ(elementStyle(el), el.id))}
+              className={`gw-dbox${el.hideOnMobile ? " gw-hide-sm" : ""}`}
+              {...(editable ? { "data-gw-design-element": el.id } : {})}
+            >
+              <DesignShape el={el} />
+            </div>
+          ),
+        )}
         {design.boxes.map((b, i) => {
           if (b.hidden) return null;
           const text = resolveBoxText(b, legacy);
@@ -146,7 +168,7 @@ export function DesignedBanner({
           return (
             <Tag
               key={b.id}
-              style={css(boxStyle(b))}
+              style={css(withZ(boxStyle(b), b.id))}
               className={`gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""}`}
               {...(editable ? { "data-gw-design-box": b.id } : {})}
               {...(editable && blockKeyPrefix && suffix
@@ -159,7 +181,7 @@ export function DesignedBanner({
         })}
         {design.buttons.map((btn) => {
           if (!btn.enabled || !btn.label.trim() || !btn.href.trim()) return null;
-          const style = css(buttonStyle(btn));
+          const style = css(withZ(buttonStyle(btn), btn.id));
           const className = `gw-dbox gw-dbtn${btn.hideOnMobile ? " gw-hide-sm" : ""}`;
           const hooks = editable ? { "data-gw-design-button": btn.id } : {};
           const external = linkKindOf(btn.href) === "external" || linkKindOf(btn.href) === "contact";

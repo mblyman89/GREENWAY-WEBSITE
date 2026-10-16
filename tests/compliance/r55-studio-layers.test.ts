@@ -1,0 +1,37 @@
+/**
+ * R55 — Banner Studio shapes, layers, icons, text effects (source guards).
+ * The pure logic is covered by the self-tests (banner-elements-core,
+ * banner-design-core); these check the wiring stays in place.
+ */
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+const ROOT = path.resolve(__dirname, "../..");
+const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8");
+
+describe("R55-S2 shapes + layers", () => {
+  const site = read("src/components/site/DesignedBanner.tsx");
+  const studio = read("src/components/admin/banner-studio/BannerStudio.tsx");
+  const canvas = read("src/components/admin/banner-studio/StudioCanvas.tsx");
+
+  it("public banner draws shapes decoratively and paints layer order with z-index only", () => {
+    expect(site).toContain("<DesignShape el={el} />");
+    expect(site).toMatch(/aria-hidden="true"\s+style=\{css\(withZ\(elementStyle\(el\), el\.id\)\)\}/);
+    expect(site).toContain("const z = layerZ(design);");
+  });
+
+  it("studio has Shapes and Layers tabs; deleting a layer also drops it from the order", () => {
+    expect(studio).toContain('tabBtn("shapes"');
+    expect(studio).toContain('tabBtn("layers"');
+    expect(studio).toContain("design.order?.filter((id) => id !== s.id)");
+  });
+
+  it("locked items select but never drag", () => {
+    expect(canvas).toContain("if (isLocked(target, id)) return; // R55: locked = select only");
+  });
+
+  it("phone shape height uses the container rule", () => {
+    expect(read("src/app/globals.css")).toContain("--gbh: var(--gmh, var(--gh));");
+  });
+});

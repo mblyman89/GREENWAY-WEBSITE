@@ -25,6 +25,8 @@
  *    "plaintext-only" (Enter = new line, no pasted formatting); Esc or
  *    clicking away commits as ONE change (one undo step for free-text boxes).
  *    Bound boxes (eyebrow/title/description) write the banner's own field.
+ *  - R55: shapes (drag, width handle, arrows) and layer order (z-index, same
+ *    rule as the public banner). Locked items select but never move.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import {
@@ -36,6 +38,7 @@ import {
   containerStyle,
   frameStyle,
   imageStyle,
+  layerZ,
   nudge,
   overlayStyle,
   resolveBoxText,
@@ -45,8 +48,11 @@ import {
   type DesignDevice,
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
+import { elementPosition } from "@/lib/cms/banner-elements-core";
+import { CanvasGuides, CanvasShape } from "./CanvasParts";
 
-export type StudioSelection = { target: "box" | "button"; id: string } | null;
+export type StudioTarget = "box" | "button" | "element";
+export type StudioSelection = { target: StudioTarget; id: string } | null;
 
 const css = (s: Record<string, string>) => s as unknown as CSSProperties;
 const half = (n: number) => Math.round(n * 2) / 2;
@@ -54,7 +60,7 @@ const SNAP = 1.5;
 
 type Drag = {
   mode: "move" | "resize";
-  target: "box" | "button";
+  target: StudioTarget;
   id: string;
   startX: number;
   startY: number;
@@ -125,8 +131,19 @@ export function StudioCanvas({
 
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
   const overlay = overlayStyle(design, headline ? { x: headline.x + headline.w / 2, y: headline.y + 10 } : undefined);
+  const z = layerZ(design);
+  const zOf = (id: string): CSSProperties => {
+    const n = z?.get(id);
+    return n ? { zIndex: n } : {};
+  };
+  const isLocked = (target: StudioTarget, id: string) =>
+    target === "box"
+      ? !!design.boxes.find((b) => b.id === id)?.locked
+      : target === "button"
+        ? !!design.buttons.find((b) => b.id === id)?.locked
+        : !!(design.elements ?? []).find((b) => b.id === id)?.locked;
 
-  function startDrag(e: RPointerEvent<HTMLElement>, target: "box" | "button", id: string, mode: "move" | "resize") {
+  function startDrag(e: RPointerEvent<HTMLElement>, target: StudioTarget, id: string, mode: "move" | "resize") {
     if (e.button !== 0) return;
     if (editing && editing === id) return; // typing: let the caret move normally
     const frame = frameRef.current;
@@ -138,6 +155,7 @@ export function StudioCanvas({
     const itemEl = (mode === "resize" ? e.currentTarget.parentElement : e.currentTarget) as HTMLElement | null;
     itemEl?.focus({ preventScroll: true });
     onSelect({ target, id });
+    if (isLocked(target, id)) return; // R55: locked = select only
     const rect = frame.getBoundingClientRect();
     const itemRect = (mode === "resize" ? (e.currentTarget.parentElement as HTMLElement) : e.currentTarget).getBoundingClientRect();
     const d = designRef.current;
@@ -148,6 +166,13 @@ export function StudioCanvas({
       const b = d.boxes.find((x) => x.id === id);
       if (!b) return;
       const p = boxPosition(b, device);
+      origX = p.x;
+      origY = p.y;
+      origW = p.w;
+    } else if (target === "element") {
+      const el = (d.elements ?? []).find((x) => x.id === id);
+      if (!el) return;
+      const p = elementPosition(el, device);
       origX = p.x;
       origY = p.y;
       origW = p.w;
@@ -184,7 +209,13 @@ export function StudioCanvas({
     const next: BannerDesign = JSON.parse(JSON.stringify(designRef.current));
     const v: number[] = [];
     const h: number[] = [];
-    if (g.mode === "resize" && g.target === "box") {
+    if (g.mode === "resize" && g.target === "element") {
+      const el = (next.elements ?? []).find((x) => x.id === g.id);
+      if (!el) return;
+      const w = half(Math.min(100, Math.max(1, g.origW + dx)));
+      if (device === "mobile") el.mw = w;
+      else el.w = w;
+    } else if (g.mode === "resize" && g.target === "box") {
       const b = next.boxes.find((x) => x.id === g.id);
       if (!b) return;
       let w = Math.min(100 - g.origX, Math.max(5, g.origW + dx));
@@ -226,7 +257,12 @@ export function StudioCanvas({
       }
       x = half(Math.min(100 - Math.min(w, 100), Math.max(0, x)));
       y = half(Math.min(100 - Math.min(g.itemHpct, 100), Math.max(0, y)));
-      const item = g.target === "box" ? next.boxes.find((b) => b.id === g.id) : next.buttons.find((b) => b.id === g.id);
+      const item =
+        g.target === "box"
+          ? next.boxes.find((b) => b.id === g.id)
+          : g.target === "element"
+            ? (next.elements ?? []).find((b) => b.id === g.id)
+            : next.buttons.find((b) => b.id === g.id);
       if (!item) return;
       if (device === "mobile") {
         item.mx = x;
@@ -268,7 +304,7 @@ export function StudioCanvas({
     else onChange({ ...d, boxes: d.boxes.map((x) => (x.id === id ? { ...x, text } : x)) });
   }
 
-  function onItemKey(e: React.KeyboardEvent, target: "box" | "button", id: string) {
+  function onItemKey(e: React.KeyboardEvent, target: StudioTarget, id: string) {
     if (editing === id) {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -295,7 +331,7 @@ export function StudioCanvas({
     }
   }
 
-  const isSel = (t: "box" | "button", id: string) => selection?.target === t && selection.id === id;
+  const isSel = (t: StudioTarget, id: string) => selection?.target === t && selection.id === id;
 
   return (
     <div ref={outerRef} className="w-full">
@@ -342,6 +378,23 @@ export function StudioCanvas({
               ) : null}
               {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
 
+              {(design.elements ?? []).map((el) =>
+                el.hidden || (device === "mobile" && el.hideOnMobile) ? null : (
+                  <CanvasShape
+                    key={el.id}
+                    el={el}
+                    selected={isSel("element", el.id)}
+                    scale={scale}
+                    z={zOf(el.id)}
+                    onStart={(e, mode) => startDrag(e, "element", el.id, mode)}
+                    onMove={onPointerMove}
+                    onEnd={endDrag}
+                    onKey={(e) => onItemKey(e, "element", el.id)}
+                    onFocus={() => onSelect({ target: "element", id: el.id })}
+                  />
+                ),
+              )}
+
               {design.boxes.map((b) => {
                 if (b.hidden) return null;
                 if (device === "mobile" && b.hideOnMobile) return null;
@@ -370,7 +423,7 @@ export function StudioCanvas({
                       role="textbox"
                       aria-multiline="true"
                       aria-label={`Editing ${roleInfo(b.role).label}. Enter for a new line, Escape to finish.`}
-                      style={{ ...css(boxStyle(b)), cursor: "text", outline: "2px solid #ffd700", outlineOffset: 2, minHeight: "1em", userSelect: "text", WebkitUserSelect: "text" }}
+                      style={{ ...css(boxStyle(b)), cursor: "text", outline: "2px solid #ffd700", outlineOffset: 2, minHeight: "1em", userSelect: "text", WebkitUserSelect: "text", ...zOf(b.id) }}
                       className="gw-dbox"
                       onKeyDown={(e) => onItemKey(e, "box", b.id)}
                       onBlur={(e) => commitEdit(e.currentTarget, b.id)}
@@ -388,7 +441,7 @@ export function StudioCanvas({
                     aria-label={`${roleInfo(b.role).label}: ${text.slice(0, 40) || "empty"}. Drag or use arrow keys to move. Double-click to type.`}
                     aria-pressed={sel}
                     title={b.bind && !onLegacyEdit ? undefined : "Double-click to type on the banner"}
-                    style={{ ...css(boxStyle(b)), cursor: "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "1px dashed rgba(255,255,255,0.35)", outlineOffset: 2, minHeight: "1em" }}
+                    style={{ ...css(boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "1px dashed rgba(255,255,255,0.35)", outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
                     className="gw-dbox"
                     onPointerDown={(e) => startDrag(e, "box", b.id, "move")}
                     onPointerMove={onPointerMove}
@@ -399,7 +452,7 @@ export function StudioCanvas({
                     onFocus={() => onSelect({ target: "box", id: b.id })}
                   >
                     {text || <span style={{ opacity: 0.45 }}>(empty {roleInfo(b.role).label.toLowerCase()})</span>}
-                    {sel ? (
+                    {sel && !b.locked ? (
                       <span
                         aria-hidden="true"
                         title="Drag to change how wide the text can run before it wraps"
@@ -437,7 +490,7 @@ export function StudioCanvas({
                     tabIndex={0}
                     aria-label={`Button ${btn.label}. Drag or use arrow keys to move.`}
                     aria-pressed={sel}
-                    style={{ ...css(buttonStyle(btn)), cursor: "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "none", outlineOffset: 3 }}
+                    style={{ ...css(buttonStyle(btn)), cursor: btn.locked ? "default" : "move", touchAction: "none", outline: sel ? "2px solid #7ed957" : "none", outlineOffset: 3, ...zOf(btn.id) }}
                     className="gw-dbox gw-dbtn"
                     onPointerDown={(e) => startDrag(e, "button", btn.id, "move")}
                     onPointerMove={onPointerMove}
@@ -451,45 +504,7 @@ export function StudioCanvas({
                 );
               })}
 
-              {ghost ? (
-                <>
-                  <div
-                    aria-hidden="true"
-                    data-gw-ai-ghost="zone"
-                    className="pointer-events-none absolute"
-                    style={{
-                      left: `${ghost.zone.x}%`,
-                      top: `${ghost.zone.y}%`,
-                      width: `${ghost.zone.w}%`,
-                      height: `${ghost.zone.h}%`,
-                      border: `${3 / scale}px dotted #ffd700`,
-                      background: "rgba(255,215,0,0.10)",
-                      borderRadius: 8 / scale,
-                    }}
-                  />
-                  <div
-                    aria-hidden="true"
-                    data-gw-ai-ghost="focus"
-                    className="pointer-events-none absolute"
-                    style={{
-                      left: `${ghost.focusX}%`,
-                      top: `${ghost.focusY}%`,
-                      width: 28 / scale,
-                      height: 28 / scale,
-                      transform: "translate(-50%, -50%)",
-                      border: `${3 / scale}px solid #ffd700`,
-                      borderRadius: "999px",
-                      boxShadow: "0 0 0 3px rgba(0,0,0,0.5)",
-                    }}
-                  />
-                </>
-              ) : null}
-              {guides.v.map((g) => (
-                <div key={`v${g}`} aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: `${g}%`, width: 0, borderLeft: `${2 / scale}px dashed #ff7f00` }} />
-              ))}
-              {guides.h.map((g) => (
-                <div key={`h${g}`} aria-hidden="true" className="pointer-events-none absolute inset-x-0" style={{ top: `${g}%`, height: 0, borderTop: `${2 / scale}px dashed #ff7f00` }} />
-              ))}
+              <CanvasGuides ghost={ghost} guides={guides} scale={scale} />
             </div>
           </div>
         </div>

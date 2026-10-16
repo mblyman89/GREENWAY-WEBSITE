@@ -642,6 +642,8 @@ h1, h2, h3, h4, h5, h6 {
     --gbx: var(--gmx, var(--gx));
     --gby: var(--gmy, var(--gy));
     --gbw: var(--gmw, var(--gw));
+    /* R55: shape height (phone override) */
+    --gbh: var(--gmh, var(--gh));
   }
   .gw-dimg {
     --gip: var(--gip-m);
