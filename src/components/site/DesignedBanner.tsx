@@ -16,6 +16,8 @@ import {
 import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
 import { DesignShape } from "./DesignShape";
+import { ButtonInner } from "./ButtonInner";
+import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { elementStyle } from "@/lib/cms/banner-elements-core";
 import { customFontFaceCss, customFontIdsIn } from "@/lib/cms/custom-font-core";
 // R44: a video wrapper must stay visible to assistive tech (its pause button);
@@ -191,7 +193,8 @@ export function DesignedBanner({
         {design.buttons.map((btn) => {
           if (!btn.enabled || !btn.label.trim() || !btn.href.trim()) return null;
           const style = css(withZ(buttonStyle(btn), btn.id));
-          const className = `gw-dbox gw-dbtn${btn.hideOnMobile ? " gw-hide-sm" : ""}`;
+          const fxc = buttonFxClass(btn);
+          const className = `gw-dbox gw-dbtn${btn.hideOnMobile ? " gw-hide-sm" : ""}${fxc ? ` ${fxc}` : ""}`;
           const hooks = editable ? { "data-gw-design-button": btn.id } : {};
           const external = linkKindOf(btn.href) === "external" || linkKindOf(btn.href) === "contact";
           if (external || btn.newTab) {
@@ -204,13 +207,13 @@ export function DesignedBanner({
                 {...(btn.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                 {...hooks}
               >
-                {btn.label}
+                <ButtonInner btn={btn} />
               </a>
             );
           }
           return (
             <Link key={btn.id} href={btn.href} style={style} className={className} {...hooks}>
-              {btn.label}
+              <ButtonInner btn={btn} />
             </Link>
           );
         })}

@@ -955,6 +955,7 @@ import { __runBannerCompareTests } from "../../src/lib/analytics/banner-compare-
 import { __runColorInputTests } from "../../src/lib/cms/color-input-core";
 import { __runCustomFontTests } from "../../src/lib/cms/custom-font-core";
 import { __runBannerArrangeTests } from "../../src/lib/cms/banner-arrange-core";
+import { __runButtonFxTests } from "../../src/lib/cms/button-fx-core";
 import { __runStoreHoursCoreTests } from "../../src/lib/seo/store-hours-core";
 import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
 import { __runDesignDragCoreTests } from "../../src/lib/cms/design-drag-core";
@@ -2289,6 +2290,7 @@ __runLiquidVolumeTests();
   assertRan("color-input-core", __runColorInputTests(), 16); // R56-S1 any-colour input + recent colours
   assertRan("custom-font-core", __runCustomFontTests(), 19); // R56-S2 owner-uploaded fonts (licence box, byte sniff, same-origin @font-face)
   assertRan("banner-arrange-core", __runBannerArrangeTests(), 26); // R56-S3 multi-select, align/distribute, duplicate, copy/paste, rotate, snap
+  assertRan("button-fx-core", __runButtonFxTests(), 31); // R56-S4 button icon/gradient/shadow/hover/attention/corner + badge stickers
   assertRan("banner-compare-core", __runBannerCompareTests(), 22); // R55-S1: banner comparison
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers

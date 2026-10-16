@@ -13,6 +13,7 @@ import { MAX_ELEMENTS, SHAPE_KINDS, defaultElement, defaultIcon, elementLabel, t
 import { DesignShape } from "@/components/site/DesignShape";
 import { ColorField, NumberSlider, Toggle } from "./controls";
 import { ElementFxFields } from "./ElementFxFields";
+import { BadgeStickers } from "./BadgeStickers";
 import type { StudioSelection } from "./StudioCanvas";
 
 export function ShapePanel({
@@ -90,6 +91,8 @@ export function ShapePanel({
           </button>
         ))}
       </div>
+
+      <BadgeStickers design={design} onChange={onChange} onSelect={onSelect} />
 
       <div className="space-y-2 rounded-lg border border-white/10 p-2">
         <div className="flex flex-wrap items-center gap-2">
