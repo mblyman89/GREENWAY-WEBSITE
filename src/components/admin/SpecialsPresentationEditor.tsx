@@ -50,7 +50,8 @@ import {
   dayPresentationFor,
 } from "@/lib/specials/specials-presentation-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
-import { DesignCard, HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
+import { HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
+import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 
 export type SpecialsRevisionVM = {
   id: string;
@@ -259,6 +260,26 @@ export function SpecialsPresentationEditor(props: Props) {
       {tab === "hero" ? (
         /* ── Top hero tab (page-order tab 1) ─────────────────────────────── */
         <>
+        {/* R41 S4: full Banner Studio design for the TOP hero. */}
+        <DesignCard
+          mediaChoices={mediaChoices}
+          title="Design Studio — top hero"
+          description="Drag the wording anywhere, change fonts, colors and sizes, add text boxes and buttons, and set a separate phone layout. When it's on, it replaces the classic placement settings (Basic mode below). Turn it off any time to go back to the classic hero."
+          design={pres.heroDesign}
+          onChange={(heroDesign) => setGlobal("heroDesign", heroDesign)}
+          legacy={heroText}
+          imageSrc={pres.heroBannerImage || props.legacyHeroImage || ""}
+          imageAlt=""
+          preset="hero"
+          seed={{
+            ...heroText,
+            textAlign: pres.heroBannerTextAlign,
+            verticalAlign: pres.heroBannerVerticalAlign,
+            imageFocus: pres.heroBannerImageFocus,
+            buttons: pres.heroButtonsSet ? pres.heroButtons : legacyHeroButtons,
+          }}
+          posts={posts}
+        />
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Controls column */}
           <div className="space-y-5">
@@ -296,6 +317,7 @@ export function SpecialsPresentationEditor(props: Props) {
               />
             </div>
 
+            <BasicMode hint="classic text position and image focus">
             {/* Hero text position. */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Hero text position</div>
@@ -373,6 +395,8 @@ export function SpecialsPresentationEditor(props: Props) {
               </div>
             </div>
 
+            </BasicMode>
+
             {/* R41 S4: hero buttons (add / edit / remove / reorder / repoint). */}
             <HeroButtonsCard
               buttons={pres.heroButtons}
@@ -412,26 +436,6 @@ export function SpecialsPresentationEditor(props: Props) {
             </div>
           </div>
         </div>
-        {/* R41 S4: full Banner Studio design for the TOP hero. */}
-        <DesignCard
-          mediaChoices={mediaChoices}
-          title="Custom design for the top hero"
-          description="Drag the wording anywhere, change fonts, colors and sizes, add text boxes and buttons, and set a separate phone layout. When it's on, it replaces the placement settings above. Turn it off any time to go back to the classic hero."
-          design={pres.heroDesign}
-          onChange={(heroDesign) => setGlobal("heroDesign", heroDesign)}
-          legacy={heroText}
-          imageSrc={pres.heroBannerImage || props.legacyHeroImage || ""}
-          imageAlt=""
-          preset="hero"
-          seed={{
-            ...heroText,
-            textAlign: pres.heroBannerTextAlign,
-            verticalAlign: pres.heroBannerVerticalAlign,
-            imageFocus: pres.heroBannerImageFocus,
-            buttons: pres.heroButtonsSet ? pres.heroButtons : legacyHeroButtons,
-          }}
-          posts={posts}
-        />
         </>
       ) : tab === "cards" ? (
         <>
@@ -646,6 +650,29 @@ export function SpecialsPresentationEditor(props: Props) {
       ) : (
         /* ── Today's Deal banner & products tab ─────────────────────────────── */
         <>
+        {/* R41 S4: full Banner Studio design for the Today's Deal banner. Text
+            boxes tied to the title/subtitle keep showing the day's deal, so it
+            still changes every day. */}
+        <DesignCard
+          mediaChoices={mediaChoices}
+          title="Design Studio — Today's Deal banner"
+          description="Drag the wording anywhere, change fonts and colors, add text boxes and buttons, and set a phone layout. Boxes tied to the title and subtitle still show each day's deal automatically. The preview shows today's wording."
+          design={pres.todaysDealsDesign}
+          onChange={(todaysDealsDesign) => setGlobal("todaysDealsDesign", todaysDealsDesign)}
+          legacy={{ eyebrow: "Today's Deal", title: todaysText.title, subtitle: todaysText.subtitle }}
+          imageSrc={pres.todaysDealsBannerImage || "/home/hero-banner.webp"}
+          imageAlt={`${todaysText.title} daily deal products`}
+          preset="section"
+          seed={{
+            eyebrow: "Today's Deal",
+            title: todaysText.title,
+            subtitle: todaysText.subtitle,
+            textAlign: pres.todaysDealsBannerTextAlign,
+            verticalAlign: pres.todaysDealsBannerVerticalAlign,
+            imageFocus: pres.todaysDealsBannerImageFocus,
+          }}
+          posts={posts}
+        />
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Controls column */}
           <div className="space-y-5">
@@ -702,6 +729,7 @@ export function SpecialsPresentationEditor(props: Props) {
               />
             </div>
 
+            <BasicMode hint="classic text position and image focus">
             {/* Text alignment controls. */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Banner text position</div>
@@ -784,6 +812,8 @@ export function SpecialsPresentationEditor(props: Props) {
               </div>
             </div>
 
+            </BasicMode>
+
             {/* Nudge to Creative Studio for on-brand banner art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide banner in{" "}
@@ -832,29 +862,6 @@ export function SpecialsPresentationEditor(props: Props) {
             </div>
           </div>
         </div>
-        {/* R41 S4: full Banner Studio design for the Today's Deal banner. Text
-            boxes tied to the title/subtitle keep showing the day's deal, so it
-            still changes every day. */}
-        <DesignCard
-          mediaChoices={mediaChoices}
-          title="Custom design for the Today's Deal banner"
-          description="Drag the wording anywhere, change fonts and colors, add text boxes and buttons, and set a phone layout. Boxes tied to the title and subtitle still show each day's deal automatically. The preview shows today's wording."
-          design={pres.todaysDealsDesign}
-          onChange={(todaysDealsDesign) => setGlobal("todaysDealsDesign", todaysDealsDesign)}
-          legacy={{ eyebrow: "Today's Deal", title: todaysText.title, subtitle: todaysText.subtitle }}
-          imageSrc={pres.todaysDealsBannerImage || "/home/hero-banner.webp"}
-          imageAlt={`${todaysText.title} daily deal products`}
-          preset="section"
-          seed={{
-            eyebrow: "Today's Deal",
-            title: todaysText.title,
-            subtitle: todaysText.subtitle,
-            textAlign: pres.todaysDealsBannerTextAlign,
-            verticalAlign: pres.todaysDealsBannerVerticalAlign,
-            imageFocus: pres.todaysDealsBannerImageFocus,
-          }}
-          posts={posts}
-        />
         </>
       )}
 

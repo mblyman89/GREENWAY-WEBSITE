@@ -46,11 +46,16 @@ describe("R41 S2 Banner Studio", () => {
 
   it("SectionCard: custom design opt-in, legacy start, writeDesign merge, lazy studio", () => {
     const src = read("src/components/admin/SectionCard.tsx");
-    expect(src).toContain("Use custom design for this banner");
-    expect(src).toContain("designFromLegacy({");
+    // R61 S1: the opt-in / legacy start / keep-when-off / lazy studio now live
+    // in the ONE shared shell every banner editor uses.
+    expect(src).toContain('import { BasicMode, DesignCard } from "./banner-studio/BannerEditorShell"');
+    expect(src).toContain("<DesignCard");
+    expect(src).toContain("seed={designSeed}");
     expect(src).toContain("writeDesign(baseSettings, design)");
-    expect(src).toContain("setDesign({ ...design, enabled: false })");
-    expect(src).toContain('dynamic(() => import("./banner-studio/BannerStudio")');
+    const shell = read("src/components/admin/banner-studio/BannerEditorShell.tsx");
+    expect(shell).toContain("designFromLegacy({ ...seed, preset })");
+    expect(shell).toContain("onChange({ ...design, enabled: false })");
+    expect(shell).toContain('dynamic(() => import("@/components/admin/banner-studio/BannerStudio")');
     // the SLICE 112 pins still hold
     expect(src).toContain('name="settings_json"');
     expect(src).toContain('d.settings.lanes === "brand"');

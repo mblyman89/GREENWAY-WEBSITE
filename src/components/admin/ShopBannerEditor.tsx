@@ -21,7 +21,7 @@ import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { SlideView } from "@/components/menu/ShopBannerCarousel";
-import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
@@ -602,6 +602,46 @@ function SlideCard({
               />
             </div>
 
+            {/* R41 S6 / R61 S1: Design Studio first (shared shell), classic fields in Basic mode. */}
+            <DesignCard
+              mediaChoices={mediaChoices}
+              title="Design Studio"
+              description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. Double-click any text to type on it. The three classic text lines (Basic mode below) still supply the words. With custom design on, the buttons you add in the studio replace the two classic buttons. Turn it off any time to go back to the classic look."
+              design={pres.design ?? null}
+              onChange={(d) =>
+                setPres((p) => {
+                  const next = { ...p };
+                  if (d) next.design = d;
+                  else delete next.design;
+                  return next;
+                })
+              }
+              legacy={{
+                eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+                title: pres.title.show ? pres.title.text : "",
+                subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+              }}
+              imageSrc={pres.image || pres.imageMobile}
+              imageAlt=""
+              preset="hero"
+              seed={{
+                eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+                title: pres.title.show ? pres.title.text : "",
+                subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+                textAlign: pres.textAlign,
+                verticalAlign: pres.verticalAlign,
+                imageFocus: pres.imageFocus,
+                buttons: pres.ctas.map((c) => ({
+                  label: c.label,
+                  href: c.href,
+                  variant: c.variant === "solid" ? ("solid" as const) : ("outline" as const),
+                })),
+              }}
+              posts={posts}
+              onLegacyEdit={(bind, text) => patchBlock(bind, { text })}
+            />
+
+            <BasicMode hint="classic words, fonts, buttons, text position and picture focus">
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Text position</div>
               <div className="mt-2 space-y-3">
@@ -661,44 +701,7 @@ function SlideCard({
             />
 
             <CtaEditor ctas={pres.ctas} onChange={(next) => setField("ctas", next)} />
-
-            {/* R41 S6: optional Banner Studio design for this slide. */}
-            <DesignCard
-              mediaChoices={mediaChoices}
-              title="Custom design (optional)"
-              description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The three text lines above still supply the words. With custom design on, the buttons you add in the studio replace the two buttons above. Turn it off any time to go back to the classic look."
-              design={pres.design ?? null}
-              onChange={(d) =>
-                setPres((p) => {
-                  const next = { ...p };
-                  if (d) next.design = d;
-                  else delete next.design;
-                  return next;
-                })
-              }
-              legacy={{
-                eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
-                title: pres.title.show ? pres.title.text : "",
-                subtitle: pres.subtitle.show ? pres.subtitle.text : "",
-              }}
-              imageSrc={pres.image || pres.imageMobile}
-              imageAlt=""
-              preset="hero"
-              seed={{
-                eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
-                title: pres.title.show ? pres.title.text : "",
-                subtitle: pres.subtitle.show ? pres.subtitle.text : "",
-                textAlign: pres.textAlign,
-                verticalAlign: pres.verticalAlign,
-                imageFocus: pres.imageFocus,
-                buttons: pres.ctas.map((c) => ({
-                  label: c.label,
-                  href: c.href,
-                  variant: c.variant === "solid" ? ("solid" as const) : ("outline" as const),
-                })),
-              }}
-              posts={posts}
-            />
+            </BasicMode>
 
             <PromotionLinkEditor
               promotion={pres.promotion}

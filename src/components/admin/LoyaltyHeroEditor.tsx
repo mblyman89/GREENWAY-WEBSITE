@@ -28,7 +28,7 @@ import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
-import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
@@ -358,6 +358,40 @@ export function LoyaltyHeroEditor(props: Props) {
             />
           </div>
 
+          {/* R41 S6: optional Banner Studio design for this hero. */}
+          <DesignCard
+            mediaChoices={mediaChoices}
+            title="Design Studio"
+            description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. Double-click any text to type on it. The three classic text lines (Basic mode below) still supply the words. Turn it off any time to go back to the classic look."
+            design={pres.design ?? null}
+            onChange={(d) =>
+              setPres((p) => {
+                const next = { ...p };
+                if (d) next.design = d;
+                else delete next.design;
+                return next;
+              })
+            }
+            legacy={{
+              eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+              title: pres.title.show ? pres.title.text : "",
+              subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+            }}
+            imageSrc={pres.image || pres.imageMobile}
+            imageAlt=""
+            preset="hero"
+            seed={{
+              eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+              title: pres.title.show ? pres.title.text : "",
+              subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+              textAlign: pres.textAlign,
+              verticalAlign: pres.verticalAlign,
+              imageFocus: pres.imageFocus,
+            }}
+            posts={props.posts ?? []}
+            onLegacyEdit={(bind, text) => patchBlock(bind, { text })}
+          />
+          <BasicMode hint="classic words, fonts, text position and picture focus">
           {/* Text position */}
           <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
             <div className="mb-1 text-sm font-semibold">Text position</div>
@@ -447,38 +481,7 @@ export function LoyaltyHeroEditor(props: Props) {
             onChange={(patch) => patchBlock("subtitle", patch)}
           />
 
-          {/* R41 S6: optional Banner Studio design for this hero. */}
-          <DesignCard
-            mediaChoices={mediaChoices}
-            title="Custom design (optional)"
-            description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The three text lines above still supply the words. Turn it off any time to go back to the classic look."
-            design={pres.design ?? null}
-            onChange={(d) =>
-              setPres((p) => {
-                const next = { ...p };
-                if (d) next.design = d;
-                else delete next.design;
-                return next;
-              })
-            }
-            legacy={{
-              eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
-              title: pres.title.show ? pres.title.text : "",
-              subtitle: pres.subtitle.show ? pres.subtitle.text : "",
-            }}
-            imageSrc={pres.image || pres.imageMobile}
-            imageAlt=""
-            preset="hero"
-            seed={{
-              eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
-              title: pres.title.show ? pres.title.text : "",
-              subtitle: pres.subtitle.show ? pres.subtitle.text : "",
-              textAlign: pres.textAlign,
-              verticalAlign: pres.verticalAlign,
-              imageFocus: pres.imageFocus,
-            }}
-            posts={props.posts ?? []}
-          />
+          </BasicMode>
         </div>
 
         {/* Live preview column — renders the REAL public banner. */}
