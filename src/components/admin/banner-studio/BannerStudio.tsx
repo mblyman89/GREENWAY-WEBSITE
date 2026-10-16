@@ -23,6 +23,7 @@ import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { ShapePanel } from "./ShapePanel";
 import { LayersPanel } from "./LayersPanel";
+import { CustomFontFaces } from "@/components/admin/fonts/CustomFontUpload";
 import type { PickerPost } from "./LinkPicker";
 import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
 import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
@@ -210,6 +211,7 @@ export function BannerStudio({
 
   return (
     <div ref={rootRef} className="space-y-3">
+      <CustomFontFaces />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div role="radiogroup" aria-label="Preview size" className="flex gap-1">
           {(["desktop", "mobile"] as DesignDevice[]).map((d) => (

@@ -20,6 +20,7 @@ import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchem
 import { getContentValues } from "@/lib/cms/render-content";
 import { getStoreSchemaInput } from "@/lib/seo/store-hours-server";
 import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
+import { customFontFaceCss } from "@/lib/cms/custom-font-core";
 import {
   fontStack,
   DEFAULT_HEADING_FONT_ID,
@@ -105,6 +106,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     DEFAULT_HEADING_FONT_ID,
   );
   const bodyStack = fontStack(fonts["site.font.body"], DEFAULT_BODY_FONT_ID);
+  const siteFontFaces = customFontFaceCss([fonts["site.font.heading"] ?? "", fonts["site.font.body"] ?? ""]);
 
   return (
     <html
@@ -131,6 +133,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
          * renders in <body>, would reintroduce the flash. Fail-closed: any
          * failure leaves the attribute unset and the gate visible. */}
         <script dangerouslySetInnerHTML={{ __html: ageGateBootstrapScript() }} />
+        {/* R56-S2: an uploaded font picked as the site heading/body font. */}
+        {siteFontFaces ? <style dangerouslySetInnerHTML={{ __html: siteFontFaces }} /> : null}
       </head>
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema(storeHours, storeToday)]} id="site" />
