@@ -70,6 +70,11 @@ describe("R41 S3 Type Cards", () => {
     expect(src).toContain("Reset to the original six");
     expect(src).toContain("Delete card");
     expect(src).toContain("<ConfirmDialog");
-    expect(src).toMatch(/aria-label=\{`Move \$\{c\.label \|\| "card"\} up`\}/);
+    // R63: reorder / show / edit rows come from the ONE shared card-editor shell.
+    expect(src).toContain("<CardEditorShell");
+    const shell = read("src/components/admin/banner-studio/CardEditorShell.tsx");
+    expect(shell).toMatch(/aria-label=\{`Move \$\{it\.name \|\| "card"\} up`\}/);
+    expect(shell).toContain("overflow-x-auto");
+    expect(src).not.toContain("defaultOpen");
   });
 });

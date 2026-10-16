@@ -47,11 +47,12 @@ import {
   normalizeSpecialsPresentation,
   serializeSpecialsPresentation,
   orderedVisibleWeekdays,
-  dayPresentationFor,
 } from "@/lib/specials/specials-presentation-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
+import { CardEditorShell } from "@/components/admin/banner-studio/CardEditorShell";
+import { DesignedCard } from "@/components/site/DesignedCard";
 import { cardDesign, designFromLegacy, unbindDesign } from "@/lib/cms/banner-design-core";
 
 export type SpecialsRevisionVM = {
@@ -156,6 +157,11 @@ function initialPresentation(props: Props): SpecialsPresentation {
   };
 }
 
+/** R61-S3 / R63: the first card-shaped design for a weekday (own text, unbound). */
+function newDayDesign(d: DayPresentation, engine?: WeekdayEngineCopy) {
+  return unbindDesign(cardDesign({ ratio: 0.8, ratioMobile: 1, eyebrow: true, subtitle: true }), dayWords(d, engine));
+}
+
 /** The words a weekday card shows today (overrides win over Promotions). */
 function dayWords(d: DayPresentation, engine?: WeekdayEngineCopy) {
   return {
@@ -186,6 +192,8 @@ export function SpecialsPresentationEditor(props: Props) {
   // R43: a green ✎ Edit deep link (?tab=cards|banner|hero) opens the right tab.
   const [tab, setTab] = useState<TabKey>(props.initialTab ?? "hero");
   const formRef = useRef<HTMLFormElement>(null);
+  // R63: which weekday card is open in the shared card editor.
+  const [openDay, setOpenDay] = useState<string | null>(null);
 
   const serialized = useMemo(() => serializeSpecialsPresentation(pres), [pres]);
   const publishedSerialized = useMemo(
@@ -227,6 +235,19 @@ export function SpecialsPresentationEditor(props: Props) {
         days: p.days.map((d) => ({ ...d, order: orderByWeekday.get(d.weekday) ?? d.order })),
       };
     });
+  }
+
+  // R63: opening a card turns its custom design ON by default (studio first).
+  // A design the owner switched off stays off (his choice).
+  function openDayCard(id: string | null) {
+    setOpenDay(id);
+    if (!id) return;
+    setPres((p) => ({
+      ...p,
+      days: p.days.map((d) =>
+        d.weekday === id && !d.design ? { ...d, design: newDayDesign(d, engineByDay.get(d.weekday)) } : d,
+      ),
+    }));
   }
 
   // Days in current display order for the editor rows.
@@ -436,95 +457,54 @@ export function SpecialsPresentationEditor(props: Props) {
             </p>
         </>
       ) : tab === "cards" ? (
-        <>
-          {/* Section toggle + badge style (cards-only controls). */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex items-center gap-3 rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm">
-              <input
-                type="checkbox"
-                checked={pres.showWeeklyGrid}
-                onChange={(e) => setGlobal("showWeeklyGrid", e.target.checked)}
-              />
-              <span>
-                <span className="font-semibold">Show the weekly deal cards</span>
-                <span className="block text-xs text-[var(--admin-text-muted)]">
-                  The 7 day-of-the-week explainer cards.
+        /* ── Specials cards tab: R63 — the ONE shared card-editor UI (same as
+           the home Type cards). 7 cards → the preview strip scrolls sideways. */
+        <CardEditorShell
+          icon="🗓️"
+          title="Specials — weekday cards"
+          count={`7 cards · ${visibleOrder.length} showing`}
+          dirty={dirtyVsPublished}
+          intro={
+            <>
+              One card per weekday, in page order (left to right). Click a card to design it. Prices
+              and offers come from Promotions; the custom design is yours. Nothing goes live until you
+              Publish below.
+            </>
+          }
+          emptyNote={!pres.showWeeklyGrid ? "The weekly deal cards are hidden (Card section settings below)." : "All day cards are hidden."}
+          items={orderedDays.map((day) => {
+            const engine = engineByDay.get(day.weekday);
+            const words = dayWords(day, engine);
+            return {
+              id: day.weekday,
+              name: day.weekday,
+              sub: words.title !== day.weekday ? `· ${words.title}` : undefined,
+              shown: day.visible,
+              badges: engine?.fromDatabase ? (
+                <span className="rounded-full bg-[var(--admin-accent)]/15 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
+                  published promo
                 </span>
-              </span>
-            </label>
-            <label className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm">
-              <span className="font-semibold">Offer badge style</span>
-              <select
-                value={pres.badgeStyle}
-                onChange={(e) => setGlobal("badgeStyle", e.target.value as BadgeStyle)}
-                className={`mt-2 w-full ${INPUT_CLASS}`}
-              >
-                {BADGE_STYLES.map((s) => (
-                  <option key={s} value={s}>
-                    {BADGE_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* ── Editor column: one row per weekday ────────────────────────── */}
-            <div className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                Weekday cards (top to bottom = left to right on the page)
-              </div>
-              {orderedDays.map((day, index) => {
-                const engine = engineByDay.get(day.weekday);
-                return (
-                  <div
-                    key={day.weekday}
-                    className={`rounded-[var(--admin-radius-sm)] border p-3 ${
-                      day.visible
-                        ? "border-[var(--admin-border)] bg-[var(--admin-surface)]"
-                        : "border-dashed border-[var(--admin-border)] bg-[var(--admin-surface)]/40 opacity-70"
-                    }`}
-                  >
-                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-black uppercase tracking-wide">{day.weekday}</span>
-                      {engine?.fromDatabase ? (
-                        <span className="rounded-full bg-[var(--admin-accent)]/15 px-2 py-0.5 font-semibold text-[var(--admin-accent)]">
-                          published promo
-                        </span>
-                      ) : null}
-                      <label className="ml-2 flex items-center gap-1 font-medium">
-                        <input
-                          type="checkbox"
-                          checked={day.visible}
-                          onChange={(e) => updateDay(day.weekday, { visible: e.target.checked })}
-                        />
-                        Show
-                      </label>
-                      <div className="ml-auto flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => moveDay(day.weekday, -1)}
-                          disabled={index === 0}
-                          aria-label={`Move ${day.weekday} up`}
-                          className="rounded border border-[var(--admin-border)] px-2 py-1 disabled:opacity-30"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveDay(day.weekday, 1)}
-                          disabled={index === orderedDays.length - 1}
-                          aria-label={`Move ${day.weekday} down`}
-                          className="rounded border border-[var(--admin-border)] px-2 py-1 disabled:opacity-30"
-                        >
-                          ↓
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* R61-S3: the shared Design Studio, card-shaped. Bound words:
-                        eyebrow = the day, title = deal title, small line = the offer. */}
-                    <div className="mb-3">
+              ) : null,
+              tile: day.design?.enabled ? (
+                <DesignedCard design={day.design} imageSrc={day.image ?? ""} legacy={words} label={day.weekday} />
+              ) : (
+                <ClassicDayTile weekday={day.weekday} title={words.title} offer={words.subtitle} badgeStyle={pres.badgeStyle} />
+              ),
+            };
+          })}
+          openId={openDay}
+          onOpen={openDayCard}
+          onMove={(index, dir) => {
+            const d = orderedDays[index];
+            if (d) moveDay(d.weekday, dir);
+          }}
+          onShownChange={(weekday, visible) => updateDay(weekday as SpecialsWeekday, { visible })}
+          renderEditor={(weekday) => {
+            const day = orderedDays.find((d) => d.weekday === weekday);
+            if (!day) return null;
+            const engine = engineByDay.get(day.weekday);
+            return (
+              <>
                       <DesignCard
                         mediaChoices={mediaChoices}
                         title={`Card Design Studio — ${day.weekday}`}
@@ -540,15 +520,14 @@ export function SpecialsPresentationEditor(props: Props) {
                         imageAlt=""
                         preset="section"
                         seed={{ eyebrow: day.weekday, title: day.titleOverride || engine?.title || day.weekday }}
-                        makeNew={() => unbindDesign(cardDesign({ ratio: 0.8, ratioMobile: 1, eyebrow: true, subtitle: true }), dayWords(day, engine))}
+                        makeNew={() => newDayDesign(day, engine)}
                         posts={posts}
                         onLegacyEdit={(bind, text) => {
                           if (bind === "title") updateDay(day.weekday, { titleOverride: text });
                           else if (bind === "subtitle") updateDay(day.weekday, { offerOverride: text });
                         }}
                       />
-                    </div>
-                    <BasicMode hint="classic wording overrides and card photo" defaultOpen>
+                    <BasicMode hint="classic wording overrides and card photo">
                     <div className="grid gap-2 sm:grid-cols-3">
                       <label className="text-xs">
                         <span className="text-[var(--admin-text-muted)]">Title override</span>
@@ -607,76 +586,49 @@ export function SpecialsPresentationEditor(props: Props) {
                       </p>
                     </div>
                     </BasicMode>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Preview column: as customers see it ───────────────────────── */}
-            <div className="lg:sticky lg:top-4 lg:self-start">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                As customers see it
-              </div>
-              <div className="max-h-[70vh] space-y-3 overflow-auto rounded-[var(--admin-radius-lg)] border border-white/10 bg-black p-5 text-white">
-                {!pres.showWeeklyGrid ? (
-                  <p className="text-sm text-white/60">The weekly deal cards are hidden.</p>
-                ) : visibleOrder.length === 0 ? (
-                  <p className="text-sm text-white/60">All day cards are hidden.</p>
-                ) : (
-                  visibleOrder.map((weekday) => {
-                    const day = dayPresentationFor(pres, weekday);
-                    const engine = engineByDay.get(weekday);
-                    const title = day?.titleOverride || engine?.title || weekday;
-                    const offer = day?.offerOverride || engine?.offer || "";
-                    const desc = day?.descriptionOverride || engine?.description || "";
-                    return (
-                      <div
-                        key={weekday}
-                        className="rounded-[1rem] border border-white/10 bg-[#101010] p-3"
-                      >
-                        {day?.design?.enabled ? (
-                          <p className="mb-1 text-[0.6rem] font-semibold text-[#ffd700]">🎨 custom card design (see the studio)</p>
-                        ) : null}
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-[var(--orange)]">
-                              {weekday}
-                            </p>
-                            <p className="mt-1 text-lg font-black uppercase leading-tight text-white">
-                              {title}
-                            </p>
-                          </div>
-                          {offer ? (
-                            <span
-                              className={
-                                pres.badgeStyle === "bold"
-                                  ? "rounded-full bg-[var(--orange)] px-2 py-1 text-xs font-black uppercase text-black"
-                                  : pres.badgeStyle === "minimal"
-                                    ? "rounded-full border border-white/15 px-2 py-1 text-xs font-black uppercase text-white/85"
-                                    : "rounded-full border border-[var(--orange)]/60 bg-black/55 px-2 py-1 text-xs font-black uppercase text-[var(--orange)]"
-                              }
-                            >
-                              {offer.replace(/\s*off$/i, "")}
-                            </span>
-                          ) : null}
-                        </div>
-                        {desc ? <p className="mt-2 text-sm text-zinc-300">{desc}</p> : null}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                <a href="/specials" target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
-                  View live /specials ↗
-                </a>
-                <Link href="/admin/promotions" className="text-[var(--admin-accent)] hover:underline">
-                  Edit prices &amp; offers in Promotions →
-                </Link>
-              </div>
-            </div>
+              </>
+            );
+          }}
+          footer={
+            <details className="rounded-lg border border-white/10 p-3">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Card section settings <span className="font-normal opacity-60">(show the cards + classic offer badge style)</span>
+              </summary>
+              <div className="mt-4">
+          {/* Section toggle + badge style (cards-only controls). */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex items-center gap-3 rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={pres.showWeeklyGrid}
+                onChange={(e) => setGlobal("showWeeklyGrid", e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold">Show the weekly deal cards</span>
+                <span className="block text-xs text-[var(--admin-text-muted)]">
+                  The 7 day-of-the-week explainer cards.
+                </span>
+              </span>
+            </label>
+            <label className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm">
+              <span className="font-semibold">Offer badge style</span>
+              <select
+                value={pres.badgeStyle}
+                onChange={(e) => setGlobal("badgeStyle", e.target.value as BadgeStyle)}
+                className={`mt-2 w-full ${INPUT_CLASS}`}
+              >
+                {BADGE_STYLES.map((s) => (
+                  <option key={s} value={s}>
+                    {BADGE_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </>
+              </div>
+            </details>
+          }
+        />
       ) : (
         /* ── Specials banner tab (Today's Deal): R63 — same order as the home
            carousel editor; product-grid settings collapsed underneath. */
@@ -934,6 +886,29 @@ export function SpecialsPresentationEditor(props: Props) {
           )
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** The classic (no custom design) weekday tile for the preview strip. */
+function ClassicDayTile({ weekday, title, offer, badgeStyle }: { weekday: string; title: string; offer: string; badgeStyle: BadgeStyle }) {
+  return (
+    <div className="flex aspect-[4/5] flex-col justify-between rounded-lg border border-white/10 bg-[#101010] p-2 text-white">
+      <p className="text-[0.55rem] font-black uppercase tracking-[0.18em] text-[var(--orange)]">{weekday}</p>
+      <p className="line-clamp-3 text-xs font-black uppercase leading-tight">{title}</p>
+      {offer ? (
+        <span
+          className={`self-start rounded-full px-1.5 py-0.5 text-[0.55rem] font-black uppercase ${
+            badgeStyle === "bold"
+              ? "bg-[var(--orange)] text-black"
+              : badgeStyle === "minimal"
+                ? "border border-white/15 text-white/85"
+                : "border border-[var(--orange)]/60 bg-black/55 text-[var(--orange)]"
+          }`}
+        >
+          {offer.replace(/\s*off$/i, "")}
+        </span>
+      ) : <span />}
     </div>
   );
 }
