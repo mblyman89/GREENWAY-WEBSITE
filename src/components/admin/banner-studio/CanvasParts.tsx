@@ -14,7 +14,16 @@ export { BannerBeam } from "@/components/site/DesignMotion";
 export { BannerSmoke } from "@/components/site/smoke/BannerSmoke";
 export { BannerPicture } from "@/components/site/BannerPicture";
 export { StudioBoxText } from "@/components/site/LiveText";
-export { RevealWords } from "@/components/site/smoke/RevealWords";
+import { BannerEntrances } from "@/components/site/BannerEntrances";
+import { entrancePlan } from "@/lib/cms/banner-enter-core";
+import type { BannerDesign } from "@/lib/cms/banner-design-core";
+
+/** R59: Studio plays entrances + the intro curtain only on ▶ replay (never while editing). */
+export function StudioEntrances({ design, replayKey }: { design: BannerDesign; replayKey: number }) {
+  const plan = entrancePlan(design);
+  if (!plan.length && !design.intro) return null;
+  return <BannerEntrances plan={plan} intro={design.intro} attr="data-studio-id" replayKey={replayKey} auto={false} />;
+}
 import { gapPx, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 
 /** R57: measure every other item on the canvas (in % of the frame) for smart guides. */

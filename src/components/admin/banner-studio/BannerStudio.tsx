@@ -23,6 +23,7 @@ import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import { ShapePanel } from "./ShapePanel";
 import { SmokePanel } from "./SmokePanel";
+import { AnimatePanel } from "./AnimatePanel";
 import { LayersPanel } from "./LayersPanel";
 import { CustomFontFaces } from "@/components/admin/fonts/CustomFontUpload";
 import { ArrangeBar } from "./ArrangeBar";
@@ -31,7 +32,7 @@ import type { PickerPost } from "./LinkPicker";
 import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
 import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
 
-type Tab = "text" | "buttons" | "shapes" | "smoke" | "layers" | "picture" | "checks";
+type Tab = "text" | "buttons" | "shapes" | "animate" | "smoke" | "layers" | "picture" | "checks";
 const HISTORY_MAX = 60;
 const GROUP_MS = 600;
 
@@ -61,6 +62,12 @@ export function BannerStudio({
   const deviceSrc = imageSrc;
   const [tab, setTab] = useState<Tab>("text");
   const [replayKey, setReplayKey] = useState(0);
+  // R59: entrance controls anywhere in the Studio ask for a replay via this event.
+  useEffect(() => {
+    const on = () => setReplayKey((k) => k + 1);
+    window.addEventListener("gw-studio-replay", on);
+    return () => window.removeEventListener("gw-studio-replay", on);
+  }, []);
   const [selection, setSelection] = useState<StudioSelection>(null);
   // R56: shift-click group (2+ items); empty = single selection only.
   const [group, setGroup] = useState<ItemRef[]>([]);
@@ -344,6 +351,7 @@ export function BannerStudio({
         {tabBtn("text", "✏️ Text")}
         {tabBtn("buttons", "🔘 Buttons")}
         {tabBtn("shapes", "◆ Shapes & icons")}
+        {tabBtn("animate", "✨ Animate")}
         {tabBtn("smoke", "💨 Smoke & fog")}
         {tabBtn("layers", "☰ Layers")}
         {tabBtn("picture", "🖼 Picture & shade")}
@@ -356,6 +364,8 @@ export function BannerStudio({
           <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "shapes" ? (
           <ShapePanel design={design} device={device} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
+        ) : tab === "animate" ? (
+          <AnimatePanel design={design} onChange={change} onSelect={select} />
         ) : tab === "smoke" ? (
           <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={() => setReplayKey((k) => k + 1)} />
         ) : tab === "layers" ? (

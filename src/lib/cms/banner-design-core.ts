@@ -22,6 +22,7 @@ import { normalizeCurve } from "./banner-curve-core";
 import { normalizeLive, type LiveText } from "./banner-live-core";
 import { normalizeReveal, normalizeSmoke, type SmokeLayer } from "./banner-atmos-core";
 import { imageFxFilters, normalizeImageFx, type ImageFx } from "./banner-image-core";
+import { normalizeEnter, normalizeIntro, type Enter, type Intro } from "./banner-enter-core";
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
@@ -236,6 +237,8 @@ export type DesignTextBox = {
   curve?: number;
   /** R58: countdown / auto deal badge — `text` becomes a template ({left}, {offer}…). */
   live?: LiveText;
+  /** R59: entrance animation; absent = just there. */
+  enter?: Enter;
 } & TextMotionFields;
 
 export type DesignButton = {
@@ -261,6 +264,8 @@ export type DesignButton = {
   locked?: boolean;
   /** R56: rotation in degrees; absent = upright. */
   rotate?: number;
+  /** R59: entrance animation; absent = just there. */
+  enter?: Enter;
 } & ButtonFx;
 
 export type DesignOverlay = {
@@ -312,6 +317,8 @@ export type BannerDesign = {
   smoke?: SmokeLayer[];
   /** R58: seconds the words + buttons wait before fading in (after the smoke). */
   reveal?: number;
+  /** R59: "start blank, then reveal" curtain the smoke plays over. Written only when used. */
+  intro?: Intro;
   /** R55: decorative shapes (banner-elements-core). Written only when there are any. */
   elements?: DesignElement[];
   /** R55: layer paint order, back → front (ids). Written only after the owner reorders. */
@@ -516,6 +523,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
     ...(normalizeCurve(raw.curve) ? { curve: normalizeCurve(raw.curve) } : {}),
     ...(normalizeLive(raw.live) ? { live: normalizeLive(raw.live) } : {}),
     ...normalizeTextMotion(raw),
+    ...enterField(raw.enter),
   };
 }
 
@@ -563,7 +571,14 @@ export function normalizeButton(raw: unknown, fallbackId: string): DesignButton 
     ...rotateField(raw.rotate),
     // R56-S4: icon / gradient / shadow / hover / attention / corner — only when used.
     ...normalizeButtonFx(raw, normalizeHex(raw.bg, d.bg)),
+    ...enterField(raw.enter),
   };
+}
+
+/** R59: entrance written only when set. */
+function enterField(v: unknown): { enter?: Enter } {
+  const e = normalizeEnter(v);
+  return e ? { enter: e } : {};
 }
 
 /** R56: rotation is written only when non-zero (older designs stay byte-identical). */
@@ -646,6 +661,8 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   if (reveal) out.reveal = reveal;
   const ifx = normalizeImageFx(im.fx);
   if (ifx) out.image.fx = ifx;
+  const intro = normalizeIntro(raw.intro, safeImageSrc);
+  if (intro) out.intro = intro;
   return out;
 }
 
@@ -1564,6 +1581,9 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
     ok(boxStyle(rb.boxes[0]).rotate === "-12deg" && boxStyle(rb.boxes[1]).rotate === undefined && buttonStyle(rb.buttons[0]).rotate === "180deg", "R56: rotate style");
     const cv = normalizeDesign({ boxes: [{ id: "c", curve: 250, strokeWidth: 3 }, { id: "f", curve: 0 }] })!;
     ok(normalizeDesign({ boxes: [{ id: "l", live: { mode: "deal" } }] })!.boxes[0].live?.promo === "today" && !("live" in cv.boxes[0]), "R58: live only when set");
+    const en = normalizeDesign({ boxes: [{ id: "a", enter: { fx: "pop" } }, { id: "b" }], buttons: [{ id: "c", href: "/menu", label: "Shop", enter: { fx: "nope" } }], intro: { color: "#000", hold: 2, out: "iris", dur: 1 } })!;
+    ok(en.boxes[0].enter?.fx === "pop" && !("enter" in en.boxes[1]) && !("enter" in en.buttons[0]) && en.intro?.out === "iris", "R59: entrance + intro only when set");
+    ok(!("intro" in normalizeDesign({ intro: { color: "bad" } })!), "R59: bad intro dropped");
     ok(cv.boxes[0].curve === 100 && !("curve" in cv.boxes[1]), "R58: curve only when set, clamped");
     ok(curvedBoxStyle(cv.boxes[0]).WebkitTextStroke === undefined && curvedBoxStyle(cv.boxes[0]).left === boxStyle(cv.boxes[0]).left, "R58: curved holder keeps position, drops paint");
     const withEl = { ...rb, elements: [{ ...(normalizeDesign({ elements: [{ id: "s", shape: "star" }] })!.elements ?? [])[0]! }] };

@@ -48,7 +48,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { BannerBeam, BannerPicture, BannerSmoke, StudioBoxText, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
+import { BannerBeam, BannerPicture, BannerSmoke, StudioBoxText, StudioEntrances, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
@@ -506,7 +506,7 @@ export function StudioCanvas({
               })}
 
               {design.smoke ? <BannerSmoke layers={design.smoke} replayKey={replayKey} /> : null}
-              {design.reveal && replayKey ? <RevealWords seconds={design.reveal} replayKey={replayKey} /> : null}
+              <StudioEntrances design={design} replayKey={replayKey} />
               {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
               <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: device === "mobile" ? design.frame.heightMobile : design.frame.height }} />
             </div>

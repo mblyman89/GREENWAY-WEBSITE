@@ -26,6 +26,7 @@
  */
 
 import { elementMotion, normalizeElementMotion, type ElementMotionFields } from "./banner-motion-core";
+import { normalizeEnter, type Enter } from "./banner-enter-core";
 
 export const MAX_ELEMENTS = 12;
 
@@ -115,6 +116,8 @@ export type DesignElement = {
   /** R56: soft drop shadow (blur px, 0 = off) in any colour. */
   shadow?: number;
   shadowColor?: string;
+  /** R59: entrance animation; absent = just there. */
+  enter?: Enter;
 } & ElementMotionFields;
 
 export type ElementGradient = { from: string; to: string; angle: number };
@@ -261,6 +264,8 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
   }
   // R57: micro-interactions (breathe/glow/float/spin/wiggle/blob/morph, orbit spark, hover).
   Object.assign(el, normalizeElementMotion(raw, el.shape, isIcon));
+  const en = normalizeEnter(raw.enter);
+  if (en) el.enter = en;
   return el;
 }
 

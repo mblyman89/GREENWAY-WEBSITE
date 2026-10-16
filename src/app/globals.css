@@ -1028,8 +1028,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ---------------------------------------------------------------------------
  * R58-S1 — smoke / fog / haze canvases (banner-atmos-core, BannerSmokeClient)
- * and "words fade in after the smoke" (.gw-rvp = words start hidden; the
- * RevealWords client component removes it on mount, then animates them in).
+ * ("words fade in after the smoke" moved to the R59 entrances block below).
  * ------------------------------------------------------------------------- */
 .gw-smoke {
   position: absolute;
@@ -1039,12 +1038,27 @@ h1, h2, h3, h4, h5, h6 {
   pointer-events: none;
   transition: opacity 400ms ease;
 }
-.gw-rvp > .gw-dbox:not([aria-hidden="true"]) {
+
+/* ---------------------------------------------------------------------------
+ * R59-S2/S3 — entrances + intro curtain (banner-enter-core, BannerEntrances).
+ * .gw-enp = planned items start hidden until the island starts their
+ * animations (no flash); reduced motion shows everything and skips the curtain.
+ * ------------------------------------------------------------------------- */
+.gw-enp [data-gw-enter] {
   visibility: hidden;
 }
+.gw-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  .gw-rvp > .gw-dbox:not([aria-hidden="true"]) {
+  .gw-enp [data-gw-enter] {
     visibility: visible;
+  }
+  .gw-intro {
+    display: none;
   }
 }
 

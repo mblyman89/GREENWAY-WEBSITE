@@ -20,7 +20,8 @@ import { BannerMedia } from "./BannerMedia";
 import { BannerPicture } from "./BannerPicture";
 import { BannerBeam, ElementVisual } from "./DesignMotion";
 import { BannerSmoke } from "./smoke/BannerSmoke";
-import { RevealWords } from "./smoke/RevealWords";
+import { BannerEntrances } from "./BannerEntrances";
+import { entrancePlan } from "@/lib/cms/banner-enter-core";
 import { ButtonInner } from "./ButtonInner";
 import { CurvedText } from "./CurvedText";
 import { LiveBox } from "./LiveText";
@@ -102,6 +103,10 @@ export function DesignedBanner({
     const n = z?.get(id);
     return n ? { ...style, zIndex: String(n) } : style;
   };
+  // R59: entrances + intro curtain (and R58 "words wait for the smoke").
+  const plan = entrancePlan(design);
+  const entering = new Set(plan.map((p) => p.id));
+  const en = (id: string): Record<string, string> => (entering.has(id) ? { "data-gw-enter": id } : {});
   const bindSuffix = (b: DesignTextBox) =>
     b.bind === "title" ? "title" : b.bind === "eyebrow" ? "eyebrow" : b.bind === "subtitle" ? "subtitle" : null;
 
@@ -117,7 +122,7 @@ export function DesignedBanner({
       ))}
       <div
         style={css(frameStyle(design))}
-        className={`gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30${design.reveal ? " gw-rvp" : ""}`}
+        className={`gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30${plan.length ? " gw-enp" : ""}`}
         {...(editable && owner ? { "data-gw-design-frame": "true", "data-gw-design-owner": owner } : {})}
       >
         {phoneSrc ? (
@@ -166,7 +171,7 @@ export function DesignedBanner({
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
         {/* R58: smoke / fog / haze (lazy, client-only) + words that fade in after it. */}
         {design.smoke ? <BannerSmoke layers={design.smoke} /> : null}
-        {design.reveal ? <RevealWords seconds={design.reveal} /> : null}
+        {plan.length || design.intro ? <BannerEntrances plan={plan} intro={design.intro} /> : null}
         {(design.elements ?? []).map((el) =>
           el.hidden ? null : (
             <div
@@ -175,6 +180,7 @@ export function DesignedBanner({
               style={css(withZ(elementStyle(el), el.id))}
               className={`gw-dbox${el.hideOnMobile ? " gw-hide-sm" : ""} ${elementHoverClass(el)}`.trim()}
               {...(editable ? { "data-gw-design-element": el.id } : {})}
+              {...en(el.id)}
             >
               <ElementVisual el={el} />
             </div>
@@ -189,13 +195,14 @@ export function DesignedBanner({
           const boxCss = css(withZ(b.curve ? curvedBoxStyle(b) : boxStyle(b), b.id));
           const boxCls = `gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim();
           // R58-S3: countdown / auto deal badge — a small client island ticks it.
-          if (b.live) return <LiveBox key={b.id} as={Tag} box={b} text={text} style={boxCss} className={boxCls} attrs={editable ? { "data-gw-design-box": b.id } : undefined} />;
+          if (b.live) return <LiveBox key={b.id} as={Tag} box={b} text={text} style={boxCss} className={boxCls} attrs={{ ...(editable ? { "data-gw-design-box": b.id } : {}), ...en(b.id) }} />;
           return (
             <Tag
               key={b.id}
               style={boxCss}
               className={boxCls}
               {...(editable ? { "data-gw-design-box": b.id } : {})}
+              {...en(b.id)}
               {...(editable && blockKeyPrefix && suffix
                 ? { "data-gw-block": `${blockKeyPrefix}.${suffix}`, "data-gw-editable": "true" }
                 : {})}
@@ -209,7 +216,7 @@ export function DesignedBanner({
           const style = css(withZ(buttonStyle(btn), btn.id));
           const fxc = buttonFxClass(btn);
           const className = `gw-dbox gw-dbtn${btn.hideOnMobile ? " gw-hide-sm" : ""}${fxc ? ` ${fxc}` : ""}`;
-          const hooks = editable ? { "data-gw-design-button": btn.id } : {};
+          const hooks = { ...(editable ? { "data-gw-design-button": btn.id } : {}), ...en(btn.id) };
           const external = linkKindOf(btn.href) === "external" || linkKindOf(btn.href) === "contact";
           if (external || btn.newTab) {
             return (
