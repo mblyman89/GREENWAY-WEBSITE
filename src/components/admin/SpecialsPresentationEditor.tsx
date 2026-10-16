@@ -237,9 +237,11 @@ export function SpecialsPresentationEditor(props: Props) {
       <nav className="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3">
         {(
           [
-            { key: "hero" as const, label: "Top hero" },
-            { key: "cards" as const, label: "Weekly deal cards" },
-            { key: "banner" as const, label: "Today's Deal banner & products" },
+            // R61 S2 (roadmap §15): Main banner | Specials banner | Specials cards.
+            // Keys are unchanged so every ?tab= deep link still lands.
+            { key: "hero" as const, label: "Main banner" },
+            { key: "banner" as const, label: "Specials banner" },
+            { key: "cards" as const, label: "Specials cards" },
           ]
         ).map((t) => (
           <button

@@ -185,8 +185,9 @@ describe("the ONE editor is tabbed, uses the image helper, and is dark-themed", 
   it("has a tab system (weekly cards vs. Today's Deal banner & products)", () => {
     const src = read("src/components/admin/SpecialsPresentationEditor.tsx");
     expect(src).toContain("setTab");
-    expect(src).toContain("Weekly deal cards");
-    expect(src).toContain("Today's Deal banner & products");
+    // R61 S2 (roadmap §15): owner-named tabs.
+    expect(src).toContain('label: "Specials cards"');
+    expect(src).toContain('label: "Specials banner"');
   });
 
   it("uses ContentImageField for the banner + count + alignment controls", () => {
@@ -379,15 +380,15 @@ describe("SLICE 122 (SET-3): the ONE editor now has 3 tabs in page order", () =>
     expect(src).toContain('useState<TabKey>(props.initialTab ?? "hero")'); // R43: ?tab= deep link, still defaults to hero
   });
 
-  it("the tab bar is in public-page order: Top hero → cards → banner", () => {
+  it("the tab bar is in the owner's order (R61 §15): Main banner → Specials banner → Specials cards", () => {
     const heroIdx = src.indexOf('key: "hero"');
     const cardsIdx = src.indexOf('key: "cards"');
     const bannerIdx = src.indexOf('key: "banner"');
     expect(heroIdx).toBeGreaterThan(-1);
     expect(cardsIdx).toBeGreaterThan(-1);
     expect(bannerIdx).toBeGreaterThan(-1);
-    expect(heroIdx).toBeLessThan(cardsIdx);
-    expect(cardsIdx).toBeLessThan(bannerIdx);
+    expect(heroIdx).toBeLessThan(bannerIdx);
+    expect(bannerIdx).toBeLessThan(cardsIdx);
   });
 
   it("the hero tab has the moved hero image field + placement controls", () => {

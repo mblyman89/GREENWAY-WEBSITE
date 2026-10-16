@@ -100,10 +100,17 @@ export default async function AdminLoyaltyPage({
     published?: string;
     restored?: string;
     error?: string;
+    tab?: string;
+    block?: string;
   }>;
 }) {
   await requirePermission("content.edit");
   const sp = await searchParams;
+  // R61 S2 (roadmap §15): the hero banner editor has its own tab (shown first);
+  // the page wording + program terms are the second tab.
+  // ✎ Edit links for a wording block (?block=loyalty.…) land on the wording tab.
+  const tab: "banner" | "wording" =
+    sp.tab === "wording" || sp.error === "consent_empty" || (sp.tab !== "banner" && !!sp.block) ? "wording" : "banner";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -263,6 +270,29 @@ export default async function AdminLoyaltyPage({
           </div>
         )}
 
+        <div className="flex flex-wrap gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
+          {(
+            [
+              { key: "banner", label: "Main banner" },
+              { key: "wording", label: "Page wording & terms" },
+            ] as const
+          ).map((t) => (
+            <a
+              key={t.key}
+              href={`/admin/loyalty-page?tab=${t.key}`}
+              className={
+                tab === t.key
+                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
+              }
+            >
+              {t.label}
+            </a>
+          ))}
+        </div>
+
+        {tab === "banner" ? (
+          <>
         {/* SLICE 123 (LOY-1): the hero banner editor (image + overlay text).
             R43: id="loyalty-hero" is the green ✎ Edit landing spot. */}
         <section id="loyalty-hero" className="scroll-mt-4 space-y-3">
@@ -293,8 +323,8 @@ export default async function AdminLoyaltyPage({
           )}
         </section>
 
-        <div className="border-t border-[var(--admin-border)]" />
-
+          </>
+        ) : (
         <LoyaltyPageEditor
           sections={sections}
           liveTerms={liveTerms}
@@ -303,6 +333,7 @@ export default async function AdminLoyaltyPage({
           restoreAction={restoreLoyaltyRevisionAction}
           consentRecording={consentRecording}
         />
+        )}
       </div>
     </div>
   );
