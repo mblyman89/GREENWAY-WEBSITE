@@ -24,6 +24,24 @@ import {
   publishAboutSideAction,
 } from "../about-values-actions";
 import { AboutSidePanelEditor } from "@/components/admin/about/AboutSidePanelEditor";
+import { VendorCenterEditor } from "@/components/admin/vendors/VendorCenterEditor";
+import {
+  saveVendorCenterDraftAction,
+  publishVendorCenterAction,
+  resetVendorCenterAction,
+} from "../vendors-center-actions";
+import {
+  centerFromLegacy,
+  parseVendorCenter,
+  serializeVendorCenter,
+  VENDOR_CENTER_BLOCK,
+} from "@/lib/vendors/vendor-center-core";
+import {
+  resolveVendorChannels,
+  VENDOR_EDITABLE_CONTENT_KEYS,
+  VENDOR_OUTREACH_SUBJECT_KEY,
+} from "@/lib/vendors/vendor-relations-core";
+import { getContentValues } from "@/lib/cms/render-content";
 import { ABOUT_SIDE_BLOCK } from "@/lib/about/about-side-core";
 import { ensureContentBlocksSeeded, getContentBlock } from "@/lib/cms/content-store";
 import { listSections } from "@/lib/cms/page-sections-store";
@@ -96,6 +114,19 @@ const HOME_TAB_LABEL: Record<HomeTab, string> = {
 /** The fixed home banner each single-banner tab shows. */
 const HOME_TAB_KEY: Partial<Record<HomeTab, string>> = { types: "home.category", brands: "home.brand" };
 
+// R64: the Vendors editor tabs (same pattern as Home): the two banners each
+// get a tab, the center section gets its own full editor, and "Wording &
+// more" holds the older per-field wording plus any extra banners.
+const VENDOR_TABS = ["grow", "center", "brands", "more"] as const;
+type VendorTab = (typeof VENDOR_TABS)[number];
+const VENDOR_TAB_LABEL: Record<VendorTab, string> = {
+  grow: "Top banner",
+  center: "Center section",
+  brands: "Brands banner",
+  more: "Wording & more banners",
+};
+const VENDOR_TAB_KEY: Partial<Record<VendorTab, string>> = { grow: "vendors.grow", brands: "vendors.brands" };
+
 function flashFor(sp: Record<string, string | undefined>): Flash {
   if (sp.error) return { tone: "error", text: decodeURIComponent(sp.error) };
   if (sp.scheduled) return { tone: "ok", text: decodeURIComponent(sp.scheduled) };
@@ -133,13 +164,15 @@ export default async function PageBuilderPage({
   // Old deep links keep working: ?tab=carousel = Main banner, ?tab=sections =
   // every home section on one screen (the pre-R61 view, so #section-<id>
   // anchors always land). FAQ keeps (sections | qanda); other pages: sections.
-  let tab: HomeTab | "sections" | "qanda" | "side" = isHome ? "carousel" : "sections";
+  const isVendors = slug === "vendors";
+  let tab: HomeTab | VendorTab | "sections" | "qanda" | "side" = isHome ? "carousel" : isVendors ? "grow" : "sections";
   if (isHome) {
     const want = sp.tab === "main" ? "carousel" : sp.tab;
     if (want && (HOME_TABS as readonly string[]).includes(want)) tab = want as HomeTab;
     else if (want === "sections") tab = "sections";
   } else if (isFaq && sp.tab === "qanda") tab = "qanda";
   else if (isAbout && sp.tab === "side") tab = "side";
+  else if (isVendors && sp.tab && (VENDOR_TABS as readonly string[]).includes(sp.tab)) tab = sp.tab as VendorTab;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -258,6 +291,24 @@ export default async function PageBuilderPage({
           </div>
         ) : null}
 
+        {isVendors ? (
+          <div className="flex flex-wrap gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
+            {VENDOR_TABS.map((t) => (
+              <a
+                key={t}
+                href={`/admin/pages/vendors?tab=${t}`}
+                className={
+                  tab === t
+                    ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                    : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
+                }
+              >
+                {VENDOR_TAB_LABEL[t]}
+              </a>
+            ))}
+          </div>
+        ) : null}
+
         {isAbout ? (
           <div className="flex gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
             {([
@@ -298,7 +349,7 @@ export default async function PageBuilderPage({
           Content, just scoped to this page. Additive only: the blocks also
           remain in Site Content until a later mini-slice removes them there.
         */}
-        {PAGES_WITH_WORDING.has(slug) && tab !== "side" ? (
+        {PAGES_WITH_WORDING.has(slug) && tab !== "side" && (!isVendors || tab === "more") ? (
           <PageWordingCard slug={slug} previewPath={config.previewPath} />
         ) : null}
 
@@ -320,7 +371,9 @@ export default async function PageBuilderPage({
           />
         ) : null}
 
-        {isAbout && tab === "side" ? (
+        {isVendors && tab === "center" ? (
+          <VendorCenterTab />
+        ) : isAbout && tab === "side" ? (
           aboutSideBlock ? (
             <AboutSidePanelEditor
               draftJson={aboutSideBlock.draft_value ?? null}
@@ -346,6 +399,7 @@ export default async function PageBuilderPage({
             mediaChoices={mediaChoices}
             hasSeeds={seedsForPage(slug).length > 0}
             homeTab={isHome && tab !== "qanda" ? (tab as HomeTab | "sections") : undefined}
+            vendorTab={isVendors ? (tab as VendorTab) : undefined}
           />
         )}
       </div>
@@ -458,6 +512,46 @@ async function TypeCardsTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// R64: Vendors "Center section" tab
+// ---------------------------------------------------------------------------
+
+async function VendorCenterTab() {
+  let block = await getContentBlock(VENDOR_CENTER_BLOCK);
+  if (!block && (await ensureContentBlocksSeeded()) > 0) block = await getContentBlock(VENDOR_CENTER_BLOCK);
+  if (!block) {
+    return <p className="text-sm text-[var(--admin-gold)]">The center section block isn&apos;t set up yet. Reload this page to create it.</p>;
+  }
+  const draft = parseVendorCenter(block.draft_value);
+  const published = parseVendorCenter(block.published_value);
+  // Start from the saved draft (the draft always mirrors the latest save /
+  // publish / reset), else exactly what the page shows from the older
+  // per-field wording.
+  let initial = draft;
+  if (!initial) {
+    const copy = await getContentValues(["vendors.outreach.heading", "vendors.outreach.body", ...VENDOR_EDITABLE_CONTENT_KEYS]);
+    initial = centerFromLegacy({
+      heading: copy["vendors.outreach.heading"],
+      body: copy["vendors.outreach.body"],
+      outreachSubject: copy[VENDOR_OUTREACH_SUBJECT_KEY],
+      channels: resolveVendorChannels(copy),
+    });
+  }
+  const savedJson = draft ? serializeVendorCenter(draft) : "";
+  const publishedJson = published ? serializeVendorCenter(published) : "";
+  return (
+    <VendorCenterEditor
+      initial={initial}
+      isCustom={!!draft}
+      savedJson={savedJson}
+      publishedJson={publishedJson}
+      saveDraftAction={saveVendorCenterDraftAction}
+      publishAction={publishVendorCenterAction}
+      resetAction={resetVendorCenterAction}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sections tab (generic page_sections)
 // ---------------------------------------------------------------------------
 
@@ -467,6 +561,7 @@ async function SectionsTab({
   mediaChoices,
   hasSeeds,
   homeTab,
+  vendorTab,
 }: {
   slug: string;
   cap: number;
@@ -474,6 +569,8 @@ async function SectionsTab({
   hasSeeds: boolean;
   /** R61 S2: which Home tab is showing (undefined on other pages). */
   homeTab?: HomeTab | "sections";
+  /** R64: which Vendors banner tab is showing. */
+  vendorTab?: VendorTab;
 }) {
   const allSections = await listSections(slug);
   const isHome = slug === "home";
@@ -495,14 +592,15 @@ async function SectionsTab({
   );
   // R61 S2: Types / Brands tabs show just their banner; "More" shows the extra
   // banners (not the two fixed ones); legacy ?tab=sections shows all of them.
-  const fixedKey = homeTab ? HOME_TAB_KEY[homeTab as HomeTab] : undefined;
+  const fixedKey = homeTab ? HOME_TAB_KEY[homeTab as HomeTab] : vendorTab ? VENDOR_TAB_KEY[vendorTab] : undefined;
+  const fixedKeys: string[] = vendorTab ? Object.values(VENDOR_TAB_KEY) : Object.values(HOME_TAB_KEY);
   const sections = fixedKey
     ? nonConfig.filter((s) => s.section_key === fixedKey)
-    : homeTab === "more"
-      ? nonConfig.filter((s) => !Object.values(HOME_TAB_KEY).includes(s.section_key))
+    : homeTab === "more" || vendorTab === "more"
+      ? nonConfig.filter((s) => !fixedKeys.includes(s.section_key))
       : nonConfig;
   const singleBanner = !!fixedKey;
-  const returnTab = isHome ? (homeTab ?? "sections") : undefined;
+  const returnTab = isHome ? (homeTab ?? "sections") : vendorTab;
   const dailyDealsCount = readHomeCardCount(
     homeSettingsRow?.settings,
     DAILY_DEALS_COUNT_KEY,
@@ -566,7 +664,7 @@ async function SectionsTab({
           title={singleBanner ? "This banner isn’t set up yet" : "No editable sections yet"}
           description={
             singleBanner
-              ? "Open the “More banners & settings” tab and click “Load starter sections” to bring in the homepage banners, then come back here."
+              ? `Open the “${vendorTab ? VENDOR_TAB_LABEL.more : HOME_TAB_LABEL.more}” tab and click “Load starter sections” to bring in this page's banners, then come back here.`
               : hasSeeds
               ? "Click “Load starter sections” to bring in this page's current banners, or “+ Add section” to create one."
               : "Click “+ Add section” to create one."

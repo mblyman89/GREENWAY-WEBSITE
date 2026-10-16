@@ -42,6 +42,7 @@ import {
 } from "@/lib/vendors/vendor-relations-core";
 import { BLOG_CONTENT_BLOCKS } from "@/lib/blog/blog-content-core";
 import { LOYALTY_LOGO_BLOCK, defaultLoyaltyLogo, serializeLoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
+import { VENDOR_CENTER_BLOCK } from "@/lib/vendors/vendor-center-core";
 import { ABOUT_SIDE_BLOCK, defaultAboutSide, serializeAboutSide } from "@/lib/about/about-side-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
@@ -408,6 +409,18 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
   },
   ...medicalCopyBlockSeeds(),
   // ---- Vendors -------------------------------------------------------------
+  {
+    // R64: the whole center section (heading, paragraph, buttons, contact
+    // cards). Blank on purpose: while blank the page renders the older
+    // per-field blocks below exactly as before.
+    block_key: VENDOR_CENTER_BLOCK,
+    page: "vendors",
+    section: "center",
+    label: "Vendors \u2014 center section",
+    help_text: "The outreach container between the two banners. Edited on the Vendors page editor's \u201cCenter section\u201d tab.",
+    field_type: "richjson",
+    defaultValue: "",
+  },
   {
     block_key: "vendors.outreach.heading",
     page: "vendors",
