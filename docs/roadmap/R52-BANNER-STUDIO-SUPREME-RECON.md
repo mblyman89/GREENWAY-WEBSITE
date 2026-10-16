@@ -504,3 +504,80 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   - wisps from a point (joint / pipe / bong): medium
   - realistic exhale plume: medium-hard (WebGPU path plus fallback)
 - **Risks:** mobile battery/GPU use (one shader per visible banner at most); Android WebGPU gaps; licence and telemetry, which our own WebGL avoids.
+
+## 15. R58: what shipped (4 slices), the shadcn/21st.dev decision, and the editor restructure for next round
+
+### R58-S1: smoke, fog, haze, bong hits and the word reveal (new **Smoke** tab)
+- **One-click presets:** Joint / blunt smoke, Pipe / bowl smoke, Bong hit blown across, Psychedelic cloud (rainbow), Spooky fog (bottom), Green fog, Dreamy haze.
+- **Four layer kinds, up to 4 per banner:**
+  - rising fog
+  - haze
+  - smoke wisp (from a point you click: the joint tip, the bowl)
+  - bong hit / exhale (a cloud blown across the banner)
+- **Per-layer controls:** colour, second colour, rainbow, amount, size, direction, speed, front/behind text, one-time, push smoke with the mouse, phone position and hide on phones.
+- **Engine:**
+  - Fog, haze and wisps use our own ~6 KB WebGL2 fragment shader (domain-warped fbm). It works on phones and needs no three.js.
+  - The bong hit uses shaders.com `Smoke` (a real stable-fluids simulation, WebGPU, MIT). It loads lazily, only when a banner has a hit AND the browser has WebGPU.
+  - With no WebGPU, the hit falls back to our WebGL2 plume. With no WebGL2, there's no smoke and the banner is unchanged.
+- **Word reveal:** with a hit or psychedelic preset, the words fade in after the cloud (`reveal` seconds).
+- **Carousel:**
+  - Plays only while the slide is shown, on screen, and the tab is visible.
+  - One-time hits replay each time the slide comes back.
+  - Reduced motion shows a still frame of fog/haze with no hit, and the words appear at once.
+
+### R58-S2: curved text
+- Any text box gets a **Curve** slider (−100 to +100) plus presets: Straight, Gentle arch, Arch, Ring, Smile, Deep smile.
+- It renders as an SVG textPath with separate desktop and phone geometry, swapped by container query. No JS, SSR-safe, and the text stays readable to screen readers.
+- Gradient, outline and shadow effects carry over onto the curve.
+
+### R58-S3: countdown and auto badges
+- **Countdown:**
+  - "Ends tonight" counts to closing (store time, Pacific), or you count to any date/time.
+  - Tokens: `{left}` `{clock}` `{ends}`.
+  - You choose the expired text, or hide the badge when it ends.
+- **Auto (deal) badges:**
+  - `{offer}` `{deal}` `{ends}` are bound to the same published promotion rules the cart uses: today's flash deal, then the weekday deal, then always-on, by priority.
+  - You can pin a specific promotion.
+  - The badge hides itself when no deal is running.
+- **Behaviour:**
+  - Hydration-safe placeholders.
+  - One shared 1-second clock that pauses in hidden tabs.
+  - One-click "Live badges" presets in the Shapes tab.
+
+### R58-S4: bigger libraries, all searchable and scrollable
+- **Shapes:** 8 → **30**. New: pentagon, hexagon, octagon, sparkle star, 6-point star, seal, heart, cloud, speech bubble, ribbon, price tag, shield, plus, chevron, slant box, trapezoid, lightning, drop, moon, half circle, double arrow, ring. **17 can morph.**
+- **Icons:** 45 → **242** Phosphor icons in 10 categories, with search keywords and 3 styles.
+- **Objects (new):** **117** illustrations and decorative elements in 6 categories:
+  - Material Design Icons (Apache-2.0), re-scaled to the icon model.
+  - 13 Greenway originals: smoke puff, puff trail, smoke ring, sparkles, twinkle, sunburst, dots, wave, zig-zag, corners, brackets, underline, circle ring.
+- **One shared `LibraryPicker`:**
+  - Search matches name, keywords and category.
+  - Category chips.
+  - The grid scrolls in its own box, with a live "showing X of Y" count.
+  - The button icon picker uses it too.
+- Only the picked artwork is copied into the banner. The public site never imports the libraries (enforced by test).
+
+### shadcn and 21st.dev: not needed
+- **Fog, haze and wisps:** our WebGL2 shader already covers them.
+- **The realistic hit:** shaders.com covers it with a real fluid simulation.
+- **The 21st.dev smoke components:** basic fbm noise in a canvas, which is what we already have, and smaller.
+- **Registry access:** both registries need accounts/CLI pulls that add nothing we don't own.
+- **Decision:** we keep zero extra UI-kit dependencies.
+
+### Editor restructure (owner request, scheduled for R59)
+- **Home page:** replace the "Sections" tab with tabs and remove the old editors. Home gets **4 tabs**:
+  1. **Main banner** (shown first)
+  2. **Types banner**
+  3. **Brands banner**
+  4. **Types cards**
+- **Exact copies everywhere:** put an exact copy of the home carousel editor everywhere a banner exists.
+- **Shop page:** gets a copy of the home carousel editor, replacing the current shop banner UX.
+- **Specials:** **3 tabs**:
+  1. **Main banner**
+  2. **Specials banner**
+  3. **Specials cards**
+
+  Both banner editors are copies of the home carousel editor.
+- **Loyalty:** the carousel editor copy in its own tab.
+- **No banner editor:** About, Price match, Locations, FAQ, Blog and Medical.
+- **Rule:** creating and editing must be identical on every page that has a banner. One shared component, one data model, one set of controls.
