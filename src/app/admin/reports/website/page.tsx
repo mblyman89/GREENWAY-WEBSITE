@@ -26,6 +26,7 @@ import {
   summarizeClicks,
   type LiveSlot,
 } from "@/lib/analytics/click-events-core";
+import { compareBanners, previousWindow, LEADER_MIN_CLICKS, type PlacementGroup, type Trend } from "@/lib/analytics/banner-compare-core";
 import { listCarouselSlides } from "@/lib/cms/carousel-store";
 import { listShopCarouselSlides } from "@/lib/cms/shop-carousel-store";
 import { isSlideLiveAt } from "@/lib/cms/shop-carousel-core";
@@ -67,6 +68,78 @@ function fmtWhen(iso: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function TrendBadge({ t }: { t: Trend }) {
+  if (t.kind === "new") return <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[11px] font-bold text-sky-300">NEW</span>;
+  if (t.kind === "flat") return <span className="text-[11px] text-white/40">— steady</span>;
+  const up = t.kind === "up";
+  return (
+    <span className={`text-[11px] font-bold ${up ? "text-emerald-300" : "text-rose-300"}`}>
+      {up ? "▲" : "▼"} {Math.abs(t.pct ?? 0)}%
+    </span>
+  );
+}
+
+/** R55-S1: one table per placement, banners ranked by clicks with share bars. */
+function ComparisonGroup({ g }: { g: PlacementGroup }) {
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-bold text-white">{g.title}</h3>
+        <span className="text-xs text-white/45">
+          {g.total.toLocaleString()} clicks · previous period {g.prevTotal.toLocaleString()}
+          {g.leaderNote ? <span className="ml-2 text-white/35">· {g.leaderNote}</span> : null}
+        </span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="bg-white/[0.03] text-[11px] uppercase tracking-wider text-white/45">
+            <tr>
+              <th className="px-3 py-2 font-bold">Banner</th>
+              <th className="px-3 py-2 font-bold">Share of clicks</th>
+              <th className="px-3 py-2 text-right font-bold">Clicks</th>
+              <th className="px-3 py-2 text-right font-bold">Per day</th>
+              <th className="px-3 py-2 font-bold">vs before</th>
+              <th className="px-3 py-2 text-right font-bold">Phone</th>
+              <th className="px-3 py-2 font-bold">Top button</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {g.rows.map((r) => (
+              <tr key={r.slotKey} className={r.leader ? "bg-[var(--admin-gold-soft)]" : undefined}>
+                <td className="max-w-[220px] px-3 py-2">
+                  <div className="flex items-center gap-1.5">
+                    {r.leader ? <span title="Best performer">⭐</span> : null}
+                    <span className="truncate font-semibold text-white/85">{r.label}</span>
+                  </div>
+                  <div className="text-[11px] text-white/35">{r.live ? "Live now" : "Not live now"}</div>
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-24 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${r.share}%`, background: r.leader ? REPORT_COLORS.GOLD : "var(--admin-accent)" }}
+                      />
+                    </div>
+                    <span className="text-xs tabular-nums text-white/60">{r.share}%</span>
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right font-bold tabular-nums text-white">{r.clicks.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-white/60">{r.perDay}</td>
+                <td className="px-3 py-2"><TrendBadge t={r.trend} /></td>
+                <td className="px-3 py-2 text-right tabular-nums text-white/60">{r.clicks ? `${r.phonePct}%` : "—"}</td>
+                <td className="max-w-[180px] truncate px-3 py-2 text-xs text-white/60">
+                  {r.topButton ? `${r.topButton.label} (${r.topButton.clicks})` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 /** Home + shop slides customers can see right now that have buttons. */
@@ -122,11 +195,14 @@ export default async function WebsiteReportPage({
   }
 
   const { nowMs, sinceIso } = clickReportWindow(days);
-  const [clicks, live, schedules] = await Promise.all([
+  const prevWin = previousWindow(days, nowMs);
+  const [clicks, prevClicks, live, schedules] = await Promise.all([
     readClicksSince(sinceIso),
+    readClicksSince(prevWin.sinceIso, prevWin.untilIso),
     liveSlots(nowMs),
     listSchedules({ recentDays: days }),
   ]);
+  const comparison = compareBanners(clicks.rows, prevClicks.rows, live, days);
   const summary = summarizeClicks(clicks.rows, days, nowMs);
   const dead = deadSlots(live, clicks.rows);
   const doneSchedules = schedules.rows
@@ -182,6 +258,23 @@ export default async function WebsiteReportPage({
 
       <Section title="Clicks per day" subtitle="Pacific time">
         <DayBarChart data={summary.daily} />
+      </Section>
+
+      <Section
+        title="Banner comparison"
+        subtitle={`Each banner against the others in the same spot, and against the ${days} days before. ⭐ = best performer (needs ${LEADER_MIN_CLICKS}+ clicks and a clear lead). Shows share of clicks, not click-through rate — views aren't counted.`}
+      >
+        {clicks.missingTable ? (
+          <p className="text-sm text-white/40">Available once update 0268 is applied.</p>
+        ) : comparison.length === 0 ? (
+          <p className="text-sm text-white/40">No live banners or clicks in this period yet.</p>
+        ) : (
+          <div className="space-y-5">
+            {comparison.map((g) => (
+              <ComparisonGroup key={g.placement} g={g} />
+            ))}
+          </div>
+        )}
       </Section>
 
       <div className="grid gap-5 lg:grid-cols-2">
