@@ -26,6 +26,7 @@ import { ColorField, NumberSlider, Row, Segmented, Toggle, studioInput } from ".
 import { LinkPicker, type PickerPost } from "./LinkPicker";
 import type { StudioSelection } from "./StudioCanvas";
 import { FontSelect } from "./TextFxFields";
+import { ButtonFxFields } from "./ButtonFxFields";
 
 const SIZE_LABEL: Record<DesignButtonSize, string> = { sm: "Small", md: "Medium", lg: "Large" };
 const SHAPE_LABEL: Record<DesignButtonShape, string> = { pill: "Pill", rounded: "Rounded", square: "Square" };
@@ -129,6 +130,7 @@ export function ButtonPanel({
           <ColorField label="Text color" value={btn.fg} onChange={(fg) => patch(btn.id, { fg })} />
           {btn.style !== "ghost" ? <ColorField label="Border color" value={btn.border} onChange={(border) => patch(btn.id, { border })} /> : null}
           <FontSelect value={btn.font} onChange={(font) => patch(btn.id, { font })} />
+          <ButtonFxFields btn={btn} patch={(p) => patch(btn.id, p)} />
           <div className="rounded-md border border-white/10 p-2">
             <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-white/60">Position {mobile ? "— phone layout" : "— computer layout"}</p>
             <div className="grid grid-cols-2 gap-2">

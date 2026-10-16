@@ -21,6 +21,7 @@
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
+import { buttonFxStyle, normalizeButtonFx, type ButtonFx } from "@/lib/cms/button-fx-core";
 import { MAX_ELEMENTS, normalizeElement, normalizeOrder, resolveLayers, type DesignElement, type LayerRef } from "@/lib/cms/banner-elements-core";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -251,7 +252,7 @@ export type DesignButton = {
   locked?: boolean;
   /** R56: rotation in degrees; absent = upright. */
   rotate?: number;
-};
+} & ButtonFx;
 
 export type DesignOverlay = {
   kind: DesignOverlayKind;
@@ -540,6 +541,8 @@ export function normalizeButton(raw: unknown, fallbackId: string): DesignButton 
     hideOnMobile: bool(raw.hideOnMobile, false),
     ...(raw.locked === true ? { locked: true } : {}),
     ...rotateField(raw.rotate),
+    // R56-S4: icon / gradient / shadow / hover / attention / corner — only when used.
+    ...normalizeButtonFx(raw, normalizeHex(raw.bg, d.bg)),
   };
 }
 
@@ -1028,7 +1031,7 @@ export function buttonStyle(btn: DesignButton): StyleMap {
     s.textDecoration = "underline";
     s.textUnderlineOffset = "4px";
   }
-  return s;
+  return { ...s, ...buttonFxStyle(btn) };
 }
 
 // ── Contrast (bible PART 5.4, WCAG 2.2 SC 1.4.3) ─────────────────────────────

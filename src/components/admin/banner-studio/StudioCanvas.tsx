@@ -51,6 +51,8 @@ import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
 import { CanvasGuides, CanvasShape, RotateHandle, WidthHandle } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, snapMove, type ItemRef } from "@/lib/cms/banner-arrange-core";
+import { ButtonInner } from "@/components/site/ButtonInner";
+import { buttonFxClass } from "@/lib/cms/button-fx-core";
 
 export type StudioTarget = "box" | "button" | "element";
 export type StudioSelection = { target: StudioTarget; id: string } | null;
@@ -490,7 +492,7 @@ export function StudioCanvas({
                     aria-label={`Button ${btn.label}. Drag or use arrow keys to move.`}
                     aria-pressed={sel}
                     style={{ ...css(buttonStyle(btn)), cursor: btn.locked ? "default" : "move", touchAction: "none", outline: outline("button", btn.id, "none"), outlineOffset: 3, ...zOf(btn.id) }}
-                    className="gw-dbox gw-dbtn"
+                    className={`gw-dbox gw-dbtn ${buttonFxClass(btn)}`}
                     data-studio-id={btn.id}
                     onPointerDown={(e) => startDrag(e, "button", btn.id, "move")}
                     onPointerMove={onPointerMove}
@@ -499,7 +501,7 @@ export function StudioCanvas({
                     onKeyDown={(e) => onItemKey(e, "button", btn.id)}
                     onFocus={() => onSelect({ target: "button", id: btn.id })}
                   >
-                    {btn.label}
+                    <ButtonInner btn={btn} />
                     {handles("button", btn.id, btn.locked)}
                   </div>
                 );
