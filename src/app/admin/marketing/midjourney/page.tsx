@@ -3,20 +3,25 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { listMedia, publicUrlForKey } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
-import { isFluxConfigured } from "@/lib/marketing/flux-client";
+import { getFluxCredits, getFluxDefaultModel, isFluxConfigured } from "@/lib/marketing/flux-client";
 import {
   MidjourneyBuilder,
   type ReferenceImage,
 } from "@/components/admin/marketing/MidjourneyBuilder";
 
 export const dynamic = "force-dynamic";
+// Server actions on this page download finished FLUX files into the media library.
+export const maxDuration = 300;
 
 export default async function MidjourneyPage() {
   await requirePermission("content.edit");
 
   const fluxConfigured = await isFluxConfigured().catch(() => false);
+  const [fluxDefaultModel, fluxCredits] = fluxConfigured
+    ? await Promise.all([getFluxDefaultModel().catch(() => "flux-2-max"), getFluxCredits().catch(() => null)])
+    : ["flux-2-max", null];
 
-  // Published images from the media library become style-reference options.
+  // Published images from the media library become reference options.
   const media = await listMedia({ status: "published", limit: 60 }).catch(() => []);
   const references: ReferenceImage[] = media
     .map((m) => {
@@ -31,33 +36,38 @@ export default async function MidjourneyPage() {
     <div>
       <AdminPageHeader
         title="Creative Studio"
-        subtitle="Two generators, two tabs: FLUX (default) generates at the exact right size in one click; the Midjourney tab builds a copy-paste prompt from the same brief."
+        subtitle="Generate images with FLUX, Playground-style: your prompt goes to FLUX word for word. There's also a Midjourney prompt builder."
         breadcrumbs={<Breadcrumbs items={[{ label: "Marketing" }, { label: "Creative Studio" }]} />}
         help={
           <HelpPanel
             id="midjourney-builder"
             title="How the Creative Studio works"
             steps={[
-              "The studio opens on the FLUX tab — the main generator. Switch to the Midjourney tab any time; your brief carries over, nothing is lost.",
-              "Step 1 — pick the destination (website banner, social post, email header, blog hero, print/in-store). The image is generated at that spot's exact pixel size.",
-              "Step 2 — type your idea and press AI assist. Greenway AI drafts the full brief using your store profile and your LIVE weekly deals (e.g. \"a banner for our Monday deal\" uses the real Monday deal). Edit anything.",
-              "Step 3 — Generate with FLUX. Results save into your media library as DRAFTS for you to review before publishing. Nothing goes live automatically.",
-              "Prefer Midjourney? Its tab builds a copy-paste prompt from the same brief with all parameters (aspect, stylize, chaos, style reference).",
-              "Add up to 8 reference images (product shots, brand assets) so FLUX matches your look.",
+              "FLUX Image: write your prompt. It's sent to FLUX exactly as typed, the same as the BFL Playground, with nothing added behind your back.",
+              "Put the subject first, then the action, style and setting. 30–80 words is BFL's sweet spot. Describe what you want; FLUX has no negative prompts.",
+              "Add up to 8 reference images (FLUX.2) or 10 (FLUX 3). FLUX sees them as image 1, image 2… so name them in your prompt.",
+              "Settings match the Playground: aspect ratio (or custom), safety tolerance 0–5, output format, prompt upsampling and 1, 2, 3, 4 or 8 images. Seed and model are optional extras.",
+              "Results appear as they finish and are saved to your media library as DRAFTS. Nothing goes live automatically.",
+              "Midjourney prompt: builds a copy-paste prompt from a structured brief with AI assist and full Midjourney parameters.",
             ]}
           >
             <p>
-              FLUX is the dominant generator here — a baked-in API pipeline that outputs pixel-perfect images for each
-              destination, shown first when you enter the studio. Midjourney lives on its own tab as a copy-a-prompt
-              fallback on the same shared brief. All AI drafting is compliance-scanned (no health claims, no youth appeal,
-              no consumption imagery) and everything lands as a draft for human review.
+              FLUX runs on your BFL account and each image is billed by BFL. The balance shows on the studio, and the exact cost
+              shows on every card. Pick the default model and add your API key under Integrations → FLUX. Review every result
+              for compliance before publishing.
             </p>
           </HelpPanel>
         }
       />
 
       <div className="px-5 py-6 sm:px-8">
-        <MidjourneyBuilder references={references} aiConfigured={isAiConfigured} fluxConfigured={fluxConfigured} />
+        <MidjourneyBuilder
+          references={references}
+          aiConfigured={isAiConfigured}
+          fluxConfigured={fluxConfigured}
+          fluxDefaultModel={fluxDefaultModel}
+          fluxCredits={fluxCredits}
+        />
       </div>
     </div>
   );

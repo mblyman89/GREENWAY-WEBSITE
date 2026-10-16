@@ -135,6 +135,24 @@ export function dimensionsForRatio(ratio: string, megapixels = 1): { width: numb
   return { width, height };
 }
 
+/** Closest preset aspect for a pixel size (FLUX 3 / video have fixed ratios). */
+export function closestFluxAspect(width: number, height: number, allowed: readonly string[] = FLUX_ASPECTS): string {
+  if (!(width > 0) || !(height > 0)) return "1:1";
+  const target = Math.log(width / height);
+  let best = allowed[0];
+  let bestD = Infinity;
+  for (const a of allowed) {
+    const r = parseRatio(a);
+    if (!r) continue;
+    const d = Math.abs(Math.log(r.w / r.h) - target);
+    if (d < bestD) {
+      bestD = d;
+      best = a;
+    }
+  }
+  return best;
+}
+
 // ---------------------------------------------------------------------------
 // Request building
 // ---------------------------------------------------------------------------

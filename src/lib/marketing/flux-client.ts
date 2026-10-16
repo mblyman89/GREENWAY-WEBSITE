@@ -121,6 +121,37 @@ export async function pollFluxTask(pollingUrl: string): Promise<FluxPollParse> {
   }
 }
 
+export type FluxCheckResult =
+  | { state: "pending"; label?: string; progress?: number }
+  | { state: "ready"; asset: MediaAsset; result?: Record<string, unknown> }
+  | { state: "failed"; error: string };
+
+/**
+ * Poll a task ONCE (the browser drives the loop, so no function timeout) and,
+ * when Ready, save the file. The polling URL is re-validated against bfl.ai
+ * hosts and the download URL always comes from BFL's own response, never from
+ * the browser (SSRF-safe; the x-key only ever goes to BFL).
+ */
+export async function checkFluxTask(input: {
+  pollingUrl: string;
+  kind: "image" | "video";
+  prompt: string;
+  uploadedBy: string | null;
+  tags?: string[];
+}): Promise<FluxCheckResult> {
+  const p = await pollFluxTask(input.pollingUrl);
+  if (p.status === "ready" && p.sampleUrl) {
+    try {
+      const asset = await saveFluxResult({ url: p.sampleUrl, kind: input.kind, prompt: input.prompt, uploadedBy: input.uploadedBy, tags: input.tags });
+      return { state: "ready", asset, result: p.result };
+    } catch (err) {
+      return { state: "failed", error: err instanceof Error ? err.message : "Saving to the media library failed." };
+    }
+  }
+  if (p.terminal) return { state: "failed", error: p.detail ?? "FLUX reported an error." };
+  return { state: "pending", label: p.label, progress: p.progress };
+}
+
 /** Download a finished FLUX file and save it into the media library as a DRAFT. */
 export async function saveFluxResult(input: {
   url: string;
@@ -151,51 +182,27 @@ export async function saveFluxResult(input: {
   });
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+export type FluxSubmittedTask = { ok: true; id: string; pollingUrl: string; seed?: number; cost?: number; outputMp?: number } | { ok: false; error: string };
 
-export type FluxImageOutcome =
-  | { ok: true; asset: MediaAsset; seed?: number; cost?: number; outputMp?: number }
+export type SubmitFluxImagesResult =
+  | { ok: true; model: string; width?: number; height?: number; warnings: string[]; prompt: string; tasks: FluxSubmittedTask[] }
   | { ok: false; error: string };
-
-export type GenerateFluxImagesResult =
-  | { ok: true; model: string; width?: number; height?: number; warnings: string[]; outcomes: FluxImageOutcome[]; totalCost: number }
-  | { ok: false; error: string };
-
-const POLL_INTERVAL_MS = 1500;
-const MAX_POLL_MS = 240_000; // inside the page's 300 s function budget
 
 /**
- * Generate 1–8 images in parallel (one task per image, exactly how the
- * Playground does batches) and save each to the media library.
+ * Submit 1–8 image tasks in parallel (one task per image — how the Playground
+ * runs batches). The browser then polls each task; see pollFluxTask + save.
  */
-export async function generateFluxImages(settings: FluxImageSettings, meta: { uploadedBy: string | null; tags?: string[] }): Promise<GenerateFluxImagesResult> {
+export async function submitFluxImages(settings: FluxImageSettings): Promise<SubmitFluxImagesResult> {
   const ctx = await fluxContext();
   if (!ctx) return { ok: false, error: new FluxNotConfiguredError().message };
   const built = buildFluxImageRequests({ ...settings, model: settings.model || ctx.defaultModel });
   if (!built.ok) return built;
-  const endpoint = built.model.id;
-
-  const runOne = async (body: FluxBody): Promise<FluxImageOutcome> => {
-    const sub = await submitFluxTask(endpoint, body);
-    if (!sub.ok) return sub;
-    const started = Date.now();
-    while (Date.now() - started < MAX_POLL_MS) {
-      await sleep(POLL_INTERVAL_MS);
-      const p = await pollFluxTask(sub.pollingUrl);
-      if (p.status === "ready" && p.sampleUrl) {
-        try {
-          const asset = await saveFluxResult({ url: p.sampleUrl, kind: "image", prompt: String(body.prompt), uploadedBy: meta.uploadedBy, tags: meta.tags });
-          return { ok: true, asset, seed: typeof body.seed === "number" ? body.seed : undefined, cost: sub.cost, outputMp: sub.outputMp };
-        } catch (err) {
-          return { ok: false, error: err instanceof Error ? err.message : "Saving the image failed." };
-        }
-      }
-      if (p.terminal) return { ok: false, error: p.detail ?? "FLUX reported an error." };
-    }
-    return { ok: false, error: "FLUX took too long for this image. Try again (or use a smaller size)." };
-  };
-
-  const outcomes = await Promise.all(built.bodies.map(runOne));
-  const totalCost = outcomes.reduce((s, o) => s + (o.ok && o.cost ? o.cost : 0), 0);
-  return { ok: true, model: endpoint, width: built.width, height: built.height, warnings: built.warnings, outcomes, totalCost };
+  const tasks = await Promise.all(
+    built.bodies.map(async (body): Promise<FluxSubmittedTask> => {
+      const sub = await submitFluxTask(built.model.id, body);
+      if (!sub.ok) return sub;
+      return { ...sub, seed: typeof body.seed === "number" ? body.seed : undefined };
+    }),
+  );
+  return { ok: true, model: built.model.id, width: built.width, height: built.height, warnings: built.warnings, prompt: String(built.bodies[0].prompt), tasks };
 }
