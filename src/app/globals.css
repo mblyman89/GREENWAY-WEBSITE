@@ -993,6 +993,26 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * R59-S1 — picture Ken Burns (banner-image-core kenBurns). Transform-only
+ * (GPU-composited, no layout), long alternate loops; .gw-m pauses it on hidden
+ * carousel slides and turns it off for reduced motion (R57 block).
+ * ------------------------------------------------------------------------- */
+.gw-kb {
+  animation: calc(18s * var(--gms, 1)) ease-in-out infinite alternate both;
+  will-change: transform;
+}
+.gw-kb-in { animation-name: gw-kb-in; }
+.gw-kb-out { animation-name: gw-kb-out; }
+.gw-kb-left { animation-name: gw-kb-left; }
+.gw-kb-right { animation-name: gw-kb-right; }
+.gw-kb-up { animation-name: gw-kb-up; }
+@keyframes gw-kb-in { from { transform: scale(1); } to { transform: scale(1.14); } }
+@keyframes gw-kb-out { from { transform: scale(1.14); } to { transform: scale(1); } }
+@keyframes gw-kb-left { from { transform: scale(1.12) translateX(3%); } to { transform: scale(1.12) translateX(-3%); } }
+@keyframes gw-kb-right { from { transform: scale(1.12) translateX(-3%); } to { transform: scale(1.12) translateX(3%); } }
+@keyframes gw-kb-up { from { transform: scale(1.12) translateY(3%); } to { transform: scale(1.12) translateY(-3%); } }
+
 /* R58-S2 — curved text: computer / phone arc swap (CurvedText.tsx). */
 .gw-curve-m {
   display: none !important;

@@ -6,6 +6,7 @@
  * the banner keeps that spot in view when it's cropped (object-position).
  */
 import { BeamFields } from "./MotionFields";
+import { ImageFxFields } from "./ImageFxFields";
 import {
   OVERLAY_DIRECTIONS,
   OVERLAY_KINDS,
@@ -104,6 +105,7 @@ export function ImagePanel({
       <NumberSlider label="Color strength" value={im.saturation} min={0} max={200} unit="%" onChange={(saturation) => setImage({ saturation })} hint="0% = black & white." />
       <NumberSlider label="Blur" value={im.blur} min={0} max={12} unit="px" onChange={(blur) => setImage({ blur })} hint="A little blur makes text easier to read on busy photos." />
       <Toggle label="Flip picture left ↔ right" checked={im.flip} onChange={(flip) => setImage({ flip })} />
+      <ImageFxFields design={design} imageSrc={imageSrc} onChange={onChange} />
 
       <div className="space-y-3 rounded-md border border-white/10 p-2">
         <Segmented<DesignOverlayKind>

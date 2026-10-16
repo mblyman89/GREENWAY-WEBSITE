@@ -48,7 +48,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { BannerBeam, BannerSmoke, StudioBoxText, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
+import { BannerBeam, BannerPicture, BannerSmoke, StudioBoxText, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
@@ -368,7 +368,7 @@ export function StudioCanvas({
               }}
             >
               {imageSrc ? (
-                <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <BannerPicture fx={design.image.fx} className="pointer-events-none absolute inset-0 overflow-hidden">
                   {isVideoSrc(imageSrc) ? (
                     // R44: video banners preview live (muted loop), same focus/zoom/filters.
                     <video
@@ -392,7 +392,7 @@ export function StudioCanvas({
                       draggable={false}
                     />
                   )}
-                </div>
+                </BannerPicture>
               ) : null}
               {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
 

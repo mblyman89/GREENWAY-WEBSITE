@@ -17,6 +17,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
+import { BannerPicture } from "./BannerPicture";
 import { BannerBeam, ElementVisual } from "./DesignMotion";
 import { BannerSmoke } from "./smoke/BannerSmoke";
 import { RevealWords } from "./smoke/RevealWords";
@@ -126,7 +127,7 @@ export function DesignedBanner({
                 lazy: browsers skip display:none lazy images, so each device
                 downloads only the picture it shows. */}
             {imageSrc ? (
-              <div className="gw-dimg-d absolute inset-0 overflow-hidden" aria-hidden={imageAlt || isVideoSrc(imageSrc) ? undefined : true}>
+              <BannerPicture fx={design.image.fx} className="gw-dimg-d absolute inset-0 overflow-hidden" ariaHidden={imageAlt || isVideoSrc(imageSrc) ? undefined : true}>
                 <BannerMedia
                   src={imageSrc}
                   alt={imageAlt}
@@ -136,9 +137,9 @@ export function DesignedBanner({
                   className="gw-dimg"
                   style={css(imageStyle(design))}
                 />
-              </div>
+              </BannerPicture>
             ) : null}
-            <div className="gw-dimg-m absolute inset-0 overflow-hidden" aria-hidden={imageAlt || isVideoSrc(phoneSrc) ? undefined : true}>
+            <BannerPicture fx={design.image.fx} className="gw-dimg-m absolute inset-0 overflow-hidden" ariaHidden={imageAlt || isVideoSrc(phoneSrc) ? undefined : true}>
               <BannerMedia
                 src={phoneSrc}
                 alt={imageAlt}
@@ -148,10 +149,10 @@ export function DesignedBanner({
                 className="gw-dimg"
                 style={css(imageStyle(design))}
               />
-            </div>
+            </BannerPicture>
           </>
         ) : imageSrc ? (
-          <div className="absolute inset-0 overflow-hidden" aria-hidden={imageAlt || isVideoSrc(imageSrc) ? undefined : true}>
+          <BannerPicture fx={design.image.fx} className="absolute inset-0 overflow-hidden" ariaHidden={imageAlt || isVideoSrc(imageSrc) ? undefined : true}>
             <BannerMedia
               src={imageSrc}
               alt={imageAlt}
@@ -160,7 +161,7 @@ export function DesignedBanner({
               className="gw-dimg"
               style={css(imageStyle(design))}
             />
-          </div>
+          </BannerPicture>
         ) : null}
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
         {/* R58: smoke / fog / haze (lazy, client-only) + words that fade in after it. */}
