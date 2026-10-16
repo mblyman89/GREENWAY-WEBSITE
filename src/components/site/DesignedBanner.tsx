@@ -62,6 +62,10 @@ export type DesignedBannerProps = {
   blockKeyPrefix?: string;
   /** R47-S2: click-analytics zone (clickZoneAttrs) for the banner's buttons. */
   zone?: Record<string, string>;
+  /** R61-S3: extra class on the frame (cards: their glow border / hover). */
+  frameClassName?: string;
+  /** R61-S3: extra inline style on the frame (cards: glowCardStyle). */
+  frameExtraStyle?: CSSProperties;
 };
 
 const css = (s: Record<string, string>) => s as unknown as CSSProperties;
@@ -77,7 +81,11 @@ export function DesignedBanner({
   owner,
   blockKeyPrefix,
   zone,
+  frameClassName,
+  frameExtraStyle,
 }: DesignedBannerProps) {
+  // R61-S3: card designs (Type cards / Specials cards) scale with the card.
+  const card = !!design.frame.card;
   // R42 Q4: optional separate phone picture (unset = one picture, as before).
   const phoneSrc = design.image.srcMobile && design.image.srcMobile !== imageSrc ? design.image.srcMobile : "";
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
@@ -113,7 +121,7 @@ export function DesignedBanner({
     b.bind === "title" ? "title" : b.bind === "eyebrow" ? "eyebrow" : b.bind === "subtitle" ? "subtitle" : null;
 
   return (
-    <div style={css(containerStyle())} className="gw-dcontainer" {...(zone ?? {})}>
+    <div style={css(containerStyle(card))} className={card ? "gw-dcontainer gw-dcard" : "gw-dcontainer"} {...(zone ?? {})}>
       {/* R56-S2: owner-uploaded fonts. React 19 hoists <style href precedence>
           into <head> and dedupes by href, so two banners using one font emit
           one @font-face. */}
@@ -123,8 +131,8 @@ export function DesignedBanner({
         </style>
       ))}
       <div
-        style={css(frameStyle(design))}
-        className={`gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30${plan.length ? " gw-enp" : ""}`}
+        style={frameExtraStyle ? { ...css(frameStyle(design)), ...frameExtraStyle } : css(frameStyle(design))}
+        className={`gw-dframe ${frameClassName ?? "border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"}${plan.length ? " gw-enp" : ""}`}
         {...(editable && owner ? { "data-gw-design-frame": "true", "data-gw-design-owner": owner } : {})}
       >
         {phoneSrc ? (
@@ -206,10 +214,10 @@ export function DesignedBanner({
           if (!text.trim()) return null;
           const Tag = boxEl(b, i);
           const suffix = bindSuffix(b);
-          const boxCss = css(withZ(b.curve ? curvedBoxStyle(b) : boxStyle(b), b.id));
+          const boxCss = css(withZ(b.curve ? curvedBoxStyle(b, card) : boxStyle(b, card), b.id));
           const boxCls = `gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim();
           // R58-S3: countdown / auto deal badge — a small client island ticks it.
-          if (b.live) return <LiveBox key={b.id} as={Tag} box={b} text={text} style={boxCss} className={boxCls} attrs={{ ...(editable ? { "data-gw-design-box": b.id } : {}), ...en(b.id) }} />;
+          if (b.live) return <LiveBox key={b.id} as={Tag} box={b} card={card} text={text} style={boxCss} className={boxCls} attrs={{ ...(editable ? { "data-gw-design-box": b.id } : {}), ...en(b.id) }} />;
           return (
             <Tag
               key={b.id}
@@ -221,13 +229,13 @@ export function DesignedBanner({
                 ? { "data-gw-block": `${blockKeyPrefix}.${suffix}`, "data-gw-editable": "true" }
                 : {})}
             >
-              {b.curve ? <CurvedText box={b} text={text} /> : text}
+              {b.curve ? <CurvedText box={b} text={text} card={card} /> : text}
             </Tag>
           );
         })}
         {design.buttons.map((btn) => {
           if (!btn.enabled || !btn.label.trim() || !btn.href.trim()) return null;
-          const style = css(withZ(buttonStyle(btn), btn.id));
+          const style = css(withZ(buttonStyle(btn, card), btn.id));
           const fxc = buttonFxClass(btn);
           const className = `gw-dbox gw-dbtn${btn.hideOnMobile ? " gw-hide-sm" : ""}${fxc ? ` ${fxc}` : ""}`;
           const hooks = { ...(editable ? { "data-gw-design-button": btn.id } : {}), ...en(btn.id) };

@@ -60,9 +60,11 @@ export function LiveBox({
   style,
   className,
   attrs,
+  card,
 }: {
   as: string;
   box: DesignTextBox;
+  card?: boolean;
   text: string;
   style: CSSProperties;
   className: string;
@@ -73,14 +75,14 @@ export function LiveBox({
   return createElement(
     as as ElementType,
     { style, className, ...attrs, "aria-live": box.live?.mode === "countdown" ? "off" : undefined, suppressHydrationWarning: true },
-    box.curve ? <CurvedText box={box} text={live.text} /> : live.text,
+    box.curve ? <CurvedText box={box} text={live.text} card={card} /> : live.text,
   );
 }
 
 /** Studio canvas body of a text box: live preview + curve, faded when it would be hidden on the site. */
-export function StudioBoxText({ box, text, empty }: { box: DesignTextBox; text: string; empty: string }) {
+export function StudioBoxText({ box, text, empty, card }: { box: DesignTextBox; text: string; empty: string; card?: boolean }) {
   const live = useLiveText(box, text);
   if (box.live && live.ended) return <span style={{ opacity: 0.45 }}>(ended — hidden on the site) {text}</span>;
   if (!live.text.trim()) return <span style={{ opacity: 0.45 }}>{empty}</span>;
-  return box.curve ? <CurvedText box={box} text={live.text} /> : <>{live.text}</>;
+  return box.curve ? <CurvedText box={box} text={live.text} card={card} /> : <>{live.text}</>;
 }

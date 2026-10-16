@@ -5,7 +5,7 @@
  * Each sticker = a normal shape + a centred badge text box, so every part
  * stays fully editable (any colour, words, size, rotation) afterwards.
  */
-import { DESKTOP_REF_PX, MAX_TEXT_BOXES, MOBILE_REF_PX, defaultTextBox, nextId, type BannerDesign } from "@/lib/cms/banner-design-core";
+import { MAX_TEXT_BOXES, defaultTextBox, frameRefPx, nextId, type BannerDesign } from "@/lib/cms/banner-design-core";
 import { MAX_ELEMENTS, defaultElement } from "@/lib/cms/banner-elements-core";
 import { BADGE_PRESETS, badgeParts, type BadgePreset } from "@/lib/cms/button-fx-core";
 import { DesignShape } from "@/components/site/DesignShape";
@@ -17,7 +17,10 @@ export function BadgeStickers({ design, onChange, onSelect }: { design: BannerDe
 
   function add(p: BadgePreset) {
     if (full) return;
-    const parts = badgeParts(p, 100 - p.w - 4, 8, { height: design.frame.height, heightMobile: design.frame.heightMobile, refW: DESKTOP_REF_PX, refWm: MOBILE_REF_PX });
+    // R61-S3: cards use their own reference size (frameRefPx).
+    const d0 = frameRefPx(design, "desktop");
+    const m0 = frameRefPx(design, "mobile");
+    const parts = badgeParts(p, 100 - p.w - 4, 8, { height: d0.h, heightMobile: m0.h, refW: d0.w, refWm: m0.w });
     const el = defaultElement(parts.element.shape, { ...parts.element, id: nextId(design, p.id) });
     const withEl = { ...design, elements: [...elements, el] };
     const box = defaultTextBox("badge", { ...parts.box, id: nextId(withEl, `${p.id}-text`), backdrop: "none", weight: 900, lineHeight: 1.1, wrap: "nowrap" });

@@ -8,7 +8,7 @@
  * letters; the holder box (curvedBoxStyle) keeps position, font and rotate.
  */
 import type { CSSProperties } from "react";
-import { DESKTOP_REF_PX, MOBILE_REF_PX, shadowAsFilter, shadowCss, type DesignTextBox } from "@/lib/cms/banner-design-core";
+import { CARD_REF_PX, DESKTOP_REF_PX, MOBILE_REF_PX, shadowAsFilter, shadowCss, type DesignTextBox } from "@/lib/cms/banner-design-core";
 import { curveGeometry } from "@/lib/cms/banner-curve-core";
 
 function hash(s: string): string {
@@ -25,10 +25,10 @@ function caseText(t: string, tr: DesignTextBox["transform"]): string {
   return one;
 }
 
-function Arc({ box, text, phone }: { box: DesignTextBox; text: string; phone: boolean }) {
+function Arc({ box, text, phone, card }: { box: DesignTextBox; text: string; phone: boolean; card?: boolean }) {
   const curve = box.curve ?? 0;
   const wPct = phone ? (box.mw ?? box.w) : box.w;
-  const W = Math.max(20, (wPct / 100) * (phone ? MOBILE_REF_PX : DESKTOP_REF_PX));
+  const W = Math.max(20, (wPct / 100) * (card ? CARD_REF_PX : phone ? MOBILE_REF_PX : DESKTOP_REF_PX));
   const fs = phone ? box.sizeMobile : box.size;
   const g = curveGeometry(curve, W, fs);
   const id = `gwc${hash(`${g.d}|${box.id}`)}`;
@@ -71,13 +71,13 @@ function Arc({ box, text, phone }: { box: DesignTextBox; text: string; phone: bo
 }
 
 /** Children for a curved box: both geometries + a real-text copy for screen readers / SEO. */
-export function CurvedText({ box, text }: { box: DesignTextBox; text: string }) {
+export function CurvedText({ box, text, card }: { box: DesignTextBox; text: string; card?: boolean }) {
   const t = caseText(text, box.transform);
   return (
     <>
       <span className="sr-only">{text}</span>
-      <Arc box={box} text={t} phone={false} />
-      <Arc box={box} text={t} phone />
+      <Arc box={box} text={t} phone={false} card={card} />
+      <Arc box={box} text={t} phone card={card} />
     </>
   );
 }

@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
+import { DesignedCard } from "@/components/site/DesignedCard";
+import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { BannerVideo } from "@/components/site/BannerVideo";
 import { clickZoneAttrs } from "@/lib/analytics/click-events-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
@@ -57,6 +59,8 @@ type DailyDeal = {
    * renders exactly as before (live-look-safe default).
    */
   image?: string;
+  /** R61-S3: owner's custom card design (shared Banner Studio). */
+  design?: BannerDesign;
 };
 
 // SLICE 117: the deal card now uses the ONE shared glow recipe (the exact
@@ -286,6 +290,23 @@ function offerChipClass(badgeStyle: BadgeStyle): string {
 
 function DailyDealCard({ deal, badgeStyle }: { deal: DailyDeal; badgeStyle: BadgeStyle }) {
   const { tone } = deal;
+  // R61-S3: the owner's custom card design (shared Banner Studio) replaces the
+  // classic card. Bound words: eyebrow = day, title = deal title, subtitle = offer.
+  if (deal.design?.enabled) {
+    return (
+      <DesignedCard
+        design={deal.design}
+        imageSrc={deal.image ?? ""}
+        imageAlt=""
+        legacy={{ eyebrow: deal.day, title: deal.title, subtitle: deal.offer }}
+        href={deal.href}
+        label={`Shop Now for ${deal.title}`}
+        frameClassName="border transition duration-300 group-hover:-translate-y-1 group-hover:border-white/70 group-hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)]"
+        frameExtraStyle={dealCardStyle(tone)}
+        className="h-full"
+      />
+    );
+  }
   return (
     <div className="flex h-full flex-col gap-2.5 md:gap-3">
       <article
@@ -458,6 +479,7 @@ export function SpecialsContent({
         details: dp.descriptionOverride ? [dp.descriptionOverride] : base.details,
         // SLICE 119: optional per-day photo (blank => keep the CSS mockup).
         image: dp.image ?? base.image,
+        design: dp.design,
       };
     })
     .filter((d): d is DailyDeal => d !== null);

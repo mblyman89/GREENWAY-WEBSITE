@@ -124,7 +124,7 @@ describe("R42 Q4 — optional separate phone picture", () => {
   it("every Banner Studio host passes the media library through", () => {
     // R61 S1: one shared shell hosts the studio for every banner editor.
     expect(read("src/components/admin/banner-studio/BannerEditorShell.tsx")).toMatch(/<BannerStudio[\s\S]*?mediaChoices=\{mediaChoices\}/);
-    for (const f of ["LoyaltyHeroEditor", "ShopBannerEditor", "SpecialsPresentationEditor", "SectionCard", "CarouselSlideCard"]) {
+    for (const f of ["LoyaltyHeroEditor", "ShopBannerEditor", "SpecialsPresentationEditor", "SectionCard", "CarouselSlideCard", "TypeCardImagesEditor"]) {
       const src = read(`src/components/admin/${f}.tsx`);
       const cards = src.split("<DesignCard").length - 1;
       const wired = src.split("<DesignCard\n").slice(1).filter((s) => s.trimStart().startsWith("mediaChoices={mediaChoices}")).length;

@@ -161,6 +161,8 @@ export type DayPresentation = {
    * the card's white artwork panel shows this image instead.
    */
   image?: string;
+  /** R61-S3: custom CARD design (shared Banner Studio, card frame). Used only when enabled. */
+  design?: BannerDesign;
 };
 
 export type SpecialsPresentation = {
@@ -389,6 +391,7 @@ export function normalizeSpecialsPresentation(
       offerOverride: cleanOverride(d.offerOverride),
       descriptionOverride: cleanOverride(d.descriptionOverride),
       image: cleanOverride(d.image),
+      ...cardDesignOf(d.design),
     };
   });
 
@@ -411,6 +414,12 @@ export function normalizeSpecialsPresentation(
     heroDesign: normalizeDesign(obj.heroDesign),
     todaysDealsDesign: normalizeDesign(obj.todaysDealsDesign),
   };
+}
+
+/** R61-S3: keep a weekday card design only when it is card-shaped. */
+function cardDesignOf(raw: unknown): { design?: BannerDesign } {
+  const d = normalizeDesign(raw);
+  return d && d.frame.card ? { design: d } : {};
 }
 
 /** Serialize to the stored JSON string (stable key order for clean diffs). */
@@ -448,6 +457,7 @@ export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
       if (d.offerOverride) out.offerOverride = d.offerOverride;
       if (d.descriptionOverride) out.descriptionOverride = d.descriptionOverride;
       if (d.image) out.image = d.image;
+      if (d.design) out.design = d.design;
       return out;
     }),
     ...r41,
@@ -597,6 +607,15 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(round.badgeStyle === "bold" && round.showTodaysDeals === false, "round-trip preserves globals");
   ok(dayPresentationFor(round, "Tuesday")!.titleOverride === "Two-fer Tuesday", "round-trip preserves overrides");
   ok(dayPresentationFor(round, "Tuesday")!.image === "/media/tuesday.webp", "round-trip preserves per-day image");
+  {
+    // R61-S3: weekday card design round-trips; banners-shaped designs dropped.
+    const cd = { v: 1, enabled: true, frame: { height: 200, heightMobile: 160, radius: 16, card: { ratio: 1, ratioMobile: 1 } }, boxes: [], buttons: [] };
+    const wd = normalizeSpecialsPresentation({ days: [{ weekday: "Monday", visible: true, order: 0, design: cd }, { weekday: "Friday", visible: true, order: 4, design: { ...cd, frame: { height: 200 } } }] });
+    ok(!!dayPresentationFor(wd, "Monday")!.design?.frame.card, "R61 weekday card design kept");
+    ok(!("design" in dayPresentationFor(wd, "Friday")!), "R61 non-card design dropped");
+    const back = normalizeSpecialsPresentation(JSON.parse(serializeSpecialsPresentation(wd)));
+    ok(dayPresentationFor(back, "Monday")!.design?.enabled === true, "R61 weekday card design round-trips");
+  }
   // SLICE 119: a day with no image must NOT serialize an `image` key (byte-identical defaults).
   ok(!/"weekday":"Monday"[^}]*"image"/.test(json), "days without an image omit the image key");
 

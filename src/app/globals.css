@@ -1148,3 +1148,55 @@ section,
 article {
   overflow-wrap: break-word;
 }
+
+/* ---------------------------------------------------------------------------
+ * R61-S3 — CARD designs (home Type cards, Specials weekday cards). A card is
+ * always narrow, so its phone layout follows the SCREEN (not the card width).
+ * `.gw-dcard` = public card (phone below 768px of screen); `.gw-dcard-m` = the
+ * studio's Phone preview (always phone). Sizes are --gc-* container units set
+ * inline by banner-design-core (cardPx / dualSize).
+ * ------------------------------------------------------------------------- */
+.gw-dcard-m .gw-dbox {
+  --gbx: var(--gmx, var(--gx));
+  --gby: var(--gmy, var(--gy));
+  --gbw: var(--gmw, var(--gw));
+  --gbh: var(--gmh, var(--gh));
+  --gc-fontSize: var(--gc-fontSize-m);
+  --gc-height: var(--gc-height-m);
+}
+.gw-dcard-m .gw-dframe {
+  --gc-ar: var(--gc-ar-m);
+}
+.gw-dcard-m .gw-dimg {
+  --gip: var(--gip-m);
+}
+.gw-dcard-m .gw-hide-sm,
+.gw-dcard-m .gw-curve-d {
+  display: none !important;
+}
+.gw-dcard-m .gw-curve-m {
+  display: block !important;
+}
+@media (max-width: 767px) {
+  .gw-dcard .gw-dbox {
+    --gbx: var(--gmx, var(--gx));
+    --gby: var(--gmy, var(--gy));
+    --gbw: var(--gmw, var(--gw));
+    --gbh: var(--gmh, var(--gh));
+    --gc-fontSize: var(--gc-fontSize-m);
+    --gc-height: var(--gc-height-m);
+  }
+  .gw-dcard .gw-dframe {
+    --gc-ar: var(--gc-ar-m);
+  }
+  .gw-dcard .gw-dimg {
+    --gip: var(--gip-m);
+  }
+  .gw-dcard .gw-hide-sm,
+  .gw-dcard .gw-curve-d {
+    display: none !important;
+  }
+  .gw-dcard .gw-curve-m {
+    display: block !important;
+  }
+}

@@ -86,7 +86,7 @@ describe("R41 S2 Banner Studio", () => {
     expect(src).toMatch(/e\.key === "Escape"/);
     expect(src).toContain("touchAction: \"none\"");
     // WYSIWYG: same pure style helpers as the public DesignedBanner
-    for (const fn of ["containerStyle()", "frameStyle(design)", "imageStyle(design)", "boxStyle(b)", "buttonStyle(btn)"]) expect(src).toContain(fn);
+    for (const fn of ["containerStyle(card)", "frameStyle(design)", "imageStyle(design)", "boxStyle(b, card)", "buttonStyle(btn, card)"]) expect(src).toContain(fn);
   });
 
   it("text panel offers roles WITH purpose, dos and don'ts", () => {

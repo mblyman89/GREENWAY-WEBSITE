@@ -27,14 +27,13 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import {
-  DESKTOP_REF_PX,
-  MOBILE_REF_PX,
   boxPosition,
   boxMotionClass,
   boxStyle,
   curvedBoxStyle,
   buttonStyle,
   containerStyle,
+  frameRefPx,
   frameStyle,
   imageStyle,
   layerZ,
@@ -139,9 +138,10 @@ export function StudioCanvas({
     return () => ro.disconnect();
   }, []);
 
-  const refW = device === "mobile" ? MOBILE_REF_PX : DESKTOP_REF_PX;
-  const scale = Math.min(1, availW / refW);
-  const frameH = device === "mobile" ? design.frame.heightMobile : design.frame.height;
+  // R61-S3: card designs lay out at CARD_REF_PX on both devices (frameRefPx).
+  const card = !!design.frame.card;
+  const { w: refW, h: frameH } = frameRefPx(design, device);
+  const scale = Math.min(card ? 1.25 : 1, availW / refW);
 
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
   const overlay = overlayStyle(design, headline ? { x: headline.x + headline.w / 2, y: headline.y + 10 } : undefined);
@@ -358,7 +358,7 @@ export function StudioCanvas({
         style={{ width: refW * scale, height: frameH * scale, maxWidth: "100%" }}
       >
         <div style={{ width: refW, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-          <div style={css(containerStyle())}>
+          <div style={css(containerStyle(card))} className={card && device === "mobile" ? "gw-dcard-m" : undefined}>
             <div
               ref={frameRef}
               style={css(frameStyle(design))}
@@ -443,7 +443,7 @@ export function StudioCanvas({
                       role="textbox"
                       aria-multiline="true"
                       aria-label={`Editing ${roleInfo(b.role).label}. Enter for a new line, Escape to finish.`}
-                      style={{ ...css(boxStyle(b)), cursor: "text", outline: "2px solid #ffd700", outlineOffset: 2, minHeight: "1em", userSelect: "text", WebkitUserSelect: "text", ...zOf(b.id) }}
+                      style={{ ...css(boxStyle(b, card)), cursor: "text", outline: "2px solid #ffd700", outlineOffset: 2, minHeight: "1em", userSelect: "text", WebkitUserSelect: "text", ...zOf(b.id) }}
                       className="gw-dbox"
                       onKeyDown={(e) => onItemKey(e, "box", b.id)}
                       onBlur={(e) => commitEdit(e.currentTarget, b.id)}
@@ -461,7 +461,7 @@ export function StudioCanvas({
                     aria-label={`${roleInfo(b.role).label}: ${text.slice(0, 40) || "empty"}. Drag or use arrow keys to move. Double-click to type.`}
                     aria-pressed={sel}
                     title={b.bind && !onLegacyEdit ? undefined : "Double-click to type on the banner"}
-                    style={{ ...css(b.curve ? curvedBoxStyle(b) : boxStyle(b)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: outline("box", b.id, "1px dashed rgba(255,255,255,0.35)"), outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
+                    style={{ ...css(b.curve ? curvedBoxStyle(b, card) : boxStyle(b, card)), cursor: b.locked ? "default" : "move", touchAction: "none", outline: outline("box", b.id, "1px dashed rgba(255,255,255,0.35)"), outlineOffset: 2, minHeight: "1em", ...zOf(b.id) }}
                     className={`gw-dbox ${boxMotionClass(b)}`}
                     data-studio-id={b.id}
                     onPointerDown={(e) => startDrag(e, "box", b.id, "move")}
@@ -472,7 +472,7 @@ export function StudioCanvas({
                     onKeyDown={(e) => onItemKey(e, "box", b.id)}
                     onFocus={() => onSelect({ target: "box", id: b.id })}
                   >
-                    <StudioBoxText box={b} text={text} empty={`(empty ${roleInfo(b.role).label.toLowerCase()})`} />
+                    <StudioBoxText box={b} card={card} text={text} empty={`(empty ${roleInfo(b.role).label.toLowerCase()})`} />
                     {sel && !b.locked ? <WidthHandle scale={scale} onStart={(e) => startDrag(e, "box", b.id, "resize")} onMove={onPointerMove} onEnd={endDrag} /> : null}
                     {handles("box", b.id, b.locked)}
                   </div>
@@ -490,7 +490,7 @@ export function StudioCanvas({
                     tabIndex={0}
                     aria-label={`Button ${btn.label}. Drag or use arrow keys to move.`}
                     aria-pressed={sel}
-                    style={{ ...css(buttonStyle(btn)), cursor: btn.locked ? "default" : "move", touchAction: "none", outline: outline("button", btn.id, "none"), outlineOffset: 3, ...zOf(btn.id) }}
+                    style={{ ...css(buttonStyle(btn, card)), cursor: btn.locked ? "default" : "move", touchAction: "none", outline: outline("button", btn.id, "none"), outlineOffset: 3, ...zOf(btn.id) }}
                     className={`gw-dbox gw-dbtn ${buttonFxClass(btn)}`}
                     data-studio-id={btn.id}
                     onPointerDown={(e) => startDrag(e, "button", btn.id, "move")}
@@ -508,7 +508,7 @@ export function StudioCanvas({
 
               {design.smoke ? <BannerSmoke layers={design.smoke} replayKey={replayKey} /> : null}
               {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
-              <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: device === "mobile" ? design.frame.heightMobile : design.frame.height }} />
+              <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: frameH }} />
             </div>
           </div>
         </div>
