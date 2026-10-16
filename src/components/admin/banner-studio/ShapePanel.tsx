@@ -4,18 +4,19 @@
  * R55-S2 — Shapes tab: add decorative shapes (rectangle, circle, line,
  * triangle, star, sale burst, arrow, diamond) and style the selected one.
  * R55-S3 — plus icons (45 curated Phosphor icons, 3 weights, searchable).
+ * R58-S4 — one tabbed, searchable, scrollable library: 30 shapes, 240+ icons
+ * in 10 categories, 110+ objects (illustrations, frames, dividers).
  * Shapes and icons are decorative only (hidden from screen readers on the site).
  */
-import { useState } from "react";
-import { BANNER_ICON_DATA, BANNER_ICON_LIST, BANNER_ICON_WEIGHTS, type BannerIconWeight } from "@/lib/cms/banner-icons-data";
+import { BANNER_ICON_DATA, BANNER_ICON_WEIGHTS, type BannerIconWeight } from "@/lib/cms/banner-icons-data";
 import { nextId, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
-import { MAX_ELEMENTS, SHAPE_KINDS, defaultElement, defaultIcon, elementLabel, type DesignElement, type ShapeKind } from "@/lib/cms/banner-elements-core";
-import { DesignShape } from "@/components/site/DesignShape";
+import { MAX_ELEMENTS, defaultElement, defaultIcon, elementLabel, type DesignElement, type ShapeKind } from "@/lib/cms/banner-elements-core";
 import { ColorField, NumberSlider, Toggle } from "./controls";
 import { ElementFxFields } from "./ElementFxFields";
 import { ElementMotionFields } from "./MotionFields";
 import { BadgeStickers } from "./BadgeStickers";
 import { LiveBadges } from "./LiveFields";
+import { AddLibrary, LIBRARY_LABELS } from "./AddLibrary";
 import type { StudioSelection } from "./StudioCanvas";
 
 export function ShapePanel({
@@ -36,11 +37,9 @@ export function ShapePanel({
   const elements = design.elements ?? [];
   const el = selection?.target === "element" ? elements.find((e) => e.id === selection.id) : undefined;
   const mobile = device === "mobile";
-  const [q, setQ] = useState("");
-  const [weight, setWeight] = useState<BannerIconWeight>("fill");
-  const iconLabels = Object.fromEntries(BANNER_ICON_LIST.map((i) => [i.id, i.label]));
-  const query = q.trim().toLowerCase();
-  const icons = query ? BANNER_ICON_LIST.filter((i) => i.label.toLowerCase().includes(query) || i.id.includes(query)) : BANNER_ICON_LIST;
+  const iconLabels = LIBRARY_LABELS;
+  /** Objects are single-style artwork — only Phosphor icons have Thin/Bold/Solid. */
+  const hasWeights = !!(el?.icon && BANNER_ICON_DATA[el.icon]);
   const full = elements.length >= MAX_ELEMENTS;
 
   const patch = (id: string, p: Partial<DesignElement>) =>
@@ -53,12 +52,6 @@ export function ShapePanel({
   function add(shape: ShapeKind) {
     if (full) return;
     push(defaultElement(shape, { id: nextId(design, shape) }));
-  }
-  function addIcon(icon: string) {
-    if (full) return;
-    const path = BANNER_ICON_DATA[icon]?.[weight]?.[0];
-    if (!path) return;
-    push(defaultIcon(icon, weight, path, { id: nextId(design, icon) }));
   }
   /** Swap the selected icon's weight (keeps size/colour/position). */
   function setIconWeight(el: DesignElement, w: BannerIconWeight) {
@@ -74,74 +67,16 @@ export function ShapePanel({
         </span>
         <span className="text-[0.7rem] text-white/45">Decoration only — screen readers skip shapes.</span>
       </div>
-      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
-        {SHAPE_KINDS.map((k) => (
-          <button
-            key={k.id}
-            type="button"
-            disabled={elements.length >= MAX_ELEMENTS}
-            onClick={() => add(k.id)}
-            title={`Add ${k.label.toLowerCase()}`}
-            className="flex flex-col items-center gap-1 rounded-md border border-white/10 bg-black/30 p-1.5 text-[0.65rem] text-white/70 hover:border-[var(--admin-accent)] disabled:opacity-40"
-          >
-            <span className="flex h-7 w-7 items-center">
-              <span className={k.id === "line" ? "block h-[3px] w-full" : k.id === "arrow" || k.id === "rect" ? "block h-4 w-full" : "block h-7 w-full"}>
-                <DesignShape el={defaultElement(k.id, { radius: 4 })} />
-              </span>
-            </span>
-            {k.label}
-          </button>
-        ))}
-      </div>
+      <AddLibrary
+        disabled={full}
+        onShape={add}
+        onIcon={(icon, weight, path) => !full && push(defaultIcon(icon, weight, path, { id: nextId(design, icon) }))}
+        onObject={(id, path) => !full && push(defaultIcon(id, "fill", path, { id: nextId(design, id.replace(/^o-/, "")) }))}
+      />
+      {full ? <p className="text-xs text-amber-300/80">This banner already has {MAX_ELEMENTS} shapes/icons — delete one to add another.</p> : null}
 
       <BadgeStickers design={design} onChange={onChange} onSelect={onSelect} />
       <LiveBadges design={design} onChange={onChange} onSelect={onSelect} />
-
-      <div className="space-y-2 rounded-lg border border-white/10 p-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-white/70">Icons</span>
-          <input
-            className="min-w-0 flex-1 rounded-md border border-white/15 bg-black/40 px-2 py-1 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
-            placeholder="Search icons (leaf, gift, clock…)"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="Search icons"
-          />
-          <div role="radiogroup" aria-label="Icon style" className="flex gap-1">
-            {BANNER_ICON_WEIGHTS.map((w) => (
-              <button
-                key={w}
-                type="button"
-                role="radio"
-                aria-checked={weight === w}
-                onClick={() => setWeight(w)}
-                className={weight === w ? "rounded-full bg-[var(--admin-accent)] px-2 py-0.5 text-[0.65rem] font-bold text-black" : "rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] text-white/70"}
-              >
-                {w === "regular" ? "Thin" : w === "bold" ? "Bold" : "Solid"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid max-h-40 grid-cols-8 gap-1 overflow-y-auto sm:grid-cols-12">
-          {icons.map((i) => (
-            <button
-              key={i.id}
-              type="button"
-              disabled={full}
-              onClick={() => addIcon(i.id)}
-              title={`Add ${i.label.toLowerCase()} icon`}
-              aria-label={`Add ${i.label} icon`}
-              className="flex aspect-square items-center justify-center rounded-md bg-black/30 p-1.5 text-white/85 hover:bg-white/10 disabled:opacity-40"
-            >
-              <svg viewBox="0 0 256 256" className="h-full w-full" aria-hidden="true" focusable="false">
-                <path d={BANNER_ICON_DATA[i.id][weight][0]} fill="currentColor" />
-              </svg>
-            </button>
-          ))}
-          {icons.length === 0 ? <p className="col-span-full text-xs text-white/45">No icon matches “{q}”.</p> : null}
-        </div>
-        <p className="text-[0.65rem] text-white/35">Icons by Phosphor (MIT). Only the icon you pick is saved into the banner.</p>
-      </div>
 
       {el ? (
         <div className="space-y-3 rounded-lg border border-white/10 bg-black/30 p-3">
@@ -152,7 +87,7 @@ export function ShapePanel({
           {el.kind === "icon" ? (
             <>
               <ColorField label="Icon colour" value={el.fill} onChange={(fill) => patch(el.id, { fill })} />
-              <div className="flex gap-1">
+              <div className={hasWeights ? "flex gap-1" : "hidden"}>
                 {BANNER_ICON_WEIGHTS.map((w) => (
                   <button
                     key={w}

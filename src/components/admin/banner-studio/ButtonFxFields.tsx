@@ -6,7 +6,8 @@
  * Any colours. Each value is written only when switched on.
  */
 import { useState } from "react";
-import { BANNER_ICON_DATA, BANNER_ICON_LIST } from "@/lib/cms/banner-icons-data";
+import { BANNER_ICON_CATS, BANNER_ICON_DATA, BANNER_ICON_LIST } from "@/lib/cms/banner-icons-data";
+import { LibraryPicker } from "./LibraryPicker";
 import { BUTTON_CORNER_MAX, BUTTON_SHADOW_MAX, type ButtonAttention, type ButtonClick, type ButtonHover, type ButtonIconPos } from "@/lib/cms/button-fx-core";
 import type { DesignButton } from "@/lib/cms/banner-design-core";
 import { ColorField, NumberSlider, Segmented, SelectField, Toggle } from "./controls";
@@ -54,21 +55,21 @@ export function ButtonFxFields({ btn, patch }: { btn: DesignButton; patch: (p: P
         ) : null}
       </div>
       {open ? (
-        <div className="grid max-h-36 grid-cols-8 gap-1 overflow-y-auto rounded-md bg-black/30 p-1 sm:grid-cols-10">
-          {BANNER_ICON_LIST.map((i) => (
-            <button
-              key={i.id}
-              type="button"
-              onClick={() => setIcon(i.id)}
-              title={i.label}
-              aria-label={`Use ${i.label} icon`}
-              className={`flex aspect-square items-center justify-center rounded p-1 hover:bg-white/10 ${btn.icon === i.id ? "bg-white/15 text-[var(--admin-accent)]" : "text-white/85"}`}
-            >
-              <svg viewBox="0 0 256 256" className="h-full w-full" aria-hidden="true" focusable="false">
+        <div className="rounded-md bg-black/30 p-1.5">
+          <LibraryPicker
+            items={BANNER_ICON_LIST}
+            cats={BANNER_ICON_CATS}
+            noun="icons"
+            placeholder="Search icons (cart, arrow, gift…)"
+            cols="grid-cols-8 sm:grid-cols-10"
+            maxH="max-h-44"
+            thumb={(i) => (
+              <svg viewBox="0 0 256 256" className={`h-full w-full ${btn.icon === i.id ? "text-[var(--admin-accent)]" : ""}`} aria-hidden="true" focusable="false">
                 <path d={BANNER_ICON_DATA[i.id].bold[0]} fill="currentColor" />
               </svg>
-            </button>
-          ))}
+            )}
+            onPick={(i) => setIcon(i.id)}
+          />
         </div>
       ) : null}
       {btn.iconPath ? (

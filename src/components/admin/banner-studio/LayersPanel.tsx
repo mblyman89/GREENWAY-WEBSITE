@@ -9,6 +9,7 @@
 import { designLayers, resolveBoxText, roleInfo, type BannerDesign } from "@/lib/cms/banner-design-core";
 import { elementLabel, moveLayer, type LayerKind, type LayerMove } from "@/lib/cms/banner-elements-core";
 import type { StudioSelection } from "./StudioCanvas";
+import { LIBRARY_LABELS } from "./AddLibrary";
 
 const ICON: Record<LayerKind, string> = { box: "✏️", button: "🔘", element: "◆" };
 
@@ -40,7 +41,7 @@ export function LayersPanel({
       return { name: `Button — ${b.label}`, locked: !!b.locked, visible: b.enabled };
     }
     const e = (design.elements ?? []).find((x) => x.id === id)!;
-    return { name: elementLabel(e), locked: !!e.locked, visible: !e.hidden };
+    return { name: elementLabel(e, LIBRARY_LABELS), locked: !!e.locked, visible: !e.hidden };
   }
 
   function move(id: string, m: LayerMove) {
