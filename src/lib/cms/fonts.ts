@@ -14,7 +14,11 @@
  *
  * Adding a font later = add a next/font loader in fonts-loader.ts and a registry
  * entry here with the matching CSS variable.
+ *
+ * R56-S2: the owner can ALSO upload any font they have the right to use
+ * (custom-font-core.ts); those ids look like `custom:<hex>.<ext>`.
  */
+import { customFontStack, isCustomFontId } from "./custom-font-core";
 
 export type FontCategory = "sans" | "serif" | "display" | "script" | "mono";
 
@@ -270,5 +274,8 @@ export function fontStack(
   id: string | null | undefined,
   fallbackId: string,
 ): string {
+  // R56-S2: an owner-uploaded font (`custom:<hex>.<ext>`); its @font-face is
+  // injected by the page (layout / DesignedBanner).
+  if (isCustomFontId(id)) return customFontStack(id) ?? resolveFont(null, fallbackId).stack;
   return resolveFont(id, fallbackId).stack;
 }

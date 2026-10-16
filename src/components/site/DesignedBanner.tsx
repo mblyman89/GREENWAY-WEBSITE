@@ -17,6 +17,7 @@ import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
 import { DesignShape } from "./DesignShape";
 import { elementStyle } from "@/lib/cms/banner-elements-core";
+import { customFontFaceCss, customFontIdsIn } from "@/lib/cms/custom-font-core";
 // R44: a video wrapper must stay visible to assistive tech (its pause button);
 // the <video> itself is aria-hidden inside BannerVideo.
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
@@ -97,6 +98,14 @@ export function DesignedBanner({
 
   return (
     <div style={css(containerStyle())} className="gw-dcontainer" {...(zone ?? {})}>
+      {/* R56-S2: owner-uploaded fonts. React 19 hoists <style href precedence>
+          into <head> and dedupes by href, so two banners using one font emit
+          one @font-face. */}
+      {customFontIdsIn(design).map((id) => (
+        <style key={id} href={`gw-font-${id}`} precedence="default">
+          {customFontFaceCss([id])}
+        </style>
+      ))}
       <div
         style={css(frameStyle(design))}
         className="gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"

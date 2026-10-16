@@ -13,7 +13,10 @@
  * preview matches what visitors will see.
  */
 import { useMemo } from "react";
-import { FONT_OPTIONS, resolveFont, type FontCategory } from "@/lib/cms/fonts";
+import { FONT_OPTIONS, fontStack, resolveFont, type FontCategory } from "@/lib/cms/fonts";
+import { isCustomFontId } from "@/lib/cms/custom-font-core";
+import { useCustomFonts } from "@/components/admin/fonts/custom-fonts-client";
+import { CustomFontFaces, CustomFontUpload } from "@/components/admin/fonts/CustomFontUpload";
 
 const CATEGORY_LABEL: Record<FontCategory, string> = {
   sans: "Sans-serif (clean & modern)",
@@ -42,7 +45,13 @@ export function ContentFontField({
   fallbackId?: string;
   sampleText?: string;
 }) {
-  const selected = resolveFont(value || fallbackId, fallbackId);
+  const mine = useCustomFonts();
+  // R56-S2: an uploaded font (`custom:…`) is a valid choice too.
+  const customPick = isCustomFontId(value) ? (mine.find((f) => f.id === value) ?? { id: value, label: "Uploaded font" }) : null;
+  const curated = resolveFont(value || fallbackId, fallbackId);
+  const selected = customPick
+    ? { id: customPick.id, label: customPick.label, note: "Your uploaded font (you confirmed you have the right to use it).", stack: fontStack(customPick.id, fallbackId) }
+    : curated;
 
   const grouped = useMemo(() => {
     const map = new Map<FontCategory, typeof FONT_OPTIONS>();
@@ -56,11 +65,22 @@ export function ContentFontField({
 
   return (
     <div className="space-y-3">
+      <CustomFontFaces />
       <select
         value={selected.id}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
       >
+        {mine.length || customPick ? (
+          <optgroup label="Your fonts (uploaded)">
+            {mine.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+            {customPick && !mine.some((f) => f.id === customPick.id) ? <option value={customPick.id}>{customPick.label}</option> : null}
+          </optgroup>
+        ) : null}
         {CATEGORY_ORDER.map((cat) => {
           const opts = grouped.get(cat) ?? [];
           if (opts.length === 0) return null;
@@ -77,6 +97,7 @@ export function ContentFontField({
       </select>
 
       <p className="text-[0.72rem] text-white/50">{selected.note}</p>
+      <CustomFontUpload onUploaded={onChange} />
 
       {/* Live preview rendered in the chosen font. */}
       <div className="rounded-lg border border-white/10 bg-[#0a0a0a] p-4">

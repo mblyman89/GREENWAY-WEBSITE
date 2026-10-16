@@ -11,6 +11,16 @@ const nextConfig: NextConfig = {
   async redirects() {
     return buildSiteRedirects();
   },
+  // R56-S2: owner-uploaded fonts are served SAME-ORIGIN. Browsers only load a
+  // cross-origin font when the response carries CORS headers (CSS Fonts 4,
+  // "font fetching requirements"); proxying /gw-fonts/* to the public media
+  // bucket removes that dependency entirely. Keys are never reused, so the
+  // storage cache (1 year) stays correct.
+  async rewrites() {
+    const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "");
+    if (!/^https?:\/\//.test(base)) return [];
+    return [{ source: "/gw-fonts/:file", destination: `${base}/storage/v1/object/public/media/fonts/:file` }];
+  },
   typescript: {
     // WHY THE BUILD USES A DIFFERENT TSCONFIG (this is the Vercel fix)
     //

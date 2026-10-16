@@ -20,6 +20,7 @@
  */
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
+import { isCustomFontId } from "@/lib/cms/custom-font-core";
 import { MAX_ELEMENTS, normalizeElement, normalizeOrder, resolveLayers, type DesignElement, type LayerRef } from "@/lib/cms/banner-elements-core";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -169,6 +170,8 @@ export const BRAND_SWATCHES: { name: string; hex: string }[] = [
  */
 export const DEFAULT_FONT_ID = "site";
 const FONT_IDS = new Set([DEFAULT_FONT_ID, ...FONT_OPTIONS.map((f) => f.id)]);
+/** R56-S2: a library font OR an owner-uploaded `custom:<hex>.<ext>` font. */
+const isDesignFont = (id: unknown): id is string => typeof id === "string" && (FONT_IDS.has(id) || isCustomFontId(id));
 export const DESIGN_FONTS: { id: string; label: string; stack: string | null }[] = [
   { id: DEFAULT_FONT_ID, label: "Site font (default)", stack: null },
   ...FONT_OPTIONS.map((f) => ({ id: f.id, label: f.label, stack: f.stack })),
@@ -176,7 +179,7 @@ export const DESIGN_FONTS: { id: string; label: string; stack: string | null }[]
 
 /** CSS font-family for a design font id; null = inherit the site font. */
 export function designFontFamily(id: string): string | null {
-  if (!id || id === DEFAULT_FONT_ID || !FONT_IDS.has(id)) return null;
+  if (!id || id === DEFAULT_FONT_ID || !isDesignFont(id)) return null;
   return fontStack(id, "system");
 }
 
@@ -451,7 +454,7 @@ export function normalizeTextBox(raw: unknown, fallbackId: string): DesignTextBo
   const role = pick(raw.role, DESIGN_ROLES.map((r) => r.role), "body");
   const d = defaultTextBox(role);
   const bind = raw.bind === "eyebrow" || raw.bind === "title" || raw.bind === "subtitle" ? raw.bind : null;
-  const font = typeof raw.font === "string" && FONT_IDS.has(raw.font) ? raw.font : DEFAULT_FONT_ID;
+  const font = isDesignFont(raw.font) ? raw.font : DEFAULT_FONT_ID;
   const w = num(raw.w, d.w, 5, 100);
   return {
     id: cleanId(raw.id, fallbackId),
@@ -525,7 +528,7 @@ export function normalizeButton(raw: unknown, fallbackId: string): DesignButton 
     bg: normalizeHex(raw.bg, d.bg),
     fg: normalizeHex(raw.fg, d.fg),
     border: normalizeHex(raw.border, d.border),
-    font: typeof raw.font === "string" && FONT_IDS.has(raw.font) ? raw.font : DEFAULT_FONT_ID,
+    font: isDesignFont(raw.font) ? raw.font : DEFAULT_FONT_ID,
     uppercase: bool(raw.uppercase, true),
     newTab: bool(raw.newTab, false),
     enabled: bool(raw.enabled, true),
@@ -1480,6 +1483,8 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(!("fontFamily" in boxStyle(defaultTextBox("body"))), "site font inherits");
   ok((boxStyle(defaultTextBox("body", { font: "oswald" })).fontFamily ?? "").includes("--gw-font-oswald"), "picked font applied");
   ok(normalizeDesign({ boxes: [{ font: "comic-sans" }] })!.boxes[0].font === "site", "unknown font → site");
+  ok(normalizeDesign({ boxes: [{ font: "custom:0123456789abcdef.woff2" }] })!.boxes[0].font === "custom:0123456789abcdef.woff2", "R56: uploaded font kept");
+  ok((boxStyle(defaultTextBox("body", { font: "custom:0123456789abcdef.woff2" })).fontFamily ?? "").includes("gwf-0123456789abcdef"), "R56: uploaded font applied");
   // 39 imageStyle
   const is = imageStyle({ ...defaultDesign(), image: { ...defaultDesign().image, focusX: 30, focusY: 70, zoom: 150, flip: true } });
   ok(is["--gip-d"] === "30% 70%" && is.objectPosition.includes("30% 70%") && is.transformOrigin.includes("30% 70%"), "image focus");
