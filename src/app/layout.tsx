@@ -19,6 +19,7 @@ import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
 import { getContentValues } from "@/lib/cms/render-content";
+import { BRAND_KIT_BLOCK, brandColorVars, parseBrandKit } from "@/lib/brand/brand-kit-core";
 import { getStoreSchemaInput } from "@/lib/seo/store-hours-server";
 import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
 import { customFontFaceCss } from "@/lib/cms/custom-font-core";
@@ -93,7 +94,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const fonts = await getContentValues([
     "site.font.heading",
     "site.font.body",
+    BRAND_KIT_BLOCK,
   ]);
+  // R64: brand colours from Admin → Branding (only changed ones; blank = none).
+  const brandVars = brandColorVars(parseBrandKit(fonts[BRAND_KIT_BLOCK]));
 
   // PROMOTIONS HARMONY (Task T / PR 1): serialise the back office's PUBLISHED
   // promotion rules once per render so every client surface (smart cart,
@@ -117,6 +121,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {
           "--font-heading": headingStack,
           "--font-body": bodyStack,
+          ...brandVars,
         } as React.CSSProperties
       }
     >

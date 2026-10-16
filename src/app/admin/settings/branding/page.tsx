@@ -23,6 +23,22 @@ import {
   publishAllDraftsAction,
   discardAllDraftsAction,
 } from "@/app/admin/content/actions";
+import Link from "next/link";
+import { BrandHubEditor, type BrandHubTab } from "@/components/admin/brand/BrandHubEditor";
+import { CustomFontUpload } from "@/components/admin/fonts/CustomFontUpload";
+import { saveBrandKitDraftAction, publishBrandKitAction } from "./brand-actions";
+import { BRAND_KIT_BLOCK } from "@/lib/brand/brand-kit-core";
+import { listPublishedPostLinks } from "@/lib/cms/blog-store";
+
+/** R64: the Brand hub tabs (Fonts keeps the original font editor). */
+const BRAND_TABS: { id: BrandHubTab | "fonts"; label: string }[] = [
+  { id: "colors", label: "Colours" },
+  { id: "logos", label: "Logos" },
+  { id: "fonts", label: "Fonts" },
+  { id: "messaging", label: "Slogans, mission & about" },
+  { id: "banners", label: "Saved banners" },
+  { id: "social", label: "Social & guidelines" },
+];
 
 /**
  * Branding editor (Admin -> Website -> Branding).
@@ -68,6 +84,7 @@ export default async function BrandingPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    tab?: string;
     saved?: string;
     published?: string;
     seeded?: string;
@@ -78,15 +95,16 @@ export default async function BrandingPage({
   }>;
 }) {
   await requirePermission("content.edit");
-  const { saved, published, seeded, restored, published_all, discarded, warning_error } =
+  const { tab: rawTab, saved, published, seeded, restored, published_all, discarded, warning_error } =
     await searchParams;
+  const tab = BRAND_TABS.find((t) => t.id === rawTab)?.id ?? "colors";
 
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
         <AdminPageHeader
           title="Branding"
-          subtitle="Choose the fonts used across your whole site — no code."
+          subtitle="Your brand hub — colours, logos, fonts, slogans and saved banners."
         />
         <div className="px-5 py-6 sm:px-8 text-sm text-[var(--admin-gold)]">
           The database isn&apos;t fully set up yet. Once your administrator finishes the
@@ -125,6 +143,10 @@ export default async function BrandingPage({
       usageType: m.usage_type ?? null,
       mimeType: m.mime_type ?? null,
     }));
+
+  // R64: the brand kit block (colours, logos, messaging, saved banners, ...).
+  const kitBlock = allBlocks.find((b) => b.block_key === BRAND_KIT_BLOCK) ?? null;
+  const posts = tab === "banners" ? await listPublishedPostLinks().catch(() => []) : [];
 
   const pendingCount = blocks.filter(
     (b) =>
@@ -165,13 +187,14 @@ export default async function BrandingPage({
     <div>
       <AdminPageHeader
         title="Branding"
-        subtitle="The fonts used across your whole site. Pick a heading font and a body font, preview it, then Publish."
+        subtitle="Your brand hub: colours, logos, fonts, slogans, mission, about us and saved banners — all in one place."
         breadcrumbs={<Breadcrumbs items={[{ label: "Branding" }]} />}
         help={
           <HelpPanel
             id="branding"
             title="How the Branding editor works"
             steps={[
+              "Use the tabs: Colours (presets, hex, colour wheel), Logos (header logo + logo library with import), Fonts, Slogans/mission/about, Saved banners, Social & guidelines.",
               "Pick the Heading font (big titles) and the Body font (paragraphs) from the curated library below — each choice is a draft, so nothing goes live yet.",
               "Open Preview in Website Hub to see exactly how the new fonts look (click ✎ Edit on a highlighted spot to jump here).",
               "Click Publish on the block (or 'Publish all drafts') to update the public site everywhere at once. Every publish is snapshotted so you can roll back.",
@@ -219,7 +242,41 @@ export default async function BrandingPage({
           </div>
         )}
 
-        {notSeeded ? (
+        <nav className="flex flex-wrap gap-2 border-b border-[var(--admin-border)] pb-2" aria-label="Brand hub sections">
+          {BRAND_TABS.map((t) => (
+            <Link
+              key={t.id}
+              href={`/admin/settings/branding?tab=${t.id}`}
+              aria-current={t.id === tab ? "page" : undefined}
+              className={`rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-sm font-semibold ${
+                t.id === tab
+                  ? "bg-[var(--admin-accent)] text-black"
+                  : "border border-[var(--admin-border)] text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+
+        {tab !== "fonts" && !notSeeded ? (
+          kitBlock ? (
+            <BrandHubEditor
+              key={`${tab}-${kitBlock.updated_at}`}
+              tab={tab}
+              draftJson={kitBlock.draft_value}
+              publishedJson={kitBlock.published_value}
+              mediaChoices={mediaChoices}
+              posts={posts}
+              saveDraftAction={saveBrandKitDraftAction}
+              publishAction={publishBrandKitAction}
+            />
+          ) : (
+            <p className="text-sm text-[var(--admin-text-muted)]">The brand kit is being set up — refresh in a moment.</p>
+          )
+        ) : null}
+
+        {tab !== "fonts" && !notSeeded ? null : notSeeded ? (
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6">
             <p className="text-sm text-[var(--admin-text-muted)]">
               The controlled content blocks haven&apos;t been initialized yet. Click below to
@@ -258,7 +315,7 @@ export default async function BrandingPage({
               pendingCount={pendingCount}
               publishAllAction={publishAllDraftsAction}
               discardAllAction={discardAllDraftsAction}
-              returnTo="/admin/settings/branding"
+              returnTo="/admin/settings/branding?tab=fonts"
             />
             <ContentEditorShell
               previewPath="/"
@@ -268,8 +325,15 @@ export default async function BrandingPage({
               saveDraftAction={saveContentDraftAction}
               publishAction={publishContentBlockAction}
               restoreAction={restoreContentRevisionAction}
-              returnTo="/admin/settings/branding"
+              returnTo="/admin/settings/branding?tab=fonts"
             />
+            <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <h3 className="text-sm font-black text-[var(--admin-text)]">Import your own font</h3>
+              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+                Upload a font file (WOFF2, WOFF, TTF or OTF). It joins the font list above and every Design Studio font picker.
+              </p>
+              <CustomFontUpload />
+            </div>
           </>
         )}
       </div>

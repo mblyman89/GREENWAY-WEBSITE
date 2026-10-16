@@ -7,6 +7,7 @@ import { MobileNavigation } from "@/components/site/MobileNavigation";
 import { SearchModal } from "@/components/site/SearchModal";
 import { SecondaryBar } from "@/components/site/SecondaryBar";
 import { getContentForRender } from "@/lib/cms/render-content";
+import { BRAND_KIT_BLOCK, SHIPPED_HEADER_LOGO, brandHeaderLogo, parseBrandKit } from "@/lib/brand/brand-kit-core";
 import {
   MEDICAL_HIDE_BLOCK,
   isMedicalPageHidden,
@@ -20,17 +21,24 @@ export async function Header() {
     await getContentForRender(MEDICAL_HIDE_BLOCK),
   );
 
+  // R64: header logo from Admin → Branding (blank kit = the shipped wordmark).
+  const logoSrc = brandHeaderLogo(parseBrandKit(await getContentForRender(BRAND_KIT_BLOCK)));
+  const customLogo = logoSrc !== SHIPPED_HEADER_LOGO;
+  const logoSrcFinal = customLogo ? logoSrc : greenwayBusiness.assets.wordmark;
+  const optimizable = !customLogo || logoSrc.startsWith("/") || /^https:\/\/[^/]+\.supabase\.co\/storage\/v1\/object\/public\//.test(logoSrc);
+
   return (
     <header className="sticky top-0 z-50 w-full max-w-[100vw] overflow-x-clip border-b border-white/10 bg-black/88 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-2.5 py-2 sm:gap-3 sm:px-4 md:max-w-none md:px-5 md:py-1 lg:px-6 xl:px-8">
         <Link href="/#top" className="group flex min-w-0 flex-1 items-center md:w-[18rem] md:flex-none lg:w-[20rem] xl:w-[22rem] 2xl:w-[27rem]" aria-label="Greenway Marijuana home">
           <Image
-            src={greenwayBusiness.assets.wordmark}
+            src={logoSrcFinal}
             alt="Greenway Marijuana"
+            unoptimized={!optimizable}
             width={5891}
             height={1170}
             priority
-            className="h-auto w-[clamp(8.4rem,44vw,10.25rem)] object-contain transition duration-200 group-hover:opacity-85 sm:w-[11.75rem] md:w-[19rem] lg:w-[22rem] xl:w-[25rem]"
+            className={`h-auto w-[clamp(8.4rem,44vw,10.25rem)]${customLogo ? " max-h-16 object-left" : ""} object-contain transition duration-200 group-hover:opacity-85 sm:w-[11.75rem] md:w-[19rem] lg:w-[22rem] xl:w-[25rem]`}
             sizes="(min-width: 1280px) 400px, (min-width: 1024px) 352px, (min-width: 768px) 304px, (min-width: 640px) 188px, 44vw"
           />
         </Link>
