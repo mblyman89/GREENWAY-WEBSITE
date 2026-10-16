@@ -10,6 +10,7 @@ import { BANNER_ICON_CATS, BANNER_ICON_DATA, BANNER_ICON_LIST } from "@/lib/cms/
 import { LibraryPicker } from "./LibraryPicker";
 import { BUTTON_CORNER_MAX, BUTTON_SHADOW_MAX, type ButtonAttention, type ButtonClick, type ButtonHover, type ButtonIconPos } from "@/lib/cms/button-fx-core";
 import type { DesignButton } from "@/lib/cms/banner-design-core";
+import { studioReplay } from "./EnterFields";
 import { ColorField, NumberSlider, Segmented, SelectField, Toggle } from "./controls";
 
 type Opt<T extends string> = T | "none";
@@ -108,9 +109,9 @@ export function ButtonFxFields({ btn, patch }: { btn: DesignButton; patch: (p: P
       {btn.shadow ? <ColorField label="Shadow colour" value={btn.shadowColor ?? "#000000"} onChange={(shadowColor) => patch({ shadowColor })} /> : null}
       <Toggle label="Custom corner rounding" checked={btn.corner !== undefined} onChange={(on) => patch({ corner: on ? 8 : undefined })} />
       {btn.corner !== undefined ? <NumberSlider label="Corners" value={btn.corner} min={0} max={BUTTON_CORNER_MAX} unit="px" onChange={(corner) => patch({ corner })} /> : null}
-      <SelectField<Opt<ButtonHover>> label="When the mouse is over it" value={btn.hover ?? "none"} options={HOVER} onChange={(v) => patch({ hover: v === "none" ? undefined : v })} />
+      <SelectField<Opt<ButtonHover>> label="When the mouse is over it" value={btn.hover ?? "none"} options={HOVER} onChange={(v) => { patch({ hover: v === "none" ? undefined : v }); studioReplay(); }} />
       <SelectField<Opt<ButtonAttention>> label="Draw attention" value={btn.attention ?? "none"} options={ATTN} onChange={(v) => patch({ attention: v === "none" ? undefined : v })} />
-      <SelectField<Opt<ButtonClick>> label="When clicked or tapped" value={btn.click ?? "none"} options={CLICK} onChange={(v) => patch({ click: v === "none" ? undefined : v })} />
+      <SelectField<Opt<ButtonClick>> label="When clicked or tapped" value={btn.click ?? "none"} options={CLICK} onChange={(v) => { patch({ click: v === "none" ? undefined : v }); studioReplay(); }} />
       {btn.attention ? <p className="text-[0.65rem] text-white/45">Turned off automatically for visitors who ask their device for less motion. Use on one button at most.</p> : null}
     </div>
   );

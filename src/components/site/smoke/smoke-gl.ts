@@ -97,6 +97,8 @@ export class GlSmoke {
   private t0 = performance.now();
   private resetAt = new Map<string, number>();
   private still: boolean;
+  private prog: WebGLProgram | null = null;
+  private buf: WebGLBuffer | null = null;
   ok = false;
 
   constructor(private canvas: HTMLCanvasElement, opts: { still?: boolean } = {}) {
@@ -117,7 +119,8 @@ export class GlSmoke {
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error("link");
     gl.useProgram(p);
-    const buf = gl.createBuffer();
+    this.prog = p;
+    const buf = (this.buf = gl.createBuffer());
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(p, "a");
@@ -156,9 +159,19 @@ export class GlSmoke {
     cancelAnimationFrame(this.raf);
   }
 
-  destroy() {
+  /**
+   * R63: free GL objects but keep the context alive. Settings changes rebuild
+   * on the SAME canvas, and getContext() hands back a lost context forever
+   * (the "smoke vanishes when I move its origin" bug). Pass `lose` only when
+   * the canvas itself is going away.
+   */
+  destroy(lose = false) {
     this.stop();
-    this.gl.getExtension("WEBGL_lose_context")?.loseContext();
+    if (lose) this.gl.getExtension("WEBGL_lose_context")?.loseContext();
+    else {
+      this.gl.deleteProgram(this.prog);
+      this.gl.deleteBuffer(this.buf);
+    }
     this.ok = false;
   }
 

@@ -34,6 +34,7 @@ export default function BannerSmokeClient({ layers, replayKey = 0 }: BannerSmoke
   const frontRef = useRef<HTMLCanvasElement>(null);
   const gpuRef = useRef<HTMLCanvasElement>(null);
   const api = useRef<{ replay: () => void } | null>(null);
+  const live = useRef<(GlSmoke | null)[]>([]);
   const key = JSON.stringify(layers);
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function BannerSmokeClient({ layers, replayKey = 0 }: BannerSmoke
       playHit();
     };
     api.current = { replay };
+    live.current = [backGl, frontGl];
 
     // Visibility: on screen × slide shown × tab visible.
     let onScreen = false;
@@ -150,6 +152,7 @@ export default function BannerSmokeClient({ layers, replayKey = 0 }: BannerSmoke
       frontGl?.destroy();
       backGl = mk(back, glLayers(false));
       frontGl = mk(frontRef.current, glLayers(true));
+      live.current = [backGl, frontGl];
       sync();
     }
 
@@ -167,6 +170,9 @@ export default function BannerSmokeClient({ layers, replayKey = 0 }: BannerSmoke
     // `key` captures every layer setting; editor/reveal re-init is cheap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  // Real unmount only: hand the GPU context back to the browser.
+  useEffect(() => () => live.current.forEach((g) => g?.destroy(true)), []);
 
   useEffect(() => {
     if (replayKey) api.current?.replay();

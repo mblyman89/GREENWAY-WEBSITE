@@ -65,11 +65,19 @@ export function BannerStudio({
   const [tab, setTab] = useState<Tab>("text");
   const [replayKey, setReplayKey] = useState(0);
   // R59: entrance controls anywhere in the Studio ask for a replay via this event.
-  useEffect(() => {
-    const on = () => setReplayKey((k) => k + 1);
-    window.addEventListener("gw-studio-replay", on);
-    return () => window.removeEventListener("gw-studio-replay", on);
+  // R63: every replay also acts out hover + click effects for a moment.
+  const [demo, setDemo] = useState(false);
+  const demoT = useRef(0);
+  const replay = useCallback(() => {
+    setReplayKey((k) => k + 1);
+    setDemo(true);
+    window.clearTimeout(demoT.current);
+    demoT.current = window.setTimeout(() => setDemo(false), 1900);
   }, []);
+  useEffect(() => {
+    window.addEventListener("gw-studio-replay", replay);
+    return () => window.removeEventListener("gw-studio-replay", replay);
+  }, [replay]);
   const [selection, setSelection] = useState<StudioSelection>(null);
   // R56: shift-click group (2+ items); empty = single selection only.
   const [group, setGroup] = useState<ItemRef[]>([]);
@@ -323,7 +331,7 @@ export function BannerStudio({
         ) : null}
       </div>
 
-      <div className="rounded-lg bg-black/40 p-2">
+      <div className={`rounded-lg bg-black/40 p-2${demo ? " gw-demo" : ""}`}>
         <StudioCanvas
           ghost={ai && ai.device === device ? { zone: ai.s.textZone, focusX: ai.s.focusX, focusY: ai.s.focusY } : null}
           design={design}
@@ -340,6 +348,10 @@ export function BannerStudio({
           onToggle={toggle}
           replayKey={replayKey}
         />
+      </div>
+      {/* R63: one-tap replay of every motion/smoke/entrance on the canvas. */}
+      <div className="-mt-1 flex justify-end">
+        <button type="button" onClick={replay} className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-bold text-black hover:bg-amber-400" title="Replay all motion, entrances and smoke on the canvas">▶ Replay</button>
       </div>
       <ArrangeBar
         design={design}
@@ -379,7 +391,7 @@ export function BannerStudio({
             <IntroFields design={design} onChange={change} mediaChoices={mediaChoices} />
           </AnimatePanel>
         ) : tab === "smoke" ? (
-          <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={() => setReplayKey((k) => k + 1)} mediaChoices={mediaChoices} />
+          <SmokePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} onReplay={replay} mediaChoices={mediaChoices} />
         ) : tab === "layers" ? (
           <LayersPanel design={design} legacy={legacy} selection={selection} onSelect={select} onChange={change} />
         ) : tab === "picture" ? (
