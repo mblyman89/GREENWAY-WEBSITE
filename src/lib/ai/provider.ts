@@ -23,7 +23,17 @@
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
 import { extractCitations, extractSearchSuggestions, type WebCitation } from "./grounding-core";
-import { buildGeminiInteractionBody, shouldRetryWithoutSchema } from "./gemini-request-core";
+import { buildGeminiInteractionBody, shouldRetryWithoutSchema, thinkingLevelFor } from "./gemini-request-core";
+import {
+  resolveGeminiModel,
+  interactionStatus,
+  incompleteRetry,
+  isTransientStatus,
+  transientRetryDelayMs,
+  readInteractionUsage,
+  effectiveMaxOutputTokens,
+  type ThinkingLevel,
+} from "./gemini-models-core";
 import {
   modelForTask,
   getBudgetStatus,
@@ -630,6 +640,19 @@ export type WebSearchOptions = {
    * output alongside google_search / url_context). Ignored on non-Gemini.
    */
   jsonSchema?: Record<string, unknown> | null;
+  /**
+   * R66: a per-call Gemini thinking level (minimal|low|medium|high), clamped
+   * to what the model supports (gemini-models-core). The background batch
+   * passes its own (deeper) level; the interactive row lookup leaves it unset
+   * and keeps AI_THINKING_LEVEL (or "low") so it stays inside its 300s.
+   */
+  thinkingLevel?: string | null;
+  /**
+   * R66: a per-call hard deadline in ms for the whole Gemini attempt chain
+   * (first send + any 503 / incomplete retries). Defaults to
+   * AI_WEBSEARCH_TIMEOUT_MS. The batch (800s function) passes a longer one.
+   */
+  timeoutMs?: number;
 };
 
 export type WebSearchResult = {
@@ -654,6 +677,12 @@ export type WebSearchResult = {
    * sandboxed iframe; never persist it.
    */
   searchSuggestions?: string[];
+  /** R66: the thinking level actually sent (Gemini only). */
+  thinkingLevel?: string;
+  /** R66: true when the final reply was still cut short (status "incomplete"). */
+  incomplete?: boolean;
+  /** R66: how many Gemini sends this answer took (1 = first try). */
+  attempts?: number;
 };
 
 /**
@@ -846,6 +875,11 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
 
   const model = AI_WEBSEARCH_MODEL;
   const promptText = `${opts.system}\n${opts.user}`;
+  // R66: per-call deadline (the batch passes a longer one); sane bounds.
+  const timeoutMs =
+    typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) && opts.timeoutMs >= 5_000
+      ? Math.min(Math.floor(opts.timeoutMs), 3_600_000)
+      : AI_WEBSEARCH_TIMEOUT_MS;
 
   // --- Gemini path: Google `google_search` grounding via Interactions API. --
   // Selected when the heavy model is a Gemini model. Uses the absolute Google
@@ -864,8 +898,14 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
       // Override via AI_THINKING_LEVEL (minimal|low|medium|high). Temperature
       // only when the caller asks (Google warns against low temperature on
       // Gemini 3+ - looping).
+      // R66: unset AI_THINKING_LEVEL keeps the interactive lookup on "low"
+      // (unchanged); a caller's opts.thinkingLevel (the batch) wins over it.
+      // Every level is clamped to what the model supports (3.8 Flash has no
+      // "minimal"), and max_output_tokens (thinking + answer) is sized per
+      // model so a deep think cannot truncate the answer.
       const geminiEnv = {
-        AI_THINKING_LEVEL: process.env.AI_THINKING_LEVEL,
+        AI_THINKING_LEVEL: process.env.AI_THINKING_LEVEL ?? "low",
+        AI_GEMINI_MAX_OUTPUT_TOKENS: process.env.AI_GEMINI_MAX_OUTPUT_TOKENS,
         AI_GEMINI_URL_CONTEXT: process.env.AI_GEMINI_URL_CONTEXT,
         AI_GEMINI_SERVICE_TIER: process.env.AI_GEMINI_SERVICE_TIER,
         AI_GEMINI_SEED: process.env.AI_GEMINI_SEED,
@@ -877,11 +917,21 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
         maxTokens: opts.maxTokens,
         temperature: opts.temperature,
         jsonSchema: opts.jsonSchema ?? null,
+        thinkingLevel: opts.thinkingLevel ?? null,
+        exactMaxTokens: null as number | null,
       };
-      // Hard timeout so a slow grounding run fails FAST with a friendly message
-      // instead of hanging until Vercel kills the function at 300s.
-      const send = (b: Record<string, unknown>) =>
-        fetchWithTimeout(
+      const profile = resolveGeminiModel(model);
+      let sentThinking = thinkingLevelFor(model, bodyInput.thinkingLevel, geminiEnv) as ThinkingLevel;
+      let sentMax = effectiveMaxOutputTokens(profile, bodyInput.maxTokens, geminiEnv.AI_GEMINI_MAX_OUTPUT_TOKENS);
+      let attempts = 0;
+      // Hard deadline for the WHOLE chain (first send + retries) so a slow
+      // grounding run fails FAST with a friendly message instead of hanging
+      // until Vercel kills the function.
+      const deadline = Date.now() + timeoutMs;
+      const remaining = () => Math.max(1, deadline - Date.now());
+      const send = (b: Record<string, unknown>) => {
+        attempts++;
+        return fetchWithTimeout(
           GEMINI_INTERACTIONS_URL,
           {
             method: "POST",
@@ -891,38 +941,77 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
             },
             body: JSON.stringify(b),
           },
-          AI_WEBSEARCH_TIMEOUT_MS,
+          remaining(),
         );
-      let res = await send(buildGeminiInteractionBody(bodyInput, geminiEnv));
+      };
+      // R66: one send, retried on a transient 5xx (Gemini 3.x Flash 503
+      // "UNAVAILABLE" bursts) while enough of the deadline is left.
+      const sendWithRetry = async (b: Record<string, unknown>): Promise<Response> => {
+        let r = await send(b);
+        for (let retry = 1; !r.ok && isTransientStatus(r.status); retry++) {
+          const wait = transientRetryDelayMs(retry, deadline - Date.now());
+          if (wait === null) break;
+          await r.text().catch(() => "");
+          await new Promise((ok) => setTimeout(ok, wait));
+          r = await send(b);
+        }
+        return r;
+      };
+      let res = await sendWithRetry(buildGeminiInteractionBody(bodyInput, geminiEnv));
       if (!res.ok && res.status === 400 && bodyInput.jsonSchema) {
         const firstDetail = await res.clone().text().catch(() => "");
         if (shouldRetryWithoutSchema(res.status, firstDetail, true)) {
           // A model that refuses schema + tools together still answers.
-          res = await send(buildGeminiInteractionBody({ ...bodyInput, jsonSchema: null }, geminiEnv));
+          bodyInput.jsonSchema = null;
+          res = await sendWithRetry(buildGeminiInteractionBody(bodyInput, geminiEnv));
         }
       }
 
       if (res.ok) {
-        const payload = (await res.json()) as {
+        let payload = (await res.json()) as {
           output_text?: string;
           steps?: unknown;
-          usage?: {
-            prompt_token_count?: number;
-            candidates_token_count?: number;
-            total_token_count?: number;
-            input_tokens?: number;
-            output_tokens?: number;
-            total_tokens?: number;
-          };
+          status?: string;
+          usage?: Record<string, unknown>;
         };
+        // R66: max_output_tokens includes thinking; a reply that ran out is
+        // status "incomplete" (billed, and its answer is cut short). Retry
+        // ONCE: lift the ceiling to the model max, else think one level less
+        // (Google's advice). Keep the first reply if the retry fails.
+        if (interactionStatus(payload) === "incomplete") {
+          const next = incompleteRetry(profile, { maxOutputTokens: sentMax, thinking: sentThinking });
+          if (next && deadline - Date.now() > 45_000) {
+            await record(
+              { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+              model,
+              promptText,
+              extractInteractionsText(payload),
+              readInteractionUsage(payload.usage),
+              true,
+              `gemini reply incomplete at ${sentMax} tokens / thinking ${sentThinking} \u2014 retrying at ${next.maxOutputTokens} / ${next.thinking}`,
+            );
+            const retryRes = await sendWithRetry(
+              buildGeminiInteractionBody(
+                { ...bodyInput, thinkingLevel: next.thinking, exactMaxTokens: next.maxOutputTokens },
+                geminiEnv,
+              ),
+            ).catch(() => null);
+            if (retryRes && retryRes.ok) {
+              const p2 = (await retryRes.json().catch(() => null)) as typeof payload | null;
+              if (p2) {
+                payload = p2;
+                sentMax = next.maxOutputTokens;
+                sentThinking = next.thinking;
+              }
+            } else if (retryRes) {
+              await retryRes.text().catch(() => "");
+            }
+          }
+        }
         const text = extractInteractionsText(payload);
         const sources = extractInteractionsSources(payload);
-        const usage: ChatUsage = {
-          prompt_tokens: payload.usage?.prompt_token_count ?? payload.usage?.input_tokens,
-          completion_tokens:
-            payload.usage?.candidates_token_count ?? payload.usage?.output_tokens,
-          total_tokens: payload.usage?.total_token_count ?? payload.usage?.total_tokens,
-        };
+        const usage: ChatUsage = readInteractionUsage(payload.usage);
+        const stillIncomplete = interactionStatus(payload) === "incomplete";
         await record(
           { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
           model,
@@ -938,6 +1027,9 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
           usedWebSearch: true,
           citations: extractCitations(payload),
           searchSuggestions: extractSearchSuggestions(payload),
+          thinkingLevel: sentThinking,
+          incomplete: stillIncomplete,
+          attempts,
         };
       }
 
@@ -984,11 +1076,11 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
           "",
           undefined,
           false,
-          `gemini google_search timed out after ${Math.round(AI_WEBSEARCH_TIMEOUT_MS / 1000)}s`,
+          `gemini google_search timed out after ${Math.round(timeoutMs / 1000)}s`,
         );
         throw new AiLookupError(
           "The web search took too long and was stopped. Try the lookup again \u2014 it usually finishes on a second attempt.",
-          `gemini google_search aborted after ${AI_WEBSEARCH_TIMEOUT_MS}ms`,
+          `gemini google_search aborted after ${timeoutMs}ms`,
         );
       }
       await record(
