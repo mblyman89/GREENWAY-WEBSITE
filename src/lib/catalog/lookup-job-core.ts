@@ -369,6 +369,9 @@ export interface JobItemView {
    * the result so a lookup that was paid for and then failed still counts.
    */
   aiCalls: number;
+  /** R66: when the newest try started / when the item settled (the ETA). */
+  startedAt?: string | null;
+  finishedAt?: string | null;
 }
 
 /** 0 when memory covered the product (or nothing was started), else 1 per web lookup. */
@@ -465,7 +468,7 @@ export function itemFoundLine(item: Pick<JobItemView, "status" | "result">, hasF
 }
 
 export const LOOKUP_ALL_HELP =
-  "Runs on the server, one product at a time. You can close this tab; refresh to see progress. Facts at 90% or better attach under your attach setting, everything else waits for you.";
+  "Runs on the server, one product at a time, as long as each one needs. You can close this tab; while it is open the progress updates by itself. Facts at 90% or better attach under your attach setting, everything else waits for you.";
 
 export function jobHeadline(status: JobStatus, s: JobSummary): string {
   if (status === "canceled") return "Batch lookup stopped";

@@ -211,6 +211,9 @@ import {
 } from "@/lib/catalog/lookup-job-core";
 import { snapshotButtonLabel, snapshotNote, snapshotToLookupResult, snapshotWhen } from "@/lib/catalog/lookup-snapshot-core";
 import { LOOKUP_HONEST_MISS } from "@/lib/inventory/product-lookup-core";
+// R66: progress bar + measured time left + auto-refresh while the batch runs.
+import { batchProgress, etaLine } from "@/lib/catalog/lookup-progress-core";
+import { BatchLookupAutoRefresh } from "@/components/admin/catalog/BatchLookupAutoRefresh";
 
 export const dynamic = "force-dynamic";
 // T-318 / T-323: the AI product lookup (a server action invoked on this route)
@@ -326,6 +329,9 @@ export default async function CatalogDraftsPage({
     : null;
   const batchLookupJob = batchLookup?.state === "job" ? batchLookup.job : null;
   const batchLookupActive = batchLookupJob !== null && (batchLookupJob.status === "queued" || batchLookupJob.status === "running");
+  const batchLookupProgress = batchLookupJob
+    ? batchProgress({ items: [...batchLookupJob.items.values()], jobStartedAt: batchLookupJob.startedAt, nowMs: now.getTime() })
+    : null;
   const batchLookupEligible = batchLookup && (batchLookup.state === "job" || batchLookup.state === "none") ? batchLookup.eligible : null;
   const batchLookupAttachOn = attachFactsV2Enabled();
   // R21: one decision for every state - the button, Stop, a plain reason, or
@@ -978,7 +984,27 @@ export default async function CatalogDraftsPage({
             {focus.manifestId && batchLookupJob && (
               <div data-testid="batch-lookup-progress" aria-live="polite">
                 <p className="font-semibold text-[var(--admin-text)]">{jobHeadline(batchLookupJob.status, batchLookupJob.summary)}</p>
-                <p className="text-xs text-[var(--admin-text-muted)]">{progressLine(batchLookupJob.summary)}</p>
+                {batchLookupProgress && (
+                  <div
+                    className="my-1 h-2 w-full max-w-md overflow-hidden rounded-full bg-[var(--admin-surface-2)]"
+                    role="progressbar"
+                    aria-label="Batch lookup progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={batchLookupProgress.percent}
+                    data-testid="batch-lookup-bar"
+                  >
+                    <div className="h-full rounded-full bg-[var(--admin-accent)] transition-[width] duration-700" style={{ width: `${batchLookupProgress.percent}%` }} />
+                  </div>
+                )}
+                <p className="text-xs text-[var(--admin-text-muted)]">
+                  {progressLine(batchLookupJob.summary)}
+                  {batchLookupProgress ? ` \u00b7 ${batchLookupProgress.percent}%` : ""}
+                </p>
+                {batchLookupProgress && etaLine(batchLookupProgress, batchLookupActive) && (
+                  <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-eta">{etaLine(batchLookupProgress, batchLookupActive)}</p>
+                )}
+                <BatchLookupAutoRefresh active={batchLookupActive} />
                 <p className="text-xs text-[var(--admin-text-muted)]">{costLine(batchLookupJob.summary, batchLookupJob.model)}</p>
                 {batchLookupJob.summary.failed > 0 && (
                   <p className="text-xs text-[var(--admin-danger)]">
@@ -1015,7 +1041,7 @@ export default async function CatalogDraftsPage({
               <form action={cancelLookupAction.bind(null, batchLookupJob.jobId)} className="flex flex-wrap items-center gap-3">
                 <input type="hidden" name="return_manifest" value={focus.manifestId} />
                 <Button type="submit" variant="neutral" size="sm">Stop the batch lookup</Button>
-                <span className="text-xs text-[var(--admin-text-muted)]">Refresh to see progress. Products not started yet are skipped; the one in progress finishes.</span>
+                <span className="text-xs text-[var(--admin-text-muted)]">Stopping skips the products not started yet; the one in progress finishes.</span>
               </form>
             ) : batchEntry.kind === "button" && focus.manifestId && batchLookupEligible ? (
               <form action={lookupAllAction.bind(null, focus.manifestId)} className="flex flex-wrap items-center gap-3">

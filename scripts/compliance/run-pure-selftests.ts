@@ -680,6 +680,7 @@ import { __runEnrichmentIdentityCoreTests } from "../../src/lib/enrichment/enric
 import { __runGapVectorCoreTests } from "../../src/lib/enrichment/gap-vector-core";
 import { __runLookupJobCoreTests } from "../../src/lib/catalog/lookup-job-core";
 import { __runLookupSnapshotCoreTests } from "../../src/lib/catalog/lookup-snapshot-core";
+import { __runLookupProgressCoreTests } from "../../src/lib/catalog/lookup-progress-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
 import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
@@ -2200,6 +2201,7 @@ __runLiquidVolumeTests();
   { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 154) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 44) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
+  { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }
 
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
   assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);
