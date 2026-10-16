@@ -15,6 +15,7 @@ import { ColorField, NumberSlider, Toggle } from "./controls";
 import { ElementFxFields } from "./ElementFxFields";
 import { ElementMotionFields } from "./MotionFields";
 import { BadgeStickers } from "./BadgeStickers";
+import { LiveBadges } from "./LiveFields";
 import type { StudioSelection } from "./StudioCanvas";
 
 export function ShapePanel({
@@ -94,6 +95,7 @@ export function ShapePanel({
       </div>
 
       <BadgeStickers design={design} onChange={onChange} onSelect={onSelect} />
+      <LiveBadges design={design} onChange={onChange} onSelect={onSelect} />
 
       <div className="space-y-2 rounded-lg border border-white/10 p-2">
         <div className="flex flex-wrap items-center gap-2">

@@ -960,6 +960,7 @@ import { __runBannerGuidesTests } from "../../src/lib/cms/banner-guides-core";
 import { __runBannerMotionTests } from "../../src/lib/cms/banner-motion-core";
 import { __runBannerAtmosTests } from "../../src/lib/cms/banner-atmos-core";
 import { __runBannerCurveTests } from "../../src/lib/cms/banner-curve-core";
+import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runStoreHoursCoreTests } from "../../src/lib/seo/store-hours-core";
 import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
 import { __runDesignDragCoreTests } from "../../src/lib/cms/design-drag-core";
@@ -2299,6 +2300,7 @@ __runLiquidVolumeTests();
   assertRan("banner-motion-core", __runBannerMotionTests(), 32); // R57-S2 micro-interactions: motion, morph, orbit spark, border beam, hover
   assertRan("banner-atmos-core", __runBannerAtmosTests(), 20); // R58-S1 smoke / fog / haze / bong hit layers + reveal
   assertRan("banner-curve-core", __runBannerCurveTests(), 8); // R58-S2 curved text geometry
+  assertRan("banner-live-core", __runBannerLiveTests(), 16); // R58-S3 countdown + auto deal badges
   assertRan("banner-compare-core", __runBannerCompareTests(), 22); // R55-S1: banner comparison
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers

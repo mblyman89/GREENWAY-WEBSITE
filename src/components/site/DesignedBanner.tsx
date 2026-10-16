@@ -22,6 +22,7 @@ import { BannerSmoke } from "./smoke/BannerSmoke";
 import { RevealWords } from "./smoke/RevealWords";
 import { ButtonInner } from "./ButtonInner";
 import { CurvedText } from "./CurvedText";
+import { LiveBox } from "./LiveText";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { elementHoverClass, elementStyle } from "@/lib/cms/banner-elements-core";
 import { customFontFaceCss, customFontIdsIn } from "@/lib/cms/custom-font-core";
@@ -184,11 +185,15 @@ export function DesignedBanner({
           if (!text.trim()) return null;
           const Tag = boxEl(b, i);
           const suffix = bindSuffix(b);
+          const boxCss = css(withZ(b.curve ? curvedBoxStyle(b) : boxStyle(b), b.id));
+          const boxCls = `gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim();
+          // R58-S3: countdown / auto deal badge — a small client island ticks it.
+          if (b.live) return <LiveBox key={b.id} as={Tag} box={b} text={text} style={boxCss} className={boxCls} attrs={editable ? { "data-gw-design-box": b.id } : undefined} />;
           return (
             <Tag
               key={b.id}
-              style={css(withZ(b.curve ? curvedBoxStyle(b) : boxStyle(b), b.id))}
-              className={`gw-dbox${b.hideOnMobile ? " gw-hide-sm" : ""} ${boxMotionClass(b)}`.trim()}
+              style={boxCss}
+              className={boxCls}
               {...(editable ? { "data-gw-design-box": b.id } : {})}
               {...(editable && blockKeyPrefix && suffix
                 ? { "data-gw-block": `${blockKeyPrefix}.${suffix}`, "data-gw-editable": "true" }

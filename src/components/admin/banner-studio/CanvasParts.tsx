@@ -12,7 +12,7 @@ import { elementHoverClass, elementStyle, type DesignElement } from "@/lib/cms/b
 import { ElementVisual } from "@/components/site/DesignMotion";
 export { BannerBeam } from "@/components/site/DesignMotion";
 export { BannerSmoke } from "@/components/site/smoke/BannerSmoke";
-export { CurvedText } from "@/components/site/CurvedText";
+export { StudioBoxText } from "@/components/site/LiveText";
 export { RevealWords } from "@/components/site/smoke/RevealWords";
 import { gapPx, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 

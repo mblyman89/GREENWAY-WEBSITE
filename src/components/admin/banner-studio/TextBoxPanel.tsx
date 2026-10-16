@@ -30,6 +30,7 @@ import {
 import { ColorField, NumberSlider, Row, Segmented, SelectField, Toggle, studioInput } from "./controls";
 import type { StudioSelection } from "./StudioCanvas";
 import { FontSelect, TextFxFields } from "./TextFxFields";
+import { LiveFields } from "./LiveFields";
 import { TextMotionFields } from "./MotionFields";
 
 const ROLE_ICON: Record<DesignRole, string> = { eyebrow: "🏷", headline: "🅷", subhead: "💬", body: "¶", badge: "⭐", legal: "⚖️" };
@@ -290,6 +291,8 @@ export function TextBoxPanel({
               />
             </div>
           </div>
+
+          <LiveFields box={box} patch={(p) => patch(box.id, p)} />
 
           <details className="rounded-md border border-white/10 p-2">
             <summary className="cursor-pointer text-xs font-semibold text-white/70">More text effects</summary>
