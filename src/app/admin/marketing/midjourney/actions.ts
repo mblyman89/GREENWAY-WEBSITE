@@ -6,10 +6,9 @@ import { suggestBrief, isAiConfigured, type BriefSuggestion } from "@/lib/market
 import { suggestCreativeConcept, type CreativeConcept } from "@/lib/marketing/creative-ai";
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { listVendors } from "@/lib/vendors/store";
-import { generateFluxImage } from "@/lib/marketing/flux-client";
+import { generateFluxImages, getFluxCredits } from "@/lib/marketing/flux-client";
 import { publicUrlForKey, uploadMedia } from "@/lib/media/store";
-import type { CreativeBrief } from "@/lib/marketing/midjourney-core";
-import type { FluxOutputFormat } from "@/lib/marketing/flux-core";
+import type { FluxImageSettings } from "@/lib/marketing/flux-core";
 import { placementById } from "@/lib/marketing/creative-placements-core";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
@@ -128,100 +127,73 @@ export async function suggestCreativeConceptAction(input: {
   }
 }
 
-export type FluxGenerateResult =
-  | {
-      ok: true;
-      asset: { id: string; url: string; filename: string; title: string };
-      endpoint: string;
-      warnings: string[];
-      /** Credits charged (verified BFL submit-response field), when reported. */
-      cost?: number;
-      /** Output megapixels (verified BFL submit-response field), when reported. */
-      outputMp?: number;
-      /** The exact pixels generated (for the "sized perfectly" confirmation). */
-      width?: number;
-      height?: number;
-    }
+export type FluxImageItem =
+  | { ok: true; id: string; url: string; filename: string; title: string; seed?: number; cost?: number; outputMp?: number }
+  | { ok: false; error: string };
+
+export type FluxImagesResult =
+  | { ok: true; model: string; width?: number; height?: number; warnings: string[]; items: FluxImageItem[]; totalCost: number; credits: number | null }
   | { ok: false; error: string };
 
 /**
- * Generate an image with FLUX from the SAME creative brief the builder holds
- * and save it into the media library as a DRAFT (AI output is employee-validated
- * before publish). When a placement is chosen, the image is generated at the
- * placement's EXACT verified pixel size with its composition hint appended.
- * Reuses the shared prompt builder via flux-core. content.edit.
+ * R62: generate 1, 2, 3, 4 or 8 images exactly like the BFL Playground. The
+ * prompt is sent verbatim; only verified per-model fields are sent. Each image
+ * is saved to the media library as a DRAFT (AI output is reviewed before
+ * publish). content.edit.
  */
-export async function generateFluxAction(input: {
-  brief: CreativeBrief;
-  outputFormat?: FluxOutputFormat;
-  /** Up to 8 reference-image URLs (FLUX.2 multi-reference). */
-  referenceImages?: string[];
-  /** Prompt upsampling (undefined = the endpoint's own default). */
-  promptUpsampling?: boolean;
-  /** Where the image will go — drives exact size + composition hint. */
-  placementId?: string | null;
-}): Promise<FluxGenerateResult> {
+export async function generateFluxImagesAction(settings: FluxImageSettings): Promise<FluxImagesResult> {
   const session = await requirePermission("content.edit");
-  const brief = input.brief;
-  if (!brief || typeof brief.subject !== "string" || brief.subject.trim().length < 3) {
-    return { ok: false, error: "Add at least a subject before generating." };
+  if (!settings || typeof settings.prompt !== "string" || !settings.prompt.trim()) {
+    return { ok: false, error: "Write a prompt first." };
   }
+  if (settings.prompt.length > 20000) return { ok: false, error: "That prompt is too long (20,000 characters max)." };
+  const res = await generateFluxImages(
+    { ...settings, referenceImages: (settings.referenceImages ?? []).filter((r) => typeof r === "string" && /^https:\/\//i.test(r.trim())) },
+    { uploadedBy: session.userId, tags: ["marketing"] },
+  );
+  if (!res.ok) return res;
 
-  const referenceImages = (input.referenceImages ?? [])
-    .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
-    .slice(0, 8);
-
-  const placement = placementById(input.placementId);
-
-  const res = await generateFluxImage({
-    brief,
-    outputFormat: input.outputFormat ?? placement?.format,
-    referenceImages,
-    promptUpsampling: input.promptUpsampling,
-    width: placement?.width,
-    height: placement?.height,
-    compositionHint: placement?.promptHint,
-    usageType: "marketing",
-    title: brief.subject.trim().slice(0, 120),
-    tags: placement ? ["marketing", `placement:${placement.id}`] : ["marketing"],
-    uploadedBy: session.userId,
-  });
-
-  if (!res.ok) return { ok: false, error: res.error };
-
-  const url = res.asset.public_url ?? publicUrlForKey(res.asset.storage_key) ?? "";
+  const items: FluxImageItem[] = res.outcomes.map((o) =>
+    o.ok
+      ? {
+          ok: true,
+          id: o.asset.id,
+          url: o.asset.public_url ?? publicUrlForKey(o.asset.storage_key) ?? "",
+          filename: o.asset.filename,
+          title: o.asset.title ?? o.asset.filename,
+          seed: o.seed,
+          cost: o.cost,
+          outputMp: o.outputMp,
+        }
+      : { ok: false, error: o.error },
+  );
+  const savedIds = items.flatMap((i) => (i.ok ? [i.id] : []));
+  const saved = savedIds.length;
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "flux.image_generated",
     entityType: "media",
-    entityId: res.asset.id,
+    entityId: savedIds[0] ?? null,
     after: {
-      endpoint: res.endpoint,
-      width: res.request.width ?? null,
-      height: res.request.height ?? null,
-      placement: placement?.id ?? null,
-      subject: brief.subject,
-      referenceCount: referenceImages.length,
-      cost: res.cost ?? null,
+      model: res.model,
+      requested: items.length,
+      saved,
+      width: res.width ?? null,
+      height: res.height ?? null,
+      referenceCount: (settings.referenceImages ?? []).length,
+      cost: res.totalCost,
+      mediaIds: savedIds,
     },
-  });
+  }).catch(() => undefined);
+  const credits = await getFluxCredits();
+  return { ok: true, model: res.model, width: res.width, height: res.height, warnings: res.warnings, items, totalCost: res.totalCost, credits };
+}
 
-  return {
-    ok: true,
-    asset: {
-      id: res.asset.id,
-      url,
-      filename: res.asset.filename,
-      title: res.asset.title ?? res.asset.filename,
-    },
-    endpoint: res.endpoint,
-    warnings: res.warnings,
-    cost: res.cost,
-    outputMp: res.outputMp,
-    width: res.request.width,
-    height: res.request.height,
-  };
+/** R62: current BFL credit balance for the studio header. content.edit. */
+export async function fluxCreditsAction(): Promise<{ credits: number | null }> {
+  await requirePermission("content.edit");
+  return { credits: await getFluxCredits() };
 }
 
 /**
