@@ -755,3 +755,28 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   A blank kit renders byte-identical.
 - **S7: saved brand banners in every Design Studio.** `DesignCard` gets a "Start from a saved brand banner" / "Save this design to brand banners" row (`listBrandBannersAction` / `saveBrandBannerAction`; the save writes both the draft and the live library).
 - **No migration this round.** All new blocks are lazily seeded richjson.
+
+## §22 — R65: canvas follows the scroll + Media Library smart folders
+
+- **S1 Sticky studio dock**: in every Design Studio (banners and cards), a dock sits under the admin header and stays in view while you scroll. It holds the Computer/Phone toggle, ▶ Replay, a 📌 Follow-scroll on/off switch, Small/Medium/Large canvas size, Undo/Redo, the canvas itself and the Arrange bar. The canvas scales to fit the dock height. Each browser remembers the choice (`gw-studio-follow` / `gw-studio-dock`). Code: `useStudioDock.ts`.
+- **S2 Smart-folder core** (`media/folders-core.ts` + `folders-server.ts`): virtual collections in the enterprise-DAM style (Bynder, Brandfolder, AEM). Rules over existing metadata decide where each file is filed. One file can sit in several folders, nothing is moved, there is no migration, and new imports file themselves.
+  - **Products** are filed by source (menu scraping split into Cultivera / GrowFlow / LeafLink, vendor website, web research/Gemini, hand upload) and by vendor. They also land in In use / Not used.
+  - **Website** files are grouped per page, detected from home/shop carousels, page_sections and content_blocks URLs.
+  - **Specials** splits into deal cards (`specials.deals.presentation`) and banners.
+  - **Other folders:**
+    - Logos (Greenway / brands / vendors);
+    - Documents (COAs / newsletters / other);
+    - Blog;
+    - Marketing & AI (FLUX / Midjourney);
+    - Emailed vendor menus;
+    - Fonts.
+  - **Needs attention** covers: unfiled, drafts, missing alt text, not used anywhere, possible duplicates (same name + size), and archived.
+- **S3 Media page UI**:
+  - folder tree with live counts, breadcrumbs, and sub-folder tiles;
+  - search-in-folder (title / file / alt / description / source / tags);
+  - sort, and 120-per-page paging;
+  - loads **all** assets (the old page showed only the newest 200);
+  - folder/sort/page survive the trip to the detail page and back (`return-state-core`).
+- **S4 Bulk organise**: in Select mode you can set the purpose, add or remove labels, and publish / draft / archive. **✨ Auto-file** uses rule-based `classify-core`, applies changes only at confidence ≥ 0.6, and audits them.
+- **S5 Recommender provenance**: when a product image already name-matches, a photo straight from the vendor's menu feed or website gets +4 confidence (capped at NAME_MATCH_MAX), and the reason is shown.
+- **Later**: owner-made manual collections (pinned folders), similar-image search, and per-folder usage analytics.

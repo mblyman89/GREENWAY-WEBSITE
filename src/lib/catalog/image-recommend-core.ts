@@ -31,6 +31,25 @@
  */
 import { isPickableImage, type LibraryPickerAsset } from "@/lib/media/library-picker-core";
 import { tokenize } from "@/lib/media/product-link-core";
+import { productSourceOf } from "@/lib/media/folders-core";
+
+/**
+ * R65: provenance boost. A name-matched photo that came straight from the
+ * vendor (their menu feed or their own website) is a more trustworthy pick
+ * than a random web find, so it ranks a little higher — with the reason shown.
+ * Never lifts a non-match (needs a name hit) and never passes NAME_MATCH_MAX.
+ */
+export const VENDOR_SOURCE_BOOST = 4;
+export function provenanceBoost(tags: readonly string[] | null | undefined): { boost: number; reason: string | null } {
+  const src = productSourceOf({ id: "", storage_key: "", filename: null, mime_type: null, size_bytes: null, alt_text: null, title: null, source: "x", usage_type: "product", tags: [...(tags ?? [])], status: null });
+  const t = new Set((tags ?? []).map((x) => x.toLowerCase()));
+  if (src === "menu") {
+    const p = t.has("cultivera") ? "Cultivera" : t.has("growflow") ? "GrowFlow" : "LeafLink";
+    return { boost: VENDOR_SOURCE_BOOST, reason: `Came straight from the vendor's ${p} menu.` };
+  }
+  if (src === "vendor-site") return { boost: VENDOR_SOURCE_BOOST, reason: "Came from the vendor's own website." };
+  return { boost: 0, reason: null };
+}
 
 /** Same value as onboarding-recall-core REMEMBERED_PICK_CONFIDENCE (R32). */
 export const REMEMBERED_IMAGE_CONFIDENCE = 97;
@@ -196,6 +215,13 @@ export function recommendImages(input: ImageRecommendInput): ImageRecommendView 
     considered += 1;
 
     const name = nameMatchScore(a, input.product);
+    if (name.confidence > 0) {
+      const prov = provenanceBoost(a.tags);
+      if (prov.boost > 0) {
+        name.confidence = Math.min(NAME_MATCH_MAX, name.confidence + prov.boost);
+        name.reasons.push(prov.reason!);
+      }
+    }
     const reasons: string[] = [];
     let confidence = name.confidence;
     const mem = memory.get(id);
@@ -346,5 +372,8 @@ export function __runImageRecommendCoreTests(): { passed: number; failed: number
   const lim = recommendImages({ assets: Array.from({ length: 20 }, (_, i) => A(`b${i}`, { title: "Phat Panda Blue Dream" })), product });
   ok(lim.items.length === MAX_RECOMMENDATIONS && lim.matched === 20, "cap + matched count");
   ok(imageResultBanner("attached", "")?.tone === "ok" && imageResultBanner("nope", "x") === null, "result banner codes");
+  ok(provenanceBoost(["growflow", "product-image", "acme"]).boost === VENDOR_SOURCE_BOOST, "menu photo gets provenance boost");
+  ok(provenanceBoost(["harvested", "product"]).reason === "Came from the vendor's own website.", "vendor-site reason");
+  ok(provenanceBoost(["web-research", "harvested"]).boost === 0 && provenanceBoost(null).boost === 0, "no boost for web finds / untagged");
   return { passed, failed };
 }
