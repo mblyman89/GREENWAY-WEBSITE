@@ -34,18 +34,21 @@ export const RESUMABLE_THRESHOLD_BYTES = 6 * MB;
 /** TUS chunk size. Supabase: "it must be set to 6MB (for now) do not change it". */
 export const RESUMABLE_CHUNK_BYTES = 6 * MB;
 
-export type UploadKind = "image" | "video" | "document";
+export type UploadKind = "image" | "video" | "document" | "animation";
 
 /** Per-kind ceilings for ONE file. Video is the largest; the bucket cap (migration 0265) equals it. */
 export const UPLOAD_MAX_BYTES: Record<UploadKind, number> = {
   image: 50 * MB,
   document: 50 * MB,
   video: 200 * MB,
+  // R60: banner animations are vector files; real ones are KBs to a few MB.
+  animation: 20 * MB,
 };
 export const UPLOAD_MAX_LABEL: Record<UploadKind, string> = {
   image: "50 MB",
   document: "50 MB",
   video: "200 MB",
+  animation: "20 MB",
 };
 /** The `media` bucket's file_size_limit set by migration 0265 (= the largest per-kind cap). */
 export const MEDIA_BUCKET_FILE_SIZE_LIMIT_BYTES = 200 * MB;
@@ -61,6 +64,8 @@ export const MEDIA_BUCKET_FILE_SIZE_LIMIT_BYTES = 200 * MB;
  */
 export const VIDEO_ADVISORY_BYTES = 8 * MB;
 export const IMAGE_ADVISORY_BYTES = 2 * MB;
+/** R60: a banner animation over this is usually carrying embedded photos. Advisory only. */
+export const ANIMATION_ADVISORY_BYTES = 1 * MB;
 /** Videos longer than this (seconds) are usually not "banner loops". Advisory only. */
 export const VIDEO_ADVISORY_SECONDS = 20;
 
@@ -71,6 +76,22 @@ export const UPLOAD_MIME: Record<UploadKind, readonly string[]> = {
   image: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"],
   video: ["video/mp4", "video/webm"],
   document: ["application/pdf"],
+  /**
+   * R60 Lottie + Rive. Browsers report "" (or a generic type) for .riv and
+   * .lottie, so the type is taken from the extension (ANIMATION_EXT_MIME) and
+   * the server then proves it from the bytes (file-signature-core: "RIVE"
+   * fingerprint, dotLottie ZIP entries, Lottie JSON keys).
+   *  - .riv: Rive's own CDN serves it as application/octet-stream.
+   *  - .lottie: dotLottie spec media type application/zip+dotlottie.
+   *  - .json: Lottie JSON (application/json).
+   */
+  animation: ["application/octet-stream", "application/zip+dotlottie", "application/json"],
+};
+/** R60: animation extension → the one type we store it as. */
+export const ANIMATION_EXT_MIME: Record<string, string> = {
+  ".riv": "application/octet-stream",
+  ".lottie": "application/zip+dotlottie",
+  ".json": "application/json",
 };
 
 const EXT_FOR_MIME: Record<string, string> = {
@@ -82,6 +103,9 @@ const EXT_FOR_MIME: Record<string, string> = {
   "video/mp4": ".mp4",
   "video/webm": ".webm",
   "application/pdf": ".pdf",
+  "application/octet-stream": ".riv",
+  "application/zip+dotlottie": ".lottie",
+  "application/json": ".json",
 };
 
 /** Extensions a file of each mime may legitimately carry. */
@@ -94,10 +118,13 @@ const EXTS_FOR_MIME: Record<string, readonly string[]> = {
   "video/mp4": [".mp4", ".m4v"],
   "video/webm": [".webm"],
   "application/pdf": [".pdf"],
+  "application/octet-stream": [".riv"],
+  "application/zip+dotlottie": [".lottie"],
+  "application/json": [".json"],
 };
 
 /** The `accept` attribute for the upload <input>. */
-export const UPLOAD_ACCEPT_ATTR = [...UPLOAD_MIME.image, ...UPLOAD_MIME.video, ...UPLOAD_MIME.document, ".mp4", ".webm"].join(",");
+export const UPLOAD_ACCEPT_ATTR = [...UPLOAD_MIME.image, ...UPLOAD_MIME.video, ...UPLOAD_MIME.document, ".mp4", ".webm", ".riv", ".lottie", ".json"].join(",");
 
 /** Some browsers report "" for a file's type; fall back to its extension. */
 export function mimeFromFilename(filename: string): string {
@@ -110,7 +137,7 @@ export function mimeFromFilename(filename: string): string {
 export function kindOfMime(mime: unknown): UploadKind | null {
   if (typeof mime !== "string") return null;
   const m = mime.trim().toLowerCase();
-  for (const kind of ["image", "video", "document"] as const) if (UPLOAD_MIME[kind].includes(m)) return kind;
+  for (const kind of ["image", "video", "document", "animation"] as const) if (UPLOAD_MIME[kind].includes(m)) return kind;
   return null;
 }
 
@@ -145,7 +172,9 @@ export function checkUpload(input: { filename: unknown; mime: unknown; size: unk
   if (size <= 0) return { ok: false, error: `${filename} is empty (0 bytes) — export it again and retry.` };
 
   const reported = typeof input.mime === "string" ? input.mime.trim().toLowerCase() : "";
-  const mime = reported || mimeFromFilename(filename);
+  // R60: animation files are typed by extension (browsers say "" / zip / octet-stream).
+  const animMime = ANIMATION_EXT_MIME[extOf(filename)];
+  const mime = animMime && (!reported || ["application/octet-stream", "application/zip", "application/x-zip-compressed", "application/json", "text/plain", animMime].includes(reported)) ? animMime : reported || mimeFromFilename(filename);
   const kind = kindOfMime(mime);
   if (!kind) {
     const ext = extOf(filename);
@@ -160,7 +189,7 @@ export function checkUpload(input: { filename: unknown; mime: unknown; size: unk
     }
     return {
       ok: false,
-      error: `${filename}: unsupported type${mime ? ` (${mime})` : ""}. Allowed: PNG, JPG, WEBP, GIF, SVG, MP4, WEBM video, or PDF.`,
+      error: `${filename}: unsupported type${mime ? ` (${mime})` : ""}. Allowed: PNG, JPG, WEBP, GIF, SVG, MP4, WEBM video, PDF, or a Lottie (.lottie / .json) or Rive (.riv) animation.`,
     };
   }
   // The extension must agree with the type (stops "photo.png" that is really a video, etc.).
@@ -174,12 +203,16 @@ export function checkUpload(input: { filename: unknown; mime: unknown; size: unk
         ? " Trim it to a short loop (5–15 seconds) or export at 1080p or lower."
         : kind === "image"
           ? " Export it smaller (WebP or JPG at 2–3× the banner size is plenty)."
-          : " Compress the PDF and try again.";
+          : kind === "animation"
+            ? " Remove embedded photos from the animation (or export dotLottie, which is compressed) and try again."
+            : " Compress the PDF and try again.";
     return { ok: false, error: `${filename} is ${formatBytes(size)} — the limit for ${kind}s is ${UPLOAD_MAX_LABEL[kind]}.${tip}` };
   }
   let advisory: string | null = null;
   if (kind === "video" && size > VIDEO_ADVISORY_BYTES) {
     advisory = `${filename} is ${formatBytes(size)}. It will upload, but every shopper downloads it — aim for under ${formatBytes(VIDEO_ADVISORY_BYTES)} (a 5–15 second loop at 1080p usually is).`;
+  } else if (kind === "animation" && size > ANIMATION_ADVISORY_BYTES) {
+    advisory = `${filename} is ${formatBytes(size)}. It will upload, but banner animations are usually under ${formatBytes(ANIMATION_ADVISORY_BYTES)} — big ones usually carry embedded photos. dotLottie (.lottie) is compressed and smaller than JSON.`;
   } else if (kind === "image" && mime !== "image/svg+xml" && size > IMAGE_ADVISORY_BYTES) {
     advisory =
       mime === "image/gif"
@@ -510,5 +543,21 @@ export function __runUploadPolicyCoreTests(): { passed: number; failed: number }
   ok(!choiceIsVideo({ mimeType: "image/png", url: "https://x/a.mp4" }), "image mime wins");
   ok(choiceIsVideo({ url: "https://x/a.webm?v=1" }), "url fallback");
   ok(!choiceIsVideo({ mimeType: null, url: "/a.png" }), "png url not video");
+
+  // R60: Lottie + Rive animations (typed by extension; bytes proven server-side).
+  const riv = checkUpload({ filename: "truck.riv", mime: "", size: 58792 });
+  ok(riv.ok && riv.kind === "animation" && riv.mime === "application/octet-stream", ".riv with no browser type");
+  const lot = checkUpload({ filename: "leaf.lottie", mime: "application/zip", size: 3148 });
+  ok(lot.ok && lot.mime === "application/zip+dotlottie", ".lottie reported as zip");
+  const lj = checkUpload({ filename: "leaf.json", mime: "application/json", size: 31539 });
+  ok(lj.ok && lj.kind === "animation" && lj.mime === "application/json", "lottie json");
+  ok(!checkUpload({ filename: "x.riv", mime: "image/png", size: 10 }).ok, "riv claiming png refused");
+  ok(!checkUpload({ filename: "x.zip", mime: "application/zip", size: 10 }).ok, "plain zip still refused");
+  ok(!checkUpload({ filename: "x.exe", mime: "application/octet-stream", size: 10 }).ok, "octet-stream without .riv refused");
+  ok(!checkUpload({ filename: "big.lottie", mime: "", size: 21 * MB }).ok, "animation size cap");
+  const adv = checkUpload({ filename: "heavy.json", mime: "application/json", size: 2 * MB });
+  ok(adv.ok && !!adv.advisory, "heavy animation advisory");
+  ok(UPLOAD_ACCEPT_ATTR.includes(".riv") && UPLOAD_ACCEPT_ATTR.includes(".lottie"), "accept has animation extensions");
+  ok(buildUploadKey({ folder: "banner", filename: "My Truck.riv", mime: "application/octet-stream", nonce: "0123456789abcdef" })?.endsWith(".riv") === true, "key keeps .riv");
   return { passed, failed };
 }

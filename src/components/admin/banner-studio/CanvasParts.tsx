@@ -10,6 +10,8 @@
 import type { CSSProperties, KeyboardEvent as RKeyboardEvent, PointerEvent as RPointerEvent } from "react";
 import { elementHoverClass, elementStyle, type DesignElement } from "@/lib/cms/banner-elements-core";
 import { ElementVisual } from "@/components/site/DesignMotion";
+import { BannerAnim } from "@/components/site/anim/BannerAnim";
+import { animLabel } from "@/lib/cms/banner-anim-core";
 export { BannerBeam } from "@/components/site/DesignMotion";
 export { BannerSmoke } from "@/components/site/smoke/BannerSmoke";
 export { BannerPicture } from "@/components/site/BannerPicture";
@@ -72,7 +74,7 @@ export function CanvasShape({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${el.kind === "icon" ? `Icon ${el.icon}` : `Shape ${el.shape}`}${el.locked ? " (locked)" : ""}. Drag or use arrow keys to move.`}
+      aria-label={`${el.kind === "anim" ? animLabel(el.anim) : el.kind === "icon" ? `Icon ${el.icon}` : `Shape ${el.shape}`}${el.locked ? " (locked)" : ""}. Drag or use arrow keys to move.`}
       aria-pressed={selected}
       style={{
         ...css(elementStyle(el)),
@@ -92,7 +94,8 @@ export function CanvasShape({
       onKeyDown={onKey}
       onFocus={onFocus}
     >
-      <ElementVisual el={el} />
+      {/* R60: animations always play on the canvas (no Rive listeners, so drag works). */}
+      {el.kind === "anim" && el.anim ? <BannerAnim anim={{ ...el.anim, interactive: undefined }} preview /> : <ElementVisual el={el} />}
       {selected && !el.locked ? <RotateHandle scale={scale} onStart={(e) => onStart(e, "rotate")} onMove={onMove} onEnd={onEnd} /> : null}
       {selected && !el.locked ? (
         <span

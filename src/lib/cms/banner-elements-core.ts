@@ -27,6 +27,7 @@
 
 import { elementMotion, normalizeElementMotion, type ElementMotionFields } from "./banner-motion-core";
 import { normalizeEnter, type Enter } from "./banner-enter-core";
+import { animLabel, normalizeAnim, type AnimSpec } from "./banner-anim-core";
 
 export const MAX_ELEMENTS = 12;
 
@@ -80,7 +81,8 @@ export const SHAPE_KEYWORDS: Partial<Record<ShapeKind, string>> = {
 const SHAPE_IDS = SHAPE_KINDS.map((s) => s.id);
 
 export const ICON_PATH_MAX = 4000;
-export type ElementKind = "shape" | "icon";
+/** R60: "anim" = a Lottie or Rive animation (settings in `anim`, banner-anim-core). */
+export type ElementKind = "shape" | "icon" | "anim";
 
 export type DesignElement = {
   id: string;
@@ -118,6 +120,8 @@ export type DesignElement = {
   shadowColor?: string;
   /** R59: entrance animation; absent = just there. */
   enter?: Enter;
+  /** R60: Lottie / Rive animation settings (kind "anim" only). */
+  anim?: AnimSpec;
 } & ElementMotionFields;
 
 export type ElementGradient = { from: string; to: string; angle: number };
@@ -164,6 +168,14 @@ export function cleanElementId(v: unknown, fallback: string): string {
 }
 
 // ── defaults + normalizer ────────────────────────────────────────────────────
+
+/** R60: a new Lottie / Rive animation layer (keeps the file's shape). */
+export function defaultAnimElement(anim: AnimSpec, overrides: Partial<DesignElement> = {}): DesignElement {
+  const { id: _id, kind: _kind, shape, ...rest } = defaultElement("rect");
+  void _id;
+  void _kind;
+  return { id: "anim", kind: "anim", shape, ...rest, x: 66, y: 12, w: 22, h: null, strokeWidth: 0, radius: 0, ...overrides, anim };
+}
 
 /** A new icon layer (square, coloured with `fill`). */
 export function defaultIcon(icon: string, weight: string, path: string, overrides: Partial<DesignElement> = {}): DesignElement {
@@ -217,14 +229,17 @@ export function defaultElement(shape: ShapeKind = "rect", overrides: Partial<Des
 
 export function normalizeElement(raw: unknown, fallbackId: string): DesignElement | null {
   if (!isObj(raw)) return null;
-  if (raw.kind !== undefined && raw.kind !== "shape" && raw.kind !== "icon") return null;
+  if (raw.kind !== undefined && raw.kind !== "shape" && raw.kind !== "icon" && raw.kind !== "anim") return null;
   const isIcon = raw.kind === "icon";
   if (isIcon && !isSafeIconPath(raw.iconPath)) return null;
+  // R60: an animation needs a playable file of ours, else it is dropped.
+  const anim = raw.kind === "anim" ? normalizeAnim(raw.anim) : null;
+  if (raw.kind === "anim" && !anim) return null;
   const shape = !isIcon && (SHAPE_IDS as string[]).includes(raw.shape as string) ? (raw.shape as ShapeKind) : "rect";
   const d = isIcon ? defaultIcon("", "", "M0 0") : defaultElement(shape);
   const el: DesignElement = {
     id: cleanElementId(raw.id, fallbackId),
-    kind: isIcon ? "icon" : "shape",
+    kind: anim ? "anim" : isIcon ? "icon" : "shape",
     shape,
     ...(isIcon
       ? {
@@ -254,7 +269,7 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
   if (raw.locked === true) el.locked = true;
   // R56: optional fx, written only when used (older designs byte-identical).
   const g = raw.gradient;
-  if (isObj(g) && typeof g.from === "string" && typeof g.to === "string" && el.shape !== "line") {
+  if (isObj(g) && typeof g.from === "string" && typeof g.to === "string" && el.shape !== "line" && !anim) {
     el.gradient = { from: hex(g.from, el.fill), to: hex(g.to, el.fill), angle: Math.round(num(g.angle, 90, 0, 360)) };
   }
   const sh = num(raw.shadow, 0, 0, ELEMENT_SHADOW_MAX);
@@ -263,9 +278,10 @@ export function normalizeElement(raw: unknown, fallbackId: string): DesignElemen
     el.shadowColor = hex(raw.shadowColor, "#000000");
   }
   // R57: micro-interactions (breathe/glow/float/spin/wiggle/blob/morph, orbit spark, hover).
-  Object.assign(el, normalizeElementMotion(raw, el.shape, isIcon));
+  Object.assign(el, normalizeElementMotion(raw, el.shape, isIcon || !!anim));
   const en = normalizeEnter(raw.enter);
   if (en) el.enter = en;
+  if (anim) el.anim = anim;
   return el;
 }
 
@@ -334,7 +350,8 @@ export function elementStyle(el: DesignElement): StyleMap {
     pointerEvents: "none",
   };
   if (el.h === null) {
-    s.aspectRatio = "1 / 1";
+    // R60: an animation keeps its file's own shape (width ÷ height).
+    s.aspectRatio = el.kind === "anim" && el.anim?.ratio ? `${el.anim.ratio} / 1` : "1 / 1";
     s.height = "auto";
   } else if (el.shape === "line") {
     s.height = `${Math.max(1, el.strokeWidth)}px`;
@@ -565,6 +582,7 @@ export function elementPosition(el: DesignElement, device: "desktop" | "mobile")
 
 /** Friendly name for a shape/icon layer. */
 export function elementLabel(el: DesignElement, iconLabels: Record<string, string> = {}): string {
+  if (el.kind === "anim") return animLabel(el.anim);
   if (el.kind === "icon") return `${el.icon?.startsWith("o-") ? "Object" : "Icon"} — ${iconLabels[el.icon ?? ""] ?? el.icon ?? "icon"}`;
   return SHAPE_KINDS.find((k) => k.id === el.shape)?.label ?? "Shape";
 }
@@ -591,6 +609,13 @@ export function __runBannerElementsTests(): { passed: number; failed: number } {
   ok(d.h === null, "circle keeps square");
   ok(defaultElement("rect").h === 30 && defaultElement("line").strokeWidth === 3, "rect/line defaults");
   ok(normalizeElement({ kind: "video" }, "x") === null, "unknown kind rejected");
+  // R60: animation layers
+  const SBA = "https://abc.supabase.co/storage/v1/object/public/media/banner/0123456789abcdef-leaf.lottie";
+  const an = defaultAnimElement({ engine: "lottie", src: SBA, ratio: 1.5 }, { id: "leaf" });
+  ok(J(normalizeElement(JSON.parse(J(an)), "x")) === J(an), "animation round-trips");
+  ok(normalizeElement({ kind: "anim", anim: { src: "https://evil.com/a.lottie" } }, "x") === null && normalizeElement({ kind: "anim" }, "x") === null, "animation without a safe file dropped");
+  ok(normalizeElement({ kind: "anim", anim: { src: SBA }, gradient: { from: "#000000", to: "#ffffff" }, motion: "blob" }, "x")!.gradient === undefined, "no gradient/blob on animations");
+  ok(elementStyle(an).aspectRatio === "1.5 / 1" && elementLabel(an) === "Lottie — leaf.lottie", "animation keeps file shape + label");
   ok(normalizeElement("nope", "x") === null, "non-object rejected");
   const bad = normalizeElement({ shape: "blob", x: 500, w: -3, fill: "red", rotate: 999, opacity: 0, id: "A B!" }, "el-1")!;
   ok(bad.shape === "rect" && bad.x === 100 && bad.w === 1, "clamped shape/x/w");

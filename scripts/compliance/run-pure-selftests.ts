@@ -974,6 +974,7 @@ import { __runGifCoreTests } from "../../src/lib/media/gif-core";
 import { __runUploadPolicyCoreTests } from "../../src/lib/media/upload-policy-core";
 import { __runCarouselAutoplayCoreTests } from "../../src/lib/site/carousel-autoplay-core";
 import { __runFileSignatureCoreTests } from "../../src/lib/media/file-signature-core";
+import { __runBannerAnimTests } from "../../src/lib/cms/banner-anim-core";
 import { __runEditConflictCoreTests } from "../../src/lib/cms/edit-conflict-core";
 import { __runContentScheduleCoreTests } from "../../src/lib/cms/content-schedule-core";
 import { __runContentReleaseCoreTests } from "../../src/lib/cms/content-release-core";
@@ -2294,7 +2295,7 @@ __runLiquidVolumeTests();
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
-  assertRan("banner-elements-core", __runBannerElementsTests(), 45); // R55-S2/S3: shapes, layers, icons
+  assertRan("banner-elements-core", __runBannerElementsTests(), 52); // R55-S2/S3: shapes, layers, icons
   assertRan("color-input-core", __runColorInputTests(), 16); // R56-S1 any-colour input + recent colours
   assertRan("custom-font-core", __runCustomFontTests(), 19); // R56-S2 owner-uploaded fonts (licence box, byte sniff, same-origin @font-face)
   assertRan("banner-arrange-core", __runBannerArrangeTests(), 26); // R56-S3 multi-select, align/distribute, duplicate, copy/paste, rotate, snap
@@ -2315,9 +2316,10 @@ __runLiquidVolumeTests();
   assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets
   assertRan("edit-target-core", __runEditTargetCoreTests(), 300); // R43: ✎ Edit button router
   assertRan("gif-core", __runGifCoreTests(), 21); // R43: GIF banners + honest upload cap
-  assertRan("upload-policy-core", __runUploadPolicyCoreTests(), 95); // R44: big uploads + video banners
+  assertRan("upload-policy-core", __runUploadPolicyCoreTests(), 119); // R44: big uploads + video banners
   assertRan("carousel-autoplay-core", __runCarouselAutoplayCoreTests(), 60); // R45-S1: APG carousel + Baymard rotation policy
-  assertRan("file-signature-core", __runFileSignatureCoreTests(), 50); // R45-S2: magic-byte + SVG active-content check (WHATWG + OWASP)
+  assertRan("file-signature-core", __runFileSignatureCoreTests(), 61); // R45-S2: magic-byte + SVG active-content check (WHATWG + OWASP); R60 .riv/.lottie/Lottie JSON
+  assertRan("banner-anim-core", __runBannerAnimTests(), 37); // R60-S2 Lottie + Rive animation layers
   assertRan("edit-conflict-core", __runEditConflictCoreTests(), 28); // R45-S2: optimistic locking on content_blocks.updated_at
   assertRan("content-schedule-core", __runContentScheduleCoreTests(), 61); // R46-S1: scheduled publish/unpublish (Pacific -> UTC, 5-min grid, due selection)
   assertRan("content-release-core", __runContentReleaseCoreTests(), 30); // R46-S2: releases (bundle of changes that go live together)

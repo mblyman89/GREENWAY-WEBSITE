@@ -140,6 +140,42 @@ export function svgActiveContent(text: string): string | null {
   return null;
 }
 
+/**
+ * R60 — Rive runtime file. rive.app/docs/runtimes/advanced-topic/format:
+ * the 4-byte fingerprint "RIVE", then the major version as a varuint; the
+ * runtimes read only major 7 ("the editor no longer exports format 6").
+ */
+export function isRive(b: Bytes): boolean {
+  return ascii(b, 0, 4) === "RIVE" && b[4] === 7;
+}
+
+/**
+ * R60 — dotLottie: a ZIP (local file header "PK\x03\x04") whose first entry
+ * is manifest.json or sits in a dotLottie folder (v1 animations/ images/,
+ * v2 a/ i/ t/ s/). The entry name length is at offset 26 (2 bytes LE) and the
+ * name starts at 30 (PKWARE APPNOTE 4.3.7). A random ZIP does not match.
+ */
+export function isDotLottie(b: Bytes): boolean {
+  if (!startsWith(b, [0x50, 0x4b, 0x03, 0x04]) || b.length < 31) return false;
+  const n = b[26]! + (b[27]! << 8);
+  if (n < 2 || n > 255) return false;
+  const name = ascii(b, 30, n);
+  return name === "manifest.json" || /^(a|i|t|s|animations|images|themes|states)\//.test(name);
+}
+
+/**
+ * R60 — Lottie JSON (Bodymovin): a JSON object whose top level carries the
+ * Lottie header keys — v (version), fr (frame rate), ip / op (in / out
+ * frame), w / h (size). Exporters write these first, so 4 of the 6 must be in
+ * the first bytes we read. Plain JSON data files do not match.
+ */
+export function isLottieJson(b: Bytes): boolean {
+  const t = decodeText(b.subarray(0, SIGNATURE_READ_BYTES)).replace(/^\uFEFF/, "").trimStart();
+  if (!t.startsWith("{")) return false;
+  const keys = ["v", "fr", "ip", "op", "w", "h"].filter((k) => new RegExp(`"${k}"\\s*:`).test(t));
+  return keys.length >= 4;
+}
+
 /** Detect the real type from the first bytes. Null if unknown. */
 export function sniffMime(b: Bytes): string | null {
   if (isPng(b)) return "image/png";
@@ -147,11 +183,14 @@ export function sniffMime(b: Bytes): string | null {
   if (isGif(b)) return "image/gif";
   if (isWebp(b)) return "image/webp";
   if (isPdf(b)) return "application/pdf";
+  if (isRive(b)) return "application/octet-stream";
+  if (isDotLottie(b)) return "application/zip+dotlottie";
   if (isWebm(b)) return "video/webm";
   if (isMp4(b)) return "video/mp4";
   if (ascii(b, 4, 4) === "ftyp" && ftypBrands(b)?.[0] === "qt  ") return "video/quicktime";
   if (ascii(b, 4, 4) === "ftyp" && ["heic", "heix", "mif1", "msf1"].includes(ftypBrands(b)?.[0] ?? "")) return "image/heic";
   if (isSvgText(decodeText(b.subarray(0, SNIFF_BYTES)))) return "image/svg+xml";
+  if (isLottieJson(b)) return "application/json";
   return null;
 }
 
@@ -166,6 +205,9 @@ const LABEL: Record<string, string> = {
   "video/webm": "WebM",
   "video/quicktime": "QuickTime .MOV",
   "image/heic": "iPhone HEIC",
+  "application/octet-stream": "Rive (.riv)",
+  "application/zip+dotlottie": "dotLottie (.lottie)",
+  "application/json": "Lottie JSON",
 };
 const label = (m: string) => LABEL[m] ?? m;
 
@@ -185,7 +227,7 @@ export function checkFileSignature(declaredMime: unknown, bytes: Bytes, filename
   }
   const detected = sniffMime(bytes);
   if (detected !== declared) {
-    const what = detected ? `really a ${label(detected)} file` : "not a recognisable image, video or PDF";
+    const what = detected ? `really a ${label(detected)} file` : "not a recognisable image, video, PDF or animation";
     return {
       ok: false,
       detected,
@@ -312,6 +354,27 @@ export function __runFileSignatureCoreTests(): { passed: number; failed: number 
   ok(!checkFileSignature(42, png).ok, "non-string mime refused");
   ok(!checkFileSignature("image/png", "x" as unknown as Uint8Array).ok, "non-bytes refused");
   ok(SNIFF_BYTES === 1445 && SIGNATURE_READ_BYTES >= SNIFF_BYTES, "read covers WHATWG header");
+
+  // R60: Rive + Lottie (real headers: cdn.rive.app vehicles.riv, a lottie.host .lottie).
+  const riv = pad(B("RIVE", 7, 0, 0xcf, 0x14, 0xa0, 1));
+  const riv6 = pad(B("RIVE", 6, 0));
+  const le16 = (n: number) => [n & 255, n >> 8];
+  const zipEntry = (name: string) => pad(B("PK", 3, 4, 0x14, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...le16(name.length), 0, 0, name), 80);
+  const lottieZip = zipEntry("manifest.json");
+  const lottieV2 = zipEntry("a/main.json");
+  const otherZip = zipEntry("word/document.xml");
+  const lottieJson = B('{"v":"4.8.0","ip":12,"op":36,"fr":24,"w":1000,"h":1000,"nm":"L","assets":[],"layers":[]}');
+  const dataJson = B('{"name":"menu","items":[1,2,3],"v":2}');
+  ok(isRive(riv) && !isRive(riv6) && sniffMime(riv) === "application/octet-stream", "rive v7 only");
+  ok(isDotLottie(lottieZip) && isDotLottie(lottieV2) && sniffMime(lottieZip) === "application/zip+dotlottie", "dotlottie v1 + v2");
+  ok(!isDotLottie(otherZip) && sniffMime(otherZip) === null, "office zip is not dotlottie");
+  ok(isLottieJson(lottieJson) && sniffMime(lottieJson) === "application/json", "lottie json");
+  ok(!isLottieJson(dataJson) && sniffMime(dataJson) === null, "plain json is not lottie");
+  ok(checkFileSignature("application/octet-stream", riv, "truck.riv").ok, "riv ok");
+  ok(checkFileSignature("application/zip+dotlottie", lottieZip).ok && checkFileSignature("application/json", lottieJson).ok, "lottie ok");
+  const exeAsRiv = checkFileSignature("application/octet-stream", exe, "x.riv");
+  ok(!exeAsRiv.ok && /Rive/.test(exeAsRiv.error), "exe renamed .riv refused");
+  ok(!checkFileSignature("application/json", dataJson).ok && !checkFileSignature("application/zip+dotlottie", otherZip).ok, "look-alikes refused");
 
   return { passed, failed };
 }
