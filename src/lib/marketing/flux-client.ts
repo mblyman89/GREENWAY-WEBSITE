@@ -33,6 +33,7 @@ import {
   type FluxImageSettings,
   type FluxPollParse,
 } from "./flux-core";
+import { buildDraftEnhanceRequest, buildFluxVideoRequest, type FluxVideoSettings } from "./flux-video-core";
 
 /** Thrown when FLUX credentials are not configured. */
 export class FluxNotConfiguredError extends Error {
@@ -205,4 +206,28 @@ export async function submitFluxImages(settings: FluxImageSettings): Promise<Sub
     }),
   );
   return { ok: true, model: built.model.id, width: built.width, height: built.height, warnings: built.warnings, prompt: String(built.bodies[0].prompt), tasks };
+}
+
+export type SubmitFluxVideoResult =
+  | { ok: true; endpoint: string; warnings: string[]; task: FluxSubmitted }
+  | { ok: false; error: string };
+
+/**
+ * Submit one FLUX 3 video task (text/image/video → video, edit, upscale, or a
+ * draft → full-quality enhance). Bodies come only from the pure, schema-exact
+ * builders in flux-video-core. The browser polls the task like images.
+ */
+export async function submitFluxVideo(
+  input: { kind: "generate"; settings: FluxVideoSettings } | { kind: "enhance"; draftCache: string; resolution: string; safetyTolerance: number },
+): Promise<SubmitFluxVideoResult> {
+  const ctx = await fluxContext();
+  if (!ctx) return { ok: false, error: new FluxNotConfiguredError().message };
+  const built =
+    input.kind === "enhance"
+      ? buildDraftEnhanceRequest(input.draftCache, input.resolution, input.safetyTolerance)
+      : buildFluxVideoRequest(input.settings);
+  if (!built.ok) return built;
+  const task = await submitFluxTask(built.endpoint, built.body);
+  if (!task.ok) return { ok: false, error: task.error };
+  return { ok: true, endpoint: built.endpoint, warnings: built.warnings, task };
 }

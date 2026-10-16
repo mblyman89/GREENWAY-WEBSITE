@@ -12,11 +12,12 @@
  */
 import { useState } from "react";
 import { FluxImageStudio } from "./flux/FluxImageStudio";
+import { FluxVideoStudio, type VideoSource } from "./flux/FluxVideoStudio";
 import { MidjourneyPromptBuilder, type ReferenceImage } from "./MidjourneyPromptBuilder";
 
-export type { ReferenceImage };
+export type { ReferenceImage, VideoSource };
 
-type StudioTab = "flux-image" | "midjourney";
+type StudioTab = "flux-image" | "flux-video" | "midjourney";
 
 const STUDIO_TABS: { key: StudioTab; icon: string; label: string; blurb: string }[] = [
   {
@@ -24,6 +25,12 @@ const STUDIO_TABS: { key: StudioTab; icon: string; label: string; blurb: string 
     icon: "⚡",
     label: "FLUX Image",
     blurb: "Generate images with FLUX exactly like the BFL Playground. Your prompt is sent word for word; results save to the media library as drafts.",
+  },
+  {
+    key: "flux-video",
+    icon: "🎬",
+    label: "FLUX Video",
+    blurb: "FLUX 3 video: text, image or video → video, plus edit and upscale. Draft first for about a third of the cost, then enhance to full quality.",
   },
   {
     key: "midjourney",
@@ -35,12 +42,14 @@ const STUDIO_TABS: { key: StudioTab; icon: string; label: string; blurb: string 
 
 export function MidjourneyBuilder({
   references,
+  videos,
   aiConfigured,
   fluxConfigured,
   fluxDefaultModel,
   fluxCredits,
 }: {
   references: ReferenceImage[];
+  videos: VideoSource[];
   aiConfigured: boolean;
   fluxConfigured: boolean;
   fluxDefaultModel: string;
@@ -79,6 +88,9 @@ export function MidjourneyBuilder({
 
       <div hidden={activeTab !== "flux-image"}>
         <FluxImageStudio library={references} configured={fluxConfigured} defaultModel={fluxDefaultModel} credits={fluxCredits} />
+      </div>
+      <div hidden={activeTab !== "flux-video"}>
+        <FluxVideoStudio images={references} videos={videos} configured={fluxConfigured} credits={fluxCredits} />
       </div>
       <div hidden={activeTab !== "midjourney"}>
         <MidjourneyPromptBuilder references={references} aiConfigured={aiConfigured} />

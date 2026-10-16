@@ -178,6 +178,7 @@ import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competiti
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
 import { __runFluxPresetsTests } from "../../src/lib/marketing/flux-presets-core";
+import { __runFluxVideoTests } from "../../src/lib/marketing/flux-video-core";
 import { __runCreativePlacementsTests } from "../../src/lib/marketing/creative-placements-core";
 import { __runCcrsWeekTests } from "../../src/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "../../src/lib/compliance/ccrs-deadline-core";
@@ -1199,6 +1200,7 @@ __runLiquidVolumeTests();
   __runMidjourneyCoreTests();
   __runFluxCoreTests();
   console.log(__runFluxPresetsTests());
+  console.log(__runFluxVideoTests());
   __runCreativePlacementsTests();
   const ccrsWeek = __runCcrsWeekTests();
   if (ccrsWeek.failed > 0) throw new Error(`ccrs-week-core: ${ccrsWeek.failed} failure(s)`);
