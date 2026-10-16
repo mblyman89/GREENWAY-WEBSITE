@@ -22,6 +22,81 @@ import { Button } from "@/components/admin/ui";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { designFromLegacy, type BannerDesign, type DesignBind, type DesignPreset } from "@/lib/cms/banner-design-core";
+import type { BrandSaved } from "@/lib/brand/brand-kit-core";
+import { listBrandBannersAction, saveBrandBannerAction } from "@/app/admin/settings/branding/brand-actions";
+
+/**
+ * R64: the Brand hub's saved banners inside every Design Studio — start from
+ * one (replaces this design, still needs Save draft) or save this design to
+ * the brand kit's library.
+ */
+function BrandBannersRow({ design, imageSrc, onPick }: { design: BannerDesign; imageSrc: string; onPick: (d: BannerDesign) => void }) {
+  const [list, setList] = useState<BrandSaved[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      setList(await listBrandBannersAction());
+    } catch {
+      setMsg("Couldn't load the saved brand banners.");
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="rounded-lg border border-white/10 p-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Brand banners:</span>
+        <Button type="button" variant="neutral" size="sm" disabled={busy} onClick={() => void (list ? setList(null) : load())}>
+          {list ? "Hide saved brand banners" : "Start from a saved brand banner"}
+        </Button>
+        <Button
+          type="button"
+          variant="neutral"
+          size="sm"
+          disabled={busy}
+          onClick={async () => {
+            const name = window.prompt("Name for this saved brand banner:", "Saved banner");
+            if (name === null) return;
+            setBusy(true);
+            const r = await saveBrandBannerAction({ name, image: imageSrc, design }).catch(() => ({ ok: false as const, error: "Couldn't save it." }));
+            setBusy(false);
+            if (r.ok) {
+              setMsg("Saved to Website → Branding → Saved banners.");
+              if (list) setList(r.banners);
+            } else setMsg(r.error);
+          }}
+        >
+          Save this design to brand banners
+        </Button>
+      </div>
+      {msg ? <p className="mt-1 text-[var(--admin-gold)]">{msg}</p> : null}
+      {list ? (
+        list.length === 0 ? (
+          <p className="mt-2 text-[var(--admin-text-muted)]">No saved brand banners yet — add some in Website → Branding.</p>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {list.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                className="rounded border border-white/15 px-2 py-1 hover:border-[var(--admin-accent)]"
+                onClick={() => {
+                  if (!window.confirm(`Replace this design with "${b.name}"? (Your picture stays; Save draft to keep it.)`)) return;
+                  onPick({ ...b.design, enabled: true });
+                  setMsg(`Loaded "${b.name}" — Save draft to keep it.`);
+                }}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        )
+      ) : null}
+    </div>
+  );
+}
 
 const BannerStudio = dynamic(() => import("@/components/admin/banner-studio/BannerStudio"), {
   ssr: false,
@@ -44,6 +119,7 @@ export function DesignCard({
   mediaChoices,
   onLegacyEdit,
   makeNew,
+  brandBanners = true,
 }: {
   title: string;
   description: string;
@@ -62,6 +138,8 @@ export function DesignCard({
   onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
   /** R61 S3: optional custom first design (e.g. a card-shaped frame). */
   makeNew?: () => BannerDesign;
+  /** R64: show the "saved brand banners" row (off inside the Brand hub itself). */
+  brandBanners?: boolean;
 }) {
   // R53: the studio is open by default (owner: studio first, basic second).
   const [open, setOpen] = useState(true);
@@ -101,6 +179,7 @@ export function DesignCard({
               {open ? "Hide design studio" : "Open design studio"}
             </Button>
           </div>
+          {brandBanners ? <BrandBannersRow design={design} imageSrc={imageSrc} onPick={(d) => onChange(d)} /> : null}
           {open ? (
             <BannerStudio
               design={design}

@@ -492,6 +492,7 @@ export function BrandHubEditor({
                 preset="section"
                 seed={{}}
                 posts={posts}
+                brandBanners={false}
               />
               <Button
                 type="button"

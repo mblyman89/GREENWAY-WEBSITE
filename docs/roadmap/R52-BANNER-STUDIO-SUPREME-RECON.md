@@ -731,3 +731,27 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   - The cause: on every settings change, `GlSmoke.destroy()` called `WEBGL_lose_context.loseContext()`. The effect then re-created the smoke on the same canvas, and `getContext()` returns that lost context permanently, so nothing drew. The preview came back only after an unrelated remount.
   - The fix: `destroy()` now frees only the program and buffer. The context is released only on a real unmount (`destroy(true)`).
 - **No migration this round.**
+
+## §21 — R64: editors cleanup, Vendors center, Brand hub
+
+- **S1: big live-preview window removed** from every page editor (`ContentEditorShell` takes `previewPath` and shows "Preview in Website Hub ↗").
+- **S2: desktop phone-number mode.** New `header.phone.mode` / `locations.phone.mode` selects: overlay (today), reveal the real number on hover, or plain number. Tap-to-call on phones is unchanged.
+- **S3: Loyalty form logo** (`loyalty.form.logo`): picture, size, alt text, show/hide, on a "Form logo" tab.
+- **S4: About side panel** (`about.side.panel`): the container to the right of the statement card. It can be a picture or logo (fit, padding, alt) or a full Design Studio card, on a new "Side panel" tab.
+- **S5: Vendors editor.** Tabs: Top banner | Center section | Brands banner | Wording & more. `vendors.center.layout` gives full control of the center section:
+  - heading, paragraph and alignment;
+  - up to 4 email or link buttons in 3 styles;
+  - the email line;
+  - up to 12 contact cards (add, remove, reorder, hide, accent), plus column count.
+
+  A blank block keeps the legacy look.
+- **S6: Brand hub** (`brand.kit`, richjson). Website → Branding tabs:
+  - **Colours:** 7 presets, hex/rgb input, colour wheel with brightness, and a quick look. Only changed tokens are written as CSS vars on `<html>`.
+  - **Logos:** the header logo applies site-wide (`Header.tsx`). A logo library with file import to the Media Library as `brand-logo`.
+  - **Fonts:** the existing `site.font.*` editor, plus font import.
+  - **Messaging:** tagline, slogans, mission, vision, about short/long, pitch, voice and keywords.
+  - **Saved banners**, and **Social & guidelines**.
+
+  A blank kit renders byte-identical.
+- **S7: saved brand banners in every Design Studio.** `DesignCard` gets a "Start from a saved brand banner" / "Save this design to brand banners" row (`listBrandBannersAction` / `saveBrandBannerAction`; the save writes both the draft and the live library).
+- **No migration this round.** All new blocks are lazily seeded richjson.
