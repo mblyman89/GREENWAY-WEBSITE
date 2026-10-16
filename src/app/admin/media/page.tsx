@@ -13,6 +13,7 @@ import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
 import { MEDIA_PURPOSES } from "@/lib/media/taxonomy";
 import { pickListParams, withListParams } from "@/lib/media/return-state-core";
 import { bulkDeleteMediaAction } from "./actions";
+import { bulkOrganizeMediaAction } from "./organize-actions";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { EmptyState } from "@/components/admin/ux";
@@ -218,6 +219,7 @@ export default async function MediaPage({
                 <MediaGrid
                   returnTo={withListParams("/admin/media", listParams)}
                   bulkDeleteAction={bulkDeleteMediaAction}
+                  organizeAction={bulkOrganizeMediaAction}
                   items={shown.map((m: MediaAsset) => ({
                     asset: m,
                     url: publicUrlForKey(m.storage_key),

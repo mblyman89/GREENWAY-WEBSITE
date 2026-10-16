@@ -19,7 +19,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { Button } from "@/components/admin/ui/Button";
-import { purposeLabel } from "@/lib/media/taxonomy";
+import { purposeLabel, MEDIA_PURPOSES } from "@/lib/media/taxonomy";
 
 function isImage(mime: string | null): boolean {
   return Boolean(mime && mime.startsWith("image/"));
@@ -48,8 +48,11 @@ export function MediaGrid({
   items,
   returnTo,
   bulkDeleteAction,
+  organizeAction,
 }: {
   items: MediaGridItem[];
+  /** R65 S4: bulk organise (purpose / labels / status / auto-file). */
+  organizeAction?: (formData: FormData) => void | Promise<void>;
   /** The current (filtered) library URL to return to after a bulk delete. */
   returnTo: string;
   bulkDeleteAction: (formData: FormData) => void | Promise<void>;
@@ -134,6 +137,35 @@ export function MediaGrid({
           </form>
         )}
       </div>
+
+      {/* R65 S4: organise the selection — purpose, labels, status, or auto-file. */}
+      {selectMode && organizeAction && (
+        <form action={organizeAction} className="flex flex-wrap items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-2 text-xs">
+          <input type="hidden" name="returnTo" value={returnTo} />
+          {Array.from(selected).map((id) => (
+            <input key={id} type="hidden" name="ids" value={id} />
+          ))}
+          <span className="font-semibold text-[var(--admin-text)]">🗂️ Organise {count || "…"}:</span>
+          <select name="purpose" defaultValue="" aria-label="Set purpose" className="rounded border border-[var(--admin-border)] bg-black px-2 py-1">
+            <option value="">Purpose — keep</option>
+            {MEDIA_PURPOSES.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+          <input name="add_tags" placeholder="Add labels (comma)" aria-label="Add labels" className="w-36 rounded border border-[var(--admin-border)] bg-black px-2 py-1" />
+          <input name="remove_tags" placeholder="Remove labels" aria-label="Remove labels" className="w-32 rounded border border-[var(--admin-border)] bg-black px-2 py-1" />
+          <select name="status" defaultValue="" aria-label="Set status" className="rounded border border-[var(--admin-border)] bg-black px-2 py-1">
+            <option value="">Status — keep</option>
+            <option value="published">Publish</option>
+            <option value="draft">Make draft</option>
+            <option value="archived">Archive</option>
+          </select>
+          <Button type="submit" name="mode" value="apply" size="sm" variant="save" disabled={count === 0}>Apply</Button>
+          <Button type="submit" name="mode" value="auto" size="sm" variant="neutral" disabled={count === 0} title="Let the rules pick each file's purpose from its name, source and size (only applied when confident).">
+            ✨ Auto-file
+          </Button>
+        </form>
+      )}
 
       {/* Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
