@@ -1,11 +1,16 @@
 import Image from "next/image";
 import { SiteText } from "@/components/site/SiteText";
 import { getCoreValuesForRender } from "@/lib/about/core-values-store";
+import { getContentValues } from "@/lib/cms/render-content";
+import { DesignedCard } from "@/components/site/DesignedCard";
+import { ABOUT_SIDE_BLOCK, aboutSideUsesDesign, resolveAboutSide } from "@/lib/about/about-side-core";
 
 export async function AboutContent() {
   // Owner-managed "Our Values" cards (draft-aware). Falls back to the four
   // shipped values so the section is byte-identical until edited + published.
-  const values = await getCoreValuesForRender();
+  const [values, sideCopy] = await Promise.all([getCoreValuesForRender(), getContentValues([ABOUT_SIDE_BLOCK])]);
+  // R64: the owner-editable side panel (blank → the shipped logo, unchanged).
+  const side = resolveAboutSide(sideCopy[ABOUT_SIDE_BLOCK]);
 
   return (
     <section className="relative overflow-hidden bg-black text-white">
@@ -44,16 +49,40 @@ export async function AboutContent() {
             </div>
           </article>
 
-          <div className="flex min-h-[22rem] items-center justify-center rounded-[1.35rem] border border-[var(--gold)]/25 bg-black p-5 shadow-2xl shadow-black/35 md:min-h-[34rem] md:rounded-[2rem] md:p-8">
-            <Image
-              src="/brand/greenway-black-gold-logo.png"
-              alt="Greenway Marijuana black and gold logo"
-              width={900}
-              height={900}
-              priority
-              className="h-full max-h-[30rem] w-full object-contain md:max-h-[42rem]"
+          {aboutSideUsesDesign(side) ? (
+            <DesignedCard
+              design={side.design}
+              imageSrc={side.src}
+              imageAlt={side.alt}
+              legacy={{}}
+              label={side.alt || "Greenway Marijuana"}
+              className="self-center"
             />
-          </div>
+          ) : side.fit === "cover" ? (
+            <div className="relative min-h-[22rem] overflow-hidden rounded-[1.35rem] border border-[var(--gold)]/25 bg-black shadow-2xl shadow-black/35 md:min-h-[34rem] md:rounded-[2rem]">
+              <Image
+                src={side.src}
+                alt={side.alt}
+                fill
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                priority
+                unoptimized={/^https:/.test(side.src) && !/\.supabase\.co\/storage\/v1\/object\/public\//.test(side.src)}
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            <div className={`flex min-h-[22rem] items-center justify-center rounded-[1.35rem] border border-[var(--gold)]/25 bg-black shadow-2xl shadow-black/35 md:min-h-[34rem] md:rounded-[2rem] ${side.padded ? "p-5 md:p-8" : ""}`}>
+              <Image
+                src={side.src}
+                alt={side.alt}
+                width={900}
+                height={900}
+                priority
+                unoptimized={/^https:/.test(side.src) && !/\.supabase\.co\/storage\/v1\/object\/public\//.test(side.src)}
+                className="h-full max-h-[30rem] w-full object-contain md:max-h-[42rem]"
+              />
+            </div>
+          )}
         </div>
 
         <section aria-labelledby="about-values-title" className="mt-12 border-t border-white/10 pt-10 md:mt-18 md:pt-14 lg:mt-20">

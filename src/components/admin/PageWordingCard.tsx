@@ -74,7 +74,9 @@ export async function PageWordingCard({
   const orderOf = (key: string) =>
     seedOrder.has(key) ? (seedOrder.get(key) as number) : Number.MAX_SAFE_INTEGER;
   const blocks = allBlocks
-    .filter((b) => b.page === slug)
+    // R64: "richjson" blocks (e.g. the About side panel) have their own
+    // dedicated editors / tabs, so the plain wording card skips them.
+    .filter((b) => b.page === slug && b.field_type !== "richjson")
     .sort((a, b) => orderOf(a.block_key) - orderOf(b.block_key));
   const notSeeded = allBlocks.length === 0;
 

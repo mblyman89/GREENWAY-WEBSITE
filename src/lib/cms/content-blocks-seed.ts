@@ -42,6 +42,7 @@ import {
 } from "@/lib/vendors/vendor-relations-core";
 import { BLOG_CONTENT_BLOCKS } from "@/lib/blog/blog-content-core";
 import { LOYALTY_LOGO_BLOCK, defaultLoyaltyLogo, serializeLoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
+import { ABOUT_SIDE_BLOCK, defaultAboutSide, serializeAboutSide } from "@/lib/about/about-side-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -338,6 +339,16 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "richjson",
     seo_impact: true,
     defaultValue: serializeLoyaltyHeroPresentation(defaultLoyaltyHeroPresentation()),
+  },
+  {
+    // R64: the About page's right-hand container (logo / picture / studio card).
+    block_key: ABOUT_SIDE_BLOCK,
+    page: "about",
+    section: "intro",
+    label: "About \u2014 side panel",
+    help_text: "The container to the right of the statement card. Pick a picture or logo, or build a card in the Design Studio.",
+    field_type: "richjson",
+    defaultValue: serializeAboutSide(defaultAboutSide()),
   },
   {
     // R64: the logo at the top of the signup form (picture, size, show/hide).

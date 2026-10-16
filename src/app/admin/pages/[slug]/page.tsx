@@ -20,7 +20,12 @@ import { getCoreValuesDoc } from "@/lib/about/core-values-store";
 import {
   saveCoreValuesDraftAction,
   publishCoreValuesAction,
+  saveAboutSideDraftAction,
+  publishAboutSideAction,
 } from "../about-values-actions";
+import { AboutSidePanelEditor } from "@/components/admin/about/AboutSidePanelEditor";
+import { ABOUT_SIDE_BLOCK } from "@/lib/about/about-side-core";
+import { ensureContentBlocksSeeded, getContentBlock } from "@/lib/cms/content-store";
 import { listSections } from "@/lib/cms/page-sections-store";
 import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
@@ -128,12 +133,13 @@ export default async function PageBuilderPage({
   // Old deep links keep working: ?tab=carousel = Main banner, ?tab=sections =
   // every home section on one screen (the pre-R61 view, so #section-<id>
   // anchors always land). FAQ keeps (sections | qanda); other pages: sections.
-  let tab: HomeTab | "sections" | "qanda" = isHome ? "carousel" : "sections";
+  let tab: HomeTab | "sections" | "qanda" | "side" = isHome ? "carousel" : "sections";
   if (isHome) {
     const want = sp.tab === "main" ? "carousel" : sp.tab;
     if (want && (HOME_TABS as readonly string[]).includes(want)) tab = want as HomeTab;
     else if (want === "sections") tab = "sections";
   } else if (isFaq && sp.tab === "qanda") tab = "qanda";
+  else if (isAbout && sp.tab === "side") tab = "side";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -172,7 +178,14 @@ export default async function PageBuilderPage({
 
   // About page: load the owner-managed "Our Values" cards (single document,
   // draft-aware). Falls back to the shipped four cards pre-migration/pre-seed.
-  const aboutValuesDoc = isAbout ? await getCoreValuesDoc() : null;
+  const aboutValuesDoc = isAbout && tab !== "side" ? await getCoreValuesDoc() : null;
+  // R64: the About side panel (the container right of the statement card).
+  let aboutSideBlock = null as Awaited<ReturnType<typeof getContentBlock>>;
+  if (isAbout && tab === "side") {
+    aboutSideBlock = await getContentBlock(ABOUT_SIDE_BLOCK);
+    if (!aboutSideBlock && (await ensureContentBlocksSeeded()) > 0) aboutSideBlock = await getContentBlock(ABOUT_SIDE_BLOCK);
+  }
+  const aboutPosts = isAbout && tab === "side" ? await listPublishedPostLinks().catch(() => []) : [];
 
   return (
     <div>
@@ -245,6 +258,27 @@ export default async function PageBuilderPage({
           </div>
         ) : null}
 
+        {isAbout ? (
+          <div className="flex gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
+            {([
+              ["sections", "Wording, values & banners"],
+              ["side", "Side panel"],
+            ] as const).map(([t, label]) => (
+              <a
+                key={t}
+                href={`/admin/pages/about?tab=${t}`}
+                className={
+                  tab === t
+                    ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                    : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
+                }
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+        ) : null}
+
         {/* Preview link → Site Content preview screen */}
         <p className="text-sm text-[var(--admin-text-muted)]">
           <a
@@ -264,7 +298,7 @@ export default async function PageBuilderPage({
           Content, just scoped to this page. Additive only: the blocks also
           remain in Site Content until a later mini-slice removes them there.
         */}
-        {PAGES_WITH_WORDING.has(slug) ? (
+        {PAGES_WITH_WORDING.has(slug) && tab !== "side" ? (
           <PageWordingCard slug={slug} previewPath={config.previewPath} />
         ) : null}
 
@@ -286,7 +320,20 @@ export default async function PageBuilderPage({
           />
         ) : null}
 
-        {isHome && tab === "carousel" ? (
+        {isAbout && tab === "side" ? (
+          aboutSideBlock ? (
+            <AboutSidePanelEditor
+              draftJson={aboutSideBlock.draft_value ?? null}
+              publishedJson={aboutSideBlock.published_value ?? null}
+              mediaChoices={mediaChoices}
+              posts={aboutPosts}
+              saveDraftAction={saveAboutSideDraftAction}
+              publishAction={publishAboutSideAction}
+            />
+          ) : (
+            <p className="text-sm text-[var(--admin-gold)]">The side panel block isn&apos;t set up yet. Reload this page to create it.</p>
+          )
+        ) : isHome && tab === "carousel" ? (
           <CarouselTab mediaChoices={mediaChoices} />
         ) : isHome && tab === "typecards" ? (
           <TypeCardsTab mediaChoices={mediaChoices} />
