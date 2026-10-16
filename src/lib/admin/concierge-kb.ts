@@ -235,9 +235,12 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     tab: "MKTG & ADV",
     href: "/admin/marketing/midjourney",
     facts: [
-      "The Creative Studio has two tabs: FLUX (default, shown first) generates images at the exact pixel size for a chosen destination — website banners, social posts, email headers, blog heroes, or print/in-store pieces; the Midjourney tab builds a copy-paste prompt from the same brief.",
-      "Greenway AI drafts the image brief from a one-line idea, grounded in the store profile and LIVE weekly deals; the brief is shared between both tabs, so switching never loses your work.",
-      "Generated images are DRAFTS — review before using them on the website or in marketing.",
+      "The Creative Studio has three tabs: FLUX Image (default), FLUX Video, and Midjourney prompt.",
+      "FLUX Image works like the BFL Playground: the prompt is sent to FLUX exactly as typed. Settings are aspect ratio (or custom or exact size, or a website/social destination size), safety tolerance 0–5 (default 2), output format (JPEG/PNG/WebP), prompt upsampling, and 1, 2, 3, 4 or 8 images. There's an optional seed and a model choice (FLUX.2 max/pro/flex or FLUX 3 Image).",
+      "Reference images: up to 8 (FLUX.2) or 10 (FLUX 3). FLUX sees them in order as image 1, image 2…, so name them in the prompt. FLUX has no negative prompts; describe what you want instead.",
+      "FLUX Video (FLUX 3): text → video, image → video with 1–10 keyframes, continue a clip, edit a clip, or upscale a clip. Duration is 5–20 s (or auto), resolution HD/Full HD/QHD/4K, with optional audio. Draft first gives a fast HD preview for about a third of the cost; Enhance renders the same shot at full quality.",
+      "The Midjourney tab builds a copy-paste prompt from a structured brief, with Greenway AI assist grounded in the store profile and live weekly deals.",
+      "Generated images and videos are DRAFTS in the Media Library. Review them before using them on the website or in marketing.",
     ],
   },
 

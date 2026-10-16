@@ -665,3 +665,45 @@ Each one is opt-in ("custom design" toggle). The classic fields stay as the fall
   - FAQ items (`FaqItemCard`)
   - Home "Shop by Brand" vendor tiles (`VendorGlowCard` via `HomeBrands`)
   - Medical page cards ("What to bring", "Perks", "High-CBD", "Limits")
+
+## 19. R62: what shipped (4 slices). FLUX rebuilt to match the BFL Playground, plus FLUX 3 Video
+
+- **Root cause of the "single cannabis bud portrait" results (verified by reading the old code):**
+  - FLUX never received the owner's prompt. `buildFluxPrompt()` rebuilt it from Midjourney brief fields, joined with commas and with newlines stripped.
+  - It then appended destination hints and an "Avoid: …" line. FLUX has no negative prompts, so naming a thing pulls it in.
+  - Presets and AI assist were cannabis-retail oriented.
+  - Safety was forced to 5.
+  - Every result was re-encoded to WebP.
+- **S1: core (`flux-core.ts`, `flux-client.ts`).**
+  - The prompt is sent verbatim.
+  - Request bodies are schema-exact per model, from the live OpenAPI:
+    - FLUX.2 [max]/[pro]: `input_image…_8`, `width`/`height`, `disable_pup`, `seed`, `output_format`.
+    - FLUX.2 [flex]: adds `guidance` and `steps`.
+    - FLUX 3 Image: `images` ≤10, `aspect_ratio`, `resolution`, `grounding`.
+  - Defaults match BFL: safety 2, JPEG, upsampling on.
+  - Sizing: 15 aspect ratios, custom ratio and exact size, with 1/2/4 MP (multiples of 16, ≤4 MP).
+  - 1, 2, 3, 4 or 8 images are submitted in parallel. Seeds step +1 across a batch.
+  - Credit balance comes from `GET /v1/credits`.
+  - Results are saved with `optimize:false`, so the chosen format is kept.
+  - Polling URLs are restricted to https on `*.bfl.ai` (or the configured host), so there is no SSRF and no key leak.
+- **S2: FLUX Image studio (`components/admin/marketing/flux/*`).**
+  - Prompt box with general-purpose templates and snippets (`flux-presets-core.ts`, no cannabis bias) and a light lint (negative prompts, `--` flags, image N without a matching reference).
+  - Reference strip labelled image 1…N, with reorder, the library picker and upload. Large files are downscaled in the browser to fit the 4.5 MB body cap.
+  - Playground settings: aspect/custom, safety 0–5, format, upsampling, count. Extras that change the output: model, seed, exact size, destination sizes (size only), FLUX 3 resolution and grounding, flex guidance and steps.
+  - Polling runs in the browser (`useFluxJobs`, 2 s) through `checkFluxTasksAction`, which polls once per call and saves when ready. This means 8 images (or a long video) never hit a function timeout.
+  - The Midjourney builder moved to its own tab (`MidjourneyPromptBuilder.tsx`).
+- **S3: FLUX 3 Video (`flux-video-core.ts`, `FluxVideoStudio.tsx`, `VideoSettings.tsx`).**
+  - `/v1/flux-3-video` modes:
+    - t2v.
+    - i2v: 1–10 keyframes, evenly spaced or timed `[sec, img]` pairs.
+    - v2v: duration 5–15.
+    - draft_enhance.
+  - Also `/v1/flux-tools/video-edit-v1` and `/v1/flux-tools/video-upscale-v1`.
+  - Draft first is on by default: HD at about 1/3 cost, then one-click Enhance at a chosen resolution.
+  - Quick formats: Reel, Story, feed, 16:9, hero loop, in-store screen.
+  - Settings: duration auto or 5–20 s, resolution HD/FHD/QHD/4K, audio, safety.
+  - Video prompt templates and snippets cover camera moves, shot types, looks and "Audio:" lines.
+  - Results poll every 5 s and save as draft mp4. "Use as source clip" feeds continue/edit/upscale.
+- **S4: copy.** Updated the Integrations FLUX card, the integration guide, help content, the concierge KB and the marketing hub links.
+- **Not implemented (not in the strict OpenAPI):** the cookbook's `reference_images` for video.
+- **No migration this round.**

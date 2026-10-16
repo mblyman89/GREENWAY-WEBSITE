@@ -44,7 +44,7 @@ export default async function MarketingPage() {
               "Planning a campaign? Open its channel in the campaign planner and work the checklist top to bottom.",
               "Want a plan drafted for you? Give the AI strategist a plain-language goal — every draft is scanned against Washington advertising rules before it appears.",
               "Save the good drafts to the idea notebook and action them from there.",
-              "For imagery, jump to the Image prompt builder.",
+              "For images and video, open the Creative Studio (FLUX Image, FLUX Video, Midjourney prompt).",
             ]}
           >
             <p>
@@ -241,7 +241,7 @@ export default async function MarketingPage() {
               Idea notebook
             </h2>
             <a href="/admin/marketing/midjourney" className="text-sm text-emerald-700 hover:underline">
-              Image prompt builder →
+              Creative Studio (FLUX image & video) →
             </a>
           </div>
           <IdeaNotebook ideas={ideas} />
