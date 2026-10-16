@@ -20,11 +20,8 @@
  *    Tab to an item, arrows move 0.5% (Shift = 5%), Delete removes (asks
  *    first), Escape deselects. The side panels also have X/Y number boxes.
  *  - On "Phone" every move writes the phone overrides (mx/my/mw) only.
- *  - R53: clicking an item focuses it, so the arrow keys work straight away.
- *  - R53: double-click a text box to type on the canvas. contenteditable
- *    "plaintext-only" (Enter = new line, no pasted formatting); Esc or
- *    clicking away commits as ONE change (one undo step for free-text boxes).
- *    Bound boxes (eyebrow/title/description) write the banner's own field.
+ *  - R53: click focuses (arrows work at once); double-click types on the canvas
+ *    (contenteditable plaintext-only; Esc/click-away = ONE undo step).
  *  - R55: shapes (drag, width handle, arrows) and layer order (z-index, same
  *    rule as the public banner). Locked items select but never move.
  */
@@ -50,7 +47,7 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { elementPosition } from "@/lib/cms/banner-elements-core";
-import { BannerBeam, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
+import { BannerBeam, BannerSmoke, RevealWords, CanvasGuides, CanvasShape, RotateHandle, WidthHandle, measureOthers } from "./CanvasParts";
 import { angleFromPointer, hasRef, moveGroup, rotateItem, type ItemRef } from "@/lib/cms/banner-arrange-core";
 import { smartSnap, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 import { ButtonInner } from "@/components/site/ButtonInner";
@@ -99,6 +96,7 @@ export function StudioCanvas({
   onLegacyEdit,
   group = [],
   onToggle,
+  replayKey = 0,
 }: {
   design: BannerDesign;
   device: DesignDevice;
@@ -109,13 +107,12 @@ export function StudioCanvas({
   onSelect: (s: StudioSelection) => void;
   onChange: (d: BannerDesign) => void;
   onRequestDelete: (s: NonNullable<StudioSelection>) => void;
-  /** R41 S8: an AI suggestion to preview as a dotted "ghost" (zone + focal point). Display only. */
-  ghost?: { zone: { x: number; y: number; w: number; h: number }; focusX: number; focusY: number } | null;
-  /** R53: inline edit of a bound box (eyebrow/title/subtitle) → the banner's own field. */
-  onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
-  /** R56: shift-click multi-selection (2+ items) and the toggle for it. */
+  /** R41 S8: AI suggestion ghost (display only). */ ghost?: { zone: { x: number; y: number; w: number; h: number }; focusX: number; focusY: number } | null;
+  /** R53: inline edit of a bound box → the banner's own field. */ onLegacyEdit?: (bind: NonNullable<DesignBind>, text: string) => void;
+  /** R56: shift-click multi-selection (2+ items) and its toggle. R58: ▶ replay smoke + reveal. */
   group?: ItemRef[];
   onToggle?: (r: ItemRef) => void;
+  replayKey?: number;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const editDone = useRef(false);
@@ -507,6 +504,8 @@ export function StudioCanvas({
                 );
               })}
 
+              {design.smoke ? <BannerSmoke layers={design.smoke} replayKey={replayKey} /> : null}
+              {design.reveal && replayKey ? <RevealWords seconds={design.reveal} replayKey={replayKey} /> : null}
               {design.beam ? <BannerBeam beam={design.beam} radius={design.frame.radius} /> : null}
               <CanvasGuides ghost={ghost} guides={guides} scale={scale} px={{ refW, height: device === "mobile" ? design.frame.heightMobile : design.frame.height }} />
             </div>

@@ -18,6 +18,7 @@
  * Research behind the rules: bible PART 3 (WCAG 2.2 SC 1.4.3, NN/g "Ensure
  * High Contrast for Text Over Images", WAC 314-55-155, Pointer Events).
  */
+import { normalizeReveal, normalizeSmoke, type SmokeLayer } from "./banner-atmos-core";
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
@@ -298,6 +299,10 @@ export type BannerDesign = {
   buttons: DesignButton[];
   /** R57: a light that travels around the banner's border. Written only when on. */
   beam?: Beam;
+  /** R58: smoke / fog / haze layers (banner-atmos-core). Written only when used. */
+  smoke?: SmokeLayer[];
+  /** R58: seconds the words + buttons wait before fading in (after the smoke). */
+  reveal?: number;
   /** R55: decorative shapes (banner-elements-core). Written only when there are any. */
   elements?: DesignElement[];
   /** R55: layer paint order, back → front (ids). Written only after the owner reorders. */
@@ -624,6 +629,10 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   if (order) out.order = order;
   const beam = normalizeBeam(raw.beam);
   if (beam) out.beam = beam;
+  const smoke = normalizeSmoke(raw.smoke);
+  if (smoke.length) out.smoke = smoke;
+  const reveal = normalizeReveal(raw.reveal);
+  if (reveal) out.reveal = reveal;
   return out;
 }
 
