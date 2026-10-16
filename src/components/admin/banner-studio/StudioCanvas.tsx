@@ -96,13 +96,13 @@ export function StudioCanvas({
   onLegacyEdit,
   group = [],
   onToggle,
-  replayKey = 0,
-}: {
+  replayKey = 0, maxH }: {
   design: BannerDesign;
   device: DesignDevice;
   legacy: { eyebrow?: string; title?: string; subtitle?: string };
   imageSrc: string;
   imageAlt: string;
+  /** R65: cap the on-screen canvas height (px) while it follows the scroll. */ maxH?: number;
   selection: StudioSelection;
   onSelect: (s: StudioSelection) => void;
   onChange: (d: BannerDesign) => void;
@@ -141,7 +141,7 @@ export function StudioCanvas({
   // R61-S3: card designs lay out at CARD_REF_PX on both devices (frameRefPx).
   const card = !!design.frame.card;
   const { w: refW, h: frameH } = frameRefPx(design, device);
-  const scale = Math.min(card ? 1.25 : 1, availW / refW);
+  const scale = Math.min(card ? 1.25 : 1, availW / refW, maxH && maxH > 0 ? maxH / frameH : Infinity);
 
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
   const overlay = overlayStyle(design, headline ? { x: headline.x + headline.w / 2, y: headline.y + 10 } : undefined);
