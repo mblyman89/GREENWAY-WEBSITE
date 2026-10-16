@@ -11,6 +11,8 @@ import type { CSSProperties, KeyboardEvent as RKeyboardEvent, PointerEvent as RP
 import { elementHoverClass, elementStyle, type DesignElement } from "@/lib/cms/banner-elements-core";
 import { ElementVisual } from "@/components/site/DesignMotion";
 export { BannerBeam } from "@/components/site/DesignMotion";
+export { BannerSmoke } from "@/components/site/smoke/BannerSmoke";
+export { RevealWords } from "@/components/site/smoke/RevealWords";
 import { gapPx, type GuideGap, type GuideLine, type GuideRect } from "@/lib/cms/banner-guides-core";
 
 /** R57: measure every other item on the canvas (in % of the frame) for smart guides. */

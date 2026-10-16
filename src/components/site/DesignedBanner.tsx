@@ -17,6 +17,8 @@ import {
 import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
 import { BannerBeam, ElementVisual } from "./DesignMotion";
+import { BannerSmoke } from "./smoke/BannerSmoke";
+import { RevealWords } from "./smoke/RevealWords";
 import { ButtonInner } from "./ButtonInner";
 import { buttonFxClass } from "@/lib/cms/button-fx-core";
 import { elementHoverClass, elementStyle } from "@/lib/cms/banner-elements-core";
@@ -111,7 +113,7 @@ export function DesignedBanner({
       ))}
       <div
         style={css(frameStyle(design))}
-        className="gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"
+        className={`gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30${design.reveal ? " gw-rvp" : ""}`}
         {...(editable && owner ? { "data-gw-design-frame": "true", "data-gw-design-owner": owner } : {})}
       >
         {phoneSrc ? (
@@ -158,6 +160,9 @@ export function DesignedBanner({
           </div>
         ) : null}
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
+        {/* R58: smoke / fog / haze (lazy, client-only) + words that fade in after it. */}
+        {design.smoke ? <BannerSmoke layers={design.smoke} /> : null}
+        {design.reveal ? <RevealWords seconds={design.reveal} /> : null}
         {(design.elements ?? []).map((el) =>
           el.hidden ? null : (
             <div

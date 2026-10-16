@@ -994,6 +994,28 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ---------------------------------------------------------------------------
+ * R58-S1 — smoke / fog / haze canvases (banner-atmos-core, BannerSmokeClient)
+ * and "words fade in after the smoke" (.gw-rvp = words start hidden; the
+ * RevealWords client component removes it on mount, then animates them in).
+ * ------------------------------------------------------------------------- */
+.gw-smoke {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+.gw-rvp > .gw-dbox:not([aria-hidden="true"]) {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gw-rvp > .gw-dbox:not([aria-hidden="true"]) {
+    visibility: visible;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * R49 S3 — dual-thumb range slider (FilterRangeSlider). Two native range
  * inputs share one track (W3C APG multi-thumb pattern via native inputs).
  * The inputs ignore pointer events; only their thumbs take them, so BOTH

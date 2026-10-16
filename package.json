@@ -39,6 +39,7 @@
     "react-dom": "19.2.4",
     "react-plaid-link": "^5.0.0",
     "recharts": "^3.9.0",
+    "shaders": "4.0.4",
     "sharp": "^0.34.5",
     "tus-js-client": "^4.3.1",
     "unpdf": "^1.6.2",
