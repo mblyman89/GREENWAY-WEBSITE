@@ -77,6 +77,20 @@ const BOTTOM_STRIP_PAGES: ReadonlySet<string> = new Set(["about", "faq", "locati
 
 type Flash = { tone: "ok" | "error"; text: string } | null;
 
+// R61 S2: the Home editor tabs (roadmap §15). "carousel" keeps its old id so
+// every existing ?tab=carousel link (schedule list, ✎ Edit, redirects) works.
+const HOME_TABS = ["carousel", "types", "brands", "typecards", "more"] as const;
+type HomeTab = (typeof HOME_TABS)[number];
+const HOME_TAB_LABEL: Record<HomeTab, string> = {
+  carousel: "Main banner",
+  types: "Types banner",
+  brands: "Brands banner",
+  typecards: "Types cards",
+  more: "More banners & settings",
+};
+/** The fixed home banner each single-banner tab shows. */
+const HOME_TAB_KEY: Partial<Record<HomeTab, string>> = { types: "home.category", brands: "home.brand" };
+
 function flashFor(sp: Record<string, string | undefined>): Flash {
   if (sp.error) return { tone: "error", text: decodeURIComponent(sp.error) };
   if (sp.scheduled) return { tone: "ok", text: decodeURIComponent(sp.scheduled) };
@@ -108,12 +122,18 @@ export default async function PageBuilderPage({
   const isHome = slug === "home";
   const isFaq = slug === "faq";
   const isAbout = slug === "about";
-  // Home has three tabs (carousel | sections | typecards); FAQ has
-  // (sections | qanda); other pages only show sections.
-  let tab: "carousel" | "sections" | "qanda" | "typecards" = "sections";
-  if (isHome && sp.tab === "carousel") tab = "carousel";
-  else if (isHome && sp.tab === "typecards") tab = "typecards";
-  else if (isFaq && sp.tab === "qanda") tab = "qanda";
+  // R61 S2 (roadmap §15): Home has 4 main tabs — Main banner (the carousel,
+  // shown first) | Types banner | Brands banner | Types cards — plus a small
+  // "More banners & settings" tab (daily-deals count + any extra banners).
+  // Old deep links keep working: ?tab=carousel = Main banner, ?tab=sections =
+  // every home section on one screen (the pre-R61 view, so #section-<id>
+  // anchors always land). FAQ keeps (sections | qanda); other pages: sections.
+  let tab: HomeTab | "sections" | "qanda" = isHome ? "carousel" : "sections";
+  if (isHome) {
+    const want = sp.tab === "main" ? "carousel" : sp.tab;
+    if (want && (HOME_TABS as readonly string[]).includes(want)) tab = want as HomeTab;
+    else if (want === "sections") tab = "sections";
+  } else if (isFaq && sp.tab === "qanda") tab = "qanda";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -160,7 +180,7 @@ export default async function PageBuilderPage({
         title={config.label}
         subtitle={
           isHome
-            ? "Manage the homepage: the rotating hero Carousel and the editable Sections below the daily-deal highlights."
+            ? "Manage the homepage: the Main banner (rotating carousel), the Types banner, the Brands banner and the Types cards — each in its own tab, all with the same Design Studio."
             : `Manage the banners and sections on the ${config.label} page. Edit a draft, then publish to go live.`
         }
       />
@@ -178,39 +198,25 @@ export default async function PageBuilderPage({
           </div>
         ) : null}
 
-        {/* Tab bar (home: Carousel|Sections; faq: Sections|Q&A) */}
+        {/* Tab bar (home: R61 4 tabs + More; faq: Banners|Q&A) */}
         {isHome ? (
-          <div className="flex gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
-            <a
-              href={`/admin/pages/home?tab=carousel`}
-              className={
-                tab === "carousel"
-                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
-              }
-            >
-              Carousel
-            </a>
-            <a
-              href={`/admin/pages/home?tab=sections`}
-              className={
-                tab === "sections"
-                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
-              }
-            >
-              Sections
-            </a>
-            <a
-              href={`/admin/pages/home?tab=typecards`}
-              className={
-                tab === "typecards"
-                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
-              }
-            >
-              Type Cards
-            </a>
+          <div className="flex flex-wrap gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
+            {HOME_TABS.map((t) => {
+              const active = tab === t || (t === "more" && tab === "sections");
+              return (
+                <a
+                  key={t}
+                  href={`/admin/pages/home?tab=${t}`}
+                  className={
+                    active
+                      ? `${t === "more" ? "" : "flex-1 "}rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black`
+                      : `${t === "more" ? "" : "flex-1 "}rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]`
+                  }
+                >
+                  {HOME_TAB_LABEL[t]}
+                </a>
+              );
+            })}
           </div>
         ) : null}
 
@@ -292,6 +298,7 @@ export default async function PageBuilderPage({
             cap={sectionCapFor(slug)}
             mediaChoices={mediaChoices}
             hasSeeds={seedsForPage(slug).length > 0}
+            homeTab={isHome && tab !== "qanda" ? (tab as HomeTab | "sections") : undefined}
           />
         )}
       </div>
@@ -412,11 +419,14 @@ async function SectionsTab({
   cap,
   mediaChoices,
   hasSeeds,
+  homeTab,
 }: {
   slug: string;
   cap: number;
   mediaChoices: MediaChoice[];
   hasSeeds: boolean;
+  /** R61 S2: which Home tab is showing (undefined on other pages). */
+  homeTab?: HomeTab | "sections";
 }) {
   const allSections = await listSections(slug);
   const isHome = slug === "home";
@@ -433,9 +443,19 @@ async function SectionsTab({
   const homeSettingsRow = isHome
     ? allSections.find((s) => s.section_key === "home.settings")
     : undefined;
-  const sections = allSections.filter(
+  const nonConfig = allSections.filter(
     (s) => s.section_key !== "home.settings",
   );
+  // R61 S2: Types / Brands tabs show just their banner; "More" shows the extra
+  // banners (not the two fixed ones); legacy ?tab=sections shows all of them.
+  const fixedKey = homeTab ? HOME_TAB_KEY[homeTab as HomeTab] : undefined;
+  const sections = fixedKey
+    ? nonConfig.filter((s) => s.section_key === fixedKey)
+    : homeTab === "more"
+      ? nonConfig.filter((s) => !Object.values(HOME_TAB_KEY).includes(s.section_key))
+      : nonConfig;
+  const singleBanner = !!fixedKey;
+  const returnTab = isHome ? (homeTab ?? "sections") : undefined;
   const dailyDealsCount = readHomeCardCount(
     homeSettingsRow?.settings,
     DAILY_DEALS_COUNT_KEY,
@@ -446,7 +466,7 @@ async function SectionsTab({
 
   return (
     <div className="space-y-5">
-      {isHome ? (
+      {isHome && !singleBanner ? (
         <HomeDisplaySettingsCard
           dailyDealsCount={dailyDealsCount}
           saveAction={saveHomeSettingsAction}
@@ -462,19 +482,22 @@ async function SectionsTab({
         </p>
       ) : null}
 
+      {singleBanner ? null : (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--admin-text-muted)]">
-          {sections.length} of {visibleCap} sections
+          {isHome ? nonConfig.length : sections.length} of {visibleCap} sections
         </p>
         <div className="flex items-center gap-2">
           {sections.length === 0 && hasSeeds ? (
             <form action={seedSectionsAction}>
               <input type="hidden" name="page_slug" value={slug} />
+              {returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
               <Button type="submit" variant="neutral">Load starter sections</Button>
             </form>
           ) : null}
           <form action={addSectionAction}>
             <input type="hidden" name="page_slug" value={slug} />
+            {returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
             <Button
               type="submit"
               variant="primary"
@@ -486,13 +509,16 @@ async function SectionsTab({
           </form>
         </div>
       </div>
+      )}
 
       {sections.length === 0 ? (
         <EmptyState
           icon="📄"
-          title="No editable sections yet"
+          title={singleBanner ? "This banner isn’t set up yet" : "No editable sections yet"}
           description={
-            hasSeeds
+            singleBanner
+              ? "Open the “More banners & settings” tab and click “Load starter sections” to bring in the homepage banners, then come back here."
+              : hasSeeds
               ? "Click “Load starter sections” to bring in this page's current banners, or “+ Add section” to create one."
               : "Click “+ Add section” to create one."
           }
@@ -512,11 +538,12 @@ async function SectionsTab({
                 deleteAction={deleteSectionAction}
                 moveAction={moveSectionAction}
                 posts={posts}
+                returnTab={returnTab}
               />
               <SchedulePanel
                 kind="page_section"
                 targetKey={section.id}
-                returnTo={`/admin/pages/${slug}?tab=sections#section-${section.id}`}
+                returnTo={`/admin/pages/${slug}?tab=${returnTab ?? "sections"}#section-${section.id}`}
                 open={sched.byKey[section.id] ?? []}
                 ready={sched.ready}
                 nowIso={nowIso}

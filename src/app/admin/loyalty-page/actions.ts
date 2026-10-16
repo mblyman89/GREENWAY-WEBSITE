@@ -34,8 +34,9 @@ import { isLoyaltyContentBlock } from "@/lib/loyalty/loyalty-content-core";
 import { LOYALTY_CONSENT_BLOCK, checkConsentText } from "@/lib/loyalty/loyalty-consent-core";
 import { LOYALTY_HERO_PRESENTATION_BLOCK } from "@/lib/loyalty/loyalty-hero-core";
 
-function backTo(flag: string): string {
-  return `/admin/loyalty-page?${flag}=1`;
+function backTo(flag: string, tab: "banner" | "wording" = "banner"): string {
+  // R61 S2: the page has tabs; land back on the one the owner was using.
+  return `/admin/loyalty-page?tab=${tab}&${flag}=1`;
 }
 
 export async function saveLoyaltyDraftAction(formData: FormData): Promise<void> {
@@ -58,7 +59,7 @@ export async function saveLoyaltyDraftAction(formData: FormData): Promise<void> 
     after: { draft_value: draftValue },
   });
   revalidatePath("/admin/loyalty-page");
-  redirect(backTo("saved"));
+  redirect(backTo("saved", "wording"));
 }
 
 export async function publishLoyaltyAction(formData: FormData): Promise<void> {
@@ -75,7 +76,7 @@ export async function publishLoyaltyAction(formData: FormData): Promise<void> {
     blockKey === LOYALTY_CONSENT_BLOCK &&
     checkConsentText(block.draft_value ?? block.published_value ?? "").blocking
   ) {
-    redirect("/admin/loyalty-page?error=consent_empty");
+    redirect("/admin/loyalty-page?tab=wording&error=consent_empty");
   }
 
   await publishContentBlock(blockKey, session.userId, { actorEmail: session.email });
@@ -91,7 +92,7 @@ export async function publishLoyaltyAction(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/loyalty-page");
   revalidatePath("/loyalty");
-  redirect(backTo("published"));
+  redirect(backTo("published", "wording"));
 }
 
 export async function restoreLoyaltyRevisionAction(formData: FormData): Promise<void> {
@@ -101,7 +102,7 @@ export async function restoreLoyaltyRevisionAction(formData: FormData): Promise<
 
   const result = await restoreContentRevisionToDraft(revisionId, session.userId);
   if (!result || !isLoyaltyContentBlock(result.blockKey)) {
-    redirect("/admin/loyalty-page?error=restore");
+    redirect("/admin/loyalty-page?tab=wording&error=restore");
     return;
   }
 
@@ -114,7 +115,7 @@ export async function restoreLoyaltyRevisionAction(formData: FormData): Promise<
     after: { restored_from_revision: revisionId },
   });
   revalidatePath("/admin/loyalty-page");
-  redirect(backTo("restored"));
+  redirect(backTo("restored", "wording"));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

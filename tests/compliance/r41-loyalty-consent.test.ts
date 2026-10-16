@@ -111,7 +111,7 @@ describe("editor + action", () => {
   const editor = read("src/components/admin/LoyaltyPageEditor.tsx");
   it("publish refuses an empty consent paragraph", () => {
     expect(actions).toContain("blockKey === LOYALTY_CONSENT_BLOCK &&");
-    expect(actions).toContain('redirect("/admin/loyalty-page?error=consent_empty")');
+    expect(actions).toContain('redirect("/admin/loyalty-page?tab=wording&error=consent_empty")');
   });
   it("editor shows the checklist and locks publish only while empty or unsaved", () => {
     expect(editor).toContain("checkConsentText(value)");

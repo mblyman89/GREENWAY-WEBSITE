@@ -46,7 +46,13 @@ async function homeSectionTarget(blockKey: string): Promise<EditTarget | null> {
   if (!m) return null;
   const rows = await listSections("home").catch(() => []);
   const row = rows.find((r) => r.section_key === `home.${m[1]}`);
-  return row?.id ? editTargetForOwner({ kind: "section", id: row.id }, "home") : null;
+  return row?.id ? homeTab(editTargetForOwner({ kind: "section", id: row.id }, "home"), row.section_key) : null;
+}
+
+/** R61 S2: land on the Home editor's own tab for that banner (Types / Brands / More). */
+function homeTab(t: EditTarget, sectionKey: string | null | undefined): EditTarget {
+  const tab = sectionKey === "home.category" ? "types" : sectionKey === "home.brand" ? "brands" : "more";
+  return { ...t, href: t.href.replace("/admin/pages/home?tab=sections", `/admin/pages/home?tab=${tab}`) };
 }
 
 export default async function AdminEditResolver({
@@ -67,11 +73,14 @@ export default async function AdminEditResolver({
     const parsed = parseDesignOwner(owner);
     if (parsed) {
       let pageSlug: string | null = null;
+      let sectionKey: string | null = null;
       if (parsed.kind === "section") {
         const row = await getSection(parsed.id).catch(() => null);
         pageSlug = row?.page_slug ?? null;
+        sectionKey = row?.section_key ?? null;
       }
       target = editTargetForOwner(parsed, pageSlug);
+      if (pageSlug === "home") target = homeTab(target, sectionKey);
     }
   } else if (area) {
     target = editTargetForArea(area);

@@ -39,6 +39,17 @@ function routeFor(slug: string): string {
   return `/admin/pages/${slug}`;
 }
 
+/**
+ * R61 S2: the Home editor has tabs (Main / Types / Brands / Types cards /
+ * More). Section forms send return_tab so the owner lands back on the same
+ * tab. Only known tab ids pass; anything else is dropped.
+ */
+const RETURN_TABS = new Set(["types", "brands", "more", "sections"]);
+function backFor(slug: string, formData: FormData): string {
+  const t = String(formData.get("return_tab") ?? "");
+  return slug === "home" && RETURN_TABS.has(t) ? `${routeFor(slug)}?tab=${t}&` : `${routeFor(slug)}?`;
+}
+
 /** Refresh the manager + the public page after a change. */
 function revalidateForSlug(slug: string): void {
   revalidatePath(routeFor(slug));
@@ -122,7 +133,7 @@ export async function seedSectionsAction(formData: FormData): Promise<void> {
     });
   }
   revalidatePath(routeFor(slug));
-  redirect(`${routeFor(slug)}?seeded=${inserted}`);
+  redirect(`${backFor(slug, formData)}seeded=${inserted}`);
 }
 
 export async function addSectionAction(formData: FormData): Promise<void> {
@@ -133,7 +144,7 @@ export async function addSectionAction(formData: FormData): Promise<void> {
   const result = await createSection(slug, session.userId);
   if ("error" in result) {
     revalidatePath(routeFor(slug));
-    redirect(`${routeFor(slug)}?error=${encodeURIComponent(result.error)}`);
+    redirect(`${backFor(slug, formData)}error=${encodeURIComponent(result.error)}`);
   }
   await recordAudit({
     actorId: session.userId,
@@ -144,7 +155,7 @@ export async function addSectionAction(formData: FormData): Promise<void> {
     after: { page_slug: slug },
   });
   revalidatePath(routeFor(slug));
-  redirect(`${routeFor(slug)}?added=1#section-${result.id}`);
+  redirect(`${backFor(slug, formData)}added=1#section-${result.id}`);
 }
 
 /**
@@ -190,7 +201,7 @@ export async function saveSectionAction(formData: FormData): Promise<void> {
   const res = await saveSectionDraft(id, input, session.userId);
   if (res.error) {
     revalidatePath(routeFor(slug));
-    redirect(`${routeFor(slug)}?error=${encodeURIComponent(res.error)}#section-${id}`);
+    redirect(`${backFor(slug, formData)}error=${encodeURIComponent(res.error)}#section-${id}`);
   }
   await recordAudit({
     actorId: session.userId,
@@ -200,7 +211,7 @@ export async function saveSectionAction(formData: FormData): Promise<void> {
     entityId: id,
   });
   revalidatePath(routeFor(slug));
-  redirect(`${routeFor(slug)}?saved=1#section-${id}`);
+  redirect(`${backFor(slug, formData)}saved=1#section-${id}`);
 }
 
 export async function publishSectionAction(formData: FormData): Promise<void> {
@@ -212,7 +223,7 @@ export async function publishSectionAction(formData: FormData): Promise<void> {
   const res = await publishSection(id, session.userId);
   if (res.error) {
     revalidatePath(routeFor(slug));
-    redirect(`${routeFor(slug)}?error=${encodeURIComponent(res.error)}#section-${id}`);
+    redirect(`${backFor(slug, formData)}error=${encodeURIComponent(res.error)}#section-${id}`);
   }
   await recordAudit({
     actorId: session.userId,
@@ -222,7 +233,7 @@ export async function publishSectionAction(formData: FormData): Promise<void> {
     entityId: id,
   });
   revalidateForSlug(slug);
-  redirect(`${routeFor(slug)}?published=1#section-${id}`);
+  redirect(`${backFor(slug, formData)}published=1#section-${id}`);
 }
 
 export async function deleteSectionAction(formData: FormData): Promise<void> {
@@ -234,7 +245,7 @@ export async function deleteSectionAction(formData: FormData): Promise<void> {
   const res = await deleteSection(id);
   if (res.error) {
     revalidatePath(routeFor(slug));
-    redirect(`${routeFor(slug)}?error=${encodeURIComponent(res.error)}`);
+    redirect(`${backFor(slug, formData)}error=${encodeURIComponent(res.error)}`);
   }
   await recordAudit({
     actorId: session.userId,
@@ -244,7 +255,7 @@ export async function deleteSectionAction(formData: FormData): Promise<void> {
     entityId: id,
   });
   revalidateForSlug(slug);
-  redirect(`${routeFor(slug)}?deleted=1`);
+  redirect(`${backFor(slug, formData)}deleted=1`);
 }
 
 /**
@@ -261,7 +272,7 @@ export async function saveHomeSettingsAction(formData: FormData): Promise<void> 
   );
   if (res.error) {
     revalidatePath(routeFor("home"));
-    redirect(`${routeFor("home")}?tab=sections&error=${encodeURIComponent(res.error)}`);
+    redirect(`${routeFor("home")}?tab=more&error=${encodeURIComponent(res.error)}`);
   }
   await recordAudit({
     actorId: session.userId,
@@ -272,7 +283,7 @@ export async function saveHomeSettingsAction(formData: FormData): Promise<void> 
     after: { dailyDealsCount: count },
   });
   revalidateForSlug("home");
-  redirect(`${routeFor("home")}?tab=sections&saved=1`);
+  redirect(`${routeFor("home")}?tab=more&saved=1`);
 }
 
 /**
@@ -370,5 +381,5 @@ export async function moveSectionAction(formData: FormData): Promise<void> {
     after: { direction },
   });
   revalidateForSlug(slug);
-  redirect(`${routeFor(slug)}?moved=1#section-${id}`);
+  redirect(`${backFor(slug, formData)}moved=1#section-${id}`);
 }

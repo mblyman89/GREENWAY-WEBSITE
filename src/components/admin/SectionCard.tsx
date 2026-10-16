@@ -68,6 +68,7 @@ export function SectionCard({
   deleteAction,
   moveAction,
   posts = [],
+  returnTab,
 }: {
   section: SectionAdminVM;
   pageSlug: string;
@@ -80,6 +81,8 @@ export function SectionCard({
   moveAction: (formData: FormData) => void | Promise<void>;
   /** R41 S2: published blog posts / newsletters for the link picker. */
   posts?: PickerPost[];
+  /** R61 S2: the Home editor tab to come back to after save / publish / move. */
+  returnTab?: string;
 }) {
   const locked = section.locked;
 
@@ -258,6 +261,7 @@ export function SectionCard({
             <form action={moveAction}>
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
+{returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
               <input type="hidden" name="direction" value="up" />
               <Button type="submit" disabled={index === 0} aria-label="Move up" variant="neutral" size="sm">
                 ↑
@@ -266,6 +270,7 @@ export function SectionCard({
             <form action={moveAction}>
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
+{returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
               <input type="hidden" name="direction" value="down" />
               <Button type="submit" disabled={index === total - 1} aria-label="Move down" variant="neutral" size="sm">
                 ↓
@@ -274,6 +279,7 @@ export function SectionCard({
             <form ref={deleteFormRef} action={deleteAction}>
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
+{returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
               <Button type="button" variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
                 Delete
               </Button>
@@ -305,6 +311,7 @@ export function SectionCard({
           <form action={saveAction} className="space-y-4">
             <input type="hidden" name="page_slug" value={pageSlug} />
             <input type="hidden" name="section_id" value={section.id} />
+{returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
             <input type="hidden" name="image" value={image} />
             <input type="hidden" name="image_focus" value={imageFocus} />
             <input type="hidden" name="text_align" value={textAlign} />
@@ -593,6 +600,7 @@ export function SectionCard({
           <form action={publishAction} className="mt-3 border-t border-white/10 pt-3">
             <input type="hidden" name="page_slug" value={pageSlug} />
             <input type="hidden" name="section_id" value={section.id} />
+{returnTab ? <input type="hidden" name="return_tab" value={returnTab} /> : null}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-white/50">
                 {unsaved
