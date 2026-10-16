@@ -48,11 +48,12 @@ These are read by `src/lib/ai/provider.ts` and `src/lib/ai/router.ts`. They pred
 | `AI_GEMINI_API_KEY` | `AI_API_KEY` | Google key for the Gemini path. |
 | `AI_GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/interactions` | Gemini Interactions endpoint. |
 | `AI_GEMINI_OPENAI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini built-in-knowledge fallback. |
-| `AI_THINKING_LEVEL` | `low` | Gemini thinking level (`minimal`/`low`/`medium`/`high`; anything else = `low`). R51: `medium` for the best research, `low` while on Vercel Hobby's 300 s limit. |
+| `AI_THINKING_LEVEL` | `low` | Gemini thinking level for the interactive row lookup (`minimal`/`low`/`medium`/`high`). R66: the level is clamped to what the model supports (3.8 Flash and 4 Argon have no `minimal`, so `minimal` is sent as `low`); see `src/lib/ai/gemini-models-core.ts`. The background batch uses its own level (`AI_BATCH_THINKING_LEVEL`). |
+| `AI_GEMINI_MAX_OUTPUT_TOKENS` | auto: max(32768, answer + 16384), capped at the model max (65536) | R66: the output ceiling, which includes thinking tokens. Google advises 32768 or more for thinking models; a reply that runs out comes back `incomplete` and is retried once at the model max. |
 | `AI_GEMINI_URL_CONTEXT` | on | R51: adds the `url_context` tool so Gemini opens the pages and photos it cites. `off` removes it. |
 | `AI_GEMINI_SERVICE_TIER` | unset (Google default) | R51: `flex`/`standard`/`priority`/`deferred`. `priority` is the enterprise choice (faster, costs more). Not sent when unset. |
 | `AI_GEMINI_SEED` | unset | R51: an integer seed, for more repeatable answers. |
-| `AI_WEBSEARCH_TIMEOUT_MS` | `290000` | One lookup's HTTP ceiling. Keep it below the drafts page `maxDuration` (300 s). |
+| `AI_WEBSEARCH_TIMEOUT_MS` | `290000` | The interactive lookup's whole deadline (first send plus any 503 / incomplete retries). Keep it below the drafts page `maxDuration` (300 s). The background batch uses `AI_BATCH_TIMEOUT_MS`. |
 | `AI_MODE` | `maintenance` | `sprint` sends heavy tasks to `AI_MODEL_HEAVY`. |
 | `AI_MONTHLY_TOKEN_BUDGET` | `0` (no cap) | Monthly token cap. |
 | `AI_MONTHLY_USD_BUDGET` | `0` (no cap) | Monthly $ cap. |

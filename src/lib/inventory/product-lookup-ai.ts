@@ -85,6 +85,10 @@ export type ProductLookupOutcome = {
    * persisted: not saved, not audited, not cached.
    */
   searchSuggestions: string[];
+  /** R66: the Gemini thinking level actually sent (absent off Gemini). */
+  thinkingLevel?: string;
+  /** R66: true when the reply was still cut short after the one retry. */
+  incomplete?: boolean;
 };
 
 /** JSON shape hint appended to the user prompt (the web_search path has no
@@ -130,6 +134,13 @@ export async function lookupProduct(input: {
    * to S06 (pinned by tests/compliance/s09-kb-first-onboarding.test.ts).
    */
   alreadyKnown?: string;
+  /**
+   * R66: a per-call Gemini thinking level + deadline. The background batch
+   * passes a deeper level and a longer deadline (it runs in an 800s function);
+   * the interactive row lookup omits both, so its call is unchanged.
+   */
+  thinkingLevel?: string | null;
+  timeoutMs?: number;
 }): Promise<ProductLookupOutcome> {
   // SLICE S06 rollback switch (Vercel env). Default ON. With it off, the call
   // below is byte-identical to pre-S06 (same system, user, shape, maxTokens).
@@ -158,6 +169,8 @@ export async function lookupProduct(input: {
     // S06: the per-field v2 record is roughly twice the v1 JSON, so it gets
     // LOOKUP_V2_MAX_TOKENS (a ceiling -- billing is per token produced).
     maxTokens: v2On ? LOOKUP_V2_MAX_TOKENS : 2000,
+    ...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
+    ...(typeof input.timeoutMs === "number" ? { timeoutMs: input.timeoutMs } : {}),
     context: {
       feature: "inventory.product_lookup",
       ...input.context,
@@ -201,6 +214,8 @@ export async function lookupProduct(input: {
     schema: facts ? "v2" : "v1",
     citations,
     searchSuggestions,
+    ...(ws.thinkingLevel ? { thinkingLevel: ws.thinkingLevel } : {}),
+    ...(ws.incomplete ? { incomplete: true } : {}),
   };
 }
 
