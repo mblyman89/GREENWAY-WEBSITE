@@ -16,9 +16,10 @@
  */
 
 /** The library's filter params — the ONLY state worth carrying around. */
-export type MediaListParams = { q?: string; status?: string; usage?: string };
+export type MediaListParams = { q?: string; status?: string; usage?: string; folder?: string; sort?: string; page?: string };
 
-const LIST_KEYS = ["q", "status", "usage"] as const;
+// R65: + folder (smart folder), sort and page so the owner returns to the exact folder/page.
+const LIST_KEYS = ["q", "status", "usage", "folder", "sort", "page"] as const;
 
 /** Keep only non-empty filter params from a searchParams-shaped object. */
 export function pickListParams(
