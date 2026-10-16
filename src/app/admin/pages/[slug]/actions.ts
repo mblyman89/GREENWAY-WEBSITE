@@ -45,9 +45,13 @@ function routeFor(slug: string): string {
  * tab. Only known tab ids pass; anything else is dropped.
  */
 const RETURN_TABS = new Set(["types", "brands", "more", "sections"]);
+const VENDOR_RETURN_TABS = new Set(["grow", "brands", "more"]);
 function backFor(slug: string, formData: FormData): string {
   const t = String(formData.get("return_tab") ?? "");
-  return slug === "home" && RETURN_TABS.has(t) ? `${routeFor(slug)}?tab=${t}&` : `${routeFor(slug)}?`;
+  if (slug === "home" && RETURN_TABS.has(t)) return `${routeFor(slug)}?tab=${t}&`;
+  // R64: the Vendors editor's banner tabs.
+  if (slug === "vendors" && VENDOR_RETURN_TABS.has(t)) return `${routeFor(slug)}?tab=${t}&`;
+  return `${routeFor(slug)}?`;
 }
 
 /** Refresh the manager + the public page after a change. */

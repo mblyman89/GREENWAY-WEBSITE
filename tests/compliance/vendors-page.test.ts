@@ -201,7 +201,8 @@ describe("SLICE 114 — public card redesign (product-card glow, no colored bg)"
   });
 
   it("channel cards render from the resolved prop with fallbacks to the defaults", () => {
-    expect(card).toContain("channels.map((channel)");
+    // R64: resolved channels → centerFromLegacy → the editable center cards.
+    expect(card).toContain("cards.map((card)");
     expect(card).toContain("content?.channels ?? VENDOR_CONTACT_CHANNELS");
     expect(card).toContain("content?.outreachSubject || VENDOR_OUTREACH_SUBJECT");
   });

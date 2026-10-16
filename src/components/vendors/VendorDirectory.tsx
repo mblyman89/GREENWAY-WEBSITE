@@ -5,7 +5,6 @@ import { useState } from "react";
 import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
 import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import { glowCardStyle, GLOW_TONES } from "@/lib/ui/glow-card-core";
-import { greenwayBusiness } from "@/content/business";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import {
   VENDOR_CONTACT_CHANNELS,
@@ -13,6 +12,14 @@ import {
   vendorMailtoHref,
   type VendorContactChannel,
 } from "@/lib/vendors/vendor-relations-core";
+import {
+  accentClass,
+  buttonStyleClass,
+  CENTER_COLUMN_CLASS,
+  centerButtonHref,
+  centerFromLegacy,
+  type VendorCenter,
+} from "@/lib/vendors/vendor-center-core";
 
 // SLICE 48 (owner Q3): the static vendors.json snapshot is retired. Vendors
 // now arrive as a prop, derived from the LIVE published menu by the server
@@ -38,9 +45,6 @@ type Vendor = VendorDirectoryEntry;
 const PLACEHOLDER_LOGO = "/vendors/vendor-logo-placeholder.png";
 const PLACEHOLDER_DESCRIPTION =
   "A trusted Greenway Marijuana partner growing and crafting premium cannabis for the Port Orchard community. Their mission: deliver consistent, lab-tested, top-shelf product our budtenders are proud to recommend.";
-
-// Per request: the email body must be BLANK so it opens an empty draft.
-const EMAIL_BODY = "";
 
 // The vendor name lives in a slim bar at the top of the card, so the total
 // character count drives how small we go to keep it on ONE line on the narrow
@@ -160,6 +164,8 @@ type VendorContent = {
   channels?: VendorContactChannel[];
   /** SLICE 114: editable subject line for the "Email Our Buying Team" button. */
   outreachSubject?: string;
+  /** R64: the owner-built center section (null/undefined → legacy fields). */
+  center?: VendorCenter | null;
 };
 
 export function VendorDirectory({ content, vendors = [] }: { content?: VendorContent; vendors?: Vendor[] } = {}) {
@@ -167,6 +173,9 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
   // byte-identical defaults so the live look never changes until published.
   const channels = content?.channels ?? VENDOR_CONTACT_CHANNELS;
   const outreachSubject = content?.outreachSubject || VENDOR_OUTREACH_SUBJECT;
+  const center =
+    content?.center ??
+    centerFromLegacy({ heading: content?.heading, body: content?.body, outreachSubject, channels });
 
   return (
     <div className="px-4 py-6 text-white md:px-8 md:py-8">
@@ -197,69 +206,10 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
           priority
         />
 
-        {/* Outreach statement + email button. */}
-        <section className="rounded-2xl border border-white/10 bg-[var(--charcoal)] px-5 py-6 shadow-xl shadow-black/30 md:px-9 md:py-8">
-          <div className="mx-auto max-w-3xl text-center lg:max-w-6xl">
-            <h2
-              className="text-xl font-black uppercase tracking-tight text-white md:text-2xl"
-              {...(content?.editable
-                ? { "data-gw-block": "vendors.outreach.heading", "data-gw-editable": "true" }
-                : {})}
-            >
-              {content?.heading || "Let's Work Together"}
-            </h2>
-            {/* SLICE 99: paragraph is editable copy now (vendors.outreach.body),
-                seeded with the exact previous wording so the live look holds. */}
-            <p
-              className="mt-3 text-sm leading-relaxed text-zinc-300 md:text-base"
-              {...(content?.editable
-                ? { "data-gw-block": "vendors.outreach.body", "data-gw-editable": "true" }
-                : {})}
-            >
-              {content?.body ||
-                "Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington, proudly serving the Kitsap Peninsula. We're always looking to connect with licensed I-502 producers and processors who make exceptional product. If you'd like to send samples, schedule a vendor day, or explore getting your line on our shelves, reach out — our buying team would love to hear from you."}
-            </p>
-            <a
-              href={`${greenwayBusiness.emailHref}?subject=${encodeURIComponent(outreachSubject)}${
-                EMAIL_BODY ? `&body=${EMAIL_BODY}` : ""
-              }`}
-              className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[var(--orange)] to-[var(--gold)] px-7 py-3 text-sm font-black uppercase tracking-wide text-black shadow-lg shadow-black/40 transition hover:brightness-110 md:text-base"
-            >
-              <EmailIcon />
-              Email Our Buying Team
-            </a>
-            <p className="mt-3 text-xs font-semibold text-zinc-500">
-              {greenwayBusiness.email}
-            </p>
-
-            {/* SLICE 99: dedicated vendor-relations channels. Samples, promos,
-                and vendor days go to the vendor_intake@ mailbox Michael reads;
-                menus go to vendor_menu@ (auto-parsed into the back office);
-                manifests go to vendor_intake@ (auto-staged into receiving).
-                All buttons open a BLANK-body draft with a prefilled subject.
-                SLICE 114: title/blurb/email/subject are each editable — the
-                `channels` prop is already resolved with any overrides. */}
-            <div className="mt-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-5">
-              {channels.map((channel) => (
-                <a
-                  key={channel.key}
-                  href={vendorMailtoHref(channel.email, channel.subject)}
-                  className="group flex flex-col rounded-xl border border-white/10 bg-black/40 p-4 transition hover:-translate-y-0.5 hover:border-[var(--greenway)]/60"
-                >
-                  <span className="text-[0.72rem] font-black uppercase tracking-wide text-[var(--greenway)]">
-                    {channel.title}
-                  </span>
-                  <span className="mt-1.5 flex-1 text-[0.7rem] leading-relaxed text-zinc-400">
-                    {channel.blurb}
-                  </span>
-                  <span className="mt-3 break-all text-[0.66rem] font-bold text-zinc-300 group-hover:text-white">
-                    {channel.email}
-                  </span>
-                </a>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* Outreach statement + buttons + contact cards. R64: the whole
+            center is owner-editable (vendors.center.layout); while that block
+            is blank it is built from the older per-field blocks, unchanged. */}
+        {center.show ? <VendorCenterSection center={center} editableLegacy={!content?.center && !!content?.editable} /> : null}
 
         {/* Hero banner 2 — same size, introduces the vendor directory below.
             Driven by the Pages builder (vendors.brands) when present. */}
@@ -325,6 +275,87 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
         ))}
       </div>
     </div>
+  );
+}
+
+function VendorCenterSection({ center, editableLegacy }: { center: VendorCenter; editableLegacy: boolean }) {
+  const left = center.align === "left";
+  const buttons = center.buttons.filter((b) => b.show && centerButtonHref(b));
+  const cards = center.cards.filter((c) => c.show && (c.title || c.blurb || c.email));
+  return (
+    <section className="rounded-2xl border border-white/10 bg-[var(--charcoal)] px-5 py-6 shadow-xl shadow-black/30 md:px-9 md:py-8">
+      <div className={left ? "mx-auto max-w-6xl text-left" : "mx-auto max-w-3xl text-center lg:max-w-6xl"}>
+        {center.heading ? (
+          <h2
+            className="text-xl font-black uppercase tracking-tight text-white md:text-2xl"
+            {...(editableLegacy ? { "data-gw-block": "vendors.outreach.heading", "data-gw-editable": "true" } : {})}
+          >
+            {center.heading}
+          </h2>
+        ) : null}
+        {center.body ? (
+          <p
+            className="mt-3 whitespace-pre-line text-sm leading-relaxed text-zinc-300 md:text-base"
+            {...(editableLegacy ? { "data-gw-block": "vendors.outreach.body", "data-gw-editable": "true" } : {})}
+          >
+            {center.body}
+          </p>
+        ) : null}
+        {buttons.length ? (
+          <div className={`mt-6 flex flex-wrap gap-3 ${left ? "justify-start" : "justify-center"}`}>
+            {buttons.map((b) => (
+              <a
+                key={b.id}
+                href={centerButtonHref(b)}
+                {...(b.kind === "link" && b.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-sm font-black uppercase tracking-wide transition md:text-base ${buttonStyleClass(b.style)}`}
+              >
+                {b.kind === "email" ? <EmailIcon /> : null}
+                {b.label}
+              </a>
+            ))}
+          </div>
+        ) : null}
+        {center.showEmailLine && center.emailLine ? (
+          <p className="mt-3 text-xs font-semibold text-zinc-500">{center.emailLine}</p>
+        ) : null}
+
+        {center.cardsHeading ? (
+          <h3 className="mt-8 text-base font-black uppercase tracking-tight text-white md:text-lg">{center.cardsHeading}</h3>
+        ) : null}
+        {/* SLICE 99/114 → R64: vendor-relations channel cards. Every card opens
+            a BLANK-body draft with a prefilled subject. */}
+        {cards.length ? (
+          <div className={`${center.cardsHeading ? "mt-4" : "mt-8"} grid grid-cols-1 gap-3 text-left ${CENTER_COLUMN_CLASS[center.columns]}`.replace(/\s+/g, " ").trim()}>
+            {cards.map((card) => {
+              const href = card.email ? vendorMailtoHref(card.email, card.subject) : "";
+              const inner = (
+                <>
+                  <span className={`text-[0.72rem] font-black uppercase tracking-wide ${accentClass(card.accent)}`}>{card.title}</span>
+                  <span className="mt-1.5 flex-1 whitespace-pre-line text-[0.7rem] leading-relaxed text-zinc-400">{card.blurb}</span>
+                  {card.email ? (
+                    <span className="mt-3 break-all text-[0.66rem] font-bold text-zinc-300 group-hover:text-white">{card.email}</span>
+                  ) : null}
+                </>
+              );
+              return href ? (
+                <a
+                  key={card.id}
+                  href={href}
+                  className="group flex flex-col rounded-xl border border-white/10 bg-black/40 p-4 transition hover:-translate-y-0.5 hover:border-[var(--greenway)]/60"
+                >
+                  {inner}
+                </a>
+              ) : (
+                <div key={card.id} className="group flex flex-col rounded-xl border border-white/10 bg-black/40 p-4">
+                  {inner}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

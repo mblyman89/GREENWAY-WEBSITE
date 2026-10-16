@@ -16,6 +16,7 @@ import {
   VENDOR_OUTREACH_SUBJECT,
   VENDOR_OUTREACH_SUBJECT_KEY,
 } from "@/lib/vendors/vendor-relations-core";
+import { parseVendorCenter, VENDOR_CENTER_BLOCK } from "@/lib/vendors/vendor-center-core";
 
 const baseMetadata = pageMetadata({
   title: "Vendors & Partners — Washington Cannabis Brands",
@@ -39,6 +40,7 @@ export default async function VendorDeliveryPage() {
       "vendors.outreach.heading",
       "vendors.outreach.body",
       ...VENDOR_EDITABLE_CONTENT_KEYS,
+      VENDOR_CENTER_BLOCK,
     ]),
     isPreviewActive(),
     getPageBanners("vendors", ["vendors.grow", "vendors.brands"]),
@@ -75,6 +77,8 @@ export default async function VendorDeliveryPage() {
           extraSections: banners.extras,
           channels,
           outreachSubject,
+          // R64: the owner-built center section (blank → the fields above).
+          center: parseVendorCenter(copy[VENDOR_CENTER_BLOCK]),
         }}
       />
       <Footer />

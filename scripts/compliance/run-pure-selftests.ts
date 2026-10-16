@@ -866,6 +866,7 @@ import { __runMedicalContentCoreTests } from "../../src/lib/medical/medical-cont
 import { __runLoyaltyContentCoreTests } from "../../src/lib/loyalty/loyalty-content-core";
 import { __runLoyaltyLogoCoreTests } from "../../src/lib/loyalty/loyalty-logo-core";
 import { __runAboutSideCoreTests } from "../../src/lib/about/about-side-core";
+import { __runVendorCenterCoreTests } from "../../src/lib/vendors/vendor-center-core";
 import { __runLoyaltyHeroCoreTests } from "../../src/lib/loyalty/loyalty-hero-core";
 import { __runShopCarouselCoreTests } from "../../src/lib/cms/shop-carousel-core";
 import { __runMenuSpecialFiltersTests } from "../../src/lib/menu/menu-special-filters-core";
@@ -1724,6 +1725,7 @@ __runLiquidVolumeTests();
   { const r = __runMedicalContentCoreTests(); if (r.passed < 1) throw new Error("medical-content-core: no assertions ran"); console.log(`medical-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyLogoCoreTests(); if (r.passed < 5) throw new Error("loyalty-logo-core: too few"); console.log(`loyalty-logo-core: ${r.passed} assertions passed`); }
   { const r = __runAboutSideCoreTests(); if (r.passed < 5) throw new Error("about-side-core: too few"); console.log(`about-side-core: ${r.passed} assertions passed`); }
+  { const r = __runVendorCenterCoreTests(); if (r.passed < 6) throw new Error("vendor-center-core: too few"); console.log(`vendor-center-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyContentCoreTests(); if (r.passed < 1) throw new Error("loyalty-content-core: no assertions ran"); console.log(`loyalty-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyHeroCoreTests(); if (r.passed < 1) throw new Error("loyalty-hero-core: no assertions ran"); console.log(`loyalty-hero-core: ${r.passed} assertions passed`); }
   { const r = __runShopCarouselCoreTests(); if (r.passed < 1) throw new Error("shop-carousel-core: no assertions ran"); console.log(`shop-carousel-core: ${r.passed} assertions passed`); }

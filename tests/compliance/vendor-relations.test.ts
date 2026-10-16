@@ -62,9 +62,11 @@ describe("vendor-relations wiring (public vendors page)", () => {
     expect(directory).toContain('from "@/lib/vendors/vendor-relations-core"');
     // SLICE 114: the channel cards now render from the RESOLVED `channels`
     // prop (editable overrides overlaid on the byte-identical defaults).
-    expect(directory).toContain("channels.map((channel)");
+    // R64: the resolved channels feed the editable center (centerFromLegacy)
+    // while the vendors.center.layout block is blank.
+    expect(directory).toContain("centerFromLegacy({ heading: content?.heading, body: content?.body, outreachSubject, channels })");
     expect(directory).toContain("VENDOR_CONTACT_CHANNELS");
-    expect(directory).toContain("vendorMailtoHref(channel.email, channel.subject)");
+    expect(directory).toContain("vendorMailtoHref(card.email, card.subject)");
     // T-307: the "Parsed automatically" footnote was removed from the cards at
     // the owner's request (cosmetic). The automated FLAG on the data model is
     // unchanged (still drives receiving intake); it just no longer prints on
@@ -82,12 +84,14 @@ describe("vendor-relations wiring (public vendors page)", () => {
     expect(page).toContain('body: copy["vendors.outreach.body"]');
     // … and rendered with the in-place editor hook when preview is active.
     expect(directory).toContain('"data-gw-block": "vendors.outreach.body"');
-    expect(directory).toContain("content?.body ||");
+    expect(directory).toContain("body: content?.body");
   });
 
   it("keeps the existing outreach button and SLICE 97 logo enrichment intact", () => {
-    expect(directory).toContain("Email Our Buying Team");
-    expect(directory).toContain("greenwayBusiness.emailHref");
+    // R64: the default outreach button now lives in the center core.
+    const centerCore = readFileSync("src/lib/vendors/vendor-center-core.ts", "utf8");
+    expect(centerCore).toContain("Email Our Buying Team");
+    expect(centerCore).toContain("email: greenwayBusiness.email");
     expect(page).toContain("enrichVendorDirectory(buildVendorDirectory(menuItems), profiles)");
   });
 });
