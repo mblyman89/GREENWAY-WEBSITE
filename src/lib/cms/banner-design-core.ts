@@ -21,6 +21,7 @@
 import { normalizeCurve } from "./banner-curve-core";
 import { normalizeLive, type LiveText } from "./banner-live-core";
 import { normalizeReveal, normalizeSmoke, type SmokeLayer } from "./banner-atmos-core";
+import { imageFxFilters, normalizeImageFx, type ImageFx } from "./banner-image-core";
 import { checkHref } from "@/lib/cms/link-target-core";
 import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 import { isCustomFontId } from "@/lib/cms/custom-font-core";
@@ -287,6 +288,8 @@ export type DesignImage = {
    * byte-identical. Site-relative path or Supabase public-storage URL only.
    */
   srcMobile?: string;
+  /** R59-S1: pro picture tools (banner-image-core). Written only when used. */
+  fx?: ImageFx;
 };
 
 export type DesignFrame = {
@@ -641,6 +644,8 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
   if (smoke.length) out.smoke = smoke;
   const reveal = normalizeReveal(raw.reveal);
   if (reveal) out.reveal = reveal;
+  const ifx = normalizeImageFx(im.fx);
+  if (ifx) out.image.fx = ifx;
   return out;
 }
 
@@ -882,10 +887,12 @@ export function imageStyle(design: BannerDesign): StyleMap {
   const transforms: string[] = [];
   if (im.zoom !== 100) transforms.push(`scale(${r4(im.zoom / 100)})`);
   if (im.flip) transforms.push("scaleX(-1)");
+  if (im.fx?.flipY) transforms.push("scaleY(-1)");
   const filters: string[] = [];
   if (im.brightness !== 100) filters.push(`brightness(${r4(im.brightness / 100)})`);
   if (im.saturation !== 100) filters.push(`saturate(${r4(im.saturation / 100)})`);
   if (im.blur > 0) filters.push(`blur(${im.blur}px)`);
+  filters.push(...imageFxFilters(im.fx));
   const s: StyleMap = {
     objectFit: "cover",
     objectPosition: `var(--gip, ${pos})`,
