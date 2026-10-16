@@ -163,7 +163,7 @@ export default async function AdminSpecialsPage({
             steps={[
               "Turn the weekly deal grid and Today's Deals products grid on or off.",
               "For each weekday: show/hide it, drag its order, pick a badge style, and optionally override the title, offer line, or description.",
-              "Use the live preview to see it as customers will, then Save draft (private) or Publish (updates the live page). Every publish is saved so you can roll back.",
+              "Design right on the studio canvas (it shows what customers see), then Save draft (private) or Publish (updates the live page). Every publish is saved so you can roll back.",
             ]}
           >
             <p className="mb-2">
@@ -202,19 +202,6 @@ export default async function AdminSpecialsPage({
           </div>
         )}
 
-        {/* MIG-5c: the Specials hero TEXT (eyebrow/title/subtitle) had no editor
-            after the Specials Pages-builder was retired. Surface it here — the
-            one honest place to edit Specials — via the shared content-block
-            machinery. Byte-identical until edited + published. */}
-        <HeroTextCard
-          blockKeys={SPECIALS_HERO_TEXT_BLOCKS}
-          previewPath="/specials"
-          returnTo="/admin/specials"
-          title="Hero text"
-          description="The eyebrow, title, and subtitle on your Specials page hero. Edit a draft, preview it, then Publish — every publish is snapshotted so you can roll back."
-          helpId="specials-hero-text"
-        />
-
         {!block ? (
           <p className="text-sm text-[var(--admin-text-muted)]">
             The Specials presentation settings are being set up. Refresh in a moment.
@@ -240,6 +227,28 @@ export default async function AdminSpecialsPage({
             initialTab={sp.tab === "cards" || sp.tab === "banner" || sp.tab === "hero" ? sp.tab : undefined}
           />
         )}
+
+        {/* R63: the editor comes first (like the home carousel); the classic
+            hero WORDS sit collapsed underneath. The studio has its own text. */}
+        <details id="classic-hero-text" className="rounded-lg border border-white/10 p-3">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Classic hero text <span className="font-normal opacity-60">(eyebrow, title, subtitle for the classic look)</span>
+          </summary>
+          <div className="mt-4">
+        {/* MIG-5c: the Specials hero TEXT (eyebrow/title/subtitle) had no editor
+            after the Specials Pages-builder was retired. Surface it here — the
+            one honest place to edit Specials — via the shared content-block
+            machinery. Byte-identical until edited + published. */}
+        <HeroTextCard
+          blockKeys={SPECIALS_HERO_TEXT_BLOCKS}
+          previewPath="/specials"
+          returnTo="/admin/specials"
+          title="Hero text"
+          description="The eyebrow, title, and subtitle on your Specials page hero. Edit a draft, preview it, then Publish — every publish is snapshotted so you can roll back."
+          helpId="specials-hero-text"
+        />
+          </div>
+        </details>
       </div>
     </div>
   );

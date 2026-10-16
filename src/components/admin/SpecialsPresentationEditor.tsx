@@ -52,7 +52,7 @@ import {
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
 import { BasicMode, DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
-import { cardDesign } from "@/lib/cms/banner-design-core";
+import { cardDesign, designFromLegacy, unbindDesign } from "@/lib/cms/banner-design-core";
 
 export type SpecialsRevisionVM = {
   id: string;
@@ -138,9 +138,31 @@ const BLOCK_KEY = "specials.deals.presentation";
 function initialPresentation(props: Props): SpecialsPresentation {
   // Prefer the draft (in-progress edits), else the published value, else the
   // live-look-safe default (normalize handles null/blank).
-  return normalizeSpecialsPresentation(
+  const p = normalizeSpecialsPresentation(
     safeParse(props.draftJson) ?? safeParse(props.publishedJson) ?? null,
   );
+  // R63: the Specials studio is NOT bound to Promotions / the hero text — any
+  // older bound box keeps the words it shows today as its OWN text (the owner
+  // has full control; saving makes it stick). Classic looks are untouched.
+  const today = props.todaysText ?? { title: "Today's Deals", subtitle: "" };
+  const engine = new Map(props.engineCopy.map((c) => [c.weekday, c] as const));
+  return {
+    ...p,
+    heroDesign: unbindDesign(p.heroDesign, props.heroText ?? {}),
+    todaysDealsDesign: unbindDesign(p.todaysDealsDesign, { eyebrow: "Today's Deal", ...today }),
+    days: p.days.map((d) =>
+      d.design ? { ...d, design: unbindDesign(d.design, dayWords(d, engine.get(d.weekday))) } : d,
+    ),
+  };
+}
+
+/** The words a weekday card shows today (overrides win over Promotions). */
+function dayWords(d: DayPresentation, engine?: WeekdayEngineCopy) {
+  return {
+    eyebrow: d.weekday,
+    title: d.titleOverride || engine?.title || d.weekday,
+    subtitle: d.offerOverride || engine?.offer || "",
+  };
 }
 
 function safeParse(json: string | null): unknown {
@@ -216,24 +238,24 @@ export function SpecialsPresentationEditor(props: Props) {
     [pres.days],
   );
   const visibleOrder = useMemo(() => orderedVisibleWeekdays(pres), [pres]);
+  // R63: seeds for a NEW studio design (boxes start with today's words as their own text).
+  const heroSeed = {
+    ...heroText,
+    textAlign: pres.heroBannerTextAlign,
+    verticalAlign: pres.heroBannerVerticalAlign,
+    imageFocus: pres.heroBannerImageFocus,
+    buttons: pres.heroButtonsSet ? pres.heroButtons : legacyHeroButtons,
+  };
+  const todaysLegacy = { eyebrow: "Today's Deal", title: todaysText.title, subtitle: todaysText.subtitle };
+  const todaySeed = {
+    ...todaysLegacy,
+    textAlign: pres.todaysDealsBannerTextAlign,
+    verticalAlign: pres.todaysDealsBannerVerticalAlign,
+    imageFocus: pres.todaysDealsBannerImageFocus,
+  };
 
   return (
     <div id="specials-presentation" className="scroll-mt-4 space-y-6">
-      {/* Caution / boundary banner. */}
-      <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
-        <strong>This controls how deals are PRESENTED — not the prices.</strong> Turn day cards on or
-        off, reorder them, restyle the offer badge, tweak the wording, and set the Today&rsquo;s Deal
-        banner image. The actual discounts, percentages, and offers are set in{" "}
-        <Link href="/admin/promotions" className="underline hover:no-underline">
-          Promotions
-        </Link>{" "}
-        (test them in the{" "}
-        <Link href="/admin/promotions/simulator" className="underline hover:no-underline">
-          discount simulator
-        </Link>
-        ). Nothing goes live until you click <strong>Publish</strong>.
-      </div>
-
       {/* ── Tab bar ───────────────────────────────────────────────────────── */}
       <nav className="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3">
         {(
@@ -261,49 +283,10 @@ export function SpecialsPresentationEditor(props: Props) {
       </nav>
 
       {tab === "hero" ? (
-        /* ── Top hero tab (page-order tab 1) ─────────────────────────────── */
+        /* ── Main banner tab: R63 — same order as the home carousel editor:
+           picture → Design Studio → Basic mode (collapsed). No side preview. */
         <>
-        {/* R41 S4: full Banner Studio design for the TOP hero. */}
-        <DesignCard
-          mediaChoices={mediaChoices}
-          title="Design Studio — top hero"
-          description="Drag the wording anywhere, change fonts, colors and sizes, add text boxes and buttons, and set a separate phone layout. When it's on, it replaces the classic placement settings (Basic mode below). Turn it off any time to go back to the classic hero."
-          design={pres.heroDesign}
-          onChange={(heroDesign) => setGlobal("heroDesign", heroDesign)}
-          legacy={heroText}
-          imageSrc={pres.heroBannerImage || props.legacyHeroImage || ""}
-          imageAlt=""
-          preset="hero"
-          seed={{
-            ...heroText,
-            textAlign: pres.heroBannerTextAlign,
-            verticalAlign: pres.heroBannerVerticalAlign,
-            imageFocus: pres.heroBannerImageFocus,
-            buttons: pres.heroButtonsSet ? pres.heroButtons : legacyHeroButtons,
-          }}
-          posts={posts}
-        />
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Controls column */}
-          <div className="space-y-5">
-            {/* R43: the hero words are edited in the "Hero text" card at the top
-                of THIS page (content blocks specials.hero.*), which is now the
-                only source the live /specials hero reads. The old note sent the
-                owner to Website Sync, which was misleading. */}
-            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
-              <div className="mb-1 text-sm font-semibold">Hero wording</div>
-              <p className="text-xs text-[var(--admin-text-muted)]">
-                The hero&rsquo;s <strong>eyebrow</strong>, <strong>title</strong>, and{" "}
-                <strong>subtitle</strong> are edited in the{" "}
-                <a href="#hero-text" className="text-[var(--admin-accent)] hover:underline">
-                  Hero text
-                </a>{" "}
-                card at the top of this page (save a draft, then Publish). This tab controls the hero{" "}
-                <strong>image</strong>, its buttons, and where the text sits over it.
-              </p>
-            </div>
-
-            {/* Hero image (moved here from the retired Pages builder). */}
+        {/* Hero image (moved here from the retired Pages builder). */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Top hero image</div>
               <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
@@ -320,7 +303,41 @@ export function SpecialsPresentationEditor(props: Props) {
               />
             </div>
 
-            <BasicMode hint="classic text position and image focus">
+        <DesignCard
+          mediaChoices={mediaChoices}
+          title="Design Studio — top hero"
+          description="Drag the wording anywhere, change fonts, colors and sizes, add text boxes and buttons, and set a separate phone layout. Every word on the canvas is yours (not tied to Promotions or the hero text). Untick any time to go back to the classic hero (Basic mode below)."
+          design={pres.heroDesign}
+          onChange={(heroDesign) => setGlobal("heroDesign", heroDesign)}
+          legacy={heroText}
+          imageSrc={pres.heroBannerImage || props.legacyHeroImage || ""}
+          imageAlt=""
+          preset="hero"
+          seed={heroSeed}
+          makeNew={() => unbindDesign(designFromLegacy({ ...heroSeed, preset: "hero" }), heroText)}
+          posts={posts}
+        />
+        <BasicMode hint="classic look: wording, buttons, text position and image focus">
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Hero wording</div>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                The hero&rsquo;s <strong>eyebrow</strong>, <strong>title</strong>, and{" "}
+                <strong>subtitle</strong> are edited in the{" "}
+                <a
+                  href="#hero-text"
+                  onClick={() => {
+                    const d = document.getElementById("classic-hero-text");
+                    if (d instanceof HTMLDetailsElement) d.open = true;
+                  }}
+                  className="text-[var(--admin-accent)] hover:underline"
+                >
+                  Classic hero text
+                </a>{" "}
+                card under this editor (save a draft, then Publish). This tab controls the hero{" "}
+                <strong>image</strong>, its buttons, and where the text sits over it.
+              </p>
+            </div>
+
             {/* Hero text position. */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Hero text position</div>
@@ -398,8 +415,6 @@ export function SpecialsPresentationEditor(props: Props) {
               </div>
             </div>
 
-            </BasicMode>
-
             {/* R41 S4: hero buttons (add / edit / remove / reorder / repoint). */}
             <HeroButtonsCard
               buttons={pres.heroButtons}
@@ -409,6 +424,7 @@ export function SpecialsPresentationEditor(props: Props) {
               onChange={(heroButtons, heroButtonsSet) => setPres((p) => ({ ...p, heroButtons, heroButtonsSet }))}
             />
 
+        </BasicMode>
             {/* Creative Studio nudge for on-brand hero art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide hero in{" "}
@@ -418,27 +434,6 @@ export function SpecialsPresentationEditor(props: Props) {
               &mdash; pick the <strong>&ldquo;Specials &mdash; top hero banner&rdquo;</strong> preset,
               then paste or Media-Library-pick it above.
             </p>
-          </div>
-
-          {/* Hero preview column */}
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-              Hero preview
-            </div>
-            <HeroPreview
-              text={heroText}
-              image={pres.heroBannerImage}
-              textAlign={pres.heroBannerTextAlign}
-              verticalAlign={pres.heroBannerVerticalAlign}
-              imageFocus={pres.heroBannerImageFocus}
-            />
-            <div className="mt-2 flex flex-wrap gap-3 text-xs">
-              <a href="/specials" target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
-                View live /specials ↗
-              </a>
-            </div>
-          </div>
-        </div>
         </>
       ) : tab === "cards" ? (
         <>
@@ -533,7 +528,7 @@ export function SpecialsPresentationEditor(props: Props) {
                       <DesignCard
                         mediaChoices={mediaChoices}
                         title={`Card Design Studio — ${day.weekday}`}
-                        description="Design this weekday card like a banner. The day, title and offer stay tied to Promotions + the overrides below. No buttons = the whole card goes to the deal. Untick for the classic card."
+                        description="Design this weekday card like a banner. Every word on the card is yours (not tied to Promotions). No buttons = the whole card goes to the deal. Untick for the classic card."
                         design={day.design ?? null}
                         onChange={(d) => updateDay(day.weekday, { design: d ?? undefined })}
                         legacy={{
@@ -545,7 +540,7 @@ export function SpecialsPresentationEditor(props: Props) {
                         imageAlt=""
                         preset="section"
                         seed={{ eyebrow: day.weekday, title: day.titleOverride || engine?.title || day.weekday }}
-                        makeNew={() => cardDesign({ ratio: 0.8, ratioMobile: 1, eyebrow: true, subtitle: true })}
+                        makeNew={() => unbindDesign(cardDesign({ ratio: 0.8, ratioMobile: 1, eyebrow: true, subtitle: true }), dayWords(day, engine))}
                         posts={posts}
                         onLegacyEdit={(bind, text) => {
                           if (bind === "title") updateDay(day.weekday, { titleOverride: text });
@@ -683,70 +678,9 @@ export function SpecialsPresentationEditor(props: Props) {
           </div>
         </>
       ) : (
-        /* ── Today's Deal banner & products tab ─────────────────────────────── */
+        /* ── Specials banner tab (Today's Deal): R63 — same order as the home
+           carousel editor; product-grid settings collapsed underneath. */
         <>
-        {/* R41 S4: full Banner Studio design for the Today's Deal banner. Text
-            boxes tied to the title/subtitle keep showing the day's deal, so it
-            still changes every day. */}
-        <DesignCard
-          mediaChoices={mediaChoices}
-          title="Design Studio — Today's Deal banner"
-          description="Drag the wording anywhere, change fonts and colors, add text boxes and buttons, and set a phone layout. Boxes tied to the title and subtitle still show each day's deal automatically. The preview shows today's wording."
-          design={pres.todaysDealsDesign}
-          onChange={(todaysDealsDesign) => setGlobal("todaysDealsDesign", todaysDealsDesign)}
-          legacy={{ eyebrow: "Today's Deal", title: todaysText.title, subtitle: todaysText.subtitle }}
-          imageSrc={pres.todaysDealsBannerImage || "/home/hero-banner.webp"}
-          imageAlt={`${todaysText.title} daily deal products`}
-          preset="section"
-          seed={{
-            eyebrow: "Today's Deal",
-            title: todaysText.title,
-            subtitle: todaysText.subtitle,
-            textAlign: pres.todaysDealsBannerTextAlign,
-            verticalAlign: pres.todaysDealsBannerVerticalAlign,
-            imageFocus: pres.todaysDealsBannerImageFocus,
-          }}
-          posts={posts}
-        />
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Controls column */}
-          <div className="space-y-5">
-            {/* Show + count, side by side. */}
-            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
-              <label className="flex items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={pres.showTodaysDeals}
-                  onChange={(e) => setGlobal("showTodaysDeals", e.target.checked)}
-                />
-                <span>
-                  <span className="font-semibold">Show today&rsquo;s live products</span>
-                  <span className="block text-xs text-[var(--admin-text-muted)]">
-                    The grid of real on-deal products for today (with the wide banner above it).
-                  </span>
-                </span>
-              </label>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <label className="text-sm font-semibold" htmlFor="todays-count">
-                  Products to show
-                </label>
-                <input
-                  id="todays-count"
-                  type="number"
-                  min={TODAYS_DEALS_COUNT_MIN}
-                  max={TODAYS_DEALS_COUNT_MAX}
-                  step={1}
-                  value={pres.todaysDealsCount}
-                  disabled={!pres.showTodaysDeals}
-                  onChange={(e) => setGlobal("todaysDealsCount", clampTodaysDealsCount(e.target.value))}
-                  className={`w-24 ${INPUT_CLASS} disabled:opacity-40`}
-                />
-                <span className="text-xs text-[var(--admin-text-muted)]">
-                  Between {TODAYS_DEALS_COUNT_MIN} and {TODAYS_DEALS_COUNT_MAX}. Default is 16.
-                </span>
-              </div>
-            </div>
-
             {/* Banner image picker (reuses the site-wide helper). */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Today&rsquo;s Deal banner image</div>
@@ -764,7 +698,21 @@ export function SpecialsPresentationEditor(props: Props) {
               />
             </div>
 
-            <BasicMode hint="classic text position and image focus">
+        <DesignCard
+          mediaChoices={mediaChoices}
+          title="Design Studio — Today's Deal banner"
+          description="Drag the wording anywhere, change fonts and colors, add text boxes and buttons, and set a phone layout. Every word on the canvas is yours (not tied to Promotions). Want it to change with the day's deal? Add a Live text box (Today's deal, auto). Untick for the classic banner (Basic mode below)."
+          design={pres.todaysDealsDesign}
+          onChange={(todaysDealsDesign) => setGlobal("todaysDealsDesign", todaysDealsDesign)}
+          legacy={todaysLegacy}
+          imageSrc={pres.todaysDealsBannerImage || "/home/hero-banner.webp"}
+          imageAlt={`${todaysText.title} daily deal products`}
+          preset="section"
+          seed={todaySeed}
+          makeNew={() => unbindDesign(designFromLegacy({ ...todaySeed, preset: "section" }), todaysLegacy)}
+          posts={posts}
+        />
+        <BasicMode hint="classic text position and image focus">
             {/* Text alignment controls. */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Banner text position</div>
@@ -847,8 +795,50 @@ export function SpecialsPresentationEditor(props: Props) {
               </div>
             </div>
 
-            </BasicMode>
+        </BasicMode>
+        <details className="rounded-lg border border-white/10 p-3">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Today&rsquo;s products grid <span className="font-normal opacity-60">(show it + how many products)</span>
+          </summary>
+          <div className="mt-4">
+            {/* Show + count, side by side. */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={pres.showTodaysDeals}
+                  onChange={(e) => setGlobal("showTodaysDeals", e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold">Show today&rsquo;s live products</span>
+                  <span className="block text-xs text-[var(--admin-text-muted)]">
+                    The grid of real on-deal products for today (with the wide banner above it).
+                  </span>
+                </span>
+              </label>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <label className="text-sm font-semibold" htmlFor="todays-count">
+                  Products to show
+                </label>
+                <input
+                  id="todays-count"
+                  type="number"
+                  min={TODAYS_DEALS_COUNT_MIN}
+                  max={TODAYS_DEALS_COUNT_MAX}
+                  step={1}
+                  value={pres.todaysDealsCount}
+                  disabled={!pres.showTodaysDeals}
+                  onChange={(e) => setGlobal("todaysDealsCount", clampTodaysDealsCount(e.target.value))}
+                  className={`w-24 ${INPUT_CLASS} disabled:opacity-40`}
+                />
+                <span className="text-xs text-[var(--admin-text-muted)]">
+                  Between {TODAYS_DEALS_COUNT_MIN} and {TODAYS_DEALS_COUNT_MAX}. Default is 16.
+                </span>
+              </div>
+            </div>
 
+          </div>
+        </details>
             {/* Nudge to Creative Studio for on-brand banner art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide banner in{" "}
@@ -859,44 +849,6 @@ export function SpecialsPresentationEditor(props: Props) {
               <strong>&ldquo;Specials — Today&rsquo;s Deal banner&rdquo;</strong> destination, then
               paste or Media-Library-pick it above.
             </p>
-
-            {/* SLICE 122 (SET-3): the TOP hero image now lives in the "Top hero"
-                tab of THIS editor (moved out of the retired Pages builder). */}
-            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
-              <div className="mb-1 text-sm font-semibold">Looking for the big top banner?</div>
-              <p className="text-xs text-[var(--admin-text-muted)]">
-                The image at the very top of the Specials page is now set in the{" "}
-                <strong>&ldquo;Top hero&rdquo;</strong> tab above &mdash; image, text position, and
-                image focus, all with a live preview.
-              </p>
-            </div>
-          </div>
-
-          {/* Banner preview column */}
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-              Banner preview
-            </div>
-            {pres.showTodaysDeals ? (
-              <BannerPreview
-                image={pres.todaysDealsBannerImage}
-                textAlign={pres.todaysDealsBannerTextAlign}
-                verticalAlign={pres.todaysDealsBannerVerticalAlign}
-                imageFocus={pres.todaysDealsBannerImageFocus}
-                count={pres.todaysDealsCount}
-              />
-            ) : (
-              <div className="rounded-[var(--admin-radius-lg)] border border-white/10 bg-black p-5 text-sm text-white/60">
-                Today&rsquo;s live products grid (and its banner) is hidden.
-              </div>
-            )}
-            <div className="mt-2 flex flex-wrap gap-3 text-xs">
-              <a href="/specials" target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
-                View live /specials ↗
-              </a>
-            </div>
-          </div>
-        </div>
         </>
       )}
 
@@ -918,6 +870,26 @@ export function SpecialsPresentationEditor(props: Props) {
           <span className="text-xs text-[var(--admin-text-muted)]">Matches what&rsquo;s live.</span>
         )}
       </form>
+
+      {/* R63: the Promotions connection, collapsed under the editor. */}
+      <details className="rounded-lg border border-white/10 p-3 text-sm">
+        <summary className="cursor-pointer font-semibold">
+          Prices & offers <span className="font-normal opacity-60">(set in Promotions)</span>
+        </summary>
+        <p className="mt-3 text-[var(--admin-text-muted)]">
+        <strong>This controls how deals are PRESENTED — not the prices.</strong> Turn day cards on or
+        off, reorder them, restyle the offer badge, tweak the wording, and set the Today&rsquo;s Deal
+        banner image. The actual discounts, percentages, and offers are set in{" "}
+        <Link href="/admin/promotions" className="underline hover:no-underline">
+          Promotions
+        </Link>{" "}
+        (test them in the{" "}
+        <Link href="/admin/promotions/simulator" className="underline hover:no-underline">
+          discount simulator
+        </Link>
+        ). Nothing goes live until you click <strong>Publish</strong>.
+      </p>
+      </details>
 
       {/* ── History / restore ──────────────────────────────────────────────── */}
       <div className="border-t border-[var(--admin-border)] pt-4">
@@ -962,135 +934,6 @@ export function SpecialsPresentationEditor(props: Props) {
           )
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/** Small WYSIWYG-ish preview of the wide banner that mirrors how SectionBanner
- *  positions its overlay text for a given alignment (editor-only visual). */
-const PREVIEW_FOCUS_OBJECT_CLASS: Record<ImageFocus, string> = {
-  center: "object-center",
-  top: "object-top",
-  bottom: "object-bottom",
-  left: "object-left",
-  right: "object-right",
-};
-
-function BannerPreview({
-  image,
-  textAlign,
-  verticalAlign,
-  imageFocus,
-  count,
-}: {
-  image: string;
-  textAlign: TextAlign;
-  verticalAlign: TextVAlign;
-  imageFocus: ImageFocus;
-  count: number;
-}) {
-  const src = image && image.trim() ? image.trim() : "/home/hero-banner.webp";
-  const justify =
-    verticalAlign === "top" ? "justify-start" : verticalAlign === "bottom" ? "justify-end" : "justify-center";
-  const items =
-    textAlign === "center" ? "items-center text-center" : textAlign === "right" ? "items-end text-right" : "items-start text-left";
-  const gradient =
-    textAlign === "right"
-      ? "bg-[linear-gradient(270deg,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.15)_70%)]"
-      : textAlign === "center"
-        ? "bg-[linear-gradient(180deg,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0.75)_100%)]"
-        : "bg-[linear-gradient(90deg,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.15)_70%)]";
-  // Image focus is now its OWN control (matches the public SectionBanner
-  // mapping) instead of being shoved opposite the text — so the preview is a
-  // faithful mirror of what shoppers will see.
-  const objectPos = PREVIEW_FOCUS_OBJECT_CLASS[imageFocus];
-  return (
-    <div className="space-y-2">
-      <div className="relative aspect-[16/6] w-full overflow-hidden rounded-[var(--admin-radius-lg)] border border-white/10 bg-black">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="Banner preview" className={`absolute inset-0 h-full w-full object-cover ${objectPos}`} />
-        <div className={`absolute inset-0 ${gradient}`} />
-        <div className={`relative flex h-full flex-col px-5 py-4 ${justify} ${items}`}>
-          <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-[var(--orange)]">
-            Today&rsquo;s Deal
-          </p>
-          <p className="mt-1 text-lg font-black uppercase leading-tight text-white">
-            (title from Promotions)
-          </p>
-          <p className="text-sm text-zinc-300">(subtitle from Promotions)</p>
-        </div>
-      </div>
-      <p className="text-xs text-[var(--admin-text-muted)]">
-        Below the banner, up to <strong>{count}</strong> live on-deal product{count === 1 ? "" : "s"} for
-        today will show. Title &amp; subtitle come from Promotions.
-      </p>
-    </div>
-  );
-}
-
-/**
- * SLICE 122 (SET-3): a faithful live preview of the TOP hero, mirroring the
- * public SpecialsContent hero — direction-aware gradient by textAlign (the
- * LEFT/default keeps today's 100deg fade intent), object-position by image
- * focus, and vertical justify. Blank image => gradient-only (today's look).
- */
-function HeroPreview({
-  text,
-  image,
-  textAlign,
-  verticalAlign,
-  imageFocus,
-}: {
-  /** R43: the real published hero words (same resolver as the live page). */
-  text: { eyebrow?: string; title?: string; subtitle?: string };
-  image: string;
-  textAlign: TextAlign;
-  verticalAlign: TextVAlign;
-  imageFocus: ImageFocus;
-}) {
-  const src = image && image.trim() ? image.trim() : "";
-  const justify =
-    verticalAlign === "top" ? "justify-start" : verticalAlign === "bottom" ? "justify-end" : "justify-center";
-  const column =
-    textAlign === "right" ? "items-end" : textAlign === "center" ? "items-center" : "items-start";
-  const items =
-    textAlign === "center" ? "items-center text-center" : textAlign === "right" ? "items-end text-right" : "items-start text-left";
-  // Mirrors SpecialsContent's heroGradientClass (LEFT default = today's 100deg).
-  const gradient =
-    textAlign === "right"
-      ? "bg-[linear-gradient(260deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]"
-      : textAlign === "center"
-        ? "bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.62)_50%,rgba(0,0,0,0.82)_100%)]"
-        : "bg-[linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]";
-  const objectPos = PREVIEW_FOCUS_OBJECT_CLASS[imageFocus];
-  return (
-    <div className="space-y-2">
-      <div
-        className={`relative flex aspect-[16/6] w-full flex-col overflow-hidden rounded-[var(--admin-radius-lg)] border border-white/10 bg-[#1a1a1e] ${justify} ${column}`}
-      >
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="Hero preview" className={`absolute inset-0 h-full w-full object-cover ${objectPos}`} />
-        ) : null}
-        <div className={`absolute inset-0 ${gradient}`} />
-        <div className={`relative flex max-w-[80%] flex-col px-5 py-4 ${items}`}>
-          <p className="inline-flex rounded-full border border-white/20 bg-black/40 px-2 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)]">
-            {text.eyebrow || "Deals every day"}
-          </p>
-          <p className="mt-1 text-lg font-black uppercase leading-tight text-white">
-            {text.title || "Cannabis Specials"}
-          </p>
-          <p className="text-sm text-zinc-300">
-            {text.subtitle ||
-              "Check out our latest deals and save on premium cannabis products. New specials added regularly."}
-          </p>
-        </div>
-      </div>
-      <p className="text-xs text-[var(--admin-text-muted)]">
-        The words shown are your current hero text (edit them in the Hero text card above);
-        this tab sets the image + where the text and picture sit. Blank image keeps the
-        built-in gradient look.
-      </p>
     </div>
   );
 }

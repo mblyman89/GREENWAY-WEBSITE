@@ -214,17 +214,11 @@ describe("the ONE editor is tabbed, uses the image helper, and is dark-themed", 
     expect(src).toContain("Image focus");
   });
 
-  it("SLICE 121 (SET-2): the editor's live BannerPreview honors image focus (not text-derived)", () => {
+  it("R63: no side preview — the studio canvas is the preview (like the home carousel)", () => {
     const src = read("src/components/admin/SpecialsPresentationEditor.tsx");
-    // Preview receives the focus and maps it with the SAME object-* classes as
-    // the public SectionBanner, independent of textAlign.
-    expect(src).toContain("imageFocus={pres.todaysDealsBannerImageFocus}");
-    expect(src).toContain("PREVIEW_FOCUS_OBJECT_CLASS[imageFocus]");
-    expect(src).toContain('center: "object-center"');
-    expect(src).toContain('top: "object-top"');
-    expect(src).toContain('bottom: "object-bottom"');
-    expect(src).toContain('left: "object-left"');
-    expect(src).toContain('right: "object-right"');
+    expect(src).not.toContain("BannerPreview");
+    expect(src).not.toContain("HeroPreview");
+    expect(src).toContain('setGlobal("todaysDealsBannerImageFocus"');
   });
 
   it("has NO leftover white inputs (dark-themed) and no light hover fallback", () => {
@@ -400,10 +394,9 @@ describe("SLICE 122 (SET-3): the ONE editor now has 3 tabs in page order", () =>
     expect(src).toContain('setGlobal("heroBannerImageFocus"');
   });
 
-  it("has a live HeroPreview that honors focus (not text-derived)", () => {
-    expect(src).toContain("HeroPreview");
-    // The preview positions the image from the chosen focus, like the banner one.
-    expect(src).toContain("PREVIEW_FOCUS_OBJECT_CLASS[imageFocus]");
+  it("R63: the Specials studio is not bound to Promotions (bound boxes become own text)", () => {
+    expect(src).toContain("unbindDesign(p.heroDesign");
+    expect(src).toContain("unbindDesign(p.todaysDealsDesign");
   });
 
   it("no longer routes staff to the retired /admin/pages/specials builder", () => {
