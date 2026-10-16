@@ -9,6 +9,13 @@ import { shapeVisual, type DesignElement } from "@/lib/cms/banner-elements-core"
 export function DesignShape({ el }: { el: DesignElement }) {
   const v = shapeVisual(el);
   if ("css" in v) return <div style={v.css as unknown as CSSProperties} />;
+  if ("iconPath" in v)
+    // R55-S3: icon path data travels inside the design (validated SVG path commands only).
+    return (
+      <svg viewBox="0 0 256 256" width="100%" height="100%" style={{ display: "block" }} aria-hidden="true" focusable="false">
+        <path d={v.iconPath} fill={v.fill} />
+      </svg>
+    );
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%" style={{ display: "block", overflow: "visible" }} aria-hidden="true" focusable="false">
       <polygon

@@ -35,3 +35,18 @@ describe("R55-S2 shapes + layers", () => {
     expect(read("src/app/globals.css")).toContain("--gbh: var(--gmh, var(--gh));");
   });
 });
+
+describe("R55-S3 icons", () => {
+  it("icon artwork is copied into the design; the public site never imports the icon set or library", () => {
+    for (const f of ["src/components/site/DesignedBanner.tsx", "src/components/site/DesignShape.tsx", "src/lib/cms/banner-elements-core.ts", "src/lib/cms/banner-design-core.ts"]) {
+      const src = read(f);
+      expect(src, f).not.toContain("banner-icons-data");
+      expect(src, f).not.toContain("@phosphor-icons");
+    }
+    expect(read("src/components/admin/banner-studio/ShapePanel.tsx")).toContain("defaultIcon(icon, weight, path");
+  });
+  it("icon paths are validated to SVG path commands only", () => {
+    expect(read("src/lib/cms/banner-elements-core.ts")).toContain("if (isIcon && !isSafeIconPath(raw.iconPath)) return null;");
+    expect(read("src/lib/cms/banner-icons-data.ts")).toContain("Phosphor Icons (https://phosphoricons.com), MIT License");
+  });
+});

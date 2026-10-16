@@ -2282,7 +2282,7 @@ __runLiquidVolumeTests();
   assertRan("banner-schedule-core", __runBannerScheduleCoreTests(), 23); // R54: schedule v2 (weekly repeat, window, fallback, calendar)
   assertRan("image-optimize-core", __runImageOptimizeCoreTests(), 19); // R54: upload-time WebP master plan
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
-  assertRan("banner-elements-core", __runBannerElementsTests(), 26); // R55-S2: shapes + layers
+  assertRan("banner-elements-core", __runBannerElementsTests(), 36); // R55-S2/S3: shapes, layers, icons
   assertRan("banner-compare-core", __runBannerCompareTests(), 22); // R55-S1: banner comparison
   assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 58); // R41 S7: hub preview Move-mode owners + per-owner movers
