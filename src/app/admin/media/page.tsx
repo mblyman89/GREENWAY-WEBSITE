@@ -4,7 +4,10 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { listMedia, countMedia, publicUrlForKey } from "@/lib/media/store";
+import { countMedia, publicUrlForKey } from "@/lib/media/store";
+import { listAllMedia, buildMediaUses } from "@/lib/media/folders-server";
+import { folderIndex, buildFolderTree, folderTrail, safeFolderId, type FolderNode } from "@/lib/media/folders-core";
+import { MediaFolderTree } from "@/components/admin/media/MediaFolderTree";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
 import { MEDIA_PURPOSES } from "@/lib/media/taxonomy";
@@ -20,13 +23,15 @@ export const dynamic = "force-dynamic";
 export default async function MediaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; usage?: string; saved?: string; deleted?: string; note?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; usage?: string; folder?: string; sort?: string; page?: string; saved?: string; deleted?: string; note?: string; error?: string }>;
 }) {
   await requirePermission("media.manage");
-  const { q, status, usage, saved, deleted, note, error } = await searchParams;
+  const { q, status, usage, folder: rawFolder, sort: rawSort, page: rawPage, saved, deleted, note, error } = await searchParams;
+  const folder = safeFolderId(rawFolder);
+  const sort = ["oldest", "name", "largest"].includes(rawSort ?? "") ? (rawSort as string) : "newest";
   // H12d: the active filters travel with every grid link so the detail page
   // can send the owner back to this exact filtered view.
-  const listParams = pickListParams({ q, status, usage });
+  const listParams = pickListParams({ q, status, usage, folder: folder === "all" ? "" : folder, sort: sort === "newest" ? "" : sort, page: rawPage });
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -43,15 +48,49 @@ export default async function MediaPage({
   }
 
   const counts = await countMedia();
-  const all = await listMedia({ usageType: usage, status });
-  const filtered = q
-    ? all.filter(
-        (m) =>
-          (m.title ?? "").toLowerCase().includes(q.toLowerCase()) ||
-          (m.filename ?? "").toLowerCase().includes(q.toLowerCase()) ||
-          (m.tags ?? []).some((t) => t.toLowerCase().includes(q.toLowerCase())),
-      )
-    : all;
+  // R65: load EVERY asset (the old page only ever showed the newest 200),
+  // work out where each is used, then file them into smart folders.
+  const everything = await listAllMedia();
+  const uses = await buildMediaUses(everything);
+  const index = folderIndex(everything, uses);
+  const tree = buildFolderTree(index);
+  const ql = (q ?? "").trim().toLowerCase();
+  const filtered = everything
+    .filter((m) => folder === "all" || (index.get(m.id) ?? []).includes(folder))
+    .filter((m) => !usage || m.usage_type === usage)
+    .filter((m) => !status || m.status === status)
+    .filter(
+      (m) =>
+        !ql ||
+        [m.title, m.filename, m.alt_text, m.description, m.source, ...(m.tags ?? [])].some((v) => (v ?? "").toLowerCase().includes(ql)),
+    )
+    .sort((a, b) =>
+      sort === "oldest"
+        ? a.created_at.localeCompare(b.created_at)
+        : sort === "name"
+          ? (a.title || a.filename || "").localeCompare(b.title || b.filename || "")
+          : sort === "largest"
+            ? (b.size_bytes ?? 0) - (a.size_bytes ?? 0)
+            : b.created_at.localeCompare(a.created_at),
+    );
+  const PER_PAGE = 120;
+  const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const pageNo = Math.min(pages, Math.max(1, Number.parseInt(rawPage ?? "1", 10) || 1));
+  const shown = filtered.slice((pageNo - 1) * PER_PAGE, pageNo * PER_PAGE);
+  const baseParams = { ...listParams, page: undefined };
+  const folderHref = (id: string) => withListParams("/admin/media", { ...baseParams, folder: id === "all" ? undefined : id });
+  const pageHref = (n: number) => withListParams("/admin/media", { ...baseParams, page: n > 1 ? String(n) : undefined });
+  const trail = folderTrail(folder);
+  const findNode = (list: FolderNode[], id: string): FolderNode | null => {
+    for (const n of list) {
+      if (n.id === id) return n;
+      const hit = findNode(n.children, id);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const current = folder === "all" ? null : findNode(tree, folder);
+  const subfolders = folder === "all" ? tree : current?.children ?? [];
 
   return (
     <div>
@@ -107,48 +146,95 @@ export default async function MediaPage({
         {/* Upload (drag & drop) */}
         <MediaDropzone />
 
-        {/* Filters */}
         {counts.total > 0 && (
-          <form className="flex flex-wrap items-center gap-3" method="get">
-            <Input
-              name="q"
-              defaultValue={q ?? ""}
-              placeholder="Search title, filename, tags…"
-              className="min-w-48 flex-1"
-            />
-            <Select name="usage" defaultValue={usage ?? ""} className="w-auto">
-              <option value="">All purposes</option>
-              {MEDIA_PURPOSES.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </Select>
-            <Select name="status" defaultValue={status ?? ""} className="w-auto">
-              <option value="">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="archived">Archived</option>
-            </Select>
-            <Button type="submit" variant="neutral">
-              Filter
-            </Button>
-          </form>
-        )}
+          <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+            {/* R65: smart-folder tree — assets file themselves by source, page and use. */}
+            <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-2">
+              <p className="px-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">Smart folders</p>
+              <MediaFolderTree tree={tree} total={everything.length} active={folder} hrefFor={folderHref} />
+              <p className="mt-2 px-1.5 text-[11px] leading-snug text-[var(--admin-text-faint)]">
+                Folders fill themselves from where each file came from and where it&apos;s used — nothing to drag. One file can sit in several folders.
+              </p>
+            </aside>
 
-        {/* Grid — with multi-select bulk delete (Task B). Cards carry the
-            active filters into the detail URL so the detail page's back link +
-            breadcrumb can return to this exact filtered view (H13a). */}
-        {filtered.length > 0 && (
-          <MediaGrid
-            returnTo={withListParams("/admin/media", listParams)}
-            bulkDeleteAction={bulkDeleteMediaAction}
-            items={filtered.map((m: MediaAsset) => ({
-              asset: m,
-              url: publicUrlForKey(m.storage_key),
-              href: withListParams(`/admin/media/${m.id}`, listParams),
-            }))}
-          />
+            <div className="min-w-0 space-y-4">
+              {/* Breadcrumb + folder summary */}
+              <div className="flex flex-wrap items-center gap-1 text-sm">
+                <Link href={folderHref("all")} className="text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]">🗂️ Everything</Link>
+                {trail.map((c) => (
+                  <span key={c.id} className="flex items-center gap-1">
+                    <span className="text-[var(--admin-text-faint)]">›</span>
+                    <Link href={folderHref(c.id)} className={c.id === folder ? "font-semibold text-[var(--admin-text)]" : "text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"}>{c.label}</Link>
+                  </span>
+                ))}
+                <span className="ml-2 text-xs text-[var(--admin-text-faint)]">{filtered.length} file(s){current?.hint ? ` · ${current.hint}` : ""}</span>
+              </div>
+
+              {/* Sub-folder tiles (like opening a folder on a computer) */}
+              {subfolders.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {subfolders.map((n) => (
+                    <Link key={n.id} href={folderHref(n.id)} title={n.hint} className="admin-card-interactive flex items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2">
+                      <span className="text-xl" aria-hidden>{n.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-[var(--admin-text)]">{n.label}</span>
+                        <span className="block text-[11px] text-[var(--admin-text-faint)]">{n.count} file(s){n.children.length ? ` · ${n.children.length} folder(s)` : ""}</span>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              {/* Filters (inside the open folder) */}
+              <form className="flex flex-wrap items-center gap-2" method="get">
+                {folder !== "all" && <input type="hidden" name="folder" value={folder} />}
+                <Input name="q" defaultValue={q ?? ""} placeholder={folder === "all" ? "Search everything — title, file name, tags, source…" : "Search in this folder…"} className="min-w-48 flex-1" />
+                <Select name="usage" defaultValue={usage ?? ""} className="w-auto">
+                  <option value="">All purposes</option>
+                  {MEDIA_PURPOSES.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </Select>
+                <Select name="status" defaultValue={status ?? ""} className="w-auto">
+                  <option value="">All statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </Select>
+                <Select name="sort" defaultValue={sort} className="w-auto">
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                  <option value="name">Name A–Z</option>
+                  <option value="largest">Largest first</option>
+                </Select>
+                <Button type="submit" variant="neutral">
+                  Apply
+                </Button>
+              </form>
+
+              {shown.length > 0 && (
+                <MediaGrid
+                  returnTo={withListParams("/admin/media", listParams)}
+                  bulkDeleteAction={bulkDeleteMediaAction}
+                  items={shown.map((m: MediaAsset) => ({
+                    asset: m,
+                    url: publicUrlForKey(m.storage_key),
+                    href: withListParams(`/admin/media/${m.id}`, listParams),
+                  }))}
+                />
+              )}
+              {pages > 1 && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {pageNo > 1 && <Link href={pageHref(pageNo - 1)} className="rounded border border-[var(--admin-border)] px-2 py-1 hover:text-[var(--admin-accent)]">← Previous</Link>}
+                  <span className="text-[var(--admin-text-muted)]">Page {pageNo} of {pages}</span>
+                  {pageNo < pages && <Link href={pageHref(pageNo + 1)} className="rounded border border-[var(--admin-border)] px-2 py-1 hover:text-[var(--admin-accent)]">Next →</Link>}
+                </div>
+              )}
+              {filtered.length === 0 && <p className="text-sm text-[var(--admin-text-muted)]">No files here{q || usage || status ? " match your filter" : " yet"}.</p>}
+            </div>
+          </div>
         )}
 
         {counts.total === 0 && (
@@ -157,9 +243,6 @@ export default async function MediaPage({
             title="No media yet"
             description="Upload logos and banners above. Vendor and brand logos you add from the Vendors editor will also show up here automatically."
           />
-        )}
-        {filtered.length === 0 && counts.total > 0 && (
-          <p className="text-sm text-[var(--admin-text-muted)]">No assets match your filter.</p>
         )}
       </div>
     </div>
