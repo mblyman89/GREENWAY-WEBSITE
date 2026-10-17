@@ -28,7 +28,7 @@ export default async function MerchStudioPage() {
         title="How the Merch Studio works"
         steps={[
           "Garments: pick a premium blank (Comfort Colors, Independent, Bella+Canvas, Yupoong, Richardson) and a colour. Every placement shows its real print size, methods and Printful price.",
-          "Design: build your art on a true-to-inch canvas per placement with live print checks.",
+          "Design: pick a placement pill, add text, icons, shapes or your own art, and drag it on a true-to-inch canvas. The green dashed box is the exact printable area. Arrows nudge 1/16 inch (Shift = 1/4 inch), Ctrl+Z / Ctrl+Shift+Z undo and redo, Ctrl+D duplicates, Alt-drag skips snapping. Checks run live, and Preview shows every side in every colour.",
           "Artwork Check: drop in any file to see if it will print sharp on this garment, placement and method.",
           "Fulfillment & Pricing: see the just-in-time pipeline (Printful makes and ships one item per sale) and your profit per unit after Printful and card fees.",
         ]}

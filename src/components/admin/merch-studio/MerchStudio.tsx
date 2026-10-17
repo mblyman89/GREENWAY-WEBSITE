@@ -10,10 +10,12 @@ import { BLANKS, colorsFor, getBlank } from "@/lib/merch-studio/garment-catalog-
 import { CatalogPanel } from "./CatalogPanel";
 import { ArtCheckPanel } from "./ArtCheckPanel";
 import { FulfillmentPanel } from "./FulfillmentPanel";
+import { DesignStudio } from "./DesignStudio";
 
-export type StudioTab = "garments" | "check" | "fulfillment";
+export type StudioTab = "garments" | "design" | "check" | "fulfillment";
 const TABS: { id: StudioTab; label: string }[] = [
   { id: "garments", label: "\ud83d\udc55 Garments" },
+  { id: "design", label: "\ud83c\udfa8 Design" },
   { id: "check", label: "\ud83d\udd0e Artwork Check" },
   { id: "fulfillment", label: "\ud83d\udce6 Fulfillment & Pricing" },
 ];
@@ -53,7 +55,7 @@ export function MerchStudio({ extraTabs = [] }: { extraTabs?: { id: string; labe
     const cols = colorsFor(b);
     if (!cols.some((c) => c[1] === colorHex)) setColorHex(cols.find((c) => c[0] === "Black")?.[1] ?? cols[0][1]);
   };
-  const all = [...TABS.slice(0, 1), ...extraTabs.map((t) => ({ id: t.id, label: t.label })), ...TABS.slice(1)];
+  const all = [...TABS.slice(0, 2), ...extraTabs.map((t) => ({ id: t.id, label: t.label })), ...TABS.slice(2)];
   const blank = getBlank(blankId)!;
   const colorName = colorsFor(blank).find((c) => c[1] === colorHex)?.[0] ?? colorHex;
 
@@ -75,6 +77,8 @@ export function MerchStudio({ extraTabs = [] }: { extraTabs?: { id: string; labe
       </div>
       <div role="tabpanel">
         {tab === "garments" ? <CatalogPanel blankId={blankId} colorHex={colorHex} onBlank={setBlank} onColor={(hex) => setColorHex(hex)} /> : null}
+        {/* Design only mounts client-side after the selection restore (tab starts on Garments for SSR), so its localStorage boot is hydration-safe. */}
+        {tab === "design" && restored ? <DesignStudio blankId={blankId} colorHex={colorHex} setBlank={setBlank} setColor={setColorHex} /> : null}
         {tab === "check" ? <ArtCheckPanel key={blankId} blankId={blankId} colorHex={colorHex} /> : null}
         {tab === "fulfillment" ? <FulfillmentPanel key={blankId} blankId={blankId} /> : null}
         {extraTabs.map((t) => (tab === t.id ? <div key={t.id}>{t.render({ blankId, colorHex, setBlank, setColor: setColorHex })}</div> : null))}

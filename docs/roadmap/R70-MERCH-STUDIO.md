@@ -107,6 +107,31 @@ Fabric.js stays an option if freehand drawing or path editing becomes a need.
   - A "lowest price for X% margin" suggester.
 - **Pure cores with self-tests** registered in `run-pure-selftests.ts` and `tests/compliance/merch-studio-core.test.ts`: `garment-catalog-core` (235 checks), `print-rules-core` (29) and `fulfillment-core` (11).
 
+## 3b. What Slice 2 delivers: the Design tab (the garment canvas)
+
+**Where:** Merch Studio → 🎨 Design (second tab). It uses the same garment and colour selection as every other tab.
+
+**Engine choice: SVG in real inches.** The canvas viewBox is measured in inches of the actual garment. Each print frame is placed from the catalog's cited `topIn` / `centerXIn` and its max width × height (`frameRect` in `garment-views-core.ts`). Because of this, what you see is the size that prints. The garment silhouettes are *illustrative*: they are drawn to typical proportions for each style and are labelled as such in code. The *frame* geometry is exact. It is measured from the reference line Printful uses for each placement: the collar seam for front and back, the shoulder seam for sleeves, and the brim seam for hats. Slice 3 adds Printful's own mockups, so the owner sees real photos before anything sells.
+
+**Why these behaviours (pro-grade, reused from Banner Studio so it feels familiar):**
+- **Follow-scroll dock:** the canvas stays in view while you work in the panels below. It has Small/Medium/Large/Full sizes and a remembered setting, the same as the banner editor.
+- **Undo/redo:** 60 steps, with rapid edits grouped within 600 ms (one drag = one undo). Keys are Ctrl/⌘+Z, Ctrl+Shift+Z and Ctrl+Y. The keys are ignored while you type in a field.
+- **Smart snapping:** snaps to the frame edges and centres and to other elements, with pink guides. Hold Alt to drag freely. A live L/T/R/B readout in inches shows how far the art is from each edge of the frame.
+- **Precision:** arrow keys nudge 1/16" (Shift: 1/4"). The Selected tab has exact inch fields, plus quick Centre H/V, Top and Fill-width buttons.
+- **Rotate and resize:** the corner you're not dragging stays pinned, even when the element is rotated. Shift toggles aspect lock. Text resizes by changing its font size, so it never stretches.
+- **Text is sized by *letter height*.** Screen printers and embroiderers talk in cap height, not points. Text width is **measured in the browser** with the real font, never guessed. Letter height uses a labelled estimate (cap height ≈ 0.70 em). For embroidery, the 0.25" minimum letter height from print-rules is enforced against that estimate.
+- **Arched text:** the same curve engine as the banner editor.
+- **Embroidery colours:** the colour picker switches to Printful's 15 thread colours. "Snap colours to threads" converts every colour on the side to its nearest thread.
+- **Per-side method:** DTG / embroidery / (puff) for each placement, with live blocker/warning/tip checks against the Slice 1 print rules. Rules are fed real inches, ink area, colour count and effective DPI per image. Blockers get a red outline on the canvas. Warnings can be acknowledged per side.
+- **Libraries:** the banner editor's icon set (filled weight, so it prints and stitches solidly), object set and shape set, plus text presets (Headline, Wordmark, Arched text, Small tagline) that size themselves to the selected placement.
+- **Your own art:** images are sized to their true 300-DPI print size and fitted into the frame. The tool reads image pixels locally to detect colour count and photo/gradient content, which matters for embroidery. SVG is treated as vector (no DPI limit).
+- **Preview sub-tab:** every side in every garment colour, with a badge counting low-contrast elements on each colour (the print-rules contrast check).
+- **Price estimate:** a Printful estimate for size M updates as you add sides (from Slice 1 `fulfillment-core`).
+
+**Storage (on purpose, for now):** drafts autosave every 700 ms to this browser (localStorage `gw-merch-designs-v1`). Uploaded art is kept in IndexedDB (`gw-merch-assets`), so large files don't hit localStorage limits. Nothing is uploaded yet. Slice 4 moves designs and art into Supabase (private bucket), so they're shared across devices and can be listed for sale.
+
+**Pure cores and tests:** `garment-views-core` (262 checks: every blank, view and placement frame falls inside its view, mirroring, zoom) and `merch-design-core` (42 checks: text sizing, rotated resize, rule bridging, sanitising of stored/imported designs). Both are registered in `run-pure-selftests.ts` and vitest.
+
 ## 4. Website menu, subdomain cart and payments — strategy
 
 **Domain shape.** Use `shop.<main-domain>`, or `goods.<main-domain>`, as a **separate Vercel project** (or a separate Next.js app in a multi-zone setup; see Next docs `02-guides/multi-tenant.md` and `multi-zones.md`). It carries its own:
