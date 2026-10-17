@@ -12,7 +12,7 @@
  * labelled as such in the UI.
  *
  * Images are stored on this device (IndexedDB) by `assetId`; the design JSON
- * itself stays small enough for localStorage drafts (Slice 4 moves drafts to
+ * itself stays small enough for localStorage drafts (Slice 5 moves drafts to
  * Supabase with migration 0281+).
  */
 import { BLANKS, colorsFor, getBlank, getPlacement, nearestThread, type Blank, type Method, type Placement } from "./garment-catalog-core";

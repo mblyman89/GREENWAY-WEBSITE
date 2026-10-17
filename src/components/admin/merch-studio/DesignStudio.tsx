@@ -560,7 +560,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
               <button type="button" className="rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-3 py-1 text-xs font-bold text-black" onClick={newFromGarments}>+ New design ({getBlank(blankId)?.model})</button>
               <button type="button" className="rounded-[var(--admin-radius-sm)] bg-white/10 px-3 py-1 text-xs text-white/85" onClick={() => { const c = { ...design, id: newId("ds"), name: `${design.name} (copy)` }; openDesign(c); setSaved(false); }}>Duplicate this design</button>
             </div>
-            <p className="text-xs text-white/55">Drafts and uploaded art are saved in THIS browser only until Slice 4 adds shared, server-side designs. Don&apos;t clear site data for this admin site.</p>
+            <p className="text-xs text-white/55">Drafts and uploaded art are saved in THIS browser only until shared, server-side designs arrive with the Greenway Goods website (Slice 5). Don&apos;t clear site data for this admin site.</p>
             <ul className="divide-y divide-[var(--admin-border)] rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)]">
               {list.length === 0 ? <li className="p-2 text-xs text-white/55">No saved drafts yet - they save automatically as you design.</li> : null}
               {list.map((d) => {

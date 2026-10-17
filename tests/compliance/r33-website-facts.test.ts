@@ -256,8 +256,8 @@ describe("R33 ProductDetailPurchasePanel", () => {
     expect(out).toContain("12 fl oz");
   });
 
-  it("the merch detail button is green too", () => {
-    const src = read("src/components/merch/MerchDetailPanel.tsx");
+  it("the Greenway Goods redirect button is green too (R71 S4 replaced the merch detail panel)", () => {
+    const src = read("src/components/merch/MerchRedirectAdView.tsx");
     expect(src).toContain("bg-[var(--greenway)] px-5");
     expect(src).not.toContain("#d8e6c4");
   });

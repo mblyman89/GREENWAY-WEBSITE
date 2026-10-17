@@ -4,6 +4,7 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
+import { MerchRedirectAd } from "@/components/merch/MerchRedirectAd";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import { ShopBannerCarousel } from "@/components/menu/ShopBannerCarousel";
@@ -150,6 +151,12 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
           saleFilters={saleFilters}
         />
       </section>
+
+      {/* R71 S4: the old in-menu "Greenway Merch" product cards are gone (they
+          were sold through the cannabis cart). In their place: ONE redirect
+          advert to the separate Greenway Goods website - no product data, no
+          prices, renders nothing until the owner enables it in Merch Studio. */}
+      <MerchRedirectAd />
     </>
   );
 }

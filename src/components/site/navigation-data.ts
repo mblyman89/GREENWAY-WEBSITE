@@ -41,7 +41,9 @@ export const primaryNavigationItems: NavigationItem[] = [
       { label: "Tincture", href: "/menu/tincture", helper: "Dropper tinctures for precise dosing." },
       { label: "Topical", href: "/menu/topical", helper: "Balms, lotions, salves, and transdermals." },
       { label: "Accessories", href: "/menu/accessories", helper: "Glass, rolling gear, batteries, dab tools, and lighters." },
-      { label: "Greenway Merch", href: "/menu/merch", helper: "Official Greenway apparel and gear — tees, hoodies, hats, and more." },
+      // R71 S4: no "Greenway Merch" link. Apparel is sold only on the separate
+      // Greenway Goods domain, reached through the owner-controlled redirect ad
+      // at the bottom of the shop (hidden until enabled in the Merch Studio).
     ],
   },
   {

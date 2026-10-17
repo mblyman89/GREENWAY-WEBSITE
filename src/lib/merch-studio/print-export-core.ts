@@ -250,7 +250,7 @@ export function planViewBox(p: PrintFilePlan): string {
 }
 
 // ---------------------------------------------------------------------------
-// Printful order-item preview (what Slice 4 sends; shown on the proof sheet)
+// Printful order-item preview (what the merch site sends in Slice 6; shown on the proof sheet + listing package)
 // ---------------------------------------------------------------------------
 export interface PrintfulItemFile { type: string; url: string; position: PrintfulPosition; options?: { id: string; value: unknown }[] }
 export interface PrintfulItemDraft { files: PrintfulItemFile[]; options: { id: string; value: unknown }[] }

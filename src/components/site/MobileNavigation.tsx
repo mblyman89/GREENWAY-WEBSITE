@@ -31,7 +31,8 @@ const shopCategoryItems: SiteMenuItem[] = [
   { label: "Tincture", href: "/menu/tincture" },
   { label: "Topical", href: "/menu/topical" },
   { label: "Accessories", href: "/menu/accessories" },
-  { label: "Greenway Merch", href: "/menu/merch" },
+  // R71 S4: no "Greenway Merch" link (apparel lives on the separate Greenway
+  // Goods domain; see navigation-data.ts).
 ];
 
 const primaryMenuItems: SiteMenuItem[] = [

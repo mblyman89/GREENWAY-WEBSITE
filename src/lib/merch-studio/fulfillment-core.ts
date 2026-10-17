@@ -2,7 +2,8 @@
  * R70 S1 - Merch Studio just-in-time fulfillment + unit economics (PURE).
  *
  * Model: Greenway Glass & Goods lists a design; nothing is bought until a
- * customer pays on the merch subdomain; then ONE item is ordered from
+ * customer pays on the SEPARATE Greenway Goods website (its own domain -
+ * R71 S4); then ONE item is ordered from
  * Printful, made in Printful's own facility and shipped by Printful directly
  * to the customer in Greenway-branded labels/packing. All money is CENTS.
  *
@@ -64,20 +65,24 @@ export function suggestRetailCents(printfulCents: number, targetBps: number, end
   return fit(dollars);
 }
 
-/** Highest slice whose pipeline steps are live in the studio (R71 S3: proof + sample tools). */
-export const SHIPPED_SLICE = 3;
-export interface PipelineStep { id: string; title: string; who: string; what: string; slice: 1 | 2 | 3 | 4 }
+/**
+ * Highest slice whose pipeline steps are live in the studio.
+ * R71 S4: listing package + the redirect ad. Slice 5 = the separate Greenway
+ * Goods website (own domain, Stripe under the LLC); Slice 6 = Printful orders.
+ */
+export const SHIPPED_SLICE = 4;
+export interface PipelineStep { id: string; title: string; who: string; what: string; slice: 1 | 2 | 3 | 4 | 5 | 6 }
 /** The full just-in-time pipeline, shown on the Fulfillment tab. */
 export const JIT_PIPELINE: readonly PipelineStep[] = [
   { id: "pick", title: "Pick a premium blank", who: "Designer", what: "Choose the garment, colours and placements from the Printful-backed catalog.", slice: 1 },
   { id: "design", title: "Design on a true-to-inch canvas", who: "Designer", what: "Build the art per placement with live print checks (DPI, text size, threads, seams, zippers).", slice: 2 },
   { id: "proof", title: "Export print files + proof", who: "Studio", what: "300-DPI transparent PNG per placement, mockups on every colour, a proof sheet to approve.", slice: 3 },
   { id: "sample", title: "Order one sample", who: "Owner", what: "Printful sample order to check colour, hand-feel and placement before listing.", slice: 3 },
-  { id: "list", title: "List on the merch subdomain", who: "Owner", what: "Publish as a Greenway Glass & Goods product with retail price, sizes and photos.", slice: 4 },
-  { id: "sell", title: "Customer pays (cards)", who: "Customer", what: "Separate cart + Stripe checkout on the subdomain under Greenway Merchandising LLC.", slice: 4 },
-  { id: "order", title: "Draft Printful order", who: "Studio", what: "Paid order creates a Printful DRAFT with the exact variant + files; cost estimate shown.", slice: 4 },
-  { id: "confirm", title: "Confirm (human click)", who: "Owner/staff", what: "One click confirms; Printful charges our card on file and starts production (2-5 business days).", slice: 4 },
-  { id: "ship", title: "Printful ships to the customer", who: "Printful", what: "Shipped from Printful's facility with our labels; webhooks bring tracking back to the customer.", slice: 4 },
+  { id: "list", title: "Package the listing", who: "Owner", what: "Publish & Ads builds the listing package (colours, sizes, Printful variants, retail prices, print positions) for the separate Greenway Goods website to import.", slice: 4 },
+  { id: "sell", title: "Customer pays (cards)", who: "Customer", what: "Cart + Stripe checkout on the separate Greenway Goods website (its own domain) under Greenway Merchandising LLC. The cannabis site only links there.", slice: 5 },
+  { id: "order", title: "Draft Printful order", who: "Merch site", what: "Paid order creates a Printful DRAFT with the exact variant, files and print positions; cost estimate shown.", slice: 6 },
+  { id: "confirm", title: "Confirm (human click)", who: "Owner/staff", what: "One click confirms; Printful charges our card on file and starts production (2-5 business days).", slice: 6 },
+  { id: "ship", title: "Printful ships to the customer", who: "Printful", what: "Shipped from Printful's facility with our labels; webhooks bring tracking back to the customer.", slice: 6 },
 ];
 
 export function __runFulfillmentTests(): { passed: number; failed: number } {

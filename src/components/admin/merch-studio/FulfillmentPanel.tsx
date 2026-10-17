@@ -65,7 +65,7 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
           {blank.puffAvailable ? <Toggle label="3D puff (+$1.50)" checked={puff} onChange={setPuff} /> : null}
           <Row label="Retail price (USD)"><input className={studioInput} inputMode="decimal" value={retail} onChange={(e) => setRetail(e.target.value)} /></Row>
           <Row label="Shipping charged to customer"><input className={studioInput} inputMode="decimal" value={shipCharged} onChange={(e) => setShipCharged(e.target.value)} /></Row>
-          <Row label="Printful shipping cost" hint="From Printful's shipping-rates API at checkout (Slice 4). Enter an estimate for now."><input className={studioInput} inputMode="decimal" value={shipCost} onChange={(e) => setShipCost(e.target.value)} /></Row>
+          <Row label="Printful shipping cost" hint="From Printful's shipping-rates API at checkout on the Greenway Goods website (Slice 5). Enter an estimate for now."><input className={studioInput} inputMode="decimal" value={shipCost} onChange={(e) => setShipCost(e.target.value)} /></Row>
         </div>
         <div className="space-y-3">
           {est && econ ? (

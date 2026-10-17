@@ -77,6 +77,7 @@ const EDITOR_ROUTE: Readonly<Record<Exclude<ContentEditor, "NONE" | "SITE_CONTEN
   PAGES_HOME: { href: "/admin/pages/home?tab=sections", label: "the Home page editor" },
   SETTINGS_BRANDING: { href: "/admin/settings/branding", label: "Branding settings" },
   BLOG: { href: "/admin/blog/content", label: "the Blog wording editor" },
+  MERCH_STUDIO: { href: "/admin/merch-studio?tab=publish", label: "the Merch Studio (Publish & Ads)" },
 };
 
 /**
@@ -101,6 +102,7 @@ const PREFIX_OWNER: ReadonlyArray<[string, ContentEditor]> = [
   ["terms.", CONTENT_EDITORS.LEGAL_POLICIES],
   ["chd.", CONTENT_EDITORS.LEGAL_POLICIES],
   ["site.font.", CONTENT_EDITORS.SETTINGS_BRANDING],
+  ["merch.", CONTENT_EDITORS.MERCH_STUDIO],
 ];
 
 /** Block keys must look like dotted identifiers; anything else is refused. */
@@ -262,6 +264,7 @@ export function __runEditTargetCoreTests(): { passed: number; failed: number } {
   );
   ok(editTargetForBlock("privacy.body.doc").href.startsWith("/admin/legal-policies?tab=privacy-policy"), "privacy doc tab");
   ok(editTargetForBlock("home.category.title").href === "/admin/pages/home?tab=sections", "home fallback -> sections tab");
+  ok(editTargetForBlock("merch.ad").href === "/admin/merch-studio?tab=publish&block=merch.ad", "merch ad -> Merch Studio publish tab (R71 S4)");
   // Unseeded but well-formed: prefix fallback.
   ok(editTargetForBlock("specials.hero.future").href === "/admin/specials?block=specials.hero.future", "prefix fallback");
   // Junk is refused.

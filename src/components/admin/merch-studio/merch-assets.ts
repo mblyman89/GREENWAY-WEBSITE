@@ -4,7 +4,7 @@
  * R70 S2 - browser-only helpers for the Merch Studio design canvas.
  *
  *  - Artwork files live in THIS browser's IndexedDB (`gw-merch-assets`), keyed
- *    by asset id; nothing is uploaded yet. Slice 4 moves approved art to
+ *    by asset id; nothing is uploaded yet. Slice 5 moves approved art to
  *    Supabase Storage when a design is listed for sale.
  *  - Drafts (small JSON) live in localStorage (`gw-merch-designs-v1`).
  *  - Text is MEASURED with the real font stack in a hidden DOM node, so the

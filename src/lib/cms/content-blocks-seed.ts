@@ -44,6 +44,7 @@ import { BLOG_CONTENT_BLOCKS } from "@/lib/blog/blog-content-core";
 import { LOYALTY_LOGO_BLOCK, defaultLoyaltyLogo, serializeLoyaltyLogo } from "@/lib/loyalty/loyalty-logo-core";
 import { VENDOR_CENTER_BLOCK } from "@/lib/vendors/vendor-center-core";
 import { BRAND_KIT_BLOCK } from "@/lib/brand/brand-kit-core";
+import { MERCH_AD_BLOCK } from "@/lib/merch/merch-ad-core";
 import { ABOUT_SIDE_BLOCK, defaultAboutSide, serializeAboutSide } from "@/lib/about/about-side-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
@@ -186,6 +187,19 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     section: "brand",
     label: "Brand kit",
     help_text: "Colours, logos, slogans, mission, about us, saved banners and brand notes. Edited in Website \u2192 Branding.",
+    field_type: "richjson",
+    defaultValue: "",
+  },
+  // R71 S4: the Greenway Goods redirect ad on the shop page. Blank on purpose:
+  // a blank (disabled) ad renders nothing. Holds NO product data by design --
+  // only a link to the separate merch domain + owner-written words + pictures
+  // (see src/lib/merch/merch-ad-core.ts). Edited in the Merch Studio.
+  {
+    block_key: MERCH_AD_BLOCK,
+    page: "menu",
+    section: "merch-ad",
+    label: "Greenway Goods redirect ad",
+    help_text: "The apparel advert at the bottom of the shop. A pure link to the separate Greenway Goods website - no prices or product details. Edited in MKTG & ADV \u2192 Merch Studio \u2192 Publish & Ads.",
     field_type: "richjson",
     defaultValue: "",
   },

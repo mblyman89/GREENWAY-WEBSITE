@@ -78,7 +78,10 @@ describe("SLICE 116 — shop width token", () => {
 describe("SLICE 116 — 4-up product grids at desktop", () => {
   it("every product-card grid is sm:2-up then lg:4-up", () => {
     const fourUp = (BROWSER.match(/grid gap-5 sm:grid-cols-2 lg:grid-cols-4/g) || []).length;
-    expect(fourUp).toBe(5);
+    // R71 S4: 5 -> 3. The two "Greenway Merch" grids (lone-merch + bottom
+    // merch) were removed with the static merch catalog; apparel is sold only
+    // on the separate Greenway Goods website. Accessory x2 + product groups remain.
+    expect(fourUp).toBe(3);
   });
 
   it("the old 3-up (lg:grid-cols-3 2xl:grid-cols-4) is fully removed", () => {
