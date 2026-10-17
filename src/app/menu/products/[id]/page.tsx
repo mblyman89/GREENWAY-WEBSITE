@@ -39,9 +39,6 @@ import { resolvePageSensory } from "@/lib/menu/product-sensory-server";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getEnrichmentForPublicItem } from "@/lib/enrichment/store";
 import { productSeoMetadata } from "@/lib/enrichment/seo-draft-core";
-import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
-import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
-import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
 type ProductTone = {
   border: string;
@@ -117,10 +114,14 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
   paraphernalia: "Accessory",
 };
 
+// R71 S4: the static merch catalog (merch-*) is gone from the cannabis site,
+// so /menu/products/merch-* now 404s. Only the live POS menu resolves here.
 async function getMenuItemById(id: string) {
-  return getMerchMenuItemById(id) ?? (await getLiveMenuItemByIdCached(id));
+  return getLiveMenuItemByIdCached(id);
 }
 
+// Non-cannabis "merch" category from the POS (in-store goods): still skips the
+// cannabis-only reads (enrichment, KB, sensory, DOH) below.
 function isMerchItem(item: GreenwayMenuItem) {
   return item.category === "merch";
 }
@@ -187,8 +188,9 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   const label = categoryLabel(item).toUpperCase();
 
   // Real / approved-substitute photo (DF-3) takes priority over the stylized
-  // mockup for cannabis + non-cannabis items. Merch keeps its own photo path.
-  if (!isMerchItem(item) && item.imageUrl) {
+  // mockup for cannabis + non-cannabis items (R71 S4: merch included - the
+  // static merch photo path went with the static catalog).
+  if (item.imageUrl) {
     return (
       <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -198,17 +200,6 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
             Representative image
           </span>
         ) : null}
-      </div>
-    );
-  }
-
-  // Merch shows the real product photograph (large, on white).
-  if (isMerchItem(item)) {
-    const def = getMerchDefById(item.id);
-    return (
-      <div className="relative flex h-full min-h-[22rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={def?.imageUrl ?? "/merch/tshirt.webp"} alt={item.name} className="h-full w-full object-contain p-6 md:p-12" />
       </div>
     );
   }
@@ -275,12 +266,6 @@ function ChipGroup({ label, chips, accent }: { label: string; chips: string[]; a
 async function relatedItemsFor(
   item: GreenwayMenuItem,
 ): Promise<{ items: GreenwayMenuItem[]; scope: RelatedScope }> {
-  if (isMerchItem(item)) {
-    return {
-      items: merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8),
-      scope: "brand",
-    };
-  }
   // SLICE 40: overlay the KB strain profile (same as home + shop) so related
   // cards show the strain type instead of the raw POS value.
   //
@@ -595,14 +580,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               ) : null}
             </div>
 
-            {isMerchItem(item) ? (
-              (() => {
-                const def = getMerchDefById(item.id);
-                return def ? <MerchDetailPanel def={def} /> : <ProductDetailPurchasePanel item={item} />;
-              })()
-            ) : (
-              <ProductDetailPurchasePanel item={item} />
-            )}
+            <ProductDetailPurchasePanel item={item} />
 
             {/* Description tab (lab results intentionally omitted). Sits in the
                 right column under the purchase panel to mirror the reference. */}
@@ -666,20 +644,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           {relatedItems.length > 0 ? (
             <div className="mt-5 -mx-4 flex snap-x items-stretch gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {relatedItems.map((related) => {
-                // Merch related items render the dedicated MERCH card (price
-                // range, colors, no THC/CBD) — never the cannabis card.
-                if (isMerchItem(related)) {
-                  const def =
-                    getMerchDefById(related.id) ??
-                    merchProductDefs.find((candidate) => merchIdForKey(candidate.key) === related.id);
-                  return def ? (
-                    <MerchProductCard
-                      key={related.id}
-                      def={def}
-                      className="w-[17.25rem] shrink-0 snap-start"
-                    />
-                  ) : null;
-                }
                 return (
                   <RelatedProductCard
                     key={related.id}

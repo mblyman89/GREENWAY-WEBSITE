@@ -12,19 +12,30 @@ import { ArtCheckPanel } from "./ArtCheckPanel";
 import { FulfillmentPanel } from "./FulfillmentPanel";
 import { DesignStudio } from "./DesignStudio";
 import { ProofPanel } from "./ProofPanel";
+import { PublishPanel, type MerchAdBlockVM } from "./PublishPanel";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
 
-export type StudioTab = "garments" | "design" | "proof" | "check" | "fulfillment";
+export type StudioTab = "garments" | "design" | "proof" | "check" | "fulfillment" | "publish";
 const TABS: { id: StudioTab; label: string }[] = [
   { id: "garments", label: "\ud83d\udc55 Garments" },
   { id: "design", label: "\ud83c\udfa8 Design" },
   { id: "proof", label: "\ud83d\udda8\ufe0f Proof & Export" },
   { id: "check", label: "\ud83d\udd0e Artwork Check" },
   { id: "fulfillment", label: "\ud83d\udce6 Fulfillment & Pricing" },
+  { id: "publish", label: "\ud83d\ude80 Publish & Ads" },
 ];
+/** Tabs a ?tab= link may open directly (R71 S4: the Website-hub edit link opens Publish & Ads). */
+export const STUDIO_TAB_IDS: readonly StudioTab[] = TABS.map((t) => t.id);
 const SEL_KEY = "gw-merch-studio-sel";
 
-export function MerchStudio({ extraTabs = [] }: { extraTabs?: { id: string; label: string; render: (sel: { blankId: string; colorHex: string; setBlank: (id: string) => void; setColor: (hex: string) => void }) => ReactNode }[] }) {
-  const [tab, setTab] = useState<string>("garments");
+export function MerchStudio({ extraTabs = [], initialTab, publish }: {
+  extraTabs?: { id: string; label: string; render: (sel: { blankId: string; colorHex: string; setBlank: (id: string) => void; setColor: (hex: string) => void }) => ReactNode }[];
+  /** From ?tab= (server-validated). Wins over the tab remembered on this device. */
+  initialTab?: StudioTab;
+  /** R71 S4: the merch.ad block + media picker choices for Publish & Ads. */
+  publish?: { adBlock: MerchAdBlockVM; mediaChoices: MediaChoice[] };
+}) {
+  const [tab, setTab] = useState<string>(initialTab ?? "garments");
   const [blankId, setBlankId] = useState(BLANKS[0].id);
   const [colorHex, setColorHex] = useState(() => colorsFor(BLANKS[0]).find((c) => c[0] === "Black")?.[1] ?? colorsFor(BLANKS[0])[0][1]);
 
@@ -40,12 +51,12 @@ export function MerchStudio({ extraTabs = [] }: { extraTabs?: { id: string; labe
         const b = s.blankId ? getBlank(s.blankId) : undefined;
         if (b) setBlankId(b.id);
         if (b && s.colorHex && colorsFor(b).some((c) => c[1] === s.colorHex)) setColorHex(s.colorHex);
-        if (s.tab) setTab(s.tab);
+        if (s.tab && !initialTab) setTab(s.tab);
       } catch { /* ignore corrupt storage */ }
       setRestored(true);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [initialTab]);
   useEffect(() => {
     if (!restored) return;
     try { window.localStorage.setItem(SEL_KEY, JSON.stringify({ blankId, colorHex, tab })); } catch { /* quota */ }
@@ -85,6 +96,10 @@ export function MerchStudio({ extraTabs = [] }: { extraTabs?: { id: string; labe
         {tab === "proof" && restored ? <ProofPanel /> : null}
         {tab === "check" ? <ArtCheckPanel key={blankId} blankId={blankId} colorHex={colorHex} /> : null}
         {tab === "fulfillment" ? <FulfillmentPanel key={blankId} blankId={blankId} /> : null}
+        {/* Publish reads saved drafts from this browser (listing package), so it mounts only after the restore. */}
+        {tab === "publish" && restored ? (
+          publish ? <PublishPanel adBlock={publish.adBlock} mediaChoices={publish.mediaChoices} /> : <p className="text-sm text-white/60">Publish & Ads isn&apos;t available here.</p>
+        ) : null}
         {extraTabs.map((t) => (tab === t.id ? <div key={t.id}>{t.render({ blankId, colorHex, setBlank, setColor: setColorHex })}</div> : null))}
       </div>
     </div>

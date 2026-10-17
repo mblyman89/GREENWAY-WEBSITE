@@ -52,8 +52,6 @@ import {
   pageGroups,
   pagingStatusLabel,
 } from "@/lib/menu/menu-pagination-core";
-import { merchProductDefs } from "@/lib/merch/merch-catalog";
-import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
 // SLICE C (SHOP-3): the Specials sidebar filters are now FULLY DYNAMIC (owner
 // directive). The old hardcoded "50% Off" placeholder (an empty clearanceItemIds
@@ -335,12 +333,6 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
       </div>
     </article>
   );
-}
-
-function MerchCard({ def }: { def: (typeof merchProductDefs)[number] }) {
-  // Delegates to the shared MerchProductCard so the shop page and the PDP
-  // "More from" rail render identical merch cards.
-  return <MerchProductCard def={def} />;
 }
 
 type FilterCriteria = {
@@ -997,7 +989,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       [
         ...categoryValues,
         ...Array(accessorySectionCards.length).fill("accessories"),
-        ...Array(merchProductDefs.length).fill("merch"),
+        // R71 S4: the static "Greenway Merch" cards were removed from the
+        // cannabis shop (WSLCB: a licensee may not sell t-shirts from its
+        // website). Apparel is advertised by the redirect ad below the grid.
       ],
       selectedCategories,
       categoryLabel,
@@ -1097,7 +1091,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     "infused-preroll-pack",
   ].includes(activeSectionCategory);
   const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
-  const showMerchSections = selectedCategories.length === 1 && selectedCategories[0] === "merch";
+  // R71 S4: there is no merch collection on the cannabis shop any more (only
+  // the Greenway Goods redirect ad, rendered by ShopPage below this grid).
 
   // Non-cannabis collections (accessories + merch) should ALSO appear grouped at
   // the BOTTOM of the grid when (a) the list is unfiltered, or (b) they are
@@ -1122,20 +1117,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // so only surface them at the bottom when no narrowing filters are applied.
   const surfaceBottomCollections = !hasOtherFiltersActive;
   const accessoriesSelectedWithOthers = selectedCategories.includes("accessories") && selectedCategories.length > 1;
-  const merchSelectedWithOthers = selectedCategories.includes("merch") && selectedCategories.length > 1;
   const showAccessoryBottom =
-    surfaceBottomCollections && !showAccessorySections && !showMerchSections && (noCategoryFilter || accessoriesSelectedWithOthers);
-  const showMerchBottom =
-    surfaceBottomCollections && !showAccessorySections && !showMerchSections && (noCategoryFilter || merchSelectedWithOthers);
+    surfaceBottomCollections && !showAccessorySections && (noCategoryFilter || accessoriesSelectedWithOthers);
 
   // The empty state should ONLY show when there are truly no products to render
   // anywhere — including the bottom accessory/merch collections.
   const showEmptyState =
     !showAccessorySections &&
-    !showMerchSections &&
     filteredItems.length === 0 &&
-    !showAccessoryBottom &&
-    !showMerchBottom;
+    !showAccessoryBottom;
 
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
     if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
@@ -1266,9 +1256,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // first product section label, falling back to a sensible default.
   const toolbarTitle = showAccessorySections
     ? "Accessories"
-    : showMerchSections
-      ? "Greenway Merch"
-      : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
+    : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
 
   const resetFilters = () => {
     setQuery("");
@@ -1583,12 +1571,6 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
           </section>
-        ) : showMerchSections ? (
-          <section id="merch" className="scroll-mt-32">
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
-            </div>
-          </section>
         ) : showEmptyState ? (
           <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">
             <p className="text-2xl font-black text-white">No products match those filters.</p>
@@ -1649,17 +1631,6 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
               </section>
             ) : null}
 
-            {/* Greenway Merch grouped at the BOTTOM under the same conditions. */}
-            {showMerchBottom ? (
-              <section id="merch" className="scroll-mt-32">
-                <div className="mb-4 min-w-0">
-                  <h2 className="text-3xl font-black text-white">Greenway Merch</h2>
-                </div>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                  {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
-                </div>
-              </section>
-            ) : null}
           </div>
         )}
       </div>

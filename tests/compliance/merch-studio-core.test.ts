@@ -6,6 +6,9 @@ import { __runGarmentCatalogTests, BLANKS } from "@/lib/merch-studio/garment-cat
 import { __runPrintRulesTests } from "@/lib/merch-studio/print-rules-core";
 import { __runFulfillmentTests } from "@/lib/merch-studio/fulfillment-core";
 import { __runPrintExportTests } from "@/lib/merch-studio/print-export-core";
+import { __runListingPackageTests } from "@/lib/merch-studio/listing-package-core";
+import { __runMerchAdTests } from "@/lib/merch/merch-ad-core";
+import { JIT_PIPELINE, SHIPPED_SLICE } from "@/lib/merch-studio/fulfillment-core";
 
 describe("merch studio cores", () => {
   it("garment-catalog-core", () => {
@@ -37,5 +40,21 @@ describe("merch studio cores", () => {
     const r = __runPrintExportTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(85);
+  });
+  it("listing-package-core (R71 S4)", () => {
+    const r = __runListingPackageTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(29);
+  });
+  it("merch-ad-core (R71 S4)", () => {
+    const r = __runMerchAdTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(36);
+  });
+  it("R71 S4 roadmap: Slice 4 shipped; checkout is Slice 5 on the separate domain, Printful orders Slice 6", () => {
+    expect(SHIPPED_SLICE).toBe(4);
+    expect(JIT_PIPELINE.find((s) => s.id === "sell")?.slice).toBe(5);
+    expect(JIT_PIPELINE.find((s) => s.id === "order")?.slice).toBe(6);
+    expect(JIT_PIPELINE.some((s) => /subdomain/i.test(s.title + s.what))).toBe(false);
   });
 });

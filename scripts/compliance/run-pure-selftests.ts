@@ -976,6 +976,8 @@ import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-co
 import { __runGarmentViewsTests } from "../../src/lib/merch-studio/garment-views-core";
 import { __runMerchDesignTests } from "../../src/lib/merch-studio/merch-design-core";
 import { __runPrintExportTests } from "../../src/lib/merch-studio/print-export-core";
+import { __runListingPackageTests } from "../../src/lib/merch-studio/listing-package-core";
+import { __runMerchAdTests } from "../../src/lib/merch/merch-ad-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
@@ -2386,6 +2388,8 @@ __runLiquidVolumeTests();
   assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 250); // R70 S2: garment views + exact print-frame inches for every blank/placement
   assertRan("merch-design-core", __runMerchDesignTests(), 42); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising
   assertRan("print-export-core", __runPrintExportTests(), 85); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
+  assertRan("listing-package-core", __runListingPackageTests(), 29); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
+  assertRan("merch-ad-core", __runMerchAdTests(), 36); // R71 S4: pure redirect ad (https separate domain only, no price/cart words, hidden by default)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

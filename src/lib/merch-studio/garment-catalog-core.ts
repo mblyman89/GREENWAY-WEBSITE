@@ -322,7 +322,7 @@ export interface UsedPlacement { placementId: string; method: Method }
 /**
  * Printful wholesale estimate for ONE unit, cents: size base price + each
  * placement upcharge (+ puff). It is an ESTIMATE - the Printful order-estimate
- * API is the source of truth (Slice 4) and shipping/tax are excluded.
+ * API is the source of truth (Slice 6) and shipping/tax are excluded.
  */
 export function basePriceCents(b: Blank, size: string, used: UsedPlacement[], puff = false): { cents: number; lines: { label: string; cents: number }[] } | null {
   const row = sizesFor(b).find((s) => s[0] === size);

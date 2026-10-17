@@ -84,6 +84,8 @@ export const CONTENT_EDITORS = {
   SETTINGS_BRANDING: "SETTINGS_BRANDING",
   /** /admin/blog "Page wording" card (MIG-6). */
   BLOG: "BLOG",
+  /** /admin/merch-studio "Publish & Ads" tab -- the Greenway Goods redirect ad (R71 S4). */
+  MERCH_STUDIO: "MERCH_STUDIO",
 } as const;
 
 export type ContentEditor =
@@ -246,6 +248,11 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
   //     hours block is instead hidden from Site Content by KEY via EXCLUDED_KEYS
   //     in content/page.tsx, matching this override. ---
   "business.hours.display": CONTENT_EDITORS.HEADER_FOOTER,
+
+  // R71 S4: the Greenway Goods redirect ad. Its page group is "menu" (it renders
+  // on the shop), which has no single default owner, so it is owned by KEY:
+  // the Merch Studio "Publish & Ads" tab is its one editor.
+  "merch.ad": CONTENT_EDITORS.MERCH_STUDIO,
 };
 
 /**

@@ -11,7 +11,7 @@
  *  - Printable proof sheet (opens in a new tab, print to PDF or paper).
  *  - Photo mockups from Printful's mockup generator (when connected).
  *  - Sample checklist (ticks saved per design on this device).
- *  - The exact Printful order-item JSON Slice 4 will send.
+ *  - The exact Printful order-item JSON the merch site will send (Slice 6).
  */
 import { useEffect, useState } from "react";
 import { colorsFor, getBlank, PRINTFUL_SNAPSHOT_DATE } from "@/lib/merch-studio/garment-catalog-core";
@@ -293,7 +293,7 @@ export function ProofPanel() {
       </section>
 
       <section>
-        <button type="button" className="text-xs text-white/60 underline" onClick={() => setShowJson((v) => !v)} aria-expanded={showJson}>{showJson ? "Hide" : "Show"} the Printful order item this design becomes (for Slice 4)</button>
+        <button type="button" className="text-xs text-white/60 underline" onClick={() => setShowJson((v) => !v)} aria-expanded={showJson}>{showJson ? "Hide" : "Show"} the Printful order item this design becomes (also in the listing package)</button>
         {showJson ? <pre className="mt-2 max-h-80 overflow-auto rounded bg-black/40 p-2 text-[0.7rem] text-white/80">{JSON.stringify({ variant_id: "<chosen colour + size>", quantity: 1, ...item }, null, 2)}</pre> : null}
       </section>
     </div>

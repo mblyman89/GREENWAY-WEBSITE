@@ -270,12 +270,18 @@ describe("THE WIRING — the real component must actually use the cap", () => {
     expect(source).toContain("pagingStatusLabel(pagedGroups)");
   });
 
-  it("still renders the accessory and merch collections at the bottom", () => {
-    // The cap must not swallow the non-cannabis collections.
+  it("still renders the accessory collection at the bottom", () => {
+    // The cap must not swallow the non-cannabis accessory collection.
     expect(source).toContain("showAccessoryBottom");
-    expect(source).toContain("showMerchBottom");
     expect(source).toContain("accessorySectionCards.map");
-    expect(source).toContain("merchProductDefs.map");
+  });
+
+  it("R71 S4: the old static merch catalog is gone from the cannabis menu", () => {
+    // Apparel is sold only on the separate Greenway Goods domain; the menu
+    // carries no merch product data at all (pure redirect ad instead).
+    expect(source).not.toContain("merchProductDefs");
+    expect(source).not.toContain("showMerchBottom");
+    expect(source).not.toContain("merch-catalog");
   });
 
   it("leaves the empty state intact", () => {

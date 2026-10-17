@@ -134,6 +134,8 @@ Fabric.js stays an option if freehand drawing or path editing becomes a need.
 
 ## 4. Website menu, subdomain cart and payments — strategy
 
+> **SUPERSEDED (R71 Slice 4).** The owner chose a **brand-new separate domain** (not a subdomain) and a **pure redirect ad** on the cannabis site with no product data. Merch tables are **not** created in the cannabis database: the studio exports a listing package and the separate merch site (Slice 5) owns products, cart, Stripe and orders (Slice 6). See `docs/roadmap/R71-MERCH-PROOF-AND-SHOP.md` §4. The processor notes below still apply.
+
 **Domain shape.** Use `shop.<main-domain>`, or `goods.<main-domain>`, as a **separate Vercel project** (or a separate Next.js app in a multi-zone setup; see Next docs `02-guides/multi-tenant.md` and `multi-zones.md`). It carries its own:
 
 - environment variables
