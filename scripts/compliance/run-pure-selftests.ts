@@ -973,6 +973,9 @@ import { __runBannerCurveTests } from "../../src/lib/cms/banner-curve-core";
 import { __runGarmentCatalogTests } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runPrintRulesTests } from "../../src/lib/merch-studio/print-rules-core";
 import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-core";
+import { __runGarmentViewsTests } from "../../src/lib/merch-studio/garment-views-core";
+import { __runMerchDesignTests } from "../../src/lib/merch-studio/merch-design-core";
+import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
 import { __runBannerEnterTests } from "../../src/lib/cms/banner-enter-core";
@@ -2379,6 +2382,8 @@ __runLiquidVolumeTests();
   assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
   assertRan("print-rules-core", __runPrintRulesTests(), 29); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
   assertRan("fulfillment-core", __runFulfillmentTests(), 11); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
+  assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 250); // R70 S2: garment views + exact print-frame inches for every blank/placement
+  assertRan("merch-design-core", __runMerchDesignTests(), 42); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

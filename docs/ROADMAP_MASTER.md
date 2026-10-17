@@ -628,3 +628,11 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   of sitting stuck until an unrelated re-render. evaluateSalesHours, the
   statute floor, the owner's window and the server completion re-check are
   all unchanged. No migration. Suite 1,779/137.
+
+- **R70 — Merch Studio (Greenway Glass & Goods).** Admin → MKTG & ADV → Merch Studio.
+  Slice 1 (PR #1404) added the Garments, Artwork Check and Fulfillment & Pricing tabs
+  over cited Printful catalog data. Slice 2 adds the Design tab: a true-to-inch SVG
+  garment canvas with exact print frames, a follow-scroll dock, undo/redo, snapping,
+  letter-height text sizing, thread colours for embroidery, and live print checks.
+  Merch is sold by Greenway Merchandising LLC, never through the cannabis shop.
+  No migration. Full detail in docs/roadmap/R70-MERCH-STUDIO.md.
