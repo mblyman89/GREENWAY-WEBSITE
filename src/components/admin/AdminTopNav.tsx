@@ -73,7 +73,19 @@ function groupBadge(
  * keeps the nav data-driven (admin-nav-data.ts remains the single source of
  * truth) while letting a group like "Reports" behave as a plain button.
  */
-const DIRECT_LINK_GROUPS = new Set<AdminNavItem["group"]>(["Reports", "CCRS", "Medical"]);
+const DIRECT_LINK_GROUPS = new Set<AdminNavItem["group"]>(["Dashboard", "Reports", "CCRS", "Medical"]);
+
+/**
+ * Optional tab label for a direct-link group. By default the tab shows the
+ * group name; R69 made "Dashboard" a single "Online Orders" button (Loyalty
+ * signups moved to CRM), so the tab says what it opens.
+ */
+const DIRECT_LINK_LABELS: Partial<Record<AdminNavItem["group"], string>> = {
+  Dashboard: "Online Orders",
+};
+function directLinkLabel(group: string): string {
+  return DIRECT_LINK_LABELS[group as AdminNavItem["group"]] ?? group;
+}
 
 function Wordmark() {
   return (
@@ -182,7 +194,7 @@ export function AdminTopNav({ role, fullName, email, badges }: Props) {
                   <span className="text-xs opacity-80" aria-hidden="true">
                     <NavGlyph item={item} />
                   </span>
-                  {g.group}
+                  {directLinkLabel(g.group)}
                 </Link>
               );
             }
@@ -338,7 +350,7 @@ export function AdminTopNav({ role, fullName, email, badges }: Props) {
                     }`}
                   >
                     <span className="w-4 text-center text-xs opacity-80"><NavGlyph item={item} /></span>
-                    <span className="flex-1">{g.group}</span>
+                    <span className="flex-1">{directLinkLabel(g.group)}</span>
                   </Link>
                 );
               }

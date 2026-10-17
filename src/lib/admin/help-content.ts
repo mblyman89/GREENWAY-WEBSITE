@@ -790,7 +790,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I generate marketing images?",
-        a: "Open the Creative Studio. It opens on FLUX Image, which works like the BFL Playground: type your prompt (sent word for word), optionally add reference images (image 1, image 2…), choose the aspect ratio or a destination size, the number of images (1–4 or 8), format, safety and prompt upsampling, then Generate. Results save to your Media Library as drafts. FLUX Video makes clips (with Draft first to save credits), and the Midjourney tab builds a copy-paste prompt.",
+        a: "Open the Creative Studio. It opens on FLUX Image, which works like the BFL Playground: type your prompt (sent word for word), optionally add reference images (image 1, image 2…), choose the aspect ratio or a destination size, the number of images (1–4 or 8), format, safety and prompt upsampling, then Generate. Results save to Digital Assets (MKTG & ADV) as drafts. FLUX Video makes clips (with Draft first to save credits), and the Midjourney tab builds a copy-paste prompt.",
         href: "/admin/marketing/midjourney",
       },
     ],
@@ -847,7 +847,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         q: "Where do my uploaded images live?",
-        a: "In the Media Library. Upload once and reuse across products, banners, and posts. You can add alt-text so images are accessible and SEO-friendly.",
+        a: "In Digital Assets (MKTG & ADV → Digital Assets). Upload once and reuse across products, banners, and posts. You can add alt-text so images are accessible and SEO-friendly.",
         href: "/admin/media",
       },
     ],

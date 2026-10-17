@@ -71,7 +71,7 @@ export const INTEGRATION_GUIDES: IntegrationGuide[] = [
       "Paste the key into the FLUX credentials here and Save.",
       "Optional: pick the default image model (FLUX.2 [max] is the default).",
       "Go to Marketing → Creative Studio. On FLUX Image, type your prompt (sent word for word), add references and Generate. FLUX Video makes clips.",
-      "Generated images and videos land in your Media Library as drafts to review before publishing.",
+      "Generated images and videos land in Digital Assets (MKTG & ADV) as drafts to review before publishing.",
     ],
     notes: [
       "FLUX.2 takes up to 8 reference images per generation; FLUX 3 Image takes up to 10.",

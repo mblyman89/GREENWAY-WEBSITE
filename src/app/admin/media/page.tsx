@@ -37,7 +37,7 @@ export default async function MediaPage({
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Media Library" subtitle="Upload and manage logos, banners, and images." />
+        <AdminPageHeader title="Digital Assets" subtitle="Upload and manage logos, banners, and images." />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Once your administrator
@@ -96,9 +96,9 @@ export default async function MediaPage({
   return (
     <div>
       <AdminPageHeader
-        title="Media Library"
+        title="Digital Assets"
         subtitle="One home for every logo, banner, and image. Upload, tag, and publish — published assets serve publicly."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Media Library" }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Digital Assets" }]} />}
         action={
           <Link href="/admin/marketing/midjourney">
             <Button variant="neutral">🎨 Midjourney prompt builder</Button>

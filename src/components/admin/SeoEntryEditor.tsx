@@ -274,7 +274,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction, imageChoices = []
                 <img src={ogChoice.url} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="px-2 text-center text-[0.65rem] text-white/40">
-                  {ogId ? "Picture not found in the Media Library" : "Site default picture"}
+                  {ogId ? "Picture not found in Digital Assets" : "Site default picture"}
                 </span>
               )}
             </div>
@@ -307,7 +307,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction, imageChoices = []
                   rel="noreferrer"
                   className="self-center text-[0.7rem] text-white/50 underline hover:text-white"
                 >
-                  + Upload in Media Library ↗
+                  + Upload in Digital Assets ↗
                 </a>
                 {ogId ? (
                   <Button type="button" variant="neutral" size="sm" onClick={() => setOgId("")}>
@@ -323,7 +323,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction, imageChoices = []
                 <p className="text-xs text-white/45">
                   No published pictures yet.{" "}
                   <a href="/admin/media" target="_blank" rel="noreferrer" className="underline">
-                    Upload one in the Media Library ↗
+                    Upload one in Digital Assets ↗
                   </a>
                   , publish it, then reload this page.
                 </p>
