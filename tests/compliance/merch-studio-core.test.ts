@@ -5,6 +5,7 @@ import { __runMerchDesignTests } from "@/lib/merch-studio/merch-design-core";
 import { __runGarmentCatalogTests, BLANKS } from "@/lib/merch-studio/garment-catalog-core";
 import { __runPrintRulesTests } from "@/lib/merch-studio/print-rules-core";
 import { __runFulfillmentTests } from "@/lib/merch-studio/fulfillment-core";
+import { __runPrintExportTests } from "@/lib/merch-studio/print-export-core";
 
 describe("merch studio cores", () => {
   it("garment-catalog-core", () => {
@@ -31,5 +32,10 @@ describe("merch studio cores", () => {
     const r = __runMerchDesignTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(42);
+  });
+  it("print-export-core", () => {
+    const r = __runPrintExportTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(85);
   });
 });

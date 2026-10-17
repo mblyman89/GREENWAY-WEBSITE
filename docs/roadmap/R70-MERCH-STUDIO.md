@@ -1,6 +1,6 @@
 # R70 — Merch Studio (Greenway Glass & Goods)
 
-Status: **Slice 1 shipped** (garment catalog + print rules + fulfillment/pricing). Slice 2 (design canvas) follows in the same round. Builds on the R69 research report (`docs/roadmap/R69-APPAREL-STUDIO-STRATEGY.md`, `docs/research/r69-apparel/notes-raw.md`).
+Status: **Slices 1–2 shipped** (R70). **Slice 3 (Proof & Export) and Slice 4 (the shop) are documented in `docs/roadmap/R71-MERCH-PROOF-AND-SHOP.md`.** Builds on the R69 research report (`docs/roadmap/R69-APPAREL-STUDIO-STRATEGY.md`, `docs/research/r69-apparel/notes-raw.md`).
 
 ## 1. The owner's request (verbatim core, rule 1)
 
@@ -92,7 +92,7 @@ Why SVG rather than adding Fabric.js:
 
 - **Zero new dependencies.**
 - Real-inch coordinates (`viewBox` in inches), so the rules engine reads the same numbers the designer sees.
-- The SVG *is* the vector print file. Slice 3 renders it to a 300-DPI transparent PNG per placement (Printful's requested format) with `sharp`, which is already installed.
+- The SVG *is* the vector print file. Slice 3 renders it to a 300-DPI transparent PNG per Printful file type (Printful's requested format). R71 decision: rendering happens **in the browser** (it has the exact fonts and the IndexedDB artwork), not with `sharp` — see R71 §2.1.
 
 Fabric.js stays an option if freehand drawing or path editing becomes a need.
 
@@ -181,7 +181,7 @@ git diff src/lib/merch-studio/garment-colors-data.ts   # review new/removed colo
 npx tsx scripts/compliance/run-pure-selftests.ts       # must still print ALL PURE SELF-TESTS PASSED
 ```
 
-On 2026-10-17 the generator reproduced the committed file byte-for-byte. To add a blank:
+On 2026-10-17 the generator reproduced the committed file byte-for-byte. Since R71 it also emits `PRINTFUL_FILE_TYPES` (file id → Printful file type), `PRINTFUL_OPTION_IDS` (real item option ids such as `thread_colors_chest_left`) and `PRINTFUL_VARIANTS` (colour, size, variant_id, price cents, in-stock) — used by print-file export and the shop. To add a blank:
 
 1. Find its id with `GET https://api.printful.com/products`.
 2. Add the id to `IDS` in the script.

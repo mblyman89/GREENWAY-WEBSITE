@@ -55,6 +55,29 @@ def main():
         s = sorted(sp, key=lambda x: ORDER.index(x) if x in ORDER else 99)
         L.append(f"  {i}: [" + ", ".join(json.dumps([k, sp[k]]) for k in s) + "],")
     L.append("};")
+    # R71 S3: Printful file id -> file TYPE (what the Orders + Mockup APIs expect).
+    L.append("/** R71: Printful file id (catalog `files[].id`) -> file type (`files[].type`, used by the Orders + Mockup APIs). */")
+    L.append("export const PRINTFUL_FILE_TYPES: Record<number, Readonly<Record<string, string>>> = {")
+    for i in IDS:
+        ft = {f["id"]: f["type"] for f in data[i]["product"]["files"] if f["type"] != "mockup"}
+        L.append(f"  {i}: {{" + ", ".join(f"{json.dumps(k)}: {json.dumps(v)}" for k, v in ft.items()) + "},")
+    L.append("};")
+    # R71 S3: product option ids (thread_colors_*, embroidery_type, ...) so exports never invent an option name.
+    L.append("/** R71: Printful product option ids (catalog `product.options[].id`). */")
+    L.append("export const PRINTFUL_OPTION_IDS: Record<number, readonly string[]> = {")
+    for i in IDS:
+        L.append(f"  {i}: [" + ", ".join(json.dumps(o["id"]) for o in data[i]["product"]["options"]) + "],")
+    L.append("};")
+    # R71 S4: every catalog variant (colour x size) -> Printful variant_id + base price (cents) + stock flag.
+    L.append("/** R71: [colour name, size, Printful catalog variant_id, base price CENTS, in stock] per product. */")
+    L.append("export type VariantRow = readonly [color: string, size: string, variantId: number, cents: number, inStock: boolean];")
+    L.append("export const PRINTFUL_VARIANTS: Record<number, readonly VariantRow[]> = {")
+    for i in IDS:
+        rows = []
+        for v in data[i]["variants"]:
+            rows.append("[" + ", ".join([json.dumps(v["color"]), json.dumps(v["size"]), str(int(v["id"])), str(round(float(v["price"]) * 100)), "true" if v.get("in_stock") else "false"]) + "]")
+        L.append(f"  {i}: [" + ", ".join(rows) + "],")
+    L.append("};")
     OUT.write_text("\n".join(L) + "\n")
     print(f"wrote {OUT} ({len(IDS)} products)")
 
