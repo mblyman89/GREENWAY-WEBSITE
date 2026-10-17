@@ -980,6 +980,7 @@ import { __runListingPackageTests } from "../../src/lib/merch-studio/listing-pac
 import { __runMerchAdTests } from "../../src/lib/merch/merch-ad-core";
 import { __runMerchCatalogTests } from "../../merch-site/lib/catalog-core";
 import { __runCheckoutCoreTests as __runMerchCheckoutTests } from "../../merch-site/lib/checkout-core";
+import { __runOrdersCoreTests as __runMerchOrdersTests } from "../../merch-site/lib/orders-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
@@ -2394,6 +2395,7 @@ __runLiquidVolumeTests();
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)
   assertRan("merch-site catalog-core", __runMerchCatalogTests(), 25); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
   assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 17); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
+  assertRan("merch-site orders-core", __runMerchOrdersTests(), 26); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

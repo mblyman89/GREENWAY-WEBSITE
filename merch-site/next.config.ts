@@ -35,6 +35,8 @@ const nextConfig: NextConfig = {
       },
       // Print PNGs are fetched by Printful; don't let search engines index them.
       { source: "/print/:file*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] },
+      // Owner-only order desk: never indexed, never cached.
+      { source: "/admin/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, { key: "Cache-Control", value: "no-store" }] },
     ];
   },
 };

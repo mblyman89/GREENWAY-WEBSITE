@@ -47,6 +47,29 @@
 - **Tests:** `catalog-core` (25) and `checkout-core` (17) are registered in `run-pure-selftests.ts`; `merch-ad-core` now has 51.
 - `SHIPPED_SLICE` is 5.
 
-## Slice 6
+## Slice 6 - Printful orders (shipped)
 
-See the Slice 6 section below (added when it ships).
+There's no database: Stripe holds the payment, customer and address, and Printful holds the production order, addressed by our `gm-...` ref (`external_id`).
+
+**`merch-site/lib/orders-core.ts`** (pure, 26 self-tests, registered in `run-pure-selftests.ts` and `merch-site npm test`) provides:
+
+- Stripe signature verification (`t=,v1=`, HMAC-SHA256, 5-minute tolerance, any matching v1 accepted so secrets can rotate).
+- Constant-time secret compare (16 characters minimum).
+- The paid session → Printful order body. The cart is re-priced from the server catalog, and problems are flagged, never silently dropped.
+- The Printful webhook reader. Tracking URLs are https only.
+- The escaped "shipped" email.
+- Admin order rows: paid vs. Printful cost vs. margin. Unknown costs stay blank, never 0.
+
+**Routes:**
+
+- **`/api/stripe/webhook`** handles `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
+  - It verifies the signature and re-fetches the session at the pinned API version.
+  - It only handles sessions with `metadata.site=greenwaymerch`, then sends `POST /orders?update_existing=true`, which is idempotent and creates a draft by default (`MERCH_PRINTFUL_AUTO_CONFIRM=true` sends orders straight to production).
+  - Permanent problems alert the owner and return 200. Transient errors (network, 429, 5xx) return 500 so Stripe retries.
+- **`/admin/orders`** is the owner's order desk.
+  - The key is typed into a form, never put in a URL. The cookie is httpOnly, Secure and SameSite=Strict, scoped to `/admin`, and holds a sha256 of the key, not the key.
+  - It lists orders by status, shows paid / Printful cost / margin, and has a Confirm button (`POST /orders/{id}/confirm`) for site drafts.
+  - It's noindex and no-store.
+- **`/api/printful/webhook/<token>`** handles `package_shipped`, which sends the customer the tracking email via Resend. `order_failed`, `order_canceled` and `order_put_hold` send an owner alert instead. Orders without a gm- ref are ignored.
+
+All fields were checked against Printful's v1 OpenAPI: the token scopes are `orders` and `webhooks`. Server REST clients are in `merch-site/lib/fulfillment.ts`, with no SDKs. `SHIPPED_SLICE` is 6, and every Merch Studio pipeline step is live.
