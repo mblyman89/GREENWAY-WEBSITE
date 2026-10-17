@@ -64,6 +64,8 @@ export function suggestRetailCents(printfulCents: number, targetBps: number, end
   return fit(dollars);
 }
 
+/** Highest slice whose pipeline steps are live in the studio (R71 S3: proof + sample tools). */
+export const SHIPPED_SLICE = 3;
 export interface PipelineStep { id: string; title: string; who: string; what: string; slice: 1 | 2 | 3 | 4 }
 /** The full just-in-time pipeline, shown on the Fulfillment tab. */
 export const JIT_PIPELINE: readonly PipelineStep[] = [

@@ -550,7 +550,7 @@ export function DesignStudio({ blankId, colorHex, setBlank, setColor }: { blankI
                 );
               })}
             </div>
-            <p className="text-[0.7rem] text-white/45">Silhouettes are illustrative (true proportions, size L flat). Photo-real Printful mockups come in Slice 3.</p>
+            <p className="text-[0.7rem] text-white/45">Silhouettes are illustrative (true proportions, size L flat). Exact print files, a printable proof and Printful photo mockups are on the Proof & Export tab.</p>
           </div>
         ) : null}
 

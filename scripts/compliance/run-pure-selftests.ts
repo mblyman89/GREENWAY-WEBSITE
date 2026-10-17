@@ -975,6 +975,7 @@ import { __runPrintRulesTests } from "../../src/lib/merch-studio/print-rules-cor
 import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-core";
 import { __runGarmentViewsTests } from "../../src/lib/merch-studio/garment-views-core";
 import { __runMerchDesignTests } from "../../src/lib/merch-studio/merch-design-core";
+import { __runPrintExportTests } from "../../src/lib/merch-studio/print-export-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
@@ -2384,6 +2385,7 @@ __runLiquidVolumeTests();
   assertRan("fulfillment-core", __runFulfillmentTests(), 11); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
   assertRan("garment-views-core", __runGarmentViewsTests(MERCH_BLANKS), 250); // R70 S2: garment views + exact print-frame inches for every blank/placement
   assertRan("merch-design-core", __runMerchDesignTests(), 42); // R70 S2: inch design model, text sizing, rotated resize, rule bridging, sanitising
+  assertRan("print-export-core", __runPrintExportTests(), 85); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

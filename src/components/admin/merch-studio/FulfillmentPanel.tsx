@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 import { basePriceCents, formatCents, getBlank, sizesFor, placementsFor, METHOD_LABEL, type Method, type UsedPlacement } from "@/lib/merch-studio/garment-catalog-core";
-import { JIT_PIPELINE, STRIPE_DISPUTE_CENTS, suggestRetailCents, unitEconomics } from "@/lib/merch-studio/fulfillment-core";
+import { JIT_PIPELINE, SHIPPED_SLICE, STRIPE_DISPUTE_CENTS, suggestRetailCents, unitEconomics } from "@/lib/merch-studio/fulfillment-core";
 import { NumberSlider, Row, Toggle, studioInput, studioLabel } from "@/components/admin/banner-studio/controls";
 
 const toCents = (s: string) => { const n = Number(s.replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
@@ -36,7 +36,7 @@ export function FulfillmentPanel({ blankId }: { blankId: string }) {
           {JIT_PIPELINE.map((s, i) => (
             <li key={s.id} className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3 text-sm">
               <p className="font-semibold text-white">{i + 1}. {s.title}</p>
-              <p className="text-[0.7rem] uppercase tracking-wide text-white/45">{s.who} - {s.slice <= 2 ? "in the studio now" : `arrives in Slice ${s.slice}`}</p>
+              <p className="text-[0.7rem] uppercase tracking-wide text-white/45">{s.who} - {s.slice <= SHIPPED_SLICE ? "in the studio now" : `arrives in Slice ${s.slice}`}</p>
               <p className="mt-1 text-white/70">{s.what}</p>
             </li>
           ))}
