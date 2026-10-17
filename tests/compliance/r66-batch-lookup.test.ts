@@ -29,7 +29,7 @@ import {
 } from "@/lib/catalog/lookup-job-core";
 import { AGAIN_MARKER } from "@/lib/catalog/lookup-history-core";
 import { normalizeLookup, type RawLookupV2 } from "@/lib/inventory/lookup-facts-core";
-import { parseLookupSnapshot, snapshotToLookupResult } from "@/lib/catalog/lookup-snapshot-core";
+import { __runLookupSnapshotCoreTests, parseLookupSnapshot, snapshotToLookupResult } from "@/lib/catalog/lookup-snapshot-core";
 
 const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -469,6 +469,33 @@ describe("R66 snapshot: runOneItem keeps every finding and the page hands it to 
     expect(view.facts?.fields.description.value).toBe("A bright, citrus-forward flower.");
     expect(view.draft).toMatchObject({ name: "Product 1", description: "A bright, citrus-forward flower." });
     expect(Object.keys(view.draft.fieldConfidence).length).toBeGreaterThan(0);
+  });
+
+  it("lookup-snapshot-core self-tests: exact count, and the runner pins the same floor", () => {
+    const r = __runLookupSnapshotCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBe(48);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupSnapshotCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 48\)/);
+  });
+
+  it("Grounding terms: a snapshot older than two years is never handed to the panel again", async () => {
+    seedDrafts(state.db, 2);
+    await enqueue();
+    state.lookup = lookupOk;
+    state.attach = attachOk;
+    await runLookupJobsTick({ admin: admin(), now: () => T0 });
+    const [a, b] = items(state.db);
+    const snapA = (a.result_json as { snapshot: Record<string, unknown> }).snapshot;
+    const snapB = (b.result_json as { snapshot: Record<string, unknown> }).snapshot;
+    const day = 24 * 60 * 60 * 1000;
+    snapA.at = new Date(Date.now() - 731 * day).toISOString();
+    snapB.at = new Date(Date.now() - 729 * day).toISOString();
+    const s = await loadManifestLookup(M);
+    if (s.state !== "job") throw new Error(`expected job, got ${s.state}`);
+    expect(s.job.snapshots.has(draftId(1).toLowerCase())).toBe(false);
+    expect(s.job.snapshots.has(draftId(2).toLowerCase())).toBe(true);
+    // The item itself (counts, outcome) is still shown; only the findings expire.
+    expect(s.job.items.get(draftId(1).toLowerCase())?.status).toBe("done");
   });
 
   it("a failed or still-queued item never gives the panel a snapshot", async () => {

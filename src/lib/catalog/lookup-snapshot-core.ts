@@ -20,7 +20,9 @@
  * values, their confidences and source URLs (the same things a row lookup
  * already writes into suggestions / the knowledge base), as this shop's own
  * lookup history, shown only inside its admin. Never the suggestion HTML,
- * never the cited text, never the model's raw reply.
+ * never the cited text, never the model's raw reply. A snapshot older than
+ * two years (the terms' limit for stored Grounded Result text) is never
+ * shown again (snapshotExpired).
  *
  * EVERY READ IS DEFENSIVE: result_json is a jsonb column anyone with database
  * access could edit, so parseLookupSnapshot re-validates every value through
@@ -418,6 +420,20 @@ export function snapshotNote(s: LookupSnapshot, when: string): string {
 }
 
 /** "Oct 3, 2026, 2:15 PM" style, or "" for a junk date (never invents one). */
+/**
+ * Google's Grounding terms allow the TEXT of a Grounded Result to be stored
+ * for at most two years (and only for limited purposes, e.g. so the person
+ * can see their own lookup history). A snapshot older than that is never
+ * shown again (the page reads it as absent). Junk / missing time = expired.
+ */
+export const LOOKUP_SNAPSHOT_MAX_AGE_MS = 730 * 24 * 60 * 60 * 1000;
+
+export function snapshotExpired(at: string | null | undefined, nowMs: number): boolean {
+  const t = Date.parse(String(at ?? ""));
+  if (!Number.isFinite(t) || !Number.isFinite(nowMs)) return true;
+  return nowMs - t > LOOKUP_SNAPSHOT_MAX_AGE_MS;
+}
+
 export function snapshotWhen(at: string, timeZone = "America/Los_Angeles"): string {
   const t = Date.parse(at);
   if (!Number.isFinite(t)) return "";
@@ -546,6 +562,11 @@ export function __runLookupSnapshotCoreTests(): { passed: number; failed: number
   ok(snapshotButtonLabel({ ...minimal!, hasAnyFindings: true }) === "AI Lookup \u00b7 see the batch result", "button label: findings, no count");
   ok(snapshotButtonLabel({ ...minimal!, hasAnyFindings: true, size: "1g" }) === "AI Lookup \u00b7 batch found 1 fact", "button label singular");
   ok(snapshotNote(minimal!, "Oct 3").startsWith("From the batch lookup on Oct 3.") && snapshotNote(minimal!, "").startsWith("From the batch lookup."), "note");
+  const at0 = Date.parse("2026-10-03T21:15:00.000Z");
+  ok(!snapshotExpired("2026-10-03T21:15:00.000Z", at0 + LOOKUP_SNAPSHOT_MAX_AGE_MS), "exactly two years: still shown");
+  ok(snapshotExpired("2026-10-03T21:15:00.000Z", at0 + LOOKUP_SNAPSHOT_MAX_AGE_MS + 1), "past two years: expired");
+  ok(snapshotExpired("junk", at0) && snapshotExpired(null, at0) && snapshotExpired("2026-10-03T21:15:00.000Z", Number.NaN), "junk time: expired");
+  ok(LOOKUP_SNAPSHOT_MAX_AGE_MS === 63_072_000_000, "730 days");
 
   return { passed, failed };
 }
