@@ -970,6 +970,9 @@ import { __runBannerGuidesTests } from "../../src/lib/cms/banner-guides-core";
 import { __runBannerMotionTests } from "../../src/lib/cms/banner-motion-core";
 import { __runBannerAtmosTests } from "../../src/lib/cms/banner-atmos-core";
 import { __runBannerCurveTests } from "../../src/lib/cms/banner-curve-core";
+import { __runGarmentCatalogTests } from "../../src/lib/merch-studio/garment-catalog-core";
+import { __runPrintRulesTests } from "../../src/lib/merch-studio/print-rules-core";
+import { __runFulfillmentTests } from "../../src/lib/merch-studio/fulfillment-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
 import { __runBannerEnterTests } from "../../src/lib/cms/banner-enter-core";
@@ -2373,6 +2376,9 @@ __runLiquidVolumeTests();
   assertRan("image-recommend-core", __runImageRecommendCoreTests(), 18); // R51: onboarding image recommendations (memory > on record > name match, confidence %)
   assertRan("gemini-request-core", __runGeminiRequestCoreTests(), 19); // R51 D1: Gemini Interactions body (system_instruction, url_context, service_tier, seed, response_format); R66: model-aware
   assertRan("gemini-models-core", __runGeminiModelsCoreTests(), 45); // R66: per-model thinking levels, output ceiling, incomplete/503 retry, usage names, 3.7->3.8 routing
+  assertRan("garment-catalog-core", __runGarmentCatalogTests(), 150); // R70 S1: Merch Studio blanks, placements, Printful upcharges, colour maths
+  assertRan("print-rules-core", __runPrintRulesTests(), 29); // R70 S1: Merch Studio print rules (DPI, text, threads, stitches, obstacles, WAC review)
+  assertRan("fulfillment-core", __runFulfillmentTests(), 11); // R70 S1: Merch Studio JIT pipeline + Stripe fee / margin maths (cents)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
