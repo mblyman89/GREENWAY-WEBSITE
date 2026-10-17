@@ -13,6 +13,10 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
 
+    // R72 S5: greenwaymerch.com is its own Next app (own Vercel project).
+    "merch-site/.next/**",
+    "merch-site/next-env.d.ts",
+
     // Build output of the packaged register app (Phase 0.3/0.4).
     // `npm run register:build` writes a minified bundle here, and
     // `npx cap sync` copies that same bundle into the native iOS project.

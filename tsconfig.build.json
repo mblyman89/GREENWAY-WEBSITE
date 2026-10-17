@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "exclude": [
     "node_modules",
+    "merch-site",
     "tests",
     "scripts",
     "visual-tools",

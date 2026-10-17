@@ -81,7 +81,9 @@ describe("SLICE 116 — 4-up product grids at desktop", () => {
     // R71 S4: 5 -> 3. The two "Greenway Merch" grids (lone-merch + bottom
     // merch) were removed with the static merch catalog; apparel is sold only
     // on the separate Greenway Goods website. Accessory x2 + product groups remain.
-    expect(fourUp).toBe(3);
+    // R72 S5: 3 -> 4. + the Greenway Merch category-ADVERT grid (links to
+    // greenwaymerch.com/<category>, shown only while the merch ad is on).
+    expect(fourUp).toBe(4);
   });
 
   it("the old 3-up (lg:grid-cols-3 2xl:grid-cols-4) is fully removed", () => {
