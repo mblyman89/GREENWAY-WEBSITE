@@ -46,7 +46,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     area: "back-office",
     title: "Finding your way around (the top navigation)",
     facts: [
-      "The top navigation has these tabs, left to right: the Greenway wordmark (click it to go to the Dashboard home), then Dashboard, Reports, CRM, Product Intake, Inventory, Website, MKTG & ADV, Employee, Medical, CCRS, and Admin.",
+      "The top navigation has these tabs, left to right: the Greenway wordmark (click it to go to the Dashboard home), then Online Orders, Reports, CRM, Product Intake, Inventory, Website, MKTG & ADV, Employee, Medical, CCRS, and Admin.",
       "Most tabs are dropdown menus — hover (or tap) a tab to open its menu, then pick a page.",
       "Reports and CCRS are single-click buttons, not dropdowns: Reports opens the reports hub; CCRS opens Compliance Health.",
       "There's a Quick Search circle (bottom-left) — press ⌘K (Mac) or Ctrl+K (Windows) to jump to any page fast.",
@@ -59,13 +59,13 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     area: "back-office",
     title: "What's in each tab (menu contents)",
     facts: [
-      "Dashboard: Online Orders, Loyalty signups.",
+      "Online Orders: a single button (no dropdown) that opens the online orders queue.",
       "Reports: opens the reporting hub (sales, tax, excise, COGS, customers, employees, loyalty, medical, compliance, forecast, accounting export).",
-      "CRM: Customers, Loyalty Program.",
+      "CRM: Loyalty Signups, Customers, Customer Insights, Loyalty Program.",
       "Product Intake: Product Discovery, CCRS Benchmarks, Catalog Hub, Purchasing, Receiving, Product Onboarding, Product Enrichment, Product Mastering, Accounts Payable, Knowledge Base.",
       "Inventory: Inventory, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts, Returns & Destruction.",
-      "Website: Media Library, Site Content, Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match.",
-      "MKTG & ADV: Marketing & Advertising, Promotions, Blog & Newsletter, Email Newsletter, Creative Studio.",
+      "Website: Site Content, Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match.",
+      "MKTG & ADV: Digital Assets, Marketing & Advertising, Promotions, Blog & Newsletter, Email Newsletter, Creative Studio.",
       "Employee: Time Clock, Payroll, Samples, Register Activity.",
       "Medical: Patient Records, Authorization Intake.",
       "CCRS: opens Compliance Health.",
@@ -111,7 +111,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     facts: [
       "CRM → Customers is where you build customer and patient profiles — the foundation for loyalty, purchase history, and (later) purchase-limit enforcement at the register.",
       "You can add a customer manually, or import a list under Customers → Import.",
-      "New public loyalty signups arrive in Dashboard → Loyalty signups; marking one as entered automatically creates (or links) its customer record here and enrolls it in the loyalty program.",
+      "New public loyalty signups arrive in CRM → Loyalty Signups; marking one as entered automatically creates (or links) its customer record here and enrolls it in the loyalty program.",
     ],
   },
   {
@@ -123,7 +123,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     facts: [
       "CRM → Loyalty Program manages points, tiers, promotions, and redemptions.",
       "The public-facing Loyalty page (what customers see) is edited under Website → Loyalty.",
-      "People who sign up on the website land in Dashboard → Loyalty signups for you to review and approve.",
+      "People who sign up on the website land in CRM → Loyalty Signups for you to review and approve.",
     ],
   },
 
@@ -186,7 +186,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     href: "/admin/pages/home",
     facts: [
       "Each public page has its own editor under the Website tab: Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, and Price Match.",
-      "Media Library (Website → Media Library) is where you upload and manage logos, banners, and images.",
+      "Digital Assets (MKTG & ADV → Digital Assets, formerly the Media Library) is where you upload and manage logos, banners, and images.",
       "Site Content (Website → Site Content) edits approved text blocks safely — no code, no page builder.",
       "Preview mode shows unpublished edits with a glowing badge in the bottom-right; click it to exit preview. Nothing is public until you publish.",
     ],
@@ -240,7 +240,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Reference images: up to 8 (FLUX.2) or 10 (FLUX 3). FLUX sees them in order as image 1, image 2…, so name them in the prompt. FLUX has no negative prompts; describe what you want instead.",
       "FLUX Video (FLUX 3): text → video, image → video with 1–10 keyframes, continue a clip, edit a clip, or upscale a clip. Duration is 5–20 s (or auto), resolution HD/Full HD/QHD/4K, with optional audio. Draft first gives a fast HD preview for about a third of the cost; Enhance renders the same shot at full quality.",
       "The Midjourney tab builds a copy-paste prompt from a structured brief, with Greenway AI assist grounded in the store profile and live weekly deals.",
-      "Generated images and videos are DRAFTS in the Media Library. Review them before using them on the website or in marketing.",
+      "Generated images and videos are DRAFTS in Digital Assets. Review them before using them on the website or in marketing.",
     ],
   },
 

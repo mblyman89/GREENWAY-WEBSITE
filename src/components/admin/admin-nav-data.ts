@@ -41,14 +41,17 @@ export type AdminNavItem = {
 export const adminNav: AdminNavItem[] = [
   // Dashboard: daily front-of-house. (The "Dashboard" landing page itself is
   // reachable via the Greenway wordmark, so no separate nav item for it.)
+  // R69: Online Orders is now the ONLY item here, so the group renders as a
+  // single direct-link "Online Orders" button (AdminTopNav DIRECT_LINK_GROUPS).
+  // Loyalty signups moved to the top of CRM, next to the customers it creates.
   { label: "Online Orders", href: "/admin/orders", permission: "orders.view", icon: "\ud83d\uded2", group: "Dashboard" }, // 🛒 shopping cart
-  { label: "Loyalty signups", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\ud83c\udf9f\ufe0f", group: "Dashboard" }, // 🎟️ ticket / signup
 
   // Reports: standalone top-header button (rendered as a direct link tab, not a
   // dropdown — see AdminTopNav DIRECT_LINK_GROUPS).
   { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "\ud83d\udcc8", group: "Reports" }, // 📈 chart increasing
 
   // CRM: customer relationship management (customers + loyalty program).
+  { label: "Loyalty Signups", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\ud83c\udf9f\ufe0f", group: "CRM" }, // 🎟️ ticket / signup — R69: moved from Dashboard to the first CRM slot
   { label: "Customers", href: "/admin/customers", permission: "customers.manage", icon: "\ud83d\udc65", group: "CRM" }, // 👥 people
   { label: "Customer Insights", href: "/admin/customers/insights", permission: "customers.manage", icon: "\ud83d\udcca", group: "CRM" }, // 📊 bar chart — Slice 3 intelligence dashboard
   { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "\ud83c\udfc5", group: "CRM" }, // 🏅 medal / rewards
@@ -79,6 +82,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" }, // ♻️ disposition
 
   // MKTG & ADV: promos, content, email, creative
+  { label: "Digital Assets", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc\ufe0f", group: "MKTG & ADV" }, // 🖼️ R69: the Media Library, renamed and moved from Website to the first MKTG & ADV slot (same /admin/media route, so no links break)
   { label: "Marketing & Advertising", href: "/admin/marketing", permission: "content.edit", icon: "\ud83d\udce3", group: "MKTG & ADV" }, // 📣 megaphone
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "\ud83c\udff7\ufe0f", group: "MKTG & ADV" }, // 🏷️ deal tag
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\ud83d\udcdd", group: "MKTG & ADV" }, // 📝 writing
@@ -109,11 +113,10 @@ export const adminNav: AdminNavItem[] = [
   { label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change radar (SLICE 37)
   { label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-18 recurring obligations
 
-  // Website: sync dashboard first, then media + site content, then public
+  // Website: sync dashboard first, then site content, then public
   // page editors + menu imports. Website Sync is the harmony dashboard (Task
   // T PR 5) — what the storefront is serving RIGHT NOW, with edit links.
   { label: "Website Sync", href: "/admin/website-sync", permission: "dashboard.view", icon: "\ud83d\udd17", group: "Website" }, // 🔗 storefront harmony
-  { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc\ufe0f", group: "Website" }, // 🖼️ media
   // "Site Content" nav entry removed (MIG-7 PR-B): the /admin/content junk-drawer
   // page was retired -- every content block now has a dedicated editor (Pages,
   // Header & Footer, Branding, Legal, etc.) and the live preview + SEO editor

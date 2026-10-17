@@ -44,7 +44,7 @@ export const WORKSPACES: Workspace[] = [
       "Your daily front-of-house cockpit — today's sales, what needs attention, open online orders, and live registers.",
     does: [
       "See today's revenue, orders, and top sellers at a glance",
-      "Work online orders and loyalty signups",
+      "Work online orders (loyalty signups now live under CRM)",
       "Print one-page SOPs for truck day and every intake stage",
     ],
     icon: "📊",
@@ -111,11 +111,11 @@ export const WORKSPACES: Workspace[] = [
     group: "Website",
     title: "Website",
     summary:
-      "Safe editors for every public page (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match), plus the Media Library and Website Sync — with preview before publish.",
+      "Safe editors for every public page (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match), plus Website Sync — with preview before publish.",
     does: [
       "Edit public pages without touching code",
-      "Manage images in the Media Library",
       "Preview unpublished changes before they go live",
+      "See what the storefront serves right now in Website Sync",
     ],
     icon: "🖥️",
     href: "/admin/website-sync",
@@ -125,11 +125,12 @@ export const WORKSPACES: Workspace[] = [
     group: "MKTG & ADV",
     title: "Marketing & advertising",
     summary:
-      "AI-assisted, WA-compliant marketing: strategy drafts, promotions, blog and newsletter, and an image generator — all preview-before-publish.",
+      "AI-assisted, WA-compliant marketing: strategy drafts, promotions, blog and newsletter, an image generator, and the Digital Assets library — all preview-before-publish.",
     does: [
       "Draft WA-compliant marketing strategies with AI",
       "Build daily deals and clearance promotions",
       "Write blog posts, send newsletters, generate images",
+      "Manage logos, banners, and images in Digital Assets",
     ],
     icon: "📣",
     href: "/admin/marketing",
