@@ -51,8 +51,9 @@ describe("merch studio cores", () => {
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(51);
   });
-  it("R72 S5 roadmap: Slice 5 shipped (greenwaymerch.com checkout); Printful orders Slice 6", () => {
-    expect(SHIPPED_SLICE).toBe(5);
+  it("R72 S6 roadmap: all slices shipped (greenwaymerch.com checkout S5 + Printful orders S6)", () => {
+    expect(SHIPPED_SLICE).toBe(6);
+    expect(JIT_PIPELINE.every((s) => s.slice <= SHIPPED_SLICE)).toBe(true);
     expect(JIT_PIPELINE.find((s) => s.id === "sell")?.slice).toBe(5);
     expect(JIT_PIPELINE.find((s) => s.id === "order")?.slice).toBe(6);
     expect(JIT_PIPELINE.some((s) => /subdomain/i.test(s.title + s.what))).toBe(false);

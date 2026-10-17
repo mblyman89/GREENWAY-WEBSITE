@@ -18,7 +18,7 @@ glow cards, detail-page layout and buttons.
 | `/checkout/success` | Order confirmation. |
 | `/shipping`, `/returns`, `/privacy`, `/terms`, `/contact` | Policy pages (card networks require these). |
 | `/api/stripe/webhook` | Slice 6: a paid order creates a Printful **draft** order. |
-| `/admin/orders?key=...` | Slice 6: the owner confirms drafts (only confirmed orders are charged by Printful). |
+| `/admin/orders` | Slice 6: the owner's order desk. Sign in with `MERCH_ADMIN_KEY`, see paid vs. Printful cost per order, and confirm drafts (Printful only charges for confirmed orders). |
 | `/api/printful/webhook/<token>` | Slice 6: shipment tracking emails go to the customer. |
 
 ## Adding a product (no code)
@@ -51,12 +51,13 @@ To hide a product without deleting it, add `"merch": { "active": false }` to its
 | `NEXT_PUBLIC_MERCH_CONTACT_PHONE` | recommended | Customer-service phone number. |
 | `NEXT_PUBLIC_MERCH_BUSINESS_ADDRESS` | recommended | One line, for example `123 Main St, Olympia, WA 98501`. |
 | `STRIPE_WEBHOOK_SECRET` | Slice 6 | `whsec_...` from the Stripe webhook endpoint. |
-| `PRINTFUL_API_TOKEN` | Slice 6 | Printful private token (orders scope). |
+| `PRINTFUL_API_TOKEN` | Slice 6 | Printful private token with the `orders` and `webhooks` scopes. |
 | `PRINTFUL_STORE_ID` | Slice 6 | Needed if the token covers more than one store. |
 | `PRINTFUL_WEBHOOK_TOKEN` | Slice 6 | A long random string that becomes part of the Printful webhook URL. |
-| `MERCH_ADMIN_KEY` | Slice 6 | A long random string that opens `/admin/orders`. |
+| `MERCH_ADMIN_KEY` | Slice 6 | A long random string (32+ characters; 16 minimum) that you type to open `/admin/orders`. Changing it signs everyone out. |
+| `MERCH_PRINTFUL_AUTO_CONFIRM` | no | `true` sends paid orders straight to production instead of as drafts. Leave unset until you trust the flow. |
 | `RESEND_API_KEY` / `MERCH_EMAIL_FROM` | Slice 6 | Shipping emails (for example `Greenway Merch <orders@greenwaymerch.com>`). |
-| `MERCH_ORDER_ALERT_EMAIL` | Slice 6 | Where new-order and problem alerts go. |
+| `MERCH_ORDER_ALERT_EMAIL` | Slice 6 | Where problem alerts go (bad address, Printful rejected an order, Printful failed, cancelled or on-hold events, an email that didn't send). |
 
 ## Local commands
 
@@ -67,3 +68,38 @@ npm run dev        # http://localhost:3000
 npm test           # pure self-tests (catalog + checkout + orders)
 npm run build
 ```
+
+## Orders: how they flow (Slice 6)
+
+1. The customer pays in Stripe Checkout. Stripe calls `/api/stripe/webhook`.
+2. The webhook checks Stripe's signature, re-reads the session from Stripe, re-prices the cart from this site's catalog, and creates a Printful **draft** with `external_id` set to the `gm-...` order number. The call uses `?update_existing=true`, so a Stripe retry can never create a second order.
+3. You open `/admin/orders`, check the address, items and margin, and press **Confirm**. Printful charges the LLC's card on file and starts production.
+4. When Printful ships, it calls `/api/printful/webhook/<token>`, and the customer gets a "your order shipped" email with the tracking link. Failed, cancelled and on-hold orders email you instead.
+
+There's no database. Stripe (payments) and Printful (orders, searchable by `gm-...`) are the record.
+
+### One-time webhook setup
+
+**Stripe:** go to **Developers**, then **Webhooks**, then **Add endpoint**:
+
+- URL: `https://greenwaymerch.com/api/stripe/webhook`
+- Events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`
+- Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
+
+**Printful:** v1 webhooks are registered with the API, once:
+
+```bash
+curl -X POST https://api.printful.com/webhooks \
+  -H "Authorization: Bearer $PRINTFUL_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"url":"https://greenwaymerch.com/api/printful/webhook/<PRINTFUL_WEBHOOK_TOKEN>","types":["package_shipped","order_failed","order_canceled","order_put_hold"]}'
+```
+
+Add `-H "X-PF-Store-Id: <id>"` if your token covers more than one store. Printful v1 doesn't sign webhooks, which is why the URL carries the secret token. A wrong token gets a 404.
+
+**Resend:** verify `greenwaymerch.com` as a sending domain (Resend shows the DNS records), then set `MERCH_EMAIL_FROM`.
+
+### Test it end-to-end (Stripe test mode)
+
+1. Use an `sk_test_...` key and a test webhook secret.
+2. Buy with card `4242 4242 4242 4242`.
+3. A draft should appear on `/admin/orders` and in Printful's Orders list. Delete the draft in Printful without confirming, so you aren't charged.
