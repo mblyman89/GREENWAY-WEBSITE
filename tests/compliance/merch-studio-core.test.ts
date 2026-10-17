@@ -49,10 +49,10 @@ describe("merch studio cores", () => {
   it("merch-ad-core (R71 S4)", () => {
     const r = __runMerchAdTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(36);
+    expect(r.passed).toBeGreaterThanOrEqual(51);
   });
-  it("R71 S4 roadmap: Slice 4 shipped; checkout is Slice 5 on the separate domain, Printful orders Slice 6", () => {
-    expect(SHIPPED_SLICE).toBe(4);
+  it("R72 S5 roadmap: Slice 5 shipped (greenwaymerch.com checkout); Printful orders Slice 6", () => {
+    expect(SHIPPED_SLICE).toBe(5);
     expect(JIT_PIPELINE.find((s) => s.id === "sell")?.slice).toBe(5);
     expect(JIT_PIPELINE.find((s) => s.id === "order")?.slice).toBe(6);
     expect(JIT_PIPELINE.some((s) => /subdomain/i.test(s.title + s.what))).toBe(false);

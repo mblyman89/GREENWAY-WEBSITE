@@ -21,7 +21,7 @@ import { buildListingPackage, listingFilename, LISTING_LIMITS } from "@/lib/merc
 import type { MerchDesign } from "@/lib/merch-studio/merch-design-core";
 import type { Issue } from "@/lib/merch-studio/print-rules-core";
 import {
-  MERCH_AD_BLOCK, MERCH_AD_LIMITS, MERCH_AD_MAX_TILES, merchAdIssues, normalizeMerchAd, parseMerchAd, safeAdImage, safeMerchUrl, serializeMerchAd, type MerchAd,
+  MERCH_AD_BLOCK, MERCH_AD_LIMITS, MERCH_AD_MAX_CARDS, MERCH_AD_MAX_TILES, MERCH_SITE_ORIGIN, STANDARD_MERCH_AD_CARDS, merchAdIssues, merchAdViewOf, merchCardHref, normalizeMerchAd, parseMerchAd, safeAdImage, safeCardPath, safeMerchUrl, serializeMerchAd, type MerchAd, type MerchAdCard,
 } from "@/lib/merch/merch-ad-core";
 import { MerchRedirectAdView } from "@/components/merch/MerchRedirectAdView";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
@@ -62,7 +62,10 @@ function AdEditor({ adBlock, mediaChoices }: { adBlock: MerchAdBlockVM; mediaCho
   const set = (patch: Partial<MerchAd>) => setAd((a) => normalizeMerchAd({ ...a, ...patch }));
   const setTile = (i: number, patch: Partial<MerchAd["tiles"][number]>) => setAd((a) => ({ ...a, tiles: a.tiles.map((t, n) => (n === i ? { ...t, ...patch, caption: (patch.caption ?? t.caption).slice(0, MERCH_AD_LIMITS.caption) } : t)) }));
   const [newTile, setNewTile] = useState("");
-  const previewView = cleanUrl ? { url: cleanUrl, host: new URL(cleanUrl).hostname, eyebrow: ad.eyebrow, heading: ad.heading, intro: ad.intro, button: ad.button, tiles: ad.tiles } : null;
+  const previewView = cleanUrl ? merchAdViewOf(ad, cleanUrl) : null;
+  const setCard = (i: number, patch: Partial<MerchAdCard>) => setAd((a) => ({ ...a, cards: a.cards.map((c, n) => (n === i ? { ...c, ...patch } : c)) }));
+  const [newCard, setNewCard] = useState<{ path: string; label: string; image: string }>({ path: "", label: "", image: "" });
+  const missingStandard = STANDARD_MERCH_AD_CARDS.filter((c) => !ad.cards.some((x) => x.path === c.path));
 
   return (
     <section aria-labelledby="merch-ad-h" className="space-y-4">
@@ -88,9 +91,10 @@ function AdEditor({ adBlock, mediaChoices }: { adBlock: MerchAdBlockVM; mediaCho
           <input type="hidden" name="block_key" value={MERCH_AD_BLOCK} />
           <input type="hidden" name="draft_value" value={value} />
           <Toggle label="Show the ad on the cannabis website" checked={ad.enabled} onChange={(v) => set({ enabled: v })} />
-          <Row label="Greenway Goods website address" hint="The separate domain only, e.g. https://greenwaygoods.example - https, no ?parameters or #tags, never greenwaymarijuana.com.">
-            <input className={studioInput} value={ad.url} maxLength={MERCH_AD_LIMITS.url} placeholder="https://" inputMode="url" autoComplete="off" spellCheck={false} onChange={(e) => set({ url: e.target.value })} />
+          <Row label="Greenway Goods website address" hint={`The separate domain only (${MERCH_SITE_ORIGIN}) - https, no ?parameters or #tags, never greenwaymarijuana.com.`}>
+            <input className={studioInput} value={ad.url} maxLength={MERCH_AD_LIMITS.url} placeholder={MERCH_SITE_ORIGIN} inputMode="url" autoComplete="off" spellCheck={false} onChange={(e) => set({ url: e.target.value })} />
           </Row>
+          {!ad.url ? <button type="button" className={`${btn} -mt-2 border border-white/20 text-white/80`} onClick={() => set({ url: MERCH_SITE_ORIGIN })}>Use {MERCH_SITE_ORIGIN}</button> : null}
           {ad.url && cleanUrl ? <p className="-mt-2 text-[0.7rem] text-white/55">Links to <code className="text-white/80">{cleanUrl}</code></p> : null}
           <Row label={`Small label (${MERCH_AD_LIMITS.eyebrow})`}><input className={studioInput} value={ad.eyebrow} maxLength={MERCH_AD_LIMITS.eyebrow} onChange={(e) => set({ eyebrow: e.target.value })} /></Row>
           <Row label={`Heading (${MERCH_AD_LIMITS.heading})`}><input className={studioInput} value={ad.heading} maxLength={MERCH_AD_LIMITS.heading} onChange={(e) => set({ heading: e.target.value })} /></Row>
@@ -124,6 +128,48 @@ function AdEditor({ adBlock, mediaChoices }: { adBlock: MerchAdBlockVM; mediaCho
             ) : null}
           </div>
 
+          <div>
+            <span className={studioLabel}>Category cards ({ad.cards.length}/{MERCH_AD_MAX_CARDS}) - shown when a shopper picks &ldquo;Greenway Merch&rdquo; in the shop filter bar</span>
+            <p className="mb-2 text-[0.7rem] text-white/55">Each card links to one category page on the merch site, e.g. <code className="text-white/80">{(cleanUrl || MERCH_SITE_ORIGIN) + "/tees"}</code>. No prices - just a picture, a name and a short line.</p>
+            {missingStandard.length ? (
+              <button type="button" className={`${btn} mb-2 bg-[var(--admin-accent)] text-black`} onClick={() => setAd((a) => normalizeMerchAd({ ...a, cards: [...a.cards, ...missingStandard] }))}>
+                Add the standard category cards ({missingStandard.map((c) => c.label).join(", ")})
+              </button>
+            ) : null}
+            <ul className="space-y-2">
+              {ad.cards.map((c, i) => (
+                <li key={c.path} className="flex items-start gap-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of an owner-picked picture */}
+                  <img src={c.image} alt="" className="h-14 w-14 shrink-0 rounded object-cover" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex gap-1">
+                      <input className={studioInput} value={c.label} maxLength={MERCH_AD_LIMITS.label} aria-label="Card name" onChange={(e) => setCard(i, { label: e.target.value })} />
+                      <code className="shrink-0 self-center text-[0.65rem] text-white/55">/{c.path}</code>
+                    </div>
+                    <input className={studioInput} value={c.text} maxLength={MERCH_AD_LIMITS.cardText} placeholder="Short line (optional)" aria-label="Card words" onChange={(e) => setCard(i, { text: e.target.value })} />
+                    <div className="flex gap-1">
+                      <button type="button" className={`${btn} border border-white/20 text-white/80`} disabled={i === 0} onClick={() => setAd((a) => { const n = [...a.cards]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return { ...a, cards: n }; })}>Up</button>
+                      <button type="button" className={`${btn} border border-white/20 text-white/80`} disabled={i === ad.cards.length - 1} onClick={() => setAd((a) => { const n = [...a.cards]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; return { ...a, cards: n }; })}>Down</button>
+                      <button type="button" className={`${btn} border border-[var(--admin-danger)]/60 text-white/80`} onClick={() => setAd((a) => ({ ...a, cards: a.cards.filter((_, n) => n !== i) }))}>Remove</button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {ad.cards.length < MERCH_AD_MAX_CARDS ? (
+              <div className="mt-2 space-y-2 rounded-[var(--admin-radius-sm)] border border-dashed border-[var(--admin-border)] p-2">
+                <div className="flex gap-1">
+                  <input className={studioInput} value={newCard.label} maxLength={MERCH_AD_LIMITS.label} placeholder="Name, e.g. Long Sleeves" onChange={(e) => setNewCard((n) => ({ ...n, label: e.target.value }))} />
+                  <input className={studioInput} value={newCard.path} maxLength={MERCH_AD_LIMITS.path} placeholder="page, e.g. long-sleeves" onChange={(e) => setNewCard((n) => ({ ...n, path: e.target.value }))} />
+                </div>
+                <ContentImageField value={newCard.image} onChange={(v) => setNewCard((n) => ({ ...n, image: v }))} mediaChoices={mediaChoices.filter((m) => !m.mimeType || m.mimeType.startsWith("image/"))} />
+                <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!safeCardPath(newCard.path) || !safeAdImage(newCard.image) || ad.cards.some((c) => c.path === safeCardPath(newCard.path))} onClick={() => { setAd((a) => normalizeMerchAd({ ...a, cards: [...a.cards, { path: newCard.path, label: newCard.label, image: newCard.image, text: "" }] })); setNewCard({ path: "", label: "", image: "" }); }}>Add card</button>
+                {newCard.path && !safeCardPath(newCard.path) ? <p className="text-[0.7rem] text-[var(--admin-danger)]">The page must be one word: lowercase letters, numbers and dashes (it becomes {MERCH_SITE_ORIGIN}/<i>page</i>).</p> : null}
+                {newCard.path && safeCardPath(newCard.path) && cleanUrl ? <p className="text-[0.7rem] text-white/55">Links to <code className="text-white/80">{merchCardHref(cleanUrl, newCard.path)}</code></p> : null}
+              </div>
+            ) : null}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--admin-border)] pt-3">
             <button type="submit" formAction={saveMerchAdDraftAction} disabled={!adBlock.available} className={`${btn} border border-white/25 text-white`}>Save draft</button>
             <button type="submit" formAction={publishMerchAdAction} disabled={!adBlock.available || (ad.enabled && blockers.length > 0) || live} className={`${btn} bg-[var(--admin-accent)] text-black`}>
@@ -138,6 +184,20 @@ function AdEditor({ adBlock, mediaChoices }: { adBlock: MerchAdBlockVM; mediaCho
           <div className="overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black py-4" onClickCapture={(e) => { if ((e.target as HTMLElement).closest("a")) e.preventDefault(); }}>
             {previewView ? <MerchRedirectAdView view={previewView} /> : <p className="p-6 text-center text-sm text-white/55">Add a valid https address on the separate merch domain to see the preview. Until then nothing shows on the website.</p>}
           </div>
+          {previewView && previewView.cards.length ? (
+            <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black p-3" onClickCapture={(e) => { if ((e.target as HTMLElement).closest("a")) e.preventDefault(); }}>
+              <span className={studioLabel}>Shop filter &ldquo;Greenway Merch&rdquo; shows these cards</span>
+              <ul className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                {previewView.cards.map((c) => (
+                  <li key={c.href} className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- preview of an owner-picked picture */}
+                    <img src={c.image} alt="" className="aspect-[4/3] w-full object-cover" />
+                    <div className="p-2"><p className="text-sm font-black text-white">{c.label}</p><p className="truncate text-[0.65rem] text-white/55">{c.href}</p></div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {!ad.enabled && previewView ? <p className="text-xs text-white/55">The ad is switched off, so customers won&apos;t see it even after publishing.</p> : null}
           <AdIssues issues={issues} />
           <p className="text-[0.7rem] text-white/45">Links open in a new tab with no referrer and no tracking parameters - the merch website receives no data from the cannabis website. Clicks are counted only in this site&apos;s own click analytics (placement &ldquo;other&rdquo;, slot &ldquo;greenway-goods&rdquo;).</p>

@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/* Tokens + base copied from greenwaymarijuana.com src/app/globals.css so the
+   merch shop looks identical to the cannabis shop page. */
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  --greenway: #7ed957;
+  --greenway-dark: #12351f;
+  --gold: #ffd700;
+  --orange: #ff7f00;
+  --frost: #d1d5db;
+  --charcoal: #1a1a1a;
+  --shop-max: 120rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(126, 217, 87, 0.2), transparent 34rem),
+    radial-gradient(circle at top right, rgba(255, 127, 0, 0.16), transparent 28rem),
+    #000000;
+  color: var(--foreground);
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: clip;
+}
+
+option,
+optgroup {
+  background-color: #0c0f0d;
+  color: #f5f7f5;
+}
+
+::selection {
+  background: var(--greenway);
+  color: #08130b;
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.13;
+  mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.45'/%3E%3C/svg%3E");
+}
+
+/* Policy pages */
+.prose-merch h2 { margin-top: 2rem; font-size: 1.25rem; font-weight: 900; color: #fff; }
+.prose-merch p, .prose-merch li { margin-top: 0.75rem; line-height: 1.7; color: rgb(212 212 216); }
+.prose-merch ul { list-style: disc; padding-left: 1.25rem; }
+.prose-merch a { color: var(--greenway); text-decoration: underline; }

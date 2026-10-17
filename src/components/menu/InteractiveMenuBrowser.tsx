@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
+import type { MerchAdCardView } from "@/lib/merch/merch-ad-core";
 // SLICE 78: owner-managed category labels. The server passes the DB-backed
 // value→label map; categoryLabel() prefers it and falls back to the hardcoded
 // taxonomy, so renames/additions at /admin/settings/types reach shoppers.
@@ -332,6 +333,41 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
         <p className="mt-3 text-sm leading-6 text-zinc-300">{card.description}</p>
       </div>
     </article>
+  );
+}
+
+/**
+ * R72 S5 - a Greenway Merch CATEGORY advert (owner: "a list of advertisement
+ * cards, each one pointing to greenwaymerch.com/sweatshirts, or /tees ...").
+ * Same look as AccessoryCard, but the whole card is ONE plain link to a
+ * category page on the separate merch domain: new tab, no referrer, no query
+ * string, no price, no cart. The href was validated server-side
+ * (merch-ad-core resolveMerchAd) before it ever reached this component.
+ */
+function MerchAdCardTile({ card }: { card: MerchAdCardView }) {
+  const host = card.href.replace(/^https:\/\//, "").split("/")[0];
+  return (
+    <a
+      href={card.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      referrerPolicy="no-referrer"
+      className="group block overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--greenway)]"
+      aria-label={`${card.label} - opens ${host} in a new tab`}
+    >
+      <div className="aspect-[4/3] overflow-hidden bg-zinc-900">
+        {/* eslint-disable-next-line @next/next/no-img-element -- owner-picked advert picture (may live on the merch domain; not proxied) */}
+        <img src={card.image} alt="" className="h-full w-full object-cover opacity-82 transition duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
+      </div>
+      <div className="p-5">
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Greenway Glass & Goods</p>
+        <h3 className="mt-2 text-2xl font-black text-white">{card.label}</h3>
+        {card.text ? <p className="mt-3 text-sm leading-6 text-zinc-300">{card.text}</p> : null}
+        <p className="mt-4 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.14em] text-white transition group-hover:text-[var(--orange)]">
+          Shop on {host} <span aria-hidden="true">&#8599;</span>
+        </p>
+      </div>
+    </a>
   );
 }
 
@@ -679,9 +715,15 @@ type InteractiveMenuBrowserProps = {
    * two built-in lanes. Empty = only the built-ins show.
    */
   saleFilters?: ShopSaleFilterInput[];
+  /**
+   * R72 S5: Greenway Merch category adverts (resolved server-side from the
+   * merch.ad block; undefined when the ad is off). When present, the filter
+   * bar offers "Greenway Merch" and picking it shows these cards.
+   */
+  merchAdCards?: MerchAdCardView[];
 };
 
-export function InteractiveMenuBrowser({ items, initialSearchParams = {}, categoryLabels, saleFilters = [] }: InteractiveMenuBrowserProps) {
+export function InteractiveMenuBrowser({ items, initialSearchParams = {}, categoryLabels, saleFilters = [], merchAdCards }: InteractiveMenuBrowserProps) {
   // SLICE 78: register the owner's labels BEFORE any lookup below runs. This
   // happens during render on both server and client with the same map, so
   // hydration stays consistent; an absent map = hardcoded behavior.
@@ -991,12 +1033,14 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
         ...Array(accessorySectionCards.length).fill("accessories"),
         // R71 S4: the static "Greenway Merch" cards were removed from the
         // cannabis shop (WSLCB: a licensee may not sell t-shirts from its
-        // website). Apparel is advertised by the redirect ad below the grid.
+        // website). R72 S5: the option comes back ONLY as a shortcut to the
+        // category ADVERTS (links to greenwaymerch.com) while the ad is on.
+        ...Array(merchAdCards?.length ?? 0).fill("merch"),
       ],
       selectedCategories,
       categoryLabel,
     );
-  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedCategories]);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, merchAdCards, selectedCategories]);
 
   const strainOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice, cannabinoidBounds));
@@ -1091,6 +1135,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     "infused-preroll-pack",
   ].includes(activeSectionCategory);
   const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
+  // R72 S5: "Greenway Merch" alone -> the category adverts (never products).
+  const showMerchAds = Boolean(merchAdCards?.length) && selectedCategories.length === 1 && selectedCategories[0] === "merch";
   // R71 S4: there is no merch collection on the cannabis shop any more (only
   // the Greenway Goods redirect ad, rendered by ShopPage below this grid).
 
@@ -1124,6 +1170,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // anywhere — including the bottom accessory/merch collections.
   const showEmptyState =
     !showAccessorySections &&
+    !showMerchAds &&
     filteredItems.length === 0 &&
     !showAccessoryBottom;
 
@@ -1256,6 +1303,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // first product section label, falling back to a sensible default.
   const toolbarTitle = showAccessorySections
     ? "Accessories"
+    : showMerchAds
+    ? "Greenway Merch"
     : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
 
   const resetFilters = () => {
@@ -1570,6 +1619,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
+          </section>
+        ) : showMerchAds && merchAdCards ? (
+          <section id="greenway-merch" className="scroll-mt-32">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {merchAdCards.map((card) => <MerchAdCardTile key={card.href} card={card} />)}
+            </div>
+            <p className="mt-5 text-[0.68rem] leading-5 text-zinc-500">
+              Apparel is sold and shipped by Greenway Merchandising LLC (dba Greenway Glass & Goods) on its own website. Each card opens it in a new tab. It is not sold, delivered or rung up by this cannabis store.
+            </p>
           </section>
         ) : showEmptyState ? (
           <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">

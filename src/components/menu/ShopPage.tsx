@@ -4,7 +4,8 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
-import { MerchRedirectAd } from "@/components/merch/MerchRedirectAd";
+import { loadMerchAdView } from "@/components/merch/MerchRedirectAd";
+import { MerchRedirectAdView } from "@/components/merch/MerchRedirectAdView";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import { ShopBannerCarousel } from "@/components/menu/ShopBannerCarousel";
@@ -84,6 +85,10 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
   // per-product category overrides on the fully-enriched items.
   // R49 S6: + withProductTags (owner tags + automatic "New") on the outside,
   // so tags are attached to the item as finally filed.
+  // R72 S5: the Greenway Goods ad (one content-block read) starts NOW so it
+  // overlaps the menu chain; awaited after the batch below. Kept out of the
+  // SLICE D Promise.all on purpose - that batch's shape is pinned by tests.
+  const merchAdPromise = loadMerchAdView();
   const enrichedMenuItems = await withProductTags(await withCategoryOverride(
     await withDohCompliance(
       await withDisplayKnowledge(
@@ -108,6 +113,10 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
   // SLICE C (SHOP-3): sale filters collected from the same slides the carousel
   // renders. Pure — no I/O — so it stays out of the batch above.
   const saleFilters = collectShopSaleFilters(shopSlides, promotionTitles);
+
+  // R72 S5: null when the ad is off/invalid -> no "Greenway Merch" filter, no
+  // cards, no bottom ad. Only words, pictures and category links cross over.
+  const merchAd = await merchAdPromise;
 
   return (
     <>
@@ -149,6 +158,7 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
           initialSearchParams={initialCategory ? { category: initialCategory } : {}}
           categoryLabels={categoryLabels}
           saleFilters={saleFilters}
+          merchAdCards={merchAd?.cards.length ? merchAd.cards : undefined}
         />
       </section>
 
@@ -156,7 +166,7 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
           were sold through the cannabis cart). In their place: ONE redirect
           advert to the separate Greenway Goods website - no product data, no
           prices, renders nothing until the owner enables it in Merch Studio. */}
-      <MerchRedirectAd />
+      {merchAd ? <MerchRedirectAdView view={merchAd} /> : null}
     </>
   );
 }

@@ -67,10 +67,11 @@ export function suggestRetailCents(printfulCents: number, targetBps: number, end
 
 /**
  * Highest slice whose pipeline steps are live in the studio.
- * R71 S4: listing package + the redirect ad. Slice 5 = the separate Greenway
+ * R72 S5: greenwaymerch.com (merch-site/) is live in the repo - shop, catalogue,
+ * detail, cart and Stripe checkout. R71 S4: listing package + the redirect ad. Slice 5 = the separate Greenway
  * Goods website (own domain, Stripe under the LLC); Slice 6 = Printful orders.
  */
-export const SHIPPED_SLICE = 4;
+export const SHIPPED_SLICE = 5;
 export interface PipelineStep { id: string; title: string; who: string; what: string; slice: 1 | 2 | 3 | 4 | 5 | 6 }
 /** The full just-in-time pipeline, shown on the Fulfillment tab. */
 export const JIT_PIPELINE: readonly PipelineStep[] = [
@@ -78,8 +79,8 @@ export const JIT_PIPELINE: readonly PipelineStep[] = [
   { id: "design", title: "Design on a true-to-inch canvas", who: "Designer", what: "Build the art per placement with live print checks (DPI, text size, threads, seams, zippers).", slice: 2 },
   { id: "proof", title: "Export print files + proof", who: "Studio", what: "300-DPI transparent PNG per placement, mockups on every colour, a proof sheet to approve.", slice: 3 },
   { id: "sample", title: "Order one sample", who: "Owner", what: "Printful sample order to check colour, hand-feel and placement before listing.", slice: 3 },
-  { id: "list", title: "Package the listing", who: "Owner", what: "Publish & Ads builds the listing package (colours, sizes, Printful variants, retail prices, print positions) for the separate Greenway Goods website to import.", slice: 4 },
-  { id: "sell", title: "Customer pays (cards)", who: "Customer", what: "Cart + Stripe checkout on the separate Greenway Goods website (its own domain) under Greenway Merchandising LLC. The cannabis site only links there.", slice: 5 },
+  { id: "list", title: "Package the listing", who: "Owner", what: "Publish & Ads builds the listing package (colours, sizes, Printful variants, retail prices, print positions) for greenwaymerch.com to import (drop it in merch-site/catalog/).", slice: 4 },
+  { id: "sell", title: "Customer pays (cards)", who: "Customer", what: "Cart + Stripe checkout on greenwaymerch.com (its own domain and Vercel project) under Greenway Merchandising LLC. The cannabis site only links there.", slice: 5 },
   { id: "order", title: "Draft Printful order", who: "Merch site", what: "Paid order creates a Printful DRAFT with the exact variant, files and print positions; cost estimate shown.", slice: 6 },
   { id: "confirm", title: "Confirm (human click)", who: "Owner/staff", what: "One click confirms; Printful charges our card on file and starts production (2-5 business days).", slice: 6 },
   { id: "ship", title: "Printful ships to the customer", who: "Printful", what: "Shipped from Printful's facility with our labels; webhooks bring tracking back to the customer.", slice: 6 },
