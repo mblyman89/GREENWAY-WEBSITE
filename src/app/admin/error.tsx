@@ -30,6 +30,29 @@ const STALE_ACTION_SIGNATURES = [
 
 const RELOAD_GUARD_KEY = "gw-admin-stale-action-reloaded";
 
+/**
+ * R72 S6 - the same "tab older than the deploy" problem also shows up as a
+ * failed CODE download: the old page asks for a JS/CSS chunk the new deploy no
+ * longer has (webpack/turbopack "ChunkLoadError" / "Loading chunk ... failed",
+ * the browser's "Failed to fetch dynamically imported module" / "Importing a
+ * module script failed"). That only ever hits the one browser that kept the
+ * old tab open - another computer that opens the page fresh works - so it is
+ * recovered the same way: one guarded reload.
+ */
+const STALE_CHUNK_PATTERNS = [
+  /chunkloaderror/i,
+  /loading (css )?chunk [^\s]+ failed/i,
+  /failed to fetch dynamically imported module/i,
+  /importing a module script failed/i,
+  /error loading dynamically imported module/i,
+];
+
+function looksLikeStaleChunk(error?: { name?: string; message?: string }): boolean {
+  if (!error) return false;
+  const text = `${error.name ?? ""} ${error.message ?? ""}`;
+  return STALE_CHUNK_PATTERNS.some((re) => re.test(text));
+}
+
 function looksLikeStaleAction(message?: string): boolean {
   if (!message) return false;
   const lower = message.toLowerCase();
@@ -53,7 +76,7 @@ export default function AdminError({
   // cascading-render lint rule. We also flip the one-shot sessionStorage guard
   // at the same time so a reload loop can't happen.
   const [autoRecovering] = useState(() => {
-    if (!looksLikeStaleAction(error?.message)) return false;
+    if (!looksLikeStaleAction(error?.message) && !looksLikeStaleChunk(error)) return false;
     try {
       if (window.sessionStorage.getItem(RELOAD_GUARD_KEY) === "1") return false;
       window.sessionStorage.setItem(RELOAD_GUARD_KEY, "1");
@@ -103,7 +126,7 @@ export default function AdminError({
     );
   }
 
-  const staleHint = looksLikeStaleAction(error?.message);
+  const staleHint = looksLikeStaleAction(error?.message) || looksLikeStaleChunk(error);
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
