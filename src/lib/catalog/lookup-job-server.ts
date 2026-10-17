@@ -51,7 +51,7 @@ import {
   memoryResultNotice,
   shouldSkipGemini,
 } from "@/lib/catalog/fact-memory-core";
-import { buildLookupSnapshot, parseLookupSnapshot, snapshotFoundCount, type LookupSnapshot } from "./lookup-snapshot-core";
+import { buildLookupSnapshot, parseLookupSnapshot, snapshotExpired, snapshotFoundCount, type LookupSnapshot } from "./lookup-snapshot-core";
 import {
   AI_BATCH_THINKING_LEVEL_ENV,
   AI_BATCH_TIMEOUT_MS_ENV,
@@ -358,7 +358,8 @@ async function readItems(admin: Admin, jobId: string, snapshots?: Map<string, Lo
       });
       if (snapshots && r.status === "done" && r.result_json && typeof r.result_json === "object") {
         const snap = parseLookupSnapshot((r.result_json as Record<string, unknown>).snapshot);
-        if (snap) snapshots.set(String(r.draft_id).toLowerCase(), snap);
+        // Never shown past the Grounding terms' two-year storage limit.
+        if (snap && !snapshotExpired(snap.at, Date.now())) snapshots.set(String(r.draft_id).toLowerCase(), snap);
       }
     }
     if (rows.length < page) return out;
