@@ -17,7 +17,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { adminNav, navGroups, type AdminNavItem } from "./admin-nav-data";
 import { NavGlyph } from "./nav-glyphs";
@@ -27,6 +27,7 @@ import {
   buildNavGroups,
   isHrefActive,
   initialsFrom,
+  subgroupHeaderAt,
 } from "./admin-nav-core";
 
 type Props = {
@@ -241,11 +242,20 @@ export function AdminTopNav({ role, fullName, email, badges }: Props) {
                     className="absolute left-0 top-full z-50 min-w-[15rem] pt-2"
                   >
                   <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1.5 shadow-xl">
-                    {g.items.map((item) => {
+                    {g.items.map((item, idx) => {
                       const active = isHrefActive(item.href, pathname);
+                      const sub = subgroupHeaderAt(g.items, idx);
                       return (
+                        <Fragment key={item.href}>
+                        {sub && (
+                          <p
+                            role="presentation"
+                            className={`px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--admin-text-faint)] ${idx > 0 ? "mt-1.5 border-t border-[var(--admin-border)] pt-2" : "pt-1"}`}
+                          >
+                            {sub}
+                          </p>
+                        )}
                         <Link
-                          key={item.href}
                           href={item.href}
                           role="menuitem"
                           onClick={closeMenus}
@@ -264,6 +274,7 @@ export function AdminTopNav({ role, fullName, email, badges }: Props) {
                             </span>
                           )}
                         </Link>
+                        </Fragment>
                       );
                     })}
                   </div>
@@ -360,10 +371,16 @@ export function AdminTopNav({ role, fullName, email, badges }: Props) {
                   {g.group}
                 </p>
                 <ul className="flex flex-col gap-0.5">
-                  {g.items.map((item) => {
+                  {g.items.map((item, idx) => {
                     const active = isHrefActive(item.href, pathname);
+                    const sub = subgroupHeaderAt(g.items, idx);
                     return (
                       <li key={item.href}>
+                        {sub && (
+                          <p className={`px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--admin-accent)] ${idx > 0 ? "mt-2" : ""}`}>
+                            {sub}
+                          </p>
+                        )}
                         <Link
                           href={item.href}
                           onClick={closeMenus}

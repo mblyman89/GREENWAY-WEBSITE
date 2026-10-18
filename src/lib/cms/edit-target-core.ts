@@ -78,6 +78,11 @@ const EDITOR_ROUTE: Readonly<Record<Exclude<ContentEditor, "NONE" | "SITE_CONTEN
   SETTINGS_BRANDING: { href: "/admin/settings/branding", label: "Branding settings" },
   BLOG: { href: "/admin/blog/content", label: "the Blog wording editor" },
   MERCH_STUDIO: { href: "/admin/merch-studio?tab=publish", label: "the Merch Studio (Publish & Ads)" },
+  // R73 S3: Website -> Merchandise (greenwaymerch.com) editors.
+  MERCH_SITE_HEADER_FOOTER: { href: "/admin/merch-site/header-footer", label: "the Merch Header & Footer editor" },
+  MERCH_SITE_BANNERS: { href: "/admin/merch-site/banners", label: "the Merch Banners editor" },
+  MERCH_SITE_CARDS: { href: "/admin/merch-site/cards", label: "the Merch Product Cards editor" },
+  MERCH_SITE_EMAILS: { href: "/admin/merch-site/emails", label: "the Merch Order Emails editor" },
 };
 
 /**
@@ -103,6 +108,11 @@ const PREFIX_OWNER: ReadonlyArray<[string, ContentEditor]> = [
   ["chd.", CONTENT_EDITORS.LEGAL_POLICIES],
   ["site.font.", CONTENT_EDITORS.SETTINGS_BRANDING],
   ["merch.", CONTENT_EDITORS.MERCH_STUDIO],
+  ["merch.header.", CONTENT_EDITORS.MERCH_SITE_HEADER_FOOTER],
+  ["merch.footer.", CONTENT_EDITORS.MERCH_SITE_HEADER_FOOTER],
+  ["merch.banner.", CONTENT_EDITORS.MERCH_SITE_BANNERS],
+  ["merch.card.", CONTENT_EDITORS.MERCH_SITE_CARDS],
+  ["merch.email.", CONTENT_EDITORS.MERCH_SITE_EMAILS],
 ];
 
 /** Block keys must look like dotted identifiers; anything else is refused. */

@@ -11,6 +11,7 @@
  * order_failed / order_canceled / order_put_hold -> owner alert email.
  * Always 200 once authenticated, so Printful never storms retries.
  */
+import { getMerchContent } from "@/lib/site-content";
 import { alertOwner, sendEmail } from "@/lib/fulfillment";
 import { isOrderRef } from "@/lib/catalog-core";
 import { readPrintfulEvent, secretMatches, shippedEmail } from "@/lib/orders-core";
@@ -37,7 +38,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   const c = contact();
-  const mail = shippedEmail(a, { name: SITE_NAME, url: siteUrl(), contactEmail: c.email });
+  const w = await getMerchContent();
+  const mail = shippedEmail(a, { name: SITE_NAME, url: siteUrl(), contactEmail: c.email }, { subject: w["merch.email.shipped.subject"], note: w["merch.email.shipped.note"], signoff: w["merch.email.signoff"] });
   const sent = a.email ? await sendEmail({ to: a.email, ...mail, replyTo: c.email || undefined }) : { ok: false, error: "no customer email" };
   if (!sent.ok) {
     await alertOwner(`Shipped email NOT sent for ${a.orderRef}`, [`Reason: ${sent.error}`, `Tracking: ${a.trackingNumber || "?"} ${a.trackingUrl || ""}`, "Printful's own shipment email (if enabled in Printful settings) still goes out."]);

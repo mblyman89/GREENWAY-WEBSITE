@@ -45,6 +45,7 @@ import { LOYALTY_LOGO_BLOCK, defaultLoyaltyLogo, serializeLoyaltyLogo } from "@/
 import { VENDOR_CENTER_BLOCK } from "@/lib/vendors/vendor-center-core";
 import { BRAND_KIT_BLOCK } from "@/lib/brand/brand-kit-core";
 import { MERCH_AD_BLOCK } from "@/lib/merch/merch-ad-core";
+import { MERCH_SITE_BLOCKS } from "../../../merch-site/lib/site-content-core";
 import { ABOUT_SIDE_BLOCK, defaultAboutSide, serializeAboutSide } from "@/lib/about/about-side-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
@@ -1168,4 +1169,16 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "select",
     defaultValue: "",
   },
+  // R73 S3: greenwaymerch.com editable copy + attached banners (Website ->
+  // Merchandise). One source of truth shared with the merch site, which falls
+  // back to these same defaults - seeding changes nothing on either site.
+  ...MERCH_SITE_BLOCKS.map((b) => ({
+    block_key: b.key,
+    page: b.page,
+    section: b.section,
+    label: b.label,
+    help_text: b.help,
+    field_type: b.type,
+    defaultValue: b.defaultValue,
+  })),
 ];

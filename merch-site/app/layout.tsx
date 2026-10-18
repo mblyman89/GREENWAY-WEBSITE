@@ -4,6 +4,8 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SITE_BG_LAYER_CLASS } from "@/lib/glow";
 import { DBA_NAME, SITE_NAME, siteUrl } from "@/lib/site";
+import { getMerchContent } from "@/lib/site-content";
+import { headerCopy, footerCopy } from "@/lib/site-content-core";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
@@ -14,14 +16,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#000000" };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const c = await getMerchContent();
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
         <div className={SITE_BG_LAYER_CLASS} aria-hidden="true" />
-        <Header />
+        <Header copy={headerCopy(c)} />
         {children}
-        <Footer />
+        <Footer copy={footerCopy(c)} />
       </body>
     </html>
   );

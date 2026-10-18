@@ -86,6 +86,11 @@ export const CONTENT_EDITORS = {
   BLOG: "BLOG",
   /** /admin/merch-studio "Publish & Ads" tab -- the Greenway Goods redirect ad (R71 S4). */
   MERCH_STUDIO: "MERCH_STUDIO",
+  /** R73 S3: Website -> Merchandise editors for greenwaymerch.com (/admin/merch-site/*). */
+  MERCH_SITE_HEADER_FOOTER: "MERCH_SITE_HEADER_FOOTER",
+  MERCH_SITE_BANNERS: "MERCH_SITE_BANNERS",
+  MERCH_SITE_CARDS: "MERCH_SITE_CARDS",
+  MERCH_SITE_EMAILS: "MERCH_SITE_EMAILS",
 } as const;
 
 export type ContentEditor =
@@ -318,6 +323,11 @@ export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
     // page-builder groups (excluded from Site Content) with dedicated editors:
     loyalty: CONTENT_EDITORS.LOYALTY_PAGE,
     specials: CONTENT_EDITORS.SPECIALS,
+    // R73 S3: greenwaymerch.com blocks, one dedicated editor per group.
+    "merch-header-footer": CONTENT_EDITORS.MERCH_SITE_HEADER_FOOTER,
+    "merch-banners": CONTENT_EDITORS.MERCH_SITE_BANNERS,
+    "merch-cards": CONTENT_EDITORS.MERCH_SITE_CARDS,
+    "merch-emails": CONTENT_EDITORS.MERCH_SITE_EMAILS,
     // "home", "menu", "faq" have no clean single default — their keys are
     // handled by KEY_OWNER_OVERRIDES (orphans) above. Any home/menu/faq key not
     // overridden falls through to the resolver's "unknown" branch and FAILS the

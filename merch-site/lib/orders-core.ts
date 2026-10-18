@@ -173,17 +173,22 @@ export function readPrintfulEvent(raw: unknown): PrintfulEventAction {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-export function shippedEmail(a: PrintfulEventAction, site: { name: string; url: string; contactEmail: string }): { subject: string; html: string; text: string } {
+/** R73 S3: owner-edited wording (Website -> Merchandise -> Order emails). {order} / {site} placeholders. */
+export interface EmailWording { subject?: string; note?: string; signoff?: string }
+const fillT = (t: string, v: Record<string, string>) => t.replace(/\{(\w+)\}/g, (m, k: string) => (k in v ? v[k] : m));
+
+export function shippedEmail(a: PrintfulEventAction, site: { name: string; url: string; contactEmail: string }, w: EmailWording = {}): { subject: string; html: string; text: string } {
   const first = a.name.split(/\s+/)[0] || "there";
-  const subject = `Your Greenway Merch order ${a.orderRef} has shipped`;
+  const vars = { order: a.orderRef, site: site.name };
+  const subject = w.subject?.trim() ? fillT(w.subject, vars) : `Your Greenway Merch order ${a.orderRef} has shipped`;
   const lines = [
     `Hi ${first},`,
     `Good news - your order ${a.orderRef} is on its way${a.carrier ? ` with ${a.carrier}${a.service ? ` (${a.service})` : ""}` : ""}.`,
     a.trackingNumber ? `Tracking number: ${a.trackingNumber}` : "",
     a.trackingUrl ? `Track it: ${a.trackingUrl}` : "",
-    "If your order had several items, they may arrive in separate packages.",
+    w.note !== undefined ? fillT(w.note, vars) : "If your order had several items, they may arrive in separate packages.",
     site.contactEmail ? `Questions? Reply to this email or write to ${site.contactEmail}.` : "",
-    `- ${site.name}`,
+    w.signoff?.trim() ? fillT(w.signoff, vars) : `- ${site.name}`,
   ].filter(Boolean);
   const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111">${lines
     .map((l) => (l.startsWith("Track it: ") && a.trackingUrl ? `<p><a href="${esc(a.trackingUrl)}" style="display:inline-block;background:#7ed957;color:#000;font-weight:bold;padding:12px 20px;border-radius:8px;text-decoration:none">Track your package</a></p>` : `<p>${esc(l)}</p>`))
@@ -296,6 +301,8 @@ export function __runOrdersCoreTests(): { passed: number; failed: number } {
   const mail = shippedEmail({ ...shipped, name: "<b>Pat</b> Doe" }, { name: "Greenway Merch", url: "https://greenwaymerch.com", contactEmail: "help@x.com" });
   ok(mail.html.includes("&lt;b&gt;Pat&lt;/b&gt;") && !mail.html.includes("<b>Pat") && mail.html.includes('href="https://tools.usps.com/x?y=1"'), "email escapes names, links tracking");
   ok(mail.subject.includes("gm-abc123-xy") && mail.text.includes("9400"), "email subject + text");
+  const mailW = shippedEmail(shipped, { name: "GM", url: "u", contactEmail: "" }, { subject: "Shipped: {order}", note: "", signoff: "Cheers, {site}" });
+  ok(mailW.subject === "Shipped: gm-abc123-xy" && !mailW.text.includes("separate packages") && mailW.text.endsWith("Cheers, GM"), "R73 S3: owner email wording (blank note dropped)");
   ok(dollars(1) === "0.01" && dollars(-5) === "0.00", "dollars()");
   ok(centsFromDollars("12.34") === 1234 && centsFromDollars("7") === 700 && centsFromDollars("") === null && centsFromDollars("abc") === null && centsFromDollars(undefined) === null, "centsFromDollars parses, never invents");
   const row = summarizeOrder({ id: 13, external_id: "gm-abc123-xy", status: "draft", created: 1602607640, recipient: { name: "Pat Doe", city: "Olympia", state_code: "WA" }, items: [{ quantity: 2 }, { quantity: 1 }], costs: { total: "41.50" }, retail_costs: { total: "77.99" } });

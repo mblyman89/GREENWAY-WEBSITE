@@ -26,6 +26,12 @@ export type AdminNavItem = {
     | "Lyman"
     | "Admin";
   comingSoon?: boolean;
+  /**
+   * R73 S3: optional sub-section inside a dropdown. The Website dropdown is
+   * split into "Cannabis" (greenwaymarijuana.com) and "Merchandise"
+   * (greenwaymerch.com); items without one render as before.
+   */
+  subgroup?: "Cannabis" | "Merchandise";
 };
 
 // Grouped for findability (NN/G IA principles: group by task-relatedness,
@@ -117,27 +123,35 @@ export const adminNav: AdminNavItem[] = [
   // Website: sync dashboard first, then site content, then public
   // page editors + menu imports. Website Sync is the harmony dashboard (Task
   // T PR 5) — what the storefront is serving RIGHT NOW, with edit links.
-  { label: "Website Sync", href: "/admin/website-sync", permission: "dashboard.view", icon: "\ud83d\udd17", group: "Website" }, // 🔗 storefront harmony
+  { label: "Website Sync", href: "/admin/website-sync", permission: "dashboard.view", icon: "\ud83d\udd17", group: "Website", subgroup: "Cannabis" }, // 🔗 storefront harmony
   // "Site Content" nav entry removed (MIG-7 PR-B): the /admin/content junk-drawer
   // page was retired -- every content block now has a dedicated editor (Pages,
   // Header & Footer, Branding, Legal, etc.) and the live preview + SEO editor
   // moved to Website Sync. Nothing links here anymore.
-  { label: "Header & Footer", href: "/admin/header-footer", permission: "content.edit", icon: "\ud83d\udd17", group: "Website" }, // 🔗 footer links & messages (SLICE 104)
-  { label: "Branding", href: "/admin/settings/branding", permission: "content.edit", icon: "\ud83c\udfa8", group: "Website" }, // 🎨 site-wide fonts (heading + body) — MIG-4 MS-4.1
-  { label: "Legal Policies", href: "/admin/legal-policies", permission: "content.edit", icon: "\u2696\ufe0f", group: "Website" }, // ⚖️ privacy / terms / consumer health data (SLICE 105b)
-  { label: "Blog wording", href: "/admin/blog/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "Website" }, // blog page wording (hero heading/intro + button labels) -- MIG-6 Slice 1; relocated MKTG -> Website in MIG-6 Slice 2 so all page editors live under Website; posts live in Blog & Newsletter, card design not editable here
-  { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website" }, // 🏠 home page
-  { label: "Shop Banner", href: "/admin/content/shop-banner", permission: "content.edit", icon: "\ud83c\udf9e\ufe0f", group: "Website" }, // 🎞️ the Shop (/menu) top-banner carousel — up to 10 "special" slides, full loyalty-style editor + per-slide CTAs + optional schedule (SLICE A / SHOP-1)
-  { label: "Google Store Listing", href: "/admin/content/store-listing", permission: "content.edit", icon: "\ud83d\udccd", group: "Website" }, // R47: weekly + holiday hours Google reads (LocalBusiness openingHoursSpecification), site_settings KV
-  { label: "Schedule & Releases", href: "/admin/content/schedule", permission: "content.edit", icon: "\u23f0", group: "Website" }, // ⏰ R46: scheduled publish/unpublish + named releases (Contentful/Sanity pattern), run by /api/cron/content-schedule every 5 min
-  { label: "Loyalty", href: "/admin/loyalty-page", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website" }, // 🏅 public /loyalty page: editable friendly copy (signup form + program-terms headings) — SLICE 108. Numbers stay live from CRM Loyalty Program; consent text is fixed. Re-pointed from /admin/pages/loyalty per SLICE 106 Specials precedent.
-  { label: "Specials", href: "/admin/specials", permission: "content.edit", icon: "\ud83d\udd25", group: "Website" }, // deal-area presentation controls (SLICE 106) — which cards show/order/badge/copy; prices come from Promotions
-  { label: "Medical page", href: "/admin/medical-page", permission: "content.edit", icon: "\ud83e\ude7a", group: "Website" }, // 🩺 public /medical page: hide-page switch + editable copy (SLICE 107). Distinct from /admin/medical patient intake (medical.manage).
-  { label: "Vendors", href: "/admin/pages/vendors", permission: "content.edit", icon: "\ud83c\udfe2", group: "Website" }, // 🏢 vendors page
-  { label: "FAQ", href: "/admin/pages/faq", permission: "content.edit", icon: "\ud83d\udcac", group: "Website" }, // 💬 Q&A
-  { label: "About", href: "/admin/pages/about", permission: "content.edit", icon: "\u2139\ufe0f", group: "Website" }, // ℹ️ about
-  { label: "Locations", href: "/admin/pages/locations", permission: "content.edit", icon: "\ud83d\udccd", group: "Website" }, // 📍 map pin
-  { label: "Price Match", href: "/admin/pages/price-match", permission: "content.edit", icon: "\ud83c\udff7\ufe0f", group: "Website" }, // 🏷️ price tag
+  { label: "Header & Footer", href: "/admin/header-footer", permission: "content.edit", icon: "\ud83d\udd17", group: "Website", subgroup: "Cannabis" }, // 🔗 footer links & messages (SLICE 104)
+  { label: "Branding", href: "/admin/settings/branding", permission: "content.edit", icon: "\ud83c\udfa8", group: "Website", subgroup: "Cannabis" }, // 🎨 site-wide fonts (heading + body) — MIG-4 MS-4.1
+  { label: "Legal Policies", href: "/admin/legal-policies", permission: "content.edit", icon: "\u2696\ufe0f", group: "Website", subgroup: "Cannabis" }, // ⚖️ privacy / terms / consumer health data (SLICE 105b)
+  { label: "Blog wording", href: "/admin/blog/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "Website", subgroup: "Cannabis" }, // blog page wording (hero heading/intro + button labels) -- MIG-6 Slice 1; relocated MKTG -> Website in MIG-6 Slice 2 so all page editors live under Website; posts live in Blog & Newsletter, card design not editable here
+  { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website", subgroup: "Cannabis" }, // 🏠 home page
+  { label: "Shop Banner", href: "/admin/content/shop-banner", permission: "content.edit", icon: "\ud83c\udf9e\ufe0f", group: "Website", subgroup: "Cannabis" }, // 🎞️ the Shop (/menu) top-banner carousel — up to 10 "special" slides, full loyalty-style editor + per-slide CTAs + optional schedule (SLICE A / SHOP-1)
+  { label: "Google Store Listing", href: "/admin/content/store-listing", permission: "content.edit", icon: "\ud83d\udccd", group: "Website", subgroup: "Cannabis" }, // R47: weekly + holiday hours Google reads (LocalBusiness openingHoursSpecification), site_settings KV
+  { label: "Schedule & Releases", href: "/admin/content/schedule", permission: "content.edit", icon: "\u23f0", group: "Website", subgroup: "Cannabis" }, // ⏰ R46: scheduled publish/unpublish + named releases (Contentful/Sanity pattern), run by /api/cron/content-schedule every 5 min
+  { label: "Loyalty", href: "/admin/loyalty-page", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website", subgroup: "Cannabis" }, // 🏅 public /loyalty page: editable friendly copy (signup form + program-terms headings) — SLICE 108. Numbers stay live from CRM Loyalty Program; consent text is fixed. Re-pointed from /admin/pages/loyalty per SLICE 106 Specials precedent.
+  { label: "Specials", href: "/admin/specials", permission: "content.edit", icon: "\ud83d\udd25", group: "Website", subgroup: "Cannabis" }, // deal-area presentation controls (SLICE 106) — which cards show/order/badge/copy; prices come from Promotions
+  { label: "Medical page", href: "/admin/medical-page", permission: "content.edit", icon: "\ud83e\ude7a", group: "Website", subgroup: "Cannabis" }, // 🩺 public /medical page: hide-page switch + editable copy (SLICE 107). Distinct from /admin/medical patient intake (medical.manage).
+  { label: "Vendors", href: "/admin/pages/vendors", permission: "content.edit", icon: "\ud83c\udfe2", group: "Website", subgroup: "Cannabis" }, // 🏢 vendors page
+  { label: "FAQ", href: "/admin/pages/faq", permission: "content.edit", icon: "\ud83d\udcac", group: "Website", subgroup: "Cannabis" }, // 💬 Q&A
+  { label: "About", href: "/admin/pages/about", permission: "content.edit", icon: "\u2139\ufe0f", group: "Website", subgroup: "Cannabis" }, // ℹ️ about
+  { label: "Locations", href: "/admin/pages/locations", permission: "content.edit", icon: "\ud83d\udccd", group: "Website", subgroup: "Cannabis" }, // 📍 map pin
+  { label: "Price Match", href: "/admin/pages/price-match", permission: "content.edit", icon: "\ud83c\udff7\ufe0f", group: "Website", subgroup: "Cannabis" }, // 🏷️ price tag
+  // R73 S3: Website -> Merchandise = greenwaymerch.com. Same draft -> preview ->
+  // publish editors as the cannabis site. Banners are finished art made in the
+  // Brand hub and attached here (no page builder on the merch site).
+  { label: "Merch Header & Footer", href: "/admin/merch-site/header-footer", permission: "content.edit", icon: "\ud83d\udd17", group: "Website", subgroup: "Merchandise" },
+  { label: "Merch Banners", href: "/admin/merch-site/banners", permission: "content.edit", icon: "\ud83c\udf9e\ufe0f", group: "Website", subgroup: "Merchandise" },
+  { label: "Merch Product Cards", href: "/admin/merch-site/cards", permission: "content.edit", icon: "\ud83c\udccf", group: "Website", subgroup: "Merchandise" },
+  { label: "Merch Ad Card (on Shop)", href: "/admin/merch-site/ad-card", permission: "content.edit", icon: "\ud83d\udce3", group: "Website", subgroup: "Merchandise" },
+  { label: "Merch Order Emails", href: "/admin/merch-site/emails", permission: "content.edit", icon: "\u2709\ufe0f", group: "Website", subgroup: "Merchandise" },
 
   // Admin: users, integrations, equipment, limits, AI usage, audit, settings,
   // help, and menu imports. Order set by the owner.
