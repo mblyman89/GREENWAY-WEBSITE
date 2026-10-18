@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageShell } from "@/components/ui";
 import { PolicyContact } from "@/components/PolicyContact";
 
-export const metadata: Metadata = { title: "Shipping Policy" };
+export const metadata: Metadata = { title: "Shipping Policy", alternates: { canonical: "/shipping" } };
 
 export default function ShippingPage() {
   return (

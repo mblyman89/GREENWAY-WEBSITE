@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageShell } from "@/components/ui";
 import { PolicyContact } from "@/components/PolicyContact";
 
-export const metadata: Metadata = { title: "Returns & Refunds" };
+export const metadata: Metadata = { title: "Returns & Refunds", alternates: { canonical: "/returns" } };
 
 export default function ReturnsPage() {
   return (

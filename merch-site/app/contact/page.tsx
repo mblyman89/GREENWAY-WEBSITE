@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageShell } from "@/components/ui";
 import { PolicyContact } from "@/components/PolicyContact";
 
-export const metadata: Metadata = { title: "Contact" };
+export const metadata: Metadata = { title: "Contact", alternates: { canonical: "/contact" } };
 
 export default function ContactPage() {
   return (

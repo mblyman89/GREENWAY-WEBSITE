@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PageShell } from "@/components/ui";
 import { PolicyContact } from "@/components/PolicyContact";
 
-export const metadata: Metadata = { title: "Terms of Sale" };
+export const metadata: Metadata = { title: "Terms of Sale", alternates: { canonical: "/terms" } };
 
 export default function TermsPage() {
   return (

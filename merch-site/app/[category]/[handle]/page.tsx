@@ -7,6 +7,10 @@ import { Breadcrumbs } from "@/components/ui";
 import { allProducts, cardsIn, findProduct } from "@/lib/catalog";
 import { getCategory, toCard } from "@/lib/catalog-core";
 import { getMerchContent } from "@/lib/site-content";
+import { JsonLd } from "@/components/JsonLd";
+import { seoShipping } from "@/lib/seo";
+import { breadcrumbJsonLd, productJsonLd } from "@/lib/seo-core";
+import { siteUrl } from "@/lib/site";
 import { cardCopy } from "@/lib/site-content-core";
 
 type Params = { params: Promise<{ category: string; handle: string }> };
@@ -21,7 +25,7 @@ export const revalidate = 60;
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { handle } = await params;
   const p = findProduct(handle);
-  return p ? { title: p.title, description: p.description.slice(0, 160) || undefined, alternates: { canonical: `/${p.category}/${p.handle}` }, openGraph: { images: p.images.slice(0, 1) } } : {};
+  return p ? { title: p.title, description: p.description.slice(0, 160) || undefined, alternates: { canonical: `/${p.category}/${p.handle}` }, openGraph: { type: "website", url: `/${p.category}/${p.handle}`, images: p.images.slice(0, 1) } } : {};
 }
 
 export default async function ProductPage({ params }: Params) {
@@ -34,6 +38,8 @@ export default async function ProductPage({ params }: Params) {
   const more = cardsIn(cat.slug).filter((p) => p.handle !== product.handle).slice(0, 4);
   return (
     <main>
+      <JsonLd data={productJsonLd(product, siteUrl(), seoShipping())} />
+      <JsonLd data={breadcrumbJsonLd(siteUrl(), [{ name: "Shop", path: "/" }, { name: cat.label, path: `/${cat.slug}` }, { name: product.title, path: `/${cat.slug}/${product.handle}` }])} />
       <Breadcrumbs items={[{ label: cat.label, href: `/${cat.slug}` }, { label: product.title }]} />
       <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-[88rem] md:px-8 md:pt-8">
         <Link href={`/${cat.slug}`} className="inline-flex items-center text-[0.68rem] font-black uppercase tracking-[0.18em] text-white transition hover:text-[var(--greenway)]">← Back to {cat.label}</Link>
