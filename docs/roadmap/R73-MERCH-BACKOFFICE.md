@@ -29,7 +29,7 @@
 | S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | shipped |
 | S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | shipped |
 | S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | shipped |
-| S8 | Reports > Merch tab: traffic, sales, WA tax | planned |
+| S8 | Reports > Merch tab: traffic, sales, WA tax | shipped |
 
 ## S1 - merch orders in the back office (shipped)
 
@@ -153,3 +153,40 @@ Merch Inventory (`/admin/inventory/merch`, permission `inventory.manage`):
 - Pure rules are in `src/lib/merch/merch-inventory-core.ts` (27 self-tests).
 
 Owner set-up (one time): create a long random value and add it as `MERCH_CATALOG_TOKEN` in **both** Vercel projects (Greenway back office and greenwaymerch.com). Until both have it, the merch site simply keeps using the `catalog/` files. No new cost: it uses Supabase storage and Vercel requests already on the Pro plans.
+
+## S8 - Reports > Merch tab (shipped)
+
+Request: "The reports page should have a new tab for merch data, everything merch related including website traffic stats, sales stats for merch, tax info."
+
+**Where:** Reports > **Merch** (`/admin/reports/merch`, `reports.view`). It sits after Website Clicks and uses the standard date picker plus CSV/Excel download (`/admin/reports/merch/export`).
+
+**Sales (Printful orders, S1 reader):**
+- Only our orders count (gm- ref). Cancelled and failed orders are left out and shown as a separate count.
+- KPIs: orders, items, what customers paid, average order, sales tax collected, and margin after Printful. Margin only covers orders Printful has already priced; the unpriced ones are counted and shown.
+- Also shown: sales by Pacific day, top items, a money breakdown (items, discounts, shipping, tax) and Printful status counts.
+- The reader looks at the newest 500 orders (5 x 100). If it hits that cap, the page says so.
+
+**WA sales tax:**
+- The amounts are what Stripe charged at checkout, read back from each Printful order's `retail_costs`.
+- Two tables: by month, and by delivery city + ZIP. WA tax is destination-based, so the ZIP helps match DOR location codes.
+- Orders with no tax amount are flagged and never shown as a made-up $0. Any delivery outside WA is also flagged.
+- Customer-typed text in the export is guarded against spreadsheet formulas.
+
+**Traffic (Vercel Web Analytics):**
+- greenwaymerch.com now loads `@vercel/analytics` (`components/SiteAnalytics.tsx`). It is cookieless; Vercel discards its visitor hash after 24 hours.
+- `beforeSend` drops query strings, so the Stripe `session_id` is never sent, and staff `/admin` pages are not counted (`lib/analytics-core.ts`, 5 self-tests).
+- The privacy page now mentions visit statistics.
+- The back office reads the data with Vercel's Web Analytics query API (`GET https://api.vercel.com/v1/query/web-analytics/visits/aggregate`, by day / requestPath / referrerHostname / deviceType / country).
+- The page shows page views, visitors, orders per 100 visitors, pages per visitor, a daily chart, and top pages, referrers, devices and countries.
+
+**Code:** `src/lib/merch/merch-reports-core.ts` (pure, 20 self-tests) and `merch-reports-server.ts`. No migration.
+
+**Owner set-up (Vercel only):**
+1. In the greenwaymerch.com project, open Analytics and press Enable.
+2. Create a Vercel access token (Account Settings > Tokens).
+3. In the Greenway Marijuana project, add `VERCEL_ANALYTICS_TOKEN`, `MERCH_VERCEL_PROJECT` (the merch project id or name) and, if it is a team project, `VERCEL_TEAM_ID`. Then redeploy.
+
+Until these are set, the traffic section shows these steps and the sales and tax sections still work.
+
+**Cost:** Vercel Pro bills Web Analytics at $0.03 per 1,000 events (page views), with no included events, out of the Pro monthly usage credit. Example: 10,000 merch page views a month is about $0.30. The Web Analytics Plus add-on ($10/month) is not needed. The query API itself has no listed charge. Source: vercel.com/docs/analytics/limits-and-pricing.
+

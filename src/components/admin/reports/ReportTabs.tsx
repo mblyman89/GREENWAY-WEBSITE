@@ -24,6 +24,8 @@ export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports/tax", label: "Tax", icon: "🧾" },
   { href: "/admin/reports/online-orders", label: "Online Orders", icon: "🛒" },
   { href: "/admin/reports/website", label: "Website Clicks", icon: "🌐" },
+  // R73 S8: greenwaymerch.com traffic, sales and WA sales tax.
+  { href: "/admin/reports/merch", label: "Merch", icon: "👕" },
   { href: "/admin/reports/customers", label: "Customers", icon: "👥" },
   { href: "/admin/reports/loyalty", label: "Loyalty & Discounts", icon: "🎁" },
   { href: "/admin/reports/special-discounts", label: "Special Discounts", icon: "🤝" },

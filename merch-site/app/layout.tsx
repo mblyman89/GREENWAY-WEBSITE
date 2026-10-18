@@ -7,6 +7,7 @@ import { DBA_NAME, SITE_NAME, siteUrl } from "@/lib/site";
 import { getMerchContent } from "@/lib/site-content";
 import { headerCopy, footerCopy } from "@/lib/site-content-core";
 import { JsonLd } from "@/components/JsonLd";
+import { SiteAnalytics } from "@/components/SiteAnalytics";
 import { seoSite } from "@/lib/seo";
 import { organizationJsonLd, websiteJsonLd } from "@/lib/seo-core";
 
@@ -30,6 +31,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <Header copy={headerCopy(c)} />
         {children}
         <Footer copy={footerCopy(c)} />
+        <SiteAnalytics />
       </body>
     </html>
   );

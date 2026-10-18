@@ -13,6 +13,7 @@ export default function PrivacyPage() {
         <li><strong>Your order:</strong> name, email, phone number, shipping address and the items you buy. You enter these on Stripe&rsquo;s secure checkout page.</li>
         <li><strong>Payment:</strong> your card is processed by Stripe. We never see or store your full card number.</li>
         <li><strong>Your cart:</strong> kept in your own browser (local storage) until you check out. We don&rsquo;t use advertising or tracking cookies on this site.</li>
+        <li><strong>Visit statistics:</strong> our host, Vercel, counts page views without cookies (which page, the referring site, device type and country). Visitors are not identified; Vercel discards its short-lived visitor hash after 24 hours.</li>
       </ul>
       <h2>Who we share it with</h2>
       <p>Only the companies needed to complete your order: Stripe (payments), Printful (printing and shipping), the shipping carrier, our email provider (order and shipping emails), and our website host. We do not sell your personal information.</p>
