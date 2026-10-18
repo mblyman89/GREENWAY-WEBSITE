@@ -17,20 +17,12 @@
  */
 import { useEffect, useState } from "react";
 import { Input } from "@/components/admin/ui";
-import { payrollDeadlineFor } from "@/lib/payments/timberland-deadline-core";
+import { payDateLine } from "@/lib/payments/pay-date-line-core";
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Exported for the vitest: the line shown for a typed pay date at a moment. */
-export function payDateLine(raw: string, now: Date): { tone: "info" | "bad"; text: string } | null {
-  if (!ISO.test(raw)) return null;
-  try {
-    const d = payrollDeadlineFor(raw, now);
-    return { tone: d.check.ok ? "info" : "bad", text: d.line };
-  } catch (e) {
-    return { tone: "bad", text: `This date cannot be checked against the bank calendar: ${(e as Error).message}` };
-  }
-}
+// payDateLine lives in a plain module so the server run page can call it
+// (calling a "use client" export on the server throws). Re-exported here for
+// the existing callers and the vitest.
+export { payDateLine };
 
 export function PayDateDeadlineField({ nowIso }: { nowIso: string }) {
   const [value, setValue] = useState("");

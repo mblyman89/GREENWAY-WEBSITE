@@ -6,9 +6,9 @@
   "scripts": {
     "catalog": "node scripts/build-catalog.mjs",
     "predev": "node scripts/build-catalog.mjs",
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "prebuild": "node scripts/build-catalog.mjs",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/selftest.ts"

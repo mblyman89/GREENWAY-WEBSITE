@@ -7,11 +7,19 @@ import { CATEGORY_ALIASES } from "./lib/catalog-core";
  * Separate Vercel project - Root Directory = merch-site.
  */
 const nextConfig: NextConfig = {
-  // This app lives INSIDE the cannabis repo. Without an explicit root Next
-  // walks up, finds the parent lockfile and builds the parent's src/ (verified:
-  // it tried to compile ../src/middleware.ts). Pin the root to this folder.
-  turbopack: { root: path.resolve(__dirname) },
-  outputFileTracingRoot: path.resolve(__dirname),
+  // This app lives INSIDE the cannabis repo (Vercel Root Directory = merch-site).
+  // The tracing root must be the REPO ROOT (one level up), not this folder:
+  // Next 16 records relativeAppDir = relative(tracingRoot, appDir) and Vercel's
+  // post-build step looks for <repo>/<relativeAppDir>/.next. With the root set
+  // to this folder relativeAppDir was "" and every deploy failed AFTER a good
+  // build with "ENOENT lstat /vercel/path0/.next/package.json"
+  // (vercel/vercel#15937). Both values must match (Next warns otherwise).
+  // The build uses webpack (`next build --webpack` in package.json): with the
+  // root one level up, Turbopack also picks up the PARENT app's
+  // src/middleware.ts and fails (verified locally); webpack only compiles this
+  // app (verified: relativeAppDir "merch-site", no middleware, 20 pages).
+  turbopack: { root: path.resolve(__dirname, "..") },
+  outputFileTracingRoot: path.resolve(__dirname, ".."),
   async redirects() {
     return [
       // /hoodie -> /hoodies, /hat -> /hats, /t-shirts -> /tees ... (permanent)

@@ -58,6 +58,9 @@ To hide a product without deleting it, add `"merch": { "active": false }` to its
 2. Add the environment variables below (Production).
 3. Add the domain `greenwaymerch.com` (and `www.greenwaymerch.com`, redirecting to the apex) and set the DNS records Vercel shows.
 4. `vercel.json` skips builds when nothing in `merch-site/` changed and only deploys `main`.
+5. Leave Build Command, Output Directory and Install Command on their defaults. `npm run build` runs `next build --webpack` with the tracing root at the repo root. This avoids the Next 16 + Vercel `ENOENT .next/package.json` bug (vercel/vercel#15937); see `next.config.ts`.
+
+Step-by-step owner walkthrough for every variable: `docs/MERCH-SITE-FINISHING-GUIDE.md`.
 
 | Variable | Required | What |
 | --- | --- | --- |
@@ -90,7 +93,7 @@ cd merch-site
 npm install
 npm run dev        # http://localhost:3000
 npm test           # pure self-tests (catalog + checkout + orders)
-npm run build
+npm run build      # next build --webpack (see next.config.ts)
 ```
 
 ## Orders: how they flow (Slice 6)

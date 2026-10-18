@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
-import { MerchStudio, STUDIO_TAB_IDS, type StudioTab } from "@/components/admin/merch-studio/MerchStudio";
+import { MerchStudio } from "@/components/admin/merch-studio/MerchStudio";
+import { studioTabFrom } from "@/lib/merch-studio/studio-tabs-core";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { getContentBlock, ensureContentBlocksSeeded } from "@/lib/cms/content-store";
 import { listMedia } from "@/lib/media/store";
@@ -33,7 +34,9 @@ async function loadPublishData() {
 export default async function MerchStudioPage({ searchParams }: { searchParams: Promise<{ tab?: string; saved?: string; published?: string; warning_error?: string }> }) {
   await requirePermission("content.edit");
   const sp = await searchParams;
-  const initialTab = STUDIO_TAB_IDS.find((t) => t === sp.tab) as StudioTab | undefined;
+  // Plain module, NOT the "use client" MerchStudio file (calling a client
+  // export on the server threw and broke the whole page).
+  const initialTab = studioTabFrom(sp.tab);
   // Tabs switch client-side without a reload, so the Publish data is always
   // loaded (one content-block read + the same media list other editors use).
   const publish = await loadPublishData();
