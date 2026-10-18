@@ -1,14 +1,16 @@
 /**
- * POST /api/checkout  {lines: [{handle, variantId, qty}]}
+ * POST /api/checkout  {lines: [{handle, variantId, qty}], zip}
  *  -> re-prices the cart from the server catalog (browser prices are never
  *     used), creates a Stripe Checkout Session on Greenway Merchandising LLC's
  *     OWN Stripe account (STRIPE_SECRET_KEY in this Vercel project only), and
  *     returns {url} to redirect to.
+ *  R73 S2: body also carries {zip}; non-Washington ZIPs are refused here.
  */
 import { randomBytes } from "node:crypto";
 import { allProducts } from "@/lib/catalog";
 import { cleanCart, makeOrderRef, priceCart } from "@/lib/catalog-core";
 import { buildCheckoutForm, parseShippingConfig, STRIPE_API_VERSION } from "@/lib/checkout-core";
+import { isWashingtonZip, WA_ONLY_MESSAGE } from "@/lib/region-core";
 import { siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,9 @@ export async function POST(req: Request) {
 
   let body: unknown;
   try { body = await req.json(); } catch { return json({ error: "Bad request." }, 400); }
+  // R73 S2: Washington only - first gate (Stripe Checkout can't limit states;
+  // the webhook re-checks the real shipping address before capturing).
+  if (!isWashingtonZip((body as { zip?: unknown })?.zip)) return json({ error: WA_ONLY_MESSAGE, code: "wa_only" }, 422);
   const lines = cleanCart((body as { lines?: unknown })?.lines);
   if (!lines.length) return json({ error: "Your cart is empty." }, 400);
   const priced = priceCart(lines, allProducts());

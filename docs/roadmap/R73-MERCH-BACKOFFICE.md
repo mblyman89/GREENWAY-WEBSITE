@@ -23,7 +23,7 @@
 | # | Slice | Status |
 |---|-------|--------|
 | S1 | Merch orders as the LAST panel on /admin/orders (same shell, row and controls as Greenway and Leafly), plus a details page at /admin/orders/merch/[ref] to Confirm or Cancel | shipped |
-| S2 | Washington-only selling: state check in the cart and API, webhook refusal and refund, policy text, WA sales tax (Stripe Tax registered for WA only) | planned |
+| S2 | Washington-only selling: ZIP gate in the cart and checkout API, authorize-only Checkout, webhook captures WA orders and cancels other states for free, customer email, policy text | shipped |
 | S3 | Website dropdown split into "Cannabis" (everything today) and "Merchandise" (product ad card, product card, home banner, catalog banner, order email, header/footer editors) feeding greenwaymerch.com | planned |
 | S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | planned |
 | S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | planned |
@@ -47,3 +47,27 @@
   - "Customer paid vs Printful charges us", including the sales tax collected.
 - Actions on the details page (`merch-actions.ts`, `orders.manage`, audited) are **Confirm** and **Cancel**. Each one re-reads Printful's current status first, so a stale page can never confirm an order twice or cancel a shipped one.
 - The greenwaymerch.com /admin/orders desk (R72 S6) still works as a fallback.
+
+## S2 - Washington-only selling (shipped)
+
+Facts verified on docs.stripe.com:
+- Hosted Checkout `shipping_address_collection` only limits countries, not states.
+- `payment_intent_data[capture_method]=manual` only authorizes the card. The PaymentIntent moves to `requires_capture`. Card holds last about 7 days (Visa: 5 days for customer-initiated payments).
+- Cancelling an uncaptured PaymentIntent releases the hold at no charge. A refund after capture does not return Stripe's processing fee, so we never capture first.
+- `custom_text[shipping_address][message]` shows a note on the Checkout address step.
+
+How it is enforced (`merch-site/lib/region-core.ts`, 11 self-tests):
+1. Cart: the shopper enters a ZIP, and the Secure checkout button stays disabled until it is a Washington ZIP (USPS prefixes 980-986 and 988-994).
+2. `/api/checkout` returns 422 for a non-WA ZIP. The session is authorize-only and shows the Washington-only note.
+3. The webhook expands `payment_intent` and calls `decidePayment(pi.status, ...)`:
+   - WA address and the order plan is clean: capture, then create the Printful draft.
+   - Address outside WA: cancel the PaymentIntent (free), email the shopper "not charged", and alert the owner.
+   - Plan problems: the order is not captured, and the owner is alerted. The owner can capture or cancel it in Stripe within about 7 days.
+   - Already `succeeded` (retries or older sessions): fulfill as before.
+4. `planPrintfulOrder` refuses non-WA recipients, so Printful never receives one.
+
+Tax: Printful does not collect or remit the customer's sales tax. Greenway Merchandising LLC collects WA sales tax and files with WA DOR. Two options:
+- Stripe Tax with only a Washington registration (`MERCH_STRIPE_AUTOMATIC_TAX=true`). Stripe Tax Basic for Checkout costs 0.5% per transaction, charged only in registered locations and on top of normal processing (secondary source dodopayments.com; stripe.com/tax/pricing requires JavaScript).
+- No Stripe Tax: then sales tax is not added at checkout.
+
+Resale certificate: file a WA reseller permit with Printful so Printful does not charge the LLC sales tax on its production costs.

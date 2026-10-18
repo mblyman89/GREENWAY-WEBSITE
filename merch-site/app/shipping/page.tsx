@@ -9,7 +9,7 @@ export default function ShippingPage() {
     <PageShell eyebrow="Policies" title="Shipping">
       <p>Every item is printed or embroidered to order after you pay, then shipped by our production partner (Printful). That is why we can offer every size and colour without waste.</p>
       <h2>Where we ship</h2>
-      <p>We currently ship to addresses in the United States only.</p>
+      <p>We currently ship to addresses in <strong>Washington State</strong> only. If an order is placed with a shipping address outside Washington, it is cancelled automatically before your card is charged (the temporary authorization hold is released) and we email you to let you know.</p>
       <h2>Cost and timing</h2>
       <p>The shipping price and the estimated delivery window are shown on the secure checkout page before you pay. Production time is added to the carrier&rsquo;s transit time, so please allow a little extra time for made-to-order items.</p>
       <h2>Tracking</h2>

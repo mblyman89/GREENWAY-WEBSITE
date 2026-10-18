@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CART_MAX_QTY, formatCents } from "@/lib/catalog-core";
+import { isWashingtonZip, SELL_STATE_NAME } from "@/lib/region-core";
 import { cart, useCart } from "./cart-store";
 
 type Line = { handle: string; variantId: number; qty: number; title: string; category: string; image: string; color: string; size: string; unitCents: number; lineCents: number };
@@ -13,6 +14,8 @@ export function CartView({ canceled }: { canceled: boolean }) {
   const [preview, setPreview] = useState<{ key: string; data: Preview } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [zip, setZip] = useState("");
+  const zipOk = isWashingtonZip(zip);
 
   useEffect(() => {
     let live = true;
@@ -32,7 +35,7 @@ export function CartView({ canceled }: { canceled: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines }) });
+      const r = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines, zip }) });
       const d = (await r.json()) as { url?: string; error?: string };
       if (d.url) { window.location.assign(d.url); return; }
       setError(d.error ?? "Checkout failed. Please try again.");
@@ -97,7 +100,16 @@ export function CartView({ canceled }: { canceled: boolean }) {
         {data && data.freeOverCents > 0 && data.subtotalCents < data.freeOverCents ? (
           <p className="mt-3 rounded-xl bg-[var(--greenway)]/10 px-3 py-2 text-xs font-bold text-[var(--greenway)]">Add {formatCents(data.freeOverCents - data.subtotalCents)} more for free shipping.</p>
         ) : null}
-        <button type="button" onClick={checkout} disabled={busy || !data || !data.lines.length || !data.checkoutOpen}
+        <div className="mt-5 rounded-2xl border border-[var(--greenway)]/30 bg-[var(--greenway)]/5 p-3">
+          <label htmlFor="ship-zip" className="text-xs font-black uppercase tracking-[0.14em] text-white">Shipping ZIP code</label>
+          <p className="mt-1 text-[0.72rem] leading-5 text-zinc-400">We currently ship to {SELL_STATE_NAME} State addresses only.</p>
+          <input id="ship-zip" inputMode="numeric" autoComplete="shipping postal-code" maxLength={10} value={zip} onChange={(e) => setZip(e.target.value)} placeholder="e.g. 98501"
+            className="mt-2 h-11 w-full rounded-md border border-white/15 bg-black px-3 text-sm font-bold text-white placeholder:text-zinc-600 focus:border-[var(--greenway)] focus:outline-none" aria-describedby="ship-zip-note" />
+          <p id="ship-zip-note" className={`mt-1 text-[0.72rem] font-bold ${zip.trim().length >= 5 && !zipOk ? "text-[var(--orange)]" : "text-zinc-500"}`} role="status">
+            {zip.trim().length >= 5 ? (zipOk ? `\u2713 ${SELL_STATE_NAME} - you're good to go.` : `Sorry - that isn't a ${SELL_STATE_NAME} ZIP. We can't ship there yet.`) : "Enter your ZIP to continue."}
+          </p>
+        </div>
+        <button type="button" onClick={checkout} disabled={busy || !zipOk || !data || !data.lines.length || !data.checkoutOpen}
           className="mt-5 flex h-14 w-full items-center justify-center rounded-md bg-[var(--greenway)] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[#6bc746] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400">
           {busy ? "Opening secure checkout…" : data && !data.checkoutOpen ? "Checkout opening soon" : "Secure checkout"}
         </button>

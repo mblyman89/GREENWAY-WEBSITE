@@ -21,6 +21,7 @@
  * message instead of charging a made-up amount.
  */
 import { encodeCartMeta, type CartLine, type PricedLine } from "./catalog-core";
+import { WA_ONLY_MESSAGE } from "./region-core";
 
 export const STRIPE_API_VERSION = "2025-03-31.basil";
 export const TAX_CODE_CLOTHING = "txcd_30011000";
@@ -77,6 +78,11 @@ export function buildCheckoutForm(i: SessionInput): [string, string][] {
   add("cancel_url", `${origin}/cart?canceled=1`);
   add("expires_at", i.nowSec + SESSION_TTL_SECONDS);
   add("shipping_address_collection[allowed_countries][0]", "US");
+  // R73 S2: Washington only. Checkout can't limit states, so say it on the
+  // address step and only AUTHORIZE the card; the webhook captures WA orders
+  // and cancels (free) anything else. See lib/region-core.ts.
+  add("custom_text[shipping_address][message]", WA_ONLY_MESSAGE);
+  add("payment_intent_data[capture_method]", "manual");
   add("phone_number_collection[enabled]", "true"); // carriers + Printful use it for delivery problems
   add("billing_address_collection", "auto");
   add("submit_type", "pay");
@@ -141,6 +147,8 @@ export function __runCheckoutCoreTests(): { passed: number; failed: number } {
   ok(get("line_items[0][price_data][product_data][images][0]") === "https://greenwaymerch.com/products/logo-tee-1.jpg", "relative image made absolute");
   ok(get("shipping_options[0][shipping_rate_data][fixed_amount][amount]") === "799", "shipping 599 + 200 for the 2nd unit");
   ok(get("shipping_address_collection[allowed_countries][0]") === "US", "US shipping only");
+  ok(get("payment_intent_data[capture_method]") === "manual", "R73 S2: authorize only - webhook captures WA orders, cancels the rest for free");
+  ok(/Washington/.test(get("custom_text[shipping_address][message]") ?? ""), "R73 S2: Washington-only note on the address step");
   ok(get("metadata[cart_0]") === "logo-tee~101~2", "cart in metadata for the webhook");
   ok(get("success_url") === "https://greenwaymerch.com/checkout/success?session_id={CHECKOUT_SESSION_ID}", "success url template kept literal");
   ok(get("expires_at") === String(1_000_000 + 3600), "session expiry inside Stripe's window");

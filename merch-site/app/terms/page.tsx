@@ -12,7 +12,7 @@ export default function TermsPage() {
       <h2>Products</h2>
       <p>This store sells apparel and accessories only. It does not sell cannabis or any cannabis product. Colours on screen may vary slightly from the finished item.</p>
       <h2>Prices and payment</h2>
-      <p>Prices are in US dollars. Shipping and any applicable sales tax are shown on the checkout page before you pay. Payment is taken by Stripe when you place your order.</p>
+      <p>Prices are in US dollars. We sell to customers in Washington State only. Shipping and Washington sales tax are shown on the checkout page before you pay. When you place your order Stripe authorizes your card; the charge is completed once we confirm the order ships to a Washington address. Orders to other states are cancelled and never charged.</p>
       <h2>Orders</h2>
       <p>We may cancel and fully refund an order if an item becomes unavailable or a pricing error occurs. Shipping and returns are covered by our <Link href="/shipping">shipping policy</Link> and <Link href="/returns">returns policy</Link>.</p>
       <h2>Contact</h2>
