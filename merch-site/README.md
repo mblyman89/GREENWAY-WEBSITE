@@ -75,6 +75,7 @@ To hide a product without deleting it, add `"merch": { "active": false }` to its
 | `PRINTFUL_API_TOKEN` | Slice 6 | Printful private token with the `orders` and `webhooks` scopes. |
 | `PRINTFUL_STORE_ID` | Slice 6 | Needed if the token covers more than one store. |
 | `MERCH_CONTENT_URL` | no | R73 S3. Where the editable wording and banners come from. Default `https://greenwaymarijuana.com/api/merch-content` (set in the back office under Website -> Merchandise). Only set this for a preview or staging back office. |
+| `MERCH_CATALOG_TOKEN` | recommended | R73 S7. A long random string (32+ characters), the **same** value in the back-office Vercel project. Lets this site read the products published from Merch Studio (`https://greenwaymarijuana.com/api/merch-catalog`). Without it only `catalog/*.json` is used. Optional `MERCH_CATALOG_URL` overrides the source (preview back office only). |
 | `PRINTFUL_WEBHOOK_TOKEN` | Slice 6 | A long random string that becomes part of the Printful webhook URL. |
 | `MERCH_ADMIN_KEY` | Slice 6 | A long random string (32+ characters; 16 minimum) that you type to open `/admin/orders`. Changing it signs everyone out. |
 | `MERCH_PRINTFUL_AUTO_CONFIRM` | no | `true` sends paid orders straight to production instead of as drafts. Leave unset until you trust the flow. |

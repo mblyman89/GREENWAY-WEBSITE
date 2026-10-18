@@ -14,12 +14,12 @@ export const metadata: Metadata = { alternates: { canonical: "/" } };
 /** The one shop page: category cards; the filter bar jumps to each catalogue. */
 export default async function ShopPage() {
   const content = await getMerchContent();
-  const counts = categoryCounts();
+  const counts = await categoryCounts();
   const categories = MERCH_CATEGORIES.map((c) => ({ ...categoryOverride(content, c), count: counts[c.slug] ?? 0 }));
   return (
     <main>
       <MerchBanner banner={bannerFor(content, "home")} priority />
-      <ShopBrowser categories={categories} products={allCards()} current={null} copy={cardCopy(content)} />
+      <ShopBrowser categories={categories} products={await allCards()} current={null} copy={cardCopy(content)} />
     </main>
   );
 }

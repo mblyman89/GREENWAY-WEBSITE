@@ -7,7 +7,7 @@
  *  R73 S2: body also carries {zip}; non-Washington ZIPs are refused here.
  */
 import { randomBytes } from "node:crypto";
-import { allProducts } from "@/lib/catalog";
+import { freshProducts } from "@/lib/catalog";
 import { cleanCart, makeOrderRef, priceCart } from "@/lib/catalog-core";
 import { buildCheckoutForm, parseShippingConfig, STRIPE_API_VERSION } from "@/lib/checkout-core";
 import { isWashingtonZip, WA_ONLY_MESSAGE } from "@/lib/region-core";
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   if (!isWashingtonZip((body as { zip?: unknown })?.zip)) return json({ error: WA_ONLY_MESSAGE, code: "wa_only" }, 422);
   const lines = cleanCart((body as { lines?: unknown })?.lines);
   if (!lines.length) return json({ error: "Your cart is empty." }, 400);
-  const priced = priceCart(lines, allProducts());
+  const priced = priceCart(lines, await freshProducts());
   if (priced.problems.length || !priced.lines.length) return json({ error: "Some items changed - please review your cart.", problems: priced.problems }, 409);
 
   const orderRef = makeOrderRef(Date.now(), randomBytes(6).toString("hex"));
