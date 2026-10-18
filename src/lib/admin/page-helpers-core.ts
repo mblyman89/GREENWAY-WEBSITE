@@ -70,6 +70,7 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
     title: "How the Branding editor works",
     steps: [
       "Use the tabs: Colours (presets, hex, colour wheel), Logos (header logo + logo library with import), Fonts, Slogans/mission/about, Saved banners, Social & guidelines.",
+      "Saved banners: pick what the design is for (website banner, card, blog, newsletter, social, print or a custom W×H), design it, add it, then use \"Save as picture\" to file a finished PNG in a Media Library folder (Merch by default).",
       "Pick the Heading font (big titles) and the Body font (paragraphs) from the curated library. Each choice is a draft, so nothing goes live yet.",
       "Open Preview in Website Hub to see exactly how the new fonts look (click ✎ Edit on a highlighted spot to jump here).",
       "Click Publish on the block (or 'Publish all drafts') to update the public site everywhere at once. Every publish is snapshotted so you can roll back.",
@@ -263,7 +264,7 @@ export const PAGE_HELPERS: readonly PageHelper[] = [
     href: "/admin/merch-site/banners",
     title: "How Merch Banners works",
     steps: [
-      "Design the banner in Brand → Banners (or any tool) and save it to the Media Library's \"Merch\" folder.",
+      "Design the banner in Branding → Saved banners (pick a size), then click \"Save as picture\" on it. The finished PNG lands in the Media Library's \"Merch\" folder.",
       "Pick a slot (Home or a category) and choose the image. Images from the Merch folder are listed first.",
       "Optionally add a phone-sized image, the alt text and a link, then Publish.",
     ],

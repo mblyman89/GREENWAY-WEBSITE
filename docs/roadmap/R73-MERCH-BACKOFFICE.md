@@ -27,7 +27,7 @@
 | S3 | Website dropdown split into "Cannabis" (everything today) and "Merchandise" (Header & Footer, Banners, Product Cards, Ad Card, Order Emails) feeding greenwaymerch.com | shipped |
 | S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | shipped |
 | S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | shipped |
-| S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | planned |
+| S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | shipped |
 | S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | planned |
 | S8 | Reports > Merch tab: traffic, sales, WA tax | planned |
 
@@ -111,3 +111,35 @@ Tax: Printful does not collect or remit the customer's sales tax. Greenway Merch
 - No Stripe Tax: then sales tax is not added at checkout.
 
 Resale certificate: file a WA reseller permit with Printful so Printful does not charge the LLC sales tax on its production costs.
+
+## S6 - Brand designs in any size, saved as pictures (shipped)
+
+- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
+- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
+- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
+- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
+- Helpers (Branding, Merch Banners) updated.
+
+## S6 - Brand designs in any size, saved as pictures (shipped)
+
+- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
+- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
+- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
+- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
+- Helpers (Branding, Merch Banners) updated.
+
+## S6 - Brand designs in any size, saved as pictures (shipped)
+
+- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
+- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
+- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
+- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
+- Helpers (Branding, Merch Banners) updated.
+
+## S6 - Brand designs in any size, saved as pictures (shipped)
+
+- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
+- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
+- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
+- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
+- Helpers (Branding, Merch Banners) updated.
