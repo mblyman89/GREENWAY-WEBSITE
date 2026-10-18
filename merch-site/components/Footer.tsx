@@ -22,7 +22,7 @@ export function Footer() {
           ))}
         </div>
         <div className="text-[0.75rem] leading-6 text-zinc-400">
-          <p>Sold and shipped by {LEGAL_NAME} (dba {DBA_NAME}), {COUNTRY}.</p>
+          <p>Sold and shipped by {LEGAL_NAME} (dba {DBA_NAME}), {COUNTRY}. We currently ship to Washington State only.</p>
           {c.address ? <p>{c.address}</p> : null}
           {c.email || c.phone ? (
             <p>

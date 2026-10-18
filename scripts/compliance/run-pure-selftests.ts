@@ -981,6 +981,7 @@ import { __runMerchAdTests } from "../../src/lib/merch/merch-ad-core";
 import { __runMerchCatalogTests } from "../../merch-site/lib/catalog-core";
 import { __runCheckoutCoreTests as __runMerchCheckoutTests } from "../../merch-site/lib/checkout-core";
 import { __runOrdersCoreTests as __runMerchOrdersTests } from "../../merch-site/lib/orders-core";
+import { __runRegionCoreTests as __runMerchRegionTests } from "../../merch-site/lib/region-core";
 import { __runMerchOrdersPanelTests } from "../../src/lib/orders/merch-orders-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
@@ -2395,8 +2396,9 @@ __runLiquidVolumeTests();
   assertRan("listing-package-core", __runListingPackageTests(), 29); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)
   assertRan("merch-site catalog-core", __runMerchCatalogTests(), 25); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
-  assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 17); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
-  assertRan("merch-site orders-core", __runMerchOrdersTests(), 26); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows
+  assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 19); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
+  assertRan("merch-site orders-core", __runMerchOrdersTests(), 28); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows
+  assertRan("merch-site region-core", __runMerchRegionTests(), 11); // R73 S2: Washington-only (WA ZIPs, authorize -> capture WA / cancel others for free)
   assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   console.log("ALL PURE SELF-TESTS PASSED");
 }

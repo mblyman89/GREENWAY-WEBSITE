@@ -28,6 +28,7 @@
  */
 import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 import { decodeCartMeta, isOrderRef, priceCart, type MerchProduct } from "./catalog-core";
+import { regionProblem } from "./region-core";
 
 // ---------------------------------------------------------------------------
 // Stripe webhook signature
@@ -81,13 +82,20 @@ const clip = (s: unknown, n: number) => (typeof s === "string" ? s : "").replace
 
 export interface PrintfulOrderPlan { orderRef: string; body: Record<string, unknown>; problems: string[]; email: string }
 
-export function planPrintfulOrder(s: StripeSessionLike, products: readonly MerchProduct[], packing: { storeName: string; email: string; phone: string }): PrintfulOrderPlan {
+/**
+ * `opts.captured` = the webhook has just verified the PaymentIntent is
+ * `succeeded` (R73 S2 manual capture), so the money is ours even if the
+ * session snapshot was read before capture.
+ */
+export function planPrintfulOrder(s: StripeSessionLike, products: readonly MerchProduct[], packing: { storeName: string; email: string; phone: string }, opts: { captured?: boolean } = {}): PrintfulOrderPlan {
   const problems: string[] = [];
   const orderRef = clip(s.metadata?.order_ref || s.client_reference_id, 32);
   if (!isOrderRef(orderRef)) problems.push("Session has no valid gm- order ref.");
-  if (s.payment_status !== "paid") problems.push(`Session is not paid (payment_status=${s.payment_status ?? "missing"}).`);
+  if (s.payment_status !== "paid" && !opts.captured) problems.push(`Session is not paid (payment_status=${s.payment_status ?? "missing"}).`);
   const ship = s.collected_information?.shipping_details ?? s.shipping_details ?? null;
   const a = ship?.address ?? null;
+  const region = regionProblem(a);
+  if (region) problems.push(`Outside our Washington-only sales area: ${region}`);
   if (!ship?.name || !a?.line1 || !a.city || !a.postal_code || !a.country) problems.push("Shipping name/address missing on the session.");
   if (a?.country === "US" && !a.state) problems.push("US address without a state.");
   const email = clip(s.customer_details?.email, 254);
@@ -272,6 +280,9 @@ export function __runOrdersCoreTests(): { passed: number; failed: number } {
   ok(b.items[0].variant_id === 4012 && b.items[0].quantity === 2 && b.items[0].retail_price === "35.00" && !!b.items[0].files[0].position, "item: variant, qty, retail price, file position");
   ok(b.retail_costs.total === "77.99" && b.retail_costs.shipping === "7.99", "retail costs in dollars");
   ok(planPrintfulOrder({ ...session, payment_status: "unpaid" }, [product], { storeName: "", email: "", phone: "" }).problems.some((p) => p.includes("not paid")), "unpaid refused");
+  ok(planPrintfulOrder({ ...session, payment_status: "unpaid" }, [product], { storeName: "", email: "", phone: "" }, { captured: true }).problems.length === 0, "R73 S2: webhook-verified capture counts as paid");
+  const oregon = { name: "Pat Doe", address: { line1: "1 Main St", city: "Portland", state: "OR", postal_code: "97201", country: "US" } };
+  ok(planPrintfulOrder({ ...session, collected_information: { shipping_details: oregon } }, [product], { storeName: "", email: "", phone: "" }).problems.some((p) => p.includes("Washington-only")), "R73 S2: non-WA address never reaches Printful");
   ok(planPrintfulOrder({ ...session, collected_information: null, shipping_details: session.collected_information!.shipping_details }, [product], { storeName: "", email: "", phone: "" }).problems.length === 0, "pre-basil shipping_details fallback");
   ok(planPrintfulOrder({ ...session, metadata: { order_ref: "gm-abc123-xy", cart_0: "gone~1~1" } }, [product], { storeName: "", email: "", phone: "" }).problems.some((p) => p.includes("Catalog changed")), "removed product flagged, not silently dropped");
   ok(planPrintfulOrder({ ...session, metadata: { cart_0: "logo-tee~4012~1" }, client_reference_id: "nope" }, [product], { storeName: "", email: "", phone: "" }).problems.some((p) => p.includes("order ref")), "bad order ref refused");
