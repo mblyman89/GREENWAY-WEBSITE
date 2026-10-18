@@ -15,7 +15,10 @@ import {
   rotateDeviceKey,
   revokeDevice,
   bindDeviceToRegister,
+  renameDevice,
+  reactivateDevice,
 } from "@/lib/pos/device-store";
+import { isRevokeConfirmed, REVOKE_CONFIRM_WORD } from "@/lib/pos/device-pairing-core";
 
 const BASE = "/admin/registers/devices";
 
@@ -69,21 +72,81 @@ export async function rotateDeviceKeyAction(
   return { ok: true, deviceId, deviceKey: result.deviceKey };
 }
 
-export async function revokeDeviceAction(formData: FormData): Promise<void> {
+export type SimpleActionResult = { ok: true; message: string } | { ok: false; error: string };
+
+/**
+ * Revoke a device. Two-step on purpose (register rotation slice): the manager
+ * must type the confirm word, checked HERE on the server, so a stray click in
+ * the back office can never take a live till out of service.
+ */
+export async function revokeDeviceAction(
+  _prev: SimpleActionResult | null,
+  formData: FormData,
+): Promise<SimpleActionResult> {
   const session = await requirePermission("staffing.manage");
   const deviceId = String(formData.get("device_id") ?? "").trim();
-  if (!deviceId) return;
-  const result = await revokeDevice(deviceId);
-  if (result.ok) {
-    await recordAudit({
-      actorId: session.profile.id,
-      actorEmail: session.email,
-      action: "pos_device.revoked",
-      entityType: "pos_device",
-      entityId: deviceId,
-    });
+  if (!deviceId) return { ok: false, error: "Missing device." };
+  if (!isRevokeConfirmed(formData.get("confirm"))) {
+    return { ok: false, error: `Type ${REVOKE_CONFIRM_WORD} to confirm.` };
   }
+  const result = await revokeDevice(deviceId);
+  if (!result.ok) return { ok: false, error: result.error };
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "pos_device.revoked",
+    entityType: "pos_device",
+    entityId: deviceId,
+  });
   revalidatePath(BASE);
+  return { ok: true, message: "Revoked. The iPad shows a re-pair screen on its next check (within about a minute)." };
+}
+
+/** Rename a device (active or revoked). The iPad picks it up on its next heartbeat. */
+export async function renameDeviceAction(
+  _prev: SimpleActionResult | null,
+  formData: FormData,
+): Promise<SimpleActionResult> {
+  const session = await requirePermission("staffing.manage");
+  const deviceId = String(formData.get("device_id") ?? "").trim();
+  if (!deviceId) return { ok: false, error: "Missing device." };
+  const result = await renameDevice(deviceId, String(formData.get("name") ?? ""));
+  if (!result.ok) return { ok: false, error: result.error };
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "pos_device.renamed",
+    entityType: "pos_device",
+    entityId: deviceId,
+    after: { name: result.name },
+  });
+  revalidatePath(BASE);
+  return { ok: true, message: "Renamed." };
+}
+
+/**
+ * Reactivate a REVOKED device with a brand-new key (shown once). The old key
+ * stays dead. Used to bring a retired iPad back, or to let unsynced sales
+ * still held on a retired iPad sync under their original device id.
+ */
+export async function reactivateDeviceAction(
+  _prev: ProvisionActionResult | null,
+  formData: FormData,
+): Promise<ProvisionActionResult> {
+  const session = await requirePermission("staffing.manage");
+  const deviceId = String(formData.get("device_id") ?? "").trim();
+  if (!deviceId) return { ok: false, error: "Missing device." };
+  const result = await reactivateDevice(deviceId);
+  if (!result.ok) return { ok: false, error: result.error };
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "pos_device.reactivated",
+    entityType: "pos_device",
+    entityId: deviceId,
+  });
+  revalidatePath(BASE);
+  return { ok: true, deviceId, deviceKey: result.deviceKey };
 }
 
 export async function bindDeviceAction(formData: FormData): Promise<void> {

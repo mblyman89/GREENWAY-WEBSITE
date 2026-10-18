@@ -77,6 +77,19 @@ import {
   medicalTestModeBannerActive,
 } from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
+// Register rotation slice — when the back office revokes or re-keys this iPad,
+// the register notices (exact 401 device-auth answers only), stops selling at
+// the next safe moment, and offers a re-pair that needs a NEW key minted by a
+// staffing.manage user. Floor staff have no unpair button anywhere.
+import {
+  classifyDeviceAuthFailure,
+  pairingProblemBanner,
+  pairingProblemMessage,
+  planRepair,
+  refreshedPairing,
+  PAIRING_HEARTBEAT_MS,
+  type PairingProblem,
+} from "@/lib/pos/device-pairing-core";
 // SLICE L-14 — the blocking cancellation modal. A Leafly order can be
 // cancelled from outside the building while a till has it open; this is the
 // interrupt that stops the handover.
@@ -278,6 +291,12 @@ export function RegisterShell({
   // routine sync message can never overwrite/dismiss a "storage is full"
   // warning; it clears itself only when a persist write SUCCEEDS again.
   const [storageAlert, setStorageAlert] = useState<string | null>(null);
+  // Register rotation slice — set when the server definitively refuses this
+  // iPad's pairing (revoked / key replaced / malformed). Cleared by any later
+  // successful device-authenticated answer, so it can never stick by mistake.
+  const [pairingProblem, setPairingProblem] = useState<PairingProblem | null>(null);
+  // Bumped by the re-pair screen's "Check again" to re-run the heartbeat now.
+  const [pairingRecheck, setPairingRecheck] = useState(0);
   const [saleActive, setSaleActive] = useState(false);
   const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
@@ -721,9 +740,15 @@ export function RegisterShell({
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        if (res.status === 401) setBanner(body?.error ?? "Device credentials rejected — see a manager.");
+        // Register rotation slice — a definitive device-auth refusal flips
+        // the register into its re-pair state (nothing is erased; the queue
+        // stays). Any other 401 keeps the old banner behaviour.
+        const problem = classifyDeviceAuthFailure(res.status, body?.error);
+        if (problem) setPairingProblem(problem);
+        else if (res.status === 401) setBanner(body?.error ?? "Device credentials rejected — see a manager.");
         return;
       }
+      setPairingProblem(null);
       const { acks, device } = (await res.json()) as {
         acks: PosSyncAck[];
         device?: { name: string; registerId: string | null };
@@ -732,10 +757,12 @@ export function RegisterShell({
       // the server says this device now belongs to a different register,
       // persist the correction immediately (guarded write) so a restart can
       // never resurrect a stale registerId.
-      if (device && typeof device.registerId === "string" && device.registerId !== creds.registerId) {
-        const next = { ...creds, registerId: device.registerId, name: device.name || creds.name };
-        persistCreds(next);
-        setCreds(next);
+      // Register rotation slice — the same self-heal now also picks up a
+      // back-office RENAME (refreshedPairing, pure).
+      const healed = refreshedPairing(creds, device);
+      if (healed) {
+        persistCreds(healed);
+        setCreds(healed);
       }
       // GW-003 — React updaters must be PURE (React may invoke an updater
       // more than once, and does deliberately in dev Strict Mode); the old
@@ -794,6 +821,57 @@ export function RegisterShell({
     }, 15_000);
     return () => clearInterval(id);
   }, [creds, flush]);
+
+  // ── Register rotation slice: pairing heartbeat ──
+  // flush() only talks to the server when there is something to send, so an
+  // idle register on the lock screen would never learn it was revoked. This
+  // sends the same empty-batch heartbeat the setup screen uses to verify a
+  // key (server-side last_seen writes are already throttled) once at boot and
+  // then every PAIRING_HEARTBEAT_MS while online. Its answer:
+  //   - 401 with an exact device-auth error → re-pair state;
+  //   - 200 → clears any problem and self-heals name + register binding;
+  //   - anything else (offline, 5xx, wrong server) → ignored.
+  useEffect(() => {
+    if (!creds || !online) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await posFetch("/api/pos/sync", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-pos-device-id": creds.deviceId,
+            "x-pos-device-key": creds.deviceKey,
+          },
+          body: JSON.stringify({ events: [] }),
+        });
+        const body = (await res.json().catch(() => null)) as
+          | { device?: { name?: unknown; registerId?: unknown }; error?: unknown }
+          | null;
+        if (cancelled) return;
+        if (!res.ok) {
+          const problem = classifyDeviceAuthFailure(res.status, body?.error);
+          if (problem) setPairingProblem(problem);
+          return;
+        }
+        setPairingProblem(null);
+        const healed = refreshedPairing(creds, body?.device);
+        if (healed) {
+          persistCreds(healed);
+          setCreds(healed);
+        }
+      } catch {
+        // Offline / unreachable — not a verdict on the pairing.
+      }
+    };
+    const t0 = setTimeout(() => void check(), 0);
+    const t1 = setInterval(() => void check(), PAIRING_HEARTBEAT_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(t0);
+      clearInterval(t1);
+    };
+  }, [creds, online, persistCreds, pairingRecheck]);
 
   // ── menu bundle: refresh when online, cache for offline sales ──
   const refreshMenu = useCallback(async () => {
@@ -1095,6 +1173,10 @@ export function RegisterShell({
   // not be dismissible by a routine sync message.
   const persistentAlert =
     (apiBaseResult.ok ? null : apiBaseResult.error) ??
+    // Register rotation slice — a dead pairing outranks routine alerts and is
+    // not dismissible: mid-sale the cashier must see it, but is never thrown
+    // out of the sale (the re-pair screen takes over at the next lock).
+    (pairingProblem ? pairingProblemBanner(pairingProblem) : null) ??
     storageAlert ??
     queueDepthWarning(pendingCount);
   const shownBanner = persistentAlert ?? banner;
@@ -1125,6 +1207,36 @@ export function RegisterShell({
         onProvisioned={(c) => {
           persistCreds(c);
           setCreds(c);
+          setScreen("locked");
+        }}
+      />
+    );
+  }
+
+  // Register rotation slice — the iPad's pairing was revoked or re-keyed in
+  // the back office. Takes over the LOCK screen only (never a live sale): no
+  // PIN can unlock a dead device anyway. Re-pairing needs a NEW id + key that
+  // only a staffing.manage user can mint, so there is nothing here a floor
+  // employee can use to detach a working register.
+  if (screen === "locked" && pairingProblem) {
+    return (
+      <SetupScreen
+        repair={{
+          problem: pairingProblem,
+          currentDeviceId: creds.deviceId,
+          currentName: creds.name,
+          unsyncedCount: queue.length,
+          rejectedCount: rejected.length,
+          online,
+          onRecheck: () => setPairingRecheck((n) => n + 1),
+        }}
+        onProvisioned={(c) => {
+          persistCreds(c);
+          setCreds(c);
+          setPairingProblem(null);
+          // The new pairing has not reported the on-device rejected rows yet.
+          lastReportedRejectedRef.current = null;
+          setBanner(`Register re-paired as "${c.name}".`);
           setScreen("locked");
         }}
       />
@@ -2001,9 +2113,33 @@ export function RegisterShell({
 // Setup screen — one-time device provisioning
 // ---------------------------------------------------------------------------
 
-function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => void }) {
-  const [deviceId, setDeviceId] = useState("");
+/** Present when the screen is RE-pairing a register whose pairing died. */
+type RepairContext = {
+  problem: PairingProblem;
+  currentDeviceId: string;
+  currentName: string;
+  unsyncedCount: number;
+  rejectedCount: number;
+  online: boolean;
+  onRecheck: () => void;
+};
+
+function SetupScreen({
+  onProvisioned,
+  repair,
+}: {
+  onProvisioned: (c: DeviceCreds) => void;
+  repair?: RepairContext;
+}) {
+  // Re-pair: a key-only problem keeps the SAME device id (rotate/reactivate),
+  // so it is pre-filled; a retired device usually gets a new one.
+  const [deviceId, setDeviceId] = useState(
+    repair && repair.problem === "key_rejected" ? repair.currentDeviceId : "",
+  );
   const [deviceKey, setDeviceKey] = useState("");
+  // Re-pair starts COLLAPSED behind an explicit button so a passer-by sees a
+  // plain "call a manager" screen, not an inviting form.
+  const [formOpen, setFormOpen] = useState(!repair);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2026,6 +2162,20 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
       setError(checked.problem);
       setBusy(false);
       return;
+    }
+    // Register rotation slice — never strand unsynced sales: they can only
+    // sync under the device id that rang them (checkEnvelopeForDevice).
+    if (repair) {
+      const plan = planRepair({
+        currentDeviceId: repair.currentDeviceId,
+        nextDeviceId: checked.deviceId,
+        unsyncedCount: repair.unsyncedCount,
+      });
+      if (!plan.ok) {
+        setError(plan.problem);
+        setBusy(false);
+        return;
+      }
     }
     try {
       const res = await posFetch("/api/pos/sync", {
@@ -2068,16 +2218,65 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
     }
   };
 
+  const repairMsg = repair ? pairingProblemMessage(repair.problem) : null;
+
   return (
     <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark mb-6 h-9 w-auto opacity-90" />
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-8 shadow-[var(--pos-shadow)]">
-        <h1 className="text-xl font-semibold">Register setup</h1>
-        <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
-          A manager provisions this iPad in the back office (Register Activity → POS devices) and
-          enters the device id + one-time key here. The key is stored only on this device.
-        </p>
+        {repair && repairMsg ? (
+          <>
+            <h1 className="text-xl font-semibold">{repairMsg.title}</h1>
+            <p className="mt-1 text-xs text-[var(--pos-text-faint)]">Saved pairing: {repair.currentName}</p>
+            <p className="mt-3 text-sm text-[var(--pos-text-muted)]">{repairMsg.detail}</p>
+            {repair.unsyncedCount > 0 ? (
+              <p className="mt-3 rounded-lg bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-warn)]">
+                {repair.unsyncedCount} unsynced event{repair.unsyncedCount === 1 ? " is" : "s are"} saved on this iPad and
+                will be kept. They can only sync under the old device: in the back office use &ldquo;Reactivate with new
+                key&rdquo; on the old device row, and enter that id + new key here.
+              </p>
+            ) : null}
+            {repair.rejectedCount > 0 ? (
+              <p className="mt-3 text-xs text-[var(--pos-text-muted)]">
+                {repair.rejectedCount} rejected event{repair.rejectedCount === 1 ? "" : "s"} held for review stay on this iPad.
+              </p>
+            ) : null}
+            <p className="mt-3 text-sm text-[var(--pos-text-muted)]">
+              Only a manager can fix this. In the back office open Register Activity → POS devices, then either
+              provision a new device or reactivate this one, and enter the device id + key shown there.
+            </p>
+            {!formOpen ? (
+              <div className="mt-6 flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormOpen(true)}
+                  className="pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-bold text-[var(--pos-accent-ink)]"
+                >
+                  Re-pair this register (manager)
+                </button>
+                <button
+                  type="button"
+                  onClick={repair.onRecheck}
+                  disabled={!repair.online}
+                  className="pos-tile w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-3 text-sm font-semibold disabled:opacity-40"
+                >
+                  {repair.online ? "Check again" : "Offline — reconnect to check"}
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-semibold">Register setup</h1>
+            <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
+              A manager provisions this iPad in the back office (Register Activity → POS devices) and
+              enters the device id + one-time key here. The key is stored only on this device.
+            </p>
+          </>
+        )}
+        {formOpen ? (
+        <>
         {/* B26 — autoCapitalize/autoCorrect OFF: the key is case-sensitive
             base64url and iOS silently capitalizes the first letter and
             autocorrects typed keys, which the server then (correctly)
@@ -2112,6 +2311,22 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
         >
           {busy ? "Verifying…" : "Verify & save"}
         </button>
+        {repair ? (
+          <button
+            type="button"
+            onClick={() => {
+              setFormOpen(false);
+              setError(null);
+              setNotice(null);
+              setDeviceKey("");
+            }}
+            className="pos-tile mt-3 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-2.5 text-sm"
+          >
+            Cancel
+          </button>
+        ) : null}
+        </>
+        ) : null}
       </div>
     </main>
   );
