@@ -20,7 +20,7 @@ import {
 import { PayrollSourceDocPanel } from "@/components/admin/payroll/PayrollSourceDocPanel";
 import { PayrollGuardrailPanel } from "@/components/admin/payroll/PayrollGuardrailPanel";
 import { OriginatorNotReady } from "@/components/admin/payroll/OriginatorNotReady";
-import { payDateLine } from "@/components/admin/payroll/PayDateDeadlineField";
+import { payDateLine } from "@/lib/payments/pay-date-line-core";
 import { saveRunLinesAction, generateRunAction, uploadSourceDocAction } from "../actions";
 
 export const dynamic = "force-dynamic";

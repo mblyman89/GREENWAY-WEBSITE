@@ -14,18 +14,10 @@ import { DesignStudio } from "./DesignStudio";
 import { ProofPanel } from "./ProofPanel";
 import { PublishPanel, type MerchAdBlockVM } from "./PublishPanel";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
+import { STUDIO_TABS, type StudioTab } from "@/lib/merch-studio/studio-tabs-core";
 
-export type StudioTab = "garments" | "design" | "proof" | "check" | "fulfillment" | "publish";
-const TABS: { id: StudioTab; label: string }[] = [
-  { id: "garments", label: "\ud83d\udc55 Garments" },
-  { id: "design", label: "\ud83c\udfa8 Design" },
-  { id: "proof", label: "\ud83d\udda8\ufe0f Proof & Export" },
-  { id: "check", label: "\ud83d\udd0e Artwork Check" },
-  { id: "fulfillment", label: "\ud83d\udce6 Fulfillment & Pricing" },
-  { id: "publish", label: "\ud83d\ude80 Publish & Ads" },
-];
-/** Tabs a ?tab= link may open directly (R71 S4: the Website-hub edit link opens Publish & Ads). */
-export const STUDIO_TAB_IDS: readonly StudioTab[] = TABS.map((t) => t.id);
+// The tab list lives in a plain module so the server page can read it too.
+const TABS = STUDIO_TABS;
 const SEL_KEY = "gw-merch-studio-sel";
 
 export function MerchStudio({ extraTabs = [], initialTab, publish }: {
