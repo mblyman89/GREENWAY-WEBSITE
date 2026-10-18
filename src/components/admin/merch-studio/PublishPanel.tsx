@@ -9,13 +9,14 @@
  *     prices, sizes, SKUs, ids or per-product links (owner rule: "A pure
  *     redirect button, that's it"). Draft -> publish, audited, revisioned.
  *
- *  B. Listing package (for the SEPARATE merch site, Slice 5). Pick a saved
- *     design, colours, sizes and a retail price; download one JSON file the
- *     merch site will import. It is generated in this browser and downloaded
- *     - never saved to the cannabis database and never shown on the cannabis
- *     site.
+ *  B. Listing (for the SEPARATE merch site). Pick a saved design, colours,
+ *     sizes and a retail price. R73 S7: "Publish to greenwaymerch.com" uploads
+ *     the print PNGs and saves the package to the merch catalog (site_settings)
+ *     -> greenwaymerch.com + Inventory > Merch Inventory. Never shown on the
+ *     cannabis site. The JSON download remains as a backup.
  */
 import { useState } from "react";
+import Link from "next/link";
 import { colorsFor, formatCents, getBlank, sizesFor } from "@/lib/merch-studio/garment-catalog-core";
 import { buildListingPackage, listingFilename, LISTING_LIMITS } from "@/lib/merch-studio/listing-package-core";
 import type { MerchDesign } from "@/lib/merch-studio/merch-design-core";
@@ -28,7 +29,11 @@ import { ContentImageField, type MediaChoice } from "@/components/admin/ContentI
 import { Row, Toggle, studioInput, studioLabel } from "@/components/admin/banner-studio/controls";
 import { IssueList } from "./IssueList";
 import { loadDesigns } from "./merch-assets";
-import { downloadBytes } from "./print-export";
+import { assetDataUrls, downloadBytes, putSignedMerchFile, renderPlanPng } from "./print-export";
+import { planPrintFiles } from "@/lib/merch-studio/print-export-core";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
+import { publishMerchListingAction, startMerchPublishAction } from "@/app/admin/merch-studio/catalog-actions";
+import { MERCH_ITEM_MAX_IMAGES, safeHttpsUrl } from "@/lib/merch/merch-inventory-core";
 import { publishMerchAdAction, saveMerchAdDraftAction } from "@/app/admin/merch-studio/ad-actions";
 
 const btn = "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs font-bold disabled:opacity-40";
@@ -39,7 +44,7 @@ export function PublishPanel({ adBlock, mediaChoices }: { adBlock: MerchAdBlockV
   return (
     <div className="space-y-8">
       <AdEditor adBlock={adBlock} mediaChoices={mediaChoices} />
-      <ListingBuilder />
+      <ListingBuilder mediaChoices={mediaChoices} />
     </div>
   );
 }
@@ -225,7 +230,7 @@ function AdIssues({ issues }: { issues: ReturnType<typeof merchAdIssues> }) {
 // ---------------------------------------------------------------------------
 const toCents = (s: string) => { const n = Number.parseFloat(s.replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
 
-function ListingBuilder() {
+function ListingBuilder({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   // This panel only mounts client-side after MerchStudio's restore, so reading localStorage in the initializer is hydration-safe (same as ProofPanel).
   const [designs] = useState<MerchDesign[]>(() => loadDesigns());
   const [designId, setDesignId] = useState(designs[0]?.id ?? "");
@@ -245,11 +250,50 @@ function ListingBuilder() {
   const [retail, setRetail] = useState("35");
   const [passUp, setPassUp] = useState(true);
   const [done, setDone] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [newPhoto, setNewPhoto] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pubMsg, setPubMsg] = useState<{ tone: "ok" | "bad"; text: string; handle?: string } | null>(null);
+
+  // R73 S7: render the print PNGs, upload them to stable public URLs (Printful
+  // fetches them per order), then save the package to the merch catalog ->
+  // greenwaymerch.com + Inventory > Merch Inventory.
+  const publishToSite = async () => {
+    if (!design) return;
+    setPubMsg(null);
+    try {
+      const fresh = buildListingPackage({ design, title, description, colors, sizes, retailCents: toCents(retail), passSizeUpcharge: passUp, generatedAt: new Date().toISOString() }).pkg;
+      if (!fresh) throw new Error("Fix the blockers first.");
+      const { plans } = planPrintFiles(design);
+      setBusy("Loading artwork...");
+      const art = await assetDataUrls(design);
+      if (art.missing.length) throw new Error(`Some artwork isn't on this device (${art.missing.length}). Open the design on the computer it was made on.`);
+      const start = await startMerchPublishAction({ handle: fresh.product.handle, fileKeys: plans.map((p) => p.key) });
+      if (!start.ok) throw new Error(start.error);
+      const files: { fileKey: string; key: string }[] = [];
+      for (const u of start.uploads) {
+        const plan = plans.find((p) => p.key === u.fileKey)!;
+        setBusy(`Rendering ${plan.filename} (${plan.pxW} x ${plan.pxH} px)...`);
+        const r = await renderPlanPng(plan, art.urls);
+        setBusy(`Uploading ${plan.filename}...`);
+        await putSignedMerchFile(supabaseUrl, supabaseAnonKey, start.bucket, u.key, u.token, r.png);
+        files.push({ fileKey: u.fileKey, key: u.key });
+      }
+      setBusy("Publishing...");
+      const res = await publishMerchListingAction({ pkg: fresh, files, images: photos });
+      if (!res.ok) throw new Error(res.error);
+      setPubMsg({ tone: "ok", handle: res.handle, text: `${res.created ? "Published" : "Updated"} "${fresh.product.title}". It is in Merch Inventory now and on greenwaymerch.com within about a minute.` });
+    } catch (e) {
+      setPubMsg({ tone: "bad", text: e instanceof Error ? e.message : "Publishing failed." });
+    } finally { setBusy(null); }
+  };
 
   const pick = (id: string) => {
     const d = designs.find((x) => x.id === id) ?? null;
     setDesignId(id);
     setDone(null);
+    setPubMsg(null);
+    setPhotos([]);
     setTitle(d?.name ?? "");
     const b = d ? getBlank(d.blankId) : undefined;
     const c = b ? colorsFor(b).find((x) => x[1].toLowerCase() === d!.colorHex.toLowerCase()) : undefined;
@@ -280,7 +324,7 @@ function ListingBuilder() {
       <div>
         <h3 id="merch-listing-h" className="text-base font-bold text-white">B. Listing package for the Greenway Goods website</h3>
         <p className="mt-1 max-w-3xl text-sm text-white/70">
-          Turns a finished design into one file the separate merch website imports (Slice 5): title, colours, sizes, Printful variant ids, your retail prices with profit per variant, the print files and their exact print positions. It is built and downloaded <b className="text-white">in this browser only</b> - nothing is saved to or shown on the cannabis website.
+          Turns a finished design into a product on the separate merch website: title, colours, sizes, Printful variant ids, your retail prices with profit per variant, the print files and their exact print positions. <b className="text-white">Publish to greenwaymerch.com</b> renders and stores the print files, puts the product on the merch site within about a minute and adds it to Inventory &gt; Merch Inventory. Re-publishing the same title updates it. Nothing is ever shown on the cannabis website. The JSON download is still there as a backup.
         </p>
       </div>
       <div className="grid gap-5 xl:grid-cols-[26rem_1fr]">
@@ -314,8 +358,36 @@ function ListingBuilder() {
           ) : null}
           <Row label="Retail price, smallest size (USD)"><input className={studioInput} inputMode="decimal" value={retail} onChange={(e) => { setRetail(e.target.value); setDone(null); }} /></Row>
           <Toggle label="Add Printful's bigger-size upcharge (e.g. 2XL) to the price" checked={passUp} onChange={(x) => { setPassUp(x); setDone(null); }} />
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--admin-border)] pt-3">
-            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!pkg || blocked}
+          <div className="space-y-2 border-t border-[var(--admin-border)] pt-3">
+            <span className={studioLabel}>Product photos on greenwaymerch.com ({photos.length}/{MERCH_ITEM_MAX_IMAGES}) - mockups or lifestyle shots; none = the category photo</span>
+            {photos.length ? (
+              <ul className="flex flex-wrap gap-2">
+                {photos.map((u, i) => (
+                  <li key={u} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of an owner-picked picture */}
+                    <img src={u} alt="" className="h-14 w-14 rounded object-cover" />
+                    <button type="button" aria-label="Remove photo" className="absolute -right-1 -top-1 rounded-full bg-black px-1 text-[0.6rem] text-white" onClick={() => setPhotos((p) => p.filter((_, n) => n !== i))}>x</button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {photos.length < MERCH_ITEM_MAX_IMAGES ? (
+              <div className="space-y-1">
+                <ContentImageField value={newPhoto} onChange={setNewPhoto} mediaChoices={mediaChoices.filter((m) => !m.mimeType || m.mimeType.startsWith("image/"))} />
+                <button type="button" className={`${btn} bg-white/10 text-white`} disabled={!safeHttpsUrl(newPhoto) || photos.includes(newPhoto)} onClick={() => { setPhotos((p) => [...p, safeHttpsUrl(newPhoto)]); setNewPhoto(""); }}>Add photo</button>
+                {newPhoto && !safeHttpsUrl(newPhoto) ? <p className="text-[0.7rem] text-[var(--admin-danger)]">Pick a picture from the Media Library (an https:// address).</p> : null}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={`${btn} bg-[var(--admin-accent)] text-black`} disabled={!pkg || blocked || !!busy} onClick={publishToSite}>
+              Publish to greenwaymerch.com
+            </button>
+            {busy ? <span className="text-xs text-white/70">{busy}</span> : null}
+            {pubMsg ? <span className={`text-xs ${pubMsg.tone === "ok" ? "text-[var(--admin-accent)]" : "text-[var(--admin-danger)]"}`}>{pubMsg.text}{pubMsg.tone === "ok" ? <> <Link className="underline" href="/admin/inventory/merch">Open Merch Inventory</Link></> : null}</span> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={`${btn} bg-white/10 text-white`} disabled={!pkg || blocked}
               onClick={() => {
                 if (!design || !pkg) return;
                 // Rebuild with the real timestamp at click time (render stays pure).

@@ -28,7 +28,7 @@
 | S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | shipped |
 | S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | shipped |
 | S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | shipped |
-| S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | planned |
+| S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | shipped |
 | S8 | Reports > Merch tab: traffic, sales, WA tax | planned |
 
 ## S1 - merch orders in the back office (shipped)
@@ -120,26 +120,36 @@ Resale certificate: file a WA reseller permit with Printful so Printful does not
 - **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
 - Helpers (Branding, Merch Banners) updated.
 
-## S6 - Brand designs in any size, saved as pictures (shipped)
+## S7 - Merch inventory, filled by Merch Studio publish (shipped)
 
-- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
-- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
-- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
-- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
-- Helpers (Branding, Merch Banners) updated.
+The ask: "We create apparel in the merch studio, save it, publish it, it shows up on the public website, at the same time it's added to the merch inventory management page in the inventory drop down menu."
 
-## S6 - Brand designs in any size, saved as pictures (shipped)
+What happens when the owner presses **Publish to greenwaymerch.com** (Merch Studio > Publish & Ads > B):
+1. The browser renders the print PNGs with the same renderer as Proof & Export.
+2. It uploads them through one-time signed URLs to `merch-print/<handle>/<nonce>/` in the public `media` bucket (migration 0012). They need stable public URLs because Printful downloads them when each order is placed, and signed URLs expire. The private `merch-files` bucket stays for proofs and mockups.
+3. The server checks that each upload is a PNG from its bytes, writes the URLs into the listing package, and saves it to the merch catalog. The catalog lives in `site_settings`, key `merch_catalog`, so no migration was needed. The publish is audited.
+4. The product shows in **Inventory > Merch Inventory** right away and on greenwaymerch.com within about 60 seconds. Publishing the same title again updates the product. A different design can't take an address that is already in use.
 
-- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
-- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
-- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
-- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
-- Helpers (Branding, Merch Banners) updated.
+The cannabis site never shows any of this (owner rule R71):
+- The catalog is read only by greenwaymerch.com's server, through `GET /api/merch-catalog`.
+- The call needs `Authorization: Bearer <MERCH_CATALOG_TOKEN>`, the same 32+ character random secret set in both Vercel projects and compared in constant time.
+- With no secret or a wrong one, the route answers 404. It is never cached or indexed.
+- It returns live items only, without Printful's sync body or notes.
 
-## S6 - Brand designs in any size, saved as pictures (shipped)
+greenwaymerch.com:
+- `lib/catalog.ts` merges the Studio products (first) with the build-time `catalog/*.json`.
+- Pages refresh every 60 seconds. Checkout, the cart preview and the Stripe webhook read the catalog fresh, so prices are always current.
+- If the back office is unreachable, the last good copy is used and the shop never empties.
+- Product pages now use `dynamicParams = true`, so a new product works without a redeploy. Unknown handles still 404.
 
-- Branding → Saved banners is now "Saved brand designs". A new design starts from **What is it for?**: website banner, card, or any researched size from `creative-placements-core` (website, social, email/newsletter, blog, print), or a custom W×H (64–6000px).
-- `src/lib/brand/brand-sizes-core.ts` (pure, 25 self-tests): size options, custom-size checks, frame choice (shape 0.4–2.5 → card frame that scales with width; wider → banner frame at the 1408px reference), `applySize`, `stillDesign` (drops entrances/curtain, square corners), `exportPlan` (render size + scale, 16 MP cap) and `exportFilename`.
-- `BrandSaved` gains an optional `size` (normalised; absent = classic). The `brand.kit` JSON block needs no migration.
-- **Save as picture** (`BrandDesignExport.tsx`) renders the same public `<DesignedBanner>` offscreen, rasterises it with `modern-screenshot` (MIT, new dependency, free), and uploads the PNG through the existing direct-upload actions into a Media Library folder (Merch by default; Section banner, Blog, Newsletter, Other). Merch Banners lists the Merch folder first.
-- Helpers (Branding, Merch Banners) updated.
+Merch Inventory (`/admin/inventory/merch`, permission `inventory.manage`):
+- Every product and variant with:
+  - live or hidden status;
+  - **Printful's live US stock**, from `GET /products/{id}` `availability_status` (in stock, made to order, out of stock, discontinued; verified against the Printful API);
+  - what the website shows, with mismatches flagged;
+  - retail price, Printful cost, profit and margin;
+  - units sold and revenue from Printful orders (cancelled and failed orders are excluded).
+- Actions: hide or show, remove (type the name to confirm; the print PNGs are deleted too), copy Printful's stock onto the website, and CSV export (guarded against spreadsheet formula injection).
+- Pure rules are in `src/lib/merch/merch-inventory-core.ts` (27 self-tests).
+
+Owner set-up (one time): create a long random value and add it as `MERCH_CATALOG_TOKEN` in **both** Vercel projects (Greenway back office and greenwaymerch.com). Until both have it, the merch site simply keeps using the `catalog/` files. No new cost: it uses Supabase storage and Vercel requests already on the Pro plans.

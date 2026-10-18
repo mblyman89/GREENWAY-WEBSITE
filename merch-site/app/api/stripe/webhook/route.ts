@@ -22,7 +22,7 @@
  * (so Stripe doesn't retry forever). Transient failures (Printful down) -> 500
  * so Stripe retries with backoff (up to 3 days).
  */
-import { allProducts } from "@/lib/catalog";
+import { freshProducts } from "@/lib/catalog";
 import { STRIPE_API_VERSION } from "@/lib/checkout-core";
 import { getMerchContent } from "@/lib/site-content";
 import { alertOwner, printful, printfulConfigured, sendEmail } from "@/lib/fulfillment";
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     return ok("outside Washington - authorization cancelled");
   }
 
-  const plan = planPrintfulOrder(session, allProducts(), { storeName: SITE_NAME, email: c.email, phone: c.phone }, { captured: true });
+  const plan = planPrintfulOrder(session, await freshProducts(), { storeName: SITE_NAME, email: c.email, phone: c.phone }, { captured: true });
   if (plan.problems.length) {
     const held = decision.action === "capture";
     await alertOwner(`Order ${plan.orderRef || session.id} needs you - NOT sent to Printful`, [

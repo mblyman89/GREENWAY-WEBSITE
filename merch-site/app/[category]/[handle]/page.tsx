@@ -15,27 +15,28 @@ import { cardCopy } from "@/lib/site-content-core";
 
 type Params = { params: Promise<{ category: string; handle: string }> };
 
-export function generateStaticParams() {
-  return allProducts().map((p) => ({ category: p.category, handle: p.handle }));
+export async function generateStaticParams() {
+  return (await allProducts()).map((p) => ({ category: p.category, handle: p.handle }));
 }
-export const dynamicParams = false;
+/** R73 S7: products published from Merch Studio appear without a redeploy (rendered on first visit, then cached). Unknown handles still 404. */
+export const dynamicParams = true;
 /** R73 S3: owner-edited copy refreshes every 60 s (ISR). */
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { handle } = await params;
-  const p = findProduct(handle);
+  const p = await findProduct(handle);
   return p ? { title: p.title, description: p.description.slice(0, 160) || undefined, alternates: { canonical: `/${p.category}/${p.handle}` }, openGraph: { type: "website", url: `/${p.category}/${p.handle}`, images: p.images.slice(0, 1) } } : {};
 }
 
 export default async function ProductPage({ params }: Params) {
   const { category, handle } = await params;
-  const product = findProduct(handle);
+  const product = await findProduct(handle);
   if (!product) notFound();
   if (product.category !== category) permanentRedirect(`/${product.category}/${product.handle}`);
   const cat = getCategory(product.category)!;
   const copy = cardCopy(await getMerchContent());
-  const more = cardsIn(cat.slug).filter((p) => p.handle !== product.handle).slice(0, 4);
+  const more = (await cardsIn(cat.slug)).filter((p) => p.handle !== product.handle).slice(0, 4);
   return (
     <main>
       <JsonLd data={productJsonLd(product, siteUrl(), seoShipping())} />

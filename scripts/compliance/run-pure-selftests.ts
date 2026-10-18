@@ -987,6 +987,7 @@ import { __runSeoCoreTests as __runMerchSeoTests } from "../../merch-site/lib/se
 import { __runPageHelpersTests } from "../../src/lib/admin/page-helpers-core";
 import { __runBrandSizesTests } from "../../src/lib/brand/brand-sizes-core";
 import { __runMerchOrdersPanelTests } from "../../src/lib/orders/merch-orders-core";
+import { __runMerchInventoryTests } from "../../src/lib/merch/merch-inventory-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
@@ -2399,6 +2400,7 @@ __runLiquidVolumeTests();
   assertRan("print-export-core", __runPrintExportTests(), 85); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
   assertRan("listing-package-core", __runListingPackageTests(), 29); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)
+  assertRan("merch-inventory-core", __runMerchInventoryTests(), 27); // R73 S7: Merch Studio publish -> catalog (site_settings), live feed, Printful stock, sales by variant, CSV
   assertRan("merch-site catalog-core", __runMerchCatalogTests(), 27); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
   assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 19); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
   assertRan("merch-site orders-core", __runMerchOrdersTests(), 29); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows

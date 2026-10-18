@@ -6,10 +6,12 @@
  * and let NO product details reach the cannabis site. "We will build the merch
  * site later."
  *
- * So the studio's publish step produces a self-contained, versioned JSON file
- * the merch site (Slice 5) will import. It is DOWNLOADED by the owner. It is
- * never written to the cannabis database, never rendered by the cannabis
- * site, never sent anywhere by this code. Everything here is plain data.
+ * So the studio's publish step produces a self-contained, versioned JSON
+ * package the merch site imports. This module only builds plain data. R73 S7:
+ * the studio's "Publish to greenwaymerch.com" saves it to the back-office
+ * merch catalog (merch-inventory-core), which only the merch site's server
+ * reads through a secret-gated API; it is never rendered by the cannabis site.
+ * The JSON download remains as a backup.
  *
  * Contents:
  *  - product: title, handle, description, the blank (Printful catalog ids).

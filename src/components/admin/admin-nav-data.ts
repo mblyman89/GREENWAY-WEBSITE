@@ -82,6 +82,7 @@ export const adminNav: AdminNavItem[] = [
 
   { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "\ud83c\udf41", glyph: "pot-leaf", group: "Inventory" }, // custom pot-leaf SVG (cannabis flower lots)
   { label: "Other Inventory", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83d\udeac", glyph: "bong", group: "Inventory" }, // custom bong SVG (non-cannabis goods) — swap to "bong-outline" for the light version
+  { label: "Merch Inventory", href: "/admin/inventory/merch", permission: "inventory.manage", icon: "\ud83d\udc55", group: "Inventory" }, // 👕 R73 S7: greenwaymerch.com apparel (Greenway Merchandising LLC) - filled by Merch Studio publish
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.count", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard — books-23: the counting FLOOR, staff included, so inventory.count not inventory.manage

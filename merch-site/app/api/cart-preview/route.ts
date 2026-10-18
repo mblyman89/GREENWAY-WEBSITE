@@ -2,7 +2,7 @@
  * POST /api/cart-preview {lines} -> server prices + display data for the cart
  * page (so the cart always shows what checkout will actually charge).
  */
-import { allProducts } from "@/lib/catalog";
+import { freshProducts } from "@/lib/catalog";
 import { cleanCart, priceCart } from "@/lib/catalog-core";
 import { parseShippingConfig, shippingCents } from "@/lib/checkout-core";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   let body: unknown;
   try { body = await req.json(); } catch { body = null; }
-  const priced = priceCart(cleanCart((body as { lines?: unknown })?.lines), allProducts());
+  const priced = priceCart(cleanCart((body as { lines?: unknown })?.lines), await freshProducts());
   const ship = parseShippingConfig(process.env).config;
   const units = priced.lines.reduce((s, l) => s + l.qty, 0);
   return Response.json(

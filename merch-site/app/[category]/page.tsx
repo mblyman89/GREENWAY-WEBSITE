@@ -29,14 +29,14 @@ export default async function CataloguePage({ params }: { params: Promise<{ cate
   const cat = getCategory((await params).category);
   if (!cat) notFound();
   const content = await getMerchContent();
-  const counts = categoryCounts();
+  const counts = await categoryCounts();
   const categories = MERCH_CATEGORIES.map((c) => ({ ...categoryOverride(content, c), count: counts[c.slug] ?? 0 }));
   return (
     <main>
       <JsonLd data={breadcrumbJsonLd(siteUrl(), [{ name: "Shop", path: "/" }, { name: cat.label, path: `/${cat.slug}` }])} />
       <Breadcrumbs items={[{ label: cat.label }]} />
       <MerchBanner banner={bannerFor(content, cat.slug)} priority />
-      <ShopBrowser categories={categories} products={cardsIn(cat.slug)} current={cat.slug} copy={cardCopy(content)} />
+      <ShopBrowser categories={categories} products={await cardsIn(cat.slug)} current={cat.slug} copy={cardCopy(content)} />
     </main>
   );
 }
