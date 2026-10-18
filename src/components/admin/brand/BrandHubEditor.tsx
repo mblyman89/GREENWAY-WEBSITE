@@ -13,6 +13,8 @@ import { ColorField } from "@/components/admin/banner-studio/controls";
 import { DesignCard } from "@/components/admin/banner-studio/BannerEditorShell";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { DesignedCard } from "@/components/site/DesignedCard";
+import { BrandDesignExport } from "@/components/admin/brand/BrandDesignExport";
+import { applySize, checkCustomSize, newDesignForSize, sizeOptionById, sizeOptions, type BrandSize } from "@/lib/brand/brand-sizes-core";
 import { ColorWheel } from "@/components/admin/brand/ColorWheel";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { colorToHex } from "@/lib/cms/color-input-core";
@@ -158,6 +160,12 @@ export function BrandHubEditor({
   const [draftBanner, setDraftBanner] = useState<BannerDesign | null>(null);
   const [draftBannerName, setDraftBannerName] = useState("");
   const [draftBannerImage, setDraftBannerImage] = useState("");
+  // R73 S6: what the new design is for (banner, card, blog, newsletter, social, print or a custom size).
+  const [draftSizeId, setDraftSizeId] = useState("banner");
+  const [customW, setCustomW] = useState("1200");
+  const [customH, setCustomH] = useState("800");
+  const customCheck = checkCustomSize(Number(customW), Number(customH));
+  const draftSize: BrandSize | null = draftSizeId === "custom" ? (customCheck.ok ? customCheck.size : null) : (sizeOptionById(draftSizeId)?.size ?? null);
 
   return (
     <form className="space-y-4">
@@ -429,12 +437,12 @@ export function BrandHubEditor({
         <div className="space-y-4">
           <div className={CARD}>
             <h3 className="text-sm font-black text-[var(--admin-text)]">
-              Saved brand banners ({kit.banners.length}/{BRAND_MAX_BANNERS})
+              Saved brand designs ({kit.banners.length}/{BRAND_MAX_BANNERS})
             </h3>
             <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-              Reusable Design Studio banners. Every banner and card editor can start from one of these (&ldquo;Start from a saved brand banner&rdquo;), and can save its own design here.
+              Reusable Design Studio banners, cards and custom sizes (blog, newsletter, social, print). Every banner and card editor can start from one of these (&ldquo;Start from a saved brand banner&rdquo;). &ldquo;Save as picture&rdquo; turns a design into a finished PNG in the Media Library &mdash; the Merch folder is what Website &rarr; Merchandise &rarr; Banners lists first.
             </p>
-            {kit.banners.length === 0 ? <p className="text-xs text-[var(--admin-text-muted)]">No saved banners yet — make one below.</p> : null}
+            {kit.banners.length === 0 ? <p className="text-xs text-[var(--admin-text-muted)]">No saved designs yet — make one below.</p> : null}
             <div className="grid gap-4 md:grid-cols-2">
               {kit.banners.map((b, i) => (
                 <div key={b.id} className="space-y-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-2">
@@ -448,6 +456,8 @@ export function BrandHubEditor({
                     onChange={(e) => setKit((k) => ({ ...k, banners: k.banners.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) }))}
                     className={INPUT}
                   />
+                  {b.size ? <p className="text-xs text-[var(--admin-text-muted)]">Made for: {b.size.label} ({b.size.w}×{b.size.h})</p> : null}
+                  <BrandDesignExport name={b.name} image={b.image} design={b.design} size={b.size} />
                   <div className="flex gap-3 text-xs">
                     <button
                       type="button"
@@ -456,6 +466,11 @@ export function BrandHubEditor({
                         setDraftBanner({ ...b.design, enabled: true });
                         setDraftBannerName(`${b.name} (copy)`);
                         setDraftBannerImage(b.image);
+                        if (b.size) {
+                          setDraftSizeId("custom");
+                          setCustomW(String(b.size.w));
+                          setCustomH(String(b.size.h));
+                        } else setDraftSizeId(b.design.frame.card ? "card" : "banner");
                       }}
                     >
                       Duplicate & edit below
@@ -471,7 +486,54 @@ export function BrandHubEditor({
 
           {kit.banners.length < BRAND_MAX_BANNERS ? (
             <div className={`${CARD} space-y-3`}>
-              <h3 className="text-sm font-black text-[var(--admin-text)]">Make a new brand banner</h3>
+              <h3 className="text-sm font-black text-[var(--admin-text)]">Make a new brand design</h3>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <label className="block text-sm text-[var(--admin-text)]">
+                  What is it for?
+                  <select
+                    value={draftSizeId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setDraftSizeId(id);
+                      const next = id === "custom" ? (customCheck.ok ? customCheck.size : null) : (sizeOptionById(id)?.size ?? null);
+                      if (draftBanner && next) setDraftBanner(applySize(draftBanner, next));
+                    }}
+                    className={INPUT}
+                  >
+                    {Object.entries(
+                      sizeOptions().reduce<Record<string, ReturnType<typeof sizeOptions>>>((acc, o) => ((acc[o.group] ??= []).push(o), acc), {}),
+                    ).map(([group, opts]) => (
+                      <optgroup key={group} label={group}>
+                        {opts.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.size.label} — {o.size.w}×{o.size.h}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <option value="custom">Custom size…</option>
+                  </select>
+                </label>
+                {draftSizeId === "custom" ? (
+                  <div className="flex items-end gap-1 text-sm text-[var(--admin-text)]">
+                    <label>
+                      W
+                      <input type="number" min={64} max={6000} value={customW} onChange={(e) => setCustomW(e.target.value)} className={`${INPUT} w-24`} />
+                    </label>
+                    <span className="pb-2">×</span>
+                    <label>
+                      H
+                      <input type="number" min={64} max={6000} value={customH} onChange={(e) => setCustomH(e.target.value)} className={`${INPUT} w-24`} />
+                    </label>
+                    {draftBanner && customCheck.ok ? (
+                      <button type="button" className="pb-2 text-xs underline text-[var(--admin-accent)]" onClick={() => setDraftBanner(applySize(draftBanner, customCheck.size))}>
+                        Apply
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              {draftSizeId === "custom" && !customCheck.ok ? <p className="text-xs text-red-400">{customCheck.error}</p> : null}
               <label className="block text-sm text-[var(--admin-text)]">
                 Name
                 <input type="text" maxLength={80} value={draftBannerName} onChange={(e) => setDraftBannerName(e.target.value)} className={INPUT} placeholder="e.g. Grand-opening green" />
@@ -483,7 +545,7 @@ export function BrandHubEditor({
               <DesignCard
                 mediaChoices={mediaChoices}
                 title="Design Studio"
-                description="Tick the box and design the banner. Then click “Add to saved banners”."
+                description="Tick the box and design the banner. Then click “Add to saved designs”."
                 design={draftBanner}
                 onChange={setDraftBanner}
                 legacy={{}}
@@ -493,6 +555,7 @@ export function BrandHubEditor({
                 seed={{}}
                 posts={posts}
                 brandBanners={false}
+                makeNew={draftSize ? () => newDesignForSize(draftSize) : undefined}
               />
               <Button
                 type="button"
@@ -503,14 +566,14 @@ export function BrandHubEditor({
                   if (!draftBanner) return;
                   setKit((k) => ({
                     ...k,
-                    banners: [...k.banners, { id: uid("b"), name: draftBannerName.trim() || `Banner ${k.banners.length + 1}`, image: draftBannerImage, design: { ...draftBanner, enabled: true } }].slice(0, BRAND_MAX_BANNERS),
+                    banners: [...k.banners, { id: uid("b"), name: draftBannerName.trim() || `Banner ${k.banners.length + 1}`, image: draftBannerImage, design: { ...draftBanner, enabled: true }, ...(draftSize && draftSizeId !== "banner" ? { size: draftSize } : {}) }].slice(0, BRAND_MAX_BANNERS),
                   }));
                   setDraftBanner(null);
                   setDraftBannerName("");
                   setDraftBannerImage("");
                 }}
               >
-                Add to saved banners
+                Add to saved designs
               </Button>
             </div>
           ) : null}

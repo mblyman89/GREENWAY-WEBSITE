@@ -19,6 +19,7 @@
  */
 import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 import { colorToHex } from "@/lib/cms/color-input-core";
+import { normalizeSize, type BrandSize } from "@/lib/brand/brand-sizes-core";
 
 export const BRAND_KIT_BLOCK = "brand.kit";
 
@@ -56,7 +57,8 @@ export const BRAND_COLOR_PRESETS: { id: string; name: string; colors: BrandColor
 // ── Everything else ─────────────────────────────────────────────────────────
 
 export type BrandLogo = { id: string; name: string; src: string; note: string };
-export type BrandSaved = { id: string; name: string; image: string; design: BannerDesign };
+/** R73 S6: `size` = the picture size it was made for (blog, newsletter, social …). Absent = a classic banner/card. */
+export type BrandSaved = { id: string; name: string; image: string; design: BannerDesign; size?: BrandSize };
 export type BrandLink = { id: string; label: string; url: string };
 
 export type BrandKit = {
@@ -157,7 +159,9 @@ export function normalizeBrandKit(raw: unknown): BrandKit {
       .filter(isObj)
       .map((b, i) => {
         const design = normalizeDesign(b.design);
-        return design ? { id: id(b.id, `b${i}`), name: str(b.name, 80) || `Banner ${i + 1}`, image: safeBrandSrc(b.image), design } : null;
+        if (!design) return null;
+        const size = normalizeSize(b.size);
+        return { id: id(b.id, `b${i}`), name: str(b.name, 80) || `Banner ${i + 1}`, image: safeBrandSrc(b.image), design, ...(size ? { size } : {}) };
       })
       .filter((b): b is BrandSaved => !!b)
       .slice(0, BRAND_MAX_BANNERS),
@@ -258,5 +262,8 @@ export function __runBrandKitCoreTests(): { passed: number } {
   ok(hsvToHex(hsv.h, hsv.s, hsv.v) === "#7ed957", "hex ⇄ hsv round trip");
   ok(contrastText("#ffd700") === "#000000" && contrastText("#12351f") === "#ffffff", "contrast text");
   ok(BRAND_COLOR_PRESETS[0].colors.gold === "#ffd700", "classic preset = shipped");
+  // R73 S6: saved designs may carry the size they were made for; bad sizes drop, the design stays.
+  const sized = normalizeBrandKit({ banners: [{ name: "Sq", design: {}, size: { w: 1080, h: 1080, label: "Square" } }, { name: "Bad", design: {}, size: { w: 1, h: 1 } }] });
+  ok(sized.banners.length === 2 && sized.banners[0].size?.w === 1080 && !("size" in sized.banners[1]), "saved design sizes");
   return { passed };
 }
