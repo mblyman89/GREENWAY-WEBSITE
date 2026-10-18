@@ -4,6 +4,7 @@ import {
   REGISTER_APP_ID,
   REGISTER_APP_NAME,
   REGISTER_BACKGROUND_COLOR,
+  REGISTER_IOS_SCROLL_ENABLED,
   REGISTER_WEB_DIR,
 } from "./src/lib/pos/capacitor-config-core";
 
@@ -109,12 +110,20 @@ const config: CapacitorConfig = {
     contentInset: "never",
 
     /**
-     * The register is a fixed, full-screen application, not a document. Its
-     * panes scroll internally; the web view itself must not rubber-band, or
-     * the whole till appears to come loose from the top of the screen when a
-     * cashier swipes a product grid.
+     * Vertical pan is ON (owner request: "There have been times where I
+     * needed to pan down a little to clear a message"). With this false, iOS
+     * froze the web view, so anything taller than the screen (a long message,
+     * a dialog pushed up by the on-screen keyboard) was simply unreachable.
+     *
+     * This does NOT bring back the rubber-band "till comes loose" effect:
+     * Capacitor always sets scrollView.bounces = false on the web view
+     * (CAPBridgeViewController.swift), register.css sets overscroll-behavior:
+     * none, and pinch-zoom stays off (zoomEnabled above + the viewport meta).
+     * When everything fits on screen there is nothing to pan, so the till
+     * stays put exactly as before. Pinned by
+     * REGISTER_IOS_SCROLL_ENABLED in capacitor-config-core.
      */
-    scrollEnabled: false,
+    scrollEnabled: REGISTER_IOS_SCROLL_ENABLED,
 
     /**
      * A long-press on a link inside a POS should never offer a page preview.

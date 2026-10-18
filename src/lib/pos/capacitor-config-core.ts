@@ -118,6 +118,16 @@ export const REGISTER_WEB_DIR = "register-app/dist";
  */
 export const REGISTER_BACKGROUND_COLOR = "#060807ff";
 
+/**
+ * Whether the iPad web view may be panned up and down (Capacitor
+ * `ios.scrollEnabled`). Owner request: "add a scroll/ pan up and down
+ * feature. There have been times where I needed to pan down a little to
+ * clear a message". With it off, iOS freezes the web view and anything taller
+ * than the screen is unreachable. Turning it on cannot rubber-band (Capacitor
+ * forces scrollView.bounces = false) and cannot zoom (zoomEnabled stays off).
+ */
+export const REGISTER_IOS_SCROLL_ENABLED = true;
+
 /* -------------------------------------------------------------------------
  * Shapes. Deliberately `unknown`-typed: this validator's whole job is to be
  * fed a real, possibly-wrong config and survive it, so it must not assume the
@@ -143,6 +153,7 @@ export type CapacitorPlatformLike = {
   path?: unknown;
   scheme?: unknown;
   contentInset?: unknown;
+  scrollEnabled?: unknown;
   limitsNavigationsToAppBoundDomains?: unknown;
 };
 
@@ -410,6 +421,20 @@ export function auditProductionSafety(config: CapacitorConfigLike): ConfigProble
       });
     }
   }
+  if (ios.scrollEnabled === false) {
+    problems.push({
+      code: "ios-scroll-disabled",
+      message:
+        "ios.scrollEnabled is false. That freezes the register's web view, so a message or dialog taller than the iPad screen (for example when the keyboard is up) cannot be panned into view and the cashier is stuck.",
+    });
+  }
+  if (config.zoomEnabled === true) {
+    problems.push({
+      code: "zoom-enabled",
+      message:
+        "zoomEnabled is true. A pinch-zoom on a till leaves the cashier looking at a magnified fragment of the screen mid-sale. Panning is allowed; zooming is not.",
+    });
+  }
   const loggingValues = [config.loggingBehavior, ios.loggingBehavior, android.loggingBehavior];
   if (loggingValues.some((v) => v === "production")) {
     problems.push({
@@ -657,6 +682,20 @@ export function __runCapacitorConfigCoreTests(): { passed: number; failed: numbe
   // ── production-safety audit ──────────────────────────────────────────────
   ok(auditProductionSafety(GOOD).length === 0, "the shipped config is production-safe");
   ok(auditProductionSafety({}).length === 0, "an empty config raises no safety problems");
+  ok(REGISTER_IOS_SCROLL_ENABLED === true, "the iPad register may be panned up and down");
+  ok(
+    auditProductionSafety({ ios: { scrollEnabled: false } })[0]?.code === "ios-scroll-disabled",
+    "a frozen (non-pannable) web view is flagged",
+  );
+  ok(
+    auditProductionSafety({ ios: { scrollEnabled: true } }).length === 0,
+    "scrollEnabled true is accepted",
+  );
+  ok(
+    auditProductionSafety({ zoomEnabled: true })[0]?.code === "zoom-enabled",
+    "pinch-zoom is flagged",
+  );
+  ok(auditProductionSafety({ zoomEnabled: false }).length === 0, "zoom off is accepted");
   {
     const p = auditProductionSafety({ server: { url: "http://192.168.1.5:5173" } });
     ok(p.length === 1 && p[0]?.code === "server-url-set", "a live-reload server url is caught");

@@ -3196,7 +3196,7 @@ function NoSaleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">No sale — open drawer</h2>
@@ -3370,7 +3370,7 @@ function VoidSaleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Void a sale (today)</h2>
@@ -3762,7 +3762,7 @@ function ReturnsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Return an item</h2>
@@ -4579,7 +4579,7 @@ function PickupQueueModal({
   const detailTitle = detail ? (detail.displayName ?? "").trim() || detail.orderNumber : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-3 *:my-auto">
       <div className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] text-[var(--pos-text)]">
         {/* Header: title, search / scan, close */}
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--pos-border)] p-4">
@@ -5185,7 +5185,7 @@ function DayReportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Day report (X/Z)</h2>
@@ -5273,7 +5273,7 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
   const entries = boards ? (tab === "today" ? boards.today : boards.week) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="w-full max-w-lg rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Leaderboard 🏆</h2>
@@ -5443,7 +5443,7 @@ function PrinterSetupModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="w-full max-w-lg rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Receipt printer 🖨</h2>
@@ -5690,7 +5690,7 @@ function TillModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{TITLES[mode]}</h2>
