@@ -981,6 +981,7 @@ import { __runMerchAdTests } from "../../src/lib/merch/merch-ad-core";
 import { __runMerchCatalogTests } from "../../merch-site/lib/catalog-core";
 import { __runCheckoutCoreTests as __runMerchCheckoutTests } from "../../merch-site/lib/checkout-core";
 import { __runOrdersCoreTests as __runMerchOrdersTests } from "../../merch-site/lib/orders-core";
+import { __runMerchOrdersPanelTests } from "../../src/lib/orders/merch-orders-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
 import { __runBannerImageTests } from "../../src/lib/cms/banner-image-core";
@@ -2050,7 +2051,7 @@ __runLiquidVolumeTests();
   // SLICE L-40. Floor 88, from a measured 94. The owner asked for the Leafly
   // panel to "look and behave identically" to ours; this core is where that
   // behaviour is written down, so a drop means a behaviour stopped being proven.
-  assertRan("order-panels-core", __runOrdersPanelTests(), 88);
+  assertRan("order-panels-core", __runOrdersPanelTests(), 100); // R73 S1: +6 three-panel URL tests
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the
@@ -2396,6 +2397,7 @@ __runLiquidVolumeTests();
   assertRan("merch-site catalog-core", __runMerchCatalogTests(), 25); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
   assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 17); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
   assertRan("merch-site orders-core", __runMerchOrdersTests(), 26); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows
+  assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

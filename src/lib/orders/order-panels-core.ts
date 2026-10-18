@@ -122,7 +122,7 @@ export function statusInTab(status: OrderStatus, tab: OrdersPanelStatus): boolea
 // 2. THE URL
 // ============================================================================
 
-export const ORDERS_PANELS = ["greenway", "leafly"] as const;
+export const ORDERS_PANELS = ["greenway", "leafly", "merch"] as const;
 export type OrdersPanelKey = (typeof ORDERS_PANELS)[number];
 
 export type PanelParamNames = {
@@ -155,12 +155,24 @@ export const ORDERS_PANEL_PARAMS: Record<OrdersPanelKey, PanelParamNames> = {
     sort: "lsort",
     page: "lpage",
   },
+  // R73 S1 - Greenway Merch (greenwaymerch.com via Printful), `m`-prefixed.
+  merch: {
+    status: "mstatus",
+    q: "mq",
+    from: "mfrom",
+    to: "mto",
+    min: "mmin",
+    max: "mmax",
+    sort: "msort",
+    page: "mpage",
+  },
 };
 
 /** Where each panel lives on the page, so a link can land on it. */
 export const ORDERS_PANEL_ANCHORS: Record<OrdersPanelKey, string> = {
   greenway: "greenway-orders",
   leafly: "leafly-orders",
+  merch: "merch-orders",
 };
 
 export type SearchParamsLike = Record<string, string | string[] | undefined>;
@@ -251,18 +263,17 @@ export function panelQueryEntries(q: OrdersPanelQuery, panel: OrdersPanelKey): [
   return out;
 }
 
-/** The panel that is not `panel`. */
-export function otherPanel(panel: OrdersPanelKey): OrdersPanelKey {
-  return panel === "greenway" ? "leafly" : "greenway";
+/** The panels that are not `panel` (R73 S1: there are three now). */
+export function otherPanels(panel: OrdersPanelKey): OrdersPanelKey[] {
+  return ORDERS_PANELS.filter((p) => p !== panel);
 }
 
 /**
- * Hidden inputs for a panel's GET form: the OTHER panel's view, so pressing
- * Apply on one panel leaves the other exactly as it was.
+ * Hidden inputs for a panel's GET form: the OTHER panels' views, so pressing
+ * Apply on one panel leaves the others exactly as they were.
  */
 export function preservedFields(sp: SearchParamsLike | null | undefined, panel: OrdersPanelKey): [string, string][] {
-  const other = otherPanel(panel);
-  return panelQueryEntries(parseOrdersPanelQuery(sp, other), other);
+  return otherPanels(panel).flatMap((other) => panelQueryEntries(parseOrdersPanelQuery(sp, other), other));
 }
 
 export type PanelHrefChange =
@@ -656,6 +667,21 @@ export function __runOrdersPanelTests(): { passed: number; failed: number } {
     Object.values(lf).every((n) => !Object.values(gw).includes(n)),
   );
   ok("leafly params are l-prefixed", Object.values(lf).every((n) => n.startsWith("l")));
+  {
+    const mf = ORDERS_PANEL_PARAMS.merch;
+    ok("R73: merch params are m-prefixed", Object.values(mf).every((n) => n.startsWith("m")));
+    ok(
+      "R73: no two panels share a param name",
+      new Set(ORDERS_PANELS.flatMap((p) => Object.values(ORDERS_PANEL_PARAMS[p]))).size === ORDERS_PANELS.length * 8,
+    );
+    ok("R73: merch is the last panel", ORDERS_PANELS[ORDERS_PANELS.length - 1] === "merch");
+    const msp = { status: "ready", lq: "x", mstatus: "completed", mq: "jane" };
+    const mh = panelHref(msp, "merch", { kind: "page", page: 2 });
+    ok("R73: merch link keeps both other panels", mh.includes("status=ready") && mh.includes("lq=x") && mh.includes("mpage=2") && mh.endsWith("#merch-orders"));
+    const lkeep = preservedFields(msp, "leafly");
+    ok("R73: leafly form carries greenway AND merch views", lkeep.some(([k]) => k === "status") && lkeep.some(([k, v]) => k === "mq" && v === "jane"));
+    ok("R73: greenway link keeps the merch view", panelHref(msp, "greenway", { kind: "status", status: "new" }).includes("mstatus=completed"));
+  }
   const q0 = parseOrdersPanelQuery({}, "leafly");
   ok("empty URL = default view", q0.status === "active" && q0.search === "" && q0.sortKey === "newest" && q0.page === 1);
   const qBad = parseOrdersPanelQuery(

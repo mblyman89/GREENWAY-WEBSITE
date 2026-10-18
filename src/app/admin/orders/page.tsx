@@ -61,6 +61,9 @@ import {
 // SLICE L-26 — the render backstop. See `render-budget.ts` for why a page
 // that a redirecting server action navigates to needs one of these at all.
 import { withRenderBudget } from "@/lib/supabase/render-budget";
+// R73 S1 - Greenway Merch orders (Printful), the last panel on this page.
+import { MerchOrdersPanel } from "@/components/admin/orders/MerchOrdersPanel";
+import { emptyMerchBoard, loadMerchOrderBoard } from "@/lib/orders/merch-orders-server";
 
 import { assessEmailReadiness } from "@/lib/orders/email-readiness-core";
 import { EmailReadinessBanner } from "@/components/admin/orders/EmailReadinessBanner";
@@ -171,6 +174,15 @@ export default async function OrdersAdminPage({
     lmax?: string;
     lsort?: string;
     lpage?: string;
+    // R73 S1 - the merch panel's view: the same eight knobs, `m`-prefixed.
+    mstatus?: string;
+    mq?: string;
+    mfrom?: string;
+    mto?: string;
+    mmin?: string;
+    mmax?: string;
+    msort?: string;
+    mpage?: string;
   }>;
 }) {
   await requirePermission("orders.view");
@@ -180,6 +192,7 @@ export default async function OrdersAdminPage({
   // exception. A garbage `status` means Active (it used to reach the query).
   const gq = parseOrdersPanelQuery(sp, "greenway");
   const lq = parseOrdersPanelQuery(sp, "leafly");
+  const mq = parseOrdersPanelQuery(sp, "merch");
   // GW-029: carry the current filters/search into detail links so BackLink
   // can restore this exact view.
   const detailHref = (id: string) => withBackParam(`/admin/orders/${id}`, sp);
@@ -228,6 +241,7 @@ export default async function OrdersAdminPage({
     leaflyBoard,
     leaflySetup,
     announcerData,
+    merchBoard,
   ] = await Promise.all([
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     // SLICE L-38 — count only what the table shows, so the stat cards and the
@@ -308,6 +322,14 @@ export default async function OrdersAdminPage({
       getAnnouncerPanelDataCached(),
       emptyAnnouncerPanelData(),
       "announcer panel",
+    ),
+    // R73 S1 - Printful is outside our control: budgeted like the other
+    // secondary readers, and non-throwing (a failure is the panel's notice).
+    // Not read on the setup tab (nothing there shows it).
+    withRenderBudget(
+      resolveOrdersTab(sp.tab) === "setup" ? Promise.resolve(emptyMerchBoard()) : loadMerchOrderBoard(),
+      emptyMerchBoard("Printful took too long to answer, so merch orders couldn’t be listed this time. Refresh to try again."),
+      "merch orders (Printful)",
     ),
   ]);
   // SLICE L-14 — cancellation interrupts for the orders the board just loaded.
@@ -923,6 +945,8 @@ export default async function OrdersAdminPage({
             so every number sits directly above the orders it counts. */}
         {greenwaySection}
         {leaflySection}
+        {/* R73 S1 - "its table ... to be the last table on that page". */}
+        <MerchOrdersPanel board={merchBoard} query={mq} searchParams={sp} now={new Date()} />
       </div>
       )}
     </div>
