@@ -12,6 +12,7 @@ import {
   REGISTER_APP_ID,
   REGISTER_APP_NAME,
   REGISTER_BACKGROUND_COLOR,
+  REGISTER_IOS_SCROLL_ENABLED,
   REGISTER_WEB_DIR,
   validateAppId,
 } from "../../src/lib/pos/capacitor-config-core";
@@ -105,6 +106,37 @@ describe("the real capacitor.config.ts", () => {
     expect(capacitorConfig.zoomEnabled).toBe(false);
     const html = read(path.join(repoRoot, "register-app/index.html"));
     expect(html).toContain("user-scalable=no");
+  });
+
+  it("lets the iPad register pan up and down without bounce or zoom", () => {
+    // Owner request: "pan down a little to clear a message".
+    expect(REGISTER_IOS_SCROLL_ENABLED).toBe(true);
+    expect(capacitorConfig.ios?.scrollEnabled).toBe(true);
+    expect(capacitorConfig.zoomEnabled).toBe(false);
+    // Capacitor itself pins bounces off, so enabling scroll cannot rubber-band.
+    const bridge = read(
+      path.join(repoRoot, "node_modules/@capacitor/ios/Capacitor/Capacitor/CAPBridgeViewController.swift"),
+    );
+    expect(bridge).toContain("scrollView.bounces = false");
+    expect(read(path.join(repoRoot, "register-app/src/register.css"))).toContain("overscroll-behavior: none");
+    expect(read(path.join(repoRoot, "capacitor.config.ts"))).toContain("scrollEnabled: REGISTER_IOS_SCROLL_ENABLED");
+  });
+
+  it("keeps every register dialog pannable instead of clipping tall content", () => {
+    for (const file of ["src/app/pos/RegisterShell.tsx", "src/app/pos/SaleFlow.tsx"]) {
+      const src = read(path.join(repoRoot, file));
+      // A centred, non-scrolling overlay clips anything taller than the iPad.
+      expect(src).not.toMatch(/fixed inset-0 z-50 flex items-center justify-center/);
+      const overlays = src.match(/fixed inset-0 z-50 flex [^"]*/g) ?? [];
+      expect(overlays.length).toBeGreaterThan(0);
+      for (const cls of overlays) {
+        expect(cls).toContain("overflow-y-auto");
+        expect(cls).toContain("*:my-auto");
+      }
+    }
+    const sale = read(path.join(repoRoot, "src/app/pos/SaleFlow.tsx"));
+    expect(sale).not.toContain("lg:h-dvh lg:min-h-0 lg:overflow-hidden");
+    expect(sale).toContain("lg:overflow-y-auto");
   });
 
   it("imports its values from the core rather than hard-coding literals", () => {
