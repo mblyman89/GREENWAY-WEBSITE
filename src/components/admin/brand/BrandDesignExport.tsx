@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { EXPORT_FOLDERS, exportFilename, exportPlan, stillDesign, type BrandSize } from "@/lib/brand/brand-sizes-core";
-import { putSigned } from "@/lib/media/direct-upload-client";
+import { putSigned, tusSigned } from "@/lib/media/direct-upload-client";
 import { finishDirectUploadAction, startDirectUploadAction } from "@/app/admin/media/direct-upload-actions";
 
 type Status = { kind: "idle" } | { kind: "busy" } | { kind: "ok"; url: string; folder: string } | { kind: "err"; msg: string };
@@ -47,7 +47,9 @@ export function BrandDesignExport({ name, image, design, size }: { name: string;
       const mime = "image/png";
       const start = await startDirectUploadAction({ filename, mime, size: blob.size, usageType: folder });
       if (!start.ok) throw new Error(start.error);
-      await putSigned(start.key, start.token, blob, mime);
+      // Big pictures (> 6 MB) go through the resumable path, like the Media Library dropzone.
+      if (start.resumable) await tusSigned({ endpoint: start.endpoint, anonKey: start.anonKey, key: start.key, token: start.token, file: new File([blob], filename, { type: mime }), contentType: mime });
+      else await putSigned(start.key, start.token, blob, mime);
       const fin = await finishDirectUploadAction({
         key: start.key,
         filename,
