@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
@@ -189,34 +189,7 @@ export default async function BrandingPage({
         title="Branding"
         subtitle="Your brand hub: colours, logos, fonts, slogans, mission, about us and saved banners — all in one place."
         breadcrumbs={<Breadcrumbs items={[{ label: "Branding" }]} />}
-        help={
-          <HelpPanel
-            id="branding"
-            title="How the Branding editor works"
-            steps={[
-              "Use the tabs: Colours (presets, hex, colour wheel), Logos (header logo + logo library with import), Fonts, Slogans/mission/about, Saved banners, Social & guidelines.",
-              "Pick the Heading font (big titles) and the Body font (paragraphs) from the curated library below — each choice is a draft, so nothing goes live yet.",
-              "Open Preview in Website Hub to see exactly how the new fonts look (click ✎ Edit on a highlighted spot to jump here).",
-              "Click Publish on the block (or 'Publish all drafts') to update the public site everywhere at once. Every publish is snapshotted so you can roll back.",
-            ]}
-          >
-            <p className="mb-2">
-              <strong>Heading vs. Body:</strong> the <strong>Heading</strong> font is used for big
-              titles and headlines; the <strong>Body</strong> font is used for regular paragraph and
-              interface text. A clean pairing (a characterful heading with a highly readable body) is
-              usually the safest, most professional look.
-            </p>
-            <p className="mb-2">
-              <strong>Why a curated list?</strong> web pages can only use fonts the browser can fetch,
-              so we ship a hand-picked set of high-quality, license-clean fonts (plus the fast
-              &ldquo;System default&rdquo;). Each is loaded for performance with no layout shift.
-            </p>
-            <p>
-              <strong>Nothing breaks:</strong> your fonts apply site-wide the moment you Publish, and
-              you can roll back to any previous choice from History at any time.
-            </p>
-          </HelpPanel>
-        }
+        helpId="branding"
         action={<Button href="/admin/website-sync" variant="neutral">Website Sync →</Button>}
       />
 

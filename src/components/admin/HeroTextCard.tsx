@@ -1,4 +1,5 @@
-import { HelpPanel } from "@/components/admin/ux";
+import Link from "next/link";
+import { helperHref } from "@/lib/admin/page-helpers-core";
 import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
@@ -65,7 +66,7 @@ export async function HeroTextCard({
   title?: string;
   /** Card sub-description. */
   description?: string;
-  /** Stable id for the HelpPanel. */
+  /** R73 S5: anchor of this card's guide on the Helpers page (/admin/helpers). */
   helpId?: string;
   /** R43: DOM id of the card so other panels can link to it (#hero-text). */
   anchorId?: string;
@@ -155,20 +156,9 @@ export async function HeroTextCard({
         </p>
       </div>
 
-      <HelpPanel
-        id={helpId}
-        title="How hero text works"
-        steps={[
-          "Pick a field below and edit its draft — nothing goes live yet.",
-          "Click 'Preview in Website Hub' to see the page exactly as visitors will (hover any spot and click the green ✎ Edit to jump back to its field).",
-          "Click Publish on the field (or 'Publish all drafts') to update the public page.",
-        ]}
-      >
-        <p>
-          <strong>Nothing breaks:</strong> you can only edit these approved
-          words, so the page always stays laid out correctly.
-        </p>
-      </HelpPanel>
+      <Link href={helperHref(helpId)} className="admin-focus text-xs font-medium text-[var(--admin-accent)] hover:underline">
+        ⓘ How this works
+      </Link>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard

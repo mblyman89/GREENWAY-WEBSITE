@@ -124,6 +124,7 @@ export const adminNav: AdminNavItem[] = [
   // page editors + menu imports. Website Sync is the harmony dashboard (Task
   // T PR 5) — what the storefront is serving RIGHT NOW, with edit links.
   { label: "Website Sync", href: "/admin/website-sync", permission: "dashboard.view", icon: "\ud83d\udd17", group: "Website", subgroup: "Cannabis" }, // 🔗 storefront harmony
+  { label: "Helpers", href: "/admin/helpers", permission: "content.edit", icon: "\u2753", group: "Website", subgroup: "Cannabis" }, // R73 S5: every editor/studio "How this works" guide on one page (moved off the top of the editors)
   // "Site Content" nav entry removed (MIG-7 PR-B): the /admin/content junk-drawer
   // page was retired -- every content block now has a dedicated editor (Pages,
   // Header & Footer, Branding, Legal, etc.) and the live preview + SEO editor

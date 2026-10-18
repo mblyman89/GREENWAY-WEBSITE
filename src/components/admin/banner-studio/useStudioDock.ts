@@ -4,7 +4,10 @@
  * R65 — the Studio "dock": the canvas, its toolbar (Computer/Phone, ▶ Replay,
  * Undo/Redo) and the Arrange bar stay on screen (sticky under the admin
  * header) while the owner scrolls through the settings tabs below, so every
- * change can be watched live. On by default; the on/off choice and the dock
+ * change can be watched live. R73 S5: OFF by default, so the canvas sits where
+ * the banner sits on the live page and only follows the scroll after the owner
+ * presses "Follow scroll" (new key gw-studio-follow-v2, so everyone starts
+ * from the new default once). The on/off choice and the dock
  * size are remembered in this browser. The canvas scales down to fit the
  * dock height so tall cards never cover the whole screen.
  *
@@ -32,7 +35,7 @@ function writePref(k: string, v: string) {
 }
 
 export function useStudioDock() {
-  const [follow, setFollow] = useState(() => readPref("gw-studio-follow") !== "0");
+  const [follow, setFollow] = useState(() => readPref("gw-studio-follow-v2") === "1");
   const [dockSize, setDockSize] = useState<DockSize>(() => {
     const z = readPref("gw-studio-dock");
     return z === "s" || z === "l" ? z : "m";
@@ -56,7 +59,7 @@ export function useStudioDock() {
     follow,
     saveFollow: (v: boolean) => {
       setFollow(v);
-      writePref("gw-studio-follow", v ? "1" : "0");
+      writePref("gw-studio-follow-v2", v ? "1" : "0");
     },
     dockSize,
     saveDock: (v: DockSize) => {

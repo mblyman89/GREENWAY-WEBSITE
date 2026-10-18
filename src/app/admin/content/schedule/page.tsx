@@ -1,7 +1,6 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { HelpPanel } from "@/components/admin/ux";
 import { defaultRunAtLocal } from "@/lib/cms/content-schedule-core";
 import {
   listSchedules,
@@ -60,24 +59,7 @@ export default async function SchedulePage({
       <AdminPageHeader
         title="Schedule & Releases"
         subtitle="Set website changes to go live, or come down, on their own at a date and time (Pacific). Group several changes into a release so they all switch together."
-        help={
-          <HelpPanel
-            id="content-schedule"
-            title="How scheduling works"
-            steps={[
-              "Edit and SAVE the draft as usual (home slide, Shop banner slide, page section, FAQ question or page wording).",
-              "Pick “Go live” or “Come down” and a time. Times are Pacific and run on a 5-minute clock.",
-              "At that time the website publishes the saved draft, exactly as if you had pressed Publish, or hides the item.",
-              "For a sale: schedule the banner to go live Friday morning and to come down Sunday night.",
-              "For a launch with several changes, make a Release, add the items, and give the release one time (or press Publish now).",
-            ]}
-          >
-            <p>
-              Every change is recorded in the audit log under your name. If something cannot be published (for example
-              the item was deleted), it is tried up to three times and then shows here as failed, with the reason.
-            </p>
-          </HelpPanel>
-        }
+        helpId="content-schedule"
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">

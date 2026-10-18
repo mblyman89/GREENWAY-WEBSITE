@@ -26,7 +26,7 @@
 | S2 | Washington-only selling: ZIP gate in the cart and checkout API, authorize-only Checkout, webhook captures WA orders and cancels other states for free, customer email, policy text | shipped |
 | S3 | Website dropdown split into "Cannabis" (everything today) and "Merchandise" (Header & Footer, Banners, Product Cards, Ad Card, Order Emails) feeding greenwaymerch.com | shipped |
 | S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | shipped |
-| S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | planned |
+| S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | shipped |
 | S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | planned |
 | S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | planned |
 | S8 | Reports > Merch tab: traffic, sales, WA tax | planned |
@@ -47,6 +47,18 @@
   - "Customer paid vs Printful charges us", including the sales tax collected.
 - Actions on the details page (`merch-actions.ts`, `orders.manage`, audited) are **Confirm** and **Cancel**. Each one re-reads Printful's current status first, so a stale page can never confirm an order twice or cancel a shipped one.
 - The greenwaymerch.com /admin/orders desk (R72 S6) still works as a fallback.
+
+## S5 - Helpers page and less top-of-page chrome (shipped)
+
+The owner clarified that "helpers" means the green "How this works" bar at the very top. It was collapsible, but it lived inside the **sticky** page header, so it rode along over the editors and studios together with the title and subtitle.
+- **New Helpers page** at `/admin/helpers` (Website > Cannabis > Helpers, `content.edit`). It holds every guide that used to sit at the top of the website editors (Website Sync, Header & Footer, Branding, Legal Policies, Blog wording, the page editors, Shop Banner, Store Listing, Schedule, Loyalty, Specials, Medical page), the four Merchandise editors, Creative Studio and Merch Studio.
+  - The wording is moved unchanged into `src/lib/admin/page-helpers-core.ts` (pure, 17 self-tests: unique anchor-safe ids, every guide has steps, every link stays in the back office, and each section is covered).
+  - Anchor ids are the old HelpPanel ids, so `/admin/helpers#merch-studio` and similar links are stable.
+- **Editors:** the green panel is gone. The header shows one small "ⓘ How this page works" link to that page's guide. The embedded Hero text and Page wording cards do the same.
+- **Less chrome everywhere:** `AdminPageHeader` is no longer sticky. It scrolls away with the page, and the top menu bar stays pinned. Padding is tighter, the title is a step smaller, and a long subtitle is clamped to one line on desktop (the full text shows on hover). This applies to every back-office page.
+  - Pages that still pass `help={<HelpPanel/>}` (purchasing, inventory and similar operational pages) keep their panel, but it now scrolls away too.
+- **Merch Studio:** the four-line "Sold by Greenway Glass & Goods" notice is now a one-line strip that links to the full text on the Helpers page.
+- **First banner sits in place:** the studio canvas dock (`useStudioDock`, used by every Design Studio banner/card editor and Merch Studio) now starts **off**. The canvas sits where the banner sits on the live page, and follows the scroll only after the owner presses "📌 Follow scroll". The choice is remembered in the browser under a new key (`gw-studio-follow-v2`), so everyone starts once from the new default.
 
 ## S4 - SEO for greenwaymerch.com (shipped)
 
