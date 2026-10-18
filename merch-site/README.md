@@ -36,6 +36,12 @@ Printful does not collect or remit the customer's sales tax, so the LLC is the s
 
 **Printful:** first add your legal info in the Printful Dashboard (Billing, then Legal info). Then go to Billing, then Resale certificates (printful.com/dashboard/billing/resale-certificates), click Add certificate, choose the Washington form (MTC or SSUTA) and enter your WA tax registration number. Approval takes about 2 business days, and Printful doesn't refund tax on orders placed before approval. Without a certificate, Printful charges you WA sales tax on its production costs.
 
+## Google (R73 S4)
+
+- Search Console: add `https://greenwaymerch.com`, then submit `https://greenwaymerch.com/sitemap.xml`.
+- Merchant Center (free listings): verify and claim the domain, then add a data source with the file URL `https://greenwaymerch.com/feeds/google.xml`, set to a daily scheduled fetch. Each product page also carries Product structured data, so prices stay in sync.
+- Shipping in the feed and markup comes from `MERCH_SHIP_*`. If those aren't set, no shipping is claimed. The destination is always Washington.
+
 ## Adding a product (no code)
 
 1. In the back office, open **Merch Studio**, go to **Publish & Ads** and click **Download listing package**.

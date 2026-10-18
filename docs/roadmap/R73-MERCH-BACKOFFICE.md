@@ -25,7 +25,7 @@
 | S1 | Merch orders as the LAST panel on /admin/orders (same shell, row and controls as Greenway and Leafly), plus a details page at /admin/orders/merch/[ref] to Confirm or Cancel | shipped |
 | S2 | Washington-only selling: ZIP gate in the cart and checkout API, authorize-only Checkout, webhook captures WA orders and cancels other states for free, customer email, policy text | shipped |
 | S3 | Website dropdown split into "Cannabis" (everything today) and "Merchandise" (Header & Footer, Banners, Product Cards, Ad Card, Order Emails) feeding greenwaymerch.com | shipped |
-| S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | planned |
+| S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | shipped |
 | S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | planned |
 | S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | planned |
 | S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | planned |
@@ -47,6 +47,21 @@
   - "Customer paid vs Printful charges us", including the sales tax collected.
 - Actions on the details page (`merch-actions.ts`, `orders.manage`, audited) are **Confirm** and **Cancel**. Each one re-reads Printful's current status first, so a stale page can never confirm an order twice or cancel a shipped one.
 - The greenwaymerch.com /admin/orders desk (R72 S6) still works as a fallback.
+
+## S4 - SEO for greenwaymerch.com (shipped)
+
+Built from Google's own docs (merchant listing, product variants, return policy, the Merchant Center product data spec, and the official product taxonomy file). All of it lives in `merch-site/lib/seo-core.ts`, which has 19 self-tests.
+- **Every page:** `OnlineStore` (an Organization type) JSON-LD with the dba, legal name and a `merchantReturnLink` to /returns, plus `WebSite`. Email, phone and address are only included when their env vars are set.
+- **Product pages:** a `ProductGroup` with one `Product`/`Offer` per variant (`variesBy` size/color, `productGroupID` = handle, price in USD, New condition, InStock/OutOfStock).
+  - Variants priced at $0 are left out, because Google requires a price above zero.
+  - Shipping is only claimed when `MERCH_SHIP_FLAT_CENTS` is set, and the destination is always **US-WA**. The free-shipping threshold follows the same rule as checkout.
+  - Google category: 212 Shirts & Tops (tees, long sleeves, hoodies, sweatshirts, zip hoodies; the taxonomy has no hoodie node), 5598 Coats & Jackets, and 173 Hats (hats, beanies).
+  - Audience is "unisex" only where Printful's own title says Unisex. The hat titles don't, so no gender is claimed for them.
+- **Breadcrumbs:** `BreadcrumbList` on catalogue and product pages.
+- **Canonical URLs:** set on home, catalogue, product and policy pages. They are per page, so a policy page can never inherit the home canonical. Cart, success and admin stay `noindex`. Default OG image and `summary_large_image` Twitter card.
+- **Google Merchant feed:** `https://greenwaymerch.com/feeds/google.xml` (RSS 2.0 with the `g:` namespace, cached for 1 hour). It has one item per variant with `item_group_id`, price, availability, `identifier_exists=no` (print-on-demand has no GTIN), google_product_category, color, size, age_group adult, gender where verified, and WA shipping.
+  - Owner step: in Merchant Center, add a data source by file URL (scheduled fetch), and verify and claim greenwaymerch.com.
+  - Today the catalogue is empty, so the feed is valid and has no items until Merch Studio publishes.
 
 ## S3 - Website -> Cannabis / Merchandise (shipped)
 
