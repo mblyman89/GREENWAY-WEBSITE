@@ -34,7 +34,7 @@ Printful does not collect or remit the customer's sales tax, so the LLC is the s
 
 **Stripe Tax (optional):** in Stripe, go to Tax, then Registrations, and add **Washington only**. Then set `MERCH_STRIPE_AUTOMATIC_TAX=true`. Stripe Tax Basic for Checkout costs 0.5% per taxed transaction.
 
-**Printful:** in Printful, go to Billing, then Tax exemption, and upload your WA reseller permit. Without it, Printful adds WA sales tax to what it charges you for production.
+**Printful:** first add your legal info in the Printful Dashboard (Billing, then Legal info). Then go to Billing, then Resale certificates (printful.com/dashboard/billing/resale-certificates), click Add certificate, choose the Washington form (MTC or SSUTA) and enter your WA tax registration number. Approval takes about 2 business days, and Printful doesn't refund tax on orders placed before approval. Without a certificate, Printful charges you WA sales tax on its production costs.
 
 ## Adding a product (no code)
 
