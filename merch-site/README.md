@@ -21,6 +21,21 @@ glow cards, detail-page layout and buttons.
 | `/admin/orders` | Slice 6: the owner's order desk. Sign in with `MERCH_ADMIN_KEY`, see paid vs. Printful cost per order, and confirm drafts (Printful only charges for confirmed orders). |
 | `/api/printful/webhook/<token>` | Slice 6: shipment tracking emails go to the customer. |
 
+## Washington-only selling (R73 S2)
+
+Printful does not collect or remit the customer's sales tax, so the LLC is the seller of record. To keep to one tax authority (WA DOR), the store sells to Washington addresses only.
+
+1. In the cart, the shopper must enter a Washington ZIP before the checkout button turns on. `/api/checkout` checks the ZIP again.
+2. Stripe Checkout only authorizes the card (`capture_method=manual`) and shows a "Washington only" note on the address step.
+3. The webhook reads the real shipping address:
+   - **Washington:** it captures the payment, then creates the Printful draft.
+   - **Any other state:** it cancels the authorization, which costs nothing. The customer gets a "not charged" email and you get an alert.
+   - **Any other problem:** the order is left authorized but not charged, and you get an alert. Capture or cancel it in Stripe within about 7 days, before the hold expires.
+
+**Stripe Tax (optional):** in Stripe, go to Tax, then Registrations, and add **Washington only**. Then set `MERCH_STRIPE_AUTOMATIC_TAX=true`. Stripe Tax Basic for Checkout costs 0.5% per taxed transaction.
+
+**Printful:** in Printful, go to Billing, then Tax exemption, and upload your WA reseller permit. Without it, Printful adds WA sales tax to what it charges you for production.
+
 ## Adding a product (no code)
 
 1. In the back office, open **Merch Studio**, go to **Publish & Ads** and click **Download listing package**.
