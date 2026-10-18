@@ -92,6 +92,30 @@ def test_scanner_detects_lazy_imports_inside_functions():
     assert mods == {"openpyxl", "zzz_not_real.sub"}
 
 
+def _uses_zoneinfo() -> list[str]:
+    hits = []
+    for f in sorted(APP.rglob("*.py")):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.module == "zoneinfo":
+                hits.append(f.relative_to(ROOT).as_posix())
+            elif isinstance(node, ast.Import) and any(a.name == "zoneinfo" for a in node.names):
+                hits.append(f.relative_to(ROOT).as_posix())
+    return hits
+
+
+def test_zoneinfo_users_ship_tzdata():
+    # zoneinfo is stdlib, but its DATA is not: it reads /usr/share/zoneinfo or the
+    # `tzdata` pip package. The Playwright base image has no /usr/share/zoneinfo,
+    # so ZoneInfo("America/Los_Angeles") at import time crashed the app on boot
+    # (Railway: healthcheck "service unavailable"). Require tzdata whenever used.
+    if _uses_zoneinfo():
+        assert "tzdata" in declared_dists(), f"zoneinfo used in {_uses_zoneinfo()} but tzdata not declared"
+
+
+def test_zoneinfo_scanner_sees_the_harvester():
+    assert "app/cultivera_pos.py" in _uses_zoneinfo()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

@@ -29,3 +29,8 @@ tenacity>=8.2,<10.0
 # "batch dates" stage (app/cultivera_pos.py: exported_barcodes_from_xlsx).
 # Missing it made stage 7 fail with ModuleNotFoundError on Railway.
 openpyxl>=3.1,<4.0
+# IANA time-zone data for zoneinfo. app/cultivera_pos.py builds
+# ZoneInfo("America/Los_Angeles") at import time, and the Playwright base image
+# ships no /usr/share/zoneinfo, so without this the app cannot even start
+# (ZoneInfoNotFoundError -> Railway healthcheck "service unavailable").
+tzdata>=2024.1
