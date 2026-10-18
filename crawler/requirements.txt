@@ -25,3 +25,7 @@ supabase>=2.4,<3.0
 # --- Misc ----------------------------------------------------------------------
 python-dotenv>=1.0,<2.0
 tenacity>=8.2,<10.0
+# Reads the Cultivera POS inventory export (.xlsx) in the harvest's
+# "batch dates" stage (app/cultivera_pos.py: exported_barcodes_from_xlsx).
+# Missing it made stage 7 fail with ModuleNotFoundError on Railway.
+openpyxl>=3.1,<4.0
