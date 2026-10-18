@@ -116,6 +116,7 @@ export const WORKSPACES: Workspace[] = [
       "Edit public pages without touching code",
       "Preview unpublished changes before they go live",
       "See what the storefront serves right now in Website Sync",
+      "Read how every editor and studio works on the Helpers page",
       "Edit greenwaymerch.com wording and attach banners (Merchandise)",
     ],
     icon: "🖥️",

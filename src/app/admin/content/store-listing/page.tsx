@@ -1,7 +1,6 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { backHref } from "@/lib/admin/back-link-core";
 import { getStoreHoursForEdit } from "@/lib/seo/store-hours-server";
@@ -38,29 +37,7 @@ export default async function StoreListingPage({
         title="Google Store Listing"
         subtitle="The opening hours (including holidays) that Google and other search engines read from your website."
         action={<Button href={backHref("/admin/content/seo", back)} variant="neutral">← SEO Editor</Button>}
-        help={
-          <HelpPanel
-            id="store-listing"
-            title="How store hours reach Google"
-            steps={[
-              "Set your regular hours for each day. Tick “Midnight” if you stay open until 12 AM.",
-              "Add holiday or special hours (for example Thanksgiving closed, or Christmas Eve 8 AM – 6 PM).",
-              "Save. Every page of the site updates its hidden store information for Google right away.",
-              "Also update the same hours in your Google Business Profile — Google treats that as the main source for Maps.",
-            ]}
-          >
-            <p className="mb-2">
-              This page controls the hidden “structured data” Google reads from your website. It does not change the
-              hours text people see in the footer or on the Locations page — that wording is edited in{" "}
-              <a className="underline" href="/admin/header-footer">Header &amp; Footer</a> (the business hours text).
-              Please keep them matching.
-            </p>
-            <p>
-              To check: open Google&apos;s Rich Results Test, enter your Locations page address, and look for the
-              “Local business” result with your hours.
-            </p>
-          </HelpPanel>
-        }
+        helpId="store-listing"
       />
       <div className="space-y-4 px-5 py-6 sm:px-8">
         {saved && (

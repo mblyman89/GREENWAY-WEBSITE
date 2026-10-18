@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import {
   ShopBannerEditor,
@@ -143,24 +143,7 @@ export default async function AdminShopBannerPage({
         title="Shop banner"
         subtitle="The carousel of banners at the top of your Shop page. Add up to ten slides — great for one-off sales — and style each with its own picture, fonts, colors, and buttons."
         breadcrumbs={<Breadcrumbs items={[{ label: "Shop banner" }]} />}
-        help={
-          <HelpPanel
-            id="shop-banner-editor"
-            title="How the Shop banner works"
-            steps={[
-              "Add a slide, style its picture and text, then Publish that slide to put it live.",
-              "Drag order with the up/down arrows — the first live slide shows first, then they auto-rotate.",
-              "Use a slide’s buttons to send shoppers to a filtered menu (handy for a sale).",
-              "Leave a slide’s schedule blank to show it always, or set a start/end for a one-off sale.",
-            ]}
-          >
-            <p>
-              Each slide is fully yours to style — the same powerful editor as the Loyalty banner,
-              now for every slide, plus buttons and an optional schedule. Nothing goes live until you
-              Publish that slide.
-            </p>
-          </HelpPanel>
-        }
+        helpId="shop-banner-editor"
         action={<Button href="/menu" external variant="neutral">View live Shop page →</Button>}
       />
 

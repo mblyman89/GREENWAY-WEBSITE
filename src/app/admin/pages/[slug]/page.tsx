@@ -224,6 +224,7 @@ export default async function PageBuilderPage({
     <div>
       <AdminPageHeader
         title={config.label}
+        helpId="page-wording"
         subtitle={
           isHome
             ? "Manage the homepage: the Main banner (rotating carousel), the Types banner, the Brands banner and the Types cards — each in its own tab, all with the same Design Studio."

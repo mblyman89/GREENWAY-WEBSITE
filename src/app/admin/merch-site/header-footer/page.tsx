@@ -20,18 +20,6 @@ export default async function MerchHeaderFooterPage({
         subtitle: "The header, announcement bar and footer on every greenwaymerch.com page. Edit a draft, then Publish.",
         crumb: "Header & Footer",
         helpId: "merch-header-footer",
-        steps: [
-          "Edit a block below (the announcement bar, the wordmark, the footer note or a social link). Nothing goes live yet.",
-          "Click Publish (or 'Publish all drafts'). greenwaymerch.com picks it up within about a minute.",
-          "Every publish is saved, so you can roll back from a block's history.",
-        ],
-        help: (
-          <p>
-            Leave the <strong>announcement</strong> blank to hide the bar. Social links must start
-            with <code>https://</code>; a blank one simply hides that button. The legal lines
-            (seller name, Washington-only shipping) are fixed and always show.
-          </p>
-        ),
         slotsHint: "Announcement, wordmark, labels, footer note & social links",
       }}
     />

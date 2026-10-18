@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import {
   MedicalPageEditor,
@@ -166,27 +166,7 @@ export default async function AdminMedicalPage({
         title="Medical page"
         subtitle="Show or hide the public Medical page, and edit its section headings and info lists — then Save draft or Publish."
         breadcrumbs={<Breadcrumbs items={[{ label: "Medical page" }]} />}
-        help={
-          <HelpPanel
-            id="medical-page-editor"
-            title="How the Medical page editor works"
-            steps={[
-              "Use the visibility switch to show or hide the whole Medical page. Publish to make it take effect.",
-              "Edit any section heading or info line, then Save draft (private) or Publish (updates the live page).",
-              "Every publish is saved, so you can open History on any field and roll back.",
-            ]}
-          >
-            <p className="mb-2">
-              <strong>The legal fine print and the limits table are locked.</strong> They stay
-              accurate from the compliance engine, so you can never accidentally change a tax figure
-              or a purchase limit here.
-            </p>
-            <p>
-              This is a different page from <strong>Medical (patient intake)</strong> in the staff
-              tools — this one only edits the public website page.
-            </p>
-          </HelpPanel>
-        }
+        helpId="medical-page-editor"
         action={<Button href="/medical" external variant="neutral">View live page →</Button>}
       />
 

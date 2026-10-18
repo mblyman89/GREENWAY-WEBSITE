@@ -1,8 +1,7 @@
-import type { ReactNode } from "react";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
@@ -54,8 +53,6 @@ export type MerchEditorConfig = {
   subtitle: string;
   crumb: string;
   helpId: string;
-  steps: string[];
-  help: ReactNode;
   slotsHint: string;
   /** Put images from the "merch" media folder first in the picker. */
   merchMediaFirst?: boolean;
@@ -76,11 +73,7 @@ export async function MerchSiteEditor({
       title={config.title}
       subtitle={config.subtitle}
       breadcrumbs={<Breadcrumbs items={[{ label: "Merchandise" }, { label: config.crumb }]} />}
-      help={
-        <HelpPanel id={config.helpId} title={`How ${config.title} works`} steps={config.steps}>
-          {config.help}
-        </HelpPanel>
-      }
+      helpId={config.helpId}
       action={
         <Button href={MERCH_SITE_ORIGIN} variant="neutral">
           View greenwaymerch.com ↗

@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import {
   LoyaltyPageEditor,
@@ -230,30 +230,7 @@ export default async function AdminLoyaltyPage({
         title="Loyalty page"
         subtitle="Edit the wording on the public Loyalty page — the signup button, the birthday note, the thank-you message, the marketing-consent paragraph, and the Program terms headings."
         breadcrumbs={<Breadcrumbs items={[{ label: "Loyalty page" }]} />}
-        help={
-          <HelpPanel
-            id="loyalty-page-editor"
-            title="How the Loyalty page editor works"
-            steps={[
-              "Edit any friendly wording field, then Save draft (private) or Publish (updates the live page).",
-              "Every publish is saved, so you can open History on any field and roll back.",
-              "The program numbers shown on the page are live from your register — change them in CRM → Loyalty Program.",
-            ]}
-          >
-            <p className="mb-2">
-              <strong>The consent paragraph is yours to edit.</strong> A checklist under it shows
-              which usual parts are covered (it&apos;s a helper, not legal advice), and an empty
-              paragraph can&apos;t be published. <strong>The program numbers are locked</strong>: they
-              stay accurate from the register, so this page can never advertise terms that differ
-              from what customers actually earn.
-            </p>
-            <p>
-              The <strong>hero banner</strong> (the big image and its wording) is now edited right
-              here at the top of this page — pick the picture and style the eyebrow, title, and
-              subtitle text. Everything for the Loyalty page lives on this one screen.
-            </p>
-          </HelpPanel>
-        }
+        helpId="loyalty-page-editor"
         action={<Button href="/loyalty" external variant="neutral">View live page →</Button>}
       />
 

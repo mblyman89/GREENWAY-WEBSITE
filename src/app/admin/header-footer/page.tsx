@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
@@ -187,39 +187,7 @@ export default async function HeaderFooterPage({
         title="Header & Footer"
         subtitle="The links and messages in your site footer — shown on every page. Edit a draft, preview it, then Publish."
         breadcrumbs={<Breadcrumbs items={[{ label: "Header & Footer" }]} />}
-        help={
-          <HelpPanel
-            id="header-footer"
-            title="How the Header & Footer editor works"
-            steps={[
-              "Pick a block below (like a 'Follow Greenway' social link) and edit its draft — nothing goes live yet.",
-              "Open Preview in Website Hub to see the footer exactly as visitors will (click ✎ Edit on a highlighted spot to jump here).",
-              "Click Publish on the block (or 'Publish all drafts') to update the public site. Every publish is snapshotted so you can roll back.",
-            ]}
-          >
-            <p className="mb-2">
-              <strong>Follow Greenway links:</strong> paste the full web address (starting with
-              <code> https:// </code>) for each social button. Leave one blank to show your friendly
-              &ldquo;not connected yet&rdquo; message instead of a broken link.
-            </p>
-            <p className="mb-2">
-              <strong>App download links:</strong> these ship blank on purpose until your app is
-              live. Visitors who click them see your editable &ldquo;not connected yet&rdquo; message.
-              When your app launches, paste the App Store / Google Play links here and the buttons
-              start working automatically.
-            </p>
-            <p className="mb-2">
-              <strong>Footer compliance &amp; hours:</strong> this editor also owns the required
-              WA <strong>compliance warning</strong>, the <strong>store-hours image</strong>, and the
-              plain-text <strong>store hours</strong> that appear in the footer. Edit them here just
-              like any other block &mdash; the same draft &rarr; preview &rarr; publish flow applies.
-            </p>
-            <p>
-              <strong>Nothing breaks:</strong> you can only edit these approved spots, so the footer
-              always stays laid out correctly.
-            </p>
-          </HelpPanel>
-        }
+        helpId="header-footer"
         action={<Button href="/admin/website-sync" variant="neutral">Website Sync →</Button>}
       />
 

@@ -20,17 +20,6 @@ export default async function MerchCardsPage({
         subtitle: "The wording on greenwaymerch.com product and category cards, plus each category's image and blurb.",
         crumb: "Product Cards",
         helpId: "merch-cards",
-        steps: [
-          "Edit the card wording (brand line, button labels, the Sold out badge).",
-          "Optionally give a category card its own image and blurb. Blank keeps the automatic one.",
-          "Publish. greenwaymerch.com updates within about a minute.",
-        ],
-        help: (
-          <p>
-            Product names, prices and photos come from Merch Studio when you publish a product, so
-            they are not edited here.
-          </p>
-        ),
         slotsHint: "Card labels + per-category image & blurb",
         merchMediaFirst: true,
       }}

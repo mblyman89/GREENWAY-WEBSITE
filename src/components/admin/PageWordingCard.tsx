@@ -1,4 +1,5 @@
-import { HelpPanel } from "@/components/admin/ux";
+import Link from "next/link";
+import { helperHref } from "@/lib/admin/page-helpers-core";
 import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
@@ -172,22 +173,9 @@ export async function PageWordingCard({
         </p>
       </div>
 
-      <HelpPanel
-        id={`page-wording-${slug}`}
-        title="How Page wording works"
-        steps={[
-          "Pick a block below and edit its draft — nothing goes live yet.",
-          "Use the live preview to see the page exactly as visitors will (click ✎ Edit on a highlighted spot to jump to it).",
-          "Click Publish on the block (or 'Publish all drafts') to update the public page.",
-        ]}
-      >
-        <p>
-          <strong>Nothing breaks:</strong> you can only edit these approved
-          spots, so the page always stays laid out correctly. These are the same
-          words you could previously edit under Site Content — now they live here
-          on the page&apos;s own editor.
-        </p>
-      </HelpPanel>
+      <Link href={helperHref("page-wording")} className="admin-focus text-xs font-medium text-[var(--admin-accent)] hover:underline">
+        ⓘ How this works
+      </Link>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard

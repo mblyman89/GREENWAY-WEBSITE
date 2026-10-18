@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import {
   PolicyDocEditor,
@@ -110,26 +110,7 @@ export default async function LegalPoliciesPage({
         title="Legal Policies"
         subtitle="Edit every word of your Privacy Policy, Terms of Use, and Consumer Health Data pages. Draft it, preview it, then Publish."
         breadcrumbs={<Breadcrumbs items={[{ label: "Legal Policies" }]} />}
-        help={
-          <HelpPanel
-            id="legal-policies"
-            title="How the Legal Policies editor works"
-            steps={[
-              "Pick a tab (Privacy Policy, Terms of Use, or Consumer Health Data).",
-              "Edit the page title and the body — each paragraph or heading is its own row you can change, add, remove, or reorder.",
-              "Use View live page (or the Website Hub preview) to see it as customers will, then Save draft (private) or Publish (updates the live page). Every publish is saved so you can roll back.",
-            ]}
-          >
-            <p className="mb-2">
-              <strong>This is legal wording.</strong> Consider having your attorney review changes
-              before publishing. Nothing goes live until you press Publish.
-            </p>
-            <p>
-              <strong>Nothing can break the layout:</strong> you edit text only — the page styling
-              stays exactly as designed.
-            </p>
-          </HelpPanel>
-        }
+        helpId="legal-policies"
         action={<Button href="/admin/website-sync" variant="neutral">Website Sync →</Button>}
       />
 

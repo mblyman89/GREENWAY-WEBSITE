@@ -984,6 +984,7 @@ import { __runOrdersCoreTests as __runMerchOrdersTests } from "../../merch-site/
 import { __runRegionCoreTests as __runMerchRegionTests } from "../../merch-site/lib/region-core";
 import { __runSiteContentCoreTests as __runMerchSiteContentTests } from "../../merch-site/lib/site-content-core";
 import { __runSeoCoreTests as __runMerchSeoTests } from "../../merch-site/lib/seo-core";
+import { __runPageHelpersTests } from "../../src/lib/admin/page-helpers-core";
 import { __runMerchOrdersPanelTests } from "../../src/lib/orders/merch-orders-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
@@ -2403,6 +2404,7 @@ __runLiquidVolumeTests();
   assertRan("merch-site region-core", __runMerchRegionTests(), 12); // R73 S2: Washington-only (WA ZIPs, authorize -> capture WA / cancel others for free)
   assertRan("merch-site site-content-core", __runMerchSiteContentTests(), 15); // R73 S3: greenwaymerch.com editable header/footer, banners, cards, email wording (published content_blocks)
   assertRan("merch-site seo-core", __runMerchSeoTests(), 19); // R73 S4: greenwaymerch.com JSON-LD (ProductGroup/Offer, OnlineStore, breadcrumbs) + Google Merchant feed, WA-only shipping
+  assertRan("page-helpers-core", __runPageHelpersTests(), 17); // R73 S5: Helpers page registry (guides moved off the top of the editors/studios)
   assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   console.log("ALL PURE SELF-TESTS PASSED");
 }

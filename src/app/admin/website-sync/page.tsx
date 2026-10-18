@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { EditLinksGuide } from "@/components/admin/EditLinksGuide";
 import { StatCard } from "@/components/admin/StatCard";
 import { Section } from "@/components/admin/ui/Section";
@@ -103,23 +103,7 @@ export default async function WebsiteSyncPage({
             <Button href="/admin/content/seo" variant="neutral">SEO editor →</Button>
           ) : null
         }
-        help={
-          <HelpPanel
-            id="website-sync"
-            title="How this page keeps the website honest"
-            steps={[
-              "Every block below is loaded with the SAME functions the customer-facing site calls — published menu version, published promotion snapshots, loyalty config, endorsement config, CMS hours.",
-              "Today's deal row is resolved with the store's Pacific weekday, exactly like the storefront cart re-prices at midnight.",
-              "Each block links to the admin surface that owns it, so fixing a mismatch is one click away.",
-              "If a block shows seed/fallback data, the storefront is showing the committed fallback too — publish from the owning page to take control.",
-            ]}
-          >
-            <p>
-              This is the back office&apos;s promise as the single source of truth: if it looks
-              right here, it is what customers see.
-            </p>
-          </HelpPanel>
-        }
+        helpId="website-sync"
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">

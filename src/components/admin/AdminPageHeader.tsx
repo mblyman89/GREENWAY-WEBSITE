@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { helperHref } from "@/lib/admin/page-helpers-core";
 
 /**
  * AdminPageHeader — consistent page title block across the back office.
@@ -6,11 +8,16 @@ import type { ReactNode } from "react";
  * Slots:
  *  - breadcrumbs: wayfinding row above the title (use <Breadcrumbs />)
  *  - action: right-aligned primary action(s)
+ *  - helpId: R73 S5 — the page's "How this works" guide lives on the Helpers
+ *    page (/admin/helpers); the header only shows a small link to it, so the
+ *    guide no longer takes canvas space at the top of the page.
  *  - help: a collapsible help panel (use <HelpPanel />) rendered under the
- *    header so every section can explain itself in plain language.
+ *    header (pages not yet moved to the Helpers page).
  *
- * Token-driven (--admin-*) so it matches the rest of the shell. A subtle
- * sticky, blurred bar keeps the title + primary action in reach while scrolling.
+ * R73 S5: the header scrolls away with the page (it used to be sticky, which
+ * kept the title, subtitle and green helper on screen over the editors and
+ * studios). The top menu bar stays pinned, so navigation is always one click
+ * away. Padding is tighter and a long subtitle is clamped (full text on hover).
  */
 export function AdminPageHeader({
   title,
@@ -18,25 +25,37 @@ export function AdminPageHeader({
   action,
   breadcrumbs,
   help,
+  helpId,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
   breadcrumbs?: ReactNode;
   help?: ReactNode;
+  helpId?: string;
 }) {
   return (
-    <div className="sticky top-0 z-20 border-b border-[var(--admin-border)] bg-[var(--admin-canvas)]/80 backdrop-blur supports-[backdrop-filter]:bg-[var(--admin-canvas)]/70">
+    <div className="border-b border-[var(--admin-border)]">
       {breadcrumbs ? (
-        <div className="px-5 pt-4 sm:px-8">{breadcrumbs}</div>
+        <div className="px-5 pt-3 sm:px-8">{breadcrumbs}</div>
       ) : null}
-      <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+      <div className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-bold tracking-tight text-[var(--admin-text)] sm:text-2xl">
-            {title}
-          </h1>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="truncate text-lg font-bold tracking-tight text-[var(--admin-text)] sm:text-xl">
+              {title}
+            </h1>
+            {helpId ? (
+              <Link
+                href={helperHref(helpId)}
+                className="admin-focus shrink-0 text-xs font-medium text-[var(--admin-accent)] hover:underline"
+              >
+                ⓘ How this page works
+              </Link>
+            ) : null}
+          </div>
           {subtitle ? (
-            <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
+            <p title={subtitle} className="mt-0.5 line-clamp-2 text-xs text-[var(--admin-text-muted)] sm:line-clamp-1 sm:text-sm">
               {subtitle}
             </p>
           ) : null}
@@ -47,7 +66,7 @@ export function AdminPageHeader({
           </div>
         ) : null}
       </div>
-      {help ? <div className="px-5 pb-5 sm:px-8">{help}</div> : null}
+      {help ? <div className="px-5 pb-3 sm:px-8">{help}</div> : null}
     </div>
   );
 }

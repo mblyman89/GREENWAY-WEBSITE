@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import {
   BlogContentEditor,
@@ -121,27 +121,7 @@ export default async function AdminBlogContentPage({
             ]}
           />
         }
-        help={
-          <HelpPanel
-            id="blog-content-editor"
-            title="How the blog wording editor works"
-            steps={[
-              "Edit any field — the hero heading, the intro line, or a button label.",
-              "Save draft (private) or Publish (updates the live blog page).",
-              "Every publish is saved, so you can open History on any field and roll back.",
-            ]}
-          >
-            <p className="mb-2">
-              This edits the blog page&rsquo;s <strong>wording only</strong>. Your actual posts and
-              newsletters are written in <strong>Blog &amp; Newsletter</strong>, and the card design
-              isn&rsquo;t changed here.
-            </p>
-            <p>
-              Defaults match the live page exactly, so nothing looks different until you edit a field
-              and Publish.
-            </p>
-          </HelpPanel>
-        }
+        helpId="blog-content-editor"
         action={<Button href="/blog" external variant="neutral">View live blog &rarr;</Button>}
       />
 

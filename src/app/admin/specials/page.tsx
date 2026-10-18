@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 import {
@@ -156,28 +155,7 @@ export default async function AdminSpecialsPage({
         title="Specials"
         subtitle="Choose which weekly deal cards show, their order, the badge style, and copy — then Save draft or Publish. Prices come from Promotions."
         breadcrumbs={<Breadcrumbs items={[{ label: "Specials" }]} />}
-        help={
-          <HelpPanel
-            id="specials-presentation"
-            title="How the Specials editor works"
-            steps={[
-              "Turn the weekly deal grid and Today's Deals products grid on or off.",
-              "For each weekday: show/hide it, drag its order, pick a badge style, and optionally override the title, offer line, or description.",
-              "Design right on the studio canvas (it shows what customers see), then Save draft (private) or Publish (updates the live page). Every publish is saved so you can roll back.",
-            ]}
-          >
-            <p className="mb-2">
-              <strong>This controls presentation only — not the prices.</strong> The actual
-              discounts, percentages, and eligible products are set in{" "}
-              <Link href="/admin/promotions" className="underline">Promotions</Link>. Editing here only
-              changes how those deals are shown.
-            </p>
-            <p>
-              <strong>Nothing can break the layout:</strong> you toggle and reorder cards and edit
-              text only — the page styling stays exactly as designed.
-            </p>
-          </HelpPanel>
-        }
+        helpId="specials-presentation"
         action={
           <div className="flex flex-wrap items-center gap-2">
             <CanvaButton />
