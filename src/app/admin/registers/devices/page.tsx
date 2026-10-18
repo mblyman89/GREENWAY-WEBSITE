@@ -14,8 +14,9 @@ import { backHref } from "@/lib/admin/back-link-core";
 import { Badge, Button, Card, Select } from "@/components/admin/ui";
 import { listPosDevices } from "@/lib/pos/device-store";
 import { listRegisters } from "@/lib/registers/store";
-import { ProvisionForm, RotateKeyForm } from "./DeviceManager";
-import { bindDeviceAction, revokeDeviceAction } from "./actions";
+import { ProvisionForm, DeviceKeyForm, RenameDeviceForm, RevokeDeviceForm } from "./DeviceManager";
+import { bindDeviceAction } from "./actions";
+import { deviceActionsFor } from "@/lib/pos/device-pairing-core";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function PosDevicesPage({
     <div>
       <AdminPageHeader
         title="POS devices"
-        subtitle="Provision, bind, rotate, and revoke the register iPads."
+        subtitle="Provision, rename, bind, rotate, revoke, and reactivate the register iPads."
         breadcrumbs={
           <Breadcrumbs
             items={[{ label: "Register Activity", href: "/admin/registers" }, { label: "POS devices" }]}
@@ -66,7 +67,10 @@ export default async function PosDevicesPage({
             "Provisioning mints a device id + key. The key is shown ONCE and only its hash is stored — like employee PINs.",
             "On the iPad, open /pos and enter both values in the setup screen. The device then syncs sales, punches, and audits.",
             "PINs identify people; the device key identifies the iPad. Both are required for every register action.",
-            "Revoking (or rotating) a key cuts the device off on its very next request.",
+            "Revoking (or rotating) a key cuts the device off on its very next request. The iPad then shows a re-pair screen within about a minute — it stops ringing sales but keeps any unsynced sales safe.",
+            "To SWAP iPads: revoke the old device (type REVOKE to confirm), provision a new device with a new name, then on the iPad tap \"Re-pair this register\" and paste the new id + key.",
+            "Revoked by mistake, or the old iPad still holds unsynced sales? Use \"Reactivate with new key\" on the revoked row. The old key stays dead; the same device id comes back with a fresh key so its queued sales can sync.",
+            "Floor staff cannot unpair a register: a working iPad has no unpair button at all, and a revoked iPad can only be put back in service with a NEW id + key that only someone with this page's permission can mint.",
           ]}
         />
 
@@ -128,31 +132,40 @@ export default async function PosDevicesPage({
                           </p>
                         </div>
                       ) : null}
-                      {d.status === "active" ? (
-                        <div className="mt-3 flex flex-wrap items-end gap-3">
-                          <form action={bindDeviceAction} className="flex items-end gap-2">
-                            <input type="hidden" name="device_id" value={d.id} />
-                            <Select name="register_id" defaultValue={d.register_id ?? ""}>
-                              <option value="">— unbound —</option>
-                              {registers.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.name}
-                                </option>
-                              ))}
-                            </Select>
-                            <Button type="submit" variant="neutral" size="sm">
-                              Bind
-                            </Button>
-                          </form>
-                          <RotateKeyForm deviceId={d.id} />
-                          <form action={revokeDeviceAction}>
-                            <input type="hidden" name="device_id" value={d.id} />
-                            <Button type="submit" variant="danger" size="sm">
-                              Revoke
-                            </Button>
-                          </form>
-                        </div>
-                      ) : null}
+                      {/* Register rotation slice — the row's controls come from
+                          deviceActionsFor (pure). DeviceKeyForm is rendered at a
+                          FIXED position for every status so a reactivate's
+                          one-time key survives the row flipping to active. */}
+                      {(() => {
+                        const actions = deviceActionsFor(d.status);
+                        return (
+                          <div className="mt-3 flex flex-wrap items-start gap-3">
+                            {actions.includes("rename") ? (
+                              <RenameDeviceForm deviceId={d.id} currentName={d.name} />
+                            ) : null}
+                            {actions.includes("bind") ? (
+                              <form action={bindDeviceAction} className="flex items-end gap-2">
+                                <input type="hidden" name="device_id" value={d.id} />
+                                <Select name="register_id" defaultValue={d.register_id ?? ""}>
+                                  <option value="">— unbound —</option>
+                                  {registers.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                      {r.name}
+                                    </option>
+                                  ))}
+                                </Select>
+                                <Button type="submit" variant="neutral" size="sm">
+                                  Bind
+                                </Button>
+                              </form>
+                            ) : null}
+                            <DeviceKeyForm deviceId={d.id} status={d.status} />
+                            {actions.includes("revoke") ? (
+                              <RevokeDeviceForm deviceId={d.id} deviceName={d.name} />
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </li>
                   ))}
                 </ul>

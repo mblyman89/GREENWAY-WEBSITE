@@ -12,6 +12,7 @@ import { randomBytes } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { hashPin } from "@/lib/security/pin-hash";
+import { validateDeviceName } from "@/lib/pos/device-pairing-core";
 
 function isMissingSchemaError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -104,8 +105,9 @@ export async function provisionDevice(opts: {
   notes?: string | null;
 }): Promise<ProvisionResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
-  const name = opts.name.trim();
-  if (name.length < 3) return { ok: false, error: "Give the device a name (at least 3 characters)." };
+  const checkedName = validateDeviceName(opts.name);
+  if (!checkedName.ok) return checkedName;
+  const name = checkedName.name;
 
   const deviceKey = randomBytes(24).toString("base64url"); // 192-bit key
   const admin = createSupabaseAdminClient();
@@ -163,4 +165,53 @@ export async function bindDeviceToRegister(
   const { error } = await admin.from("pos_devices").update({ register_id: registerId }).eq("id", deviceId);
   if (error) return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
   return { ok: true };
+}
+
+/**
+ * Rename a device (register rotation slice). Works on active AND revoked
+ * rows so a retired iPad can be labelled ("Old front iPad — retired"). An
+ * active register picks the new name up on its next heartbeat.
+ */
+export async function renameDevice(
+  deviceId: string,
+  rawName: string,
+): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const checked = validateDeviceName(rawName);
+  if (!checked.ok) return checked;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pos_devices")
+    .update({ name: checked.name })
+    .eq("id", deviceId)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error) return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
+  if (!data) return { ok: false, error: "Device not found." };
+  return { ok: true, name: checked.name };
+}
+
+/**
+ * Reactivate a REVOKED device with a brand-new key (register rotation slice).
+ *
+ * The old key is never brought back: the hash is replaced in the same update
+ * that flips the status, so whatever key was saved on the retired iPad stays
+ * dead. The device id is kept — that is the point: any sales still queued
+ * on that iPad were stamped with this id and can only sync under it
+ * (checkEnvelopeForDevice). The new key is returned ONCE.
+ */
+export async function reactivateDevice(deviceId: string): Promise<ProvisionResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const deviceKey = randomBytes(24).toString("base64url");
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pos_devices")
+    .update({ status: "active", provision_hash: hashPin(deviceKey) })
+    .eq("id", deviceId)
+    .eq("status", "revoked")
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error) return { ok: false, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
+  if (!data) return { ok: false, error: "Device not found or not revoked." };
+  return { ok: true, deviceId: data.id, deviceKey };
 }

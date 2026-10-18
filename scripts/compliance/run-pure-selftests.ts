@@ -647,6 +647,9 @@ import { __runCutoverWatchCoreTests } from "../../src/lib/pos/cutover-watch-core
 import { __runIntakeMenuStagingCoreTests } from "../../src/lib/pos/intake-menu-staging-core";
 import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
 import { __runDeviceSetupCoreTests } from "../../src/lib/pos/device-setup-core";
+// Register rotation slice -- when a revoked/re-keyed register re-pairs, and
+// the guard that stops unsynced sales being stranded under a dead device id.
+import { __runDevicePairingCoreTests } from "../../src/lib/pos/device-pairing-core";
 import { __runVoidSaleCoreTests } from "../../src/lib/pos/void-sale-core";
 import { __runPickupCoreTests } from "../../src/lib/pos/pickup-core";
 import { __runPickupDetailCoreTests } from "../../src/lib/pos/pickup-detail-core";
@@ -1589,6 +1592,11 @@ __runLiquidVolumeTests();
   __runIntakeMenuStagingCoreTests();
   __runPriceOverrideCoreTests();
   __runDeviceSetupCoreTests();
+  {
+    const pairing = __runDevicePairingCoreTests();
+    if (pairing.failed > 0 || pairing.passed < 1) throw new Error(`device-pairing-core: ${pairing.failed} failure(s)`);
+    console.log(`device-pairing-core self-tests: ${pairing.passed} passed`);
+  }
   __runVoidSaleCoreTests();
   __runPickupCoreTests();
   {
