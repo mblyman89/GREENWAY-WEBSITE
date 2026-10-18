@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 // Categories (the cards on the shop page = the catalogue pages)
 // ---------------------------------------------------------------------------
+import { MERCH_BANNER_CATEGORIES, merchDefaults } from "./site-content-core";
 export interface MerchCategory {
   slug: string;
   label: string;
@@ -349,5 +350,9 @@ export function __runMerchCatalogTests(): { passed: number; failed: number } {
   const meta = encodeCartMeta(many);
   ok(Object.values(meta).every((v) => v.length <= 500) && Object.keys(meta).length > 1, "cart metadata chunks under Stripe's 500-char limit");
   ok(JSON.stringify(decodeCartMeta(meta)) === JSON.stringify(cleanCart(many)), "cart metadata round trip");
+  // R73 S3: the admin's banner + card editors list exactly these catalogues with the same blurbs.
+  ok(JSON.stringify(MERCH_BANNER_CATEGORIES.map((c) => [c.slug, c.label])) === JSON.stringify(MERCH_CATEGORIES.map((c) => [c.slug, c.label])), "editor categories = MERCH_CATEGORIES");
+  const defaults = merchDefaults();
+  ok(MERCH_CATEGORIES.every((c) => defaults[`merch.card.category.${c.slug}.blurb`] === c.blurb), "seeded blurbs = shipped blurbs");
   return { passed, failed };
 }

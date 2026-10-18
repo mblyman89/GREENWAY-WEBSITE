@@ -6,6 +6,8 @@ import { ProductDetail } from "@/components/ProductDetail";
 import { Breadcrumbs } from "@/components/ui";
 import { allProducts, cardsIn, findProduct } from "@/lib/catalog";
 import { getCategory, toCard } from "@/lib/catalog-core";
+import { getMerchContent } from "@/lib/site-content";
+import { cardCopy } from "@/lib/site-content-core";
 
 type Params = { params: Promise<{ category: string; handle: string }> };
 
@@ -13,6 +15,8 @@ export function generateStaticParams() {
   return allProducts().map((p) => ({ category: p.category, handle: p.handle }));
 }
 export const dynamicParams = false;
+/** R73 S3: owner-edited copy refreshes every 60 s (ISR). */
+export const revalidate = 60;
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { handle } = await params;
@@ -26,6 +30,7 @@ export default async function ProductPage({ params }: Params) {
   if (!product) notFound();
   if (product.category !== category) permanentRedirect(`/${product.category}/${product.handle}`);
   const cat = getCategory(product.category)!;
+  const copy = cardCopy(await getMerchContent());
   const more = cardsIn(cat.slug).filter((p) => p.handle !== product.handle).slice(0, 4);
   return (
     <main>
@@ -38,7 +43,7 @@ export default async function ProductPage({ params }: Params) {
         <section className="mx-auto max-w-[var(--shop-max)] px-3 pb-10 sm:px-4 md:px-8">
           <h2 className="mb-5 text-2xl font-black text-white md:text-3xl">More {cat.label}</h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {more.map((p, i) => <ProductCard key={p.handle} p={p} index={i} />)}
+            {more.map((p, i) => <ProductCard key={p.handle} p={p} index={i} copy={copy} />)}
           </div>
         </section>
       ) : null}

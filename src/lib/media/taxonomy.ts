@@ -35,6 +35,9 @@ export const MEDIA_PURPOSES: MediaPurpose[] = [
   { id: "newsletter", label: "Newsletter", hint: "Newsletter PDF or its cover." },
   { id: "icon", label: "Icon / badge", hint: "Small UI icon, badge, or seal." },
   { id: "background", label: "Background", hint: "Decorative background texture." },
+  // R73 S3: the Merch folder - finished banners / cards for greenwaymerch.com
+  // (Website -> Merchandise -> Banners lists these first).
+  { id: "merch", label: "Merch (greenwaymerch.com)", hint: "Finished banners and cards for the merch website." },
   { id: "document", label: "Document", hint: "A PDF or downloadable file." },
   { id: "other", label: "Other", hint: "Anything that doesn't fit above." },
 ];

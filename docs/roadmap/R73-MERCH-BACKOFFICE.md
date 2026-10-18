@@ -24,10 +24,10 @@
 |---|-------|--------|
 | S1 | Merch orders as the LAST panel on /admin/orders (same shell, row and controls as Greenway and Leafly), plus a details page at /admin/orders/merch/[ref] to Confirm or Cancel | shipped |
 | S2 | Washington-only selling: ZIP gate in the cart and checkout API, authorize-only Checkout, webhook captures WA orders and cancels other states for free, customer email, policy text | shipped |
-| S3 | Website dropdown split into "Cannabis" (everything today) and "Merchandise" (product ad card, product card, home banner, catalog banner, order email, header/footer editors) feeding greenwaymerch.com | planned |
+| S3 | Website dropdown split into "Cannabis" (everything today) and "Merchandise" (Header & Footer, Banners, Product Cards, Ad Card, Order Emails) feeding greenwaymerch.com | shipped |
 | S4 | SEO for greenwaymerch.com: JSON-LD Organization, Product and Breadcrumb; OG images; canonical URLs; sitemap; Google Merchant feed | planned |
 | S5 | Helpers page: move the top-of-page helpers off the website editors, Creative Studio and Merch Studio. The first banner sits where it does on the live site and only follows the scroll when that setting is turned on | planned |
-| S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners | planned |
+| S6 | Brand editor: build and save cards plus custom sizes (blog, newsletter, marketing), not just banners, and save a finished design as an image into the Media Library "Merch" folder so Merch Banners can attach it | planned |
 | S7 | Merch inventory page (Inventory menu). Publishing in Merch Studio adds the item to inventory automatically | planned |
 | S8 | Reports > Merch tab: traffic, sales, WA tax | planned |
 
@@ -47,6 +47,19 @@
   - "Customer paid vs Printful charges us", including the sales tax collected.
 - Actions on the details page (`merch-actions.ts`, `orders.manage`, audited) are **Confirm** and **Cancel**. Each one re-reads Printful's current status first, so a stale page can never confirm an order twice or cancel a shipped one.
 - The greenwaymerch.com /admin/orders desk (R72 S6) still works as a fallback.
+
+## S3 - Website -> Cannabis / Merchandise (shipped)
+
+Course change (owner, mid-S3): build banners once in the cannabis Brand editor, save the finished image to a "Merch" media folder, and have the merch side simply attach it. We agreed because copying the live banner renderer to greenwaymerch.com would mean about 61 files and 17.5k lines (DesignedBanner, banner-design-core at 1,830 lines, the smoke/animation/promotions code, and three extra packages: `shaders/js`, `@lottiefiles/dotlottie-web`, `@rive-app/webgl2`). Two copies would drift apart. A finished image looks pixel-identical, costs nothing to serve, and needs no second renderer.
+
+What shipped:
+- The Website dropdown now shows two headings, **Cannabis** (all existing items, unchanged) and **Merchandise** (`subgroup` on nav items; `subgroupHeaderAt` in admin-nav-core, tested).
+- Four editors at `/admin/merch-site/{header-footer,banners,cards,emails}`, all one shared component cloned from the Header & Footer editor (same draft, publish and history actions). "Merch Ad Card (on Shop)" is `/admin/merch-site/ad-card`, a guarded redirect to the existing Merch Studio Publish tab (one editor, no copy).
+- Banners: one slot for Home and one per category (desktop image, optional phone image, alt text, link). The image picker lists the new **Merch** media folder first. An empty slot renders nothing.
+- The content lives in `content_blocks` (pages `merch-header-footer`, `merch-banners`, `merch-cards`, `merch-emails`), defined once in `merch-site/lib/site-content-core.ts` (15 self-tests) and seeded from there. No migration.
+- greenwaymerch.com reads only published values from the public, read-only `GET /api/merch-content` (60s CDN cache). If that call fails it uses the built-in defaults. The defaults match the pre-S3 site exactly, so nothing changes until someone publishes.
+- Order emails: the shipped and "cancelled (Washington only)" subjects, the shipped note and the sign-off are editable (`{order}`, `{site}`). Order facts, tracking and refund wording stay automatic.
+- The green Edit router (edit-target-core) sends `merch.header/footer/banner/card/email.*` keys to their new editors.
 
 ## S2 - Washington-only selling (shipped)
 

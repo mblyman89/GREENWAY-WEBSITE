@@ -982,6 +982,7 @@ import { __runMerchCatalogTests } from "../../merch-site/lib/catalog-core";
 import { __runCheckoutCoreTests as __runMerchCheckoutTests } from "../../merch-site/lib/checkout-core";
 import { __runOrdersCoreTests as __runMerchOrdersTests } from "../../merch-site/lib/orders-core";
 import { __runRegionCoreTests as __runMerchRegionTests } from "../../merch-site/lib/region-core";
+import { __runSiteContentCoreTests as __runMerchSiteContentTests } from "../../merch-site/lib/site-content-core";
 import { __runMerchOrdersPanelTests } from "../../src/lib/orders/merch-orders-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
 import { __runBannerLiveTests } from "../../src/lib/cms/banner-live-core";
@@ -2395,10 +2396,11 @@ __runLiquidVolumeTests();
   assertRan("print-export-core", __runPrintExportTests(), 85); // R71 S3: print-file planning, Printful position/options, PNG sRGB+pHYs tagging, STORE zip
   assertRan("listing-package-core", __runListingPackageTests(), 29); // R71 S4: listing package for the separate Greenway Goods site (variants, prices, no position on sync files)
   assertRan("merch-ad-core", __runMerchAdTests(), 51); // R71 S4 + R72 S5: pure redirect ad + per-category cards to greenwaymerch.com (https separate domain only, no price/cart words, hidden by default)
-  assertRan("merch-site catalog-core", __runMerchCatalogTests(), 25); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
+  assertRan("merch-site catalog-core", __runMerchCatalogTests(), 27); // R72 S5: greenwaymerch.com listing packages -> products, server cart pricing, Stripe metadata cart
   assertRan("merch-site checkout-core", __runMerchCheckoutTests(), 19); // R72 S5: Stripe Checkout form (tax codes, US shipping, owner-set shipping price only)
-  assertRan("merch-site orders-core", __runMerchOrdersTests(), 28); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows
-  assertRan("merch-site region-core", __runMerchRegionTests(), 11); // R73 S2: Washington-only (WA ZIPs, authorize -> capture WA / cancel others for free)
+  assertRan("merch-site orders-core", __runMerchOrdersTests(), 29); // R72 S6: Stripe signature, paid session -> Printful draft, Printful webhooks, admin rows
+  assertRan("merch-site region-core", __runMerchRegionTests(), 12); // R73 S2: Washington-only (WA ZIPs, authorize -> capture WA / cancel others for free)
+  assertRan("merch-site site-content-core", __runMerchSiteContentTests(), 15); // R73 S3: greenwaymerch.com editable header/footer, banners, cards, email wording (published content_blocks)
   assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   console.log("ALL PURE SELF-TESTS PASSED");
 }

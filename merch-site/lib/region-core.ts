@@ -63,18 +63,19 @@ export function decidePayment(piStatus: string | null | undefined, sessionPaid: 
   return { action: "wait", reason: `payment is ${piStatus || "not authorized yet"}` };
 }
 
-export function outOfStateEmail(o: { name: string; orderRef: string; reason: string }, site: { name: string; url: string; contactEmail: string }): { subject: string; html: string; text: string } {
+export function outOfStateEmail(o: { name: string; orderRef: string; reason: string }, site: { name: string; url: string; contactEmail: string }, w: { subject?: string; signoff?: string } = {}): { subject: string; html: string; text: string } {
+  const fill = (t: string) => t.replace(/\{(\w+)\}/g, (m, k: string) => (k === "order" ? o.orderRef : k === "site" ? site.name : m));
   const first = o.name.split(/\s+/)[0] || "there";
   const lines = [
     `Hi ${first},`,
     `Thanks for your order ${o.orderRef}. Right now ${site.name} can only ship to addresses in ${SELL_STATE_NAME} State, so we cancelled this order.`,
     "Your card was NOT charged - the temporary hold has been released. Depending on your bank, the pending amount can take a few days to disappear.",
     site.contactEmail ? `Questions? Reply to this email or write to ${site.contactEmail}.` : "",
-    `- ${site.name}`,
+    w.signoff?.trim() ? fill(w.signoff) : `- ${site.name}`,
   ].filter(Boolean);
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
   return {
-    subject: `Your ${site.name} order ${o.orderRef} was cancelled (Washington only)`,
+    subject: w.subject?.trim() ? fill(w.subject) : `Your ${site.name} order ${o.orderRef} was cancelled (Washington only)`,
     text: lines.join("\n\n"),
     html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111">${lines.map((l) => `<p>${esc(l)}</p>`).join("")}<p style="font-size:12px;color:#666">${esc(site.url)}</p></div>`,
   };
@@ -97,5 +98,7 @@ export function __runRegionCoreTests(): { passed: number; failed: number } {
   ok(decidePayment("processing", false, wa).action === "wait" && decidePayment("requires_payment_method", false, wa).action === "wait" && decidePayment(null, false, wa).action === "wait", "not authorized -> wait");
   const m = outOfStateEmail({ name: "<i>Sam</i> Lee", orderRef: "gm-abc123-xy", reason: "x" }, { name: "Greenway Merch", url: "https://greenwaymerch.com", contactEmail: "orders@greenwaymerch.com" });
   ok(m.html.includes("&lt;i&gt;Sam") && !m.html.includes("<i>Sam") && /NOT charged/.test(m.text) && m.subject.includes("gm-abc123-xy"), "customer email escaped + says not charged");
+  const m2 = outOfStateEmail({ name: "Sam", orderRef: "gm-1", reason: "x" }, { name: "GM", url: "u", contactEmail: "" }, { subject: "Order {order} at {site} cancelled", signoff: "Thanks, {site} team" });
+  ok(m2.subject === "Order gm-1 at GM cancelled" && m2.text.endsWith("Thanks, GM team") && /NOT charged/.test(m2.text), "owner wording applied, legal line kept");
   return { passed, failed };
 }

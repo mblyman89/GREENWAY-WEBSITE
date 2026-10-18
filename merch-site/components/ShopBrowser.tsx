@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { browse, facetCounts, priceLabel, SORT_OPTIONS, type MerchCategory, type MerchProductCard, type SortKey } from "@/lib/catalog-core";
 import { glowCardStyle, glowToneByIndex, GLOW_STRIP_BOTTOM_CLASS, GLOW_STRIP_LEFT_CLASS, GLOW_STRIP_RIGHT_CLASS } from "@/lib/glow";
+import type { CardCopy } from "@/lib/site-content-core";
 import { FilterCheckRow, FilterLinkRow, FilterSection, SEARCH_INPUT_CLASS, SearchIcon } from "./ui";
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   products: MerchProductCard[];
   /** null = the shop page (category cards); a slug = that catalogue page. */
   current: string | null;
+  /** R73 S3: owner-edited card wording (Website -> Merchandise -> Product cards). */
+  copy: CardCopy;
 };
 
 const CARD = "group relative flex min-h-[37.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)]";
@@ -38,7 +41,7 @@ function GlowStrips({ index }: { index: number }) {
   );
 }
 
-export function CategoryCard({ cat, index }: { cat: MerchCategory & { count: number }; index: number }) {
+export function CategoryCard({ cat, index, copy }: { cat: MerchCategory & { count: number }; index: number; copy: CardCopy }) {
   const href = `/${cat.slug}`;
   return (
     <article className={`${CARD} !min-h-[28rem]`} style={glowCardStyle(glowToneByIndex(index))}>
@@ -48,7 +51,7 @@ export function CategoryCard({ cat, index }: { cat: MerchCategory & { count: num
         <p className="truncate pb-2 text-center text-[0.7rem] font-bold uppercase tracking-[0.18em] text-white/60">
           {cat.count ? `${cat.count} design${cat.count === 1 ? "" : "s"}` : "Coming soon"}
         </p>
-        <Link href={href} className="block" aria-label={`Shop ${cat.label}`}>
+        <Link href={href} className="block" aria-label={`${copy.categoryCta} ${cat.label}`}>
           <div className={IMAGE_BOX}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={cat.image} alt={cat.label} loading={index < 4 ? "eager" : "lazy"} className="h-full w-full object-contain p-3" />
@@ -56,25 +59,25 @@ export function CategoryCard({ cat, index }: { cat: MerchCategory & { count: num
         </Link>
         <p className="mx-auto mt-4 line-clamp-3 min-h-[3.6rem] text-center text-sm leading-5 text-zinc-300">{cat.blurb}</p>
       </div>
-      <Link href={href} className={CTA}>Shop {cat.label} →</Link>
+      <Link href={href} className={CTA}>{copy.categoryCta} {cat.label} →</Link>
     </article>
   );
 }
 
-export function ProductCard({ p, index }: { p: MerchProductCard; index: number }) {
+export function ProductCard({ p, index, copy }: { p: MerchProductCard; index: number; copy: CardCopy }) {
   const href = `/${p.category}/${p.handle}`;
   const inStock = p.variants.some((v) => v.inStock);
   return (
     <article className={CARD} style={glowCardStyle(glowToneByIndex(index))}>
       <GlowStrips index={index} />
       <div>
-        <p className="truncate pb-1 text-center text-lg font-black leading-none text-white md:text-xl">Greenway</p>
+        <p className="truncate pb-1 text-center text-lg font-black leading-none text-white md:text-xl">{copy.brand}</p>
         <p className="truncate pb-2 text-center text-[0.7rem] font-bold uppercase tracking-[0.18em] text-white/60">{p.blankLabel || "Apparel"}</p>
         <Link href={href} className="block" aria-label={`View ${p.title}`}>
           <div className={IMAGE_BOX}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={p.images[0]} alt={p.title} loading={index < 4 ? "eager" : "lazy"} className="h-full w-full object-cover" />
-            {!inStock ? <span className="absolute left-1.5 top-1.5 rounded-full bg-black/80 px-2 py-0.5 text-[0.62rem] font-black uppercase text-white">Sold out</span> : null}
+            {!inStock ? <span className="absolute left-1.5 top-1.5 rounded-full bg-black/80 px-2 py-0.5 text-[0.62rem] font-black uppercase text-white">{copy.soldOutBadge}</span> : null}
           </div>
         </Link>
         <Link href={href} className="mx-auto mt-4 line-clamp-2 block min-h-[2.45rem] text-center text-[1.08rem] font-black leading-[1.12] text-white md:text-[1.18rem]">{p.title}</Link>
@@ -84,7 +87,7 @@ export function ProductCard({ p, index }: { p: MerchProductCard; index: number }
       </div>
       <div>
         <p className="text-center text-[1.6rem] font-black leading-none text-white">{priceLabel(p)}</p>
-        <Link href={href} className={CTA}>{inStock ? "Choose options" : "View"}</Link>
+        <Link href={href} className={CTA}>{inStock ? copy.cta : copy.ctaSoldOut}</Link>
       </div>
     </article>
   );
@@ -104,7 +107,7 @@ function SortSelect({ value, onChange }: { value: SortKey; onChange: (v: SortKey
   );
 }
 
-export function ShopBrowser({ categories, products, current }: Props) {
+export function ShopBrowser({ categories, products, current, copy }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("featured");
   const [colors, setColors] = useState<string[]>([]);
@@ -211,11 +214,11 @@ export function ShopBrowser({ categories, products, current }: Props) {
         <div className="mt-5 lg:mt-0">
           {!showProducts ? (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {categories.map((c, i) => <CategoryCard key={c.slug} cat={c} index={i} />)}
+              {categories.map((c, i) => <CategoryCard key={c.slug} cat={c} index={i} copy={copy} />)}
             </div>
           ) : results.length ? (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {results.map((p, i) => <ProductCard key={p.handle} p={p} index={i} />)}
+              {results.map((p, i) => <ProductCard key={p.handle} p={p} index={i} copy={copy} />)}
             </div>
           ) : (
             <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">

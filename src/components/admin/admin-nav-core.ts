@@ -15,7 +15,21 @@ export type NavItemLike = {
   group: string;
   icon: string;
   comingSoon?: boolean;
+  /** R73 S3: optional sub-heading inside a dropdown (e.g. Website → Cannabis / Merchandise). */
+  subgroup?: string;
 };
+
+/**
+ * R73 S3: the sub-heading to render ABOVE item `i`, or null. A heading shows
+ * at the first item of each run of the same `subgroup`; items with no
+ * subgroup never get one (so every other dropdown renders unchanged).
+ */
+export function subgroupHeaderAt(items: NavItemLike[], i: number): string | null {
+  const cur = items[i]?.subgroup;
+  if (!cur) return null;
+  const prev = i > 0 ? items[i - 1]?.subgroup : undefined;
+  return prev === cur ? null : cur;
+}
 
 /**
  * Does `pathname` fall under `href`?
@@ -126,6 +140,16 @@ export function __runAdminNavTests(): void {
   eq(groups.map((g) => g.group), ["Operations", "Catalog"], "empty Admin dropped, order kept");
   eq(groups.find((g) => g.group === "Catalog")?.active, true, "Catalog active");
   eq(groups.find((g) => g.group === "Operations")?.active, false, "Operations inactive");
+
+  // subgroupHeaderAt (R73 S3)
+  const sg: NavItemLike[] = [
+    { label: "A", href: "/a", group: "Website", icon: "", subgroup: "Cannabis" },
+    { label: "B", href: "/b", group: "Website", icon: "", subgroup: "Cannabis" },
+    { label: "C", href: "/c", group: "Website", icon: "", subgroup: "Merchandise" },
+  ];
+  eq([0, 1, 2].map((i) => subgroupHeaderAt(sg, i)), ["Cannabis", null, "Merchandise"], "headers at run starts");
+  eq(subgroupHeaderAt(items, 0), null, "no subgroup -> no header");
+  eq(subgroupHeaderAt(sg, 9), null, "out of range -> null");
 
   // initials
   eq(initialsFrom("Mike Blyman"), "MB", "name initials");

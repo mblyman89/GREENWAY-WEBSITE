@@ -111,11 +111,12 @@ export const WORKSPACES: Workspace[] = [
     group: "Website",
     title: "Website",
     summary:
-      "Safe editors for every public page (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match), plus Website Sync — with preview before publish.",
+      "Safe editors for every public page (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match), plus Website Sync — with preview before publish. The Merchandise section edits greenwaymerch.com (header & footer, banners, product cards, order emails).",
     does: [
       "Edit public pages without touching code",
       "Preview unpublished changes before they go live",
       "See what the storefront serves right now in Website Sync",
+      "Edit greenwaymerch.com wording and attach banners (Merchandise)",
     ],
     icon: "🖥️",
     href: "/admin/website-sync",

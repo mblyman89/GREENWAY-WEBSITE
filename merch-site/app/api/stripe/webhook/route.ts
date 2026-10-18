@@ -24,6 +24,7 @@
  */
 import { allProducts } from "@/lib/catalog";
 import { STRIPE_API_VERSION } from "@/lib/checkout-core";
+import { getMerchContent } from "@/lib/site-content";
 import { alertOwner, printful, printfulConfigured, sendEmail } from "@/lib/fulfillment";
 import { decidePayment, outOfStateEmail } from "@/lib/region-core";
 import { planPrintfulOrder, verifyStripeSignature, type StripeSessionLike } from "@/lib/orders-core";
@@ -78,7 +79,8 @@ export async function POST(req: Request) {
       return ok("cancel failed - owner alerted");
     }
     if (email) {
-      const m = outOfStateEmail({ name: ship?.name ?? session.customer_details?.name ?? "", orderRef, reason: decision.reason }, { name: SITE_NAME, url: siteUrl(), contactEmail: c.email });
+      const w = await getMerchContent();
+      const m = outOfStateEmail({ name: ship?.name ?? session.customer_details?.name ?? "", orderRef, reason: decision.reason }, { name: SITE_NAME, url: siteUrl(), contactEmail: c.email }, { subject: w["merch.email.cancelled.subject"], signoff: w["merch.email.signoff"] });
       await sendEmail({ to: email, ...m, replyTo: c.email || undefined });
     }
     await alertOwner(`Out-of-state order ${orderRef} cancelled automatically (not charged)`, [...who, decision.reason, "The card hold was released for free - nothing to do."]);

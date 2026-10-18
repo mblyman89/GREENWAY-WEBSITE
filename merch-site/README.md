@@ -68,6 +68,7 @@ To hide a product without deleting it, add `"merch": { "active": false }` to its
 | `STRIPE_WEBHOOK_SECRET` | Slice 6 | `whsec_...` from the Stripe webhook endpoint. |
 | `PRINTFUL_API_TOKEN` | Slice 6 | Printful private token with the `orders` and `webhooks` scopes. |
 | `PRINTFUL_STORE_ID` | Slice 6 | Needed if the token covers more than one store. |
+| `MERCH_CONTENT_URL` | no | R73 S3. Where the editable wording and banners come from. Default `https://greenwaymarijuana.com/api/merch-content` (set in the back office under Website -> Merchandise). Only set this for a preview or staging back office. |
 | `PRINTFUL_WEBHOOK_TOKEN` | Slice 6 | A long random string that becomes part of the Printful webhook URL. |
 | `MERCH_ADMIN_KEY` | Slice 6 | A long random string (32+ characters; 16 minimum) that you type to open `/admin/orders`. Changing it signs everyone out. |
 | `MERCH_PRINTFUL_AUTO_CONFIRM` | no | `true` sends paid orders straight to production instead of as drafts. Leave unset until you trust the flow. |
