@@ -48,6 +48,7 @@ import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
 import { __runCcrsSubmitGateTests } from "@/lib/compliance/ccrs-submit-gate-core";
 import { __runCcrsIssueDisplayTests } from "@/lib/compliance/ccrs-issue-display-core";
+import { __runCcrsLotProductTests } from "@/lib/compliance/ccrs-lot-product-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
@@ -241,6 +242,11 @@ describe("embedded pure self-test suites", () => {
   it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {
     const out = __runCcrsPreflightCoreTests();
     expect(out).toContain("0 failed");
+  });
+  it("ccrs-lot-product-core (Part 17 S-17b: why a lot's product is not in Product.csv)", () => {
+    const r = __runCcrsLotProductTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(13);
   });
   it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {
     const r = __runCcrsIssueDisplayTests();

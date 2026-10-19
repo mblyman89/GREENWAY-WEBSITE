@@ -240,3 +240,17 @@ Recorded consequences:
 3. A fresh copy is needed (Part 17 §G): G-1 right after Cultivera's last filing, then copies around each equalize wave and after the initial uploads `[EXAM L0568]`.
 4. U-10 is closed. The WA.gov change is login-only `[FAQ19 L0191]` `[EXAM L0560]`.
 5. Nothing in code changes in this slice. The next slices are proposed in Part 17 §J. Sending the Part 17 §H questions to the examiner is the owner's decision (new **OD-6**: wave timing; **OD-7**: send the §H questions).
+
+## D-19 — Owner facts for the cutover and the first build (2026-10-19, Part 17 §K)
+
+(Appended after D-18; this log is append-only.)
+
+Owner, verbatim: *"the week is 10/11/26 - 10/17/26. i have one manifest in the system currently with 38 products on it, so yes i am only expecting 38 lots right now. … the date of cultivera's final upload of our data to ccrs will be saturday 11/7/26. we will begin using the new system 11/1/26. i am registered."*
+
+Recorded:
+1. **38 lots is correct** for today's database. It is one manifest; it is not the migrated inventory.
+2. **New system in use from Sun 2026-11-01.** The hub's first day of sales is the site setting `compliance_obligation_start` (S-12d). Its stored value is data, not code, and is not verified here. S-12d measured its effect with 2026-11-01. Under option (a) it must read 2026-11-01; under option (b) it must read 2026-11-08. The owner should check it on the CCRS page.
+3. **Cultivera's final upload is Sat 2026-11-07.** That covers exactly the CCRS week 11/01–11/07 `[FAQ L0041]`. Which data it contains decides OD-1 / U-61 (option (a) Greenway files that week; option (b) Cultivera files it). The owner is to confirm this with Cultivera in writing. Not decided here.
+4. **WA.gov: "i am registered".** Which accounts (PREprod and/or production) is not stated, so Q-B9 stays open.
+5. Pressing Assign in production does not assign PREprod ids (separate ledgers; `[FAQ L0096]` "These environments are autonomous"). PREprod needs "Assign PREprod ids".
+6. Fresh copy G-1 is requested **after** 11/07 and before Greenway's first production upload (Part 17 §G). The email to the examiner is drafted for the owner to send (OD-7).

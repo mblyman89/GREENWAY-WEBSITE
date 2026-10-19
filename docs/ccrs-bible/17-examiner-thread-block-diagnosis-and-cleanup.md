@@ -152,6 +152,7 @@ The owner saw this "for both production, and preproduction".
    - Severity is warning, so it never blocks, but it misleads.
    - Fix: compare by product key, using `product.keys` filtered to emitted rows plus the plan. Split the message into "not in the published menu" and "withheld (see error)". Write the test first.
    - **Confirmed live 2026-10-19 (§K.3):** production emitted ≥18 products under GWP- ids (E44 lists GWP-000051…) and still reported "(38)". Fix: S-17b.
+   - **FIXED by S-17b (2026-10-19, §K.7).** The warning is now E47, computed from the planner's own decision, with one row per product key, the reason, and every lot.
 2. **The hub never shows the per-row reasons.** `CcrsSyncIssue.rows` carries `{id, label, detail}` for every withheld product and lot (`ccrs-batch.ts` L831, L652). But `page.tsx` L213–L218 maps `syncIssues` to `{severity, file, message, count}` only, and the list at L533–L537 prints `[file] message (count)`.
    - The error text says "Each row says why" `[EXAM L0003]`, yet the owner cannot see a single row.
    - **This is why the owner is blocked without a next step.**
@@ -335,7 +336,7 @@ Evidence: `docs/ccrs-bible/evidence/2026-10-19-owner-screenshots/` (two PNGs, md
 
 ### K.5 Cutover dates and the duplicate-sale risk (owner decision needed, OD-1)
 
-Facts: new system in use from **Sun 2026-11-01**; Cultivera's **final upload Sat 2026-11-07**; CCRS weeks run Sunday–Saturday `[FAQ L0041]`, so 11/01–11/07 is exactly one CCRS week; `compliance_obligation_start` is 2026-11-01 (S-12d).
+Facts: new system in use from **Sun 2026-11-01**; Cultivera's **final upload Sat 2026-11-07**; CCRS weeks run Sunday–Saturday `[FAQ L0041]`, so 11/01–11/07 is exactly one CCRS week; the hub's first day of sales is the site setting `compliance_obligation_start` (S-12d measured it with 2026-11-01; the stored value is data and is not verified from code; see Part 05 D-19).
 
 Risk: if Cultivera's 11/07 upload contains any sale or adjustment for 11/01–11/07 and Greenway also files that week, the second copy of each sale fails with "Duplicate Sale for Licensee" `[G L1390]` (Part 07 §D step 7). If neither files it, the week is unreported.
 
@@ -356,3 +357,46 @@ Until the owner confirms (a) or (b) in writing with Cultivera, U-61 stays open. 
 - Tests: `tests/compliance/s17a-hub-issue-rows.test.tsx`. It **reads `ccrs-ledger-core.ts`** and requires every `reason:` literal there (13 today) to be classified, so a new reason cannot fall through silently. It also runs real `planLedgerBatch` output through the gate and the display, renders the component (40 rows, no cap), and pins each caller. Self-tests are registered in both runners. Mutations M120–M130 are all killed.
 - Not changed: no CSV byte, no routing decision, no migration.
 
+### K.7 Slice S-17b: honest "not in the menu" rows, and the hub runs the export's self-check (DONE in code, 2026-10-19)
+
+**1. The "(38)" orphan warning (C.4 defect 1, U-60) is replaced by E47.**
+- Old rule: `product.rows.map((r) => r[6])` against the lot's sanitized key. Column 6 holds the CCRS id after `applyProductPlan`, so every lot of an emitted product was "orphaned". The test reproduces it: 4 of 4 lots flagged against real `planLedgerBatch` + `applyProductPlan` output.
+- New rule (`ccrs-lot-product-core.ts`, pure): E47 speaks only about the lots the planner **withheld** with "its product is not in the published menu". It takes the planner's decision, it does not re-derive it, so the warning and Inventory.csv cannot disagree. Two kinds of lot are excluded on purpose:
+  - a lot CCRS already holds whose product left the menu: the planner emits it as an Update under its **filed** product name;
+  - a lot refused for another reason: it is already an E41 row with that reason.
+- Legacy mode (no ledger view) withholds nothing. There, E47 lists the lots **written with a blank Product**, and it is an **error**, because CCRS answers "Product is required" `[G L0578]`. With a ledger it is a **warning**, because each lot is already a blocking E41 row.
+- Each E47 row is one product key with **why** and every lot. The extra menu read (`readMenuPresence`) gives the reason:
+  - hidden in the published version, with the menu's own `hiddenReasonText`;
+  - only in a staged version;
+  - no menu item with that key;
+  - blank key;
+  - visible but its cleaned-up id is empty or collides with another item's;
+  - "the menu could not be read". A failed read is **never** treated as "no item".
+- The E41 lot row with that reason is enriched the same way: "its product is not in the published menu (hidden in the published menu: …)". It keeps its S-17a class and next step.
+- Pin: `E47_LOT_PRODUCT_NOT_IN_MENU` → `[G L0579-L0583]`. Inventory must name a product "submitted this product on the product.CSV" in "the same format and spelling".
+
+**2. The hub runs the export route's ledger self-check (§K.4, U-62).**
+- `ledgerSelfCheckIssues` (in `ccrs-outbox-core.ts`) runs the **same** `planOutboxFiles → verifyOutboxAgainstLedger` that `batch-export/route.ts` runs. It uses the same bytes, the same `now` (`generatedAt`) and the same `lastStamp`. It returns one blocking gate issue per (file, code), with every row named "<file name> row N".
+- Each code has its guide pin (`LEDGER_PROBLEM_PIN`); the test checks each against `guide.txt`:
+  - L_INSERT_ON_FILE `[G L0246]`
+  - L_UPDATE_NOT_ON_FILE `[G L0247]`
+  - L_DELETE_NOT_ON_FILE `[G L0248]`
+  - L_REF_PRODUCT `[G L0579]`
+  - L_REF_STRAIN `[G L0555]`
+  - L_REF_AREA `[G L0570]`
+  - L_REF_INVENTORY `[G L1302-L1304]`
+  - L_TOTALS `[G L0246-L0248]`
+- Effect: a Sale whose lot is withheld and not filed is now a **red blocking issue in the hub and in the report**. Before, it appeared only as a refused download. The route keeps its own check as the last guard. Legacy mode has no ledger to check against, exactly as in the route.
+
+**Not changed:** no CSV byte, no routing decision, no migration, no planner reason string. The test reads `ccrs-ledger-core.ts` and requires the literal to be the same.
+
+**Proof:**
+- `tests/compliance/s17b-honest-orphans-and-hub-selfcheck.test.ts`.
+- Self-tests registered in both runners.
+- Mutations M131–M148, all killed.
+- Full `tests/compliance` suite green.
+
+**What the owner will see on the next build:**
+- the "(38)" line is gone;
+- if any lot names a product not in the menu, one E47 row per product says why;
+- if the test sale's lot is withheld, a blocking `L_REF_INVENTORY` row names the Sale file row. Fix the lot (S-17a reason), rebuild, and it clears.

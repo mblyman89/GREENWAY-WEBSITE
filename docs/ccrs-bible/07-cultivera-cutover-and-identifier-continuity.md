@@ -63,6 +63,8 @@ Week -3 to -1 (at least 2 weeks; owner picks, OD-1):
 
 ## D. Cutover Sunday (the exact sequence)
 
+> **Dates (owner, 2026-10-19, Part 05 D-19):** new system in use from **Sun 2026-11-01**. Cultivera's **final upload is Sat 2026-11-07**. Which of the two files week 11/01–11/07 is OD-1 / U-61 and is **not decided** (Part 17 §K.5). Under option (a) the first Greenway production upload is Sun 2026-11-08 for week 11/01–11/07, and Cultivera's 11/07 upload must hold nothing dated 11/01 or later. Under option (b) the first Greenway week is 11/08–11/14. Either way, step 7's written notice to Cultivera names that first week, and fresh copy G-1 (Part 17 §G) is requested after 11/07.
+
 1. Saturday close: no more sales counted for the week (week is Sunday–Saturday `[FAQ L0041]`).
 2. Sunday morning: generate the batch with environment = PRODUCTION. Pre-flight must be green (all E-items are errors; Part 09 S-02/S-03).
 3. Upload Group 1 (Strain, Area, Product). Wait ≥10 minutes `[G L0530]`. Check the uploader's mailbox.
