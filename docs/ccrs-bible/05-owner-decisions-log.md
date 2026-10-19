@@ -226,3 +226,17 @@ Recorded consequences:
 3. Priority is the POS and the Cultivera menu upload pipeline for the 11/01 go-live.
 
 Owner, verbatim, same message: *"We currently use Cultivera for sales and returns. My Cultivera has both of these in the same sales file you will scrape with the crawler."* Recorded against U-48 (Part 12). It supports, but does not close, the reading of `ReturnUnits`.
+
+## D-18 — Finish the CCRS pipeline; clean up the CCRS data; first slice is research and bible (2026-10-19, Part 17)
+
+(Appended after D-17; this log is append-only.)
+
+Owner, verbatim `[EXAM L0001]`: *"I need your help finishing the ccrs upload pipeline we have built so that it can successfully create spreadsheets that ccrs will accept as well as being accurate. this includes the cleanup of my ccrs data sent by brian a month ago."* And `[EXAM L0843]`: *"…please let me know if you have more questions for brian the examiner, and if we need a fresh copy of my ccrs data given to me after november 1st 2026. and how that plays a part in our system. please read agents.md. then proceed with the first slice, read, recon, research the internet, report, strategize, bible build…"*
+
+Recorded consequences:
+
+1. The examiner's written answers are now one register (Part 17 §A, X-01…X-38), each pinned `[EXAM L####]`.
+2. The stale-lot cleanup mechanism is the examiner's: Inventory Update to 0, **then** an InventoryAdjustment with reason Reconciliation `[EXAM L0430]`. This settles D-02/P-01 **for stale lots**. It does not change D-15: no Inventory Delete.
+3. A fresh copy is needed (Part 17 §G): G-1 right after Cultivera's last filing, then copies around each equalize wave and after the initial uploads `[EXAM L0568]`.
+4. U-10 is closed. The WA.gov change is login-only `[FAQ19 L0191]` `[EXAM L0560]`.
+5. Nothing in code changes in this slice. The next slices are proposed in Part 17 §J. Sending the Part 17 §H questions to the examiner is the owner's decision (new **OD-6**: wave timing; **OD-7**: send the §H questions).

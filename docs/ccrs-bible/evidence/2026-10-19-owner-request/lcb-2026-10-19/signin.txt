@@ -1,0 +1,75 @@
+Washington State Liquor and Cannabis Board
+
+Cannabis Central Reporting System (CCRS)
+User Sign-In Guide
+How to access CCRS with the new WA.gov sign-in
+
+
+
+
+CIB154 8/26
+Welcome
+The Cannabis Central Reporting System (CCRS) is where Washington State cannabis licensees
+submit required reporting data. CCRS now uses Washington State's WA.gov sign-in to keep your
+account secure.
+This short guide explains how to sign in and get set up. It applies to licensees and their employees who
+upload files through the CCRS website. Users can follow the same steps to access the CCRS Pre-
+Production website.
+Note: if you connect to CCRS using the API, this guide is not for you. Please see the separate CCRS
+Integrator API Guide.
+
+What’s changing?
+Previously you signed in with a CCRS-specific login. Now you'll sign in using a WA.gov account - the
+same secure sign-in used across many Washington State services. The first time you sign in, you'll
+complete a quick one-time registration so CCRS knows which license(s) your WA.gov account is tied
+to.
+After the one-time setup, you simply sign in with WA.gov each time. You won't need to register again.
+
+
+
+
+ Washington State Liquor and Cannabis Board CCRS User Sign-In Guide                               Page 2
+Getting Started
+Step 1 - Make sure you have a WA.gov account
+You need a WA.gov account to sign in to CCRS. If you already use one for other Washington State
+services, you can use it here. You will need separate WA.gov accounts for the Pre-Production
+environment and the live environment.
+   •   Create a WA.gov account here
+   •   Create a Pre-Production WA.gov account here
+
+Step 2 - Sign in to CCRS
+ 1. Go to the CCRS website.
+ 2. Choose to sign in. You'll be taken to the WA.gov sign-in page.
+
+
+
+
+ 3. Sign in with your WA.gov account.
+
+
+
+
+ Washington State Liquor and Cannabis Board CCRS User Sign-In Guide                          Page 3
+Step 3 - Complete the one-time registration
+The first time you sign in with WA.gov, CCRS needs to link your WA.gov account to your CCRS
+account. You'll be taken to a short registration screen. This is a one-time step, and future visits will only
+require your WA.gov login information.
+
+
+
+
+  1. Enter the email address you use for CCRS reporting. This links your WA.gov sign-in to your CCRS
+     account. This email address must already have been set up with LCB Licensing.
+
+
+  2. Click “Register.” You're now set up, can access CCRS, and submit files as usual.
+
+
+Need Help?
+Contact the LCB ITS Service Desk (servicedesk@lcb.wa.gov) for assistance.
+
+
+
+
+ Washington State Liquor and Cannabis Board CCRS User Sign-In Guide                                   Page 4
+

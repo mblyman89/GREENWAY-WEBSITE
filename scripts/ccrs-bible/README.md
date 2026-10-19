@@ -31,6 +31,8 @@ python3 scripts/ccrs-bible/mutate_check.py              # always runnable (slow:
 CCRS_SOURCE_ROOT=/path/that/contains/lcb python3 scripts/ccrs-bible/build_spec_part.py
 ```
 
+`check_pins.py` also reads four sources versioned **inside the repo** (`REPO_SRC`, Part 13 §G): `[EXAM]`, `[FAQ19]`, `[SIGNIN]`, `[BUL1006]` under `docs/ccrs-bible/evidence/2026-10-19-owner-request/`. A pin whose source is missing counts as a range error (`MISSING-SOURCE`).
+
 `check_pins.py` must report `range_errors=0`. Quote mismatches are advisory — a few are
 expected where a quotation is elided with `…` or where the pin sits inside a code block.
 

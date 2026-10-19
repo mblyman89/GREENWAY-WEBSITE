@@ -97,3 +97,26 @@ or reporting data."* `[FAQ L0096]`
 **PENDING:** the examiner is preparing Greenway's Cultivera-filed CCRS records (possibly via
 Box). When it arrives, add it here with its fetch date and checksum **before** using it —
 it becomes the authority for Part 07 R-4/R-5 and the seed load for the S-05b ledger.
+
+---
+
+## G. 2026-10-19 sources (owner request + LCB re-fetch) — Part 17
+
+Location: `docs/ccrs-bible/evidence/2026-10-19-owner-request/`. These files are versioned **in the repo** so that `check_pins.py` (its `REPO_SRC` table) verifies their pins without `/workspace/lcb`.
+
+| Pin | Source | URL / provenance | Fetched | md5 (text as committed) | Lines |
+|---|---|---|---|---|---|
+| `[EXAM L####]` | Owner's 2026-10-19 message, verbatim (hub text, 10/07 PREprod success emails, full examiner thread 9/17–10/5) | Pasted by the owner; CR stripped | 2026-10-19 | `6da5d9498997fc140402d58a924c78f7` | 852 |
+| `[FAQ19 L####]` | LCB CCRS FAQ (new revision) | `https://lcb.wa.gov/ccrs/faq` | 2026-10-19 | `9e0c507b1a2f309d5f23eccc5d85bc68` (html, not committed: `3d9acb411fdc7dc7cbdf998f9cd8ecf5`) | 781 |
+| `[SIGNIN L####]` | CCRS User Sign-In Guide, CIB154 8/26 | `https://lcb.wa.gov/sites/default/files/2026-08/CCRS_User_SignIn_Guide.pdf` (PDF md5 `0a0ad5a5ba868ff227708fcc4079603d`, not committed) | 2026-10-19 | `85309bc9fa53207182c899898101a014` | 74 |
+| `[BUL1006 L####]` | LCB bulletin "Oct. 12: CCRS Transition to WA.gov Login" (sent 10/06/2026 11:08 AM PDT) | `https://content.govdelivery.com/accounts/WALCB/bulletins/42e03cc` (raw html committed, md5 `b2d8e3f0ee5d596045f16fa03286df07`) | 2026-10-19 | `67bee0924c49dec1d23d67d3540be2c4` | 21 |
+
+**Re-verified unchanged 2026-10-19 (md5):**
+- Upload User Guide PDF `cbfc4dd29b49c42639f1207f8078a6b4` (= §A).
+- All seven templates (= §B, byte-identical to `docs/ccrs-templates/`).
+
+So no `[G]` pin moved. Note on the FAQ: the old `[FAQ]` text (183 lines, 2026-09-15) remains the reference for existing `[FAQ L####]` pins. New citations from the current page use `[FAQ19]`.
+
+**Owner-uploaded run files:** `evidence/P20261007A/files/` holds the 7 CSVs accepted by PREprod on 2026-10-07, plus MANIFEST. Their md5s are in that folder's README.
+
+**Not yet received:** the post-cutover Service Desk copy (Part 17 §G, G-1). When it arrives, add it here with md5 **before** use.

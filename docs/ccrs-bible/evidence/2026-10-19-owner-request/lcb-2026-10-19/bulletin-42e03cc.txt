@@ -1,0 +1,21 @@
+SOURCE: https://content.govdelivery.com/accounts/WALCB/bulletins/42e03cc
+FETCHED: 2026-10-19 (Pacific)
+NOTE: tags stripped, blank lines removed; text otherwise verbatim.
+Oct. 12: CCRS Transition to WA.gov Login
+Oct. 12: CCRS Transition to WA.gov Login
+Washington State Liquor and Cannabis Board sent this bulletin at 10/06/2026 11:08 AM PDT
+Having trouble viewing this email? View it as a Web page.
+Oct. 6, 2026
+Oct. 12: CCRS Transition to WA.gov Login
+Next week, on Monday, Oct. 12, the Cannabis Central Reporting System (CCRS) will transition from using SecureAccess Washington (SAW) to the new WA.gov interface for login. CCRS will be down and unavailable for users from approximately 5 p.m. to 8 p.m. on Monday, Oct. 12 as we complete the transition.
+All licensees must make a WA.gov account and complete a one-time registration process after the cutover to link their account with their license. The CCRS FAQ page is updated with some common questions regarding the transition.
+Replacing SAW with WA.gov
+SecureAccess Washington (SAW) is being replaced with WA.gov accounts - the state’s new single sign-on system that provides one login, stronger privacy protections, and easier access to state services. SAW will be fully transitioned by the end of 2027. Other LCB applications will move to using WA.gov next year.
+Licensees and Integrators: Please Finish Testing by Oct. 9
+If you are a Washington cannabis licensee or integrator conducting testing in the pre-production environment, please make sure to finalize any testing by the end of this week, Friday, Oct. 9. If you have any questions, contact CCRS@lcb.wa.gov.
+###
+Stay Connected with Washington State Liquor and Cannabis Board:
+SUBSCRIBER SERVICES:
+Manage Subscriptions  |  Unsubscribe All  |  Help
+Powered by
+Privacy Policy | Cookie Statement | Help
