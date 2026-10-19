@@ -17,7 +17,8 @@ import { buildCcrsSaleCsv, getCcrsLicenseSettings } from "@/lib/compliance/ccrs-
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
 import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
-import { assertCcrsBatchSubmittable } from "@/lib/compliance/ccrs-submit-gate-core";
+import { assertCcrsBatchSubmittable, toGateInput } from "@/lib/compliance/ccrs-submit-gate-core";
+import { CcrsIssueList } from "@/components/admin/compliance/CcrsIssueList";
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
@@ -70,12 +71,7 @@ export default async function CompliancePage({
   // the previous on-screen roll-up missed.
   const verdict = batch
     ? assertCcrsBatchSubmittable({
-        syncIssues: batch.syncIssues.map((s) => ({
-          severity: s.severity,
-          file: String(s.file),
-          message: s.message,
-          count: s.count,
-        })),
+        syncIssues: batch.syncIssues.map(toGateInput),
         verifierProblems: (verification?.problems ?? []).map((p) => ({
           severity: p.severity,
           file: String(p.file),
@@ -265,14 +261,13 @@ export default async function CompliancePage({
                 <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-red-300">
                   Out of sync — fix before uploading
                 </p>
-                <ul className="space-y-1 text-xs text-red-100/90">
-                  {batchErrors.map((s, i) => (
-                    <li key={i}>
-                      • <span className="font-bold">{s.file}</span>: {s.message}
-                      {s.count ? ` (${s.count})` : ""}
-                    </li>
-                  ))}
-                </ul>
+                {/* S-17a: every row, next step per reason (same component as the CCRS hub). */}
+                <CcrsIssueList
+                  issues={batchErrors}
+                  env="prod"
+                  tone="error"
+                  copyTitle={`CCRS blocking errors — prod — ${range.fromDate} to ${range.toDate}`}
+                />
               </div>
             ) : (
               <div className="mb-3 rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.05] p-3 text-xs text-[#9be870]">
@@ -281,14 +276,15 @@ export default async function CompliancePage({
             )}
 
             {batchWarnings.length > 0 ? (
-              <ul className="mb-3 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-orange-500/25 bg-orange-500/[0.05] p-3 text-xs text-orange-100/80">
-                {batchWarnings.slice(0, 30).map((s, i) => (
-                  <li key={i}>
-                    • <span className="font-bold">{s.file}</span>: {s.message}
-                    {s.count ? ` (${s.count})` : ""}
-                  </li>
-                ))}
-              </ul>
+              <div className="mb-3 max-h-96 overflow-y-auto rounded-xl border border-orange-500/25 bg-orange-500/[0.05] p-3">
+                {/* S-17a: no cap (Part 05 §H) — the old .slice(0, 30) hid every warning past the 30th. */}
+                <CcrsIssueList
+                  issues={batchWarnings}
+                  env="prod"
+                  tone="warning"
+                  copyTitle={`CCRS warnings — prod — ${range.fromDate} to ${range.toDate}`}
+                />
+              </div>
             ) : null}
 
             {/* Per-file record counts, grouped by upload order */}

@@ -218,6 +218,10 @@ Migration `0250_obligation_waivers.sql` (KEEP on factory reset; RLS staff read /
 
 `ccrs-area-core.ts` plans the Area file from the ledger and D-03. Production stays Update-only (4 Updates per batch, no Delete) until PREprod probe P-02 answers U-31. New codes: E45 (held lot reported in Sales Floor, advisory) and E46 (Area ledger contradicts D-03, blocking/advisory). N-01 and E23 are closed in code. See Part 09 S-13.
 
+### A.10 S-17a every withheld row shown — DONE in code (2026-10-19)
+
+The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and the export refusal list every withheld or warned row grouped by reason, with a next step per environment. Fixes Part 17 §C.4 defects 2 and 3. See Part 09 S-17a.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

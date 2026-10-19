@@ -120,6 +120,8 @@ The owner saw this "for both production, and preproduction".
 
 ### C.3 What the facts imply (inference, stated as such)
 
+> **Correction 2026-10-19 (owner screenshots, §K).** Item 3 below assumed that PREprod showed the same counts as the text quoted in C.1. It did not. The PREprod screenshot of week 2026-10-11 → 10-17 withholds **20 products**, not 2, and every one of them lacks a PREprod id (§K.2). So the "at most 2 menu products" reasoning and the conclusion "the main cause is not ids" are **withdrawn** for PREprod. In production, after the owner pressed Assign, 21 of 38 lots now emit and 17 are withheld for reasons the hub did not show until S-17a. Items 1, 2, 4 and 5 stand.
+
 1. **The ledger is loaded in both environments.** If it were not, the plan's `!view` branch emits every row as Insert (`ccrs-ledger-core.ts` L330–L332, L370–L372), there is no E41, and the page shows the amber banner (`page.tsx` L495–L499).
 2. **Exactly 38 lots exist** in `inventory_lots` with `status <> 'destroyed'` and an assigned CCRS id. The query is at `ccrs-batch.ts` L763–L774; "every lot withheld" follows from L633 and the absence of E3.
    - The Cultivera import produced 4,208 lots in the 9/01 rehearsal `[EXAM L0202]`. So today's database is **not** holding the migrated inventory. The live migration is scheduled for 10/30 (Part 05 D-16).
@@ -149,11 +151,13 @@ The owner saw this "for both production, and preproduction".
    - Withheld and skipped products are also absent from `rows`, so the warning mixes three causes under one wording.
    - Severity is warning, so it never blocks, but it misleads.
    - Fix: compare by product key, using `product.keys` filtered to emitted rows plus the plan. Split the message into "not in the published menu" and "withheld (see error)". Write the test first.
+   - **Confirmed live 2026-10-19 (§K.3):** production emitted ≥18 products under GWP- ids (E44 lists GWP-000051…) and still reported "(38)". Fix: S-17b.
 2. **The hub never shows the per-row reasons.** `CcrsSyncIssue.rows` carries `{id, label, detail}` for every withheld product and lot (`ccrs-batch.ts` L831, L652). But `page.tsx` L213–L218 maps `syncIssues` to `{severity, file, message, count}` only, and the list at L533–L537 prints `[file] message (count)`.
    - The error text says "Each row says why" `[EXAM L0003]`, yet the owner cannot see a single row.
    - **This is why the owner is blocked without a next step.**
    - Fix: render `rows` (label + detail) under each issue, uncapped, with a copy button.
-3. **The assign button's help text says "Production only"** (`page.tsx` L513). That is correct for that form. The PREprod equivalent sits in a different panel further down (`CcrsFilesPanel`). When the PREprod tab shows E41 for lack of ids, the error should point to it. This is a UX item, part of fix 2.
+   - **FIXED by S-17a (2026-10-19, §K.4).** The gate now carries `rows`/`code`/`specPin`; the hub, the compliance report and the export refusal show every row with a next step.
+3. **The assign button's help text says "Production only"** (`page.tsx` L513). That is correct for that form. The PREprod equivalent sits in a different panel further down (`CcrsFilesPanel`). When the PREprod tab shows E41 for lack of ids, the error should point to it. This is a UX item, part of fix 2. **FIXED by S-17a:** a PREprod "no CCRS Product id" group says to use "Assign PREprod ids", explains that production ids do not carry over (`[FAQ L0096]`: "These environments are autonomous and do not share administration or reporting data"), and links to `#ccrs-files`.
 
 ---
 
@@ -290,3 +294,65 @@ Format to request: the same CSV export the 9/21 delivery used, so the existing l
 | S-15 | Re-seed / diff loader for a post-cutover delivery (G-1) | First-production accuracy |
 | S-14 | Equalize waves: Update-to-0 + Reconciliation, same-day pair, TotalCost/QoH/THC repairs, 10k chunks | §E |
 | S-16 | Copy diff verifier (G-2/G-3) | Proof of acceptance |
+
+---
+
+## K. 2026-10-19 owner screenshots: what they prove, and slice S-17a
+
+Evidence: `docs/ccrs-bible/evidence/2026-10-19-owner-screenshots/` (two PNGs, md5 in the README, verbatim transcription). Week **2026-10-11 → 2026-10-17**. The owner pressed **Assign CCRS Product ids (GWP-)** on production only.
+
+### K.1 Owner facts (answers to §I)
+
+| §I item | Answer (owner, 2026-10-19) |
+|---|---|
+| 1 per-row reasons | Not visible: the hub did not render them (C.4 defect 2). S-17a renders them |
+| 2 week / env | Week 2026-10-11 → 10-17, one screenshot per environment |
+| 3 assign pressed | Production: yes. PREprod: no |
+| 4 38 lots expected | **Yes**: "one manifest in the system currently with 38 products on it" |
+| 5 Cultivera's last filing / cutover | Cultivera's final upload: **Saturday 2026-11-07**. New system in use from **2026-11-01** (§K.5) |
+| 6 WA.gov | "i am registered" (which accounts, PREprod and/or production, is not stated; Q-B9 stays open) |
+| 7 approval to send §H | The owner asked for an email draft to send himself |
+
+### K.2 PREprod (Total 17, Blocking 2, Warnings 23)
+
+- `[Product] 20 product(s) … no CCRS Product id is assigned or its CCRS status is unproven (20)` and `[Inventory] 38 lot(s) … (38)`. Product.csv and Inventory.csv are empty ("File contains no data rows" for both).
+- **Cause, by code:** the PREprod ledger starts empty (0249), so no PREprod product is filed and no lot is "filed". A product with no PREprod id is withheld with `NO_PRODUCT_ID_REASON` (`ccrs-ledger-core.ts` `planLedgerBatch`), and each of its lots is withheld with "its product is withheld: …". Pressing Assign in production does not assign PREprod ids: the two ledgers are separate by design, and the environments are autonomous `[FAQ L0096]`.
+- **Next step:** PREprod set-up step 2, "Assign PREprod ids" with a run id (e.g. `P20261019A`), then rebuild. Whether all 38 lots then emit depends on whether each lot's product is among the 20 (see K.3: in production 17 lots are still withheld after assignment, so PREprod will very probably show the same 17 for the same reasons).
+
+### K.3 Production (Total 49, Blocking 1, Warnings 23)
+
+- 17 of 38 lots withheld; 21 emit. Production has the 9/18 seed, so some lots can be "filed": the E40 warning (3 lots filed under a product whose name differs) proves that at least 3 of the 38 lots are in the seed.
+- E44 lists GWP-000051 … GWP-000067 among 18 rewritten Description values, so **at least 18 products were emitted** with their new ids.
+- The orphan warning still says "(38)". That is C.4 defect 1 (U-60), now observed live. It is wrong, not a data problem.
+- The 17 reasons are **not visible** in the screenshot. They are one or more of: "its product is not in the published menu"; a filed lot whose filed product is not proven ("filed Product X is not in the Product ledger", "… is in state …", "… has no filed Name", "filed lot has no filed Product Identifier"); or "its product is withheld: <reason>" for a product still unassigned (e.g. the exact name already filed under another CCRS product). **Not inferred further.** S-17a shows them on the next build.
+
+### K.4 Sales: what the screenshots prove and what they do not
+
+- **Proven (code + screenshot):** Sale.csv had data rows in both environments. `buildCcrsSaleCsv` warns "No completed orders in the selected range." when the week has no completed order (`ccrs-sales.ts`), and `verifyCcrsFile` warns "File contains no data rows" for an empty file (`ccrs-batch-core.ts`). Neither appears for Sale in either screenshot, while the same warning appears for four other files. So the test sale was completed, fell in the week, and was turned into Sale rows.
+- **PREprod record arithmetic (inference):** 17 records = Strain + Area + Sale (Product, Inventory, Adjustment and Transfer are empty). Area = 1 (PREprod Inserts `Sales Floor`, `PREPROD_AREA_PLAN` is empty). If Strain = the 13 strains in the "defaulted to Hybrid" warning, Sale = 3 rows. The Strain count is not shown, so the 3 is not proven.
+- **Not yet proven: that CCRS will accept the sale.** A Sale row must name a lot CCRS already holds; otherwise CCRS returns "Invalid InventoryExternalIdentifier" `[G L1302]` with the note "ensure that you have already reported the" `[G L1303]` inventory in an inventory.CSV. In PREprod no lot is in Inventory.csv yet. In production the sold lot may be one of the 17 withheld. The export route refuses this case (`verifyOutboxAgainstLedger` `L_REF_INVENTORY`), but the hub did not run that check, so the hub could show green while the download refuses. Slice S-17b runs the same check in the hub.
+- **Answer to the owner:** the sale is captured and formatted; it can be accepted only once its lot is filed (or sent in the same batch). Fix the withheld lots first, then the sale goes through.
+
+### K.5 Cutover dates and the duplicate-sale risk (owner decision needed, OD-1)
+
+Facts: new system in use from **Sun 2026-11-01**; Cultivera's **final upload Sat 2026-11-07**; CCRS weeks run Sunday–Saturday `[FAQ L0041]`, so 11/01–11/07 is exactly one CCRS week; `compliance_obligation_start` is 2026-11-01 (S-12d).
+
+Risk: if Cultivera's 11/07 upload contains any sale or adjustment for 11/01–11/07 and Greenway also files that week, the second copy of each sale fails with "Duplicate Sale for Licensee" `[G L1390]` (Part 07 §D step 7). If neither files it, the week is unreported.
+
+What decides it is **which data Cultivera's 11/07 upload contains**. If sales are rung in the new POS from 11/01, Cultivera has no record of them unless they are also entered there. The options, for the owner and Cultivera (not decided here):
+- (a) Greenway files week 11/01–11/07 (Sunday 11/08). Cultivera's 11/07 upload must contain **nothing dated 11/01 or later** (only catch-up of 10/25–10/31). The hub setting stays 2026-11-01.
+- (b) Cultivera files week 11/01–11/07 from data it holds. Only possible if the 11/01–11/07 sales are in Cultivera. Greenway's first week is then 11/08–11/14, and the hub's first day of sales must move to 2026-11-08.
+
+Until the owner confirms (a) or (b) in writing with Cultivera, U-61 stays open. Fresh copy G-1 (§G) is requested **after** 11/07, the last Cultivera filing, and before Greenway's first production upload.
+
+### K.6 Slice S-17a: every withheld row shown, with the next step (DONE in code, 2026-10-19)
+
+- `ccrs-submit-gate-core.ts`: `GateIssueInput`/`GateIssue` carry `code`, `specPin`, `rows`. Deduplication **merges** the rows of a dropped duplicate. New `toGateInput()` is the one mapping every caller uses (hub, compliance report, export route), so no caller can drop the rows by hand again.
+- `ccrs-issue-display-core.ts` (new, pure): `classifyWithholdReason` turns each reason produced by `ccrs-ledger-core.ts` into one of 10 classes. A lot withheld for its product takes the product's class. `nextStepFor(class, env)` names the exact control (production Assign, PREprod set-up, Menu review, the CCRS files list, the fresh copy). `issuePlainText` and `issuesPlainText` give an uncapped plain-text copy. An unknown reason is "unclassified" and says do not upload; it is never guessed.
+- `CcrsIssueList.tsx` (new): each issue shows its code, one line per reason class with the next step (largest first), a `<details>` list of **every** row, and copy buttons. PREprod no-id groups link to `#ccrs-files`.
+- Hub `/admin/compliance/ccrs` and `/admin/reports/compliance` render errors and warnings with it. The compliance report's `batchWarnings.slice(0, 30)` cap is removed (Part 05 §H).
+- `batch-export` 409 refusal prints every row and the next steps.
+- Harness: mutation M101's anchor had been dead since S-13 moved the Area plan into `ccrs-area-core.ts`, so `mutate_check.py` aborted at M101. It is retargeted to the same behaviour in its new home and killed by `s13-ccrs-areas.test.ts`.
+- Tests: `tests/compliance/s17a-hub-issue-rows.test.tsx`. It **reads `ccrs-ledger-core.ts`** and requires every `reason:` literal there (13 today) to be classified, so a new reason cannot fall through silently. It also runs real `planLedgerBatch` output through the gate and the display, renders the component (40 rows, no cap), and pins each caller. Self-tests are registered in both runners. Mutations M120–M130 are all killed.
+- Not changed: no CSV byte, no routing decision, no migration.
+
