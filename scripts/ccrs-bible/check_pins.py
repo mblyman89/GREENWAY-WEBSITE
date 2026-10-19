@@ -8,7 +8,20 @@ SRC = {"G": "lcb/guide.txt", "FAQ": "lcb/faq.txt", "API": "lcb/api.txt",
        "LOGIN": "lcb/login.txt", "ADMIN": "lcb/admin-guide.txt", "SAW": "lcb/saw-guide.txt",
        "MANI": "lcb/manifests.txt"}
 lines = {k: open(os.path.join(ROOT, v), encoding="utf-8", errors="replace").read().split("\n") for k, v in SRC.items()}
-pin_re = re.compile(r"\[(G|FAQ|API|LOGIN|ADMIN|SAW|MANI) L(\d{4})(?:-L(\d{4}))?\]")
+# Sources versioned INSIDE the repo (Part 17). Paths are relative to the repo root.
+# EXAM   = owner's 2026-10-19 request incl. the full examiner thread, verbatim
+# FAQ19  = LCB CCRS FAQ as fetched 2026-10-19 (NOT the 2026-09-15 [FAQ] text)
+# SIGNIN = CCRS User Sign-In Guide CIB154 8/26 (pdftotext)
+# BUL1006 = LCB bulletin 2026-10-06 "Oct. 12: CCRS Transition to WA.gov Login"
+REPO_SRC = {"EXAM": "docs/ccrs-bible/evidence/2026-10-19-owner-request/owner-request-verbatim.txt",
+            "FAQ19": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/faq.txt",
+            "SIGNIN": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/signin.txt",
+            "BUL1006": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/bulletin-42e03cc.txt"}
+for k, v in REPO_SRC.items():
+    fp = os.path.join(REPO, v)
+    if os.path.exists(fp):
+        lines[k] = open(fp, encoding="utf-8", errors="replace").read().split("\n")
+pin_re = re.compile(r"\[(G|FAQ19|FAQ|API|LOGIN|ADMIN|SAW|MANI|EXAM|SIGNIN|BUL1006) L(\d{4})(?:-L(\d{4}))?\]")
 bad, checked, quote_miss = 0, 0, 0
 for f in sorted(glob.glob(os.path.join(REPO, "docs/ccrs-bible/*.md"))):
     if os.path.basename(f)[:2] in ("02", "03"):
@@ -17,6 +30,10 @@ for f in sorted(glob.glob(os.path.join(REPO, "docs/ccrs-bible/*.md"))):
     for m in pin_re.finditer(text):
         src, a, b = m.group(1), int(m.group(2)), int(m.group(3) or m.group(2))
         checked += 1
+        if src not in lines:
+            bad += 1
+            print(f"MISSING-SOURCE {os.path.basename(f)}: {m.group(0)}")
+            continue
         n = len(lines[src])
         if a < 1 or b > n or a > b:
             bad += 1

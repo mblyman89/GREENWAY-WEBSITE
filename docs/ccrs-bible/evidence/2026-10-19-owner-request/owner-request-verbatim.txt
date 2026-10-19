@@ -1,0 +1,852 @@
+I need your help finishing the ccrs upload pipeline we have built so that it can successfully create spreadsheets that ccrs will accept as well as being accurate. this includes the cleanup of my ccrs data sent by brian a month ago. I am going to paste in the entire email thread for you to read so you have context regarding everything we have talked about. I will aslo paste in the preprod success emails and the files that were used to create the successful files so you have context about what works. the system is telling me that the upload is blocked for inventory related things and sales being zero. this is for both production, and preproduction. this is the message that is see, "✕ Validation FAILED — the zip download is blocked until these errors are fixed:
+• [Product] 2 product(s) were left out of Product.csv because no CCRS Product id is assigned or its CCRS status is unproven [G L0246-L0248]. Lots of these products are withheld from Inventory.csv too. (2)
+• [Inventory] 38 lot(s) were left out of Inventory.csv because we cannot prove what CCRS holds for them. Insert creates a record and Update alters "an existing record indicated by external identifier" [G L0246-L0248], so sending either on a guess risks a rejected file. Each row says why; reconcile it, then rebuild. (38)
+12 warning(s) — non-blocking, worth a skim
+• [Product] Inventory lots reference products not present in the published menu (Product.csv). (38)
+• [Product] Product "Heavenly Buds Super Boof Flower 7g": Legacy LCB value "Usable Marijuana" (2021 Data Model vocabulary) canonicalized to "Usable Cannabis" under EndProduct (current CCRS Table 2).
+• [Product] Product "Heavenly Buds Orange Diesel Rosin 1g": Description exceeds 250 chars and was truncated — shorten it in the source.
+• [Inventory] No inventory lots found to report.
+• [InventoryAdjustment] No reportable adjustments found in the selected range.
+• [InventoryTransfer] InventoryTransfer is submitted by the receiving licensee; retail intake is reported via Inventory.csv. This file is intentionally empty.
+• [Sale] No completed orders in the selected range.
+• [Product] File contains no data rows (empty submission for this type).
+• [Inventory] File contains no data rows (empty submission for this type).
+• [InventoryAdjustment] File contains no data rows (empty submission for this type).
+• [InventoryTransfer] File contains no data rows (empty submission for this type).
+• [Sale] File contains no data rows (empty submission for this type)."
+
+here is the success emails thread, "PRE: CCRS Processing Successful
+External
+Inbox
+
+info@lcb.wa.gov
+Wed, Oct 7, 10:35 AM (12 days ago)
+PRE The file Strain_413541_20261006222847_2026107T103687.csv you submitted has been processed. Date Submitted: 10/7/2026 10:35:10 AM For assistance, please cont
+
+info@lcb.wa.gov
+Wed, Oct 7, 10:37 AM (12 days ago)
+PRE The file Area_413541_20261006222848_2026107T1037316.csv you submitted has been processed. Date Submitted: 10/7/2026 10:37:01 AM For assistance, please conta
+
+info@lcb.wa.gov
+Wed, Oct 7, 10:38 AM (12 days ago)
+PRE The file Product_413541_20261006222849_2026107T1038666.csv you submitted has been processed. Date Submitted: 10/7/2026 10:38:06 AM For assistance, please co
+
+info@lcb.wa.gov
+Wed, Oct 7, 10:57 AM (12 days ago)
+PRE The file Inventory_413541_20261006222850_2026107T1057602.csv you submitted has been processed. Date Submitted: 10/7/2026 10:57:33 AM For assistance, please
+
+info@lcb.wa.gov
+Wed, Oct 7, 11:04 AM (12 days ago)
+PRE The file Inventory_413541_20261006222851_2026107T114557.csv you submitted has been processed. Date Submitted: 10/7/2026 11:04:33 AM For assistance, please c
+
+info@lcb.wa.gov
+Wed, Oct 7, 11:06 AM (12 days ago)
+PRE The file Inventory_413541_20261006222852_1_2026107T116153.csv you submitted has been processed. Date Submitted: 10/7/2026 11:05:36 AM For assistance, please
+
+info@lcb.wa.gov
+Wed, Oct 7, 11:07 AM (12 days ago)
+to me
+
+PRE
+
+The file Inventory_413541_20261006222853_2026107T117682.csv you submitted has been processed.  Date Submitted: 10/7/2026 11:06:47 AM  For assistance, please contact the Cannabis Examiners by e-mail at examiner@lcb.wa.gov"
+
+here is the email thread between brian and myself, "CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+External
+Inbox
+
+Michael Lyman <michael@greenwaymarijuana.com>
+Sep 17, 2026, 12:27 PM
+to examiner, marcos.ocampo
+
+Hello,
+
+I own Greenway Marijuana, an I-502 retailer in Port Orchard, license 413541.
+
+We currently report to CCRS through our integrator, Cultivera. We are preparing to take reporting in-house and upload our own .CSV files. I have a PREproduction account and am working through our file formats there now, so I have kept this to the four questions that PREproduction cannot answer for us.
+
+1. Our previously reported data, so our identifiers line up. Cultivera has been filing our inventory using our product barcode as the InventoryExternalIdentifier. Before our first upload I want to be certain we continue using the same identifiers rather than creating duplicates.
+
+The FAQ says a license can request their data from the examiner unit for CCRS. May we request Greenway's reported CCRS data for license 413541 — specifically the InventoryExternalIdentifier, Strain, Area, Product names currently on file? If that request belongs with Public Records instead, please tell me and I will file it there.
+
+2. If that data is not available to us, which approach do you want? When we begin uploading ourselves, should we: (a) continue to Update the existing identifiers Cultivera filed, or (b) Insert new identifiers of our own and report InventoryTransfer rows from the old identifiers to the new ones?
+
+I have read the FAQ guidance to keep existing ID structures where possible; my question is whether that still holds when the party doing the filing changes from the integrator to the licensee. I want to avoid duplicating or orphaning our live inventory on day one.
+
+3. Retention. How long are we required to keep the .CSV files we upload and the error emails CCRS returns? I could not find a retention period in the Upload User Guide or the FAQ, and I would rather set our retention to your number than pick one ourselves.
+
+4. Un-assigning our integrator. When we stop using Cultivera, is there anything required beyond un-assigning them from our license in CCRS — and would you like to be notified of the date we switch over?
+
+One smaller item if it is easy to answer: when a licensee uploads their own files, which email address receives the error notifications — the account used to log in, or a separate address on the CCRS profile? I ask because today those errors go to our integrator and we never see them, and I want them landing in our inbox before we cut over, not after.
+
+Thank you very much for your time. I am happy to be told "upload it to PREproduction and see" on anything I should be testing myself.
+
+Michael Lyman Owner, Greenway Marijuana — license 413541 Port Orchard, WA
+
+
+Examiner (LCB)
+Sep 17, 2026, 1:23 PM
+to Examiner, me, Marcos
+
+Hi Michael,
+
+ 
+
+Yes, I can get your data over to you that has been submitted by your integrator for your license, please give me a few days to get this together and prepared (if the size of all the files , exceeds what we can share via email, I will have a Box account set up with the files,)
+For your other questions, please continue to use the IDs already submitted and use the update path to update them vs creating new ones, this will simplify your workflow getting started doing your own uploads.
+For retention, it is the same for all records as dictated in WAC 314-55-083, which is the standard 5 years for records.
+Correct, after you unassign Cultivera, there is nothing else to complete, they will no longer have access to upload for your license once you unassign. And it is the email that submits the file will get confirmation and error messages.
+Please reach out with any other questions, as you make these changes.
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+Signature 2
+1025 Union Avenue S.E. | PO Box 43100 | Olympia, Washington 98504
+
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+From: Michael Lyman <michael@greenwaymarijuana.com>
+Sent: Thursday, September 17, 2026 12:28 PM
+To: Examiner (LCB) <Examiner@lcb.wa.gov>; Ocampo, Marcos (LCB) <marcos.ocampo@lcb.wa.gov>
+Subject: CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+
+ 
+
+External Email
+
+
+Examiner (LCB)
+Attachments
+Sep 21, 2026, 12:04 PM
+to me, Examiner, Marcos
+
+Hi Michael,
+
+ 
+
+Attached are two files:
+
+When you open the inventory file, make sure to click do not convert on the pop up window that should open with it. This will maintain the IDs in the proper format.
+
+Data Request contains strain, area, and additional product data. Let me know if you have any questions.
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+Signature 2
+1025 Union Avenue S.E. | PO Box 43100 | Olympia, Washington 98504
+
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+From: Michael Lyman <michael@greenwaymarijuana.com>
+Sent: Thursday, September 17, 2026 12:28 PM
+To: Examiner (LCB) <Examiner@lcb.wa.gov>; Ocampo, Marcos (LCB) <marcos.ocampo@lcb.wa.gov>
+Subject: CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+
+ 
+
+External Email
+
+Hello,
+
+ 2 Attachments
+  •  Scanned by Gmail
+
+Michael Lyman <michael@greenwaymarijuana.com>
+Sep 21, 2026, 4:54 PM
+to Examiner
+
+Hi Brian,
+
+Thank you - the Inventory file and the Data Request workbook both arrived, and the "do not convert" instruction was exactly the right warning. That was immediately useful.
+
+We have now loaded both files and checked them against what we are building, against the results of our first full PREproduction test run on September 17, and against our own back-office records. That comparison answered a lot, and it also raised a set of questions I would not have known to ask a week ago. I have grouped them so you can answer only what is relevant to you and hand the rest off if they belong with someone else. Short answers are completely fine - even a yes, a no, or "test it in PREproduction" is useful to us.
+
+For context on what we found in the data you sent: 62,744 inventory records, 64,566 products, 9,736 strains, and 9 areas, for license 413541, with reported dates running from October 2018 through September 18, 2026. Every inventory identifier is unique, which was the thing I most needed to confirm.
+
+-- A. Making sure I read your identifier guidance correctly --
+
+You told us to continue using the IDs already submitted and to use the Update path. I want to be certain I have the scope right: does that apply to every file type - Inventory, Product, Strain, and Area alike - or specifically to Inventory?
+
+About 4,295 of our filed inventory identifiers contain a period, for example I65303102101603WAR413541.IN132IB0. Is the period a fully supported character in ExternalIdentifier going forward, or is it an artifact of how our integrator formed IDs that we should migrate away from over time? I am not asking to change them - I want to know whether to keep accepting that shape permanently.
+
+Roughly 15,800 of our identifiers are purely numeric, and about 15,300 of those are longer than 15 digits, with 911 carrying leading zeros. Does CCRS treat ExternalIdentifier strictly as text, so that leading zeros are preserved and never interpreted numerically? This is the reason your "do not convert" warning mattered so much to us, and I want to confirm the same is true on your side.
+
+Is there a maximum length for ExternalIdentifier? Our longest is 52 characters. I would like to know the real limit before we design around it.
+
+-- B. Reconciling your data against our own records --
+
+This is the section I would most value your guidance on.
+
+The data you sent reflects what our integrator has filed. Our own back-office system is a separate set of books, and the two do not currently agree. Comparing our back-office inventory export from September 1 against your file:
+
+Our back-office barcode matches your InventoryExternalIdentifier for 4,098 of our 4,208 current lots, about 97%. So the identifier scheme lines up well, which is encouraging.
+But your file shows 44,746 lots with a quantity still on hand, totaling about 532,000 units, while our back office shows 4,284 lots and about 30,000 units.
+Of those 44,746, about 40,662 do not appear in our back office at all. They were created between 2019 and 2026, and most hold small remainders - roughly 3,800 have one unit or less, and about 10,400 have between two and five.
+That pattern looks to us like lots that were sold down over the years but never zeroed out or closed in CCRS, so they remain open on our reported record.
+
+Does that interpretation sound right to you, or is there something about how CCRS reports quantity on hand that would explain the difference innocently?
+
+If those lots genuinely are stale, what is the correct way to close them out? Is that an InventoryAdjustment for each one, an Inventory Update setting QuantityOnHand to zero, or something else? I want to use the method you would prefer to see rather than pick one.
+
+Is there a preferred pace or batching approach for a cleanup of that size, so we do not flood the system or trigger anything that looks like an anomaly on your end? We are not in a hurry and would rather do it the way you want it done.
+
+Is a cleanup like this something you would expect us to do before we take over reporting, or after we are established and filing reliably on our own?
+
+Is there any risk in leaving it as it is? I would rather understand the exposure than guess. If our reported inventory has been drifting from our actual inventory for some time, I would like to correct it properly and on the record.
+
+Finally, so we are measuring against the right baseline: as of what date is the file you sent current? The most recent reported date in it is September 18, 2026, which suggests our integrator was still filing while you prepared it.
+
+-- C. Our Areas, which look unusual --
+
+Our Area data shows nine records but only five actual locations. Four names - Sales Floor, Incoming Orders, POS Returns, and Vendor Returns - each appear twice, under two different identifier schemes. For example Sales Floor exists as both C1100011 and C1-11021100011, and the same doubling pattern holds for the other three. We believe this came from a past POS migration.
+
+Which set should we treat as current and file against going forward? And is it appropriate for us to retire the duplicates - and if so, is that a Delete, or should we simply stop referencing them and leave them in place?
+
+Since the Inventory file references Area by name rather than by identifier, and "Sales Floor" now matches two filed Area records, how does CCRS resolve that on our uploads? I want to be sure our inventory is landing in the area we think it is.
+
+Is there a supported way to rename an Area, or to correct an Area's ExternalIdentifier, without disturbing the inventory that references it?
+
+-- D. Data that is on file but appears to conflict with the validation rules --
+
+I ask these only because we are building pre-upload checks, and I do not want to block a file that CCRS would actually accept - nor to "correct" something that is fine as it is.
+
+Our filed inventory includes 3,005 records with a TotalCost of 0.00, yet on September 17 PREproduction rejected a new row with "Total Cost cannot equal zero." Is that rule applied only on Insert, or only to newer submissions? And should we be going back to correct those 3,005 historical rows, or leave them?
+
+Similarly, 77 records have a QuantityOnHand greater than their InitialQuantity, which PREproduction rejected for a new row. Same question: leave them, or correct them?
+
+Our strain list has 44 names appearing twice, and 19 of those are duplicated with an identical name and type, even though CCRS returns "Duplicate Strain. The Strain must be unique for the LicenseNumber." Is there anything we should do about the existing duplicates?
+
+We also have a strain literally named "THC" on file, though CCRS rejects that name on upload with "Strain name is invalid cannot be Unknown THC or Other." Should that one be corrected, and if so, what is the right way to rename a strain that inventory already references?
+
+-- E. One note about the export itself, in case it is useful to you --
+
+Four rows in the Product report sheet appear to have shifted one column to the left, so the ExternalIdentifier column reads "1" while the real identifier has moved into the Name column - showing as 1.32304601350899e+16 in one case and GF41583505706958 in another. In those same rows the created-by and date fields are offset as well, and the weight reads NULL.
+
+The underlying records are clearly fine; we located them by description and matched them to our inventory, which carries the identifiers correctly as 13230460135089916 and GF41583505706958. So nothing is missing - I mention it only because it looks like a formatting artifact on the export side that you may want to know about, and the affected identifiers happen to be exactly the long-numeric kind your "do not convert" warning was about.
+
+Related and more practical: for future data requests, could these be sent as plain CSV or tab-delimited text rather than a spreadsheet? That would remove the conversion risk entirely on both ends. Not a complaint - the data is 99.99% intact - just a preference if it is easy on your side.
+
+-- F. PREproduction testing, so our results stay clean --
+
+Can the PREproduction environment be reset or cleared for our license on request? On September 17 several tests failed as duplicates only because an earlier test in the same session had already filed that identifier. If a reset is not available, we will simply generate a unique prefix per run - I just want to know which approach you would rather we use.
+
+Does anything we upload to PREproduction ever reach production, or affect our compliance record in any way? I believe the answer is no, and I would like that confirmed in writing before we scale up our testing.
+
+Is there a volume or file-size limit we should respect in PREproduction? We would like to rehearse a realistic full-size upload rather than only small samples, but not if that creates a burden on your side.
+
+Is there any preferred window, or times to avoid, for heavier PREproduction testing?
+
+-- G. Uploads and error handling --
+
+When a file is rejected, is the entire file rejected, or are the valid rows within it still accepted? Our September 17 results strongly suggest the whole file is rejected - we submitted a two-row file where only the first row was a duplicate and both rows came back - but I would like that confirmed, because our whole retry design depends on it.
+
+The confirmation emails echo our file name with an extra token appended, for example ..._2026917T1252497.csv. Is that token a receipt or tracking ID we can reference if we ever need to ask about a specific submission?
+
+In production, do the confirmation and error emails look the same as in PREproduction, minus the "PRE" prefix?
+
+The Upload User Guide suggests waiting about ten minutes between dependent files, such as Product before Inventory. Is that an enforced timing requirement, or a guideline? Knowing which determines whether we build a wait into our process.
+
+Is there a limit on how many files we can upload per day, or a recommended pace?
+
+If we upload the same file twice by accident, what is the correct remedy?
+
+-- H. Two smaller data questions --
+
+The Product report includes a Description field, and about 46% of our filed products have it empty. The guide notes that a description is expected for Usable Cannabis. PREproduction accepted an empty one. Is a description going to become required, or is empty permanently acceptable?
+
+Your exports use different formats for what looks like the same information - IsMedical came through as 0 and 1, IsQuarantine as "no," and dates appear as M/D/YYYY in the Inventory file but as YYYY-MM-DD HH:MM:SS in the workbook. For uploads we have been using MM/DD/YYYY and True/False, which were accepted. Is that the correct convention to standardize on, or is there a preferred one?
+
+-- I. Two forward-looking items --
+
+The FAQ says CCRS transitions to WA.gov logins in October 2026, which is now very close. Does that change anything besides the login - the upload page, the file templates, or the way integrators are assigned? I want to avoid cutting over to self-reporting the same week the login changes if that would be poor timing. If you would recommend a better sequence, I would welcome the advice.
+
+I came across the CCRS Integrator API Guide, which describes submitting files over an API with machine-to-machine credentials rather than uploading by hand. Is that available to a licensee reporting only for their own license, or is it strictly for third-party integrators serving multiple licensees? If a single licensee can be provisioned, I would like to know what the process looks like, since it would make our reporting considerably more reliable than manual uploads.
+
+-- J. Finally --
+
+When we are ready to un-assign Cultivera and file our first upload ourselves, would you like advance notice of the date? And is there anything you would want us to verify beforehand that we have not thought to ask about?
+I know this is a long list. Please do not feel obligated to answer all of it at once, or to answer anything that is better settled by testing - "upload it to PREproduction and see" is always a welcome answer, and we will do the work. Section B is the one I would most appreciate your guidance on, since it affects the accuracy of our reported record rather than just our process.
+
+We are trying to get this right the first time rather than discover it later in production. Thank you again for the data and for your help so far. It has made a real difference.
+
+I just want to add here as well, full disclosure, that everything written above was written by my ai agent. I am building my own system that will take over for Cultivera, hopefully within the next couple of months. I apologize if the list above is overwhelming, we are not cutting corners or taking short cuts, and will build this the right way. Our philosophy has been, "no guessing, no assuming," so we ask lots of questions rather than make assumptions. I am attempting to build a system that actually resolves the many years of built-up discrepancies and realigns my CCRS data with the reality of what I actually have on hand at my shop. So, with that being said, I can build this new system in any way needed to make this possible. I really appreciate your helping me figure out the weekly reporting upload process, thank you! 
+
+Michael Lyman Owner, Greenway Marijuana License 413541 - Port Orchard, WA
+
+
+Michael Lyman <michael@greenwaymarijuana.com>
+Sep 25, 2026, 12:24 PM
+to Examiner
+
+Good afternoon, Brian. I hope all is well! I am reaching out to see if you had a chance to read my email and answer any of the remaining questions I have about the weekly CCRS upload process. I appreciate your help in figuring out this process so my uploads are accurate, correct, and timely. Thank you again; I hope you have a good weekend!
+
+Michael Lyman
+
+Examiner (LCB)
+Sep 25, 2026, 1:14 PM
+to me, Examiner
+
+Hi Michael,
+
+ 
+
+ 
+
+Sorry for the delay, busy week.
+
+ 
+
+You told us to continue using the IDs already submitted and to use the Update path. I want to be certain I have the scope right: does that apply to every file type - Inventory, Product, Strain, and Area alike - or specifically to Inventory?
+Inventory and product are the primary concern, products are less, as you create new products feel free to update the ids to a pattern that suits your needs.
+
+About 4,295 of our filed inventory identifiers contain a period, for example I65303102101603WAR413541.IN132IB0. Is the period a fully supported character in ExternalIdentifier going forward, or is it an artifact of how our integrator formed IDs that we should migrate away from over time? I am not asking to change them - I want to know whether to keep accepting that shape permanently.
+This would be your choice, I recommend mitigating to what is easiest for you to understand and report when formatting the IDs.
+
+Roughly 15,800 of our identifiers are purely numeric, and about 15,300 of those are longer than 15 digits, with 911 carrying leading zeros. Does CCRS treat ExternalIdentifier strictly as text, so that leading zeros are preserved and never interpreted numerically? This is the reason your "do not convert" warning mattered so much to us, and I want to confirm the same is true on your side.
+Yes, that is correct, CCRS ingest it as text, and when we export to csv with have to use that warning as well. You do not have to keep that format, and I do recommend not a purely numeric format due to how excel will automatically convert that to scientific notation.
+
+Is there a maximum length for ExternalIdentifier? Our longest is 52 characters. I would like to know the real limit before we design around it.
+Yes, the character limit is 100.
+
+
+Michael Lyman <michael@greenwaymarijuana.com>
+Sep 28, 2026, 1:10 PM
+to Examiner
+
+Good afternoon, Brian. I hope you had a good weekend! I appreciate you sending back answers to the first few questions we had, I was hoping, if you have some time available, to answer a few more of the remaining questions from the other sections. I am hoping to deploy my new software system by the end of next month, so there isn't a major rush on these answers; I can fold them in as you provide them. I apologize again for the large number of inquiries about the process, and I greatly appreciate your help working through everything. Thank you again!
+
+Michael Lyman
+
+Michael Lyman <michael@greenwaymarijuana.com>
+Sep 30, 2026, 10:18 AM
+to Examiner
+
+Good morning Brian, I hope you are having a good day so far. I am reaching out today to request guidance on what I should do about my current integrator, Cultivera, refusing to send me my coa data. Almost all vendors send these digitally now, so I don’t have a way to provide these documents after my migration. Cultivera says they won’t send them to me. What should I do to get this data? Are the coas available in the CCRS dataset you sent me the other day? If not then I am not sure how I can maintain compliance without the coas on hand. Any advice you can provide would be greatly appreciated. I am going to migrate from them to my own platform by the end of October, so I need the data as soon as possible. Thank you!
+Also, I apologize for pestering you. If you get a chance to answer a few more of the questions we have, would also be wonderful. I am very close to having everything wrapped up, I just need to make sure I can get all my data from Cultivera so I maintain compliance after the transition. I have reached out to Marcos about it already, he advised me to talk with you about it. Thank you again for helping me!
+
+Michael Lyman 
+
+On Sep 28, 2026, at 1:10 PM, Michael Lyman <michael@greenwaymarijuana.com> wrote:
+
+﻿
+Good afternoon, Brian. I hope you had a good weekend! I appreciate you sending back answers to the first few questions we had, I was hoping, if you have some time available, to answer a few more of the remaining questions from the other sections. I am hoping to deploy my new software system by the end of next month, so there isn't a major rush on these answers; I can fold them in as you provide them. I apologize again for the large number of inquiries about the process, and I greatly appreciate your help working through everything. Thank you again!
+
+Michael Lyman
+
+On Fri, Sep 25, 2026 at 1:14 PM Examiner (LCB) <Examiner@lcb.wa.gov> wrote:
+Hi Michael,
+
+ 
+
+ 
+
+Sorry for the delay, busy week.
+
+ 
+
+You told us to continue using the IDs already submitted and to use the Update path. I want to be certain I have the scope right: does that apply to every file type - Inventory, Product, Strain, and Area alike - or specifically to Inventory?
+Inventory and product are the primary concern, products are less, as you create new products feel free to update the ids to a pattern that suits your needs.
+
+About 4,295 of our filed inventory identifiers contain a period, for example I65303102101603WAR413541.IN132IB0. Is the period a fully supported character in ExternalIdentifier going forward, or is it an artifact of how our integrator formed IDs that we should migrate away from over time? I am not asking to change them - I want to know whether to keep accepting that shape permanently.
+This would be your choice, I recommend mitigating to what is easiest for you to understand and report when formatting the IDs.
+
+Roughly 15,800 of our identifiers are purely numeric, and about 15,300 of those are longer than 15 digits, with 911 carrying leading zeros. Does CCRS treat ExternalIdentifier strictly as text, so that leading zeros are preserved and never interpreted numerically? This is the reason your "do not convert" warning mattered so much to us, and I want to confirm the same is true on your side.
+Yes, that is correct, CCRS ingest it as text, and when we export to csv with have to use that warning as well. You do not have to keep that format, and I do recommend not a purely numeric format due to how excel will automatically convert that to scientific notation.
+
+Is there a maximum length for ExternalIdentifier? Our longest is 52 characters. I would like to know the real limit before we design around it.
+Yes, the character limit is 100.
+
+ 
+
+ 
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+
+<image001.jpg>
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+
+<image001.jpg>
+
+Michael Lyman <michael@greenwaymarijuana.com>
+Oct 2, 2026, 11:14 AM
+to Examiner
+
+Good morning Brian. I apologize for pestering you, I am hoping you would be able to answer a few more of my questions about the CCRS upload process. Also, I am curious to know if there is anything I can do to require Cultivera to give me my compliance data so I can migrate away from them. Finishing the upload process is my final piece to complete. I hope you have a good weekend. Thank you again!
+
+On Sep 30, 2026, at 10:18 AM, Michael Lyman <michael@greenwaymarijuana.com> wrote:
+
+Examiner (LCB)
+Oct 2, 2026, 3:57 PM
+to me, Examiner
+
+Hi Michael,
+
+ 
+
+Sorry for the delays I been in the field all week.
+
+ 
+
+I can give a fuller answer on Monday, here is some quick responses:
+
+ 
+
+Yes, you should be able to get your data from Cultivera, I would recommend looking over the contact to ensure that there is nothing in there that states otherwise, as it is your data, and it is your responsibility to maintain a copy of all records.
+
+ 
+
+As for the old ids that were not 0 out in CCRS, yes, your assessment would align with my own. It would be best if you did submit an inventory update for all those ids and get them to zero and then an inventory adjustment for those ids, with the reason as reconciliation, so we understand that you were doing an inventory audit and cleaning up old data.
+
+ 
+
+Hope this helps, and I will go more in detail on Monday,
+
+Have a good weekend.
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+Signature 2
+
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+
+Examiner (LCB)
+Oct 5, 2026, 1:37 PM
+to me, Examiner
+
+Hey Michael,
+
+ 
+
+Hope this answers the rest of your question:
+
+
+Is there a preferred pace or batching approach for a cleanup of that size, so we do not flood the system or trigger anything that looks like an anomaly on your end? We are not in a hurry and would rather do it the way you want it done.
+To minimize slower response times, limit a file size to 1 million rows.
+
+Is a cleanup like this something you would expect us to do before we take over reporting, or after we are established and filing reliably on our own?
+It is expected that the licensee corrects the data in the quickest way possible once the incorrect data has been identified.
+
+Is there any risk in leaving it as it is? I would rather understand the exposure than guess. If our reported inventory has been drifting from our actual inventory for some time, I would like to correct it properly and on the record.
+The data is expected to be kept up to date and accurate per the WAC and Policy Statement, by not correcting the data a license can face possible penalties associated with failure to meet regulatory requirements.  Leaving inaccurate information reported in the system could result in data being flagged for further examinations, field audits of inventory, concerns about data reporting.
+
+Finally, so we are measuring against the right baseline: as of what date is the file you sent current? The most recent reported date in it is September 18, 2026, which suggests our integrator was still filing while you prepared it.
+That was the most recent at the time, as I provide what data was reported up to the date I pulled.
+
+-- C. Our Areas, which look unusual --
+
+Our Area data shows nine records but only five actual locations. Four names - Sales Floor, Incoming Orders, POS Returns, and Vendor Returns - each appear twice, under two different identifier schemes. For example Sales Floor exists as both C1100011 and C1-11021100011, and the same doubling pattern holds for the other three. We believe this came from a past POS migration.
+Which set should we treat as current and file against going forward? And is it appropriate for us to retire the duplicates - and if so, is that a Delete, or should we simply stop referencing them and leave them in place?
+
+Using a delete operation for those not in use is advised. If there was not a date with the file for area, please let me know, I would recommend using the most recent dated Sales Floor, however, I can not confirm when one stopped being used and the other started.
+
+Since the Inventory file references Area by name rather than by identifier, and "Sales Floor" now matches two filed Area records, how does CCRS resolve that on our uploads? I want to be sure our inventory is landing in the area we think it is.
+It captures the most recent file that was ingested for that name and license.
+
+Is there a supported way to rename an Area, or to correct an Area's ExternalIdentifier, without disturbing the inventory that references it?
+Any area name change would have to reflected the next time you updated that inventory row or it would result in an error.
+
+-- D. Data that is on file but appears to conflict with the validation rules --
+
+I ask these only because we are building pre-upload checks, and I do not want to block a file that CCRS would actually accept - nor to "correct" something that is fine as it is.
+
+Our filed inventory includes 3,005 records with a TotalCost of 0.00, yet on September 17 PREproduction rejected a new row with "Total Cost cannot equal zero." Is that rule applied only on Insert, or only to newer submissions? And should we be going back to correct those 3,005 historical rows, or leave them?
+That validation came into effect in June of 2025, if those rows are updated, that will have to be addressed also. If they are old data and the inventory is no longer on hand they need to be updated to reflect that.
+
+Similarly, 77 records have a QuantityOnHand greater than their InitialQuantity, which PREproduction rejected for a new row. Same question: leave them, or correct them?
+If they are old data and the inventory is no longer on hand they need to be updated to reflect that.
+
+Our strain list has 44 names appearing twice, and 19 of those are duplicated with an identical name and type, even though CCRS returns "Duplicate Strain. The Strain must be unique for the LicenseNumber." Is there anything we should do about the existing duplicates?
+No, just do not submit the same name with a variation of captilization. EX: Dutch Treat vs Dutch treat
+
+We also have a strain literally named "THC" on file, though CCRS rejects that name on upload with "Strain name is invalid cannot be Unknown THC or Other." Should that one be corrected, and if so, what is the right way to rename a strain that inventory already references?
+Newer validation, if that product exist, and is not giving an error do not worry about it, if it is older and needs to be updated, updating it on the inventory report to a new name that already exist and is accurately will work.
+
+-- E. One note about the export itself, in case it is useful to you --
+
+Four rows in the Product report sheet appear to have shifted one column to the left, so the ExternalIdentifier column reads "1" while the real identifier has moved into the Name column - showing as 1.32304601350899e+16 in one case and GF41583505706958 in another. In those same rows the created-by and date fields are offset as well, and the weight reads NULL.
+The underlying records are clearly fine; we located them by description and matched them to our inventory, which carries the identifiers correctly as 13230460135089916 and GF41583505706958. So nothing is missing - I mention it only because it looks like a formatting artifact on the export side that you may want to know about, and the affected identifiers happen to be exactly the long-numeric kind your "do not convert" warning was about.
+
+Related and more practical: for future data requests, could these be sent as plain CSV or tab-delimited text rather than a spreadsheet? That would remove the conversion risk entirely on both ends. Not a complaint - the data is 99.99% intact - just a preference if it is easy on your side.
+It is a csv file, just when you open with Microsoft programs it treats it as an excel and wants to automatically convert. Opening in a text program would be fine.
+
+-- F. PREproduction testing, so our results stay clean --
+
+Can the PREproduction environment be reset or cleared for our license on request? On September 17 several tests failed as duplicates only because an earlier test in the same session had already filed that identifier. If a reset is not available, we will simply generate a unique prefix per run - I just want to know which approach you would rather we use.
+NO, you can request a copy from the Service Desk for what has been reported to Preproduction and clean or work around the data.
+
+Does anything we upload to PREproduction ever reach production, or affect our compliance record in any way? I believe the answer is no, and I would like that confirmed in writing before we scale up our testing.
+They are separate environments.
+
+Is there a volume or file-size limit we should respect in PREproduction? We would like to rehearse a realistic full-size upload rather than only small samples, but not if that creates a burden on your side.
+Limit to less then 1 gb per upload.
+
+Is there any preferred window, or times to avoid, for heavier PREproduction testing?
+Only when we post about it being down.
+
+-- G. Uploads and error handling --
+
+When a file is rejected, is the entire file rejected, or are the valid rows within it still accepted? Our September 17 results strongly suggest the whole file is rejected - we submitted a two-row file where only the first row was a duplicate and both rows came back - but I would like that confirmed, because our whole retry design depends on it.
+Header and operation errors are full file, individual row errors are specific to that row, so a file that passes operation and header validation can have 5 rows fail and 1 row pass.
+
+The confirmation emails echo our file name with an extra token appended, for example ..._2026917T1252497.csv. Is that token a receipt or tracking ID we can reference if we ever need to ask about a specific submission?
+It is a file time stamp and internal system generated, you would not be able to track by it.
+
+In production, do the confirmation and error emails look the same as in PREproduction, minus the "PRE" prefix?
+yes
+
+The Upload User Guide suggests waiting about ten minutes between dependent files, such as Product before Inventory. Is that an enforced timing requirement, or a guideline? Knowing which determines whether we build a wait into our process.
+Guideline, as soon as you receive a successful response that the prior file was ingested, you can upload the new file.
+
+Is there a limit on how many files we can upload per day, or a recommended pace?
+Not at this time, however at any time we can set a limit on how many per individual and universal are allowed. We would post that limit on the resource page.
+
+If we upload the same file twice by accident, what is the correct remedy?
+The exact same file name will not be accepted twice, nor would the data.
+
+-- H. Two smaller data questions --
+
+The Product report includes a Description field, and about 46% of our filed products have it empty. The guide notes that a description is expected for Usable Cannabis. PREproduction accepted an empty one. Is a description going to become required, or is empty permanently acceptable?
+There is an expectation that a description is on file, and enhancements to CCRS are an ongoing basis.
+
+Your exports use different formats for what looks like the same information - IsMedical came through as 0 and 1, IsQuarantine as "no," and dates appear as M/D/YYYY in the Inventory file but as YYYY-MM-DD HH:MM:SS in the workbook. For uploads we have been using MM/DD/YYYY and True/False, which were accepted. Is that the correct convention to standardize on, or is there a preferred one?
+That is the correct convention, the files were from different sources, one generated by a query and one by a report.
+
+-- I. Two forward-looking items --
+
+The FAQ says CCRS transitions to WA.gov logins in October 2026, which is now very close. Does that change anything besides the login - the upload page, the file templates, or the way integrators are assigned? I want to avoid cutting over to self-reporting the same week the login changes if that would be poor timing. If you would recommend a better sequence, I would welcome the advice.
+At this time no other impacts.
+
+I came across the CCRS Integrator API Guide, which describes submitting files over an API with machine-to-machine credentials rather than uploading by hand. Is that available to a licensee reporting only for their own license, or is it strictly for third-party integrators serving multiple licensees? If a single licensee can be provisioned, I would like to know what the process looks like, since it would make our reporting considerably more reliable than manual uploads.
+At this time it is just for integrators, future enhancements are being researched.
+
+-- J. Finally --
+
+When we are ready to un-assign Cultivera and file our first upload ourselves, would you like advance notice of the date? And is there anything you would want us to verify beforehand that we have not thought to ask about?
+No notice is required, after the initial uploads, recommendation is to reach out for a copy of what was submitted to check for accuracy.
+
+I know this is a long list. Please do not feel obligated to answer all of it at once, or to answer anything that is better settled by testing - "upload it to PREproduction and see" is always a welcome answer, and we will do the work. Section B is the one I would most appreciate your guidance on, since it affects the accuracy of our reported record rather than just our process.
+
+ 
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+Signature 2
+1025 Union Avenue S.E. | PO Box 43100 | Olympia, Washington 98504
+
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+ 
+
+From: Michael Lyman <michael@greenwaymarijuana.com>
+Sent: Friday, October 2, 2026 11:14 AM
+
+To: Examiner (LCB) <Examiner@lcb.wa.gov>
+Subject: Re: CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+ 
+
+External Email
+
+Good morning Brian. I apologize for pestering you, I am hoping you would be able to answer a few more of my questions about the CCRS upload process. Also, I am curious to know if there is anything I can do to require Cultivera to give me my compliance data so I can migrate away from them. Finishing the upload process is my final piece to complete. I hope you have a good weekend. Thank you again!
+
+
+
+
+On Sep 30, 2026, at 10:18 AM, Michael Lyman <michael@greenwaymarijuana.com> wrote:
+
+﻿
+
+Good morning Brian, I hope you are having a good day so far. I am reaching out today to request guidance on what I should do about my current integrator, Cultivera, refusing to send me my coa data. Almost all vendors send these digitally now, so I don’t have a way to provide these documents after my migration. Cultivera says they won’t send them to me. What should I do to get this data? Are the coas available in the CCRS dataset you sent me the other day? If not then I am not sure how I can maintain compliance without the coas on hand. Any advice you can provide would be greatly appreciated. I am going to migrate from them to my own platform by the end of October, so I need the data as soon as possible. Thank you!
+
+Also, I apologize for pestering you. If you get a chance to answer a few more of the questions we have, would also be wonderful. I am very close to having everything wrapped up, I just need to make sure I can get all my data from Cultivera so I maintain compliance after the transition. I have reached out to Marcos about it already, he advised me to talk with you about it. Thank you again for helping me!
+
+ 
+
+Michael Lyman 
+
+
+
+
+On Sep 28, 2026, at 1:10 PM, Michael Lyman <michael@greenwaymarijuana.com> wrote:
+
+﻿
+
+Good afternoon, Brian. I hope you had a good weekend! I appreciate you sending back answers to the first few questions we had, I was hoping, if you have some time available, to answer a few more of the remaining questions from the other sections. I am hoping to deploy my new software system by the end of next month, so there isn't a major rush on these answers; I can fold them in as you provide them. I apologize again for the large number of inquiries about the process, and I greatly appreciate your help working through everything. Thank you again!
+
+ 
+
+Michael Lyman
+
+ 
+
+On Fri, Sep 25, 2026 at 1:14 PM Examiner (LCB) <Examiner@lcb.wa.gov> wrote:
+
+Hi Michael,
+
+ 
+
+ 
+
+Sorry for the delay, busy week.
+
+ 
+
+You told us to continue using the IDs already submitted and to use the Update path. I want to be certain I have the scope right: does that apply to every file type - Inventory, Product, Strain, and Area alike - or specifically to Inventory?
+Inventory and product are the primary concern, products are less, as you create new products feel free to update the ids to a pattern that suits your needs.
+
+About 4,295 of our filed inventory identifiers contain a period, for example I65303102101603WAR413541.IN132IB0. Is the period a fully supported character in ExternalIdentifier going forward, or is it an artifact of how our integrator formed IDs that we should migrate away from over time? I am not asking to change them - I want to know whether to keep accepting that shape permanently.
+This would be your choice, I recommend mitigating to what is easiest for you to understand and report when formatting the IDs.
+
+Roughly 15,800 of our identifiers are purely numeric, and about 15,300 of those are longer than 15 digits, with 911 carrying leading zeros. Does CCRS treat ExternalIdentifier strictly as text, so that leading zeros are preserved and never interpreted numerically? This is the reason your "do not convert" warning mattered so much to us, and I want to confirm the same is true on your side.
+Yes, that is correct, CCRS ingest it as text, and when we export to csv with have to use that warning as well. You do not have to keep that format, and I do recommend not a purely numeric format due to how excel will automatically convert that to scientific notation.
+
+Is there a maximum length for ExternalIdentifier? Our longest is 52 characters. I would like to know the real limit before we design around it.
+Yes, the character limit is 100.
+
+ 
+
+ 
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+<image001.jpg>
+
+
+1025 Union Avenue S.E. | PO Box 43100 | Olympia, Washington 98504
+
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+ 
+
+From: Michael Lyman <michael@greenwaymarijuana.com>
+Sent: Monday, September 21, 2026 4:55 PM
+To: Examiner (LCB) <Examiner@lcb.wa.gov>
+Subject: Re: CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+
+ 
+
+External Email
+
+Hi Brian,
+
+Thank you - the Inventory file and the Data Request workbook both arrived, and the "do not convert" instruction was exactly the right warning. That was immediately useful.
+
+We have now loaded both files and checked them against what we are building, against the results of our first full PREproduction test run on September 17, and against our own back-office records. That comparison answered a lot, and it also raised a set of questions I would not have known to ask a week ago. I have grouped them so you can answer only what is relevant to you and hand the rest off if they belong with someone else. Short answers are completely fine - even a yes, a no, or "test it in PREproduction" is useful to us.
+
+For context on what we found in the data you sent: 62,744 inventory records, 64,566 products, 9,736 strains, and 9 areas, for license 413541, with reported dates running from October 2018 through September 18, 2026. Every inventory identifier is unique, which was the thing I most needed to confirm.
+
+-- A. Making sure I read your identifier guidance correctly --
+
+You told us to continue using the IDs already submitted and to use the Update path. I want to be certain I have the scope right: does that apply to every file type - Inventory, Product, Strain, and Area alike - or specifically to Inventory?
+About 4,295 of our filed inventory identifiers contain a period, for example I65303102101603WAR413541.IN132IB0. Is the period a fully supported character in ExternalIdentifier going forward, or is it an artifact of how our integrator formed IDs that we should migrate away from over time? I am not asking to change them - I want to know whether to keep accepting that shape permanently.
+Roughly 15,800 of our identifiers are purely numeric, and about 15,300 of those are longer than 15 digits, with 911 carrying leading zeros. Does CCRS treat ExternalIdentifier strictly as text, so that leading zeros are preserved and never interpreted numerically? This is the reason your "do not convert" warning mattered so much to us, and I want to confirm the same is true on your side.
+Is there a maximum length for ExternalIdentifier? Our longest is 52 characters. I would like to know the real limit before we design around it.
+-- B. Reconciling your data against our own records --
+
+This is the section I would most value your guidance on.
+
+The data you sent reflects what our integrator has filed. Our own back-office system is a separate set of books, and the two do not currently agree. Comparing our back-office inventory export from September 1 against your file:
+
+Our back-office barcode matches your InventoryExternalIdentifier for 4,098 of our 4,208 current lots, about 97%. So the identifier scheme lines up well, which is encouraging.
+But your file shows 44,746 lots with a quantity still on hand, totaling about 532,000 units, while our back office shows 4,284 lots and about 30,000 units.
+Of those 44,746, about 40,662 do not appear in our back office at all. They were created between 2019 and 2026, and most hold small remainders - roughly 3,800 have one unit or less, and about 10,400 have between two and five.
+That pattern looks to us like lots that were sold down over the years but never zeroed out or closed in CCRS, so they remain open on our reported record.
+
+Does that interpretation sound right to you, or is there something about how CCRS reports quantity on hand that would explain the difference innocently?
+If those lots genuinely are stale, what is the correct way to close them out? Is that an InventoryAdjustment for each one, an Inventory Update setting QuantityOnHand to zero, or something else? I want to use the method you would prefer to see rather than pick one.
+Is there a preferred pace or batching approach for a cleanup of that size, so we do not flood the system or trigger anything that looks like an anomaly on your end? We are not in a hurry and would rather do it the way you want it done.
+Is a cleanup like this something you would expect us to do before we take over reporting, or after we are established and filing reliably on our own?
+Is there any risk in leaving it as it is? I would rather understand the exposure than guess. If our reported inventory has been drifting from our actual inventory for some time, I would like to correct it properly and on the record.
+Finally, so we are measuring against the right baseline: as of what date is the file you sent current? The most recent reported date in it is September 18, 2026, which suggests our integrator was still filing while you prepared it.
+-- C. Our Areas, which look unusual --
+
+Our Area data shows nine records but only five actual locations. Four names - Sales Floor, Incoming Orders, POS Returns, and Vendor Returns - each appear twice, under two different identifier schemes. For example Sales Floor exists as both C1100011 and C1-11021100011, and the same doubling pattern holds for the other three. We believe this came from a past POS migration.
+Which set should we treat as current and file against going forward? And is it appropriate for us to retire the duplicates - and if so, is that a Delete, or should we simply stop referencing them and leave them in place?
+
+Since the Inventory file references Area by name rather than by identifier, and "Sales Floor" now matches two filed Area records, how does CCRS resolve that on our uploads? I want to be sure our inventory is landing in the area we think it is.
+Is there a supported way to rename an Area, or to correct an Area's ExternalIdentifier, without disturbing the inventory that references it?
+-- D. Data that is on file but appears to conflict with the validation rules --
+
+I ask these only because we are building pre-upload checks, and I do not want to block a file that CCRS would actually accept - nor to "correct" something that is fine as it is.
+
+Our filed inventory includes 3,005 records with a TotalCost of 0.00, yet on September 17 PREproduction rejected a new row with "Total Cost cannot equal zero." Is that rule applied only on Insert, or only to newer submissions? And should we be going back to correct those 3,005 historical rows, or leave them?
+Similarly, 77 records have a QuantityOnHand greater than their InitialQuantity, which PREproduction rejected for a new row. Same question: leave them, or correct them?
+Our strain list has 44 names appearing twice, and 19 of those are duplicated with an identical name and type, even though CCRS returns "Duplicate Strain. The Strain must be unique for the LicenseNumber." Is there anything we should do about the existing duplicates?
+We also have a strain literally named "THC" on file, though CCRS rejects that name on upload with "Strain name is invalid cannot be Unknown THC or Other." Should that one be corrected, and if so, what is the right way to rename a strain that inventory already references?
+-- E. One note about the export itself, in case it is useful to you --
+
+Four rows in the Product report sheet appear to have shifted one column to the left, so the ExternalIdentifier column reads "1" while the real identifier has moved into the Name column - showing as 1.32304601350899e+16 in one case and GF41583505706958 in another. In those same rows the created-by and date fields are offset as well, and the weight reads NULL.
+The underlying records are clearly fine; we located them by description and matched them to our inventory, which carries the identifiers correctly as 13230460135089916 and GF41583505706958. So nothing is missing - I mention it only because it looks like a formatting artifact on the export side that you may want to know about, and the affected identifiers happen to be exactly the long-numeric kind your "do not convert" warning was about.
+
+Related and more practical: for future data requests, could these be sent as plain CSV or tab-delimited text rather than a spreadsheet? That would remove the conversion risk entirely on both ends. Not a complaint - the data is 99.99% intact - just a preference if it is easy on your side.
+-- F. PREproduction testing, so our results stay clean --
+
+Can the PREproduction environment be reset or cleared for our license on request? On September 17 several tests failed as duplicates only because an earlier test in the same session had already filed that identifier. If a reset is not available, we will simply generate a unique prefix per run - I just want to know which approach you would rather we use.
+Does anything we upload to PREproduction ever reach production, or affect our compliance record in any way? I believe the answer is no, and I would like that confirmed in writing before we scale up our testing.
+Is there a volume or file-size limit we should respect in PREproduction? We would like to rehearse a realistic full-size upload rather than only small samples, but not if that creates a burden on your side.
+Is there any preferred window, or times to avoid, for heavier PREproduction testing?
+-- G. Uploads and error handling --
+
+When a file is rejected, is the entire file rejected, or are the valid rows within it still accepted? Our September 17 results strongly suggest the whole file is rejected - we submitted a two-row file where only the first row was a duplicate and both rows came back - but I would like that confirmed, because our whole retry design depends on it.
+The confirmation emails echo our file name with an extra token appended, for example ..._2026917T1252497.csv. Is that token a receipt or tracking ID we can reference if we ever need to ask about a specific submission?
+In production, do the confirmation and error emails look the same as in PREproduction, minus the "PRE" prefix?
+The Upload User Guide suggests waiting about ten minutes between dependent files, such as Product before Inventory. Is that an enforced timing requirement, or a guideline? Knowing which determines whether we build a wait into our process.
+Is there a limit on how many files we can upload per day, or a recommended pace?
+If we upload the same file twice by accident, what is the correct remedy?
+-- H. Two smaller data questions --
+
+The Product report includes a Description field, and about 46% of our filed products have it empty. The guide notes that a description is expected for Usable Cannabis. PREproduction accepted an empty one. Is a description going to become required, or is empty permanently acceptable?
+Your exports use different formats for what looks like the same information - IsMedical came through as 0 and 1, IsQuarantine as "no," and dates appear as M/D/YYYY in the Inventory file but as YYYY-MM-DD HH:MM:SS in the workbook. For uploads we have been using MM/DD/YYYY and True/False, which were accepted. Is that the correct convention to standardize on, or is there a preferred one?
+-- I. Two forward-looking items --
+
+The FAQ says CCRS transitions to WA.gov logins in October 2026, which is now very close. Does that change anything besides the login - the upload page, the file templates, or the way integrators are assigned? I want to avoid cutting over to self-reporting the same week the login changes if that would be poor timing. If you would recommend a better sequence, I would welcome the advice.
+I came across the CCRS Integrator API Guide, which describes submitting files over an API with machine-to-machine credentials rather than uploading by hand. Is that available to a licensee reporting only for their own license, or is it strictly for third-party integrators serving multiple licensees? If a single licensee can be provisioned, I would like to know what the process looks like, since it would make our reporting considerably more reliable than manual uploads.
+-- J. Finally --
+
+When we are ready to un-assign Cultivera and file our first upload ourselves, would you like advance notice of the date? And is there anything you would want us to verify beforehand that we have not thought to ask about?
+I know this is a long list. Please do not feel obligated to answer all of it at once, or to answer anything that is better settled by testing - "upload it to PREproduction and see" is always a welcome answer, and we will do the work. Section B is the one I would most appreciate your guidance on, since it affects the accuracy of our reported record rather than just our process.
+
+We are trying to get this right the first time rather than discover it later in production. Thank you again for the data and for your help so far. It has made a real difference.
+
+I just want to add here as well, full disclosure, that everything written above was written by my ai agent. I am building my own system that will take over for Cultivera, hopefully within the next couple of months. I apologize if the list above is overwhelming, we are not cutting corners or taking short cuts, and will build this the right way. Our philosophy has been, "no guessing, no assuming," so we ask lots of questions rather than make assumptions. I am attempting to build a system that actually resolves the many years of built-up discrepancies and realigns my CCRS data with the reality of what I actually have on hand at my shop. So, with that being said, I can build this new system in any way needed to make this possible. I really appreciate your helping me figure out the weekly reporting upload process, thank you! 
+
+Michael Lyman Owner, Greenway Marijuana License 413541 - Port Orchard, WA
+
+ 
+
+On Mon, Sep 21, 2026 at 12:04 PM Examiner (LCB) <Examiner@lcb.wa.gov> wrote:
+
+Hi Michael,
+
+ 
+
+Attached are two files:
+
+When you open the inventory file, make sure to click do not convert on the pop up window that should open with it. This will maintain the IDs in the proper format.
+
+Data Request contains strain, area, and additional product data. Let me know if you have any questions.
+
+ 
+
+Brian McQuay
+
+Data Consultant Supervisor
+
+Cannabis Examiner Unit
+
+Pronouns: He/Him/His
+
+<image001.jpg>
+
+
+1025 Union Avenue S.E. | PO Box 43100 | Olympia, Washington 98504
+
+Ph: 360.664.1600 | Fax: 360.664.2588
+
+ 
+
+From: Michael Lyman <michael@greenwaymarijuana.com>
+Sent: Thursday, September 17, 2026 12:28 PM
+To: Examiner (LCB) <Examiner@lcb.wa.gov>; Ocampo, Marcos (LCB) <marcos.ocampo@lcb.wa.gov>
+Subject: CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+
+ 
+
+External Email
+
+Hello,
+
+I own Greenway Marijuana, an I-502 retailer in Port Orchard, license 413541.
+
+We currently report to CCRS through our integrator, Cultivera. We are preparing to take reporting in-house and upload our own .CSV files. I have a PREproduction account and am working through our file formats there now, so I have kept this to the four questions that PREproduction cannot answer for us.
+
+1. Our previously reported data, so our identifiers line up. Cultivera has been filing our inventory using our product barcode as the InventoryExternalIdentifier. Before our first upload I want to be certain we continue using the same identifiers rather than creating duplicates.
+
+The FAQ says a license can request their data from the examiner unit for CCRS. May we request Greenway's reported CCRS data for license 413541 — specifically the InventoryExternalIdentifier, Strain, Area, Product names currently on file? If that request belongs with Public Records instead, please tell me and I will file it there.
+
+2. If that data is not available to us, which approach do you want? When we begin uploading ourselves, should we: (a) continue to Update the existing identifiers Cultivera filed, or (b) Insert new identifiers of our own and report InventoryTransfer rows from the old identifiers to the new ones?
+
+I have read the FAQ guidance to keep existing ID structures where possible; my question is whether that still holds when the party doing the filing changes from the integrator to the licensee. I want to avoid duplicating or orphaning our live inventory on day one.
+
+3. Retention. How long are we required to keep the .CSV files we upload and the error emails CCRS returns? I could not find a retention period in the Upload User Guide or the FAQ, and I would rather set our retention to your number than pick one ourselves.
+
+4. Un-assigning our integrator. When we stop using Cultivera, is there anything required beyond un-assigning them from our license in CCRS — and would you like to be notified of the date we switch over?
+
+One smaller item if it is easy to answer: when a licensee uploads their own files, which email address receives the error notifications — the account used to log in, or a separate address on the CCRS profile? I ask because today those errors go to our integrator and we never see them, and I want them landing in our inbox before we cut over, not after.
+
+Thank you very much for your time. I am happy to be told "upload it to PREproduction and see" on anything I should be testing myself.
+
+Michael Lyman Owner, Greenway Marijuana — license 413541 Port Orchard, WA"."
+
+please clone a copy of the git repo, then read everything I have pasted in and uploaded, document all of it, organize it into a report for yourself to use as a resource when building enhancing and hardening. let me know if you need anything more from me to help you gain further clarity. please let me know if you have more questions for brian the examiner, and if we need a fresh copy of my ccrs data given to me after november 1st 2026. and how that plays a part in our system. please read agents.md. then proceed with the first slice, read, recon, research the internet, report, strategize, bible build, and anything else you need from me. please go above and beyond for me. go slow and be meticulous. document everything. pin everything. anchor everything. no drifting allow. no slop allowed. follow the standing rules and never guess, never assume. in the summary report, please provide for me a full report on everything that is to come in this ccrs upload and clean up entails. what it needs, and how we are going to produce successful results. thank you.
+
+[Uploaded File: /workspace/MANIFEST.md]
+[Uploaded File: /workspace/Inventory_413541_20261006222853.csv]
+[Uploaded File: /workspace/Inventory_413541_20261006222852_1.csv]
+[Uploaded File: /workspace/Inventory_413541_20261006222851.csv]
+[Uploaded File: /workspace/Inventory_413541_20261006222850.csv]
+[Uploaded File: /workspace/Product_413541_20261006222849.csv]
+[Uploaded File: /workspace/Area_413541_20261006222848.csv]
+[Uploaded File: /workspace/Strain_413541_20261006222847.csv]

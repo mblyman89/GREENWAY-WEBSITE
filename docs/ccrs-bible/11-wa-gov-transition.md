@@ -45,3 +45,19 @@ S-07 collapses the URL into `ccrs-portal-core.ts`; S-09 collapses the login labe
 ## E. What "we should know sooner than later" translates to
 
 The only way to *know* before October is the examiner's written answer (Q8) and, once LCB opens WA.gov login in PREprod, running Part 06 T-01 again under the new login. Add **T-02b** to Part 06 when that happens: "Log in at PREprod via WA.gov; confirm the Upload page and the seven templates are unchanged (re-download templates and md5 against Part 13)." Until then, S-09 is scaffolding only.
+
+## F. UPDATE 2026-10-19: the switch has happened (Part 17 §F)
+
+- CCRS moved to WA.gov login on **Monday Oct. 12, 2026**, with downtime "approximately 5 p.m. to 8 p.m." `[BUL1006 L0010]`. Every licensee needs a WA.gov account plus a one-time registration `[BUL1006 L0011]`.
+- **Scope is login only.** "None. The only change in scope is the transition from SAW to WA.gov authentication. All CCRS functionality and upload processes remain the same as they are now." `[FAQ19 L0191]`. The examiner: "At this time no other impacts." `[EXAM L0560]`. **U-10 CLOSED.**
+- **Two accounts:** "You will need separate WA.gov accounts for the Pre-Production environment and the live environment." `[SIGNIN L0035-L0036]`. The registration email "must already have been set up with LCB Licensing." `[SIGNIN L0062]`.
+- The 08/19 bulletin's Sign-In Guide link, which returned 404 before (§A), now resolves. It is CIB154 (Part 13 §G).
+- **Consequence for §C (S-09):** the date notice and the `portal_login_mode` setting are no longer needed. The switch is past and cannot be reverted. S-09 becomes slice S-17c: replace the six remaining "SAW login" strings with WA.gov wording, and add a guardrail test. The six strings are:
+  - `compliance-reminders.ts:108`
+  - `ccrs-outbox-core.ts:300`
+  - `excise-payment-core.ts:46`
+  - `UploadWalkthrough.tsx:184`
+  - `ErrorTriagePanel.tsx:160`
+  - `concierge-kb.ts:350`
+  
+  The line numbers in §B above are older.

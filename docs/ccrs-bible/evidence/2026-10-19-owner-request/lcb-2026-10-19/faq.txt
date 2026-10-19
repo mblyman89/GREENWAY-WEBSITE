@@ -1,0 +1,782 @@
+Frequently Asked Questions | Washington State Liquor and Cannabis Board
+Skip to main content
+Menu
+Main navigation
+Licensing Services
+Liquor Licensing
+Apply for a Liquor License
+Renew your License
+Liquor Forms and Applications
+Special Licenses and Permits
+Mandatory Alcohol Server Training (MAST)
+Responsible Vendor Program (RVP)
+Alcohol Impact Areas
+Trade Area Map
+Cannabis Licensing
+Apply for a Cannabis License
+Air Quality and Odor Controls
+Cannabis Forms and Applications
+Cannabis Social Equity
+Medical Cannabis
+Cannabis Retailer Map
+Cannabis Licensing Resources
+Tobacco and Vapor Licensing
+Apply for a Tobacco and Vapor License
+Tobacco and Vapor FAQs
+Resources
+Authorized Representatives for Licensees
+Direct Shipping Laws
+Floor Plan Requirements
+Internet Sales of Alcohol
+New License Actions
+Outdoor Alcohol Service
+Enforcement
+General Resources
+Enforcement Education
+Acceptable ID
+Briefings
+Bulletins
+Order Keg Books
+Required Signs
+Year to Date Signs
+Cannabis Resources
+Cannabis Advertising FAQs
+Cannabis Central Reporting System (CCRS)
+Cannabis Packaging and Labeling Resources
+Request a Cannabis Consultation
+Traceability and Examiners
+Tobacco and Vapor
+FDA Compliance
+Labels, Samples, and Tasting Requirements
+Local Government Regulation
+Tobacco and Tax Violations
+Tobacco and Vapor Resources
+Vapor Information for Cannabis Licensees
+About Enforcement
+Enforcement Education Program
+Non-Retail Enforcement
+Retail Enforcement
+Violations and Due Process
+2019 Independent Enforcement Review Report
+Enforcement FAQs
+Report a Violation
+Education
+Taxes and Fees
+Tax and Fee Reporting
+Filing Online Reports
+Beer and Wine Taxes and Fees Guide
+Cannabis Tax Reporting Guide
+Spirit Fee Reporting Guide
+Tax and Fee Laws and Rules
+Tax and Fee Systems Replacement Project
+Washington Licensees
+Brewery
+Craft Distillery
+Distiller
+Distributor
+Importer
+Interstate Common Carrier
+Retailer
+Winery
+Out of State Licensees
+Brewery COA
+Distiller COA
+Representative COA
+Winery COA and Shipper to Consumer
+Helpful Tools
+Licensee List
+Beer High Tax Rate
+Brewer's Tax Rate Table
+Conversion Tables
+Resources
+Laws and Rules
+Current Rulemaking Activity
+Public Hearings and Outreach
+Recent Rulemaking Activity
+Rulemaking Resources
+Legislative Information
+Public Records
+Frequently Requested Lists
+Public Records Index
+Public Records Request
+Public Records FAQs
+Research
+Dashboards
+Research Projects
+Research and Data Briefs
+Independently Contracted Projects
+Cannabis Research License Information
+Tribal Resources
+Cannabis Compacts
+Liquor MOAs
+Tribal ID Cards as Identification
+Business Resources
+Small Business Guide
+About
+About LCB
+Vision, Mission, Goals, Values
+Annual Reports
+Accessibility
+Board Information
+Meeting Schedule and Information
+Meet the Board
+Delegated Authority
+Declaratory Orders
+Interim Policies
+Adjudicative Proceedings
+Career and Business Opportunities
+Business Opportunities
+Career Opportunities
+Benefits and Wellness
+Embracing Diversity, Equity, Inclusion and Belonging
+Employee Testimonials
+Contact
+Directory and Departments
+Speaking Requests
+Enforcement and Education Offices and Contacts
+News and Communication
+Communications and Publications
+Email Notification Archive
+Newsletters
+Press Releases
+Breadcrumb
+Home
+Enforcement
+Cannabis Resources
+Cannabis Central Reporting System (CCRS)
+CCRS FAQs
+CCRS FAQs
+Main navigation
+General Resources
+Cannabis Resources
+Cannabis Advertising FAQs
+Cannabis Central Reporting System (CCRS)
+CCRS FAQs
+CCRS Resources
+Cooperatives
+Labs
+Manifests
+Third Party Integrators
+Cannabis Packaging and Labeling Resources
+Request a Cannabis Consultation
+Traceability and Examiners
+Tobacco and Vapor
+About Enforcement
+Report a Violation
+CCRS now uses WA.gov for login.
+Users will need to create a
+WA.gov account
+in order to log into CCRS and complete a one-time registration process.
+SAW accounts did not automatically transition.
+For assistance with WA.gov accounts (i.e., account or password failures, missing verification emails, account creation issues, or denials), you will need to
+Submit a WA.gov accounts help request
+with the WaTech Support Center.
+WA.gov Transition
+Q: What is changing?
+A:
+Washington state is transitioning from SecureAccess Washington (SAW) to a new, unified WA.gov account system, providing a new way to log in to Washington state services. SAW no longer meets current technology, security, or user experience standards. It requires multiple logins and creates barriers for residents and agencies.
+Q: Who do I contact if I cannot create a new WA.gov account or cannot sign in?
+A
+: For issues related to WA.gov logins (i.e., account or password failures, missing verification emails, account creation issues, or denials), you can refer to WaTech’s
+Get Help
+website. If you still cannot resolve the WA.gov account issue, you will need to
+Submit a WA.gov accounts help request
+with the WaTech Support Center.
+Q: Will SAW accounts automatically transition to WA.gov?
+A:
+No. All users need to manually set up a new account and complete a one-time registration process to link their license and account.
+Make a WA.gov account now.
+Q: What other changes are being made to CCRS other than WA.gov accounts?
+A
+: None. The only change in scope is the transition from SAW to WA.gov authentication. All CCRS functionality and upload processes remain the same as they are now.
+Data Elements
+Q:
+Why are Other, THC, and Unknown not allowed as Strain names?
+A:
+As the strain name should be known at the start of growing the flower, it was determined these three entries were not conducive in ensuring public safety and was removed from allowed entries.
+Q:
+Will price data be included for wholesale and retail sales activity?
+A:
+Sales data will be collected. Details can be found in the user guide on what content is required to be reported in the sales report fields. Please see the user guide located on the
+CCRS Resources page
+.
+Q:
+Will there be a fixed list of inventory types? Or just broad 'equivalence' categories (eg, Clone/Seed, Plant, Bulk Material, Product)?
+A:
+This information can be found in resources provided on reporting submittals and data field detail on the
+CCRS Resources page
+.
+Q:
+What date should be entered for Harvest Date if the harvest date is not yet known?
+A:
+If the harvest date is not yet known, leave a NULL or a blank entry in the Harvest Date. This is not a required field for data submission.
+Q:
+How are infused Pre-Rolls categorized in CCRS?
+A:
+Infused pre-rolls are to be categorized as Concentrates in CCRS and thus are subject to the serving/transaction limits of concentrates.
+Data Quality
+Q:
+How will an integrator access CCRS to send or review data?
+A:
+Please refer to the
+Third Party Integrators
+section of the CCRS website.
+Q:
+Is there a file size limit?
+A:
+Please limit file sizes to 1GB or less. While CCRS can accept files up to 2GB in size, the larger the file, the longer it will take to process. By submitting a smaller file, CCRS is able to process the file faster and return either a confirmation or error message to the submitter.
+Q:
+How do I fix the errors that I receive back from CCRS after submitting a .CSV file to report new or updated data, such as claiming new inventory, updating a plant tag, or noting a new sale?
+A:
+Please review the Upload User Guide on the
+CCRS Resources page
+to learn more about how to make adjustments to the original file, based on the specific type of error received. If you are unable to resolve the errors, please email the LCB Examiners at examiner@lcb.wa.gov, and please email a copy of the .CSV file that was sent to CCRS, as well as forward the error email (along with any attachments) that was returned. The Examiners need to see both the file that was sent and what sort of errors were returned to the licensee in order to troubleshoot the situation.
+Data Reporting
+Q:
+How to report minor cannabinoids in CCRS inventory?
+A:
+If you are creating products with minor cannabinoids, you need to enter them into CCRS as Inventory Type CBD, and provide in the product name and description what minor cannabinoid is being reported.
+Q:
+How do I report trade samples in CCRS inventory?
+A:
+CCRS requires a value above $0.00 to be entered on the Total Cost field for an inventory ID to be reported. While the provided Trade Samples do not have a value, a value of $0.01 needs to be entered into the Total Cost field for Trade Samples. Please ensure you are including in the name and Description: Trade Sample.
+Q:
+How to report an adjustment?
+A:
+Report the Quantity of the adjustment as numeric positive value and in the details provide what the adjustment was for (adding to or subtracting from inventory).
+Q:
+How does a retailer report a return in CCRS?
+A:
+If a retailer receives a valid return from a customer, the sale identifier should be deleted from CCRS, and theinventory identifier reported on an Inventory Adjustment as a return, with details provided about why it was a return.
+Q:
+What is the definition of "weekly reporting"?
+A:
+Week is defined as Sunday - Saturday.  After the transition period, all licensee weekly reporting will be expected by no later than Sunday for the previous week. Reporting more frequently than weekly is allowed.
+Q:
+Are licensees expected to have data in CCRS from the start of Dec. 2021 when the system was launched?
+A:
+Yes, if the license was active during that time then the data needs to be uploaded and reflected in CCRS.
+Q:
+Are CBD materials are required to be entered into the system?
+A:
+Yes. Imported CBD is required to have the necessary tests to allow it to be added to cannabis and the records and reporting requirements continue.
+Q:
+Will the laboratory need to provide COA documents to the LCB?
+A:
+Labs are required to provide the test results to LCB via the reports established for that purpose. Record maintenance and access remain the same for both the labs and licensees. No changes have been made on the requirement to produce the records if requested by LCB.
+Q:
+For those that only grow during the summer, will they need to submit a .CSV file weekly during the winter months when there are no changes?
+A:
+The Upload User Guide on the
+CCRS Resources page
+provides more detail on the required frequency of reporting. For seasonal growers, it is expected that reports are submitted when there are actions, updates and changes weekly (if those activities have occurred). It is not the expectation that reporting be submitted when there is no activity to report. A reminder that LCB will be monitoring reporting activity. If information does not support weekly report submissions, the LCB will also be reaching out to confirm the reason for lack of reporting, however keep in mind that there is no reporting required if there are no new data to provide (no updates to existing records, no new inventory lots, no changes to plant tags, no unreported sales, no outgoing manifests, etc. Simply put, if there is nothing new to report, there is no report to submit and no expectation to provide some form of “no change” report, which does not exist.
+Q:
+Why does the Area specification mention that IsQuarantine is only for imported CBD? How is that related to Area data?
+A:
+There are no quarantine requirements for cannabis products. You will have an entry as FALSE. For imported CBD: quarantine rules are required until passing tests results as outlined in WAC 314-55-109 are on hand. Imported CBD must be put into its own room/area and marked TRUE until passing results are received.  This information is available in the Upload User Guide on the
+CCRS Resources page
+. Please be sure that Area is NOT set by default to “TRUE” for the answer to “IsQuarantine”, as this is typically not the case and would only apply in very select situations (such as when CBD has been received from a non I-502, such as from outside the state of Washington, and is awaiting testing results). All other cannabis products should NOT be listed as “IsQuarantine” by default, which will happen if the status for Area is set to TRUE (the system will treat inventory and products contained in that area as being in quarantine).
+Q:
+What happens if an Update operation is performed prior to an Insert operation, will it default to inserting that case? If so, can we just always specify the operation to be Update even if it is an Insert?
+A:
+The record doesn't exist, so an error message would be received.
+Q:
+Can a Lab sub-contract out their testing? If they do, who is responsible for reporting the test result?
+A:
+Labs may subcontract samples for a limited suite of tests and circumstances. The primary lab is responsible for reporting the test results directly to CCRS for the applicable product tested. WAC 314-55-102 (5) and WAC 314-55-102 (5) address referencing and subcontracting.
+Q:
+For the inventory sheet, is ‘total cost’ the individual unit cost * quantity in stock, or the unit cost for each item in stock?
+A:
+The Upload User Guide on the
+CCRS Resources page
+explains the following: TotalCost is the total cost associated with a licensee's inventory and stock.
+Q:
+If a retailer incorrectly enters the ‘FromInventoryExternalIdentifier’ when they are receiving new products, how will they correct this?
+A:
+They would perform an "Update" operation. That would update the record and correct the error.  The receiving license should only be providing the new (if any) “ToInventoryExternalIdentifier”, as the “From” ID is assigned as the original ID by the producer or processor.  If the license is going to use a new ID, it is important they submit an Inventory Transfer file, to provide both the old and new IDs for inventory items.
+Q:
+What is the correct way to enter a product's weight in .CSV submissions?
+A:
+UnitWeightGrams is the weight of the sellable product unit (not including packaging). Any one sellable product may never exceed the individual carry limit allowed for a consumer.
+Unit Examples:
+Sellable product = 2 grams of flower - UnitWeightGrams  = 2 grams
+Sellable product = 1 pre roll - UnitWeightGrams = 1 gram
+Sellable product = 1 package of edibles - UnitWeightGrams = 10 grams
+Sellable product = 1 concentrate for inhalation cartridge - UnitWeightGrams = 2 grams
+General
+Q:
+What is the expectation of licensees using CCRS?
+A:
+Please see the Upload User Guide located on the
+CCRS Resources page
+.
+Q:
+Does CCRS apply to all licensees, including retailers?
+A:
+Yes. This applies to all cannabis license types and to certified labs.
+Q:
+How do we do a plant ID in CCRS?
+A:
+The plant ID will not be generated by the state software system.  Licensees will need to establish/choose an inventory numbering system and then assign ID's to plants. A reminder that requirements to tag plants has not changed; plants must still be tagged. The plant tag will now be the ID a licensee assigns to that plant and has recorded in the appropriate .CSV file.
+Q:
+What time zone should dates/times be documented in?
+A:
+For reporting purposes, the file name should be referenced in PST.
+Q:
+How should a licensee  create a Sample to send to the Labs?
+A:
+The sample sent to the lab should be the same external identifier for the lot that was created original. This way the Lab results are attached to the larger batch. Keep IDs from original external ID, do not break them out as this will cause issues with required testing of all your products.
+Q:
+If a license changes physical locations, do they keep the same original six-digit license number?
+A:
+No, the six-digit license number is associated with a physical address, so the license holder will receive a new six-digit license number.
+Q:
+Can any approved user associated with the license make changes to who the integrator is? For example, an entity that has permissions to upload data to CCRS on behalf of the licensee?
+A:
+No, only the active administrator of the license can assign or remove an integrator.
+Q:
+I would like to change the email account currently associated with my license as the active administrator, how do I do that?
+A:
+You must request a change to your license information by emailing
+customerservicelicensing@lcb.wa.gov
+from the current administrator email account of the license requesting a change of email address for your license.
+Q:
+I am a licensee and my integrator has not been reporting my data to CCRS. Who is held responsible for making sure my data is reported?
+A:
+The licensee is ultimately responsible to meet data reporting obligations, and may need to make a business decision with regard to which integrator they use if their data is not being reported.
+Integrators
+Q:
+Does CCRS provide an integration sandbox for integrators to develop against?
+A:
+The LCB provides all cannabis licensees, labs and integrators access to the PREproduction CCRS environment for training and testing.
+Q:
+How does an integrator gain access to CCRS to report on behalf of licensees?
+A:
+Once an integrator is granted access to CCRS via the cannabis examiners, licensees will have the option to assign themselves that integrator through CCRS. Integrators do not have the ability to adjust licensee assignment. It is critically important that licensees who opt to use an integrator go into CCRS and assign that integrator to their license, otherwise the integrator cannot upload any data on behalf of that licensee. Licensees must “unlock the door” to allow an integrator access to CCRS, and if a licensee holds multiple licenses, they must assign the integrator to every license they hold individually. Assigning an integrator to one licensee will not automatically provide access to CCRS for any other licenses they own.
+Q:
+How will licensee software vendors authenticate on behalf of licensees?
+A:
+Integrators will be assigned a specific ID and will need to use the SecureAccess Washington (SAW) to authenticate and report on behalf of a licensee.
+Q:
+Does the integrator need to be preliminarily approved or validated by LCB before it is added to the system by the licensee to enable the integrator to upload reports on the licensee’s behalf?
+A:
+Yes. Integrators providing reporting services for licensees will need to be added to the approved integrator list in order for licensees to assign them reporting permissions. The steps for approval are listed on the
+CCRS Third Party Integrator Approval Process page
+.
+Q:
+If any licensees were to add an integrator within the PREproduction environment, do they need to do so again on the live site?
+A:
+Yes. These environments are autonomous and do not share administration or reporting data.
+Q:
+Can only one user be associated with our CCRS integrator account?
+A:
+Two users can be associated with your integrator account, meaning the integrator can have up to two emails associated with the license and thus with access to submit data to CCRS on behalf of the licensee (their client).
+Q:
+What filename format does an integrator use when uploading on behalf of a lab?
+A:
+Integrators uploading files on a Lab's behalf would use the same Lab .CSV file that the labs would use. The CCRS specification file has the naming conventions.
+Q:
+If an integrator is submitting .CSV reports on behalf of a licensee, should we expect that only the integrator will be notified of errors via email, or does the licensee receive an email notification as well?
+A:
+Yes, the individual (integrator) uploading the .CSV file would be notified of any errors, but the licensee will not receive an email. However, many integrators have set up a method to automatically send a copy of any errors to the licensee. Please ask your integrator to confirm if they will automatically be sending you the licensee a copy of any errors generated when data is submitted to CCRS. If so, please be sure to check any spam filters that might initially block these error emails or look in junk folder to see if the error emails were sent there.
+Manifests
+Q:
+Can licensees use Manifests generated by their integrator or Point of Sale (POS) systems?
+A:
+No, the only accepted Manifests are the PDFs generated by submitting the Manifest.CSV to CCRS.
+Q:
+Can a licensee submit a contingency manifest directly to LCB without uploading to CCRS?
+A:
+No, there is no contingency Manifest option. Manifests must be generated by CCRS to be valid.
+Medical Products and Sales
+Q:
+As a cannabis producer/processor licensee, how do I comply with medically compliant product requirements?
+A:
+To start, we recommend reviewing the information on
+Department of Health (DOH) Cannabis Program page
+. When reporting Medically Compliant products in CCRS, on the Inventory.csv, the Inventory External Identifier category must be marked as “Medically Compliant.”
+Q:
+As a cannabis retail licensee, I want to register patients with a Cannabis Medical Card in the Medical Cannabis Authorization Database. What are the requirements?
+A:
+The DOH website
+provides these requirements.
+Q:
+As a cannabis retail licensee, how do I give Cannabis Medical Card holders the new excise tax exemption?
+A:
+For a retailer to give the excise tax (begins June 6, 2024) exemption to qualified medical patients, all of these requirements must be met:
+The retail store has a Medical Endorsement from DOH.
+The Medical Card holder is registered in the Medical Cannabis Authorization Database.
+The product(s) are Medically Compliant products.
+Q:
+What does the cannabis retail licensee need to report in CCRS for sales that meet these conditions?
+A:
+All of the conditions below must be met:
+The retail licensee must have a medical endorsement.
+The product must be marked in the retailer’s inventory upload to CCRS as “Medically Compliant.”
+The sale must be RecreationalMedical when reporting to CCRS.
+If all these conditions are met, the two tax columns can be reported as $0.00 to show the tax exemption. All sales that do not meet these conditions must have taxes reported following current reporting requirements.
+For information on tax reporting requirements related to the exemption, please visit the
+Cannabis Taxes and Fees resource page
+.
+Posting Test Results
+Q:
+Do licensees and labs have 90 days before they are required to start uploading test results?
+A:
+Any tests not in the system that took place prior to Mar. 26 should be properly manifested and reported in CCRS as soon as possible. LCB will work with labs to educate on proper compliance practices when we detect instances of tests conducted before Mar. 26 that impact products in the hands of retailers or preparing to be shipped to retailers. All tests after Mar. 26 which include any of the fields listed in the notice must be uploaded to CCRS.
+Q:
+This seems like a new requirement. After 90 days has passed, how will the LCB Education and Enforcement Division approach addressing these requirements for product tested before Mar. 26, 2025?
+A:
+This is not a new mandate. Test reporting requirements are in addition to licensee and lab obligations to maintain accurate traceability records, including accurate CCRS manifests. LCB will work with labs and licensees to educate and gain compliance when we find instances of tests conducted before 26 March, not entered in CCRS, that impact products likely in the hands of retailers or products preparing to be shipped to retailers.
+Q:
+What happens if Labs or licensees do not report data during or after the 90 day education period?
+A:
+Following the 90 day education period, all licensees and certified labs are expected to continue complying with all laws and regulations regarding testing, test reporting, and traceability. The education window is not an amnesty period for licensees and labs who, through investigation or follow on compliance checks, are found to have knowingly violated requirements in the WAC.
+Q:
+Is this a new policy? Do labs or licensees need to go back and enter results and records from the past?
+A:
+This is not a new policy. Reporting of tests older than six months (prior to Sep. 25, 2024) for any of the fields in WAC will be considered as low priority for reporting in CCRS as they are less likely to still relate to products currently in the market. If labs or licensees are aware of any tests related to currently available products that predate that date they should be considered priority for public safety. All results of tests for any of the fields set forth in WAC that impact inventory or products currently on hand should be uploaded into CCRS in accordance with WACs as soon as possible. LCB staff will still require labs and licensees to ensure any samples collected for testing, no matter the date, meet traceability requirements and are reported in accordance with applicable law and regulation.
+Q
+: If I have issues reporting test results who can I contact?
+A:
+If you have issues or delays in reporting test results, please notify LCB within 24 hours by contacting the Examiners at:
+examiner@lcb.wa.gov
+.
+Public Records
+Q:
+Will licensees be able to access analytics from CCRS?
+A:
+A license can request their data from the examiner unit for CCRS. An Integrator can request a copy of the licensee they are working with data (license must be included on the request). For all other requests, please contact
+Public Records
+.
+Q:
+Can the LCB make a copy of the entire Leaf database available once it is turned off, similar to FOIA public records requests, but with full export?
+A:
+Information on public records requests are available
+here
+. Full publishing of the entire backup is not available.
+Q:
+Can we get access to all the CCRS data including products sold (in order to assess trends)? Or will the data at least be public for sales figures by license, similar to what we can access currently?
+A:
+This information is not available on our public website, but information on public records requests are available
+here
+.
+Q:
+What is the process for seeing what has previously been reported to CCRS for this given license so that we can align our future .csv imports to use the same external identifiers?
+A:
+Licensees would request CCRS records through a Public Records request if seeking licensee specific information. There is no direct access to the data that has already been reported. The original licensee records still fall under the archive requirements found in WAC 314-55.
+Rules
+Q:
+Will there be explicit rules on what can be transported between licensees?
+A:
+There are no changes to licensee permissions by licensee type and no changes in the types of products that can be transported between licensees.
+Q:
+Will there be explicit rules on 'conversions' from one type to another? How will these be enforced?
+Leaf allowed anything to be ‘re-typed’ into anything.
+A:
+Rules on valid conversions have not changed per RCW or WAC. CCRS will not “enforce” conversions by the system architecture. The enforcement of conversions will be based on the detail reported to WSLCB and follow up conversations between licensees and their Enforcement Officer/Compliance Consultant.
+Q:
+WAC 314-55-083H still makes reference to "unique identifier generated by the traceability system." Will we be returning to that requirement?
+A:
+The CCRS reports and the LCB will not be generating the IDs. Licensees will need to use reliable inventory tracking methodologies to assign IDs to their inventory and provide the ID (called external identifiers) when reporting via the CCRS reports. It is recommended that where possible to continue to use the existing ID structures. The WAC requirement going forward will be for IDs, not for IDs generated by the State.
+Q:
+Will there be a redefinition of the concept of “failure to maintain traceability” or what it means to maintain compliance given the significant change?
+A:
+No. The change in systems for reporting does not change the underlying concept that reporting is required and that accurate reporting and records maintenance is expected.
+Sales
+Q:
+When entering the discount and tax information in the Sales.CSV does the detail apply to the individual unit or the whole transaction?
+A:
+For the Sale.CSV in a row entry in which QTY is more than 1, the discount and taxes are reflective of the entire transaction. Unit Price is the price of one unit before discount or taxes. A reminder that other tax is Excise tax and is required for retail sales.
+Example:
+QTY = 3
+Unit Price  = $5.00
+Discount = $3.00
+Sales Tax (10%) = $1.20
+Other Tax (37%) = $4.44
+Q:
+How are Medical Tax Exemptions applied?
+A:
+The Sale.CSV will record the transaction as a RecreationalMedical sale. The tax for which the qualifying individual is exempt will not be charged and not collected from the individual and is therefore $0.00.  A reminder that a
+tax exemption is not a "discount."
+The exemption for a valid medical sale applies to both sales and excise taxes, and is not optional. A patient should not pay either sales or excise tax. For more information on this topic, please visit the Washington State Department of Health's
+website
+and FAQ page.
+Q:
+How do I report Waste in CCRS?
+A:
+Producers can report the sales of designated waste in the following manner:
+Sale: 3606641600
+Sale Type: Wholesale
+Product Category: Harvest Material
+Product Type: Waste
+The External Identifier must already exist in CCRS. For more information on what waste qualifies to be sold, please see the
+Cannabis Licensee Education page
+.
+Tax
+Tax
+Q:
+How do I pay my cannabis excise tax in CCRS?
+A:
+See the
+Cannabis Tax Reporting Guide
+for instructions on paying cannabis excise tax via CCRS.
+Q:
+In the WAC (314-55-089) it states “the act of keeping data completely up-to-date in the state traceability system fulfills the monthly reporting requirement” - regarding taxes - will that still be the case or will there be a new process?
+A:
+Cannabis retailers are still required to send monthly reports. Reporting requirements have not changed. The statements below are specific to producer/processors (reference 314-55-089(2) and 314-55-089(3).
+Cannabis producer/processors do not have a tax obligation to the WSLCB and the Finance Tax and Fee group is not collecting reports from this group of licensees.
+Producers and Processors should contact their Enforcement and Education Officer if they have questions regarding how to report their information. To be fully compliant with the LCB, licensed cannabis retailers (reference 314-55-089(4) are required to report using LCB form LIQ1295 (Retailers Sales and Excise Tax) and pay their monthly sales/tax information by the tax due date. Retail licensees are required to submit a report to the LCB each month even if they did not have sales completed. Per WAC 314-55-092(2) failure to report and/or pay will be sufficient grounds for the LCB to suspend or revoke a license.
+Technical Details
+Q:
+Does CCRS allow integrators to use an API?
+A:
+No. There is no Application Programming Interface (API) for CCRS.
+Q:
+Does the
+LCB provide any ‘cloud storage’ to facilitate digital transfer of data between licensees (such as manifests and lab results data)?
+A:
+No, this is not a service available.
+Q:
+How are lab results be tracked for retail products?
+A:
+Records requirements have not changed. Licensees must continue to provide the supporting documentation for all products sold at retail. Reports are being built against the CCRS data submitted for LCB’s use in reviewing test results.
+Washington State Liquor and Cannabis Board
+Social Links
+Footer CTA
+Sign Up for Email Notifications
+Footer
+Licensing Services
+Alcohol Sales Training
+Cannabis Licensing
+Liquor Licensing
+New License Actions
+Tobacco and Vapor Licensing
+Enforcement
+Enforcement Education
+Non-Retail Enforcement
+Report a Violation
+Retail Enforcement
+Education
+Cannabis Education
+Licensee Education
+Liquor Education
+Tobacco and Vapor Education
+Resources
+Laws and Rules
+Public Records
+Research
+Tribal Resources
+Taxes and Fees
+Beer and Wine Tax Reporting
+Cannabis Tax Reporting
+Licensee List
+Spirit Fee Guide
+About
+Board Information
+Career and Contractor Opportunities
+Communications and Publications
+Directory
+Mission, Vision, Goals, Values
+Copyright © 2026 Washington State Liquor and Cannabis Board
+Policy Links
+Accessibility
+Privacy Policy
+Licensing Services
+Liquor Licensing
+Apply for a Liquor License
+Available Liquor License Types
+Apply for an Out-of-State Non-Retail License
+Liquor License Starter Guide
+Liquor License FAQs
+Current Licensee FAQs
+Renew your License
+Liquor Forms and Applications
+Special Licenses and Permits
+Special Occasion License FAQs
+Mandatory Alcohol Server Training (MAST)
+Permit Checker
+Replace a Permit
+Find a Class
+"Last Call" Video
+MAST FAQs
+Responsible Vendor Program (RVP)
+Grocery Employee Online Training
+RVP (Korean)
+RVP (Spanish)
+RVP FAQ
+RVP FAQ (Spanish)
+Alcohol Impact Areas
+Alcohol Impact Area Locations
+Test Studies of Alcohol Impact Areas
+Trade Area Map
+Cannabis Licensing
+Apply for a Cannabis License
+Cannabis License Types
+Cannabis Change Applications
+Restrictions and Requirements
+Cannabis Licensing FAQ
+Air Quality and Odor Controls
+Cannabis Forms and Applications
+Cannabis Social Equity
+2870 Applicant Resources
+5080 Applicant Resources
+Social Equity FAQs
+DIA Maps
+Social Equity Blog
+Social Equity Plan
+Social Equity History
+Medical Cannabis
+Cannabis Retailer Map
+Cannabis Licensing Resources
+Tobacco and Vapor Licensing
+Apply for a Tobacco and Vapor License
+Tobacco and Vapor FAQs
+Resources
+Authorized Representatives for Licensees
+Direct Shipping Laws
+Floor Plan Requirements
+Internet Sales of Alcohol
+New License Actions
+Outdoor Alcohol Service
+Enforcement
+General Resources
+Enforcement Education
+Responsible Alcohol Sales Video
+Selling Alcohol Responsibly
+Responsible Cannabis Sales Video
+Vapor Information for Cannabis Licensees
+Acceptable ID
+Briefings
+Bulletins
+Order Keg Books
+Required Signs
+Year to Date Signs
+Cannabis Resources
+Cannabis Advertising FAQs
+Cannabis Central Reporting System (CCRS)
+CCRS FAQs
+CCRS Resources
+Cooperatives
+Labs
+Manifests
+Third Party Integrators
+Cannabis Packaging and Labeling Resources
+Request a Cannabis Consultation
+Traceability and Examiners
+Canopy Report
+Cannabis Recalls
+Tobacco and Vapor
+FDA Compliance
+Labels, Samples, and Tasting Requirements
+Local Government Regulation
+Tobacco and Tax Violations
+Tobacco and Vapor Resources
+Vapor Information for Cannabis Licensees
+About Enforcement
+Enforcement Education Program
+Non-Retail Enforcement
+MIW Bulletins
+Retail Enforcement
+Violations and Due Process
+2019 Independent Enforcement Review Report
+Enforcement FAQs
+Report a Violation
+Education
+Taxes and Fees
+Tax and Fee Reporting
+Filing Online Reports
+Beer and Wine Taxes and Fees Guide
+Cannabis Tax Reporting Guide
+Spirit Fee Reporting Guide
+Tax and Fee Laws and Rules
+Tax and Fee Systems Replacement Project
+Washington Licensees
+Brewery
+Craft Distillery
+Distiller
+Distributor
+Importer
+Interstate Common Carrier
+Retailer
+Winery
+Out of State Licensees
+Brewery COA
+Distiller COA
+Representative COA
+Winery COA and Shipper to Consumer
+Helpful Tools
+Licensee List
+Beer High Tax Rate
+Brewer's Tax Rate Table
+Conversion Tables
+Resources
+Laws and Rules
+Current Rulemaking Activity
+Public Hearings and Outreach
+Recent Rulemaking Activity
+Rulemaking Resources
+Interpretive and Policy Statements
+Rulemaking FAQs
+Rulemaking Schedule
+Rule Petition
+Understanding Rulemaking Phases
+Legislative Information
+Legislative Fact Sheets
+Legislative Reports
+Public Records
+Frequently Requested Lists
+Public Records Index
+Public Records Request
+Public Records FAQs
+Research
+Dashboards
+Research Projects
+Research and Data Briefs
+Independently Contracted Projects
+Cannabis Research License Information
+Tribal Resources
+Cannabis Compacts
+Liquor MOAs
+Tribal ID Cards as Identification
+Business Resources
+Small Business Guide
+About
+About LCB
+Vision, Mission, Goals, Values
+Annual Reports
+Accessibility
+Board Information
+Meeting Schedule and Information
+Board Meeting Archives
+Meet the Board
+Delegated Authority
+Declaratory Orders
+Interim Policies
+Adjudicative Proceedings
+FAQs
+Career and Business Opportunities
+Business Opportunities
+Career Opportunities
+Benefits and Wellness
+Embracing Diversity, Equity, Inclusion and Belonging
+Employee Testimonials
+Contact
+Directory and Departments
+Enforcement Offices and Contacts
+Speaking Requests
+Enforcement and Education Offices and Contacts
+News and Communication
+Communications and Publications
+Email Notification Archive
+Newsletters
+Press Releases
+2025 Press Releases
+2024 Press Releases
+2023 Press Releases
+2022 Press Releases
+2021 Press Releases
+2020 Press Releases
+2019 Press Releases
+2018 Press Releases
+2017 Press Releases
+2016 Press Releases
