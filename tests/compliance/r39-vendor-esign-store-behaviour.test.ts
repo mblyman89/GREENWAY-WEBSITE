@@ -659,6 +659,34 @@ async function signedOn(vendorId: string): Promise<string> {
 
 describe("vendorPageView", () => {
   it("stamps first_opened_at once and walks the steps with the cookie", async () => {
+    // vendorPageView reads the real clock (Date.now(), by design: the page
+    // render stays pure). The invite is created at the fixed T0 with a 14-day
+    // TTL (INVITE_TTL_DAYS), so without pinning the clock this test turned red
+    // on 2026-10-19 (T0 + 14 days) with step "expired". Pin Date only, so the
+    // async store mocks keep their real timers.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0 + 500);
+    try {
+      await pageViewWalk();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("an invite opened after its 14-day TTL is shown as expired and is not stamped", async () => {
+    const i = await invited();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0 + core.INVITE_TTL_MS + 1);
+    try {
+      const v = await store.vendorPageView(i.token, null);
+      expect(v.kind).toBe("ok");
+      if (v.kind !== "ok") return;
+      expect(v.step).toBe("expired");
+      expect(row(i.id).first_opened_at).toBeFalsy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  async function pageViewWalk() {
     const i = await invited();
     const v1 = await store.vendorPageView(i.token, null);
     expect(v1.kind).toBe("ok");
@@ -669,7 +697,7 @@ describe("vendorPageView", () => {
     await store.vendorPageView(i.token, null);
     expect(row(i.id).first_opened_at).toBe(opened);
     expect((await store.vendorPageView("x".repeat(43), null)).kind).toBe("invalid");
-  });
+  }
 });
 
 describe("participationRows", () => {
