@@ -468,6 +468,13 @@ Part 10 holds the procedure. No code in this slice until the owner says go. Plac
 - `s13-ccrs-areas.test.ts`: its source pin now includes the new trailing `menuPresence` argument. The Area-name argument it guards is unchanged.
 - `mutate_check.py`: M131–M148; `S17B_TESTS` added to the baseline.
 
+**CI note (learned on PR #1427).** `lcb/*.txt` is outside the repo, so a test must not read it unconditionally. The first push read `/workspace/lcb/guide.txt` and failed in CI. Fix:
+- the cited guide lines are embedded verbatim, as `ccrs-preflight.test.ts` does;
+- a drift check compares them with the file only where it exists (`it.runIf`);
+- a second test requires every cited pin to be embedded.
+
+Verified both ways: with the file hidden, the drift check skips and M145 is still killed; with the file present, an altered line goes red.
+
 **Proof.** `tests/compliance/s17b-honest-orphans-and-hub-selfcheck.test.ts`:
 - the old rule reproduced (4 of 4) on real planner output;
 - the filed-lot, uncertain-lot and legacy cases through the real planner;
