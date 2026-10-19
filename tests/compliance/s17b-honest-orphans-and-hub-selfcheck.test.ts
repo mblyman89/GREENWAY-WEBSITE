@@ -14,7 +14,7 @@
  *    ("Invalid InventoryExternalIdentifier" [G L1302-L1304]) blocks on screen,
  *    not only in the refused download.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CCRS_COLUMNS, type CcrsRetailerFileType } from "@/lib/compliance/ccrs-batch-core";
@@ -52,7 +52,35 @@ const ROOT = path.resolve(__dirname, "../..");
 const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8");
 const BATCH = read("src/lib/compliance/ccrs-batch.ts");
 const LCORE = read("src/lib/compliance/ccrs-ledger-core.ts");
-const GUIDE = "/workspace/lcb/guide.txt";
+/*
+ * The LCB guide text lives outside the repo (lcb/guide.txt, md5 in Part 13).
+ * As in ccrs-preflight.test.ts, the lines this slice cites are embedded
+ * VERBATIM (bullet glyphs and indentation trimmed). Where the guide file is
+ * present (the build sandbox; check_pins.py reads the same file) the embedded
+ * text is re-checked against it line by line, so it cannot drift.
+ */
+const GUIDE_FILE = path.resolve(ROOT, "../lcb/guide.txt");
+const GUIDE_LINES: Record<number, string> = {
+  246: "Insert (create a new record with a unique external identifier).",
+  247: "Update (alter an existing record indicated by external identifier).",
+  248: "Delete (delete a record indicated by external identifier).",
+  555: "Invalid Strain",
+  570: "Invalid Area",
+  578: "Product is required",
+  579: "Invalid Product",
+  580: "Note: If you receive this error message, ensure you have already",
+  581: "submitted this product on the product.CSV, and validate that you have",
+  582: "submitted this product name in the same format and spelling as previously",
+  583: "submitted on the product.CSV",
+  1302: "Invalid InventoryExternalIdentifier",
+  1303: "Note: If you have received this error, ensure that you have already reported the",
+  1304: "inventory in an inventory.CSV",
+};
+const guideLine = (n: number): string => {
+  const t = GUIDE_LINES[n];
+  if (t === undefined) throw new Error(`guide line L${n} is not embedded in this test`);
+  return t;
+};
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
 const HDR = "SubmittedBy,G\r\nSubmittedDate,10/19/2026\r\n";
@@ -188,8 +216,7 @@ describe("E47 speaks only about lots the planner really left out (or, in legacy 
     expect(e47Message(3, false)).not.toContain("[G L0578]");
     expect(e47Message(3, true)).toContain("WRITTEN to Inventory.csv with a blank Product");
     expect(e47Message(3, true)).toContain('"Product is required" [G L0578]');
-    const g = readFileSync(GUIDE, "utf8").split("\n");
-    expect(g[578 - 1]).toContain("Product is required");
+    expect(guideLine(578)).toBe("Product is required");
   });
 });
 
@@ -304,8 +331,7 @@ describe("hub ledger self-check = the export route's refusal (Part 17 §K.4)", (
     expect(text).toContain("Every row (2):");
   });
   it("every self-check pin quotes the guide line it names", () => {
-    const g = readFileSync(GUIDE, "utf8").split("\n");
-    const line = (n: number) => g[n - 1] ?? "";
+    const line = guideLine;
     const expectWord: Record<string, string> = {
       L_INSERT_ON_FILE: "Insert",
       L_UPDATE_NOT_ON_FILE: "Update",
@@ -324,13 +350,32 @@ describe("hub ledger self-check = the export route's refusal (Part 17 §K.4)", (
   });
 });
 
+describe("embedded guide lines equal lcb/guide.txt (checked wherever the file exists)", () => {
+  it.runIf(existsSync(GUIDE_FILE))("every embedded line matches the file, glyphs and indentation trimmed", () => {
+    const g = readFileSync(GUIDE_FILE, "utf8").split("\n");
+    for (const [n, text] of Object.entries(GUIDE_LINES)) {
+      const raw = (g[Number(n) - 1] ?? "").replace(/^[\s\uf0a7\u25a0\u2022]+/, "").trimEnd();
+      expect(raw, `L${n}`).toBe(text);
+    }
+  });
+  it("the embedded set covers every pin this slice cites", () => {
+    const cited = [...Object.values(LEDGER_PROBLEM_PIN), specPinFor("E47_LOT_PRODUCT_NOT_IN_MENU"), "[G L0578]"];
+    for (const pin of cited) {
+      const m = /^\[G L(\d{4})(?:-L(\d{4}))?\]$/.exec(pin);
+      expect(m, pin).not.toBeNull();
+      const a = Number(m![1]);
+      const b = m![2] ? Number(m![2]) : a;
+      for (let n = a; n <= b; n += 1) expect(GUIDE_LINES[n], `${pin} L${n}`).toBeDefined();
+    }
+  });
+});
+
 describe("E47 is a registered, pinned code", () => {
   it("in CCRS_ISSUE_CODES with pin [G L0579-L0583]", () => {
     expect(CCRS_ISSUE_CODES).toContain("E47_LOT_PRODUCT_NOT_IN_MENU");
     expect(specPinFor("E47_LOT_PRODUCT_NOT_IN_MENU")).toBe("[G L0579-L0583]");
-    const g = readFileSync(GUIDE, "utf8").split("\n");
-    expect(g[579 - 1]).toContain("Invalid Product");
-    expect(g.slice(579, 583).join(" ")).toContain("submitted this product on the product.CSV");
+    expect(guideLine(579)).toBe("Invalid Product");
+    expect([580, 581, 582, 583].map(guideLine).join(" ")).toContain("submitted this product on the product.CSV");
   });
 });
 
