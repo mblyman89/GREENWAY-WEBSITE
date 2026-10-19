@@ -428,6 +428,22 @@ Part 10 holds the procedure. No code in this slice until the owner says go. Plac
 
 ---
 
+## S-17a — Every withheld/warned row shown in the hub, report and export refusal — DONE in code (2026-10-19)
+
+**Why.** On 2026-10-19 the owner's screenshots (`evidence/2026-10-19-owner-screenshots/`) showed "17 of 38 lot(s) withheld" in production and "20 product(s) withheld" in PREprod with no per-row reasons. The ledger planner already wrote one row per withheld entity with a reason, but `ccrs-submit-gate-core.ts` dropped `rows` and the hub printed only `• [file] message` (Part 17 §C.4 defect 2).
+
+**What changed.**
+- `src/lib/compliance/ccrs-issue-display-core.ts` (pure): classifies every planner reason into 10 classes (a lot whose product is withheld inherits the product's class); per-class next step, environment-aware (PREprod "no CCRS Product id" → "Assign PREprod ids"; ids do not carry over `[FAQ L0096]`); uncapped plain-text rendering; `mergeRows` dedupes by id + detail.
+- `ccrs-submit-gate-core.ts`: `GateIssue` carries `code`, `specPin`, `rows`; `toGateInput` is the one mapping used by the hub, the compliance report and the batch-export route; dedupe merges rows instead of dropping them.
+- `CcrsIssueList.tsx`: reason groups, "Show all N row(s)", copy buttons. Used by the hub (errors + warnings) and the report (the 30-warning cap is removed).
+- Batch-export refusal text and README list every row.
+- S-12a: `EXPECTED_2026_09_18` is now checked for internal consistency against Part 04 even when the real delivery files are absent (mutation M89 used to survive in such sandboxes).
+- `mutate_check.py`: M120–M130 added; M101 retargeted to `ccrs-area-core.ts` (its anchor was dead since S-13).
+
+**Proof.** `tests/compliance/s17a-hub-issue-rows.test.tsx` (real `planLedgerBatch` output through the gate to the markup; every `reason:` literal in the planner is classified; 250 rows uncapped). Mutation harness: 0 survived.
+
+**Not covered (S-17b).** The orphan "(38)" warning comparison (U-60); why a lot's product is missing from the published menu; the hub does not yet run `verifyOutboxAgainstLedger` (Sale → unfiled lot, `[G L1302-L1304]`).
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).

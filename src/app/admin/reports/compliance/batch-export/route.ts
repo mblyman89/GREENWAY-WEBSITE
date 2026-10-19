@@ -33,9 +33,11 @@ import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
 import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
 import {
   assertCcrsBatchSubmittable,
+  toGateInput,
   verdictSummary,
   type GateIssue,
 } from "@/lib/compliance/ccrs-submit-gate-core";
+import { issuePlainText } from "@/lib/compliance/ccrs-issue-display-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
 import { emitOutboxFiles, readStoredFile } from "@/lib/compliance/ccrs-ledger-store";
 import {
@@ -78,12 +80,7 @@ export async function GET(request: Request) {
 
   // Slice 105 — AUTHORITATIVE HARD GATE.
   const verdict = assertCcrsBatchSubmittable({
-    syncIssues: batch.syncIssues.map((s) => ({
-      severity: s.severity,
-      file: String(s.file),
-      message: s.message,
-      count: s.count,
-    })),
+    syncIssues: batch.syncIssues.map(toGateInput),
     verifierProblems: verification.problems.map((p) => ({
       severity: p.severity,
       file: String(p.file),
@@ -93,7 +90,10 @@ export async function GET(request: Request) {
     classifyWarning,
   });
 
-  const fmt = (i: GateIssue) => `  ${i.file}: ${i.message}${i.count ? ` (${i.count})` : ""}`;
+  // S-17a: every row of every issue, with the next step per reason — never
+  // capped. The refusal used to print only "file: message (count)", so the
+  // operator was told 17 lots were withheld but not which or why.
+  const fmt = (i: GateIssue): string => issuePlainText(i, env, "  ").join("\r\n");
   const refuse = (title: string, lines: string[]) =>
     new Response(
       [

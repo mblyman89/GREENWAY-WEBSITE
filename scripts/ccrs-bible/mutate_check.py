@@ -76,6 +76,12 @@ CHUNK_TESTS = "tests/compliance/ccrs-chunk-core.test.ts"
 S12B_TESTS = "tests/compliance/s12b-ccrs-outbox.test.ts"
 P11GEN = "scripts/compliance/generate-p11-chunk-naming-probe.ts"
 P11_TESTS = "tests/compliance/p11-chunk-naming-probe.test.ts"
+# S-17a hub issue rows (Bible Part 17 §C.4 defect 1).
+DISPLAY = "src/lib/compliance/ccrs-issue-display-core.ts"
+ISSUELIST = "src/components/admin/compliance/CcrsIssueList.tsx"
+HUBPAGE = "src/app/admin/compliance/ccrs/page.tsx"
+REPORTPAGE = "src/app/admin/reports/compliance/page.tsx"
+S17A_TESTS = "tests/compliance/s17a-hub-issue-rows.test.tsx"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -819,10 +825,13 @@ MUTATIONS = [
     ),
     (
         'M101-s12b-area-held-name-reinserted',
-        BATCHSRV,
-        '    if (held.has(name)) continue;',
-        '    if (false && held.has(name)) continue;',
-        S12B_TESTS,
+        # S-17a: retargeted. S-13 (a4ceb6da) moved the Area plan from
+        # ccrs-batch.ts into ccrs-area-core.ts, leaving this anchor matching 0x
+        # and the harness aborting here. Same behaviour, new home.
+        "src/lib/compliance/ccrs-area-core.ts",
+        '    if (holders.length === 0) {',
+        '    if (true) {',
+        "tests/compliance/s13-ccrs-areas.test.ts",
         'E23: an Area name CCRS holds must never be Inserted again under a new id.',
     ),
     (
@@ -905,6 +914,94 @@ MUTATIONS = [
         S12B_TESTS,
         'The seed writer must never silently overwrite an existing file.',
     ),
+    (
+        "M120-s17a-gate-drops-rows",
+        GATE,
+        "      rows: s.rows ? [...s.rows] : undefined,\n      source: \"sync\",",
+        "      rows: undefined,\n      source: \"sync\",",
+        S17A_TESTS,
+        "The 2026-10-19 defect: the gate must carry every row to the hub.",
+    ),
+    (
+        "M121-s17a-toGateInput-drops-rows",
+        GATE,
+        "    specPin: s.specPin,\n    rows: s.rows,\n  };",
+        "    specPin: s.specPin,\n  };",
+        S17A_TESTS,
+        "The shared mapper must not drop rows (every caller uses it).",
+    ),
+    (
+        "M122-s17a-dedupe-loses-rows",
+        GATE,
+        "      prev.rows = mergeRows(prev.rows, i.rows);",
+        "",
+        S17A_TESTS,
+        "Collapsing a duplicate issue must merge its rows, never lose them.",
+    ),
+    (
+        "M123-s17a-lot-not-inheriting-product-class",
+        DISPLAY,
+        "  if (r.startsWith(PRODUCT_WITHHELD_PREFIX)) r = r.slice(PRODUCT_WITHHELD_PREFIX.length).trim();",
+        "",
+        S17A_TESTS,
+        "A lot withheld for its product must get the product's fix (e.g. Assign ids).",
+    ),
+    (
+        "M124-s17a-filed-unproven-unclassified",
+        DISPLAY,
+        '    /^filed Product .+ is not in the Product ledger$/.test(r) ||',
+        '    /^filed Product .+ is NOT in the Product ledger$/.test(r) ||',
+        S17A_TESTS,
+        "Every ledger-core withhold reason must be classified (source-read test).",
+    ),
+    (
+        "M125-s17a-preprod-hint-says-prod-button",
+        DISPLAY,
+        "      return env === \"prod\"\n",
+        "      return env !== \"preprod\" || true\n",
+        S17A_TESTS,
+        "PREprod must be pointed at PREprod set-up; prod ids do not carry over [FAQ L0096].",
+    ),
+    (
+        "M126-s17a-plaintext-capped",
+        DISPLAY,
+        "  for (const r of rows) out.push(`${indent}    - ${rowLine(r)}`);",
+        "  for (const r of rows.slice(0, 30)) out.push(`${indent}    - ${rowLine(r)}`);",
+        S17A_TESTS,
+        "No caps: a capped list hides findings (Part 05 §H).",
+    ),
+    (
+        "M127-s17a-list-capped",
+        ISSUELIST,
+        "                    {rows.map((r, j) => (",
+        "                    {rows.slice(0, 30).map((r, j) => (",
+        S17A_TESTS,
+        "The rendered row list must show every row.",
+    ),
+    (
+        "M128-s17a-groups-sorted-wrong",
+        DISPLAY,
+        "    .sort((a, b) => b.count - a.count || WITHHOLD_CLASSES.indexOf(a.cls) - WITHHOLD_CLASSES.indexOf(b.cls));",
+        "    .sort((a, b) => a.count - b.count || WITHHOLD_CLASSES.indexOf(a.cls) - WITHHOLD_CLASSES.indexOf(b.cls));",
+        S17A_TESTS,
+        "The biggest cause must be read first.",
+    ),
+    (
+        "M129-s17a-report-cap-returns",
+        REPORTPAGE,
+        "                  issues={batchWarnings}",
+        "                  issues={batchWarnings.slice(0, 30)}",
+        S17A_TESTS,
+        "The compliance report must not re-introduce the 30-warning cap.",
+    ),
+    (
+        "M130-s17a-mergeRows-ignores-detail",
+        DISPLAY,
+        "  const seen = new Set(out.map((r) => `${r.id}\\u0000${r.detail ?? \"\"}`));",
+        "  const seen = new Set(out.map((r) => r.id));",
+        S17A_TESTS,
+        "Same lot, different reason, is two findings.",
+    ),
 ]
 
 
@@ -949,6 +1046,7 @@ def main() -> int:
         CHUNK_TESTS,
         S12B_TESTS,
         P11_TESTS,
+        S17A_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

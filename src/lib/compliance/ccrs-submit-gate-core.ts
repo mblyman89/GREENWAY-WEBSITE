@@ -22,6 +22,8 @@
  * and rejects the batch and every dependent file on any structural error.
  */
 
+import { mergeRows, type DisplayRow } from "./ccrs-issue-display-core";
+
 export type GateSeverity = "error" | "warning";
 
 /** A minimal issue shape both sync issues and verifier problems satisfy. */
@@ -30,6 +32,12 @@ export type GateIssueInput = {
   file: string;
   message: string;
   count?: number;
+  /** S-17a: coded issue id (CCRS_ISSUE_CODES) — carried, never dropped. */
+  code?: string;
+  /** S-17a: spec pin for the code. */
+  specPin?: string;
+  /** S-17a: EVERY affected row with its reason. Never capped (Part 05 §H). */
+  rows?: readonly DisplayRow[];
 };
 
 /** A CCRS file carrying its own advisory/blocking warning strings. */
@@ -45,6 +53,10 @@ export type GateIssue = {
   file: string;
   message: string;
   count?: number;
+  code?: string;
+  specPin?: string;
+  /** S-17a: every affected row (Part 17 §C.4 defect 1 — these used to be dropped here). */
+  rows?: DisplayRow[];
   /** where this issue came from, for the report. */
   source: "sync" | "verifier" | "file-warning";
 };
@@ -58,6 +70,33 @@ export type CcrsSubmitVerdict = {
   /** All issues (errors first) for a single ordered report. */
   issues: GateIssue[];
 };
+
+/**
+ * S-17a: the ONE mapping from a builder sync issue to gate input. Every caller
+ * (hub page, compliance report, batch-export route) uses this instead of a
+ * hand-written `{severity, file, message, count}` literal — that literal is
+ * exactly how the 2026-10-19 hub lost the rows of "17 lot(s) were left out"
+ * (Part 17 §C.4 defect 1). A source test pins that no caller maps by hand.
+ */
+export function toGateInput(s: {
+  severity: GateSeverity;
+  file: string;
+  message: string;
+  count?: number;
+  code?: string;
+  specPin?: string;
+  rows?: readonly DisplayRow[];
+}): GateIssueInput {
+  return {
+    severity: s.severity,
+    file: String(s.file),
+    message: s.message,
+    count: s.count,
+    code: s.code,
+    specPin: s.specPin,
+    rows: s.rows,
+  };
+}
 
 /**
  * The default warning classifier. A warning whose message begins with "ERROR"
@@ -89,6 +128,9 @@ export function assertCcrsBatchSubmittable(input: {
       file: String(s.file),
       message: s.message,
       count: s.count,
+      code: s.code,
+      specPin: s.specPin,
+      rows: s.rows ? [...s.rows] : undefined,
       source: "sync",
     });
   }
@@ -98,6 +140,9 @@ export function assertCcrsBatchSubmittable(input: {
       file: String(p.file),
       message: p.message,
       count: p.count,
+      code: p.code,
+      specPin: p.specPin,
+      rows: p.rows ? [...p.rows] : undefined,
       source: "verifier",
     });
   }
@@ -112,14 +157,20 @@ export function assertCcrsBatchSubmittable(input: {
     }
   }
 
-  // De-duplicate identical (severity+file+message) lines.
-  const seen = new Set<string>();
-  const deduped = collected.filter((i) => {
+  // De-duplicate identical (severity+file+message) lines. S-17a: a dropped
+  // duplicate's rows are MERGED into the kept issue, never lost.
+  const kept = new Map<string, GateIssue>();
+  const deduped: GateIssue[] = [];
+  for (const i of collected) {
     const k = `${i.severity}|${i.file}|${i.message}`;
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
+    const prev = kept.get(k);
+    if (prev) {
+      prev.rows = mergeRows(prev.rows, i.rows);
+      continue;
+    }
+    kept.set(k, i);
+    deduped.push(i);
+  }
 
   const errors = deduped.filter((i) => i.severity === "error");
   const warnings = deduped.filter((i) => i.severity === "warning");
@@ -223,6 +274,19 @@ export function __runCcrsSubmitGateTests(): { passed: number; failed: number } {
     classifyWarning: (m) => ((m ?? "").startsWith("CRITICAL") ? "error" : "warning"),
   });
   ok(!custom.submittable, "injected classifier honored");
+
+  // S-17a: rows, code and specPin survive the gate; a duplicate's rows merge.
+  const withRows = assertCcrsBatchSubmittable({
+    syncIssues: [
+      { severity: "error", file: "Inventory", message: "withheld", code: "E41_LEDGER_WITHHELD", specPin: "[G L0246-L0248]", rows: [{ id: "l1", label: "L1", detail: "r1" }] },
+      { severity: "error", file: "Inventory", message: "withheld", rows: [{ id: "l2", label: "L2", detail: "r2" }] },
+    ],
+    verifierProblems: [],
+    files: [],
+  });
+  ok(withRows.errors.length === 1, "duplicate collapsed");
+  ok(withRows.errors[0].rows?.length === 2, "duplicate's rows merged, none lost");
+  ok(withRows.errors[0].code === "E41_LEDGER_WITHHELD" && withRows.errors[0].specPin === "[G L0246-L0248]", "code + pin carried");
 
   if (failed === 0) console.log(`ccrs-submit-gate-core: all ${passed} tests passed`);
   return { passed, failed };

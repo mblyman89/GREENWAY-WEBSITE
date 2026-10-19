@@ -300,6 +300,23 @@ describe("S-12a seed SQL", () => {
   });
 });
 
+// S-17a: EXPECTED_2026_09_18 internal consistency (always runs).
+// The real-delivery test below is skipIf(!haveReal), so in a sandbox without
+// the 9/18 files nothing pinned these constants (mutation M89 survived).
+// Every Inventory row is either closed (QoH exactly 0) or open; Part 04:
+// "closed (17,998); else seed (44,746)" of 62,744.
+describe("S-12a EXPECTED_2026_09_18 is internally consistent (no delivery files needed)", () => {
+  it("closed + open == Inventory entities == source rows, and Part 04 quotes the same numbers", () => {
+    const e = EXPECTED_2026_09_18;
+    expect(e.inventoryClosed + e.inventoryOpen).toBe(e.entities.Inventory);
+    expect(e.entities.Inventory).toBe(e.sourceRows.Inventory);
+    const bible = readFileSync(path.join(__dirname, "../../docs/ccrs-bible/04-current-state-and-gap-matrix.md"), "utf8");
+    const fmt = (n: number) => n.toLocaleString("en-US");
+    expect(bible).toContain(`closed\` (${fmt(e.inventoryClosed)}); else \`seed\` (${fmt(e.inventoryOpen)})`);
+    expect(bible).toContain(`| Inventory | ${fmt(e.sourceRows.Inventory)} | ${fmt(e.entities.Inventory)} |`);
+  });
+});
+
 // ── The real delivery (only where the files exist: the owner's sandbox) ──────
 const REAL: Record<SeedSource, string> = {
   Inventory: "/workspace/Inventory.csv",

@@ -224,7 +224,10 @@ describe("S-12b batch builder loads the ledger", () => {
   it("no warning cap anywhere on the path to the operator (Part 05 section H)", () => {
     expect(BATCH).not.toContain("WARNING_CAP_PER_FILE");
     expect(PAGE).not.toContain("warnings.slice(0, 25)");
-    expect(PAGE).toContain("warnings.map");
+    // S-17a moved the rendering into CcrsIssueList (every issue, every row;
+    // uncapped — pinned by s17a-hub-issue-rows.test.tsx and M127).
+    expect(PAGE).toContain("issues={warnings}");
+    expect(PAGE).not.toMatch(/issues=\{warnings\.slice/);
     expect(ADVISOR).toMatch(/more warning\(s\) not shown/);
   });
 });

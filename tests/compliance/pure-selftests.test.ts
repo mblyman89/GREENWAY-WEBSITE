@@ -47,6 +47,7 @@ import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
 import { __runCcrsSubmitGateTests } from "@/lib/compliance/ccrs-submit-gate-core";
+import { __runCcrsIssueDisplayTests } from "@/lib/compliance/ccrs-issue-display-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
@@ -240,6 +241,11 @@ describe("embedded pure self-test suites", () => {
   it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {
     const out = __runCcrsPreflightCoreTests();
     expect(out).toContain("0 failed");
+  });
+  it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {
+    const r = __runCcrsIssueDisplayTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
   });
   it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {
     expect(() => __runCcrsLedgerCoreTests()).not.toThrow();

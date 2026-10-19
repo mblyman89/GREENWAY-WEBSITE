@@ -31,7 +31,8 @@ import { pacificToday } from "@/lib/reports/timezone";
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
 import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
-import { assertCcrsBatchSubmittable } from "@/lib/compliance/ccrs-submit-gate-core";
+import { assertCcrsBatchSubmittable, toGateInput } from "@/lib/compliance/ccrs-submit-gate-core";
+import { CcrsIssueList } from "@/components/admin/compliance/CcrsIssueList";
 import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { weekFromKey, type WeekDeadline } from "@/lib/compliance/ccrs-week-core";
@@ -210,12 +211,7 @@ export default async function CcrsCommandCenterPage({
     : null;
   const verdict = batch
     ? assertCcrsBatchSubmittable({
-        syncIssues: batch.syncIssues.map((s) => ({
-          severity: s.severity,
-          file: String(s.file),
-          message: s.message,
-          count: s.count,
-        })),
+        syncIssues: batch.syncIssues.map(toGateInput),
         verifierProblems: (verification?.problems ?? []).map((p) => ({
           severity: p.severity,
           file: String(p.file),
@@ -528,29 +524,26 @@ export default async function CcrsCommandCenterPage({
                   : "✓ Validation passed — the batch is cleared for upload. This is the same hard gate the zip download enforces."
                 : "✕ Validation FAILED — the zip download is blocked until these errors are fixed:"}
             </div>
-            {errors.length > 0 ? (
-              <ul className="space-y-1 text-xs text-red-200">
-                {errors.map((e, i) => (
-                  <li key={i}>
-                    • [{e.file}] {e.message}
-                    {e.count ? ` (${e.count})` : ""}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            {/* S-17a: every row of every issue, with the next step per reason (Part 17 §C.4 defect 1). */}
+            <CcrsIssueList
+              issues={errors}
+              env={env}
+              tone="error"
+              copyTitle={`CCRS blocking errors — ${env} — week ${week.start} to ${week.end}`}
+            />
             {warnings.length > 0 ? (
               <details className="text-xs text-white/50">
                 <summary className="cursor-pointer font-semibold text-white/60">
                   {warnings.length} warning(s) — non-blocking, worth a skim
                 </summary>
-                <ul className="mt-2 space-y-1">
-                  {warnings.map((w, i) => (
-                    <li key={i}>
-                      • [{w.file}] {w.message}
-                      {w.count ? ` (${w.count})` : ""}
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-2">
+                  <CcrsIssueList
+                    issues={warnings}
+                    env={env}
+                    tone="warning"
+                    copyTitle={`CCRS warnings — ${env} — week ${week.start} to ${week.end}`}
+                  />
+                </div>
               </details>
             ) : null}
           </div>
