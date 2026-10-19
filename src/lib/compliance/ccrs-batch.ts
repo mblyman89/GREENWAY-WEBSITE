@@ -54,7 +54,21 @@ import {
   type CcrsIssueRow,
 } from "@/lib/compliance/ccrs-preflight-core";
 import { ccrsInventoryCreatedDate } from "@/lib/inventory/received-date-core";
-import { pagedAll } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import {
+  enrichLotWithholdReason,
+  keysNeedingMenuLookup,
+  lotsWithProductNotInMenu,
+  lotsWithheldForMissingProduct,
+  legacyLotsWithBlankProduct,
+  e47Message,
+  menuPresenceFromRows,
+  type MenuPresence,
+} from "@/lib/compliance/ccrs-lot-product-core";
+import { ledgerSelfCheckIssues, type LedgerProblem } from "@/lib/compliance/ccrs-outbox-core";
+
+/** S-17b: the export route's ledger self-check codes, carried with their own pins. */
+type LedgerProblemCode = LedgerProblem["code"];
 import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/convention-core";
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
@@ -85,7 +99,7 @@ export type CcrsSyncIssue = {
    * Optional so the many legacy warnings keep compiling; every issue raised by
    * a bible-grounded check MUST set it (Part 08 §C).
    */
-  code?: CcrsIssueCode;
+  code?: CcrsIssueCode | LedgerProblemCode;
   /** The verbatim LCB pin behind the check, e.g. "[G L0614]". */
   specPin?: string;
   /** Every offending row — NEVER capped; a capped list hides the blocker. */
@@ -137,6 +151,59 @@ async function getPublishedVersionId(admin: Admin): Promise<string | null> {
     .limit(1)
     .maybeSingle();
   return (data as { id: string } | null)?.id ?? null;
+}
+
+/**
+ * S-17b: for product keys that lots name but the published menu does not show,
+ * read whether each is HIDDEN in the published version (with its reason) or
+ * present only in a STAGED version. Any read error → `readable: false` (the
+ * lot is still withheld; only the explanation is lost, and that is said).
+ */
+async function readMenuPresence(
+  admin: Admin,
+  publishedVersionId: string | null,
+  visiblePublishedKeys: Iterable<string>,
+  keys: readonly string[],
+): Promise<MenuPresence> {
+  if (keys.length === 0 || !publishedVersionId) {
+    return menuPresenceFromRows(!!publishedVersionId, visiblePublishedKeys, [], []);
+  }
+  try {
+    let failed: string | null = null;
+    const hidden = await chunkedIn<string, { source_item_id: string | null; hidden_reason: string | null }>(keys, async (chunk, from, to) => {
+      const { data, error } = await admin
+        .from("menu_items")
+        .select("source_item_id, hidden_reason")
+        .eq("menu_version_id", publishedVersionId)
+        .eq("hidden", true)
+        .in("source_item_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) failed = error.message;
+      return (data as { source_item_id: string | null; hidden_reason: string | null }[] | null) ?? [];
+    });
+    const { data: stagedVersions, error: sErr } = await admin.from("menu_versions").select("id").eq("status", "staged");
+    if (sErr) failed = sErr.message;
+    const stagedIds = ((stagedVersions as { id: string }[] | null) ?? []).map((v) => v.id);
+    const staged =
+      stagedIds.length === 0
+        ? []
+        : await chunkedIn<string, { source_item_id: string | null }>(keys, async (chunk, from, to) => {
+            const { data, error } = await admin
+              .from("menu_items")
+              .select("source_item_id")
+              .in("menu_version_id", stagedIds)
+              .in("source_item_id", chunk)
+              .order("id", { ascending: true })
+              .range(from, to);
+            if (error) failed = error.message;
+            return (data as { source_item_id: string | null }[] | null) ?? [];
+          });
+    if (failed) return { readable: false, error: failed };
+    return menuPresenceFromRows(true, visiblePublishedKeys, hidden, staged);
+  } catch (e) {
+    return { readable: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 type MenuItemRow = {
@@ -524,6 +591,7 @@ function buildInventoryFile(
   createdBy: string,
   plan: LedgerPlan,
   areaName: string,
+  menuPresence: MenuPresence | null = null,
 ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
   const warnings: string[] = [];
   const rows: string[][] = [];
@@ -553,7 +621,9 @@ function buildInventoryFile(
     const planned = plan.lots.get(l.id);
     if (!planned) throw new Error(`S-11 invariant: lot ${l.id} has no ledger plan`);
     if (planned.action === "withhold") {
-      e41Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: planned.reason });
+      // S-17b: "its product is not in the published menu" says WHY (hidden
+      // with its reason / staged only / no item / blank key).
+      e41Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: enrichLotWithholdReason(planned.reason, key, menuPresence) });
       continue;
     }
     // S-11: the Strain cell carries the ONE spelling the plan chose (the filed
@@ -822,7 +892,26 @@ export async function buildCcrsBatch(
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
   const area = buildAreaFile(env, license.licenseNumber, createdBy, createdDate, ledger);
   const product = { ...productBuild, ...applyProductPlan(productBuild.rows, productBuild.keys, plan) };
-  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName);
+  // S-17b: keys of every visible published item that has a product plan. A
+  // lot whose key is not here names a product Product.csv cannot carry. Only
+  // the lots the PLANNER withheld for that reason are spoken about (a filed lot
+  // whose product left the menu is emitted under its filed product, so it is
+  // not left out; an E3 / routing-refused lot already has its own reason).
+  const plannedKeys = new Set(plan.products.keys());
+  // Legacy mode (no ledger view) withholds nothing: such a lot is written with
+  // a blank Product cell, and the E47 message says so.
+  const coverageLots = (ledger ? lotsWithheldForMissingProduct(lots, plan.lots) : legacyLotsWithBlankProduct(lots, plan.lots, plannedKeys)).map((l) => ({
+    id: l.id,
+    label: l.lot_code ?? l.id,
+    productKey: (l.pos_product_key ?? "").trim(),
+  }));
+  const menuPresence = await readMenuPresence(
+    admin,
+    versionId,
+    items.map((i) => i.source_item_id),
+    keysNeedingMenuLookup(coverageLots, plannedKeys),
+  );
+  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);
   if (product.withheld.length > 0) {
     syncIssues.push({
       severity: "error",
@@ -969,20 +1058,28 @@ export async function buildCcrsBatch(
     });
   }
 
-  // Products referenced by lots but absent from the published menu (Product.csv
-  // won't contain them → Inventory.Product reference would be invalid).
-  const productExtInFile = new Set(product.rows.map((r) => r[6]));
-  const orphanLotProducts = new Set<string>();
-  for (const l of lots) {
-    const ext = sanitizeExternalId((l.pos_product_key ?? "").trim());
-    if (ext && !productExtInFile.has(ext)) orphanLotProducts.add(ext);
-  }
-  if (orphanLotProducts.size > 0) {
+  // S-17b (U-60): lots whose product key has NO product plan, i.e. the product
+  // is not a visible item of the published menu, so Product.csv cannot carry
+  // it and Inventory.Product would be "Invalid Product" [G L0579-L0583].
+  // Compared by product KEY. (Before S-17b this compared the lot key with
+  // Product column 6, which after applyProductPlan holds the CCRS id the row is
+  // filed under, so every lot of an emitted GWP- product looked orphaned:
+  // production 2026-10-19 said "(38)" for 38 lots.) Products that ARE in the
+  // menu but withheld are the E41 Product error, not repeated here. With a
+  // ledger it is advisory: each such lot is already withheld from
+  // Inventory.csv (E41 Inventory). In legacy mode the lot is WRITTEN with a
+  // blank Product, which CCRS rejects ("Product is required" [G L0578]), so it
+  // blocks.
+  const notInMenu = lotsWithProductNotInMenu(coverageLots, plannedKeys, menuPresence);
+  if (notInMenu.length > 0) {
     syncIssues.push({
-      severity: "warning",
+      severity: ledger ? "warning" : "error",
       file: "Product",
-      message: "Inventory lots reference products not present in the published menu (Product.csv).",
-      count: orphanLotProducts.size,
+      code: "E47_LOT_PRODUCT_NOT_IN_MENU",
+      specPin: specPinFor("E47_LOT_PRODUCT_NOT_IN_MENU"),
+      count: notInMenu.length,
+      rows: notInMenu,
+      message: e47Message(notInMenu.length, !ledger),
     });
   }
 
@@ -997,6 +1094,27 @@ export async function buildCcrsBatch(
     const saleRows = saleLines.map((l) => splitCsvLine(l));
     for (const p of verifySaleNumericColumns(saleRows)) {
       syncIssues.push({ severity: p.severity, file: "Sale", message: p.message });
+    }
+  }
+
+  // S-17b (Part 17 §K.4): the export route refuses on the ledger self-check
+  // (planOutboxFiles → verifyOutboxAgainstLedger). Running the SAME check here
+  // makes the hub, the compliance report and the download agree: e.g. a Sale
+  // row whose lot is not reported in Inventory.csv and not held by CCRS
+  // ("Invalid InventoryExternalIdentifier" [G L1302-L1304]) is now a blocking
+  // error on screen, not only a refused download. Legacy mode (no ledger view)
+  // has nothing to check against, exactly as in the route.
+  if (ledger) {
+    for (const i of ledgerSelfCheckIssues(
+      ledger,
+      files.map((f) => ({ type: f.type, csv: f.csv })),
+      {
+        licenseNumber: license.licenseNumber,
+        now,
+        lastStamp: slice.kind === "loaded" && slice.ledger.lastStamp ? slice.ledger.lastStamp : null,
+      },
+    )) {
+      syncIssues.push(i);
     }
   }
 

@@ -222,6 +222,15 @@ Migration `0250_obligation_waivers.sql` (KEEP on factory reset; RLS staff read /
 
 The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and the export refusal list every withheld or warned row grouped by reason, with a next step per environment. Fixes Part 17 §C.4 defects 2 and 3. See Part 09 S-17a.
 
+### A.11 S-17b honest E47 rows + hub ledger self-check — DONE in code (2026-10-19)
+
+- The column-6 orphan warning (U-60) is replaced by E47:
+  - it comes from the planner's own withhold decision (legacy mode: blank-Product lots, blocking);
+  - there is one row per product key, with the reason and every lot.
+- E41 "not in the published menu" rows say why.
+- The hub and the report run the export route's ledger self-check as blocking `L_*` issues, so a Sale of an unfiled withheld lot (`L_REF_INVENTORY` `[G L1302-L1304]`) is red on screen.
+- See Part 09 S-17b and Part 17 §K.7.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

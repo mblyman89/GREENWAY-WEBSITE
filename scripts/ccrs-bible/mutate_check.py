@@ -82,6 +82,9 @@ ISSUELIST = "src/components/admin/compliance/CcrsIssueList.tsx"
 HUBPAGE = "src/app/admin/compliance/ccrs/page.tsx"
 REPORTPAGE = "src/app/admin/reports/compliance/page.tsx"
 S17A_TESTS = "tests/compliance/s17a-hub-issue-rows.test.tsx"
+# S-17b honest orphans + hub ledger self-check (Part 17 §C.4 defect 1, §K.4; U-60).
+LOTPROD = "src/lib/compliance/ccrs-lot-product-core.ts"
+S17B_TESTS = "tests/compliance/s17b-honest-orphans-and-hub-selfcheck.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -1002,6 +1005,150 @@ MUTATIONS = [
         S17A_TESTS,
         "Same lot, different reason, is two findings.",
     ),
+    (
+        "M131-s17b-column6-rule-returns",
+        BATCHSRV,
+        "  const coverageLots = (ledger ? lotsWithheldForMissingProduct(lots, plan.lots) : legacyLotsWithBlankProduct(lots, plan.lots, plannedKeys)).map((l) => ({",
+        "  const coverageLots = lots.map((l) => ({",
+        S17B_TESTS,
+        "E47 must speak only about lots the planner left out (or legacy blank-Product lots), not every lot.",
+    ),
+    (
+        "M132-s17b-enrichment-dropped",
+        BATCHSRV,
+        "detail: enrichLotWithholdReason(planned.reason, key, menuPresence) });",
+        "detail: planned.reason });",
+        S17B_TESTS,
+        "The E41 lot row must say WHY its product is not in the menu.",
+    ),
+    (
+        "M133-s17b-menu-read-error-swallowed",
+        BATCHSRV,
+        "    if (failed) return { readable: false, error: failed };",
+        "    if (failed) failed = null;",
+        S17B_TESTS,
+        "A failed menu read must be 'unreadable', never 'no menu item' (never guess).",
+    ),
+    (
+        "M134-s17b-selfcheck-not-run",
+        BATCHSRV,
+        "  if (ledger) {\n    for (const i of ledgerSelfCheckIssues(",
+        "  if (ledger && false) {\n    for (const i of ledgerSelfCheckIssues(",
+        S17B_TESTS,
+        "The hub must run the export route's ledger self-check.",
+    ),
+    (
+        "M135-s17b-legacy-e47-not-blocking",
+        BATCHSRV,
+        'severity: ledger ? "warning" : "error",',
+        'severity: "warning",',
+        S17B_TESTS,
+        "Legacy mode writes a blank Product, which CCRS rejects ('Product is required'); it must block.",
+    ),
+    (
+        "M136-s17b-selfcheck-on-wrong-bytes",
+        BATCHSRV,
+        "      files.map((f) => ({ type: f.type, csv: f.csv })),",
+        "      files.filter((f) => f.type !== \"Sale\").map((f) => ({ type: f.type, csv: f.csv })),",
+        S17B_TESTS,
+        "The self-check must read every built file, Sale included.",
+    ),
+    (
+        "M137-s17b-planned-key-counted-missing",
+        LOTPROD,
+        '    if (plannedKeys.has(k) && k !== "") continue;',
+        '    if (plannedKeys.has(k) && k !== "" && false) continue;',
+        S17B_TESTS,
+        "A lot whose product has a plan is not 'not in the menu'.",
+    ),
+    (
+        "M138-s17b-unreadable-treated-as-no-item",
+        LOTPROD,
+        '  if (!presence.readable) return { cls: "menu-unreadable"',
+        '  if (!presence.readable) return { cls: "no-menu-item"',
+        S17B_TESTS,
+        "Unreadable menu must be said as such (never guess).",
+    ),
+    (
+        "M139-s17b-enrich-all-reasons",
+        LOTPROD,
+        "  if (reason !== LOT_PRODUCT_NOT_IN_MENU_REASON || !presence) return reason;",
+        "  if (!presence) return reason;",
+        S17B_TESTS,
+        "Only the not-in-menu reason is enriched.",
+    ),
+    (
+        "M140-s17b-ledger-filter-any-withhold",
+        LOTPROD,
+        '    return !!p && p.action === "withhold" && p.reason === LOT_PRODUCT_NOT_IN_MENU_REASON;',
+        '    return !!p && p.action === "withhold";',
+        S17B_TESTS,
+        "A routing-refused lot (uncertain) has its own reason; it is not 'not in menu'.",
+    ),
+    (
+        "M141-s17b-legacy-filter-ignores-plan-key",
+        LOTPROD,
+        '    return !!p && p.action === "emit" && !(k && plannedKeys.has(k));',
+        '    return !!p && p.action === "emit";',
+        S17B_TESTS,
+        "Legacy: a lot whose product IS planned is written with its name; not E47.",
+    ),
+    (
+        "M142-s17b-lot-list-dropped",
+        LOTPROD,
+        "      detail: `${explainMissingProduct(k, presence).detail}; ${labels.length} lot(s): ${labels.join(\", \")}`,",
+        "      detail: explainMissingProduct(k, presence).detail,",
+        S17B_TESTS,
+        "Every lot is listed (never capped, never hidden).",
+    ),
+    (
+        "M143-s17b-visible-check-skipped",
+        LOTPROD,
+        "  if (presence.visibleInPublished.has(k)) {",
+        "  if (presence.visibleInPublished.has(k) && false) {",
+        S17B_TESTS,
+        "A visible key with no plan is an id collision, not 'no menu item'.",
+    ),
+    (
+        "M144-s17b-hidden-rows-ignored",
+        LOTPROD,
+        "    if (k && !hidden.has(k)) hidden.set(k, r.hidden_reason);",
+        "    if (k && false) hidden.set(k, r.hidden_reason);",
+        S17B_TESTS,
+        "Hidden items must be reported with their reason.",
+    ),
+    (
+        "M145-s17b-wrong-inventory-pin",
+        OUTBOX,
+        '  L_REF_INVENTORY: "[G L1302-L1304]",',
+        '  L_REF_INVENTORY: "[G L1390]",',
+        S17B_TESTS,
+        "Each self-check code carries the guide line it names.",
+    ),
+    (
+        "M146-s17b-selfcheck-row-labels-lost",
+        OUTBOX,
+        "    g.rows.push({ id: `${p.fileName}#${p.row}`, label: `${p.fileName} row ${p.row}`, detail: p.message });",
+        "    g.rows.push({ id: `${p.fileName}#${p.row}`, label: p.fileName, detail: p.message });",
+        S17B_TESTS,
+        "Each self-check row names its file AND row number.",
+    ),
+    (
+        "M147-s17b-group-by-code-only",
+        OUTBOX,
+        "    const k = `${p.type}\\u0000${p.code}`;",
+        "    const k = p.code;",
+        S17B_TESTS,
+        "One issue per (file, code), so each issue names its own file.",
+    ),
+    (
+        "M148-s17b-classifier-loose-or-gone",
+        DISPLAY,
+        'r.startsWith("its product is not in the published menu (")',
+        'r.startsWith("its product is not in the published menu-")',
+        S17B_TESTS,
+        "An enriched not-in-menu reason keeps its S-17a class.",
+    ),
 ]
 
 
@@ -1047,6 +1194,7 @@ def main() -> int:
         S12B_TESTS,
         P11_TESTS,
         S17A_TESTS,
+        S17B_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

@@ -281,7 +281,9 @@ describe("S-13 wiring in ccrs-batch.ts", () => {
   it("Area file is the core plan for the batch env; Inventory uses its area name; Area issues reach the gate", () => {
     expect(BATCH).toContain("const plan = planAreaFile({ view: ledger, config: areaPlanFor(env), license, by: createdBy, date: createdDate });");
     expect(BATCH).toContain("const area = buildAreaFile(env, license.licenseNumber, createdBy, createdDate, ledger);");
-    expect(BATCH).toContain("buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName);");
+    // S-17b added a trailing menuPresence argument (explains E41 lot rows); the
+    // Area-name argument this pin guards is unchanged.
+    expect(BATCH).toContain("buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);");
     expect(BATCH).toContain("    const area = areaName;");
     expect(BATCH).toContain("syncIssues.push(...strain.issues, ...area.issues, ...product.issues, ...inventory.issues);");
     expect(BATCH).toContain('push("Area", area.rows, area.warnings);');

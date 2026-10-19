@@ -215,6 +215,69 @@ export function verifyOutboxAgainstLedger(view: LedgerView, files: readonly Outb
 }
 
 /* ------------------------------------------------------------------ *
+ * 3b. S-17b: the same self-check, as gate issues, for the hub and report
+ * ------------------------------------------------------------------ */
+
+/** One gate issue per (file, code); every problem row kept (never capped). */
+export type LedgerSelfCheckIssue = {
+  severity: "error";
+  file: CcrsRetailerFileType;
+  code: LedgerProblem["code"];
+  specPin: string;
+  message: string;
+  count: number;
+  rows: { id: string; label: string; detail: string }[];
+};
+
+/** Verbatim LCB lines behind each self-check code (checked by check_pins / tests). */
+export const LEDGER_PROBLEM_PIN: Record<LedgerProblem["code"], string> = {
+  L_INSERT_ON_FILE: "[G L0246]",
+  L_UPDATE_NOT_ON_FILE: "[G L0247]",
+  L_DELETE_NOT_ON_FILE: "[G L0248]",
+  L_REF_PRODUCT: "[G L0579]",
+  L_REF_STRAIN: "[G L0555]",
+  L_REF_AREA: "[G L0570]",
+  L_REF_INVENTORY: "[G L1302-L1304]",
+  L_TOTALS: "[G L0246-L0248]",
+};
+
+const LEDGER_PROBLEM_TEXT: Record<LedgerProblem["code"], (n: number, t: string) => string> = {
+  L_INSERT_ON_FILE: (n, t) => `${n} ${t} row(s) are Insert, but CCRS already holds the id. Insert creates "a new record with a unique external identifier" [G L0246]; these must be Updates. Reconcile the ledger, then rebuild.`,
+  L_UPDATE_NOT_ON_FILE: (n, t) => `${n} ${t} row(s) are Update, but CCRS does not hold the id. Update alters "an existing record" [G L0247]. Reconcile the ledger, then rebuild.`,
+  L_DELETE_NOT_ON_FILE: (n, t) => `${n} ${t} row(s) are Delete, but CCRS does not hold the id [G L0248].`,
+  L_REF_PRODUCT: (n) => `${n} Inventory row(s) name a Product that CCRS does not hold and this batch does not create; CCRS answers "Invalid Product" [G L0579].`,
+  L_REF_STRAIN: (n) => `${n} Inventory row(s) name a Strain that CCRS does not hold and this batch does not create; CCRS answers "Invalid Strain" [G L0555].`,
+  L_REF_AREA: (n) => `${n} Inventory row(s) name an Area that CCRS does not hold and this batch does not create; CCRS answers "Invalid Area" [G L0570].`,
+  L_REF_INVENTORY: (n, t) => `${n} ${t} row(s) name a lot that CCRS does not hold and this batch does not report in Inventory.csv. CCRS answers "Invalid InventoryExternalIdentifier" and asks that the inventory was "already reported … in an inventory.CSV" [G L1302-L1304]. Fix why each lot is left out of Inventory.csv (see the Inventory errors), then rebuild.`,
+  L_TOTALS: (n) => `${n} file(s): control totals re-derived from the bytes differ from the stored totals. Do not upload; rebuild.`,
+};
+
+/**
+ * Run the export route's ledger self-check (planOutboxFiles → verifyOutboxAgainstLedger,
+ * Part 05 §D.4) and return it as gate issues, so the hub and the compliance
+ * report show the same refusal the download would give (Part 17 §K.4). Rows
+ * keep the problem's file and row number.
+ */
+export function ledgerSelfCheckIssues(
+  view: LedgerView,
+  sources: readonly OutboxSourceFile[],
+  opts: { licenseNumber: string; now: Date; lastStamp: Date | null },
+): LedgerSelfCheckIssue[] {
+  const problems = verifyOutboxAgainstLedger(view, planOutboxFiles(sources, opts));
+  const groups = new Map<string, LedgerSelfCheckIssue>();
+  for (const p of problems) {
+    const k = `${p.type}\u0000${p.code}`;
+    let g = groups.get(k);
+    if (!g) {
+      g = { severity: "error", file: p.type, code: p.code, specPin: LEDGER_PROBLEM_PIN[p.code], message: "", count: 0, rows: [] };
+      groups.set(k, g);
+    }
+    g.rows.push({ id: `${p.fileName}#${p.row}`, label: `${p.fileName} row ${p.row}`, detail: p.message });
+  }
+  return [...groups.values()].map((g) => ({ ...g, count: g.rows.length, message: LEDGER_PROBLEM_TEXT[g.code](g.rows.length, g.file) }));
+}
+
+/* ------------------------------------------------------------------ *
  * 4. Emit payload
  * ------------------------------------------------------------------ */
 

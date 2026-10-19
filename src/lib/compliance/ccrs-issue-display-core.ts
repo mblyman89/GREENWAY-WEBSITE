@@ -69,7 +69,9 @@ export function classifyWithholdReason(reason: string | null | undefined): Withh
   let r = (reason ?? "").trim();
   if (r.startsWith(PRODUCT_WITHHELD_PREFIX)) r = r.slice(PRODUCT_WITHHELD_PREFIX.length).trim();
   if (r === NO_PRODUCT_ID_REASON) return "no-product-id";
-  if (r === "its product is not in the published menu") return "not-in-published-menu";
+  // S-17b enriches this reason with WHY in brackets (ccrs-lot-product-core
+  // enrichLotWithholdReason): "… menu (hidden in the published menu: …)".
+  if (r === "its product is not in the published menu" || r.startsWith("its product is not in the published menu (")) return "not-in-published-menu";
   if (r.startsWith("last file outcome is uncertain")) return "uncertain";
   if (r.startsWith("id was Deleted in CCRS")) return "deleted-id";
   if (r.startsWith("id status is unknown")) return "unknown-status";
@@ -228,6 +230,12 @@ export function __runCcrsIssueDisplayTests(): { passed: number; failed: number }
     "lot inherits its product's class",
   );
   ok(classifyWithholdReason("its product is not in the published menu") === "not-in-published-menu", "menu");
+  ok(
+    classifyWithholdReason("its product is not in the published menu (only in a staged menu version that is not published yet)") ===
+      "not-in-published-menu",
+    "S-17b enriched menu reason keeps its class",
+  );
+  ok(classifyWithholdReason("its product is not in the published menuX") === "unclassified", "no loose prefix match");
   ok(classifyWithholdReason("last file outcome is uncertain — reconcile first (Part 06)") === "uncertain", "uncertain");
   ok(classifyWithholdReason('filed Product 1234.ABC is in state "deleted"') === "filed-product-unproven", "filed state");
   ok(classifyWithholdReason("something new") === "unclassified", "unknown reason is unclassified, not guessed");

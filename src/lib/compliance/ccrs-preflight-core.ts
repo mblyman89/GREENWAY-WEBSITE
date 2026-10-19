@@ -68,6 +68,7 @@ export const CCRS_ISSUE_CODES = [
   "E44_FREE_TEXT_REWRITTEN",
   "E45_HELD_LOT_NOT_AN_AREA",
   "E46_AREA_LEDGER",
+  "E47_LOT_PRODUCT_NOT_IN_MENU",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -412,6 +413,13 @@ const PINS: Record<CcrsIssueCode, string> = {
   // S-13: an Area id the D-03 plan Updates/Deletes is not provably held by
   // CCRS (Update/Delete need an existing record). Blocking when an error.
   E46_AREA_LEDGER: "[G L0246-L0248]",
+  // S-17b (U-60): a lot names a product key that is not a visible item of the
+  // published menu, so Product.csv cannot carry it. Inventory.Product must be a
+  // product "already submitted … on the product.CSV" ("Invalid Product").
+  // With a ledger: advisory, the lots are already withheld (E41). Legacy mode
+  // (no ledger): blocking, the lot is written with a blank Product, which CCRS
+  // rejects ("Product is required" [G L0578]).
+  E47_LOT_PRODUCT_NOT_IN_MENU: "[G L0579-L0583]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

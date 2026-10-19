@@ -444,6 +444,44 @@ Part 10 holds the procedure. No code in this slice until the owner says go. Plac
 
 **Not covered (S-17b).** The orphan "(38)" warning comparison (U-60); why a lot's product is missing from the published menu; the hub does not yet run `verifyOutboxAgainstLedger` (Sale → unfiled lot, `[G L1302-L1304]`).
 
+## S-17b — Honest "not in the menu" rows (E47) and the hub runs the export's ledger self-check — DONE in code (2026-10-19)
+
+**Why.**
+- U-60: the orphan warning said "(38)" for 38 lots whose products Product.csv carried. It compared Product column 6, the CCRS id after `applyProductPlan`, with the lot's key.
+- U-62 / Part 17 §K.4: the hub did not run `verifyOutboxAgainstLedger`. So a Sale naming an unfiled, withheld lot ("Invalid InventoryExternalIdentifier" `[G L1302-L1304]`) showed only as a refused download.
+
+**What changed.**
+- `src/lib/compliance/ccrs-lot-product-core.ts` (new, pure):
+  - `lotsWithheldForMissingProduct` (ledger mode: the planner's own decision);
+  - `legacyLotsWithBlankProduct` (no ledger: lots written with a blank Product, "Product is required" `[G L0578]`);
+  - `explainMissingProduct`, with 7 classes, never guessed; an unreadable menu is said as such;
+  - `lotsWithProductNotInMenu`, one row per key, every lot listed;
+  - `enrichLotWithholdReason` and `e47Message`.
+- `ccrs-batch.ts`:
+  - `readMenuPresence` reads hidden (with reason) and staged menu items for only the keys concerned, and fails closed to "unreadable";
+  - E47 replaces the column-6 warning: a warning with a ledger, an error in legacy mode;
+  - E41 lot rows are enriched;
+  - `ledgerSelfCheckIssues` results are pushed as blocking issues.
+- `ccrs-outbox-core.ts`: `ledgerSelfCheckIssues`, `LEDGER_PROBLEM_PIN`, plain-English messages per code.
+- `ccrs-preflight-core.ts`: `E47_LOT_PRODUCT_NOT_IN_MENU` → `[G L0579-L0583]`.
+- `ccrs-issue-display-core.ts`: the enriched reason keeps class "not-in-published-menu"; a loose prefix does not.
+- `s13-ccrs-areas.test.ts`: its source pin now includes the new trailing `menuPresence` argument. The Area-name argument it guards is unchanged.
+- `mutate_check.py`: M131–M148; `S17B_TESTS` added to the baseline.
+
+**Proof.** `tests/compliance/s17b-honest-orphans-and-hub-selfcheck.test.ts`:
+- the old rule reproduced (4 of 4) on real planner output;
+- the filed-lot, uncertain-lot and legacy cases through the real planner;
+- self-check parity with `verifyOutboxAgainstLedger`;
+- one issue per (file, code);
+- every pin checked against `guide.txt`;
+- source pins.
+
+Full `tests/compliance` is green. Mutation harness: 0 survived.
+
+**Not covered.**
+- The menu reason is only as good as `menu_items.hidden_reason`.
+- A lot whose `pos_product_key` does not equal any item's `source_item_id` (after trimming) shows as "no menu item". That is the truth of the join, and the row quotes the exact key, so a near-miss (case, prefix) is visible to the reader. It is not auto-matched.
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
