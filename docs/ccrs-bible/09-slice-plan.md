@@ -571,6 +571,38 @@ Reverting the src/docs changes turns 7 tests red.
 
 ---
 
+## S-18b — Strategy report for every CCRS error email, and a once-only owner alert (DONE in code, 2026-10-20)
+
+**Why.** The owner asked for the system to "automatically draft a strategy report to fix the issue" when an upload fails (Part 05 D-21). Failed uploads come back with the failures in an attached CSV (owner, 2026-10-20; also the 15 error CSVs in `evidence/`).
+
+**What changed.**
+- New `ccrs-strategy-core.ts` (pure, self-test registered, floor 18):
+  - `STRATEGY_PLAYBOOK`: one entry per `CCRS_KNOWN_MESSAGES` text (12). Each has what failed, the rule it breaks with its pin, ordered fix steps, and the PREprod run where the exact text was received. The action follows the class: benign → none, file-fatal → whole file, row → fix and re-send the listed rows, row-contradicts-ledger → settle first with a Service Desk copy (the hub holds the id as "uncertain").
+  - `SOURCE_QUOTES`: every guide / FAQ / examiner line the playbook cites, embedded verbatim. The test re-checks each one against `lcb/guide.txt`, `lcb/faq.txt` and the in-repo examiner thread. Every cited range must be fully embedded.
+  - `buildCcrsStrategy`: per file it gives the scope (none / listed-rows / whole-file / unknown) and per message the row count and the ids. An id is read only from a row whose cells match the header; a shifted row (comma, P20261005A) is counted as unreadable, never guessed. The re-send order follows the guide's groups "Group 1 file uploads are the Strain, Area, and Product records." `[G L0084-L0089]`, with the 10-minute wait `[G L0529-L0530]`. The weekly deadline comes from `[FAQ L0041]`.
+  - An unknown message, an unreadable message, or a file whose name and header disagree produces an examiner email DRAFT through the existing `buildExaminerDraft` (to examiner@lcb.wa.gov, never sent automatically). The week stays a placeholder: an error file does not say which week it answers.
+  - `planMailAlert`: one alert per error or unreadable email. Key `ccrs_mail:<mailbox>:<gmail id>`, stage `ccrs_mail_error`, all CCRS text HTML-escaped, a DMARC failure and Spam stated first.
+- New `ccrs-mail-notify.ts` (server). Called at the end of each ccrs-mail tick. It uses the cutover-watch pattern: claim by insert into `compliance_reminder_log` (23505 = already claimed), send email (Resend, `ORDER_STAFF_EMAILS`) and push, then record the channels. With no channel nothing is claimed. With every channel failed the claim stays, marked with the same `WATCH_UNDELIVERED` text. Only open mail fetched in the last 7 days is alerted. A quiet tick is one read and no write.
+- New `CcrsStrategyReport.tsx`, shown inside each open error email on the hub panel. The page builds the report from the stored CSVs.
+- `mutate_check.py`: M202–M223 with `S18B_TESTS` in the baseline.
+
+**What to re-send.** Brian: "Header and operation errors are full file, individual row errors are specific to that row, so a file that passes operation and header validation can have 5 rows fail and 1 row pass." `[EXAM L0532]`. PREprod agrees for row errors (P20261006A: the rows not listed were filed) and for the checksum (T-54). One observation does not fit "operation errors are full file": P20261005A's `Operation is invalid ...` came back on 3 of 8 rows and the other 5 were filed. The report says what was observed and tells the owner to check the confirmation of the re-sent rows. It does not choose.
+
+**Proof.** `tests/compliance/s18b-ccrs-error-strategy.test.ts` (57 tests) covers:
+- all 15 real error CSVs: every one fully explained, no examiner escalation, the row counts add up, the observed scope per file;
+- quotes verbatim against the source files;
+- unknown / unreadable / mismatched files go to a draft;
+- the alert through the real postgrest-js client against FakePostgrest: once only, a racing tick, no channel, all channels failed, email+push, the 7-day and state filters, a quiet tick, a database fault;
+- wiring and panel rendering.
+
+22 mutations are killed.
+
+**Not covered.**
+- No production error email has been seen yet (U-66). If CCRS sends a message that is not in the playbook, the report says so and drafts to the examiner instead of guessing.
+- The report does not edit products or lots. The owner makes the fix in the app, and the next export re-sends only what CCRS does not hold.
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).

@@ -473,6 +473,13 @@ this stage adds no new work; it is the formal look-back.
   check that the hub panel "CCRS email: confirmations and error files" is green.
   After the first upload, apply each confirmation from the panel and note the
   production subject it shows (U-65).
+- [ ] **C-135 👤 Before Sunday, November 8: make sure CCRS error alerts can reach
+  you** — the mailbox monitor (Bible Part 09 S-18b) sends one alert per CCRS
+  error or unread email through the existing staff channels: email needs
+  `RESEND_API_KEY`, `ORDER_EMAIL_FROM` and `ORDER_STAFF_EMAILS`; push needs the
+  VAPID keys and a subscribed device. With neither set, nothing is claimed and
+  the hub panel notes it, so the next tick retries once a channel exists. The
+  strategy report itself always shows on the hub panel under the error email.
 
 ---
 

@@ -9,6 +9,8 @@ import type { MailAnalysis, MailHeartbeat } from "@/lib/compliance/ccrs-mail-cor
 import { AUTH_TEXT, heartbeatStale } from "@/lib/compliance/ccrs-mail-core";
 import type { CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
 import { Button } from "@/components/admin/ui";
+import type { CcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
+import { CcrsStrategyReport } from "./CcrsStrategyReport";
 
 export type CcrsMailPanelRow = {
   id: string;
@@ -23,6 +25,8 @@ export type CcrsMailPanelRow = {
   analysis: Omit<Partial<MailAnalysis>, "errors"> & { errors?: { filename: string; fileType: string | null; typeProblem: string | null; dataLines: number; messages: string[] }[] };
   state: "new" | "applied" | "dismissed";
   handled_note: string | null;
+  /** S-18b: built by the page from the stored CSVs (error mail only). */
+  strategy?: CcrsStrategy | null;
 };
 
 export type CcrsMailSetup =
@@ -155,6 +159,7 @@ export function CcrsMailPanel({
                   </div>
                 ))
               : null}
+            {r.kind === "error" && r.strategy ? <CcrsStrategyReport strategy={r.strategy} /> : null}
             {needs.length ? (
               <ul className="mt-2 list-disc pl-5 text-amber-100" data-testid="ccrs-mail-needs-human">
                 {needs.map((n) => (
