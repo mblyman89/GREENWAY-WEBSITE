@@ -838,13 +838,64 @@ All 24 mutations are killed.
 
 ---
 
+## S-14b — Equalize waves wait for a copy dated after Cultivera's final upload, and never zero a lot from our 10/30 audit (Part 17 §E.6; D-22) (DONE in code, 2026-10-20)
+
+**Why.** Owner question (D-22): can the cleanup happen on 10/31 or 11/01, and can it wait until after the migration? Two facts decide it:
+- Cultivera files week 10/25–10/31 on **Sun 11/01** (D-21). That upload carries sales, adjustments and possibly new lots. A copy pulled before or on that day cannot show what it changed, so a wave planned from it could zero a lot that still holds stock.
+- The migration import skips Cultivera lots with zero units (no lot is created). Those lots are not in "our lots". If the 10/30 audit scanned one of them, it was on our shelf, so no wave may zero it.
+
+**What changed (tests first: `tests/compliance/s14b-final-upload-guard.test.ts`, 25 tests).**
+- `planEqualizeWave` (`ccrs-equalize-core.ts`) needs `finalUploadDate` and `countedBarcodes`:
+  - a final upload day that is not a real `YYYY-MM-DD` is refused ("never assumed");
+  - `copyAsOf <= finalUploadDate` is refused, with no override; the message says to request a copy after that day and merge it (S-15);
+  - a copy barcode in the audit list (trimmed, any letter case) is held `H_COUNTED_ON_SHELF`. The hold sits right after `H_POSSIBLY_OURS` and is never zeroed;
+  - the report states the final upload day and the number of audit barcodes.
+- `parseCountedList`: one barcode per line, blank and `#` lines skipped; an empty list is refused.
+- `equalize-ccrs-wave.ts` (inventory phase):
+  - `--final-upload-date` is required (exit 2);
+  - `--counted-file <file>` or an explicit `--no-counted-file` is required (neither, both, or a missing file: exit 2);
+  - when our lots are read live (`--psql` without `--ours-file`), `--snapshot-date` must be today in Pacific time (`liveSnapshotRefusal`, exit 1).
+- New `scripts/compliance/count-barcodes.ts`:
+  - reads the counters' audit workbooks with the same parser as the count apply (`cultivera-count-core`);
+  - refuses on any blocking problem;
+  - writes every scanned and hand-counted barcode once, sorted, and never overwrites.
+
+**Not changed:** selling. Opening on 11/01 does not depend on any wave.
+
+**Mutations:** M328–M339, all killed.
+
+## R-3 — DOR Combined Excise Tax Return on the compliance calendar, with reminders (DONE in code, 2026-10-20)
+
+**Ground (read online 2026-10-20):**
+- RCW 82.32.045(1): returns "are due monthly within 25 days after the end of the month".
+- DOR: "If the due date falls on a weekend or legal holiday, the due date is extended to the next business day."
+- RCW 82.32.090(1): 9% penalty, rising to 19% after the last day of the following month and 29% after the second month.
+- Greenway files monthly.
+
+**What changed (tests first: `tests/compliance/r3-dor-excise-calendar.test.ts`).**
+- `compliance-calendar-core.ts`:
+  - task `dor_excise` (monthly, LAST month, citing RCW 82.32.045(1));
+  - `dorExciseDueDate(year, month)`: the 25th of the next month, rolled over weekends and WA legal holidays, with `shiftedBy`. The holidays come from the one shared table, `isWaLegalHoliday` in `wa-quarterly-core.ts`;
+  - `planDorExciseReminders(today, doneMap)`:
+    - `dor_due_soon` 5–1 days before (warning, one per month);
+    - `dor_due_today` (critical);
+    - `dor_overdue_daily` (critical, new each day, states the penalty);
+    - looks at last month and the month before, so a missed return keeps nagging after the month turns;
+    - silent for a month marked done.
+- Every month of DOR's published 2026 table is pinned (weekend rolls Mar/Jun/Sep; holiday rolls Apr = Memorial Day, Nov = Christmas).
+- `compliance-reminders.ts` runs the planner in its own try/catch ("DOR excise planner failed").
+
+**Design change from the roadmap text:** no CCRS-page dismiss and no migration. A month is cleared by **Mark done** on the compliance calendar, the S-18 done map in `site_settings`. `WAIVABLE_OBLIGATIONS` and the 0250 check are unchanged.
+
+**Mutations:** M340–M346, all killed.
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
 
 **R-2 Monthly LIQ-1295 excise payment automation.** Known: there is no LCB payment API in the sources; payment is made through the LCB's online system. Research: the accepted payment channels (online portal/ACH), whether a scheduled ACH debit can be set up, and whether report filing can be automated at all. Until then: the monthly reminder plus the dismiss/record path.
 
-**R-3 DOR combined excise / sales-tax return tracking (gap).** Not tracked anywhere in the code today. Monthly filers are due the 25th. Build: a calendar task + reminders + dismiss + "filed" record, same pattern as S-12d (add `dor_excise` to `WAIVABLE_OBLIGATIONS` and to the 0250 check in a new migration).
+**R-3 DOR combined excise / sales-tax return tracking — DONE 2026-10-20 (see the R-3 section above; built without dismiss or migration).** Original text: not tracked anywhere in the code today. Monthly filers are due the 25th. Build: a calendar task + reminders + dismiss + "filed" record, same pattern as S-12d (add `dor_excise` to `WAIVABLE_OBLIGATIONS` and to the 0250 check in a new migration).
 
 **R-4 PREprod tab shows the amber "ledger not started" banner instead of the green bar (owner report 2026-10-07).** Not yet diagnosed. **First hypothesis, unproven:** the button the owner tested was the S-12d *first-day-of-sales* start date, not **Start PREprod ledger** (CcrsFilesPanel "PREprod set-up (one time per test cycle)"). The amber text itself says "PREprod ledger not started (…). Start it in the CCRS files section below". If the reason in brackets is `seed-not-finalized`, pressing Start PREprod ledger once should turn it green. Check this first. Do not assume the cause; recon it first. Known code facts:
 - the banner is `src/app/admin/compliance/ccrs/page.tsx` ~L491-L496, shown when `!batch.ledger.view`, and its text includes `absentReason`;

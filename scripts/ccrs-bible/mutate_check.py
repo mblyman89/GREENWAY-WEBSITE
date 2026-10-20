@@ -122,6 +122,12 @@ EQCLI = "scripts/compliance/equalize-ccrs-wave.ts"
 S16_TESTS = "tests/compliance/s16-ccrs-copy-verify.test.ts"
 CVCORE = "src/lib/compliance/ccrs-copy-verify-core.ts"
 CVCLI = "scripts/compliance/verify-ccrs-copy.ts"
+# S-14b (final-upload guard, audit list) + R-3 (DOR excise calendar)
+S14B_TESTS = "tests/compliance/s14b-final-upload-guard.test.ts"
+CNTCLI = "scripts/compliance/count-barcodes.ts"
+R3_TESTS = "tests/compliance/r3-dor-excise-calendar.test.ts"
+CALCORE = "src/lib/compliance/compliance-calendar-core.ts"
+REMINDERS = "src/lib/notifications/compliance-reminders.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -2628,6 +2634,158 @@ MUTATIONS = [
         S16_TESTS,
         "StrainType is compared.",
     ),
+    (
+        "M328-s14b-final-upload-equal",
+        EQCORE,
+        "  if (copyAsOf <= finalUploadDate) {",
+        "  if (copyAsOf < finalUploadDate) {",
+        S14B_TESTS,
+        "A copy dated ON Cultivera's final upload day is refused too.",
+    ),
+    (
+        "M329-s14b-final-upload-gone",
+        EQCORE,
+        "  if (copyAsOf <= finalUploadDate) {",
+        "  if (false) {",
+        S14B_TESTS,
+        "A copy from before the final upload never drives a wave.",
+    ),
+    (
+        "M330-s14b-final-upload-iso",
+        EQCORE,
+        "  if (!isoOk(input.finalUploadDate)) throw",
+        "  if (false) throw",
+        S14B_TESTS,
+        "The final upload day must be a real date (never assumed).",
+    ),
+    (
+        "M331-s14b-counted-hold",
+        EQCORE,
+        "    if (counted.has(id.trim().toLowerCase())) { hold(",
+        "    if (false) { hold(",
+        S14B_TESTS,
+        "A barcode scanned in the 10/30 audit is never zeroed.",
+    ),
+    (
+        "M332-s14b-counted-case",
+        EQCORE,
+        "input.countedBarcodes.map((b) => b.trim().toLowerCase())",
+        "input.countedBarcodes.map((b) => b)",
+        S14B_TESTS,
+        "The audit match ignores case and stray spaces.",
+    ),
+    (
+        "M333-s14b-counted-empty",
+        EQCORE,
+        "  if (out.length === 0) throw new EqualizeError(\"the audit list has no barcodes;",
+        "  if (false) throw new EqualizeError(\"the audit list has no barcodes;",
+        S14B_TESTS,
+        "An empty audit list is refused (no silent no-op).",
+    ),
+    (
+        "M334-s14b-counted-comments",
+        EQCORE,
+        ".filter((l) => l !== \"\" && !l.startsWith(\"#\"));",
+        ".filter((l) => l !== \"\");",
+        S14B_TESTS,
+        "# lines in the audit list are notes, not barcodes.",
+    ),
+    (
+        "M335-s14b-live-snapshot",
+        EQCLI,
+        "  return today === want ? null : `REFUSED: our lots were read live today",
+        "  return true ? null : `REFUSED: our lots were read live today",
+        S14B_TESTS,
+        "A live read of our lots needs today's snapshot date.",
+    ),
+    (
+        "M336-s14b-cli-final-required",
+        EQCLI,
+        "    if (!finalUploadDate) { console.error(",
+        "    if (false) { console.error(",
+        S14B_TESTS,
+        "The wave script requires --final-upload-date.",
+    ),
+    (
+        "M337-s14b-cli-counted-required",
+        EQCLI,
+        "  if (!file) throw new ArgError(\"give --counted-file",
+        "  if (!file) return []; if (false) throw new ArgError(\"give --counted-file",
+        S14B_TESTS,
+        "The wave script requires the audit list or an explicit --no-counted-file.",
+    ),
+    (
+        "M338-s14b-count-blocking",
+        CNTCLI,
+        "  if (blocking.length) throw new RefusedError(",
+        "  if (false) throw new RefusedError(",
+        S14B_TESTS,
+        "A counter workbook with a blocking problem writes nothing.",
+    ),
+    (
+        "M339-s14b-count-no-overwrite",
+        CNTCLI,
+        "    if (existsSync(out)) throw new ArgError(",
+        "    if (false) throw new ArgError(",
+        S14B_TESTS,
+        "The audit list is never overwritten (refused up front, exit 2; the wx write flag is the second guard).",
+    ),
+    (
+        "M340-r3-weekend-roll",
+        CALCORE,
+        "    const weekend = wd === 0 || wd === 6;",
+        "    const weekend = wd === 0;",
+        R3_TESTS,
+        "A Saturday 25th rolls to Monday (DOR table: Apr 2026).",
+    ),
+    (
+        "M341-r3-holiday-roll",
+        CALCORE,
+        "    const holiday = !weekend && isWaLegalHoliday(formatPlainDate(due));",
+        "    const holiday = false;",
+        R3_TESTS,
+        "A holiday 25th rolls (Memorial Day 5/25, Christmas 12/25).",
+    ),
+    (
+        "M342-r3-december-year",
+        CALCORE,
+        "month === 12 ? { y: year + 1, m: 1, d: 25 }",
+        "month === 12 ? { y: year, m: 1, d: 25 }",
+        R3_TESTS,
+        "December's return is due in January of the NEXT year.",
+    ),
+    (
+        "M343-r3-soon-window",
+        CALCORE,
+        "    if (days > DOR_DUE_SOON_DAYS) continue;",
+        "    if (days > DOR_DUE_SOON_DAYS + 1) continue;",
+        R3_TESTS,
+        "No reminder more than 5 days before the due day.",
+    ),
+    (
+        "M344-r3-done-silences",
+        CALCORE,
+        "    if (done.dor_excise?.[period.periodKey]) continue;",
+        "    if (false) continue;",
+        R3_TESTS,
+        "A month marked filed sends nothing.",
+    ),
+    (
+        "M345-r3-lookback",
+        CALCORE,
+        "  for (const [y, m] of [[ppy, ppm], [py, pm]] as const) {",
+        "  for (const [y, m] of [[py, pm]] as const) {",
+        R3_TESTS,
+        "A missed return keeps nagging after the month turns.",
+    ),
+    (
+        "M346-r3-wired",
+        REMINDERS,
+        "    for (const r of planDorExciseReminders({ y: ty, m: tm, d: td }, doneMap)) {",
+        "    for (const r of [] as ReturnType<typeof planDorExciseReminders>) { void doneMap; void ty; void tm; void td;",
+        R3_TESTS,
+        "The reminder engine really runs the DOR planner.",
+    ),
 ]
 
 
@@ -2682,6 +2840,8 @@ def main() -> int:
         S15_TESTS,
         S14_TESTS,
         S16_TESTS,
+        S14B_TESTS,
+        R3_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

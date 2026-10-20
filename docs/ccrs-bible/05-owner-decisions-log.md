@@ -282,3 +282,16 @@ Recorded:
 3. The owner is opening the **production** CCRS account through WA.gov (Part 11). PREprod is a separate account `[SIGNIN L0035-L0036]`, U-59.
 4. Confirmations and error files go to the email address that submits the file `[EXAM L0098]`. That is michael@greenwaymarijuana.com. S-18a reads that mailbox with read-only access. It lists each CCRS email on the hub for the owner to apply; nothing is applied automatically (standing rule 3).
 5. The owner's memory that failed uploads carry an attachment matches U-14 (ANSWERED 2026-09-17: a CSV with an `ErrorMessage` column; 15 such files are committed). The **subject, body and MIME type** of an error email were never captured, so this is **U-66**. S-18a therefore recognises an error email only by a `.csv` attachment with an `ErrorMessage` column.
+
+## D-22 — Owner question: when the lot cleanup (equalize waves) can run, and the hand-over schedule reconfirmed (2026-10-20, slices S-14b, R-3)
+
+(Appended after D-21; this log is append-only.)
+
+Owner, verbatim: *"On October 31 after our last sale, I will press the Cultivera upload and scape all data from my portal. On October 30, an audit will be done, every item scanned so we have a list of every single lot and its quantity. How do we zero out the garbage on October 31 after close/ November 1 before we open. I might be able to get an updated copy of my CCRS data before the 1st, but I doubt I'll get the copy I need after nov 1 by the time we will need it. Can the system equalize and zero out records happen after the migration is complete and I get all lots scraped into our system and on the menu? I need to be able to sell the products by open on Nov 1, but we also need to clean up soon after migration so we have a clean start."* And, later the same day: *"Cultivera's last upload is 11/1. Mine is 11/8. I was confused before. Now we know the schedule."*
+
+Recorded:
+1. **The schedule is settled:** Cultivera's last upload is Sun 2026-11-01; Greenway's first is Sun 2026-11-08 (D-21 confirmed). **U-61 stays OPEN** until Cultivera confirms in writing that its 11/01 upload holds nothing dated 11/01 or later.
+2. **Selling on 11/01 does not wait for the cleanup.** The cleanup runs **after** the migration, in weeks 2–3 (§E.5, §E.6).
+3. **No wave on 10/31 or 11/01, and none from a copy pulled before or on 11/01.** The system refuses it (S-14b), with no override.
+4. **The 10/30 audit protects the shelf.** `count-barcodes.ts` turns the counters' workbooks into a list. Every wave must be given that list, and no listed barcode is ever zeroed.
+5. **R-3 (DOR return) is built:** it is on the compliance calendar with reminders, and "filed" is recorded with Mark done.

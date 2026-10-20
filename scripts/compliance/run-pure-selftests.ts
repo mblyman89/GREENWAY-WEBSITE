@@ -1794,7 +1794,7 @@ __runLiquidVolumeTests();
   assertRan("ccrs-strategy-core", __runCcrsStrategyCoreTests(), 18);
   assertRan("ccrs-watchdog-core", __runCcrsWatchdogCoreTests(), 21);
   assertRan("ccrs-reseed-core", __runCcrsReseedCoreTests(), 12);
-  assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 15);
+  assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 24); // S-14b: +5 (final-upload guard, audit-counted hold)
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();

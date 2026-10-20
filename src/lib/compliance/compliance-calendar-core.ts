@@ -15,6 +15,9 @@
  *    inside the window).
  *  - Scale calibration / WSDA weighing-device registration — annual.
  *  - Employee badge & visitor-log check — monthly.
+ *  - R-3: DOR Combined Excise Tax Return — monthly, due the 25th of the
+ *    following month, rolled to the next business day over a weekend or WA
+ *    legal holiday (RCW 82.32.045(1); DOR 2026 due-date table).
  *
  * All date math is plain calendar arithmetic (no timezone parsing); callers
  * feed the STORE's Pacific wall-clock date via lib/reports/timezone.
@@ -28,6 +31,8 @@ import {
   type ObligationContext,
   type Waiver,
 } from "./obligation-waiver-core";
+// R-3: ONE WA legal-holiday table for the whole system (pure; imports a type only).
+import { isWaLegalHoliday } from "@/lib/payroll/wa-quarterly-core";
 
 // ---------------------------------------------------------------------------
 // Plain calendar dates
@@ -66,7 +71,8 @@ export type CalendarTaskId =
   | "ccrs_weekly"
   | "cctv_retention"
   | "scale_calibration"
-  | "badge_visitor_log";
+  | "badge_visitor_log"
+  | "dor_excise";
 
 export type CalendarTaskDef = {
   id: CalendarTaskId;
@@ -115,6 +121,18 @@ export const CALENDAR_TASKS: readonly CalendarTaskDef[] = [
     description:
       "Verify every worker's LCB-compliant badge is current and the visitor log is complete for the month.",
     authority: "WAC 314-55-083(1)-(2)",
+    cadence: "monthly",
+  },
+  {
+    // R-3. Greenway files MONTHLY ("Filing Frequency: Monthly", DOR return
+    // July 2026). Due the 25th of the next month; DOR moves a weekend/holiday
+    // due date to the next business day. 9% penalty from the day after
+    // (RCW 82.32.090(1)).
+    id: "dor_excise",
+    label: "DOR Combined Excise Tax Return",
+    description:
+      "File the Department of Revenue excise return (sales tax, B&O) for LAST month and pay it. Due the 25th; when the 25th is a weekend or legal holiday, the next business day.",
+    authority: "RCW 82.32.045(1) / RCW 82.32.090(1) (9% late penalty)",
     cadence: "monthly",
   },
 ] as const;
@@ -178,6 +196,12 @@ export function pendingPeriodFor(id: CalendarTaskId, today: PlainDate): PendingP
         dueDate: { y: today.y, m: today.m, d: daysInMonth(today.y, today.m) },
       };
     }
+    case "dor_excise": {
+      // Return for the PRIOR month, due the 25th of this month (rolled).
+      const py = today.m === 1 ? today.y - 1 : today.y;
+      const pm = today.m === 1 ? 12 : today.m - 1;
+      return dorPeriod(py, pm);
+    }
     case "scale_calibration": {
       // Current calendar year, due by Dec 31.
       return {
@@ -187,6 +211,59 @@ export function pendingPeriodFor(id: CalendarTaskId, today: PlainDate): PendingP
       };
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// R-3: DOR Combined Excise Tax Return due date
+// ---------------------------------------------------------------------------
+export type DorExciseDue = {
+  /** The 25th of the month after the return month (YYYY-MM-DD). */
+  namedDate: string;
+  /** The last day to file without penalty: the named date, rolled forward
+   *  over Saturdays, Sundays and WA legal holidays. */
+  dueDate: string;
+  /** Why the date moved (the FIRST reason it could not stay put). */
+  shiftedBy: "none" | "weekend" | "holiday";
+};
+
+/**
+ * The due date of the DOR return for `month` of `year` (month = the month the
+ * sales happened, 1..12). RCW 82.32.045(1): due "within 25 days after the end
+ * of the month"; DOR: "If the due date falls on a weekend or legal holiday,
+ * the due date is extended to the next business day." Pinned against DOR's
+ * published 2026 table for every month (tests/compliance/r3-...).
+ */
+export function dorExciseDueDate(year: number, month: number): DorExciseDue {
+  if (!Number.isInteger(year) || year < 2000 || year > 2200) {
+    throw new Error(`DOR return year must be a whole year, got ${year}`);
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error(`DOR return month must be 1-12, got ${month}`);
+  }
+  const named: PlainDate = month === 12 ? { y: year + 1, m: 1, d: 25 } : { y: year, m: month + 1, d: 25 };
+  let due = named;
+  let shiftedBy: DorExciseDue["shiftedBy"] = "none";
+  for (let i = 0; i < 10; i++) {
+    const wd = weekdayOf(due);
+    const weekend = wd === 0 || wd === 6;
+    const holiday = !weekend && isWaLegalHoliday(formatPlainDate(due));
+    if (!weekend && !holiday) break;
+    if (shiftedBy === "none") shiftedBy = weekend ? "weekend" : "holiday";
+    due = addDays(due, 1);
+  }
+  return { namedDate: formatPlainDate(named), dueDate: formatPlainDate(due), shiftedBy };
+}
+
+function parseIso(iso: string): PlainDate {
+  return { y: Number(iso.slice(0, 4)), m: Number(iso.slice(5, 7)), d: Number(iso.slice(8, 10)) };
+}
+
+function dorPeriod(y: number, m: number): PendingPeriod {
+  return {
+    periodKey: monthKey(y, m),
+    periodLabel: `${MONTH_NAMES[m - 1]} ${y}`,
+    dueDate: parseIso(dorExciseDueDate(y, m).dueDate),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +359,74 @@ export function normalizeDoneMap(raw: unknown): DoneMap {
       };
     }
     if (Object.keys(clean).length > 0) out[taskId as CalendarTaskId] = clean;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// R-3: DOR excise reminders (pure; the reminder engine sends and dedupes)
+// ---------------------------------------------------------------------------
+export type DorExciseReminder = {
+  stage: "dor_due_soon" | "dor_due_today" | "dor_overdue_daily";
+  dedupeKey: string;
+  subject: string;
+  body: string;
+  urgency: "warning" | "critical";
+  linkPath: string;
+};
+
+/** Days before the due day the "due soon" note may go out (one per period). */
+export const DOR_DUE_SOON_DAYS = 5;
+
+/**
+ * Reminders for the DOR return. Looks at the pending period (last month) and
+ * the month before it, so a return that was never marked filed keeps nagging
+ * after the month turns. Nothing for a period marked done on the calendar.
+ * Oldest first.
+ */
+export function planDorExciseReminders(today: PlainDate, done: DoneMap): DorExciseReminder[] {
+  const out: DorExciseReminder[] = [];
+  const todayIso = formatPlainDate(today);
+  const py = today.m === 1 ? today.y - 1 : today.y;
+  const pm = today.m === 1 ? 12 : today.m - 1;
+  const ppy = pm === 1 ? py - 1 : py;
+  const ppm = pm === 1 ? 12 : pm - 1;
+  for (const [y, m] of [[ppy, ppm], [py, pm]] as const) {
+    const period = dorPeriod(y, m);
+    if (done.dor_excise?.[period.periodKey]) continue;
+    const dueIso = formatPlainDate(period.dueDate);
+    const days = daysBetween(today, period.dueDate);
+    const label = period.periodLabel;
+    const linkPath = "/admin/compliance/calendar";
+    if (days > DOR_DUE_SOON_DAYS) continue;
+    if (days >= 1) {
+      out.push({
+        stage: "dor_due_soon",
+        dedupeKey: `dor_due_soon:${period.periodKey}`,
+        subject: `DOR excise return for ${label} is due ${dueIso}`,
+        body: `The Department of Revenue Combined Excise Tax Return for ${label} is due ${dueIso} (${days} day${days === 1 ? "" : "s"} from today). File and pay it in My DOR, then mark it done on the compliance calendar. A late return costs a 9% penalty (RCW 82.32.090(1)).`,
+        urgency: "warning",
+        linkPath,
+      });
+    } else if (days === 0) {
+      out.push({
+        stage: "dor_due_today",
+        dedupeKey: `dor_due_today:${period.periodKey}`,
+        subject: `DOR excise return for ${label} is due TODAY (${dueIso})`,
+        body: `Today is the last day to file and pay the DOR Combined Excise Tax Return for ${label} without a penalty. Starting tomorrow DOR adds 9% of the tax (RCW 82.32.090(1)). After filing, mark it done on the compliance calendar.`,
+        urgency: "critical",
+        linkPath,
+      });
+    } else {
+      out.push({
+        stage: "dor_overdue_daily",
+        dedupeKey: `dor_overdue_daily:${period.periodKey}:${todayIso}`,
+        subject: `OVERDUE: DOR excise return for ${label} (was due ${dueIso})`,
+        body: `The DOR Combined Excise Tax Return for ${label} was due ${dueIso} and is not marked filed. DOR's late penalty is 9% of the tax, rising to 19% if still unpaid after the last day of the following month and 29% after the second month (RCW 82.32.090(1)). File and pay it in My DOR now, then mark it done on the compliance calendar. If it was already filed, just mark it done.`,
+        urgency: "critical",
+        linkPath,
+      });
+    }
   }
   return out;
 }
