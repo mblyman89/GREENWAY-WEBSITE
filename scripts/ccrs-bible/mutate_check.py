@@ -2389,8 +2389,8 @@ MUTATIONS = [
     (
         'M297-s14-cli-same-day',
         EQCLI,
-        'return today === want ? null :',
-        'return true ? null :',
+        'return today === want ? null : `REFUSED: the file would be named for today',
+        'return true ? null : `REFUSED: the file would be named for today',
         S14_TESTS,
         'The file name day and SubmittedDate must agree (S-01).',
     ),
