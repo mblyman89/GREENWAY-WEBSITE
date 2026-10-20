@@ -533,6 +533,18 @@ this stage adds no new work; it is the formal look-back.
   `--same-batch` (Q-B1), `--nominal-cost` (Q-B3), `--strain-override` (Q-B6),
   `--max-lots` (Q-B7). Never set one without his written answer in Part 17 §H.
 
+- [ ] **C-145 🤝 Check the copy: is every record we sent stored as we sent it? (Bible Part 09 S-16; Part 17 §G G-3)** —
+  After the initial uploads (the first production week, and again after the last
+  equalize wave), ask the examiner for a fresh copy of the four reports
+  (Inventory, Product, Strain, Area) and the date it is current through. Save the
+  four files on your computer. Then, read-only (nothing is written anywhere):
+  `npx tsx scripts/compliance/verify-ccrs-copy.ts --as-of <the copy's date> --inventory … --product … --strain … --area … --psql "<prod PGURL>" --report copy-check.md`.
+  "OK: no problems" (exit 0) = every record CCRS answered as landed is stored as
+  sent. "PROBLEMS" (exit 1) = read `copy-check.md` in a session; each record shows
+  what we sent and what CCRS stored, in quotes. Records uploaded on or after the
+  copy's date are "not judged: too new" and are checked by the next copy. Record
+  the answer to U-68 (QoH after sales) and U-27b / U-44b / U-45b in Bible Part 12.
+
 ---
 
 <a id="stage-10"></a>

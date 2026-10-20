@@ -786,6 +786,58 @@ All 24 mutations are killed.
 
 ---
 
+## S-16 — Copy diff verifier: is every record we sent stored as we sent it? (Part 17 §G G-3; `[EXAM L0568]`) (DONE in code, 2026-10-20)
+
+**Why.** The examiner's advice: "after the initial uploads, recommendation is to reach out for a copy of what was submitted to check for accuracy" `[EXAM L0568]`. A success email proves that CCRS accepted a file. It does not prove what CCRS stored. This slice compares a fresh LCB copy (the same four delivery reports as the 9/18 delivery) with what our own files sent and CCRS answered as landed. It reports every difference with the exact bytes on both sides.
+
+**What changed.**
+- New `src/lib/compliance/ccrs-copy-verify-core.ts` (pure, self-test registered, floor 15):
+  - `SENT_READ_SQL` (read-only) returns one JSON line per row of every production, non-seed Inventory / Product / Strain / Area file that left the building (states uploaded / succeeded / errored / reconciling / closed; never draft, emitted-only or abandoned). It also counts, per lot, the landed Sale / InventoryAdjustment rows in answered files stamped later (`eventsAfter`). Times are integer microseconds, and the order is byte order (`collate "C"`).
+  - `parseSentLine` validates every line, so a shape is never trusted.
+  - `verifyCopy(copy, sent, asOf)` judges each record by its LAST row that may have reached CCRS (by file stamp, then row number). Rejected, withheld, planned and emitted rows never did, so they are skipped. Each record lands in exactly one of nine buckets: `verified`, `mismatched`, `zeroedNotZero`, `missing`, `deletedPresent`, `copyConflict`, `notJudgedUncertain`, `notJudgedUnanswered` or `notJudgedTooNew`. The first four are problems.
+  - "Too new" means uploaded on or after 00:00 UTC of the copy's date (the S-15 rule). `--as-of` is required and is never guessed.
+  - Fields compared:
+    - Inventory: LicenseNumber, Strain (a case-only difference is a U-45b note), Product, InitialQuantity, QuantityOnHand, TotalCost, IsMedical (any case) and CreatedDate (as a day). The product name is read from the copy's own Product report by the lot's Product Identifier; the Inventory report's "Product Name" column is the Description (Part 04 §A.5).
+    - Product: Name, Description, InventoryType and UnitWeightGrams.
+    - Strain: StrainType. A strain held only in another case is matched with a note.
+    - Area: Area vs Name, and IsQuarantine.
+  - Numbers are compared as exact decimals (10 = 10.00), and anything unreadable is never equal.
+  - Not compared, and stated in the report: Area on lots (no such column in the delivery), CreatedBy / UpdatedBy / UpdatedDate (undocumented), InventoryCategory (not in the delivery), and sales / adjustments / transfers (not in the delivery).
+  - A QoH difference on a lot with later landed Sale/Adjustment rows is still reported, with a U-68 note. Whether CCRS changes a stored QoH from those rows is not documented.
+  - `verifyReport` writes a markdown report: a result line, a bucket table, a "Not compared" paragraph and one section per bucket. Values are JSON-quoted and table-escaped.
+- New read-only CLI `scripts/compliance/verify-ccrs-copy.ts`:
+  - `--as-of`, the four copy files, `--psql <PGURL>` (or `--sent-file`), `--report` and `--json` (never overwritten);
+  - prints `copy check counts: {…}`;
+  - exit codes: 0 no problems, 1 problems or input refused, 2 bad arguments/files.
+- New generated pg-check `scripts/recon/ccrs-copy-verify-pg-check.sql`, built by `scripts/compliance/copy-verify-pg-check-fixture.ts --write` and registered in `verify-migrations-execute.ts`. Through the real `ccrs_emit_files` / `ccrs_mark_uploaded` / `ccrs_record_outcome`, it builds three weeks of history: Strain, Area, two Products and four lots, one of them rejected; then Updates to 0 and 3; then a Sale. It proves `SENT_READ_SQL` returns exactly the lines the unit tests use, then rolls back.
+- No migration. `mutate_check.py` M298–M327 with `S16_TESTS` in the baseline. Checklist C-145.
+
+**Read-only.** Nothing is written to the database. A difference is reported, never "fixed". What to do about a difference is a person's decision, made with the report in hand.
+
+**Proof.**
+- `tests/compliance/s16-ccrs-copy-verify.test.ts` (93 tests):
+  - every bucket and its boundary (the cutoff microsecond, a rejected later row skipped, last row by stamp and by row number);
+  - every compared field; Product by report id, never by Description; strain and IsMedical case; numbers; dates; copyConflict; a product missing from the copy; the U-68 note;
+  - report escaping and the cut-off limit; parseSentLine refusals; the SQL's structure;
+  - the pg-check equals the generator and is registered; the fixture history judged against constructed copies (all verified; sold down; dropped; too new);
+  - the CLI end to end (exit codes 0/1/2, refusals, never overwrites); purity; no migration.
+- All 30 mutations are killed.
+- Local Postgres, end to end with the real CLI (2026-10-20):
+  - the pg-check history was committed and copy files were written;
+  - CV-L3 at 4 (sold down) → `mismatched` with the U-68 note, exit 1;
+  - CV-L3 at 5 → 7 verified, exit 0;
+  - `--as-of 2026-09-28` → 2 too new;
+  - CV-L1 at 3 → `zeroedNotZero`, exit 1;
+  - an existing report → refused; no `--as-of` → refused;
+  - a hash of `ccrs_files` and `ccrs_file_rows` was identical before and after (read-only). The database was cleaned afterwards.
+
+**Not covered (waits on a real copy).**
+- No real post-upload copy exists yet. `docs/ccrs-bible/evidence/P20261005A/Product__20261006T113333390.csv` is an error echo, not a data copy. U-27b / U-44b / U-45b stay OPEN until the first real G-3 copy is diffed.
+- U-68 (does CCRS change a stored QoH from Sale/Adjustment rows?) is answered by the first G-3 diff: lots with later sales whose QoH differs show it directly.
+- G-2 (the same-day pair for a wave) is S-15 + S-14's job. S-16 is the after-the-fact proof.
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).

@@ -296,7 +296,7 @@ Format to request: the same CSV export the 9/21 delivery used, so the existing l
 | S-17c | S-09 text: SAW → WA.gov (6 strings) + a guardrail test; drop the `portal_login_mode` design | §F |
 | S-15 | Re-seed / diff loader for a post-cutover delivery (G-1) — **DONE in code 2026-10-20** (Part 09 S-15; checklist C-137) | First-production accuracy |
 | S-14 | Equalize waves: Update-to-0 + Reconciliation, same-day pair, TotalCost/QoH/THC repairs, 10k chunks — **DONE in code 2026-10-20** (Part 09 S-14; checklist C-139). Open questions Q-B1/Q-B2/Q-B3/Q-B6/Q-B7 are switches with safe defaults | §E |
-| S-16 | Copy diff verifier (G-2/G-3) | Proof of acceptance |
+| S-16 | Copy diff verifier (G-3) — **DONE in code 2026-10-20** (Part 09 S-16; checklist C-145). Read-only; runs on the first real copy after the initial uploads. G-2 (the wave's same-day pair) is served by S-15 + S-14 | Proof of acceptance |
 
 ---
 
