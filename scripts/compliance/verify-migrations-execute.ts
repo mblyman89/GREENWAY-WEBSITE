@@ -137,6 +137,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/ach-timberland-comms-0277-pg-check.sql", mustPrint: "ACH 0277 CHECK PASSED" },
   { file: "scripts/recon/ofac-screening-0278-pg-check.sql", mustPrint: "ACH 0278 CHECK PASSED" },
   { file: "scripts/recon/ccrs-mail-0282-pg-check.sql", mustPrint: "CCRS 0282 CHECK PASSED" },
+  { file: "scripts/recon/ccrs-reseed-pg-check.sql", mustPrint: "CCRS RESEED CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */

@@ -490,6 +490,21 @@ this stage adds no new work; it is the formal look-back.
   no check has run for 45 minutes. Nothing is recorded for you: the hub's
   "No email after 60 minutes" button stays yours. "Not set up yet" never alerts.
 
+- [ ] **C-137 🤝 After Cultivera's final upload (11/01 per Bible Part 05 D-21): request the fresh CCRS copy (G-1) and merge it** —
+  (Bible Part 09 S-15; Part 17 §G; closes U-30). Ask once CCRS shows that upload
+  accepted, so the copy includes it; the `--as-of` date is the date the examiner
+  says the copy is current through (never guess it). Ask the examiner through the
+  Service Desk for a new data copy for license 413541 (Inventory, Product,
+  Strain, Area). When it arrives: (1) record each file's md5 in Bible Part 13;
+  (2) plan only, nothing is written:
+  `npx tsx scripts/compliance/reseed-ccrs-ledger.ts --as-of <date the copy is current through> --inventory … --product … --strain … --area … --psql "<prod PGURL>" --report reseed-plan.md`;
+  (3) read `reseed-plan.md` in a session — every "review" section is a row that is
+  NOT changed and needs a human look; (4) write the script with the counts line
+  the plan printed: `… --expect '<counts>' [--accept-seed-missing N] --sql-file reseed.sql`;
+  (5) run it with `psql "<prod PGURL>" -v ON_ERROR_STOP=1 -f reseed.sql`. If anything
+  changed since the plan it stops with `CCRS_RESEED_STALE` and writes nothing —
+  re-plan and repeat. A second plan afterwards must show 0 writes.
+
 ---
 
 <a id="stage-10"></a>
