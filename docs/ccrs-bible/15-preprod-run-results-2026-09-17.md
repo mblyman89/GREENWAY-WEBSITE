@@ -240,6 +240,8 @@ belief overturned.
 | **U-20** | Production sends the identical mail without the `PRE` prefix | Inference from the `PRE` marker; unconfirmed until first production upload |
 | **U-21** | An empty Description is permanently acceptable for Usable Cannabis | Accepted on 2026-09-17; the guide's Note `[G L0482-L0483]` suggests LCB may enforce it later |
 
+
+> **2026-10-20 note (S-18a, D-21).** U-20 was answered "yes" by the examiner `[EXAM L0538]`. The exact production subject is still uncaptured (U-65). The owner recalls that failed uploads carry an attachment, which matches U-14. The error email's own subject, body and MIME type were never kept (U-66). The S-18a mailbox monitor stores each CCRS email whole, so the first production confirmation and the first error email will close U-65 and U-66 from the hub.
 ---
 
 ## F. What must NOT be concluded from this run

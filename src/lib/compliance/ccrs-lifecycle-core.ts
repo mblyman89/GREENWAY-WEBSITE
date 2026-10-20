@@ -74,7 +74,7 @@ export type SuccessNotice = {
   submittedAt: string | null;
 };
 
-const SUBMITTED_RE = /Date Submitted:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*([AP]M)/i;
+const SUBMITTED_RE = /Date\s+Submitted:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*([AP]M)/i;
 
 /**
  * Every success notice in a paste (one or many emails), in order, each name

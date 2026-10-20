@@ -52,7 +52,7 @@ describe("USAGE-5 · vercel.json disables automatic deployments off `main`", () 
 
   it("did not disturb the cron list (rule 12 cadences are pinned elsewhere)", () => {
     const crons = cfg.crons ?? [];
-    expect(crons.length).toBe(12); // R19 S13 added /api/cron/lookup-jobs; R46 added /api/cron/content-schedule; R50 A4 added /api/cron/cutover-watch; R41 S0 added /api/cron/ach-approvals-reminder (D-7 daily reminder); R41 S5 added /api/cron/ach-deadline-1pm (1 pm Pacific deadline-day nudge); R41 S9 added /api/cron/ach-funding-8am (8 am Pacific settlement-day funding reminder); R41 S11 added /api/cron/ofac-screening (daily 13:30 UTC OFAC sanctions screen of every payee; never blocks a payment)
+    expect(crons.length).toBe(13); // R19 S13 added /api/cron/lookup-jobs; R46 added /api/cron/content-schedule; R50 A4 added /api/cron/cutover-watch; R41 S0 added /api/cron/ach-approvals-reminder (D-7 daily reminder); R41 S5 added /api/cron/ach-deadline-1pm (1 pm Pacific deadline-day nudge); R41 S9 added /api/cron/ach-funding-8am (8 am Pacific settlement-day funding reminder); R41 S11 added /api/cron/ofac-screening (daily 13:30 UTC OFAC sanctions screen of every payee; never blocks a payment); CCRS S-18a added /api/cron/ccrs-mail (every 5 minutes at :04; reads CCRS's emails from the submitting mailbox, drafts only)
     const byPath = new Map(crons.map((c) => [c.path, c.schedule]));
     expect(byPath.get("/api/cron/leafly-menu-sync")).toBe("*/15 * * * *");
     expect(byPath.get("/api/cron/leafly-ack-sweep")).toBe("*/2 * * * *");

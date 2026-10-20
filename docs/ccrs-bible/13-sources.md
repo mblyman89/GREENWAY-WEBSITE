@@ -121,3 +121,19 @@ So no `[G]` pin moved. Note on the FAQ: the old `[FAQ]` text (183 lines, 2026-09
 **Owner-uploaded run files:** `evidence/P20261007A/files/` holds the 7 CSVs accepted by PREprod on 2026-10-07, plus MANIFEST. Their md5s are in that folder's README.
 
 **Not yet received:** the post-cutover Service Desk copy (Part 17 §G, G-1). When it arrives, add it here with md5 **before** use.
+
+---
+
+## H. 2026-10-20 sources for S-18a (Gmail API, Google sign-in, LCB DNS)
+
+No `[PIN]` tags: these are platform facts that the code depends on, and they are re-checked by reading the page. Each was fetched 2026-10-20.
+
+| Fact used | Source | Where used |
+|---|---|---|
+| `q` "Supports the same query format as the Gmail search box"; `includeSpamTrash` "Include messages from SPAM and TRASH"; `maxResults` default 100, max 500; list returns only `id` and `threadId` | https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list | `buildCcrsQuery`, `listMessageIds` |
+| `internalDate` "the time the message was originally accepted by Google, which is more reliable than the Date header" | https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages | `normalizeGmailMessage` |
+| Quota: messages.list 5; messages.get 20 "(60 when format is full, raw, or html)"; messages.attachments.get 20; 6,000 units per minute per user per project | https://developers.google.com/workspace/gmail/api/reference/quota | `MAX_NEW_PER_TICK`, `MAX_CSV_PER_MESSAGE` (worst tick 4,025 units) |
+| Service-account JWT: `"alg": "RS256"`; claims `iss`, `scope`, `aud` = `https://oauth2.googleapis.com/token`, `exp` "a maximum of 1 hour after the issued time", `iat`; `sub` = the user for delegated access; grant `urn:ietf:params:oauth:grant-type:jwt-bearer`; delegation by a super administrator under Security > Access and data control > API Controls > Domain wide delegation, with the numeric Client ID; "might take up to 24 hours to propagate" | https://developers.google.com/identity/protocols/oauth2/service-account | `serviceAccountJwtParts`, `getGmailAccessToken`, owner setup steps |
+| A refresh token stops working when access is revoked, when it "has not been used for six months", or when "The user changed passwords and the refresh token contains Gmail scopes"; an External app in "Testing" gets a 7-day refresh token | https://developers.google.com/identity/protocols/oauth2 | OAuth mode warning, `.env.example` |
+| `_dmarc.lcb.wa.gov` = `v=DMARC1; p=none; aspf=s; ...` (receivers are asked not to reject forged mail; SPF alignment is strict) | DNS TXT via https://dns.google/resolve, 2026-10-20 | `authVerdict` shown, never blocking (U-67). Google's own `dmarc=` result wins when present. The DKIM/SPF fallback is a relaxed (subdomain) reading, shown only |
+

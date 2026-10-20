@@ -896,6 +896,7 @@ import { __runCcrsLotProductTests } from "../../src/lib/compliance/ccrs-lot-prod
 import { __runCcrsSigninTests } from "../../src/lib/compliance/ccrs-signin-core";
 // CCRS Bible Part 09 S-17d: hand-over plan from the integrator (first upload date).
 import { __runCcrsHandoverTests } from "../../src/lib/compliance/ccrs-handover-core";
+import { __runCcrsMailCoreTests } from "../../src/lib/compliance/ccrs-mail-core";
 import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
 import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
 import { __runExciseSendCoreTests } from "../../src/lib/compliance/excise-send-core";
@@ -1784,6 +1785,7 @@ __runLiquidVolumeTests();
   assertNoFailures("ccrs-lot-product-core", __runCcrsLotProductTests());
   assertNoFailures("ccrs-signin-core", __runCcrsSigninTests());
   assertNoFailures("ccrs-handover-core", __runCcrsHandoverTests());
+  assertRan("ccrs-mail-core", __runCcrsMailCoreTests(), 30);
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();
   __runExciseSendCoreTests();

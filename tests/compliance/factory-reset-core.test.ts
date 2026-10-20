@@ -1322,7 +1322,10 @@ describe("D-65 — the connections survive the reset", () => {
     //       to each product on onboarding; KEEP with media_assets it points at)
     //   +1  R59 / 0280: website_web_vitals (anonymous page-speed measurements;
     //       KEEP like website_click_events)
-    expect(plan.keep.length).toBe(164);
+    //   +1  CCRS S-18a / 0282: ccrs_mail_messages (CCRS's confirmation and
+    //       error emails about files the State already received; the
+    //       database refuses DELETE, so a WIPE rule would fail part-way)
+    expect(plan.keep.length).toBe(165);
     expect(plan.wipe.length).toBe(139);
   });
 

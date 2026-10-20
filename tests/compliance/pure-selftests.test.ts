@@ -51,6 +51,7 @@ import { __runCcrsIssueDisplayTests } from "@/lib/compliance/ccrs-issue-display-
 import { __runCcrsLotProductTests } from "@/lib/compliance/ccrs-lot-product-core";
 import { __runCcrsSigninTests } from "@/lib/compliance/ccrs-signin-core";
 import { __runCcrsHandoverTests } from "@/lib/compliance/ccrs-handover-core";
+import { __runCcrsMailCoreTests } from "@/lib/compliance/ccrs-mail-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
@@ -257,6 +258,11 @@ describe("embedded pure self-test suites", () => {
   });
   it("ccrs-handover-core (Part 09 S-17d: first upload date and hand-over warnings)", () => {
     const r = __runCcrsHandoverTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(30);
+  });
+  it("ccrs-mail-core (Part 09 S-18a: CCRS mailbox monitor, classify and prove)", () => {
+    const r = __runCcrsMailCoreTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(30);
   });

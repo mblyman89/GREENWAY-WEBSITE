@@ -66,6 +66,15 @@ import { planHandover } from "@/lib/compliance/ccrs-handover-core";
 import { HandoverPlanCard } from "@/components/admin/compliance/HandoverPlanCard";
 import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obligation-waiver-core";
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
+import { CcrsMailPanel, type CcrsMailPanelRow } from "@/components/admin/compliance/CcrsMailPanel";
+import { listRecentCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
+import {
+  applyCcrsErrorMailAction,
+  applyCcrsSuccessMailAction,
+  dismissCcrsMailAction,
+  pollCcrsMailNowAction,
+} from "./mail-actions";
 import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
 import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
 import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
@@ -237,6 +246,12 @@ export default async function CcrsCommandCenterPage({
   const ccrsFiles = isSupabaseServiceConfigured
     ? await listCcrsFiles(createSupabaseAdminClient(), env)
     : { available: false, files: [], issues: [], error: null };
+  // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
+  const ccrsMail = await listRecentCcrsMail(25);
+  const mailCfg = mailConfigFromEnv(process.env);
+  const mailSetup = mailCfg.configured
+    ? { configured: true as const, mode: mailCfg.mode, mailbox: mailCfg.mailbox }
+    : { configured: false as const, mailbox: mailCfg.mailbox, missing: mailCfg.missing, problem: mailCfg.problem };
   // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
   const migrationGarbage = isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null;
 
@@ -592,6 +607,30 @@ export default async function CcrsCommandCenterPage({
           portalUrl={ccrsPortalUrl(env)}
         />
       ) : null}
+
+      {/* S-18a: CCRS's answers, read from the submitting mailbox */}
+      <Section
+        title="CCRS email: confirmations and error files"
+        subtitle="Read from the mailbox that uploads the files. Nothing is recorded until you press Apply; the server re-checks every row first."
+      >
+        <CcrsMailPanel
+          available={ccrsMail.available}
+          loadError={ccrsMail.error}
+          setup={mailSetup}
+          heartbeat={ccrsMail.heartbeat}
+          rows={ccrsMail.rows as unknown as CcrsMailPanelRow[]}
+          uploadedFiles={ccrsFiles.files.filter((f) => f.state === "uploaded")}
+          canEdit={canEdit}
+          weekKey={week.key}
+          nowISO={new Date().toISOString()}
+          actions={{
+            poll: pollCcrsMailNowAction,
+            applySuccess: applyCcrsSuccessMailAction,
+            applyError: applyCcrsErrorMailAction,
+            dismiss: dismissCcrsMailAction,
+          }}
+        />
+      </Section>
 
       {/* S-12c: every emitted file, its state, and what to do next */}
       {batch ? (
