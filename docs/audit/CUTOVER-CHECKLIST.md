@@ -515,6 +515,24 @@ this stage adds no new work; it is the formal look-back.
   Never commit them to this public repo (`.gitignore` blocks the exact names).
   After any re-send, record the new SHA-256 in Part 18 §A.
 
+- [ ] **C-139 🤝 Equalize waves: zero the stale Cultivera lots, one wave at a time (Bible Part 09 S-14; Part 17 §E)** —
+  Only after C-137 (the fresh copy is merged by S-15) and after the first clean
+  production week. Each wave needs a **same-day pair**: a fresh copy from the
+  examiner and our own full count taken on or after the copy's date (never
+  older). (1) Plan only, nothing is written:
+  `npx tsx scripts/compliance/equalize-ccrs-wave.ts --phase inventory --wave W1 --wave-date <day you will emit> --copy-as-of <copy date> --snapshot-date <count date> --inventory … --product … --strain … --area … --psql "<prod PGURL>" --report w1-plan.md`;
+  (2) read `w1-plan.md` in a session — every held lot has its reason, and our own
+  lots are never in a wave; (3) ON the wave day (Pacific), emit with the counts
+  line the plan printed: `… --emit --expect '<wave counts>'` — the file appears in
+  the hub's CCRS files list; (4) upload the files one at a time, each after the
+  previous success email, and record each answer in the hub; (5) when every wave
+  file is answered, plan the Reconciliation adjustments:
+  `npx tsx scripts/compliance/equalize-ccrs-wave.ts --phase adjustments --wave W1 --wave-date <wave day> --adjust-date <today> --psql "<prod PGURL>" --report w1-adjust.md`,
+  then on that same day `… --emit --expect '<adjust counts>'`, upload, record.
+  Next wave: W2, W3 … (a used label is refused). Switches wait on Brian's answers:
+  `--same-batch` (Q-B1), `--nominal-cost` (Q-B3), `--strain-override` (Q-B6),
+  `--max-lots` (Q-B7). Never set one without his written answer in Part 17 §H.
+
 ---
 
 <a id="stage-10"></a>

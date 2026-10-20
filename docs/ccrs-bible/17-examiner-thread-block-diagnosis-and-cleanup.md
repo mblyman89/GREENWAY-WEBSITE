@@ -295,7 +295,7 @@ Format to request: the same CSV export the 9/21 delivery used, so the existing l
 | S-17b | Fix the orphan-warning comparison (C.4 item 1) and split its wording | Honest warnings |
 | S-17c | S-09 text: SAW → WA.gov (6 strings) + a guardrail test; drop the `portal_login_mode` design | §F |
 | S-15 | Re-seed / diff loader for a post-cutover delivery (G-1) — **DONE in code 2026-10-20** (Part 09 S-15; checklist C-137) | First-production accuracy |
-| S-14 | Equalize waves: Update-to-0 + Reconciliation, same-day pair, TotalCost/QoH/THC repairs, 10k chunks | §E |
+| S-14 | Equalize waves: Update-to-0 + Reconciliation, same-day pair, TotalCost/QoH/THC repairs, 10k chunks — **DONE in code 2026-10-20** (Part 09 S-14; checklist C-139). Open questions Q-B1/Q-B2/Q-B3/Q-B6/Q-B7 are switches with safe defaults | §E |
 | S-16 | Copy diff verifier (G-2/G-3) | Proof of acceptance |
 
 ---

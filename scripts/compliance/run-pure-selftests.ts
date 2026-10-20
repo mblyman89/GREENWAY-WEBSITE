@@ -900,6 +900,7 @@ import { __runCcrsMailCoreTests } from "../../src/lib/compliance/ccrs-mail-core"
 import { __runCcrsStrategyCoreTests } from "../../src/lib/compliance/ccrs-strategy-core";
 import { __runCcrsWatchdogCoreTests } from "../../src/lib/compliance/ccrs-watchdog-core";
 import { __runCcrsReseedCoreTests } from "../../src/lib/compliance/ccrs-reseed-core";
+import { __runCcrsEqualizeCoreTests } from "../../src/lib/compliance/ccrs-equalize-core";
 import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
 import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
 import { __runExciseSendCoreTests } from "../../src/lib/compliance/excise-send-core";
@@ -1792,6 +1793,7 @@ __runLiquidVolumeTests();
   assertRan("ccrs-strategy-core", __runCcrsStrategyCoreTests(), 18);
   assertRan("ccrs-watchdog-core", __runCcrsWatchdogCoreTests(), 21);
   assertRan("ccrs-reseed-core", __runCcrsReseedCoreTests(), 12);
+  assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 15);
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();
   __runExciseSendCoreTests();

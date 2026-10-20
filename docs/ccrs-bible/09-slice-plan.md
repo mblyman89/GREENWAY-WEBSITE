@@ -717,6 +717,75 @@ All 24 mutations are killed.
 
 ---
 
+## S-14 — Equalize waves: stale lots zeroed by Update, then Reconciliation (Part 17 §E; X-11) (DONE in code, 2026-10-20)
+
+**Why.** CCRS holds about 44,746 open lots for 413541 `[EXAM L0203]`, and about 40,662 of them are not in our back office `[EXAM L0204]`. They are Cultivera history. The examiner gave the method: "submit an inventory update for all those ids and get them to zero and then an inventory adjustment for those ids, with the reason as reconciliation" `[EXAM L0430]`. The rows must use the ids already filed (Update, never Insert) `[EXAM L0096]`, and every other value must stay accurate `[EXAM L0473]`. A wave is one bounded, reviewed set of these lots.
+
+**What changed.**
+- New `src/lib/compliance/ccrs-equalize-core.ts` (pure, self-test registered, floor 15):
+  - `planEqualizeWave(input, policy)` reads the same-day pair: the LCB copy (Inventory / Product / Strain / Area, parsed by the S-12 reader), the ledger (`LEDGER_READ_SQL`), and our own lots (`OURS_READ_SQL`: lot code, product key, assigned CCRS id, status).
+    - It refuses the whole wave if the snapshot is older than the copy (D-14 item 2), if a date, the wave label (`W1`…) or a policy value is bad, if no Sales Floor Area is on file, or if an id is duplicated in the ledger or in our lots.
+    - Lots at QoH 0 in the copy are counted and never sent (the Q-B2 default).
+    - A lot in our own system is never zeroed. It is matched by assigned id, by lot code, or by product key, in exact bytes.
+    - Every other lot either joins the wave or is held under one of 21 named reasons (`EQUALIZE_HOLD_CODES`, in a fixed order so `--expect` is stable). Each reason has a plain-English meaning in `EQUALIZE_HOLD_MEANING`. The ledger must hold the lot as seeded, untouched by any of our files, and merged with this same copy, which is why S-15 runs first.
+    - Values are written exactly as filed. The product name comes from the Product ledger by the lot's Product Identifier `[G L0579]`. The strain is written in its filed casing, and a strain CCRS does not hold is held `[G L0555]`. TotalCost 0 is held `[G L0614]`, and so is a reserved strain `[G L0358]`.
+    - Eligible lots are taken in exact byte order up to `maxLots` (default 10,000). The rest wait for the next wave.
+  - Rows use the PREprod-accepted P20261007A Inventory Update shape, tested column for column against `docs/ccrs-bible/evidence/P20261007A/files/Inventory_413541_20261006222853.csv`. The file name day and SubmittedDate are the wave day.
+  - Two modes (Q-B1):
+    - **separate** (default): the wave emits the Inventory file only;
+    - **same-batch** (only if Brian says yes): Inventory and Reconciliation adjustments in one emission. The ledger self-check orders them in the existing groups.
+  - Adjustment phase (separate mode): `ADJUST_PHASE_SQL` reads, from the database only, the wave's Inventory rows and what CCRS answered. `planAdjustPhase` writes a Reconciliation only for a lot whose wave Update landed (the row landed, the lot is closed, and nothing touched it later). Anything not proven is held under `A_FILE_UNANSWERED`, `A_ROW_NOT_LANDED`, `A_NOT_CLOSED`, `A_TOUCHED_LATER` or `A_NO_QUANTITY`. The adjustment id is `EQ-<wave>-<lot>` (≤100, `[G L0219-L0225]`). The reason is `Reconciliation` with a short audit detail `[G L1097-L1103]`. The quantity is the filed QoH removed, never negative `[G L1119]`.
+  - `verifyEqualizeFiles` runs the standard outbox ledger self-check. It relaxes exactly one finding: an adjustment on a lot that is closed AND in this wave (0249 `ccrs_mark_uploaded` accepts that, `[G L1077-L1085]`).
+  - `equalizeEmitStatements` builds ONE transaction:
+    1. refuse if the wave label already has files (`CCRS_EQUALIZE_WAVE_USED`);
+    2. `ccrs_emit_files('prod', …)` with purpose `cleanup:stale`;
+    3. refuse anything not newly emitted (`CCRS_EQUALIZE_NOT_NEW`);
+    4. write the wave label on the new `ccrs_files` rows;
+    5. list them.
+- New CLI `scripts/compliance/equalize-ccrs-wave.ts`:
+  - `--phase inventory|adjustments` is plan only by default and writes a markdown review (`--report`, never overwrites) plus optional review files (`--out`);
+  - `--emit` needs `--psql` and `--expect '<counts printed by the plan>'`, and runs only on the wave day (adjust day for phase 2) in Pacific time. The file name is stamped in Pacific `[FAQ L0075]` and must match SubmittedDate;
+  - the switches waiting on Brian: `--same-batch` (Q-B1), `--nominal-cost 0.01` (Q-B3), `--strain-override <filed strain>` (Q-B6), `--max-lots N` (Q-B7). There is no switch for Delete (Q-B8: never written).
+  - Exit codes: 0 ok, 1 refused, 2 bad arguments or files.
+- New generated pg-check `scripts/recon/ccrs-equalize-pg-check.sql`, built by `scripts/compliance/equalize-pg-check-fixture.ts --write` and registered in `verify-migrations-execute.ts`. On real Postgres it proves:
+  - the exact emit statements store the wave file with purpose `cleanup:stale` and label W1;
+  - a second emit of the label is refused;
+  - an error-rows answer closes only the landed lots;
+  - `ADJUST_PHASE_SQL` returns exactly the expected lines;
+  - the adjustment file is accepted by `ccrs_mark_uploaded` with no override;
+  - then it rolls back.
+- No migration (the wave column is not immutable in 0247). `mutate_check.py` M270–M297 with `S14_TESTS` in the baseline. Checklist C-139.
+
+**Drafts-only.** Nothing runs on its own. The owner reads the plan, then emits on the wave day. The hub hands out the stored files, and they are uploaded one at a time after each success email (X-31).
+
+**Proof.**
+- `tests/compliance/s14-ccrs-equalize.test.ts` (45 tests):
+  - every hold and its boundary; byte order; maxLots;
+  - the exact P20261007A row shape;
+  - refusals; both modes passing the format verifier and the ledger self-check; 10,001 lots → 2 chunks;
+  - the emit SQL;
+  - the adjustment phase from proof only;
+  - the pg-check equals the generator and is registered for CI;
+  - the CLI end to end (report, refusals, `--expect`, the switches, exit codes, Pacific wave day);
+  - purity, and no migration.
+- All 28 mutations are killed.
+- Local Postgres, end to end with the CLI (2026-10-20): 29 copy lots and 1 of ours.
+  - The plan gave a wave of 10, 15 for the next wave, 1 zero-cost hold, 1 reserved-strain hold, 1 of ours never touched, and 1 already zero.
+  - A wrong `--expect` was refused.
+  - `--emit` stored `Inventory_413541_20261020025437.csv` (cleanup:stale, W1, 10 rows).
+  - A re-emit was refused.
+  - Marked uploaded, then success: all 10 lots closed by Update.
+  - The adjustment phase planned 10 lines (sum 55) and emitted `InventoryAdjustment_413541_20261020025615.csv`.
+  - `ccrs_mark_uploaded` accepted it with no override, and success closed it.
+  - A second adjustment emit was refused. The database was cleaned afterwards.
+
+**Not covered (waits on Brian or on the real copy).**
+- Q-B1 / U-55 (same batch or a later week), Q-B2 / U-56 (adjust lots already at 0?), Q-B3 / U-57 (what cost to write where CCRS shows 0.00), Q-B6 / U-58 (which strain for THC/Other/Unknown), Q-B7 (per-day ceiling). Each is a switch with the safe default. Changing a default is a one-line policy change plus its tests.
+- QoH > Initial lots (77, `[EXAM L0235]`) resolve themselves when zeroed (0 ≤ Initial). Lots we keep are our weekly files' job.
+- No real wave has run. The first one needs the G-1/G-2 copy merged by S-15 and a same-day count.
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
