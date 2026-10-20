@@ -650,6 +650,73 @@ All 24 mutations are killed.
 
 ---
 
+## S-15 — Re-seed / diff loader for a later LCB delivery (G-1; U-30) (DONE in code, 2026-10-20)
+
+**Why.** The ledger decides Insert or Update for every row we send. It was seeded from the LCB delivery current through 2026-09-18 (U-30), and Cultivera kept filing until the cutover. The examiner confirmed the delivery holds only "what data was reported up to the date I pulled" `[EXAM L0476]`. A lot Cultivera created after 9/18 is missing from the ledger, so we would Insert it and CCRS would refuse a duplicate. The seed script cannot load a second delivery: it is idempotent and refuses a second finalize (Part 17 §G). G-1 needs a reviewed merge, and a fresh copy can be OLDER than our own filings, so it must never overwrite what our files recorded.
+
+**What changed.**
+- New `src/lib/compliance/ccrs-reseed-core.ts` (pure, self-test registered, floor 12):
+  - `reseedSource(asOf)` → `seed:<asOf>-delivery`. The date must be real and after 2026-09-18, and the tag matches 0248's source regex;
+  - `LEDGER_READ_SQL` reads prod Inventory/Product/Strain/Area with each row's last file, its `uploaded_at`, and the guard `updated_at` in integer epoch microseconds (does not depend on DateStyle);
+  - `planReseed(copy, ledger, asOf)` sorts every row into a bucket.
+    - **Written:**
+      - **add** — an id the ledger lacks. The seed's state rules apply (QoH 0 → closed; Product "1" → unknown);
+      - **refresh** — a `seed`/`closed` row with a `seed:*` source that no file has touched, where the copy differs;
+      - **settleLink** — an untouched 0248 linker `unknown` lot that the copy now holds;
+      - **settleUncertain** — an `uncertain` row whose file was uploaded strictly before 00:00 UTC of the as-of day, that is not a Delete and that the copy holds as a real record. It becomes `confirmed`, or `closed` for a QoH-0 lot.
+    - **Only reported:**
+      - uncertain rows that are absent or not proven (a Delete, junk, uploaded on/after the as-of day, no upload time);
+      - our filings that disagree with the copy (`filed`/`confirmed`, or any row a file touched; ours wins);
+      - ledger Deleted but still in the copy (never revived);
+      - seed rows missing from the copy;
+      - our rows missing from the copy;
+  - `applyRefusal`: seed rows missing from the copy block writing unless `--accept-seed-missing` gives the EXACT count;
+  - `reseedApplyStatements` builds ONE transaction:
+    1. the `hashtext('ccrs_seed_finalize')` advisory lock;
+    2. a not-seeded refusal;
+    3. a temp stage table;
+    4. adds `on conflict do nothing` plus a count assert;
+    5. updates guarded by the planned `state` AND `updated_at` µs, plus a count assert. Either assert failing raises `CCRS_RESEED_STALE` and the whole transaction rolls back;
+    6. `ccrs_link_unfiled_migration_lots(true)`, which keeps the 0248 invariant;
+    7. 4 provenance `ccrs_files` rows (purpose seed, closed, the delivery's sha256 and row counts).
+- New CLI `scripts/compliance/reseed-ccrs-ledger.ts`:
+  - plan only by default;
+  - `--report` writes a markdown review (refuses to overwrite);
+  - writing (`--sql-file` or `--apply`) needs `--expect '<copy counts>'` equal to what was read;
+  - the delivery is parsed by the S-12 seed reader (exact headers, prod only).
+- New generated pg-check `scripts/recon/ccrs-reseed-pg-check.sql`, built by `scripts/compliance/reseed-pg-check-fixture.ts --write` and registered in `verify-migrations-execute.ts`, so CI's migrations job runs it on real Postgres 15. It proves on a fixture:
+  - the unseeded refusal;
+  - a stale refusal (a row moved after planning; nothing written);
+  - an added-race refusal;
+  - every outcome of a full apply;
+  - a re-run refusing as stale;
+  - then it rolls back.
+- No migration: the merge is plain SQL under existing grants. `ccrs_filed_entities` has no guard trigger.
+- Checklist C-137. `mutate_check.py` M248–M269 with `S15_TESTS` in the baseline.
+
+**Drafts-only.** Nothing runs on its own. The owner reviews the report, then runs the one-transaction script. A row our pipeline filed is never overwritten.
+
+**Proof.**
+- `tests/compliance/s15-ccrs-reseed.test.ts` (50 tests):
+  - every bucket and its boundaries; exact ids; refusals and gates;
+  - idempotency: a second plan after the apply plans nothing;
+  - the SQL structure, quoting and batching;
+  - the pg-check equals the generator byte for byte, and is registered for CI;
+  - routing after the merge (adds route as Update);
+  - the report and its escaping;
+  - the CLI end to end on a saved ledger file;
+  - purity, and that no migration was added.
+- All 22 mutations are killed.
+- Local Postgres:
+  - the CLI plan, refusal, `--apply`, a re-plan with 0 writes, and a `--sql-file` race (stale, nothing written);
+  - a 70k-lot / 65k-product scale run: plan 2 s, apply 6 s.
+
+**Not covered.**
+- Whether a copy lists Deleted records is not verified, so an uncertain Delete is never settled from a copy (it is reported).
+- The real G-1 delivery does not exist yet (U-30 stays OPEN until it is received, measured, md5 recorded in Part 13 and applied).
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).

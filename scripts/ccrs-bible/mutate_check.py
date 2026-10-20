@@ -113,6 +113,9 @@ S18B_TESTS = "tests/compliance/s18b-ccrs-error-strategy.test.ts"
 WDCORE = "src/lib/compliance/ccrs-watchdog-core.ts"
 WDSTORE = "src/lib/compliance/ccrs-watchdog.ts"
 S18C_TESTS = "tests/compliance/s18c-ccrs-watchdog.test.ts"
+RSCORE = "src/lib/compliance/ccrs-reseed-core.ts"
+RSCLI = "scripts/compliance/reseed-ccrs-ledger.ts"
+S15_TESTS = "tests/compliance/s15-ccrs-reseed.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -1979,6 +1982,182 @@ MUTATIONS = [
         S18C_TESTS,
         'The daily cron checks for a dead 5-minute cron.',
     ),
+    (
+        'M248-s15-refresh-touched-rows',
+        RSCORE,
+        '(l.state === "seed" || l.state === "closed") && untouched && l.source.startsWith("seed:")',
+        '(l.state === "seed" || l.state === "closed") && l.source.startsWith("seed:")',
+        S15_TESTS,
+        'A seed row one of our files touched must never be overwritten by the copy.',
+    ),
+    (
+        'M249-s15-refresh-any-source',
+        RSCORE,
+        '(l.state === "seed" || l.state === "closed") && untouched && l.source.startsWith("seed:")',
+        '(l.state === "seed" || l.state === "closed") && untouched',
+        S15_TESTS,
+        'Only rows a seed wrote are refreshed.',
+    ),
+    (
+        'M250-s15-refresh-filed',
+        RSCORE,
+        'if ((l.state === "seed" || l.state === "closed") && untouched',
+        'if ((l.state === "seed" || l.state === "closed" || l.state === "filed") && untouched',
+        S15_TESTS,
+        'A filed row is ours, never refreshed.',
+    ),
+    (
+        'M251-s15-unchanged-written',
+        RSCORE,
+        'if (!differs) { unchanged += 1; continue; }',
+        'if (!differs && false) { unchanged += 1; continue; }',
+        S15_TESTS,
+        'An identical row is not rewritten (idempotent re-run).',
+    ),
+    (
+        'M252-s15-payload-ignored',
+        RSCORE,
+        '|| !samePayload(l.payload, c.seedPayload);',
+        ';',
+        S15_TESTS,
+        'A details-only change still refreshes the stored payload.',
+    ),
+    (
+        'M253-s15-link-touched',
+        RSCORE,
+        'if (l.state === "unknown" && untouched && l.source === LINK_SOURCE)',
+        'if (l.state === "unknown" && l.source === LINK_SOURCE)',
+        S15_TESTS,
+        'A linker row a file touched is not settled by the copy.',
+    ),
+    (
+        'M254-s15-link-junk-settles',
+        RSCORE,
+        'if (c.state === "unknown") { linkStillUnfiled += 1; continue; }',
+        '',
+        S15_TESTS,
+        'A migration lot the copy holds only as junk stays held.',
+    ),
+    (
+        'M255-s15-uncertain-boundary',
+        RSCORE,
+        '} else if (!Number.isFinite(up) || up >= asOfMs) {',
+        '} else if (!Number.isFinite(up) || up > asOfMs) {',
+        S15_TESTS,
+        "A file uploaded on the copy's day is not proven by it.",
+    ),
+    (
+        'M256-s15-uncertain-no-time',
+        RSCORE,
+        '} else if (!Number.isFinite(up) || up >= asOfMs) {',
+        '} else if (up >= asOfMs) {',
+        S15_TESTS,
+        'No upload time means not proven.',
+    ),
+    (
+        'M257-s15-uncertain-delete',
+        RSCORE,
+        'if (l.lastOp === "Delete") {',
+        'if (l.lastOp === "Delete-x") {',
+        S15_TESTS,
+        'An uncertain Delete is never settled as present.',
+    ),
+    (
+        'M258-s15-settle-closed',
+        RSCORE,
+        'const state: LedgerState = c.fileType === "Inventory" && c.state === "closed" ? "closed" : "confirmed";',
+        'const state: LedgerState = "confirmed";',
+        S15_TESTS,
+        'A settled lot at QoH 0 is closed.',
+    ),
+    (
+        'M259-s15-deleted-revived',
+        RSCORE,
+        'review.deletedPresent.push({ t: c.fileType, id: c.externalId, ledgerState: l.state, why: "the ledger says Deleted, the copy still holds it" });\n      continue;',
+        'writes.push({ ...base, op: "refresh", state: c.state, ...guard, why: "x" });\n      continue;',
+        S15_TESTS,
+        'A Deleted id is never re-used.',
+    ),
+    (
+        'M260-s15-seedmissing-touched',
+        RSCORE,
+        'else if (l.lastFile === null && l.source.startsWith("seed:")) review.seedMissing',
+        'else if (l.source.startsWith("seed:")) review.seedMissing',
+        S15_TESTS,
+        'A seed row our file touched counts as ours when missing.',
+    ),
+    (
+        'M261-s15-gate-loose',
+        RSCORE,
+        'if (acceptSeedMissing === m) return null;',
+        'if (acceptSeedMissing !== null && acceptSeedMissing >= m) return null;',
+        S15_TESTS,
+        'Seed rows missing are accepted only by EXACT count.',
+    ),
+    (
+        'M262-s15-guard-state',
+        RSCORE,
+        'and e.state = s.expect_state and (extract',
+        'and (extract',
+        S15_TESTS,
+        "The apply refuses when a row's state moved.",
+    ),
+    (
+        'M263-s15-guard-time',
+        RSCORE,
+        'and e.state = s.expect_state and (extract(epoch from e.updated_at) * 1000000)::bigint = s.expect_us;',
+        'and e.state = s.expect_state;',
+        S15_TESTS,
+        'The apply refuses when a row changed since the plan.',
+    ),
+    (
+        'M264-s15-add-count',
+        RSCORE,
+        'if v_add <> ${c.add} then',
+        'if v_add > ${c.add} then',
+        S15_TESTS,
+        'An add that lost a race stops the whole apply.',
+    ),
+    (
+        'M265-s15-no-link',
+        RSCORE,
+        '  perform public.ccrs_link_unfiled_migration_lots(true);\n',
+        '',
+        S15_TESTS,
+        'The 0248 invariant: unfiled import lots stay held.',
+    ),
+    (
+        'M266-s15-cli-no-expect',
+        RSCLI,
+        '    if (!expected) {',
+        '    if (false) {',
+        S15_TESTS,
+        'Writing needs --expect.',
+    ),
+    (
+        'M267-s15-cli-no-gate',
+        RSCLI,
+        '    if (gate) { console.error(`REFUSED: ${gate}`); return 1; }',
+        '',
+        S15_TESTS,
+        'The seed-missing gate is enforced by the script.',
+    ),
+    (
+        'M268-s15-asof-first',
+        RSCORE,
+        'if (asOf <= FIRST_SEED_AS_OF)',
+        'if (asOf < FIRST_SEED_AS_OF)',
+        S15_TESTS,
+        "The first delivery's date is not a re-seed.",
+    ),
+    (
+        'M269-s15-unseeded',
+        RSCORE,
+        'if (!ledger.some((r) => r.source.startsWith("seed:"))) throw',
+        'if (false) throw',
+        S15_TESTS,
+        'An unseeded ledger is refused.',
+    ),
 ]
 
 
@@ -2030,6 +2209,7 @@ def main() -> int:
         S18A_TESTS,
         S18B_TESTS,
         S18C_TESTS,
+        S15_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)
