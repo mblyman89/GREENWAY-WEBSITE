@@ -342,7 +342,7 @@ done small:
 1. Ring a handful of real (or one-cent test-day) sales.
 2. Back office → generate the CCRS Sale CSV for that date range. The
    export hard-gate blocks malformed files before you can download.
-3. Log into CCRS with your SAW account, upload the file with a clear name.
+3. Log into CCRS with your WA.gov account, upload the file with a clear name.
 4. Check the **Processing Status (PST)** for that filename; if rows
    reject, fix and re-upload. That round-trip — export → upload → PST
    clean — is a complete, valid test.

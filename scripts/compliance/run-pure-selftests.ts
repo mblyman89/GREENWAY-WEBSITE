@@ -893,6 +893,7 @@ import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-g
 // CCRS Bible Part 17 S-17a: withhold-reason classes, next steps, uncapped row text.
 import { __runCcrsIssueDisplayTests } from "../../src/lib/compliance/ccrs-issue-display-core";
 import { __runCcrsLotProductTests } from "../../src/lib/compliance/ccrs-lot-product-core";
+import { __runCcrsSigninTests } from "../../src/lib/compliance/ccrs-signin-core";
 import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
 import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
 import { __runExciseSendCoreTests } from "../../src/lib/compliance/excise-send-core";
@@ -1779,6 +1780,7 @@ __runLiquidVolumeTests();
   assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());
   assertNoFailures("ccrs-issue-display-core", __runCcrsIssueDisplayTests());
   assertNoFailures("ccrs-lot-product-core", __runCcrsLotProductTests());
+  assertNoFailures("ccrs-signin-core", __runCcrsSigninTests());
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();
   __runExciseSendCoreTests();

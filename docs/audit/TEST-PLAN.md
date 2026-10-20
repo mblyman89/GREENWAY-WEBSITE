@@ -1223,7 +1223,7 @@ the banner is missing while test mode is on, that itself is a bug.*
 
 #### T-136 — The real CCRS round-trip (after GW-010 is fixed)
 - **Do:** exactly per `OWNER-TASKLIST.md` §7: ring a handful of tiny real
-  sales → generate the Sale CSV → log into CCRS with your SAW account →
+  sales → generate the Sale CSV → log into CCRS with your WA.gov account →
   upload with a clear filename → watch the Processing Status (PST) for
   that file.
 - **Expect:** the file processes clean. If rows reject, save the PST

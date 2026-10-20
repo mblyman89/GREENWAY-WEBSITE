@@ -15,7 +15,7 @@
 ### 1.1 What CCRS is
 - LCB's traceability system since Dec 2021 (replaced Leaf Data Systems).
 - **CSV upload only — there is NO API.** Files are uploaded through the CCRS portal
-  (cannabisreporting.lcb.wa.gov) via SAW login, or by a vetted third-party integrator.
+  (cannabisreporting.lcb.wa.gov) via WA.gov login (SAW was replaced on 2026-10-12), or by a vetted third-party integrator.
 - **Weekly reporting**: reporting week = Sunday–Saturday, files due by the following Sunday.
 - Retailers submit up to **7 file types**: `Area`, `Strain`, `Product`, `Inventory`,
   `InventoryAdjustment`, `InventoryTransfer`, `Sale`. Area only when rooms change.

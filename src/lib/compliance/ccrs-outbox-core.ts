@@ -37,6 +37,7 @@ import {
 import { CCRS_CHUNK_ROWS, allocateStampBase, chunkStampInstant, compareChunkPlacement, splitAssembledFile } from "./ccrs-chunk-core";
 import { controlTotalsFromCsv, type CcrsControlTotals } from "./ccrs-control-totals-core";
 import { ledgerEntry, type LedgerFileType, type LedgerState, type LedgerView } from "./ccrs-ledger-core";
+import { ccrsLoginPhrase, envOfPortalUrl } from "./ccrs-signin-core";
 
 /* ------------------------------------------------------------------ *
  * 1. Chunk + stamp
@@ -358,9 +359,12 @@ export function outboxReadmeLines(
   if (names.length !== files.length) throw new Error("outbox: README names do not match the files");
   // S-12c: a PREprod zip names the PREprod portal (ccrsPortalUrl(env)); the
   // default stays production so every existing caller is unchanged.
-  const pre = portalUrl.includes("precannabisreporting");
+  // S-17c: CCRS signs in with WA.gov since 2026-10-12 [BUL1006 L0010], and
+  // PREprod needs its own WA.gov account [SIGNIN L0035-L0036].
+  const env = envOfPortalUrl(portalUrl);
+  const pre = env === "preprod";
   const out = [
-    `Upload these files at ${portalUrl} (SAW login)${pre ? " - PREPROD TEST SITE, not production" : ""}, ONE AT A TIME, in this order:`,
+    `Upload these files at ${portalUrl} (${ccrsLoginPhrase(env)})${pre ? " - PREPROD TEST SITE, not production" : ""}, ONE AT A TIME, in this order:`,
   ];
   let group = 0;
   files.forEach((f, i) => {

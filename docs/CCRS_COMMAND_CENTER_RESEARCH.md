@@ -19,8 +19,9 @@
 
 - CCRS = **Cannabis Central Reporting System**, the WSLCB traceability system.
 - Submission is **manual CSV upload only** at `https://cannabisreporting.lcb.wa.gov/`,
-  authenticated through **SecureAccess Washington (SAW)** (transitioning to WA.gov
-  login by **October 2026**).
+  authenticated through **WA.gov** since Oct. 12, 2026 (it used SecureAccess
+  Washington (SAW) until 2026-10-12; CCRS Bible Part 11 §F/§G). Pre-Production and
+  live need separate WA.gov accounts.
 - **There is NO API.** No programmatic submission exists for licensees or integrators.
   The best a back office can do is: generate perfect CSVs, validate them, hand-hold the
   human through the manual upload, and track/verify completion.
@@ -201,7 +202,7 @@ InventoryTransfer.
 4. If unresolvable: email **examiner@lcb.wa.gov** attaching the CSV **and forwarding
    the CCRS error email**. The command center should generate this email as a DRAFT
    (mailto/EML) that the owner reviews and sends — never auto-send (drafts-only rule).
-5. Contacts: servicedesk@lcb.wa.gov / 360-664-1776 (technical/SAW),
+5. Contacts: servicedesk@lcb.wa.gov / 360-664-1776 (CCRS technical; WA.gov account problems go to WaTech, https://wa.gov/get-help),
    examiner@lcb.wa.gov (traceability data), cannabistaxes@lcb.wa.gov / 360-664-1789
    (LIQ-1295/tax), cannabisenf@lcb.wa.gov (enforcement/compliance),
    cannabisendorsement@lcb.wa.gov (medical endorsement).

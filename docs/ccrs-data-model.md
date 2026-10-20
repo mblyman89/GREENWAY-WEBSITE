@@ -5,11 +5,11 @@
 > Sources:
 > - CCRS Resources: https://lcb.wa.gov/ccrs/resources
 > - CCRS Integrators: https://lcb.wa.gov/ccrs/integrators
-> - Upload portal: https://cannabisreporting.lcb.wa.gov/ (SAW-authenticated)
+> - Upload portal: https://cannabisreporting.lcb.wa.gov/ (WA.gov login since 2026-10-12; SAW was replaced)
 > Do NOT add/remove columns from the templates. The licensee remains responsible for content.
 
 ## How CCRS submission works (verified)
-- Licensees upload **.CSV files** into CCRS (SAW login), OR assign an **approved integrator**
+- Licensees upload **.CSV files** into CCRS (WA.gov login), OR assign an **approved integrator**
   to upload on their behalf. Cultivera and other POS vendors are on the approved-integrator
   list; the integrator receives **system-generated access credentials** from the LCB after
   approval (LIQ-1455 application → examiner@lcb.wa.gov).

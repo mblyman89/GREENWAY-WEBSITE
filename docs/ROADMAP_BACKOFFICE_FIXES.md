@@ -2019,7 +2019,7 @@ upload deadlines."
 
 Research first (standing rule): `docs/CCRS_COMMAND_CENTER_RESEARCH.md` — an
 AI-readable report covering what CCRS is (manual CSV upload only, NO API;
-SAW login, WA.gov cutover ~Oct 2026), the weekly cadence (Sun–Sat week due
+login then SAW, replaced by WA.gov on 2026-10-12), the weekly cadence (Sun–Sat week due
 the FOLLOWING SUNDAY per the LCB FAQ), the monthly LIQ-1295 (due the 20th,
 even with no sales, 2% late penalty), all seven retailer file specs with
 enums/limits/error messages, the dependency upload order (Group 1 → 10 min →
