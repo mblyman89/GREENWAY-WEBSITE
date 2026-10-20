@@ -85,3 +85,11 @@ __pycache__/
 .l30-probe-*/
 .l30-plain-*/
 .l39-probe-*/
+
+# CCRS integrator application (Bible Part 18): signed legal records with
+# personal contact details stay OUT of this public repo. Originals live in the
+# owner's mailbox + private Drive; Part 18 records their SHA-256 hashes.
+**/CCRS_System_Access_Application-Signed.pdf
+**/Greenway_CCRS_Integrator_Agreement_Executed_Self.pdf
+**/Greenway_Statement_of_Services_Offered.pdf
+**/Greenway_Statement_of_Developmental_Purpose.pdf

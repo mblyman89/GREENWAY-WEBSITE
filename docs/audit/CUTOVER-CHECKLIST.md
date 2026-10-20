@@ -505,6 +505,16 @@ this stage adds no new work; it is the formal look-back.
   changed since the plan it stops with `CCRS_RESEED_STALE` and writes nothing —
   re-plan and repeat. A second plan afterwards must show 0 writes.
 
+- [ ] **C-138 👤 Integrator application follow-ups (Bible Part 18 §E)** — (1) sign
+  AND date the Integrator Agreement (the copy sent on 10/19 is unsigned/undated)
+  and re-send it to the examiner; (2) fill the blank dates on the two
+  statements and re-send if the examiner asks; (3) confirm which business phone
+  LCB should use (the application and statements differ); (4) confirm the
+  Admin 2 mailbox (M_lyman@live.com) is one you read — or replace it; (5) keep
+  the signed originals in your mailbox AND a private Drive folder for 5+ years.
+  Never commit them to this public repo (`.gitignore` blocks the exact names).
+  After any re-send, record the new SHA-256 in Part 18 §A.
+
 ---
 
 <a id="stage-10"></a>
