@@ -44,6 +44,7 @@ import {
   setObligationStartDate,
   undoDismissal,
 } from "@/lib/compliance/obligation-waiver-store";
+import { HANDOVER_SETTING_KEY, getHandoverFacts, setHandoverFacts } from "@/lib/compliance/ccrs-handover-store";
 
 const BASE = "/admin/compliance/ccrs";
 
@@ -526,6 +527,29 @@ export async function setObligationStartAction(formData: FormData): Promise<void
     formData,
     `saved=1&note=${encodeURIComponent(after ? `First day of sales set to ${after}.` : "First day of sales cleared.")}`,
   );
+}
+
+/** S-17d: record the integrator's last sale day and final upload day (hand-over plan). */
+export async function setHandoverFactsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const before = await getHandoverFacts();
+  const res = await setHandoverFacts({
+    lastSaleRaw: String(formData.get("integrator_last_sale") ?? ""),
+    finalUploadRaw: String(formData.get("integrator_final_upload") ?? ""),
+    byId: session.profile.id,
+  });
+  if (!res.ok) backToWeek(formData, `error=${encodeURIComponent(res.error)}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs_handover.facts_set",
+    entityType: "site_setting",
+    entityId: HANDOVER_SETTING_KEY,
+    before,
+    after: res.facts,
+  });
+  revalidatePath(BASE);
+  backToWeek(formData, `saved=1&note=${encodeURIComponent("Hand-over dates saved.")}`);
 }
 
 /** Check one ended CCRS week or LIQ-1295 month off with a written reason. */

@@ -1,5 +1,28 @@
 # Greenway POS — The Cutover Checklist
 
+> **⚠️ SUPERSEDED DATES (2026-10-19, owner facts, CCRS Bible Part 05 D-20).** The
+> October 18 cutover below did not happen. The owner's actual plan: the **last sale
+> rung in Cultivera is before close on Saturday 2026-10-31**, and the **first sale on
+> the new system is the morning of Sunday 2026-11-01**. CCRS weeks run Sunday to
+> Saturday and each week is due "no later than Sunday for the previous week" (LCB
+> CCRS FAQ, `[FAQ L0041]`). So:
+>
+> | Week | Who files it | Due |
+> | --- | --- | --- |
+> | 2026-10-25 to 2026-10-31 | Cultivera (its last week) | Sunday 2026-11-01 |
+> | 2026-11-01 to 2026-11-07 | **Greenway (first week)** | **Sunday 2026-11-08** |
+> | 2026-11-08 to 2026-11-14 | Greenway | Sunday 2026-11-15 |
+>
+> Greenway's first self-reported upload is due **Sunday 2026-11-08** for the
+> week 2026-11-01 to 2026-11-07 (it may be uploaded Saturday 11/07 after close). It
+> is not 11/14. Cultivera's planned final upload on 11/07 is after its last week's
+> due Sunday (11/01), and it must contain nothing dated 11/01 or later, or CCRS
+> refuses the second copy as "Duplicate Sale for Licensee" `[G L1390]`; get both in
+> writing (CCRS Bible Part 17 §K.5, U-61). The CCRS hub
+> (`/admin/compliance/ccrs`, card "Hand-over from Cultivera") works these dates out
+> from the first day of sales and shows the warnings (slice S-17d). Stage 7–10 dates
+> below are corrected; Stage 6's original window is kept as history.
+
 > **What this is:** the ordered, checkbox-by-checkbox countdown from today to the day
 > Greenway stops paying Cultivera and runs entirely on its own system. It is the fourth
 > and final audit deliverable (see `README.md` deliverables table).
@@ -46,6 +69,18 @@
 
 ## The calendar at a glance (all dates verified against a real 2026 calendar)
 
+**Current (2026-10-19, owner facts; supersedes the original plan below):**
+
+```
+Sat Oct 31   Last sale rung in Cultivera (before close). Cultivera renewal day.
+Sun Nov 1    First sale on the new system. Cultivera's last week (Oct 25–31) is due today.
+Sat Nov 7    After close: earliest upload of Greenway's first week (Nov 1–7).
+Sun Nov 8    FIRST self-reported upload due (week Nov 1–7).
+Sun Nov 15   Second upload due (week Nov 8–14).
+```
+
+**Original plan (2026-07-21, superseded; kept as history):**
+
 ```
 TODAY                     ~July 21, 2026        (~14½ weeks of runway)
 Stage 1  Fix slices       July → August         all fixes land, most severe first
@@ -63,7 +98,7 @@ Oct 31   Cultivera renewal date — you decline it with proof in hand
 Stage 10 First month solo November: first LIQ-1295 filed fully on the new system
 ```
 
-**Why cutover on Sunday, October 18 and not October 25:** cutting over Oct 18 gives
+**(Original reasoning, superseded 2026-10-19.) Why cutover on Sunday, October 18 and not October 25:** cutting over Oct 18 gives
 you TWO complete self-reported CCRS weeks (Oct 18–24 and Oct 25–31) confirmed clean
 before the renewal decision — with Oct 25 as a built-in one-week slip buffer. Cutting
 over Oct 25 leaves zero buffer. The 2026 Sundays available are Sep 6, 13, 20, 27 and
@@ -350,7 +385,7 @@ calendar. **Cultivera stays live and keeps submitting; you shadow it.**
 - [ ] **C-106 👤 Run the store's daily routine on the new system all four weeks:**
   day close, drawer counts, the compliance calendar checkboxes. By cutover day the
   new system should already FEEL like the normal one, with Cultivera as the shadow.
-- [ ] **C-107 ⛔ GATE B (Sunday, October 18):** all four parallel weeks reconciled
+- [ ] **C-107 ⛔ GATE B (originally Sunday, October 18; now: before the first sale on Sunday, November 1):** all four parallel weeks reconciled
   with zero unexplained differences; the T-136 real round-trip processed clean in
   the portal; the weekly export-generate-compare routine takes you under an hour
   and needs no help. **RED = slip to Oct 25 (the last slip — see the slip rule).
@@ -359,7 +394,7 @@ calendar. **Cultivera stays live and keeps submitting; you shadow it.**
 ---
 
 <a id="stage-7"></a>
-## Stage 7 — The go/no-go decision (Sunday, October 18)
+## Stage 7 — The go/no-go decision (before the first sale on Sunday, November 1; originally October 18)
 
 One sitting, with this document open. Every box below must already be checked —
 this stage adds no new work; it is the formal look-back.
@@ -375,26 +410,29 @@ this stage adds no new work; it is the formal look-back.
     cash routine rehearsed.
   - Stage 5: GATE A green (the TEST-PLAN finish line, Part B3).
   - Stage 6: GATE B green (four clean parallel weeks + real round-trip).
-- [ ] **C-111 👤 The rollback plan is written and understood** (it's short): if
-  self-reporting fails in the solo weeks, Cultivera is still under contract until
-  Oct 31 — resume its submission for the affected week, reconcile, and re-attempt
-  the next Sunday. After Oct 31 the fallback is the bridge/renewal option from
-  C-020. The store NEVER stops selling in either case — registers and the offline
+- [ ] **C-111 👤 The rollback plan is written and understood** (it's short): from
+  Sunday Nov 1 the sales are rung only in the new system, so Cultivera holds no
+  record of them and cannot file them. If the first upload has errors, fix and
+  re-upload (reporting more often than weekly is allowed `[FAQ L0041]`); Cultivera
+  is NOT removed as integrator until a clean upload (CCRS Bible Part 07 §D step 6,
+  §E). Any bridge with Cultivera is the C-020 option. The store NEVER stops selling in either case — registers and the offline
   queue don't depend on CCRS at all; reporting is the only thing that rolls back.
 - [ ] **C-112 👤 Say the decision out loud and write it in the tracking log:**
-  "GO — cutover begins today" or "NO-GO — slip to October 25, re-run Stage 7
-  then." Dated, in writing. If it's NO-GO on October 25 too: activate the C-020
-  bridge conversation with Cultivera that week.
+  "GO — new system sells from Sunday Nov 1" or "NO-GO". Dated, in writing. A
+  NO-GO means sales stay in Cultivera and Cultivera keeps filing: activate the C-020
+  bridge conversation before Oct 31.
 
 ---
 
 <a id="stage-8"></a>
-## Stage 8 — Cutover week (October 18–24): you become the reporting entity
+## Stage 8 — Cutover week (November 1–7, upload November 8): you become the reporting entity
 
-- [ ] **C-120 👤 Sunday, October 18: submit the FIRST self-reported upload** — the
-  file for the week of Oct 11–17 (the prior completed CCRS week), generated from
-  the back office, uploaded under your WA.gov login. This is guide Part B step 4,
-  on the chosen Sunday.
+- [ ] **C-120 👤 Sunday, November 8: submit the FIRST self-reported upload** — the
+  files for the week of Nov 1–7 (the first CCRS week sold on the new system; it may
+  go up Saturday Nov 7 after close), generated from the back office, uploaded
+  under your live (production) WA.gov login. This is guide Part B step 4. Before
+  it: Cultivera has confirmed in writing that its final upload holds nothing dated
+  Nov 1 or later (CCRS Bible Part 17 §K.5, U-61).
 - [ ] **C-121 👤 Watch the PST until that file processes clean.** If any rows
   reject: save the exact error text (it names the row and column), bring it to a
   session, fix the data, re-upload the corrected file the same week. The back
@@ -411,19 +449,22 @@ this stage adds no new work; it is the formal look-back.
 ---
 
 <a id="stage-9"></a>
-## Stage 9 — The solo weeks (October 18–31): prove it twice before renewal day
+## Stage 9 — The solo weeks (from November 8)
 
-- [ ] **C-130 👤 Sunday, October 25: second self-reported upload** (week of
-  Oct 18–24). Same routine: generate → upload → PST clean → archive.
+- [ ] **C-130 👤 Sunday, November 15: second self-reported upload** (week of
+  Nov 8–14). Same routine: generate → upload → PST clean → archive.
 - [ ] **C-131 👤 Confirm the compliance calendar in the back office shows both
   weeks resolved** (Bible ch. 11 §7 — completed weeks must show submitted or
   nothing-to-report, or they nag daily; that nagging is your friend now).
-- [ ] **C-132 👤 Saturday, October 31 — renewal day:** with two clean solo weeks
-  archived, decline the Cultivera renewal per your C-020 terms. If anything went
-  wrong in the solo weeks, you already executed C-111's rollback and are on the
-  bridge plan instead — that's not failure, that's the plan working.
-- [ ] **C-133 👤 Sunday, November 1: third upload** (week of Oct 25–31) — the
-  first one filed with no safety net. By now it's routine.
+- [ ] **C-132 👤 Saturday, October 31 — renewal day and the last Cultivera sales
+  day:** decline the Cultivera renewal per your C-020 terms, and have in writing
+  Cultivera's final upload day and that it holds nothing dated Nov 1 or later.
+  (The original plan had two clean solo weeks before this day; under the
+  2026-10-19 dates there are none, so the PREprod rehearsal, CCRS Bible Part 06,
+  is the proof instead.)
+- [ ] **C-133 👤 Sunday, November 1: Cultivera's last week (Oct 25–31) is due** —
+  filed by Cultivera, not you `[FAQ L0041]`. If Cultivera plans to upload later
+  (it said 11/07), that is after this Sunday; ask it to upload by today.
 
 ---
 
@@ -433,9 +474,10 @@ this stage adds no new work; it is the formal look-back.
 - [ ] **C-140 👤 File the October LIQ-1295 by its due date** — the monthly excise
   return never paused during any of this (guide Part B step 6; historically due
   the 20th of the following month — confirm the current date on the form itself,
-  per the guide). ⚠️ Note the October wrinkle: part of October was reported by
-  Cultivera, part by you — reconcile the month's totals from your Stage 6/9
-  archives BEFORE filing, in a session if anything doesn't tie out.
+  per the guide). Under the 2026-10-19 dates every October sale was rung in
+  Cultivera, so October's totals come from Cultivera's records; November is the
+  first month fully on the new system. Reconcile before filing, in a session if
+  anything doesn't tie out.
 - [ ] **C-141 👤 Weekly rhythm, permanently:** every Sunday — generate, upload,
   PST-check, archive. Every month — LIQ-1295. The in-app compliance calendar
   tracks both with authorities cited; keep your paper calendar as the backup.

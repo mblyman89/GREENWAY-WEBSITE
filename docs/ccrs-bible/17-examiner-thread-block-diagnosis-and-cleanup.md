@@ -346,6 +346,8 @@ What decides it is **which data Cultivera's 11/07 upload contains**. If sales ar
 
 Until the owner confirms (a) or (b) in writing with Cultivera, U-61 stays open. Fresh copy G-1 (§G) is requested **after** 11/07, the last Cultivera filing, and before Greenway's first production upload.
 
+**Update 2026-10-19 (Part 05 D-20):** the owner states the last Cultivera sale is Sat 10/31 and the 11/07 upload is for 10/25–10/31, which is option (a). Greenway's first upload is due **Sun 2026-11-08** (not 11/14). G-1 can be requested only after 11/07, so it leaves one day before that due date; the first batch is uploaded on time anyway and holds back the rows §G names. The hub card "Hand-over from Cultivera" (S-17d) shows all of this.
+
 ### K.6 Slice S-17a: every withheld row shown, with the next step (DONE in code, 2026-10-19)
 
 - `ccrs-submit-gate-core.ts`: `GateIssueInput`/`GateIssue` carry `code`, `specPin`, `rows`. Deduplication **merges** the rows of a dropped duplicate. New `toGateInput()` is the one mapping every caller uses (hub, compliance report, export route), so no caller can drop the rows by hand again.

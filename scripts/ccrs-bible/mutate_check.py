@@ -88,6 +88,12 @@ S17B_TESTS = "tests/compliance/s17b-honest-orphans-and-hub-selfcheck.test.ts"
 # S-17c WA.gov sign-in wording (Part 11 §F/§G).
 SIGNIN = "src/lib/compliance/ccrs-signin-core.ts"
 S17C_TESTS = "tests/compliance/s17c-wagov-signin-wording.test.ts"
+HANDOVER = "src/lib/compliance/ccrs-handover-core.ts"
+HANDOVER_STORE = "src/lib/compliance/ccrs-handover-store.ts"
+HANDOVER_CARD = "src/components/admin/compliance/HandoverPlanCard.tsx"
+CUTOVER_DOC = "docs/audit/CUTOVER-CHECKLIST.md"
+CCRS_ACTIONS = "src/app/admin/compliance/ccrs/actions.ts"
+S17D_TESTS = "tests/compliance/s17d-handover-plan.test.tsx"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -1216,6 +1222,134 @@ MUTATIONS = [
         S17C_TESTS,
         'The README names WA.gov, not SAW.',
     ),
+    (
+        'M157-s17d-due-sunday-counted-late',
+        HANDOVER,
+        "if (finalUpload > lastWeek.due) {",
+        "if (finalUpload >= lastWeek.due) {",
+        S17D_TESTS,
+        'An upload ON the due Sunday is on time [FAQ L0041].',
+    ),
+    (
+        'M158-s17d-same-day-overlap-missed',
+        HANDOVER,
+        "} else if (lastSaleStated >= start) {",
+        "} else if (lastSaleStated > start) {",
+        S17D_TESTS,
+        'Both systems selling on the start day is an overlap [G L1390].',
+    ),
+    (
+        'M159-s17d-false-gap',
+        HANDOVER,
+        "} else if (lastSaleStated < dayBefore) {",
+        "} else if (lastSaleStated <= dayBefore) {",
+        S17D_TESTS,
+        'Last sale the day before the start is no gap.',
+    ),
+    (
+        'M160-s17d-start-day-upload-not-after-start',
+        HANDOVER,
+        "if (finalUpload >= start) {",
+        "if (finalUpload > start) {",
+        S17D_TESTS,
+        'An integrator upload on the start day can already hold new-system dates.',
+    ),
+    (
+        'M161-s17d-sunday-test-wrong-day',
+        HANDOVER,
+        "if (isoWeekday(start) !== 0) {",
+        "if (isoWeekday(start) !== 6) {",
+        S17D_TESTS,
+        'CCRS weeks start Sunday [FAQ L0041].',
+    ),
+    (
+        'M162-s17d-first-due-the-owners-11-14',
+        HANDOVER,
+        "greenwayFirstDue: firstWeek.due,",
+        "greenwayFirstDue: addDaysIso(firstWeek.end, 7),",
+        S17D_TESTS,
+        'First week 11/01-11/07 is due 11/08, not 11/14.',
+    ),
+    (
+        'M163-s17d-overlap-only-warns',
+        HANDOVER,
+        "code: \"SALES_OVERLAP\",\n      severity: \"block\",",
+        "code: \"SALES_OVERLAP\",\n      severity: \"warn\",",
+        S17D_TESTS,
+        'An overlap must block the plan.',
+    ),
+    (
+        'M164-s17d-ready-ignores-blocks',
+        HANDOVER,
+        "ready: !warnings.some((w) => w.severity === \"block\"),",
+        "ready: true,",
+        S17D_TESTS,
+        'A blocking warning makes the plan not ready.',
+    ),
+    (
+        'M165-s17d-assumed-last-sale-is-start',
+        HANDOVER,
+        "const lastSale = lastSaleStated ?? dayBefore;",
+        "const lastSale = lastSaleStated ?? start;",
+        S17D_TESTS,
+        'Unknown last sale is assumed the day before the start.',
+    ),
+    (
+        'M166-s17d-fresh-copy-window-to-saturday',
+        HANDOVER,
+        "freshCopyWindowDays = isoDayDiff(firstWeek.due, finalUpload);",
+        "freshCopyWindowDays = isoDayDiff(firstWeek.end, finalUpload);",
+        S17D_TESTS,
+        'G-1 window runs to the due Sunday.',
+    ),
+    (
+        'M167-s17d-store-overwrites-first-day',
+        HANDOVER_STORE,
+        "HANDOVER_SETTING_KEY = \"ccrs_handover_facts\"",
+        "HANDOVER_SETTING_KEY = \"compliance_obligation_start\"",
+        S17D_TESTS,
+        'Hand-over facts must not overwrite the S-12d first day of sales.',
+    ),
+    (
+        'M168-s17d-action-ungated',
+        CCRS_ACTIONS,
+        "const session = await requirePermission(\"settings.manage\");\n  const before = await getHandoverFacts();",
+        "const session = await requirePermission(\"reports.view\");\n  const before = await getHandoverFacts();",
+        S17D_TESTS,
+        'Changing hand-over facts needs settings.manage.',
+    ),
+    (
+        'M169-s17d-parser-keeps-junk',
+        HANDOVER,
+        "integratorFinalUploadDate: cleanDate(v.integratorFinalUploadDate),",
+        "integratorFinalUploadDate: (v.integratorFinalUploadDate as string | null) ?? null,",
+        S17D_TESTS,
+        'Junk stored dates read as unknown.',
+    ),
+    (
+        'M170-s17d-card-drops-warnings',
+        HANDOVER_CARD,
+        "{plan.warnings.map((w) => (",
+        "{plan.warnings.slice(0, 1).map((w) => (",
+        S17D_TESTS,
+        'Every warning is shown.',
+    ),
+    (
+        'M171-s17d-checklist-back-to-oct-18',
+        CUTOVER_DOC,
+        "- [ ] **C-120 👤 Sunday, November 8: submit the FIRST self-reported upload**",
+        "- [ ] **C-120 👤 Sunday, October 18: submit the FIRST self-reported upload**",
+        S17D_TESTS,
+        'The stale Oct 18 date must not return.',
+    ),
+    (
+        'M172-s17d-late-called-violation',
+        HANDOVER,
+        "period\"; what that means for this license is not verified.",
+        "period\"; this is a violation.",
+        S17D_TESTS,
+        'Lateness is stated as unverified (U-64), never as a violation.',
+    ),
 ]
 
 
@@ -1263,6 +1397,7 @@ def main() -> int:
         S17A_TESTS,
         S17B_TESTS,
         S17C_TESTS,
+        S17D_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)
