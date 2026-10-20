@@ -33,6 +33,7 @@ import {
   type MailHeartbeat,
 } from "./ccrs-mail-core";
 import { getAttachmentText, getGmailAccessToken, getMessage, listMessageIds } from "./ccrs-mail-fetch";
+import { notifyOpenCcrsMail, type MailNotifyResult } from "./ccrs-mail-notify";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -82,11 +83,13 @@ export type MailTickResult = {
   deferred: number;
   failures: string[];
   error: string | null;
+  /** S-18b owner alerts for open error / unreadable mail (null when the monitor is not set up). */
+  alerts: MailNotifyResult | null;
 };
 
 /** One poll of the submitting mailbox. Never throws. */
 export async function runCcrsMailTick(nowMs = Date.now()): Promise<MailTickResult> {
-  const base: MailTickResult = { ok: true, configured: false, mode: null, listed: 0, stored: 0, deferred: 0, failures: [], error: null };
+  const base: MailTickResult = { ok: true, configured: false, mode: null, listed: 0, stored: 0, deferred: 0, failures: [], error: null, alerts: null };
   if (!isSupabaseServiceConfigured) return { ...base, ok: false, error: "Database is not configured." };
   const cfg = mailConfigFromEnv(process.env);
   const admin = createSupabaseAdminClient();
@@ -137,8 +140,11 @@ export async function runCcrsMailTick(nowMs = Date.now()): Promise<MailTickResul
     }
     const truncated = listed.truncated ? ["more CCRS mail in the window than one tick lists; the rest is read next tick"] : [];
     const ok = failures.length === 0;
+    // S-18b: alert the owner once per open error email (claimed in compliance_reminder_log). Never throws.
+    const alerts = await notifyOpenCcrsMail(admin, cfg.mailbox, nowMs);
     return finish({
       ...base,
+      alerts,
       ok,
       configured: true,
       mode: cfg.mode,

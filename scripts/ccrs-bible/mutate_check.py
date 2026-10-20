@@ -104,6 +104,12 @@ MAILCRON = "src/app/api/cron/ccrs-mail/route.ts"
 MIG0282 = "supabase/migrations/0282_ccrs_mail_messages.sql"
 LIFECYCLE = "src/lib/compliance/ccrs-lifecycle-core.ts"
 S18A_TESTS = "tests/compliance/s18a-ccrs-mail-monitor.test.ts"
+# S-18b CCRS error strategy report + owner alert (Part 09 S-18b).
+STRATCORE = "src/lib/compliance/ccrs-strategy-core.ts"
+MAILNOTIFY = "src/lib/compliance/ccrs-mail-notify.ts"
+STRATREPORT = "src/components/admin/compliance/CcrsStrategyReport.tsx"
+CCRS_PAGE = "src/app/admin/compliance/ccrs/page.tsx"
+S18B_TESTS = "tests/compliance/s18b-ccrs-error-strategy.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -1592,6 +1598,192 @@ MUTATIONS = [
         S18A_TESTS,
         'Attachments per email are capped (Gmail quota).',
     ),
+    (
+        'M202-s18b-checksum-not-whole-file',
+        STRATCORE,
+        '''    cls: "file-fatal",
+    action: "whole-file",''',
+        '''    cls: "file-fatal",
+    action: "fix-resend",''',
+        S18B_TESTS,
+        'A checksum fault refuses the whole file [G L0203].',
+    ),
+    (
+        'M203-s18b-dup-strain-needs-fix',
+        STRATCORE,
+        '''    cls: "benign",
+    action: "none",''',
+        '''    cls: "benign",
+    action: "fix-resend",''',
+        S18B_TESTS,
+        'Duplicate Strain needs no action [G L0325-L0326].',
+    ),
+    (
+        'M204-s18b-confirm-says-insert',
+        STRATCORE,
+        '"If the copy shows the record, future changes to it go as Update. Never re-send it as Insert.",',
+        '"If the copy shows the record, re-send it.",',
+        S18B_TESTS,
+        'A record CCRS holds is never re-sent as Insert.',
+    ),
+    (
+        'M205-s18b-unknown-scope-lost',
+        STRATCORE,
+        '  if (f.some((x) => !x.entry)) return "unknown";\n',
+        '',
+        S18B_TESTS,
+        'A message never seen before is flagged unknown.',
+    ),
+    (
+        'M206-s18b-no-examiner-draft',
+        STRATCORE,
+        '  if (examinerReasons.length) {\n    const excerpt',
+        '  if (false) {\n    const excerpt',
+        S18B_TESTS,
+        'An unknown message gets an examiner draft.',
+    ),
+    (
+        'M207-s18b-resend-order-unsorted',
+        STRATCORE,
+        'const resendOrder = TYPE_ORDER.filter((t) => resend.has(t));',
+        'const resendOrder = [...resend];',
+        S18B_TESTS,
+        'Files are re-sent in the guide dependency order [G L0084-L0089].',
+    ),
+    (
+        'M208-s18b-shifted-id-guessed',
+        STRATCORE,
+        'const id = clean && idAt >= 0 ? (cells[idAt] ?? "").trim() : "";',
+        'const id = idAt >= 0 ? (cells[idAt] ?? "").trim() : "";',
+        S18B_TESTS,
+        'An id is never read from a shifted row.',
+    ),
+    (
+        'M209-s18b-row-count-dropped',
+        STRATCORE,
+        '    f.rows += 1;\n',
+        '',
+        S18B_TESTS,
+        'Each finding counts its rows.',
+    ),
+    (
+        'M210-s18b-quote-drift',
+        STRATCORE,
+        '434: "If Useable Cannabis is selected, Unit Weight Gram cannot be 0",',
+        '434: "If Useable Cannabis is selected, Unit Weight Gram cannot be zero",',
+        S18B_TESTS,
+        'Embedded guide lines stay verbatim.',
+    ),
+    (
+        'M211-s18b-alert-on-success',
+        STRATCORE,
+        '  if (m.kind !== "error" && m.kind !== "unknown") return null;',
+        '  if (m.kind === "not-ccrs") return null;',
+        S18B_TESTS,
+        'Confirmations never alert.',
+    ),
+    (
+        'M212-s18b-alert-unescaped',
+        STRATCORE,
+        '${lines.map((l) => `<p style="line-height:1.5;margin:6px 0">${escHtml(l)}</p>`).join("\\n  ")}',
+        '${lines.map((l) => `<p style="line-height:1.5;margin:6px 0">${l}</p>`).join("\\n  ")}',
+        S18B_TESTS,
+        'CCRS-supplied text is escaped in the alert email.',
+    ),
+    (
+        'M213-s18b-key-not-casefolded',
+        STRATCORE,
+        'return `ccrs_mail:${mailbox.toLowerCase()}:${gmailId}`;',
+        'return `ccrs_mail:${mailbox}:${gmailId}`;',
+        S18B_TESTS,
+        'The alert key folds the mailbox case.',
+    ),
+    (
+        'M214-s18b-send-without-claim',
+        MAILNOTIFY,
+        '''      if (c === "taken") {
+        out.alreadyClaimed += 1;
+        continue;
+      }
+      if (c === "error") {''',
+        '''      if (c === "error") {''',
+        S18B_TESTS,
+        'A claimed alert is never sent twice (23505 = taken).',
+    ),
+    (
+        'M215-s18b-claim-without-channel',
+        MAILNOTIFY,
+        '    if (!emailOn && !pushOn) {',
+        '    if (false) {',
+        S18B_TESTS,
+        'No channel -> nothing claimed.',
+    ),
+    (
+        'M216-s18b-old-mail-alerted',
+        MAILNOTIFY,
+        '      .gte("fetched_at", since)\n',
+        '',
+        S18B_TESTS,
+        'Only mail from the last 7 days alerts.',
+    ),
+    (
+        'M217-s18b-handled-mail-alerted',
+        MAILNOTIFY,
+        '      .eq("state", "new")\n',
+        '',
+        S18B_TESTS,
+        'Applied or dismissed mail never alerts.',
+    ),
+    (
+        'M218-s18b-undelivered-not-recorded',
+        MAILNOTIFY,
+        '        await record(admin, a, "email", MAIL_UNDELIVERED);\n',
+        '',
+        S18B_TESTS,
+        'An alert every channel refused is marked undelivered.',
+    ),
+    (
+        'M219-s18b-tick-alerts-overwritten',
+        MAILSTORE,
+        '''      ...base,
+      alerts,''',
+        '''      alerts,
+      ...base,''',
+        S18B_TESTS,
+        'The tick result carries the alert counts.',
+    ),
+    (
+        'M220-s18b-report-not-shown',
+        MAILPANEL,
+        '{r.kind === "error" && r.strategy ? <CcrsStrategyReport strategy={r.strategy} /> : null}',
+        '{null}',
+        S18B_TESTS,
+        'The panel shows the strategy report on error mail.',
+    ),
+    (
+        'M221-s18b-draft-not-shown',
+        STRATREPORT,
+        '{d && mailto ? (',
+        '{false ? (',
+        S18B_TESTS,
+        'The examiner draft is shown on the hub.',
+    ),
+    (
+        'M222-s18b-page-builds-for-handled',
+        CCRS_PAGE,
+        'r.kind === "error" && r.state === "new"',
+        'r.kind === "error"',
+        S18B_TESTS,
+        'The page builds a report only for open error mail.',
+    ),
+    (
+        'M223-s18b-unreadable-ids-not-counted',
+        STRATCORE,
+        '    } else f.unreadableIds += 1;\n',
+        '    }\n',
+        S18B_TESTS,
+        'Shifted rows are counted as unreadable ids.',
+    ),
 ]
 
 
@@ -1641,6 +1833,7 @@ def main() -> int:
         S17C_TESTS,
         S17D_TESTS,
         S18A_TESTS,
+        S18B_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

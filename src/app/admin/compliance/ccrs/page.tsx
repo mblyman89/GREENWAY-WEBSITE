@@ -68,7 +68,8 @@ import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obli
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
 import { CcrsMailPanel, type CcrsMailPanelRow } from "@/components/admin/compliance/CcrsMailPanel";
 import { listRecentCcrsMail } from "@/lib/compliance/ccrs-mail-store";
-import { mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
+import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
+import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
 import {
   applyCcrsErrorMailAction,
   applyCcrsSuccessMailAction,
@@ -252,6 +253,19 @@ export default async function CcrsCommandCenterPage({
   const mailSetup = mailCfg.configured
     ? { configured: true as const, mode: mailCfg.mode, mailbox: mailCfg.mailbox }
     : { configured: false as const, mailbox: mailCfg.mailbox, missing: mailCfg.missing, problem: mailCfg.problem };
+  // S-18b: a strategy report for every open error email, from the CSVs CCRS attached.
+  // The week stays a placeholder in the examiner draft: an error file does not say which week it answers.
+  const ccrsMailRows = ccrsMail.rows.map((r) => ({
+    ...r,
+    strategy:
+      r.kind === "error" && r.state === "new"
+        ? buildCcrsStrategy(errorsFromStored(r.csvs ?? []), {
+            licenseNumber: license.licenseNumber || "(license not set)",
+            licenseeName: license.submittedBy || "Greenway Marijuana",
+            contactEmail: mailCfg.mailbox,
+          })
+        : null,
+  }));
   // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
   const migrationGarbage = isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null;
 
@@ -618,7 +632,7 @@ export default async function CcrsCommandCenterPage({
           loadError={ccrsMail.error}
           setup={mailSetup}
           heartbeat={ccrsMail.heartbeat}
-          rows={ccrsMail.rows as unknown as CcrsMailPanelRow[]}
+          rows={ccrsMailRows as unknown as CcrsMailPanelRow[]}
           uploadedFiles={ccrsFiles.files.filter((f) => f.state === "uploaded")}
           canEdit={canEdit}
           weekKey={week.key}
