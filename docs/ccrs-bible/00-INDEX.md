@@ -27,6 +27,7 @@ This bible exists so that no future agent drifts. If a thing is not in here, it 
 | 15 | `15-preprod-run-results-2026-09-17.md` | **What CCRS actually did.** The 2026-09-17 PREprod run + the examiner's answers: 11 verbatim error strings, the success email that no LCB document mentions, and the rules they imply | hand |
 | 16 | `16-owner-guide-s13-areas-and-p02.md` | **Owner guide (S-13).** What changed in Areas, the P-02 PREprod probe step by step, and the end-to-end PREprod test with an expected result for every step | hand |
 | 17 | `17-examiner-thread-block-diagnosis-and-cleanup.md` | **Examiner register + 2026-10-19 block.** Every Brian answer pinned `[EXAM L####]` (X-01…X-38); the known-good P20261007A format; the hub block diagnosed to code lines; the stale-lot cleanup (Update→0 + Reconciliation); WA.gov facts; the fresh-copy plan; new examiner questions; slices S-17a/b/c, S-15, S-14, S-16 | hand |
+| 18 | `18-integrator-application.md` | **CCRS integrator application (2026-10-19).** What was signed and sent to LCB (hashes only; PDFs stay out of the public repo), every commitment traced to code, discrepancies to fix, next events | hand |
 | — | `evidence/2026-09-17-preprod-run/` | Primary artifacts: 14 returned error CSVs, 10 success emails, examiner reply, the 23 probe files, 4 reproduction scripts | raw |
 | — | `evidence/2026-10-19-owner-request/` | Owner request + full examiner thread verbatim (`[EXAM]`), LCB FAQ/Sign-In Guide/bulletin of 2026-10-19 (`[FAQ19]` `[SIGNIN]` `[BUL1006]`) | raw |
 
