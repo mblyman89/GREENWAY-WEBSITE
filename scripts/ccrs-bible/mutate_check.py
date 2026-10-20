@@ -94,6 +94,16 @@ HANDOVER_CARD = "src/components/admin/compliance/HandoverPlanCard.tsx"
 CUTOVER_DOC = "docs/audit/CUTOVER-CHECKLIST.md"
 CCRS_ACTIONS = "src/app/admin/compliance/ccrs/actions.ts"
 S17D_TESTS = "tests/compliance/s17d-handover-plan.test.tsx"
+# S-18a CCRS mailbox monitor (Part 09 S-18a; U-65/U-66/U-67).
+MAILCORE = "src/lib/compliance/ccrs-mail-core.ts"
+MAILFETCH = "src/lib/compliance/ccrs-mail-fetch.ts"
+MAILSTORE = "src/lib/compliance/ccrs-mail-store.ts"
+MAILACTIONS = "src/app/admin/compliance/ccrs/mail-actions.ts"
+MAILPANEL = "src/components/admin/compliance/CcrsMailPanel.tsx"
+MAILCRON = "src/app/api/cron/ccrs-mail/route.ts"
+MIG0282 = "supabase/migrations/0282_ccrs_mail_messages.sql"
+LIFECYCLE = "src/lib/compliance/ccrs-lifecycle-core.ts"
+S18A_TESTS = "tests/compliance/s18a-ccrs-mail-monitor.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -1350,6 +1360,238 @@ MUTATIONS = [
         S17D_TESTS,
         'Lateness is stated as unverified (U-64), never as a violation.',
     ),
+    (
+        'M173-s18a-any-sender',
+        MAILCORE,
+        'if (senderAddress(m.from) !== CCRS_SENDER) {',
+        'if (!(m.from ?? "").includes("lcb.wa.gov")) {',
+        S18A_TESTS,
+        'Only info@lcb.wa.gov exactly; look-alikes are not-ccrs.',
+    ),
+    (
+        'M174-s18a-dkim-suffix-lookalike',
+        MAILCORE,
+        'header\\.(?:d|i)=@?(?:[a-z0-9-]+\\.)*lcb\\.wa\\.gov(?![a-z0-9.-])/',
+        'header\\.(?:d|i)=@?(?:[a-z0-9-]+\\.)*lcb\\.wa\\.gov/',
+        S18A_TESTS,
+        'lcb.wa.gov.evil.com is not aligned.',
+    ),
+    (
+        'M175-s18a-dmarc-fail-ignored',
+        MAILCORE,
+        'if (/\\bdmarc=fail\\b/.test(all)) return "dmarc-fail";',
+        '',
+        S18A_TESTS,
+        'DMARC fail is surfaced.',
+    ),
+    (
+        'M176-s18a-spam-not-flagged',
+        MAILCORE,
+        'const inSpam = m.labelIds.includes("SPAM");',
+        'const inSpam = false;',
+        S18A_TESTS,
+        'Spam-foldered CCRS mail is flagged [FAQ L0102].',
+    ),
+    (
+        'M177-s18a-mime-filter',
+        MAILCORE,
+        'return /\\.csv$/i.test(a.filename) && a.size <= MAX_ATTACHMENT_BYTES;',
+        'return /\\.csv$/i.test(a.filename) && a.mimeType === "text/csv" && a.size <= MAX_ATTACHMENT_BYTES;',
+        S18A_TESTS,
+        'MIME type is unknown (U-66); never filter on it.',
+    ),
+    (
+        'M178-s18a-no-errormessage-is-error',
+        MAILCORE,
+        'if (!head.includes("ErrorMessage")) return null;',
+        'if (head.length === 0) return null;',
+        S18A_TESTS,
+        'A CSV without ErrorMessage is not an error file.',
+    ),
+    (
+        'M179-s18a-cell-before-known',
+        MAILCORE,
+        'const msg = km ?? (cell ||',
+        'const msg = (cell || km) ?? (cell ||',
+        S18A_TESTS,
+        'Known text wins over a shifted cell.',
+    ),
+    (
+        'M180-s18a-prod-success-verified',
+        MAILCORE,
+        'if (/^CCRS Processing Successful$/i.test(s)) return { env: "prod", verified: false };',
+        'if (/^CCRS Processing Successful$/i.test(s)) return { env: "prod", verified: true };',
+        S18A_TESTS,
+        'Production subject is unverified (U-65).',
+    ),
+    (
+        'M181-s18a-error-subject-decides',
+        MAILCORE,
+        'if (/^PRE\\b/i.test(s)) return { env: "preprod", verified: false };',
+        'if (/^PRE\\b/i.test(s)) return { env: "preprod", verified: true };',
+        S18A_TESTS,
+        'Error subject never decides env (U-66).',
+    ),
+    (
+        'M182-s18a-renamed-forced-success',
+        MAILCORE,
+        'if (successes.length > 0 && errors.length === 0) {',
+        'if ((successes.length > 0 || PROCESSED_RE.test(m.text)) && errors.length === 0) {',
+        S18A_TESTS,
+        'A renamed _1 copy goes to a human.',
+    ),
+    (
+        'M183-s18a-ambiguous-takes-first',
+        MAILCORE,
+        'if (ok.length > 1) return { kind: "ambiguous"',
+        'if (ok.length > 1) return { kind: "unique", fileId: ok[0].c.fileId, fileName: ok[0].c.fileName, env: ok[0].c.env, verdict: ok[0].v };\n  if (ok.length > 99) return { kind: "ambiguous"',
+        S18A_TESTS,
+        'Two fitting files are ambiguous, never first-wins.',
+    ),
+    (
+        'M184-s18a-pool-any-state',
+        MAILCORE,
+        'c.fileType === e.fileType && c.state === "uploaded" &&',
+        'c.fileType === e.fileType &&',
+        S18A_TESTS,
+        'Only files marked uploaded can be answered.',
+    ),
+    (
+        'M185-s18a-chosen-overrides-proof',
+        MAILCORE,
+        'return auto.fileId === chosenFileId ? auto : { kind: "none"',
+        'return auto.fileId === chosenFileId || true ? auto : { kind: "none"',
+        S18A_TESTS,
+        'A choice cannot override the row proof.',
+    ),
+    (
+        'M186-s18a-unverified-no-tick',
+        MAILCORE,
+        'if (!confirmed) return { ok: false, error: "Tick the box to confirm you checked this file in the CCRS portal (this subject',
+        'if (false) return { ok: false, error: "Tick the box to confirm you checked this file in the CCRS portal (this subject',
+        S18A_TESTS,
+        'Unverified env needs the owner tick.',
+    ),
+    (
+        'M187-s18a-newest-first',
+        MAILCORE,
+        '.filter((id) => !known.has(id)).reverse();',
+        '.filter((id) => !known.has(id));',
+        S18A_TESTS,
+        'Oldest first, so a backlog is applied in order.',
+    ),
+    (
+        'M188-s18a-no-cap',
+        MAILCORE,
+        'return { fetch: fresh.slice(0, max), deferred:',
+        'return { fetch: fresh, deferred:',
+        S18A_TESTS,
+        'At most MAX_NEW_PER_TICK per tick.',
+    ),
+    (
+        'M189-s18a-jwt-two-hours',
+        MAILCORE,
+        'exp: opts.nowSec + 3600,',
+        'exp: opts.nowSec + 7200,',
+        S18A_TESTS,
+        'Google caps JWT exp at 1 hour.',
+    ),
+    (
+        'M190-s18a-quiet-tick-writes',
+        MAILCORE,
+        'if (next.newMessages > 0) return true;\n  const last = Date.parse(prev.lastRunAt);\n  return',
+        'if (next.newMessages > 0) return true;\n  const last = Date.parse(prev.lastRunAt);\n  return true ||',
+        S18A_TESTS,
+        'A quiet tick writes nothing (rule 12).',
+    ),
+    (
+        'M191-s18a-no-spam-search',
+        MAILFETCH,
+        'u.searchParams.set("includeSpamTrash", "true");',
+        'u.searchParams.set("includeSpamTrash", "false");',
+        S18A_TESTS,
+        'Spam is searched too.',
+    ),
+    (
+        'M192-s18a-wrong-sign-alg',
+        MAILFETCH,
+        'createSign("RSA-SHA256")',
+        'createSign("RSA-SHA1")',
+        S18A_TESTS,
+        'RS256 is what Google verifies.',
+    ),
+    (
+        'M193-s18a-insert-overwrites',
+        MAILSTORE,
+        'ignoreDuplicates: true }',
+        'ignoreDuplicates: false }',
+        S18A_TESTS,
+        'The insert is the claim; a stored email is never overwritten.',
+    ),
+    (
+        'M194-s18a-handle-twice',
+        MAILSTORE,
+        '.eq("state", "new")',
+        '.neq("state", "zzz")',
+        S18A_TESTS,
+        'An email is handled once.',
+    ),
+    (
+        'M195-s18a-action-ungated',
+        MAILACTIONS,
+        'export async function dismissCcrsMailAction(formData: FormData): Promise<void> {\n  const session = await requirePermission("settings.manage");',
+        'export async function dismissCcrsMailAction(formData: FormData): Promise<void> {\n  const session = await requirePermission("reports.view");',
+        S18A_TESTS,
+        'Mail actions need settings.manage.',
+    ),
+    (
+        'M196-s18a-dismiss-no-reason',
+        MAILACTIONS,
+        'if (reason.length < 5) backMail(',
+        'if (reason.length < 0) backMail(',
+        S18A_TESTS,
+        'Set aside needs a reason.',
+    ),
+    (
+        'M197-s18a-mail-deletable',
+        MIG0282,
+        "raise exception 'CCRS_MAIL_KEPT: a received CCRS email is never deleted';",
+        'return old;',
+        S18A_TESTS,
+        'A received email is never deleted.',
+    ),
+    (
+        'M198-s18a-cron-off-schedule',
+        "vercel.json",
+        '"4-59/5 * * * *"',
+        '"4 * * * *"',
+        S18A_TESTS,
+        'Checked every 5 minutes.',
+    ),
+    (
+        'M199-s18a-panel-hides-reasons',
+        MAILPANEL,
+        'const needs = a.needsHuman ?? [];',
+        'const needs: string[] = [];',
+        S18A_TESTS,
+        'Every reason to look is shown.',
+    ),
+    (
+        'M200-s18a-wrapped-date-lost',
+        LIFECYCLE,
+        'const SUBMITTED_RE = /Date\\s+Submitted:',
+        'const SUBMITTED_RE = /Date Submitted:',
+        S18A_TESTS,
+        'A line-wrapped Date Submitted is still read.',
+    ),
+    (
+        'M201-s18a-csv-cap-dropped',
+        MAILCORE,
+        'const download = wanted.slice(0, MAX_CSV_PER_MESSAGE);',
+        'const download = wanted;',
+        S18A_TESTS,
+        'Attachments per email are capped (Gmail quota).',
+    ),
 ]
 
 
@@ -1398,6 +1640,7 @@ def main() -> int:
         S17B_TESTS,
         S17C_TESTS,
         S17D_TESTS,
+        S18A_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

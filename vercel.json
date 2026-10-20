@@ -40,6 +40,10 @@
       "schedule": "2-59/5 * * * *"
     },
     {
+      "path": "/api/cron/ccrs-mail",
+      "schedule": "4-59/5 * * * *"
+    },
+    {
       "path": "/api/cron/ach-approvals-reminder",
       "schedule": "0 15 * * *"
     },

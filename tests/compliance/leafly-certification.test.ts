@@ -607,6 +607,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       "/api/cron/ach-deadline-1pm": 2, //  20:00 and 21:00 UTC = 1 pm Pacific in PDT / PST (R41 S5); the pure planner sends only from 1:00 pm Pacific to the 4:00 pm cutoff, each file claimed once
       "/api/cron/ach-funding-8am": 2, //  15:00 and 16:00 UTC = 8 am Pacific in PDT / PST (R41 S9); the pure planner sends only from 8:00 am Pacific to the 9:00 am funding deadline on the settlement day, each file claimed once
       "/api/cron/cutover-watch": 288, //   every 5 minutes at :02, :07 ... (offset off content-schedule's minutes; R50 A4: harvest / import failure alerts; each alert claimed once, an idle tick sends nothing)
+      "/api/cron/ccrs-mail": 288, //       every 5 minutes at :04, :09 ... (CCRS S-18a: reads CCRS's confirmation / error-CSV emails from the submitting mailbox; each Gmail id stored once, a quiet tick writes nothing)
     };
     for (const c of crons) {
       const want = expected[c.path ?? ""] ?? 1;

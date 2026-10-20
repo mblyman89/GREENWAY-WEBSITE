@@ -270,6 +270,8 @@ Format to request: the same CSV export the 9/21 delivery used, so the existing l
 | Q-B7 | Is "1 million rows" per file, and is there a per-day row ceiling for a large cleanup? | X-12 / X-32 | — |
 | Q-B8 | Is an Inventory **Delete** of a Cultivera-filed lot with sales behind it ever preferred to Update + Reconciliation? | U-46 | U-46 |
 | Q-B9 | After Oct. 9, is PREprod still available for our testing under the new WA.gov PREprod account? | `[BUL1006 L0015]` | U-59 |
+| Q-B10 | The FAQ says "After the transition period, all licensee weekly reporting will be expected by no later than Sunday for the previous week." `[FAQ L0041]` Has that transition period ended, so the Sunday deadline applies to every week now? If an upload arrives after its Sunday, what happens? (Added 2026-10-20, owner request, Part 05 D-21) | Whether a late week is late; the S-17d warning FINAL_UPLOAD_AFTER_DUE says "not verified" until answered | U-64 |
+| Q-B11 | When a production file has errors, what does the email look like: its subject line, and is the error file always a CSV attachment? (Added 2026-10-20 for S-18a) | The mailbox monitor recognises errors by the CSV alone, because the email itself was never captured | U-66 |
 
 ---
 

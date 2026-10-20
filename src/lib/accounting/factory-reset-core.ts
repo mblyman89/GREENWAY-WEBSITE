@@ -695,6 +695,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ccrs_file_rows", disposition: "KEEP", because: "Row-by-row content of files the State already received." },
   { table: "ccrs_file_issues", disposition: "KEEP", because: "The State's error/warning findings on files already sent." },
   { table: "ccrs_file_contents", disposition: "KEEP", because: "The exact bytes of every CCRS file we emitted — the operator downloads these, never a regeneration." },
+  // S-18a (0282): CCRS's own emails about files the State already received
+  // (confirmations and error CSVs), read from the submitting mailbox. The
+  // database refuses DELETE, so a WIPE rule would make the reset fail part-way.
+  { table: "ccrs_mail_messages", disposition: "KEEP", because: "CCRS's own answers (confirmation and error emails) about files the State already received; the database refuses DELETE." },
   { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
   // S-12d (0250): the owner's written reasons for checking off a real State
   // deadline. Evidence for an examiner, not test activity.

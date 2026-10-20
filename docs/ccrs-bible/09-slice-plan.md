@@ -529,6 +529,48 @@ Reverting the src/docs changes turns 7 tests red.
 
 ---
 
+## S-18a — CCRS mailbox monitor: confirmations and error files read from Gmail (DONE in code, 2026-10-20)
+
+**Why.** The owner asked for it (Part 05 D-21). The submitter's address gets the confirmation and error messages `[EXAM L0098]`. Until now each one was pasted by hand (S-12c). This is roadmap R-1 (d) (email ingestion).
+
+**What changed.**
+- New `ccrs-mail-core.ts` (pure, self-test registered):
+  - Gmail query `from:info@lcb.wa.gov after:<epoch seconds>`, with Spam included.
+  - MIME walk and base64url decode.
+  - `classifyCcrsMail`: success (S-12c `parseSuccessEmails`) / error (a `.csv` with an `ErrorMessage` column, read with the same known-message rule as `classifyEcho`) / unknown / not-ccrs (sender must be exactly info@lcb.wa.gov).
+  - `subjectEnv`: only `PRE: CCRS Processing Successful` is verified. A subject without PRE is "production, not yet verified" (U-65). Error subjects never decide the env (U-66).
+  - `authVerdict`: shown, never blocking (U-67).
+  - `pickEchoFile` / `resolveEchoPick`: an error CSV is applied only to the one uploaded file whose rows it proves (`classifyEcho`). Two fits means the owner picks, and the pick is re-proven.
+  - `planSuccessEnv`, heartbeat.
+- New `ccrs-mail-fetch.ts` (server): Google token by service-account JWT (RS256, `sub` = mailbox, scope `gmail.readonly`) or by OAuth refresh token. `messages.list` (5 pages max), `messages.get?format=full`, `attachments.get`. 15 s timeout per call.
+- New `ccrs-mail-store.ts` + cron `/api/cron/ccrs-mail` (`4-59/5 * * * *`, fail-closed `CRON_SECRET`). The insert is the claim (unique `(mailbox, gmail_id)`). At most 25 new emails per tick, oldest first. A quiet tick writes nothing (heartbeat on change, on new mail, or every 30 min).
+- Migration **0282** `ccrs_mail_messages`:
+  - A received email is never deleted (`CCRS_MAIL_KEPT`) or altered (`CCRS_MAIL_IMMUTABLE`), and is handled once (`CCRS_MAIL_HANDLED`).
+  - RLS: staff read, admin write. Factory reset keeps it.
+  - pg-check `scripts/recon/ccrs-mail-0282-pg-check.sql` runs in `verify-migrations-execute`.
+- New `mail-actions.ts`: Check now / Apply confirmation / Apply error file / Set aside. All need `settings.manage` and are audited. Apply re-reads the stored email and re-proves the file on the server, then writes through the same `recordOutcome` (0249) as the paste boxes. An error email is all-or-nothing.
+- New `CcrsMailPanel.tsx` on the hub ("CCRS email: confirmations and error files"). It shows not-set-up, a stale/failing warning, every reason to look, the sender check, and the env picker / portal tick only when needed.
+- `.env.example`: `CCRS_MAILBOX_ADDRESS`, `CCRS_MAIL_LOOKBACK_HOURS`, `GMAIL_SA_*` or `GMAIL_OAUTH_*`. Unset means the monitor is off and nothing breaks.
+- `parseSuccessEmails` now reads a line-wrapped "Date / Submitted:" (the 09-17 printouts).
+- `mutate_check.py`: M173–M201 with `S18A_TESTS` in the baseline.
+
+**Proof.** `tests/compliance/s18a-ccrs-mail-monitor.test.ts` covers:
+- all 45 real PREprod confirmations wrapped as Gmail delivers them: 44 applied, and the `_1` renamed copy goes to a human;
+- all 15 real error CSVs as attachments (inline and by `attachments.get`, any MIME type);
+- the P20261005A echo proven against its SENT file;
+- sender look-alikes; DKIM/SPF/DMARC verdicts;
+- the fetch client against a mocked `fetch`, with a real RSA key whose signature is verified;
+- migration, cron, action and panel pins.
+
+29 mutations are killed. Migration 0282 is executed on Postgres 15 with the CI bootstrap.
+
+**Not covered.**
+- The production subject (U-65), an error email's subject/body/MIME (U-66) and a real email's authentication header (U-67) are unseen. Each is shown to the owner rather than guessed.
+- Gmail push (`users.watch`) was not used: it needs Pub/Sub and renewal every 7 days. A 5-minute poll is simpler and well inside quota.
+- The monitor is off until the owner sets the Google credentials (build report 2026-10-20b).
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).

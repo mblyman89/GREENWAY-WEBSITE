@@ -269,3 +269,16 @@ Recorded:
 5. The hub's first day of sales (`compliance_obligation_start`) must read **2026-11-01** (option (a)). Its stored value is data and is still not verified here.
 6. The hub now works this out (S-17d: `ccrs-handover-core.ts`, card "Hand-over from Cultivera"). The owner records Cultivera's last sale day and final upload day there; the card shows the first upload date and the warnings above.
 7. `docs/audit/CUTOVER-CHECKLIST.md` still scheduled an Oct 18 cutover. It now opens with a superseding notice, and C-107, C-110–C-112, C-120, C-130, C-132, C-133 and C-140 carry the dates above. No ID was renumbered.
+
+## D-21 — Owner facts: who files the last Cultivera week, the production account, and the CCRS mailbox (2026-10-20, slice S-18a)
+
+(Appended after D-20; this log is append-only.)
+
+Owner, verbatim: *"I did not fully understand the reporting requirements, I thought it was due Saturday for the previous weeks data. But if it's due Sunday, the day after the filing period ends, then yes, Cultivera will upload our final reports on our behalf on 11/1/26. Our first upload of reports will be 11/8/26. I will open a production account with CCRS through their new wa.gov portal."* And: *"I want to add to the system a fetching service that monitors my michael@greenwaymarijuana.com address for CCRS emails, specifically the upload confirmations."* And, later: *"Failed uploads have an attachment with the failures identified if I remember correctly."*
+
+Recorded:
+1. **Cultivera uploads week 10/25–10/31 on Sun 2026-11-01**, its due Sunday `[FAQ L0041]`. This replaces the 11/07 date in D-19 item 3 and D-20 item 3. If Cultivera does upload on 11/01, the S-17d warning FINAL_UPLOAD_AFTER_DUE no longer applies once the owner records 11/01 on the hub card. **U-61 stays OPEN** until Cultivera confirms in writing that the upload holds nothing dated 11/01 or later. **U-64 stays OPEN** because the question still matters for any later week (Q-B10).
+2. **First Greenway upload: Sun 2026-11-08**, for week 11/01–11/07. This matches D-20 item 2.
+3. The owner is opening the **production** CCRS account through WA.gov (Part 11). PREprod is a separate account `[SIGNIN L0035-L0036]`, U-59.
+4. Confirmations and error files go to the email address that submits the file `[EXAM L0098]`. That is michael@greenwaymarijuana.com. S-18a reads that mailbox with read-only access. It lists each CCRS email on the hub for the owner to apply; nothing is applied automatically (standing rule 3).
+5. The owner's memory that failed uploads carry an attachment matches U-14 (ANSWERED 2026-09-17: a CSV with an `ErrorMessage` column; 15 such files are committed). The **subject, body and MIME type** of an error email were never captured, so this is **U-66**. S-18a therefore recognises an error email only by a `.csv` attachment with an `ErrorMessage` column.

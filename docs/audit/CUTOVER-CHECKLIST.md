@@ -465,6 +465,14 @@ this stage adds no new work; it is the formal look-back.
 - [ ] **C-133 👤 Sunday, November 1: Cultivera's last week (Oct 25–31) is due** —
   filed by Cultivera, not you `[FAQ L0041]`. If Cultivera plans to upload later
   (it said 11/07), that is after this Sunday; ask it to upload by today.
+  **Owner, 2026-10-20 (Bible Part 05 D-21): Cultivera uploads on 11/01.** Record
+  11/01 as Cultivera's final upload day on the hub card "Hand-over from Cultivera".
+  Still get it in writing that the upload holds nothing dated Nov 1 or later (U-61).
+- [ ] **C-134 👤 Before Sunday, November 8: turn on the CCRS mailbox monitor** —
+  set the Google credentials (build report 2026-10-20b, Bible Part 09 S-18a) and
+  check that the hub panel "CCRS email: confirmations and error files" is green.
+  After the first upload, apply each confirmation from the panel and note the
+  production subject it shows (U-65).
 
 ---
 
