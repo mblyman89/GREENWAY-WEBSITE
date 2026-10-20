@@ -601,6 +601,53 @@ Reverting the src/docs changes turns 7 tests red.
 - No production error email has been seen yet (U-66). If CCRS sends a message that is not in the playbook, the report says so and drafts to the examiner instead of guessing.
 - The report does not edit products or lots. The owner makes the fix in the app, and the next export re-sends only what CCRS does not hold.
 
+## S-18c — CCRS watchdog: no answer after 60 minutes, mailbox monitor down (DONE in code, 2026-10-20)
+
+**Why.** Two things the owner could only see by opening the hub:
+- an uploaded file with no CCRS answer an hour later. CCRS answers in 30–90 s (Part 15 A1), and 60 minutes is the line the hub button and 0249 (`CCRS_OUTCOME_SLA_NOT_REACHED`) already use (Part 05 E, `CCRS_EMAIL_SLA_MINUTES`);
+- a mailbox monitor (S-18a) that is failing, or whose 5-minute cron stopped. The panel turned red, but nobody was told.
+
+**What changed.**
+- New `ccrs-watchdog-core.ts` (pure, self-test registered, floor 21):
+  - `planNoEmail`: files in state `uploaded` at or past `uploaded_at + 60 min`. Each gets a reason from what the mailbox already holds:
+    - a stored, unapplied confirmation naming the file → "press Apply";
+    - an unhandled error/unknown CCRS email received at or after the upload (1-minute clock slack) → "may be the answer". It is never matched by guess, because error attachments do not carry our file name (Part 15 A2);
+    - monitor not set up / failing / stale → "check Gmail (Inbox AND Spam) by hand";
+    - else → "check the CCRS portal, then the no-email button".
+  - `noEmailMessage`: one message for every file crossing in a tick, HTML-escaped, with a link to the right env.
+  - `planMonitorAlert`:
+    - "failing" when configured and every check since `failingSince` failed for 15+ minutes (`MAIL_DOWN_AFTER_MINUTES`); one alert per outage;
+    - "stopped checking" when `heartbeatStale` (45 min), asked only by the daily cron;
+    - "not set up" never alerts.
+  - Keys:
+    - `ccrs_no_email:<env>:<file id>`
+    - `ccrs_mail_down:<mailbox>:<failingSince>`
+    - `ccrs_mail_stale:<mailbox>:<lastRunAt|never>`
+- `ccrs-mail-core.ts`:
+  - the heartbeat carries `failingSince`. `nextFailingSince` keeps it across failed ticks of the same mode, restarts it on a mode change, and clears it when healthy or not set up;
+  - `shouldWriteHeartbeat` persists a new outage start at once.
+- New `ccrs-watchdog.ts` (server):
+  - the cutover-watch / S-18b claim-before-send pattern on `compliance_reminder_log`; every file keeps its own claim row even when sent in one message;
+  - no channel → nothing claimed; all channels failed → `WATCH_UNDELIVERED`; a quiet tick only reads.
+- Wiring:
+  - `runCcrsMailTick` runs the watchdog inside `finish`, so on EVERY path (not set up, Gmail failing, healthy). The result carries `watchdog`;
+  - the daily `compliance-reminders` cron calls `runCcrsWatchdogDaily` (checkStale), because a dead 5-minute cron cannot report itself.
+- Panel: the red box adds "Failing since …; the owner is alerted once after 15 minutes."
+- Checklist C-136. `mutate_check.py` M224–M247 with `S18C_TESTS` in the baseline.
+
+**Drafts-only.** Nothing here records an outcome or writes `ccrs_files`. The no-email button stays the owner's (standing rule 3). Alerts go only to `ORDER_STAFF_EMAILS` and staff push devices.
+
+**Proof.** `tests/compliance/s18c-ccrs-watchdog.test.ts` (53 tests):
+- the 60-minute edge; every state; every reason;
+- messages and escaping; monitor down/stale edges; the heartbeat outage start;
+- claims through the real postgrest-js client against FakePostgrest: once, a 23505 race, no channel, undelivered, push only, one message per batch, the mail filters, a 500 database, an exception;
+- the tick end to end with Gmail mocked: not set up; failing at 0/5/10/15/20 minutes; recovery;
+- the daily stale alert once; route wiring; guards.
+
+All 24 mutations are killed.
+
+**Not covered.** If the whole Vercel project is down, no cron runs and nothing can alert. The daily alert covers a dead 5-minute cron, not a dead platform.
+
 ---
 
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)

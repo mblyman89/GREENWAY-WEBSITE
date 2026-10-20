@@ -53,6 +53,7 @@ import { __runCcrsSigninTests } from "@/lib/compliance/ccrs-signin-core";
 import { __runCcrsHandoverTests } from "@/lib/compliance/ccrs-handover-core";
 import { __runCcrsMailCoreTests } from "@/lib/compliance/ccrs-mail-core";
 import { __runCcrsStrategyCoreTests } from "@/lib/compliance/ccrs-strategy-core";
+import { __runCcrsWatchdogCoreTests } from "@/lib/compliance/ccrs-watchdog-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
@@ -271,6 +272,11 @@ describe("embedded pure self-test suites", () => {
     const r = __runCcrsStrategyCoreTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(18);
+  });
+  it("ccrs-watchdog-core (Part 09 S-18c: no CCRS answer after 60 minutes; mailbox monitor down)", () => {
+    const r = __runCcrsWatchdogCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(21);
   });
   it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {
     const r = __runCcrsIssueDisplayTests();

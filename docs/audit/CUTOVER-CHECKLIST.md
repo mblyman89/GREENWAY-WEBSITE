@@ -480,6 +480,15 @@ this stage adds no new work; it is the formal look-back.
   VAPID keys and a subscribed device. With neither set, nothing is claimed and
   the hub panel notes it, so the next tick retries once a channel exists. The
   strategy report itself always shows on the hub panel under the error email.
+- [ ] **C-136 👤 Before Sunday, November 8: know what the CCRS watchdog sends** —
+  (Bible Part 09 S-18c) through the same staff channels as C-135, once each:
+  "CCRS: no answer for <file> after 60 minutes" when an uploaded file is still
+  waiting an hour later (the message says whether a confirmation is waiting to
+  be applied, an error email may be the answer, or Gmail must be checked by
+  hand); "CCRS email monitor is failing" after 15 minutes of failed checks; and
+  "CCRS email monitor has stopped checking" from the daily 16:00 UTC cron when
+  no check has run for 45 minutes. Nothing is recorded for you: the hub's
+  "No email after 60 minutes" button stays yours. "Not set up yet" never alerts.
 
 ---
 

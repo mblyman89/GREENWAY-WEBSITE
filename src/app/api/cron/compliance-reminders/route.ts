@@ -25,6 +25,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { runComplianceReminders } from "@/lib/notifications/compliance-reminders";
 import { sweepStalePendingEvents } from "@/lib/pos/sync-store";
 import { expireStaleReservations } from "@/lib/orders/orders-store";
+import { runCcrsWatchdogDaily } from "@/lib/compliance/ccrs-mail-store";
 
 export const dynamic = "force-dynamic";
 // Sends a handful of emails/pushes sequentially; give it room beyond the
@@ -83,8 +84,15 @@ export async function GET(req: NextRequest) {
     (e: unknown) => ({ ok: false, expired: 0, skipped: 0, error: e instanceof Error ? e.message : String(e) }),
   );
 
+  // S-18c — the CCRS watchdog's daily look: has the 5-minute ccrs-mail cron
+  // stopped running? (A dead cron cannot report itself.) Also re-checks files
+  // with no CCRS answer. Claimed once per outage / file; never throws.
+  const ccrsWatchdog = await runCcrsWatchdogDaily().catch(
+    (e: unknown) => ({ planned: 0, sent: 0, alreadyClaimed: 0, undelivered: 0, unsentNoChannel: 0, notes: [e instanceof Error ? e.message : String(e)] }),
+  );
+
   return NextResponse.json(
-    { ...result, posSweep, reservationSweep },
+    { ...result, posSweep, reservationSweep, ccrsWatchdog },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

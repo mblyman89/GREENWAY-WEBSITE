@@ -26,6 +26,7 @@ import {
   heartbeatFromSetting,
   idsToFetch,
   mailConfigFromEnv,
+  nextFailingSince,
   normalizeGmailMessage,
   shouldWriteHeartbeat,
   toMailRow,
@@ -34,6 +35,7 @@ import {
 } from "./ccrs-mail-core";
 import { getAttachmentText, getGmailAccessToken, getMessage, listMessageIds } from "./ccrs-mail-fetch";
 import { notifyOpenCcrsMail, type MailNotifyResult } from "./ccrs-mail-notify";
+import { runCcrsWatchdog, type WatchdogResult } from "./ccrs-watchdog";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -85,11 +87,13 @@ export type MailTickResult = {
   error: string | null;
   /** S-18b owner alerts for open error / unreadable mail (null when the monitor is not set up). */
   alerts: MailNotifyResult | null;
+  /** S-18c watchdog (no CCRS answer after 60 minutes; monitor failing). Runs on every path once the database is reachable. */
+  watchdog: WatchdogResult | null;
 };
 
 /** One poll of the submitting mailbox. Never throws. */
 export async function runCcrsMailTick(nowMs = Date.now()): Promise<MailTickResult> {
-  const base: MailTickResult = { ok: true, configured: false, mode: null, listed: 0, stored: 0, deferred: 0, failures: [], error: null, alerts: null };
+  const base: MailTickResult = { ok: true, configured: false, mode: null, listed: 0, stored: 0, deferred: 0, failures: [], error: null, alerts: null, watchdog: null };
   if (!isSupabaseServiceConfigured) return { ...base, ok: false, error: "Database is not configured." };
   const cfg = mailConfigFromEnv(process.env);
   const admin = createSupabaseAdminClient();
@@ -103,9 +107,12 @@ export async function runCcrsMailTick(nowMs = Date.now()): Promise<MailTickResul
       error: r.error,
       mode: cfg.configured ? cfg.mode : null,
       newMessages: r.stored,
+      failingSince: nextFailingSince(prev, r.ok, cfg.configured ? cfg.mode : null, nowIso),
     };
     if (shouldWriteHeartbeat(prev, next, nowMs)) await writeHeartbeat(admin, next).catch(() => undefined);
-    return r;
+    // S-18c: on every path (set up or not, Gmail working or not). Never throws.
+    const watchdog = await runCcrsWatchdog(admin, { configured: cfg.configured, mailbox: cfg.mailbox, heartbeat: next, nowMs, checkStale: false });
+    return { ...r, watchdog };
   };
   if (!cfg.configured) {
     // Not set up yet is a routine state, not a failure: the route answers 200 and the
@@ -156,6 +163,23 @@ export async function runCcrsMailTick(nowMs = Date.now()): Promise<MailTickResul
     });
   } catch (e) {
     return finish({ ...base, ok: false, configured: true, mode: cfg.mode, error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
+ * S-18c, from the DAILY compliance-reminders cron: the same watchdog with
+ * checkStale=true, so a 5-minute cron that stopped running is reported by a
+ * cron that still runs. Never throws.
+ */
+export async function runCcrsWatchdogDaily(nowMs = Date.now()): Promise<WatchdogResult | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const cfg = mailConfigFromEnv(process.env);
+    const admin = createSupabaseAdminClient();
+    const heartbeat = await getMailHeartbeat(admin).catch(() => null);
+    return await runCcrsWatchdog(admin, { configured: cfg.configured, mailbox: cfg.mailbox, heartbeat, nowMs, checkStale: true });
+  } catch (e) {
+    return { planned: 0, sent: 0, alreadyClaimed: 0, undelivered: 0, unsentNoChannel: 0, notes: [`watchdog failed: ${e instanceof Error ? e.message : String(e)}`] };
   }
 }
 

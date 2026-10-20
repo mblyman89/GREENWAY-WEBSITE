@@ -92,6 +92,7 @@ export function CcrsMailPanel({
           <p className="font-bold">The mailbox monitor is not working.</p>
           <p className="mt-1">
             {heartbeat?.error ?? "No check has run in the last 45 minutes."} Last good check: {pacific(heartbeat?.lastOkAt ?? null)}. Check Gmail by hand until this is fixed.
+            {heartbeat?.failingSince ? ` Failing since ${pacific(heartbeat.failingSince)}; the owner is alerted once after 15 minutes.` : ""}
           </p>
         </div>
       ) : (

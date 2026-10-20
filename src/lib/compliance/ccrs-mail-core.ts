@@ -613,12 +613,34 @@ export function errorsFromStored(csvs: readonly { filename: string; text: string
 /* ------------------------------------------------------------------ *
  * Heartbeat: write on change, or when the last OK is older than 30 min.
  * ------------------------------------------------------------------ */
-export type MailHeartbeat = { lastRunAt: string; lastOkAt: string | null; ok: boolean; error: string | null; mode: MailAuthMode | null; newMessages: number };
+export type MailHeartbeat = {
+  lastRunAt: string;
+  lastOkAt: string | null;
+  ok: boolean;
+  error: string | null;
+  mode: MailAuthMode | null;
+  newMessages: number;
+  /** S-18c: when the current run of failed checks began (configured monitor only); null while healthy or not set up. */
+  failingSince?: string | null;
+};
+
+/**
+ * S-18c: the start of the current outage. Carried over while the same
+ * configured monitor keeps failing; restarts when the mode changes (a new
+ * setup is a new outage); null when healthy or not set up ("not set up" is
+ * not an outage and never alerts).
+ */
+export function nextFailingSince(prev: MailHeartbeat | null, ok: boolean, mode: MailAuthMode | null, nowIso: string): string | null {
+  if (ok || !mode) return null;
+  if (prev && !prev.ok && prev.mode === mode && prev.failingSince) return prev.failingSince;
+  return nowIso;
+}
 export const HEARTBEAT_REFRESH_MINUTES = 30;
 
 export function shouldWriteHeartbeat(prev: MailHeartbeat | null, next: MailHeartbeat, nowMs: number): boolean {
   if (!prev) return true;
   if (prev.ok !== next.ok || prev.error !== next.error || prev.mode !== next.mode) return true;
+  if ((prev.failingSince ?? null) !== (next.failingSince ?? null)) return true; // S-18c: the outage start is persisted at once
   if (next.newMessages > 0) return true;
   const last = Date.parse(prev.lastRunAt);
   return !Number.isFinite(last) || nowMs - last >= HEARTBEAT_REFRESH_MINUTES * 60_000;
@@ -642,6 +664,7 @@ export function heartbeatFromSetting(v: unknown): MailHeartbeat | null {
     error: typeof o.error === "string" ? o.error : null,
     mode: o.mode === "service-account" || o.mode === "oauth-refresh" ? o.mode : null,
     newMessages: typeof o.newMessages === "number" ? o.newMessages : 0,
+    failingSince: typeof o.failingSince === "string" ? o.failingSince : null,
   };
 }
 
@@ -704,5 +727,11 @@ export function __runCcrsMailCoreTests(): { passed: number; failed: number } {
   ok(shouldWriteHeartbeat(hb, { ...hb }, 30 * 60_000), "refresh at 30 min");
   ok(shouldWriteHeartbeat(hb, { ...hb, ok: false, error: "x" }, 60_000), "state change writes");
   ok(heartbeatStale(hb, 46 * 60_000) && !heartbeatStale(hb, 44 * 60_000), "stale after 45 min");
+  ok(nextFailingSince(hb, false, "service-account", "T1") === "T1", "first failure starts the outage");
+  ok(nextFailingSince({ ...hb, ok: false, failingSince: "T0" }, false, "service-account", "T1") === "T0", "outage start carried");
+  ok(nextFailingSince({ ...hb, ok: false, failingSince: "T0" }, false, "oauth-refresh", "T1") === "T1", "mode change restarts");
+  ok(nextFailingSince({ ...hb, ok: false, failingSince: "T0" }, true, "service-account", "T1") === null, "healthy clears");
+  ok(nextFailingSince(null, false, null, "T1") === null, "not set up is not an outage");
+  ok(shouldWriteHeartbeat({ ...hb, ok: false, error: "x" }, { ...hb, ok: false, error: "x", failingSince: "T0" }, 60_000), "an outage start from an old-shape heartbeat is written at once");
   return { passed, failed };
 }
