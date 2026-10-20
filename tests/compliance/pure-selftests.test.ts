@@ -55,6 +55,7 @@ import { __runCcrsMailCoreTests } from "@/lib/compliance/ccrs-mail-core";
 import { __runCcrsStrategyCoreTests } from "@/lib/compliance/ccrs-strategy-core";
 import { __runCcrsWatchdogCoreTests } from "@/lib/compliance/ccrs-watchdog-core";
 import { __runCcrsReseedCoreTests } from "@/lib/compliance/ccrs-reseed-core";
+import { __runCcrsEqualizeCoreTests } from "@/lib/compliance/ccrs-equalize-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
@@ -283,6 +284,11 @@ describe("embedded pure self-test suites", () => {
     const r = __runCcrsReseedCoreTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(12);
+  });
+  it("ccrs-equalize-core (Part 17 §E, S-14: equalize waves)", () => {
+    const r = __runCcrsEqualizeCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(15);
   });
   it("ccrs-issue-display-core (Part 17 S-17a: every withheld row shown with its next step)", () => {
     const r = __runCcrsIssueDisplayTests();
