@@ -50,6 +50,7 @@ export const EQUALIZE_HOLD_CODES = [
   "H_DELIVERY_CONFLICT",
   "H_OURS_DESTROYED",
   "H_POSSIBLY_OURS",
+  "H_COUNTED_ON_SHELF",
   "H_NEGATIVE_QOH",
   "H_LEDGER_MISSING",
   "H_LEDGER_TOUCHED",
@@ -76,6 +77,7 @@ export const EQUALIZE_HOLD_MEANING: Record<EqualizeHoldCode, string> = {
   H_DELIVERY_CONFLICT: "The LCB copy lists this lot id more than once with different values; we cannot tell which is filed.",
   H_OURS_DESTROYED: "Our own system has this exact lot id, marked destroyed. Its destruction belongs in our weekly files, not a cleanup wave.",
   H_POSSIBLY_OURS: "One of our lots has this id as its lot code or product key. It may be stock we still have; a person must check.",
+  H_COUNTED_ON_SHELF: "This barcode was scanned in our audit (the 10/30 count), so the product was on our shelf. It is never zeroed by a wave; a person checks why it is not one of our lots.",
   H_NEGATIVE_QOH: "CCRS shows a negative quantity on hand. Zeroing it is not a removal; ask the examiner.",
   H_LEDGER_MISSING: "Our ledger does not hold this lot. Run the re-seed (S-15) with this same copy first.",
   H_LEDGER_TOUCHED: "One of our own files already touched this lot after the copy was seeded. It is not a stale Cultivera lot.",
@@ -139,6 +141,19 @@ export type EqualizeInput = {
   snapshotDate: string;
   /** YYYY-MM-DD written as UpdatedDate / SubmittedDate */
   waveDate: string;
+  /**
+   * S-14b: YYYY-MM-DD of the integrator's (Cultivera's) FINAL upload. The copy
+   * must be dated strictly after it: the final files change quantities and may
+   * create lots after any earlier copy. No override (sales alone cannot prove
+   * which lots the final files touched).
+   */
+  finalUploadDate: string;
+  /**
+   * S-14b: every barcode scanned in our full audit (count-barcodes.ts). A lot
+   * whose id is one of these (case-insensitive) is held, never zeroed, unless
+   * it is one of our lots by exact id. An empty list must be chosen explicitly.
+   */
+  countedBarcodes: readonly string[];
   /** W1, W2, ... */
   wave: string;
   licenseNumber: string;
@@ -153,6 +168,7 @@ export type EqualizePlan = {
   waveDate: string;
   copyAsOf: string;
   snapshotDate: string;
+  finalUploadDate: string;
   licenseNumber: string;
   submittedBy: string;
   policy: EqualizePolicy;
@@ -168,6 +184,8 @@ export type EqualizePlan = {
     copyOpen: number;
     alreadyZero: number;
     ours: number;
+    /** distinct barcodes in our audit list (case-insensitive) */
+    counted: number;
     wave: number;
     nextWave: number;
     sumRemoved: string;
@@ -303,6 +321,19 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
   // lot sold/received between them would be misjudged.
   if (snapshotDate < copyAsOf) throw new EqualizeError(`our snapshot (${snapshotDate}) is older than the copy (${copyAsOf}); take a new count on or after the copy's date`);
   if (waveDate < snapshotDate) throw new EqualizeError(`wave date ${waveDate} is before the snapshot ${snapshotDate}`);
+  // S-14b: the copy must postdate the integrator's final upload (Part 17 §E.6).
+  if (!isoOk(input.finalUploadDate)) throw new EqualizeError(`Cultivera's final upload day must be a real date written YYYY-MM-DD (got ${JSON.stringify(input.finalUploadDate)}); it is never assumed`);
+  const finalUploadDate = input.finalUploadDate;
+  if (copyAsOf <= finalUploadDate) {
+    throw new EqualizeError(
+      `the copy (${copyAsOf}) is from before or on Cultivera's final upload day (${finalUploadDate}). Cultivera's last files change quantities and can add lots after that copy, so a wave from it could zero the wrong lots. ` +
+        `Request a new copy from the examiner after ${finalUploadDate}, merge it (S-15), then plan the wave from that copy.`,
+    );
+  }
+  if (!Array.isArray(input.countedBarcodes) || input.countedBarcodes.some((b) => typeof b !== "string")) {
+    throw new EqualizeError("counted barcodes must be a list of text (the audit list; pass an empty list only when there is no audit)");
+  }
+  const counted = new Set(input.countedBarcodes.map((b) => b.trim().toLowerCase()).filter((b) => b !== ""));
 
   // Ledger: no duplicates, Sales Floor on file.
   const seen = new Set<string>();
@@ -361,6 +392,7 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
     if (e.seedConflicts) { hold(id, "H_DELIVERY_CONFLICT", `${e.seedConflicts.length} rows in the copy`); continue; }
     if (mine && mine.destroyed) { hold(id, "H_OURS_DESTROYED", "our lot with this id is destroyed"); continue; }
     if (maybeOurs.has(id)) { hold(id, "H_POSSIBLY_OURS", "matches one of our lot codes or product keys"); continue; }
+    if (counted.has(id.trim().toLowerCase())) { hold(id, "H_COUNTED_ON_SHELF", "scanned in our audit"); continue; }
     if (qoh < BigInt(0)) { hold(id, "H_NEGATIVE_QOH", `QoH ${qohText}`); continue; }
     const L = ledgerById.get(id);
     if (!L) { hold(id, "H_LEDGER_MISSING", "not in the ledger"); continue; }
@@ -414,14 +446,14 @@ export function planEqualizeWave(input: EqualizeInput): EqualizePlan {
     ? take.map((c) => adjustmentRowFor({ licenseNumber: input.licenseNumber, lotId: c.id, qty: c.qty, wave, adjustmentDate: waveDate, createdDate: waveDate, by: input.submittedBy }))
     : [];
   return {
-    wave, waveDate, copyAsOf, snapshotDate, licenseNumber: input.licenseNumber, submittedBy: input.submittedBy, policy: { ...policy },
+    wave, waveDate, copyAsOf, snapshotDate, finalUploadDate, licenseNumber: input.licenseNumber, submittedBy: input.submittedBy, policy: { ...policy },
     lots: take.map((c) => ({ id: c.id, qty: c.qty })),
     inventoryRows: take.map((c) => c.row),
     adjustmentRows,
     holds,
     nextWave: rest.map((c) => c.id),
     counts: {
-      copyOpen, alreadyZero, ours, wave: take.length, nextWave: rest.length,
+      copyOpen, alreadyZero, ours, counted: counted.size, wave: take.length, nextWave: rest.length,
       sumRemoved: sumDecimals(take.map((c) => c.qty), "QoH"),
       nominalCost: take.filter((c) => c.nominal).length,
       strainOverride: take.filter((c) => c.override).length,
@@ -649,6 +681,18 @@ export function parseOurLine(line: string): OurLot {
  * The owner's review document
  * ------------------------------------------------------------------ */
 
+/**
+ * S-14b: the audit list file written by count-barcodes.ts: one barcode per
+ * line, as scanned. Blank lines and lines starting with # are skipped; spaces
+ * around a barcode are trimmed. An empty list is refused: "no audit" must be
+ * said out loud (--no-counted-file), never implied by an empty file.
+ */
+export function parseCountedList(text: string): string[] {
+  const out = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "" && !l.startsWith("#"));
+  if (out.length === 0) throw new EqualizeError("the audit list has no barcodes; pass --no-counted-file if there truly was no audit");
+  return out;
+}
+
 const md = (s: string) => s.replace(/[|\\`*_[\]<>]/g, (ch) => `\\${ch}`).replace(/\r?\n/g, " ");
 
 export function equalizeReport(plan: EqualizePlan, limit = 500): string {
@@ -657,7 +701,7 @@ export function equalizeReport(plan: EqualizePlan, limit = 500): string {
   const lines: string[] = [
     `# CCRS equalize wave ${plan.wave}`,
     "",
-    `Copy current through ${plan.copyAsOf}. Our count taken ${plan.snapshotDate}. Wave day ${plan.waveDate}. License ${plan.licenseNumber}.`,
+    `Copy current through ${plan.copyAsOf} (after Cultivera's final upload ${plan.finalUploadDate}). Our count taken ${plan.snapshotDate}. Wave day ${plan.waveDate}. License ${plan.licenseNumber}.`,
     "",
     "What this wave does, in the examiner's words: \"submit an inventory update for all those ids and get them to zero and then an inventory adjustment for those ids, with the reason as reconciliation\" [EXAM L0430].",
     "",
@@ -677,6 +721,7 @@ export function equalizeReport(plan: EqualizePlan, limit = 500): string {
     `| Open in the copy (quantity not 0) | ${c.copyOpen} |`,
     `| Already 0 in the copy (counted, never sent) | ${c.alreadyZero} |`,
     `| Ours (our system holds this exact lot id; never zeroed) | ${c.ours} |`,
+    `| Barcodes from our audit (never zeroed) | ${c.counted} |`,
     `| In this wave (Update to 0) | ${c.wave} |`,
     `| Ready for the next wave | ${c.nextWave} |`,
     `| Held (see below) | ${holdsTotal(plan)} |`,
@@ -730,7 +775,7 @@ export function __runCcrsEqualizeCoreTests(): { passed: number; failed: number }
     { t: "Area", id: "C1", name: "Sales Floor", prod: null, state: "seed", source: "seed:x", lastFile: null, lastOp: null, uploadedAt: null, updatedAt: "1", payload: {} },
   ];
   const inp = (copy: SeedEntity[], o: Partial<EqualizeInput> = {}): EqualizeInput => ({
-    copy, ledger: [...fixed, ...copy.map(row)], ours: [], copyAsOf: "2026-11-08", snapshotDate: "2026-11-08", waveDate: "2026-11-15", wave: "W1", licenseNumber: "413541", submittedBy: "Greenway Marijuana", policy: { ...DEFAULT_EQUALIZE_POLICY }, ...o,
+    copy, ledger: [...fixed, ...copy.map(row)], ours: [], copyAsOf: "2026-11-08", snapshotDate: "2026-11-08", waveDate: "2026-11-15", finalUploadDate: "2026-11-01", countedBarcodes: [], wave: "W1", licenseNumber: "413541", submittedBy: "Greenway Marijuana", policy: { ...DEFAULT_EQUALIZE_POLICY }, ...o,
   });
 
   ok(parseCcrsDate("8/30/2024") === "2024-08-30" && parseCcrsDate("2/29/2025") === null && parseCcrsDate("2024-08-30") === null, "dates strict");
@@ -757,6 +802,11 @@ export function __runCcrsEqualizeCoreTests(): { passed: number; failed: number }
   ok(throws(() => equalizeSources(p, "both")), "same batch refused when off");
   ok(throws(() => ADJUST_PHASE_SQL("W1'--")) && ADJUST_PHASE_SQL("W3").includes("f.wave = 'W3'"), "adjust SQL label checked");
   ok(Object.keys(p.counts.held).join() === EQUALIZE_HOLD_CODES.join(), "hold counts in fixed order");
+  ok(throws(() => planEqualizeWave(inp([ent("A")], { copyAsOf: "2026-11-01", snapshotDate: "2026-11-08" })), /final upload day/), "copy on the final upload day refused");
+  ok(planEqualizeWave(inp([ent("A")], { copyAsOf: "2026-11-02" })).lots.length === 1, "copy the day after the final upload plans");
+  ok(throws(() => planEqualizeWave(inp([ent("A")], { finalUploadDate: "" })), /never assumed/), "final upload day required");
+  ok(planEqualizeWave(inp([ent("S")], { countedBarcodes: [" s "] })).holds[0]?.code === "H_COUNTED_ON_SHELF", "audited barcode held (case-insensitive)");
+  ok(throws(() => parseCountedList("#none\n")) && parseCountedList("a\r\n b \n").join() === "a,b", "audit list parsed, empty refused");
   return { passed, failed };
 }
 

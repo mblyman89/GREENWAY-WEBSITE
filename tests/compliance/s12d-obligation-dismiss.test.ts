@@ -181,9 +181,10 @@ describe("compliance calendar + dashboard count honour the context", () => {
       if (e.task.id === "liq1295" || e.task.id === "ccrs_weekly") continue;
       waivers.set(`${e.task.id}:${e.period.periodKey}`, { obligation: "liq1295", periodKey: e.period.periodKey, reason: "should be ignored", waivedAt: "t", waivedByEmail: null });
     }
-    expect(waivers.size).toBe(3);
+    // R-3 added dor_excise: a DOR return can NOT be dismissed on the CCRS page either.
+    expect(waivers.size).toBe(4);
     const withStray = evaluateCalendar(today, {}, { startDate: null, waivers } as unknown as ObligationContext);
-    for (const id of ["cctv_retention", "scale_calibration", "badge_visitor_log"]) {
+    for (const id of ["cctv_retention", "scale_calibration", "badge_visitor_log", "dor_excise"]) {
       const e = withStray.find((x) => x.task.id === id)!;
       expect(e.status).toBe(raw.find((x) => x.task.id === id)!.status);
       expect(e.waiver).toBeNull();

@@ -13,9 +13,20 @@
  * reseed-ccrs-ledger.ts, same copy files) and our own full count was taken on
  * or after the copy's date.
  *
+ * S-14b (Part 17 §E.6), two facts every inventory-phase run must be given:
+ *   --final-upload-date 2026-11-01   the day Cultivera made its LAST upload (the
+ *                                    hand-over card). The copy must be dated
+ *                                    AFTER it, or the run is refused.
+ *   --counted-file counted.txt       the audit list (count-barcodes.ts): every
+ *                                    barcode scanned on 10/30 is never zeroed.
+ *   (or --no-counted-file, said out loud, when there was no audit)
+ * When our lots are read live (--psql, no --ours-file) the snapshot date must
+ * be today in Pacific time: that read IS the snapshot.
+ *
  * Phase 1 - the Inventory Updates (plan first, always):
  *   npx tsx scripts/compliance/equalize-ccrs-wave.ts --phase inventory --wave W1 \
- *     --wave-date 2026-11-15 --copy-as-of 2026-11-08 --snapshot-date 2026-11-08 \
+ *     --wave-date 2026-11-15 --copy-as-of 2026-11-08 --snapshot-date 2026-11-15 \
+ *     --final-upload-date 2026-11-01 --counted-file counted.txt \
  *     --inventory Inventory.csv --product Product_report.csv --strain Strains.csv --area Area.csv \
  *     --psql "<PGURL>" --report w1-plan.md [--out w1-review/]
  *   (or --ledger-file <LEDGER_READ_SQL output> and --ours-file <OURS_READ_SQL output>)
@@ -51,6 +62,7 @@ import {
   EqualizeError,
   OURS_READ_SQL,
   equalizeEmitPayload,
+  parseCountedList,
   equalizeEmitSql,
   equalizeReport,
   equalizeSources,
@@ -140,6 +152,27 @@ function needExpect(argv: readonly string[], got: string): number | null {
  * SubmittedDate inside the file is the wave/adjust day. They must be the same
  * day (S-01), so an emission is refused unless that day is today in Pacific time.
  */
+/**
+ * S-14b: when our lots are read live from the database, that read is the
+ * snapshot, so the snapshot date must be today (Pacific). A saved --ours-file
+ * keeps whatever date it was read on.
+ */
+export function liveSnapshotRefusal(snapshotDate: string, now: Date): string | null {
+  const today = ccrsDate(now);
+  const want = `${snapshotDate.slice(5, 7)}/${snapshotDate.slice(8, 10)}/${snapshotDate.slice(0, 4)}`;
+  return today === want ? null : `REFUSED: our lots were read live today (${today}, Pacific), so --snapshot-date must be today, not ${want}. Or pass the saved read with --ours-file.`;
+}
+
+function readCounted(argv: readonly string[]): string[] {
+  const file = arg(argv, "counted-file");
+  const none = argv.includes("--no-counted-file");
+  if (file && none) throw new ArgError("give --counted-file <file> OR --no-counted-file, not both");
+  if (none) return [];
+  if (!file) throw new ArgError("give --counted-file <the audit list from count-barcodes.ts>, or --no-counted-file if there was no audit");
+  if (!existsSync(file)) throw new ArgError(`--counted-file ${file} does not exist`);
+  return parseCountedList(readFileSync(file, "utf8"));
+}
+
 export function sameDayRefusal(day: string, now: Date): string | null {
   const today = ccrsDate(now);
   const want = `${day.slice(5, 7)}/${day.slice(8, 10)}/${day.slice(0, 4)}`;
@@ -203,14 +236,21 @@ export function main(argv: readonly string[] = process.argv): number {
     const copyAsOf = arg(argv, "copy-as-of");
     const snapshotDate = arg(argv, "snapshot-date");
     if (!copyAsOf || !snapshotDate) { console.error("--copy-as-of and --snapshot-date are required"); return 2; }
+    const finalUploadDate = arg(argv, "final-upload-date");
+    if (!finalUploadDate) { console.error("--final-upload-date is required: the day Cultivera made its last upload (see the hand-over card). The copy must be dated after it."); return 2; }
+    const countedBarcodes = readCounted(argv);
     const paths: Record<SeedSource, string | undefined> = { Inventory: arg(argv, "inventory"), Product: arg(argv, "product"), Strain: arg(argv, "strain"), Area: arg(argv, "area") };
     for (const [k, p] of Object.entries(paths)) {
       if (!p || !existsSync(p)) { console.error(`--${k.toLowerCase()} <file> is required and must exist (got ${p ?? "nothing"})`); return 2; }
     }
     const copy = buildLedgerSeed(Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, readFileSync(p!, "utf8")])) as Record<SeedSource, string>).entities;
     const ledger = readLedger(argv);
+    if (!arg(argv, "ours-file") && pg) {
+      const live = liveSnapshotRefusal(snapshotDate, new Date());
+      if (live) { console.error(live); return 1; }
+    }
     const ours = readOurs(argv);
-    const plan = planEqualizeWave({ copy, ledger, ours, copyAsOf, snapshotDate, waveDate, wave, licenseNumber: LICENSE, submittedBy: SUBMITTED_BY, policy });
+    const plan = planEqualizeWave({ copy, ledger, ours, copyAsOf, snapshotDate, waveDate, finalUploadDate, countedBarcodes, wave, licenseNumber: LICENSE, submittedBy: SUBMITTED_BY, policy });
     const got = JSON.stringify(plan.counts);
     console.log(`wave counts: ${got}`);
     writeReport(report, equalizeReport(plan));

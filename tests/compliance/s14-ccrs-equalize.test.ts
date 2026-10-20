@@ -87,6 +87,7 @@ const input = (inv: string[][], o: Partial<EqualizeInput> = {}, ledgerOver: Reco
   const copy = buildLedgerSeed(texts(inv, extraProducts, extraStrains)).entities;
   return {
     copy, ledger: ledgerFrom(copy, ledgerOver), ours: [], copyAsOf: "2026-11-08", snapshotDate: "2026-11-08", waveDate: "2026-11-15", wave: "W1",
+    finalUploadDate: "2026-11-01", countedBarcodes: [],
     licenseNumber: "413541", submittedBy: "Greenway Marijuana", policy: { ...DEFAULT_EQUALIZE_POLICY }, ...o,
   };
 };
@@ -437,7 +438,8 @@ describe("S-14 script end to end (saved files, no database)", () => {
     writeFileSync(path.join(dir, "ours.jsonl"), JSON.stringify(our({ externalId: "OURS" })) + "\n");
     return ["x", "equalize-ccrs-wave.ts", "--phase", "inventory", "--wave", "W1", "--wave-date", "2026-11-15", "--copy-as-of", "2026-11-08", "--snapshot-date", "2026-11-08",
       "--inventory", path.join(dir, "Inventory.csv"), "--product", path.join(dir, "Product.csv"), "--strain", path.join(dir, "Strain.csv"), "--area", path.join(dir, "Area.csv"),
-      "--ledger-file", path.join(dir, "ledger.jsonl"), "--ours-file", path.join(dir, "ours.jsonl")];
+      "--ledger-file", path.join(dir, "ledger.jsonl"), "--ours-file", path.join(dir, "ours.jsonl"),
+      "--final-upload-date", "2026-11-01", "--no-counted-file"];
   };
   it("plans, writes the report and the review files, and prints the counts line", () => {
     const a = setup();
@@ -514,7 +516,7 @@ describe("S-14 wiring and guards", () => {
   });
   it("is registered in the pure self-test runner", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 15)');
+    expect(runner).toContain('assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 24)');
   });
   it("no migration was added by this slice", () => {
     const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();

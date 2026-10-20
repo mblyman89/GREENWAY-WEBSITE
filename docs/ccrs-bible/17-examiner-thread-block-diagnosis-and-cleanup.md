@@ -212,6 +212,30 @@ For each stale lot:
 
 Speed matters (X-13), so the waves should not wait for perfection elsewhere.
 
+### E.6 The hand-over timeline: selling first, cleanup after (owner question D-22; slice S-14b)
+
+**Facts:**
+- Last sale in Cultivera: Sat 10/31 (D-20).
+- Cultivera uploads week 10/25–10/31 on **Sun 11/01**. Greenway's first upload is **Sun 11/08** (D-21; owner reconfirmed 2026-10-20).
+- The migration gives each lot `ccrs_inventory_external_id` = the Cultivera barcode, and skips lots with zero units.
+- The 0248 ledger marks migrated lots that are not in the copy as `unknown`, so they are withheld, never Inserted. The 11/08 batch is therefore safe without a new copy.
+- The last copy took 4 days (asked 9/17 12:27 PM `[EXAM L0059]`, delivered 9/21 12:04 PM `[EXAM L0130]`).
+
+**Why no wave on 10/31 or 11/01.** Cultivera's 11/01 upload changes CCRS after any copy pulled on or before that day. A wave from such a copy could zero a lot that the final upload had just received or adjusted. The planner refuses it (S-14b). An earlier copy may still be merged (S-15): it shrinks the list of withheld rows, but it cannot drive a wave.
+
+| When | What | Tool |
+|---|---|---|
+| Fri 10/30 | Full audit: every lot scanned | Count workbooks |
+| Fri 10/30 (after the audit) | Build the audit list | `count-barcodes.ts --out counted.txt …` (C-146) |
+| Sat 10/31 | Last sale in Cultivera. Scrape the portal after close | Migration import |
+| Sun 11/01 early | Import, count apply, menu check; **open and sell** | Existing cutover steps |
+| Sun 11/01 | Cultivera's final upload (10/25–10/31) | Cultivera |
+| Mon 11/02 | Ask the examiner for a fresh copy, current after 11/01 | Email (C-147) |
+| Sun 11/08 | First Greenway upload: our lots only; unknown lots withheld | Hub, normal weekly |
+| Copy arrives (~11/06 by the 9/17 pace; not promised) | Merge it | S-15 (C-148) |
+| Weeks 2–3 | Waves W1… Each uses a same-day snapshot, `--final-upload-date 2026-11-01` and `--counted-file counted.txt` | `equalize-ccrs-wave.ts` (C-149) |
+| After the last wave | Fresh copy, then verify | S-16 (C-145) |
+
 ---
 
 ## F. WA.gov login: what changed (Oct 12) and what that means for us
@@ -249,7 +273,7 @@ Brian recommends the copy without notice: "after the initial uploads, recommenda
 
 | Step | When | Why | How it enters the system |
 |---|---|---|---|
-| G-1 | Immediately after Cultivera's **last** filing (the cutover; 11/01 go-live) | Closes U-30: catch everything Cultivera filed 9/18 → cutover | A new delivery is loaded by `seed-ccrs-ledger.ts` **with `--expect`** (required for a non-9/18 delivery). The seed is idempotent and refuses a second finalize, so G-1 needs a reviewed **re-seed / diff** procedure (new slice S-15). Until G-1 lands, the first production batch carries the risk above. Mitigation: the first batch Updates only lots in both the seed and our count, and holds the rest (S-12b behaviour) |
+| G-1 | Immediately after Cultivera's **last** filing (Sun 11/01, D-21). Request it Mon 11/02; a copy dated on or before 11/01 cannot drive a wave (S-14b, §E.6) | Closes U-30: catch everything Cultivera filed 9/18 → cutover | A new delivery is loaded by `seed-ccrs-ledger.ts` **with `--expect`** (required for a non-9/18 delivery). The seed is idempotent and refuses a second finalize, so G-1 needs a reviewed **re-seed / diff** procedure (new slice S-15). Until G-1 lands, the first production batch carries the risk above. Mitigation: the first batch Updates only lots in both the seed and our count, and holds the rest (S-12b behaviour) |
 | G-2 | Same day as each equalize wave | D-14 item 2: a wave is built from a same-day pair | The S-16 diff (copy vs ledger vs our inventory) produces the wave's row list |
 | G-3 | After the initial uploads (first production week and after the last wave) | `[EXAM L0568]`: check what was submitted for accuracy | The S-16 diff verifies every row we sent is stored as sent (U-27b/U-44b), closes U-20/U-45b, and confirms zeroed lots read 0 |
 

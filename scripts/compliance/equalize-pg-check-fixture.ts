@@ -44,7 +44,7 @@ export function equalizeFixture() {
   };
   const copy = buildLedgerSeed(texts).entities;
   const ledger = copy.map((e) => ({ t: e.fileType, id: e.externalId, name: e.filedName, prod: e.productExternalId, state: e.state, source: SEED_SOURCE, lastFile: null, lastOp: null, uploadedAt: null, updatedAt: "1789898400000000", payload: e.seedPayload }));
-  const plan = planEqualizeWave({ copy, ledger, ours: [], copyAsOf: "2026-11-08", snapshotDate: "2026-11-08", waveDate: "2026-11-15", wave: "W1", licenseNumber: "413541", submittedBy: "Greenway Marijuana", policy: { ...DEFAULT_EQUALIZE_POLICY } });
+  const plan = planEqualizeWave({ copy, ledger, ours: [], copyAsOf: "2026-11-08", snapshotDate: "2026-11-08", waveDate: "2026-11-15", finalUploadDate: "2026-11-01", countedBarcodes: [], wave: "W1", licenseNumber: "413541", submittedBy: "Greenway Marijuana", policy: { ...DEFAULT_EQUALIZE_POLICY } });
   const invFiles = planOutboxFiles(equalizeSources(plan, "inventory"), { licenseNumber: "413541", now: new Date("2026-11-15T20:00:00Z"), lastStamp: null });
   const invFile = invFiles[0];
   // CCRS rejects data row 2 of the wave file (the lot sorted second); the others land.

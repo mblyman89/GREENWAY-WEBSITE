@@ -545,6 +545,26 @@ this stage adds no new work; it is the formal look-back.
   copy's date are "not judged: too new" and are checked by the next copy. Record
   the answer to U-68 (QoH after sales) and U-27b / U-44b / U-45b in Bible Part 12.
 
+- [ ] **C-146 👤 Fri 10/30, after the audit: turn the count into the audit list (Bible Part 09 S-14b; Part 17 §E.6)** —
+  When every counter's workbook is finished, run (read-only; it writes one new file):
+  `npx tsx scripts/compliance/count-barcodes.ts --out counted-2026-10-30.txt <every counter workbook .xlsx>`.
+  It refuses (exit 1, nothing written) if any workbook has a blocking problem. Fix that and run again.
+  It never overwrites an existing file. Keep `counted-2026-10-30.txt` safe: every equalize wave needs it.
+  No barcode on that list is ever zeroed, even if it is not one of our lots.
+- [ ] **C-147 👤 Mon 11/02: ask the examiner for a fresh copy (Part 17 §G G-1)** —
+  Same four reports (Inventory, Product, Strain, Area) as the 9/21 delivery, and ask the date it is current through.
+  It must be current **after** Cultivera's final upload (Sun 11/01). Last time it took 4 days (U-69).
+  Do not wait for it to open or to upload 11/08: unknown lots are withheld, never Inserted.
+- [ ] **C-148 🤝 When the copy arrives: merge it (Bible Part 09 S-15)** — Use the re-seed / diff loader, reviewed in a session.
+- [ ] **C-149 🤝 Equalize waves, weeks 2–3 (Bible Part 09 S-14 + S-14b)** —
+  Each wave runs on the day it is built: our lots read live that day, the merged copy, and two required inputs:
+  `--final-upload-date 2026-11-01 --counted-file counted-2026-10-30.txt`.
+  The script refuses a copy dated 11/01 or earlier, a live read with a snapshot date other than today, and a missing audit list.
+  After the last wave, do C-145.
+- [ ] **C-150 👤 DOR excise return every month (Bible Part 09 R-3)** —
+  The compliance calendar now lists it, due the 25th (or the next business day) for last month.
+  File and pay in My DOR, then press **Mark done** for that month. Reminders start 5 days before and repeat daily if it is late.
+
 ---
 
 <a id="stage-10"></a>

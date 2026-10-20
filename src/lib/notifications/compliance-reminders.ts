@@ -49,6 +49,8 @@ import { opsPageView } from "@/lib/payments/ach-ops-store";
 import { isLlamaParseConfigured } from "@/lib/inbound-email/llamaparse-provider";
 import { planDeadlineReminders } from "@/lib/payments/timberland-deadline-core";
 import { readOpenFilesForDeadlines } from "@/lib/payments/ach-file-ledger-store";
+import { planDorExciseReminders } from "@/lib/compliance/compliance-calendar-core";
+import { getDoneMap } from "@/lib/compliance/compliance-calendar-store";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
@@ -406,6 +408,22 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
   } catch (e) {
     result.notes.push(
       `Timberland deadline planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
+    );
+  }
+
+  // 8) R-3 - DOR Combined Excise Tax Return (monthly, due the 25th rolled to
+  //    the next business day; 9% late penalty, RCW 82.32.090(1)). "Filed" is
+  //    the S-18 calendar's done map; an unreadable map reads as empty, so the
+  //    reminder nags rather than going quiet. Own try/catch.
+  try {
+    const doneMap = await getDoneMap();
+    const [ty, tm, td] = todayIso.split("-").map(Number);
+    for (const r of planDorExciseReminders({ y: ty, m: tm, d: td }, doneMap)) {
+      reminders.push({ ...r, weekKey: null, linkLabel: "Open the compliance calendar", footnote: "File and pay in My DOR (secure.dor.wa.gov). Then mark the month done on the compliance calendar." });
+    }
+  } catch (e) {
+    result.notes.push(
+      `DOR excise planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
     );
   }
 
