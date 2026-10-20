@@ -489,6 +489,28 @@ Full `tests/compliance` is green. Mutation harness: 0 survived.
 - The menu reason is only as good as `menu_items.hidden_reason`.
 - A lot whose `pos_product_key` does not equal any item's `source_item_id` (after trimming) shows as "no menu item". That is the truth of the join, and the row quotes the exact key, so a near-miss (case, prefix) is visible to the reader. It is not auto-matched.
 
+## S-17c — CCRS sign-in wording says WA.gov (replaces S-09) — DONE in code (2026-10-19)
+
+**Why.** CCRS moved from SAW to WA.gov on 2026-10-12 `[BUL1006 L0010]`. The upload README, the reminder email, the walkthrough, the error-triage footer, the concierge and about 15 docs still said "SAW login". The owner also thought PREprod access proves live access. It does not: "You will need separate WA.gov accounts for the Pre-Production environment and the live environment." `[SIGNIN L0035-L0036]`.
+
+**What changed.**
+- New `ccrs-signin-core.ts` (pure, self-test registered).
+- The six src strings and the docs (Part 11 §G has the list).
+- New evidence: `signin-links.txt`, the PDF link targets.
+- `mutate_check.py`: M149–M156, and `S17C_TESTS` in the baseline.
+
+**Proof.** `tests/compliance/s17c-wagov-signin-wording.test.ts` (26 tests):
+- every grounding line read from the committed evidence (runs in CI);
+- core behaviour per environment;
+- the guardrail tested on the six old strings, wrapped markdown, the DOH line and history lines;
+- a whole-tree scan with zero findings.
+
+Reverting the src/docs changes turns 7 tests red.
+
+**Not covered.** The LCB Portal (SAW per lcb.wa.gov/portal/resources) and the DOH MCR (U-63) are outside CCRS and unchanged. S-09's `portal_login_mode` setting and date notice are dropped: the switch is past and cannot be reverted (Part 11 §F).
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).

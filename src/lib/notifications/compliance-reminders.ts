@@ -38,6 +38,7 @@ import { getWeekResolutions } from "@/lib/compliance/ccrs-week-store";
 import { planMonthlyReminders } from "@/lib/compliance/ccrs-deadline-core";
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
+import { CCRS_LOGIN_LABEL } from "@/lib/compliance/ccrs-signin-core";
 import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
 import { planLargeDraftNotice } from "@/lib/accounting/large-draft-notice-core";
 import { loadUnapprovedDrafts } from "@/lib/accounting/large-draft-notice-store";
@@ -105,7 +106,7 @@ function urgencyColor(u: Reminder["urgency"]): string {
 function reminderHtml(r: Reminder, linkUrl: string): string {
   const footnote =
     r.footnote ??
-    `Upload portal: <a href="https://cannabisreporting.lcb.wa.gov">cannabisreporting.lcb.wa.gov</a> (SAW login).
+    `Upload portal: <a href="https://cannabisreporting.lcb.wa.gov">cannabisreporting.lcb.wa.gov</a> (${CCRS_LOGIN_LABEL} login).
         This is an automated Greenway compliance reminder; it repeats until the week is recorded as
         submitted or nothing-to-report.`;
   return `

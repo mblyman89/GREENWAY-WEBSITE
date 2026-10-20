@@ -210,7 +210,7 @@ blocks). **Preview mode** shows unpublished edits with a glowing badge
   every compliance gate checked live (CCRS batch readiness, sales limits,
   manifests). Check it before submitting a batch.
 - **CCRS reporting** — **no live API**; it's a **CSV a human uploads** to the
-  state's SAW/CCRS portal. Cadence: weekly batch (Sun–Sat, due the following
+  state's CCRS portal (WA.gov login). Cadence: weekly batch (Sun–Sat, due the following
   Sunday) + monthly **LIQ-1295**. A **DO-NOT-UPLOAD** check blocks bad batches.
   CCRS strain types = Indica / Sativa / Hybrid only.
 - **WA advertising & DOH rules:** no health/medical/therapeutic/curative claims

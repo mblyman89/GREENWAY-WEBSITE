@@ -17,7 +17,7 @@
 ## 1. The big idea in one paragraph
 
 Washington's CCRS (Cannabis Central Reporting System) has no API — a retailer
-logs into cannabisreporting.lcb.wa.gov with a SAW account and manually uploads
+logs into cannabisreporting.lcb.wa.gov with a WA.gov account (SAW until 2026-10-12) and manually uploads
 CSV files every week. If a file is malformed, the LCB does not tell you at
 upload time; it emails you later. The app's answer is layered defense: **the
 spec is code** (`src/lib/compliance/ccrs-batch-core.ts` — pure, self-tested,

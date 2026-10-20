@@ -18,7 +18,7 @@ records a **payment reconciliation** so we know each month is filed AND paid. We
 fabricate a payment integration.
 
 ## Method 1 — CCRS "Make a Payment" (ACH) — recommended
-- In CCRS (SAW login at https://cannabisreporting.lcb.wa.gov/), use the **Make a Payment** link.
+- In CCRS (WA.gov login at https://cannabisreporting.lcb.wa.gov/, the live account, not the Pre-Production one), use the **Make a Payment** link.
 - CCRS auto-fills your **license number** and the **current date**. You enter:
   - Payment amount
   - Contact (name, phone number, email)

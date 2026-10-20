@@ -157,7 +157,7 @@ export function ErrorTriagePanel({ licenseNumber, licenseeName, weekStart, weekE
       ) : (
         <p className="mt-3 text-[11px] text-white/35">
           Common outcomes: “Duplicate Strain” is benign (no action). Fixable errors are corrected in
-          the original file and re-uploaded with a matching NumberRecords. Tech/SAW problems go to{" "}
+          the original file and re-uploaded with a matching NumberRecords. CCRS technical problems go to{" "}
           {LCB_CONTACTS.serviceDesk} (360-664-1776).
         </p>
       )}

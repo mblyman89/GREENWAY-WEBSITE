@@ -1,0 +1,13 @@
+SOURCE: https://lcb.wa.gov/sites/default/files/2026-08/CCRS_User_SignIn_Guide.pdf (CIB154 8/26)
+FETCHED: 2026-10-19 (Pacific); PDF md5 0a0ad5a5ba868ff227708fcc4079603d
+METHOD: pypdf link annotations (page, Rect [x1,y1,x2,y2] PDF points, origin bottom-left, page height 792) matched to pdftotext -bbox-layout word boxes (origin top-left).
+NOTE: pdftotext (signin.txt) drops hyperlink targets; this file records them.
+LINK page 2 [510, 634, 560, 649] https://precannabisreporting.lcb.wa.gov/
+LINK page 2 [52, 613, 149, 634] https://precannabisreporting.lcb.wa.gov/
+LINK page 3 [88, 617, 243, 638] https://manage.login.wa.gov/create
+LINK page 3 [88, 595, 319, 617] https://test-manage.login.wa.gov/create
+LINK page 3 [75, 549, 202, 568] https://cannabisreporting.lcb.wa.gov/
+LINK page 4 [227, 236, 353, 257] mailto:servicedesk@lcb.wa.gov
+MAP: page 3 Rect y2=638 -> top 154 = word 'here' yMin 155.3 on 'Create a WA.gov account here' (signin.txt L0037) -> https://manage.login.wa.gov/create
+MAP: page 3 Rect y2=617 -> top 175 = word 'here' yMin 176.8 xMax 316.8 on 'Create a Pre-Production WA.gov account here' (signin.txt L0038) -> https://test-manage.login.wa.gov/create
+MAP: page 3 Rect [75,549,202,568] -> 'CCRS website' (signin.txt L0041) -> https://cannabisreporting.lcb.wa.gov/

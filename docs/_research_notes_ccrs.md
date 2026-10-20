@@ -3,7 +3,7 @@
 ## Becoming "your own reporting entity"
 - Two distinct paths:
   1. **SELF-REPORT (default for a single retailer):** any licensee logs into CCRS at
-     https://cannabisreporting.lcb.wa.gov/ with their OWN SAW (soon WA.gov) account and uploads
+     https://cannabisreporting.lcb.wa.gov/ with their OWN WA.gov account (SAW was replaced on 2026-10-12) and uploads
      their own CSV files. NO integrator application required. This is what replaces paying Cultivera.
   2. **THIRD-PARTY INTEGRATOR:** only needed to report ON BEHALF OF OTHER licensees (what Cultivera/Dutchie do).
      Requires LIQ-1455 "CCRS System Access Application" emailed to examiner@lcb.wa.gov with: integrator
@@ -39,7 +39,7 @@
 - No contingency manifest option.
 
 ## LOGIN TRANSITION
-- SAW → WA.gov single sign-on. CCRS moves to WA.gov Oct 2026; make a WA.gov account at manage.login.wa.gov.
+- SAW → WA.gov single sign-on. CCRS moved to WA.gov on 2026-10-12; live account at manage.login.wa.gov/create, Pre-Production account (separate) at test-manage.login.wa.gov/create.
 
 ## IMPLICATION FOR OUR POS
 - Offline capture is fine and even necessary; sync target is OUR Supabase, NOT CCRS directly.

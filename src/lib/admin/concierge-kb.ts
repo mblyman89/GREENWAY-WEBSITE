@@ -347,7 +347,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     tab: "CCRS",
     href: "/admin/compliance/health",
     facts: [
-      "CCRS has no live API — reporting is a CSV a human uploads to the state's SAW/CCRS portal.",
+      "CCRS has no live API — reporting is a CSV a human uploads to the state's CCRS portal (WA.gov login).",
       "Cadence: a weekly batch (Sunday–Saturday, due the following Sunday) plus the monthly LIQ-1295.",
       "Before uploading, the system runs a DO-NOT-UPLOAD check that blocks a batch with errors, so you never submit a bad file.",
       "CCRS strain types are only Indica, Sativa, or Hybrid — friendly 'leaning' labels collapse to Hybrid on export.",

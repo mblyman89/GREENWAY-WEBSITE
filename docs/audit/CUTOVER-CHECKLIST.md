@@ -115,12 +115,13 @@ Target: everything below done by **Sunday, August 30, 2026**.
 ### Your LCB / CCRS identity
 
 - [ ] **C-010 👤 Log into CCRS today** at https://cannabisreporting.lcb.wa.gov/ with
-  your SAW (SecureAccess Washington) account, just to prove the login works. Don't
+  your WA.gov account (CCRS left SAW on 2026-10-12), just to prove the login works. Don't
   wait until you need it (`CCRS_SELF_REPORTING_GUIDE.md` Step A1).
-- [ ] **C-011 👤 Create a WA.gov account** at https://manage.login.wa.gov —
-  Washington is moving CCRS sign-in to WA.gov single sign-on **around October 2026**,
-  i.e., possibly during your cutover window. Having the account ready means the
-  state's login switch can't lock you out mid-cutover (Step A1, verified).
+- [ ] **C-011 👤 Create TWO WA.gov accounts** — CCRS moved to WA.gov sign-in on
+  **Oct. 12, 2026**. Live: https://manage.login.wa.gov/create. Pre-Production
+  (separate account): https://test-manage.login.wa.gov/create. Register each once
+  at its CCRS site with the CCRS email on file with LCB Licensing (Step A1;
+  CCRS Bible Part 11 §G).
 - [ ] **C-012 👤 Confirm your CCRS profile is linked to license 413541 and that you
   (or a trusted staffer) are the active administrator** on the license (Step A2).
 - [ ] **C-013 👤 Put the two compliance clocks on your real calendar now:** CCRS
@@ -336,7 +337,7 @@ calendar. **Cultivera stays live and keeps submitting; you shadow it.**
 - [ ] **C-104 👤 The one-time REAL upload test (T-136):** once during this stage —
   after C-001 (GW-010 fixed) and ideally in week 3 or 4 — do the tiny real
   round-trip exactly as TEST-PLAN T-136 describes: a handful of small real sales →
-  Sale CSV → upload to CCRS under your own SAW login with a clear filename →
+  Sale CSV → upload to CCRS under your own WA.gov login with a clear filename →
   watch the Processing Status (PST) until it processes clean. There is no LCB
   sandbox; this small, controlled real upload IS the test (`OWNER-TASKLIST.md` §7).
   ⚠️ Coordinate the date range so it doesn't collide with what Cultivera submits —
@@ -392,7 +393,7 @@ this stage adds no new work; it is the formal look-back.
 
 - [ ] **C-120 👤 Sunday, October 18: submit the FIRST self-reported upload** — the
   file for the week of Oct 11–17 (the prior completed CCRS week), generated from
-  the back office, uploaded under your SAW login. This is guide Part B step 4,
+  the back office, uploaded under your WA.gov login. This is guide Part B step 4,
   on the chosen Sunday.
 - [ ] **C-121 👤 Watch the PST until that file processes clean.** If any rows
   reject: save the exact error text (it names the row and column), bring it to a
@@ -464,7 +465,7 @@ is guessed; calendar dates were computed against the real 2026 calendar.
 | CCRS week = Sunday–Saturday, due the following Sunday; no zero-change filing | `docs/CCRS_SELF_REPORTING_GUIDE.md` Step A4 |
 | LIQ-1295 monthly even at zero sales; WAC 314-55-092(2) suspension risk | same, Step A4 |
 | CCRS = CSV upload only, NO API, no sandbox; data not retrievable (Public Records only); PST per filename | same, Step A3; `docs/audit/OWNER-TASKLIST.md` §7 |
-| WA.gov single sign-on migration ~Oct 2026; pre-create account | same, Step A1 |
+| CCRS moved to WA.gov sign-in on 2026-10-12; separate live and Pre-Production accounts | same, Step A1; CCRS Bible Part 11 §G |
 | Dual-run 2–4 weeks, Sunday boundary, only Cultivera submits; reconcile KB; stop Cultivera only after clean cycle; LIQ-1295 never pauses | same, Part B |
 | GW-010 (tax overstatement ~46%) must be fixed before ANY real upload | `docs/audit/FINDINGS.md` GW-010; `OWNER-TASKLIST.md` §7 |
 | 35 findings; severity/status conventions; ACCEPTED-RISK requires owner sign-off | `docs/audit/FINDINGS.md`; `docs/audit/README.md` |

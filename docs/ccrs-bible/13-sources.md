@@ -109,6 +109,7 @@ Location: `docs/ccrs-bible/evidence/2026-10-19-owner-request/`. These files are 
 | `[EXAM L####]` | Owner's 2026-10-19 message, verbatim (hub text, 10/07 PREprod success emails, full examiner thread 9/17–10/5) | Pasted by the owner; CR stripped | 2026-10-19 | `6da5d9498997fc140402d58a924c78f7` | 852 |
 | `[FAQ19 L####]` | LCB CCRS FAQ (new revision) | `https://lcb.wa.gov/ccrs/faq` | 2026-10-19 | `9e0c507b1a2f309d5f23eccc5d85bc68` (html, not committed: `3d9acb411fdc7dc7cbdf998f9cd8ecf5`) | 781 |
 | `[SIGNIN L####]` | CCRS User Sign-In Guide, CIB154 8/26 | `https://lcb.wa.gov/sites/default/files/2026-08/CCRS_User_SignIn_Guide.pdf` (PDF md5 `0a0ad5a5ba868ff227708fcc4079603d`, not committed) | 2026-10-19 | `85309bc9fa53207182c899898101a014` | 74 |
+| (no pin; read by tests) | Hyperlink targets of the Sign-In Guide PDF: pdftotext drops them, so `signin-links.txt` records each link annotation (page, Rect) and the "here" word it covers | Same PDF, md5 `0a0ad5a5ba868ff227708fcc4079603d`, read with pypdf + `pdftotext -bbox-layout` | 2026-10-19 | `6ed13607088418c384a375239d19c0cd` | 13 |
 | `[BUL1006 L####]` | LCB bulletin "Oct. 12: CCRS Transition to WA.gov Login" (sent 10/06/2026 11:08 AM PDT) | `https://content.govdelivery.com/accounts/WALCB/bulletins/42e03cc` (raw html committed, md5 `b2d8e3f0ee5d596045f16fa03286df07`) | 2026-10-19 | `67bee0924c49dec1d23d67d3540be2c4` | 21 |
 
 **Re-verified unchanged 2026-10-19 (md5):**

@@ -43,7 +43,7 @@ export const EXCISE_SENDER_FROM_DEFAULT = "michael@greenwaymarijuana.com";
 /** The address CC'd on every submission so the store keeps its own copy. */
 export const EXCISE_SENDER_CC = "contact@greenwaymarijuana.com";
 
-/** CCRS portal (SAW login) — "Make a Payment" ACH path. */
+/** CCRS portal (WA.gov login since 2026-10-12, Part 11 §F) — "Make a Payment" ACH path. */
 export const CCRS_PORTAL_URL = "https://cannabisreporting.lcb.wa.gov/";
 
 /** Retail Lockbox / PayStation deep-link base. */

@@ -30,10 +30,14 @@ Either way: **the licensee is always legally responsible for the accuracy of wha
 
 ### Step A1 — Create/confirm your login
 - CCRS lives at **https://cannabisreporting.lcb.wa.gov/**.
-- Sign in with your **SAW (SecureAccess Washington)** account today.
-- **Transition note:** WA is moving CCRS sign-in to **WA.gov single sign-on around October 2026**.
-  Create a WA.gov account ahead of time at **https://manage.login.wa.gov** so you're not locked out
-  during the switch.
+- Sign in with your **WA.gov** account. CCRS left SAW on Oct. 12, 2026; SAW accounts did not
+  carry over (CCRS Bible Part 11 §F/§G).
+- **Two separate WA.gov accounts:** one for live CCRS (create at https://manage.login.wa.gov/create)
+  and one for Pre-Production (create at https://test-manage.login.wa.gov/create). Having the
+  Pre-Production one does not give you live access.
+- First sign-in only: enter the email you use for CCRS reporting (it must already be on file with
+  LCB Licensing) and click Register. WA.gov account problems: WaTech (https://wa.gov/get-help);
+  CCRS problems: servicedesk@lcb.wa.gov.
 
 ### Step A2 — Confirm your license is linked and you are the active admin
 - Make sure your CCRS profile is tied to your I-502 retail license.
@@ -128,7 +132,7 @@ your own store.
 ## QUICK REFERENCE
 
 - CCRS portal: https://cannabisreporting.lcb.wa.gov/
-- Future WA.gov login: https://manage.login.wa.gov (transition ~Oct 2026)
+- WA.gov login (CCRS since Oct. 12, 2026): live account https://manage.login.wa.gov/create; Pre-Production account (separate) https://test-manage.login.wa.gov/create
 - Integrator application email: examiner@lcb.wa.gov (Path B only)
 - Weekly cadence: Sun–Sat week, due by the following **Sunday**.
 - Monthly: **LIQ-1295** every month even with zero sales; pay by due date.

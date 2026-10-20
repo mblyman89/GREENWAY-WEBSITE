@@ -17,6 +17,12 @@
  */
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/admin/ui";
+import {
+  CCRS_LOGIN_LABEL,
+  CCRS_SIGNIN_SERVICE_DESK,
+  WAGOV_CREATE_ACCOUNT_URLS,
+  envOfPortalUrl,
+} from "@/lib/compliance/ccrs-signin-core";
 
 type FileSummary = { type: string; fileName: string; recordCount: number; empty: boolean };
 
@@ -89,6 +95,8 @@ function fmtRemaining(ms: number): string {
 export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, portalUrl }: Props) {
   const PORTAL_URL = portalUrl ?? PROD_PORTAL_URL;
   const portalHost = PORTAL_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  // S-17c: CCRS signs in with WA.gov since 2026-10-12; PREprod needs its own account.
+  const signinEnv = envOfPortalUrl(PORTAL_URL);
   const raw = useSyncExternalStore(
     storeSubscribe,
     () => {
@@ -181,8 +189,19 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, p
           <a href={PORTAL_URL} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] underline">
             {portalHost}
           </a>{" "}
-          and sign in with your SecureAccess Washington (SAW) account. (The LCB is moving CCRS to
-          WA.gov login around Oct 2026.)
+          and choose to sign in. You are taken to {CCRS_LOGIN_LABEL}: sign in with{" "}
+          {signinEnv === "preprod" ? "your Pre-Production WA.gov account" : "your WA.gov account"}. Pre-Production and
+          live need separate WA.gov accounts (
+          <a
+            href={WAGOV_CREATE_ACCOUNT_URLS[signinEnv]}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[var(--admin-accent)] underline"
+          >
+            create one
+          </a>
+          ). First time only: enter the email you use for CCRS reporting (already on file with LCB Licensing) and click
+          Register. WA.gov account problems: WaTech; CCRS problems: {CCRS_SIGNIN_SERVICE_DESK}.
         </p>
       ),
     },

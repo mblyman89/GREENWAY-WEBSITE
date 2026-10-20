@@ -61,3 +61,32 @@ The only way to *know* before October is the examiner's written answer (Q8) and,
   - `concierge-kb.ts:350`
   
   The line numbers in §B above are older.
+
+## G. S-17c done (2026-10-19): CCRS sign-in wording is WA.gov everywhere
+
+**Source of truth:** `src/lib/compliance/ccrs-signin-core.ts` (pure). It holds the label, the switch date, the two create-account links, WaTech help, the service desk, the per-environment sign-in steps, and the guardrail `ccrsLoginWordingIssues`.
+
+**Grounding (all verbatim, in the repo):**
+- "on Monday, Oct. 12, the Cannabis Central Reporting System (CCRS) will transition from using SecureAccess Washington (SAW) to the new WA.gov interface for login" `[BUL1006 L0010]`.
+- "Other LCB applications will move to using WA.gov next year." `[BUL1006 L0013]`. So the LCB Portal (licensing requests, card payments) may still be SAW. Nothing here speaks for it.
+- "You will need separate WA.gov accounts for the Pre-Production environment and the live environment." `[SIGNIN L0035-L0036]`.
+- The two "here" links of `[SIGNIN L0037-L0038]` resolve, from the PDF's link annotations, to `https://manage.login.wa.gov/create` (live) and `https://test-manage.login.wa.gov/create` (Pre-Production). Evidence: `evidence/.../signin-links.txt`. Both URLs returned HTTP 200 on 2026-10-19.
+- "This email address must already have been set up with LCB Licensing." `[SIGNIN L0062]`.
+- "Contact the LCB ITS Service Desk (servicedesk@lcb.wa.gov) for assistance." `[SIGNIN L0069]`.
+- WA.gov account problems: "Submit a WA.gov accounts help request" `[FAQ19 L0172]`, "with the WaTech Support Center." `[FAQ19 L0173]`.
+- "These environments are autonomous and do not share administration or reporting data." `[FAQ19 L0369]`.
+
+**What changed:**
+- Upload README header: "(WA.gov login)" for production. PREprod gets "(WA.gov login - your PRE-PRODUCTION WA.gov account, separate from the live one)".
+- Reminder email footer: "(WA.gov login)".
+- Walkthrough sign-in step: per environment, with the create link, the one-time Register step and the help routes.
+- Error-triage footer: "CCRS technical problems".
+- Concierge fact: the CCRS portal uses a WA.gov login.
+- Excise comment.
+- Docs: the self-reporting guide (Step A1 + quick reference), the cutover checklist (C-010, C-011, the "SAW login" in two upload steps, and the reference table), the owner tasklist, the test plan, the audit bible, the data model, excise methods, the project guide, the compliance bible, returns/destruction, the command-center research, the roadmap and the research notes.
+
+**What stays SAW, on purpose:**
+- The DOH Medical Cannabis Registry login at the register (`saw-prefill-core.ts`, `SaleFlow.tsx`, the staffing "SAW username"). That is DOH, not CCRS. It is not verified whether DOH has moved to WA.gov, so it is not changed (see U-63).
+- Part 02 §4/§6 quote the LCB's SAW-era guides verbatim. They are history.
+
+**Guardrail:** `tests/compliance/s17c-wagov-signin-wording.test.ts` scans every `.ts/.tsx/.md` under `src/` and `docs/` (except `docs/ccrs-bible/` and the guardrail module itself). Any line naming SAW within one line of a CCRS word fails, unless it is history ("from SAW to", "left SAW", "SAW → WA.gov", "until 2026-10-12", …). The test also proves the guardrail flags each of the six old strings, and that it spares the DOH line.

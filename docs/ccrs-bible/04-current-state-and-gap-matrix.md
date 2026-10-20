@@ -285,7 +285,7 @@ Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = wha
 | N-07 stale prose | OPEN | API guide exists (Part 02 §3); no "Processing Status" page in guide | `docs/CCRS_SELF_REPORTING_GUIDE.md` A5.4 "Processing Status (PST)", Part C "no API" | correct both to point at Part 02 | S-08 |
 | N-08 duplicate strain benign vs Strain file weekly | INFO | "Duplicate Strain" = no action `[G L0325 L0359]` | triage rule `duplicate_strain` benign — correct | none | — |
 | N-09 SaleDetail uniqueness | INFO | "All records with the same SaleExternalIdentifier have a unique SaleDetailExternalIdentifier" `[G L0397-L1399]` | `${saleExternalId}-${l.id.slice(0,8)}` L417 — 8 hex chars of a uuid; collision within one order practically impossible; `checkSaleIdentifierIntegrity` (`ccrs-identifiers.ts` L146) exists | keep; ensure integrity check is in the gate as error | S-03 |
-| N-10 WA.gov | OPEN | Oct 2026, manual account `[FAQ L0010-L0012]` | `PORTAL_URL` L30 + SAW wording in walkthrough and `docs/CCRS_SELF_REPORTING_GUIDE.md` | Part 11 | S-09 |
+| N-10 WA.gov | CLOSED 2026-10-19 by S-17c (Part 11 §G); was OPEN | Oct 2026, manual account `[FAQ L0010-L0012]` | `PORTAL_URL` L30 + SAW wording in walkthrough and `docs/CCRS_SELF_REPORTING_GUIDE.md` | Part 11 | S-09 |
 
 ## D. Known conflicts between repo prose and the LCB sources (LCB wins)
 

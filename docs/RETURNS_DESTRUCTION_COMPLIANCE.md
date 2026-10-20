@@ -250,8 +250,8 @@ templates:
    destruction staging should NOT be filed as a CCRS quarantine area. The
    app's internal `quarantine` lot status is an internal shop-floor signal
    only; it is not reported as a CCRS quarantine area.
-9. **Login:** CCRS uses SecureAccess Washington (SAW); LCB has announced a
-   transition to WA.gov login (Oct 2026). Harvest.CSV / updated Manifest.CSV
+9. **Login:** CCRS uses WA.gov login since Oct. 12, 2026 (SecureAccess
+   Washington (SAW) was replaced; CCRS Bible Part 11 §F). Harvest.CSV / updated Manifest.CSV
    (Oct 2025) are producer/processor requirements and do not change retailer
    disposition reporting.
 

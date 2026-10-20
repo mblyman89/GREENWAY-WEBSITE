@@ -85,6 +85,9 @@ S17A_TESTS = "tests/compliance/s17a-hub-issue-rows.test.tsx"
 # S-17b honest orphans + hub ledger self-check (Part 17 §C.4 defect 1, §K.4; U-60).
 LOTPROD = "src/lib/compliance/ccrs-lot-product-core.ts"
 S17B_TESTS = "tests/compliance/s17b-honest-orphans-and-hub-selfcheck.test.ts"
+# S-17c WA.gov sign-in wording (Part 11 §F/§G).
+SIGNIN = "src/lib/compliance/ccrs-signin-core.ts"
+S17C_TESTS = "tests/compliance/s17c-wagov-signin-wording.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -1149,6 +1152,70 @@ MUTATIONS = [
         S17B_TESTS,
         "An enriched not-in-menu reason keeps its S-17a class.",
     ),
+    (
+        'M149-s17c-preprod-create-url-swapped',
+        SIGNIN,
+        '  preprod: "https://test-manage.login.wa.gov/create",',
+        '  preprod: "https://manage.login.wa.gov/create",',
+        S17C_TESTS,
+        'The PREprod account is created on the test WA.gov site [SIGNIN L0038 + PDF link].',
+    ),
+    (
+        'M150-s17c-env-detect-always-prod',
+        SIGNIN,
+        '  return /precannabisreporting\\.lcb\\.wa\\.gov/i.test(portalUrl) ? "preprod" : "prod";',
+        '  return /precannabisreporting\\.lcb\\.wa\\.gov/.test(portalUrl) && false ? "preprod" : "prod";',
+        S17C_TESTS,
+        'A PREprod portal URL must give PREprod sign-in wording.',
+    ),
+    (
+        'M151-s17c-preprod-phrase-drops-separate',
+        SIGNIN,
+        'account, separate from the live one`',
+        'account`',
+        S17C_TESTS,
+        'PREprod needs its own WA.gov account [SIGNIN L0035-L0036].',
+    ),
+    (
+        'M152-s17c-guardrail-blind-to-wrapped-lines',
+        SIGNIN,
+        '    const ctx = [lines[i - 1] ?? "", l, lines[i + 1] ?? ""].join(" ");',
+        '    const ctx = l;',
+        S17C_TESTS,
+        'Wrapped markdown (SAW next line after CCRS) must be caught.',
+    ),
+    (
+        'M153-s17c-guardrail-history-too-loose',
+        SIGNIN,
+        '|left SAW|until 2026-10-12|',
+        '|left SAW|until 2026-10-12|SAW|',
+        S17C_TESTS,
+        'A bare SAW mention must not count as history.',
+    ),
+    (
+        'M154-s17c-guardrail-misses-triage-idiom',
+        SIGNIN,
+        '|Make a Payment|Tech\\/SAW/i.test(ctx);',
+        '|Make a Payment/i.test(ctx);',
+        S17C_TESTS,
+        "The old 'Tech/SAW problems' footer must be flagged.",
+    ),
+    (
+        'M155-s17c-registration-rule-dropped',
+        SIGNIN,
+        '(it must already be on file with LCB Licensing) and click Register.',
+        'and click Register.',
+        S17C_TESTS,
+        'Registration email must be on file with LCB Licensing [SIGNIN L0062].',
+    ),
+    (
+        'M156-s17c-readme-back-to-saw',
+        OUTBOX,
+        '(${ccrsLoginPhrase(env)})',
+        '(SAW login)',
+        S17C_TESTS,
+        'The README names WA.gov, not SAW.',
+    ),
 ]
 
 
@@ -1195,6 +1262,7 @@ def main() -> int:
         P11_TESTS,
         S17A_TESTS,
         S17B_TESTS,
+        S17C_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)
