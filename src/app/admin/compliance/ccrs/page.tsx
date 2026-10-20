@@ -56,10 +56,14 @@ import {
   startPreprodLedgerAction,
   assignPreprodProductIdsAction,
   setObligationStartAction,
+  setHandoverFactsAction,
   dismissPeriodAction,
   undoDismissalAction,
 } from "./actions";
 import { getObligationContext, listRecentWaivers } from "@/lib/compliance/obligation-waiver-store";
+import { getHandoverFacts } from "@/lib/compliance/ccrs-handover-store";
+import { planHandover } from "@/lib/compliance/ccrs-handover-core";
+import { HandoverPlanCard } from "@/components/admin/compliance/HandoverPlanCard";
 import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obligation-waiver-core";
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
 import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
@@ -184,6 +188,9 @@ export default async function CcrsCommandCenterPage({
   const overview = await getWeeklyOverview({ lookbackWeeks: 6 });
   // S-12d: first day of sales + dismissals (fails safe: empty = nags as before).
   const obligationCtx = await getObligationContext();
+  // S-17d: the integrator hand-over plan (first upload date, overlap and lateness warnings).
+  const handoverFacts = await getHandoverFacts();
+  const handoverPlan = planHandover({ greenwayFirstSaleDate: obligationCtx.startDate, facts: handoverFacts, todayIso });
   const waiverHistory = isSupabaseServiceConfigured ? await listRecentWaivers(20) : [];
   const ledger = isSupabaseServiceConfigured ? await listWeekSubmissions(12) : [];
 
@@ -432,6 +439,21 @@ export default async function CcrsCommandCenterPage({
             <p className="text-white/40">Changing it requires the &ldquo;Change settings&rdquo; permission.</p>
           )}
         </div>
+      </Section>
+
+      {/* S-17d) Hand-over from the integrator */}
+      <Section
+        title="Hand-over from Cultivera: your first upload"
+        subtitle="Worked out from the first day of sales and the dates Cultivera gives you in writing. CCRS weeks run Sunday to Saturday and are due the next Sunday."
+      >
+        <HandoverPlanCard
+          plan={handoverPlan}
+          facts={handoverFacts}
+          canEdit={canEdit}
+          weekKey={week.key}
+          env={env}
+          action={setHandoverFactsAction}
+        />
       </Section>
 
       {/* 2) Week picker */}

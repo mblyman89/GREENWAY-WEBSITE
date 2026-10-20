@@ -254,3 +254,18 @@ Recorded:
 4. **WA.gov: "i am registered".** Which accounts (PREprod and/or production) is not stated, so Q-B9 stays open.
 5. Pressing Assign in production does not assign PREprod ids (separate ledgers; `[FAQ L0096]` "These environments are autonomous"). PREprod needs "Assign PREprod ids".
 6. Fresh copy G-1 is requested **after** 11/07 and before Greenway's first production upload (Part 17 §G). The email to the examiner is drafted for the owner to send (OD-7).
+
+## D-20 — Owner facts for the hand-over dates, and the first upload date (2026-10-19, slice S-17d)
+
+(Appended after D-19; this log is append-only.)
+
+Owner, verbatim: *"our last sale with cultivera will be sometime before closing on 10/31/2026. our first sale with our new system will be sometime in the morning of 11/1/2026. so my assumption is that cultivera will upload on 11/7/2026 for ccrs activity related to 10/25/2026 through 10/31/2026. then we would make our first submission on 11/14/2026?"*
+
+Recorded:
+1. **Last sale in Cultivera: Sat 2026-10-31 (before close). First sale on the new system: Sun 2026-11-01 (morning).** 11/01 is a Sunday, so no CCRS week is split between the two systems `[FAQ L0041]`.
+2. The first Greenway upload is due **Sun 2026-11-08**, not 11/14. The week 11/01–11/07 is Greenway's first week, and a week is due "no later than Sunday for the previous week" `[FAQ L0041]`. It may be uploaded Sat 11/07 after close ("Reporting more frequently than weekly is allowed." `[FAQ L0041]`). The week 11/08–11/14 is due 11/15.
+3. **Cultivera's last week is 10/25–10/31, due Sun 2026-11-01.** The owner's stated assumption that Cultivera uploads it on 11/07 is **six days after** that Sunday. The FAQ applies the Sunday rule "After the transition period"; what that phrase means for this license today is **U-64** (not verified). The owner should ask Cultivera to upload by 11/01. The licensee is responsible either way `[FAQ19 L0346]`.
+4. This resolves the reading of D-19 item 3: the 11/07 upload is meant to cover **10/25–10/31**, which is option (a) of Part 17 §K.5. **U-61 stays OPEN** until Cultivera confirms in writing that the upload holds nothing dated 11/01 or later (otherwise "Duplicate Sale for Licensee" `[G L1390]`).
+5. The hub's first day of sales (`compliance_obligation_start`) must read **2026-11-01** (option (a)). Its stored value is data and is still not verified here.
+6. The hub now works this out (S-17d: `ccrs-handover-core.ts`, card "Hand-over from Cultivera"). The owner records Cultivera's last sale day and final upload day there; the card shows the first upload date and the warnings above.
+7. `docs/audit/CUTOVER-CHECKLIST.md` still scheduled an Oct 18 cutover. It now opens with a superseding notice, and C-107, C-110–C-112, C-120, C-130, C-132, C-133 and C-140 carry the dates above. No ID was renumbered.

@@ -511,6 +511,24 @@ Reverting the src/docs changes turns 7 tests red.
 
 ---
 
+## S-17d — Hand-over plan from Cultivera: the first upload date, worked out and warned (DONE in code, 2026-10-19)
+
+**Why.** The owner asked when Greenway's first upload is (Part 05 D-20). He assumed 11/14; by `[FAQ L0041]` it is **Sun 2026-11-08** (week 11/01–11/07). `docs/audit/CUTOVER-CHECKLIST.md` still scheduled an Oct 18 cutover.
+
+**What changed.**
+- New `ccrs-handover-core.ts` (pure, self-test registered). `planHandover` takes the first day of sales (S-12d), Cultivera's last sale day and its final upload day. It returns Greenway's first week, earliest upload (its Saturday) and due Sunday, the next week, Cultivera's last week and its due Sunday, and the fresh-copy window. Warnings: START_NOT_SET and SALES_OVERLAP and FINAL_UPLOAD_BEFORE_LAST_SALE block; START_NOT_SUNDAY, LAST_SALE_UNKNOWN, SALES_GAP, FINAL_UPLOAD_UNKNOWN, FINAL_UPLOAD_AFTER_DUE (U-64, "not verified"), FINAL_UPLOAD_AFTER_START (U-61) warn; FRESH_COPY_WINDOW informs. Steps H-1..H-6.
+- New `ccrs-handover-store.ts`: site_settings key `ccrs_handover_facts` (no migration). Unreadable reads as unknown, which only adds warnings.
+- `setHandoverFactsAction`: `settings.manage`, audited `ccrs_handover.facts_set`.
+- New `HandoverPlanCard.tsx` on the hub, after "First day of sales".
+- CUTOVER-CHECKLIST: superseding notice, current calendar, and dated steps corrected; no ID renumbered.
+- `mutate_check.py`: M157+ with `S17D_TESTS` in the baseline.
+
+**Proof.** `tests/compliance/s17d-handover-plan.test.tsx`: grounding read from Part 02 and the committed FAQ (runs in CI); weekdays checked against the platform Date; the owner's dates (11/08, not 11/14; Cultivera due 11/01; 6 days late; overlap warning); edges (on-time, due-day, not set, junk, Wednesday and Saturday starts, overlap, gap, upload before last sale, year boundary); card render; wiring pins; docs pins.
+
+**Not covered.** Whether the FAQ's "transition period" has ended (U-64) and what Cultivera's 11/07 upload contains (U-61) are for the examiner and Cultivera. The stored first day of sales is data and is not read here.
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
