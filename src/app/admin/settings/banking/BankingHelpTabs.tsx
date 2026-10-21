@@ -16,6 +16,8 @@ export const BANKING_HELP_TABS = [
   { key: "screening", href: "/admin/settings/banking/screening", label: "Sanctions screening" },
   // R41 S14: Nacha Phase 2 yearly obligations (procedure review, risk assessment, who did what).
   { key: "yearly", href: "/admin/settings/banking/yearly-review", label: "Yearly review" },
+  // R41 S16: the daily Plaid watch of the Timberland Main account (never blocks a payment).
+  { key: "bankwatch", href: "/admin/settings/banking/bank-watch", label: "Bank watch" },
 ] as const;
 
 export type BankingHelpTabKey = (typeof BANKING_HELP_TABS)[number]["key"];

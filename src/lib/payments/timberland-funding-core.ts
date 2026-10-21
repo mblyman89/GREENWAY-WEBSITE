@@ -22,7 +22,9 @@
  * not at upload time, and adds a plain warning never to let the account go
  * negative (overdrawing is what turns pre-funding on).
  *
- * The app cannot see the balance. There is no bank feed and none is assumed.
+ * This helper does not read the balance. (R41 S16: ACH operations shows the
+ * Plaid Main-account balance beside the box as a HINT for the owner, via
+ * ach-bank-watch-core fundingBalanceHint; it can lag, so it never decides.)
  * So the helper only SHOWS the amount and the deadline, and the owner records
  * what he saw (migration 0276, once per file, at least the file total). It
  * never blocks an upload, and it never blocks paying by check.

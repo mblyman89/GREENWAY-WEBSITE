@@ -25,6 +25,9 @@
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
+import { fundingBalanceHint } from "@/lib/payments/ach-bank-watch-core";
+import { readMainBalances } from "@/lib/payments/ach-bank-watch-store";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge } from "@/components/admin/ui";
@@ -72,7 +75,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
   const session = await requirePermission("settings.manage");
   const sp = await searchParams;
   const today = pacificToday();
-  const [view, employees, vendors, files, dualNote, comms, monthCounts] = await Promise.all([
+  const [view, employees, vendors, files, dualNote, comms, monthCounts, mainBalances] = await Promise.all([
     opsPageView(today),
     listEmployees({ includeInactive: true }),
     listVendors(),
@@ -80,6 +83,8 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
     getDualNoteDismiss(),
     readTimberlandCommsCached(),
     countNoticesThisMonth(today),
+    // R41 S16: the Plaid balance is bank-feed data, so only finances.view (the owner) gets it.
+    can(session.profile.role, "finances.view") ? readMainBalances() : Promise.resolve([]),
   ]);
   const isOwner = session.profile.role === "owner";
   const showDualNote = dualNoteVisible(dualNote.dismiss, today);
@@ -505,7 +510,14 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                                 <ul className="text-white/50">
                                   {plan.lines.map((l) => <li key={l.key}>{usd(l.cents)}: {l.label}</li>)}
                                 </ul>
-                                <p className="text-white/40">{plan.returnFeeNote} The app cannot see your balance: you look, then type what you saw.</p>
+                                <p className="text-white/40">{plan.returnFeeNote} You look at the account, then type what you saw.</p>
+                                {(() => {
+                                  // R41 S16: Plaid's balance as a hint only; the owner still looks and types (0276).
+                                  const h = fundingBalanceHint(mainBalances, plan.minimumCents, new Date().toISOString());
+                                  if (!h) return null;
+                                  const tone = h.tone === "ok" ? "text-emerald-300/80" : h.tone === "short" ? "text-red-300" : "text-amber-200";
+                                  return <p data-plaid-balance={h.tone} className={tone}>{h.text}</p>;
+                                })()}
                                 <input name="amount" required inputMode="decimal" maxLength={20} placeholder={`Balance you saw (at least ${usd(plan.minimumCents)})`} className={inputCls} />
                                 <label className="flex items-center gap-2"><input type="checkbox" name="confirm" value="yes" required /> I looked at the account balance myself</label>
                                 <button className={btnGhost}>{isOwner ? "Confirm funding" : "Ask the owner to confirm funding"}</button>

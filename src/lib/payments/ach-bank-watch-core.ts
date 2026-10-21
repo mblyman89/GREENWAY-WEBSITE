@@ -301,17 +301,17 @@ export function buildBankWatch(input: WatchInput): WatchReport {
   // health
   const health: HealthItem[] = [];
   if (input.mainAccounts.length === 0) {
-    health.push({ level: "bad", text: "No bank account is tagged as the Main account in Plaid, so the watch has nothing to read. Tag the Timberland account as Main under Finances > Accounts." });
+    health.push({ level: "bad", text: "No bank account is tagged as the Main account in Plaid, so the watch has nothing to read. Tag the Timberland account as Main operating on Bank Feeds (Health tab)." });
   }
   for (const a of input.mainAccounts) {
     if (a.itemStatus !== "healthy") {
-      health.push({ level: "bad", text: `${a.name}: the Plaid connection says "${a.itemStatus.replace(/_/g, " ")}"${a.itemErrorCode ? ` (${a.itemErrorCode})` : ""}. New bank lines are not arriving. Open Finances > Accounts and reconnect it (reconnecting the same connection does not use a new slot).` });
+      health.push({ level: "bad", text: `${a.name}: the Plaid connection says "${a.itemStatus.replace(/_/g, " ")}"${a.itemErrorCode ? ` (${a.itemErrorCode})` : ""}. New bank lines are not arriving. Open Bank Feeds and reconnect it (reconnecting the same connection does not use a new slot).` });
     }
     const last = a.lastSuccessfulSync ? a.lastSuccessfulSync.slice(0, 10) : null;
     if (!last) health.push({ level: "bad", text: `${a.name}: Plaid has never finished a sync, so the watch cannot see this account.` });
     else {
       const age = daysBetweenIso(last, input.todayIso);
-      if (age > STALE_SYNC_DAYS) health.push({ level: "warn", text: `${a.name}: the last Plaid sync was ${last} (${age} days ago). Press "Sync now" on Finances > Accounts.` });
+      if (age > STALE_SYNC_DAYS) health.push({ level: "warn", text: `${a.name}: the last Plaid sync was ${last} (${age} days ago). Press "Sync now" on Bank Feeds (Health tab).` });
       else health.push({ level: "ok", text: `${a.name}: Plaid last synced ${last}.` });
     }
     if (!a.mask) health.push({ level: "warn", text: `${a.name}: Plaid did not give the last four digits, so the site cannot confirm this is the account in the Timberland agreement.` });
@@ -389,6 +389,26 @@ export function weekKeyOf(iso: string): string {
   const day = (d.getUTCDay() + 6) % 7;
   d.setUTCDate(d.getUTCDate() - day);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The Plaid balance hint beside the funding box on ACH operations. It only
+ * HELPS: the owner still looks at the account and types what he saw (0276).
+ * Plaid's available balance can lag, so the hint says how old it is and is
+ * never shown as "funded". Null when there is no Main account or no balance.
+ */
+export function fundingBalanceHint(accts: MainAccount[], neededCents: number, nowIso: string): { tone: "ok" | "short" | "stale"; text: string } | null {
+  const withBal = accts.filter((a) => a.availableCents !== null);
+  if (withBal.length === 0) return null;
+  const total = withBal.reduce((s, a) => s + (a.availableCents ?? 0), 0);
+  const times = withBal.map((a) => a.balancesUpdatedAt).filter((t): t is string => !!t).sort();
+  const oldest = times[0] ?? null;
+  const ageH = oldest ? Math.floor((Date.parse(nowIso) - Date.parse(oldest)) / 3_600_000) : null;
+  const when = oldest ? `as of ${oldest.slice(0, 16).replace("T", " ")} UTC` : "time unknown";
+  const base = `Plaid shows ${usd(total)} available on the Main account (${when}).`;
+  if (ageH === null || ageH > 24) return { tone: "stale", text: `${base} That is more than a day old: sync Bank Feeds or look at Timberland online before you confirm.` };
+  if (total < neededCents) return { tone: "short", text: `${base} That is ${usd(neededCents - total)} short of ${usd(neededCents)}. Move money in before 9:00 am Pacific on the settlement date.` };
+  return { tone: "ok", text: `${base} That covers ${usd(neededCents)}. Still look at the account yourself: pending debits may not show yet.` };
 }
 
 /** Database errors in plain words. */
@@ -559,6 +579,11 @@ export function __runAchBankWatchCoreTests(): { passed: number; failed: number }
 
   ok(weekKeyOf("2026-10-22") === "2026-10-19" && weekKeyOf("2026-10-19") === "2026-10-19" && weekKeyOf("2026-10-25") === "2026-10-19", "week key is Monday");
   ok(/0289/.test(watchDbErrorMessage("relation does not exist")) && /owner/.test(watchDbErrorMessage("ACH_OWNER_ONLY: x")), "db errors");
+  const fh = (cents: number | null, at: string | null, need: number) => fundingBalanceHint([{ ...acct, availableCents: cents, balancesUpdatedAt: at }], need, "2026-10-22T15:00:00Z");
+  ok(fh(null, null, 100) === null && fundingBalanceHint([], 100, "2026-10-22T15:00:00Z") === null, "no balance, no hint");
+  ok(fh(500000, "2026-10-22T10:00:00Z", 400000)?.tone === "ok" && /\$5,000\.00 available/.test(fh(500000, "2026-10-22T10:00:00Z", 400000)!.text), "covered");
+  ok(fh(300000, "2026-10-22T10:00:00Z", 400000)?.tone === "short" && /\$1,000\.00 short/.test(fh(300000, "2026-10-22T10:00:00Z", 400000)!.text), "short by the gap");
+  ok(fh(900000, "2026-10-20T10:00:00Z", 400000)?.tone === "stale" && fh(900000, null, 1)?.tone === "stale", "old or unknown time is stale, never ok");
   ok(explanationWord(null) === "Not explained yet" && /Schedule B/.test(explanationWord({ by: "fee", which: "service" })), "explanation words");
   return { passed, failed };
 }
