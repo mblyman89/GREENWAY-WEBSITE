@@ -73,9 +73,21 @@ import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/conven
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
-import { NO_PRODUCT_ID_REASON, applyProductPlan, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
+import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
-import { loadLedgerForBatch } from "@/lib/compliance/ccrs-ledger-store";
+import { loadLedgerForBatch, loadSaleSlice } from "@/lib/compliance/ccrs-ledger-store";
+import {
+  correctionExportIds,
+  eventLotRefs,
+  planReturnCorrections,
+  returnRecordFromRow,
+  routeSaleInserts,
+  saleLedgerEntries,
+  type CorrectionNote,
+  type CustomerReturnRowLike,
+  type ReturnCorrectionPlan,
+  type ReturnRecord,
+} from "@/lib/compliance/ccrs-return-corrections-core";
 
 export type CcrsFile = {
   type: CcrsRetailerFileType;
@@ -152,6 +164,106 @@ async function getPublishedVersionId(admin: Admin): Promise<string | null> {
     .maybeSingle();
   return (data as { id: string } | null)?.id ?? null;
 }
+
+const LOT_COLUMNS =
+  "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample";
+
+/**
+ * R5-1: the DESTROYED lots that this batch's event rows name (by CCRS id).
+ * Live lots are read with `.neq("status", "destroyed")`; a lot destroyed to 0
+ * still needs its Inventory row (QoH 0) in the emission that carries its
+ * Destruction adjustment [G L1302-L1304, EXAM L0430]. A read error THROWS:
+ * silently dropping the lot would send an adjustment CCRS rejects.
+ */
+async function readDestroyedLots(admin: Admin, refs: readonly string[]): Promise<LotRow[]> {
+  if (refs.length === 0) return [];
+  let failed: string | null = null;
+  const rows = await chunkedIn<string, LotRow>(refs, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select(LOT_COLUMNS)
+      .eq("status", "destroyed")
+      .in("ccrs_inventory_external_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) failed = error.message;
+    return (data as LotRow[] | null) ?? [];
+  });
+  if (failed) throw new Error(`R5-1: could not read destroyed lots named by this batch: ${failed}`);
+  // The stored id may carry surrounding spaces; assignedInventoryExternalId
+  // trims, so match on what the event row printed.
+  const wanted = new Set(refs);
+  const seen = new Set<string>();
+  return rows.filter((l) => {
+    const ext = assignedInventoryExternalId(l);
+    if (!ext || !wanted.has(ext) || seen.has(l.id)) return false;
+    seen.add(l.id);
+    return true;
+  });
+}
+
+const RETURN_COLUMNS =
+  "id, sale_external_id, sale_detail_external_id, inventory_external_id, sale_type, sale_date, unit_price_minor, discount_minor, sales_tax_minor, excise_minor, quantity, original_quantity, correction_status, created_at";
+
+/** customer_returns missing (pre-0115) reads as "no returns"; any other error throws. */
+function isMissingTable(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const msg = (error.message ?? "").toLowerCase();
+  return error.code === "42P01" || error.code === "PGRST205" || /relation .* does not exist|could not find the table/.test(msg);
+}
+
+/**
+ * R5-1: the returns a batch must consider for Sale corrections: every PENDING
+ * return, every return made (created_at) inside the batch range, and every
+ * other return of those sale lines (the correction states the line after ALL
+ * its returns: rule 1). Same rule in both envs.
+ *   - `correction_status` is ONE flag that only a PROD emission sets
+ *     (correctionExportIds), so it cannot say what PREprod has seen, nor
+ *     whether CCRS accepted a prod correction. The env's own ledger decides
+ *     that (reflected = already applied, in flight = wait).
+ *   - The range part lets a correction whose file was rejected or abandoned
+ *     be planned again by rebuilding that week; the ledger stops re-sends.
+ */
+async function readReturnsForCorrections(
+  admin: Admin,
+  fromISO: string,
+  toISO: string,
+): Promise<{ records: ReturnRecord[]; tableMissing: boolean }> {
+  const seeds = await pagedAll<CustomerReturnRowLike>(async (from, to) => {
+    const { data, error } = await admin
+      .from("customer_returns")
+      .select(RETURN_COLUMNS)
+      .or(`correction_status.eq.pending,and(created_at.gte.${fromISO},created_at.lte.${toISO})`)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      if (isMissingTable(error)) throw new MissingReturnsTable();
+      throw new Error(`R5-1: could not read customer_returns: ${error.message}`);
+    }
+    return (data as CustomerReturnRowLike[] | null) ?? [];
+  }).catch((e) => {
+    if (e instanceof MissingReturnsTable) return null;
+    throw e;
+  });
+  if (seeds === null) return { records: [], tableMissing: true };
+  const lineIds = [...new Set(seeds.map((r) => (r.sale_detail_external_id ?? "").trim()).filter(Boolean))];
+  let failed: string | null = null;
+  const siblings = await chunkedIn<string, CustomerReturnRowLike>(lineIds, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("customer_returns")
+      .select(RETURN_COLUMNS)
+      .in("sale_detail_external_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) failed = error.message;
+    return (data as CustomerReturnRowLike[] | null) ?? [];
+  });
+  if (failed) throw new Error(`R5-1: could not read the other returns of these sale lines: ${failed}`);
+  const byId = new Map<string, CustomerReturnRowLike>();
+  for (const r of [...seeds, ...siblings]) byId.set(r.id, r);
+  return { records: [...byId.values()].map(returnRecordFromRow), tableMissing: false };
+}
+class MissingReturnsTable extends Error {}
 
 /**
  * S-17b: for product keys that lots name but the published menu does not show,
@@ -787,6 +899,7 @@ export async function buildCcrsBatch(
     totalRecords: 0,
     generatedAt: now.toISOString(),
     ledger: { env, view: null, absentReason: "not-configured", lastStamp: null, unassignedProductKeys: [] },
+    corrections: { exportReturnIds: [], emitted: 0, withheld: 0, invalid: 0, reflected: 0 },
   });
 
   if (!license.licenseNumber) {
@@ -830,17 +943,44 @@ export async function buildCcrsBatch(
   // first 1,000 lots and silently omitted the rest. That is an incomplete
   // state traceability filing, which is why this is fixed in the same slice
   // as the received date. (Selecting `received_on` for CreatedDate.)
-  const lots = await pagedAll<LotRow>(async (from, to) => {
+  const liveLots = await pagedAll<LotRow>(async (from, to) => {
     const { data } = await admin
       .from("inventory_lots")
-      .select(
-        "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample",
-      )
+      .select(LOT_COLUMNS)
       .neq("status", "destroyed")
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LotRow[] | null) ?? [];
   });
+
+  // --- Event files first (R5-1) ---------------------------------------------
+  // Adjustment + Sale are built BEFORE the ledger slice so the lots their rows
+  // name are known. A lot destroyed down to 0 has status "destroyed" and is not
+  // in `liveLots`, yet its Destruction adjustment names it; without an
+  // Inventory row in the same emission CCRS (and our self-check) reject it:
+  // "Invalid InventoryExternalIdentifier ... ensure that you have already
+  // reported the inventory in an inventory.CSV" [G L1302-L1304]. The examiner's
+  // own method is an Inventory Update to zero plus the adjustment [EXAM L0430].
+  // So every destroyed lot an event row of THIS batch names is reported too.
+  const [adj, sale] = await Promise.all([
+    buildCcrsInventoryAdjustmentCsv(fromISO, toISO),
+    buildCcrsSaleCsv(fromISO, toISO),
+  ]);
+  // R5-1: the customer returns whose Sale corrections this batch may carry.
+  // Read BEFORE the destroyed-lot lookup: a correction row names its lot too.
+  const returnsRead = await readReturnsForCorrections(admin, fromISO, toISO);
+  const liveIds = new Set(liveLots.map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x));
+  const destroyedRefs = [
+    ...new Set([
+      ...eventLotRefs([
+        { type: "InventoryAdjustment", csv: adj.csv },
+        { type: "Sale", csv: sale.csv },
+      ]),
+      ...returnsRead.records.map((r) => r.inventoryExternalId).filter(Boolean),
+    ]),
+  ].filter((ref) => !liveIds.has(ref));
+  const destroyedLots = await readDestroyedLots(admin, destroyedRefs);
+  const lots: LotRow[] = [...liveLots, ...destroyedLots];
 
   // --- Build each master-data file ------------------------------------------
   // S-11: one pure plan routes every Strain/Product/Inventory row against the
@@ -866,6 +1006,22 @@ export async function buildCcrsBatch(
       count: slice.ledger.duplicates.length,
       rows: slice.ledger.duplicates.map((d) => ({ id: d, label: d, detail: "duplicate ledger record" })),
     });
+  }
+  // --- R5-1: the Sale ledger for this batch's sale lines ----------------------
+  // One read (0283 ccrs_sale_slice) answers, per sale line this batch Inserts
+  // or would correct, what CCRS holds and whether a file naming it is still
+  // unanswered. Those entries are merged into the view the self-check and the
+  // export route verify against, so a correction is only ever an Update or
+  // Delete of a line CCRS holds [FAQ L0052-L0053, G L1413-L1414], and an
+  // Insert is never sent for a line CCRS already holds [G L1412].
+  const SALE_DETAIL = CCRS_COLUMNS.Sale.indexOf("SaleDetailExternalIdentifier");
+  const correctionLineIds = [...new Set(returnsRead.records.map((r) => r.saleDetailExternalId).filter(Boolean))];
+  const saleSlice = ledger ? await loadSaleSlice(admin, env, [...sale.rows.map((r) => r[SALE_DETAIL]), ...correctionLineIds]) : null;
+  let saleAwareLedger: LedgerView | null = null;
+  if (ledger && saleSlice?.kind === "loaded") {
+    const merged = buildLedgerView(env, [...ledger.entries.values(), ...saleLedgerEntries(saleSlice.held)], ledger.productIdByKey);
+    if (merged.duplicates.length > 0) throw new Error(`R5-1: Sale ledger entries collide with the batch ledger: ${merged.duplicates.join(", ")}`);
+    saleAwareLedger = merged.view;
   }
   const plan = planLedgerBatch({
     view: ledger,
@@ -941,19 +1097,10 @@ export async function buildCcrsBatch(
   // FALSE), tells us only by email [FAQ L0102], and dependent rows then fail.
   syncIssues.push(...strain.issues, ...area.issues, ...product.issues, ...inventory.issues);
 
-  // --- Reuse mature builders for Adjustment + Sale --------------------------
-  const [adj, sale] = await Promise.all([
-    buildCcrsInventoryAdjustmentCsv(fromISO, toISO),
-    buildCcrsSaleCsv(fromISO, toISO),
-  ]);
+  // Adjustment + Sale were built above (R5-1: before the ledger slice).
 
   const files: CcrsFile[] = [];
-  const push = (
-    type: CcrsRetailerFileType,
-    rawRows: string[][],
-    warnings: string[],
-    skipped = 0,
-  ) => {
+  const encode = (type: CcrsRetailerFileType, rawRows: string[][]) => {
     // S-09 E38 / S-09b E42-E44: CCRS splits every row on every comma and does
     // not honour quoting (PREprod P20261005A). Free-text columns are rewritten
     // (`,`→`;`, `"`→`'`, reported); a line break, or a comma/quote in any other
@@ -964,7 +1111,8 @@ export async function buildCcrsBatch(
       rawRows,
       CCRS_COLUMNS[type],
       (r, i) => {
-        const ext = CCRS_COLUMNS[type].indexOf("ExternalIdentifier");
+        // R5-1: a Sale row is named by its line id (Sale has no ExternalIdentifier).
+        const ext = CCRS_COLUMNS[type].indexOf(type === "Sale" ? "SaleDetailExternalIdentifier" : "ExternalIdentifier");
         const name = CCRS_COLUMNS[type].indexOf(type === "Strain" ? "Strain" : type === "Area" ? "Area" : "Name");
         return (ext >= 0 && r[ext]) || (name >= 0 && r[name]) || `row ${i + 1}`;
       },
@@ -996,13 +1144,22 @@ export async function buildCcrsBatch(
         message: freeTextRewriteMessage(type, e38.rewritten),
       });
     }
+    return { rows, withheld: e38.withheld };
+  };
+  const push = (
+    type: CcrsRetailerFileType,
+    rawRows: string[][],
+    warnings: string[],
+    skipped = 0,
+  ) => {
+    const { rows, withheld } = encode(type, rawRows);
     files.push({
       type,
       group: uploadGroupOf(type),
       fileName: ccrsFileName(type, license.licenseNumber, now),
       csv: assembleCcrsFile({ type, submittedBy, submittedDate: now, rows }),
       recordCount: rows.length,
-      skipped: skipped + e38.withheld.length,
+      skipped: skipped + withheld.length,
       warnings,
       empty: rows.length === 0,
     });
@@ -1030,15 +1187,82 @@ export async function buildCcrsBatch(
   push("InventoryTransfer", [], [
     "InventoryTransfer is submitted by the receiving licensee; retail intake is reported via Inventory.csv. This file is intentionally empty.",
   ]);
+  // --- Sale: this range's Inserts + customer-return corrections (R5-1) ------
+  // ONE Sale file per emission (planOutboxFiles refuses two). The Insert rows
+  // already passed E38 in buildCcrsSaleCsv; correction rows pass it here.
+  let insertRows: string[][] = sale.rows;
+  let corrections: ReturnCorrectionPlan = { rows: [], groups: [], withheld: [], invalid: [], reflected: [] };
+  const saleNotes: CorrectionNote[] = [];
+  if (saleAwareLedger && saleSlice?.kind === "loaded") {
+    const routed = routeSaleInserts(sale.rows, saleSlice.held);
+    insertRows = routed.rows;
+    if (routed.alreadyHeld.length > 0) {
+      syncIssues.push({
+        severity: "warning",
+        file: "Sale",
+        code: "E49_SALE_LINE_ALREADY_HELD",
+        specPin: specPinFor("E49_SALE_LINE_ALREADY_HELD"),
+        count: routed.alreadyHeld.length,
+        rows: routed.alreadyHeld.map((d) => ({ id: d, label: d, detail: `ledger state ${saleSlice.held.get(d)?.state ?? "?"}` })),
+        message: `${routed.alreadyHeld.length} sale line(s) in this range are already held by CCRS (${env}), so they were not Inserted again: a second Insert is rejected as "Duplicate Sale detail item for Licensee" [G L1412]. Nothing to do.`,
+      });
+    }
+    if (routed.uncertain.length > 0) {
+      syncIssues.push({
+        severity: "error",
+        file: "Sale",
+        code: "E49_SALE_LINE_ALREADY_HELD",
+        specPin: specPinFor("E49_SALE_LINE_ALREADY_HELD"),
+        count: routed.uncertain.length,
+        rows: routed.uncertain.map((d) => ({ id: d, label: d, detail: `ledger state ${saleSlice.held.get(d)?.state ?? "?"}` })),
+        message: `${routed.uncertain.length} sale line(s) were left out of Sale.csv because the ${env} ledger cannot say whether CCRS holds them (an earlier file's outcome is not recorded). An Insert of a held line is rejected [G L1412] and leaving it out under-reports the sale, so record that file's outcome in the CCRS hub, then rebuild.`,
+      });
+    }
+    corrections = planReturnCorrections({
+      returns: returnsRead.records,
+      license: { licenseNumber: license.licenseNumber, submittedBy },
+      ledger: saleSlice.held,
+      insertedDetailIds: new Set(insertRows.map((r) => r[SALE_DETAIL])),
+      inFlightOnly: saleSlice.inFlightOnly,
+    });
+  } else if (returnsRead.records.some((r) => r.pending)) {
+    // No Sale ledger to prove CCRS holds each line: nothing is corrected here.
+    const why = !ledger
+      ? `the ${env} ledger is not loaded (legacy routing); use the Sale correction download on the Disposition page`
+      : "migration 0283 (ccrs_sale_slice) is not applied, so the batch cannot prove CCRS holds each sale line";
+    const pendingByLine = new Map<string, string[]>();
+    for (const r of returnsRead.records.filter((x) => x.pending)) {
+      pendingByLine.set(r.saleDetailExternalId, [...(pendingByLine.get(r.saleDetailExternalId) ?? []), r.id]);
+    }
+    for (const [detailId, returnIds] of [...pendingByLine].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      saleNotes.push({ detailId, returnIds, reason: why });
+    }
+  }
+  const correctionE38 = encode("Sale", corrections.rows);
+  const e38WithheldLines = new Set(correctionE38.withheld.map((w) => w.label));
+  const saleRows = [...insertRows, ...correctionE38.rows];
+  const withheldNotes = [...corrections.withheld, ...saleNotes];
+  if (withheldNotes.length > 0 || corrections.invalid.length > 0) {
+    const all = [...withheldNotes, ...corrections.invalid];
+    syncIssues.push({
+      severity: "warning",
+      file: "Sale",
+      code: "E48_SALE_CORRECTION_WITHHELD",
+      specPin: specPinFor("E48_SALE_CORRECTION_WITHHELD"),
+      count: all.length,
+      rows: all.map((n) => ({ id: n.detailId || "(no sale line id)", label: n.detailId || "(no sale line id)", detail: `${n.reason} (returns: ${n.returnIds.join(", ") || "none pending"})` })),
+      message: `${all.length} customer-return Sale correction(s) were not put in Sale.csv. An Update or Delete of a sale line CCRS does not hold is rejected ("SaleDetailExternalIdentifier not found" [G L1413-L1414]), so each waits until the line is proven held; ${corrections.invalid.length} cannot be built from the return record and must be fixed there. The returns stay pending and are picked up by the next batch. Each row says why.`,
+    });
+  }
   files.push({
     type: "Sale",
     group: uploadGroupOf("Sale"),
-    fileName: sale.fileName,
-    csv: sale.csv,
-    recordCount: sale.recordCount,
-    skipped: sale.skipped,
+    fileName: ccrsFileName("Sale", license.licenseNumber, now),
+    csv: assembleCcrsFile({ type: "Sale", submittedBy, submittedDate: now, rows: saleRows }),
+    recordCount: saleRows.length,
+    skipped: sale.skipped + correctionE38.withheld.length,
     warnings: sale.warnings,
-    empty: sale.recordCount === 0,
+    empty: saleRows.length === 0,
   });
 
   // Order files by upload group (1 → 2 → 3), preserving intra-group order.
@@ -1106,7 +1330,7 @@ export async function buildCcrsBatch(
   // has nothing to check against, exactly as in the route.
   if (ledger) {
     for (const i of ledgerSelfCheckIssues(
-      ledger,
+      saleAwareLedger ?? ledger,
       files.map((f) => ({ type: f.type, csv: f.csv })),
       {
         licenseNumber: license.licenseNumber,
@@ -1141,13 +1365,22 @@ export async function buildCcrsBatch(
     generatedAt: now.toISOString(),
     ledger: {
       env,
-      view: ledger,
+      // R5-1: with the Sale entries merged, so the export route's self-check
+      // verifies Sale Insert/Update/Delete rows against what CCRS holds.
+      view: saleAwareLedger ?? ledger,
       absentReason: slice.kind === "loaded" ? null : slice.reason,
       lastStamp: slice.kind === "loaded" && slice.ledger.lastStamp ? slice.ledger.lastStamp.toISOString() : null,
       unassignedProductKeys: [...plan.products]
         .filter(([, pp]) => pp.action === "withhold" && pp.reason === NO_PRODUCT_ID_REASON)
         .map(([k]) => k)
         .sort(),
+    },
+    corrections: {
+      exportReturnIds: correctionExportIds(env, corrections, e38WithheldLines),
+      emitted: corrections.rows.length - correctionE38.withheld.length,
+      withheld: withheldNotes.length,
+      invalid: corrections.invalid.length,
+      reflected: corrections.reflected.length,
     },
   };
 }

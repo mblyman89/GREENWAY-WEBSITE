@@ -70,6 +70,7 @@ export const CCRS_ISSUE_CODES = [
   "E46_AREA_LEDGER",
   "E47_LOT_PRODUCT_NOT_IN_MENU",
   "E48_SALE_CORRECTION_WITHHELD",
+  "E49_SALE_LINE_ALREADY_HELD",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -422,6 +423,7 @@ const PINS: Record<CcrsIssueCode, string> = {
   // rejects ("Product is required" [G L0578]).
   E47_LOT_PRODUCT_NOT_IN_MENU: "[G L0579-L0583]",
   E48_SALE_CORRECTION_WITHHELD: "[G L1413-L1414]",
+  E49_SALE_LINE_ALREADY_HELD: "[G L1412]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

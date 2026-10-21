@@ -40,6 +40,7 @@ import {
 import { issuePlainText } from "@/lib/compliance/ccrs-issue-display-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
 import { emitOutboxFiles, readStoredFile } from "@/lib/compliance/ccrs-ledger-store";
+import { markCorrectionsExported } from "@/lib/inventory/disposition";
 import {
   emitPayload,
   planOutboxFiles,
@@ -167,6 +168,16 @@ export async function GET(request: Request) {
     const admin = createSupabaseAdminClient();
     const result = await emitOutboxFiles(admin, env, payload, general);
 
+    // R5-1: the outbox now holds the Sale file with this batch's customer-
+    // return corrections, so those returns are no longer owed to production.
+    // Marked only AFTER the bytes are stored (a failed emit leaves them
+    // pending) and only for a PROD batch (correctionExportIds): a PREprod test
+    // never hides a correction production still owes. A re-download serves
+    // the stored file and marks the same ids again (idempotent).
+    if (batch.corrections.exportReturnIds.length > 0) {
+      await markCorrectionsExported(batch.corrections.exportReturnIds);
+    }
+
     // A duplicate is served from the STORED bytes under the STORED name.
     zipFiles = [];
     for (let i = 0; i < result.length; i += 1) {
@@ -185,7 +196,13 @@ export async function GET(request: Request) {
       action: "ccrs.batch.emit",
       entityType: "ccrs_files",
       entityId: null,
-      after: { env, range: [range.fromDate, range.toDate], files: result.map((r) => ({ id: r.id, name: r.file_name, status: r.status })) },
+      after: {
+        env,
+        range: [range.fromDate, range.toDate],
+        files: result.map((r) => ({ id: r.id, name: r.file_name, status: r.status })),
+        // R5-1: which customer returns this emission answered (prod only).
+        sale_corrections: { ...batch.corrections },
+      },
     });
   } else {
     const why =
