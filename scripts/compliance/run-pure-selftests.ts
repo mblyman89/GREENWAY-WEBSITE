@@ -2353,7 +2353,7 @@ __runLiquidVolumeTests();
   assertRan("ach-ops-ui-core", __runAchOpsUiCoreTests(), 17); // R39 S7: Operations page words (site URL, who was told, urgency, monitor, owner/request hint (R41 S0))
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 130); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails; S6: two bank-step kinds
   assertRan("ach-gate-core", __runAchGateCoreTests(), 145); // R41 S0: versions, redirect outcomes, replay match, supersede, payload parse, vendor build outcome; S6: two bank-step specs
-  assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42); // R41 S1: every Timberland term readable in its own quote; 14 drift mutants; Q1, Q3-Q14
+  assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 44); // R41 S1: every Timberland term readable in its own quote; 14 drift mutants; S12: Q1-Q26 answered record (Email 3)
   assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 68); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
   assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 56); // R41 S9: funding errors + 0276 missing named; S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason; S6: bank-step errors, 0274 missing named

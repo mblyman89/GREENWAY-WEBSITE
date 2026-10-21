@@ -47,7 +47,7 @@ M = [
     # --- Q14 and the open questions ---
     ("q14-payroll-in-discretionary", NACHA, 'export const PAYROLL_BATCH_DISCRETIONARY_DATA: string = "";', 'export const PAYROLL_BATCH_DISCRETIONARY_DATA: string = "PAYROLL";'),
     ("q14-applies-to-ccd-too", NACHA, 'alpha(secCode === "PPD" && companyEntryDescription === "PAYROLL" ? PAYROLL_BATCH_DISCRETIONARY_DATA : "", 20)', 'alpha(PAYROLL_BATCH_DISCRETIONARY_DATA, 20)'),
-    ("q18-default-lenient", PROF, '    strictDefault: "Test credits COUNT toward the daily and monthly limits (the stricter reading).",', '    strictDefault: "Test credits are ignored by the daily and monthly limits.",'),
+    ("q18-default-lenient", PROF, '    appDoes: "Test credits COUNT toward the daily and monthly limits, as she says.",', '    appDoes: "Test credits are ignored by the daily and monthly limits.",'),
     ("q20-id-renamed", PROF, '    id: "Q20",', '    id: "Q19",'),
     # --- calendar tasks ---
     ("task-cadence-once", CAL, '    id: "timberland_agreement_reread",\n    cadence: "annual",', '    id: "timberland_agreement_reread",\n    cadence: "once",'),
