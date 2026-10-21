@@ -58,6 +58,10 @@
     {
       "path": "/api/cron/ofac-screening",
       "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/cron/ach-bank-watch",
+      "schedule": "15 14 * * *"
     }
   ]
 }
