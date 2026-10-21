@@ -31,6 +31,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | #1445 | 0287 |
 | S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | #1446 | 0288 |
 | S15 | Leftovers without guessing: R90 return code from a new Nacha mirror; stale mutation anchor re-anchored | #1447 | none |
+| S16 | Bank watch: the Plaid feed on the Main account checked daily against ACH files, books, Timberland fees, known payees and reviews; possible returns; fee/notice gaps; feed health; daily email; Plaid balance hint on the funding box | (this PR) | 0289 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -254,4 +255,19 @@ Still to arrange: the testing session Brenda asked for.
   - the basis for the monthly limit;
   - the D-2 late lane.
 - **No migration.**
+
+## S16 in detail
+
+- **Why Plaid here.** The owner's Plaid connection to the Timberland Main account (the account payroll and vendor payments come out of) refreshes daily and on demand. The Trial plan (mirrored as `docs/authorities/ach/plaid-trial-plan.txt`) allows 10 connections, and removing one does not free a slot, so the watch reuses the existing Main connection and never asks for another.
+- **Bank watch page** (`/admin/settings/banking/bank-watch`, new "Bank watch" tab; gate `finances.view`, as Bank Feeds). Last 60 days of the Main account's lines:
+  - *Is the feed working?* No Main account linked, a sync older than 2 days, last four digits that differ from the agreement's account, a connection error.
+  - *Money out that nothing explains.* Each settled debit is checked in order: an ACH file settling (the ACH Payments report match), already in the books, a Timberland fee amount (Schedule B), a known payee within its limit, a recorded review. Pending lines are listed apart and not counted.
+  - *Possible returned payments.* Money in for exactly the amount of a payment we sent on or before that day; each payment and logged return used once.
+  - *Return/NOC fees vs notices logged*, per month.
+  - *Known payees* (owner adds and retires) and the explained lines with the reason.
+  - *What Plaid does (and doesn't) do for ACH here*: quoted from the Trial plan mirror. Statements and payee account checks are not turned on; the reasons are on the page (Timberland support for Statements not confirmed; a payee account check would need each payee to link through Plaid and use a slot, so prenotes and the call-back stay).
+- **Daily cron** `/api/cron/ach-bank-watch` (14:15 UTC): syncs only the Main connection, rebuilds the watch, emails the owner once per new set of findings per week (or once a day if the feed could not be read). It never blocks a payment.
+- **Funding box hint.** On ACH operations the owner (finances.view) sees the Plaid balance next to the "what I saw" box, marked stale if older than 24 hours. The owner still types what they saw; the hint is never the confirmation.
+- **Migration 0289**: rules (retire-only) and reviews (append-only); see MIGRATIONS_TO_RUN.
+- **Tests.** `tests/compliance/r41-s16-bank-watch.test.ts`; pure self-test `ach-bank-watch-core` 54; `mutate-0289-sql.py` (35 mutants plus two probes) and `mutate-s16-app.py`. Manual test T-375.
 

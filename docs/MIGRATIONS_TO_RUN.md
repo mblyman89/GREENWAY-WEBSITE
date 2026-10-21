@@ -2773,3 +2773,37 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0288_ach_annual_reviews.rollback.sql`.
   It refuses once any review exists (they are records).
+
+## R41 — 0289 — Bank watch (known payees and line reviews)
+
+- [ ] `0289_ach_bank_watch.sql` adds two tables for the Bank watch page
+  (Settings → Banking → Bank watch), which checks every money-out line Plaid
+  pulls from the Timberland Main account against what the site knows.
+  - `ach_bank_watch_rules`: the owner's known-payee list (text to match in the
+    bank description, an optional most-it-should-be, and a note). Only the
+    owner adds one. A rule is never deleted or edited; it is retired once.
+  - `ach_bank_watch_reviews`: a note recorded against one bank line the watch
+    could not explain (what it is and how you know). The owner or an active
+    admin records it. Append-only: nothing is changed or deleted.
+  - Neither table accepts a run of 7 or more digits in its text (no account
+    numbers).
+
+  Apply it **after 0288**. It is safe to re-run. Until it is applied, the Bank
+  watch page still checks the lines but says rules and reviews cannot be read,
+  and adding one saves nothing.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from ach_bank_watch_rules) as rules,
+         (select count(*) from ach_bank_watch_reviews) as reviews;
+  -- rules | reviews
+  -- 0     | 0
+  ```
+
+  For the full proof, paste `scripts/recon/ach-bank-watch-0289-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0289 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0289_ach_bank_watch.rollback.sql`.
+  It refuses once any rule or review exists (they are records).
+  - Manual test T-375.
