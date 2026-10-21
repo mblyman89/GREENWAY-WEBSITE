@@ -96,7 +96,11 @@ export type TransferLot = {
   isCultivera: boolean;
 };
 
-export type TransferHeld = { state: LedgerState; inFlight: boolean };
+/**
+ * What the ledger knows about one transfer id. `state` null + `inFlight` true:
+ * an emitted / uploaded file names it but no answer is recorded yet.
+ */
+export type TransferHeld = { state: LedgerState | null; inFlight: boolean };
 
 export type TransferIssue = { code: TransferIssueCode; lotId: string; manifestId: string | null; label: string; detail: string };
 
@@ -219,12 +223,18 @@ export function buildTransferRows(input: TransferInput): TransferPlan {
     seen.add(ext);
     if (input.held) {
       const h = input.held.get(ext) ?? null;
-      if (h && PRESENT.has(h.state)) {
+      if (h && h.state && PRESENT.has(h.state)) {
         alreadyHeld.push(ext);
         continue;
       }
       if (h && (h.state === "uncertain" || h.state === "unknown")) {
         issue("E14_TRANSFER_LEDGER_WITHHELD", `the ledger cannot say whether CCRS holds ${ext} (state ${h.state}); record that file's outcome first`);
+        continue;
+      }
+      if (h && h.inFlight) {
+        // A file already carrying this transfer is unanswered: a second Insert
+        // would be "Duplicate InventoryTransfer for Licensee" [G L1190].
+        issue("E14_TRANSFER_LEDGER_WITHHELD", `${ext} is in a file that is uploaded or emitted but not answered yet; record that file's outcome first`);
         continue;
       }
     }
@@ -266,14 +276,14 @@ export function decodeTransferSlice(env: LedgerEnv, data: unknown, error: RpcErr
     if (state !== null && (typeof state !== "string" || !(LEDGER_STATES as readonly string[]).includes(state))) bad(`entry ${i}: state ${String(state)}`);
     if (typeof inFlight !== "boolean") bad(`entry ${i}: in_flight is not a boolean`);
     if (held.has(id as string)) bad(`entry ${i}: ${String(id)} appears twice`);
-    held.set(id as string, state === null ? null : { state: state as LedgerState, inFlight: inFlight as boolean });
+    held.set(id as string, state === null && !inFlight ? null : { state: state as LedgerState | null, inFlight: inFlight as boolean });
   });
   return { kind: "loaded", held };
 }
 
 export function transferLedgerEntries(held: ReadonlyMap<string, TransferHeld | null>): LedgerEntry[] {
   const out: LedgerEntry[] = [];
-  for (const [externalId, h] of held) if (h) out.push({ fileType: "InventoryTransfer", externalId, filedName: null, state: h.state, productExternalId: null });
+  for (const [externalId, h] of held) if (h && h.state) out.push({ fileType: "InventoryTransfer", externalId, filedName: null, state: h.state, productExternalId: null });
   return out;
 }
 
@@ -366,6 +376,9 @@ export function __runCcrsTransferTests(): { passed: number; failed: number } {
   ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "filed", inFlight: false }]]) })).alreadyHeld.length === 1, "held not re-sent");
   ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "uncertain", inFlight: false }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "uncertain withheld");
   ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", null]]) })).rows.length === 1, "not held -> sent");
+  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: null, inFlight: true }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "in flight withheld");
+  const dIn = decodeTransferSlice("prod", { env: "prod", entries: [["TR-2", null, true]] }, null);
+  ok(dIn.kind === "loaded" && dIn.held.get("TR-2")?.inFlight === true && transferLedgerEntries(dIn.held).length === 0, "in-flight decoded, not a ledger entry");
   ok(buildTransferRows(base({ reportable: new Set() })).issues[0]?.code === "E14_TRANSFER_LOT_NOT_REPORTED", "To lot must be reported");
   ok(transferDate("2026-11-03") === "11/03/2026", "date has no tz shift");
   ok(vendorIdSourceFor("wcia") === "wcia_json" && vendorIdSourceFor("pdf-manifest") === "pdf_guess", "source stamp");

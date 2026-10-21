@@ -903,6 +903,7 @@ import { __runCcrsReseedCoreTests } from "../../src/lib/compliance/ccrs-reseed-c
 import { __runCcrsEqualizeCoreTests } from "../../src/lib/compliance/ccrs-equalize-core";
 import { __runCcrsCopyVerifyCoreTests } from "../../src/lib/compliance/ccrs-copy-verify-core";
 import { __runReturnCorrectionsTests } from "../../src/lib/compliance/ccrs-return-corrections-core";
+import { __runCcrsTransferTests } from "../../src/lib/compliance/ccrs-transfer-core";
 import { __runResetProofTests } from "../../src/lib/accounting/reset-proof-core";
 import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
 import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
@@ -1799,6 +1800,7 @@ __runLiquidVolumeTests();
   assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 24); // S-14b: +5 (final-upload guard, audit-counted hold)
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file
+  assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 25); // R6-2: InventoryTransfer rows for received deliveries
   assertRan("reset-proof-core", __runResetProofTests(), 11); // R5-2: the factory reset is checked against its own per-table report
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();

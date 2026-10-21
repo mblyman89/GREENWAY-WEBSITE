@@ -140,6 +140,7 @@ import {
   planReceivedOnStamp,
 } from "@/lib/inventory/intake-lot-facts-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import { vendorIdSourceFor } from "@/lib/compliance/ccrs-transfer-core";
 import {
   deriveManifestStatus,
   normalizePartialNote,
@@ -189,6 +190,20 @@ export async function listManifests(opts?: {
   const { data } = await q;
   const rows = (data as InboundManifest[] | null) ?? [];
   return opts?.includeMigration ? rows : rows.filter((m) => !isRebuiltKind(payloadKindOf(m)));
+}
+
+/**
+ * R6-2 (0285): the vendor-id columns for a staged lot. Empty / over-long codes
+ * are left NULL (the 0285 shape check refuses them); the owner can type the id
+ * on the manifest page later.
+ */
+function vendorIdColumnsFor(lotCode: string | null | undefined, sourceFormat: string | null | undefined): {
+  vendor_inventory_external_id?: string;
+  vendor_inventory_external_id_source?: string;
+} {
+  const v = typeof lotCode === "string" ? lotCode.trim() : "";
+  if (v === "" || v.length > 100) return {};
+  return { vendor_inventory_external_id: v, vendor_inventory_external_id_source: vendorIdSourceFor(sourceFormat) };
 }
 
 function payloadKindOf(m: { raw_payload?: unknown }): unknown {
@@ -776,6 +791,8 @@ export async function stageManifest(
   }
   // Set once a lot insert proves 0234 is not applied: stop sending the column.
   let identityColumnsMissing = false;
+  // R6-2 (0285): false once the vendor-id columns are known to be missing.
+  let vendorIdColumnsMissing = false;
   // R28: set once a lab insert proves 0252 is not applied.
   let labJsonUrlColumnMissing = false;
 
@@ -884,8 +901,21 @@ export async function stageManifest(
       updated_by: actorId,
       // S05 (0234): omitted entirely when the stamp is off or 0234 is missing.
       ...(identityKey === undefined ? {} : { identity_key: identityKey }),
+      // R6-2 (0285): the VENDOR's InventoryExternalIdentifier exactly as the
+      // manifest gave it: InventoryTransfer.FromInventoryExternalIdentifier is
+      // "the original ... InventoryExternalIdentifier from the producer"
+      // [FAQ L0058-L0059]. Stamped with where it was read so a PDF guess is
+      // never filed unconfirmed. Omitted while 0285 is not applied.
+      ...(vendorIdColumnsMissing ? {} : vendorIdColumnsFor(line.lot_code, parsed.source_format)),
     };
     let { error: lotErr } = await admin.from("inventory_lots").insert(lotRow);
+    if (lotErr && !vendorIdColumnsMissing && isMissingColumnError(lotErr) && /vendor_inventory_external_id/.test(lotErr.message ?? "")) {
+      vendorIdColumnsMissing = true;
+      console.warn("[intake-store] migration 0285 not applied - lots staged without the vendor inventory id");
+      delete (lotRow as Record<string, unknown>).vendor_inventory_external_id;
+      delete (lotRow as Record<string, unknown>).vendor_inventory_external_id_source;
+      ({ error: lotErr } = await admin.from("inventory_lots").insert(lotRow));
+    }
     // R34: before 0253 the source CHECK has no "manifest" - retry once with
     // no source (the pre-R34 row shape) so receiving never breaks over it.
     if (lotErr && isExpirySourceCheckViolation(lotErr)) {
@@ -2585,4 +2615,67 @@ export async function findDuplicateTwinsFor(
     console.error("[intake-store] twin lookup failed:", err);
     return new Map();
   }
+}
+
+/**
+ * R6-2 (0285): the vendor's InventoryExternalIdentifier per lot of a delivery,
+ * with where it was read. A SEPARATE read so the manifest page keeps working
+ * before 0285 is applied (null = columns missing).
+ */
+export async function listLotVendorIds(
+  manifestId: string,
+): Promise<Map<string, { vendorId: string | null; source: string | null }> | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inventory_lots")
+    .select("id, vendor_inventory_external_id, vendor_inventory_external_id_source")
+    .eq("manifest_id", manifestId);
+  if (error) {
+    if (!isMissingColumnError(error)) console.error("[intake-store] vendor id read failed:", error.message);
+    return null;
+  }
+  const out = new Map<string, { vendorId: string | null; source: string | null }>();
+  for (const r of (data ?? []) as { id: string; vendor_inventory_external_id: string | null; vendor_inventory_external_id_source: string | null }[]) {
+    out.set(r.id, { vendorId: r.vendor_inventory_external_id, source: r.vendor_inventory_external_id_source });
+  }
+  return out;
+}
+
+/**
+ * R6-2 (0285): a person types / confirms the vendor's inventory id for one
+ * lot. Stamped `owner_entered` (trusted: InventoryTransfer will send it) and
+ * audited with the before / after values.
+ */
+export async function setLotVendorInventoryId(
+  manifestId: string,
+  lotId: string,
+  value: string,
+  actorId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data: before, error: readErr } = await admin
+    .from("inventory_lots")
+    .select("id, vendor_inventory_external_id, vendor_inventory_external_id_source")
+    .eq("id", lotId)
+    .eq("manifest_id", manifestId)
+    .maybeSingle();
+  if (readErr) return { ok: false, error: isMissingColumnError(readErr) ? "Migration 0285 is not applied yet." : readErr.message };
+  if (!before) return { ok: false, error: "That lot is not on this delivery." };
+  const { error } = await admin
+    .from("inventory_lots")
+    .update({ vendor_inventory_external_id: value, vendor_inventory_external_id_source: "owner_entered", updated_by: actorId })
+    .eq("id", lotId)
+    .eq("manifest_id", manifestId);
+  if (error) return { ok: false, error: error.message };
+  await admin.from("audit_logs").insert({
+    actor_id: actorId,
+    action: "inventory_lot.vendor_inventory_external_id_set",
+    entity_type: "inventory_lot",
+    entity_id: lotId,
+    before_json: before,
+    after_json: { vendor_inventory_external_id: value, vendor_inventory_external_id_source: "owner_entered" },
+  });
+  return { ok: true };
 }

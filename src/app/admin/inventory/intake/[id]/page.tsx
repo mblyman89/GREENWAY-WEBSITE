@@ -28,6 +28,7 @@ import { listManifestDocMeta } from "@/lib/inventory/manifest-docs";
 import { getVendorById } from "@/lib/vendors/store";
 import {
   listManifestLots,
+  listLotVendorIds,
   listManifestEvents,
   listLabFactsByIds,
   findDuplicateTwinsFor,
@@ -65,6 +66,7 @@ import {
   rejectManifestAction,
   updateManifestTransportAction,
   setLotDispositionAction,
+  setLotVendorIdAction,
   finalizeManifestAction,
   promoteManifestToKbAction,
   notifyVendorSampleCapAction,
@@ -132,6 +134,8 @@ export default async function ManifestReviewPage({
     /** R36: Dismiss duplicate result / refusal. */
     dismissed?: string;
     dismisserr?: string;
+    /** R6-2: vendor inventory id save result (saved | invalid | error). */
+    vendorid?: string;
   }>;
 }) {
   // S29: the session is kept so owner-only books links render only for a
@@ -167,6 +171,7 @@ export default async function ManifestReviewPage({
     tab,
     dismissed,
     dismisserr,
+    vendorid,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -207,6 +212,9 @@ export default async function ManifestReviewPage({
     "";
 
   const lots = await listManifestLots(id);
+  // R6-2: the vendor's own inventory id per lot (InventoryTransfer's
+  // FromInventoryExternalIdentifier). null = migration 0285 not applied.
+  const vendorIds = await listLotVendorIds(id);
   const events = await listManifestEvents(id);
 
   // SLICE 39: Slice 97's intake REVIEW summary, finally connected. Built from
@@ -452,6 +460,22 @@ export default async function ManifestReviewPage({
             className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
           >
             <strong>Duplicate dismissed - this is the manifest that was kept.</strong> {dismissed}
+          </div>
+        )}
+        {vendorid && (
+          <div
+            data-testid="vendorid-banner"
+            className={`rounded-[var(--admin-radius)] border px-4 py-2 text-sm ${
+              vendorid === "saved"
+                ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+                : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 text-[var(--admin-danger)]"
+            }`}
+          >
+            {vendorid === "saved"
+              ? "Vendor inventory id saved. It will be used in the CCRS InventoryTransfer file."
+              : vendorid === "invalid"
+                ? "Not saved: enter the vendor's id exactly as on their manifest (1-100 characters, no commas or quotes)."
+                : "Not saved: the vendor inventory id could not be stored. Try again."}
           </div>
         )}
         {dismisserr && (
@@ -1007,6 +1031,40 @@ export default async function ManifestReviewPage({
                             </Link>
                           ) : null}
                         </div>
+                      );
+                    })()}
+                    {(() => {
+                      // R6-2: the vendor's inventory id for CCRS InventoryTransfer.
+                      // A PDF read may be a batch number, so it is shown for
+                      // confirmation; WCIA / CCRS-CSV / typed ids are trusted.
+                      if (!vendorIds || l.disposition === "rejected_at_dock") return null;
+                      const v = vendorIds.get(l.id);
+                      const trusted = !!v?.vendorId && ["wcia_json", "ccrs_csv", "owner_entered"].includes(v.source ?? "");
+                      return (
+                        <form
+                          action={setLotVendorIdAction.bind(null, id, l.id)}
+                          className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]"
+                          data-testid="vendor-id-form"
+                        >
+                          <label className="text-[var(--admin-text-faint)]" htmlFor={`vid-${l.id}`}>
+                            Vendor inventory id
+                          </label>
+                          <input
+                            id={`vid-${l.id}`}
+                            name="vendor_inventory_external_id"
+                            defaultValue={v?.vendorId ?? ""}
+                            maxLength={100}
+                            className="w-40 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-1.5 py-0.5 text-[var(--admin-text)]"
+                          />
+                          <button type="submit" className="font-semibold text-[var(--admin-accent)] underline hover:brightness-110">
+                            {trusted ? "Save" : "Confirm"}
+                          </button>
+                          {!trusted && (
+                            <span className="rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-gold)]">
+                              needs confirming for CCRS
+                            </span>
+                          )}
+                        </form>
                       );
                     })()}
                     <Link
