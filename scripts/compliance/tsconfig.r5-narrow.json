@@ -1,3 +1,23 @@
-{ "extends": "../../tsconfig.json", "compilerOptions": { "incremental": false, "noEmit": true },
-  "include": ["../../next-env.d.ts"],
-  "files": ["../../src/lib/compliance/ccrs-batch.ts","../../src/app/admin/reports/compliance/batch-export/route.ts","../../src/app/admin/inventory/disposition/sale-correction-export/route.ts","../../src/lib/compliance/ccrs-preflight-core.ts","../../src/lib/compliance/ccrs-return-corrections-core.ts"] }
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "noEmit": true
+  },
+  "include": [
+    "../../next-env.d.ts"
+  ],
+  "files": [
+    "../../src/lib/compliance/ccrs-batch.ts",
+    "../../src/app/admin/reports/compliance/batch-export/route.ts",
+    "../../src/app/admin/inventory/disposition/sale-correction-export/route.ts",
+    "../../src/lib/compliance/ccrs-preflight-core.ts",
+    "../../src/lib/compliance/ccrs-return-corrections-core.ts",
+    "../../src/lib/accounting/reset-proof-core.ts",
+    "../../src/lib/admin/reset-open-ccrs.ts",
+    "../../src/app/admin/settings/actions.ts",
+    "../../src/app/admin/settings/reset/page.tsx",
+    "../../tests/compliance/r5-reset-proof.test.ts",
+    "../../tests/compliance/r5-return-corrections.test.ts"
+  ]
+}

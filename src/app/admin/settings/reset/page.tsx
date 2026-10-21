@@ -28,6 +28,7 @@ import {
 } from "@/lib/accounting/factory-reset-core";
 import { listSchemaTables } from "@/lib/admin/schema-tables";
 import { previewFactoryReset } from "@/lib/admin/reset-service";
+import { loadOpenCcrsFiles } from "@/lib/admin/reset-open-ccrs";
 import { RESET_ENGINE_CURRENT, RESET_UPGRADE_SQL } from "@/lib/admin/reset-upgrade-sql";
 import { ResetUpgradeBox } from "@/components/admin/settings/ResetUpgradeBox";
 import { resetOperationalDataAction } from "../actions";
@@ -66,6 +67,16 @@ export default async function ResetDataSettingsPage({
   // preview RAN and did not report the current engine, so a preview error
   // (not the owner, 0209 missing) never produces a misleading upgrade prompt.
   const needsUpgrade = preview !== null && preview.resetEngine !== RESET_ENGINE_CURRENT;
+
+  // R5-2: the reset KEEPS the CCRS ledger, so a file the State has not answered
+  // stays open afterwards. Name them here, before the owner presses the button.
+  let openCcrsRead: Awaited<ReturnType<typeof loadOpenCcrsFiles>>;
+  try {
+    openCcrsRead = await loadOpenCcrsFiles();
+  } catch (err) {
+    openCcrsRead = { ok: false, error: err instanceof Error ? err.message : "Could not read the CCRS ledger." };
+  }
+  const openCcrs = openCcrsRead.ok ? openCcrsRead.summary : null;
 
   const wipe = plan.ok ? plan.wipe : [];
   const keep = plan.ok ? plan.keep : [];
@@ -118,6 +129,28 @@ export default async function ResetDataSettingsPage({
         ) : null}
 
         {needsUpgrade ? <ResetUpgradeBox sql={RESET_UPGRADE_SQL} /> : null}
+
+        {/* R5-2: CCRS files still waiting for the State (kept by the reset) */}
+        {!openCcrsRead.ok ? (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Could not check for CCRS files still waiting for an answer: {openCcrsRead.error}
+          </div>
+        ) : openCcrs ? (
+          <section className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-5">
+            <h2 className="text-sm font-semibold text-amber-100">CCRS files still waiting for an answer</h2>
+            <p className="mt-1 text-sm text-amber-100/90">{openCcrs.message}</p>
+            <ul className="mt-3 max-h-60 space-y-1 overflow-y-auto pr-1">
+              {openCcrs.files.map((f) => (
+                <li key={`${f.env}-${f.fileName}`} className="text-xs text-white/70">
+                  <code className="text-amber-200/90">{f.fileName}</code> ({f.env === "prod" ? "production" : "PREprod"}, {f.state})
+                </li>
+              ))}
+            </ul>
+            <a href="/admin/compliance/ccrs" className="mt-3 inline-block text-sm font-semibold text-amber-200 underline">
+              Open the CCRS hub
+            </a>
+          </section>
+        ) : null}
 
         {/* What the database looks like right now */}
         <section className="rounded-xl border border-white/10 bg-white/5 p-5">
