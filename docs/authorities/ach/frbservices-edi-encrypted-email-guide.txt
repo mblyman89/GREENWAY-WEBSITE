@@ -1,0 +1,114 @@
+Payments Reporter
+Encrypted Email User Guide
+
+Revised 06/26/24
+ Contents
+• Encrypted email service
+  overview
+• Registering, activating and
+  maintaining an account
+• Online help
+• Notification emails
+• Downloading and deleting
+  reports
+          Encrypted Email Service Overview
+
+•   ACH and Check reports are available via an encrypted email service.
+
+•   The reports are created, encrypted and sent to a password-protected internet
+    portal, where they are retained for 60 calendar days.
+
+•   Email notifications are automatically generated to alert you when there are
+    reports awaiting retrieval. In case any notification emails are blocked, a best
+    practice is to access the encrypted internet portal directly each day to check for
+    reports.
+
+•   Pulling the reports from the portal is the default way to access them. The
+    encrypted portal can be accessed at achedi.com, where you will need to set up an
+    account with an email address and password.
+
+•   Other optional products enable the reports to be automatically pushed directly
+    to your email inbox in an encrypted manner. Learn more at Zix.com.
+                 Internet Portal Homepage
+This is the homepage of the encrypted internet portal (achedi.com). The appearance of
+the screen may differ depending on the browser used. Several desktop and mobile
+device browsers are supported. JavaScript must be enabled to use the portal.
+                       Register an Account
+When accessing the portal for the first time, complete a one-time registration process to
+establish a password and confirm control of the email address.
+                       Register an Account
+Set up a password following the rules on the screen.
+                        Register an Account
+After submitting account information, you will see a screen similar to this one.
+Check your email inbox for a confirmation email. This process is designed to
+confirm the user has control of this email address.
+                         Activate an Account
+
+This is an example of the confirmation email you will receive. To activate the account,
+click the Activate link. If you see a similar email that you did not initiate, click the
+Decline link and notify the email vendor immediately.
+                         Activate an Account
+After clicking the Activate link, you will be returned to the portal and presented with
+an “Activation Successful” screen. Click the Continue button to sign in to access the
+reports.
+                           Reset an Account
+If you forget your password, or it has expired or been compromised, click the Reset
+button from the homepage to establish a new password.
+                         Reset an Account
+Follow the password rules on the screen to create your new password.
+                            Account Locked
+If you receive an email similar to this one, return to the portal and use the Reset
+button to establish a new password. If you did not initiate the message by using
+invalid passwords while trying to access the portal, notify the email vendor
+immediately.
+                                 Online Help
+If you experience problems or have questions about using the portal, click the Help
+button or reference this user guide, which can help resolve most issues. If issues remain,
+see the last page of this guide for additional contact information.
+                        Notification Emails
+When a report is generated, you should receive a notification email from the
+domain name encryptedmail.achedi.com. The email will vary depending on your
+email software and provider. In the email, click the Open Message button or link,
+which will direct you to the achedi.com portal to access your report.
+                       Notification Emails
+
+•   If a report was generated but you do not receive a notification email, it
+    has likely been trapped by a spam filter or directed to a junk mail area.
+    Work with your email support area to ensure the domain name
+    encryptedmail.achedi.com is not blocked.
+
+•   Remember, it is a best practice not to rely on these notification emails
+    but rather to access the portal directly to check for reports.
+
+•   If you do rely on the notification emails, please ensure that the Open
+    Message link directs you to the valid achedi.com site. Checking the link
+    could help you avoid phishing attempts that use similar-looking sites to
+    trick users into revealing their passwords.
+                        Download Reports
+To download a report, enter your email address and password. Then click Sign In.
+                         Download Reports
+
+Click the Inbox tab, where you should see a view similar to this. Locate the report to
+download and click either the From email address or the Subject line of the report.
+                         Download Reports
+You will then see a screen similar to this. Click on the Attachments link to
+download the report.
+                         Download Reports
+
+You will then see a dialog box like the one below. Select the Open or Save button.
+
+Reports may be in a compressed format to reduce storage space and transfer time.
+After the download is complete, click on the file to extract the reports from the
+compressed format. Most operating systems include the ability to uncompress files,
+so no other products are needed.
+                            Delete Reports
+Reports are retained in the portal for 60 calendar days and then automatically
+deleted. There is no need to manually delete reports, but you can if needed. If you
+need to retain reports longer than 60 calendar days, you will need to download and
+store them elsewhere.
+Additional Support
+
+If you are not a financial institution, contact your bank or credit union.
+
+If you are a financial institution, call (833) 377-7827.
+
