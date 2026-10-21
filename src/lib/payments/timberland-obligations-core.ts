@@ -4,7 +4,7 @@
  * The Timberland communications log (migration 0277) and the obligation
  * clocks it starts, the "STOP: call Timberland" card and the fees card.
  * Every rule is quoted from the signed agreement mirror
- * (docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt) or
+ * (docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt) or
  * Brenda's emails (timberland-brenda-2026-10.txt); the numbers come from
  * timberland-profile-core, never typed again here. Tests check each quote
  * against its mirror, whitespace-normalised.
@@ -50,7 +50,7 @@ import {
 } from "@/lib/payments/timberland-profile-core";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 
-export const AGREEMENT_FILE = "ach/timberland-ach-agreement-2026-10-09.redacted.txt";
+export const AGREEMENT_FILE = "ach/timberland-ach-agreement-2026-10-14.redacted.txt";
 export const BRENDA_FILE = "ach/timberland-brenda-2026-10.txt";
 
 export type Quote = { file: string; section: string; text: string };

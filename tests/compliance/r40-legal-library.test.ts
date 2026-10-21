@@ -41,7 +41,7 @@ const OFFICIAL_HOSTS = [
 /** R41 S8: the Timberland agreement has no public URL; it is checked by its sha256 header instead. */
 const PUBLIC_ENTRIES = ACH_LEGAL_LIBRARY.filter((e) => e.kind !== "agreement");
 const AGREEMENT_ENTRIES = ACH_LEGAL_LIBRARY.filter((e) => e.kind === "agreement");
-const TIMBERLAND_MIRROR = "ach/timberland-ach-agreement-2026-10-09.redacted.txt";
+const TIMBERLAND_MIRROR = "ach/timberland-ach-agreement-2026-10-14.redacted.txt";
 
 describe("R40 legal library — verbatim, sourced, linked", () => {
   it("has the 20 entries the generator writes (13 public + 7 Timberland agreement, R41 S8), with unique ids", () => {

@@ -158,7 +158,7 @@ beforeEach(() => {
 // =========================================================================
 describe("quotes are verbatim to the mirrors (whitespace-normalized)", () => {
   const files: Record<keyof typeof core.OFAC_QUOTES, string> = {
-    agreement3: "ach/timberland-ach-agreement-2026-10-09.redacted.txt",
+    agreement3: "ach/timberland-ach-agreement-2026-10-14.redacted.txt",
     faq249: "ofac/ofac-faq-249-score-calculation.txt",
     faq249Higher: "ofac/ofac-faq-249-score-calculation.txt",
     faq250: "ofac/ofac-faq-250-no-threshold.txt",

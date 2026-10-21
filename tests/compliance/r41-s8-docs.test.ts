@@ -21,7 +21,7 @@ const ROOT = join(__dirname, "..", "..");
 const AUTH = join(ROOT, "docs", "authorities");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const flat = (s: string) => s.replace(/\s+/g, " ").trim();
-const TIMBERLAND_MIRROR = "ach/timberland-ach-agreement-2026-10-09.redacted.txt";
+const TIMBERLAND_MIRROR = "ach/timberland-ach-agreement-2026-10-14.redacted.txt";
 const FR_MIRROR = "docs/authorities/ach/fr-2017-19135-prenote-three-banking-days.txt";
 
 const S8_TASKS = ["timberland_agreement_reread", "timberland_limits_reconfirm", "timberland_name_id_reconfirm", "timberland_schedule_f_selfcheck"] as const;

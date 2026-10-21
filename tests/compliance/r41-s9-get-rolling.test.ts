@@ -12,7 +12,7 @@
  *
  * The REAL stores and the REAL cron route run over the REAL postgrest-js
  * client against FakePostgrest. Quotes are checked against the repo mirror
- * docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt.
+ * docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,7 +75,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const flat = (s: string) => s.replace(/\s+/g, " ");
 const pt = (day: string, h: number, m = 0) => new Date(pacificWallTimeToUtcISO(day, { h, m, s: 0, ms: 0 }));
-const MIRROR = "docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt";
+const MIRROR = "docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt";
 const MICHAEL = "22222222-2222-4222-8222-222222222222";
 const FILE_ID = "aaaaaaaa-1111-4222-8333-444455556666";
 

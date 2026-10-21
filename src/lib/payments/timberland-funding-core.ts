@@ -4,7 +4,7 @@
  * The funding helper. Pure: no database, no clock of its own.
  *
  * What the contract says (verbatim, docs/authorities/ach/
- * timberland-ach-agreement-2026-10-09.redacted.txt):
+ * timberland-ach-agreement-2026-10-14.redacted.txt):
  *   section 14: "Company shall provide Financial Institution with immediately
  *     available funds not later than 9:00 a.m. PST on each Settlement Date"
  *   section 14: "Financial Institution reserves the right to require that

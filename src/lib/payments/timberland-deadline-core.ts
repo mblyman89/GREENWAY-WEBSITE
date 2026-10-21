@@ -3,7 +3,7 @@
  *
  * The upload deadline for a Timberland ACH file. Every rule is quoted from
  * the signed agreement mirror (docs/authorities/ach/
- * timberland-ach-agreement-2026-10-09.redacted.txt) through
+ * timberland-ach-agreement-2026-10-14.redacted.txt) through
  * timberland-profile-core; none is typed again here.
  *
  *   Schedule A, Delivery Deadline: "All ACH input files must be received by

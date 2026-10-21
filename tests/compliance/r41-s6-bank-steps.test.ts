@@ -213,7 +213,7 @@ describe("honest Timberland wording (plan section 3.5)", () => {
   });
 
   it("the Schedule F quote the grey line leans on is in the mirrored agreement", () => {
-    const mirror = read("docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt").replace(/\s+/g, " ");
+    const mirror = read("docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt").replace(/\s+/g, " ");
     expect(mirror).toContain("Timberland Bank also recommends dual control approval for all file originations.");
     expect(steps.DUAL_APPROVAL_NOTE).toContain("'recommends dual control approval'");
     expect(mirror).toContain("Dual Approval Required (Recommended by Bank) [ ] Yes [X] No");
