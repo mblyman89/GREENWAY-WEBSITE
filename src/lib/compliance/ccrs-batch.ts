@@ -146,6 +146,18 @@ export type CcrsBatch = {
      */
     unassignedProductKeys: string[];
   };
+  /**
+   * R5-1: customer-return Sale corrections carried in this batch's Sale file.
+   * `exportReturnIds` is filled ONLY for a production emission (preprod never
+   * marks the shared correction_status); the route marks them after emit.
+   */
+  corrections: {
+    exportReturnIds: string[];
+    emitted: number;
+    withheld: number;
+    invalid: number;
+    reflected: number;
+  };
 };
 
 // ---------------------------------------------------------------------------

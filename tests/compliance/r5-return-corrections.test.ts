@@ -307,6 +307,13 @@ describe("E48 is a registered, pinned issue code", () => {
   });
 });
 
+describe("E49 is a registered, pinned issue code", () => {
+  it("in CCRS_ISSUE_CODES with pin [G L1412] (\"Duplicate Sale detail item for Licensee\")", () => {
+    expect(CCRS_ISSUE_CODES).toContain("E49_SALE_LINE_ALREADY_HELD");
+    expect(specPinFor("E49_SALE_LINE_ALREADY_HELD")).toBe("[G L1412]");
+  });
+});
+
 describe("decodeSaleSlice (migration 0283 ccrs_sale_slice)", () => {
   it("names the RPC", () => expect(SALE_SLICE_RPC).toBe("ccrs_sale_slice"));
   it("missing function -> absent; any other error or a malformed answer throws", () => {
@@ -443,6 +450,35 @@ describe("wiring (source pins)", () => {
   it("the batch reports a destroyed lot that an event row of this batch names", () => {
     expect(batch).toContain("eventLotRefs(");
     expect(batch).toMatch(/\.eq\("status", "destroyed"\)/);
+    // the destroyed read is chunked by the refs only (never a whole-table read)
+    const fn = batch.slice(batch.indexOf("async function readDestroyedLots("), batch.indexOf("const RETURN_COLUMNS"));
+    expect(fn).toContain('.in("ccrs_inventory_external_id", chunk)');
+    expect(fn).toContain('.order("id", { ascending: true })');
+    expect(fn).toContain("if (error) failed = error.message;");
+    expect(fn).toContain("if (failed) throw new Error(");
+    // only ids NOT already live are fetched, and both sets reach Inventory.csv
+    expect(batch).toContain("const lots: LotRow[] = [...liveLots, ...destroyedLots];");
+  });
+  it("the batch reads pending returns plus this range's returns plus their sibling returns", () => {
+    const fn = batch.slice(batch.indexOf("async function readReturnsForCorrections("), batch.indexOf("class MissingReturnsTable"));
+    expect(fn).toContain("correction_status.eq.pending,and(created_at.gte.${fromISO},created_at.lte.${toISO})");
+    expect(fn).toContain('.in("sale_detail_external_id", chunk)');
+    expect(fn).toContain(".map(returnRecordFromRow)");
+    expect(fn).toContain("isMissingTable(");
+  });
+  it("E49: an already-held line is a warning, an uncertain one is an error, and only routed rows are Inserted", () => {
+    const at = batch.indexOf("const routed = routeSaleInserts(");
+    const body = batch.slice(at, batch.indexOf("corrections = planReturnCorrections(", at));
+    expect(body).toContain("insertRows = routed.rows;");
+    expect(body).toMatch(/routed\.alreadyHeld\.length > 0\) \{\s*syncIssues\.push\(\{\s*severity: "warning",[\s\S]*?code: "E49_SALE_LINE_ALREADY_HELD"/);
+    expect(body).toMatch(/routed\.uncertain\.length > 0\) \{\s*syncIssues\.push\(\{\s*severity: "error",[\s\S]*?code: "E49_SALE_LINE_ALREADY_HELD"/);
+    expect(batch).toContain("insertedDetailIds: new Set(insertRows.map((r) => r[SALE_DETAIL])),");
+    expect(batch).toContain("const saleRows = [...insertRows, ...correctionE38.rows];");
+  });
+  it("the self-check and the returned view use the Sale-aware ledger", () => {
+    expect(batch).toMatch(/ledgerSelfCheckIssues\(\s*saleAwareLedger \?\? ledger/);
+    expect(batch).toContain("view: saleAwareLedger ?? ledger");
+    expect(batch).toContain("exportReturnIds: correctionExportIds(env, corrections, e38WithheldLines)");
   });
   it("the export route marks returns exported only AFTER the outbox stored the Sale file", () => {
     const emitAt = route.indexOf("await emitOutboxFiles(");
@@ -470,6 +506,6 @@ describe("embedded self-tests", () => {
   it("pass", () => {
     const r = __runReturnCorrectionsTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(8);
+    expect(r.passed).toBeGreaterThanOrEqual(18);
   });
 });
