@@ -133,10 +133,12 @@ export const STRATEGY_PLAYBOOK: Record<string, PlaybookEntry> = {
     cite: ["[G L0220-L0221]", "[G L0246-L0247]"],
     fix: [
       "Apply the error file. The hub marks the id \"uncertain\" and holds it out of exports, so it cannot fail the same way again.",
-      "Settle it with a copy of the data from the CCRS Service Desk (servicedesk@lcb.wa.gov). Until then the id stays out of every export.",
-      "If the copy shows the record, future changes to it go as Update. Never re-send it as Insert.",
+      "If a later Sale or Adjustment that CCRS accepted names the same lot, the hub settles it by itself: CCRS only accepts such a row for inventory it already holds (R6-1).",
+      "PREprod (test site) only: press \"Settle PREprod duplicates\" in the PREprod set-up box. PREprod cannot be reset, and the examiner says to work around its data.",
+      "Production: settle it with a copy of the data from the CCRS Service Desk (servicedesk@lcb.wa.gov). Until then the id stays out of every export.",
+      "Once settled, future changes to it go as Update. Never re-send it as Insert.",
     ],
-    seen: "2026-09-17 T-16/T-17/T-33",
+    seen: "2026-09-17 T-16/T-17/T-33; 2026-10-20 PREprod Inventory (13 lots)",
   },
   "If Useable Cannabis is selected Unit Weight Gram cannot be Zero": {
     cls: "row",

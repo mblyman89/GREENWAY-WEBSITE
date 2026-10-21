@@ -23,8 +23,12 @@ import {
   decodeAbandon,
   decodeMarkUploaded,
   decodeOutcome,
+  decodePreprodSettle,
   decodePreprodStart,
+  decodeProveByReference,
   type MarkUploadedAnswer,
+  type PreprodSettleAnswer,
+  type ProveByReferenceAnswer,
   type OutcomeAnswer,
 } from "./ccrs-lifecycle-core";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
@@ -181,7 +185,7 @@ export async function listCcrsFiles(
           .from("ccrs_file_issues")
           .select("id, file_id, severity, code, message")
           .in("file_id", needIssues)
-          .in("code", ["CCRS_ROW_REJECTED", "CCRS_ROW_CONTRADICTS_LEDGER", "W_LOT_PRODUCT_UNRESOLVED"])
+          .in("code", ["CCRS_ROW_REJECTED", "CCRS_ROW_CONTRADICTS_LEDGER", "W_LOT_PRODUCT_UNRESOLVED", "I_PROVED_BY_REFERENCE", "I_PREPROD_SETTLED"])
           .order("id", { ascending: true })
           .range(from, to);
         return { rows: (iss as IssueDb[] | null) ?? [], ok: !e2 };
@@ -264,4 +268,47 @@ export async function startPreprodLedger(admin: Admin, by: string): Promise<{ st
   const { data, error } = await admin.rpc("ccrs_preprod_ledger_start", { p_by: by });
   if (error) rpcError("ccrs_preprod_ledger_start", error);
   return decodePreprodStart(data);
+}
+
+/**
+ * R6-1 (0284). Uncertain lots named by a LATER accepted Sale/InventoryAdjustment
+ * row become filed: CCRS refuses such a row unless the inventory is already
+ * reported [G L1302-L1304]. Safe to call after every recorded answer.
+ */
+export async function proveByReference(admin: Admin, env: LedgerEnv): Promise<ProveByReferenceAnswer> {
+  const { data, error } = await admin.rpc("ccrs_prove_by_reference", { p_env: env });
+  if (error) rpcError("ccrs_prove_by_reference", error);
+  return decodeProveByReference(env, data);
+}
+
+/**
+ * R6-1 (0284). PREPROD ONLY: ids uncertain only because CCRS answered
+ * "Duplicate External Identifier" to our Insert become filed [G L0246]; PREprod
+ * cannot be reset, so the examiner says to work around its data [EXAM L0518].
+ */
+export async function preprodSettleDuplicates(admin: Admin, by: string): Promise<PreprodSettleAnswer> {
+  const { data, error } = await admin.rpc("ccrs_preprod_settle_duplicates", { p_by: by });
+  if (error) rpcError("ccrs_preprod_settle_duplicates", error);
+  return decodePreprodSettle(data);
+}
+
+/**
+ * After a recorded answer: run proveByReference and NEVER throw. The answer is
+ * already in the record; a failed proof must not hide that. Returns the
+ * operator sentence to append ("" when nothing was proved).
+ */
+export async function proveAfterOutcome(admin: Admin, env: LedgerEnv): Promise<{ text: string; proved: string[]; filesClosed: number; error: string | null }> {
+  try {
+    const a = await proveByReference(admin, env);
+    if (a.proved.length === 0) return { text: "", proved: [], filesClosed: 0, error: null };
+    return {
+      text: `Proved on file by an accepted sale/adjustment: ${a.proved.join(", ")} (${a.filesClosed} file(s) closed).`,
+      proved: a.proved,
+      filesClosed: a.filesClosed,
+      error: null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { text: `Proof-by-sale check did not run (${msg}); it runs again after the next answer.`, proved: [], filesClosed: 0, error: msg };
+  }
 }

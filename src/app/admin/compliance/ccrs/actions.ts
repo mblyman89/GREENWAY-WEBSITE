@@ -24,6 +24,8 @@ import {
   fileRowsForEcho,
   getCcrsFile,
   markUploaded,
+  preprodSettleDuplicates,
+  proveAfterOutcome,
   recordOutcome,
   startPreprodLedger,
 } from "@/lib/compliance/ccrs-ledger-store";
@@ -35,6 +37,7 @@ import {
   matchSuccessNames,
   pacificLocalToUtcISO,
   parseSuccessEmails,
+  settleSummaryText,
 } from "@/lib/compliance/ccrs-lifecycle-core";
 
 import {
@@ -329,8 +332,11 @@ export async function recordSuccessAction(formData: FormData): Promise<void> {
       failed.push(`${r.fileName}: ${asText(e)}`);
     }
   }
+  const proof = done.length > 0 ? await proveAfterOutcome(admin, env) : null;
+  if (proof && proof.proved.length > 0) await auditProof(session, env, proof);
   revalidatePath(BASE);
   const warn = [
+    proof?.text ?? "",
     match.unknown.length ? `Ignored (not ${env} outbox files): ${match.unknown.join(", ")}.` : "",
     match.notWaiting.length ? `Already answered or not uploaded: ${match.notWaiting.map((n) => n.fileName).join(", ")}.` : "",
     match.timeMismatch.length ? `Check the upload time of ${match.timeMismatch.map((t) => t.fileName).join(", ")}: CCRS's "Date Submitted" is over 15 minutes from what was recorded.` : "",
@@ -375,8 +381,10 @@ export async function recordErrorAction(formData: FormData): Promise<void> {
     entityId: file.id,
     after: { env, fileName: out.fileName, state: out.state, rows: out.rows, messages: verdict.messages, rejectedRows: verdict.rejected.map((r) => r.row_no), why: verdict.why },
   });
+  const proof = await proveAfterOutcome(admin, env);
+  if (proof.proved.length > 0) await auditProof(session, env, proof);
   revalidatePath(BASE);
-  backTo(weekKey, env, okQ(`${out.fileName}: ${verdict.why} Now ${out.state}; ${out.rows.landed} filed, ${out.rows.rejected} refused, ${out.rows.uncertain} uncertain.`));
+  backTo(weekKey, env, okQ(`${out.fileName}: ${verdict.why} Now ${out.state}; ${out.rows.landed} filed, ${out.rows.rejected} refused, ${out.rows.uncertain} uncertain. ${proof.text}`.trim()));
 }
 
 /** 60+ minutes after the upload, no email of either kind: every row uncertain (Part 05 E). */
@@ -450,6 +458,51 @@ export async function startPreprodLedgerAction(formData: FormData): Promise<void
   });
   revalidatePath(BASE);
   backTo(weekKey, "preprod", okQ(out.status === "started" ? "PREprod ledger started (empty)." : "PREprod ledger was already started."));
+}
+
+/** Audit row for an automatic proof-by-reference (R6-1, 0284). */
+async function auditProof(
+  session: Awaited<ReturnType<typeof requirePermission>>,
+  env: LedgerEnv,
+  proof: { proved: string[]; filesClosed: number },
+): Promise<void> {
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.ledger.proved_by_reference",
+    entityType: "ccrs_filed_entities",
+    entityId: null,
+    after: { env, proved: proof.proved, filesClosed: proof.filesClosed, rule: "[G L1302-L1304] an accepted Sale/Adjustment row proves its lot is held" },
+  });
+}
+
+/**
+ * PREPROD ONLY (R6-1, 0284). Every PREprod Inventory/Product/Area id that is
+ * uncertain only because CCRS answered "Duplicate External Identifier" to our
+ * Insert is treated as on file, so the next PREprod export sends it as Update.
+ * PREprod cannot be reset; the examiner says to work around its data
+ * [EXAM L0518]. Production has no such button: a copy settles production.
+ */
+export async function settlePreprodDuplicatesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const weekKey = String(formData.get("week_key") ?? "");
+  const admin = createSupabaseAdminClient();
+  let out: Awaited<ReturnType<typeof preprodSettleDuplicates>>;
+  try {
+    out = await preprodSettleDuplicates(admin, session.email ?? session.profile.id);
+  } catch (e) {
+    backTo(weekKey, "preprod", errQ(asText(e)));
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.preprod.settle_duplicates",
+    entityType: "ccrs_filed_entities",
+    entityId: null,
+    after: { settled: out.settled, filesClosed: out.filesClosed, rule: "[G L0246] [EXAM L0518]" },
+  });
+  revalidatePath(BASE);
+  backTo(weekKey, "preprod", okQ(settleSummaryText({ settled: out.settled, filesClosed: out.filesClosed })));
 }
 
 /**

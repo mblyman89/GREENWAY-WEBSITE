@@ -18,7 +18,7 @@
  */
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { fileActions, noEmailAllowedAt } from "@/lib/compliance/ccrs-outcome-core";
-import { FILE_STATE_TEXT, ccrsPortalUrl, pacificLocalInputValue } from "@/lib/compliance/ccrs-lifecycle-core";
+import { FILE_STATE_TEXT, ccrsPortalUrl, pacificLocalInputValue, pendingDuplicateCount } from "@/lib/compliance/ccrs-lifecycle-core";
 
 export type PanelFile = {
   id: string;
@@ -43,6 +43,8 @@ export type CcrsFilesPanelActions = {
   abandon: Action;
   startPreprod: Action;
   assignPreprodIds: Action;
+  /** R6-1 (0284): PREprod only. Optional so older callers still compile. */
+  settlePreprodDuplicates?: Action;
 };
 
 type Props = {
@@ -96,6 +98,7 @@ export function CcrsFilesPanel(p: Props) {
   const waiting = p.files.filter((f) => f.state === "uploaded");
   const toAct = p.files.filter((f) => ["emitted", "uploaded", "errored", "reconciling"].includes(f.state)).length;
   const issuesOf = (id: string) => p.issues.filter((i) => i.fileId === id);
+  const dupes = p.env === "preprod" ? pendingDuplicateCount(p.files, p.issues) : 0;
 
   return (
     <section id="ccrs-files" className="rounded-2xl border border-white/10 bg-white/[0.02] p-5" data-env={p.env}>
@@ -150,6 +153,23 @@ export function CcrsFilesPanel(p: Props) {
                     <span>{p.unassignedProductCount} product(s) need a PREprod id.</span>
                   )}
                 </li>
+                {dupes > 0 ? (
+                  <li data-testid="preprod-settle">
+                    {edit && a!.settlePreprodDuplicates ? (
+                      <form action={a!.settlePreprodDuplicates} className="flex flex-wrap items-center gap-2">
+                        <Hidden env={p.env} weekKey={p.weekKey} />
+                        <span>
+                          CCRS answered "Duplicate External Identifier" to {dupes} row(s): PREprod already had them from an earlier test.
+                          PREprod cannot be reset, so treat them as on file (they go out as Update next time).
+                        </span>
+                        <button type="submit" className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`}>Settle PREprod duplicates</button>
+                        <span className="w-full text-white/50">PREprod only. Production never does this: a Service Desk copy settles production.</span>
+                      </form>
+                    ) : (
+                      <span>{dupes} PREprod duplicate row(s) waiting to be settled.</span>
+                    )}
+                  </li>
+                ) : null}
                 <li>
                   Download the zip above (it says PREprod), upload at{" "}
                   <a href={ccrsPortalUrl("preprod")} target="_blank" rel="noreferrer" className="underline">precannabisreporting.lcb.wa.gov</a>, one file at a time.
@@ -253,7 +273,7 @@ export function CcrsFilesPanel(p: Props) {
                         <ul className="mt-1 space-y-0.5">
                           {iss.slice(0, 200).map((i, k) => (
                             <li key={k}>
-                              • [{i.code === "CCRS_ROW_CONTRADICTS_LEDGER" ? "uncertain" : i.code === "CCRS_ROW_REJECTED" ? "refused" : "note"}] {i.message}
+                              • [{i.code === "CCRS_ROW_CONTRADICTS_LEDGER" ? "uncertain" : i.code === "CCRS_ROW_REJECTED" ? "refused" : i.code === "I_PROVED_BY_REFERENCE" ? "proved by sale" : i.code === "I_PREPROD_SETTLED" ? "PREprod settled" : "note"}] {i.message}
                             </li>
                           ))}
                         </ul>
