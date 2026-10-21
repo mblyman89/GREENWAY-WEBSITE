@@ -1,0 +1,26 @@
+control (before) pass
+killed   quote reworded
+killed   risk row points past the procedure
+killed   bank change not higher risk
+killed   future year accepted
+killed   two years back accepted
+killed   digits allowed in summary
+killed   sod box not required
+killed   oldest correction stands
+killed   year window in UTC
+killed   non-ACH actions counted
+killed   manager action not flagged
+killed   packet always has section 5
+killed   owner-only db error reworded
+killed   audit read not checked complete
+killed   admin can record
+killed   calendar ticked for last year too
+killed   admin sees who-did-what
+killed   page without a guard
+killed   route cached
+killed   route hands out a packet after a partial read
+killed   route shows who-did-what to admins
+killed   tab missing
+killed   calendar task back to the calendar
+control (after) pass
+total 23 killed 23 survivors []
