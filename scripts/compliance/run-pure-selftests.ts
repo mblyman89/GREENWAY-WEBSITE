@@ -2337,7 +2337,7 @@ __runLiquidVolumeTests();
   assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 67); // R37 S6: search history + harvest verdict
   assertRan("inventory-metrics-core", __runInventoryMetricsTests(), 28); // R38 S2: ext cost/retail, sell-through, velocity, days of supply
   assertRan("inventory-table-core", __runInventoryTableCoreTests(), 61); // R38 S2-S4: column registry, presets, page size, pager, export
-  assertRan("ach-authorization-core", __runAchAuthorizationCoreTests(), 75); // R39 S1: FedACH days, prenote/NOC/return/reversal clocks, splits, release, retention, codes; R41 S0: owner-only release (11 dual/solo release checks -> 12 owner checks)
+  assertRan("ach-authorization-core", __runAchAuthorizationCoreTests(), 77); // R41 S15: +2 (R90 catalogued from the Nacha mirror; sourced codes catalogued); R39 S1: FedACH days, prenote/NOC/return/reversal clocks, splits, release, retention, codes; R41 S0: owner-only release (11 dual/solo release checks -> 12 owner checks)
   assertRan("vault-release-notice-core", __runVaultReleaseNoticeCoreTests(), 17); // R39 S3: solo-release notice recipients, masking, escaping, phone reminder
   assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
   assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 59); // R39 S4: needs bank info / opted out card + 0258 CHECK planner; R41 Round 12: follow-up search (10)
@@ -2350,7 +2350,7 @@ __runLiquidVolumeTests();
   assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 26); // R39 S7: prefill, bulk plan, cookie, link
   assertRan("no-track-paths", __runNoTrackPathTests(), 8); // R39 S7: no analytics where the URL holds a token
   assertRan("vendor-proof-shrink", __runVendorProofShrinkTests(), 14); // R39 S7: phone photo -> under Vercel's 4.5 MB body cap
-  assertRan("ach-return-log-core", __runAchReturnLogCoreTests(), 37); // R39 S7: returns / NOC log (parse, hold reason, owner email, urgency)
+  assertRan("ach-return-log-core", __runAchReturnLogCoreTests(), 38); // R41 S15: +1 (R90 notice); R39 S7: returns / NOC log (parse, hold reason, owner email, urgency)
   assertRan("ach-ops-core", __runAchOpsCoreTests(), 97); // R39 S7: account-check files, release/review/legal-hold forms, test-credit monitoring, 0263 errors. R41 S3: +5 (the ledger File ID Modifier, no fixed P/M) R41 S5: +4 (the default and the release check use the Timberland deadline; the "a day ahead" wording is gone) R41 S7: +1 (0275 TIMBERLAND_WAIT mapped)
   assertRan("ach-ops-ui-core", __runAchOpsUiCoreTests(), 17); // R39 S7: Operations page words (site URL, who was told, urgency, monitor, owner/request hint (R41 S0))
   assertRan("ach-authority-core", __runAchAuthorityCoreTests(), 130); // R41 S0 (D-4..D-9): owner acts, admin requests, stop actions, masking, emails; S6: two bank-step kinds
@@ -2372,7 +2372,7 @@ __runLiquidVolumeTests();
   assertRan("ofac-screening-core", __runOfacScreeningCoreTests(), 96); // R41 S11: OFAC list parsing, Jaro-Winkler + Soundex screening, review status (never blocks payment)
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
-  assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 35); // R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
+  assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 36); // R41 S15: R90 coded (no reminder), reminders checked on the 2027 character rule; R41 S8: +3 (yearly Timberland tasks); R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 31); // R40: ACH guide journeys, blockers, explainer; R41 S6: Timberland setup journey
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 159); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 30); // R47: home carousel advanced options; R54 repeat/fallback

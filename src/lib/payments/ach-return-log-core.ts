@@ -263,6 +263,9 @@ export function __runAchReturnLogCoreTests(): { passed: number; failed: number }
   // unknown
   const u = parseReturnNotice(f({ payee: `vendor:${V}`, code: "R99", received_on: T }), T);
   ok(u.ok && !u.notice.known && u.notice.action === "hold_investigate_fraud" && u.notice.codeLabel === null, "unknown code -> fraud hold, no invented label");
+  // R41 S15: R90 (Nacha, from 2028-03-17) is known, held as possible fraud, with Nacha's title
+  const r90 = parseReturnNotice(f({ payee: `vendor:${V}`, code: "r90", received_on: T }), T);
+  ok(r90.ok && r90.notice.known && r90.notice.kind === "return" && r90.notice.action === "hold_investigate_fraud" && r90.notice.codeLabel === "Entry Returned Due to RDFI\u2019s Sanctions Compliance Obligations", "R90 sanctions return: known, fraud hold, Nacha label");
   // refusals
   const bad = parseReturnNotice(f({ payee: "vendor:nope", code: "X1", received_on: "2026-10-06", settlement_date: "2026-02-30", amount: "abc", trace: "123" }), T);
   ok(!bad.ok && Object.keys(bad.errors).sort().join(",") === "amount,code,payee,received_on,settlement_date,trace", "every bad field reported");

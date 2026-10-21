@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ACH_CODES,
+  ACH_CODE_SOURCE,
   ACH_NOTIFY_PUBLIC,
   resolveNotifyContacts,
   CONTACT_LOOKBACK_DAYS,
@@ -156,11 +157,21 @@ describe("transaction codes are the First Citizens credit codes, and only credit
 
 describe("return / NOC labels are copied from the mirrored newsletter", () => {
   const text = flat(read("ach/odfi-peoples-bank-2026-originators-newsletter.txt"));
-  it("every catalogued code + label appears verbatim as '• CODE label'", () => {
-    expect(Object.keys(ACH_CODES).length).toBe(20);
+  it("every catalogued code + label appears verbatim as '• CODE label' (newsletter codes)", () => {
+    expect(Object.keys(ACH_CODES).length).toBe(21);
     for (const [code, v] of Object.entries(ACH_CODES)) {
+      if (ACH_CODE_SOURCE[code]) continue;
       expect(text.includes(`• ${code} ${v.label}`), `${code} ${v.label}`).toBe(true);
     }
+  });
+  it("R41 S15: R90's label is verbatim from Nacha's rule page as 'R90 (label)'", () => {
+    expect(ACH_CODE_SOURCE).toEqual({ R90: "ach/nacha-r90-sanctions-return-code.txt" });
+    const nacha = flat(read(ACH_CODE_SOURCE.R90));
+    expect(nacha.includes(`R90 (${ACH_CODES.R90.label}) will be added to the return reason code table.`)).toBe(true);
+    expect(nacha).toContain("March 17, 2028");
+    expect(ACH_CODES.R90.action).toBe("hold_investigate_fraud");
+    // the newsletter does not list R90, so the per-code source is needed
+    expect(text.includes("R90")).toBe(false);
   });
   it("mutation: a reworded label is not found (the check can say no)", () => {
     expect(text.includes("• R02 Account was closed")).toBe(false);
@@ -196,7 +207,7 @@ describe("owner-supplied facts", () => {
     // be anyone's number.
     // An area code or exchange starting 0/1 is impossible under NANP rules.
     const impossible = (p: string) => /^[01]/.test(p) || /^\d{3}-[01]/.test(p);
-    for (const p of phones) expect(p === "360-443-6988" || /-555-01\d\d$/.test(p) || impossible(p), p).toBe(true);
+    for (const p of phones) expect(p === "360-443-6988" || p === "800-562-8761" /* Timberland's published line (R41 S15) */ || /-555-01\d\d$/.test(p) || impossible(p), p).toBe(true);
     expect(impossible("360-555-0200") || impossible("253-867-5309"), "a real-looking number is NOT impossible").toBe(false);
     expect(phones.length, "the scan found the fixtures (guard the guard)").toBeGreaterThan(3);
     expect("360-555-0199").toMatch(/-555-01\d\d$/);
