@@ -889,6 +889,33 @@ All 24 mutations are killed.
 
 **Mutations:** M340–M346, all killed.
 
+## R5-1 — Customer-return Sale corrections ride the weekly batch, per env, checked against the Sale ledger (DONE in code, 2026-10-20)
+
+Branch `round5-returns-reach-ccrs-and-reset-proof`. Owner plan: Clean Slate (rehearse on real manifests, then factory reset).
+
+**Before.** The return's inventory add-back reached CCRS (InventoryAdjustment `Other`), but the Sale correction ("the sale identifier should be deleted from CCRS" `[FAQ L0039]`) did not. It was a separate manual download that (G1) knew nothing of PREprod/prod or the ledger and marked returns exported on download, (G2) computed a second partial return wrongly (original minus THIS return), and (G3) could not be checked: `ccrs_ledger_slice` (0248) never returns Sale entities, so an Update/Delete of a line CCRS lacks ("SaleDetailExternalIdentifier not found" `[G L1413-L1414]`) went out unchecked.
+
+**Built.**
+- `src/lib/compliance/ccrs-return-corrections-core.ts` (pure): `planReturnCorrections` (cumulative per SaleDetailExternalIdentifier; Delete when everything is returned, else Update with the remaining quantity and pro-rated money; invalid lines named: blank id, snapshot clash, missing SaleType/SaleDate, over-return `[G L1345]`; ledger mode emits only for lines CCRS holds, with no file in flight and not Inserted in the same batch, otherwise withheld E48; already-applied corrections are "reflected", not re-sent); `correctionExportIds` (only a PROD emission clears the shared `correction_status`); `decodeSaleSlice`; `routeSaleInserts` (a held line is never Inserted again, "Duplicate Sale detail item for Licensee" `[G L1412]`; uncertain = withheld); `saleLedgerEntries`; `eventLotRefs`; `returnRecordFromRow` (no defaults invented). 18 embedded self-tests, registered in `run-pure-selftests.ts`.
+- Migration **0283** `ccrs_sale_slice(p_env, p_detail_ids)` (read-only, service role only) + rollback + pg-check. Owner applies by hand (SQL editor). Without it the batch withholds every correction with a note (never guesses).
+- `ccrs-ledger-store.ts` `loadSaleSlice`; `ccrs-ledger-core.ts` `buildLedgerView`.
+- `ccrs-batch.ts`: reads pending + in-range + sibling returns (`readReturnsForCorrections`); reads destroyed lots named by this batch's event rows or returns (`readDestroyedLots`, chunked) so a Destruction or a return on a fully destroyed / sold-out lot passes `L_REF_INVENTORY`; routes Sale Inserts (E49 warning = already held, E49 error = ledger unsure); merges corrections into the ONE Sale file (E38-checked through the shared `encode`); E48 lists every withheld/invalid correction with its reason; the self-check uses the Sale-aware ledger; `CcrsBatch.corrections` reports counts and the ids to mark.
+- `ccrs-outbox-core.ts`: a lot CCRS has closed (QoH 0) may carry event rows when THIS emission re-reports it in Inventory.csv (`closedReported`; M95 anchor updated).
+- `batch-export/route.ts`: `markCorrectionsExported` runs only AFTER `emitOutboxFiles` stored the files, and only for prod; the audit row carries `sale_corrections`.
+- Manual route `disposition/sale-correction-export`: same planner in legacy mode (fixes G2).
+- New issue codes: E48_SALE_CORRECTION_WITHHELD `[G L1413-L1414]`, E49_SALE_LINE_ALREADY_HELD `[G L1412]`.
+
+**Tests.** `tests/compliance/r5-return-corrections.test.ts` (46), plus updated pins in `ccrs-csv-fidelity.test.ts`. Mutations **M347-M372** (26) all killed; M95 re-anchored and killed; M30 anchor kept unique.
+
+## R5-2 — Factory reset proof for the Clean Slate (DONE in code, 2026-10-20)
+
+**Built.** `src/lib/accounting/reset-proof-core.ts` (pure): `REHEARSAL_ACTIVITY_TABLES` (36 tables the rehearsal writes, incl. destruction_events, vendor_returns, customer_returns, inbound_manifests, orders, ccrs_export_batches); `CCRS_LEDGER_KEEP` (7); `verifyResetSummary(tables, plan)` checks the DB's own per-table report from `gl_factory_reset` (every WIPE table reported, no kb_*, CCRS-ledger, KEEP or unclassified table reported; empty report and refused plan are named problems); `summariseOpenCcrsFiles` (anything not closed/abandoned is open, unknown states included). 11 self-tests registered.
+- `settings/actions.ts`: after the reset, `verifyResetSummary` problems join the audit RPC's problems in the audit row and the owner's message.
+- `src/lib/admin/reset-open-ccrs.ts` (service-role read of `ccrs_files`, kept out of `reset-service.ts` which must stay on the owner session) + reset page box "CCRS files still waiting for an answer" with a link to the hub.
+- No SQL change: `gl_factory_reset` (0240) is not redefined.
+
+**Tests.** `tests/compliance/r5-reset-proof.test.ts` (25), incl. a write-scan guard: every table written by POS / orders / inventory / receiving code is WIPE, or KEEP and on an exact 16-table allowlist (config + kb_products / kb_strains). Mutations **M373-M386** (14) all killed.
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
