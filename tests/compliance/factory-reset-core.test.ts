@@ -1328,7 +1328,11 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R41 S14 / 0288: ach_annual_reviews (the yearly Nacha fraud-
     //       procedure review record; append-only, the database refuses
     //       DELETE and TRUNCATE)
-    expect(plan.keep.length).toBe(166);
+    //   +2  R41 S16 / 0289: ach_bank_watch_rules (the owner's known-payee
+    //       list; retire-only) and ach_bank_watch_reviews (explanations of
+    //       unmatched bank lines; append-only); the database refuses DELETE
+    //       and TRUNCATE on both
+    expect(plan.keep.length).toBe(168);
     expect(plan.wipe.length).toBe(139);
   });
 
