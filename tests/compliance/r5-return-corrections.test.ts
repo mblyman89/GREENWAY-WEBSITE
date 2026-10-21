@@ -322,7 +322,8 @@ describe("self-check: a closed lot (QoH 0 in CCRS) that THIS emission reports ma
     expect(check(V, [{ type: "InventoryAdjustment", rows: [adjRow("LOT-C")] }])).toEqual(["L_REF_INVENTORY"]);
   });
   it("uncertain or deleted lots are never relaxed, even when an Inventory row names them", () => {
-    expect(check(V, [{ type: "Inventory", rows: [invRow("LOT-U", "Update")] }, { type: "InventoryAdjustment", rows: [adjRow("LOT-U")] }])).toEqual(["L_REF_INVENTORY"]);
+    // (The Update itself is also refused: neither state is UPDATABLE, Part 03 §D.3.)
+    expect(check(V, [{ type: "Inventory", rows: [invRow("LOT-U", "Update")] }, { type: "InventoryAdjustment", rows: [adjRow("LOT-U")] }])).toEqual(["L_UPDATE_NOT_ON_FILE", "L_REF_INVENTORY"]);
     expect(check(V, [{ type: "Inventory", rows: [invRow("LOT-X", "Update")] }, { type: "InventoryAdjustment", rows: [adjRow("LOT-X")] }])).toEqual(["L_UPDATE_NOT_ON_FILE", "L_REF_INVENTORY"]);
   });
 });

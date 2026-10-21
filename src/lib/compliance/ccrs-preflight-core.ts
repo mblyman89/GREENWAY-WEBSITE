@@ -69,6 +69,7 @@ export const CCRS_ISSUE_CODES = [
   "E45_HELD_LOT_NOT_AN_AREA",
   "E46_AREA_LEDGER",
   "E47_LOT_PRODUCT_NOT_IN_MENU",
+  "E48_SALE_CORRECTION_WITHHELD",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -420,6 +421,7 @@ const PINS: Record<CcrsIssueCode, string> = {
   // (no ledger): blocking, the lot is written with a blank Product, which CCRS
   // rejects ("Product is required" [G L0578]).
   E47_LOT_PRODUCT_NOT_IN_MENU: "[G L0579-L0583]",
+  E48_SALE_CORRECTION_WITHHELD: "[G L1413-L1414]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {
