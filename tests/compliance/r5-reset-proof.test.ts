@@ -251,7 +251,7 @@ describe("wiring (source pins)", () => {
     expect(page).toContain("openCcrs.message");
   });
   it("the reset SQL is not redefined by this round", () => {
-    for (const f of ["0283_ccrs_sale_slice.sql", "0284_ccrs_settle_uncertain.sql", "0285_ccrs_inventory_transfer.sql"]) {
+    for (const f of ["0283_ccrs_sale_slice.sql", "0284_ccrs_settle_uncertain.sql", "0285_ccrs_inventory_transfer.sql", "0286_ccrs_inventory_last_told.sql"]) {
       expect(read(`supabase/migrations/${f}`)).not.toMatch(/function\s+public\.gl_factory_reset/i);
     }
   });

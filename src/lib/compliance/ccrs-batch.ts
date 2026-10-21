@@ -75,7 +75,8 @@ import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
-import { loadLedgerForBatch, loadSaleSlice, loadTransferSlice } from "@/lib/compliance/ccrs-ledger-store";
+import { loadInventoryTold, loadLedgerForBatch, loadSaleSlice, loadTransferSlice } from "@/lib/compliance/ccrs-ledger-store";
+import { lotsNamedByEventRows, planInventoryDelta } from "@/lib/compliance/ccrs-inventory-delta-core";
 import {
   TRANSFER_BLOCKING,
   buildTransferRows,
@@ -1309,7 +1310,8 @@ export async function buildCcrsBatch(
   push("Strain", strain.rows, strain.warnings);
   push("Area", area.rows, area.warnings);
   push("Product", product.rows, product.warnings);
-  push("Inventory", inventory.rows, inventory.warnings);
+  // R6-3: Inventory is pushed AFTER the event files below, because a lot an
+  // event row of this batch names is always re-sent (planInventoryDelta).
 
   // Adjustment + Sale come pre-assembled by their own builders; adopt their CSV.
   files.push({
@@ -1457,6 +1459,35 @@ export async function buildCcrsBatch(
       message: `${all.length} customer-return Sale correction(s) were not put in Sale.csv. An Update or Delete of a sale line CCRS does not hold is rejected ("SaleDetailExternalIdentifier not found" [G L1413-L1414]), so each waits until the line is proven held; ${corrections.invalid.length} cannot be built from the return record and must be fixed there. The returns stay pending and are picked up by the next batch. Each row says why.`,
     });
   }
+  // --- Inventory: send only what changed (R6-3) -----------------------------
+  // "Inventory.CSV is required weekly ... only when inventory exists that is
+  // unreported, or unreported updates to an existing inventory. No report is
+  // needed if there are no changes." [G L0525-L0527]. An Update row equal to
+  // what CCRS last ACCEPTED (0286 ccrs_inventory_last_told) is left out; every
+  // sent Update carries UpdatedBy/UpdatedDate [G L0234-L0242]. Without the
+  // ledger (legacy) or before 0286 every row is sent, as before.
+  const invExtCol = CCRS_COLUMNS.Inventory.indexOf("ExternalIdentifier");
+  const invOpCol = CCRS_COLUMNS.Inventory.indexOf("Operation");
+  const updateIds = inventory.rows.filter((r) => r[invOpCol] === "Update").map((r) => r[invExtCol]);
+  const told = ledger && updateIds.length > 0 ? await loadInventoryTold(admin, env, updateIds) : ({ kind: "absent" } as const);
+  const namedByEvents = new Set([
+    ...eventLotRefs([{ type: "InventoryAdjustment", csv: adj.csv }]),
+    ...lotsNamedByEventRows({ adjustment: [], sale: saleRows, transfer: transferRows }),
+  ]);
+  const delta = planInventoryDelta({ rows: inventory.rows, told, namedByEvents, updatedBy: submittedBy, batchDay: createdDate });
+  if (delta.unchanged.length > 0) {
+    syncIssues.push({
+      severity: "warning",
+      file: "Inventory",
+      code: "E51_INVENTORY_UNCHANGED_NOT_SENT",
+      specPin: specPinFor("E51_INVENTORY_UNCHANGED_NOT_SENT"),
+      count: delta.unchanged.length,
+      rows: delta.unchanged.map((u) => ({ id: u.id, label: u.id, detail: `CCRS (${env}) already holds exactly these values (ledger state ${u.state ?? "?"})` })),
+      message: `${delta.unchanged.length} lot(s) were not re-sent in Inventory.csv because CCRS already accepted exactly these values and nothing changed. "No report is needed if there are no changes." [G L0525-L0527]. Nothing to do: any lot that changes, or that a sale, adjustment or transfer in this batch names, is sent.`,
+    });
+  }
+  push("Inventory", delta.rows, inventory.warnings);
+
   files.push({
     type: "Sale",
     group: uploadGroupOf("Sale"),

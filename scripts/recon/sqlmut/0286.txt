@@ -1,0 +1,21 @@
+p_env is null or p_env not in|p_env not in
+and f.state in ('uploaded', 'succeeded', 'errored', 'reconciling', 'closed')|and f.state in ('uploaded', 'succeeded', 'errored', 'reconciling', 'closed', 'abandoned')
+and f.uploaded_at is not null|and true
+and r.state not in ('rejected', 'withheld')|and r.state not in ('withheld')
+and r.state not in ('rejected', 'withheld')|and r.state not in ('rejected')
+order by r.external_id, f.uploaded_at desc|order by r.external_id, f.uploaded_at asc
+when l.row_state in ('submitted', 'confirmed')|when l.row_state in ('submitted', 'confirmed', 'uncertain')
+and l.file_state in ('succeeded', 'errored', 'reconciling', 'closed')|and l.file_state in ('uploaded', 'succeeded', 'errored', 'reconciling', 'closed')
+where f2.env = p_env and f2.file_type = 'Inventory' and f2.state in ('emitted', 'uploaded')|where f2.env = p_env and f2.state in ('emitted', 'uploaded')
+where f2.env = p_env and f2.file_type = 'Inventory' and f2.state in ('emitted', 'uploaded')|where f2.env = p_env and f2.file_type = 'Inventory' and f2.state in ('uploaded')
+where f2.env = p_env and f2.file_type = 'Inventory' and f2.state in ('emitted', 'uploaded')|where f2.file_type = 'Inventory' and f2.state in ('emitted', 'uploaded')
+on e.env = p_env and e.file_type = 'Inventory' and e.external_id = i.id|on e.env = p_env and e.external_id = i.id
+on e.env = p_env and e.file_type = 'Inventory' and e.external_id = i.id|on e.file_type = 'Inventory' and e.external_id = i.id
+where f.env = p_env and f.file_type = 'Inventory'|where f.env = p_env
+where f.env = p_env and f.file_type = 'Inventory'|where f.file_type = 'Inventory'
+where x.state is not null or x.has_row or x.in_flight|where x.state is not null or x.in_flight
+where x.state is not null or x.has_row or x.in_flight|where true
+order by x.id), '[]'::jsonb)|), '[]'::jsonb)
+select distinct u.id from unnest|select u.id from unnest
+revoke all on function public.ccrs_inventory_last_told(text, text[]) from public, anon, authenticated;|select 1;
+stable|volatile

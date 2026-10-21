@@ -18,6 +18,7 @@ import { checkEmitResult, sha256Utf8, type EmitIssue, type EmitPayloadFile, type
 import type { LedgerEnv } from "./ccrs-ledger-core";
 import { decodeSaleSlice, SALE_SLICE_RPC, type SaleSliceOutcome } from "./ccrs-return-corrections-core";
 import { decodeTransferSlice, TRANSFER_SLICE_RPC, type TransferSliceOutcome } from "./ccrs-transfer-core";
+import { decodeInventoryTold, INVENTORY_TOLD_RPC, type InventoryToldOutcome } from "./ccrs-inventory-delta-core";
 import type { CcrsRetailerFileType } from "./ccrs-batch-core";
 import type { CcrsOutcomeKind, OurRow, RejectedRow } from "./ccrs-outcome-core";
 import {
@@ -68,6 +69,23 @@ export async function loadTransferSlice(admin: Admin, env: LedgerEnv, ids: reado
   if (uniq.length === 0) return { kind: "loaded", held: new Map() };
   const { data, error } = await admin.rpc(TRANSFER_SLICE_RPC, { p_env: env, p_ids: uniq });
   return decodeTransferSlice(env, data, error);
+}
+
+/**
+ * R6-3 (0286): per Inventory id, what CCRS last ACCEPTED and whether a file
+ * naming it is unanswered. "absent" before 0286 (every Update row is sent).
+ * Chunked so a large week never builds one huge request.
+ */
+export async function loadInventoryTold(admin: Admin, env: LedgerEnv, ids: readonly string[]): Promise<InventoryToldOutcome> {
+  const uniq = [...new Set(ids)].filter((x) => x !== "");
+  const byId: Extract<InventoryToldOutcome, { kind: "loaded" }>["byId"] = new Map();
+  for (let i = 0; i < uniq.length; i += 1000) {
+    const { data, error } = await admin.rpc(INVENTORY_TOLD_RPC, { p_env: env, p_ids: uniq.slice(i, i + 1000) });
+    const part = decodeInventoryTold(env, data, error);
+    if (part.kind === "absent") return part;
+    for (const [k, v] of part.byId) byId.set(k, v);
+  }
+  return { kind: "loaded", byId };
 }
 
 /**
