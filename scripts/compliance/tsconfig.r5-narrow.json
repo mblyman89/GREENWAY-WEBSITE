@@ -18,6 +18,10 @@
     "../../src/app/admin/settings/actions.ts",
     "../../src/app/admin/settings/reset/page.tsx",
     "../../tests/compliance/r5-reset-proof.test.ts",
-    "../../tests/compliance/r5-return-corrections.test.ts"
+    "../../tests/compliance/r5-return-corrections.test.ts",
+    "../../tests/compliance/r5-preprod-evidence-gates.test.ts",
+    "../../src/lib/compliance/ccrs-batch-core.ts",
+    "../../src/app/admin/compliance/ccrs/page.tsx",
+    "../../src/app/admin/reports/compliance/page.tsx"
   ]
 }
