@@ -162,10 +162,10 @@ describe("funding helper (pure)", () => {
   });
   it("the self-tests are registered with their exact floors", () => {
     const r = read("scripts/compliance/run-pure-selftests.ts");
-    expect(r).toContain('assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 64)');
+    expect(r).toContain('assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 65)');
     expect(r).toContain('assertRan("timberland-golive-core", __runTimberlandGoLiveCoreTests(), 43)');
     expect(r).toContain('assertRan("timberland-file-checker-core", __runTimberlandFileCheckerCoreTests(), 98)');
-    expect(funding.__runTimberlandFundingCoreTests()).toEqual({ passed: 64, failed: 0 });
+    expect(funding.__runTimberlandFundingCoreTests()).toEqual({ passed: 65, failed: 0 });
     expect(golive.__runTimberlandGoLiveCoreTests()).toEqual({ passed: 43, failed: 0 });
     expect(checker.__runTimberlandFileCheckerCoreTests()).toEqual({ passed: 98, failed: 0 });
   });

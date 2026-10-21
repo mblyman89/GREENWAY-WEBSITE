@@ -1,10 +1,13 @@
 /**
  * R41 S4: the "Timberland room left" bar (Guide, payroll, vendor payments).
  *
- * Today: what is in process at Timberland right now (released, not voided,
- * not prenote, not yet settled) against the $50,000 daily in-process limit.
- * This month: everything uploaded or effective this month (Q3 strict) against
- * the $100,000 monthly limit. Gold at 80%; a failed read says so and is never
+ * Today: R41 S12 (Email 3 answer 2, D-3) Timberland counts the $50,000 daily
+ * limit by the day of the upload, so the bar shows files uploaded today, or
+ * released and not yet recorded as uploaded that could still go up today
+ * (not voided, not prenote). The in-flight total (released, not yet settled)
+ * is shown underneath as information only.
+ * This month: everything uploaded or effective this month ("calendar month",
+ * basis unstated, so both months count) against the $100,000 monthly limit. Gold at 80%; a failed read says so and is never
  * shown as all clear. Server component; reads only.
  */
 import { loadTimberlandRoomLeft } from "@/lib/payments/ach-file-ledger-store";
@@ -42,7 +45,8 @@ export async function TimberlandRoomLeft({ today }: { today: string }) {
   return (
     <section aria-label="Timberland room left" className="space-y-3 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4">
       <h2 className="text-sm font-semibold text-white">Timberland room left</h2>
-      <Bar label="Today (in process until each file settles)" usedCents={room.todayInProcessCents} limitCents={LIMIT_DAILY_IN_PROCESS_CENTS} warn={room.todayWarn} />
+      <Bar label="Today (uploaded today, or could still be uploaded today)" usedCents={room.todayInProcessCents} limitCents={LIMIT_DAILY_IN_PROCESS_CENTS} warn={room.todayWarn} />
+      <p className="text-xs text-white/50">In flight right now (released and not yet settled, information only): ${centsToUsdText(room.todayInFlightCents)}</p>
       <Bar label={`${friendlyMonth(room.month)} (uploaded or effective this month)`} usedCents={room.monthUsedCents} limitCents={LIMIT_MONTHLY_CENTS} warn={room.monthWarn} />
       <p className="text-xs text-white/50">
         These are Timberland&apos;s limits (Schedule C). A file that would go over is refused and cannot be overridden; the refusal names the earliest

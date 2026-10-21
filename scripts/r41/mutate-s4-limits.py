@@ -5,7 +5,7 @@ inside releaseLoop, the room-left bar, the 80% notes). Each mutant changes ONE
 thing; then the pure self-tests (run-pure-selftests.ts) OR the S4 / S3 / R39
 ops vitest files must FAIL. The plan's three (R41-TIMBERLAND-SLICE-PLAN v4
 S4): `>` changed to `>=`, the overlap window off by one day, prenotes
-counted. Files are restored after each mutant and checked byte-for-byte at
+counted. R41 S12 adds the D-3 mutants (daily limit by upload day). Files are restored after each mutant and checked byte-for-byte at
 the end; a control run must pass first and last.
 
 The test that reads THIS script's log is left out of every run (-t), so a
@@ -60,6 +60,15 @@ M = [
     ("null-amount-as-number", LS, "if (!Number.isSafeInteger(cents) || cents < 0) return null;", "if (cents < 0) return null;"),
     ("entries-not-read", LS, "entryAmountsCents: entryAmountsFromFile(built.file)", "entryAmountsCents: []"),
     ("warnings-dropped", LS, "limitWarnings: limits.warnings.map((x) => x.message)", "limitWarnings: []"),
+    # --- R41 S12 (Email 3 answer 2, D-3): daily limit by upload day ---
+    ("d3-daily-uses-in-flight", LC, "const total = uploadDayTotal(live, day) + newFile.totalCents;", "const total = inProcessTotal(live, day) + newFile.totalCents;"),
+    ("d3-window-to-settlement", LC, "let last = subBankingDays(settlementOf(f), 1);", "let last = settlementOf(f);"),
+    ("d3-recorded-upload-ignored", LC, "  if (f.uploadedDay && f.uploadedDay < last) last = f.uploadedDay;\n", ""),
+    ("d3-new-file-today-only", LC, "for (const day of uploadDaysOf({ fileDate: newFile.fileDate, effectiveDate: newFile.effectiveDate, settlementDate: null })) {", "for (const day of [newFile.fileDate]) {"),
+    ("d3-room-uses-in-flight", LC, "const t = uploadDayTotal(ledger, today);", "const t = inProcessTotal(ledger, today);"),
+    ("d3-uploaded-at-utc-day", LS, "uploadedDay = pacificDayKey(new Date(ua));", "uploadedDay = ua.slice(0, 10);"),
+    ("d3-uploaded-at-not-selected", LS, "settlement_date, total_cents, uploaded_at\")", "settlement_date, total_cents\")"),
+    ("d3-bad-uploaded-at-accepted", LS, "if (typeof ua !== \"string\" || Number.isNaN(Date.parse(ua))) return null;", "if (typeof ua !== \"string\") return null;"),
     ("room-bar-misread", LS, "return { ok: true, room: roomLeft(r.ledger, today) };", "return { ok: true, room: roomLeft([], today) };"),
     # --- the people see it ---
     ("payroll-notes-dropped", PS, "notes: [...notes, ...released.limitWarnings, ...deadlineNotes]", "notes: [...notes, ...deadlineNotes]"),
