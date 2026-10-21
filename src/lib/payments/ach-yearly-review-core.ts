@@ -81,7 +81,7 @@ export const RISK_ASSESSMENT: readonly RiskRow[] = [
     id: "bank-change",
     payment: "Any payment after a payee's routing number, account number or account type changed",
     level: "higher",
-    why: "\"Change my account\" emails are the most common way money is sent to a thief. Nacha's False Pretenses definition names it: misrepresenting the ownership of an account to be credited.",
+    why: "\"Change my account\" emails are a known way money is sent to a thief. Nacha's False Pretenses definition names it: misrepresenting the ownership of an account to be credited.",
     quote: "falsePretenses",
     procedureItems: [1, 2, 3, 4],
   },
