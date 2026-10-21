@@ -148,17 +148,24 @@ describe("the release choke point (releaseLoop) enforces Schedule A with the rel
     expect(two.ok).toBe(true);
   });
 
-  it("weekend, FRB holiday, Q9 Friday, same day and past dates are refused with the right reason", async () => {
+  it("weekend, FRB holiday, same day and past dates are refused with the right reason", async () => {
     const now = pt("2026-10-19", 10, 0);
     expect(await vendor("2026-10-24", now).then((r) => !r.ok && r.error)).toMatch(/not a banking day/);
     expect(await vendor("2026-11-11", now).then((r) => !r.ok && r.error)).toMatch(/not a banking day/); // Veterans Day
     expect(await vendor("2026-10-19", now).then((r) => !r.ok && r.error)).toMatch(/Same Day ACH/);
     expect(await vendor("2026-10-16", now).then((r) => !r.ok && r.error)).toMatch(/already passed/);
     expect(await vendor("2026-12-30", now).then((r) => !r.ok && r.error)).toMatch(/more than 30 days/);
-    const q9 = await vendor("2027-12-24", pt("2027-12-17", 10, 0));
-    expect(!q9.ok && q9.error).toMatch(/Friday before a Saturday holiday/);
     expect(builds).toBe(0);
     expect(writes()).toHaveLength(0);
+  });
+
+  it("R41 S12 (Email 3 answer 8, D-7): a Friday before a Saturday holiday is a normal effective date; the Saturday is still refused", async () => {
+    const sat = await vendor("2027-12-25", pt("2027-12-17", 10, 0));
+    expect(!sat.ok && sat.error).toMatch(/not a banking day/);
+    expect(builds).toBe(0);
+    const q9 = await vendor("2027-12-24", pt("2027-12-17", 10, 0));
+    expect(q9.ok, q9.ok ? "" : q9.error).toBe(true);
+    expect(builds).toBe(1);
   });
 
   it("DST end week: Mon Nov 2 2026 is PST; 3:59 pm PST (23:59Z) is allowed, 4:00 pm PST (00:00Z Nov 3) refused", async () => {

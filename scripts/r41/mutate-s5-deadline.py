@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """scripts/r41/mutate-s5-deadline.py - R41 S5: test the tests for the
 Timberland deadline (2 banking days before the effective date, 4:00 pm
-Pacific, holidays/weekends/Q9 Fridays move a payday to the PRIOR usable
+Pacific, holidays/weekends move a payday to the PRIOR usable
 day; Greenway's own 3:30 pm target). Each mutant changes ONE thing; then the
 pure self-tests (run-pure-selftests.ts) OR the S5 / S4 / S3 / R39 vitest
 files must FAIL. The plan's (R41-TIMBERLAND-SLICE-PLAN v4 S5) mutants are
@@ -45,7 +45,8 @@ M = [
     # --- the core's other edges ---
     ("cutoff-gte-to-gt", DC, "if (nowUtc.getTime() >= deadline.cutoffUtc.getTime()) {", "if (nowUtc.getTime() > deadline.cutoffUtc.getTime()) {"),
     ("earliest-at-cutoff", DC, "if (nowUtc.getTime() < latestUploadAndApproval(eff).cutoffUtc.getTime()) return eff;", "if (nowUtc.getTime() <= latestUploadAndApproval(eff).cutoffUtc.getTime()) return eff;"),
-    ("q9-check-removed", DC, "  if (isQ9Friday(d)) {\n    return { ok: false, rule: \"q9_friday\"", "  if (false) {\n    return { ok: false, rule: \"q9_friday\""),
+    # R41 S12 (Email 3 answer 8, D-7): Q9 Fridays are usable; blocking them again must be caught.
+    ("q9-fridays-blocked-again", DC, "  return isFedAchBankingDay(iso);\n}", "  return isFedAchBankingDay(iso) && !isQ9Friday(iso);\n}"),
     ("same-day-allowed", DC, "if (d === today) return { ok: false, rule: \"same_day\"", "if (false) return { ok: false, rule: \"same_day\""),
     # (A UTC day in earliestEffectiveDate / the 1 pm planner is an EQUIVALENT
     # mutant: probed every 15 min, Sep 2026 - Sep 2028, 70,176 instants, 0
