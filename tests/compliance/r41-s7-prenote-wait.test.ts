@@ -121,9 +121,9 @@ describe("section 6: 6 usable banking days from settlement (not Nacha's 3)", () 
     expect(core.prenoteLiveUploadDay("2026-10-20") > "2026-10-26").toBe(true);
   });
 
-  it("Q9 strict: Fri 2027-12-24 (before Saturday Christmas) is not counted, so 12-20 -> 12-29 (Fed days alone say 12-28)", () => {
+  it("R41 S12 (D-7): Fri 2027-12-24 (before Saturday Christmas) now counts, so 12-20 -> 12-28, the same as Fed banking days", () => {
     expect(addBankingDays("2027-12-20", 6)).toBe("2027-12-28");
-    expect(core.prenoteLiveUploadDay("2027-12-20")).toBe("2027-12-29");
+    expect(core.prenoteLiveUploadDay("2027-12-20")).toBe("2027-12-28");
   });
 
   it("the account-check file plan sends Timberland's day as eligible_on (what 0263/0275 store)", () => {

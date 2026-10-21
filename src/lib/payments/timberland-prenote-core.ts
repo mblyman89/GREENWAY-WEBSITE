@@ -13,14 +13,19 @@
  * The number (6) and its start point ("settlement") come from
  * timberland-profile-core (S1); they are not typed again here.
  *
- *   Q7 (open, strict default): "The earliest upload day (the strict reading
- *   of \"initiate\")." -> the live file may be UPLOADED no earlier than
- *   settlement + 6 days, so the prenote's eligible_on (0263) is that day.
+ *   Q7 (ANSWERED, R41 S12, owner decision D-6): Brenda, Email 3 answer 6:
+ *   "Technically you could upload a live file prior to the 6 days however
+ *   you are defeating the purpose of creating the pre-note file in the first
+ *   place." -> the wait is still counted to the UPLOAD day: the live file may
+ *   be UPLOADED no earlier than settlement + 6 days, so the prenote's
+ *   eligible_on (0263) is that day.
  *
- *   Q9 (open, strict default): Fridays before a Saturday Federal Reserve
- *   holiday are NOT usable. Counting them out makes the wait longer, never
- *   shorter, so the 6 days are counted in USABLE days
- *   (timberland-deadline-core.addUsableDays).
+ *   Q20 (ANSWERED, D-1): the 6 days stay, exactly as signed (section 6).
+ *
+ *   Q9 (ANSWERED, R41 S12, D-7): Fridays before a Saturday Federal Reserve
+ *   holiday are usable again, so the 6 days are counted in usable days
+ *   (timberland-deadline-core.addUsableDays), which are now the Fed banking
+ *   days.
  *
  * Nacha's own minimum is 3 banking days (ach-authorization-core
  * NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS). Timberland's day is proven, for every
@@ -58,7 +63,7 @@ function assertProfile(): void {
 
 /**
  * The first day a live file may be UPLOADED to an account whose prenote
- * settled on `settlement` (section 6, Q7 strict, Q9 strict). This is the
+ * settled on `settlement` (section 6; Q7 counted to the upload day, D-6). This is the
  * prenote's eligible_on.
  */
 export function prenoteLiveUploadDay(settlement: string): string {
@@ -71,8 +76,8 @@ export function prenoteLiveUploadDay(settlement: string): string {
  * The database cannot see the Federal Reserve calendar, so migration 0275
  * enforces a calendar-day FLOOR that is always at or before the real day:
  * six weekdays cannot fit without crossing a weekend, so the sixth usable day
- * after any date is at least 8 calendar days later (holidays and Q9 Fridays
- * only push it further). The self-test proves this for every day 2026-2028.
+ * after any date is at least 8 calendar days later (holidays only push it
+ * further). The self-test proves this for every day 2026-2028.
  * The app writes the exact day; the database refuses anything earlier than
  * the floor, so a bug or a hand-typed RPC can never shorten the wait to
  * Nacha's three days.
@@ -252,8 +257,8 @@ export function __runTimberlandPrenoteCoreTests(): { passed: number; failed: num
   ok(prenoteLiveUploadDay("2026-10-20") === "2026-10-28", "Tue 10-20 + 6 -> Wed 10-28");
   ok(prenoteLiveUploadDay("2026-11-02") === "2026-11-10", "Mon 11-02 + 6 skips Veterans Day -> Tue 11-10");
   ok(prenoteLiveUploadDay("2026-11-20") === "2026-12-01", "Fri 11-20 + 6 skips Thanksgiving -> Tue 12-01");
-  ok(prenoteLiveUploadDay("2027-12-20") === "2027-12-29", "Q9: Fri 12-24 is not counted -> Wed 12-29 (plain Fed days would say 12-28)");
-  ok(prenoteLiveUploadDay("2027-12-20") > addBankingDays("2027-12-20", 6), "Q9 strict makes the wait longer, never shorter");
+  ok(prenoteLiveUploadDay("2027-12-20") === "2027-12-28", "D-7: Fri 12-24 now counts -> Tue 12-28");
+  ok(prenoteLiveUploadDay("2027-12-20") === addBankingDays("2027-12-20", 6), "usable days are the Fed banking days since D-7");
   throws(() => prenoteLiveUploadDay("2026-13-01"), "bad date refused");
   for (const s of ["2026-10-13", "2026-11-24", "2026-12-24", "2027-07-02", "2027-12-20"]) {
     ok(prenoteLiveUploadDay(s) > nachaMinPrenoteLiveDate(s), `Timberland day is after Nacha's floor (${s})`);

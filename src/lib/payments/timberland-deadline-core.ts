@@ -26,11 +26,12 @@
  *   payday that is not a usable day to the PRIOR usable day (never later:
  *   the repo's nextBankingDayOnOrAfter would pay people late).
  *
- *   Q9 (open, strict default): "Treat those Fridays as NOT usable for upload
- *   or effective dates" - a Friday whose Saturday is a Federal Reserve
- *   holiday. The Fed is open those Fridays; Schedule D says "The Federal
- *   Reserve Bank and/or Timberland Bank will be closed on these dates", so
- *   whether Timberland is open is not stated.
+ *   Q9 (ANSWERED, R41 S12, owner decision D-7): a Friday whose Saturday is a
+ *   Federal Reserve holiday is a normal usable day again. Brenda, Email 3
+ *   answer 8: "Yes however a file uploaded on Friday would have a Monday
+ *   effective." The Fed is open those Fridays too (fedAchClosures), so
+ *   isUsableDay is now exactly isFedAchBankingDay. isQ9Friday stays only so
+ *   screens and tests can name those Fridays; it no longer blocks anything.
  *
  *   Greenway's own margin (SAFETY_MARGIN_MIN, 30 minutes, NOT a bank rule):
  *   our target is 3:30 pm. Between 3:30 and 4:00 a release is still allowed
@@ -69,7 +70,7 @@ function clock(h: number, m: number): string {
 
 // ---------------------------------------------------------- usable days ---
 
-/** Q9: a Friday whose Saturday is a Federal Reserve holiday (strict default: not usable). */
+/** Q9: a Friday whose Saturday is a Federal Reserve holiday. Information only since R41 S12 (D-7: usable). */
 export function isQ9Friday(iso: string): boolean {
   if (weekday(iso) !== 5) return false;
   const sat = addCalendarDays(iso, 1);
@@ -78,9 +79,9 @@ export function isQ9Friday(iso: string): boolean {
   return list.includes(sat);
 }
 
-/** A FedACH banking day that is not a Q9 Friday. */
+/** A FedACH banking day (Q9 Fridays included since R41 S12, Email 3 answer 8). */
 export function isUsableDay(iso: string): boolean {
-  return isFedAchBankingDay(iso) && !isQ9Friday(iso);
+  return isFedAchBankingDay(iso);
 }
 
 /** The nth usable day BEFORE `iso` (n >= 0; `iso` itself never counts). */
@@ -118,8 +119,8 @@ export function nextUsableDayOnOrAfter(iso: string): string {
 // ------------------------------------------------------------- deadline ---
 
 /**
- * Schedule D for credits: a payday that is a weekend, a holiday or a Q9
- * Friday moves to the PRIOR usable day.
+ * Schedule D for credits: a payday that is a weekend or a holiday moves to
+ * the PRIOR usable day.
  */
 export function creditEffectiveDateFor(payday: string): string {
   assertIso(payday, "creditEffectiveDateFor");
@@ -166,11 +167,11 @@ export function earliestEffectiveDate(nowUtc: Date): string {
 
 export type EffectiveCheck =
   | { ok: true; date: string; deadline: UploadDeadline; warning: string | null }
-  | { ok: false; error: string; earliest: string; rule: "format" | "not_usable" | "q9_friday" | "same_day" | "past" | "too_late" | "too_far" };
+  | { ok: false; error: string; earliest: string; rule: "format" | "not_usable" | "same_day" | "past" | "too_late" | "too_far" };
 
 /**
  * May a credit file with this effective date be released at `nowUtc`?
- * Refuses: not a date; not a banking day; a Q9 Friday; today or earlier
+ * Refuses: not a date; not a banking day; today or earlier
  * (Same Day ACH is off); its deadline (4:00 pm Pacific, 2 usable days
  * before) has passed; more than 30 days out. Each refusal names the
  * earliest effective date that still works.
@@ -189,9 +190,6 @@ export function checkEffectiveDateForTimberland(raw: string | null | undefined, 
   const daysOut = Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   if (daysOut > MAX_DAYS_AHEAD) return { ok: false, rule: "too_far", earliest, error: `${shortDate(d)} is more than ${MAX_DAYS_AHEAD} days away. Check the date.` };
   if (!isFedAchBankingDay(d)) return { ok: false, rule: "not_usable", earliest, error: `${shortDate(d)} is not a banking day (weekend or Federal Reserve holiday, Schedule D). ${try_}` };
-  if (isQ9Friday(d)) {
-    return { ok: false, rule: "q9_friday", earliest, error: `${shortDate(d)} is a Friday before a Saturday holiday. Until Timberland answers question Q9, those Fridays are not used. ${try_}` };
-  }
   const deadline = latestUploadAndApproval(d);
   if (nowUtc.getTime() >= deadline.cutoffUtc.getTime()) {
     return {
@@ -322,11 +320,14 @@ export function __runTimberlandDeadlineCoreTests(): { passed: number; failed: nu
     ok(latestUploadAndApproval(eff).day === up, `3.7: effective ${eff} -> upload by ${up}`);
   }
   // Q9 Fridays (plan 3.7): 2026-07-03, 2027-06-18, 2027-12-24, 2027-12-31, 2028-11-10.
-  for (const f of ["2026-07-03", "2027-06-18", "2027-12-24", "2027-12-31", "2028-11-10"]) ok(isQ9Friday(f) && !isUsableDay(f) && isFedAchBankingDay(f), `Q9 Friday ${f}`);
+  // R41 S12 (Email 3 answer 8, D-7): usable again.
+  for (const f of ["2026-07-03", "2027-06-18", "2027-12-24", "2027-12-31", "2028-11-10"]) ok(isQ9Friday(f) && isUsableDay(f) && isFedAchBankingDay(f), `Q9 Friday ${f} is usable (D-7)`);
   ok(!isQ9Friday("2026-10-23") && isUsableDay("2026-10-23"), "an ordinary Friday is usable");
-  ok(creditEffectiveDateFor("2027-12-24") === "2027-12-23", "a Q9 Friday payday moves to Thursday");
+  ok(!isUsableDay("2027-12-25") && !isUsableDay("2028-01-01"), "the Saturday holidays themselves are still never usable");
+  ok(creditEffectiveDateFor("2027-12-24") === "2027-12-24", "a Q9 Friday payday stays on Friday (D-7)");
+  ok(creditEffectiveDateFor("2027-12-25") === "2027-12-24", "a Saturday-holiday payday moves to the Friday before");
   ok(creditEffectiveDateFor("2026-10-24") === "2026-10-23", "a Saturday payday moves to Friday (prior, never Monday)");
-  ok(latestUploadAndApproval("2027-12-28").day === "2027-12-23", "a Q9 Friday is skipped as an upload day too");
+  ok(latestUploadAndApproval("2027-12-28").day === "2027-12-24", "a Q9 Friday counts as an upload day (D-7): Tue 12-28 -> Fri 12-24");
   ok(subUsableDays("2026-10-14", 2) === "2026-10-09" && addUsableDays("2026-10-09", 2) === "2026-10-14", "usable-day arithmetic skips Columbus Day and the weekend");
 
   // 4:00 pm Pacific across DST: PDT (UTC-7) and PST (UTC-8).
@@ -369,7 +370,8 @@ export function __runTimberlandDeadlineCoreTests(): { passed: number; failed: nu
   ok(rule("2026-11-20") === "too_far", "more than 30 days refused");
   ok(rule("2026-11-18") === "ok", "30 days allowed");
   ok(rule("2026-02-30") === "format" && rule("") === "format" && rule("10/21/2026") === "format", "not a date refused");
-  ok(checkEffectiveDateForTimberland("2027-12-24", pt("2027-12-15", 10, 0)).ok === false, "a Q9 Friday effective date refused");
+  ok(checkEffectiveDateForTimberland("2027-12-24", pt("2027-12-15", 10, 0)).ok === true, "a Q9 Friday effective date is allowed (D-7)");
+  ok(checkEffectiveDateForTimberland("2027-12-25", pt("2027-12-15", 10, 0)).ok === false, "the Saturday holiday itself is still refused");
   ok(!r("2026-10-20").ok && (r("2026-10-20") as { earliest: string }).earliest === "2026-10-21", "refusal names the earliest that works");
 
   // earliestEffectiveDate

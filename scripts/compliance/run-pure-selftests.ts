@@ -2359,8 +2359,8 @@ __runLiquidVolumeTests();
   assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 56); // R41 S9: funding errors + 0276 missing named; S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason; S6: bank-step errors, 0274 missing named
   assertRan("timberland-bank-steps-core", __runTimberlandBankStepsCoreTests(), 30); // R41 S9: checklist names checker + funding; S6: honest Timberland wording, bank-step buttons in order, yearly dismiss of the grey line
   assertRan("timberland-limits-core", __runTimberlandLimitsCoreTests(), 57); // R41 S4: per-entry/per-file/daily in-process/monthly (Q3 both months) hard blocks, 80% warning, earliest fit, prenotes/voided excluded
-  assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 71); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays, section 3.7 table, reminders
-  assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7/Q9 strict), section 3.7 backwards plan, first-file gate
+  assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 74); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays usable (S12, D-7), section 3.7 table, reminders
+  assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7 upload day D-6; Q9 Fridays usable D-7), section 3.7 backwards plan, first-file gate
   assertRan("timberland-file-checker-core", __runTimberlandFileCheckerCoreTests(), 98); // R41 S9: check a file before upload (Nacha structure, controls, Timberland pins, deadline, ledger fingerprint, limits)
   assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 64); // R41 S9: funding helper (file + $50 fee + own buffer, 9:00 am settlement, 8 am reminder)
   assertRan("timberland-golive-core", __runTimberlandGoLiveCoreTests(), 43); // R41 S9: go-live readiness board (14 gates; never blocks checks)

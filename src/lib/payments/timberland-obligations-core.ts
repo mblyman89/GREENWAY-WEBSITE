@@ -10,11 +10,10 @@
  * against its mirror, whitespace-normalised.
  *
  * Strict readings (NOT legal advice; each is the earlier of two readings):
- *   - "banking days" forward (sections 5, 22) count every FedACH banking day,
- *     including the Q9 Fridays the upload deadline treats as unusable. Counting
- *     more days as banking days makes a forward deadline EARLIER.
- *   - "at least 2 banking days prior" (section 26) counts back over USABLE days
- *     only (Q9 Fridays skipped), which makes the ask-by date EARLIER.
+ *   - "banking days" forward (sections 5, 22) count every FedACH banking day.
+ *     Since R41 S12 (Email 3 answer 8, D-7) the Q9 Fridays are usable days too,
+ *     so FedACH banking days and usable days are the same set.
+ *   - "at least 2 banking days prior" (section 26) counts back over usable days.
  *   - "within 1 calendar day of verbal notice" (Schedule F) is 24 hours from
  *     the phone call, not the end of the next day.
  *   - Reversal (section 21): the earlier of 24 hours from discovery and
