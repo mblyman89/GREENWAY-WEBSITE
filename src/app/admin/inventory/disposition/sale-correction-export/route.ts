@@ -7,6 +7,17 @@
  * deleted (or updated for a partial return) in CCRS — this file is that
  * correction, built from the snapshots captured when each return was accepted.
  *
+ * R5-1: built by the SAME cumulative planner as the weekly batch
+ * (planReturnCorrections, legacy mode: no ledger here). A sale line's
+ * correction states the line after ALL its returns — the old route sent
+ * "original − this return", which was wrong on a second partial return. A
+ * line whose returns cannot be built into a correction (missing SaleType or
+ * SaleDate, more returned than sold, disagreeing snapshots) is refused by name
+ * and stays pending.
+ *
+ * Prefer the weekly batch once the ledger is loaded: it checks each line is
+ * held by CCRS and records the file in the outbox. This download does not.
+ *
  * Marks the included returns as exported and audits the download. Requires
  * inventory.manage (same gate as the disposition page).
  */
@@ -15,60 +26,58 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
-import {
-  mapSaleCorrectionRow,
-  buildSaleCorrectionFile,
-  makeSaleCorrectionFileName,
-} from "@/lib/compliance/ccrs-sale-correction-core";
-import { markCorrectionsExported, type CustomerReturn } from "@/lib/inventory/disposition";
+import { buildSaleCorrectionFile, makeSaleCorrectionFileName } from "@/lib/compliance/ccrs-sale-correction-core";
+import { markCorrectionsExported } from "@/lib/inventory/disposition";
 import { CCRS_COLUMNS, withholdUnencodableRows } from "@/lib/compliance/ccrs-batch-core";
+import {
+  planReturnCorrections,
+  returnRecordFromRow,
+  type CustomerReturnRowLike,
+  type ReturnRecord,
+} from "@/lib/compliance/ccrs-return-corrections-core";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const RETURN_COLUMNS =
+  "id, sale_external_id, sale_detail_external_id, inventory_external_id, sale_type, sale_date, unit_price_minor, discount_minor, sales_tax_minor, excise_minor, quantity, original_quantity, correction_status, created_at";
 
 export async function GET() {
   const session = await requirePermission("inventory.manage");
 
   const license = await getCcrsLicenseSettings();
-  const rows: string[][] = [];
-  const includedIds: string[] = [];
+  let rows: string[][] = [];
+  /** rowReturnIds[i] = the pending return ids answered by rows[i]. */
+  let rowReturnIds: string[][] = [];
   const skipped: string[] = [];
 
   if (isSupabaseServiceConfigured) {
     try {
       const admin = createSupabaseAdminClient();
-      const { data } = await admin
+      const { data: pending } = await admin
         .from("customer_returns")
-        .select("*")
+        .select(RETURN_COLUMNS)
         .eq("correction_status", "pending")
         .order("created_at", { ascending: true })
         .limit(500);
-      for (const r of ((data as CustomerReturn[] | null) ?? [])) {
-        const mapped = mapSaleCorrectionRow(
-          {
-            correctionOperation: r.correction_operation,
-            saleExternalId: r.sale_external_id ?? "",
-            saleDetailExternalId: r.sale_detail_external_id ?? "",
-            inventoryExternalId: r.inventory_external_id ?? "",
-            saleType: r.sale_type ?? "RecreationalRetail",
-            saleDateISO: r.sale_date ?? r.created_at,
-            originalQuantity: Number(r.original_quantity) || 0,
-            returnQuantity: Number(r.quantity) || 0,
-            unitPriceMinor: r.unit_price_minor ?? 0,
-            discountMinor: r.discount_minor ?? 0,
-            salesTaxMinor: r.sales_tax_minor ?? 0,
-            exciseMinor: r.excise_minor ?? 0,
-            returnedAtISO: r.created_at,
-          },
-          license,
-        );
-        if (mapped.row) {
-          rows.push(mapped.row);
-          includedIds.push(r.id);
-        } else {
-          skipped.push(`${r.id}: ${mapped.skipReason ?? "unmappable"}`);
-        }
-      }
+      const pendingRows = (pending as CustomerReturnRowLike[] | null) ?? [];
+      // Every other return of the same sale lines: the correction states the
+      // line after ALL its returns, not just the pending ones.
+      const lineIds = [...new Set(pendingRows.map((r) => (r.sale_detail_external_id ?? "").trim()).filter(Boolean))];
+      const { data: siblings } = lineIds.length
+        ? await admin.from("customer_returns").select(RETURN_COLUMNS).in("sale_detail_external_id", lineIds)
+        : { data: [] };
+      const byId = new Map<string, ReturnRecord>();
+      for (const r of [...pendingRows, ...((siblings as CustomerReturnRowLike[] | null) ?? [])]) byId.set(r.id, returnRecordFromRow(r));
+      const plan = planReturnCorrections({
+        returns: [...byId.values()],
+        license,
+        ledger: "legacy",
+        insertedDetailIds: new Set(),
+      });
+      rows = plan.rows;
+      rowReturnIds = plan.groups.map((g) => g.returnIds);
+      for (const n of plan.invalid) skipped.push(`${n.detailId || "(no sale line id)"} [${n.returnIds.join(", ")}]: ${n.reason}`);
     } catch {
       // customer_returns missing (pre-0115) — empty file below.
     }
@@ -76,12 +85,12 @@ export async function GET() {
 
   // S-09 E38 / S-09b E42: a correction carrying a line break or comma cannot
   // be one CCRS record (CCRS splits on every comma). A `"` is fine (S-09c).
-  // Withhold it and leave it PENDING (never marked exported) so it is fixed
-  // and re-sent, not lost. rows[i] belongs to includedIds[i].
-  const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (_r, i) => includedIds[i]);
-  const withheldIds = new Set(e38.withheld.map((w) => w.label));
-  const exportIds = includedIds.filter((id) => !withheldIds.has(id));
-  for (const w of e38.withheld) skipped.push(`${w.label}: ${w.column} contains a ${w.reason} — left pending`);
+  // Withhold it and leave its returns PENDING (never marked exported) so it is
+  // fixed and re-sent, not lost. rows[i] answers rowReturnIds[i].
+  const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (_r, i) => String(i));
+  const withheldRows = new Set(e38.withheld.map((w) => Number(w.label)));
+  const exportIds = rowReturnIds.filter((_ids, i) => !withheldRows.has(i)).flat();
+  for (const w of e38.withheld) skipped.push(`${rowReturnIds[Number(w.label)].join(", ")}: ${w.column} contains a ${w.reason} — left pending`);
 
   const csv = buildSaleCorrectionFile(e38.rows, license);
   const fileName = makeSaleCorrectionFileName(license.licenseNumber);
