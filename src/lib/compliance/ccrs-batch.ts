@@ -696,14 +696,18 @@ function buildProductFile(
     });
   }
   if (e10Rows.length > 0) {
+    // R5-3 (S-02b): a WARNING, never blocking, and the row is still filed.
+    // The guide has only a Note [G L0482-L0483] and CCRS ACCEPTED an empty
+    // Description in PREprod (T-19, 2026-09-17). Withholding the product would
+    // make every Inventory row naming it fail "Invalid Product" [G L0579].
     issues.push({
-      severity: "error",
+      severity: "warning",
       file: "Product",
       code: "E10_DESCRIPTION_REQUIRED",
       specPin: specPinFor("E10_DESCRIPTION_REQUIRED"),
       count: e10Rows.length,
       rows: e10Rows,
-      message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description, which CCRS requires for those two types [G L0482-L0483]. Add a short product description (250 characters max) and rebuild.`,
+      message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description. They are still filed: CCRS accepted an empty Description in PREprod (T-19), because the guide states it only as a Note [G L0482-L0483]. The examiner says "There is an expectation that a description is on file" [EXAM L0552], so add a short description (250 characters max) when you can.`,
     });
   }
   return { rows, warnings: dedupWarnings, nameByProductKey, keys, issues };

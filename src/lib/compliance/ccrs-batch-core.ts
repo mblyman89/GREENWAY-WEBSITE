@@ -932,6 +932,39 @@ export function verifySaleNumericColumns(rows: ReadonlyArray<readonly string[]>)
   return problems;
 }
 
+/**
+ * E50 (R5-3) — "Only Medical Sales can be 0" [G L1378]; "An entry of 0
+ * CannabisExciseTax is only allowed for sale type Wholsale, and sales that meet
+ * medical compliance conditions." [G L1460-L1461]. CCRS's real answer to the
+ * 2026-09-17 probe T-42 (RecreationalRetail, excise 0.00) was, verbatim,
+ * "Only Medical Sales Excise tax can be 0". PURE. Rows are DATA rows in
+ * CCRS_COLUMNS.Sale order (any Operation). An empty / non-numeric value is the
+ * numeric check's job (verifySaleNumericColumns) and is not reported twice.
+ * SaleType is compared exactly, as CCRS's enum is. Never capped.
+ */
+export const SALE_TYPES_ZERO_EXCISE_ALLOWED: readonly string[] = ["RecreationalMedical", "Wholesale"];
+
+export function verifySaleExciseRule(rows: ReadonlyArray<readonly string[]>): CcrsBatchProblem[] {
+  const C = CCRS_COLUMNS.Sale;
+  const typeI = C.indexOf("SaleType");
+  const exciseI = C.indexOf("CannabisExciseTax");
+  const detailI = C.indexOf("SaleDetailExternalIdentifier");
+  const problems: CcrsBatchProblem[] = [];
+  rows.forEach((row, idx) => {
+    const raw = (row[exciseI] ?? "").trim();
+    if (raw === "" || !MONEY_2DP_RE.test(raw)) return;
+    if (Number(raw) !== 0) return;
+    const saleType = (row[typeI] ?? "").trim();
+    if (SALE_TYPES_ZERO_EXCISE_ALLOWED.includes(saleType)) return;
+    problems.push({
+      file: "Sale",
+      severity: "error",
+      message: `Sale row ${idx + 1} (${(row[detailI] ?? "").trim() || "no sale line id"}): CannabisExciseTax is ${raw} on a ${saleType || "blank"} sale. CCRS rejects this: "Only Medical Sales Excise tax can be 0" (PREprod T-42, 2026-09-17) [G L1378] [G L1460-L1461]. Only a qualifying medical sale may report zero excise; fix the line's category or its medical record and rebuild.`,
+    });
+  });
+  return problems;
+}
+
 /* ------------------------------------------------------------------ *
  * End-to-end batch verification (Slice 94 — verifiable trust)
  *
@@ -1117,6 +1150,11 @@ export function verifyCcrsFile(
       // repeat is legitimate — skip collision detection for that file.
     }
   });
+
+  // R5-3 E50: zero excise only on a medical (or wholesale) Sale line [G L1378].
+  if (type === "Sale") {
+    problems.push(...verifySaleExciseRule(dataRows.map(ccrsReaderSplit)));
+  }
 
   // Slice 108: cross-row identifier integrity (evaluated once per file).
   if (type === "Sale" && saleLines.length > 0) {

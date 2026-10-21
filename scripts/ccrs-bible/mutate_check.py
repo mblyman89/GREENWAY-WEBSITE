@@ -133,6 +133,7 @@ RPCORE = "src/lib/accounting/reset-proof-core.ts"
 RESETACT = "src/app/admin/settings/actions.ts"
 RESETPAGE = "src/app/admin/settings/reset/page.tsx"
 R5R_TESTS = "tests/compliance/r5-reset-proof.test.ts"
+R5E_TESTS = "tests/compliance/r5-preprod-evidence-gates.test.ts"
 CALCORE = "src/lib/compliance/compliance-calendar-core.ts"
 REMINDERS = "src/lib/notifications/compliance-reminders.ts"
 
@@ -3113,6 +3114,85 @@ MUTATIONS = [
         R5R_TESTS,
         "The allowlist is enforced: a written KEEP table not on it goes red (vendors removed).",
     ),
+    # R5-3: the pre-flight agrees with the real 2026-09-17 PREprod results.
+    (
+        "M387-r5e-zero-excise-medical-only",
+        CORE,
+        'export const SALE_TYPES_ZERO_EXCISE_ALLOWED: readonly string[] = ["RecreationalMedical", "Wholesale"];',
+        'export const SALE_TYPES_ZERO_EXCISE_ALLOWED: readonly string[] = ["RecreationalMedical", "Wholesale", "RecreationalRetail"];',
+        R5E_TESTS,
+        "T-42: a RecreationalRetail line with 0 excise was rejected; allowing it must go red.",
+    ),
+    (
+        "M388-r5e-zero-excise-wholesale-allowed",
+        CORE,
+        'export const SALE_TYPES_ZERO_EXCISE_ALLOWED: readonly string[] = ["RecreationalMedical", "Wholesale"];',
+        'export const SALE_TYPES_ZERO_EXCISE_ALLOWED: readonly string[] = ["RecreationalMedical"];',
+        R5E_TESTS,
+        "[G L1461] allows 0 for Wholesale; flagging it is a false error.",
+    ),
+    (
+        "M389-r5e-zero-excise-one-cent-boundary",
+        CORE,
+        "    if (Number(raw) !== 0) return;",
+        "    if (Number(raw) > 0.01) return;",
+        R5E_TESTS,
+        "A 0.01 excise is not zero; the boundary must stay exact.",
+    ),
+    (
+        "M390-r5e-zero-excise-numeric-left-to-numeric-check",
+        CORE,
+        '    if (raw === "" || !MONEY_2DP_RE.test(raw)) return;',
+        '    if (raw === "") return;',
+        R5E_TESTS,
+        "A non-numeric excise is the numeric check's error; reporting it twice is noise.",
+    ),
+    (
+        "M391-r5e-zero-excise-trim",
+        CORE,
+        '    const raw = (row[exciseI] ?? "").trim();',
+        '    const raw = row[exciseI] ?? "";',
+        R5E_TESTS,
+        "A padded ' 0.00 ' is still zero to CCRS.",
+    ),
+    (
+        "M392-r5e-zero-excise-wired-into-verifier",
+        CORE,
+        "    problems.push(...verifySaleExciseRule(dataRows.map(ccrsReaderSplit)));",
+        "    void verifySaleExciseRule;",
+        R5E_TESTS,
+        "The rule must run inside verifyCcrsFile, which the hub, the report and the export route all use.",
+    ),
+    (
+        "M393-r5e-zero-excise-message-names-line",
+        CORE,
+        '      message: `Sale row ${idx + 1} (${(row[detailI] ?? "").trim() || "no sale line id"}): CannabisExciseTax',
+        '      message: `Sale row (${(row[detailI] ?? "").trim() || "no sale line id"}): CannabisExciseTax',
+        R5E_TESTS,
+        "Every offending row is named by number so staff can find it.",
+    ),
+    (
+        "M394-r5e-e10-is-warning",
+        BATCHSRV,
+        '''    issues.push({
+      severity: "warning",
+      file: "Product",
+      code: "E10_DESCRIPTION_REQUIRED",''',
+        '''    issues.push({
+      severity: "error",
+      file: "Product",
+      code: "E10_DESCRIPTION_REQUIRED",''',
+        R5E_TESTS,
+        "T-19: CCRS accepted an empty Description; blocking the batch for it is wrong.",
+    ),
+    (
+        "M395-r5e-e50-pin",
+        PREFLIGHT,
+        '  E50_ZERO_EXCISE_NOT_MEDICAL: "[G L1378]",',
+        '  E50_ZERO_EXCISE_NOT_MEDICAL: "[G L1377]",',
+        R5E_TESTS,
+        "E50's pin is the 'Only Medical Sales can be 0' line, not the 37% line.",
+    ),
 ]
 
 
@@ -3171,6 +3251,7 @@ def main() -> int:
         R3_TESTS,
         R5_TESTS,
         R5R_TESTS,
+        R5E_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.
