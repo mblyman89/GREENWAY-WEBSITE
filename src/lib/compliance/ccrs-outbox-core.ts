@@ -122,6 +122,10 @@ const ID_COLUMN: Partial<Record<CcrsRetailerFileType, string>> = {
   Area: "ExternalIdentifier",
   Product: "ExternalIdentifier",
   Inventory: "ExternalIdentifier",
+  // R5-1: Sale corrections (Update/Delete) name the ORIGINAL line by its
+  // SaleDetailExternalIdentifier [G L1411-L1415]; an Insert of a line CCRS
+  // holds is a duplicate, an Update/Delete of one it lacks is "not found".
+  Sale: "SaleDetailExternalIdentifier",
 };
 
 /**
@@ -149,6 +153,18 @@ export function verifyOutboxAgainstLedger(view: LedgerView, files: readonly Outb
   }
 
   const ordered = [...files].sort(compareChunkPlacement);
+  // R5-1: lots this emission REPORTS with an Inventory row. A `closed` lot
+  // (CCRS holds it at QoH 0) re-reported here may carry event rows: "ensure
+  // that you have already reported the inventory in an inventory.CSV"
+  // [G L1302-L1304]; the examiner's own method is "submit an inventory update
+  // ... get them to zero and then an inventory adjustment" [EXAM L0430].
+  // Never relaxed for uncertain / deleted / unknown lots.
+  const reportedLots = new Set<string>();
+  for (const f of ordered) {
+    if (f.type !== "Inventory") continue;
+    const ci = CCRS_COLUMNS.Inventory.indexOf("ExternalIdentifier");
+    for (const line of f.csv.slice(0, -2).split("\r\n").slice(4)) reportedLots.add(ccrsReaderSplit(line)[ci]);
+  }
   for (const f of ordered) {
     const C = CCRS_COLUMNS[f.type];
     const rows = f.csv.slice(0, -2).split("\r\n").slice(4).map(ccrsReaderSplit);
@@ -197,8 +213,10 @@ export function verifyOutboxAgainstLedger(view: LedgerView, files: readonly Outb
           const inv = r[invCol];
           const e = ledgerEntry(view, "Inventory", inv);
           // Part 03 L189: an event row's lot must be in (seed, filed, confirmed),
-          // the same set routeReference uses — a `closed` lot is not enough.
-          if (!(e && PRESENT.has(e.state)) && !newIds.has(key("Inventory", inv))) {
+          // the same set routeReference uses — a `closed` lot is not enough
+          // UNLESS this emission re-reports it in Inventory.csv (R5-1).
+          const closedReported = !!e && e.state === "closed" && reportedLots.has(inv);
+          if (!(e && PRESENT.has(e.state)) && !closedReported && !newIds.has(key("Inventory", inv))) {
             push("L_REF_INVENTORY", `${f.type} row names lot ${inv}, which CCRS does not hold and this emission does not Insert`);
           }
         }
