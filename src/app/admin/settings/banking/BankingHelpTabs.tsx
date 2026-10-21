@@ -14,6 +14,8 @@ export const BANKING_HELP_TABS = [
   { key: "checker", href: "/admin/settings/banking/checker", label: "File checker" },
   // R41 S11: the daily OFAC screen of every payee (never blocks a payment).
   { key: "screening", href: "/admin/settings/banking/screening", label: "Sanctions screening" },
+  // R41 S14: Nacha Phase 2 yearly obligations (procedure review, risk assessment, who did what).
+  { key: "yearly", href: "/admin/settings/banking/yearly-review", label: "Yearly review" },
 ] as const;
 
 export type BankingHelpTabKey = (typeof BANKING_HELP_TABS)[number]["key"];

@@ -763,6 +763,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/settings/banking/screening",
       },
       {
+        q: "What does Nacha require me to do once a year for ACH fraud?",
+        a: "Banking \u2192 Yearly review. Nacha's fraud-monitoring rule (Phase 2) says every business that sends ACH payments must have written, risk-based procedures to spot payments made under false pretenses, and review them at least once a year. The page shows the 12-item written procedure, Greenway's risk assessment (which payments are higher risk, like a bank-account change or a new vendor, and which are lower risk, like repeat payroll), each tied to Nacha's own words, and who did what with ACH this year: who holds owner or admin, every ACH action by person, and every approval request and how it ended (only the owner sees that part, because it reads the Security Log). Once a year the owner re-reads it, ticks the two boxes, writes what was found and presses Record. Recording this year's review also ticks the Calendar task. A review is never changed: to fix one, record a correction. 'Print the packet' gives a plain-text copy for your files.",
+        href: "/admin/settings/banking/yearly-review",
+      },
+      {
         q: "How do I confirm the money is in the account for an ACH file?",
         a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the app cannot see it), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date, and Brenda confirmed that is when it must be there (Email 3, answer 5). Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",
