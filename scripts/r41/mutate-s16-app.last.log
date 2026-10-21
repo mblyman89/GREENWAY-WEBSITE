@@ -1,0 +1,36 @@
+control (before) pass
+killed   quote reworded
+killed   window 90 days
+killed   stale after 5 days
+killed   pending lines alarmed
+killed   money in counted as out
+killed   other accounts read
+killed   over-limit rule explains
+killed   retired rules still live
+killed   oldest review stands
+killed   return before the payment
+killed   payment reused
+killed   notices never close a return
+killed   fee gap counts notices twice
+killed   wrong last four only a warning
+killed   slots warn too late
+killed   email drops the bank phone
+killed   stale hint after 48h
+killed   unknown time is fresh
+killed   digits allowed in review note
+killed   zero limit accepted
+killed   review on any account
+killed   missing 0289 not reported
+killed   admin adds rules
+killed   admin retires rules
+killed   review not audited
+killed   page open to admins
+killed   admin sees rule forms
+killed   cron syncs every item
+killed   failed read reads as all clear
+killed   email every day
+killed   claim kept after a failed send
+killed   balance shown to admins
+killed   tab missing
+control (after) pass
+total 33 killed 33 survivors []
