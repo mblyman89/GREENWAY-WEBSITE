@@ -245,7 +245,10 @@ describe("S16 wiring", () => {
     const s = read(STORE);
     expect(s).toContain('if (a.error || (a.data as { role?: string } | null)?.role !== "main") return { ok: false, error: "Only lines on the Main account are reviewed here." };');
     expect(s).toContain("export const WATCH_TXN_CAP = 3000;");
-    expect(s).toContain(".limit(WATCH_TXN_CAP + 1);");
+    expect(s).toContain('import { pagedAllChecked } from "@/lib/supabase/chunked-in";');
+    expect(s).toContain('q.order("id", { ascending: true }).range(from, to)');
+    expect(s).toContain("for (const t of rows.slice(0, WATCH_TXN_CAP)) {");
+    expect(s.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/\.limit\(/);
     expect(s).toContain('if (!tablesReady) problems.push("Migration 0289 is not applied yet');
   });
   it("cron: daily, syncs only the Main connection, a failed read is never an all clear, the email is claimed once a week per finding set", () => {
