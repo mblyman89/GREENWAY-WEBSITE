@@ -45,7 +45,11 @@ M = [
     ("voided-served-by-source", LS, '.neq("status", "voided")\n    .maybeSingle();\n  if (error) return', '.maybeSingle();\n  if (error) return'),
     ("voided-found-live", LS, '.neq("status", "voided")\n    .maybeSingle();\n  if (error || !data) return null;', '.maybeSingle();\n  if (error || !data) return null;'),
     # --- sealing ---
-    ("key-check-removed", LS, "  if (!isAtRestEncryptionConfigured()) return { ok: false, error: LEDGER_NO_KEY };\n  const fileDate", "  const fileDate"),
+    # R41 S15: re-anchored. The old "const fileDate" anchor matched 0 times. The
+    # key check in sealFile is backed by keyedHasher("achFileEntrySet") returning
+    # null without the key (same LEDGER_NO_KEY), so removing it there is an
+    # equivalent mutant. The releaseLoop check is the one tests can see.
+    ("key-check-removed", LS, '  if (!isAtRestEncryptionConfigured()) return { ok: false, error: LEDGER_NO_KEY };\n  // R41 S5: Schedule A.', '  // R41 S5: Schedule A.'),
     ("roundtrip-removed", LS, 'if (!bodyEnc.startsWith("encv1:") || decryptSecret(bodyEnc) !== body) return', "if (false) return"),
     ("built-not-checked", LS, "if (problems.length) return { ok: false, error: `The built file does not match", "if (false) return { ok: false, error: `The built file does not match"),
     ("no-crlf", LS, "const body = toCrlf(file);", "const body = file;"),

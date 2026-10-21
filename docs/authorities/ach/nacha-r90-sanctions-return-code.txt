@@ -1,0 +1,60 @@
+SOURCE: https://www.nacha.org/rules/new-return-reason-code-sanctions-compliance-obligations (Nacha, "New Return Reason Code for Sanctions Compliance Obligations", effective March 17, 2028). Fetched 2026-10-21 with curl; visible text of the page's main content extracted with BeautifulSoup (scripts/styles/nav/header/footer removed, blank and repeated lines dropped). Nothing retyped by hand. sha256 of fetched HTML: d7631cdab9104fb308b039a8b7bbbe13319f8289ef234f5ace2f77a66553d81f
+
+Nacha Operating Rules
+Details
+Technical
+Impact
+FAQs
+Effective Date
+March 17, 2028
+Rule Status
+New Rule
+New Return Reason Code for Sanctions Compliance Obligations
+This rule will create a new return reason code (R90) to support an RDFI’s decision to return an entry in compliance with sanctions obligations. This rule also expands Article Three, Section 3.8 (RDFI's Right to Transmit Return Entries) to adopt a unique return time frame for returns related to sanctions compliance obligations.
+Details
+Currently, Return Reason Code R16 is defined for use as “Account Frozen/Entry Returned Per OFAC Instruction.”
+The meanings of these two reasons are only linked at the highest level because they may deal with potential legal actions.
+The interpretation by the ODFI/Originator matters when receiving an R16 return, as the resulting actions vary significantly.
+If the Entry is, in fact, being returned per sanctions screening obligations, then the ODFI must take action and determine further requirements for the entry and entity relationships, working with its client.
+By contrast, an RDFI’s action on the receiving account due to delinquency or garnishment, for example, does not require action by the ODFI, and necessitates different action by the Originator to collect payment.
+This rule creates a new return reason code (R90) to support an RDFI’s decision to return an entry in compliance with sanctions obligations. This amendment also expands Article Three, Section 3.8 (RDFI's Right to Transmit Return Entries) to adopt a unique return time frame for returns related to sanctions compliance obligations.
+Technical
+This rule will become effective March 17, 2028.
+This rule will create a new return reason code (R90) to support an RDFI’s decision to return an entry in compliance with sanctions obligations.
+Language in Appendix Four, Part 4.2 - Table of Return Reason Codes related to R16 will be updated to remove “Entry Returned Per OFAC Instruction” from the title, remove references in the description and remove Gateway from the initiating party.
+R16 will revert to its original title “Account Frozen” and be described as “Access to the account is restricted due to specific action taken by the RDFI or by legal action.”
+R90 (Entry Returned Due to RDFI’s Sanctions Compliance Obligations) will be added to the return reason code table.
+OFAC rarely directly instructs an RDFI to return an entry, rather an RDFI may return an entry to ensure compliance with sanctions obligations. The new return reason code has been titled to more accurately describe the RDFI’s action.
+Descriptive language has been added to the return reason code table: The RDFI/Gateway has determined that the Entry must be returned to comply with its sanctions compliance obligations.
+The return time frame described for this code’s use will be aligned with the new Subsection 3.8.3.6 to reflect the RDFI’s requirement to return the entry within two banking days from the RDFI’s sanctions compliance determination.
+This rule also expands Article Three, Section 3.8 (RDFI's Right to Transmit Return Entries) to adopt a unique return time frame for returns related to sanctions compliance obligations:
+Subsection 3.8.3.6 Timing Requirements for Entries Returned Due to RDFI’s Sanctions Compliance Obligations (New Subsection)
+An RDFI transmitting a Return Entry to comply with its sanctions obligations must Transmit such a Return to its ACH Operator by the ACH Operator’s deposit deadline for the Return Entry to be made available to the ODFI no later than the opening of business on the second Banking Day following the RDFI’s sanctions compliance determination.
+Provides RDFIs with the time necessary to complete its screening procedures to determine appropriate action while placing a time limit on the return to facilitate timely notice to the ODFI or Gateway of the transaction.
+This return deadline aligns with an RDFI's obligation to return any credit entries declined by the Receiver using Return Reason Code R23 (Credit Entry Refused by Receiver)
+"The RDFI must transmit any such return entry to its ACH Operator by its deposit deadline for the return to be made available to the ODFI no later than the opening of business on the second Banking Day following the RDFI's receipt of notification from the Receiver that it has declined the Entry."
+Impact
+Anticipated Benefits
+Removing ambiguity as to the reason for return will allow ODFIs, third-parties, and Originators to act definitively upon receipt of the return.
+R16 Return Entries will be understood as occurring due to legal or RDFI account action.
+R90 Return Entries will be understood as occurring per sanctions screening obligations.
+Improved legal compliance for ODFIs/Third-Party Senders/Originators.
+The time frame for a return due to determination of sanctions obligations will take into consideration the time needed for an RDFI to complete its sanctions screening procedures and still provide a timely return to the ODFI.
+R16 returns may be able to be remediated in the future if the account status should change.
+Potential Impact
+ACH Operators will need to implement a new Return Reason Code, R90.
+Operators will be required to process this code.
+Systems for creating or deriving a return will require updates for this new code.
+Reporting updates will be required for this new code, including customer reports and ACH debit entry return monitoring reports.
+Updates to the description of R16 will be required in reporting and customer-facing systems.
+All Participating FIs will need to implement a new Return Reason Code, R90.
+RDFIs will need to be capable of originating a return with this code.
+ODFIs will need to be capable of receiving, interpreting and reporting this code to its originating customers.
+All FIs will also need to adjust descriptions for R16 (Account Frozen).
+Originators and Third-Party Senders will need to understand the new purposes for R16 and R90 Return Reason Codes.
+Reporting systems may require updates.
+Updated procedures for receipt of these codes will be required.
+Third-Party Service Providers will need to assist clients in implementing the new R90 Return Reason Code for origination, receiving and reporting.
+Description of R16 will also require updating.
+All Participants will require training on the new uses of R16 and R90 Return Reason Codes
+FAQs Section

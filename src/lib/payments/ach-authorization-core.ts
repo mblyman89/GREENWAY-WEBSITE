@@ -537,9 +537,16 @@ export type AchCodeAction = "hold_get_new_info" | "hold_investigate_fraud" | "ho
 
 /**
  * Labels copied from docs/authorities/ach/odfi-peoples-bank-2026-originators-
- * newsletter.txt (a test re-finds each "CODE label" pair in that file). Only
- * codes that file lists are catalogued; anything else is `unknownCodeAction`.
+ * newsletter.txt (a test re-finds each "CODE label" pair in that file), except
+ * the codes in ACH_CODE_SOURCE, copied from the mirror named there. Only codes
+ * a mirror lists are catalogued; anything else is `unknownCodeAction`.
  */
+export const ACH_CODE_SOURCE: Readonly<Record<string, string>> = {
+  // R41 S15: Nacha's rule page, effective March 17, 2028: "R90 (Entry Returned
+  // Due to RDFI\u2019s Sanctions Compliance Obligations) will be added to the
+  // return reason code table."
+  R90: "ach/nacha-r90-sanctions-return-code.txt",
+};
 export const ACH_CODES: Readonly<Record<string, { label: string; action: AchCodeAction; plain: string }>> = {
   R01: { label: "Insufficient funds", action: "hold_unexpected_for_credit", plain: "A debit code. Greenway only sends credits, so this should never happen - hold and call Timberland." },
   R02: { label: "Account closed", action: "hold_get_new_info", plain: "The payee closed this account. Get a new signed form with new details." },
@@ -555,6 +562,11 @@ export const ACH_CODES: Readonly<Record<string, { label: string; action: AchCode
   R16: { label: "Account frozen", action: "hold_get_new_info", plain: "The account is frozen. Pay another way and get new details." },
   R23: { label: "Credit entry refused by receiver", action: "hold_get_new_info", plain: "The payee refused the deposit. Talk to them." },
   R29: { label: "Corporate customer/accountholder advises not authorized", action: "hold_investigate_fraud", plain: "A business says this was not authorized. Fraud red flag." },
+  R90: {
+    label: "Entry Returned Due to RDFI\u2019s Sanctions Compliance Obligations",
+    action: "hold_investigate_fraud",
+    plain: "The payee's bank returned this payment to comply with its sanctions obligations (code in use from March 17, 2028). Do not send it again on your own: Nacha says Timberland (your bank) works out the next steps with you. Call Timberland Cash Management at 1-800-562-8761, and your attorney.",
+  },
   C01: { label: "Incorrect bank account number", action: "apply_correction_then_release", plain: "The bank sent the correct account number. Apply it (puts the account on hold) and release after a callback." },
   C02: { label: "Incorrect routing/transit number", action: "apply_correction_then_release", plain: "The bank sent the correct routing number. Apply and release after a callback." },
   C03: { label: "Incorrect routing/transit number and bank account number", action: "apply_correction_then_release", plain: "Both numbers were wrong. Apply and release after a callback." },
@@ -793,7 +805,9 @@ export function __runAchAuthorizationCoreTests(): { passed: number; failed: numb
   ok(classifyAchCode("r03").action === "hold_get_new_info", "R03 new info");
   ok(classifyAchCode("C01").isNoc && classifyAchCode("C01").action === "apply_correction_then_release", "C01 NOC");
   ok(!classifyAchCode("R99").known && classifyAchCode("R99").action === "hold_investigate_fraud", "unknown -> hold");
-  ok(Object.keys(ACH_CODES).length === 20, "20 catalogued codes");
+  ok(Object.keys(ACH_CODES).length === 21, "21 catalogued codes (R41 S15: + R90)");
+  ok(classifyAchCode("r90").known && classifyAchCode("R90").action === "hold_investigate_fraud" && !classifyAchCode("R90").isNoc, "R90 sanctions return -> hold, never a NOC");
+  ok(Object.keys(ACH_CODE_SOURCE).every((c) => c in ACH_CODES), "every separately sourced code is catalogued");
 
   // account key + contacts
   ok(normalizeAccountKey("125-000-105", "00012 345-6", "checking") === "125000105:123456:checking", "account key normalised");

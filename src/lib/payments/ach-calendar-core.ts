@@ -551,8 +551,8 @@ export const NACHA_RULE_WATCH: readonly NachaRuleWatch[] = [
     title: "New return code R90 (sanctions)",
     quote: "This rule will create a new return reason code (R90) to support an RDFI’s decision to return an entry in compliance with sanctions obligations.",
     quoteFile: NEW_RULES,
-    impact: "watch",
-    greenway: "Code change before March 2028: add R90 to the return-code list. Until then an R90 is treated as an unknown code, which already puts the payee ON HOLD and flags possible fraud (safe).",
+    impact: "done",
+    greenway: "Done in R41 S15: R90 is in the return-code list with Nacha's title (Entry Returned Due to RDFI\u2019s Sanctions Compliance Obligations). Logging an R90 puts the payee ON HOLD as a possible-fraud return and says to call Timberland and your attorney. Greenway's own daily OFAC screening keeps running.",
   },
 ];
 
@@ -740,9 +740,12 @@ export function __runAchCalendarCoreTests(): { passed: number; failed: number } 
   ok(rem.some((r) => r.stage === "reviews"), "authorization review reminder");
   ok(!rem.some((r) => r.dedupeKey.includes("fraud_procedure_review")), "upcoming tasks do not nag");
   ok(new Set(rem.map((r) => r.dedupeKey)).size === rem.length, "dedupe keys unique");
+  // R41 S15: R90 is coded (impact "done"), so it no longer reminds; the 2027 character list is still watched.
   const r90 = NACHA_RULE_WATCH.find((r) => r.id === "r90-sanctions-2028-03-17")!;
-  ok(!ruleWatchStatus(r90, "2026-10-11").remind && ruleWatchStatus(r90, "2028-02-01").remind, "R90 reminds within 60 days");
-  ok(planAchCalendarReminders("2028-02-01", [], { overdue: 0, missingDate: 0 }).some((r) => r.dedupeKey === "ach-rule:r90-sanctions-2028-03-17:ahead"), "rule reminder planned");
+  ok(r90.impact === "done" && !ruleWatchStatus(r90, "2028-02-01").remind, "R90 coded: no reminder");
+  const chars = NACHA_RULE_WATCH.find((r) => r.id === "characters-2027-01-01")!;
+  ok(!ruleWatchStatus(chars, "2026-10-11").remind && ruleWatchStatus(chars, "2026-11-15").remind, "watched rule reminds within 60 days");
+  ok(planAchCalendarReminders("2026-11-15", [], { overdue: 0, missingDate: 0 }).some((r) => r.dedupeKey === "ach-rule:characters-2027-01-01:ahead"), "rule reminder planned");
   ok(NACHA_RULE_WATCH.every((r, i, a) => i === 0 || a[i - 1].effective <= r.effective), "rule watch in date order");
   let threw = false;
   try {
