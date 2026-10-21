@@ -14,7 +14,7 @@
  *      the reset keeps the CCRS ledger (those files are the State's, not ours).
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { buildResetPlan } from "@/lib/accounting/factory-reset-core";
 import { listSchemaTables } from "@/lib/admin/schema-tables";
@@ -174,6 +174,62 @@ describe("4. summariseOpenCcrsFiles: what the kept CCRS ledger still waits for",
   });
   it("an unknown state is treated as OPEN (never assumed finished)", () => {
     expect(summariseOpenCcrsFiles([row("prod", "weird", "x.csv")])!.total).toBe(1);
+  });
+});
+
+describe("guard: every table the rehearsal code WRITES is wiped, or deliberately kept", () => {
+  // Code paths the Clean Slate rehearsal runs: register, orders, inventory,
+  // receiving/intake, disposition (returns, destructions, vendor returns).
+  const ROOTS = ["src/lib/pos", "src/lib/orders", "src/lib/inventory", "src/app/admin/inventory", "src/app/admin/orders", "src/app/pos", "src/app/api/pos"];
+  // KEEP tables those paths legitimately write: configuration and the
+  // knowledge base (facts learned while receiving are kept on purpose).
+  // Exact: an entry no longer written fails too, so the list cannot rot.
+  const KEEP_WRITES = [
+    "audit_logs", "brands", "disposition_settings", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
+    "kb_products", "kb_strains", "pos_devices", "product_classification_overrides", "sample_settings", "site_settings",
+    "testing_labs", "vendor_aliases", "vendors", "website_category_types",
+  ];
+  function written(): Map<string, string> {
+    const out = new Map<string, string>();
+    const walk = (dir: string) => {
+      if (!existsSync(join(ROOT, dir))) return;
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(rel);
+        else if (/\.tsx?$/.test(e.name)) {
+          const src = read(rel);
+          for (const m of src.matchAll(/\.from\(\s*"([a-z0-9_]+)"\s*\)/g)) {
+            const tail = src.slice(m.index! + m[0].length, m.index! + m[0].length + 400);
+            const stop = /;|\.from\(/.exec(tail);
+            const seg = stop ? tail.slice(0, stop.index) : tail;
+            if (/\.(insert|update|upsert|delete)\(/.test(seg) && !out.has(m[1])) out.set(m[1], rel);
+          }
+        }
+      }
+    };
+    for (const r of ROOTS) walk(r);
+    return out;
+  }
+  const w = written();
+  it("the scan finds the rehearsal's own tables (it really reads the code)", () => {
+    for (const t of ["orders", "order_lines", "customer_returns", "destruction_events", "vendor_returns", "inventory_lots", "inbound_manifests"]) {
+      expect(w.has(t), t).toBe(true);
+    }
+  });
+  it("every written table is WIPE, or KEEP and on the allowlist; nothing is unclassified", () => {
+    const bad: string[] = [];
+    for (const [t, file] of w) {
+      if (wipe.has(t)) continue;
+      if (keep.has(t) && KEEP_WRITES.includes(t)) continue;
+      bad.push(`${t} (written in ${file}) is ${keep.has(t) ? "KEEP but not on the allowlist" : "not classified"}`);
+    }
+    expect(bad).toEqual([]);
+  });
+  it("the allowlist is exact: each entry is KEEP and still written", () => {
+    for (const t of KEEP_WRITES) {
+      expect(keep.has(t), `${t} must be KEEP`).toBe(true);
+      expect(w.has(t), `${t} is no longer written; remove it from the allowlist`).toBe(true);
+    }
   });
 });
 

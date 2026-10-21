@@ -129,6 +129,10 @@ R3_TESTS = "tests/compliance/r3-dor-excise-calendar.test.ts"
 # Round 5 (R5-1 return corrections / R5-2 reset proof)
 RCCORE = "src/lib/compliance/ccrs-return-corrections-core.ts"
 R5_TESTS = "tests/compliance/r5-return-corrections.test.ts"
+RPCORE = "src/lib/accounting/reset-proof-core.ts"
+RESETACT = "src/app/admin/settings/actions.ts"
+RESETPAGE = "src/app/admin/settings/reset/page.tsx"
+R5R_TESTS = "tests/compliance/r5-reset-proof.test.ts"
 CALCORE = "src/lib/compliance/compliance-calendar-core.ts"
 REMINDERS = "src/lib/notifications/compliance-reminders.ts"
 
@@ -2997,6 +3001,118 @@ MUTATIONS = [
         R5_TESTS,
         "A closed lot re-reported in the same emission may carry the add-back / destruction.",
     ),
+    (
+        "M373-r5r-plan-refused",
+        RPCORE,
+        "  if (!plan.ok) {\n    return [{ problem: \"PLAN_REFUSED\"",
+        "  if (!plan.ok && false) {\n    return [{ problem: \"PLAN_REFUSED\"",
+        R5R_TESTS,
+        "A refused plan cannot vouch for a reset.",
+    ),
+    (
+        "M374-r5r-empty-report",
+        RPCORE,
+        "  if (reported.size === 0) {",
+        "  if (false) {",
+        R5R_TESTS,
+        "An empty report is never read as a clean reset.",
+    ),
+    (
+        "M375-r5r-rehearsal-missing",
+        RPCORE,
+        "  const rehearsalMissing = REHEARSAL_ACTIVITY_TABLES.filter((t) => !reported.has(t));",
+        "  const rehearsalMissing = [] as string[];",
+        R5R_TESTS,
+        "A destruction / vendor-return / sale table left full is named.",
+    ),
+    (
+        "M376-r5r-wipe-missing",
+        RPCORE,
+        "  const wipeMissing = [...wipe].filter((t) => !reported.has(t) && !rehearsal.has(t));",
+        "  const wipeMissing = [] as string[];",
+        R5R_TESTS,
+        "Any WIPE table the DB did not empty is named.",
+    ),
+    (
+        "M377-r5r-kb-emptied",
+        RPCORE,
+        '  const kb = extra.filter((t) => t.startsWith("kb_"));',
+        "  const kb = [] as string[];",
+        R5R_TESTS,
+        "An emptied knowledge-base table is named as such.",
+    ),
+    (
+        "M378-r5r-ccrs-emptied",
+        RPCORE,
+        "  const ccrs = extra.filter((t) => CCRS_LEDGER_KEEP.includes(t));",
+        "  const ccrs = [] as string[];",
+        R5R_TESTS,
+        "An emptied CCRS ledger table is named (duplicate filings risk).",
+    ),
+    (
+        "M379-r5r-unknown-emptied",
+        RPCORE,
+        "  if (unknown.length > 0) out.push(",
+        "  if (false) out.push(",
+        R5R_TESTS,
+        "An emptied table with no rule is named.",
+    ),
+    (
+        "M380-r5r-terminal-only",
+        RPCORE,
+        'const TERMINAL = new Set(["closed", "abandoned"]);',
+        'const TERMINAL = new Set(["closed", "abandoned", "uploaded"]);',
+        R5R_TESTS,
+        "An uploaded-but-unanswered file is open, not finished.",
+    ),
+    (
+        "M381-r5r-unknown-state-open",
+        RPCORE,
+        "  const open = rows.filter((r) => !TERMINAL.has(r.state));",
+        '  const open = rows.filter((r) => ["draft", "emitted", "uploaded", "succeeded", "errored", "reconciling"].includes(r.state));',
+        R5R_TESTS,
+        "An unknown state is treated as open, never assumed finished.",
+    ),
+    (
+        "M382-r5r-rehearsal-list-vendor-returns",
+        RPCORE,
+        '  "vendor_returns",\n',
+        "",
+        R5R_TESTS,
+        "The owner's vendor returns are in the proof list.",
+    ),
+    (
+        "M383-r5r-action-wired",
+        RESETACT,
+        "    problems = [...problems, ...summaryProblems];",
+        "    void summaryProblems;",
+        R5R_TESTS,
+        "The action reports the proof problems to the owner and the audit row.",
+    ),
+    (
+        "M384-r5r-page-wired",
+        RESETPAGE,
+        "            <p className=\"mt-1 text-sm text-amber-100/90\">{openCcrs.message}</p>",
+        "",
+        R5R_TESTS,
+        "The reset page tells the owner which CCRS files are still open.",
+    ),
+    (
+        "M385-r5r-guard-vendor-returns-kept",
+        RESETCORE,
+        '  { table: "vendor_returns", disposition: "WIPE", because: "Test returns to vendors." },',
+        '  { table: "vendor_returns", disposition: "KEEP", because: "Test returns to vendors." },',
+        R5R_TESTS,
+        "If vendor returns were ever kept by the reset, the guard goes red.",
+    ),
+    (
+        "M386-r5r-guard-allowlist-enforced",
+        R5R_TESTS,
+        '    "testing_labs", "vendor_aliases", "vendors", "website_category_types",',
+        '    "testing_labs", "vendor_aliases", "website_category_types",',
+        R5R_TESTS,
+        "The allowlist is enforced: a written KEEP table not on it goes red (vendors removed).",
+    ),
 ]
 
 
@@ -3054,6 +3170,7 @@ def main() -> int:
         S14B_TESTS,
         R3_TESTS,
         R5_TESTS,
+        R5R_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.
