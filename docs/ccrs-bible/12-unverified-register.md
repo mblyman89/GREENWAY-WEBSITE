@@ -76,6 +76,7 @@ Owners: **O** = owner (only he can log in / email LCB); **A** = agent (code/test
 | U-74 | A filed transfer whose received quantity or vendor id is later corrected must be sent again as an Update | FAQ: an error is corrected with an "Update" operation, and the receiver supplies only its own To id `[FAQ L0059]` | A PREprod Update of a `TR-` id | O | R6-2 sends Insert once and never Updates (the ledger blocks re-sends) | OPEN |
 | U-75 | CCRS accepts our `TR-<lot id>` ExternalIdentifier (prefix plus hyphen) for InventoryTransfer | The id is free text (100) and must be unique `[G L1190]`; hyphens unverified (U-06) | The first PREprod InventoryTransfer upload | O | `TRANSFER_ID_PREFIX` | OPEN |
 | U-76 | A vendor id read from a manifest **PDF** equals the vendor's CCRS InventoryExternalIdentifier | A wrong id gives "Invalid FromInventoryExternalIdentifier" `[G L1191]`; PDF reading may misread characters | Compare PDF-read ids with the WCIA/CSV ids of the same deliveries; first PREprod transfer upload | O | R6-2 blocks `pdf_guess` ids until the owner confirms them (E14_TRANSFER_VENDOR_ID_UNKNOWN) | OPEN |
+| U-77 | A lot left out of a weekly Inventory.csv because nothing changed keeps its values in CCRS (CCRS does not zero or age a lot absent from a week) | "No report is needed if there are no changes." `[G L0525-L0527]`; `[FAQ L0049]` | An S-16 copy after a week in which E51 left lots out | O | R6-3 `planInventoryDelta` (E51) | OPEN |
 
 ## Adding a row
 

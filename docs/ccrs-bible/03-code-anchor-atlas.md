@@ -1,21 +1,21 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-10-21 06:35Z at commit `9d3c820795239b79cab627ca6054b86bc14aca95` by `build_atlas_part.py`.
+Generated 2026-10-21 08:24Z at commit `35c5ee8a612c4fda3b30dfc7aa205d0599f8c74b` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 9d3c820 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 35c5ee8 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
 ## 0. Module inventory (line counts + every `export` with its line)
 
-### `src/lib/compliance/ccrs-batch.ts` (1590 L)
+### `src/lib/compliance/ccrs-batch.ts` (1621 L)
 
-- L106: `export type CcrsFile = {`
-- L118: `export type CcrsSyncIssue = {`
-- L135: `export type CcrsBatch = {`
-- L1020: `export async function buildCcrsBatch(`
+- L107: `export type CcrsFile = {`
+- L119: `export type CcrsSyncIssue = {`
+- L136: `export type CcrsBatch = {`
+- L1021: `export async function buildCcrsBatch(`
 
 ### `src/lib/compliance/ccrs-batch-core.ts` (1554 L)
 
@@ -524,456 +524,456 @@ Generated 2026-10-21 06:35Z at commit `9d3c820795239b79cab627ca6054b86bc14aca95`
 `src/lib/compliance/ccrs-batch.ts` L160-L193 — buildStrainFile — NOTE: no guard for Unknown/THC/Other (guide p.12 L358: 'Strain name is invalid, cannot be Unknown, THC, or Other'). Defaults StrainType to Hybrid.
 
 ```ts
- 160|      */
- 161|     unassignedProductKeys: string[];
- 162|   };
- 163|   /**
- 164|    * R5-1: customer-return Sale corrections carried in this batch's Sale file.
- 165|    * `exportReturnIds` is filled ONLY for a production emission (preprod never
- 166|    * marks the shared correction_status); the route marks them after emit.
- 167|    */
- 168|   corrections: {
- 169|     exportReturnIds: string[];
- 170|     emitted: number;
- 171|     withheld: number;
- 172|     invalid: number;
- 173|     reflected: number;
- 174|   };
- 175| };
- 176| 
- 177| // ---------------------------------------------------------------------------
- 178| // Helpers to read the published menu snapshot + inventory lots
- 179| // ---------------------------------------------------------------------------
- 180| 
- 181| type Admin = ReturnType<typeof createSupabaseAdminClient>;
- 182| 
- 183| async function getPublishedVersionId(admin: Admin): Promise<string | null> {
- 184|   const { data } = await admin
- 185|     .from("menu_versions")
- 186|     .select("id")
- 187|     .eq("status", "published")
- 188|     .order("published_at", { ascending: false })
- 189|     .limit(1)
- 190|     .maybeSingle();
- 191|   return (data as { id: string } | null)?.id ?? null;
- 192| }
- 193| 
+ 160|      * the export never assigns on its own (D-01a: ids are minted deliberately).
+ 161|      */
+ 162|     unassignedProductKeys: string[];
+ 163|   };
+ 164|   /**
+ 165|    * R5-1: customer-return Sale corrections carried in this batch's Sale file.
+ 166|    * `exportReturnIds` is filled ONLY for a production emission (preprod never
+ 167|    * marks the shared correction_status); the route marks them after emit.
+ 168|    */
+ 169|   corrections: {
+ 170|     exportReturnIds: string[];
+ 171|     emitted: number;
+ 172|     withheld: number;
+ 173|     invalid: number;
+ 174|     reflected: number;
+ 175|   };
+ 176| };
+ 177| 
+ 178| // ---------------------------------------------------------------------------
+ 179| // Helpers to read the published menu snapshot + inventory lots
+ 180| // ---------------------------------------------------------------------------
+ 181| 
+ 182| type Admin = ReturnType<typeof createSupabaseAdminClient>;
+ 183| 
+ 184| async function getPublishedVersionId(admin: Admin): Promise<string | null> {
+ 185|   const { data } = await admin
+ 186|     .from("menu_versions")
+ 187|     .select("id")
+ 188|     .eq("status", "published")
+ 189|     .order("published_at", { ascending: false })
+ 190|     .limit(1)
+ 191|     .maybeSingle();
+ 192|   return (data as { id: string } | null)?.id ?? null;
+ 193| }
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L201-L213 — buildAreaFile — emits Area 'Quarantine' IsQuarantine=TRUE whenever hasQuarantine. FAQ (Data Reporting, IsQuarantine Q): 'There are no quarantine requirements for cannabis products. You will have an entry as FALSE.' → compliance question, Part 04 flag N-01.
 
 ```ts
- 201|  * RECEIVING licensee and files the transfer [G L0124-L0128, G L0143-L0144].
- 202|  * `absent` = migration 0285 (the vendor-id columns) is not applied. Any other
- 203|  * read error THROWS: a silently missing lot is a missing weekly filing.
- 204|  */
- 205| const TRANSFER_LOT_COLUMNS =
- 206|   "id, lot_code, manifest_id, notes, vendor_id, ccrs_inventory_external_id, received_qty, received_on, disposition, vendor_inventory_external_id, vendor_inventory_externa
- 207| type TransferLotRow = {
- 208|   id: string;
- 209|   lot_code: string | null;
- 210|   manifest_id: string | null;
- 211|   notes: string | null;
- 212|   vendor_id: string | null;
- 213|   ccrs_inventory_external_id: string | null;
+ 201|  * delivery facts an InventoryTransfer row needs. The retailer is the
+ 202|  * RECEIVING licensee and files the transfer [G L0124-L0128, G L0143-L0144].
+ 203|  * `absent` = migration 0285 (the vendor-id columns) is not applied. Any other
+ 204|  * read error THROWS: a silently missing lot is a missing weekly filing.
+ 205|  */
+ 206| const TRANSFER_LOT_COLUMNS =
+ 207|   "id, lot_code, manifest_id, notes, vendor_id, ccrs_inventory_external_id, received_qty, received_on, disposition, vendor_inventory_external_id, vendor_inventory_externa
+ 208| type TransferLotRow = {
+ 209|   id: string;
+ 210|   lot_code: string | null;
+ 211|   manifest_id: string | null;
+ 212|   notes: string | null;
+ 213|   vendor_id: string | null;
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L215-L260 — buildProductFile (part 1) — weightByKey from lots; grams may be '' when no lot weight.
 
 ```ts
- 215|   received_on: string | null;
- 216|   disposition: string | null;
- 217|   vendor_inventory_external_id: string | null;
- 218|   vendor_inventory_external_id_source: string | null;
- 219| };
- 220| type TransferManifestRow = LineageManifestRow & {
- 221|   vendor_id: string | null;
- 222|   from_license_number?: string | null;
- 223|   vendor_license?: string | null;
- 224| };
- 225| async function readTransferLots(admin: Admin, toDay: string): Promise<{ kind: "absent" } | { kind: "loaded"; lots: TransferLot[] }> {
- 226|   let missing = false;
- 227|   let failed: string | null = null;
- 228|   const rows = await pagedAll<TransferLotRow>(async (from, to) => {
- 229|     if (missing || failed) return [];
- 230|     const { data, error } = await admin
- 231|       .from("inventory_lots")
- 232|       .select(TRANSFER_LOT_COLUMNS)
- 233|       .not("manifest_id", "is", null)
- 234|       .eq("disposition", "accepted")
- 235|       .lte("received_on", toDay)
- 236|       .order("id", { ascending: true })
- 237|       .range(from, to);
- 238|     if (error) {
- 239|       if (isMissingColumnError(error)) missing = true;
- 240|       else failed = error.message;
- 241|       return [];
- 242|     }
- 243|     return (data as TransferLotRow[] | null) ?? [];
- 244|   });
- 245|   if (missing) return { kind: "absent" };
- 246|   if (failed) throw new Error(`R6-2: reading received lots for InventoryTransfer failed: ${failed}`);
- 247|   const manifestIds = [...new Set(rows.map((r) => (r.manifest_id ?? "").trim()).filter(Boolean))];
- 248|   let mFailed: string | null = null;
- 249|   const manifests = await chunkedIn<string, TransferManifestRow>(manifestIds, async (chunk, from, to) => {
- 250|     const { data, error } = await admin
- 251|       .from("inbound_manifests")
- 252|       .select(`${LINEAGE_MANIFEST_SELECT}, vendor_id, from_license_number:raw_payload->>from_license_number, vendor_license:raw_payload->>vendor_license`)
- 253|       .in("id", chunk)
- 254|       .order("id", { ascending: true })
- 255|       .range(from, to);
- 256|     if (error) mFailed = error.message;
- 257|     return (data as TransferManifestRow[] | null) ?? [];
- 258|   });
- 259|   if (mFailed) throw new Error(`R6-2: reading delivery manifests for InventoryTransfer failed: ${mFailed}`);
- 260|   const byManifest = new Map(manifests.map((m) => [m.id, m]));
+ 215|   received_qty: number | string | null;
+ 216|   received_on: string | null;
+ 217|   disposition: string | null;
+ 218|   vendor_inventory_external_id: string | null;
+ 219|   vendor_inventory_external_id_source: string | null;
+ 220| };
+ 221| type TransferManifestRow = LineageManifestRow & {
+ 222|   vendor_id: string | null;
+ 223|   from_license_number?: string | null;
+ 224|   vendor_license?: string | null;
+ 225| };
+ 226| async function readTransferLots(admin: Admin, toDay: string): Promise<{ kind: "absent" } | { kind: "loaded"; lots: TransferLot[] }> {
+ 227|   let missing = false;
+ 228|   let failed: string | null = null;
+ 229|   const rows = await pagedAll<TransferLotRow>(async (from, to) => {
+ 230|     if (missing || failed) return [];
+ 231|     const { data, error } = await admin
+ 232|       .from("inventory_lots")
+ 233|       .select(TRANSFER_LOT_COLUMNS)
+ 234|       .not("manifest_id", "is", null)
+ 235|       .eq("disposition", "accepted")
+ 236|       .lte("received_on", toDay)
+ 237|       .order("id", { ascending: true })
+ 238|       .range(from, to);
+ 239|     if (error) {
+ 240|       if (isMissingColumnError(error)) missing = true;
+ 241|       else failed = error.message;
+ 242|       return [];
+ 243|     }
+ 244|     return (data as TransferLotRow[] | null) ?? [];
+ 245|   });
+ 246|   if (missing) return { kind: "absent" };
+ 247|   if (failed) throw new Error(`R6-2: reading received lots for InventoryTransfer failed: ${failed}`);
+ 248|   const manifestIds = [...new Set(rows.map((r) => (r.manifest_id ?? "").trim()).filter(Boolean))];
+ 249|   let mFailed: string | null = null;
+ 250|   const manifests = await chunkedIn<string, TransferManifestRow>(manifestIds, async (chunk, from, to) => {
+ 251|     const { data, error } = await admin
+ 252|       .from("inbound_manifests")
+ 253|       .select(`${LINEAGE_MANIFEST_SELECT}, vendor_id, from_license_number:raw_payload->>from_license_number, vendor_license:raw_payload->>vendor_license`)
+ 254|       .in("id", chunk)
+ 255|       .order("id", { ascending: true })
+ 256|       .range(from, to);
+ 257|     if (error) mFailed = error.message;
+ 258|     return (data as TransferManifestRow[] | null) ?? [];
+ 259|   });
+ 260|   if (mFailed) throw new Error(`R6-2: reading delivery manifests for InventoryTransfer failed: ${mFailed}`);
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L280-L349 — buildProductFile (part 2) — classification via deriveCcrsClassificationFromType; E4 error message; clamps; warnings.slice(0,30).
 
 ```ts
- 280|     return {
- 281|       lotId: r.id,
- 282|       manifestId: r.manifest_id,
- 283|       label: r.lot_code ?? r.id,
- 284|       ourId: assignedInventoryExternalId(r),
- 285|       vendorId: r.vendor_inventory_external_id,
- 286|       vendorIdSource: r.vendor_inventory_external_id_source,
- 287|       vendorLicense: fromDoc || vendorRecord || null,
- 288|       receivedQty: qty,
- 289|       receivedOn: r.received_on,
- 290|       disposition: r.disposition,
- 291|       isCultivera: lotFlaggedCultivera(r, migration),
- 292|     };
- 293|   });
- 294|   return { kind: "loaded", lots };
- 295| }
- 296| 
- 297| const TRANSFER_ISSUE_TEXT: Record<TransferIssueCode, (n: number) => string> = {
- 298|   E14_TRANSFER_FIELD_MISSING: (n) => `${n} received lot(s) are missing a field InventoryTransfer.csv requires (vendor license, our lot id, or received date). Fix each del
- 299|   E14_TRANSFER_VENDOR_ID_UNKNOWN: (n) =>
- 300|     `${n} received lot(s) have no confirmed vendor inventory id. CCRS needs "the original ... InventoryExternalIdentifier from the producer" [FAQ L0058-L0059]. Open the d
- 301|   E14_TRANSFER_SAME_LICENSE: (n) => `${n} received lot(s) name our own license as the vendor. A transfer to the same license is an error [G L1205]; fix the vendor on the 
- 302|   E14_TRANSFER_QUANTITY: (n) => `${n} received lot(s) have a received quantity that is not positive ("No negative entries allowed" [G L1238]).`,
- 303|   E14_TRANSFER_LEDGER_WITHHELD: (n) => `${n} transfer(s) were left out because an earlier file naming them is not answered yet. Record that file's CCRS result, then rebui
- 304|   E14_TRANSFER_LOT_NOT_REPORTED: (n) =>
- 305|     `${n} transfer(s) were left out because their lot is not in Inventory.csv and CCRS does not hold it yet ("ensure the inventory has been reported through the inventory
- 306| };
- 307| 
- 308| /**
- 309|  * R5-1: the DESTROYED lots that this batch's event rows name (by CCRS id).
- 310|  * Live lots are read with `.neq("status", "destroyed")`; a lot destroyed to 0
- 311|  * still needs its Inventory row (QoH 0) in the emission that carries its
- 312|  * Destruction adjustment [G L1302-L1304, EXAM L0430]. A read error THROWS:
- 313|  * silently dropping the lot would send an adjustment CCRS rejects.
- 314|  */
- 315| async function readDestroyedLots(admin: Admin, refs: readonly string[]): Promise<LotRow[]> {
- 316|   if (refs.length === 0) return [];
- 317|   let failed: string | null = null;
- 318|   const rows = await chunkedIn<string, LotRow>(refs, async (chunk, from, to) => {
- 319|     const { data, error } = await admin
- 320|       .from("inventory_lots")
- 321|       .select(LOT_COLUMNS)
- 322|       .eq("status", "destroyed")
- 323|       .in("ccrs_inventory_external_id", chunk)
- 324|       .order("id", { ascending: true })
- 325|       .range(from, to);
- 326|     if (error) failed = error.message;
- 327|     return (data as LotRow[] | null) ?? [];
- 328|   });
- 329|   if (failed) throw new Error(`R5-1: could not read destroyed lots named by this batch: ${failed}`);
- 330|   // The stored id may carry surrounding spaces; assignedInventoryExternalId
- 331|   // trims, so match on what the event row printed.
- 332|   const wanted = new Set(refs);
- 333|   const seen = new Set<string>();
- 334|   return rows.filter((l) => {
- 335|     const assigned = assignedInventoryExternalId(l);
- 336|     if (!assigned || !wanted.has(assigned) || seen.has(l.id)) return false;
- 337|     seen.add(l.id);
- 338|     return true;
- 339|   });
- 340| }
- 341| 
- 342| const RETURN_COLUMNS =
- 343|   "id, sale_external_id, sale_detail_external_id, inventory_external_id, sale_type, sale_date, unit_price_minor, discount_minor, sales_tax_minor, excise_minor, quantity, 
- 344| 
- 345| /** customer_returns missing (pre-0115) reads as "no returns"; any other error throws. */
- 346| function isMissingTable(error: { code?: string; message?: string } | null): boolean {
- 347|   if (!error) return false;
- 348|   const msg = (error.message ?? "").toLowerCase();
- 349|   return error.code === "42P01" || error.code === "PGRST205" || /relation .* does not exist|could not find the table/.test(msg);
+ 280|     const qty = r.received_qty === null ? null : Number(r.received_qty);
+ 281|     return {
+ 282|       lotId: r.id,
+ 283|       manifestId: r.manifest_id,
+ 284|       label: r.lot_code ?? r.id,
+ 285|       ourId: assignedInventoryExternalId(r),
+ 286|       vendorId: r.vendor_inventory_external_id,
+ 287|       vendorIdSource: r.vendor_inventory_external_id_source,
+ 288|       vendorLicense: fromDoc || vendorRecord || null,
+ 289|       receivedQty: qty,
+ 290|       receivedOn: r.received_on,
+ 291|       disposition: r.disposition,
+ 292|       isCultivera: lotFlaggedCultivera(r, migration),
+ 293|     };
+ 294|   });
+ 295|   return { kind: "loaded", lots };
+ 296| }
+ 297| 
+ 298| const TRANSFER_ISSUE_TEXT: Record<TransferIssueCode, (n: number) => string> = {
+ 299|   E14_TRANSFER_FIELD_MISSING: (n) => `${n} received lot(s) are missing a field InventoryTransfer.csv requires (vendor license, our lot id, or received date). Fix each del
+ 300|   E14_TRANSFER_VENDOR_ID_UNKNOWN: (n) =>
+ 301|     `${n} received lot(s) have no confirmed vendor inventory id. CCRS needs "the original ... InventoryExternalIdentifier from the producer" [FAQ L0058-L0059]. Open the d
+ 302|   E14_TRANSFER_SAME_LICENSE: (n) => `${n} received lot(s) name our own license as the vendor. A transfer to the same license is an error [G L1205]; fix the vendor on the 
+ 303|   E14_TRANSFER_QUANTITY: (n) => `${n} received lot(s) have a received quantity that is not positive ("No negative entries allowed" [G L1238]).`,
+ 304|   E14_TRANSFER_LEDGER_WITHHELD: (n) => `${n} transfer(s) were left out because an earlier file naming them is not answered yet. Record that file's CCRS result, then rebui
+ 305|   E14_TRANSFER_LOT_NOT_REPORTED: (n) =>
+ 306|     `${n} transfer(s) were left out because their lot is not in Inventory.csv and CCRS does not hold it yet ("ensure the inventory has been reported through the inventory
+ 307| };
+ 308| 
+ 309| /**
+ 310|  * R5-1: the DESTROYED lots that this batch's event rows name (by CCRS id).
+ 311|  * Live lots are read with `.neq("status", "destroyed")`; a lot destroyed to 0
+ 312|  * still needs its Inventory row (QoH 0) in the emission that carries its
+ 313|  * Destruction adjustment [G L1302-L1304, EXAM L0430]. A read error THROWS:
+ 314|  * silently dropping the lot would send an adjustment CCRS rejects.
+ 315|  */
+ 316| async function readDestroyedLots(admin: Admin, refs: readonly string[]): Promise<LotRow[]> {
+ 317|   if (refs.length === 0) return [];
+ 318|   let failed: string | null = null;
+ 319|   const rows = await chunkedIn<string, LotRow>(refs, async (chunk, from, to) => {
+ 320|     const { data, error } = await admin
+ 321|       .from("inventory_lots")
+ 322|       .select(LOT_COLUMNS)
+ 323|       .eq("status", "destroyed")
+ 324|       .in("ccrs_inventory_external_id", chunk)
+ 325|       .order("id", { ascending: true })
+ 326|       .range(from, to);
+ 327|     if (error) failed = error.message;
+ 328|     return (data as LotRow[] | null) ?? [];
+ 329|   });
+ 330|   if (failed) throw new Error(`R5-1: could not read destroyed lots named by this batch: ${failed}`);
+ 331|   // The stored id may carry surrounding spaces; assignedInventoryExternalId
+ 332|   // trims, so match on what the event row printed.
+ 333|   const wanted = new Set(refs);
+ 334|   const seen = new Set<string>();
+ 335|   return rows.filter((l) => {
+ 336|     const assigned = assignedInventoryExternalId(l);
+ 337|     if (!assigned || !wanted.has(assigned) || seen.has(l.id)) return false;
+ 338|     seen.add(l.id);
+ 339|     return true;
+ 340|   });
+ 341| }
+ 342| 
+ 343| const RETURN_COLUMNS =
+ 344|   "id, sale_external_id, sale_detail_external_id, inventory_external_id, sale_type, sale_date, unit_price_minor, discount_minor, sales_tax_minor, excise_minor, quantity, 
+ 345| 
+ 346| /** customer_returns missing (pre-0115) reads as "no returns"; any other error throws. */
+ 347| function isMissingTable(error: { code?: string; message?: string } | null): boolean {
+ 348|   if (!error) return false;
+ 349|   const msg = (error.message ?? "").toLowerCase();
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L351-L417 — buildInventoryFile — ext id derive; Area choice; TotalCost = unit_cost_minor_units*received_qty (0 when cost missing → guide p.17 L614 'TotalCost cannot equal 0'); IsMedical hard 'FALSE'; Operation Insert.
 
 ```ts
- 351| 
- 352| /**
- 353|  * R5-1: the returns a batch must consider for Sale corrections: every PENDING
- 354|  * return, every return made (created_at) inside the batch range, and every
- 355|  * other return of those sale lines (the correction states the line after ALL
- 356|  * its returns: rule 1). Same rule in both envs.
- 357|  *   - `correction_status` is ONE flag that only a PROD emission sets
- 358|  *     (correctionExportIds), so it cannot say what PREprod has seen, nor
- 359|  *     whether CCRS accepted a prod correction. The env's own ledger decides
- 360|  *     that (reflected = already applied, in flight = wait).
- 361|  *   - The range part lets a correction whose file was rejected or abandoned
- 362|  *     be planned again by rebuilding that week; the ledger stops re-sends.
- 363|  */
- 364| async function readReturnsForCorrections(
- 365|   admin: Admin,
- 366|   fromISO: string,
- 367|   toISO: string,
- 368| ): Promise<{ records: ReturnRecord[]; tableMissing: boolean }> {
- 369|   const seeds = await pagedAll<CustomerReturnRowLike>(async (from, to) => {
- 370|     const { data, error } = await admin
- 371|       .from("customer_returns")
- 372|       .select(RETURN_COLUMNS)
- 373|       .or(`correction_status.eq.pending,and(created_at.gte.${fromISO},created_at.lte.${toISO})`)
- 374|       .order("id", { ascending: true })
- 375|       .range(from, to);
- 376|     if (error) {
- 377|       if (isMissingTable(error)) throw new MissingReturnsTable();
- 378|       throw new Error(`R5-1: could not read customer_returns: ${error.message}`);
- 379|     }
- 380|     return (data as CustomerReturnRowLike[] | null) ?? [];
- 381|   }).catch((e) => {
- 382|     if (e instanceof MissingReturnsTable) return null;
- 383|     throw e;
- 384|   });
- 385|   if (seeds === null) return { records: [], tableMissing: true };
- 386|   const lineIds = [...new Set(seeds.map((r) => (r.sale_detail_external_id ?? "").trim()).filter(Boolean))];
- 387|   let failed: string | null = null;
- 388|   const siblings = await chunkedIn<string, CustomerReturnRowLike>(lineIds, async (chunk, from, to) => {
- 389|     const { data, error } = await admin
- 390|       .from("customer_returns")
- 391|       .select(RETURN_COLUMNS)
- 392|       .in("sale_detail_external_id", chunk)
- 393|       .order("id", { ascending: true })
- 394|       .range(from, to);
- 395|     if (error) failed = error.message;
- 396|     return (data as CustomerReturnRowLike[] | null) ?? [];
- 397|   });
- 398|   if (failed) throw new Error(`R5-1: could not read the other returns of these sale lines: ${failed}`);
- 399|   const byId = new Map<string, CustomerReturnRowLike>();
- 400|   for (const r of [...seeds, ...siblings]) byId.set(r.id, r);
- 401|   return { records: [...byId.values()].map(returnRecordFromRow), tableMissing: false };
- 402| }
- 403| class MissingReturnsTable extends Error {}
- 404| 
- 405| /**
- 406|  * S-17b: for product keys that lots name but the published menu does not show,
- 407|  * read whether each is HIDDEN in the published version (with its reason) or
- 408|  * present only in a STAGED version. Any read error → `readable: false` (the
- 409|  * lot is still withheld; only the explanation is lost, and that is said).
- 410|  */
- 411| async function readMenuPresence(
- 412|   admin: Admin,
- 413|   publishedVersionId: string | null,
- 414|   visiblePublishedKeys: Iterable<string>,
- 415|   keys: readonly string[],
- 416| ): Promise<MenuPresence> {
- 417|   if (keys.length === 0 || !publishedVersionId) {
+ 351| }
+ 352| 
+ 353| /**
+ 354|  * R5-1: the returns a batch must consider for Sale corrections: every PENDING
+ 355|  * return, every return made (created_at) inside the batch range, and every
+ 356|  * other return of those sale lines (the correction states the line after ALL
+ 357|  * its returns: rule 1). Same rule in both envs.
+ 358|  *   - `correction_status` is ONE flag that only a PROD emission sets
+ 359|  *     (correctionExportIds), so it cannot say what PREprod has seen, nor
+ 360|  *     whether CCRS accepted a prod correction. The env's own ledger decides
+ 361|  *     that (reflected = already applied, in flight = wait).
+ 362|  *   - The range part lets a correction whose file was rejected or abandoned
+ 363|  *     be planned again by rebuilding that week; the ledger stops re-sends.
+ 364|  */
+ 365| async function readReturnsForCorrections(
+ 366|   admin: Admin,
+ 367|   fromISO: string,
+ 368|   toISO: string,
+ 369| ): Promise<{ records: ReturnRecord[]; tableMissing: boolean }> {
+ 370|   const seeds = await pagedAll<CustomerReturnRowLike>(async (from, to) => {
+ 371|     const { data, error } = await admin
+ 372|       .from("customer_returns")
+ 373|       .select(RETURN_COLUMNS)
+ 374|       .or(`correction_status.eq.pending,and(created_at.gte.${fromISO},created_at.lte.${toISO})`)
+ 375|       .order("id", { ascending: true })
+ 376|       .range(from, to);
+ 377|     if (error) {
+ 378|       if (isMissingTable(error)) throw new MissingReturnsTable();
+ 379|       throw new Error(`R5-1: could not read customer_returns: ${error.message}`);
+ 380|     }
+ 381|     return (data as CustomerReturnRowLike[] | null) ?? [];
+ 382|   }).catch((e) => {
+ 383|     if (e instanceof MissingReturnsTable) return null;
+ 384|     throw e;
+ 385|   });
+ 386|   if (seeds === null) return { records: [], tableMissing: true };
+ 387|   const lineIds = [...new Set(seeds.map((r) => (r.sale_detail_external_id ?? "").trim()).filter(Boolean))];
+ 388|   let failed: string | null = null;
+ 389|   const siblings = await chunkedIn<string, CustomerReturnRowLike>(lineIds, async (chunk, from, to) => {
+ 390|     const { data, error } = await admin
+ 391|       .from("customer_returns")
+ 392|       .select(RETURN_COLUMNS)
+ 393|       .in("sale_detail_external_id", chunk)
+ 394|       .order("id", { ascending: true })
+ 395|       .range(from, to);
+ 396|     if (error) failed = error.message;
+ 397|     return (data as CustomerReturnRowLike[] | null) ?? [];
+ 398|   });
+ 399|   if (failed) throw new Error(`R5-1: could not read the other returns of these sale lines: ${failed}`);
+ 400|   const byId = new Map<string, CustomerReturnRowLike>();
+ 401|   for (const r of [...seeds, ...siblings]) byId.set(r.id, r);
+ 402|   return { records: [...byId.values()].map(returnRecordFromRow), tableMissing: false };
+ 403| }
+ 404| class MissingReturnsTable extends Error {}
+ 405| 
+ 406| /**
+ 407|  * S-17b: for product keys that lots name but the published menu does not show,
+ 408|  * read whether each is HIDDEN in the published version (with its reason) or
+ 409|  * present only in a STAGED version. Any read error → `readable: false` (the
+ 410|  * lot is still withheld; only the explanation is lost, and that is said).
+ 411|  */
+ 412| async function readMenuPresence(
+ 413|   admin: Admin,
+ 414|   publishedVersionId: string | null,
+ 415|   visiblePublishedKeys: Iterable<string>,
+ 416|   keys: readonly string[],
+ 417| ): Promise<MenuPresence> {
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L424-L500 — buildCcrsBatch (part 1) — license/Supabase guards E1/E2; published menu; lots pagedAll excluding status=destroyed.
 
 ```ts
- 424|         .from("menu_items")
- 425|         .select("source_item_id, hidden_reason")
- 426|         .eq("menu_version_id", publishedVersionId)
- 427|         .eq("hidden", true)
- 428|         .in("source_item_id", chunk)
- 429|         .order("id", { ascending: true })
- 430|         .range(from, to);
- 431|       if (error) failed = error.message;
- 432|       return (data as { source_item_id: string | null; hidden_reason: string | null }[] | null) ?? [];
- 433|     });
- 434|     const { data: stagedVersions, error: sErr } = await admin.from("menu_versions").select("id").eq("status", "staged");
- 435|     if (sErr) failed = sErr.message;
- 436|     const stagedIds = ((stagedVersions as { id: string }[] | null) ?? []).map((v) => v.id);
- 437|     const staged =
- 438|       stagedIds.length === 0
- 439|         ? []
- 440|         : await chunkedIn<string, { source_item_id: string | null }>(keys, async (chunk, from, to) => {
- 441|             const { data, error } = await admin
- 442|               .from("menu_items")
- 443|               .select("source_item_id")
- 444|               .in("menu_version_id", stagedIds)
- 445|               .in("source_item_id", chunk)
- 446|               .order("id", { ascending: true })
- 447|               .range(from, to);
- 448|             if (error) failed = error.message;
- 449|             return (data as { source_item_id: string | null }[] | null) ?? [];
- 450|           });
- 451|     if (failed) return { readable: false, error: failed };
- 452|     return menuPresenceFromRows(true, visiblePublishedKeys, hidden, staged);
- 453|   } catch (e) {
- 454|     return { readable: false, error: e instanceof Error ? e.message : String(e) };
- 455|   }
- 456| }
- 457| 
- 458| type MenuItemRow = {
- 459|   source_item_id: string;
- 460|   name: string;
- 461|   strain_name: string | null;
- 462|   strain_type: string | null;
- 463|   pos_inventory_type: string | null;
- 464|   pos_inventory_category: string | null;
- 465|   description: string | null;
- 466|   // SLICE 53 (two-layer naming): fields the CCRS Product.Name composer uses.
- 467|   brand_name: string | null;
- 468|   vendor_name: string | null;
- 469|   category: string | null;
- 470|   total_thc_json: unknown;
- 471|   total_cbd_json: unknown;
- 472|   compounds_json: unknown;
- 473| };
- 474| 
- 475| /** Parse a stored cannabinoid JSON blob (same shape live-menu.ts reads). */
- 476| function jsonToCannabinoid(json: unknown): Cannabinoid | null {
- 477|   if (!json || typeof json !== "object") return null;
- 478|   const o = json as Record<string, unknown>;
- 479|   if (typeof o.type !== "string" || typeof o.unit !== "string") return null;
- 480|   return {
- 481|     type: o.type as Cannabinoid["type"],
- 482|     value: typeof o.value === "string" || typeof o.value === "number" ? o.value : null,
- 483|     unit: o.unit as Cannabinoid["unit"],
- 484|   };
- 485| }
- 486| 
- 487| function jsonToCompounds(json: unknown): Cannabinoid[] {
- 488|   if (!Array.isArray(json)) return [];
- 489|   return json.map(jsonToCannabinoid).filter((c): c is Cannabinoid => c != null);
- 490| }
- 491| 
- 492| type LotRow = {
- 493|   id: string;
- 494|   lot_code: string | null;
- 495|   pos_product_key: string | null;
- 496|   product_name: string | null;
- 497|   ccrs_inventory_external_id: string | null;
- 498|   received_qty: number;
- 499|   on_hand_qty: number;
- 500|   unit_cost_minor_units: number | null;
+ 424|       const { data, error } = await admin
+ 425|         .from("menu_items")
+ 426|         .select("source_item_id, hidden_reason")
+ 427|         .eq("menu_version_id", publishedVersionId)
+ 428|         .eq("hidden", true)
+ 429|         .in("source_item_id", chunk)
+ 430|         .order("id", { ascending: true })
+ 431|         .range(from, to);
+ 432|       if (error) failed = error.message;
+ 433|       return (data as { source_item_id: string | null; hidden_reason: string | null }[] | null) ?? [];
+ 434|     });
+ 435|     const { data: stagedVersions, error: sErr } = await admin.from("menu_versions").select("id").eq("status", "staged");
+ 436|     if (sErr) failed = sErr.message;
+ 437|     const stagedIds = ((stagedVersions as { id: string }[] | null) ?? []).map((v) => v.id);
+ 438|     const staged =
+ 439|       stagedIds.length === 0
+ 440|         ? []
+ 441|         : await chunkedIn<string, { source_item_id: string | null }>(keys, async (chunk, from, to) => {
+ 442|             const { data, error } = await admin
+ 443|               .from("menu_items")
+ 444|               .select("source_item_id")
+ 445|               .in("menu_version_id", stagedIds)
+ 446|               .in("source_item_id", chunk)
+ 447|               .order("id", { ascending: true })
+ 448|               .range(from, to);
+ 449|             if (error) failed = error.message;
+ 450|             return (data as { source_item_id: string | null }[] | null) ?? [];
+ 451|           });
+ 452|     if (failed) return { readable: false, error: failed };
+ 453|     return menuPresenceFromRows(true, visiblePublishedKeys, hidden, staged);
+ 454|   } catch (e) {
+ 455|     return { readable: false, error: e instanceof Error ? e.message : String(e) };
+ 456|   }
+ 457| }
+ 458| 
+ 459| type MenuItemRow = {
+ 460|   source_item_id: string;
+ 461|   name: string;
+ 462|   strain_name: string | null;
+ 463|   strain_type: string | null;
+ 464|   pos_inventory_type: string | null;
+ 465|   pos_inventory_category: string | null;
+ 466|   description: string | null;
+ 467|   // SLICE 53 (two-layer naming): fields the CCRS Product.Name composer uses.
+ 468|   brand_name: string | null;
+ 469|   vendor_name: string | null;
+ 470|   category: string | null;
+ 471|   total_thc_json: unknown;
+ 472|   total_cbd_json: unknown;
+ 473|   compounds_json: unknown;
+ 474| };
+ 475| 
+ 476| /** Parse a stored cannabinoid JSON blob (same shape live-menu.ts reads). */
+ 477| function jsonToCannabinoid(json: unknown): Cannabinoid | null {
+ 478|   if (!json || typeof json !== "object") return null;
+ 479|   const o = json as Record<string, unknown>;
+ 480|   if (typeof o.type !== "string" || typeof o.unit !== "string") return null;
+ 481|   return {
+ 482|     type: o.type as Cannabinoid["type"],
+ 483|     value: typeof o.value === "string" || typeof o.value === "number" ? o.value : null,
+ 484|     unit: o.unit as Cannabinoid["unit"],
+ 485|   };
+ 486| }
+ 487| 
+ 488| function jsonToCompounds(json: unknown): Cannabinoid[] {
+ 489|   if (!Array.isArray(json)) return [];
+ 490|   return json.map(jsonToCannabinoid).filter((c): c is Cannabinoid => c != null);
+ 491| }
+ 492| 
+ 493| type LotRow = {
+ 494|   id: string;
+ 495|   lot_code: string | null;
+ 496|   pos_product_key: string | null;
+ 497|   product_name: string | null;
+ 498|   ccrs_inventory_external_id: string | null;
+ 499|   received_qty: number;
+ 500|   on_hand_qty: number;
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L540-L652 — buildCcrsBatch (part 2) — InventoryTransfer emitted EMPTY with an explanatory note (guide p.33 L1162 says it 'is required weekly by any licensed facility that receives inventory'); sort; E3; orphan products; verifySaleNumericColumns; WARNING_CAP_PER_FILE.
 
 ```ts
- 540|   plan: LedgerPlan,
- 541| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
- 542|   const warnings: string[] = [];
- 543|   const seen = new Set<string>();
- 544|   const rows: string[][] = [];
- 545|   const defaulted: string[] = [];
- 546|   const reserved: CcrsIssueRow[] = [];
- 547|   for (const it of items) {
- 548|     const raw = (it.strain_name ?? "").trim();
- 549|     if (!raw) continue;
- 550|     // S-11: the plan decides. A strain already on file in ANY casing is never
- 551|     // re-sent (Strain has no Operation [G L0319-L0320]); a case variant of a
- 552|     // filed or already-emitted strain is never sent at all [BRIAN A16].
- 553|     const strain = plan.strainCanonical.get(raw) ?? raw;
- 554|     if (!plan.strainEmit.has(strain)) continue;
- 555|     if (seen.has(strain)) continue;
- 556|     seen.add(strain);
- 557|     // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
- 558|     // Exact match only — "Other Kush" is a real strain and must still ship.
- 559|     if (isReservedStrainName(strain)) {
- 560|       reserved.push({
- 561|         id: (it.source_item_id ?? strain).trim(),
- 562|         label: strain,
- 563|         detail: `"${strain}" is a reserved CCRS strain name`,
- 564|       });
- 565|       continue;
- 566|     }
- 567|     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
- 568|     // label; when it can't be resolved we default to Hybrid (safe superset) and
- 569|     // flag the strain so an employee can correct it (drafts-only).
- 570|     const st = normalizeStrainType(it.strain_type);
- 571|     if (st.defaulted) defaulted.push(strain);
- 572|     rows.push([license, strain, st.value, createdBy, createdDate]);
- 573|   }
- 574|   if (defaulted.length > 0) {
- 575|     warnings.push(
- 576|       `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${default
- 577|         .slice(0, 15)
- 578|         .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
- 579|     );
- 580|   }
- 581|   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
- 582|   const issues: CcrsSyncIssue[] = [];
- 583|   if (plan.strainCaseVariants.length > 0) {
- 584|     issues.push({
- 585|       severity: "warning",
- 586|       file: "Strain",
- 587|       code: "E39_STRAIN_CASE_VARIANT",
- 588|       specPin: specPinFor("E39_STRAIN_CASE_VARIANT"),
- 589|       count: plan.strainCaseVariants.length,
- 590|       rows: plan.strainCaseVariants.map((v) => ({
- 591|         id: v.ours,
- 592|         label: v.ours,
- 593|         detail: `written as "${v.value}" (${v.source === "ledger" ? "the spelling already filed in CCRS" : "the first spelling in this batch"})`,
- 594|       })),
- 595|       message: `${plan.strainCaseVariants.length} strain name(s) differ from another only by capital letters. CCRS must never receive the same strain with a different cap
- 596|     });
- 597|   }
- 598|   if (reserved.length > 0) {
- 599|     issues.push({
- 600|       severity: "error",
- 601|       file: "Strain",
- 602|       code: "E11_STRAIN_NAME_RESERVED",
- 603|       specPin: specPinFor("E11_STRAIN_NAME_RESERVED"),
- 604|       count: reserved.length,
- 605|       rows: reserved,
- 606|       message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. Set the real strain
- 607|     });
- 608|   }
- 609|   return { rows, warnings, issues };
- 610| }
- 611| 
- 612| /**
- 613|  * Area.csv — S-13: planned over the CCRS ledger by the pure core
- 614|  * (ccrs-area-core.ts, D-03, [BRIAN A11] [BRIAN A12], [G L0298-L0299]). The
- 615|  * old literals (`AREA-SALES-FLOOR`, a `Quarantine`/TRUE area) are gone: a new
- 616|  * "Sales Floor" record would silently become every lot's join target (E23),
- 617|  * and IsQuarantine TRUE "only applies to imported CBD" [G L0298].
- 618|  */
- 619| function buildAreaFile(
- 620|   env: LedgerEnv,
- 621|   license: string,
- 622|   createdBy: string,
- 623|   createdDate: string,
- 624|   ledger: LedgerView | null,
- 625| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[]; inventoryAreaName: string } {
- 626|   const plan = planAreaFile({ view: ledger, config: areaPlanFor(env), license, by: createdBy, date: createdDate });
- 627|   const issues: CcrsSyncIssue[] = [];
- 628|   for (const severity of ["error", "warning"] as const) {
- 629|     const these = plan.problems.filter((p) => p.severity === severity);
- 630|     if (these.length === 0) continue;
- 631|     issues.push({
- 632|       severity,
- 633|       file: "Area",
- 634|       code: "E46_AREA_LEDGER",
- 635|       specPin: specPinFor("E46_AREA_LEDGER"),
- 636|       count: these.length,
- 637|       rows: these.map((p) => ({ id: p.id, label: p.id, detail: p.detail })),
- 638|       message:
- 639|         severity === "error"
- 640|           ? `${these.length} Area record(s) the plan (D-03) relies on are not provably held by CCRS. An Update or Delete of a record CCRS does not hold is an error [G L02
- 641|           : `${these.length} Area name(s) are held by more than one CCRS record; CCRS uses the most recently ingested one [BRIAN A12]. Advisory.`,
- 642|     });
- 643|   }
- 644|   return { rows: plan.rows, warnings: [], issues, inventoryAreaName: plan.inventoryAreaName };
- 645| }
- 646| 
- 647| function buildProductFile(
- 648|   items: MenuItemRow[],
- 649|   lots: LotRow[],
- 650|   license: string,
- 651|   createdBy: string,
- 652|   createdDate: string,
+ 540|   createdDate: string,
+ 541|   plan: LedgerPlan,
+ 542| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
+ 543|   const warnings: string[] = [];
+ 544|   const seen = new Set<string>();
+ 545|   const rows: string[][] = [];
+ 546|   const defaulted: string[] = [];
+ 547|   const reserved: CcrsIssueRow[] = [];
+ 548|   for (const it of items) {
+ 549|     const raw = (it.strain_name ?? "").trim();
+ 550|     if (!raw) continue;
+ 551|     // S-11: the plan decides. A strain already on file in ANY casing is never
+ 552|     // re-sent (Strain has no Operation [G L0319-L0320]); a case variant of a
+ 553|     // filed or already-emitted strain is never sent at all [BRIAN A16].
+ 554|     const strain = plan.strainCanonical.get(raw) ?? raw;
+ 555|     if (!plan.strainEmit.has(strain)) continue;
+ 556|     if (seen.has(strain)) continue;
+ 557|     seen.add(strain);
+ 558|     // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
+ 559|     // Exact match only — "Other Kush" is a real strain and must still ship.
+ 560|     if (isReservedStrainName(strain)) {
+ 561|       reserved.push({
+ 562|         id: (it.source_item_id ?? strain).trim(),
+ 563|         label: strain,
+ 564|         detail: `"${strain}" is a reserved CCRS strain name`,
+ 565|       });
+ 566|       continue;
+ 567|     }
+ 568|     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
+ 569|     // label; when it can't be resolved we default to Hybrid (safe superset) and
+ 570|     // flag the strain so an employee can correct it (drafts-only).
+ 571|     const st = normalizeStrainType(it.strain_type);
+ 572|     if (st.defaulted) defaulted.push(strain);
+ 573|     rows.push([license, strain, st.value, createdBy, createdDate]);
+ 574|   }
+ 575|   if (defaulted.length > 0) {
+ 576|     warnings.push(
+ 577|       `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${default
+ 578|         .slice(0, 15)
+ 579|         .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
+ 580|     );
+ 581|   }
+ 582|   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
+ 583|   const issues: CcrsSyncIssue[] = [];
+ 584|   if (plan.strainCaseVariants.length > 0) {
+ 585|     issues.push({
+ 586|       severity: "warning",
+ 587|       file: "Strain",
+ 588|       code: "E39_STRAIN_CASE_VARIANT",
+ 589|       specPin: specPinFor("E39_STRAIN_CASE_VARIANT"),
+ 590|       count: plan.strainCaseVariants.length,
+ 591|       rows: plan.strainCaseVariants.map((v) => ({
+ 592|         id: v.ours,
+ 593|         label: v.ours,
+ 594|         detail: `written as "${v.value}" (${v.source === "ledger" ? "the spelling already filed in CCRS" : "the first spelling in this batch"})`,
+ 595|       })),
+ 596|       message: `${plan.strainCaseVariants.length} strain name(s) differ from another only by capital letters. CCRS must never receive the same strain with a different cap
+ 597|     });
+ 598|   }
+ 599|   if (reserved.length > 0) {
+ 600|     issues.push({
+ 601|       severity: "error",
+ 602|       file: "Strain",
+ 603|       code: "E11_STRAIN_NAME_RESERVED",
+ 604|       specPin: specPinFor("E11_STRAIN_NAME_RESERVED"),
+ 605|       count: reserved.length,
+ 606|       rows: reserved,
+ 607|       message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. Set the real strain
+ 608|     });
+ 609|   }
+ 610|   return { rows, warnings, issues };
+ 611| }
+ 612| 
+ 613| /**
+ 614|  * Area.csv — S-13: planned over the CCRS ledger by the pure core
+ 615|  * (ccrs-area-core.ts, D-03, [BRIAN A11] [BRIAN A12], [G L0298-L0299]). The
+ 616|  * old literals (`AREA-SALES-FLOOR`, a `Quarantine`/TRUE area) are gone: a new
+ 617|  * "Sales Floor" record would silently become every lot's join target (E23),
+ 618|  * and IsQuarantine TRUE "only applies to imported CBD" [G L0298].
+ 619|  */
+ 620| function buildAreaFile(
+ 621|   env: LedgerEnv,
+ 622|   license: string,
+ 623|   createdBy: string,
+ 624|   createdDate: string,
+ 625|   ledger: LedgerView | null,
+ 626| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[]; inventoryAreaName: string } {
+ 627|   const plan = planAreaFile({ view: ledger, config: areaPlanFor(env), license, by: createdBy, date: createdDate });
+ 628|   const issues: CcrsSyncIssue[] = [];
+ 629|   for (const severity of ["error", "warning"] as const) {
+ 630|     const these = plan.problems.filter((p) => p.severity === severity);
+ 631|     if (these.length === 0) continue;
+ 632|     issues.push({
+ 633|       severity,
+ 634|       file: "Area",
+ 635|       code: "E46_AREA_LEDGER",
+ 636|       specPin: specPinFor("E46_AREA_LEDGER"),
+ 637|       count: these.length,
+ 638|       rows: these.map((p) => ({ id: p.id, label: p.id, detail: p.detail })),
+ 639|       message:
+ 640|         severity === "error"
+ 641|           ? `${these.length} Area record(s) the plan (D-03) relies on are not provably held by CCRS. An Update or Delete of a record CCRS does not hold is an error [G L02
+ 642|           : `${these.length} Area name(s) are held by more than one CCRS record; CCRS uses the most recently ingested one [BRIAN A12]. Advisory.`,
+ 643|     });
+ 644|   }
+ 645|   return { rows: plan.rows, warnings: [], issues, inventoryAreaName: plan.inventoryAreaName };
+ 646| }
+ 647| 
+ 648| function buildProductFile(
+ 649|   items: MenuItemRow[],
+ 650|   lots: LotRow[],
+ 651|   license: string,
+ 652|   createdBy: string,
 ```
 
 ## B. Core/pure helpers — `src/lib/compliance/ccrs-batch-core.ts`

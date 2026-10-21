@@ -1017,7 +1017,7 @@ The planned one-click flow (R6-3+):
 - The Manifest.csv builder and its verifier.
 - The return screen (one click).
 - An InventoryTransfer **Update** when a filed transfer's quantity or vendor id changes `[FAQ L0059]` (U-74).
-- N-03 (Insert-only Inventory).
+- N-03 (Insert-only Inventory): routing done by the S-05 ledger; unchanged re-sends stopped by R6-3.
 
  research first, build later, switch on only after the upload process is proven)
 
@@ -1038,6 +1038,28 @@ Fix steps:
 2. Query `ccrs_files` for the preprod seed row and call `ccrs_ledger_slice('preprod', …)` by hand.
 3. Check that the page builds with `env=preprod` and that no cache serves an old render.
 4. Fix only the proven cause, with a test.
+
+## R6-3 — Inventory.csv sends only what changed (DONE in code, 2026-10-21)
+
+Branch `r6-3-inventory-unchanged`. Closes the re-send half of N-03 (Part 04 §A.14).
+
+**Rule.** "Inventory.CSV is required weekly by any licensed facility that owns the inventory, only when inventory exists that is unreported, or unreported updates to an existing inventory. No report is needed if there are no changes." `[G L0525-L0527]`. Sent Updates carry UpdatedBy/UpdatedDate; "Updated Date cannot be prior to Created Date" `[G L0234-L0242]`. PREprod accepted an Update with both filled (P20261007A file 7, Part 17 §B).
+
+**Built.**
+- Migration **0286** `0286_ccrs_inventory_last_told.sql` + rollback (no tables). The owner applies it by hand.
+  - `ccrs_inventory_last_told(env, ids)`: stable, read-only, service role only, search_path pinned, a bad or null env is refused.
+  - Per lot: the ledger state; `told` = the payload of the newest Inventory row of an uploaded file that CCRS accepted (row submitted/confirmed in a succeeded/errored/reconciling/closed file), else null; `in_flight` = an emitted/uploaded Inventory file names it.
+- `ccrs-inventory-delta-core.ts` (pure, 22 self-tests): `decodeInventoryTold`, `changedColumns` (numbers as numbers, IsMedical case-insensitive, text exact), `updatedDateFor`, `planInventoryDelta`, `lotsNamedByEventRows`.
+- `ccrs-ledger-store.ts` `loadInventoryTold` (chunks of 1000). `ccrs-batch.ts` pushes Inventory after the event rows are known, through `planInventoryDelta`, and reports left-out lots as advisory **E51_INVENTORY_UNCHANGED_NOT_SENT**.
+- Sent when unsure: 0286 absent, no ledger, never accepted, uncertain/rejected last row, in flight, named by an event row (keeps R5-1's closed-lot re-report), or any cell changed. Inserts are never touched.
+
+**Tests.**
+- `tests/compliance/r6-3-inventory-unchanged.test.ts`, with spec pins checked against Part 02. The self-test is registered.
+- `scripts/recon/ccrs-inventory-told-0286-pg-check.sql` is in POST_APPLY_CHECKS. Its 21 SQL mutants (`scripts/recon/sqlmut/0286.txt`) are all killed.
+- TS mutations **M432–M445** (14) are all killed.
+- Migration-tail pins were moved to 0286.
+
+**Remaining.** Confirm with an S-16 copy that a lot left out of a week keeps its values in CCRS (U-77).
 
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 

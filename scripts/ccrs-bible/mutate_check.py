@@ -141,6 +141,10 @@ CCRS_ACTIONS = "src/app/admin/compliance/ccrs/actions.ts"
 FILES_PANEL = "src/components/admin/compliance/CcrsFilesPanel.tsx"
 M0284 = "supabase/migrations/0284_ccrs_settle_uncertain.sql"
 R62_TESTS = "tests/compliance/r6-2-inventory-transfer.test.ts"
+R63_TESTS = "tests/compliance/r6-3-inventory-unchanged.test.ts"
+DELTA = "src/lib/compliance/ccrs-inventory-delta-core.ts"
+M0286 = "supabase/migrations/0286_ccrs_inventory_last_told.sql"
+LSTORE = "src/lib/compliance/ccrs-ledger-store.ts"
 TCORE = "src/lib/compliance/ccrs-transfer-core.ts"
 INTAKE = "src/lib/inventory/intake-store.ts"
 M0285 = "supabase/migrations/0285_ccrs_inventory_transfer.sql"
@@ -3490,6 +3494,118 @@ MUTATIONS = [
         'E14_TRANSFER_LEDGER_WITHHELD: "[G L1191]"',
         R62_TESTS,
         "The withheld code's pin is the Duplicate InventoryTransfer line.",
+    ),
+    (
+        'M432-r63-insert-skipped',
+        DELTA,
+        '    if (op !== "Update") {',
+        '    if (op === "Delete") {',
+        R63_TESTS,
+        'An Insert (unreported lot) is never left out.',
+    ),
+    (
+        'M433-r63-absent-skips',
+        DELTA,
+        '    if (input.told.kind !== "loaded") {\n      rows.push(withUpdated());',
+        '    if (input.told.kind !== "loaded") {\n      continue;\n      rows.push(withUpdated());',
+        R63_TESTS,
+        'Before 0286 every Update is sent.',
+    ),
+    (
+        'M434-r63-never-accepted',
+        DELTA,
+        '    if (!t || !t.told) {\n      rows.push(withUpdated());',
+        '    if (!t) {\n      rows.push(withUpdated());',
+        R63_TESTS,
+        'A lot CCRS never accepted is sent.',
+    ),
+    (
+        'M435-r63-inflight',
+        DELTA,
+        '    if (t.inFlight) {',
+        '    if (false && t.inFlight) {',
+        R63_TESTS,
+        'A lot in an unanswered file is sent.',
+    ),
+    (
+        'M436-r63-named',
+        DELTA,
+        '    if (input.namedByEvents.has(id)) {',
+        '    if (false && input.namedByEvents.has(id)) {',
+        R63_TESTS,
+        'A lot an event row names is sent (closed-lot re-report).',
+    ),
+    (
+        'M437-r63-compared-cols',
+        DELTA,
+        'COLS.filter((c) => c !== "UpdatedBy" && c !== "UpdatedDate" && c !== "Operation")',
+        'COLS.filter((c) => c !== "UpdatedBy" && c !== "UpdatedDate" && c !== "Operation" && c !== "Area")',
+        R63_TESTS,
+        'Every data column is compared.',
+    ),
+    (
+        'M438-r63-numeric',
+        DELTA,
+        '    return Number.isFinite(x) && Number.isFinite(y) && x === y;',
+        '    return a === b;',
+        R63_TESTS,
+        'Numbers compare as numbers (20.0 == 20.00).',
+    ),
+    (
+        'M439-r63-missing-told',
+        DELTA,
+        '  if (told === null || told === undefined) return false;',
+        '  if (told === null || told === undefined) return true;',
+        R63_TESTS,
+        "A told payload missing a column is not 'unchanged'.",
+    ),
+    (
+        'M440-r63-clamp',
+        DELTA,
+        '  return c !== null && c > b ? createdDate : batchDay;',
+        '  return batchDay;',
+        R63_TESTS,
+        'UpdatedDate never precedes CreatedDate [G L0242].',
+    ),
+    (
+        'M441-r63-updatedby',
+        DELTA,
+        '      r[UPDATED_BY] = input.updatedBy;',
+        '      r[UPDATED_BY] = "";',
+        R63_TESTS,
+        'Sent Updates carry UpdatedBy.',
+    ),
+    (
+        'M442-r63-transfer-lots',
+        DELTA,
+        '  for (const r of input.transfer) if (r[t]) out.add(r[t]);',
+        '  for (const r of input.transfer) if (r[t] && false) out.add(r[t]);',
+        R63_TESTS,
+        'Transfer rows name lots too.',
+    ),
+    (
+        'M443-r63-dup-id',
+        DELTA,
+        '    if (byId.has(id as string)) bad(',
+        '    if (false) bad(',
+        R63_TESTS,
+        'A duplicate id in the answer is refused.',
+    ),
+    (
+        'M444-r63-batch-ledger',
+        BATCHSRV,
+        '  const told = ledger && updateIds.length > 0 ? await loadInventoryTold(',
+        '  const told = updateIds.length > 0 ? await loadInventoryTold(',
+        R63_TESTS,
+        '0286 is read only with a ledger.',
+    ),
+    (
+        'M445-r63-loader-absent',
+        LSTORE,
+        '    if (part.kind === "absent") return part;',
+        '    if (part.kind === "absent") continue;',
+        R63_TESTS,
+        'The loader stops at the first absent answer.',
     ),
 ]
 

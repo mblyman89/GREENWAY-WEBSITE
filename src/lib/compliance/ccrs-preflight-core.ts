@@ -78,6 +78,7 @@ export const CCRS_ISSUE_CODES = [
   "E14_TRANSFER_QUANTITY",
   "E14_TRANSFER_LEDGER_WITHHELD",
   "E14_TRANSFER_LOT_NOT_REPORTED",
+  "E51_INVENTORY_UNCHANGED_NOT_SENT",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -439,6 +440,9 @@ const PINS: Record<CcrsIssueCode, string> = {
   E14_TRANSFER_QUANTITY: "[G L1238]",
   E14_TRANSFER_LEDGER_WITHHELD: "[G L1190]",
   E14_TRANSFER_LOT_NOT_REPORTED: "[G L1207-L1209]",
+  // R6-3: an Update row equal to what CCRS last accepted is not re-sent:
+  // "No report is needed if there are no changes." Advisory (nothing to fix).
+  E51_INVENTORY_UNCHANGED_NOT_SENT: "[G L0525-L0527]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {
