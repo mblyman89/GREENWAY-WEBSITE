@@ -28,7 +28,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S10 | Obligation clocks: Timberland communications log, what is due to Timberland, STOP card on every banking page, fees card | #1384 | 0277 |
 | S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | #1385 | 0278 |
 | S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | #1444 | none |
-| S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | this branch | 0287 |
+| S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | #1445 | 0287 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
