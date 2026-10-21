@@ -28,11 +28,14 @@ This bible exists so that no future agent drifts. If a thing is not in here, it 
 | 16 | `16-owner-guide-s13-areas-and-p02.md` | **Owner guide (S-13).** What changed in Areas, the P-02 PREprod probe step by step, and the end-to-end PREprod test with an expected result for every step | hand |
 | 17 | `17-examiner-thread-block-diagnosis-and-cleanup.md` | **Examiner register + 2026-10-19 block.** Every Brian answer pinned `[EXAM L####]` (X-01…X-38); the known-good P20261007A format; the hub block diagnosed to code lines; the stale-lot cleanup (Update→0 + Reconciliation); WA.gov facts; the fresh-copy plan; new examiner questions; slices S-17a/b/c, S-15, S-14, S-16 | hand |
 | 18 | `18-integrator-application.md` | **CCRS integrator application (2026-10-19).** What was signed and sent to LCB (hashes only; PDFs stay out of the public repo), every commitment traced to code, discrepancies to fix, next events | hand |
+| — | `HANDOFF-round5.md` | **Agent handoff at the end of Round 5 (2026-10-20).** State of branch/PR #1438, every slice built (with tests and mutation ranges), hand-applied migrations, low-memory recovery, all remaining work (S-05, S-03, S-06, S-08, R-4), add-ons and automation (R-1 integrator API, R-2), the owner's real-upload triage plan. Start here in a new sandbox | hand |
+| — | `round5-recon-notes.md` | Round 5 recon (sales/returns/vendor returns/destructions/transfers to PREprod; factory reset WIPE/KEEP) | hand |
 | — | `evidence/2026-09-17-preprod-run/` | Primary artifacts: 14 returned error CSVs, 10 success emails, examiner reply, the 23 probe files, 4 reproduction scripts | raw |
 | — | `evidence/2026-10-19-owner-request/` | Owner request + full examiner thread verbatim (`[EXAM]`), LCB FAQ/Sign-In Guide/bulletin of 2026-10-19 (`[FAQ19]` `[SIGNIN]` `[BUL1006]`) | raw |
 
 ## Reading order for a fresh agent
 
+0. **New sandbox?** Read `HANDOFF-round5.md` first (recovery, git identity, low-memory commands).
 1. `01` (rules) → `05` (owner decisions) → `04` (gap matrix) → `09` (slice plan). That is the minimum to start a slice.
 2. Open `02` and `03` **only by pin** — they are reference volumes, not reading material. Search for `L0124` etc.
 3. Before touching a file: `git diff <atlas commit> -- <file>`. If it moved, regenerate `03` and re-pin.
