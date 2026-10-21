@@ -9,19 +9,26 @@
  *      Appendix B).
  *   2. No single file over LIMIT_PER_FILE_CENTS ($50,000; Schedule C "ACH
  *      Batch").
- *   3. Daily: for EVERY calendar day the new file is in process, the files
- *      in process that day plus this one stay at or under
- *      LIMIT_DAILY_IN_PROCESS_CENTS ($50,000). Schedule C "Maximum daily
- *      aggregate limit of all credit files"; section 26 defines it as the
- *      amount "of In-Process Entries permitted to be outstanding at any
- *      time". A file is in process from its upload day through its
- *      settlement date (it stops counting the day after). Until S6 records
- *      the real upload day, the release day (file_date, Pacific) is used:
- *      the earliest a file can be at the bank, so the window is never
- *      shorter than the truth.
- *   4. Monthly: LIMIT_MONTHLY_CENTS ($100,000). Open question Q3 (upload or
- *      effective month?) uses its strict default: a file counts in BOTH its
- *      upload month and its effective month.
+ *   3. Daily: LIMIT_DAILY_IN_PROCESS_CENTS ($50,000), Schedule C "Maximum
+ *      daily aggregate limit of all credit files". R41 S12 (owner decision
+ *      D-3): counted BY UPLOAD DAY, as Brenda answered (Email 3 answer 2,
+ *      Q3): "The limit is by the day of the upload file". The files uploaded
+ *      on one Pacific day, plus this one, stay at or under $50,000.
+ *      The app does not guess a file's upload day: a file counts on EVERY
+ *      day it could have been (or could still be) uploaded, from its release
+ *      day (file_date) through the banking day before it settles (Brenda,
+ *      answer 3: a file "will processed with a 1 day lead time"). Once the
+ *      upload is recorded (S6, uploaded_at, stamped when the owner presses
+ *      "Mark uploaded"), the real upload was on or before that Pacific day,
+ *      so the window ends there instead. Released and recorded the same day
+ *      (the normal case) is exactly one day. The new file must fit on every
+ *      day it could be uploaded. The older "in process from upload until
+ *      settlement" total (section 26's "outstanding at any time") is still
+ *      computed and shown as information (inProcessTotal), never as a block.
+ *   4. Monthly: LIMIT_MONTHLY_CENTS ($100,000). Brenda: "the monthly is by
+ *      calendar month" (Email 3 answer 2), which does not say whether the
+ *      upload or the effective date picks the month, so a file still counts
+ *      in BOTH its upload month and its effective month (D-3).
  *
  * Settlement date: the agreement says the Effective Entry Date is the date
  * "on which it intends an Entry to be posted and settled", and must be a
@@ -67,6 +74,8 @@ export type LedgerFileForLimits = {
   effectiveDate: string; // YYYY-MM-DD
   settlementDate: string | null;
   totalCents: number;
+  /** R41 S12: the Pacific day the upload to Timberland was RECORDED (from uploaded_at; the upload was on or before it), or null/absent. */
+  uploadedDay?: string | null;
 };
 
 /** The file about to be released. */
@@ -148,7 +157,30 @@ export function inProcessOn(f: LedgerFileForLimits, day: string): boolean {
   return counts(f) && f.fileDate <= day && day <= settlementOf(f);
 }
 
-/** Does a ledger file count in `month` (its upload month OR its effective month, Q3 strict)? */
+/**
+ * R41 S12 (D-3): the Pacific days a file counts toward the daily limit:
+ * every day it could have been uploaded. Release day through the banking day
+ * before it settles, cut short at the recorded upload day when there is one
+ * (the upload happened on or before the day it was recorded). Never fewer
+ * than the release day itself.
+ */
+export function uploadDaysOf(f: { fileDate: string; effectiveDate: string; settlementDate: string | null; uploadedDay?: string | null }): string[] {
+  let last = subBankingDays(settlementOf(f), 1);
+  if (f.uploadedDay && f.uploadedDay < last) last = f.uploadedDay;
+  return daysFromTo(f.fileDate, last > f.fileDate ? last : f.fileDate);
+}
+
+/** Does a ledger file count toward the daily limit on `day` (its upload day, or a day it could still be uploaded)? */
+export function countsOnUploadDay(f: LedgerFileForLimits, day: string): boolean {
+  return counts(f) && uploadDaysOf(f).includes(day);
+}
+
+/** The daily-limit total for `day`: files uploaded (or that could still be uploaded) that day. */
+export function uploadDayTotal(ledger: readonly LedgerFileForLimits[], day: string): number {
+  return ledger.reduce((s, f) => (countsOnUploadDay(f, day) ? s + f.totalCents : s), 0);
+}
+
+/** Does a ledger file count in `month` (its upload month OR its effective month: "calendar month", basis unstated)? */
 export function countsInMonth(f: { kind: LimitKind; status?: string; fileDate: string; effectiveDate: string }, month: string): boolean {
   return counts(f) && (monthKey(f.fileDate) === month || monthKey(f.effectiveDate) === month);
 }
@@ -184,21 +216,20 @@ function check(newFile: NewFileForLimits, ledger: readonly LedgerFileForLimits[]
     blocks.push({ rule: "file", message: `This file is ${usd(newFile.totalCents)}, over Timberland's ${usd(LIMIT_PER_FILE_CENTS)} per-file limit (Schedule C, ACH Batch).` });
   }
 
-  const settle = settlementOf({ effectiveDate: newFile.effectiveDate, settlementDate: null });
   let worstDay: { day: string; total: number } | null = null;
-  for (const day of daysFromTo(newFile.fileDate, settle)) {
-    const total = inProcessTotal(live, day) + newFile.totalCents;
+  for (const day of uploadDaysOf({ fileDate: newFile.fileDate, effectiveDate: newFile.effectiveDate, settlementDate: null })) {
+    const total = uploadDayTotal(live, day) + newFile.totalCents;
     if (!worstDay || total > worstDay.total) worstDay = { day, total };
   }
   if (worstDay && worstDay.total > LIMIT_DAILY_IN_PROCESS_CENTS) {
     blocks.push({
       rule: "daily",
-      message: `On ${friendlyDate(worstDay.day)} this file would put ${usd(worstDay.total)} in process at Timberland, over the ${usd(LIMIT_DAILY_IN_PROCESS_CENTS)} daily limit (Schedule C; section 26 counts files from upload until they settle).`,
+      message: `If uploaded on ${friendlyDate(worstDay.day)}, this file would make ${usd(worstDay.total)} uploaded to Timberland that day, over the ${usd(LIMIT_DAILY_IN_PROCESS_CENTS)} daily limit (Schedule C; Timberland counts it by the day of the upload). Files not yet recorded as uploaded count on every day they could still be uploaded.`,
     });
   } else if (worstDay && atOrOver80(worstDay.total, LIMIT_DAILY_IN_PROCESS_CENTS)) {
     warnings.push({
       rule: "daily",
-      message: `On ${friendlyDate(worstDay.day)} this file puts ${usd(worstDay.total)} in process, ${WARN_AT_PERCENT}% or more of Timberland's ${usd(LIMIT_DAILY_IN_PROCESS_CENTS)} daily limit. Only ${usd(LIMIT_DAILY_IN_PROCESS_CENTS - worstDay.total)} of room is left that day.`,
+      message: `If uploaded on ${friendlyDate(worstDay.day)}, this file makes ${usd(worstDay.total)} uploaded that day, ${WARN_AT_PERCENT}% or more of Timberland's ${usd(LIMIT_DAILY_IN_PROCESS_CENTS)} daily limit. Only ${usd(LIMIT_DAILY_IN_PROCESS_CENTS - worstDay.total)} of room is left that day.`,
     });
   }
 
@@ -208,7 +239,7 @@ function check(newFile: NewFileForLimits, ledger: readonly LedgerFileForLimits[]
     if (total > LIMIT_MONTHLY_CENTS) {
       blocks.push({
         rule: "monthly",
-        message: `${friendlyMonth(m)} would reach ${usd(total)}, over Timberland's ${usd(LIMIT_MONTHLY_CENTS)} monthly limit (Schedule C). Until Timberland answers question Q3, a file counts in both its upload month and its effective month.`,
+        message: `${friendlyMonth(m)} would reach ${usd(total)}, over Timberland's ${usd(LIMIT_MONTHLY_CENTS)} monthly limit (Schedule C). Timberland counts by calendar month without saying whether the upload or the effective date picks the month, so a file counts in both its upload month and its effective month.`,
       });
     } else if (atOrOver80(total, LIMIT_MONTHLY_CENTS)) {
       warnings.push({
@@ -284,21 +315,28 @@ export function ledgerWindowStart(fileDate: string): string {
   return back < first ? back : first;
 }
 
-/** "Timberland room left" for today and this month. */
+/**
+ * "Timberland room left" for today and this month. todayInProcessCents and
+ * todayRoomCents are the DAILY LIMIT numbers, by upload day (R41 S12, D-3;
+ * the field names are kept from S4). todayInFlightCents is information only:
+ * everything released and not yet settled.
+ */
 export function roomLeft(ledger: readonly LedgerFileForLimits[], today: string): {
   todayInProcessCents: number;
   todayRoomCents: number;
+  todayInFlightCents: number;
   monthUsedCents: number;
   monthRoomCents: number;
   month: string;
   todayWarn: boolean;
   monthWarn: boolean;
 } {
-  const t = inProcessTotal(ledger, today);
+  const t = uploadDayTotal(ledger, today);
   const m = monthTotal(ledger, monthKey(today));
   return {
     todayInProcessCents: t,
     todayRoomCents: Math.max(0, LIMIT_DAILY_IN_PROCESS_CENTS - t),
+    todayInFlightCents: inProcessTotal(ledger, today),
     monthUsedCents: m,
     monthRoomCents: Math.max(0, LIMIT_MONTHLY_CENTS - m),
     month: monthKey(today),
@@ -366,29 +404,38 @@ export function __runTimberlandLimitsCoreTests(): { passed: number; failed: numb
   const f1 = ev(nf({ totalCents: 5_000_001, entryAmountsCents: [2_500_000, 2_500_001] }));
   ok(!f1.ok && f1.blocks.some((b) => b.rule === "file") && !f1.blocks.some((b) => b.rule === "entry"), "file $50,000.01 blocked by the file rule only");
 
-  // daily: two overlapping $30k files -> the second refused
+  // daily (R41 S12, D-3): by upload day. Row a: released Mon Oct 19, effective Wed Oct 21 -> could be uploaded Mon or Tue.
   const a = row({ totalCents: 3_000_000 });
+  ok(uploadDaysOf(a).join() === "2026-10-19,2026-10-20", "not yet uploaded: counts on each day it could still be uploaded (release day through the day before settlement)");
   const d1 = ev(nf({ totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [a]);
-  ok(!d1.ok && d1.blocks.length === 1 && d1.blocks[0]!.rule === "daily", "overlapping $30k + $30k: the second is refused (daily)");
-  ok(/Mon Oct 19, 2026/.test(d1.blocks[0]!.message) && /\$60,000\.00/.test(d1.blocks[0]!.message), "daily refusal names the day and the total");
-  // non-overlapping: first settles Oct 21; a new file uploaded Oct 22 is clear
-  ok(ev(nf({ fileDate: "2026-10-22", effectiveDate: "2026-10-26", totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [a]).ok, "non-overlapping $30k files: both allowed");
-  // settled file stops counting the DAY AFTER settlement: uploaded on the settlement day still overlaps
-  ok(!ev(nf({ fileDate: "2026-10-21", effectiveDate: "2026-10-23", totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [a]).ok, "a file still counts on its settlement day");
-  ok(inProcessOn(a, "2026-10-21") && !inProcessOn(a, "2026-10-22"), "in process through settlement, not the day after");
-  ok(!inProcessOn(a, "2026-10-18"), "not in process before its upload day");
-  // stored settlement date wins
+  ok(!d1.ok && d1.blocks.length === 1 && d1.blocks[0]!.rule === "daily", "two $30k files that could go up the same day: the second is refused (daily)");
+  ok(/Mon Oct 19, 2026/.test(d1.blocks[0]!.message) && /\$60,000\.00/.test(d1.blocks[0]!.message) && /day of the upload/.test(d1.blocks[0]!.message), "daily refusal names the upload day, the total and the rule");
+  // once a's upload is RECORDED, it counts on that day only
+  const aUp = row({ totalCents: 3_000_000, uploadedDay: "2026-10-19" });
+  ok(uploadDaysOf(aUp).join() === "2026-10-19", "released and recorded as uploaded the same day: exactly that day");
+  ok(uploadDaysOf(row({ fileDate: "2026-10-16", effectiveDate: "2026-10-21", uploadedDay: "2026-10-19" })).join() === "2026-10-16,2026-10-17,2026-10-18,2026-10-19", "recorded Mon after a Fri release: Fri through Mon (it went up on or before the day it was recorded)");
+  ok(uploadDaysOf(row({ fileDate: "2026-10-19", effectiveDate: "2026-10-21", uploadedDay: "2026-10-22" })).join() === "2026-10-19,2026-10-20", "recorded after settlement: the window still ends the banking day before settlement");
+  ok(ev(nf({ fileDate: "2026-10-20", effectiveDate: "2026-10-22", totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [aUp]).ok, "a uploaded Mon: a $30k file uploaded Tue is allowed, though a is still in flight (D-3)");
+  ok(!ev(nf({ fileDate: "2026-10-20", effectiveDate: "2026-10-22", totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [a]).ok, "a NOT recorded as uploaded: it could still go up Tue, so Tue's $30k is refused (no guessing)");
+  ok(ev(nf({ fileDate: "2026-10-21", effectiveDate: "2026-10-23", totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [a]).ok, "on a's settlement day a can no longer be uploaded: a new $30k file fits");
+  ok(inProcessOn(a, "2026-10-21") && inProcessTotal([a], "2026-10-21") === 3_000_000 && uploadDayTotal([a], "2026-10-21") === 0, "in flight (information) vs the daily limit total (upload day)");
+  ok(inProcessOn(a, "2026-10-21") && !inProcessOn(a, "2026-10-22") && !inProcessOn(a, "2026-10-18"), "in flight through settlement, not before release or after settlement");
+  // stored settlement date and non-banking effective dates
   const late = row({ totalCents: 3_000_000, settlementDate: "2026-10-23" });
   ok(inProcessOn(late, "2026-10-23") && !inProcessOn(late, "2026-10-24"), "a recorded settlement date is used");
-  // a non-banking effective date settles the next banking day
+  ok(uploadDaysOf(late).at(-1) === "2026-10-22", "a later recorded settlement keeps the possible upload window open to the day before");
   ok(settlementOf({ effectiveDate: "2026-10-24", settlementDate: null }) === "2026-10-26", "Saturday effective -> settles Monday");
   ok(settlementOf({ effectiveDate: "2026-11-11", settlementDate: null }) === "2026-11-12", "Veterans Day effective -> settles the next banking day");
+  ok(uploadDaysOf(row({ fileDate: "2026-10-22", effectiveDate: "2026-10-24" })).join() === "2026-10-22,2026-10-23", "Sat effective settles Mon: the last possible upload is Fri, the banking day before (a Saturday upload is a Tuesday effective, Email 3 answer 8)");
+  ok(uploadDaysOf(row({ fileDate: "2026-10-16", effectiveDate: "2026-10-21" })).join() === "2026-10-16,2026-10-17,2026-10-18,2026-10-19,2026-10-20", "the weekend between release and the last banking day is counted too (strict)");
+  ok(uploadDaysOf(row({ fileDate: "2026-10-21", effectiveDate: "2026-10-21" })).join() === "2026-10-21", "never fewer than the release day itself");
   // exactly at the daily limit allowed, one cent over refused
   ok(ev(nf({ totalCents: 2_000_000, entryAmountsCents: [2_000_000] }), [a]).ok, "$30k + $20k = $50,000.00 allowed");
   ok(!ev(nf({ totalCents: 2_000_001, entryAmountsCents: [2_000_001] }), [a]).ok, "$30k + $20,000.01 refused");
-  // the whole window is checked, not just the upload day
-  const later = row({ fileDate: "2026-10-21", effectiveDate: "2026-10-23", totalCents: 3_000_000 });
-  ok(!ev(nf({ totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [later]).ok, "a file released later that overlaps the window's end is counted");
+  // every day the new file could be uploaded is checked, not just today
+  const later = row({ fileDate: "2026-10-20", effectiveDate: "2026-10-22", totalCents: 3_000_000 });
+  ok(!ev(nf({ totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [later]).ok, "a file released tomorrow that could go up the same day as this one is counted");
+  ok(ev(nf({ totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [row({ fileDate: "2026-10-21", effectiveDate: "2026-10-23", totalCents: 3_000_000 })]).ok, "a file whose upload window starts after this one's ends is not counted");
 
   // voided and prenote excluded; test credits count
   ok(ev(nf({ totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [row({ totalCents: 3_000_000, status: "voided" })]).ok, "a voided file is excluded");
@@ -411,15 +458,15 @@ export function __runTimberlandLimitsCoreTests(): { passed: number; failed: numb
 
   // gold warning at 80%
   const w1 = ev(nf({ totalCents: 1_000_000, entryAmountsCents: [1_000_000] }), [a]);
-  ok(w1.ok && w1.warnings.some((w) => w.rule === "daily"), "$40k in process (80%) warns");
+  ok(w1.ok && w1.warnings.some((w) => w.rule === "daily"), "$40k uploaded that day (80%) warns");
   ok(ev(nf({ totalCents: 999_999, entryAmountsCents: [999_999] }), [a]).warnings.length === 0, "$39,999.99 (under 80%) does not warn");
   const w2 = ev(nf({ fileDate: "2026-10-26", effectiveDate: "2026-10-28", totalCents: 100, entryAmountsCents: [100] }), [row({ fileDate: "2026-10-01", effectiveDate: "2026-10-05", totalCents: 4_000_000 }), row({ fileDate: "2026-10-12", effectiveDate: "2026-10-14", totalCents: 3_999_900 })]);
   ok(w2.ok && w2.warnings.some((w) => w.rule === "monthly"), "$80,000 in a month warns");
 
   // earliest fit
-  ok(d1.earliestFit !== null && d1.earliestFit.uploadDate === "2026-10-22", "earliest fit: the banking day after the other file settles");
-  ok(d1.earliestFit !== null && d1.earliestFit.effectiveDate === addBankingDays("2026-10-22", CREDIT_LEAD_BANKING_DAYS), "earliest fit moves the effective date to keep the lead time");
-  ok(/It would fit if uploaded on Thu Oct 22, 2026/.test(limitRefusalMessage(d1)), "the refusal names the earliest fit");
+  ok(d1.earliestFit !== null && d1.earliestFit.uploadDate === "2026-10-21", "earliest fit: the first day the other file can no longer be uploaded (its settlement day)");
+  ok(d1.earliestFit !== null && d1.earliestFit.effectiveDate === addBankingDays("2026-10-21", CREDIT_LEAD_BANKING_DAYS), "earliest fit moves the effective date to keep the lead time");
+  ok(/It would fit if uploaded on Wed Oct 21, 2026/.test(limitRefusalMessage(d1)), "the refusal names the earliest fit");
   const farEff = ev(nf({ effectiveDate: "2026-10-30", totalCents: 3_000_000, entryAmountsCents: [3_000_000] }), [row({ fileDate: "2026-10-19", effectiveDate: "2026-10-21", totalCents: 3_000_000 })]);
   ok(farEff.earliestFit !== null && farEff.earliestFit.effectiveDate === "2026-10-30", "earliest fit keeps a later effective date the user chose");
   const monthBlocked = ev(nf({ fileDate: "2026-10-26", effectiveDate: "2026-10-28", totalCents: 2_000_000, entryAmountsCents: [2_000_000] }), octFull);
@@ -438,6 +485,8 @@ export function __runTimberlandLimitsCoreTests(): { passed: number; failed: numb
   ok(friendlyMonth("2026-11") === "November 2026", "friendly month");
   const r = roomLeft([a, row({ totalCents: 37, kind: "micro_entry" })], "2026-10-20");
   ok(r.todayInProcessCents === 3_000_037 && r.todayRoomCents === 1_999_963 && r.monthRoomCents === 10_000_000 - 3_000_037, "room left today and this month");
+  const r2 = roomLeft([aUp], "2026-10-20");
+  ok(r2.todayInProcessCents === 0 && r2.todayInFlightCents === 3_000_000 && r2.todayRoomCents === 5_000_000, "room left: uploaded yesterday is in flight today (information) but uses none of today's daily limit");
   ok(roomLeft([row({ totalCents: 4_000_000 })], "2026-10-20").todayWarn, "room left warns at 80%");
   ok(roomLeft([], "2026-10-20").todayRoomCents === 5_000_000, "an empty ledger has all the room");
   const line = (amt: number) => "6" + "22" + "12100035" + "8" + "12345678901234567" + String(amt).padStart(10, "0") + "E".padEnd(15) + "NAME".padEnd(22) + "  " + "0" + "325170750000001";
@@ -457,6 +506,7 @@ export function __runTimberlandLimitsCoreTests(): { passed: number; failed: numb
   // and its effective date is inside the window read for a file released on the 13th.
   const sat = row({ fileDate: "2026-10-08", effectiveDate: "2026-10-10", totalCents: 1 });
   ok(settlementOf(sat) === "2026-10-13" && inProcessOn(sat, "2026-10-13") && sat.effectiveDate >= ledgerWindowStart("2026-10-13"), "window start covers a weekend + holiday settlement");
+  ok(uploadDaysOf(sat).join() === "2026-10-08,2026-10-09" && uploadDaysOf(sat).every((d) => d <= settlementOf(sat)), "possible upload days stop at the banking day before settlement (Columbus Day skipped) and never pass it");
 
   return { passed, failed };
 }

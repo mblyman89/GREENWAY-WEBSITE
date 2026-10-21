@@ -168,6 +168,13 @@ export function limitRowFrom(r: Record<string, unknown>): LedgerFileForLimits | 
   if (typeof r.effective_date !== "string" || !ISO_DAY.test(r.effective_date)) return null;
   const sd = r.settlement_date;
   if (sd !== null && sd !== undefined && (typeof sd !== "string" || !ISO_DAY.test(sd))) return null;
+  // R41 S12 (D-3): the recorded upload, as a Pacific day. Odd values refuse (never read as "not uploaded").
+  const ua = r.uploaded_at;
+  let uploadedDay: string | null = null;
+  if (ua !== null && ua !== undefined) {
+    if (typeof ua !== "string" || Number.isNaN(Date.parse(ua))) return null;
+    uploadedDay = pacificDayKey(new Date(ua));
+  }
   return {
     id: r.id,
     kind: r.kind as LedgerFileForLimits["kind"],
@@ -176,6 +183,7 @@ export function limitRowFrom(r: Record<string, unknown>): LedgerFileForLimits | 
     effectiveDate: r.effective_date,
     settlementDate: typeof sd === "string" ? sd : null,
     totalCents: cents,
+    uploadedDay,
   };
 }
 
@@ -188,7 +196,7 @@ export async function readLedgerForLimits(fileDate: string): Promise<{ ok: true;
   const start = ledgerWindowStart(fileDate);
   const { data, error } = await createSupabaseAdminClient()
     .from("ach_files")
-    .select("id, kind, status, file_date, effective_date, settlement_date, total_cents")
+    .select("id, kind, status, file_date, effective_date, settlement_date, total_cents, uploaded_at")
     .neq("status", "voided")
     .or(`file_date.gte.${start},effective_date.gte.${start},settlement_date.gte.${start}`)
     .limit(LIMITS_READ_CAP + 1);
@@ -203,7 +211,7 @@ export async function readLedgerForLimits(fileDate: string): Promise<{ ok: true;
   return { ok: true, ledger };
 }
 
-/** The "Timberland room left" bar: today's in-process total and this month's, from the same read the release check uses. */
+/** The "Timberland room left" bar: today's daily-limit total (by upload day, R41 S12), in-flight (information) and this month's, from the same read the release check uses. */
 export async function loadTimberlandRoomLeft(today: string): Promise<{ ok: true; room: ReturnType<typeof roomLeft> } | Fail> {
   const r = await readLedgerForLimits(today);
   if (!r.ok) return { ok: false, error: "Timberland room left could not be read (never shown as all clear). Releases are still checked and refused if over a limit." };

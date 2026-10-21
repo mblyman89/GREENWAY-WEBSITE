@@ -98,7 +98,7 @@ const posts = () => st.db.log.filter((r: FakeRequest) => r.method !== "GET" && !
 
 let rowSeq = 0;
 /** An ach_files row already in the ledger (every column the limit read uses). */
-function existing(o: { kind?: string; status?: string; file_date: string; effective_date: string; settlement_date?: string | null; total_cents: number }) {
+function existing(o: { kind?: string; status?: string; file_date: string; effective_date: string; settlement_date?: string | null; total_cents: number; uploaded_at?: string | null }) {
   rowSeq += 1;
   files().push({
     id: `00000000-0000-4000-8000-${String(rowSeq).padStart(12, "0")}`,
@@ -110,6 +110,7 @@ function existing(o: { kind?: string; status?: string; file_date: string; effect
     effective_date: o.effective_date,
     settlement_date: o.settlement_date ?? null,
     total_cents: o.total_cents,
+    uploaded_at: o.uploaded_at ?? null,
     sha256: `sha-${rowSeq}`,
     entry_set_hmac: `hmac-${rowSeq}`,
   });
@@ -177,45 +178,58 @@ describe("per-file and per-entry limits: $49,999.99 / $50,000.00 / $50,000.01", 
   });
 });
 
-describe("daily in-process limit (section 26: outstanding at any time)", () => {
-  it("two overlapping files of $30k: the second is refused and told the earliest date it fits", async () => {
+describe("daily limit by upload day (R41 S12: Email 3 answer 2, owner decision D-3)", () => {
+  it("two $30k files released the same day: the second is refused and told the earliest date it fits", async () => {
     const a = await vendor("a", [3_000_000]);
     expect(a.ok).toBe(true);
     const b = await vendor("b", [3_000_001]);
     expect(b.ok).toBe(false);
     const msg = b.ok ? "" : b.error;
-    expect(msg).toContain(`On ${limits.friendlyDate(TODAY)} this file would put $60,000.01 in process at Timberland, over the $50,000.00 daily limit`);
-    // The first file settles Wed Oct 7; the second fits from Thu Oct 8. Two banking days on is
-    // Mon Oct 12 = Columbus Day (FRB holiday), so the effective date is Tue Oct 13.
-    expect(msg).toContain(`It would fit if uploaded on ${limits.friendlyDate("2026-10-08")} with effective date ${limits.friendlyDate("2026-10-13")}.`);
+    expect(msg).toContain(`If uploaded on ${limits.friendlyDate(TODAY)}, this file would make $60,000.01 uploaded to Timberland that day, over the $50,000.00 daily limit`);
+    expect(msg).toContain("Timberland counts it by the day of the upload");
+    // The first file (effective Wed Oct 7) could still go up Mon or Tue; from Wed Oct 7 it cannot.
+    // Two banking days after Wed Oct 7 is Fri Oct 9.
+    expect(msg).toContain(`It would fit if uploaded on ${limits.friendlyDate("2026-10-07")} with effective date ${limits.friendlyDate("2026-10-09")}.`);
     expect(msg).toContain(`it can cover an upload on ${limits.friendlyDate("2026-10-07")} or later`);
     expect(files()).toHaveLength(1);
     expect(posts()).toHaveLength(1);
   });
 
-  it("non-overlapping files of $30k: both allowed (the earlier one settled before today)", async () => {
-    existing({ file_date: "2026-09-30", effective_date: "2026-10-02", total_cents: 3_000_000 });
+  it("a $30k file uploaded on Friday and still in flight today does NOT use today's daily limit", async () => {
+    existing({ file_date: "2026-10-02", effective_date: "2026-10-06", total_cents: 3_000_000, status: "uploaded", uploaded_at: "2026-10-02T20:00:00Z" });
     const r = await vendor("b", [3_000_000]);
     expect(r.ok).toBe(true);
   });
 
-  it("a file counts ON its settlement day and stops the day after", async () => {
-    existing({ file_date: "2026-10-01", effective_date: "2026-10-05", total_cents: 3_000_000 }); // settles today
-    expect((await vendor("b", [3_000_000])).ok).toBe(false);
-    files()[0].effective_date = "2026-10-02"; // settled Friday
-    expect((await vendor("c", [3_000_000])).ok).toBe(true);
+  it("the same file released Friday but NOT recorded as uploaded could still go up today: refused (no guessing)", async () => {
+    existing({ file_date: "2026-10-02", effective_date: "2026-10-06", total_cents: 3_000_000 });
+    const r = await vendor("b", [3_000_000]);
+    expect(r.ok === false && r.error).toMatch(/daily limit/);
   });
 
-  it("a stored settlement_date wins over the effective date (later settlement keeps it in process)", async () => {
+  it("uploaded_at is read as a Pacific day: 6:30 pm Pacific Friday (01:30Z Saturday) is still Friday", async () => {
+    existing({ file_date: "2026-10-02", effective_date: "2026-10-06", total_cents: 3_000_000, status: "uploaded", uploaded_at: "2026-10-03T01:30:00Z" });
+    expect((await vendor("b", [3_000_000])).ok).toBe(true);
+  });
+
+  it("a file recorded as uploaded TODAY counts today", async () => {
+    existing({ file_date: TODAY, effective_date: EFFECTIVE, total_cents: 3_000_000, status: "uploaded", uploaded_at: NOW.toISOString() });
+    expect((await vendor("b", [3_000_000])).ok).toBe(false);
+  });
+
+  it("a file settling today can no longer be uploaded: it does not count", async () => {
+    existing({ file_date: "2026-10-01", effective_date: "2026-10-05", total_cents: 3_000_000 });
+    expect((await vendor("b", [3_000_000])).ok).toBe(true);
+  });
+
+  it("a stored settlement_date wins over the effective date (a later settlement keeps the upload window open)", async () => {
     existing({ file_date: "2026-10-01", effective_date: "2026-10-02", settlement_date: "2026-10-06", total_cents: 3_000_000 });
     expect((await vendor("b", [3_000_000])).ok).toBe(false);
   });
 
-  it("a Saturday effective date settles the NEXT banking day: effective Sat Oct 3 settles Mon Oct 5 (today) and still counts", async () => {
+  it("a Saturday effective date settles Mon Oct 5 (today): its last possible upload day was Friday, so it does not count today", async () => {
     existing({ file_date: "2026-10-01", effective_date: "2026-10-03", total_cents: 3_000_000 });
-    expect((await vendor("b", [3_000_000])).ok).toBe(false);
-    files()[0].effective_date = "2026-10-02"; // Friday: settled before today
-    expect((await vendor("c", [3_000_000])).ok).toBe(true);
+    expect((await vendor("b", [3_000_000])).ok).toBe(true);
   });
 
   it("a voided file and a prenote never count", async () => {
@@ -228,7 +242,7 @@ describe("daily in-process limit (section 26: outstanding at any time)", () => {
   it("a test credit (micro_entry) DOES count: one cent in process makes $50,000.00 too much", async () => {
     existing({ kind: "micro_entry", file_date: TODAY, effective_date: EFFECTIVE, total_cents: 1 });
     const r = await vendor("b", [5_000_000]);
-    expect(r.ok === false && r.error).toContain("$50,000.01 in process");
+    expect(r.ok === false && r.error).toContain("$50,000.01 uploaded to Timberland that day");
   });
 
   it("the payroll path is checked too: refused before the database function is called; the run stays a draft", async () => {
@@ -240,7 +254,7 @@ describe("daily in-process limit (section 26: outstanding at any time)", () => {
   });
 });
 
-describe("monthly limit (Q3 strict: upload month and effective month)", () => {
+describe("monthly limit (calendar month, basis unstated: upload month and effective month)", () => {
   it("$80k already this month + $30k: refused by the monthly limit, naming October 2026", async () => {
     existing({ file_date: "2026-10-01", effective_date: "2026-10-02", total_cents: 4_000_000 });
     existing({ file_date: "2026-10-02", effective_date: "2026-10-02", total_cents: 4_000_000 });
@@ -299,9 +313,12 @@ describe("fail closed: no partial or guessed totals", () => {
     expect(await vendor("b", [100])).toEqual({ ok: false, error: ledger.LIMITS_READ_FAILED });
   });
 
-  it("limitRowFrom: digit-string bigint accepted; null, negative, voided, unknown kind and bad dates refused", () => {
-    const good = { id: "x", kind: "vendor", status: "uploaded", file_date: TODAY, effective_date: EFFECTIVE, settlement_date: null, total_cents: "123" };
+  it("limitRowFrom: digit-string bigint accepted; null, negative, voided, unknown kind, bad dates and a bad uploaded_at refused", () => {
+    const good = { id: "x", kind: "vendor", status: "uploaded", file_date: TODAY, effective_date: EFFECTIVE, settlement_date: null, total_cents: "123", uploaded_at: "2026-10-05T23:30:00Z" };
     expect(ledger.limitRowFrom(good)?.totalCents).toBe(123);
+    expect(ledger.limitRowFrom(good)?.uploadedDay).toBe("2026-10-05");
+    expect(ledger.limitRowFrom({ ...good, uploaded_at: "2026-10-06T06:59:00Z" })?.uploadedDay).toBe("2026-10-05"); // 11:59 pm PDT
+    expect(ledger.limitRowFrom({ ...good, uploaded_at: null })?.uploadedDay).toBeNull();
     for (const bad of [
       { total_cents: null },
       { total_cents: -1 },
@@ -312,6 +329,8 @@ describe("fail closed: no partial or guessed totals", () => {
       { effective_date: null },
       { settlement_date: "soon" },
       { id: null },
+      { uploaded_at: "yesterday" },
+      { uploaded_at: 12345 },
     ]) {
       expect(ledger.limitRowFrom({ ...good, ...bad }), JSON.stringify(bad)).toBeNull();
     }
@@ -324,7 +343,7 @@ describe("fail closed: no partial or guessed totals", () => {
     const start = limits.ledgerWindowStart(TODAY);
     expect(get.url.searchParams.get("or")).toBe(`(file_date.gte.${start},effective_date.gte.${start},settlement_date.gte.${start})`);
     expect(get.url.searchParams.get("limit")).toBe(String(ledger.LIMITS_READ_CAP + 1));
-    expect(get.url.searchParams.get("select")).toBe("id,kind,status,file_date,effective_date,settlement_date,total_cents");
+    expect(get.url.searchParams.get("select")).toBe("id,kind,status,file_date,effective_date,settlement_date,total_cents,uploaded_at");
   });
 
   it("the modifier race: a $30k file that took our letter first is seen on the retry, and ours is refused", async () => {
@@ -345,7 +364,7 @@ describe("fail closed: no partial or guessed totals", () => {
 });
 
 describe("room left (the bar's numbers come from the same read)", () => {
-  it("today's in-process and this month's totals, with room and the 80% flags", async () => {
+  it("today's daily-limit total (by upload day), in flight (information) and this month's totals, with room and the 80% flags", async () => {
     existing({ file_date: "2026-10-01", effective_date: "2026-10-02", total_cents: 2_000_000 });
     existing({ file_date: TODAY, effective_date: EFFECTIVE, total_cents: 4_000_000 });
     existing({ kind: "prenote", file_date: TODAY, effective_date: EFFECTIVE, total_cents: 0 });
@@ -353,6 +372,7 @@ describe("room left (the bar's numbers come from the same read)", () => {
     expect(r.ok && r.room).toEqual({
       todayInProcessCents: 4_000_000,
       todayRoomCents: 1_000_000,
+      todayInFlightCents: 4_000_000,
       monthUsedCents: 6_000_000,
       monthRoomCents: 4_000_000,
       month: "2026-10",
