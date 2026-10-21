@@ -69,7 +69,7 @@ export function timberlandPreview(originator: AchOriginator | null, now: Date, s
       f(fh, 14, 23, "Immediate Origin (1 + EIN)"),
       f(fh, 34, 34, "File ID Modifier (A for the first file of a day)"),
       f(fh, 41, 63, "Immediate Destination Name"),
-      f(fh, 64, 86, "Immediate Origin Name (full trade name until Q11 is answered)"),
+      f(fh, 64, 86, "Immediate Origin Name (Brenda: leave as Greenway)"),
     ],
     batchFields: [
       f(bh, 2, 4, "Service Class Code (220 = credits only, an unbalanced batch)"),
@@ -109,7 +109,7 @@ export function __runTimberlandPreviewCoreTests(): { passed: number; failed: num
     ok(pos(p.fileHeader, 4, 13) === " 325170754", "1-record 4-13 is blank + Timberland routing");
     ok(pos(p.fileHeader, 14, 23) === "1911234567", "1-record 14-23 is 1 + EIN");
     ok(pos(p.fileHeader, 34, 34) === "A", "1-record 34 is A");
-    ok(pos(p.fileHeader, 64, 86).trimEnd() === "GREENWAY MARIJUANA", "1-record 64-86 keeps the full trade name (Q11)");
+    ok(pos(p.fileHeader, 64, 86).trimEnd() === "GREENWAY MARIJUANA", "1-record 64-86 keeps the full trade name (Q11 answered: leave as Greenway)");
     ok(pos(p.batchHeader, 2, 4) === "220", "5-record SCC 220");
     ok(pos(p.batchHeader, 5, 20) === BATCH_COMPANY_NAME, "5-record 5-20 is Brenda's GREENWAY MARIJUA");
     ok(pos(p.batchHeader, 41, 50) === "1911234567", "5-record 41-50 is 1 + EIN");

@@ -45,12 +45,12 @@ function linkLands(link: string): { page: boolean; anchor: boolean } {
 }
 
 // ---------------------------------------------------------------- Q14 ----
-describe("Q14: PAYROLL batch discretionary data stays blank until Brenda answers", () => {
+describe("Q14 answered (Email 3 answer 12, not necessary): PAYROLL batch discretionary data stays blank", () => {
   const entries = [{ name: "PAT WORKER", routing: "021000021", accountNumber: "0012345678", accountType: "checking" as const, amountCents: 1000, idNumber: "E1" }];
   const base = { entries, originator: greenwayTestOriginator(), effectiveDate: new Date("2026-10-06T19:00:00Z"), createdAt: new Date("2026-10-05T17:00:00Z") };
   const batchHeader = (file: string) => file.split(/\r?\n/).find((l) => l.startsWith("5"))!;
 
-  it("the constant is blank (strict default)", () => {
+  it("the constant is blank (Brenda: not necessary)", () => {
     expect(PAYROLL_BATCH_DISCRETIONARY_DATA).toBe("");
   });
   it("a real PPD PAYROLL file has spaces in batch positions 21-40 and PAYROLL in 54-63", () => {
@@ -226,7 +226,7 @@ describe("help, concierge, test plan, roadmap", () => {
   });
   it("roadmap doc exists and lists S0..S8 with their PRs", () => {
     const r = read("docs/roadmap/R41-TIMBERLAND.md");
-    for (const pr of ["#1372", "#1373", "#1374", "#1375", "#1377", "#1378", "#1380", "#1381", "#1382", "#1383", "#1384"]) expect(r).toContain(pr);
+    for (const pr of ["#1372", "#1373", "#1374", "#1375", "#1377", "#1378", "#1380", "#1381", "#1382", "#1383", "#1384", "#1385"]) expect(r).toContain(pr);
     expect(r).toContain("82 FR 42597");
   });
 });

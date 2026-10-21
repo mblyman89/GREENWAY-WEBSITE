@@ -61,9 +61,9 @@ M = [
     ("afternoon-approved-too", DC, "if (f.status !== \"released\" && f.status !== \"uploaded\") continue;\n    const dl = latestUploadAndApproval(f.effectiveDate);\n    if (dl.day !== today ||", "const dl = latestUploadAndApproval(f.effectiveDate);\n    if (dl.day !== today ||"),
     # --- the store: the one choke point ---
     ("release-deadline-removed", LS, "  if (!deadline.ok) return { ok: false, error: `Timberland deadline: this file was NOT released. ${deadline.error}` };\n", ""),
-    ("open-cap-ignored", LS, "if (rows.length > OPEN_FILES_READ_CAP) return", "if (false) return"),
-    ("open-odd-row-skipped", LS, "if (!ok) return { ok: false, error: \"An ACH file row", "if (!ok) continue;\n    if (false) return { ok: false, error: \"An ACH file row"),
-    ("open-read-error-empty", LS, "  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };\n  const rows = (data ?? []) as Record<string, unknown>[];", "  const rows = (data ?? []) as Record<string, unknown>[];"),
+    ("open-cap-ignored", LS, "if (rows.length > OPEN_FILES_READ_CAP) return { ok: false, error: `More than ${OPEN_FILES_READ_CAP} files are waiting", "if (false) return { ok: false, error: `More than ${OPEN_FILES_READ_CAP} files are waiting"),
+    ("open-odd-row-skipped", LS, "if (!ok) return { ok: false, error: \"An ACH file row could not be read (missing", "if (!ok) continue;\n    if (false) return { ok: false, error: \"An ACH file row could not be read (missing"),
+    ("open-read-error-empty", LS, "    .order(\"effective_date\", { ascending: true })\n    .limit(OPEN_FILES_READ_CAP + 1);\n  if (error) return { ok: false, error: ledgerDbErrorMessage(error.message) };\n", "    .order(\"effective_date\", { ascending: true })\n    .limit(OPEN_FILES_READ_CAP + 1);\n"),
     # --- payroll ---
     ("payroll-uses-payday", PS, "const bankEffective = deadline.effective;", "const bankEffective = detail.run.pay_date;"),
     ("payroll-refusal-ignored", PS, "  if (!deadline.check.ok) return { ok: false, error: deadline.line };\n", ""),
