@@ -1092,6 +1092,50 @@ Branch `r6-4-integrator-api`. Part 18 rows 13-15. Roadmap R-1 groundwork; no mig
 - Then the R-1 dry-run switch.
 - U-78 (oversize status) and U-79 (Integrator ID format) close on the first PREprod call.
 
+## R6-5 — Keyless Gmail sign-in for the CCRS mailbox monitor (DONE in code, 2026-10-21)
+
+Branch `r6-5-gmail-keyless`. S-18a follow-up; no migration.
+
+**Why.** The owner tried option A (service-account key). Google's secure-by-default organisation policy `iam.disableServiceAccountKeyCreation` blocks key files in new organisations, and Google recommends Workload Identity Federation instead. The cron runs on **Vercel**, so the federation is Vercel to Google (not GitHub).
+
+**Built.**
+- `ccrs-mail-core.ts` (pure, 42 self-tests):
+  - mode `workload-identity`, selected by `GMAIL_WIF_SERVICE_ACCOUNT_EMAIL`, `GMAIL_WIF_PROJECT_NUMBER`, `GMAIL_WIF_POOL_ID`, `GMAIL_WIF_PROVIDER_ID`;
+  - checks: SA email shape, project NUMBER (digits), pool/provider IDs "4-32 characters ... [a-z0-9-]", no `gcp-` prefix (IAM REST reference);
+  - more than one sign-in set is refused; with nothing set, the panel names the four keyless variables;
+  - `stsExchangeBody`, `signJwtRequest` (the same DWD claims as option A: sub = mailbox, gmail.readonly, 1 hour);
+  - `decodeStsResponse` / `decodeSignJwtResponse`, which turn Google's refusals into the fix, including the exact principal to grant;
+  - `pickVercelOidcToken` (header, then `VERCEL_OIDC_TOKEN_FILE`, then `VERCEL_OIDC_TOKEN`, as @vercel/oidc 4.x).
+- `ccrs-mail-fetch.ts`: `readVercelOidcToken` (request context, no new package), then STS, then signJwt, then the unchanged oauth2 jwt-bearer step.
+- Panel text and `.env.example` updated (option K, recommended).
+
+**Tests.** `tests/compliance/r6-5-gmail-keyless.test.ts` (21) runs the whole chain against a fake Google. TS mutations **M461–M474** (14) are all killed.
+
+**Owner setup (one time, about 30 minutes plus up to 24 h for Google).**
+Values for Greenway:
+- team slug `michael-lymans-projects`;
+- project `greenway_website`;
+- issuer `https://oidc.vercel.com/michael-lymans-projects`;
+- audience `https://vercel.com/michael-lymans-projects`;
+- subject `owner:michael-lymans-projects:project:greenway_website:environment:production` (U-81).
+
+Steps:
+1. Vercel → project → Settings → Security → "Secure backend access with OIDC federation": ON, issuer mode **Team**.
+2. Google Cloud console: create or choose a project. Turn on the **Gmail API** and the **IAM Service Account Credentials API**.
+3. IAM & Admin → Workload Identity Federation → Create pool `vercel`. Add an OIDC provider `vercel` with:
+   - the issuer above;
+   - Allowed audiences = the audience above;
+   - mapping `google.subject` = `assertion.sub`.
+4. IAM & Admin → Service Accounts → create `ccrs-mail`. Grant no project roles and create **no key**. Note its email and its numeric **Unique ID** (OAuth 2 Client ID).
+5. On that service account → Permissions → Grant access to principal `principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/vercel/subject/<subject above>`, with the role **Service Account Token Creator**.
+6. Workspace Admin console → Security → Access and data control → API controls → Domain-wide delegation → Add new: Client ID = the Unique ID, scope `https://www.googleapis.com/auth/gmail.readonly`. Google says this "might take up to 24 hours".
+7. Vercel → Environment Variables (Production): the four `GMAIL_WIF_*` values. Delete any `GMAIL_SA_*` / `GMAIL_OAUTH_*`. Redeploy.
+8. Admin → Compliance → CCRS → "Check the mailbox now". Any refusal is printed with its fix.
+
+**Remaining.**
+- U-80: the first real success proves the chain.
+- U-81: confirm the issuer mode.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

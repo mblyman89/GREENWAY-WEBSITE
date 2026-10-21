@@ -81,7 +81,10 @@ export const MAX_ATTACHMENT_BYTES = 8_000_000;
 /** CSVs downloaded per message. Every real error email carried one; more are named as skipped for a human. */
 export const MAX_CSV_PER_MESSAGE = 5;
 
-export type MailAuthMode = "service-account" | "oauth-refresh";
+export type MailAuthMode = "service-account" | "oauth-refresh" | "workload-identity";
+export const MAIL_AUTH_MODES: readonly MailAuthMode[] = ["service-account", "oauth-refresh", "workload-identity"];
+/** R6-5: keyless sign-in. Vercel's OIDC token -> Workload Identity Federation -> the service account signs the DWD JWT (no key file). */
+export type WorkloadIdentityConfig = { serviceAccountEmail: string; projectNumber: string; poolId: string; providerId: string };
 export type MailConfig =
   | {
       configured: true;
@@ -90,6 +93,7 @@ export type MailConfig =
       lookbackHours: number;
       serviceAccount?: { clientEmail: string; privateKey: string };
       oauth?: { clientId: string; clientSecret: string; refreshToken: string };
+      workloadIdentity?: WorkloadIdentityConfig;
     }
   | { configured: false; mailbox: string; missing: string[]; problem: string | null };
 
@@ -110,10 +114,31 @@ export function mailConfigFromEnv(env: Readonly<Record<string, string | undefine
   }
   const sa = { clientEmail: v("GMAIL_SA_CLIENT_EMAIL"), privateKey: v("GMAIL_SA_PRIVATE_KEY").replace(/\\n/g, "\n") };
   const oa = { clientId: v("GMAIL_OAUTH_CLIENT_ID"), clientSecret: v("GMAIL_OAUTH_CLIENT_SECRET"), refreshToken: v("GMAIL_OAUTH_REFRESH_TOKEN") };
+  const wi: WorkloadIdentityConfig = {
+    serviceAccountEmail: v("GMAIL_WIF_SERVICE_ACCOUNT_EMAIL").toLowerCase(),
+    projectNumber: v("GMAIL_WIF_PROJECT_NUMBER"),
+    poolId: v("GMAIL_WIF_POOL_ID"),
+    providerId: v("GMAIL_WIF_PROVIDER_ID"),
+  };
   const saAny = !!(sa.clientEmail || sa.privateKey);
   const oaAny = !!(oa.clientId || oa.clientSecret || oa.refreshToken);
-  if (saAny && oaAny) {
-    return { configured: false, mailbox, missing: [], problem: "Both the service-account and the OAuth variables are set. Keep one set only." };
+  const wiAny = !!(wi.serviceAccountEmail || wi.projectNumber || wi.poolId || wi.providerId);
+  if ([saAny, oaAny, wiAny].filter(Boolean).length > 1) {
+    const sets = [saAny && "service-account (GMAIL_SA_*)", oaAny && "OAuth (GMAIL_OAUTH_*)", wiAny && "keyless (GMAIL_WIF_*)"].filter(Boolean) as string[];
+    const head = sets.length === 2 ? `Both the ${sets[0]} and the ${sets[1]}` : `The ${sets.join(", ")}`;
+    return { configured: false, mailbox, missing: [], problem: `${head} variables are set. Keep one set only.` };
+  }
+  if (wiAny) {
+    const missing = [
+      !wi.serviceAccountEmail && "GMAIL_WIF_SERVICE_ACCOUNT_EMAIL",
+      !wi.projectNumber && "GMAIL_WIF_PROJECT_NUMBER",
+      !wi.poolId && "GMAIL_WIF_POOL_ID",
+      !wi.providerId && "GMAIL_WIF_PROVIDER_ID",
+    ].filter(Boolean) as string[];
+    if (missing.length) return { configured: false, mailbox, missing, problem: null };
+    const problem = workloadIdentityProblem(wi);
+    if (problem) return { configured: false, mailbox, missing: [], problem };
+    return { configured: true, mode: "workload-identity", mailbox, lookbackHours, workloadIdentity: wi };
   }
   if (saAny) {
     const missing = [!sa.clientEmail && "GMAIL_SA_CLIENT_EMAIL", !sa.privateKey && "GMAIL_SA_PRIVATE_KEY"].filter(Boolean) as string[];
@@ -130,7 +155,139 @@ export function mailConfigFromEnv(env: Readonly<Record<string, string | undefine
     if (missing.length) return { configured: false, mailbox, missing, problem: null };
     return { configured: true, mode: "oauth-refresh", mailbox, lookbackHours, oauth: oa };
   }
-  return { configured: false, mailbox, missing: ["GMAIL_SA_CLIENT_EMAIL", "GMAIL_SA_PRIVATE_KEY"], problem: null };
+  // Nothing set: name the recommended (keyless) way. New Google organisations block key files.
+  return { configured: false, mailbox, missing: [...WIF_VARS], problem: null };
+}
+
+export const WIF_VARS = ["GMAIL_WIF_SERVICE_ACCOUNT_EMAIL", "GMAIL_WIF_PROJECT_NUMBER", "GMAIL_WIF_POOL_ID", "GMAIL_WIF_PROVIDER_ID"] as const;
+
+/* ------------------------------------------------------------------ *
+ * R6-5 keyless sign-in (Workload Identity Federation + domain-wide delegation).
+ *
+ * Why: Google's "secure by default" organisation policy
+ * iam.disableServiceAccountKeyCreation blocks key files in new organisations,
+ * so option A's GMAIL_SA_PRIVATE_KEY cannot be made. No key is needed:
+ *
+ *   1. Vercel gives each function run a short-lived OIDC token
+ *      (iss https://oidc.vercel.com/<team>, aud https://vercel.com/<team>,
+ *      sub owner:<team>:project:<project>:environment:<env>; vercel.com/docs/oidc/reference).
+ *   2. Google STS swaps it for a federated token (sts.googleapis.com/v1/token,
+ *      token-exchange grant, audience //iam.googleapis.com/<provider>, scope cloud-platform).
+ *   3. With that token, IAM Credentials signJwt has the service account sign the
+ *      SAME domain-wide-delegation claims option A signs locally
+ *      (iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/<email>:signJwt;
+ *      needs roles/iam.serviceAccountTokenCreator for the Vercel principal).
+ *   4. The signed JWT goes to oauth2.googleapis.com/token (jwt-bearer) as before.
+ * The same flow is what google-github-actions/auth does for access_token_subject.
+ * ------------------------------------------------------------------ */
+export const STS_TOKEN_URL = "https://sts.googleapis.com/v1/token";
+export const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
+const WIF_ID_RE = /^[a-z0-9-]{4,32}$/;
+const SA_EMAIL_RE = /^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$/;
+
+/** A human sentence when a WIF value is malformed, else null. Values are never echoed whole. */
+export function workloadIdentityProblem(wi: WorkloadIdentityConfig): string | null {
+  if (!SA_EMAIL_RE.test(wi.serviceAccountEmail)) {
+    return "GMAIL_WIF_SERVICE_ACCOUNT_EMAIL must be the service account's email (it ends in .iam.gserviceaccount.com).";
+  }
+  if (!/^[0-9]{6,20}$/.test(wi.projectNumber)) {
+    return "GMAIL_WIF_PROJECT_NUMBER must be the project NUMBER (digits only, from the Google Cloud dashboard), not the project ID or name.";
+  }
+  for (const [k, val] of [["GMAIL_WIF_POOL_ID", wi.poolId], ["GMAIL_WIF_PROVIDER_ID", wi.providerId]] as const) {
+    // "4-32 characters, and may contain the characters [a-z0-9-]. The prefix gcp- is reserved" (IAM REST reference).
+    if (!WIF_ID_RE.test(val) || val.startsWith("gcp-")) return `${k} must be the ID (4-32 lowercase letters, digits or hyphens), not the display name.`;
+  }
+  return null;
+}
+
+/** The STS audience: the provider's full resource name with the //iam.googleapis.com/ prefix. */
+export function wifAudience(wi: WorkloadIdentityConfig): string {
+  return `//iam.googleapis.com/projects/${wi.projectNumber}/locations/global/workloadIdentityPools/${wi.poolId}/providers/${wi.providerId}`;
+}
+
+/** Body of the STS token exchange (JSON). No Authorization header: the Vercel token IS the credential. */
+export function stsExchangeBody(wi: WorkloadIdentityConfig, vercelOidcToken: string): Record<string, string> {
+  return {
+    audience: wifAudience(wi),
+    grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
+    requestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+    scope: CLOUD_PLATFORM_SCOPE,
+    subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
+    subjectToken: vercelOidcToken,
+  };
+}
+
+/** The signJwt call: the DWD claims (sub = mailbox, gmail.readonly, 1 hour), signed by Google with the service account's Google-held key. */
+export function signJwtRequest(wi: WorkloadIdentityConfig, mailbox: string, nowSec: number): { url: string; body: { payload: string } } {
+  const { claims } = serviceAccountJwtParts({ clientEmail: wi.serviceAccountEmail, subject: mailbox, nowSec });
+  return {
+    url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(wi.serviceAccountEmail)}:signJwt`,
+    body: { payload: JSON.stringify(claims) },
+  };
+}
+
+/** The issuer, audience and subject a Vercel OIDC token carries (decoded, NOT verified: for error messages only). */
+export function oidcTokenFacts(token: string): { iss: string | null; aud: string | null; sub: string | null } {
+  try {
+    const part = token.split(".")[1] ?? "";
+    const o = JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as Record<string, unknown>;
+    const s = (x: unknown) => (typeof x === "string" ? x : Array.isArray(x) && typeof x[0] === "string" ? (x[0] as string) : null);
+    return { iss: s(o.iss), aud: s(o.aud), sub: s(o.sub) };
+  } catch {
+    return { iss: null, aud: null, sub: null };
+  }
+}
+
+/** First non-empty source, in @vercel/oidc 4.x order: request header, then VERCEL_OIDC_TOKEN_FILE, then VERCEL_OIDC_TOKEN. */
+export function pickVercelOidcToken(sources: { header?: string | null; file?: string | null; env?: string | null }): string | null {
+  for (const t of [sources.header, sources.file, sources.env]) {
+    const v = (t ?? "").trim();
+    if (v) return v;
+  }
+  return null;
+}
+
+/** Strict decode of the STS answer, with the most likely fix. */
+export function decodeStsResponse(status: number, body: unknown, facts: { iss: string | null; aud: string | null; sub: string | null }): { ok: true; token: string } | { ok: false; error: string } {
+  const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (status === 200 && typeof o.access_token === "string" && o.access_token !== "") return { ok: true, token: o.access_token };
+  if (status === 200) return { ok: false, error: "Google STS answer has no access_token" };
+  const err = typeof o.error === "string" ? o.error : `HTTP ${status}`;
+  const desc = typeof o.error_description === "string" ? `: ${o.error_description}` : "";
+  const seen = ` Vercel's token says issuer ${facts.iss ?? "?"}, audience ${facts.aud ?? "?"}, subject ${facts.sub ?? "?"}.`;
+  // Order matters: invalid_target ("the audience PARAMETER does not exist") is OUR provider path, not Vercel's aud claim.
+  const hint =
+    err === "invalid_target" || /not found|does not exist|disabled/i.test(desc)
+      ? " (check GMAIL_WIF_PROJECT_NUMBER, GMAIL_WIF_POOL_ID and GMAIL_WIF_PROVIDER_ID, and that the pool and provider are enabled)"
+      : /audience/i.test(desc)
+        ? ` (the provider's Allowed audience must be exactly ${facts.aud ?? "https://vercel.com/<team>"})`
+        : /issuer|\biss\b/i.test(desc)
+          ? ` (the provider's Issuer URL must be exactly ${facts.iss ?? "https://oidc.vercel.com/<team>"})`
+          : "";
+  return { ok: false, error: `Google STS refused Vercel's token: ${err}${desc}${hint}.${seen}` };
+}
+
+/** Strict decode of the signJwt answer, with the most likely fix. */
+export function decodeSignJwtResponse(status: number, body: unknown, ctx: { serviceAccountEmail: string; principal: string | null }): { ok: true; signedJwt: string } | { ok: false; error: string } {
+  const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (status === 200 && typeof o.signedJwt === "string" && o.signedJwt.split(".").length === 3) return { ok: true, signedJwt: o.signedJwt };
+  if (status === 200) return { ok: false, error: "signJwt answer has no signedJwt" };
+  const e = o.error && typeof o.error === "object" ? (o.error as { message?: unknown }) : null;
+  const msg = typeof e?.message === "string" ? e.message : typeof o.error === "string" ? o.error : "";
+  const hint =
+    /has not been used|is disabled|SERVICE_DISABLED/i.test(msg)
+      ? " (turn on the IAM Service Account Credentials API in the Google Cloud project)"
+      : status === 403 || /signJwt|PERMISSION_DENIED/i.test(msg)
+        ? ` (on service account ${ctx.serviceAccountEmail}, give ${ctx.principal ?? "the Vercel principal"} the role Service Account Token Creator)`
+        : status === 404
+          ? " (GMAIL_WIF_SERVICE_ACCOUNT_EMAIL does not name a service account in this project)"
+          : "";
+  return { ok: false, error: `Google signJwt failed: HTTP ${status}${msg ? `: ${msg}` : ""}${hint}` };
+}
+
+/** The principal to grant, built from the provider and the token's subject (shown in errors). */
+export function wifPrincipal(wi: WorkloadIdentityConfig, subject: string | null): string | null {
+  return subject ? `principal://iam.googleapis.com/projects/${wi.projectNumber}/locations/global/workloadIdentityPools/${wi.poolId}/subject/${subject}` : null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -662,7 +819,7 @@ export function heartbeatFromSetting(v: unknown): MailHeartbeat | null {
     lastOkAt: typeof o.lastOkAt === "string" ? o.lastOkAt : null,
     ok: o.ok,
     error: typeof o.error === "string" ? o.error : null,
-    mode: o.mode === "service-account" || o.mode === "oauth-refresh" ? o.mode : null,
+    mode: (MAIL_AUTH_MODES as readonly unknown[]).includes(o.mode) ? (o.mode as MailAuthMode) : null,
     newMessages: typeof o.newMessages === "number" ? o.newMessages : 0,
     failingSince: typeof o.failingSince === "string" ? o.failingSince : null,
   };
@@ -691,6 +848,16 @@ export function __runCcrsMailCoreTests(): { passed: number; failed: number } {
   const both = mailConfigFromEnv({ GMAIL_OAUTH_CLIENT_ID: "a", GMAIL_SA_CLIENT_EMAIL: "b" });
   ok(!both.configured && !!both.problem, "both modes refused");
   ok(!mailConfigFromEnv({ CCRS_MAIL_LOOKBACK_HOURS: "0", GMAIL_OAUTH_CLIENT_ID: "a", GMAIL_OAUTH_CLIENT_SECRET: "b", GMAIL_OAUTH_REFRESH_TOKEN: "c" }).configured, "lookback 0 refused");
+  // R6-5 keyless
+  const WI = { GMAIL_WIF_SERVICE_ACCOUNT_EMAIL: "ccrs-mail@gw-1.iam.gserviceaccount.com", GMAIL_WIF_PROJECT_NUMBER: "123456789012", GMAIL_WIF_POOL_ID: "vercel", GMAIL_WIF_PROVIDER_ID: "vercel" };
+  const wiCfg = mailConfigFromEnv(WI);
+  ok(wiCfg.configured && wiCfg.mode === "workload-identity" && wiCfg.workloadIdentity!.poolId === "vercel", "WIF mode");
+  const nothing = mailConfigFromEnv({});
+  ok(!nothing.configured && nothing.missing.join() === WIF_VARS.join(), "nothing set names the keyless variables");
+  ok(!mailConfigFromEnv({ ...WI, GMAIL_WIF_PROJECT_NUMBER: "gw-1" }).configured, "project id instead of number refused");
+  ok(!mailConfigFromEnv({ ...WI, GMAIL_SA_CLIENT_EMAIL: "x" }).configured, "WIF + SA refused");
+  ok(wifAudience(wiCfg.configured ? wiCfg.workloadIdentity! : (WI as never)) === "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/vercel/providers/vercel", "STS audience");
+  ok(pickVercelOidcToken({ header: " ", file: null, env: "e" }) === "e" && pickVercelOidcToken({}) === null, "token source order");
   // query
   ok(buildCcrsQuery(Date.UTC(2026, 10, 8, 12), 72) === `from:info@lcb.wa.gov after:${Date.UTC(2026, 10, 5, 12) / 1000}`, "query uses epoch seconds");
   // jwt

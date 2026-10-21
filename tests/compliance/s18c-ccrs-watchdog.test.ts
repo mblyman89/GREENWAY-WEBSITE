@@ -306,7 +306,7 @@ function reset() {
   state.emailOk = true;
   state.tokenError = null;
   process.env = { ...env0, RESEND_API_KEY: "re_x", ORDER_EMAIL_FROM: "alerts@greenwaymarijuana.com", ORDER_STAFF_EMAILS: MAILBOX, NEXT_PUBLIC_SITE_URL: "https://www.greenwaymarijuana.com" };
-  for (const k of ["GMAIL_SA_CLIENT_EMAIL", "GMAIL_SA_PRIVATE_KEY", "GMAIL_OAUTH_CLIENT_ID", "GMAIL_OAUTH_CLIENT_SECRET", "GMAIL_OAUTH_REFRESH_TOKEN", "CCRS_MAILBOX_ADDRESS"]) delete process.env[k];
+  for (const k of ["GMAIL_SA_CLIENT_EMAIL", "GMAIL_SA_PRIVATE_KEY", "GMAIL_OAUTH_CLIENT_ID", "GMAIL_OAUTH_CLIENT_SECRET", "GMAIL_OAUTH_REFRESH_TOKEN", "GMAIL_WIF_SERVICE_ACCOUNT_EMAIL", "GMAIL_WIF_PROJECT_NUMBER", "GMAIL_WIF_POOL_ID", "GMAIL_WIF_PROVIDER_ID", "CCRS_MAILBOX_ADDRESS"]) delete process.env[k];
 }
 
 describe("runCcrsWatchdog: once per file (real postgrest-js against FakePostgrest)", () => {

@@ -1795,7 +1795,7 @@ __runLiquidVolumeTests();
   assertNoFailures("ccrs-lot-product-core", __runCcrsLotProductTests());
   assertNoFailures("ccrs-signin-core", __runCcrsSigninTests());
   assertNoFailures("ccrs-handover-core", __runCcrsHandoverTests());
-  assertRan("ccrs-mail-core", __runCcrsMailCoreTests(), 30);
+  assertRan("ccrs-mail-core", __runCcrsMailCoreTests(), 42); // R6-5: +6 keyless (workload-identity) checks
   assertRan("ccrs-strategy-core", __runCcrsStrategyCoreTests(), 18);
   assertRan("ccrs-watchdog-core", __runCcrsWatchdogCoreTests(), 21);
   assertRan("ccrs-reseed-core", __runCcrsReseedCoreTests(), 12);
