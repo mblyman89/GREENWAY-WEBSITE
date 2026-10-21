@@ -144,7 +144,9 @@ R62_TESTS = "tests/compliance/r6-2-inventory-transfer.test.ts"
 R63_TESTS = "tests/compliance/r6-3-inventory-unchanged.test.ts"
 DELTA = "src/lib/compliance/ccrs-inventory-delta-core.ts"
 M0286 = "supabase/migrations/0286_ccrs_inventory_last_told.sql"
-LSTORE = "src/lib/compliance/ccrs-ledger-store.ts"
+R64_TESTS = "tests/compliance/r6-4-integrator-api.test.ts"
+APICORE = "src/lib/compliance/ccrs-integrator-api-core.ts"
+APIIO = "src/lib/compliance/ccrs-integrator-api.ts"
 TCORE = "src/lib/compliance/ccrs-transfer-core.ts"
 INTAKE = "src/lib/inventory/intake-store.ts"
 M0285 = "supabase/migrations/0285_ccrs_inventory_transfer.sql"
@@ -3606,6 +3608,126 @@ MUTATIONS = [
         '    if (part.kind === "absent") continue;',
         R63_TESTS,
         'The loader stops at the first absent answer.',
+    ),
+    (
+        'M446-r64-switch',
+        APICORE,
+        '  if (get(n.enabled) !== "true") return',
+        '  if (get(n.enabled) === "false") return',
+        R64_TESTS,
+        'Off unless the switch is exactly true.',
+    ),
+    (
+        'M447-r64-pre-audience',
+        APICORE,
+        '    audience: "lcb.ccrs.api.pre",',
+        '    audience: "lcb.ccrs.api.prod",',
+        R64_TESTS,
+        'PREprod audience [API L0056].',
+    ),
+    (
+        'M448-r64-prod-token',
+        APICORE,
+        '    tokenUrl: "https://www.login.wa.gov/oauth/token",',
+        '    tokenUrl: "https://test-login.wa.gov/oauth/token",',
+        R64_TESTS,
+        'Prod token endpoint [API L0060].',
+    ),
+    (
+        'M449-r64-grant',
+        APICORE,
+        'grant_type: "client_credentials" }',
+        'grant_type: "password" }',
+        R64_TESTS,
+        'Client-credentials grant [API L0126].',
+    ),
+    (
+        'M450-r64-id-underscore',
+        APICORE,
+        'export const INTEGRATOR_ID_RE = /^[A-Za-z0-9-]{1,64}$/;',
+        'export const INTEGRATOR_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;',
+        R64_TESTS,
+        'The integrator id may not contain an underscore.',
+    ),
+    (
+        'M451-r64-refresh',
+        APICORE,
+        '  return nowMs < t.expiresAtMs - refreshMarginMs(t.lifetimeMs);',
+        '  return nowMs < t.expiresAtMs;',
+        R64_TESTS,
+        'Refresh close to expiry [API L0138].',
+    ),
+    (
+        'M452-r64-audience-cache',
+        APICORE,
+        '  if (t.audience !== audience) return false;\n',
+        '',
+        R64_TESTS,
+        'A cached token is bound to its audience.',
+    ),
+    (
+        'M453-r64-header',
+        APICORE,
+        '"X-Uploader-Email": cfg.uploaderEmail },',
+        '"X-Uploader-Email": cfg.clientId },',
+        R64_TESTS,
+        'The uploader email header [API L0084].',
+    ),
+    (
+        'M454-r64-one-group',
+        APICORE,
+        '  if (groups.size !== 1) throw',
+        '  if (groups.size > 3) throw',
+        R64_TESTS,
+        'One upload group per request.',
+    ),
+    (
+        'M455-r64-our-id',
+        APICORE,
+        '    if (m[2] !== cfg.integratorId) throw',
+        '    if (false) throw',
+        R64_TESTS,
+        'One integrator per submission [API L0093-L0094].',
+    ),
+    (
+        'M456-r64-401',
+        APICORE,
+        '  if (r.status === 401) {',
+        '  if (r.status === 401 && r.bodyText.trim() !== "") {',
+        R64_TESTS,
+        'Any 401 is an auth failure, even with an empty body [API L0225-L0227].',
+    ),
+    (
+        'M457-r64-errors-array',
+        APICORE,
+        'return { kind: "rejected", error: typeof j.error === "string" ? j.error : null, errors: strings(j.errors) };',
+        'return { kind: "rejected", error: typeof j.error === "string" ? j.error : null, errors: [] };',
+        R64_TESTS,
+        'Both failure shapes are read [API L0222-L0223].',
+    ),
+    (
+        'M458-r64-unknown-stop',
+        APICORE,
+        '  if (o.kind === "server_error") return { action: "retry"',
+        '  if (o.kind === "server_error" || o.kind === "unknown") return { action: "retry"',
+        R64_TESTS,
+        'An unreadable answer is never retried.',
+    ),
+    (
+        'M459-r64-redact',
+        APICORE,
+        'Authorization: `Bearer …${tok.slice(-4)}`',
+        'Authorization: `Bearer …${tok}`',
+        R64_TESTS,
+        'The token is never shown.',
+    ),
+    (
+        'M460-r64-io-switch-first',
+        APIIO,
+        '  if (c.kind !== "ready") {\n    return { finished: "stopped"',
+        '  if (false) {\n    return { finished: "stopped"',
+        R64_TESTS,
+        'The I/O half checks the switch before any request.',
     ),
 ]
 
