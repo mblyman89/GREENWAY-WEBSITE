@@ -80,6 +80,8 @@ describe("record form and year status", () => {
     const base = { reviewed_on: "2026-12-20", outcome: "no_changes" as const, summary: "x".repeat(20), procedure_sha256: fp, created_by: "o" };
     const o = { ...base, id: "a", review_year: 2026, corrects_id: null, created_at: "2026-12-20T20:00:00Z" };
     const c = { ...base, id: "b", review_year: 2026, corrects_id: "a", created_at: "2026-12-21T20:00:00Z", procedure_sha256: "0".repeat(64) };
+    const c2 = { ...base, id: "d", review_year: 2026, corrects_id: "a", created_at: "2026-12-22T20:00:00Z", procedure_sha256: "0".repeat(64) };
+    expect(y.yearStatus([c2, c, o], 2026, fp).current?.id).toBe("d");
     const st = y.yearStatus([c, o], 2026, fp);
     expect(st.current?.id).toBe("b");
     expect(st.original?.id).toBe("a");
@@ -264,7 +266,7 @@ describe("S14 public-repo rules", () => {
       expect(phones.filter((p) => !p.endsWith("562-8761")), f).toEqual([]);
       expect(s.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/g)?.filter((e) => !e.endsWith("@x.test")) ?? [], f).toEqual([]);
       // the self-tests' deliberate fakes ("account 123456789", refused by the summary rule) are the only allowed runs
-      expect(s.replace(/[0-9a-f]{64}/g, "").replace(/account 123456789/g, ""), f).not.toMatch(/(?<![0-9a-f])[0-9]{9,}(?![0-9a-f])/);
+      expect(s.replace(/[0-9a-f]{64}/g, "").replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "").replace(/account 123456789/g, ""), f).not.toMatch(/(?<![0-9a-f])[0-9]{9,}(?![0-9a-f])/);
     }
   });
 });
