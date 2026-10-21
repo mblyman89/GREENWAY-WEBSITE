@@ -23,9 +23,11 @@
  *      states the line AFTER every return so far (cumulative), never "original
  *      minus this return" — the bug the old manual route had on a second
  *      partial return.
- *   2. Only lines with at least one PENDING (not yet exported) return emit a
- *      row; the row's returnIds are the pending ones (what gets marked
- *      exported once the outbox has stored the file).
+ *   2. Legacy mode: only lines with at least one PENDING (not yet exported)
+ *      return emit a row. Ledger mode: the env's own ledger decides (rule 5);
+ *      a return exported by a PREprod batch is still owed to prod. A row's
+ *      returnIds are the pending ones (marked exported once the outbox has
+ *      stored the file).
  *   3. cumulative >= original -> ONE Delete restating the original line.
  *      Otherwise an Update with the remaining quantity, money pro-rated.
  *   4. More returned than sold, a blank id, or disagreeing snapshots of the
@@ -87,6 +89,48 @@ export type ReturnCorrectionPlan = {
   reflected: { detailId: string; returnIds: string[] }[];
 };
 
+/** The customer_returns columns the planner reads (migration 0115). */
+export type CustomerReturnRowLike = {
+  id: string;
+  sale_external_id: string | null;
+  sale_detail_external_id: string | null;
+  inventory_external_id: string | null;
+  sale_type: string | null;
+  sale_date: string | null;
+  unit_price_minor: number | null;
+  discount_minor: number | null;
+  sales_tax_minor: number | null;
+  excise_minor: number | null;
+  quantity: number | string;
+  original_quantity: number | string | null;
+  correction_status: string;
+  created_at: string;
+};
+
+/**
+ * customer_returns row -> ReturnRecord. Nothing is invented: a missing sale
+ * type or sale date stays blank and the planner refuses the line by name (a
+ * correction must carry the original Insert's SaleType and SaleDate).
+ */
+export function returnRecordFromRow(r: CustomerReturnRowLike): ReturnRecord {
+  return {
+    id: r.id,
+    saleExternalId: (r.sale_external_id ?? "").trim(),
+    saleDetailExternalId: (r.sale_detail_external_id ?? "").trim(),
+    inventoryExternalId: (r.inventory_external_id ?? "").trim(),
+    saleType: (r.sale_type ?? "").trim(),
+    saleDateISO: (r.sale_date ?? "").trim(),
+    originalQuantity: Number(r.original_quantity),
+    quantity: Number(r.quantity),
+    unitPriceMinor: r.unit_price_minor ?? 0,
+    discountMinor: r.discount_minor ?? 0,
+    salesTaxMinor: r.sales_tax_minor ?? 0,
+    exciseMinor: r.excise_minor ?? 0,
+    createdAtISO: r.created_at,
+    pending: r.correction_status === "pending",
+  };
+}
+
 const HELD: ReadonlySet<LedgerState> = new Set(["seed", "filed", "confirmed"]);
 
 const SNAPSHOT_FIELDS = [
@@ -125,7 +169,11 @@ export function planReturnCorrections(input: {
   for (const detailId of [...groups.keys()].sort()) {
     const list = [...groups.get(detailId)!].sort(byCreated);
     const pendingIds = list.filter((r) => r.pending).map((r) => r.id);
-    if (pendingIds.length === 0) continue; // already exported; never re-sent
+    // Legacy (manual download, no ledger): `pending` is the only memory, so a
+    // line with nothing pending is never re-sent. Ledger mode: the env's OWN
+    // ledger decides (a return exported by a PREprod batch has not reached
+    // prod); the reflected check below stops a re-send once CCRS has it.
+    if (input.ledger === "legacy" && pendingIds.length === 0) continue;
     const note = (reason: string): CorrectionNote => ({ detailId, returnIds: pendingIds, reason });
 
     if (detailId === "") {
@@ -136,6 +184,10 @@ export function planReturnCorrections(input: {
     const clash = SNAPSHOT_FIELDS.find((f) => list.some((r) => r[f] !== first[f]));
     if (clash) {
       plan.invalid.push(note(`the returns of this sale line disagree about the original ${clash}; fix the return records before reporting`));
+      continue;
+    }
+    if (first.saleType === "" || first.saleDateISO === "") {
+      plan.invalid.push(note("the return did not capture the original SaleType and SaleDate, which a correction must repeat exactly"));
       continue;
     }
     const original = first.originalQuantity;
@@ -214,6 +266,24 @@ export function planReturnCorrections(input: {
   return plan;
 }
 
+/**
+ * Which returns the weekly batch marks `exported` once the outbox has stored
+ * its Sale file. `correction_status` is ONE flag shared by every env, and it
+ * is what tells PRODUCTION a correction is still owed (the prod batch loads
+ * pending returns). So only a PROD emission marks: a PREprod test batch never
+ * hides a return from production. Marked = the pending returns of every row
+ * that went into the file (not withheld by E38) plus the pending returns of
+ * lines CCRS already reflects.
+ */
+export function correctionExportIds(env: LedgerEnv, plan: ReturnCorrectionPlan, e38WithheldDetailIds: ReadonlySet<string>): string[] {
+  if (env !== "prod") return [];
+  const ids = [
+    ...plan.groups.filter((g) => !e38WithheldDetailIds.has(g.detailId)).flatMap((g) => g.returnIds),
+    ...plan.reflected.flatMap((r) => r.returnIds),
+  ];
+  return [...new Set(ids)].sort();
+}
+
 /* ------------------------------------------------------------------ *
  * Decoder for public.ccrs_sale_slice (migration 0283)
  * ------------------------------------------------------------------ */
@@ -259,6 +329,31 @@ export function decodeSaleSlice(env: LedgerEnv, data: unknown, error: RpcErrorLi
     }
   });
   return { kind: "loaded", held, inFlightOnly };
+}
+
+/**
+ * Route this batch's Sale INSERT rows against the Sale ledger: "Duplicate Sale
+ * detail item for Licensee" [G L1412] means a line CCRS holds must not be
+ * Inserted again (an overlapping range exported twice, or a line a return has
+ * since Deleted). Held in a settled state -> skipped as already reported.
+ * The ledger unsure (uncertain / unknown) -> withheld, never guessed. Not held
+ * -> kept, INCLUDING a line whose own Insert file is still unanswered: a
+ * re-download must produce the same bytes so the stored file is served again
+ * ("the same file name will not be accepted twice, nor the same data" [BRIAN A29]).
+ */
+export function routeSaleInserts(
+  rows: readonly string[][],
+  held: ReadonlyMap<string, SaleHeld | null>,
+): { rows: string[][]; alreadyHeld: string[]; uncertain: string[] } {
+  const D = CCRS_COLUMNS.Sale.indexOf("SaleDetailExternalIdentifier");
+  const out = { rows: [] as string[][], alreadyHeld: [] as string[], uncertain: [] as string[] };
+  for (const r of rows) {
+    const h = held.get(r[D]) ?? null;
+    if (!h) out.rows.push(r);
+    else if (h.state === "uncertain" || h.state === "unknown") out.uncertain.push(r[D]);
+    else out.alreadyHeld.push(r[D]);
+  }
+  return out;
 }
 
 /** Held sale lines as Sale ledger entries, so the outbox self-check sees them. */
@@ -360,6 +455,17 @@ export function __runReturnCorrectionsTests(): { passed: number; failed: number 
   }
   ok(threw, "env mismatch throws");
   ok(saleLedgerEntries(held(null)).length === 0, "null lines are not ledger entries");
+
+  const notPending = planReturnCorrections({ returns: [{ ...base, pending: false }], license: lic, ledger: held({ state: "filed", quantity: "2", inFlight: false }), insertedDetailIds: new Set() });
+  ok(notPending.rows.length === 1 && notPending.groups[0].returnIds.length === 0, "ledger mode corrects an env that lacks it even if exported elsewhere");
+  const D = CCRS_COLUMNS.Sale.indexOf("SaleDetailExternalIdentifier");
+  const mk = (id: string) => CCRS_COLUMNS.Sale.map((c, i) => (i === D ? id : c === "Operation" ? "Insert" : "x"));
+  const ins = routeSaleInserts([mk("A"), mk("S-1")], held({ state: "filed", quantity: "2", inFlight: false }));
+  ok(ins.rows.length === 1 && ins.alreadyHeld[0] === "S-1", "held sale line is not re-Inserted");
+
+  const exp = { rows: [], groups: [{ detailId: "A", operation: "Update" as const, cumulative: 1, original: 2, returnIds: ["r1"] }, { detailId: "B", operation: "Delete" as const, cumulative: 2, original: 2, returnIds: ["r2"] }], withheld: [], invalid: [], reflected: [{ detailId: "C", returnIds: ["r3"] }] };
+  ok(JSON.stringify(correctionExportIds("prod", exp, new Set(["B"]))) === '["r1","r3"]', "prod marks emitted + reflected, not E38-withheld");
+  ok(correctionExportIds("preprod", exp, new Set()).length === 0, "preprod never marks");
 
   return { passed, failed };
 }

@@ -16,6 +16,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkAssignResult, decodeLedgerSlice, LEDGER_SLICE_RPC, type AssignedProductId, type LedgerSliceOutcome } from "./ccrs-ledger-store-core";
 import { checkEmitResult, sha256Utf8, type EmitIssue, type EmitPayloadFile, type EmitResultFile } from "./ccrs-outbox-core";
 import type { LedgerEnv } from "./ccrs-ledger-core";
+import { decodeSaleSlice, SALE_SLICE_RPC, type SaleSliceOutcome } from "./ccrs-return-corrections-core";
 import type { CcrsRetailerFileType } from "./ccrs-batch-core";
 import type { CcrsOutcomeKind, OurRow, RejectedRow } from "./ccrs-outcome-core";
 import {
@@ -42,6 +43,18 @@ export async function loadLedgerForBatch(
     p_product_names: [...new Set(productNames)],
   });
   return decodeLedgerSlice(env, data, error);
+}
+
+/**
+ * R5-1 (0283): what the ledger holds for the sale lines a batch Inserts or
+ * would correct. "absent" = 0283 not applied (the batch then withholds every
+ * return correction: it cannot prove CCRS holds the line).
+ */
+export async function loadSaleSlice(admin: Admin, env: LedgerEnv, detailIds: readonly string[]): Promise<SaleSliceOutcome> {
+  const ids = [...new Set(detailIds)].filter((x) => x !== "");
+  if (ids.length === 0) return { kind: "loaded", held: new Map(), inFlightOnly: new Set() };
+  const { data, error } = await admin.rpc(SALE_SLICE_RPC, { p_env: env, p_detail_ids: ids });
+  return decodeSaleSlice(env, data, error);
 }
 
 /**
