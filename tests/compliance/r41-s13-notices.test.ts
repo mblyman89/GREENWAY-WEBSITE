@@ -210,7 +210,8 @@ describe("S13 public-repo rules", () => {
       const phones = s.match(/\b\d{3}[-.]\d{3}[-.]\d{4}\b/g) ?? [];
       expect(phones.filter((p) => !p.endsWith("562-8761")), f).toEqual([]);
       expect(s.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/g)?.filter((e) => !e.endsWith("@x.test")) ?? [], f).toEqual([]);
-      expect(s, f).not.toMatch(/(?<![0-9a-f])[0-9]{9,}(?![0-9a-f])/);
+      // the pg-check's deliberate fake ("acct 123456789", refused by the summary rule) is the only allowed run
+      expect(s.replace(/acct 123456789/g, ""), f).not.toMatch(/(?<![0-9a-f])[0-9]{9,}(?![0-9a-f])/);
     }
   });
 });
