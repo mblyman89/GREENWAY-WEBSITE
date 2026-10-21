@@ -33,7 +33,8 @@
  *     path uses (it replaced five different 3/5/6-field checks).
  *
  * The file header's Immediate Origin Name (positions 64-86) keeps the full
- * trade name "GREENWAY MARIJUANA" until Brenda answers Q11 (plan section 3.1).
+ * trade name "GREENWAY MARIJUANA". Q11 is answered (Brenda, Email 3 answer A.2:
+ * "so I would leave as Greenway").
  */
 
 import type { AchOriginator } from "./nacha-core";
@@ -55,7 +56,7 @@ import {
 /**
  * The two spellings of the company name the settings may hold. Both cut to
  * Brenda's 16-character batch name. The full one is what the file header
- * carries until Q11 is answered; the short one is Brenda's own text.
+ * carries (Q11: Brenda said leave it as Greenway); the short one is Brenda's own text.
  */
 export const ACCEPTED_COMPANY_NAMES: readonly string[] = ["GREENWAY MARIJUANA", BATCH_COMPANY_NAME];
 
@@ -162,7 +163,7 @@ export function validateOriginator(o: AchOriginator): OriginatorProblem[] {
   } else if (!ACCEPTED_COMPANY_NAMES.includes(name)) {
     out.push({
       field: "companyName",
-      message: `Company name "${name}" is not GREENWAY MARIJUANA. The file header keeps the full trade name until Timberland answers Q11.`,
+      message: `Company name "${name}" is not GREENWAY MARIJUANA. The file header keeps the full trade name (Brenda, Q11: leave as Greenway).`,
     });
   }
   return out;

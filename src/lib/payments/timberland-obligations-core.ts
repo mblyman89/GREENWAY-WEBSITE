@@ -131,19 +131,19 @@ export const COMMS_TYPE_SPECS: Readonly<Record<CommsType, CommsTypeSpec>> = {
   },
   termination_notice: {
     label: "Termination notice (either side)",
-    hint: `Either side may end the agreement with ${TERMINATION_NOTICE_CALENDAR_DAYS} calendar days' written notice; Timberland may end it at once for a violation. From the end date, pay by check.`,
+    hint: `Either side may end the agreement with ${TERMINATION_NOTICE_CALENDAR_DAYS} calendar days' written notice; Timberland may end it at once for a violation. Brenda says a notice from Timberland may come by phone call, followed by an email for documentation. From the end date, pay by check.`,
     clock: true, needsTime: false, needsSecondDate: true, secondDateLabel: "Last day ACH may be used", needsAmount: false,
     quote: A("\u00a730 Termination of Agreement (p.5)", "Either party may terminate this Agreement upon 3 calendar days written notice to the other"),
   },
   compromise_reported: {
     label: "I phoned Timberland about a stolen or lost password, code, phone or token",
-    hint: `Phone first (${TIMBERLAND_PHONE}). Then confirm in writing within ${COMPROMISE_WRITTEN_CONFIRM_CALENDAR_DAYS} calendar day of the call. Enter the time of the call.`,
+    hint: `Phone first (${TIMBERLAND_PHONE}) and ask for Cash Management. Then confirm in writing to Cash Management within ${COMPROMISE_WRITTEN_CONFIRM_CALENDAR_DAYS} calendar day of the call. Enter the time of the call.`,
     clock: true, needsTime: true, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
     quote: A("Schedule F - Security Procedures (p.11)", "Company will verbally notify Financial Institution immediately, followed by written confirmation within 1 calendar day of verbal notice."),
   },
   reversal_needed: {
     label: "A wrong or duplicate payment went out (reversal)",
-    hint: `Phone Timberland (${TIMBERLAND_PHONE}) at once: within ${REVERSAL_HOURS_FROM_DISCOVERY} hours of finding it and within ${REVERSAL_BANKING_DAYS} banking days of the original payment. Enter when you found it and the original settlement date.`,
+    hint: `Phone Timberland (${TIMBERLAND_PHONE}) at once and ask for Cash Management. Timberland reverses it from the original uploaded file and explains the risks at the time. Call within ${REVERSAL_HOURS_FROM_DISCOVERY} hours of finding it and within ${REVERSAL_BANKING_DAYS} banking days of the original payment. Enter when you found it and the original settlement date.`,
     clock: true, needsTime: true, needsSecondDate: true, secondDateLabel: "Settlement date of the wrong payment", needsAmount: false,
     quote: A("\u00a721 Reversals (p.4)", "within 5 banking days of the original Entry or Entries and within 24 hours of discovery of the error"),
   },
@@ -160,8 +160,8 @@ export const COMMS_TYPE_SPECS: Readonly<Record<CommsType, CommsTypeSpec>> = {
     quote: A("Schedule F - Security Procedures (p.11)", "Timberland Bank also recommends dual control approval for all file originations."),
   },
   schedule_g_email_corrected: {
-    label: "Brenda confirmed the Schedule G email is corrected",
-    hint: "Closes the go-live item. Write who confirmed it.",
+    label: "Brenda confirmed the Schedule G email is right in Timberland's system",
+    hint: "Closes the go-live item. She answered in Email 3 (item B) that it is correct in the system and the document does not need correcting. Write who confirmed it and when.",
     clock: false, needsTime: false, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
     quote: null,
   },
@@ -173,7 +173,7 @@ export const COMMS_TYPE_SPECS: Readonly<Record<CommsType, CommsTypeSpec>> = {
   },
   countersigned_received: {
     label: "Countersigned agreement received from Timberland",
-    hint: "Closes the go-live item. Keep the copy privately, never in the website's code.",
+    hint: "Closes the go-live item. Timberland countersigned on 10/14/26. Keep the copy privately, never in the website's code.",
     clock: false, needsTime: false, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
     quote: null,
   },

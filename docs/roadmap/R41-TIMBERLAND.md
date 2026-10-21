@@ -26,7 +26,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S8 | Docs, help, concierge, test plan, yearly tasks, agreement entries in the Legal library | #1382 | none |
 | S9 | Get rolling: go-live readiness board, file checker, funding helper (owner confirms funding; 8 am settlement-day reminder) | #1383 | 0276 |
 | S10 | Obligation clocks: Timberland communications log, what is due to Timberland, STOP card on every banking page, fees card | #1384 | 0277 |
-| S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | this branch | 0278 |
+| S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | #1385 | 0278 |
+| S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | this branch | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -74,10 +75,9 @@ Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
 ## Held for the end of the build
 
-Michael sends Brenda one email at the end of the full build. It holds:
-- Q1 (for information only; Q2 was removed by the owner in round 5);
-- Q3 to Q15, Q18 and Q20;
-- the small add-ons noted in the round reports.
+Michael sent Brenda the questions (Q1, Q3 to Q15, Q18, Q20, Q21 to Q26). She answered them in Email 3 (10/19/26),
+mirrored in `docs/authorities/ach/timberland-brenda-2026-10-19-email-3.txt`. S12 records each answer word for word.
+Still to arrange: the testing session Brenda asked for.
 
 ## S9 in detail
 
@@ -184,3 +184,22 @@ Michael sends Brenda one email at the end of the full build. It holds:
   - `tests/compliance/r41-s11-ofac.test.tsx`, using real-format OFAC fixtures (real public records).
   - Mutation runs: `mutate-s11-app.py` and `mutate-0278-sql.py` (Supabase default privileges simulated).
   - Manual tests T-368 to T-371.
+
+## S12 in detail
+
+- **Sources.** Two new mirrors in `docs/authorities/ach/`:
+  - the countersigned agreement (Greenway 10/13/26, Timberland 10/14/26), with the sha256 of `ACH_Agreement_10-14-26.pdf`. Its printed terms are the same as the 10/09 copy. Every citation now points at this copy.
+  - Brenda's Email 3, with her answers kept word for word.
+- **Answered record.** `OPEN_QUESTIONS` in `timberland-profile-core.ts` keeps its name but now holds, for each question, Brenda's verbatim answer(s), what the app does and, where she left a choice, the owner decision it rests on (D-1 to D-8). The owner did not answer D-1 to D-10 in Round 14, so the recommended defaults from the Round 13 report are applied:
+  - **D-1** the 6-banking-day prenote wait stays.
+  - **D-2** the 2-banking-day lead stays strict. The optional 1-day late lane is not built.
+  - **D-3** the daily $50,000.00 limit counts files by the day they are uploaded. A file not yet marked uploaded counts on every day it could still be uploaded. The monthly limit still counts a file in both months when its days span two.
+  - **D-5** the funding helper asks for the money by 9:00 am Pacific on the settlement date, and never to let the account go negative.
+  - **D-6** the prenote wait is counted to the upload day.
+  - **D-7** the Fridays before Saturday holidays are usable days.
+  - **D-8** per-file match first, per-payment as a labelled fallback.
+  - **D-9** "Brenda, Cash Management", no surname.
+  - **D-10** a 15-calendar-day wrong-NOC clock (built in S13).
+- **Wording.** The go-live board, calendar and guide show the countersigned copy as received and quote Brenda on Schedule G: "I have this correct in the system.  No need to correct document." Calls go to Cash Management at 1-800-562-8761. A reversal is done by Timberland from the original uploaded file. Q11: keep GREENWAY MARIJUANA in the file header. Q14: PAYROLL stays out of the discretionary data.
+- **No migration.** `ach_files.uploaded_at` (0274) already records the upload.
+- **Tests.** Pure self-test floors: profile 44, deadline 74, limits 69, funding 65. Mutation scripts s1, s4, s5 and s8 are updated and rerun. Manual test T-372.

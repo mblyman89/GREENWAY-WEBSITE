@@ -65,7 +65,7 @@ M = [
     ("manifest-bytes-wrong", MF, "\t48973\t721\t12", "\t48974\t721\t12"),
     ("readme-row-dropped", RD, "timberland-ach-agreement-2026-10-14.redacted.txt", "timberland-agreement.txt"),
     # registration
-    ("selftest-floor-lowered", RS, 'assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42)',
+    ("selftest-floor-lowered", RS, 'assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 44)',
      'assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 1)'),
 ]
 

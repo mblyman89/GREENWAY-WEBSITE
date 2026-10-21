@@ -386,8 +386,8 @@ export function buildJourneys(s: GuideSnapshot): Journey[] {
   const timberland = journey("timberland", "Timberland setup", "Michael is Greenway's only Timberland user. These make sure Timberland's side matches ours.", [
     { id: "tb-access", title: "Cash management access is ready (Brenda)", detail: t.accessReady ? "Recorded on the calendar." : "Brenda will tell you when the separate cash management login is set up. Then press Done on the calendar.", status: st(t.accessReady), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
     { id: "tb-users", title: "Users and phones are correct (Michael only)", detail: t.usersPhones ? "Recorded on the calendar." : "Check the portal lists Michael only, and the text-code phone is yours.", status: st(t.usersPhones), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
-    { id: "tb-email", title: "Schedule G email corrected", detail: t.scheduleGEmail ? "Recorded on the calendar." : "You are telling Brenda. Until she confirms, watch the portal for security notices.", status: st(t.scheduleGEmail), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
-    { id: "tb-countersigned", title: "Countersigned agreement on file", detail: t.countersigned ? "Recorded on the calendar." : "Ask Brenda for the copy with Timberland's countersignature.", status: st(t.countersigned), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
+    { id: "tb-email", title: "Schedule G email confirmed", detail: t.scheduleGEmail ? "Recorded on the calendar." : "Brenda says it is correct in Timberland's system. Record that on the calendar; until then, watch the portal for security notices.", status: st(t.scheduleGEmail), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
+    { id: "tb-countersigned", title: "Countersigned agreement on file", detail: t.countersigned ? "Recorded on the calendar." : "Timberland countersigned on 10/14/26. File that copy, then mark the calendar task done.", status: st(t.countersigned), href: GUIDE_LINKS.calendar, hrefLabel: "Open the calendar" },
     {
       id: "tb-dual",
       title: "Dual approval at Timberland",

@@ -108,7 +108,7 @@ export function buildGoLiveBoard(i: GoLiveInput): GoLiveGate[] {
     id: "contract",
     title: "Timberland agreement on file",
     tone: yes(i.contractOnFile),
-    detail: i.contractOnFile ? "Marked done on the calendar (signed 10/09/26; the PDF stays with you, not on the website)." : "Mark the 'Timberland agreement' task done on the calendar once the signed copy is filed.",
+    detail: i.contractOnFile ? "Marked done on the calendar (signed by you 10/13/26 and by Timberland 10/14/26; the PDF stays with you, not on the website)." : "Mark the 'Timberland agreement' task done on the calendar once the signed copy is filed.",
     href: GO_LIVE_LINKS.calendar,
     hrefLabel: "Open the calendar",
   });
@@ -116,15 +116,15 @@ export function buildGoLiveBoard(i: GoLiveInput): GoLiveGate[] {
     id: "countersigned",
     title: "Countersigned copy from Timberland",
     tone: yes(i.countersigned),
-    detail: i.countersigned ? "Recorded on the calendar." : "Our copy's bank signature block is blank (question 12 for Brenda). Mark it done when the countersigned copy arrives.",
+    detail: i.countersigned ? "Recorded on the calendar." : "Timberland countersigned on 10/14/26 (ACH_Agreement_10-14-26.pdf). Keep that copy with your banking records, then mark the task done on the calendar.",
     href: GO_LIVE_LINKS.calendar,
     hrefLabel: "Open the calendar",
   });
   g.push({
     id: "schedule-g",
-    title: "Schedule G email corrected at Timberland",
+    title: "Schedule G email confirmed by Timberland",
     tone: yes(i.scheduleGEmail),
-    detail: i.scheduleGEmail ? "Recorded on the calendar." : "You are telling Brenda. Until she confirms, assume Timberland's security emails are NOT reaching you: watch the portal itself.",
+    detail: i.scheduleGEmail ? "Recorded on the calendar." : "Brenda answered (Email 3, item B): \"I have this correct in the system.  No need to correct document.\" Record that on the calendar. Until it is recorded, watch the portal itself for security notices.",
     href: GO_LIVE_LINKS.calendar,
     hrefLabel: "Open the calendar",
   });
