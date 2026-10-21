@@ -14,7 +14,9 @@
  *   - the logged returns and NOCs (ach_return_notices: kind, day, amount);
  *   - the owner's known-payee rules and the reviews (migration 0289).
  *
- * Every read is checked. A failed read is a PROBLEM shown on the page and
+ * Every list read is paged by its unique id (pagedAllChecked): PostgREST
+ * caps one response at 1,000 rows with no error, so a plain .limit() would
+ * quietly drop lines. Every read is checked. A failed read is a PROBLEM shown on the page and
  * stops the daily email from saying "all clear" (silence is never all clear).
  * Nothing here creates or removes a Plaid connection: on the Trial plan a
  * removed connection still counts against the 10.
@@ -25,6 +27,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { loadAchReportInputs } from "@/lib/reports/ach-payments-report-store";
 import { buildAchReport } from "@/lib/reports/ach-payments-report-core";
 import { ACCOUNT_LAST4, FEES } from "@/lib/payments/timberland-profile-core";
@@ -89,17 +92,33 @@ export async function loadBankWatch(todayIso: string): Promise<WatchLoad> {
   const db = createSupabaseAdminClient();
   const fromIso = addDaysIso(todayIso, -WATCH_DAYS);
 
+  type Rows = Record<string, unknown>[];
+  /** One checked, paged read: { error } when it did not finish, never a short list. */
+  /** Filters are only equality and on-or-after, so no query-builder type is passed around. */
+  type Filter = { eq?: Record<string, string | boolean>; gte?: Record<string, string> };
+  const paged = async (table: string, cols: string, filter: Filter = {}): Promise<{ data: Rows; error: { message: string } | null }> => {
+    let lastError = "";
+    const { rows, verdict } = await pagedAllChecked<Record<string, unknown>>(async (from, to) => {
+      let q = db.from(table).select(cols);
+      for (const [k, v] of Object.entries(filter.eq ?? {})) q = q.eq(k, v);
+      for (const [k, v] of Object.entries(filter.gte ?? {})) q = q.gte(k, v);
+      const { data, error } = await q.order("id", { ascending: true }).range(from, to);
+      if (error) lastError = String(error.message ?? "read failed");
+      return { rows: (data ?? []) as unknown as Rows, ok: !error };
+    }, { maxRows: 20_000 });
+    return verdict.complete ? { data: rows, error: null } : { data: [], error: { message: lastError || "the read did not finish" } };
+  };
   const [acctQ, itemQ, noticeQ, ruleQ, reviewQ, staffQ] = await Promise.all([
-    db.from("plaid_accounts").select("account_id, item_id, name, official_name, custom_name, mask, role, active, available_balance_cents, balances_updated_at"),
-    db.from("plaid_items").select("item_id, status, error_code, last_successful_sync"),
-    db.from("ach_return_notices").select("id, notice_kind, received_on, amount_cents").gte("received_on", fromIso).order("received_on", { ascending: true }).limit(1001),
-    db.from("ach_bank_watch_rules").select("id, match_text, max_cents, note, created_by, created_at, retired_at, retired_by").order("created_at", { ascending: true }).limit(1001),
-    db.from("ach_bank_watch_reviews").select("id, transaction_id, verdict, note, created_by, created_at").gte("created_at", `${addDaysIso(fromIso, -30)}T00:00:00Z`).order("created_at", { ascending: true }).limit(5001),
-    db.from("staff_profiles").select("id, full_name, email"),
+    paged("plaid_accounts", "id, account_id, item_id, name, official_name, custom_name, mask, role, active, available_balance_cents, balances_updated_at"),
+    paged("plaid_items", "id, item_id, status, error_code, last_successful_sync"),
+    paged("ach_return_notices", "id, notice_kind, received_on, amount_cents", { gte: { received_on: fromIso } }),
+    paged("ach_bank_watch_rules", "id, match_text, max_cents, note, created_by, created_at, retired_at, retired_by"),
+    paged("ach_bank_watch_reviews", "id, transaction_id, verdict, note, created_by, created_at", { gte: { created_at: `${addDaysIso(fromIso, -30)}T00:00:00Z` } }),
+    paged("staff_profiles", "id, full_name, email"),
   ]);
 
   const nameOf = new Map<string, string>();
-  if (!staffQ.error) for (const s of (staffQ.data ?? []) as Record<string, unknown>[]) nameOf.set(String(s.id), String((s.full_name as string | null)?.trim() || s.email || "Staff"));
+  if (!staffQ.error) for (const s of staffQ.data) nameOf.set(String(s.id), String((s.full_name as string | null)?.trim() || s.email || "Staff"));
   const who = (id: unknown) => nameOf.get(String(id)) ?? "Staff";
 
   // ---- Main accounts + connection health
@@ -109,9 +128,9 @@ export async function loadBankWatch(todayIso: string): Promise<WatchLoad> {
     problems.push("The Plaid accounts or connections could not be read, so the bank feed is not checked.");
   } else {
     const items = new Map<string, Record<string, unknown>>();
-    for (const it of (itemQ.data ?? []) as Record<string, unknown>[]) items.set(String(it.item_id), it);
+    for (const it of itemQ.data) items.set(String(it.item_id), it);
     connectionsNow = items.size;
-    for (const a of (acctQ.data ?? []) as Record<string, unknown>[]) {
+    for (const a of acctQ.data) {
       if (a.role !== "main" || a.active === false || typeof a.account_id !== "string") continue;
       const it = items.get(String(a.item_id));
       mainAccounts.push({
@@ -130,19 +149,15 @@ export async function loadBankWatch(todayIso: string): Promise<WatchLoad> {
   // ---- Main-account transactions in the window
   const txns: WatchTxn[] = [];
   for (const a of mainAccounts) {
-    const tq = await db
-      .from("plaid_transactions")
-      .select("transaction_id, account_id, amount_cents, date, name, merchant_name, pending, gl_match_id, gl_journal_id")
-      .eq("account_id", a.accountId)
-      .eq("removed", false)
-      .gte("date", fromIso)
-      .order("date", { ascending: false })
-      .limit(WATCH_TXN_CAP + 1);
+    const tq = await paged("plaid_transactions", "id, transaction_id, account_id, amount_cents, date, name, merchant_name, pending, gl_match_id, gl_journal_id", {
+      eq: { account_id: a.accountId, removed: false },
+      gte: { date: fromIso },
+    });
     if (tq.error) {
-      problems.push(`Bank lines for ${a.name} could not be read, so that account is not watched today.`);
+      problems.push(`Bank lines for ${a.name} could not be read in full, so that account is not watched today.`);
       continue;
     }
-    const rows = (tq.data ?? []) as Record<string, unknown>[];
+    const rows = [...tq.data].sort((x, y) => String(y.date).localeCompare(String(x.date)));
     if (rows.length > WATCH_TXN_CAP) problems.push(`More than ${WATCH_TXN_CAP} bank lines on ${a.name} in ${WATCH_DAYS} days; only the newest ${WATCH_TXN_CAP} are watched.`);
     for (const t of rows.slice(0, WATCH_TXN_CAP)) {
       txns.push({
@@ -177,9 +192,8 @@ export async function loadBankWatch(todayIso: string): Promise<WatchLoad> {
   const notices: LoggedNotice[] = [];
   if (noticeQ.error) problems.push("The logged returns and NOCs could not be read, so possible returns and fee gaps may be wrong.");
   else {
-    const rows = (noticeQ.data ?? []) as Record<string, unknown>[];
-    if (rows.length > 1000) problems.push("More than 1,000 notices in the window; some are left out.");
-    for (const n of rows.slice(0, 1000)) {
+    const rows = [...noticeQ.data].sort((x, y) => String(x.received_on).localeCompare(String(y.received_on)));
+    for (const n of rows) {
       if (n.notice_kind !== "return" && n.notice_kind !== "noc") continue;
       notices.push({ kind: n.notice_kind, receivedOn: String(n.received_on), amountCents: n.amount_cents === null || n.amount_cents === undefined ? null : cents(n.amount_cents) });
     }
@@ -192,7 +206,7 @@ export async function loadBankWatch(todayIso: string): Promise<WatchLoad> {
     if (missingTable(ruleQ.error.message)) tablesReady = false;
     else problems.push("The known-payee rules could not be read, so lines they cover show as unexplained.");
   } else {
-    for (const r of (ruleQ.data ?? []) as Record<string, unknown>[]) {
+    for (const r of [...ruleQ.data].sort((x, y) => String(x.created_at).localeCompare(String(y.created_at)))) {
       rules.push({
         id: String(r.id),
         matchText: String(r.match_text ?? ""),
@@ -211,9 +225,8 @@ export async function loadBankWatch(todayIso: string): Promise<WatchLoad> {
     if (missingTable(reviewQ.error.message)) tablesReady = false;
     else problems.push("The bank line reviews could not be read, so reviewed lines show as unexplained.");
   } else {
-    const rows = (reviewQ.data ?? []) as Record<string, unknown>[];
-    if (rows.length > 5000) problems.push("More than 5,000 reviews in the window; the oldest are left out.");
-    for (const r of rows.slice(-5000)) {
+    const rows = [...reviewQ.data].sort((x, y) => String(x.created_at).localeCompare(String(y.created_at)));
+    for (const r of rows) {
       if (!VERDICTS.has(String(r.verdict))) continue;
       reviews.push({ transactionId: String(r.transaction_id), verdict: r.verdict as WatchVerdict, note: String(r.note ?? ""), createdAt: String(r.created_at ?? ""), by: who(r.created_by) });
     }
