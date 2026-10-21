@@ -1,0 +1,26 @@
+coalesce(m.raw_payload->>'kind', '') not in ('pos-import-migration', 'cultivera-reconstructed')|coalesce(m.raw_payload->>'kind', '') not in ('pos-import-migration')
+coalesce(m.raw_payload->>'kind', '') not in ('pos-import-migration', 'cultivera-reconstructed')|coalesce(m.raw_payload->>'kind', '') not in ('cultivera-reconstructed')
+and upper(coalesce(m.manifest_number, '')) not like 'POS-IMPORT-%'|and true
+upper(coalesce(m.manifest_number, ''))|coalesce(m.manifest_number, '')
+and coalesce(l.notes, '') not like '%Cultivera migration (one-time POS import).%'|and true
+where l.vendor_inventory_external_id is null|where true
+and nullif(trim(l.lot_code), '') is not null|and l.lot_code is not null
+left(trim(l.lot_code), 100)|left(l.lot_code, 100)
+when 'pdf-manifest' then 'pdf_guess'|when 'pdf-manifest' then 'ccrs_csv'
+when 'wcia' then 'wcia_json'|when 'wcia' then 'unknown'
+'lots', sum(x.n)|'lots', count(*)
+having count(*) > 0;|;
+coalesce(p_env, '') not in ('preprod', 'prod')|p_env not in ('preprod', 'prod')
+coalesce(p_env, '') not in ('preprod', 'prod')|coalesce(p_env, '') not in ('preprod', 'prod', 'test')
+where f.env = p_env and f.file_type = 'InventoryTransfer'|where f.file_type = 'InventoryTransfer'
+and f.file_type = 'InventoryTransfer' and f.state in|and f.state in
+f.state in ('emitted', 'uploaded')|f.state in ('emitted', 'uploaded', 'abandoned')
+on e.env = p_env and e.file_type = 'InventoryTransfer'|on e.file_type = 'InventoryTransfer'
+and e.file_type = 'InventoryTransfer' and e.external_id = i.id|and e.external_id = i.id
+where x.state is not null or x.in_flight;|where true;
+grant execute on function public.ccrs_transfer_slice(text, text[]) to service_role;|grant execute on function public.ccrs_transfer_slice(text, text[]) to service_role, anon;
+or vendor_inventory_external_id_source in ('wcia_json', 'ccrs_csv', 'pdf_guess', 'owner_entered', 'unknown')|or true
+(vendor_inventory_external_id <> '' and length(vendor_inventory_external_id) <= 100)|(length(vendor_inventory_external_id) <= 100)
+length(vendor_inventory_external_id) <= 100|length(vendor_inventory_external_id) <= 101
+set search_path = public, pg_temp|set search_path = public
+stable|volatile

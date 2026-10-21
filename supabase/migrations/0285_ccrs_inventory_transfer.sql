@@ -84,7 +84,7 @@ with src as (
 )
 insert into public.audit_logs (actor_id, actor_email, action, entity_type, entity_id, before_json, after_json)
 select null, 'migration:0285', 'migration_0285.vendor_inventory_external_id_backfill', 'inventory_lot', 'batch',
-       null, jsonb_build_object('lots', count(*), 'by_source', jsonb_object_agg(x.how, x.n))
+       null, jsonb_build_object('lots', sum(x.n), 'by_source', jsonb_object_agg(x.how, x.n))
   from (select how, count(*) as n from done group by how) x
 having count(*) > 0;
 
@@ -97,7 +97,7 @@ as $$
 declare
   v_entries jsonb;
 begin
-  if p_env not in ('preprod', 'prod') then
+  if coalesce(p_env, '') not in ('preprod', 'prod') then
     raise exception 'CCRS_TRANSFER_SLICE_BAD_ENV: %', p_env using errcode = 'check_violation';
   end if;
   with ids as (
