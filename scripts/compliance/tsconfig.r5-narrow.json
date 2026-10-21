@@ -10,6 +10,8 @@
   "files": [
     "../../src/lib/compliance/ccrs-batch.ts",
     "../../src/lib/compliance/ccrs-inventory-delta-core.ts",
+    "../../src/lib/compliance/ccrs-integrator-api-core.ts",
+    "../../src/lib/compliance/ccrs-integrator-api.ts",
     "../../src/app/admin/reports/compliance/batch-export/route.ts",
     "../../src/app/admin/inventory/disposition/sale-correction-export/route.ts",
     "../../src/lib/compliance/ccrs-preflight-core.ts",

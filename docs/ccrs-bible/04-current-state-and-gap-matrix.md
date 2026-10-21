@@ -262,6 +262,17 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - Left-out lots are listed in advisory **E51_INVENTORY_UNCHANGED_NOT_SENT**. Without the ledger, or before 0286 is applied, every row is sent as before.
 - See Part 09 R6-3.
 
+### A.15 R6-4 Integrator API client — BUILT, SWITCHED OFF (2026-10-21); needs LCB credentials
+
+- **Before:** there was no API code at all (Part 18 rows 13-15 NOT BUILT).
+- **Now:** a pure core and a server-only client follow the CCRS Integrator API Guide (Part 02 §3):
+  - the token per env audience `[API L0119-L0127]`, cached until 15 min before expiry `[API L0137-L0138]`;
+  - the multipart upload of one group with Bearer + X-Uploader-Email `[API L0080-L0085]`;
+  - every documented answer `[API L0187-L0228]`;
+  - integrator file names `[G L0047]`.
+- Off unless `CCRS_API_<ENV>_ENABLED=true` and every credential is set. Nothing in the app calls it yet; the weekly upload stays by hand.
+- See Part 09 R6-4.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

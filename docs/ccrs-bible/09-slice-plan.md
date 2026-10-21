@@ -1061,6 +1061,37 @@ Branch `r6-3-inventory-unchanged`. Closes the re-send half of N-03 (Part 04 §A.
 
 **Remaining.** Confirm with an S-16 copy that a lot left out of a week keeps its values in CCRS (U-77).
 
+## R6-4 — CCRS Integrator API client foundation, switched off (DONE in code, 2026-10-21)
+
+Branch `r6-4-integrator-api`. Part 18 rows 13-15. Roadmap R-1 groundwork; no migration.
+
+**Why now.** The owner applied to be Greenway's own integrator (Part 18). Everything that does not need the LCB's answer is built now, so approval only needs credentials plus a PREprod proof. Every rule is from the CCRS Integrator API Guide, verbatim in Part 02 §3.
+
+**Built.**
+- `ccrs-integrator-api-core.ts` (pure, 20 self-tests):
+  - `CCRS_API_ENDPOINTS`: token URL, audience and upload URL per env `[API L0053-L0075]`.
+  - `readIntegratorConfig`: off unless `CCRS_API_<ENV>_ENABLED` is exactly `true`; names missing variables, never values; the Integrator ID must be letters, digits and hyphens.
+  - `tokenRequest` and `decodeTokenResponse` `[API L0119-L0135]`; `tokenIsUsable` (same audience, refresh 15 min before expiry) `[API L0137-L0138]`.
+  - `integratorFileName` `[G L0047]`.
+  - `buildUploadRequest`: Bearer + X-Uploader-Email, one `files` part per file `[API L0080-L0085]`, `[API L0159-L0160]`. It refuses an empty request, duplicates, a name that is not ours, a file without CRLF, and mixed upload groups.
+  - `redactRequest`.
+  - `classifyUploadResponse`: received / rejected (error or errors[]) / auth_failed (any 401) / server_error / too_large (HTML or 413) / unknown `[API L0187-L0228]`.
+  - `nextStep`: retries a 500 with back-off and one cached-token 401 with a new token, at most 3 tries; never retries a rejection, an oversize page or an unreadable answer.
+- `ccrs-integrator-api.ts` (server only): `integratorConfig`, `getIntegratorToken` (per-env in-memory cache), `uploadGroupViaApi`. It checks the switch before any request. **No route, cron or screen imports it** (test-enforced).
+- `.env.example`: the ten `CCRS_API_PREPROD_*` / `CCRS_API_PROD_*` variables.
+- "Acceptance means the file was received for processing" `[API L0230-L0231]`: a `received` answer marks nothing succeeded. The CCRS email (S-12c / S-18a) still decides.
+
+**Tests.**
+- `tests/compliance/r6-4-integrator-api.test.ts` (26), with the API quotes checked against Part 02 §3. The self-test is registered.
+- TS mutations **M446–M460** (15) are all killed.
+
+**Remaining (needs the LCB).**
+- Credentials and the Integrator ID.
+- An owner button to send one group by API in PREprod, recording the answer on the `ccrs_files` row.
+- The PREprod proof (evidence folder).
+- Then the R-1 dry-run switch.
+- U-78 (oversize status) and U-79 (Integrator ID format) close on the first PREprod call.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

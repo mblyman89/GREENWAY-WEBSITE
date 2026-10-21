@@ -905,6 +905,7 @@ import { __runCcrsCopyVerifyCoreTests } from "../../src/lib/compliance/ccrs-copy
 import { __runReturnCorrectionsTests } from "../../src/lib/compliance/ccrs-return-corrections-core";
 import { __runCcrsTransferTests } from "../../src/lib/compliance/ccrs-transfer-core";
 import { __runInventoryDeltaTests } from "../../src/lib/compliance/ccrs-inventory-delta-core";
+import { __runIntegratorApiTests } from "../../src/lib/compliance/ccrs-integrator-api-core";
 import { __runResetProofTests } from "../../src/lib/accounting/reset-proof-core";
 import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
 import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
@@ -1803,6 +1804,7 @@ __runLiquidVolumeTests();
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file
   assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 27); // R6-2: InventoryTransfer rows for received deliveries
   assertRan("ccrs-inventory-delta-core", __runInventoryDeltaTests(), 22); // R6-3: Inventory.csv sends only what changed
+  assertRan("ccrs-integrator-api-core", __runIntegratorApiTests(), 20); // R6-4: integrator API client foundation (switched off)
   assertRan("reset-proof-core", __runResetProofTests(), 11); // R5-2: the factory reset is checked against its own per-table report
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();

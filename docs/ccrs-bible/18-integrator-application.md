@@ -116,9 +116,9 @@ Status: **BUILT** (in code, tested) · **THIS ROUND** (built in S-14 / S-16, 202
 | 10 | "ten-transition state machine" (DP §3.6) | BUILT | 0247 `ccrs_files_guard` `legal` array has exactly 10 entries |
 | 11 | Success notice parsed and correlated on our file name; error file matched row by row (DP §3.6) | BUILT | S-12c, S-18a/b mailbox monitor |
 | 12 | Five-year retention of submitted files and responses (Agreement 5; DP §6) | BUILT (storage); OWNER (policy) | `ccrs_files` rows can never be deleted after draft (0247 guard); `ccrs_file_contents` keeps the bytes. No purge job exists. Backups are the hosting provider's |
-| 13 | Credentials only as server-side secrets, never in git (Agreement 6; DP §6) | NOT BUILT (nothing to store yet) | Applies when the API client lands (R-1) |
-| 14 | Integrator API client: token cache to ~24 h, every documented outcome, pacing (DP §4.1; SoS) | **NOT BUILT** | R-1. Needs the client id/secret LCB issues on approval. Design in the round report |
-| 15 | Integrator file names `UploadType_IntegratorID_…` (DP §4.2) | **NOT BUILT** | Needs the Integrator ID. `ccrsFileName` is pure, so the change is small; prove it in PREprod first |
+| 13 | Credentials only as server-side secrets, never in git (Agreement 6; DP §6) | **BUILT (R6-4, 2026-10-21; nothing stored yet)** | `CCRS_API_<PREPROD|PROD>_*` server env vars only (`.env.example`); no `NEXT_PUBLIC_`; `readIntegratorConfig` never echoes a value; `redactRequest` shows the last 4 characters of a token only |
+| 14 | Integrator API client: token cache to ~24 h, every documented outcome, pacing (DP §4.1; SoS) | **BUILT, SWITCHED OFF (R6-4, 2026-10-21)** | `ccrs-integrator-api-core.ts` (pure) + `ccrs-integrator-api.ts` (server I/O). Client-credentials token per env audience `[API L0119-L0127]`, cached until 15 min before expiry `[API L0137-L0138]`; one upload group per request `[API L0170-L0172]`; every documented answer classified `[API L0187-L0228]`; a 500 retried with back-off, one 401 retried with a new token, anything unreadable never retried. Nothing calls it yet; pacing stays the existing group release on the success email |
+| 15 | Integrator file names `UploadType_IntegratorID_…` (DP §4.2) | **BUILT, NOT WIRED (R6-4, 2026-10-21)** | `integratorFileName` `[G L0047]` (same Pacific stamp as `ccrsFileName`). The batch still names files with the license number for the hand upload. Needs the Integrator ID; prove it in PREprod first (U-79) |
 | 16 | InventoryTransfer rows from receiving records (DP §4.3) | **NOT BUILT** | Today the file is empty with an advisory (`ccrs-batch.ts` ~L1027) |
 | 17 | Empty Description demoted to warning (DP §4.3) | **BUILT (R5-3, 2026-10-20)** | `E10_DESCRIPTION_REQUIRED` is now `severity: "warning"` in `ccrs-batch.ts`; the product row was never withheld (test `r5-preprod-evidence-gates.test.ts`, mutation M394). Based on T-19 accepted `[OBS 2026-09-17 T-19]`; U-21 stays open (LCB may enforce the Note `[G L0482-L0483]`) |
 | 18 | Stale-lot waves: Update to 0, then Reconciliation, 10k chunks, cost/QoH/strain repairs (DP §4.4; SoS) | **THIS ROUND (S-14)** | `ccrs-equalize-core.ts`, `scripts/compliance/equalize-ccrs-wave.ts`. Every open examiner question (Q-B1/2/3/6) is a policy switch with the safe default |
@@ -145,7 +145,7 @@ Status: **BUILT** (in code, tested) · **THIS ROUND** (built in S-14 / S-16, 202
 
 | When | Event | Code / doc action |
 |---|---|---|
-| LCB answers the application | PREprod integrator credentials (client id, secret, Integrator ID, uploader email) | Store the secret only in Vercel environment variables (never git, never the browser). Record the Integrator ID in Part 05 as an owner fact. Start R-1 slice R-1a (pure API core, tests first) |
+| LCB answers the application | PREprod integrator credentials (client id, secret, Integrator ID, uploader email) | Store the secret only in Vercel environment variables (never git, never the browser). Record the Integrator ID in Part 05 as an owner fact. Set the five `CCRS_API_PREPROD_*` values; the R6-4 client is already built. Next slice: an owner button "Send this group by API (PREprod)" that calls `uploadGroupViaApi` and records the answer on the file |
 | PREprod proof | Integrator file names + API upload accepted | Evidence folder under `docs/ccrs-bible/evidence/`, the same discipline as P20261007A |
 | Production approval | Production credentials, audience `lcb.ccrs.api.prod` | R-1 switch, dry-run first (Part 09 Roadmap R-1 gate) |
 | Brian answers Q-B1…Q-B11 | Policies for the waves | Change only the S-14 policy defaults the answer settles, cite `[EXAM L####]`, close U-55…U-58 |
@@ -154,5 +154,6 @@ Status: **BUILT** (in code, tested) · **THIS ROUND** (built in S-14 / S-16, 202
 
 ## G. Change log
 
+- 2026-10-21 (R6-4): rows 13-15 BUILT (client switched off; nothing calls it).
 - 2026-10-20 (R5-3): row 17 is now BUILT (E10 demoted to a warning).
 - 2026-10-20: created (owner upload of the four PDFs). Hashes computed in the sandbox with `sha256sum`/`md5sum`. Text read with `pdftotext`. The LIQ1455 scan was read from its page images.
