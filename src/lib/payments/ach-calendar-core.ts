@@ -251,7 +251,7 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
     lawIds: ["timberland-s25-liability", "timberland-s11-indemnity"],
     quote: {
       text: "Such amendments shall become effective upon receipt of notice by Company or such later date as may be stated in Financial Institution's notice to Company.",
-      file: "ach/timberland-ach-agreement-2026-10-09.redacted.txt",
+      file: "ach/timberland-ach-agreement-2026-10-14.redacted.txt",
     },
   },
   {
@@ -269,7 +269,7 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
     lawIds: [],
     quote: {
       text: "Maximum monthly aggregate limit of all credit files .......... $100,000.00",
-      file: "ach/timberland-ach-agreement-2026-10-09.redacted.txt",
+      file: "ach/timberland-ach-agreement-2026-10-14.redacted.txt",
     },
   },
   {
@@ -307,7 +307,7 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
     lawIds: ["timberland-schedule-f-notice"],
     quote: {
       text: "Timberland Bank requires companies\u2019 use of a private secured internet connection and a network that is protected by Anti-virus, Anti-spyware, and a Firewall on all company computers that will be originating ACH files.",
-      file: "ach/timberland-ach-agreement-2026-10-09.redacted.txt",
+      file: "ach/timberland-ach-agreement-2026-10-14.redacted.txt",
     },
   },
 ];

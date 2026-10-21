@@ -43,11 +43,11 @@ import {
 
 const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
-const AGREEMENT = read(TIMBERLAND_SOURCE_FILES["timberland-ach-agreement-2026-10-09"]);
+const AGREEMENT = read(TIMBERLAND_SOURCE_FILES["timberland-ach-agreement-2026-10-14"]);
 const BRENDA = read(TIMBERLAND_SOURCE_FILES["timberland-brenda-2026-10"]);
 const PROFILE_SRC = read("src/lib/payments/timberland-profile-core.ts");
 const FLAT: Record<string, string> = {
-  "timberland-ach-agreement-2026-10-09": flattenWs(AGREEMENT),
+  "timberland-ach-agreement-2026-10-14": flattenWs(AGREEMENT),
   "timberland-brenda-2026-10": flattenWs(BRENDA),
 };
 
@@ -66,7 +66,7 @@ describe("R41 S1: every quote is in its mirror", () => {
     const q = flattenWs(TIMBERLAND_PROFILE.creditLeadBankingDays.cites[0]!.quote);
     const changed = q.replace("credit transactions", "credit transactiens");
     expect(changed).not.toBe(q);
-    expect(FLAT["timberland-ach-agreement-2026-10-09"]).not.toContain(changed);
+    expect(FLAT["timberland-ach-agreement-2026-10-14"]).not.toContain(changed);
   });
   it("code never quotes the three scan-uncertain words (Intemet, Retum, retums)", () => {
     for (const { cite } of cites) expect(cite.quote).not.toMatch(/Intemet|Internet Banking|Retum|retums/);
@@ -172,14 +172,14 @@ describe("R41 S1: provenance of the two mirrors", () => {
   });
   it("both mirrors are listed in the ACH README", () => {
     const readme = read("docs/authorities/ach/README.md");
-    expect(readme).toContain("timberland-ach-agreement-2026-10-09.redacted.txt");
+    expect(readme).toContain("timberland-ach-agreement-2026-10-14.redacted.txt");
     expect(readme).toContain("timberland-brenda-2026-10.txt");
     expect(readme).toContain(TIMBERLAND_AGREEMENT_PDF_SHA256.slice(0, 16));
   });
   it("the agreement has a MANIFEST row with the PDF's size, hash prefix, and the mirror's real line and byte counts", () => {
     const row = read("docs/authorities/MANIFEST.tsv")
       .split("\n")
-      .find((l) => l.startsWith("ach/timberland-ach-agreement-2026-10-09.redacted.txt\t"));
+      .find((l) => l.startsWith("ach/timberland-ach-agreement-2026-10-14.redacted.txt\t"));
     expect(row).toBeDefined();
     const [, pdf, pdfBytes, sha16, txtBytes, txtLines, pages] = row!.split("\t");
     expect(pdf).toBe("Signed_ACH_Origination_Agreement.pdf");

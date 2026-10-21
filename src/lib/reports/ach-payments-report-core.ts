@@ -10,12 +10,14 @@
  *
  * HOW THE BANK MATCHING WORKS (no guessing about how Timberland posts)
  * The signed agreement, section 16 (mirror
- * docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt line
- * 228), says: "Company authorizes Financial Institution to debit its Account
+ * docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt line
+ * 219), says: "Company authorizes Financial Institution to debit its Account
  * in the amount of each file." Our files are unbalanced (section 14, no offset
- * entry), so the bank makes the settlement debit. The mirrors do NOT say
- * whether that shows up as one line per file or one per entry. So we try both,
- * in this order, and label which one matched:
+ * entry), so the bank makes the settlement debit. R41 S12: Brenda's Email 3
+ * (docs/authorities/ach/timberland-brenda-2026-10-19-email-3.txt, answer 13)
+ * says the statement shows "Per total amount of file uploaded." So step 1 is
+ * the expected match; steps 2 and 3 stay as labelled fallbacks (owner
+ * decision D-8 default) for older runs and odd cases. In this order:
  *   1. FILE TOTAL — each released file (not voided, money > 0) against one
  *      Main-account debit in its window (effective date T+0..T+2 business
  *      days), exact amount first, else the closest within tolerance.

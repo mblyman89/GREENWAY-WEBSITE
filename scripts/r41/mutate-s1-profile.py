@@ -15,7 +15,7 @@ import subprocess
 import sys
 
 P = "src/lib/payments/timberland-profile-core.ts"
-AG = "docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt"
+AG = "docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt"
 BR = "docs/authorities/ach/timberland-brenda-2026-10.txt"
 MF = "docs/authorities/MANIFEST.tsv"
 RD = "docs/authorities/ach/README.md"
@@ -63,7 +63,7 @@ M = [
     ("mirror-phone-leak", BR, "Cutoff time is 4 pm daily", "Call 360-555-0142. Cutoff time is 4 pm daily"),
     # provenance
     ("manifest-bytes-wrong", MF, "\t48973\t721\t12", "\t48974\t721\t12"),
-    ("readme-row-dropped", RD, "timberland-ach-agreement-2026-10-09.redacted.txt", "timberland-agreement.txt"),
+    ("readme-row-dropped", RD, "timberland-ach-agreement-2026-10-14.redacted.txt", "timberland-agreement.txt"),
     # registration
     ("selftest-floor-lowered", RS, 'assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 42)',
      'assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 1)'),

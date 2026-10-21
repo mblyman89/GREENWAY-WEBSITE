@@ -2,7 +2,7 @@
  * R41 S7: Timberland's prenote wait and the first-file test.
  *
  * Timberland ACH agreement, section 6 (mirror:
- * docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt):
+ * docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt):
  * "it agrees not to initiate live dollar Entries until at least 6 banking
  * days following the settlement date of the prenotification Entry."
  *

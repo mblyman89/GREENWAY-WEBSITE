@@ -4,12 +4,16 @@
  * Timberland Bank's ACH terms for Greenway, in ONE place, each with the words
  * it came from. PURE: no I/O, no clock, no server-only imports.
  *
- * Two sources, both mirrored verbatim in docs/authorities/ach:
- *   - "timberland-ach-agreement-2026-10-09": the signed ACH Origination
- *     Agreement (company-signed 10/09/26), redacted for the public repo, PDF
- *     sha256 302132a2...58ce4. File: timberland-ach-agreement-2026-10-09.redacted.txt
- *   - "timberland-brenda-2026-10": Brenda's (Timberland Cash Management) two
- *     emails, as the owner pasted them. File: timberland-brenda-2026-10.txt
+ * Three sources, all mirrored verbatim in docs/authorities/ach:
+ *   - "timberland-ach-agreement-2026-10-14": the COUNTERSIGNED ACH Origination
+ *     Agreement (Greenway 10/13/26, Timberland 10/14/26), redacted for the public
+ *     repo, PDF sha256 5cbcc523...0b3. File: timberland-ach-agreement-2026-10-14.redacted.txt
+ *     (R41 S12. The company-signed 10/09/26 copy's mirror stays in the repo as
+ *     history; the printed terms of the two copies are the same.)
+ *   - "timberland-brenda-2026-10": Brenda's (Timberland Cash Management) first
+ *     two emails, as the owner pasted them. File: timberland-brenda-2026-10.txt
+ *   - "timberland-brenda-2026-10-19-email-3": Brenda's Email 3, her answers to
+ *     our remaining questions (R41 S12). File: timberland-brenda-2026-10-19-email-3.txt
  *
  * Rules this file keeps (tests/compliance/r41-s1-timberland-profile.test.ts):
  *   - every `quote` is an exact substring of its mirror (whitespace flattened)
@@ -23,9 +27,10 @@
  * This slice only RECORDS the terms. Later R41 slices (S2-S11) read them; no
  * file builder, limit check or clock changes behaviour in S1.
  *
- * NOT LEGAL ADVICE. Where the contract and Brenda differ, or a term is not
- * defined, the open question is listed in OPEN_QUESTIONS with the strict
- * default the later slices use until Brenda answers.
+ * NOT LEGAL ADVICE. Where the contract and Brenda differed, or a term was not
+ * defined, the question was listed in OPEN_QUESTIONS with a strict default.
+ * R41 S12: Brenda answered them all (Email 3). OPEN_QUESTIONS keeps the same
+ * ids as a record, each now carrying her exact answer and what the app does.
  */
 
 import { dfiId8, isValidRouting } from "./nacha-fields-core";
@@ -35,16 +40,23 @@ import { NACHA_MIN_PRENOTE_WAIT_BANKING_DAYS as NACHA_PRENOTE_WAIT_BANKING_DAYS 
 // 1. Sources and citations
 // ───────────────────────────────────────────────────────────────────────────
 
-export type TimberlandSourceId = "timberland-ach-agreement-2026-10-09" | "timberland-brenda-2026-10";
+export type TimberlandSourceId = "timberland-ach-agreement-2026-10-14" | "timberland-brenda-2026-10" | "timberland-brenda-2026-10-19-email-3";
 
 /** Repo-relative path of each verbatim mirror. */
 export const TIMBERLAND_SOURCE_FILES: Readonly<Record<TimberlandSourceId, string>> = {
-  "timberland-ach-agreement-2026-10-09": "docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt",
+  "timberland-ach-agreement-2026-10-14": "docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt",
   "timberland-brenda-2026-10": "docs/authorities/ach/timberland-brenda-2026-10.txt",
+  "timberland-brenda-2026-10-19-email-3": "docs/authorities/ach/timberland-brenda-2026-10-19-email-3.txt",
 };
 
-/** sha256 of the ORIGINAL signed PDF (kept by the owner, never committed). */
-export const TIMBERLAND_AGREEMENT_PDF_SHA256 = "302132a284ad0ebfc83c3bbf6aa77fe002141b7ec8646efa4fd2bea129158ce4";
+/** sha256 of the ORIGINAL countersigned PDF, ACH_Agreement_10-14-26.pdf (kept by the owner, never committed). */
+export const TIMBERLAND_AGREEMENT_PDF_SHA256 = "5cbcc523f766552c7d798ac85f87239ef79070688c6738d2bf416578ab63b0b3";
+
+/** The company-signed 10/09/26 copy the code cited before S12 (mirror kept as history). */
+export const TIMBERLAND_AGREEMENT_2026_10_09_PDF_SHA256 = "302132a284ad0ebfc83c3bbf6aa77fe002141b7ec8646efa4fd2bea129158ce4";
+
+/** Signature dates on the countersigned copy (p.6 verified transcription). */
+export const TIMBERLAND_AGREEMENT_SIGNED = { company: "10/13/26", bank: "10/14/26" } as const;
 
 export type TimberlandCite = { source: TimberlandSourceId; section: string; quote: string };
 
@@ -57,8 +69,9 @@ export type TimberlandFact<T> = {
   label: string;
 };
 
-const A = "timberland-ach-agreement-2026-10-09" as const;
+const A = "timberland-ach-agreement-2026-10-14" as const;
 const B = "timberland-brenda-2026-10" as const;
+const E3 = "timberland-brenda-2026-10-19-email-3" as const;
 
 /** Collapse every run of whitespace (incl. U+00A0 and newlines) to one space. */
 export function flattenWs(s: string): string {

@@ -180,7 +180,7 @@ export default async function AchLegalLibraryPage() {
         <section id="timberland" className="space-y-4">
           <h2 className="text-base font-semibold text-white">Your Timberland agreement: the parts that matter most ({agreement.length})</h2>
           <p className="text-sm text-white/70">
-            Word for word from the ACH Origination Agreement Greenway signed on 10/09/26. The signed PDF is kept by Michael, not on the website. The
+            Word for word from the ACH Origination Agreement, signed by Greenway on 10/13/26 and countersigned by Timberland on 10/14/26. The signed PDF is kept by Michael, not on the website. The
             text here comes from a redacted copy with the PDF&apos;s fingerprint (SHA-256), so anyone with the PDF can prove it matches. Section 28 lets
             Timberland change the agreement by notice, so the Calendar has a yearly task to re-read it.
           </p>

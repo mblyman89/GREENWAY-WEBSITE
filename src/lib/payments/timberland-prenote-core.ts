@@ -3,7 +3,7 @@
  *
  * Timberland's prenote wait, the first-file gate and the backwards plan for
  * the first live payroll. The rule is quoted from the signed agreement mirror
- * (docs/authorities/ach/timberland-ach-agreement-2026-10-09.redacted.txt):
+ * (docs/authorities/ach/timberland-ach-agreement-2026-10-14.redacted.txt):
  *
  *   section 6 Prenotification: "If Company chooses to originate non-dollar
  *   prenotification Entries to verify the accuracy of routing and account
