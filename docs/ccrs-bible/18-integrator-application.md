@@ -120,7 +120,7 @@ Status: **BUILT** (in code, tested) · **THIS ROUND** (built in S-14 / S-16, 202
 | 14 | Integrator API client: token cache to ~24 h, every documented outcome, pacing (DP §4.1; SoS) | **NOT BUILT** | R-1. Needs the client id/secret LCB issues on approval. Design in the round report |
 | 15 | Integrator file names `UploadType_IntegratorID_…` (DP §4.2) | **NOT BUILT** | Needs the Integrator ID. `ccrsFileName` is pure, so the change is small; prove it in PREprod first |
 | 16 | InventoryTransfer rows from receiving records (DP §4.3) | **NOT BUILT** | Today the file is empty with an advisory (`ccrs-batch.ts` ~L1027) |
-| 17 | Empty Description demoted to warning (DP §4.3) | NOT BUILT | E10 still blocks (`ccrs-preflight-core.ts` L356). U-21 / X-34 |
+| 17 | Empty Description demoted to warning (DP §4.3) | **BUILT (R5-3, 2026-10-20)** | `E10_DESCRIPTION_REQUIRED` is now `severity: "warning"` in `ccrs-batch.ts`; the product row was never withheld (test `r5-preprod-evidence-gates.test.ts`, mutation M394). Based on T-19 accepted `[OBS 2026-09-17 T-19]`; U-21 stays open (LCB may enforce the Note `[G L0482-L0483]`) |
 | 18 | Stale-lot waves: Update to 0, then Reconciliation, 10k chunks, cost/QoH/strain repairs (DP §4.4; SoS) | **THIS ROUND (S-14)** | `ccrs-equalize-core.ts`, `scripts/compliance/equalize-ccrs-wave.ts`. Every open examiner question (Q-B1/2/3/6) is a policy switch with the safe default |
 | 19 | Fresh-copy compare after uploads (SoS; Part 17 §G) | BUILT (S-15 merge) + **THIS ROUND (S-16 verify)** | `ccrs-reseed-core.ts`; `ccrs-copy-verify-core.ts`, `scripts/compliance/verify-ccrs-copy.ts` |
 | 20 | Test counts "23,676 tests / 908 files; CCRS subset 20 files / 740 tests" on 10/19 (DP §3.1) | Was true on 10/19; grows | Each round's report gives the current count |
@@ -154,4 +154,5 @@ Status: **BUILT** (in code, tested) · **THIS ROUND** (built in S-14 / S-16, 202
 
 ## G. Change log
 
+- 2026-10-20 (R5-3): row 17 is now BUILT (E10 demoted to a warning).
 - 2026-10-20: created (owner upload of the four PDFs). Hashes computed in the sandbox with `sha256sum`/`md5sum`. Text read with `pdftotext`. The LIQ1455 scan was read from its page images.
