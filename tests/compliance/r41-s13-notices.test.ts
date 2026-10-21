@@ -122,6 +122,11 @@ describe("R41 S13: the reversal call sheet", () => {
     expect(r).toContain("reversalSheet(res.body, res.row)");
     expect(r).toContain('action: "ach.file.reversal_sheet"');
     expect(r).toContain('"Cache-Control": "no-store"');
+    // every response (errors AND the 200 sheet) must say no-store
+    const cc = r.match(/"Cache-Control": "[^"]*"/g) ?? [];
+    expect(cc.length).toBe(3);
+    expect(cc.every((x) => x === '"Cache-Control": "no-store"')).toBe(true);
+    expect(r).toContain('      "Cache-Control": "no-store",\n      "X-Content-Type-Options": "nosniff",');
     expect(r).not.toMatch(/body_enc|account_number/);
     const p = read("src/app/admin/settings/banking/operations/page.tsx");
     expect(p).toContain('{f.status === "uploaded" || f.status === "bank_approved" ? (');
