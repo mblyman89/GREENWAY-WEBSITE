@@ -2741,3 +2741,35 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0287_ach_timberland_comms_notices.rollback.sql`.
   It refuses once any entry of the three new types exists (they are records).
+
+## R41 — 0288 — Yearly ACH fraud-procedure review (Nacha Phase 2)
+
+- [ ] `0288_ach_annual_reviews.sql` adds one table, `ach_annual_reviews`: the
+  yearly review of Greenway's written ACH fraud procedure that Nacha's Phase 2
+  fraud-monitoring rule requires "at least annually". One row per year (who
+  reviewed, the date, the outcome, what was found, and a fingerprint of the
+  procedure text that was reviewed). A mistake is fixed by a correction row
+  that points at the original; nothing is ever changed or deleted.
+  - Only the owner can record it (the trigger checks `ach_write_by_owner`).
+  - The date must be today or yesterday (Pacific): no backdating.
+  - The year must be the review date's year or the year before.
+  - The summary is 20 to 2,000 characters and may not contain a run of 7 or
+    more digits (no account numbers).
+
+  Apply it **after 0287**. It is safe to re-run. Until it is applied, the
+  Yearly review page says the reviews cannot be read and Record saves nothing.
+
+  **Check:**
+
+  ```sql
+  select count(*) as rows, to_regclass('public.ach_annual_reviews') is not null as has_table
+    from ach_annual_reviews;
+  -- rows | has_table
+  -- 0    | t
+  ```
+
+  For the full proof, paste `scripts/recon/ach-annual-reviews-0288-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0288 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0288_ach_annual_reviews.rollback.sql`.
+  It refuses once any review exists (they are records).

@@ -1325,7 +1325,10 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  CCRS S-18a / 0282: ccrs_mail_messages (CCRS's confirmation and
     //       error emails about files the State already received; the
     //       database refuses DELETE, so a WIPE rule would fail part-way)
-    expect(plan.keep.length).toBe(165);
+    //   +1  R41 S14 / 0288: ach_annual_reviews (the yearly Nacha fraud-
+    //       procedure review record; append-only, the database refuses
+    //       DELETE and TRUNCATE)
+    expect(plan.keep.length).toBe(166);
     expect(plan.wipe.length).toBe(139);
   });
 

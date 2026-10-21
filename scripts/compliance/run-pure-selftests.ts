@@ -968,6 +968,7 @@ import { __runTimberlandDeadlineCoreTests } from "../../src/lib/payments/timberl
 import { __runTimberlandPrenoteCoreTests } from "../../src/lib/payments/timberland-prenote-core";
 import { __runTimberlandFileCheckerCoreTests, testFileForChecker } from "../../src/lib/payments/timberland-file-checker-core";
 import { __runAchReversalSheetCoreTests } from "../../src/lib/payments/ach-reversal-sheet-core";
+import { __runAchYearlyReviewCoreTests } from "../../src/lib/payments/ach-yearly-review-core";
 import { __runTimberlandFundingCoreTests } from "../../src/lib/payments/timberland-funding-core";
 import { __runTimberlandGoLiveCoreTests } from "../../src/lib/payments/timberland-golive-core";
 import { __runTimberlandObligationsCoreTests } from "../../src/lib/payments/timberland-obligations-core";
@@ -2364,6 +2365,7 @@ __runLiquidVolumeTests();
   assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7 upload day D-6; Q9 Fridays usable D-7), section 3.7 backwards plan, first-file gate
   assertRan("timberland-file-checker-core", __runTimberlandFileCheckerCoreTests(), 98); // R41 S9: check a file before upload (Nacha structure, controls, Timberland pins, deadline, ledger fingerprint, limits)
   assertRan("ach-reversal-sheet-core", __runAchReversalSheetCoreTests(testFileForChecker({ entries: [{ amountCents: 123_45 }, { amountCents: 67_00 }, { amountCents: 1_000_00 }], description: "PAYROLL", sec: "PPD", effective: "2026-10-23", created: new Date("2026-10-20T17:00:00Z") })), 15); // R41 S13: reversal call sheet from the stored file, no account numbers
+  assertRan("ach-yearly-review-core", __runAchYearlyReviewCoreTests(), 47); // R41 S14: Nacha Phase 2 yearly review: quotes, risk assessment, form checks, year status, SoD report, packet
   assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 65); // R41 S9: funding helper (file + $50 fee + own buffer, 9:00 am settlement, 8 am reminder)
   assertRan("timberland-golive-core", __runTimberlandGoLiveCoreTests(), 43); // R41 S9: go-live readiness board (14 gates; never blocks checks)
   assertRan("timberland-obligations-core", __runTimberlandObligationsCoreTests(), 78); // R41 S10: obligation clocks (comms log + NOC), fees, STOP card letter; S13: wrong NOC, OFAC notice, bank report (0287)

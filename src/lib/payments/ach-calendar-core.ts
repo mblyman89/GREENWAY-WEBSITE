@@ -153,12 +153,12 @@ export const ACH_CAL_TASKS: readonly AchCalTask[] = [
     title: "Year-end: review the ACH fraud procedure",
     why: "Nacha's Phase 2 fraud-monitoring rule says the procedure must be reviewed at least once a year and updated for new risks.",
     steps: [
-      "Re-read the fraud procedure on this page.",
-      "Think back over the year: any returned payments, bank-change requests or odd emails? Did anything get past the steps?",
-      "If something should change, note it and tell your developer. Then press \"Done\" for the year.",
+      "Open Banking \u2192 Yearly review. Re-read the fraud procedure and the risk assessment.",
+      "Think back over the year: any returned payments, bank-change requests or odd emails? Did anything get past the steps? Look at who did what (owner only).",
+      "If something should change, note it and tell your developer. Then record the review there: recording this year's review marks this task done for the year.",
     ],
-    href: "/admin/settings/banking/calendar#fraud-procedure",
-    hrefLabel: "Read the procedure",
+    href: "/admin/settings/banking/yearly-review#record",
+    hrefLabel: "Open the yearly review",
     lawIds: ["rcw-62a-4a-202-b"],
     quote: {
       text: "Yes. The rules require these parties to review their processes and procedures at least annually and make appropriate updates to address evolving risks.",

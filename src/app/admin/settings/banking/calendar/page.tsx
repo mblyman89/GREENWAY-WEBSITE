@@ -213,6 +213,10 @@ export default async function AchCalendarPage({ searchParams }: { searchParams: 
               <a href="#task-fraud_procedure_adopt" className="font-semibold text-amber-300 underline">Not adopted yet: type your name in the to-do above →</a>
             )}
           </p>
+          <p className="mt-2 text-sm text-white/70">
+            The yearly review of this procedure, the risk assessment (which payments are higher risk) and who did what with ACH are on{" "}
+            <Link href="/admin/settings/banking/yearly-review" className="font-semibold text-emerald-300 hover:underline">Yearly review →</Link>
+          </p>
         </section>
 
         {/* Rule watch */}
