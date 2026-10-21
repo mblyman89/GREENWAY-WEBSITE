@@ -74,19 +74,21 @@ describe("Q14: PAYROLL batch discretionary data stays blank until Brenda answers
 });
 
 // ------------------------------------------------------- open questions ----
-describe("open questions for Brenda", () => {
-  it("ids are Q1, Q3..Q15, Q18, Q20 (Q2 removed by the owner, round 5; Q16, Q17, Q19 answered by Email 2)", () => {
-    expect(OPEN_QUESTIONS.map((q) => q.id)).toEqual(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20"]);
+describe("questions for Brenda (answered in Email 3, R41 S12)", () => {
+  it("ids are Q1, Q3..Q15, Q18, Q20, Q21..Q26 (Q2 removed by the owner, round 5; Q16, Q17, Q19 answered by Email 2)", () => {
+    expect(OPEN_QUESTIONS.map((q) => q.id)).toEqual(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20", "Q21", "Q22", "Q23", "Q24", "Q25", "Q26"]);
   });
-  it("Q18 strict default: test credits COUNT toward the limits", () => {
+  it("Q18: test credits COUNT toward the limits (her answer)", () => {
     const q = OPEN_QUESTIONS.find((x) => x.id === "Q18")!;
-    expect(q.strictDefault).toMatch(/count/i);
+    expect(q.answers[0]!.quote).toMatch(/it would count in the calculation/);
+    expect(q.appDoes).toMatch(/COUNT/);
     expect(q.affects).toEqual(["prenotesCount"]);
   });
-  it("Q20 cites 82 FR 42597 and keeps Timberland's 6", () => {
+  it("Q20 cites 82 FR 42597 and keeps Timberland's 6 (owner decision D-1)", () => {
     const q = OPEN_QUESTIONS.find((x) => x.id === "Q20")!;
     expect(q.label).toContain("82 FR 42597");
-    expect(q.strictDefault).toMatch(/\b6\b/);
+    expect(q.appDoes).toMatch(/\b6\b/);
+    expect(q.decision).toBe("D-1");
     expect(q.affects).toEqual(["prenoteWaitBankingDays"]);
   });
 });

@@ -462,140 +462,225 @@ export const TIMBERLAND_USERS_ON_FILE = TIMBERLAND_PROFILE.timberlandUsersOnFile
 export const ACH_CONTACTS_ON_FILE = TIMBERLAND_PROFILE.achContactsOnFile.value;
 
 // ───────────────────────────────────────────────────────────────────────────
-// 3. Open questions (R41 plan section 9; Q2 removed by the owner, round 5)
+// 3. Answered questions (R41 plan section 9; Q2 removed by the owner, round 5)
 // ───────────────────────────────────────────────────────────────────────────
 
+/**
+ * R41 S12: Brenda answered every question in Email 3 (2026-10-19). The list keeps
+ * the old ids (and its old export name, OPEN_QUESTIONS) so nothing that linked
+ * to "Q9" breaks, but each entry is now a RECORD: her exact words (verbatim
+ * substrings of the Email 3 mirror, checked by the mirror test) and what the app
+ * does because of them. Where her words left a choice, the owner decision that
+ * settled it is named (D-1..D-9, R41-ROUND13-STRATEGY-REPORT.md). The owner did
+ * not reply to the decision list, so round 14 applied the recommended defaults.
+ */
 export type OpenQuestion = {
   id: string;
-  /** Plain English, shown on screen. */
+  /** Plain English, shown on screen: what we asked. */
   label: string;
-  /** What the later slices do until Timberland answers. Always the strict reading. */
-  strictDefault: string;
-  /** Profile facts this answer could change. Updated together with the mirror. */
+  /** Brenda's answer, word for word, from the Email 3 mirror. */
+  answers: readonly TimberlandCite[];
+  /** What the app does now, in plain English. */
+  appDoes: string;
+  /** The owner decision that settled a choice her answer left open, if any. */
+  decision?: string;
+  /** Profile facts this answer touches. */
   affects: readonly TimberlandFactKey[];
   infoOnly?: true;
 };
+export type AnsweredQuestion = OpenQuestion;
+
+const e3 = (section: string, quote: string): TimberlandCite => ({ source: E3, section, quote });
 
 export const OPEN_QUESTIONS: readonly OpenQuestion[] = [
   {
     id: "Q1",
     label: "Dual approval at Timberland is off and Michael is the only user. What form turns it on, if ever wanted?",
-    strictDefault: "Information only. Nothing waits for a second Timberland user (owner round 5, D-1 and D-2).",
+    answers: [e3("Email 3, answer 1 (Q1)", "We have a change form that we would complete if you wish to turn on approvals.  Currently this is not turned on.")],
+    appDoes: "Information only. Nothing waits for a second Timberland user (owner round 5, D-1 and D-2). If dual approval is ever wanted, ask Cash Management for the change form.",
     affects: ["bankDualApprovalOnFile", "timberlandUsersOnFile"],
     infoOnly: true,
   },
   {
     id: "Q3",
     label: "Is the $50,000 daily limit counted by upload day, by effective date, or as the total not yet settled? Is the $100,000 month counted by upload or effective date?",
-    strictDefault: "Every calendar day from upload to settlement must stay at or under $50,000 in flight, and the file counts in BOTH its upload month and its effective month.",
+    answers: [e3("Email 3, answer 2 (Q3)", "The limit is by the day of the upload file and the monthly is by calendar month.")],
+    appDoes: "Daily: the files uploaded on the same Pacific day must total $50,000 or less (the in-flight total is still shown, for information). Monthly: \"calendar month\" does not say whether the upload or the effective date picks the month, so a file still counts in BOTH its upload month and its effective month.",
+    decision: "D-3",
     affects: ["limitDailyInProcessCents", "limitMonthlyCents"],
   },
   {
     id: "Q4",
     label: "Schedule A says 2 banking days before the effective date by 4:00 pm. Brenda's email said 4 pm for next-day processing. Which applies?",
-    strictDefault: "2 banking days before the effective date, by 4:00 pm Pacific.",
+    answers: [e3("Email 3, answer 3 (Q4)", "It is recommended that you upload a file 2 days prior however the file will processed with a 1 day lead time.")],
+    appDoes: "Plans and checks still use 2 banking days before the effective date, by 4:00 pm Pacific (her recommendation and the signed Schedule A). A confirmed 1-day late lane is NOT built yet.",
+    decision: "D-2",
     affects: ["creditLeadBankingDays", "uploadCutoff"],
   },
   {
     id: "Q5",
     label: "Is \"4:00 p.m. PST\" Pacific local time all year (4:00 pm PDT in summer)?",
-    strictDefault: "Pacific local time (America/Los_Angeles). In summer this is earlier than 4:00 pm PST, so it is the strict reading either way.",
+    answers: [e3("Email 3, answer 4 (Q5)", "4:00 PST")],
+    appDoes: "Her answer repeats \"4:00 PST\". The app keeps 4:00 pm Pacific local time (America/Los_Angeles) all year: in summer that is an hour EARLIER than 4:00 pm PST, so it is never late either way.",
     affects: ["uploadCutoff", "fundingDeadline"],
   },
   {
     id: "Q6",
     label: "Must collected funds be in the account at upload time, or only by 9:00 am on the settlement date?",
-    strictDefault: "Collected funds in account ending 6048 before upload, and still there at 9:00 am Pacific on the settlement date.",
+    answers: [e3("Email 3, answer 5 (Q6)", "Collected funds should be on the effective/settlement date, and we only do pre-funding for customers that overdrawn their account.")],
+    appDoes: "The funding headline says the money must be collected in account ending 6048 by 9:00 am Pacific on the settlement date, and warns never to let the account go negative (pre-funding is only for customers who overdraw).",
+    decision: "D-5",
     affects: ["fundingDeadline"],
   },
   {
     id: "Q7",
     label: "After a prenote settles and 6 banking days pass, is that the earliest UPLOAD day for the live file, or the earliest EFFECTIVE date?",
-    strictDefault: "The earliest upload day (the strict reading of \"initiate\").",
+    answers: [e3("Email 3, answer 6 (Q7)", "Technically you could upload a live file prior to the 6 days however you are defeating the purpose of creating the pre-note file in the first place.")],
+    appDoes: "The wait is counted to the UPLOAD day, which keeps the purpose of the prenote.",
+    decision: "D-6",
     affects: ["prenoteWaitBankingDays", "prenoteWaitFrom"],
   },
   {
     id: "Q8",
     label: "Our debit limits are $0, so we cannot send a reversal file. Is a reversal done by calling Timberland, and who do we ask for?",
-    strictDefault: "No reversal files are ever built. The action is \"Call Timberland now\" at 1-800-562-8761, inside both clocks (24 hours, 5 banking days).",
+    answers: [
+      e3("Email 3, answer 7 (Q8)", "Yes you would call us to reverse a file.  The reversal will be completed using the original uploaded file and should be used in a cautionary manner"),
+      e3("Email 3, answer 19 (Q24)", "the department is Cash Management would need to be notified."),
+    ],
+    appDoes: "No reversal files are ever built. The action is \"Call Timberland now\" at 1-800-562-8761 and ask for Cash Management, inside both clocks (24 hours, 5 banking days). Have the ORIGINAL uploaded file's details ready: the reversal is done from that file.",
     affects: ["debitsAllowed", "reversalBankingDays", "reversalHoursFromDiscovery", "timberlandPhone"],
   },
   {
     id: "Q9",
     label: "Is Timberland open for ACH on Fridays before a Saturday holiday (for example 12/24/2027 and 12/31/2027)?",
-    strictDefault: "Treat those Fridays as NOT usable for upload or effective dates.",
+    answers: [e3("Email 3, answer 8 (Q9)", "Yes however a file uploaded on Friday would have a Monday effective.")],
+    appDoes: "Those Fridays are normal banking days again for upload and effective dates (the Federal Reserve is open on them). Saturdays, Sundays and holidays are never effective dates.",
+    decision: "D-7",
     affects: ["holidayShiftCredits"],
   },
   {
     id: "Q10",
     label: "How will Timberland tell us about returns and NOCs (email, portal, phone), and to whom?",
-    strictDefault: "Check the Timberland portal every banking day; do not rely on an email arriving.",
+    answers: [
+      e3("Email 3, answer 9 (Q10)", "The first is an email directly to you via the federal reserves website and it a secure encrypted email."),
+      e3("Email 3, answer 9 (Q10)", "The 2nd delivery method is under the reporting tab, electronic documents."),
+      e3("Email 3, answer 9 (Q10)", "the notice will only be delivered in the electronic documents section, no email will be sent."),
+    ],
+    appDoes: "Notices arrive as a secure encrypted email sent through the Federal Reserve's site, and under the portal's Reporting tab, Electronic documents. For a payee who also banks at Timberland there is NO email, only the Electronic documents entry, so the app still says to check the portal every banking day.",
     affects: ["returnNoticeBankingDays", "achContactsOnFile"],
   },
   {
     id: "Q11",
     label: "The file header has a 23-character Immediate Origin Name. We send \"GREENWAY MARIJUANA\". Is that right, or \"LYMANS MARIJUANA LLC\"?",
-    strictDefault: "Keep \"GREENWAY MARIJUANA\" (unchanged) and show all three names side by side so nobody \"fixes\" one to match another.",
+    answers: [e3("Email 3, answer A.2 (Q11)", "Probably Greenway opposed to Lymans \u2013 so I would leave as Greenway")],
+    appDoes: "Keep \"GREENWAY MARIJUANA\" in the file header (her answer). The three names are still shown side by side so nobody \"fixes\" one to match another.",
     affects: ["batchCompanyName", "contractLegalName"],
   },
   {
     id: "Q12",
-    label: "Please send a copy with Timberland's countersignature (their signature block is blank on our copy).",
-    strictDefault: "The agreement shows as company-signed, bank countersignature NOT on file. The calendar task is never marked done without it.",
+    label: "Please send a copy with Timberland's countersignature (their signature block was blank on our copy).",
+    answers: [e3("Email 3, answer 10 (Q12)", "Yes I will send to you.")],
+    appDoes: "Done. The countersigned copy (Greenway 10/13/26, Timberland 10/14/26) is mirrored and is the copy every citation now points at.",
     affects: [],
   },
   {
     id: "Q13",
     label: "Sections 28 and 31 mention Schedules A through H, but our copy ends at G. Is there a Schedule H?",
-    strictDefault: "Cite every schedule by its title, never by letter alone.",
+    answers: [e3("Email 3, answer 11 (Q13)", "there used to be a section for a personal guarantee \u2013 which has been eliminated.")],
+    appDoes: "There is no Schedule H (it was a personal guarantee, removed). Schedules are still cited by title as well as letter.",
     affects: [],
   },
   {
     id: "Q14",
     label: "Brenda's first email said Nacha \"requires PAYROLL be added in the discretionary data field\"; her later answer 4 said \"Company entry description is good\". Does she ALSO want PAYROLL in the discretionary data field?",
-    strictDefault: "Recorded, not decided. Nothing in S1 changes the file: PAYROLL stays in the Company Entry Description. Found in R41 S1; ask Brenda before the file-builder slice.",
+    answers: [e3("Email 3, answer 12 (Q14)", "Not necessary \u2013 I misquoted as this is new this year.")],
+    appDoes: "No. PAYROLL stays in the Company Entry Description only; the batch discretionary data stays blank.",
     affects: [],
   },
-  // R41 S8: the add-ons held for the end-of-build email. Q16 (file name), Q17 (duplicate
-  // files) and Q19 (upload or approval by 4 pm) are NOT here: Brenda's Email 2 already
-  // answers them (answers 8, 9 and 7; see fileNameRequirements, bankRejectsDuplicateFiles
-  // and uploadCutoff). Q18 is half answered (answer 6: prenotes do not count).
   {
     id: "Q15",
     label: "Section 16 says Timberland will debit the account \"in the amount of each file\". Will the statement show one debit per file, or one per payment?",
-    strictDefault: "The ACH Payments report matches one debit per file first, then one per payment, and says plainly when no bank row is found. No code change either way.",
+    answers: [e3("Email 3, answer 13 (Q15)", "Per total amount of file uploaded.")],
+    appDoes: "The ACH Payments report matches one bank debit per file first. One-per-payment matching is kept only as a labelled fallback.",
+    decision: "D-8",
     affects: [],
   },
   {
     id: "Q18",
-    label: "Prenotes do not count toward the limits (answer 6). Do test credits (amounts under $1) count?",
-    strictDefault: "Test credits COUNT toward the daily and monthly limits (the stricter reading).",
+    label: "Prenotes do not count toward the limits (Email 2, answer 6). Do test credits (amounts under $1) count?",
+    answers: [e3("Email 3, answer 14 (Q18)", "If you choose to process a file with any amount in the field, it would count in the calculation.")],
+    appDoes: "Test credits COUNT toward the daily and monthly limits, as she says.",
     affects: ["prenotesCount"],
   },
   {
     id: "Q20",
     label: "Section 6 says live entries wait \"at least 6 banking days\" after a prenote settles. Nacha cut its own wait to the third banking day in 2014 (82 FR 42597). Does Timberland want 6, or the current Nacha 3?",
-    strictDefault: "6 banking days, exactly as signed (section 6). The database floor (0275) and the first-file gate stay on 6.",
+    answers: [e3("Email 3, answer 15 (Q20)", "We do not police pre-note.  NACHA rules always override anything in our policy/procedures")],
+    appDoes: "Kept at 6 banking days, exactly as signed (section 6). The database floor (0275) and the first-file gate stay on 6.",
+    decision: "D-1",
     affects: ["prenoteWaitBankingDays"],
+  },
+  {
+    id: "Q21",
+    label: "Our files use Windows line ends (CR LF) and 94-character records, blocked to a multiple of 10 with lines of 9s. Does the portal accept that?",
+    answers: [e3("Email 3, answer 16 (Q21)", "This is standard NACHA formatting")],
+    appDoes: "No change. The file format stays exactly as built.",
+    affects: [],
+  },
+  {
+    id: "Q22",
+    label: "Section 7 allows NOC changes by the LATER of 6 banking days or the next live entry. We apply them by the EARLIER. Is that fine?",
+    answers: [e3("Email 3, answer 17 (Q22)", "Yes, you just want to make changes prior to originating another transaction")],
+    appDoes: "No change. NOC changes stay due by the earlier of the two (never late under either reading).",
+    affects: ["nocApplyBankingDays"],
+  },
+  {
+    id: "Q23",
+    label: "If a NOC is wrong, section 7 says we deliver a Refused NOC within 15 calendar days. How should it be delivered?",
+    answers: [e3("Email 3, answer 18 (Q23)", "this would have to be rejected by the 15th day per the rules.")],
+    appDoes: "The app does not build Refused NOCs (we send credits through the portal only). If a NOC is ever wrong, ask Cash Management how to reject it, well inside the 15 calendar days.",
+    affects: ["refusedNocCalendarDays"],
+  },
+  {
+    id: "Q24",
+    label: "Schedule F asks for written confirmation within 1 calendar day after phoning about a lost password, code, phone or token. Where should it go?",
+    answers: [e3("Email 3, answer 19 (Q24)", "the department is Cash Management would need to be notified.")],
+    appDoes: "Phone Timberland at 1-800-562-8761, ask for Cash Management, then confirm in writing to Cash Management within 1 calendar day.",
+    affects: ["compromiseWrittenConfirmCalendarDays"],
+  },
+  {
+    id: "Q25",
+    label: "Section 30 allows termination on 3 calendar days' written notice. How would a notice from Timberland reach us?",
+    answers: [e3("Email 3, answer 20 (Q25)", "you may receive a phone call however it would be followed up with an email for documentation purposes.")],
+    appDoes: "A notice may start with a phone call; an email follows for the record. Stop scheduling ACH after the last day of the notice.",
+    affects: ["terminationNoticeCalendarDays"],
+  },
+  {
+    id: "Q26",
+    label: "Section 3 makes OFAC screening our job. Does Timberland also screen our files, and how would we hear of a match?",
+    answers: [e3("Email 3, answer 21 (Q26)", "Yes we screen for OFAC for each person contained in a file.  Cash Management would let you know.")],
+    appDoes: "Our own daily OFAC screen stays (it is our duty under section 3). Timberland screens too; a match notice would come from Cash Management.",
+    affects: [],
   },
 ];
 
 /**
- * Whether the two emails disagree about PAYROLL placement (Q14). Exposed so a
- * later slice must look at it, and so a test pins that both sentences exist.
+ * The two earlier emails pointed different ways about PAYROLL placement (Q14);
+ * Email 3 answer 12 settled it ("Not necessary"). Both sentences stay pinned as history.
  */
 export const PAYROLL_PLACEMENT_QUOTES: readonly TimberlandCite[] = [
   { source: B, section: "Email 1", quote: "This is a new NACHA rule that yes requires PAYROLL be added in the discretionary data field." },
   { source: B, section: "Email 2, answer 4", quote: "4. Company entry description is good" },
 ];
 
-/** Every cite in the profile, plus the Q14 quotes, for the mirror test. */
+/** Every cite in the profile, plus the Q14 quotes and Brenda's Email 3 answers, for the mirror test. */
 export function allTimberlandCites(): { key: string; cite: TimberlandCite }[] {
   const out: { key: string; cite: TimberlandCite }[] = [];
   for (const [key, fact] of Object.entries(TIMBERLAND_PROFILE) as [string, TimberlandFact<unknown>][]) {
     for (const cite of fact.cites) out.push({ key, cite });
   }
   for (const cite of PAYROLL_PLACEMENT_QUOTES) out.push({ key: "Q14", cite });
+  for (const q of OPEN_QUESTIONS) for (const cite of q.answers) out.push({ key: q.id, cite });
   return out;
 }
 
@@ -777,14 +862,23 @@ export function __runTimberlandProfileCoreTests(): { passed: number; failed: num
   ok(timberlandProfileProblems(mut("bankCallbacks", { value: true })).length > 0, "callbacks flip is caught");
   ok(timberlandProfileProblems(mut("routing", { cites: [] })).length > 0, "a bank fact with no quote is caught");
 
-  // Open questions
+  // Answered questions (Email 3)
   const ids = OPEN_QUESTIONS.map((x) => x.id);
-  ok(JSON.stringify(ids) === JSON.stringify(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20"]), "Q1, Q3-Q13 (Q2 removed), Q14, then the S8 add-ons Q15, Q18, Q20");
-  ok(OPEN_QUESTIONS.every((x) => x.label.length > 10 && x.strictDefault.length > 10), "every question has a label and a strict default");
+  ok(
+    JSON.stringify(ids) ===
+      JSON.stringify(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20", "Q21", "Q22", "Q23", "Q24", "Q25", "Q26"]),
+    "Q1, Q3-Q15, Q18, Q20, then Q21-Q26 (all answered by Email 3)",
+  );
+  ok(OPEN_QUESTIONS.every((x) => x.label.length > 10 && x.appDoes.length > 10), "every question has a label and says what the app does");
+  ok(OPEN_QUESTIONS.every((x) => x.answers.length > 0 && x.answers.every((c) => c.source === E3 && c.quote.trim().length >= 4)), "every question carries Brenda's Email 3 answer");
   ok(OPEN_QUESTIONS.every((x) => x.affects.every((k) => k in TIMBERLAND_PROFILE)), "every affected fact exists");
   ok(OPEN_QUESTIONS.filter((x) => x.infoOnly).map((x) => x.id).join() === "Q1", "only Q1 is information only");
+  ok(
+    OPEN_QUESTIONS.filter((x) => x.decision).map((x) => `${x.id}:${x.decision}`).join() === "Q3:D-3,Q4:D-2,Q6:D-5,Q7:D-6,Q9:D-7,Q15:D-8,Q20:D-1",
+    "the owner decisions applied are named",
+  );
   ok(PAYROLL_PLACEMENT_QUOTES.length === 2, "both PAYROLL sentences recorded for Q14");
-  ok(allTimberlandCites().length > 50, "cites collected for the mirror test");
+  ok(allTimberlandCites().length > 70, "cites collected for the mirror test (profile + Q14 + Email 3)");
 
   return { passed, failed };
 }

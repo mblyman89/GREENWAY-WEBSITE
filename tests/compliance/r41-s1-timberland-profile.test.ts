@@ -45,10 +45,12 @@ const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 const AGREEMENT = read(TIMBERLAND_SOURCE_FILES["timberland-ach-agreement-2026-10-14"]);
 const BRENDA = read(TIMBERLAND_SOURCE_FILES["timberland-brenda-2026-10"]);
+const EMAIL3 = read(TIMBERLAND_SOURCE_FILES["timberland-brenda-2026-10-19-email-3"]);
 const PROFILE_SRC = read("src/lib/payments/timberland-profile-core.ts");
 const FLAT: Record<string, string> = {
   "timberland-ach-agreement-2026-10-14": flattenWs(AGREEMENT),
   "timberland-brenda-2026-10": flattenWs(BRENDA),
+  "timberland-brenda-2026-10-19-email-3": flattenWs(EMAIL3),
 };
 
 describe("R41 S1: every quote is in its mirror", () => {
@@ -170,8 +172,9 @@ describe("R41 S1: provenance of the two mirrors", () => {
     expect(BRENDA).toContain("The questions are NOT Brenda's words.");
     expect(BRENDA).toContain("provided by the owner");
   });
-  it("both mirrors are listed in the ACH README", () => {
+  it("the mirrors are listed in the ACH README", () => {
     const readme = read("docs/authorities/ach/README.md");
+    expect(readme).toContain("timberland-brenda-2026-10-19-email-3.txt");
     expect(readme).toContain("timberland-ach-agreement-2026-10-14.redacted.txt");
     expect(readme).toContain("timberland-brenda-2026-10.txt");
     expect(readme).toContain(TIMBERLAND_AGREEMENT_PDF_SHA256.slice(0, 16));
@@ -182,8 +185,8 @@ describe("R41 S1: provenance of the two mirrors", () => {
       .find((l) => l.startsWith("ach/timberland-ach-agreement-2026-10-14.redacted.txt\t"));
     expect(row).toBeDefined();
     const [, pdf, pdfBytes, sha16, txtBytes, txtLines, pages] = row!.split("\t");
-    expect(pdf).toBe("Signed_ACH_Origination_Agreement.pdf");
-    expect(pdfBytes).toBe("4406241");
+    expect(pdf).toBe("ACH_Agreement_10-14-26.pdf");
+    expect(pdfBytes).toBe("2617130");
     expect(sha16).toBe(TIMBERLAND_AGREEMENT_PDF_SHA256.slice(0, 16));
     expect(Number(txtBytes)).toBe(Buffer.byteLength(AGREEMENT, "utf8"));
     expect(Number(txtLines)).toBe(AGREEMENT.split("\n").length - (AGREEMENT.endsWith("\n") ? 1 : 0));
@@ -198,23 +201,37 @@ describe("R41 S1: provenance of the two mirrors", () => {
   });
 });
 
-describe("R41 S1: open questions match plan section 9", () => {
-  it("Q1 and Q3-Q13 (Q2 removed by the owner), plus Q14 found in S1", () => {
-    expect(OPEN_QUESTIONS.map((q) => q.id)).toEqual(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20"]);
+describe("R41 S1 + S12: the questions for Brenda, now answered (Email 3)", () => {
+  it("Q1, Q3-Q15, Q18, Q20 keep their ids; Q21-Q26 (Email 3 numbering map) are added", () => {
+    expect(OPEN_QUESTIONS.map((q) => q.id)).toEqual(["Q1", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q18", "Q20", "Q21", "Q22", "Q23", "Q24", "Q25", "Q26"]);
   });
-  it("only Q1 is information only, and every question has a strict default on screen", () => {
+  it("only Q1 is information only, and every question has Brenda's answer and what the app does", () => {
     expect(OPEN_QUESTIONS.filter((q) => q.infoOnly).map((q) => q.id)).toEqual(["Q1"]);
     for (const q of OPEN_QUESTIONS) {
       expect(q.label.length, q.id).toBeGreaterThan(10);
-      expect(q.strictDefault.length, q.id).toBeGreaterThan(10);
+      expect(q.appDoes.length, q.id).toBeGreaterThan(10);
+      expect(q.answers.length, q.id).toBeGreaterThan(0);
+      for (const c of q.answers) {
+        expect(c.source, q.id).toBe("timberland-brenda-2026-10-19-email-3");
+        expect(FLAT[c.source], `${q.id}: ${c.quote}`).toContain(flattenWs(c.quote));
+      }
       for (const k of q.affects) expect(k in TIMBERLAND_PROFILE, `${q.id} -> ${k}`).toBe(true);
     }
   });
-  it("the strict defaults the later slices rely on are stated (Q3 both months, Q7 upload, Q9 Fridays closed)", () => {
-    const d = Object.fromEntries(OPEN_QUESTIONS.map((q) => [q.id, q.strictDefault]));
-    expect(d.Q3).toMatch(/BOTH its upload month and its effective month/);
-    expect(d.Q7).toMatch(/earliest upload day/);
-    expect(d.Q9).toMatch(/NOT usable/);
+  it("the answers the behaviour rests on are recorded (Q3 upload day, Q6 settlement date, Q7 upload, Q9 Fridays open)", () => {
+    const d = Object.fromEntries(OPEN_QUESTIONS.map((q) => [q.id, q]));
+    expect(d.Q3!.answers[0]!.quote).toContain("by the day of the upload file");
+    expect(d.Q3!.appDoes).toMatch(/BOTH its upload month and its effective month/);
+    expect(d.Q6!.appDoes).toMatch(/by 9:00 am Pacific on the settlement date/);
+    expect(d.Q7!.appDoes).toMatch(/UPLOAD day/);
+    expect(d.Q9!.answers[0]!.quote).toMatch(/^Yes however/);
+    expect(d.Q9!.appDoes).toMatch(/normal banking days again/);
+  });
+  it("the Email 3 mirror keeps its provenance and redactions", () => {
+    expect(EMAIL3).toContain("Source: pasted by the owner (Michael Lyman)");
+    expect(EMAIL3).toContain("[REDACTED: 1 + EIN]");
+    expect(EMAIL3).toContain("Numbering map");
+    expect(findLongDigitRuns(EMAIL3, ["325170754", "32517075"]).length).toBe(0);
   });
   it("Q14 rests on two real sentences from Brenda that point different ways", () => {
     for (const c of PAYROLL_PLACEMENT_QUOTES) expect(FLAT[c.source]).toContain(flattenWs(c.quote));
