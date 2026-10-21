@@ -30,7 +30,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | #1444 | none |
 | S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | #1445 | 0287 |
 | S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | #1446 | 0288 |
-| S15 | Leftovers without guessing: R90 return code from a new Nacha mirror; stale mutation anchor re-anchored | (this PR) | none |
+| S15 | Leftovers without guessing: R90 return code from a new Nacha mirror; stale mutation anchor re-anchored | #1447 | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -246,7 +246,7 @@ Still to arrange: the testing session Brenda asked for.
   - Logging an R90 holds the payee as a possible-fraud return. The plain text says not to resend and to call Cash Management (1-800-562-8761) and an attorney, because Nacha says the bank works out the next steps "working with its client".
   - The rule watch marks R90 as coded, so there is no more "code change" reminder.
   - R16 keeps the newsletter's "Account frozen", which matches what Nacha says R16 reverts to.
-- **Stale mutation anchor.** In `scripts/r41/mutate-s3-app.py`, "key-check-removed" matched 0 times after `sealFile` started hashing before the fact check. It is re-anchored on the hasher line and the run was redone. A new test checks that every app mutation script's anchors match exactly once.
+- **Stale mutation anchor.** In `scripts/r41/mutate-s3-app.py`, "key-check-removed" matched 0 times after `sealFile` started hashing before the fact check. The copy in `sealFile` turned out to be an equivalent mutant: the next line, `keyedHasher("achFileEntrySet")`, returns null without the key and gives the same LEDGER_NO_KEY. So the mutant now removes the `releaseLoop` key check, which the "without DATA_ENCRYPTION_KEY" test kills. The rerun kills 27/27. The new anchor test also found that its own decoder mis-read `\t` and `\\`; it now decodes like Python, in one pass. A new test checks that every app mutation script's anchors match exactly once.
 - **Still blocked (no guessing):**
   - attaching achedi reports (format and storage unknown);
   - the upload receipt (Brenda has not said the portal shows one);
