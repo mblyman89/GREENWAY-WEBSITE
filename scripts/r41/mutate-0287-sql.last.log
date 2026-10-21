@@ -1,0 +1,20 @@
+control (before) pass
+killed   noc-wrong-not-a-type  (PL/pgSQL function inline_code_block line 30 at EXECUTE)
+killed   ofac-notice-not-a-type  (PL/pgSQL function inline_code_block line 31 at EXECUTE)
+killed   bank-report-not-a-type  (PL/pgSQL function inline_code_block line 32 at EXECUTE)
+killed   any-type-allowed  (PL/pgSQL function inline_code_block line 43 at PERFORM)
+killed   old-type-dropped  (PL/pgSQL function inline_code_block line 41 at EXECUTE)
+killed   noc-wrong-cannot-close  (PL/pgSQL function inline_code_block line 47 at PERFORM)
+killed   ofac-cannot-close  (PL/pgSQL function inline_code_block line 50 at EXECUTE)
+killed   report-cannot-close  (PL/pgSQL function inline_code_block line 51 at EXECUTE)
+killed   fact-can-close  (PL/pgSQL function inline_code_block line 58 at PERFORM)
+killed   old-clock-dropped  (PL/pgSQL function inline_code_block line 55 at EXECUTE)
+killed   guard-update-allowed  (PL/pgSQL function inline_code_block line 61 at PERFORM)
+killed   guard-owner-skipped  (PL/pgSQL function inline_code_block line 29 at PERFORM)
+killed   guard-done-before-arrival  (PL/pgSQL function inline_code_block line 47 at PERFORM)
+killed   guard-security-definer  (CONTEXT:  PL/pgSQL function inline_code_block line 26 at ASSERT)
+control (mid) pass
+killed   rolled-back  (the 0287 check fails on the 0277 state)
+killed   rollback-refuses  (raised ROLLBACK REFUSED)
+control (after) pass
+total 14 killed 14 survivors []
