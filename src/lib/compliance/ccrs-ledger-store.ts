@@ -17,6 +17,7 @@ import { checkAssignResult, decodeLedgerSlice, LEDGER_SLICE_RPC, type AssignedPr
 import { checkEmitResult, sha256Utf8, type EmitIssue, type EmitPayloadFile, type EmitResultFile } from "./ccrs-outbox-core";
 import type { LedgerEnv } from "./ccrs-ledger-core";
 import { decodeSaleSlice, SALE_SLICE_RPC, type SaleSliceOutcome } from "./ccrs-return-corrections-core";
+import { decodeTransferSlice, TRANSFER_SLICE_RPC, type TransferSliceOutcome } from "./ccrs-transfer-core";
 import type { CcrsRetailerFileType } from "./ccrs-batch-core";
 import type { CcrsOutcomeKind, OurRow, RejectedRow } from "./ccrs-outcome-core";
 import {
@@ -59,6 +60,14 @@ export async function loadSaleSlice(admin: Admin, env: LedgerEnv, detailIds: rea
   if (ids.length === 0) return { kind: "loaded", held: new Map(), inFlightOnly: new Set() };
   const { data, error } = await admin.rpc(SALE_SLICE_RPC, { p_env: env, p_detail_ids: ids });
   return decodeSaleSlice(env, data, error);
+}
+
+/** R6-2 (0285): ledger state of the InventoryTransfer ids a batch would send. "absent" before 0285. */
+export async function loadTransferSlice(admin: Admin, env: LedgerEnv, ids: readonly string[]): Promise<TransferSliceOutcome> {
+  const uniq = [...new Set(ids)].filter((x) => x !== "");
+  if (uniq.length === 0) return { kind: "loaded", held: new Map() };
+  const { data, error } = await admin.rpc(TRANSFER_SLICE_RPC, { p_env: env, p_ids: uniq });
+  return decodeTransferSlice(env, data, error);
 }
 
 /**
