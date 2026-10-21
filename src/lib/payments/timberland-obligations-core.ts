@@ -51,6 +51,15 @@ import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 
 export const AGREEMENT_FILE = "ach/timberland-ach-agreement-2026-10-14.redacted.txt";
 export const BRENDA_FILE = "ach/timberland-brenda-2026-10.txt";
+/** R41 S13: Brenda's Email 3 (her answers), and the Federal Reserve's encrypted email guide. */
+export const EMAIL3_FILE = "ach/timberland-brenda-2026-10-19-email-3.txt";
+export const FED_EDI_FILE = "ach/frbservices-edi-encrypted-email-guide.txt";
+/**
+ * The Fed guide (page 19, "Delete Reports"): "Reports are retained in the
+ * portal for 60 calendar days and then automatically deleted". The S13
+ * "download it" clock for a return or NOC report.
+ */
+export const FED_REPORT_RETENTION_CALENDAR_DAYS = 60;
 
 export type Quote = { file: string; section: string; text: string };
 
@@ -67,6 +76,9 @@ export const COMMS_TYPES = [
   "compromise_reported",
   "reversal_needed",
   "statement_received",
+  "noc_wrong",
+  "ofac_notice",
+  "bank_report_received",
   "dual_approval_on",
   "schedule_g_email_corrected",
   "access_ready",
@@ -91,6 +103,7 @@ export type CommsTypeSpec = {
 };
 
 const A = (section: string, text: string): Quote => ({ file: AGREEMENT_FILE, section, text });
+const E3 = (section: string, text: string): Quote => ({ file: EMAIL3_FILE, section, text });
 
 export const COMMS_TYPE_SPECS: Readonly<Record<CommsType, CommsTypeSpec>> = {
   amendment_notice: {
@@ -152,6 +165,24 @@ export const COMMS_TYPE_SPECS: Readonly<Record<CommsType, CommsTypeSpec>> = {
     hint: `Report any difference to Timberland within ${STATEMENT_REVIEW_CALENDAR_DAYS} calendar days. Use the statement date if you are not sure when it arrived.`,
     clock: true, needsTime: false, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
     quote: A("\u00a717 Settlement Discrepancies (p.3)", "Company agrees to notify Financial Institution within a reasonable time not to exceed 30 calendar days"),
+  },
+  noc_wrong: {
+    label: "A bank correction (NOC) looks wrong",
+    hint: `Enter the date the correction ARRIVED, not today: the ${REFUSED_NOC_CALENDAR_DAYS} calendar days count from then (section 7). The site cannot build a Refused NOC; Brenda says a wrong one "would have to be rejected by the 15th day". Contact Timberland Cash Management (${TIMBERLAND_PHONE}) well before then and ask how they want it rejected. Name the payee and the code in the note, never an account number.`,
+    clock: true, needsTime: false, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
+    quote: E3("Email 3, answer 18 (Q23)", "this would have to be rejected by the 15th day per the rules."),
+  },
+  ofac_notice: {
+    label: "Timberland told me about a possible OFAC match",
+    hint: "Timberland screens every person in a file against OFAC; Cash Management lets you know of a match (Brenda, Email 3). Write who called and which payee. There is no deadline in the agreement: the item stays open until Cash Management says it is resolved. Your own daily screening keeps running.",
+    clock: true, needsTime: false, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
+    quote: E3("Email 3, answer 21 (Q26)", "Yes we screen for OFAC for each person contained in a file.  Cash Management would let you know."),
+  },
+  bank_report_received: {
+    label: "A return or correction report arrived (secure email or Electronic Documents)",
+    hint: `Notices come by the Federal Reserve's secure email (achedi.com) or in Timberland's portal under Reporting, Electronic Documents (Brenda, Email 3). The Fed deletes reports from achedi.com after ${FED_REPORT_RETENTION_CALENDAR_DAYS} calendar days: download it and keep a copy, then enter it in Returns and bank corrections.`,
+    clock: true, needsTime: false, needsSecondDate: false, secondDateLabel: null, needsAmount: false,
+    quote: { file: FED_EDI_FILE, section: "Fed encrypted email guide, Delete Reports (p.19)", text: "Reports are retained in the portal for 60 calendar days and then automatically deleted." },
   },
   dual_approval_on: {
     label: "Dual approval turned on at Timberland",
@@ -429,6 +460,17 @@ function commsClock(r: CommsRow, todayIso: string, nowUtc: Date): Clock | null {
       section: "\u00a721",
     };
   }
+  if (t === "noc_wrong") {
+    const due = addCalendarDays(r.received_on, REFUSED_NOC_CALENDAR_DAYS);
+    return { ...base, title: `Reject the wrong correction received ${r.received_on}`, dueDate: due, dueUtc: null, dueText: dateText(due, todayIso), tone: dateTone(due, todayIso), action: `Contact Timberland Cash Management (${TIMBERLAND_PHONE}) before this date and ask how they want it rejected (the site cannot build a Refused NOC). Do not apply the wrong details. Press Done when Cash Management has it.`, section: "\u00a77" };
+  }
+  if (t === "ofac_notice") {
+    return { ...base, title: "Possible OFAC match reported by Timberland", dueDate: null, dueUtc: null, dueText: "No deadline in the agreement: open until Cash Management says it is resolved", tone: "danger", action: "Follow Cash Management's instructions for this payee and look at the payee on the OFAC screening page. Press Done only when Cash Management says it is resolved.", section: "\u00a73" };
+  }
+  if (t === "bank_report_received") {
+    const due = addCalendarDays(r.received_on, FED_REPORT_RETENTION_CALENDAR_DAYS);
+    return { ...base, title: `Download the bank report received ${r.received_on}`, dueDate: due, dueUtc: null, dueText: dateText(due, todayIso), tone: dateTone(due, todayIso), action: `Download it and keep a copy outside the portal: the Federal Reserve deletes reports from achedi.com after ${FED_REPORT_RETENTION_CALENDAR_DAYS} calendar days. Enter the return or correction in Returns and bank corrections, then press Done.`, section: "Fed guide" };
+  }
   if (t === "statement_received") {
     const due = addCalendarDays(r.received_on, STATEMENT_REVIEW_CALENDAR_DAYS);
     return { ...base, title: `Check the statement received ${r.received_on}`, dueDate: due, dueUtc: null, dueText: dateText(due, todayIso), tone: dateTone(due, todayIso), action: "Match every ACH line and fee (see the fees card). Report any difference to Timberland, then press Done.", section: "\u00a717" };
@@ -443,7 +485,7 @@ function noticeClocks(n: NoticeClockRow, todayIso: string): Clock[] {
   const out: Clock[] = [];
   if (n.apply_by) out.push({ key: `notice:${n.id}`, commsId: null, title: `Apply bank correction ${n.code} for ${n.payee}`, dueDate: n.apply_by, dueUtc: null, dueText: dateText(n.apply_by, todayIso), tone: dateTone(n.apply_by, todayIso), action: "Apply the corrected details before this date (or before the next payment, if that is sooner), then resolve the notice.", section: "\u00a77" });
   const refuse = addCalendarDays(n.received_on, REFUSED_NOC_CALENDAR_DAYS);
-  out.push({ key: `refuse:${n.id}`, commsId: null, title: `Only if correction ${n.code} for ${n.payee} is WRONG: refuse it`, dueDate: refuse, dueUtc: null, dueText: dateText(refuse, todayIso), tone: "neutral", action: "If the correction is wrong, tell Timberland in writing before this date and ask how they want the Refused NOC sent. Otherwise ignore this line.", section: "\u00a77" });
+  out.push({ key: `refuse:${n.id}`, commsId: null, title: `Only if correction ${n.code} for ${n.payee} is WRONG: refuse it`, dueDate: refuse, dueUtc: null, dueText: dateText(refuse, todayIso), tone: "neutral", action: `If the correction is wrong, contact Timberland Cash Management (${TIMBERLAND_PHONE}) before this date and ask how they want it rejected, then log "A bank correction (NOC) looks wrong". Otherwise ignore this line.`, section: "\u00a77" });
   return out;
 }
 
@@ -576,10 +618,11 @@ const COMMS_ERROR_TABLE: readonly [RegExp, string][] = [
   [/ACH_COMMS_CLOSE: it cannot be done before/, "It cannot be marked done before the day it arrived."],
   [/ach_timberland_comms_summary_check/, "Write a short note (5 to 1,000 characters, and never an account or card number)."],
   [/relation "public\.ach_timberland_comms" does not exist|Could not find the table 'public\.ach_timberland_comms'|ach_timberland_comms.*does not exist/, "The Timberland log is not set up yet: run migration 0277 (docs/MIGRATIONS_TO_RUN.md). Nothing was saved."],
+  [/ach_timberland_comms_entry_type_check/, "This kind of entry is not set up yet: run migration 0287 (docs/MIGRATIONS_TO_RUN.md). Nothing was saved."],
   [/atc_/, "The database refused this entry (a required date, time or amount is missing). Nothing was saved."],
 ];
 
-/** Plain words for a 0277 refusal. Never echoes the raw database text. */
+/** Plain words for a 0277 / 0287 refusal. Never echoes the raw database text. */
 export function commsDbErrorMessage(message: string | null | undefined): string {
   const m = String(message ?? "");
   for (const [re, text] of COMMS_ERROR_TABLE) if (re.test(m)) return text;
@@ -603,8 +646,8 @@ export function __runTimberlandObligationsCoreTests(): { passed: number; failed:
   const row = (p: Partial<CommsRow> & Pick<CommsRow, "id" | "entry_type">): CommsRow => ({ received_on: today, occurred_at: null, effective_on: null, amount_cents: null, summary: "x", closes_id: null, created_at: "2026-10-20T18:00:00Z", ...p });
 
   // entry types mirror 0277
-  ok(COMMS_TYPES.length === 15 && !COMMS_TYPES.includes("done" as never), "15 offered types, 'done' is not offered");
-  ok(COMMS_TYPES.filter((t) => COMMS_TYPE_SPECS[t].clock).join(",") === "amendment_notice,fee_notice,reserve_demand,auth_copy_request,over_limit_request,prefunding_notice,termination_notice,compromise_reported,reversal_needed,statement_received", "clock types match the 0277 close list");
+  ok(COMMS_TYPES.length === 18 && !COMMS_TYPES.includes("done" as never), "18 offered types (0277 + 0287), 'done' is not offered");
+  ok(COMMS_TYPES.filter((t) => COMMS_TYPE_SPECS[t].clock).join(",") === "amendment_notice,fee_notice,reserve_demand,auth_copy_request,over_limit_request,prefunding_notice,termination_notice,compromise_reported,reversal_needed,statement_received,noc_wrong,ofac_notice,bank_report_received", "clock types match the 0287 close list");
   ok(COMMS_TYPES.filter((t) => COMMS_TYPE_SPECS[t].needsTime).join(",") === "compromise_reported,reversal_needed", "time needed: compromise and reversal (0277 atc_time_needed)");
   ok(COMMS_TYPES.filter((t) => COMMS_TYPE_SPECS[t].needsSecondDate).join(",") === "over_limit_request,termination_notice,reversal_needed", "second date needed (0277 atc_second_date_needed)");
   ok(COMMS_TYPES.filter((t) => COMMS_TYPE_SPECS[t].needsAmount).join(",") === "reserve_demand,over_limit_request", "amount needed (0277 atc_amount_needed)");
@@ -659,6 +702,20 @@ export function __runTimberlandObligationsCoreTests(): { passed: number; failed:
   ok(ord[0].key === "comms:a", "overdue first");
   const nc = obligationClocks({ todayIso: today, nowUtc: now, comms: [], notices: [{ id: "n1", notice_kind: "noc", code: "C01", received_on: "2026-10-19", apply_by: "2026-10-27", payee: "Pat" }] });
   ok(nc.length === 2 && nc.some((c) => c.key === "refuse:n1" && c.dueDate === "2026-11-03"), "NOC: apply-by plus refuse-by 15 calendar days");
+  ok(/Cash Management \(1-800-562-8761\)/.test(nc.find((c) => c.key === "refuse:n1")?.action ?? ""), "refuse-by line: contact Cash Management");
+
+  // S13 (0287): wrong NOC 15 calendar days, OFAC notice open, bank report 60 calendar days
+  const nw = commsClock(row({ id: "nw", entry_type: "noc_wrong", received_on: "2026-10-19" }), today, now);
+  ok(nw?.dueDate === "2026-11-03" && nw.section === "\u00a77" && /Cash Management/.test(nw.action), "wrong NOC: 15 calendar days from arrival, call Cash Management");
+  ok(commsClock(row({ id: "nw2", entry_type: "noc_wrong", received_on: "2026-10-05" }), today, now)?.tone === "gold", "wrong NOC: 2026-10-20 due today is gold");
+  ok(commsClock(row({ id: "nw3", entry_type: "noc_wrong", received_on: "2026-10-04" }), today, now)?.tone === "danger", "wrong NOC: overdue is red");
+  const of = commsClock(row({ id: "of", entry_type: "ofac_notice" }), today, now);
+  ok(of !== null && of.dueDate === null && of.dueUtc === null && of.tone === "danger" && of.section === "\u00a73", "OFAC notice: no deadline, red, section 3");
+  const br = commsClock(row({ id: "br", entry_type: "bank_report_received", received_on: "2026-10-19" }), today, now);
+  ok(br?.dueDate === "2026-12-18" && /60 calendar days/.test(br.action), "bank report: download within 60 calendar days");
+  ok(FED_REPORT_RETENTION_CALENDAR_DAYS === 60 && /60 calendar days/.test(COMMS_TYPE_SPECS.bank_report_received.quote?.text ?? ""), "60 days is the quoted number");
+  ok(obligationClocks({ todayIso: today, nowUtc: now, comms: [row({ id: "of", entry_type: "ofac_notice" }), row({ id: "dd", entry_type: "done", closes_id: "of" })], notices: [] }).length === 0, "a resolved OFAC notice is closed");
+  ok(/run migration 0287/.test(commsDbErrorMessage('new row for relation "ach_timberland_comms" violates check constraint "ach_timberland_comms_entry_type_check"')), "db: new type before 0287");
   ok(obligationClocks({ todayIso: today, nowUtc: now, comms: [], notices: [{ id: "r1", notice_kind: "return", code: "R03", received_on: today, apply_by: null, payee: "Pat" }] })[0].tone === "neutral", "a return has no contract clock");
 
   // termination and facts

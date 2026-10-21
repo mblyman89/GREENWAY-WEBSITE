@@ -966,7 +966,8 @@ import { __runTimberlandBankStepsCoreTests } from "../../src/lib/payments/timber
 import { __runTimberlandLimitsCoreTests } from "../../src/lib/payments/timberland-limits-core";
 import { __runTimberlandDeadlineCoreTests } from "../../src/lib/payments/timberland-deadline-core";
 import { __runTimberlandPrenoteCoreTests } from "../../src/lib/payments/timberland-prenote-core";
-import { __runTimberlandFileCheckerCoreTests } from "../../src/lib/payments/timberland-file-checker-core";
+import { __runTimberlandFileCheckerCoreTests, testFileForChecker } from "../../src/lib/payments/timberland-file-checker-core";
+import { __runAchReversalSheetCoreTests } from "../../src/lib/payments/ach-reversal-sheet-core";
 import { __runTimberlandFundingCoreTests } from "../../src/lib/payments/timberland-funding-core";
 import { __runTimberlandGoLiveCoreTests } from "../../src/lib/payments/timberland-golive-core";
 import { __runTimberlandObligationsCoreTests } from "../../src/lib/payments/timberland-obligations-core";
@@ -2362,9 +2363,10 @@ __runLiquidVolumeTests();
   assertRan("timberland-deadline-core", __runTimberlandDeadlineCoreTests(), 74); // R41 S5: 2 usable banking days, 4:00 pm Pacific (DST), 3:30 pm margin, Schedule D prior-day shift, Q9 Fridays usable (S12, D-7), section 3.7 table, reminders
   assertRan("timberland-prenote-core", __runTimberlandPrenoteCoreTests(), 38); // R41 S7: section 6 six usable days from settlement (Q7 upload day D-6; Q9 Fridays usable D-7), section 3.7 backwards plan, first-file gate
   assertRan("timberland-file-checker-core", __runTimberlandFileCheckerCoreTests(), 98); // R41 S9: check a file before upload (Nacha structure, controls, Timberland pins, deadline, ledger fingerprint, limits)
+  assertRan("ach-reversal-sheet-core", __runAchReversalSheetCoreTests(testFileForChecker({ entries: [{ amountCents: 123_45 }, { amountCents: 67_00 }, { amountCents: 1_000_00 }], description: "PAYROLL", sec: "PPD", effective: "2026-10-23", created: new Date("2026-10-20T17:00:00Z") })), 15); // R41 S13: reversal call sheet from the stored file, no account numbers
   assertRan("timberland-funding-core", __runTimberlandFundingCoreTests(), 65); // R41 S9: funding helper (file + $50 fee + own buffer, 9:00 am settlement, 8 am reminder)
   assertRan("timberland-golive-core", __runTimberlandGoLiveCoreTests(), 43); // R41 S9: go-live readiness board (14 gates; never blocks checks)
-  assertRan("timberland-obligations-core", __runTimberlandObligationsCoreTests(), 69); // R41 S10: obligation clocks (comms log + NOC), fees, STOP card letter
+  assertRan("timberland-obligations-core", __runTimberlandObligationsCoreTests(), 78); // R41 S10: obligation clocks (comms log + NOC), fees, STOP card letter; S13: wrong NOC, OFAC notice, bank report (0287)
   assertRan("ofac-screening-core", __runOfacScreeningCoreTests(), 96); // R41 S11: OFAC list parsing, Jaro-Winkler + Soundex screening, review status (never blocks payment)
   assertRan("ach-payments-report-core", __runAchPaymentsReportCoreTests(), 70); // R41 round 9: ACH Payments report (file-total, per-payment, per-run bank matching; stages; deadlines; aging; funding)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects

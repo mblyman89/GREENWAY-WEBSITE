@@ -482,6 +482,9 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
                       {f.status !== "voided" ? (
                         <>
                           <a href={`/admin/settings/banking/files/${f.id}/download`} className="block text-xs font-semibold text-emerald-300 hover:underline">Download</a>
+                          {f.status === "uploaded" || f.status === "bank_approved" ? (
+                            <a href={`/admin/settings/banking/files/${f.id}/reversal-sheet`} target="_blank" rel="noopener" className="block text-xs text-white/60 hover:underline" title="If a payment in this file was wrong: what to read out when you call Timberland Cash Management. No account numbers.">Reversal call sheet</a>
+                          ) : null}
                           {(() => {
                             const b = bankStepButton(f.status, isOwner);
                             if (!b) return null;
