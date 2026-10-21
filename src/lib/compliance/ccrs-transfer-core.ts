@@ -180,7 +180,7 @@ export function buildTransferRows(input: TransferInput): TransferPlan {
       continue;
     }
     const floor = input.catchUp ? input.notBefore : input.notBefore && input.notBefore > input.fromDay ? input.notBefore : input.fromDay;
-    if (l.receivedOn > input.toDay || (floor && l.receivedOn < floor) || (input.notBefore && l.receivedOn < input.notBefore)) {
+    if (l.receivedOn > input.toDay || (floor && l.receivedOn < floor)) {
       skipped.outOfWindow += 1;
       continue;
     }
