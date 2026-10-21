@@ -286,7 +286,12 @@ describe("withholdUnencodableRows — E38 / E42 withhold, E44 free-text rewrite 
 describe("wiring guard — every production builder withholds before encoding", () => {
   it("batch push(), sales, adjustment and sale-correction route all call withholdUnencodableRows", () => {
     const batch = src("src/lib/compliance/ccrs-batch.ts");
-    const pushBody = batch.slice(batch.indexOf("const push = ("), batch.indexOf("files.push({", batch.indexOf("const push = (")));
+    // R5-1: the withhold logic lives in encode() (shared by push() and the
+    // Sale file, which also carries return corrections); push() must call it.
+    const pushBody = batch.slice(batch.indexOf("const encode = ("), batch.indexOf("const push = ("));
+    const pushOnly = batch.slice(batch.indexOf("const push = ("), batch.indexOf("files.push({", batch.indexOf("const push = (")));
+    expect(pushOnly).toContain("const { rows, withheld } = encode(type, rawRows);");
+    expect(batch).toContain('const correctionE38 = encode("Sale", ');
     expect(pushBody).toContain("withholdUnencodableRows(");
     expect(pushBody).toContain("CCRS_FREE_TEXT_COLUMNS[type] ?? []");
     expect(pushBody).toContain("CCRS_UNENCODABLE_CODE[reason]");
