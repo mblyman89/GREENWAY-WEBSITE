@@ -1669,57 +1669,70 @@ describe("the migration list is ordered the way the database will see it", () =>
     // applied, scripts/recon/ccrs-sale-slice-0283-pg-check.sql passes (and
     // fails under each of 9 hand-made SQL mutations), rollback then re-apply is
     // clean. The owner applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0283_/);
+    // Round 6 / R6-1 added 0284_ccrs_settle_uncertain.sql (no tables: three
+    // service-role functions. ccrs_prove_by_reference(env) files an uncertain
+    // lot named by a later accepted Sale/Adjustment row [G L1302-L1304];
+    // ccrs_preprod_settle_duplicates(by) treats PREprod ids refused as
+    // "Duplicate External Identifier" on Insert as on file [G L0246]
+    // [EXAM L0518]; ccrs_close_settled_files closes reconciling files whose
+    // uncertain rows are settled). The tripwire FIRED and was HONOURED: 284
+    // .sql files, gapless. Executed against a local Postgres 15 with the CI
+    // bootstrap: 0001-0284 applied, 0284 re-applied cleanly,
+    // scripts/recon/ccrs-settle-0284-pg-check.sql passes and fails under each of
+    // 15 SQL mutations (scripts/recon/sqlmut/0284.txt), rollback then re-apply
+    // is clean. The owner applies it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0284_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0283_ccrs_sale_slice.sql");
-    expect(listed[listed.length - 2]).toBe("0282_ccrs_mail_messages.sql");
-    expect(listed[listed.length - 3]).toBe("0281_merch_print_files_bucket.sql");
-    expect(listed[listed.length - 4]).toBe("0280_website_web_vitals.sql");
-    expect(listed[listed.length - 5]).toBe("0279_product_image_memory.sql");
-    expect(listed[listed.length - 6]).toBe("0278_ofac_screening.sql");
-    expect(listed[listed.length - 7]).toBe("0277_ach_timberland_comms.sql");
-    expect(listed[listed.length - 8]).toBe("0276_ach_file_funding_confirm.sql");
-    expect(listed[listed.length - 9]).toBe("0275_ach_prenote_timberland_wait.sql");
-    expect(listed[listed.length - 10]).toBe("0274_ach_file_bank_steps.sql");
-    expect(listed[listed.length - 11]).toBe("0273_ach_files.sql");
-    expect(listed[listed.length - 12]).toBe("0272_ach_company_timberland_confirmed.sql");
-    expect(listed[listed.length - 13]).toBe("0271_ach_owner_authority.sql");
-    expect(listed[listed.length - 14]).toBe("0270_intake_card_aliases.sql");
-    expect(listed[listed.length - 15]).toBe("0269_product_tags.sql");
-    expect(listed[listed.length - 16]).toBe("0268_home_slide_advanced_click_events.sql");
-    expect(listed[listed.length - 17]).toBe("0267_content_schedule_releases.sql");
-    expect(listed[listed.length - 18]).toBe("0266_media_blur_placeholder.sql");
-    expect(listed[listed.length - 19]).toBe("0265_media_bucket_video_large_uploads.sql");
-    expect(listed[listed.length - 20]).toBe("0264_loyalty_consent_text.sql");
-    expect(listed[listed.length - 21]).toBe("0263_ach_operations.sql");
-    expect(listed[listed.length - 22]).toBe("0262_vendor_ach_esign.sql");
-    expect(listed[listed.length - 23]).toBe("0261_ach_esign.sql");
-    expect(listed[listed.length - 24]).toBe("0260_ach_document_intake.sql");
-    expect(listed[listed.length - 25]).toBe("0259_vendor_vault_change_control.sql");
-    expect(listed[listed.length - 26]).toBe("0258_ach_authorizations.sql");
-    expect(listed[listed.length - 27]).toBe("0257_delivery_brand.sql");
-    expect(listed[listed.length - 28]).toBe("0256_testing_labs.sql");
-    expect(listed[listed.length - 29]).toBe("0255_inbound_dedupe.sql");
-    expect(listed[listed.length - 30]).toBe("0254_menu_item_effects_aroma.sql");
-    expect(listed[listed.length - 31]).toBe("0253_inventory_expiry_rules.sql");
-    expect(listed[listed.length - 32]).toBe("0252_lab_coa_extract.sql");
-    expect(listed[listed.length - 33]).toBe("0251_wa_total_thc_cbd_repair.sql");
-    expect(listed[listed.length - 34]).toBe("0250_obligation_waivers.sql");
-    expect(listed[listed.length - 35]).toBe("0249_ccrs_upload_lifecycle.sql");
-    expect(listed[listed.length - 36]).toBe("0248_ccrs_outbox.sql");
-    expect(listed[listed.length - 37]).toBe("0247_ccrs_ledger.sql");
-    expect(listed[listed.length - 38]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
-    expect(listed[listed.length - 39]).toBe("0245_manifest_invoice_number_detected.sql");
-    expect(listed[listed.length - 40]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
-    expect(listed[listed.length - 41]).toBe("0243_master_suggestions_v2.sql");
-    expect(listed[listed.length - 42]).toBe("0242_lookup_jobs.sql");
-    expect(listed[listed.length - 43]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 44]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 45]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 46]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 47]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 48]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0284_ccrs_settle_uncertain.sql");
+    expect(listed[listed.length - 2]).toBe("0283_ccrs_sale_slice.sql");
+    expect(listed[listed.length - 3]).toBe("0282_ccrs_mail_messages.sql");
+    expect(listed[listed.length - 4]).toBe("0281_merch_print_files_bucket.sql");
+    expect(listed[listed.length - 5]).toBe("0280_website_web_vitals.sql");
+    expect(listed[listed.length - 6]).toBe("0279_product_image_memory.sql");
+    expect(listed[listed.length - 7]).toBe("0278_ofac_screening.sql");
+    expect(listed[listed.length - 8]).toBe("0277_ach_timberland_comms.sql");
+    expect(listed[listed.length - 9]).toBe("0276_ach_file_funding_confirm.sql");
+    expect(listed[listed.length - 10]).toBe("0275_ach_prenote_timberland_wait.sql");
+    expect(listed[listed.length - 11]).toBe("0274_ach_file_bank_steps.sql");
+    expect(listed[listed.length - 12]).toBe("0273_ach_files.sql");
+    expect(listed[listed.length - 13]).toBe("0272_ach_company_timberland_confirmed.sql");
+    expect(listed[listed.length - 14]).toBe("0271_ach_owner_authority.sql");
+    expect(listed[listed.length - 15]).toBe("0270_intake_card_aliases.sql");
+    expect(listed[listed.length - 16]).toBe("0269_product_tags.sql");
+    expect(listed[listed.length - 17]).toBe("0268_home_slide_advanced_click_events.sql");
+    expect(listed[listed.length - 18]).toBe("0267_content_schedule_releases.sql");
+    expect(listed[listed.length - 19]).toBe("0266_media_blur_placeholder.sql");
+    expect(listed[listed.length - 20]).toBe("0265_media_bucket_video_large_uploads.sql");
+    expect(listed[listed.length - 21]).toBe("0264_loyalty_consent_text.sql");
+    expect(listed[listed.length - 22]).toBe("0263_ach_operations.sql");
+    expect(listed[listed.length - 23]).toBe("0262_vendor_ach_esign.sql");
+    expect(listed[listed.length - 24]).toBe("0261_ach_esign.sql");
+    expect(listed[listed.length - 25]).toBe("0260_ach_document_intake.sql");
+    expect(listed[listed.length - 26]).toBe("0259_vendor_vault_change_control.sql");
+    expect(listed[listed.length - 27]).toBe("0258_ach_authorizations.sql");
+    expect(listed[listed.length - 28]).toBe("0257_delivery_brand.sql");
+    expect(listed[listed.length - 29]).toBe("0256_testing_labs.sql");
+    expect(listed[listed.length - 30]).toBe("0255_inbound_dedupe.sql");
+    expect(listed[listed.length - 31]).toBe("0254_menu_item_effects_aroma.sql");
+    expect(listed[listed.length - 32]).toBe("0253_inventory_expiry_rules.sql");
+    expect(listed[listed.length - 33]).toBe("0252_lab_coa_extract.sql");
+    expect(listed[listed.length - 34]).toBe("0251_wa_total_thc_cbd_repair.sql");
+    expect(listed[listed.length - 35]).toBe("0250_obligation_waivers.sql");
+    expect(listed[listed.length - 36]).toBe("0249_ccrs_upload_lifecycle.sql");
+    expect(listed[listed.length - 37]).toBe("0248_ccrs_outbox.sql");
+    expect(listed[listed.length - 38]).toBe("0247_ccrs_ledger.sql");
+    expect(listed[listed.length - 39]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
+    expect(listed[listed.length - 40]).toBe("0245_manifest_invoice_number_detected.sql");
+    expect(listed[listed.length - 41]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
+    expect(listed[listed.length - 42]).toBe("0243_master_suggestions_v2.sql");
+    expect(listed[listed.length - 43]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 44]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 45]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 46]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 47]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 48]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 49]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

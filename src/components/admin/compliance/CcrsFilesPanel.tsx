@@ -159,7 +159,7 @@ export function CcrsFilesPanel(p: Props) {
                       <form action={a!.settlePreprodDuplicates} className="flex flex-wrap items-center gap-2">
                         <Hidden env={p.env} weekKey={p.weekKey} />
                         <span>
-                          CCRS answered "Duplicate External Identifier" to {dupes} row(s): PREprod already had them from an earlier test.
+                          CCRS answered &ldquo;Duplicate External Identifier&rdquo; to {dupes} row(s): PREprod already had them from an earlier test.
                           PREprod cannot be reset, so treat them as on file (they go out as Update next time).
                         </span>
                         <button type="submit" className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`}>Settle PREprod duplicates</button>

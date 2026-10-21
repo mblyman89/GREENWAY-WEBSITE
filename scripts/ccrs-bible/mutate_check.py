@@ -134,6 +134,12 @@ RESETACT = "src/app/admin/settings/actions.ts"
 RESETPAGE = "src/app/admin/settings/reset/page.tsx"
 R5R_TESTS = "tests/compliance/r5-reset-proof.test.ts"
 R5E_TESTS = "tests/compliance/r5-preprod-evidence-gates.test.ts"
+R61_TESTS = "tests/compliance/r6-1-preprod-settle.test.ts"
+LIFECORE = "src/lib/compliance/ccrs-lifecycle-core.ts"
+LSTORE = "src/lib/compliance/ccrs-ledger-store.ts"
+CCRS_ACTIONS = "src/app/admin/compliance/ccrs/actions.ts"
+FILES_PANEL = "src/components/admin/compliance/CcrsFilesPanel.tsx"
+M0284 = "supabase/migrations/0284_ccrs_settle_uncertain.sql"
 CALCORE = "src/lib/compliance/compliance-calendar-core.ts"
 REMINDERS = "src/lib/notifications/compliance-reminders.ts"
 
@@ -1647,8 +1653,8 @@ MUTATIONS = [
     (
         'M204-s18b-confirm-says-insert',
         STRATCORE,
-        '"If the copy shows the record, future changes to it go as Update. Never re-send it as Insert.",',
-        '"If the copy shows the record, re-send it.",',
+        '"Once settled, future changes to it go as Update. Never re-send it as Insert.",',
+        '"Once settled, re-send it.",',
         S18B_TESTS,
         'A record CCRS holds is never re-sent as Insert.',
     ),
@@ -3192,6 +3198,86 @@ MUTATIONS = [
         '  E50_ZERO_EXCISE_NOT_MEDICAL: "[G L1377]",',
         R5E_TESTS,
         "E50's pin is the 'Only Medical Sales can be 0' line, not the 37% line.",
+    ),
+    (
+        "M396-r61-prove-env",
+        LIFECORE,
+        '  need(data.env === env, fn, "another env");',
+        '  need(true, fn, "another env");',
+        R61_TESTS,
+        "A proof answer for the other env must never be accepted as this env's.",
+    ),
+    (
+        "M397-r61-settle-preprod-only",
+        LIFECORE,
+        '  need(data.env === "preprod", fn, "only PREprod is ever settled this way");',
+        '  need(data.env === "preprod" || data.env === "prod", fn, "only PREprod is ever settled this way");',
+        R61_TESTS,
+        "The duplicate settle is PREprod only [EXAM L0518]; production is settled by a copy.",
+    ),
+    (
+        "M398-r61-pending-reconciling",
+        LIFECORE,
+        '  const rec = new Set(files.filter((f) => f.state === "reconciling").map((f) => f.id));',
+        '  const rec = new Set(files.map((f) => f.id));',
+        R61_TESTS,
+        "Only reconciling files still wait on a settle; a closed file must not show the button.",
+    ),
+    (
+        "M399-r61-panel-env",
+        FILES_PANEL,
+        '  const dupes = p.env === "preprod" ? pendingDuplicateCount(p.files, p.issues) : 0;',
+        '  const dupes = pendingDuplicateCount(p.files, p.issues);',
+        R61_TESTS,
+        "The settle button must never appear on the production panel.",
+    ),
+    (
+        "M400-r61-proof-catches",
+        LSTORE,
+        "    return { text: `Proof-by-sale check did not run (${msg}); it runs again after the next answer.`, proved: [], filesClosed: 0, error: msg };",
+        "    throw e;",
+        R61_TESTS,
+        "A failed proof must never hide an answer already recorded.",
+    ),
+    (
+        "M401-r61-proof-after-error",
+        CCRS_ACTIONS,
+        "  const proof = await proveAfterOutcome(admin, env);\n  if (proof.proved.length > 0) await auditProof(session, env, proof);",
+        '  const proof = { text: "", proved: [] as string[], filesClosed: 0 };',
+        R61_TESTS,
+        "An accepted Sale recorded by error paste must still run the proof.",
+    ),
+    (
+        "M402-r61-sql-later-upload",
+        M0284,
+        "       and g.uploaded_at > uf.uploaded_at",
+        "       and g.uploaded_at >= uf.uploaded_at - interval '1 day'",
+        R61_TESTS,
+        "Only a file uploaded AFTER the one that made the lot uncertain proves it.",
+    ),
+    (
+        "M403-r61-sql-preprod-only",
+        M0284,
+        "     where e.env = 'preprod' and e.state = 'uncertain'",
+        "     where e.state = 'uncertain'",
+        R61_TESTS,
+        "The settle function must never touch production entities.",
+    ),
+    (
+        "M404-r61-sql-dup-message",
+        M0284,
+        "       and i.message like '%: Duplicate External Identifier'",
+        "       and i.message like '%Duplicate%'",
+        R61_TESTS,
+        "Only the exact CCRS Insert refusal settles; 0249 writes it as 'row N (id): <message>'.",
+    ),
+    (
+        "M405-r61-playbook-never-insert",
+        "src/lib/compliance/ccrs-strategy-core.ts",
+        '      "Once settled, future changes to it go as Update. Never re-send it as Insert.",',
+        '      "Once settled, future changes to it go as Update.",',
+        R61_TESTS,
+        "The playbook must keep telling the owner never to re-send a held id as Insert.",
     ),
 ]
 

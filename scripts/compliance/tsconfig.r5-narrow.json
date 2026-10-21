@@ -22,6 +22,13 @@
     "../../tests/compliance/r5-preprod-evidence-gates.test.ts",
     "../../src/lib/compliance/ccrs-batch-core.ts",
     "../../src/app/admin/compliance/ccrs/page.tsx",
-    "../../src/app/admin/reports/compliance/page.tsx"
+    "../../src/app/admin/reports/compliance/page.tsx",
+    "../../src/lib/compliance/ccrs-lifecycle-core.ts",
+    "../../src/lib/compliance/ccrs-ledger-store.ts",
+    "../../src/app/admin/compliance/ccrs/actions.ts",
+    "../../src/app/admin/compliance/ccrs/mail-actions.ts",
+    "../../src/components/admin/compliance/CcrsFilesPanel.tsx",
+    "../../src/lib/compliance/ccrs-strategy-core.ts",
+    "../../tests/compliance/r6-1-preprod-settle.test.ts"
   ]
 }
