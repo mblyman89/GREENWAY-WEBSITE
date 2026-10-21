@@ -42,7 +42,7 @@ export const BANNED_TIMBERLAND_CLAIMS: readonly string[] = [
 export const BANK_STEP_CHECKLIST: readonly { id: string; text: string }[] = [
   { id: "download", text: "Download the file from this list (the same bytes every time)." },
   { id: "checker", text: "Run the file checker (Banking > File checker) on the downloaded file. It re-checks every Timberland pin and that it is the released file. A file cannot be cancelled after upload (section 18), so this is the last check." },
-  { id: "funding", text: "Look at the balance of the account ending 6048 and press \"Confirm funding\" here. The money must be there before you upload and still there at 9:00 am Pacific on the settlement date (section 14)." },
+  { id: "funding", text: "Look at the balance of the account ending 6048 and press \"Confirm funding\" here. The money must be there by 9:00 am Pacific on the settlement date (section 14; Brenda, Email 3 answer 5). Never let the account go negative." },
   { id: "login", text: "Log in to Timberland's cash management portal (a separate login from online banking). Have your token or phone ready for the text code (Schedule F)." },
   { id: "upload", text: "Upload the file, then press \"Mark uploaded\" here." },
   { id: "approve", text: "Approve it in the portal with the code, then press \"Mark approved\" here." },

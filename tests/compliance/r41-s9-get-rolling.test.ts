@@ -141,7 +141,8 @@ describe("funding helper (pure)", () => {
   it("deadline is 9:00 am Pacific on the settlement day (PDT and PST)", () => {
     expect(funding.fundingPlan(f).deadlineUtc.toISOString()).toBe("2026-10-21T16:00:00.000Z");
     expect(funding.fundingPlan({ ...f, effectiveDate: "2026-11-04" }).deadlineUtc.toISOString()).toBe("2026-11-04T17:00:00.000Z");
-    expect(funding.fundingPlan(f).headline).toMatch(/collected in account ending 6048 before you upload, and is still there at 9:00 am Pacific/);
+    expect(funding.fundingPlan(f).headline).toMatch(/collected in account ending 6048 by 9:00 am Pacific on /);
+    expect(funding.fundingPlan(f).headline).toMatch(/Never let the account go negative/);
   });
   it("a weekend effective date settles the next banking day", () => {
     expect(funding.fundingPlan({ ...f, effectiveDate: "2026-10-24" }).settlementDay).toBe("2026-10-26");

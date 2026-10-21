@@ -764,7 +764,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I confirm the money is in the account for an ACH file?",
-        a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the app cannot see it), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date; until Brenda answers question 6, the app asks you to have it there before you upload too. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
+        a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the app cannot see it), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date, and Brenda confirmed that is when it must be there (Email 3, answer 5). Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",
       },
     ],

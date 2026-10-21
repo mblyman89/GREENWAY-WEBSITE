@@ -15,10 +15,12 @@
  *   Schedule B: "ACH Service Fee $ 50.00 per month" and
  *     "Return/NOC $ 5.00 per item"
  *
- * Q6 (open with Brenda) asks whether the collected funds must be there at
- * upload time or only by 9:00 am on the settlement date. Strict default until
- * she answers: BOTH. The money is collected in the account before you upload,
- * and it is still there at 9:00 am Pacific on the settlement date.
+ * Q6 (ANSWERED, R41 S12, owner decision D-5). Brenda, Email 3 answer 5:
+ * "Collected funds should be on the effective/settlement date, and we only do
+ * pre-funding for customers that overdrawn their account." So the headline
+ * asks for the money by 9:00 am Pacific on the settlement date (section 14),
+ * not at upload time, and adds a plain warning never to let the account go
+ * negative (overdrawing is what turns pre-funding on).
  *
  * The app cannot see the balance. There is no bank feed and none is assumed.
  * So the helper only SHOWS the amount and the deadline, and the owner records
@@ -110,7 +112,7 @@ export function fundingPlan(f: { totalCents: number; effectiveDate: string; sett
     settlementDay,
     deadlineUtc,
     deadlineText,
-    headline: `Make sure at least ${usd(suggestedCents)} is collected in account ending 6048 before you upload, and is still there at ${deadlineText}.`,
+    headline: `Make sure at least ${usd(suggestedCents)} is collected in account ending 6048 by ${deadlineText}. Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw.`,
     returnFeeNote: `Each return or notification of change costs ${usd(FEES.perReturnOrNoc)} (Schedule B), debited later.`,
   };
 }
@@ -168,7 +170,7 @@ export function fundingBadge(f: FundingFileState, nowUtc: Date): FundingBadge {
   }
   return urgent
     ? { tone: "danger", text: `Funding not checked. ${usd(f.totalCents)} must be in the account by ${plan.deadlineText}.` }
-    : { tone: "warn", text: `Funding not checked yet. Look at the balance before you upload (deadline ${plan.deadlineText}).` };
+    : { tone: "warn", text: `Funding not checked yet. The money must be in the account by ${plan.deadlineText}.` };
 }
 
 // ------------------------------------------------------------ reminders ---
@@ -274,7 +276,12 @@ export function __runTimberlandFundingCoreTests(): { passed: number; failed: num
   ok(p.lines[1]!.cents === 5000, "fee line is the Schedule B $50.00");
   ok(p.suggestedCents === 1_239_567, "suggested = file + $50");
   ok(p.minimumCents === 1_234_567, "minimum is the file total");
-  ok(p.headline === "Make sure at least $12,395.67 is collected in account ending 6048 before you upload, and is still there at 9:00 am Pacific on Wed Oct 21.", "headline words (Q6 strict: before upload AND at 9:00 am)");
+  ok(
+    p.headline ===
+      "Make sure at least $12,395.67 is collected in account ending 6048 by 9:00 am Pacific on Wed Oct 21. Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw.",
+    "headline words (Q6 answered, D-5: by 9:00 am on the settlement date; never overdraw)",
+  );
+  ok(!/before you upload/.test(p.headline), "the headline no longer asks for the money at upload time (Email 3 answer 5)");
   ok(/\$5\.00/.test(p.returnFeeNote) && /Schedule B/.test(p.returnFeeNote), "return/NOC fee note");
   const pb = fundingPlan({ totalCents: 100, effectiveDate: "2026-10-21", settlementDate: null }, 25_000);
   ok(pb.lines.length === 3 && pb.lines[2]!.key === "buffer" && /your choice/.test(pb.lines[2]!.label), "buffer is its own labelled line");
