@@ -143,7 +143,16 @@ export function transferExternalId(ourId: string): string {
   return `${TRANSFER_ID_PREFIX}${ourId}`;
 }
 
-const digits = (s: string | null | undefined) => (s ?? "").trim();
+/**
+ * A license as CCRS wants it: digits only ("FromLicenseNumber must be numeric"
+ * [G L1189]). The common written forms ("WA417068", "417-068", "417 068") are
+ * normalized; anything else is left as typed so the numeric check refuses it.
+ */
+const digits = (s: string | null | undefined) => {
+  const t = (s ?? "").trim();
+  const n = t.replace(/^wa\s*/i, "").replace(/[\s-]/g, "");
+  return /^\d+$/.test(n) ? n : t;
+};
 
 export function buildTransferRows(input: TransferInput): TransferPlan {
   const rows: string[][] = [];
@@ -367,6 +376,8 @@ export function __runCcrsTransferTests(): { passed: number; failed: number } {
   ok(buildTransferRows(base({ lots: [lot({ isCultivera: true })] })).skipped.cultivera === 1, "Cultivera lot skipped");
   ok(buildTransferRows(base({ lots: [lot({ vendorLicense: "413541" })] })).issues[0]?.code === "E14_TRANSFER_SAME_LICENSE", "same license");
   ok(buildTransferRows(base({ lots: [lot({ vendorLicense: null })] })).issues[0]?.code === "E14_TRANSFER_FIELD_MISSING", "no license");
+  ok(buildTransferRows(base({ lots: [lot({ vendorLicense: "WA 417-068" })] })).rows[0]?.[0] === "417068", "written license forms normalized");
+  ok(buildTransferRows(base({ lots: [lot({ vendorLicense: "41X068" })] })).issues[0]?.code === "E14_TRANSFER_FIELD_MISSING", "non-numeric license refused");
   ok(buildTransferRows(base({ lots: [lot({ vendorIdSource: "pdf_guess" })] })).issues[0]?.code === "E14_TRANSFER_VENDOR_ID_UNKNOWN", "pdf guess not sent");
   ok(buildTransferRows(base({ lots: [lot({ vendorIdSource: "owner_entered" })] })).rows.length === 1, "owner-entered sent");
   ok(buildTransferRows(base({ lots: [lot({ receivedQty: 0 })] })).issues[0]?.code === "E14_TRANSFER_QUANTITY", "zero qty");

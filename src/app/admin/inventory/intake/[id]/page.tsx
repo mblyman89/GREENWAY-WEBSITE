@@ -462,20 +462,22 @@ export default async function ManifestReviewPage({
             <strong>Duplicate dismissed - this is the manifest that was kept.</strong> {dismissed}
           </div>
         )}
-        {vendorid && (
+        {vendorid === "saved" && (
           <div
             data-testid="vendorid-banner"
-            className={`rounded-[var(--admin-radius)] border px-4 py-2 text-sm ${
-              vendorid === "saved"
-                ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
-                : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 text-[var(--admin-danger)]"
-            }`}
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
           >
-            {vendorid === "saved"
-              ? "Vendor inventory id saved. It will be used in the CCRS InventoryTransfer file."
-              : vendorid === "invalid"
-                ? "Not saved: enter the vendor's id exactly as on their manifest (1-100 characters, no commas or quotes)."
-                : "Not saved: the vendor inventory id could not be stored. Try again."}
+            Vendor inventory id saved. It will be used in the CCRS InventoryTransfer file.
+          </div>
+        )}
+        {vendorid && vendorid !== "saved" && (
+          <div
+            data-testid="vendorid-error"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+          >
+            {vendorid === "invalid"
+              ? "Not saved: enter the vendor's id exactly as on their manifest (1-100 characters, no commas or quotes)."
+              : "Not saved: the vendor inventory id could not be stored. Try again."}
           </div>
         )}
         {dismisserr && (
