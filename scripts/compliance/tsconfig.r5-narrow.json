@@ -29,6 +29,11 @@
     "../../src/app/admin/compliance/ccrs/mail-actions.ts",
     "../../src/components/admin/compliance/CcrsFilesPanel.tsx",
     "../../src/lib/compliance/ccrs-strategy-core.ts",
-    "../../tests/compliance/r6-1-preprod-settle.test.ts"
+    "../../tests/compliance/r6-1-preprod-settle.test.ts",
+    "../../src/lib/compliance/ccrs-transfer-core.ts",
+    "../../src/lib/compliance/ccrs-outbox-core.ts",
+    "../../src/lib/inventory/intake-store.ts",
+    "../../src/app/admin/inventory/intake/actions.ts",
+    "../../src/app/admin/inventory/intake/[id]/page.tsx"
   ]
 }

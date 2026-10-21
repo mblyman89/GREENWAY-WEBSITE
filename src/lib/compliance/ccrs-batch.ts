@@ -75,7 +75,21 @@ import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
-import { loadLedgerForBatch, loadSaleSlice } from "@/lib/compliance/ccrs-ledger-store";
+import { loadLedgerForBatch, loadSaleSlice, loadTransferSlice } from "@/lib/compliance/ccrs-ledger-store";
+import {
+  TRANSFER_BLOCKING,
+  buildTransferRows,
+  transferExternalId,
+  transferLedgerEntries,
+  transferSummaryText,
+  type TransferIssueCode,
+  type TransferLot,
+} from "@/lib/compliance/ccrs-transfer-core";
+import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
+import { pacificDayKey } from "@/lib/reports/timezone";
+import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
+import { LINEAGE_MANIFEST_SELECT, type LineageManifestRow } from "@/lib/inventory/import-lineage-core";
+import { cultiveraManifestIdSet, lotFlaggedCultivera } from "@/lib/inventory/cultivera-received-flag-core";
 import {
   correctionExportIds,
   eventLotRefs,
@@ -179,6 +193,117 @@ async function getPublishedVersionId(admin: Admin): Promise<string | null> {
 
 const LOT_COLUMNS =
   "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample";
+
+/**
+ * R6-2: every ACCEPTED lot of a delivery received on or before `toDay` (live
+ * or destroyed: a lot sold out or destroyed was still received), with the
+ * delivery facts an InventoryTransfer row needs. The retailer is the
+ * RECEIVING licensee and files the transfer [G L0124-L0128, G L0143-L0144].
+ * `absent` = migration 0285 (the vendor-id columns) is not applied. Any other
+ * read error THROWS: a silently missing lot is a missing weekly filing.
+ */
+const TRANSFER_LOT_COLUMNS =
+  "id, lot_code, manifest_id, notes, vendor_id, ccrs_inventory_external_id, received_qty, received_on, disposition, vendor_inventory_external_id, vendor_inventory_external_id_source";
+type TransferLotRow = {
+  id: string;
+  lot_code: string | null;
+  manifest_id: string | null;
+  notes: string | null;
+  vendor_id: string | null;
+  ccrs_inventory_external_id: string | null;
+  received_qty: number | string | null;
+  received_on: string | null;
+  disposition: string | null;
+  vendor_inventory_external_id: string | null;
+  vendor_inventory_external_id_source: string | null;
+};
+type TransferManifestRow = LineageManifestRow & {
+  vendor_id: string | null;
+  from_license_number?: string | null;
+  vendor_license?: string | null;
+};
+async function readTransferLots(admin: Admin, toDay: string): Promise<{ kind: "absent" } | { kind: "loaded"; lots: TransferLot[] }> {
+  let missing = false;
+  let failed: string | null = null;
+  const rows = await pagedAll<TransferLotRow>(async (from, to) => {
+    if (missing || failed) return [];
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select(TRANSFER_LOT_COLUMNS)
+      .not("manifest_id", "is", null)
+      .eq("disposition", "accepted")
+      .lte("received_on", toDay)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      if (isMissingColumnError(error)) missing = true;
+      else failed = error.message;
+      return [];
+    }
+    return (data as TransferLotRow[] | null) ?? [];
+  });
+  if (missing) return { kind: "absent" };
+  if (failed) throw new Error(`R6-2: reading received lots for InventoryTransfer failed: ${failed}`);
+  const manifestIds = [...new Set(rows.map((r) => (r.manifest_id ?? "").trim()).filter(Boolean))];
+  let mFailed: string | null = null;
+  const manifests = await chunkedIn<string, TransferManifestRow>(manifestIds, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("inbound_manifests")
+      .select(`${LINEAGE_MANIFEST_SELECT}, vendor_id, from_license_number:raw_payload->>from_license_number, vendor_license:raw_payload->>vendor_license`)
+      .in("id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) mFailed = error.message;
+    return (data as TransferManifestRow[] | null) ?? [];
+  });
+  if (mFailed) throw new Error(`R6-2: reading delivery manifests for InventoryTransfer failed: ${mFailed}`);
+  const byManifest = new Map(manifests.map((m) => [m.id, m]));
+  const vendorIds = [
+    ...new Set([...rows.map((r) => r.vendor_id), ...manifests.map((m) => m.vendor_id)].filter((x): x is string => !!x)),
+  ];
+  let vFailed: string | null = null;
+  const vendors = await chunkedIn<string, { id: string; license_number: string | null }>(vendorIds, async (chunk, from, to) => {
+    const { data, error } = await admin.from("vendors").select("id, license_number").in("id", chunk).order("id", { ascending: true }).range(from, to);
+    if (error) vFailed = error.message;
+    return (data as { id: string; license_number: string | null }[] | null) ?? [];
+  });
+  if (vFailed) throw new Error(`R6-2: reading vendor licenses for InventoryTransfer failed: ${vFailed}`);
+  const licenseByVendor = new Map(vendors.map((v) => [v.id, (v.license_number ?? "").trim()]));
+  const migration = cultiveraManifestIdSet(manifests);
+  const lots: TransferLot[] = rows.map((r) => {
+    const m = r.manifest_id ? byManifest.get(r.manifest_id) : undefined;
+    // The delivery's own sending license first (exact for THIS manifest),
+    // then the vendor record's license.
+    const fromDoc = (m?.from_license_number ?? m?.vendor_license ?? "").trim();
+    const vendorRecord = licenseByVendor.get(m?.vendor_id ?? r.vendor_id ?? "") ?? "";
+    const qty = r.received_qty === null ? null : Number(r.received_qty);
+    return {
+      lotId: r.id,
+      manifestId: r.manifest_id,
+      label: r.lot_code ?? r.id,
+      ourId: assignedInventoryExternalId(r),
+      vendorId: r.vendor_inventory_external_id,
+      vendorIdSource: r.vendor_inventory_external_id_source,
+      vendorLicense: fromDoc || vendorRecord || null,
+      receivedQty: qty,
+      receivedOn: r.received_on,
+      disposition: r.disposition,
+      isCultivera: lotFlaggedCultivera(r, migration),
+    };
+  });
+  return { kind: "loaded", lots };
+}
+
+const TRANSFER_ISSUE_TEXT: Record<TransferIssueCode, (n: number) => string> = {
+  E14_TRANSFER_FIELD_MISSING: (n) => `${n} received lot(s) are missing a field InventoryTransfer.csv requires (vendor license, our lot id, or received date). Fix each delivery, then rebuild.`,
+  E14_TRANSFER_VENDOR_ID_UNKNOWN: (n) =>
+    `${n} received lot(s) have no confirmed vendor inventory id. CCRS needs "the original ... InventoryExternalIdentifier from the producer" [FAQ L0058-L0059]. Open the delivery and enter or confirm the vendor's id for each lot.`,
+  E14_TRANSFER_SAME_LICENSE: (n) => `${n} received lot(s) name our own license as the vendor. A transfer to the same license is an error [G L1205]; fix the vendor on the delivery.`,
+  E14_TRANSFER_QUANTITY: (n) => `${n} received lot(s) have a received quantity that is not positive ("No negative entries allowed" [G L1238]).`,
+  E14_TRANSFER_LEDGER_WITHHELD: (n) => `${n} transfer(s) were left out because an earlier file naming them is not answered yet. Record that file's CCRS result, then rebuild.`,
+  E14_TRANSFER_LOT_NOT_REPORTED: (n) =>
+    `${n} transfer(s) were left out because their lot is not in Inventory.csv and CCRS does not hold it yet ("ensure the inventory has been reported through the inventory.CSV" [G L1207-L1209]). Fix the Inventory errors first.`,
+};
 
 /**
  * R5-1: the DESTROYED lots that this batch's event rows name (by CCRS id).
@@ -1197,12 +1322,74 @@ export async function buildCcrsBatch(
     warnings: adj.warnings,
     empty: adj.recordCount === 0,
   });
-  // InventoryTransfer: only the RECEIVING licensee submits it; retail intake is
-  // reported via Inventory.csv. We emit an empty, correctly-shaped file and note
-  // it so staff know it is intentionally empty for a retailer.
-  push("InventoryTransfer", [], [
-    "InventoryTransfer is submitted by the receiving licensee; retail intake is reported via Inventory.csv. This file is intentionally empty.",
-  ]);
+  // --- InventoryTransfer (R6-2) ----------------------------------------------
+  // The retailer is the RECEIVING licensee, so the retailer files it, weekly:
+  // "only the receiving licensee is required to submit ... inventory transfer"
+  // [G L0124-L0128, G L0143-L0144, G L1162]. One row per accepted lot of a
+  // real delivery (Cultivera migration lots are skipped: Cultivera filed them).
+  // Prod: the owner's obligation start date is a hard floor and, with the
+  // transfer ledger loaded, any earlier lot never filed is caught up. The
+  // ledger (0285 ccrs_transfer_slice) stops a re-Insert ("Duplicate
+  // InventoryTransfer for Licensee" [G L1190]).
+  const fromDay = pacificDayKey(fromISO);
+  const toDay = pacificDayKey(toISO);
+  const transferRead = await readTransferLots(admin, toDay);
+  let transferRows: string[][] = [];
+  const transferWarnings: string[] = [];
+  if (transferRead.kind === "absent") {
+    transferWarnings.push("InventoryTransfer is empty: migration 0285 (vendor inventory ids) is not applied yet. Apply it, then rebuild.");
+  } else {
+    const obligation = env === "prod" ? await getObligationContext() : null;
+    const notBefore = obligation?.startDate ?? null;
+    const transferIds = transferRead.lots.map((l) => l.ourId).filter((x): x is string => !!x).map(transferExternalId);
+    const transferSlice = ledger ? await loadTransferSlice(admin, env, transferIds) : null;
+    const held = transferSlice?.kind === "loaded" ? transferSlice.held : null;
+    if (held) {
+      const merged = buildLedgerView(env, [...(saleAwareLedger ?? ledger!).entries.values(), ...transferLedgerEntries(held)], ledger!.productIdByKey);
+      if (merged.duplicates.length > 0) throw new Error(`R6-2: InventoryTransfer ledger entries collide with the batch ledger: ${merged.duplicates.join(", ")}`);
+      saleAwareLedger = merged.view;
+    }
+    const reportable = new Set<string>();
+    const invExt = CCRS_COLUMNS.Inventory.indexOf("ExternalIdentifier");
+    for (const r of inventory.rows) if (r[invExt]) reportable.add(r[invExt]);
+    if (ledger) {
+      for (const e of ledger.entries.values()) {
+        if (e.fileType === "Inventory" && (e.state === "seed" || e.state === "filed" || e.state === "confirmed" || e.state === "closed")) reportable.add(e.externalId);
+      }
+    }
+    const tplan = buildTransferRows({
+      lots: transferRead.lots,
+      licenseNumber: license.licenseNumber,
+      createdBy,
+      fromDay,
+      toDay,
+      notBefore,
+      // Catch-up needs BOTH the ledger (to know what was already filed) and
+      // the floor (so years of pre-Greenway deliveries are never swept in).
+      catchUp: env === "prod" && held !== null && notBefore !== null,
+      held,
+      reportable,
+    });
+    transferRows = tplan.rows;
+    if (env === "prod" && notBefore === null) {
+      transferWarnings.push("InventoryTransfer covers this week only: set the CCRS obligation start date so missed earlier weeks are caught up.");
+    }
+    const byCode = new Map<TransferIssueCode, typeof tplan.issues>();
+    for (const i of tplan.issues) byCode.set(i.code, [...(byCode.get(i.code) ?? []), i]);
+    for (const [code, list] of byCode) {
+      syncIssues.push({
+        severity: TRANSFER_BLOCKING.has(code) ? "error" : "warning",
+        file: "InventoryTransfer",
+        code,
+        specPin: specPinFor(code),
+        count: list.length,
+        rows: list.map((i) => ({ id: i.manifestId ?? i.lotId, label: i.label, detail: i.detail })),
+        message: TRANSFER_ISSUE_TEXT[code](list.length),
+      });
+    }
+    if (tplan.rows.length > 0 || tplan.alreadyHeld.length > 0) transferWarnings.push(transferSummaryText(tplan));
+  }
+  push("InventoryTransfer", transferRows, transferWarnings);
   // --- Sale: this range's Inserts + customer-return corrections (R5-1) ------
   // ONE Sale file per emission (planOutboxFiles refuses two). The Insert rows
   // already passed E38 in buildCcrsSaleCsv; correction rows pass it here.

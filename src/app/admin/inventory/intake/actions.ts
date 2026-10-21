@@ -14,7 +14,9 @@ import {
   logManifestEvent,
   setManifestInvoiceOverride,
   dismissDuplicateManifest,
+  setLotVendorInventoryId,
 } from "@/lib/inventory/intake-store";
+import { normalizeOwnerVendorId } from "@/lib/compliance/ccrs-transfer-core";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
 import { isMigrationStockResult, receiptEventFor } from "@/lib/inventory/manifest-event-labels-core";
@@ -608,6 +610,22 @@ export async function setLotDispositionAction(
   }
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
   redirect(`/admin/inventory/intake/${manifestId}?lot=${disposition}`);
+}
+
+/**
+ * R6-2: type or confirm the VENDOR's inventory id for one received lot.
+ * CCRS InventoryTransfer needs "the original ... InventoryExternalIdentifier
+ * from the producer" [FAQ L0058-L0059]; a PDF read may have picked a batch
+ * number instead, so a person confirms it here and it is stamped
+ * owner_entered (trusted).
+ */
+export async function setLotVendorIdAction(manifestId: string, lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const norm = normalizeOwnerVendorId(formData.get("vendor_inventory_external_id"));
+  if (!norm.ok) redirect(`/admin/inventory/intake/${manifestId}?vendorid=invalid`);
+  const res = await setLotVendorInventoryId(manifestId, lotId, norm.value, session.userId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  redirect(`/admin/inventory/intake/${manifestId}?vendorid=${res.ok ? "saved" : "error"}`);
 }
 
 /**

@@ -126,6 +126,10 @@ const ID_COLUMN: Partial<Record<CcrsRetailerFileType, string>> = {
   // SaleDetailExternalIdentifier [G L1411-L1415]; an Insert of a line CCRS
   // holds is a duplicate, an Update/Delete of one it lacks is "not found".
   Sale: "SaleDetailExternalIdentifier",
+  // R6-2: a transfer is identified by its own ExternalIdentifier ("TR-" + our
+  // lot id). Re-Inserting one CCRS holds is "Duplicate InventoryTransfer for
+  // Licensee" [G L1190].
+  InventoryTransfer: "ExternalIdentifier",
 };
 
 /**
@@ -208,7 +212,9 @@ export function verifyOutboxAgainstLedger(view: LedgerView, files: readonly Outb
         }
       }
       if (f.type === "InventoryAdjustment" || f.type === "Sale" || f.type === "InventoryTransfer") {
-        const invCol = C.indexOf("InventoryExternalIdentifier");
+        // R6-2: a transfer names OUR lot in ToInventoryExternalIdentifier; it
+        // "must be reported through the inventory.CSV" [G L1207-L1209].
+        const invCol = C.indexOf(f.type === "InventoryTransfer" ? "ToInventoryExternalIdentifier" : "InventoryExternalIdentifier");
         if (invCol >= 0) {
           const inv = r[invCol];
           const e = ledgerEntry(view, "Inventory", inv);
