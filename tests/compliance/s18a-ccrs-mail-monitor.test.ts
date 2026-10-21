@@ -806,7 +806,7 @@ describe("the hub panel", () => {
 describe("environment documentation", () => {
   it(".env.example documents every variable mailConfigFromEnv reads", () => {
     const ex = read(".env.example");
-    for (const v of ["CCRS_MAILBOX_ADDRESS", "CCRS_MAIL_LOOKBACK_HOURS", "GMAIL_SA_CLIENT_EMAIL", "GMAIL_SA_PRIVATE_KEY", "GMAIL_OAUTH_CLIENT_ID", "GMAIL_OAUTH_CLIENT_SECRET", "GMAIL_OAUTH_REFRESH_TOKEN"]) {
+    for (const v of ["CCRS_MAILBOX_ADDRESS", "CCRS_MAIL_LOOKBACK_HOURS", "GMAIL_SA_CLIENT_EMAIL", "GMAIL_SA_PRIVATE_KEY", "GMAIL_OAUTH_CLIENT_ID", "GMAIL_OAUTH_CLIENT_SECRET", "GMAIL_OAUTH_REFRESH_TOKEN", "GMAIL_WIF_SERVICE_ACCOUNT_EMAIL", "GMAIL_WIF_PROJECT_NUMBER", "GMAIL_WIF_POOL_ID", "GMAIL_WIF_PROVIDER_ID"]) {
       expect(ex, v).toMatch(new RegExp(`^${v}=`, "m"));
     }
   });

@@ -84,7 +84,7 @@ export function CcrsMailPanel({
           <p className="font-bold">The mailbox monitor is not set up yet.</p>
           <p className="mt-1">
             {setup.problem ?? `Missing: ${setup.missing.join(", ")}.`} It will read {setup.mailbox} once the Google settings are added in Vercel
-            (see the setup steps in the build report). Until then, paste CCRS emails into the boxes below as before.
+            (the keyless setup walkthrough is in Part 09 R6-5). Until then, paste CCRS emails into the boxes below as before.
           </p>
         </div>
       ) : stale || (heartbeat && !heartbeat.ok) ? (

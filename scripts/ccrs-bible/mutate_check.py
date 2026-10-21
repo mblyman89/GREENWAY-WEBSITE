@@ -147,6 +147,7 @@ M0286 = "supabase/migrations/0286_ccrs_inventory_last_told.sql"
 R64_TESTS = "tests/compliance/r6-4-integrator-api.test.ts"
 APICORE = "src/lib/compliance/ccrs-integrator-api-core.ts"
 APIIO = "src/lib/compliance/ccrs-integrator-api.ts"
+R65_TESTS = "tests/compliance/r6-5-gmail-keyless.test.ts"
 TCORE = "src/lib/compliance/ccrs-transfer-core.ts"
 INTAKE = "src/lib/inventory/intake-store.ts"
 M0285 = "supabase/migrations/0285_ccrs_inventory_transfer.sql"
@@ -3728,6 +3729,118 @@ MUTATIONS = [
         '  if (false) {\n    return { finished: "stopped"',
         R64_TESTS,
         'The I/O half checks the switch before any request.',
+    ),
+    (
+        'M461-r65-mixed-refused',
+        MAILCORE,
+        '  if ([saAny, oaAny, wiAny].filter(Boolean).length > 1) {',
+        '  if ([saAny, oaAny].filter(Boolean).length > 1) {',
+        R65_TESTS,
+        'Keyless plus a key or OAuth is refused.',
+    ),
+    (
+        'M462-r65-missing-named',
+        MAILCORE,
+        '      !wi.projectNumber && "GMAIL_WIF_PROJECT_NUMBER",\n',
+        '',
+        R65_TESTS,
+        'A half setup names every missing variable.',
+    ),
+    (
+        'M463-r65-project-number',
+        MAILCORE,
+        '  if (!/^[0-9]{6,20}$/.test(wi.projectNumber)) {',
+        '  if (!/^[0-9a-z-]{6,30}$/.test(wi.projectNumber)) {',
+        R65_TESTS,
+        'The project ID is not accepted as the number.',
+    ),
+    (
+        'M464-r65-gcp-prefix',
+        MAILCORE,
+        '    if (!WIF_ID_RE.test(val) || val.startsWith("gcp-")) return',
+        '    if (!WIF_ID_RE.test(val)) return',
+        R65_TESTS,
+        'The gcp- prefix is reserved.',
+    ),
+    (
+        'M465-r65-id-length',
+        MAILCORE,
+        'const WIF_ID_RE = /^[a-z0-9-]{4,32}$/;',
+        'const WIF_ID_RE = /^[a-z0-9-]{3,32}$/;',
+        R65_TESTS,
+        'Pool and provider ids are 4-32 characters.',
+    ),
+    (
+        'M466-r65-audience-prefix',
+        MAILCORE,
+        '  return `//iam.googleapis.com/projects/${wi.projectNumber}/locations/global/workloadIdentityPools/',
+        '  return `https://iam.googleapis.com/projects/${wi.projectNumber}/locations/global/workloadIdentityPools/',
+        R65_TESTS,
+        'STS audience uses the // resource form.',
+    ),
+    (
+        'M467-r65-scope',
+        MAILCORE,
+        '    scope: CLOUD_PLATFORM_SCOPE,\n    subjectTokenType',
+        '    scope: GMAIL_READONLY_SCOPE,\n    subjectTokenType',
+        R65_TESTS,
+        'The federated token asks for cloud-platform (signJwt needs it).',
+    ),
+    (
+        'M468-r65-dwd-subject',
+        MAILCORE,
+        'serviceAccountJwtParts({ clientEmail: wi.serviceAccountEmail, subject: mailbox, nowSec });',
+        'serviceAccountJwtParts({ clientEmail: wi.serviceAccountEmail, subject: wi.serviceAccountEmail, nowSec });',
+        R65_TESTS,
+        'The signed claims impersonate the mailbox.',
+    ),
+    (
+        'M469-r65-source-order',
+        MAILCORE,
+        '  for (const t of [sources.header, sources.file, sources.env]) {',
+        '  for (const t of [sources.env, sources.header, sources.file]) {',
+        R65_TESTS,
+        'The request header wins, as in @vercel/oidc.',
+    ),
+    (
+        'M470-r65-sts-target-hint',
+        MAILCORE,
+        '    err === "invalid_target" || /not found|does not exist|disabled/i.test(desc)',
+        '    /not found|disabled/i.test(desc)',
+        R65_TESTS,
+        'A wrong pool path points at the GMAIL_WIF ids.',
+    ),
+    (
+        'M471-r65-signjwt-3parts',
+        MAILCORE,
+        'typeof o.signedJwt === "string" && o.signedJwt.split(".").length === 3)',
+        'typeof o.signedJwt === "string")',
+        R65_TESTS,
+        'Only a three-part JWT is accepted.',
+    ),
+    (
+        'M472-r65-fed-bearer',
+        MAILFETCH,
+        'authorization: `Bearer ${fed.token}` },',
+        'authorization: `Bearer ${oidc}` },',
+        R65_TESTS,
+        'signJwt is called with the federated token.',
+    ),
+    (
+        'M473-r65-no-token-stop',
+        MAILFETCH,
+        '  if (!tok) {\n    throw new Error(',
+        '  if (false) {\n    throw new Error(',
+        R65_TESTS,
+        'No Vercel token: nothing is sent.',
+    ),
+    (
+        'M474-r65-hb-mode',
+        MAILCORE,
+        'export const MAIL_AUTH_MODES: readonly MailAuthMode[] = ["service-account", "oauth-refresh", "workload-identity"];',
+        'export const MAIL_AUTH_MODES: readonly MailAuthMode[] = ["service-account", "oauth-refresh"];',
+        R65_TESTS,
+        'The heartbeat keeps the keyless mode.',
     ),
 ]
 

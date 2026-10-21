@@ -14,6 +14,10 @@
  *   POST https://oauth2.googleapis.com/token
  *        service account: grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<JWT RS256>
  *        OAuth:           grant_type=refresh_token&client_id&client_secret&refresh_token
+ *   R6-5 keyless (workload-identity): Vercel OIDC token ->
+ *   POST https://sts.googleapis.com/v1/token (token-exchange, JSON)
+ *   POST https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{email}:signJwt
+ *        -> the same jwt-bearer POST as the service account, signed by Google.
  *
  * Every request has a hard timeout, so a slow Google cannot hold the cron
  * past maxDuration. Errors are returned as text, never thrown past the tick.
@@ -21,13 +25,22 @@
 import "server-only";
 
 import { createSign } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import {
   GOOGLE_TOKEN_URL,
   JWT_BEARER_GRANT,
+  STS_TOKEN_URL,
   b64url,
   decodeBodyData,
+  decodeSignJwtResponse,
+  decodeStsResponse,
   decodeTokenResponse,
+  oidcTokenFacts,
+  pickVercelOidcToken,
   serviceAccountJwtParts,
+  signJwtRequest,
+  stsExchangeBody,
+  wifPrincipal,
   type AttachmentRef,
   type GmailMessage,
   type MailConfig,
@@ -76,7 +89,10 @@ function gmailError(what: string, status: number, body: unknown): Error {
 /** An access token for gmail.readonly on the configured mailbox. */
 export async function getGmailAccessToken(cfg: Configured, nowMs = Date.now()): Promise<string> {
   let form: URLSearchParams;
-  if (cfg.mode === "service-account") {
+  if (cfg.mode === "workload-identity") {
+    const assertion = await signedDwdJwtKeyless(cfg, nowMs);
+    form = new URLSearchParams({ grant_type: JWT_BEARER_GRANT, assertion });
+  } else if (cfg.mode === "service-account") {
     const sa = cfg.serviceAccount!;
     const { signingInput } = serviceAccountJwtParts({ clientEmail: sa.clientEmail, subject: cfg.mailbox, nowSec: Math.floor(nowMs / 1000) });
     const signer = createSign("RSA-SHA256");
@@ -96,6 +112,49 @@ export async function getGmailAccessToken(cfg: Configured, nowMs = Date.now()): 
   const t = decodeTokenResponse(status, body);
   if (!t.ok) throw new Error(`Google sign-in for ${cfg.mailbox} failed: ${t.error}`);
   return t.accessToken;
+}
+
+/**
+ * Vercel's OIDC token for THIS run, read the way @vercel/oidc 4.x reads it
+ * (request header via the @vercel/request-context symbol, then the file named
+ * by VERCEL_OIDC_TOKEN_FILE, then VERCEL_OIDC_TOKEN), without the dependency.
+ * Never cached: Vercel rotates it (function tokens live 2 hours).
+ */
+export async function readVercelOidcToken(): Promise<string> {
+  const ctx = (globalThis as Record<symbol, { get?: () => { headers?: Record<string, string | undefined> } } | undefined>)[Symbol.for("@vercel/request-context")];
+  const header = ctx?.get?.()?.headers?.["x-vercel-oidc-token"] ?? null;
+  const fileName = (process.env.VERCEL_OIDC_TOKEN_FILE ?? "").trim();
+  const file = !header && fileName ? await readFile(fileName, "utf8").catch(() => null) : null;
+  const tok = pickVercelOidcToken({ header, file, env: process.env.VERCEL_OIDC_TOKEN ?? null });
+  if (!tok) {
+    throw new Error(
+      "No Vercel OIDC token in this run. In Vercel: Project Settings > Security > Secure backend access with OIDC federation must be ON (Team issuer), then redeploy.",
+    );
+  }
+  return tok;
+}
+
+/** Keyless DWD: Vercel token -> STS federated token -> signJwt by the service account. Returns the signed assertion. */
+async function signedDwdJwtKeyless(cfg: Configured, nowMs: number): Promise<string> {
+  const wi = cfg.workloadIdentity!;
+  const oidc = await readVercelOidcToken();
+  const facts = oidcTokenFacts(oidc);
+  const sts = await fetchJson(STS_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(stsExchangeBody(wi, oidc)),
+  });
+  const fed = decodeStsResponse(sts.status, sts.body, facts);
+  if (!fed.ok) throw new Error(`Google sign-in for ${cfg.mailbox} failed: ${fed.error}`);
+  const req = signJwtRequest(wi, cfg.mailbox, Math.floor(nowMs / 1000));
+  const sj = await fetchJson(req.url, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${fed.token}` },
+    body: JSON.stringify(req.body),
+  });
+  const signed = decodeSignJwtResponse(sj.status, sj.body, { serviceAccountEmail: wi.serviceAccountEmail, principal: wifPrincipal(wi, facts.sub) });
+  if (!signed.ok) throw new Error(`Google sign-in for ${cfg.mailbox} failed: ${signed.error}`);
+  return signed.signedJwt;
 }
 
 /** Every message id matching q, newest first, Spam and Trash included [FAQ L0102]. */

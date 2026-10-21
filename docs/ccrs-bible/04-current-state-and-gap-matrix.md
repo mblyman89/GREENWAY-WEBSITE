@@ -273,6 +273,18 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
 - Off unless `CCRS_API_<ENV>_ENABLED=true` and every credential is set. Nothing in the app calls it yet; the weekly upload stays by hand.
 - See Part 09 R6-4.
 
+### A.16 R6-5 Keyless Gmail sign-in for the CCRS mailbox monitor — BUILT (2026-10-21); needs the owner's Google setup
+
+- **Before:** S-18a could sign in only with a service-account key file (option A) or an OAuth refresh token (option B). The owner's new Google organisation blocks key files (the secure-by-default policy `iam.disableServiceAccountKeyCreation`), so option A could not be set up.
+- **Now:** a third mode, `workload-identity`, needs no key:
+  - Vercel's per-run OIDC token is exchanged at Google STS (Workload Identity Federation);
+  - the service account signs the same domain-wide-delegation JWT through IAM Credentials `signJwt`;
+  - the oauth2 jwt-bearer step is unchanged.
+- It is selected by four variables, `GMAIL_WIF_SERVICE_ACCOUNT_EMAIL`, `GMAIL_WIF_PROJECT_NUMBER`, `GMAIL_WIF_POOL_ID` and `GMAIL_WIF_PROVIDER_ID`. Mixing it with A or B is refused. With nothing set, the panel now names these four (the recommended way).
+- Every Google refusal is turned into the fix. For example, a refused `signJwt` names the exact principal to grant.
+- No package was added; the cron route did not change.
+- See Part 09 R6-5 for the owner walkthrough.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.
