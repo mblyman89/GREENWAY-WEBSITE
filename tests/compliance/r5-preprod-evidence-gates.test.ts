@@ -30,6 +30,7 @@ import {
   CCRS_COLUMNS,
   verifyCcrsFile,
   verifySaleExciseRule,
+  verifySaleNumericColumns,
   splitCsvLine,
 } from "../../src/lib/compliance/ccrs-batch-core";
 import { specPinFor, CCRS_ISSUE_CODES } from "../../src/lib/compliance/ccrs-preflight-core";
@@ -109,6 +110,10 @@ describe("E50: a non-medical Sale line with zero excise is caught before CCRS re
   it("an empty or non-numeric excise is left to the numeric check (no double report)", () => {
     expect(verifySaleExciseRule([row({ CannabisExciseTax: "" })])).toEqual([]);
     expect(verifySaleExciseRule([row({ CannabisExciseTax: "abc" })])).toEqual([]);
+    // Zero-valued but mis-formatted: the numeric check owns these (one report, not two).
+    expect(verifySaleExciseRule([row({ CannabisExciseTax: "0.000" })])).toEqual([]);
+    expect(verifySaleExciseRule([row({ CannabisExciseTax: "-0" })])).toEqual([]);
+    expect(verifySaleNumericColumns([row({ CannabisExciseTax: "0.000" })]).length).toBe(1);
   });
   it("every offending row is listed, by row number and sale line id, never capped", () => {
     const rows = Array.from({ length: 40 }, (_, i) => row({ CannabisExciseTax: "0.00", SaleDetailExternalIdentifier: `L-${i + 1}` }));
