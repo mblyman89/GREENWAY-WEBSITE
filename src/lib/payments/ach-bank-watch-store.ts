@@ -274,3 +274,29 @@ export async function recordWatchReview(input: { transactionId: string; verdict:
   const id = (data as { id?: string } | null)?.id;
   return id ? { ok: true, id } : { ok: false, error: "The database did not confirm the review. Reload the page and check before recording it again." };
 }
+
+/** Main account(s) and their Plaid balance only (for the funding hint). Never throws; [] on any error. */
+export async function readMainBalances(): Promise<MainAccount[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const { data, error } = await createSupabaseAdminClient()
+      .from("plaid_accounts")
+      .select("account_id, name, official_name, custom_name, mask, role, active, available_balance_cents, balances_updated_at")
+      .eq("role", "main");
+    if (error) return [];
+    return ((data ?? []) as Record<string, unknown>[])
+      .filter((a) => a.active !== false && typeof a.account_id === "string")
+      .map((a) => ({
+        accountId: String(a.account_id),
+        name: String(a.custom_name ?? a.official_name ?? a.name ?? "Main account"),
+        mask: typeof a.mask === "string" && a.mask ? a.mask : null,
+        availableCents: a.available_balance_cents === null || a.available_balance_cents === undefined ? null : cents(a.available_balance_cents),
+        balancesUpdatedAt: (a.balances_updated_at as string | null) ?? null,
+        itemStatus: "unknown",
+        itemErrorCode: null,
+        lastSuccessfulSync: null,
+      }));
+  } catch {
+    return [];
+  }
+}
