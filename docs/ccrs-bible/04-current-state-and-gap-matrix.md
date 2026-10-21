@@ -231,6 +231,16 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
 - The hub and the report run the export route's ledger self-check as blocking `L_*` issues, so a Sale of an unfiled withheld lot (`L_REF_INVENTORY` `[G L1302-L1304]`) is red on screen.
 - See Part 09 S-17b and Part 17 §K.7.
 
+### A.12 R6-1 uncertain ids settle by proof (both envs) or by the PREprod button — DONE in code (2026-10-20); owner applies 0284 by hand
+
+- **Before:** an id CCRS refused with `Duplicate External Identifier` on our Insert became `uncertain` (0249), and nothing but a Service Desk copy could settle it. On 2026-10-20 that held 13 real PREprod lots out of every PREprod export for good, because PREprod cannot be reset `[EXAM L0518]` (evidence `evidence/2026-10-20-real-upload/`).
+- **Now (migration 0284):**
+  - `ccrs_prove_by_reference(env)` runs after every recorded answer, by paste or by email. An uncertain lot named by a submitted/confirmed row of a Sale/InventoryAdjustment file uploaded **after** the file that made it uncertain becomes filed (closed if QoH 0) `[G L1302-L1304]`.
+  - `ccrs_preprod_settle_duplicates(by)` (PREprod only; the "Settle PREprod duplicates" button in the PREprod set-up box) files every PREprod Inventory/Product/Area id whose only problem is that refusal `[G L0246]`.
+  - A reconciling file whose uncertain rows are all settled closes.
+  - Production uncertainty is still settled only by a copy.
+- See Part 09 R6-1.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

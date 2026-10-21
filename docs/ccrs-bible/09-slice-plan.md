@@ -927,6 +927,47 @@ Every test runs on the files we actually uploaded on 2026-09-17 and the error fi
 
 **Tests.** `tests/compliance/r5-preprod-evidence-gates.test.ts` (31). Mutations **M387-M395** (9) all killed (M390 survived once; the test now covers `0.000` and `-0`, and it is killed).
 
+## R6-1 — Uncertain ids settle by proof or by the PREprod button (the 2026-10-20 Inventory failure) (DONE in code, 2026-10-20)
+
+Branch `r6-1-preprod-settle-uncertain`. Owner report: D-23. Evidence: `evidence/2026-10-20-real-upload/` (README explains it).
+
+**Diagnosis.**
+- Strain: 11 × `Duplicate Strain`, benign by design `[G L0325-L0326]`.
+- Inventory: 13 of 18 Inserts got `Duplicate External Identifier`. They are exactly the lots whose strains were duplicates: an earlier PREprod test had filed those vendor lots, our PREprod ledger starts empty, and lot ids have no per-run prefix.
+- The accepted Sale named 4 of the 13, so PREprod holds them `[G L1302-L1304]`.
+- 0249 had made all 13 `uncertain`, and nothing but a copy could settle them. PREprod cannot be reset `[EXAM L0518]`.
+
+**Built.**
+- Migration **0284** `0284_ccrs_settle_uncertain.sql` + rollback. No tables. Service role only, not security definer, search_path pinned. The owner applies it by hand.
+  - `ccrs_prove_by_reference(env)`: lots proved by a later accepted Sale/Adjustment row become filed, closed if their last QoH is 0. The product is resolved by an exact single name match. Writes info issue `I_PROVED_BY_REFERENCE`.
+  - `ccrs_preprod_settle_duplicates(by)`: PREprod only. Settles Inventory/Product/Area entities whose last-file row was an Insert in state uncertain with a `CCRS_ROW_CONTRADICTS_LEDGER` issue ending `: Duplicate External Identifier`. Records `source = preprod-settle:<time> PT by <who>`. Writes info issue `I_PREPROD_SETTLED`.
+  - `ccrs_close_settled_files(env, note)`: reconciling → closed when none of a file's uncertain rows still has an uncertain entity.
+- `ccrs-lifecycle-core.ts` (pure): `decodeProveByReference`, `decodePreprodSettle` (PREprod only; Inventory/Product/Area only; no duplicates), `pendingDuplicateCount`, `settleSummaryText`, hints `CCRS_SETTLE_BY` / `CCRS_SETTLE_BAD_ENV`, and a new reconciling state text.
+- `ccrs-ledger-store.ts`: `proveByReference`, `preprodSettleDuplicates`, `proveAfterOutcome`. `proveAfterOutcome` never throws: a recorded answer is never hidden by a failed proof. The two info codes are now listed with each file.
+- Actions:
+  - the proof runs after Record success, Record error (paste), and both email-apply paths, and is audited as `ccrs.ledger.proved_by_reference`;
+  - new `settlePreprodDuplicatesAction` (settings.manage, audited as `ccrs.preprod.settle_duplicates`).
+- `CcrsFilesPanel`: the PREprod set-up box shows "Settle PREprod duplicates" only while a reconciling PREprod file has such rows. Row notes now label "proved by sale" and "PREprod settled".
+- Playbook (`ccrs-strategy-core.ts`) "Duplicate External Identifier" names both new routes and keeps "Never re-send it as Insert" and the Service Desk address.
+
+**Tests.**
+- `tests/compliance/r6-1-preprod-settle.test.ts` (18) runs on the real 2026-10-20 bytes. It checks:
+  - the hashes;
+  - Strain → error-benign;
+  - Inventory → 13 uncertain;
+  - the 13 = the duplicate-strain lots;
+  - Sale proves exactly 4;
+  - the 0249 issue-message format matches what the button looks for;
+  - decoders and wiring.
+- `scripts/recon/ccrs-settle-0284-pg-check.sql` replays the run in miniature through the real 0249 lifecycle on Postgres 15 (CI: `POST_APPLY_CHECKS`). It covers:
+  - an earlier upload, a rejected Sale row, a production Sale and a non-event file prove nothing;
+  - an Update-row "duplicate" is not settled, and an ambiguous product name resolves to none;
+  - QoH 0 → closed, and a Product settles with its Name;
+  - production is never touched, and the functions are idempotent.
+  Its 15 SQL mutations (`scripts/recon/sqlmut/0284.txt`, `run-0284.sh`) are all killed.
+- TS mutations **M396–M405** (10), all killed. M204 was re-anchored to the new playbook line and is still killed.
+- Migration-tail pins were moved to 0284.
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
