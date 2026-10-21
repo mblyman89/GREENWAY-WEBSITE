@@ -29,7 +29,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | #1385 | 0278 |
 | S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | #1444 | none |
 | S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | #1445 | 0287 |
-| S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | (this PR) | 0288 |
+| S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | #1446 | 0288 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 

@@ -218,6 +218,7 @@ describe("S14 docs", () => {
     expect(man).toContain('"T-374": "part-b--the-results-log"');
     const r = read("docs/roadmap/R41-TIMBERLAND.md");
     expect(r).toContain("| S14 | Nacha yearly obligations");
+    expect(r).toContain("| #1446 | 0288 |");
     expect(r).toContain("## S14 in detail");
   });
 });
