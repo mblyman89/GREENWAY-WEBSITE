@@ -432,8 +432,9 @@ ENTRIES = [
         ),
         howWeProtectYou=(
             "Greenway's debit limits at Timberland are $0, so the app never builds a reversal file. The answer is to "
-            "call Timberland at 1-800-562-8761 inside both clocks (open question Q8 asks Brenda to confirm). The "
-            "duplicate checks exist so this is rarely needed."
+            "call Timberland at 1-800-562-8761 and ask for Cash Management, inside both clocks. Brenda confirmed "
+            "this (Email 3, answer 7): Timberland does the reversal from the original uploaded file and explains "
+            "the risks at the time. The duplicate checks exist so this is rarely needed."
         ),
         appLink="/admin/settings/banking/guide",
     ),
