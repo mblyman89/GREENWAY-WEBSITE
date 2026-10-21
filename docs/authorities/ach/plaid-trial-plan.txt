@@ -1,0 +1,80 @@
+SOURCE: https://support.plaid.com/hc/en-us/articles/39994173227159-What-is-the-Plaid-Trial-plan (Plaid Customer Help Center, "What is the Plaid Trial plan?"). Fetched 2026-10-21 in Chromium (the help center refuses plain curl); the page's own HTML was re-fetched in the page and base64-copied out, then the article body extracted with BeautifulSoup (blank and repeated lines dropped). Nothing retyped by hand. sha256 of the HTML: 8ed7b3e77fb7e71d86ed1fee95d53b23b46b72d761b43a2914b69d24ba69b6cb
+
+What is the Plaid Trial plan?
+The Plaid Trial plan provides free access to Plaid's production APIs. You can connect real financial accounts, call production endpoints, and build projects — no business registration, security questionnaire, or sales process required.
+Who can sign up
+The Trial plan is available to developers who:
+Are located in the United States or Canada
+Do not already have an existing Plaid Production or Limited Production account
+US and Canadian institutions are available on Trial plans, all other institutions are not currently available on this plan type. To get started, go to
+dashboard.plaid.com/signup
+.
+Agreements
+Applying for a Trial plan requires accepting Plaid's standard Master Services Agreement (MSA).
+In the Agreements step of the application you'll check "I agree to the latest Plaid Master Services Agreement," along with attestations about keeping your accounts, data, and code secure. The application can't be submitted without these.
+What's included
+The Trial plan includes access to the following products:
+Auth
+— retrieve account and routing numbers
+Transactions
+(including Recurring Transactions and Transactions Refresh)
+Balance
+— retrieve real-time account balances
+Identity
+(including Identity Match) — retrieve account owner information
+Assets
+— generate asset reports
+Liabilities
+— retrieve loan and credit card data
+Investments
+(including Investments Refresh)
+Statements
+— retrieve bank statements
+What's not included
+The following products are not available on the Trial plan. To access these, you'll need to apply for a paid
+Production
+account:
+Identity Verification
+Signal Transaction Scores
+Transfer
+Consumer Report (by Plaid Check)
+Monitor
+Protect
+Income
+Investments Move
+Enrich
+Layer
+Payment Initiation
+Item limits
+Trial plan accounts can create up to
+10
+Items
+(connected financial accounts) in production. An Item represents one end-user connection to a financial institution.
+Once you have connected 10 Items, you will need to upgrade to a paid Production account to connect more. See
+Trial plan limits
+for full details.
+API calls against your existing connected Items are not capped — you can make unlimited API calls to the Items you've already connected.
+Note:
+Calling
+/item/remove
+on the Trial plan does not free up slots against your 10-Item cap. If you've reached the limit, you'll need to
+upgrade to a paid Production plan
+to connect more. All access tokens created in Production will count against your Trial plan Item limit. This includes duplicate Items created when a user links the same account more than once. We recommend adding logic to prevent duplicate Items; see
+Preventing duplicate Items
+for more details.
+OAuth coverage
+The Trial plan includes immediate access to almost all
+OAuth
+institutions, including Bank of America, Chase, Wells Fargo, Capital One, Citi, Navy Federal, PNC, U.S. Bank, American Express, and Merrill.
+You don't need to complete the OAuth registration requirements in the Dashboard until you upgrade to a paid plan.
+Getting approved
+Most Trial plan applications are approved automatically after identity verification. If your application is flagged for manual review, Plaid's Customer Oversight team will follow up within 2–3 business days via email.
+Getting help
+Trial plan customers can ask
+Bill
+, Plaid's AI assistant. Support cases are available only on paid plans.
+Upgrading to Production
+If you need products not available on the Trial plan or are ready to scale, you can apply for a paid Production account. See
+How do I upgrade from the Trial plan to a paid Production plan?
+for step-by-step instructions.
+Upgrading from the Trial plan to Production is a one-way change. Once your Production account is approved, you cannot revert to the Trial plan.
