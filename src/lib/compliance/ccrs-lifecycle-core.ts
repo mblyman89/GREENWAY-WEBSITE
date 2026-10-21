@@ -13,7 +13,9 @@
  *   decodeMarkUploaded / decodeOutcome / decodeAbandon / decodePreprodStart
  *                          strict decoders of the 0249 answers (a garbled
  *                          answer throws; the ledger is never guessed at)
- *   lifecycleErrorText     a 0249 exception -> what the operator should do
+ *   decodeProveByReference / decodePreprodSettle
+ *                          strict decoders of the 0284 answers (R6-1)
+ *   lifecycleErrorText     a 0249/0284 exception -> what the operator should do
  *
  * Evidence used:
  *   - Success notice body, verbatim (2026-09-17, 10 of 10; 2026-10-06, 28):
@@ -219,6 +221,61 @@ export function decodePreprodStart(data: unknown): { status: "started" | "alread
 }
 
 /* ------------------------------------------------------------------ *
+ * 0284 answers (R6-1). Settling an uncertain id is the State's record
+ * moving: a garbled answer throws, nothing is guessed.
+ *   ccrs_prove_by_reference  -> {env, proved:[lot ids], files_closed}
+ *   ccrs_preprod_settle_duplicates -> {env:'preprod', settled:[[type,id]], files_closed}
+ * ------------------------------------------------------------------ */
+export type ProveByReferenceAnswer = { env: LedgerEnv; proved: string[]; filesClosed: number };
+export function decodeProveByReference(env: LedgerEnv, data: unknown): ProveByReferenceAnswer {
+  const fn = "ccrs_prove_by_reference";
+  need(isObj(data), fn, "not an object");
+  need(data.env === env, fn, "another env");
+  need(Array.isArray(data.proved) && data.proved.every((x) => typeof x === "string" && x !== ""), fn, "proved");
+  need(new Set(data.proved as string[]).size === (data.proved as string[]).length, fn, "proved has duplicates");
+  need(isInt(data.files_closed), fn, "files_closed");
+  return { env, proved: data.proved as string[], filesClosed: data.files_closed as number };
+}
+
+export const SETTLE_TYPES = ["Inventory", "Product", "Area"] as const;
+export type PreprodSettleAnswer = { settled: { fileType: (typeof SETTLE_TYPES)[number]; externalId: string }[]; filesClosed: number };
+export function decodePreprodSettle(data: unknown): PreprodSettleAnswer {
+  const fn = "ccrs_preprod_settle_duplicates";
+  need(isObj(data), fn, "not an object");
+  need(data.env === "preprod", fn, "only PREprod is ever settled this way");
+  need(Array.isArray(data.settled), fn, "settled");
+  const settled = (data.settled as unknown[]).map((x) => {
+    need(Array.isArray(x) && x.length === 2 && (SETTLE_TYPES as readonly unknown[]).includes(x[0]) && typeof x[1] === "string" && x[1] !== "", fn, "settled entry");
+    return { fileType: x[0] as (typeof SETTLE_TYPES)[number], externalId: x[1] as string };
+  });
+  need(new Set(settled.map((s) => `${s.fileType}|${s.externalId}`)).size === settled.length, fn, "settled has duplicates");
+  need(isInt(data.files_closed), fn, "files_closed");
+  return { settled, filesClosed: data.files_closed as number };
+}
+
+/**
+ * How many rows of RECONCILING files are uncertain because CCRS answered
+ * "Duplicate External Identifier" (0249 writes the issue message as
+ * "row N (id): <CCRS message>"). The PREprod panel offers the settle button
+ * only when this is above 0.
+ */
+export function pendingDuplicateCount(
+  files: readonly { id: string; state: string }[],
+  issues: readonly { fileId: string; code: string; message: string }[],
+): number {
+  const rec = new Set(files.filter((f) => f.state === "reconciling").map((f) => f.id));
+  return issues.filter((i) => rec.has(i.fileId) && i.code === "CCRS_ROW_CONTRADICTS_LEDGER" && /: Duplicate External Identifier\s*$/.test(i.message)).length;
+}
+
+/** Operator sentence for a settle/prove answer (plain English, counts only). */
+export function settleSummaryText(a: { proved?: readonly string[]; settled?: readonly unknown[]; filesClosed: number }): string {
+  const n = (a.proved?.length ?? 0) + (a.settled?.length ?? 0);
+  if (n === 0) return "Nothing to settle: no id was waiting on this.";
+  const what = a.proved ? `${n} lot(s) proved on file by an accepted sale or adjustment` : `${n} PREprod id(s) treated as on file`;
+  return `${what}; ${a.filesClosed} file(s) closed. They go out as Update next time.`;
+}
+
+/* ------------------------------------------------------------------ *
  * 0249 exceptions -> operator text.
  * ------------------------------------------------------------------ */
 const HINTS: Readonly<Record<string, string>> = {
@@ -236,6 +293,8 @@ const HINTS: Readonly<Record<string, string>> = {
   CCRS_ABANDON_NOT_EMITTED: "Only a file that was never uploaded can be abandoned.",
   CCRS_ABANDON_REASON: "Give a reason of 10 or more characters.",
   CCRS_PREPROD_START_BY: "Who started the PREprod ledger must be recorded.",
+  CCRS_SETTLE_BY: "Who settled the PREprod duplicates must be recorded.",
+  CCRS_SETTLE_BAD_ENV: "Only PREprod or production can be settled. Refresh the page.",
 };
 export function lifecycleErrorText(raw: string): string {
   const m = /\b(CCRS_[A-Z_]+)\b:?\s*([\s\S]*)$/.exec(raw);
@@ -253,7 +312,7 @@ export const FILE_STATE_TEXT: Readonly<Record<string, string>> = {
   uploaded: "Uploaded: waiting for the CCRS email",
   succeeded: "Accepted by CCRS (rows filed; closes when a later file proves them)",
   errored: "Some rows refused: fix them, they go in the next export",
-  reconciling: "Unknown result: request a Service Desk copy to settle it",
+  reconciling: "Some ids are unknown to us: a later accepted sale settles a lot by itself; in PREprod use \"Settle PREprod duplicates\"; in production request a Service Desk copy",
   closed: "Done",
   abandoned: "Abandoned (never uploaded)",
 };
@@ -326,6 +385,25 @@ export function __runCcrsLifecycleCoreTests(): void {
   assert(throws(() => decodeOutcome("x", "error-fatal", { ...ok, outcome: "error-fatal", state: "closed" })), "fatal cannot land rows");
   assert(throws(() => decodeAbandon("x", { id: "x", file_name: "f", state: "emitted" })), "abandon state");
   assert(decodePreprodStart({ status: "already", id: "z" }).status === "already", "start");
+  assert(decodeProveByReference("preprod", { env: "preprod", proved: ["L1"], files_closed: 1 }).proved[0] === "L1", "prove ok");
+  assert(throws(() => decodeProveByReference("prod", { env: "preprod", proved: [], files_closed: 0 })), "prove env must match");
+  assert(throws(() => decodeProveByReference("prod", { env: "prod", proved: ["a", "a"], files_closed: 0 })), "prove dupes");
+  assert(decodePreprodSettle({ env: "preprod", settled: [["Product", "P-1"]], files_closed: 0 }).settled[0].fileType === "Product", "settle ok");
+  assert(throws(() => decodePreprodSettle({ env: "prod", settled: [], files_closed: 0 })), "settle is PREprod only");
+  assert(throws(() => decodePreprodSettle({ env: "preprod", settled: [["Sale", "x"]], files_closed: 0 })), "settle types");
+  assert(settleSummaryText({ settled: [], filesClosed: 0 }).startsWith("Nothing"), "settle text empty");
+  assert(
+    pendingDuplicateCount(
+      [{ id: "r", state: "reconciling" }, { id: "c", state: "closed" }],
+      [
+        { fileId: "r", code: "CCRS_ROW_CONTRADICTS_LEDGER", message: "row 1 (L1): Duplicate External Identifier" },
+        { fileId: "r", code: "CCRS_ROW_CONTRADICTS_LEDGER", message: "row 2 (L2): ExternalIdentifier not found" },
+        { fileId: "r", code: "CCRS_ROW_REJECTED", message: "row 3 (L3): Duplicate External Identifier" },
+        { fileId: "c", code: "CCRS_ROW_CONTRADICTS_LEDGER", message: "row 1 (L4): Duplicate External Identifier" },
+      ],
+    ) === 1,
+    "pending duplicates",
+  );
   assert(lifecycleErrorText("CCRS_UPLOAD_NOT_READY: settle these first: A (emitted)").startsWith("Upload files one at a time"), "hint");
   assert(lifecycleErrorText("boom") === "boom", "unknown text passes through");
   console.log("ccrs-lifecycle-core: all tests passed");

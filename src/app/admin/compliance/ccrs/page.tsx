@@ -54,6 +54,7 @@ import {
   recordNoEmailAction,
   abandonFileAction,
   startPreprodLedgerAction,
+  settlePreprodDuplicatesAction,
   assignPreprodProductIdsAction,
   setObligationStartAction,
   setHandoverFactsAction,
@@ -668,6 +669,7 @@ export default async function CcrsCommandCenterPage({
             abandon: abandonFileAction,
             startPreprod: startPreprodLedgerAction,
             assignPreprodIds: assignPreprodProductIdsAction,
+            settlePreprodDuplicates: settlePreprodDuplicatesAction,
           }}
         />
       ) : null}

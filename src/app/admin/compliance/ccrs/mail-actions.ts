@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { weekFromKey } from "@/lib/compliance/ccrs-week-core";
-import { ccrsFilesByName, fileRowsForEcho, listCcrsFiles, recordOutcome } from "@/lib/compliance/ccrs-ledger-store";
+import { ccrsFilesByName, fileRowsForEcho, listCcrsFiles, proveAfterOutcome, recordOutcome } from "@/lib/compliance/ccrs-ledger-store";
 import { lifecycleErrorText, matchSuccessNames, parseSuccessEmails } from "@/lib/compliance/ccrs-lifecycle-core";
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError } from "@/lib/compliance/ccrs-outcome-core";
@@ -121,9 +121,12 @@ export async function applyCcrsSuccessMailAction(formData: FormData): Promise<vo
     }
   }
   if (done.length > 0) await markCcrsMailHandled(admin, mail.id, "applied", session.profile.id, `success ${env}: ${done.join("; ")}`);
+  // R6-1 (0284): an accepted Sale/Adjustment may prove an uncertain lot.
+  const proof = done.length > 0 ? await proveAfterOutcome(admin, env) : null;
+  if (proof && proof.proved.length > 0) await auditMailProof(session, env, proof.proved, proof.filesClosed);
   revalidatePath(BASE);
-  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")}`));
-  backMail(weekKey, okQ(`From the CCRS email: ${done.join("; ")}.`));
+  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proof?.text ?? ""}`.trim()));
+  backMail(weekKey, okQ(`From the CCRS email: ${done.join("; ")}. ${proof?.text ?? ""}`.trim()));
 }
 
 /** Every uploaded (waiting) file of these types in both envs, with its rows; plus each file's upload time. */
@@ -202,9 +205,34 @@ export async function applyCcrsErrorMailAction(formData: FormData): Promise<void
     }
   }
   if (done.length > 0) await markCcrsMailHandled(admin, mail.id, "applied", session.profile.id, done.join(" | "));
+  // R6-1 (0284): run the proof for every env an answer was recorded in.
+  const proofTexts: string[] = [];
+  for (const env of [...new Set(picks.flatMap((x) => (x.pick.kind === "unique" ? [x.pick.env] : [])))]) {
+    if (done.length === 0) break;
+    const proof = await proveAfterOutcome(admin, env);
+    if (proof.proved.length > 0) await auditMailProof(session, env, proof.proved, proof.filesClosed);
+    if (proof.text) proofTexts.push(proof.text);
+  }
   revalidatePath(BASE);
-  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")}`));
-  backMail(weekKey, okQ(done.join(" | ")));
+  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proofTexts.join(" ")}`.trim()));
+  backMail(weekKey, okQ(`${done.join(" | ")} ${proofTexts.join(" ")}`.trim()));
+}
+
+/** Audit row for an automatic proof-by-reference after an email answer (R6-1, 0284). */
+async function auditMailProof(
+  session: Awaited<ReturnType<typeof requirePermission>>,
+  env: LedgerEnv,
+  proved: string[],
+  filesClosed: number,
+): Promise<void> {
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.ledger.proved_by_reference",
+    entityType: "ccrs_filed_entities",
+    entityId: null,
+    after: { env, proved, filesClosed, rule: "[G L1302-L1304] an accepted Sale/Adjustment row proves its lot is held" },
+  });
 }
 
 /** Not about a file this system made (or already recorded by paste): set aside with a reason. */
