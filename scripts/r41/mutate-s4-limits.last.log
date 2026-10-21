@@ -24,9 +24,17 @@ killed   read-cap-ignored
 killed   null-amount-as-number
 killed   entries-not-read
 killed   warnings-dropped
+killed   d3-daily-uses-in-flight
+killed   d3-window-to-settlement
+killed   d3-recorded-upload-ignored
+killed   d3-new-file-today-only
+killed   d3-room-uses-in-flight
+killed   d3-uploaded-at-utc-day
+killed   d3-uploaded-at-not-selected
+killed   d3-bad-uploaded-at-accepted
 killed   room-bar-misread
 killed   payroll-notes-dropped
 killed   vendor-notes-dropped
 killed   vendor-bar-removed
 control (after) pass
-total 29 killed 29 survivors []
+total 37 killed 37 survivors []
