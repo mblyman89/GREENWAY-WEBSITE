@@ -86,9 +86,8 @@ From `docs/ccrs-bible/01-standing-rules-and-handoff.md` §A, plus the rules he r
 - PR: **#1438**, "Round 5: returns reach CCRS (R5-1) + factory-reset proof (R5-2) + PREprod-evidence gates (R5-3)". The PR body is up to date.
 
 **CI**
-- The last *completed* CI run on the branch (39529331936) **passed** (build, compliance, migrations).
-- Runs for the final pushes (39529524111, 39529805819, 39529873150 and later) were *in progress* when this was written.
-- **Check first:** `gh pr checks 1438 -R mblyman89/GREENWAY-WEBSITE`
+- **CI is GREEN on the final pushed commit:** build pass, compliance pass, migrations pass (run 39530376332). Every earlier Round 5 run after the authorship fix also passed (39529331936, 39529524111, 39529805819, 39529873150).
+- **Re-check anyway:** `gh pr checks 1438 -R mblyman89/GREENWAY-WEBSITE`. Only this doc commit came after that run.
 
 **Commits on the branch** (all authored Greenway Dev, after the authorship fix):
 
