@@ -16,6 +16,7 @@ import * as core from "@/lib/payments/timberland-obligations-core";
 import { EMAIL3_REVERSAL_QUOTE, reversalSheet, sheetEntries, type SheetFileRow } from "@/lib/payments/ach-reversal-sheet-core";
 import { testFileForChecker } from "@/lib/payments/timberland-file-checker-core";
 import { headerFacts } from "@/lib/payments/ach-file-ledger-core";
+import { POST_APPLY_CHECKS } from "../../scripts/compliance/verify-migrations-execute";
 
 const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -136,6 +137,10 @@ describe("R41 S13: the reversal call sheet", () => {
 
 describe("0287 content pins", () => {
   const m = read("supabase/migrations/0287_ach_timberland_comms_notices.sql");
+  it("CI runs the 0287 check after every migration, and the 0277 check still runs", () => {
+    expect(POST_APPLY_CHECKS).toContainEqual({ file: "scripts/recon/ach-timberland-comms-0287-pg-check.sql", mustPrint: "ACH 0287 CHECK PASSED" });
+    expect(POST_APPLY_CHECKS).toContainEqual({ file: "scripts/recon/ach-timberland-comms-0277-pg-check.sql", mustPrint: "ACH 0277 CHECK PASSED" });
+  });
   it("adds the three types to the list and to the guard's close list; not security definer", () => {
     expect(m).toContain("    'noc_wrong', 'ofac_notice', 'bank_report_received'));");
     expect(m).toContain("                                 'noc_wrong', 'ofac_notice', 'bank_report_received') then");
