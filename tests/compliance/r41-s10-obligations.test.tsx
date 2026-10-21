@@ -99,12 +99,12 @@ describe("quotes are verbatim to the mirrors (whitespace-normalized)", () => {
     core.PAYEE_NOTICE_QUOTE,
     core.LOST_TOKEN_QUOTE,
   ].filter((q): q is import("@/lib/payments/timberland-obligations-core").Quote => q !== null);
-  it("there are 16 quotes and every one is in its mirror", () => {
-    expect(all).toHaveLength(16);
+  it("there are 19 quotes (16 from S10, 3 from S13) and every one is in its mirror", () => {
+    expect(all).toHaveLength(19);
     for (const q of all) expect(flat(read(`docs/authorities/${q.file}`)), q.section).toContain(flat(q.text));
   });
-  it("the mirror files are the two named ones", () => {
-    expect(new Set(all.map((q) => q.file))).toEqual(new Set([core.AGREEMENT_FILE, core.BRENDA_FILE]));
+  it("the mirror files are the named ones (S13 adds Email 3 and the Fed guide)", () => {
+    expect(new Set(all.map((q) => q.file))).toEqual(new Set([core.AGREEMENT_FILE, core.BRENDA_FILE, core.EMAIL3_FILE, core.FED_EDI_FILE]));
   });
 });
 
@@ -173,8 +173,8 @@ describe("pure core: clocks from the contract", () => {
     expect(core.terminationInEffect([t, row({ id: "d", entry_type: "done", closes_id: "t" })])).toBeNull();
   });
   it("the self-tests pass and are registered with their exact floor", () => {
-    expect(core.__runTimberlandObligationsCoreTests()).toEqual({ passed: 69, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("timberland-obligations-core", __runTimberlandObligationsCoreTests(), 69)');
+    expect(core.__runTimberlandObligationsCoreTests()).toEqual({ passed: 78, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("timberland-obligations-core", __runTimberlandObligationsCoreTests(), 78)');
   });
 });
 
