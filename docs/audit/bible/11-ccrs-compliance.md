@@ -104,10 +104,10 @@ from a real DB column."** How each file is built:
   :168–175).
 - **InventoryAdjustment + Sale** reuse the mature dedicated builders
   (:418–420; sections 3b and 3c) — one implementation each, no duplication.
-- **InventoryTransfer is deliberately an empty, correctly-shaped file**
-  (:457–461): "InventoryTransfer is submitted by the receiving licensee;
-  retail intake is reported via Inventory.csv." The note travels with the file
-  so an employee understands why it's empty.
+- **InventoryTransfer** (superseded 2026-10-21 by R6-2): it was once emitted
+  empty, but the guide requires receivers to file it weekly. It is now built from
+  accepted real-delivery lots by `ccrs-transfer-core.ts`. See
+  docs/ccrs-bible/09-slice-plan.md R6-2.
 - Files are sorted into upload-group order (:474–476), and the whole batch
   carries a list of **sync issues** — data-integrity problems detected BEFORE
   upload, because the LCB only reports failures by email afterwards.

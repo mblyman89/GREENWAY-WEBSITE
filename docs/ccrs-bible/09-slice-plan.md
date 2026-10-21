@@ -968,7 +968,58 @@ Branch `r6-1-preprod-settle-uncertain`. Owner report: D-23. Evidence: `evidence/
 - TS mutations **M396–M405** (10), all killed. M204 was re-anchored to the new playbook line and is still killed.
 - Migration-tail pins were moved to 0284.
 
-## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
+## R6-2 — InventoryTransfer.csv from real deliveries + vendor-return design (DONE in code, 2026-10-21)
+
+Branch `r6-2-inventory-transfer`. Closes E14 and N-02 (Part 04 §A.13).
+
+**Built.**
+- Migration **0285** `0285_ccrs_inventory_transfer.sql` + rollback. The owner applies it by hand.
+  - `inventory_lots.vendor_inventory_external_id` (raw, ≤100) and `vendor_inventory_external_id_source` with check constraints.
+  - A fill-only backfill from `lot_code` for real deliveries. Cultivera migration lots (migration manifest kinds, `POS-IMPORT-` numbers, the notes marker) are excluded. One audit row counts the lots.
+  - `ccrs_transfer_slice(env, ids)`: the transfer ledger plus in-flight flags. Service role only, search_path pinned, a bad or null env is refused.
+- `ccrs-transfer-core.ts` (pure, 27 self-tests) builds the rows from these inputs:
+  - **window:** fromDay..toDay; in production the floor is the owner's start date, with catch-up when the ledger is loaded;
+  - **vendor license normalizing:** `WA 417-068` → `417068`;
+  - **issue codes:** E14_TRANSFER_* with pins;
+  - **ledger entries:** merged into the batch's ledger view.
+- `ccrs-batch.ts` reads accepted lots with a manifest (`readTransferLots`) and replaces the empty push. `ccrs-outbox-core.ts` knows `ExternalIdentifier` for transfers, and its L_REF check uses `ToInventoryExternalIdentifier`.
+- Intake stores the vendor id and its source on every new lot. The delivery page has a per-lot **Vendor inventory id** form (Confirm/Save) that writes `owner_entered` plus an audit row.
+
+**Tests.**
+- `tests/compliance/r6-2-inventory-transfer.test.ts` (26), with spec pins checked against Part 02.
+- The self-test is registered.
+- `scripts/recon/ccrs-transfer-0285-pg-check.sql` is in POST_APPLY_CHECKS. Its 26 SQL mutants (`scripts/recon/sqlmut/0285.txt`) are all killed.
+- TS mutations **M406–M431** (26) are all killed.
+- Migration-tail pins were moved to 0285.
+
+**Vendor returns: the simple, automated design (research; NOT built).**
+
+How it works today: a return posts an InventoryAdjustment `Other` with a note, and `vendor_returns` tracks the manifest status (`none → requested → submitted → confirmed → picked_up`).
+
+The CCRS manifest page says these things:
+- the manifest is filed by the **originating** licensee: the file-name license "must match OriginLicenseNumber" `[MANI L0066]`;
+- each item must be "a previously reported inventory item external identifier" `[MANI L0147]`;
+- Inventory files are required before a Manifest file `[MANI L0019]`;
+- TransportationType has three values: Regular, Pick-up and Transporter Licensee `[MANI L0054-L0056]`.
+
+For a return, Greenway is the origin. **Unverified: U-73.**
+
+The planned one-click flow (R6-3+):
+1. The owner picks lots and quantities on the return screen. A partial lot is split first, so the returned units get their own id.
+2. The app pre-fills everything else:
+   - the vendor's license, phone and email;
+   - the transport type (default Pick-up: the vendor collects) and the vendor's saved driver/vehicle;
+   - the departure and arrival times.
+3. The app builds `manifest_413541_<PT stamp>.csv` with our ids and runs the verifier, then posts the Adjustment (or the Sale, if U-72 says Wholesale) in the same batch.
+4. The CCRS success email with the PDF is matched by S-18a and moves `vendor_returns.manifest_status` to `confirmed`.
+
+**Remaining.**
+- The Manifest.csv builder and its verifier.
+- The return screen (one click).
+- An InventoryTransfer **Update** when a filed transfer's quantity or vendor id changes `[FAQ L0059]` (U-74).
+- N-03 (Insert-only Inventory).
+
+ research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
 
