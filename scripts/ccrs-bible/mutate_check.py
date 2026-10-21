@@ -126,6 +126,9 @@ CVCLI = "scripts/compliance/verify-ccrs-copy.ts"
 S14B_TESTS = "tests/compliance/s14b-final-upload-guard.test.ts"
 CNTCLI = "scripts/compliance/count-barcodes.ts"
 R3_TESTS = "tests/compliance/r3-dor-excise-calendar.test.ts"
+# Round 5 (R5-1 return corrections / R5-2 reset proof)
+RCCORE = "src/lib/compliance/ccrs-return-corrections-core.ts"
+R5_TESTS = "tests/compliance/r5-return-corrections.test.ts"
 CALCORE = "src/lib/compliance/compliance-calendar-core.ts"
 REMINDERS = "src/lib/notifications/compliance-reminders.ts"
 
@@ -824,8 +827,8 @@ MUTATIONS = [
     (
         'M95-s12b-event-lot-closed-ok',
         OUTBOX,
-        '          if (!(e && PRESENT.has(e.state)) && !newIds.has(key("Inventory", inv))) {',
-        '          if (!(e && UPDATABLE.has(e.state)) && !newIds.has(key("Inventory", inv))) {',
+        '          if (!(e && PRESENT.has(e.state)) && !closedReported && !newIds.has(key("Inventory", inv))) {',
+        '          if (!(e && UPDATABLE.has(e.state)) && !closedReported && !newIds.has(key("Inventory", inv))) {',
         OUTBOX_TESTS,
         'Part 03 L189: an event row naming a closed lot is not enough.',
     ),
@@ -2786,6 +2789,214 @@ MUTATIONS = [
         R3_TESTS,
         "The reminder engine really runs the DOR planner.",
     ),
+    (
+        "M347-r5-cumulative-not-latest",
+        RCCORE,
+        "    const cumulative = list.reduce((s, r) => s + r.quantity, 0);",
+        "    const cumulative = list[list.length - 1].quantity;",
+        R5_TESTS,
+        "Rule 1: a second partial return must state the line after ALL returns.",
+    ),
+    (
+        "M348-r5-full-return-delete",
+        RCCORE,
+        '    const operation: "Update" | "Delete" = cumulative >= original ? "Delete" : "Update";',
+        '    const operation: "Update" | "Delete" = cumulative > original ? "Delete" : "Update";',
+        R5_TESTS,
+        "A fully returned line is Deleted (FAQ L0039), never Updated to quantity 0.",
+    ),
+    (
+        "M349-r5-over-return-invalid",
+        RCCORE,
+        "    if (cumulative > original) {",
+        "    if (false) {",
+        R5_TESTS,
+        'More returned than sold is refused ("No negative values allowed" G L1345).',
+    ),
+    (
+        "M350-r5-snapshot-clash",
+        RCCORE,
+        "    const clash = SNAPSHOT_FIELDS.find((f) => list.some((r) => r[f] !== first[f]));",
+        "    const clash = undefined as string | undefined;",
+        R5_TESTS,
+        "Disagreeing snapshots of one line are refused, never averaged or guessed.",
+    ),
+    (
+        "M351-r5-no-default-saletype",
+        RCCORE,
+        '    if (first.saleType === "" || first.saleDateISO === "") {',
+        '    if (false) {',
+        R5_TESTS,
+        "A correction must repeat the original SaleType and SaleDate; none are invented.",
+    ),
+    (
+        "M352-r5-legacy-pending-only",
+        RCCORE,
+        '    if (input.ledger === "legacy" && pendingIds.length === 0) continue;',
+        "",
+        R5_TESTS,
+        "The manual download never re-sends a line with nothing pending.",
+    ),
+    (
+        "M353-r5-same-batch-insert-waits",
+        RCCORE,
+        "      if (input.insertedDetailIds.has(detailId)) {",
+        "      if (false) {",
+        R5_TESTS,
+        "A correction never rides in the same batch as its own Insert.",
+    ),
+    (
+        "M354-r5-not-held-withheld",
+        RCCORE,
+        "      if (h === null) {\n        plan.withheld.push(",
+        "      if (h === null && false) {\n        plan.withheld.push(",
+        R5_TESTS,
+        'An Update/Delete of a line CCRS lacks is rejected (G L1413-L1414).',
+    ),
+    (
+        "M355-r5-inflight-withheld",
+        RCCORE,
+        "      if (h.inFlight) {",
+        "      if (false) {",
+        R5_TESTS,
+        "A line named by an unanswered file waits for its outcome.",
+    ),
+    (
+        "M356-r5-delete-reflected",
+        RCCORE,
+        '      if (operation === "Delete" && h.state === "deleted") {',
+        "      if (false) {",
+        R5_TESTS,
+        "A Delete CCRS already applied is not sent again.",
+    ),
+    (
+        "M357-r5-update-reflected",
+        RCCORE,
+        "      if (operation === \"Update\" && h.quantity !== null && h.quantity === String(remaining)) {",
+        "      if (false) {",
+        R5_TESTS,
+        "An Update to the quantity CCRS already holds is not sent again.",
+    ),
+    (
+        "M358-r5-prod-only-marks",
+        RCCORE,
+        '  if (env !== "prod") return [];',
+        "",
+        R5_TESTS,
+        "A PREprod batch never clears the shared pending flag production relies on.",
+    ),
+    (
+        "M359-r5-e38-withheld-stays-pending",
+        RCCORE,
+        "    ...plan.groups.filter((g) => !e38WithheldDetailIds.has(g.detailId)).flatMap((g) => g.returnIds),",
+        "    ...plan.groups.flatMap((g) => g.returnIds),",
+        R5_TESTS,
+        "A correction withheld by E38 was never sent, so its return stays pending.",
+    ),
+    (
+        "M360-r5-route-held-skip",
+        RCCORE,
+        "    if (!h) out.rows.push(r);",
+        "    if (true) out.rows.push(r);",
+        R5_TESTS,
+        'A sale line CCRS holds is never Inserted again (G L1412).',
+    ),
+    (
+        "M361-r5-route-uncertain",
+        RCCORE,
+        '    else if (h.state === "uncertain" || h.state === "unknown") out.uncertain.push(r[D]);',
+        "",
+        R5_TESTS,
+        "A line the ledger is unsure about is withheld, never guessed as held.",
+    ),
+    (
+        "M362-r5-slice-env-check",
+        RCCORE,
+        "  if (d.env !== env) bad(",
+        "  if (false) bad(",
+        R5_TESTS,
+        "A slice answer for the other env must never route this env's rows.",
+    ),
+    (
+        "M363-r5-slice-duplicate",
+        RCCORE,
+        "    if (held.has(id)) bad(`entry ${i}: ${id} appears twice`);",
+        "",
+        R5_TESTS,
+        "A garbled slice (same line twice) throws instead of routing.",
+    ),
+    (
+        "M364-r5-eventlots-adj-sale-only",
+        RCCORE,
+        '    if (s.type !== "InventoryAdjustment" && s.type !== "Sale") continue;',
+        '    if (s.type !== "InventoryAdjustment") continue;',
+        R5_TESTS,
+        "A destroyed or returned lot named by a Sale row is still reported.",
+    ),
+    (
+        "M365-r5-batch-routed-inserts",
+        BATCHSRV,
+        "    insertRows = routed.rows;",
+        "    void routed.rows;",
+        R5_TESTS,
+        "The batch Inserts only the routed rows, not every sale row.",
+    ),
+    (
+        "M366-r5-batch-merge-corrections",
+        BATCHSRV,
+        "  const saleRows = [...insertRows, ...correctionE38.rows];",
+        "  const saleRows = [...insertRows];",
+        R5_TESTS,
+        "Corrections ride in the one Sale file.",
+    ),
+    (
+        "M367-r5-batch-destroyed-lots",
+        BATCHSRV,
+        "  const lots: LotRow[] = [...liveLots, ...destroyedLots];",
+        "  const lots: LotRow[] = [...liveLots];",
+        R5_TESTS,
+        "A destroyed lot named by an event row reaches Inventory.csv (else L_REF_INVENTORY).",
+    ),
+    (
+        "M368-r5-batch-selfcheck-sale-aware",
+        BATCHSRV,
+        "      saleAwareLedger ?? ledger,\n      files.map((f) => ({ type: f.type, csv: f.csv })),",
+        "      ledger,\n      files.map((f) => ({ type: f.type, csv: f.csv })),",
+        R5_TESTS,
+        "The on-screen self-check sees the Sale ledger, so a bad Update shows before upload.",
+    ),
+    (
+        "M369-r5-route-mark-after-emit",
+        EXPROUTE,
+        "    await markCorrectionsExported(batch.corrections.exportReturnIds);",
+        "    void batch.corrections.exportReturnIds;",
+        R5_TESTS,
+        "A prod emission marks the corrections it carried, so they are not re-planned forever.",
+    ),
+    (
+        "M370-r5-manual-legacy",
+        SCROUTE,
+        '    ledger: "legacy",',
+        "    ledger: new Map(),",
+        R5_TESTS,
+        "The manual download uses the cumulative planner in legacy mode.",
+    ),
+    (
+        "M371-r5-e49-pin",
+        PREFLIGHT,
+        '  E49_SALE_LINE_ALREADY_HELD: "[G L1412]",',
+        '  E49_SALE_LINE_ALREADY_HELD: "[G L1413]",',
+        R5_TESTS,
+        "E49 cites the exact LCB line (Duplicate Sale detail item).",
+    ),
+    (
+        "M372-r5-outbox-closed-reported",
+        OUTBOX,
+        '          const closedReported = !!e && e.state === "closed" && reportedLots.has(inv);',
+        "          const closedReported = false;",
+        R5_TESTS,
+        "A closed lot re-reported in the same emission may carry the add-back / destruction.",
+    ),
 ]
 
 
@@ -2842,7 +3053,21 @@ def main() -> int:
         S16_TESTS,
         S14B_TESTS,
         R3_TESTS,
+        R5_TESTS,
     )
+    # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
+    # runs only the matching mutations and only the baseline files they use.
+    # Unset = the full run, unchanged.
+    only = os.environ.get("MUTATE_ONLY", "").strip()
+    mutations = MUTATIONS
+    if only:
+        import re as _re
+        pats = [p.strip() for p in only.split(",") if p.strip()]
+        mutations = [m for m in MUTATIONS if any(_re.match(p, m[0]) for p in pats)]
+        if not mutations:
+            print(f"ABORT: MUTATE_ONLY={only!r} matches no mutation.")
+            return 1
+        baseline_targets = tuple(dict.fromkeys(m[4] for m in mutations))
     for target in baseline_targets:
         res = vitest(target)
         state = "PASS" if res.returncode == 0 else "FAIL"
@@ -2855,7 +3080,7 @@ def main() -> int:
     survived: list[str] = []
     killed: list[str] = []
 
-    for mid, path, old, new, target, why in MUTATIONS:
+    for mid, path, old, new, target, why in mutations:
         full = os.path.join(REPO, path)
         with open(full, "r", encoding="utf-8") as fh:
             original = fh.read()

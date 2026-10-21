@@ -207,8 +207,8 @@ async function readDestroyedLots(admin: Admin, refs: readonly string[]): Promise
   const wanted = new Set(refs);
   const seen = new Set<string>();
   return rows.filter((l) => {
-    const ext = assignedInventoryExternalId(l);
-    if (!ext || !wanted.has(ext) || seen.has(l.id)) return false;
+    const assigned = assignedInventoryExternalId(l);
+    if (!assigned || !wanted.has(assigned) || seen.has(l.id)) return false;
     seen.add(l.id);
     return true;
   });
