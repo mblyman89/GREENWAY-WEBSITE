@@ -19,7 +19,7 @@
  * NEVER A PAYMENT GATE: nothing here is read by payroll or the file builder.
  *
  * EMAIL (claimed in compliance_reminder_log first, a real claim, like
- * /api/cron/ofac-screening; if the email fails the claim is removed so the
+ * the daily sanctions-screen cron; if the email fails the claim is removed so the
  * next run retries): once when the set of findings changes, and again each
  * week while they stay open. A failed read is its own email, once per day:
  * silence is never "all clear".

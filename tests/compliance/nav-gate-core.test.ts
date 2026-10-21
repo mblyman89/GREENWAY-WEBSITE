@@ -399,6 +399,15 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * asserted directly in new-hire-report.test.ts instead.
        */
       "/admin/books/new-hire-report",
+      /*
+       * R41 S16: the bank watch on the Timberland Main account. It needs
+       * finances.view (owner only) because it shows the Plaid bank lines, the
+       * same gate as Bank Feeds. Deliberately NOT a menu item: it is one tab of
+       * the Banking tab strip (BankingHelpTabs, "Bank watch"), beside the other
+       * banking pages, and Bank Feeds links to it. A daily email also links
+       * straight to it.
+       */
+      "/admin/settings/banking/bank-watch",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());
