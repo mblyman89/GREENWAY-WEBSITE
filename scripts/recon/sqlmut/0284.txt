@@ -1,0 +1,15 @@
+and g.uploaded_at > uf.uploaded_at|and true
+and r.state in ('submitted', 'confirmed')|and true
+g.file_type in ('Sale', 'InventoryAdjustment')|g.file_type is not null
+and g.env = p_env and|and
+and i.message like '%: Duplicate External Identifier'|and true
+where e.env = 'preprod' and e.state = 'uncertain'|where e.state = 'uncertain'
+and r.operation = 'Insert' and r.state = 'uncertain'|and r.state = 'uncertain'
+= 0 then 'closed' else 'filed' end,|= 0 then 'filed' else 'filed' end,
+r.state = 'uncertain' and e.state = 'uncertain');|r.state = 'uncertain');
+select case when count(*) = 1 then min(p.external_id) end|select min(p.external_id)
+if length(trim(coalesce(p_by, ''))) = 0 then|if false then
+p_env not in ('preprod', 'prod')|p_env not in ('preprod', 'prod', 'test')
+grant execute on function public.ccrs_prove_by_reference(text) to service_role;|grant execute on function public.ccrs_prove_by_reference(text) to service_role, anon;
+and e.file_type in ('Inventory', 'Product', 'Area')|and e.file_type in ('Product', 'Area')
+then e.last_payload->>'Name'|then e.filed_name
