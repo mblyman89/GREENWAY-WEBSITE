@@ -142,6 +142,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/ccrs-transfer-0285-pg-check.sql", mustPrint: "CCRS 0285 CHECK PASSED" },
   { file: "scripts/recon/ccrs-inventory-told-0286-pg-check.sql", mustPrint: "CCRS 0286 CHECK PASSED" },
   { file: "scripts/recon/ach-timberland-comms-0287-pg-check.sql", mustPrint: "ACH 0287 CHECK PASSED" },
+  { file: "scripts/recon/ach-annual-reviews-0288-pg-check.sql", mustPrint: "ACH 0288 CHECK PASSED" },
   { file: "scripts/recon/ccrs-reseed-pg-check.sql", mustPrint: "CCRS RESEED CHECK PASSED" },
   { file: "scripts/recon/ccrs-equalize-pg-check.sql", mustPrint: "CCRS EQUALIZE CHECK PASSED" },
   { file: "scripts/recon/ccrs-copy-verify-pg-check.sql", mustPrint: "CCRS COPY VERIFY CHECK PASSED" },

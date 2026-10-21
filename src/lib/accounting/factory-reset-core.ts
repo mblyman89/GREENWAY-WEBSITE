@@ -502,6 +502,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ofac_screening_results", disposition: "KEEP", because: "Each payee's result in each OFAC screen (clear or a possible match); append-only, the database refuses DELETE." },
   { table: "ofac_match_reviews", disposition: "KEEP", because: "The owner's recorded decision on each possible OFAC match (the review record OFAC FAQ 5 asks for); append-only, the database refuses DELETE." },
   { table: "ach_timberland_comms", disposition: "KEEP", because: "What Timberland told Greenway and when (fee and amendment notices, reserve demands, compromise reports): a record kept forever; the database refuses DELETE." },
+  { table: "ach_annual_reviews", disposition: "KEEP", because: "The yearly Nacha fraud-procedure review record (who reviewed and when, what was found); append-only, the database refuses DELETE." },
   // R39 (0261). The database refuses to delete a signed e-sign session
   // (ACH_ESIGN_KEEP) and the session points at the kept documents with
   // on delete restrict, so a reset that tried to wipe it would fail part-way.

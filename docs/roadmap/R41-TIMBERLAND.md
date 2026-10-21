@@ -29,6 +29,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | #1385 | 0278 |
 | S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | #1444 | none |
 | S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | #1445 | 0287 |
+| S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | (this PR) | 0288 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -221,3 +222,18 @@ Still to arrange: the testing session Brenda asked for.
   - Pure self-test floors: obligations 78 (was 69); new `ach-reversal-sheet-core` 15.
   - Mutation runs: `mutate-0287-sql.py` (14 mutants plus two probes: the check fails on the 0277 state, and the rollback refuses while a new-type row exists) and `mutate-s13-app.py`.
   - Manual test T-373.
+
+## S14 in detail
+
+- **Yearly review page** (`/admin/settings/banking/yearly-review`, new "Yearly review" tab). Owner or admin can open it; only the owner records.
+  - **The rule.** Nacha Fraud Monitoring Phase 2 quoted word for word from `docs/authorities/ach/nacha-fraud-monitoring-phase-2.txt` (written, risk-based procedures; reviewed "at least annually"; False Pretenses).
+  - **The written procedure.** The same 12 items as the Calendar (`ACH_FRAUD_PROCEDURE`), each with where the software enforces it.
+  - **Risk assessment.** Seven kinds of payment or change, each marked higher, lower or very low risk, why, and which procedure items cover it. These levels are Greenway's own assessment (Nacha does not prescribe one); the owner confirms them each year.
+  - **Who did what (segregation of duties).** Owner only, because it reads the Security Log (as /admin/audit). Who holds owner or admin and their last sign-in; every ACH action in the Pacific year by person; every approval request and its outcome; findings (no active owner, more than one owner, an inactive admin, unattributed actions, an action by someone without owner or admin, a request decided by the person who asked, apply errors, requests still waiting, stop actions not checked off). Every read is paged; a partial read shows an error, never a partial report.
+  - **Record the review (migration 0288).** Outcome, summary, two confirmations. One per year; a second press records a correction. Recording this year's review marks the Calendar task "Year-end: review the ACH fraud procedure" done for the year, and that task now links here.
+  - **Packet** (`yearly-review/packet?year=`): plain text, sections 1 to 5 (section 5, who did what, only for the owner). Audited, never cached, no account numbers.
+- **Tests.**
+  - `tests/compliance/r41-s14-yearly.test.ts`.
+  - New pure self-test `ach-yearly-review-core` 47.
+  - Mutation runs: `mutate-0288-sql.py` (22 mutants plus two probes) and `mutate-s14-app.py`.
+  - Manual test T-374.
