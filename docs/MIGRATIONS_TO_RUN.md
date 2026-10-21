@@ -2705,3 +2705,39 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0278_ofac_screening.rollback.sql`.
   It refuses once any screening record exists (they are records).
+
+## R41 — 0287 — Three new Timberland log types (notices and corrections)
+
+- [ ] `0287_ach_timberland_comms_notices.sql` adds three entry types to the
+  Timberland log (`ach_timberland_comms`, 0277). Each one has a clock, so
+  "Done" can close it:
+  - **A bank correction (NOC) looks wrong.** Section 7 gives 15 calendar days
+    from the day the correction arrived. Brenda (Email 3): a wrong one "would
+    have to be rejected by the 15th day". The site cannot build a Refused NOC,
+    so the clock says to contact Cash Management (1-800-562-8761) before then.
+  - **Timberland told me about a possible OFAC match.** Brenda: "Cash
+    Management would let you know." No deadline in the agreement. It stays
+    open until Cash Management says it is resolved.
+  - **A return or correction report arrived.** The Federal Reserve deletes
+    reports from achedi.com after 60 calendar days, so the clock says to
+    download it before then.
+
+  Nothing else changes: the same table, the same owner-only, never-changed
+  rules. Apply it **after 0277** (and after 0286). It is safe to re-run.
+  Until it is applied, picking one of the three new types shows "run
+  migration 0287" and saves nothing.
+
+  **Check:**
+
+  ```sql
+  select pg_get_constraintdef(oid) like '%bank_report_received%' as has_new_types
+    from pg_constraint where conname = 'ach_timberland_comms_entry_type_check';
+  -- has_new_types
+  -- t
+  ```
+
+  For the full proof, paste `scripts/recon/ach-timberland-comms-0287-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0287 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0287_ach_timberland_comms_notices.rollback.sql`.
+  It refuses once any entry of the three new types exists (they are records).

@@ -27,7 +27,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S9 | Get rolling: go-live readiness board, file checker, funding helper (owner confirms funding; 8 am settlement-day reminder) | #1383 | 0276 |
 | S10 | Obligation clocks: Timberland communications log, what is due to Timberland, STOP card on every banking page, fees card | #1384 | 0277 |
 | S11 | Sanctions screening: daily OFAC check of every payee, possible-match review, never a payment gate; vendor follow-up list collapsible and searchable | #1385 | 0278 |
-| S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | this branch | none |
+| S12 | Brenda's answers: countersigned agreement and Email 3 mirrored; the open questions became an answered record; D-3, D-5, D-7 built; wording | #1444 | none |
+| S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | this branch | 0287 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -203,3 +204,20 @@ Still to arrange: the testing session Brenda asked for.
 - **Wording.** The go-live board, calendar and guide show the countersigned copy as received and quote Brenda on Schedule G: "I have this correct in the system.  No need to correct document." Calls go to Cash Management at 1-800-562-8761. A reversal is done by Timberland from the original uploaded file. Q11: keep GREENWAY MARIJUANA in the file header. Q14: PAYROLL stays out of the discretionary data.
 - **No migration.** `ach_files.uploaded_at` (0274) already records the upload.
 - **Tests.** Pure self-test floors: profile 44, deadline 74, limits 69, funding 65. Mutation scripts s1, s4, s5 and s8 are updated and rerun. Manual test T-372.
+
+## S13 in detail
+
+- **Three new log types (migration 0287).** On Operations, "Log a message from Timberland" now offers:
+  - **"A bank correction (NOC) looks wrong"**: a clock 15 calendar days from the day the correction arrived (section 7; Brenda, Email 3 answer 18: "this would have to be rejected by the 15th day per the rules."). The site does not build a Refused NOC; the clock says to contact Cash Management (1-800-562-8761) and ask how they want it rejected (D-10). The refuse-by line under every bank correction now says the same, instead of "in writing".
+  - **"Timberland told me about a possible OFAC match"**: Brenda, answer 21: "Yes we screen for OFAC for each person contained in a file.  Cash Management would let you know." No deadline in the agreement, so the item is red and stays open until Cash Management says it is resolved. Our own daily screening (S11) keeps running.
+  - **"A return or correction report arrived"**: a clock 60 calendar days from arrival to download it. Source: the Federal Reserve's "Payments Reporter Encrypted Email User Guide" (Revised 06/26/24), newly mirrored as `docs/authorities/ach/frbservices-edi-encrypted-email-guide.txt`: "Reports are retained in the portal for 60 calendar days and then automatically deleted."
+- **Reversal call sheet.** Each file marked uploaded or approved on Operations has a "Reversal call sheet" link (`/admin/settings/banking/files/[id]/reversal-sheet`). It is plain text built from the exact stored bytes, after the fingerprint and header facts are re-checked. It shows the file name, file date and File ID Modifier, effective and settlement dates, upload time, number of payments, total, SHA-256, and every payment with name, amount and trace number. It never shows an account or routing number. Brenda, answer 7: the reversal "will be completed using the original uploaded file". Owner or admin only, audited, never cached.
+- **Not built (no guessing):**
+  - **Upload receipt field.** Brenda has not said the portal shows a confirmation number.
+  - **Attaching the downloaded report to its entry.** The download clock is built; storing the report file needs a format and a storage decision.
+  - **Reading notices automatically.** Needs one real or sample notice.
+- **Tests.**
+  - `tests/compliance/r41-s13-notices.test.ts`.
+  - Pure self-test floors: obligations 78 (was 69); new `ach-reversal-sheet-core` 15.
+  - Mutation runs: `mutate-0287-sql.py` (14 mutants plus two probes: the check fails on the 0277 state, and the rollback refuses while a new-type row exists) and `mutate-s13-app.py`.
+  - Manual test T-373.
