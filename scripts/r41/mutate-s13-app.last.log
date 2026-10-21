@@ -1,0 +1,26 @@
+control (before) pass
+killed   wrong NOC counted in banking days
+killed   wrong NOC 16 days
+killed   wrong NOC has no clock
+killed   OFAC notice not red
+killed   OFAC notice given a made-up deadline
+killed   bank report 90 days
+killed   bank report counted from today
+killed   new type has no Done (spec clock false)
+killed   new type not offered
+killed   refuse line back to in writing
+killed   0287 error not named
+killed   Fed quote reworded
+killed   sheet shows the account field
+killed   sheet shows the routing
+killed   sheet for a released file
+killed   sheet ignores a record mismatch
+killed   sheet amount off by a field
+killed   sheet upload time in UTC
+killed   sheet wrong phone
+killed   route without permission check
+killed   route cached
+killed   route skips the sheet check
+killed   link shown for every file
+control (after) pass
+total 23 killed 23 survivors []
