@@ -33,9 +33,12 @@ import { planOutboxFiles, verifyOutboxAgainstLedger } from "../../src/lib/compli
 import { CCRS_ISSUE_CODES, specPinFor } from "../../src/lib/compliance/ccrs-preflight-core";
 import {
   __runReturnCorrectionsTests,
+  correctionExportIds,
   decodeSaleSlice,
   eventLotRefs,
   planReturnCorrections,
+  returnRecordFromRow,
+  routeSaleInserts,
   saleLedgerEntries,
   SALE_SLICE_RPC,
   type ReturnRecord,
@@ -220,6 +223,83 @@ describe("planReturnCorrections with the Sale ledger: only what CCRS holds is co
   });
 });
 
+describe("ledger mode is per environment: the ledger decides, not the global exported flag", () => {
+  const D = "GWY-AAA111-0a1b2c3d";
+  it("a return already exported by a PREprod batch is still corrected for prod when prod's ledger has not reflected it", () => {
+    const p = planReturnCorrections({ returns: [ret({ pending: false })], license: LIC, ledger: ledgerMap({ [D]: held() }), insertedDetailIds: new Set() });
+    expect(p.rows).toHaveLength(1);
+    expect(p.groups[0].returnIds).toEqual([]);
+  });
+  it("...and is not re-sent once that env's ledger reflects it", () => {
+    const p = planReturnCorrections({ returns: [ret({ pending: false })], license: LIC, ledger: ledgerMap({ [D]: held({ quantity: "3" }) }), insertedDetailIds: new Set() });
+    expect(p.rows).toEqual([]);
+    expect(p.reflected).toEqual([{ detailId: D, returnIds: [] }]);
+  });
+});
+
+describe("routeSaleInserts: a sale line CCRS already holds is never Inserted again (\"Duplicate Sale detail item for Licensee\" [G L1412])", () => {
+  const rows = ["A", "B", "C", "D", "E"].map((d) => saleRow("LOT-1", "S1", d, "Insert").split(","));
+  it("absent -> kept; held in any settled state (deleted included, even with a file in flight) -> skipped; uncertain / unknown -> withheld", () => {
+    const r = routeSaleInserts(rows, ledgerMap({ B: held(), C: held({ state: "deleted" }), D: held({ state: "uncertain" }), E: held({ state: "unknown", inFlight: true }) }));
+    expect(r.rows.map((x) => col(x, "SaleDetailExternalIdentifier"))).toEqual(["A"]);
+    expect(r.alreadyHeld).toEqual(["B", "C"]);
+    expect(r.uncertain).toEqual(["D", "E"]);
+  });
+  it("a line whose own Insert file is unanswered (not held yet) is KEPT, so a re-download serves the same stored bytes [BRIAN A29]", () => {
+    const r = routeSaleInserts(rows.slice(0, 1), ledgerMap({ A: null }));
+    expect(r.rows).toHaveLength(1);
+    expect(routeSaleInserts(rows.slice(1, 2), ledgerMap({ B: held({ inFlight: true }) })).alreadyHeld).toEqual(["B"]);
+  });
+});
+
+describe("returnRecordFromRow: the stored snapshot, nothing invented", () => {
+  const row = {
+    id: "r9", sale_external_id: " GWY-1 ", sale_detail_external_id: "GWY-1-abc", inventory_external_id: "LOT-9",
+    sale_type: "RecreationalMedical", sale_date: "2026-10-05", unit_price_minor: 1000, discount_minor: null,
+    sales_tax_minor: 100, excise_minor: 370, quantity: "1", original_quantity: 2, correction_status: "exported", created_at: "2026-10-06T00:00:00Z",
+  };
+  it("maps every column and the pending flag", () => {
+    expect(returnRecordFromRow(row)).toEqual({
+      id: "r9", saleExternalId: "GWY-1", saleDetailExternalId: "GWY-1-abc", inventoryExternalId: "LOT-9", saleType: "RecreationalMedical",
+      saleDateISO: "2026-10-05", originalQuantity: 2, quantity: 1, unitPriceMinor: 1000, discountMinor: 0, salesTaxMinor: 100, exciseMinor: 370,
+      createdAtISO: "2026-10-06T00:00:00Z", pending: false,
+    });
+    expect(returnRecordFromRow({ ...row, correction_status: "pending" }).pending).toBe(true);
+  });
+  it("a missing SaleType or SaleDate is NOT defaulted: the line is refused by name", () => {
+    for (const bad of [{ sale_type: null }, { sale_date: null }]) {
+      const p = planReturnCorrections({ returns: [returnRecordFromRow({ ...row, ...bad, correction_status: "pending" })], license: LIC, ledger: "legacy", insertedDetailIds: new Set() });
+      expect(p.rows).toEqual([]);
+      expect(p.invalid[0].reason).toMatch(/SaleType and SaleDate/);
+    }
+  });
+  it("a missing original quantity is refused, never treated as zero-and-sent", () => {
+    const p = planReturnCorrections({ returns: [returnRecordFromRow({ ...row, original_quantity: null, correction_status: "pending" })], license: LIC, ledger: "legacy", insertedDetailIds: new Set() });
+    expect(p.rows).toEqual([]);
+    expect(p.invalid).toHaveLength(1);
+  });
+});
+
+describe("correctionExportIds: only a PROD emission clears the shared pending flag", () => {
+  const plan = {
+    rows: [],
+    groups: [
+      { detailId: "A", operation: "Update" as const, cumulative: 1, original: 2, returnIds: ["r1", "r1b"] },
+      { detailId: "B", operation: "Delete" as const, cumulative: 2, original: 2, returnIds: ["r2"] },
+    ],
+    withheld: [{ detailId: "W", returnIds: ["r4"], reason: "x" }],
+    invalid: [{ detailId: "I", returnIds: ["r5"], reason: "y" }],
+    reflected: [{ detailId: "C", returnIds: ["r3"] }],
+  };
+  it("prod: every emitted row's pending returns + reflected ones; never withheld, invalid or E38-withheld", () => {
+    expect(correctionExportIds("prod", plan, new Set())).toEqual(["r1", "r1b", "r2", "r3"]);
+    expect(correctionExportIds("prod", plan, new Set(["A"]))).toEqual(["r2", "r3"]);
+  });
+  it("preprod: nothing, so a PREprod test never hides a return production still owes", () => {
+    expect(correctionExportIds("preprod", plan, new Set())).toEqual([]);
+  });
+});
+
 describe("E48 is a registered, pinned issue code", () => {
   it("in CCRS_ISSUE_CODES with pin [G L1413-L1414]", () => {
     expect(CCRS_ISSUE_CODES).toContain("E48_SALE_CORRECTION_WITHHELD");
@@ -355,6 +435,8 @@ describe("wiring (source pins)", () => {
   it("the batch merges planned corrections into the ONE Sale file and merges Sale entries into the ledger view", () => {
     expect(batch).toContain("planReturnCorrections(");
     expect(batch).toContain("saleLedgerEntries(");
+    expect(batch).toContain("routeSaleInserts(");
+    expect(batch).toContain("loadSaleSlice(");
     expect(batch).toContain('code: "E48_SALE_CORRECTION_WITHHELD"');
     expect(batch).toMatch(/assembleCcrsFile\(\{ type: "Sale", submittedBy, submittedDate: now, rows: saleRows \}\)/);
   });

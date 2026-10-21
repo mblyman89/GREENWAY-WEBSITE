@@ -60,6 +60,12 @@ export type CcrsBuildResult = {
   /** Validation warnings the employee should review before uploading. */
   warnings: string[];
   licenseNumber: string;
+  /**
+   * R5-1: the emitted data rows (exactly what `csv` carries, after E38), so
+   * the weekly batch can route them against the Sale ledger and merge return
+   * corrections into the ONE Sale file of the emission.
+   */
+  rows: string[][];
 };
 
 // ---------------------------------------------------------------------------
@@ -194,6 +200,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     skipped: 0,
     warnings,
     licenseNumber: license.licenseNumber,
+    rows: [],
   };
 
   if (!license.licenseNumber) {
@@ -497,6 +504,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   result.csv = buildFile(e38.rows, license);
   result.fileName = makeFileName(license.licenseNumber);
   result.recordCount = e38.rows.length;
+  result.rows = e38.rows;
   result.skipped = skipped + e38.withheld.length;
   return result;
 }
