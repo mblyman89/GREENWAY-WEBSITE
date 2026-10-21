@@ -25,9 +25,12 @@ import { getPricingSettings, type PricingSettings } from "@/lib/inventory/pricin
 import { redirect } from "next/navigation";
 import { auditFactoryReset, runFactoryReset } from "@/lib/admin/reset-service";
 import {
+  buildResetPlan,
   evaluateResetRequest,
   summariseResetOutcome,
 } from "@/lib/accounting/factory-reset-core";
+import { verifyResetSummary } from "@/lib/accounting/reset-proof-core";
+import { listSchemaTables } from "@/lib/admin/schema-tables";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 
 export type ActionResult = { ok: boolean; error?: string; errors?: string[] };
@@ -234,6 +237,12 @@ export async function resetOperationalDataAction(fd: FormData): Promise<void> {
       // swallowing the reset result would be worse than a missing check.
       problems = [];
     }
+    // R5-2: also check the database's OWN per-table report against the plan:
+    // every WIPE table emptied, no KEEP table (knowledge base, CCRS ledger,
+    // settings, people) touched. Pure, so it always runs, even when the audit
+    // RPC above could not.
+    const summaryProblems = verifyResetSummary(summary.tables, buildResetPlan(listSchemaTables()));
+    problems = [...problems, ...summaryProblems];
 
     await recordAudit({
       actorId: session.profile.id,
