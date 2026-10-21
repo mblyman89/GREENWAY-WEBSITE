@@ -192,11 +192,11 @@ describe("R41 S1: provenance of the two mirrors", () => {
     expect(Number(txtLines)).toBe(AGREEMENT.split("\n").length - (AGREEMENT.endsWith("\n") ? 1 : 0));
     expect(pages).toBe("12");
   });
-  it("the pure self-test is registered in CI with a floor of at least 42 assertions", () => {
+  it("the pure self-test is registered in CI with a floor of at least 44 assertions", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     const m = runner.match(/assertRan\("timberland-profile-core", __runTimberlandProfileCoreTests\(\), (\d+)\)/);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBeGreaterThanOrEqual(42);
+    expect(Number(m![1])).toBeGreaterThanOrEqual(44);
     expect(runner).toMatch(/import \{ __runTimberlandProfileCoreTests \} from "\.\.\/\.\.\/src\/lib\/payments\/timberland-profile-core"/);
   });
 });

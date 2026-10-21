@@ -23,7 +23,7 @@ RS = "scripts/compliance/run-pure-selftests.ts"
 T = ["tests/compliance/r41-s1-timberland-profile.test.ts"]
 SELF = ["npx", "tsx", "-e",
         "import {__runTimberlandProfileCoreTests as t} from './src/lib/payments/timberland-profile-core';"
-        "const r=t(); console.log(JSON.stringify(r)); if (r.failed>0 || r.passed<42) process.exit(1);"]
+        "const r=t(); console.log(JSON.stringify(r)); if (r.failed>0 || r.passed<44) process.exit(1);"]
 FAKE_ACCT = "12345" * 2 + "6048"
 
 M = [
@@ -62,7 +62,7 @@ M = [
     ("mirror-email-leak", BR, "Cutoff time is 4 pm daily", "Write to someone@example.com. Cutoff time is 4 pm daily"),
     ("mirror-phone-leak", BR, "Cutoff time is 4 pm daily", "Call 360-555-0142. Cutoff time is 4 pm daily"),
     # provenance
-    ("manifest-bytes-wrong", MF, "\t48973\t721\t12", "\t48974\t721\t12"),
+    ("manifest-bytes-wrong", MF, "\t48946\t717\t12", "\t48947\t717\t12"),
     ("readme-row-dropped", RD, "timberland-ach-agreement-2026-10-14.redacted.txt", "timberland-agreement.txt"),
     # registration
     ("selftest-floor-lowered", RS, 'assertRan("timberland-profile-core", __runTimberlandProfileCoreTests(), 44)',
