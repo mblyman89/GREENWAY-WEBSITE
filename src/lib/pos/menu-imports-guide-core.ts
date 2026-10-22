@@ -227,7 +227,7 @@ export function buildMenuImportsGuide(input: GuideInput): GuideStep[] {
   push({
     key: "ccrs_cleanup",
     title: "Clean up migrated garbage at the first CCRS upload",
-    body: "Dead lots from Cultivera (no product master, no barcode) are flagged on the CCRS hub. They are zeroed out in CCRS by Reconciliation in your first upload, never sent as a Delete. Fixable rows are listed so you can fix them instead.",
+    body: "Dead lots from Cultivera (no product master, no barcode, no received date) are flagged on the CCRS hub. They are zeroed out in CCRS by Reconciliation in your first upload, never sent as a Delete. Fixable rows are listed so you can fix them instead.",
     status: after,
     why: done ? "Open the clean-up panel to see what is still open." : "Opens after publish.",
     links: [

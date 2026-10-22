@@ -12,9 +12,18 @@
  *       `no_product_master` — the card is in the Inventories export but has no
  *         row in the Products export (hidden by the import with that reason);
  *       `no_barcode` — the lot had no barcode, so it carries a synthetic id
- *         CCRS never held (import_lot_missing_barcode).
+ *         CCRS never held (import_lot_missing_barcode);
+ *       `no_received_date` — R74 S4, owner decision (R74 round 2, #5): "Anything
+ *         without a receive date should be flagged as, does not exist and to be
+ *         included in the clean up." Evidence = the lot's `received_on` was READ
+ *         and is blank (import-lot-core logged import_lot_received_date_missing,
+ *         or the date was out of range and receivedOnForDb dropped it). A lot
+ *         whose date was never read (`receivedOn` undefined) is never flagged.
+ *         Giving the lot a real date on the import's Received dates page (R16b,
+ *         attested) is the owner saying it exists: it leaves this list.
  *   - FIXABLE: a migration diagnostic that a person can correct (cost,
- *     potency, size, received date, COA). Listed for fixing, never removal.
+ *     potency, size, COA). Listed for fixing, never removal. (R74 S4: a missing
+ *     received date is no longer "fixable" here; it is dead evidence above.)
  *
  * Each dead lot is then routed by the CCRS ledger (what CCRS really holds):
  *   zero_in_ccrs    on file, stock > 0, active → zero it with a Reconciliation
@@ -33,12 +42,13 @@
  */
 import { ledgerEntry, type LedgerView } from "./ccrs-ledger-core";
 
-export const DEAD_REASONS = ["no_product_master", "no_barcode"] as const;
+export const DEAD_REASONS = ["no_product_master", "no_barcode", "no_received_date"] as const;
 export type DeadReason = (typeof DEAD_REASONS)[number];
 
 export const DEAD_REASON_LABEL: Record<DeadReason, string> = {
   no_product_master: "Not in Cultivera's product list (no product master)",
   no_barcode: "No barcode — never filed with CCRS",
+  no_received_date: "No received date — treated as not existing (owner rule)",
 };
 
 export const GARBAGE_ROUTES = [
@@ -68,7 +78,6 @@ export const OPEN_ROUTES: ReadonlySet<GarbageRoute> = new Set(["zero_in_ccrs", "
 /** Fixable migration diagnostics (codes written by import-lot-core / transform). */
 export const FIXABLE_CODES = [
   "import_lot_cost_unparseable",
-  "import_lot_received_date_missing",
   "import_lot_coa_missing",
   "package_size_mg_garbage",
   "cannabinoid_missing",
@@ -78,7 +87,6 @@ export type FixableCode = (typeof FIXABLE_CODES)[number];
 
 export const FIXABLE_LABEL: Record<FixableCode, string> = {
   import_lot_cost_unparseable: "Cost could not be read",
-  import_lot_received_date_missing: "No received date",
   import_lot_coa_missing: "COA flag is N",
   package_size_mg_garbage: "Package size is a milligram figure",
   cannabinoid_missing: "No THC/CBD potency",
@@ -94,6 +102,11 @@ export type GarbageLotInput = {
   onHandQty: number | string | null;
   status: string | null;
   productName: string | null;
+  /**
+   * R74 S4: inventory_lots.received_on as read (YYYY-MM-DD). null / "" = read and blank → dead
+   * (`no_received_date`). undefined = not read → never flagged (no guessing).
+   */
+  receivedOn?: string | null;
 };
 export type GarbageDiagnosticInput = { code: string };
 
@@ -119,6 +132,8 @@ export type GarbageReport = {
   fixable: { code: FixableCode; label: string; count: number }[];
   fixableTotal: number;
   ledgerLoaded: boolean;
+  /** R74 S4: lots dead ONLY because they have no received date (a real one can be dated instead). */
+  onlyNoReceivedDate: number;
 };
 
 function qtyOf(v: number | string | null): number {
@@ -134,6 +149,7 @@ export function deadReasonsFor(lot: GarbageLotInput, noMasterKeys: ReadonlySet<s
   const key = clean(lot.posProductKey);
   if (key && noMasterKeys.has(key)) out.push("no_product_master");
   if (!clean(lot.lotCode)) out.push("no_barcode");
+  if (lot.receivedOn !== undefined && !clean(lot.receivedOn)) out.push("no_received_date");
   return out;
 }
 
@@ -226,7 +242,24 @@ export function buildGarbageReport(input: {
     fixable,
     fixableTotal: fixable.reduce((n, f) => n + f.count, 0),
     ledgerLoaded: input.view !== null,
+    onlyNoReceivedDate: rows.filter((r) => r.reasons.length === 1 && r.reasons[0] === "no_received_date").length,
   };
+}
+
+/**
+ * R74 S4: the sentence under the table for the undated lots. Null when there are none.
+ * Points at the import's Received dates page (R16b) for any lot that really exists.
+ */
+export function noReceivedDateNote(r: GarbageReport): string | null {
+  const n = r.byReason.no_received_date;
+  if (n === 0) return null;
+  const only = r.onlyNoReceivedDate;
+  return (
+    `${n} migrated lot(s) have no received date, so they are treated as not existing and are on this clean-up list (owner rule). ` +
+    (only > 0
+      ? `If any of the ${only} lot(s) flagged for that reason alone really is on the shelf, give it its date on the Received dates page and it leaves this list; the rest are zeroed out like any other dead lot.`
+      : "Every one also has another dead reason, so a date alone would not take it off this list.")
+  );
 }
 
 /** One plain sentence for the top of the panel. */
@@ -300,6 +333,12 @@ export function __runCcrsMigrationGarbageCoreTests(): { passed: number; failed: 
   ok(deadReasonsFor(lot({ lotCode: null }), nm).join() === "no_product_master,no_barcode", "both reasons, stable order");
   ok(deadReasonsFor(lot({ posProductKey: null }), nm).length === 0, "no key is not no-master");
   ok(deadReasonsFor(lot({ posProductKey: " K1 " }), nm).length === 1, "key trimmed");
+  // R74 S4: no received date
+  ok(deadReasonsFor(lot({ posProductKey: "K2", receivedOn: null }), nm).join() === "no_received_date", "read + null date is dead");
+  ok(deadReasonsFor(lot({ posProductKey: "K2", receivedOn: "  " }), nm).join() === "no_received_date", "read + blank date is dead");
+  ok(deadReasonsFor(lot({ posProductKey: "K2", receivedOn: "2025-03-04" }), nm).length === 0, "dated lot is not dead");
+  ok(deadReasonsFor(lot({ posProductKey: "K2" }), nm).length === 0, "date never read is never flagged");
+  ok(deadReasonsFor(lot({ lotCode: null, receivedOn: null }), nm).join() === "no_product_master,no_barcode,no_received_date", "all three, stable order");
 
   // routing
   ok(routeGarbageLot(lot({}), null).route === "unknown", "no ledger → unknown");
@@ -355,6 +394,7 @@ export function __runCcrsMigrationGarbageCoreTests(): { passed: number; failed: 
   ok(rep.units === 15, "units 5+3+2+0+5");
   ok(rep.unitsToZero === 8, "units to zero 5+3");
   ok(rep.fixable.length === 2 && rep.fixable[0].code === "import_lot_cost_unparseable" && rep.fixable[0].count === 2, "fixable grouped in code order");
+  ok(rep.byReason.no_received_date === 0 && rep.onlyNoReceivedDate === 0 && noReceivedDateNote(rep) === null, "no undated lots → no note");
   ok(rep.fixableTotal === 3, "fixable total ignores unknown and non-fixable codes");
   ok(rep.ledgerLoaded, "ledger loaded flag");
   ok(rep.rows.find((r) => r.lotId === "E")?.ccrsId === "K2-NOBARCODE-1", "synthetic id shown");
@@ -371,6 +411,30 @@ export function __runCcrsMigrationGarbageCoreTests(): { passed: number; failed: 
   ok(empty.dead === 0 && garbageHeadline(empty).startsWith("No dead"), "headline: none");
   const done = buildGarbageReport({ items, lots: [lot({ id: "H", onHandQty: 0 })], diagnostics: [], view });
   ok(done.open === 0 && garbageHeadline(done).includes("every one is handled"), "headline: all handled");
+
+  // R74 S4: undated lots in the report
+  const und = buildGarbageReport({
+    items,
+    lots: [
+      lot({ id: "U1", posProductKey: "K2", receivedOn: null, productName: "Undated on file" }),
+      lot({ id: "U2", posProductKey: "K2", receivedOn: "", lotCode: "NOT-ON-FILE", ccrsExternalId: "NOT-ON-FILE", productName: "Undated local" }),
+      lot({ id: "U3", receivedOn: null, productName: "Undated no master" }),
+      lot({ id: "U4", posProductKey: "K2", receivedOn: "2024-01-02", productName: "Dated" }),
+      lot({ id: "U5", posProductKey: "K2", receivedOn: null, status: "destroyed" }),
+    ],
+    diagnostics: [{ code: "import_lot_received_date_missing" }, { code: "import_lot_received_date_missing" }],
+    view,
+  });
+  ok(und.dead === 3 && und.byReason.no_received_date === 3, "three undated lots dead; dated + destroyed excluded");
+  ok(und.rows.find((r) => r.lotId === "U1")?.route === "zero_in_ccrs", "undated + on file + stock → zero in CCRS");
+  ok(und.rows.find((r) => r.lotId === "U2")?.route === "local_only", "undated + not on file → local only");
+  ok(und.onlyNoReceivedDate === 2, "U1, U2 dead only for the date");
+  ok(und.fixableTotal === 0, "a missing received date is no longer listed as fixable");
+  const note = noReceivedDateNote(und) ?? "";
+  ok(note.startsWith("3 migrated lot(s) have no received date") && note.includes("of the 2 lot(s)") && note.includes("Received dates page"), "note counts + where to date a real one");
+  const allBoth = buildGarbageReport({ items, lots: [lot({ id: "U3", receivedOn: null })], diagnostics: [], view });
+  ok((noReceivedDateNote(allBoth) ?? "").includes("another dead reason"), "note when every undated lot has another reason");
+  ok(routeActionHref("zero_in_ccrs", { importId: "I", lotId: "L", reasons: ["no_received_date"] }) === "/admin/inventory/L", "undated zero → lot page");
 
   // action links
   ok(routeActionHref("zero_in_ccrs", { importId: "I", lotId: "L", reasons: ["no_product_master"] }) === "/admin/menu-imports/I/missing-products", "zero → R15b screen");

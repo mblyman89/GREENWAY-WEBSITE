@@ -11,6 +11,7 @@ import {
   OPEN_ROUTES,
   ROUTE_LABEL,
   garbageHeadline,
+  noReceivedDateNote,
   routeActionHref,
   type GarbageRoute,
 } from "@/lib/compliance/ccrs-migration-garbage-core";
@@ -20,7 +21,7 @@ export const GARBAGE_PANEL_ROW_CAP = 200;
 
 export const GARBAGE_PANEL_HELP = [
   "The examiner's office has OK'd cleaning these out of CCRS (decision D-15). The goal is the one Brian set: CCRS and our inventory must match.",
-  "A record is called dead only on evidence: it is missing from Cultivera's product list, or it has no barcode. Fixable problems (cost, potency, dates, COA) are listed below for fixing, not removal.",
+  "A record is called dead only on evidence: it is missing from Cultivera's product list, it has no barcode, or it has no received date (your rule: no receive date means it does not exist). Fixable problems (cost, potency, size, COA) are listed below for fixing, not removal.",
   "\"Zero it out in CCRS\" uses the guide's Reconciliation reason (\"Balance inventory\"). Open the import's Missing products screen, type the confirmation, and the adjustment goes into the next weekly upload.",
   "The system never sends a Delete for a migrated lot. CCRS has not shown in writing what a Delete does to a lot that has sales behind it (U-46).",
 ];
@@ -138,6 +139,14 @@ function Body({ load }: { load: Extract<GarbageLoad, { state: "ready" }> }) {
             </p>
           ) : null}
         </div>
+      ) : null}
+      {noReceivedDateNote(r) ? (
+        <p data-testid="migration-garbage-undated" className="text-xs text-white/60">
+          {noReceivedDateNote(r)}{" "}
+          <Link className="font-semibold text-orange-200 underline" href={`/admin/menu-imports/${load.importId}/received-dates`}>
+            Open Received dates
+          </Link>
+        </p>
       ) : null}
       {r.fixableTotal > 0 ? (
         <div className="text-xs text-white/60" data-testid="migration-garbage-fixable">

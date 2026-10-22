@@ -7,7 +7,7 @@
  * upload."
  *
  * Pins:
- *   1. the pure core runs at its measured self-test count (53);
+ *   1. the pure core runs at its measured self-test count (53; R74 S4 +14 = 67);
  *   2. the store reads the one-time Cultivera import end to end and routes by
  *      the CCRS ledger; every short read is an error, never a partial list;
  *   3. the panel renders the headline, the routes, R15b links, and never offers
@@ -107,6 +107,7 @@ const lot = (o: Record<string, unknown>) => ({
   on_hand_qty: 4,
   status: "active",
   product_name: "Dead Gummy",
+  received_on: "2025-06-01",
   ...o,
 });
 const inv = (id: string, state: LedgerEntry["state"]): LedgerEntry => ({ fileType: "Inventory", externalId: id, filedName: null, state });
@@ -142,7 +143,7 @@ async function load() {
 describe("R50 S10c — core", () => {
   it("self-tests run at the measured count", async () => {
     const m = await import("@/lib/compliance/ccrs-migration-garbage-core");
-    expect(m.__runCcrsMigrationGarbageCoreTests()).toEqual({ passed: 53, failed: 0 });
+    expect(m.__runCcrsMigrationGarbageCoreTests()).toEqual({ passed: 67, failed: 0 });
   });
 });
 
@@ -204,6 +205,36 @@ describe("R50 S10c — store", () => {
     const r = await load();
     if (!(r.ok && r.state === "ready")) throw new Error("not ready");
     expect(r.report.dead).toBe(0);
+  });
+});
+
+// R74 S4 - owner (round 2, #5): "Anything without a receive date should be flagged as, does not exist
+// and to be included in the clean up."
+describe("R74 S4 — no received date = does not exist", () => {
+  it("store reads received_on; an undated lot is dead and routed by the ledger", async () => {
+    const { GARBAGE_LOT_SELECT } = await import("@/lib/compliance/ccrs-migration-garbage-store");
+    expect(GARBAGE_LOT_SELECT).toContain("received_on");
+    st.lots = [...st.lots, lot({ id: "L4", pos_product_key: "K2", lot_code: "B4", ccrs_inventory_external_id: "B4", received_on: null, product_name: "Undated" })];
+    st.ledger = [...(st.ledger ?? []), inv("B4", "filed")];
+    st.diags = [...st.diags, { code: "import_lot_received_date_missing" }];
+    const r = await load();
+    if (!(r.ok && r.state === "ready")) throw new Error("not ready");
+    const row = r.report.rows.find((x) => x.lotId === "L4");
+    expect(row?.reasons).toEqual(["no_received_date"]);
+    expect(row?.route).toBe("zero_in_ccrs");
+    expect(r.report.fixable.map((f) => f.code)).not.toContain("import_lot_received_date_missing");
+    expect(r.report.rows.find((x) => x.lotId === "L3")).toBeUndefined(); // dated good lot stays off the list
+  });
+  it("panel shows the undated note with the Received dates link and the reason label", async () => {
+    st.lots = [lot({ id: "L4", pos_product_key: "K2", lot_code: "B4", ccrs_inventory_external_id: "B4", received_on: null, product_name: "Undated" })];
+    st.ledger = [inv("B4", "filed")];
+    const { MigrationGarbagePanel } = await import("@/components/admin/compliance/MigrationGarbagePanel");
+    const html = renderToStaticMarkup(<MigrationGarbagePanel load={await load()} />);
+    expect(html).toContain('data-testid="migration-garbage-undated"');
+    expect(html).toContain("1 migrated lot(s) have no received date");
+    expect(html).toContain(`/admin/menu-imports/${DONE.first.importId}/received-dates`);
+    expect(html).toContain("No received date — treated as not existing (owner rule)");
+    expect(html).toContain('href="/admin/inventory/L4"');
   });
 });
 
