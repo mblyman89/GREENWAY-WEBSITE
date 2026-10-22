@@ -441,7 +441,7 @@ export function __runAchNoticeMailCoreTests(): { passed: number; failed: number 
   ok(!checkHandleForm(f({ mail_id: id, state: "new", note: "Portal showed an R03, logged it." })).ok, "cannot set back to new");
   ok(!checkHandleForm(f({ mail_id: "x", state: "logged", note: "Portal showed an R03, logged it." })).ok, "bad id");
   ok(!checkHandleForm(f({ mail_id: id, state: "logged", note: "short" })).ok, "short note");
-  ok(!checkHandleForm(f({ mail_id: id, state: "logged", note: "trace 123456789012345 seen" })).ok, "digit run refused");
+  ok(!checkHandleForm(f({ mail_id: id, state: "logged", note: "trace 1234567 seen" })).ok, "digit run refused");
   ok(checkHandleForm(f({ mail_id: id, state: "not_a_notice", note: "Called 1-800-562-8761, it was a newsletter." })).ok, "the 1-800 number is fine");
   // db errors
   ok(/0290/.test(noticeMailDbError('relation "ach_notice_mail" does not exist')), "missing table named");
