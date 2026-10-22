@@ -1332,7 +1332,10 @@ describe("D-65 — the connections survive the reset", () => {
     //       list; retire-only) and ach_bank_watch_reviews (explanations of
     //       unmatched bank lines; append-only); the database refuses DELETE
     //       and TRUNCATE on both
-    expect(plan.keep.length).toBe(168);
+    //   +1  R41 S17 / 0290: ach_notice_mail (the Fed ACH notice emails the
+    //       watch saved, encrypted, and who marked each; append-only, the
+    //       database refuses DELETE and TRUNCATE)
+    expect(plan.keep.length).toBe(169);
     expect(plan.wipe.length).toBe(139);
   });
 

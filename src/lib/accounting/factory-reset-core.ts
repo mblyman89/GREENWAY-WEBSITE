@@ -505,6 +505,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ach_annual_reviews", disposition: "KEEP", because: "The yearly Nacha fraud-procedure review record (who reviewed and when, what was found); append-only, the database refuses DELETE." },
   { table: "ach_bank_watch_rules", disposition: "KEEP", because: "The owner's known-payee list for the bank watch (who may debit the Main account and up to how much); retire-only, the database refuses DELETE." },
   { table: "ach_bank_watch_reviews", disposition: "KEEP", because: "Each recorded explanation of a bank line the bank watch could not match (who looked, what they decided); append-only, the database refuses DELETE." },
+  { table: "ach_notice_mail", disposition: "KEEP", because: "The Fed ACH notice emails the notice-email watch saved (encrypted) and who marked each one and when; append-only, the database refuses DELETE." },
   // R39 (0261). The database refuses to delete a signed e-sign session
   // (ACH_ESIGN_KEEP) and the session points at the kept documents with
   // on delete restrict, so a reset that tried to wipe it would fail part-way.
