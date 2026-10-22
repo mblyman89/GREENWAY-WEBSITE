@@ -295,6 +295,9 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     // image_media_ids from product_enrichments / kb_products; any error
     // (pre-0234 included) skips that table = "nothing on record" (pinned by
     // the "R51" test below).
+    // R74 S11 added the eighth reader on purpose (pin updated on purpose):
+    // the vendor mastering panel counts drafts linked to the KB; any read
+    // error is shown as an error, never as zero (pinned by "R74 S11" below).
     expect(offenders.sort()).toEqual([
       "src/lib/catalog/attach-facts.ts",
       "src/lib/catalog/image-memory-server.ts",
@@ -302,8 +305,16 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
       "src/lib/catalog/menu-kb-link-server.ts",
       "src/lib/enrichment/command-center.ts",
       "src/lib/inventory/coa-extract.ts",
+      "src/lib/inventory/cultivera-vendor.ts",
       "src/lib/products/masters-store.ts",
     ]);
+  });
+
+  it("R74 S11: the vendor mastering draft read is guarded (any error is reported, never zero)", () => {
+    const sel = /\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b[^)]*\)/g;
+    const src = readFileSync(path.join(ROOT, "src/lib/inventory/cultivera-vendor.ts"), "utf8");
+    expect(src.match(sel) ?? []).toEqual(['.select("id, status, kb_product_id, attached_facts")']);
+    expect(src).toContain("if (error) return short(error);");
   });
 
   it("R51: the onboarding photo recommender's identity read is guarded for pre-0234", () => {
