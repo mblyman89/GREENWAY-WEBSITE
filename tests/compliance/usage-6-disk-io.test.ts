@@ -95,6 +95,18 @@ describe("USAGE-6 · the Postgres check", () => {
   });
 });
 
+describe("USAGE-6 · SQL mutation run", () => {
+  it("mutation log (mutate-0292-sql.last.log): every mutant killed by the check itself, controls pass", () => {
+    const log = read("scripts/usage/mutate-0292-sql.last.log");
+    expect(log).toContain("total 12 killed 12 survivors []");
+    expect(log.match(/^control \((before|mid|after)\) pass$/gm)?.length).toBe(3);
+    expect(log).toContain("probe rolled-back: pass");
+    expect(log).not.toContain("SURVIVED");
+    // none killed merely because the mutated migration refused to apply
+    expect(log).not.toContain("did not apply");
+  });
+});
+
 describe("USAGE-6 · owner diagnostics are read-only", () => {
   for (const f of [DIAG, TOP]) {
     it(`${f} only reads`, () => {

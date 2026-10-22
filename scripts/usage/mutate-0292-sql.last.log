@@ -1,0 +1,17 @@
+control (before) pass
+killed   orders-no-index  (CONTEXT:  PL/pgSQL function inline_code_block line 8 at ASSERT)
+killed   leafly-no-index  (CONTEXT:  PL/pgSQL function inline_code_block line 11 at ASSERT)
+killed   orders-asc  (CONTEXT:  PL/pgSQL function inline_code_block line 9 at ASSERT)
+killed   leafly-asc  (CONTEXT:  PL/pgSQL function inline_code_block line 12 at ASSERT)
+killed   orders-wrong-column  (CONTEXT:  PL/pgSQL function inline_code_block line 9 at ASSERT)
+killed   leafly-wrong-column  (CONTEXT:  PL/pgSQL function inline_code_block line 12 at ASSERT)
+killed   orders-hash  (CONTEXT:  PL/pgSQL function inline_code_block line 9 at ASSERT)
+killed   orders-partial  (CONTEXT:  PL/pgSQL function inline_code_block line 18 at ASSERT)
+killed   leafly-partial  (CONTEXT:  PL/pgSQL function inline_code_block line 20 at ASSERT)
+killed   orders-renamed  (CONTEXT:  PL/pgSQL function inline_code_block line 8 at ASSERT)
+killed   leafly-renamed  (CONTEXT:  PL/pgSQL function inline_code_block line 11 at ASSERT)
+killed   orders-composite  (CONTEXT:  PL/pgSQL function inline_code_block line 9 at ASSERT)
+control (mid) pass
+probe rolled-back: pass (check fails with no indexes)
+control (after) pass
+total 12 killed 12 survivors []
