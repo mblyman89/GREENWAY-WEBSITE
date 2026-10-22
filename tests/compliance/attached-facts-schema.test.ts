@@ -377,9 +377,22 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // core only names it in comments. Pinned by the R37 S6 test below.
       .filter((f) => !f.endsWith(path.join("catalog", "lookup-history-core.ts")))
       .filter((f) => !f.endsWith(path.join("catalog", "lookup-history-server.ts")))
+      // R74 S11: the vendor mastering panel READS attached_facts to count
+      // which facts came from a lab certificate / Gemini / memory. Read-only;
+      // pinned by the R74 S11 test below.
+      .filter((f) => !f.endsWith(path.join("inventory", "cultivera-vendor-core.ts")))
+      .filter((f) => !f.endsWith(path.join("inventory", "cultivera-vendor.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("R74 S11: the vendor mastering reader only READS attached_facts (one named select, no writes)", () => {
+    const srv = readFileSync(path.join(ROOT, "src/lib/inventory/cultivera-vendor.ts"), "utf8");
+    expect(srv.match(/attached_facts/g) ?? []).toEqual(["attached_facts"]);
+    expect(srv).toContain('.select("id, status, kb_product_id, attached_facts")');
+    expect(srv).not.toMatch(/\.(insert|update|upsert|delete)\(/);
+    expect(srv).not.toContain("product_fact_provenance");
   });
 
   it("R37 S6: the search-history reader only READS product_fact_provenance (named select, no writes, never attached_facts)", () => {
