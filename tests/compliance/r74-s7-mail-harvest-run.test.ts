@@ -185,7 +185,7 @@ describe("R74 S7 one batch with fake Gmail", () => {
     const last = await runHarvestBatch(io, CFG);
     expect(io.opened).toEqual(["msgPdf00004"]);
     expect(last.cursorLine).toMatch(/^Finished/);
-    expect(io.cursor?.done).toBe(true);
+    expect((io.cursor as HarvestCursor | null)?.done).toBe(true);
     // finished: a press does nothing
     io.opened.length = 0;
     const done = await runHarvestBatch(io, CFG);
