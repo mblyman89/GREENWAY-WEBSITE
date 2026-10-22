@@ -84,7 +84,7 @@ export class HarvestTableMissing extends Error {
   }
 }
 
-function isMissingTable(err: { code?: string; message?: string } | null | undefined): boolean {
+export function isMissingTable(err: { code?: string; message?: string } | null | undefined): boolean {
   if (!err) return false;
   return err.code === "42P01" || err.code === "PGRST205" || /does not exist|schema cache|could not find the table/i.test(err.message ?? "");
 }

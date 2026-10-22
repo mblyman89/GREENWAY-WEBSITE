@@ -273,6 +273,37 @@ export function sheetToManifest(rows: readonly (readonly Cell[])[]): SheetManife
   };
 }
 
+/**
+ * One exceljs cell value -> a plain Cell. exceljs gives: primitives, Date, { richText: [{text}] },
+ * { formula|sharedFormula, result }, { text, hyperlink }, { error }. A formula counts by its saved
+ * RESULT (what the vendor saw); an error or a formula with no saved result is blank (never computed
+ * here). A date becomes YYYY-MM-DD (UTC: Excel dates carry no zone).
+ */
+export function excelCellValue(v: unknown): Cell {
+  if (v == null) return null;
+  if (typeof v === "string" || typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (Array.isArray(o.richText)) return (o.richText as { text?: unknown }[]).map((r) => String(r?.text ?? "")).join("");
+    if ("formula" in o || "sharedFormula" in o) return "result" in o ? excelCellValue(o.result) : null;
+    if ("error" in o) return null;
+    if ("text" in o) return excelCellValue(o.text);
+  }
+  return null;
+}
+
+/** Spreadsheet files larger than this are refused by name (a manifest workbook is kilobytes). */
+export const SHEET_MAX_BYTES = 15 * 1024 * 1024;
+
+/** Old Excel 97-2003 (.xls, OLE2 compound file) — the reader opens .xlsx only, and says so. */
+export function isOldExcel(bytes: Uint8Array): boolean {
+  return bytes.length >= 4 && bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0;
+}
+
+export const OLD_XLS_NOTE = "an old Excel 97-2003 .xls file: the reader opens .xlsx only (open it in Excel and Save As .xlsx, or read the paper copy)";
+
 /** Every sheet of a workbook -> the sheet with the most barcodes -> the row summary. */
 export function readSpreadsheetCells(sheets: readonly { name: string; rows: readonly (readonly Cell[])[] }[]): ParsedDocSummary {
   if (sheets.length === 0) return unreadable("the spreadsheet has no sheets");
@@ -354,31 +385,71 @@ export function readPdfText(i: PdfTextInput): ParsedDocSummary {
   if (i.layer.trim() && i.layer !== i.text) tries.push({ text: i.layer, via: "read from the PDF's text layer" });
   if (tries.length === 0) return unreadable(`${how}; the PDF has no text (a scanned image LlamaParse could not read)`);
   let lastError = "";
+  const usable = hasUsableLayer(i.layer);
+  const grounded = (lines: ParsedLine[]) => groundLines(lines, i.layer, usable);
+  const finish = (manifest: Parameters<typeof summarizeManifest>[0], what: string, via: string, dropped: number, extra: string[] = []) => {
+    const sum = summarizeManifest(manifest, what);
+    const notes = [via, ...extra];
+    if (dropped > 0) notes.push(`${dropped} barcode${dropped === 1 ? "" : "s"} LlamaParse read but the PDF's own text does not contain, dropped (never guessed)`);
+    if (!usable && i.engine === "llamaparse") notes.push("scanned PDF: barcodes are from LlamaParse's image reading, no text layer to check them against");
+    if (sum.note) notes.push(sum.note);
+    return { ...sum, note: notes.join("; ") };
+  };
   for (const t of tries) {
     const r = parsePdfManifestText(t.text);
     if (!r.ok) {
       lastError = r.error;
       continue;
     }
-    const usable = hasUsableLayer(i.layer);
-    const layerSquash = i.layer.replace(/\s+/g, "");
-    let dropped = 0;
-    const lines = usable
-      ? r.manifest.lines.filter((l) => {
-          const bc = (l.lot_code ?? "").trim();
-          if (!bc || layerSquash.includes(bc)) return true;
-          dropped += 1;
-          return false;
-        })
-      : r.manifest.lines;
-    const sum = summarizeManifest({ ...r.manifest, lines }, `this PDF (${r.layout})`);
-    const notes = [`${t.via} (${r.layout})`];
-    if (dropped > 0) notes.push(`${dropped} barcode${dropped === 1 ? "" : "s"} LlamaParse read but the PDF's own text does not contain, dropped (never guessed)`);
-    if (!usable && i.engine === "llamaparse") notes.push("scanned PDF: barcodes are from LlamaParse's image reading, no text layer to check them against");
-    if (sum.note) notes.push(sum.note);
-    return { ...sum, note: notes.join("; ") };
+    const g = grounded(r.manifest.lines);
+    return finish({ ...r.manifest, lines: g.lines }, `this PDF (${r.layout})`, `${t.via} (${r.layout})`, g.dropped);
+  }
+  // No known layout. LlamaParse keeps a vendor's own table as a markdown table: read it like a
+  // spreadsheet (barcode only from a column whose header names it), still grounded by the layer.
+  if (i.engine === "llamaparse") {
+    const t = pdfTableManifest(i.text);
+    if (t) {
+      const g = grounded(t.manifest.lines);
+      if (g.lines.length > 0) {
+        return finish({ ...t.manifest, lines: g.lines }, "this PDF's table", `${how}, from a table with a ${t.barcodeHeader} column (no known manifest layout)`, g.dropped);
+      }
+      return unreadable(`${how}; a ${t.barcodeHeader} table was found but none of its ${g.dropped} barcodes appear in the PDF's own text (never guessed)`);
+    }
   }
   return unreadable(`${how}; ${lastError}`);
+}
+
+/** Keep only barcodes the PDF's own text layer contains (when the layer is usable). */
+export function groundLines(lines: readonly ParsedLine[], layer: string, usable = hasUsableLayer(layer)): { lines: ParsedLine[]; dropped: number } {
+  if (!usable) return { lines: [...lines], dropped: 0 };
+  const squash = layer.replace(/\s+/g, "");
+  let dropped = 0;
+  const kept = lines.filter((l) => {
+    const bc = (l.lot_code ?? "").trim();
+    if (!bc || squash.includes(bc)) return true;
+    dropped += 1;
+    return false;
+  });
+  return { lines: kept, dropped };
+}
+
+/** The markdown table (from LlamaParse) with the most header-named barcodes, read as a sheet. */
+export function pdfTableManifest(markdown: string): (SheetManifest & { barcodeHeader: string }) | null {
+  let best: (SheetManifest & { barcodeHeader: string }) | null = null;
+  const tables = markdownTables(markdown);
+  // Text around the tables can carry "Manifest #: ..." lines; feed them as the label block.
+  const labelRows: Cell[][] = markdown
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*\|/.test(l) && /:/.test(l))
+    .slice(0, 30)
+    .map((l) => [l.replace(/[*_#>]+/g, "").trim()]);
+  for (const t of tables) {
+    const rows: Cell[][] = [...labelRows, ...(t.header ? [t.header] : []), ...t.rows];
+    const sm = sheetToManifest(rows);
+    if (sm.manifest.lines.length === 0) continue;
+    if (!best || sm.manifest.lines.length > best.manifest.lines.length) best = { ...sm, barcodeHeader: norm(rows[sm.headerRow]?.[findCol(rows[sm.headerRow].map((x) => norm(x)), BARCODE_HEADERS)]) };
+  }
+  return best;
 }
 
 /* ------------------------------------------------------------------ *
@@ -525,6 +596,39 @@ export function __runCultiveraMailReadCoreTests(): { passed: number; failed: num
   ok(noText.status === "unreadable" && /no text/.test(noText.note ?? ""), "no text at all: unreadable, says why");
   const notManifest = readPdfText({ text: "Certificate of Analysis THC 21%", engine: "llamaparse", layer: "" });
   ok(notManifest.status === "unreadable" && /read by LlamaParse/.test(notManifest.note ?? ""), "a non-manifest PDF: unreadable, reader named");
+
+  // LlamaParse table fallback (no known layout): header-named barcode column only, grounded
+  const md = [
+    "**Manifest #:** 0004455",
+    "**From License #:** 423456",
+    "",
+    "| Lot ID | Product | Qty | Unit Price |",
+    "|---|---|---|---|",
+    "| 1234567890123456 | Blue Dream 3.5g | 10 | $4.50 |",
+    "| 9999999999999999 | Gelato 1g | 5 | $2.00 |",
+  ].join("\n");
+  const layerHas1 = "VENDOR INVOICE Manifest 0004455 Lot 1234567890123456 Blue Dream 3.5g qty 10 and more words here to be usable";
+  const tbl = readPdfText({ text: md, engine: "llamaparse", layer: layerHas1 });
+  ok(tbl.status === "parsed" && tbl.lines.length === 1 && tbl.lines[0][0] === "1234567890123456", "table fallback: grounded to the layer (OCR-only id dropped)");
+  ok(/1 barcode LlamaParse read but the PDF's own text does not contain, dropped/.test(tbl.note ?? "") && /Lot ID column/.test(tbl.note ?? ""), "table fallback note: column named + drop counted");
+  ok(tbl.manifestNumber === "0004455" && tbl.vendorLicense === "423456" && tbl.lines[0][4] === 450, "table fallback: label lines + cents");
+  const scanned = readPdfText({ text: md, engine: "llamaparse", layer: "" });
+  ok(scanned.status === "parsed" && scanned.lines.length === 2 && /scanned PDF/.test(scanned.note ?? ""), "scanned table: vision ids kept, said so");
+  const noneInLayer = readPdfText({ text: md, engine: "llamaparse", layer: "A completely different document text layer that has plenty of characters in it." });
+  ok(noneInLayer.status === "unreadable" && /none of its 2 barcodes appear/.test(noneInLayer.note ?? ""), "table whose ids are all absent from the layer: unreadable");
+  const unpdfTbl = readPdfText({ text: md, engine: "unpdf", layer: md });
+  ok(unpdfTbl.status === "unreadable", "the table fallback is for LlamaParse output only");
+  const gl = groundLines(sm.manifest.lines, "x".repeat(50) + " 1234567890123456");
+  ok(gl.lines.length === 1 && gl.dropped === 1, "groundLines keeps only ids in the layer");
+  ok(groundLines(sm.manifest.lines, "").dropped === 0, "groundLines: no usable layer keeps all");
+
+  // exceljs values
+  ok(excelCellValue({ richText: [{ text: "Blue " }, { text: "Dream" }] }) === "Blue Dream", "rich text joined");
+  ok(excelCellValue({ formula: "A1*2", result: 9 }) === 9 && excelCellValue({ sharedFormula: "A1", result: "x" }) === "x", "formula = saved result");
+  ok(excelCellValue({ formula: "A1*2" }) === null && excelCellValue({ error: "#N/A" }) === null, "no saved result / error = blank, never computed");
+  ok(excelCellValue(new Date(Date.UTC(2025, 2, 1))) === "2025-03-01" && excelCellValue({ text: "x", hyperlink: "http://y" }) === "x", "date + hyperlink");
+  ok(excelCellValue(Number.NaN) === null && excelCellValue(undefined) === null, "NaN / undefined blank");
+  ok(isOldExcel(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1])) && !isOldExcel(new Uint8Array([0x50, 0x4b, 3, 4])), "old .xls detected by its OLE2 signature");
 
   // batch line
   ok(readBatchLine({ ok: true, waiting: 0, read: 0, parsed: 0, unreadable: 0, failed: 0, llamaparse: 0, unpdf: 0, left: 0, stoppedBecause: null }).startsWith("Nothing to read"), "nothing waiting");

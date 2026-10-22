@@ -26,7 +26,7 @@ import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { OneTimeImportTools } from "@/components/admin/catalog/OneTimeImportTools";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 import { startFetchAction } from "./fetch-actions";
-import { harvestMailboxBatchAction, probeHarvestMailboxAction } from "./mail-harvest-actions";
+import { harvestMailboxBatchAction, probeHarvestMailboxAction, readKeptDocumentsAction } from "./mail-harvest-actions";
 import { readHarvestStatus } from "@/lib/pos/cultivera-mail-harvest-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { harvestConfigLine, harvestMailConfigFromEnv } from "@/lib/pos/cultivera-mail-harvest-core";
@@ -405,6 +405,28 @@ export default async function MenuImportsPage({
             <form action={harvestMailboxBatchAction} className="mt-3">
               <Button type="submit" variant="neutral" disabled={!harvestCfg.configured || !harvestStatus.ready}>
                 Harvest the next batch
+              </Button>
+            </form>
+          </div>
+          {/* R74 S9: read the kept PDFs (LlamaParse, checked against the PDF's own text) and spreadsheets (exact cells). */}
+          <div className="mt-4 border-t border-white/10 pt-4" data-testid="mail-read-run">
+            <p className="text-xs text-white/50">
+              Reads the kept PDFs and spreadsheets, up to 12 per press, oldest email first. PDFs are read by LlamaParse
+              (the same reader as the inbox intake; the PDF&apos;s own text is used if LlamaParse is unavailable), and any
+              barcode LlamaParse sees that the PDF&apos;s own text does not contain is dropped, never guessed.
+              Spreadsheets are read cell by cell; a barcode is only taken from a column headed Barcode, Inventory ID,
+              Lot ID or similar. A file with no barcodes is marked &ldquo;without barcodes&rdquo; with the reason.
+            </p>
+            {harvestStatus.ready ? (
+              <p className="mt-2 text-xs text-white/70" data-testid="mail-read-status">
+                {harvestStatus.stored === 0
+                  ? "Nothing waiting to be read."
+                  : `${harvestStatus.stored} kept PDF / spreadsheet${harvestStatus.stored === 1 ? "" : "s"} waiting to be read.`}
+              </p>
+            ) : null}
+            <form action={readKeptDocumentsAction} className="mt-3">
+              <Button type="submit" variant="neutral" disabled={!harvestStatus.ready || harvestStatus.stored === 0}>
+                Read the kept PDFs and spreadsheets
               </Button>
             </form>
           </div>
