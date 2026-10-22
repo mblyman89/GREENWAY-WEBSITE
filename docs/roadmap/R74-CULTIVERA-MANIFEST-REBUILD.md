@@ -43,7 +43,8 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S3 | (#1455) One-click crawler report (round 3). The Fetch It All run page gets a "Crawler report (for support)" box: **Download crawler report** (one `.txt`: run status + Pacific times, loud warnings, every stage, vendor-file coverage, fetch errors grouped by stage, file list, raw `state.json` + raw `errors.jsonl`, credentials redacted) and raw `state.json` / `errors.jsonl` / `manifest.json` links. Route `GET /admin/menu-imports/fetch/<runId>/report[?file=…]` (menu.import, audited `pos_fetch.report_download`) | shipped |
 | S4 | No received date = "does not exist, include in the clean up" (owner #5). `ccrs-migration-garbage-core` gains dead reason `no_received_date` (evidence: the lot's `received_on` was read and is blank); the CCRS hub's Migration clean-up panel lists and routes those lots like every other dead lot (Reconciliation zero-out if CCRS holds them, local-only if not; never a Delete), with a note + link to the import's Received dates page for any that really exist. A missing received date is no longer listed as "fixable" | (#1456) shipped |
 | S5 | Mail harvest foundation (round 4). Pure `cultivera-mail-harvest-core` (52 self-tests): the CCRS monitor's keyless Google sign-in pointed at `CULTIVERA_HARVEST_MAILBOX` (default stephen@), a no-date-limit vendor-document search, a resumable Gmail-pageToken cursor, an attachment plan (json/pdf/csv/xlsx as BYTES, every skip named), magic-byte checks, Gmail quota budget. I/O: `listMessageIdsPage`, `getAttachmentBytes`. Menu imports gets a read-only **Test the vendor mailbox** button (audited `cultivera_mail.probe`). Setup guide `docs/CULTIVERA_GMAIL_HARVEST_SETUP.md` | (#1457) shipped |
-| W2 | Gmail harvest of stephen@ (bytes attachments, resumable cursor), migration-mode match by barcode, Unmatched Cultivera stock manifest, coverage report | planned |
+| S6 | Email match by barcode + the ONE "Unmatched Cultivera stock" manifest (round 4, owner #5). Pure `cultivera-mail-match-core` (29 self-tests): `openLotsFromTransferPlan` takes the lots the crawler's transfer match left unplaced; `planMailMatch` matches each against harvested, parsed vendor documents on barcode (WCIA `inventory_id` = Cultivera Barcode). One emailed manifest places the lot (with the manifest's name, type and cost in cents for survivorship); two or more = never guess; none = `CV-UNMATCHED` "Unmatched Cultivera stock". Same transfer emailed twice = one manifest; sold-out lines counted, never made into lots; loud summary line | in progress |
+| W2 | Rest of Wave 2: the harvest RUN (cron/button that walks stephen@ with the S5 cursor, stores each vendor file in `pos-raw`, parses it with the existing parsers, ~2 slices), then the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert), and the per-lot coverage report (Cultivera / email / none) | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
 ## S1 evidence (measured, not assumed)
@@ -125,6 +126,24 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
 - Quota (Gmail usage-limits page, read 2026-10-21): list 5, get(full) 60, attachments.get 20; 6,000 per
   user per minute. `messagesPerRun(2)` = 47 emails under an 80 % budget.
 - The test button reads ONE id; nothing is opened or stored.
+
+## S6 behavior
+
+- Input lots: TransferMatchPlan decisions with `matched=false`, joined to the export rows (first row
+  labels the lot; units summed; rows with units <= 0 are not stock).
+- A receipt in email: a parsed document line with `lot_code` = the barcode and received qty > 0.
+- Documents with the same manifest number and the same vendor license (else normalized vendor name)
+  are one manifest, so a forwarded or re-sent email never makes a duplicate. A document with no number
+  is its own manifest.
+- Exactly one manifest: the lot is placed, carrying `{productName, inventoryType, unitCostCents, qty}`
+  from the line (manifest wins on name/type/cost; Cultivera keeps category and quantity).
+- Two or more manifests: `several_manifests` with the candidates, and the lot goes on the unmatched
+  manifest (these lots have no received time to choose with).
+- No receipt: `CV-UNMATCHED`, label "Unmatched Cultivera stock", with per-vendor counts and units.
+- Vendor names may differ (a license's legal name vs Cultivera's display name); barcodes are
+  state-issued, so the barcode decides. Agreement is reported (`vendorAgrees`, `vendorDiffers`).
+- Lines for barcodes that are not open lots (sold out, or already placed) are counted as
+  `otherLines`, never turned into lots.
 
 ## Round 3 walkthrough
 

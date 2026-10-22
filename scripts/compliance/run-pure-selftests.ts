@@ -927,6 +927,7 @@ import { __runCultiveraNoncannabisGateCoreTests } from "../../src/lib/pos/cultiv
 import { __runCultiveraWciaCoverageCoreTests } from "../../src/lib/pos/cultivera-wcia-coverage-core";
 import { __runCultiveraRunReportCoreTests } from "../../src/lib/pos/cultivera-run-report-core";
 import { __runCultiveraMailHarvestCoreTests } from "../../src/lib/pos/cultivera-mail-harvest-core";
+import { __runCultiveraMailMatchCoreTests } from "../../src/lib/pos/cultivera-mail-match-core";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
 import { __runReceivedDateBulkCoreTests } from "../../src/lib/inventory/received-date-bulk-core";
@@ -1836,6 +1837,7 @@ __runLiquidVolumeTests();
   { const r = __runCultiveraWciaCoverageCoreTests(); if (r.failed > 0 || r.passed < 17) throw new Error(`cultivera-wcia-coverage-core: ${r.failed} failed, ${r.passed} passed (expected >= 17)`); }
   { const r = __runCultiveraRunReportCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`cultivera-run-report-core: ${r.failed} failed, ${r.passed} passed (expected >= 33)`); }
   { const r = __runCultiveraMailHarvestCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-harvest-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S5: stephen@ mail harvest — query, resumable cursor, attachment bytes
+  { const r = __runCultiveraMailMatchCoreTests(); if (r.failed > 0 || r.passed < 29) throw new Error(`cultivera-mail-match-core: ${r.failed} failed, ${r.passed} passed (expected >= 29)`); } // R74 S6: email match by barcode + ONE "Unmatched Cultivera stock" manifest
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
   assertNoFailures("received-date-bulk-core", __runReceivedDateBulkCoreTests());
