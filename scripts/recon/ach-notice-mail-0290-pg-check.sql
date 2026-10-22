@@ -81,7 +81,7 @@ begin
   perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = %L, handled_at = now(), handled_note = 'Manager JWT, admin stamp here.' where id = %L$q$, u_s, m1), 'NOTICE_MAIL_STAFF_ONLY');
   perform set_config('request.jwt.claim.sub', '', true);
   perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = %L, handled_at = now(), handled_note = 'short' where id = %L$q$, u_m, m1), 'ach_notice_mail_handled_note_check');
-  perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = %L, handled_at = now(), handled_note = 'Trace 123456789012345 on the notice.' where id = %L$q$, u_m, m1), 'ach_notice_mail_handled_note_check');
+  perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = %L, handled_at = now(), handled_note = 'Trace 1234567 on the notice here.' where id = %L$q$, u_m, m1), 'ach_notice_mail_handled_note_check');
   perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = %L, handled_at = now(), handled_note = null where id = %L$q$, u_m, m1), 'anm_handled_shape');
   perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = null, handled_at = null, handled_note = null where id = %L$q$, m1), 'NOTICE_MAIL_STAFF_ONLY');
   perform pg_temp.must_fail(format($q$update public.ach_notice_mail set state = 'logged', handled_by = %L, handled_at = now() - interval '3 days', handled_note = 'Backdated marking attempt here.' where id = %L$q$, u_m, m1), 'NOTICE_MAIL_ONCE: the handled time');
