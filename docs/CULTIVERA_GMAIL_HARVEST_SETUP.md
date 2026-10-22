@@ -188,9 +188,12 @@ F3. Click **Test the vendor mailbox**. It signs in and runs the vendor-document 
 
 ## What the harvest reads, exactly
 
-Status (R74 S5): the sign-in, the search, the bookmark and the byte-exact downloads are built and
-tested, and the **Test the vendor mailbox** button works. The run that walks the whole mailbox and
-stages what it finds is the next Wave 2 slice. Setting Google up now means it works the day that ships.
+Status (R74 S7): the harvest runs. After Google is set up and database update **0293** is applied
+(docs/MIGRATIONS_TO_RUN.md), Menu imports -> Vendor mailbox has **Harvest the next batch**. Each press
+reads up to 47 more emails (about 3 minutes at most) and keeps every vendor file privately; press it
+again until the line under it says **Finished**. Nothing in the mailbox changes (read-only), and
+pressing twice never stores anything twice. Moving the lots onto the emailed manifests is the next
+Wave 2 slice.
 
 - The search is: any email with a `.json`, `.pdf`, `.csv`, `.xlsx` or `.xls` attachment, or whose text
   says manifest, invoice, COA, "certificate of analysis", "transfer data" or WCIA. Chat messages are
