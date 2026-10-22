@@ -9,7 +9,7 @@
  */
 import "server-only";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { loadRehomeSources } from "@/lib/inventory/cultivera-rehome-store";
+import { loadRehomeSources, type RehomeSources } from "@/lib/inventory/cultivera-rehome-store";
 import { planFromSources } from "@/lib/inventory/cultivera-rehome-core";
 import { HARVEST_DOCS_TABLE, mailDocsFromRows, type StoredDocFacts } from "@/lib/pos/cultivera-mail-harvest-run-core";
 import { buildCoverageReport, openBarcodes, type CoverageReport } from "@/lib/pos/cultivera-coverage-core";
@@ -64,9 +64,10 @@ export async function readDocsForBarcodes(admin: Admin, barcodes: readonly strin
 
 export type CoverageLoad = { ok: true; report: CoverageReport } | { ok: false; error: string };
 
-export async function loadCoverage(admin: Admin, importId: string): Promise<CoverageLoad> {
+/** `sources` lets a page that also previews the email step (S10) read the workbooks once. */
+export async function loadCoverage(admin: Admin, importId: string, given?: RehomeSources): Promise<CoverageLoad> {
   try {
-    const sources = await loadRehomeSources(admin, importId);
+    const sources = given ?? (await loadRehomeSources(admin, importId));
     const { plan } = planFromSources(sources.lotSources, sources.transfers, sources.links, sources.pacificToday, sources.indexSkipped ?? 0);
     const rows = await readDocsForBarcodes(admin, openBarcodes(sources.lotSources, plan));
     const docs = rows === null ? null : mailDocsFromRows(rows);
