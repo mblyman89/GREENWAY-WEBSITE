@@ -183,6 +183,9 @@ async function alertOpenNoticeMail(admin: Admin): Promise<number> {
     .from("ach_notice_mail")
     .select("id, received_at, sender_ok, auth, link_verdict, in_spam")
     .eq("state", "new")
+    // The 25 NEWEST waiting emails (already-claimed ones are skipped by the
+    // claim), so an older pile of waiting emails can never starve a new one.
+    .order("fetched_at", { ascending: false })
     .order("id", { ascending: true })
     .range(0, 24);
   if (error) return 0;

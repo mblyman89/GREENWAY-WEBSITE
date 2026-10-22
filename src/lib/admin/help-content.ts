@@ -773,6 +773,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/settings/banking/bank-watch",
       },
       {
+        q: "Can the site tell me when a Fed ACH notice email arrives?",
+        a: "Banking \u2192 Notice email. Timberland says ACH notices (returns and NOCs) come two ways: a secure encrypted email from the Federal Reserve, and the Timberland portal under Reporting \u2192 Electronic Documents. The Fed's guide says that email comes from encryptedmail.achedi.com, that you should not rely on it, and that you should sign in to the portal every day. So the watch is OFF until Michael turns it on, and turning it on means typing I STILL CHECK THE PORTAL. When it is on, once an hour it looks in the company Google Workspace mailbox (the same sign-in the CCRS email monitor uses), including Spam, for mail from that sender, stores each email once (encrypted) and emails Michael. It never clicks a link or reads the notice: it shows who sent it, whether Google checked the sender, and where its links go (a warning if any link is not achedi.com). You then sign in to achedi.com yourself (type it), read the notice, log it on ACH operations, and mark the email Logged. Reports stay in the portal 60 days, so download them. It never blocks a payment.",
+        href: "/admin/settings/banking/notice-email",
+      },
+      {
         q: "How do I confirm the money is in the account for an ACH file?",
         a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the owner also sees the Plaid balance beside the box as a hint; it can lag), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date, and Brenda confirmed that is when it must be there (Email 3, answer 5). Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",

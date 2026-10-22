@@ -62,6 +62,10 @@
     {
       "path": "/api/cron/ach-bank-watch",
       "schedule": "15 14 * * *"
+    },
+    {
+      "path": "/api/cron/ach-notice-mail",
+      "schedule": "50 * * * *"
     }
   ]
 }
