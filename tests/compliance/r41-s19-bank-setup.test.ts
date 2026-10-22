@@ -173,7 +173,7 @@ describe("S19 docs and rules", () => {
     expect(rm).toContain("| S18 | Written ACH policies");
     expect(rm).toMatch(/\| S18 \|[^\n]*\| #1450 \| 0291 \|/);
   });
-  it("mutation log: every mutant killed", () => {
+  it("mutation log (mutate-s19-app.last.log): every mutant killed", () => {
     const log = read("scripts/r41/mutate-s19-app.last.log");
     expect(log.trim()).toMatch(/total (\d+) killed \1 survivors \[\]$/);
   });
