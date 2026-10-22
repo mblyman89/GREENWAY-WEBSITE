@@ -32,7 +32,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | #1446 | 0288 |
 | S15 | Leftovers without guessing: R90 return code from a new Nacha mirror; stale mutation anchor re-anchored | #1447 | none |
 | S16 | Bank watch: the Plaid feed on the Main account checked daily against ACH files, books, Timberland fees, known payees and reviews; possible returns; fee/notice gaps; feed health; daily email; Plaid balance hint on the funding box | #1448 | 0289 |
-| S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | (this PR) | 0290 |
+| S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | #1449 | 0290 |
+| S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | (this PR) | 0291 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -282,3 +283,11 @@ Still to arrange: the testing session Brenda asked for.
 - **Backup plan.** None added: the owner already skips an ACH payroll and logs it as paid by written checks.
 - **Migration 0290**: `ach_notice_mail` (append-only, encrypted, one mark per row); see MIGRATIONS_TO_RUN.
 - **Tests.** `tests/compliance/r41-s17-notice-mail.test.ts`; pure self-test `ach-notice-mail-core` 57; `mutate-0290-sql.py` (29 mutants) and `mutate-s17-app.py`. Manual test T-376.
+
+## S18 in detail
+
+- **Why.** The WA State Auditor's Office ACH fraud guidance (mirrored in `docs/authorities/ach/`) starts with a written ACH policy, limited and reviewed access, training, passkeys and a dedicated banking computer; the Timberland agreement adds record keeping (1 year for entries, 2 years for authorizations), credential care, a private secured connection, and phone-then-writing within 1 calendar day (1-800-562-8761).
+- **Page** (`/admin/settings/banking/policies`, new "Policies" tab; gate `settings.manage`, records owner only via `ach.act`): status and to-do, eight policies each with a hover hint and the source's exact words, yearly adoption (stores a SHA-256 of the wording; a wording change asks for a re-adopt), quarterly access review (owner/admin list, last sign-in, 90-day flag; fingerprint of the list so a change shows), six yearly key checks with an optional last-changed date, and a plain-text packet.
+- **Backup plan.** Policy 8 is the owner's existing procedure (skip the ACH payroll, pay by written checks), quoted from his own Round 16 words; nothing new was built for it.
+- **Migration 0291**: `ach_control_records` (append-only, never backdated, owner-only, period rules); see MIGRATIONS_TO_RUN.
+- **Tests.** `tests/compliance/r41-s18-policies.test.ts`; pure self-test `ach-policies-core` 69; `mutate-0291-sql.py` (27 mutants) and `mutate-s18-app.py`. Manual test T-377.

@@ -2839,3 +2839,35 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0290_ach_notice_mail.rollback.sql`.
   It refuses once any email is stored (they are records).
   - Manual test T-376.
+
+## R41 — 0291 — ACH policies, access reviews and key checks
+
+- [ ] `0291_ach_control_records.sql` adds one table for the Policies page
+  (Settings → Banking → Policies): `ach_control_records`, one row per
+  owner sign-off: adopting the written ACH policies for a year, the quarterly
+  ACH access review, or one of the six yearly key checks.
+  - Each row is dated the day it is recorded (the database refuses a future
+    date or one older than yesterday, Pacific time), recorded by
+    the owner only (the database checks the role), and never changed or
+    deleted (append-only; truncate is refused too).
+  - Access reviews are for this quarter or last quarter; adoptions and key
+    checks for this year only.
+  - Applying 0291 records nothing by itself.
+
+  Apply it **after 0290**. It is safe to re-run. Until it is applied, the page
+  shows the policies and says to apply 0291 before anything can be recorded.
+
+  **Check:**
+
+  ```sql
+  select count(*) as control_records from ach_control_records;
+  -- control_records
+  -- 0
+  ```
+
+  For the full proof, paste `scripts/recon/ach-control-records-0291-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0291 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0291_ach_control_records.rollback.sql`.
+  It refuses once any record exists (they are records).
+  - Manual test T-377.
