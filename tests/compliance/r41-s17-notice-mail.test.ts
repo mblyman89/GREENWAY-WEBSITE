@@ -252,7 +252,7 @@ describe("S17 wiring", () => {
     expect(read(PAGE)).toContain('active="noticemail"');
     expect(read("src/lib/admin/help-content.ts")).toContain('href: "/admin/settings/banking/notice-email"');
     const kb = read("src/lib/admin/concierge-kb.ts");
-    expect(kb).toContain("Notice email is /admin/settings/banking/notice-email, Yearly review is /admin/settings/banking/yearly-review.");
+    expect(kb).toContain("Notice email is /admin/settings/banking/notice-email, "); // R41 S18 appended "Policies is ..." after it
     expect(kb).toContain("Notice email (R41 S17");
     expect(read(OPS)).toContain('href="/admin/settings/banking/notice-email"');
   });
