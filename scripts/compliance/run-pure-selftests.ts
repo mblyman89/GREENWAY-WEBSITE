@@ -1653,7 +1653,7 @@ __runLiquidVolumeTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
-  assertRan("cultivera-vendor-core", __runCultiveraVendorCoreTests(), 54); // R74 S11: vendor roll-up, vendor Start-all, vendor Gemini lookup, mastering summary
+  assertRan("cultivera-vendor-core", __runCultiveraVendorCoreTests(), 63); // R74 S11: vendor roll-up, vendor Start-all, vendor Gemini lookup, mastering summary
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
   assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);

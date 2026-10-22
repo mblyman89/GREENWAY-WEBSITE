@@ -385,6 +385,46 @@ export function masteringEventLabel(type: unknown): string {
   return MASTERING_EVENT_LABEL[t] ?? (t || "Event");
 }
 
+// --- 5b. Result banners of the two by-vendor buttons ---------------------------
+
+export type VendorBannerTone = "good" | "warn" | "bad";
+export type VendorBanner = { tone: VendorBannerTone; text: string };
+
+const VENDOR_START_CODES = ["ok", "warn", "error"] as const;
+const VENDOR_LOOKUP_CODES = ["ok", "warn", "nothing", "migration", "error"] as const;
+
+/** Banner after "Start every manifest from <vendor>"; an unknown code shows nothing. */
+export function vendorStartBanner(code: unknown, msg: unknown): VendorBanner | null {
+  const c = typeof code === "string" ? code : "";
+  if (!(VENDOR_START_CODES as readonly string[]).includes(c)) return null;
+  const m = typeof msg === "string" ? msg.trim().slice(0, 700) : "";
+  if (c === "error") return { tone: "bad", text: `Could not start this vendor's manifests: ${m || "unknown error"}. Nothing was changed on the menu.` };
+  return { tone: c === "warn" ? "warn" : "good", text: m || "Done." };
+}
+
+/** Banner after "Look up all products from <vendor>"; an unknown code shows nothing. */
+export function vendorLookupBanner(code: unknown, msg: unknown): VendorBanner | null {
+  const c = typeof code === "string" ? code : "";
+  if (!(VENDOR_LOOKUP_CODES as readonly string[]).includes(c)) return null;
+  const m = typeof msg === "string" ? msg.trim().slice(0, 700) : "";
+  if (c === "migration") return { tone: "bad", text: "The batch lookup tables are not set up yet (migration missing). Nothing was queued." };
+  if (c === "error") return { tone: "bad", text: `Gemini lookups could not be queued: ${m || "unknown error"}.` };
+  if (c === "nothing") return { tone: "warn", text: m || "Nothing to look up: start the vendor's manifests first, so their products are in review." };
+  return { tone: c === "warn" ? "warn" : "good", text: m || "Queued." };
+}
+
+/** Plain words for an attached-fact source (the mastering panel). */
+export const FACT_SOURCE_LABEL: Record<string, string> = {
+  coa: "Lab certificate",
+  cultivera: "Cultivera",
+  gemini: "Gemini (web)",
+  remembered: "Remembered (earlier lookups)",
+  kb_published: "Knowledge base",
+  kb_draft: "Knowledge base (draft)",
+  human: "A person",
+  manifest: "Manifest",
+};
+
 // --- 6. Self-tests -----------------------------------------------------------
 
 export function __runCultiveraVendorCoreTests(): { passed: number; failed: number } {
@@ -509,6 +549,17 @@ export function __runCultiveraVendorCoreTests(): { passed: number; failed: numbe
   ok(labCoverageLine(null).includes("could not be read") && labCoverageLine({ lots: 0, withLab: 0, withCertificate: 0 }).startsWith("No lots"), "lab line edge");
   ok(masteringEventLabel("lab_facts_attach") === "Facts from lab certificates" && masteringEventLabel("other") === "other" && masteringEventLabel(null) === "Event", "event labels");
   ok(MASTERING_EVENT_TYPES.includes("cultivera_onboarding") && MASTERING_EVENT_TYPES.includes("coa_extract"), "event types");
+
+  // banners
+  ok(vendorStartBanner("bogus", "x") === null && vendorStartBanner(undefined, "x") === null, "start banner: unknown code = none");
+  ok(vendorStartBanner("ok", "Ace: started 2")?.tone === "good" && vendorStartBanner("ok", "Ace: started 2")?.text === "Ace: started 2", "start banner ok");
+  ok(vendorStartBanner("warn", "m")?.tone === "warn", "start banner warn");
+  ok(vendorStartBanner("error", "")?.tone === "bad" && vendorStartBanner("error", "")!.text.includes("unknown error"), "start banner error, no message");
+  ok(vendorLookupBanner("migration", "x")?.tone === "bad" && vendorLookupBanner("migration", "x")!.text.includes("migration"), "lookup banner migration");
+  ok(vendorLookupBanner("nothing", "")?.tone === "warn" && vendorLookupBanner("nothing", "")!.text.includes("start the vendor"), "lookup banner nothing default");
+  ok(vendorLookupBanner("ok", "Gemini is looking up")?.tone === "good" && vendorLookupBanner("x", "y") === null, "lookup banner ok / unknown");
+  ok(vendorLookupBanner("error", "boom")!.text.includes("boom") && vendorLookupBanner("warn", "w")?.tone === "warn", "lookup banner error / warn");
+  ok(FACT_SOURCE_LABEL.coa === "Lab certificate" && FACT_SOURCE_LABEL.gemini.startsWith("Gemini"), "fact source labels");
 
   return { passed, failed };
 }

@@ -60,11 +60,14 @@ import {
 import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { loadCultiveraManifestSection, loadRebuiltManifestIds } from "@/lib/inventory/cultivera-onboarding";
+import { loadCultiveraVendors, loadVendorMastering } from "@/lib/inventory/cultivera-vendor";
+import { parseVendorCursor, parseVendorParam, rowsForVendor, vendorKeyOf, vendorLookupBanner, vendorStartBanner } from "@/lib/inventory/cultivera-vendor-core";
+import { CultiveraVendorOnboarding, vendorOnboardingHref } from "@/components/admin/inventory/CultiveraVendorOnboarding";
 import { WCIA_BACKFILL_HELP, parseBackfillCursor } from "@/lib/inventory/cultivera-wcia-backfill-core";
 import { COA_BACKFILL_HELP, parseCoaCursor } from "@/lib/inventory/coa-archive-backfill-core";
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
-import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, startCultiveraVendorAction, lookupCultiveraVendorAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -238,7 +241,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string; cv?: string; cv_msg?: string; cv_page?: string; cv_vendor?: string; cv_vendors?: string; cvv?: string; cvv_msg?: string; cvv_next?: string; cvl?: string; cvl_msg?: string; lab_bf?: string; lab_bf_msg?: string; lab_bf_next?: string; coa_bf?: string; coa_bf_msg?: string; coa_bf_next?: string; lab_pv?: string; lab_pv_msg?: string; lab_pv_next?: string; coa_pv?: string; coa_pv_msg?: string; alias?: string; alias_msg?: string; img?: string; img_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -295,6 +298,18 @@ export default async function CatalogDraftsPage({
     loadRebuiltManifestIds([...drafts.map((d) => d.manifest_id), focus.manifestId]),
     focus.draftId ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
   ]);
+  // R74 S11: Cultivera manifests by vendor. Loaded only when asked for (a
+  // vendor link, "Show vendors", or a by-vendor button's result), so the
+  // ordinary review page stays as fast as before.
+  const cvVendorParam = parseVendorParam(sp.cv_vendor);
+  const wantVendors = !focus.draftId && !focus.manifestId && (Boolean(cvVendorParam) || sp.cv_vendors === "1");
+  const cvVendors = wantVendors ? await loadCultiveraVendors() : null;
+  const cvSelected =
+    cvVendors && cvVendors.ok && cvVendorParam
+      ? cvVendors.vendors.find((g) => g.key !== "" && g.key === vendorKeyOf(cvVendorParam)) ?? null
+      : null;
+  const cvSelectedRows = cvVendors && cvVendors.ok && cvSelected ? rowsForVendor(cvVendors.rows, cvSelected.vendor) : [];
+  const cvMastering = cvVendors && cvVendors.ok && cvSelected ? await loadVendorMastering(cvSelected.vendor, cvVendors.rows) : null;
   // R50 S3: result of pressing Start (closed set, cultiveraStartBanner).
   const cvBanner = cultiveraStartBanner(sp.cv, sp.cv_msg);
   // R50 A1: the "Yes, same product" / "Forget" result.
@@ -1186,6 +1201,31 @@ export default async function CatalogDraftsPage({
             </span>
           </form>
         )}
+        {cvVendors ? (
+          <CultiveraVendorOnboarding
+            error={cvVendors.ok ? null : cvVendors.error}
+            vendors={cvVendors.ok ? cvVendors.vendors : []}
+            selected={cvSelected}
+            selectedRows={cvSelectedRows}
+            mastering={cvMastering}
+            startBanner={vendorStartBanner(sp.cvv, sp.cvv_msg)}
+            lookupBanner={vendorLookupBanner(sp.cvl, sp.cvl_msg)}
+            startCursor={parseVendorCursor(sp.cvv_next)}
+            startAction={startCultiveraVendorAction}
+            lookupAction={lookupCultiveraVendorAction}
+            open
+          />
+        ) : !focus.draftId && !focus.manifestId ? (
+          <div
+            className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-xs text-[var(--admin-text-muted)]"
+            data-testid="cultivera-vendor-open"
+          >
+            <Link href={vendorOnboardingHref(null)} className="font-semibold text-[var(--admin-accent)] underline">
+              Cultivera manifests by vendor
+            </Link>
+            <span>Start every manifest from one vendor, look up all its products with Gemini, and watch what onboarding attaches.</span>
+          </div>
+        ) : null}
         {cvSection && (
           <details
             className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3 text-sm"

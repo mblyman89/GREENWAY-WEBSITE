@@ -803,3 +803,77 @@ export async function forgetCardAliasAction(formData: FormData) {
   if (code === "error" && message) extra.alias_msg = message.slice(0, 300);
   redirect(draftsHref({ manifestId, draftId, extra }));
 }
+
+/**
+ * R74 S11 - "Start every manifest from <vendor>" (Product Onboarding, by
+ * vendor). Runs the SAME per-manifest Start on each of the vendor's not-done
+ * Cultivera manifests inside the page's time limit; "Continue" resumes from
+ * the returned cursor. Never changes stock, status, cost, prices or the live
+ * menu (each Start's own guarantee).
+ */
+export async function startCultiveraVendorAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { parseVendorParam, parseVendorCursor, vendorStartNote } = await import("@/lib/inventory/cultivera-vendor-core");
+  const vendor = parseVendorParam(formData.get("vendor"));
+  const cursor = parseVendorCursor(formData.get("cursor"));
+  const extra: Record<string, string> = vendor ? { cv_vendor: vendor } : { cv_vendors: "1" };
+  if (!vendor) {
+    extra.cvv = "error";
+    extra.cvv_msg = "No vendor was chosen.";
+  } else {
+    try {
+      const { startCultiveraVendorOnboarding } = await import("@/lib/inventory/cultivera-vendor");
+      const res = await startCultiveraVendorOnboarding(vendor, cursor, session.userId);
+      if (res.ok) {
+        extra.cvv = res.run.failed > 0 ? "warn" : "ok";
+        extra.cvv_msg = vendorStartNote(res.run).slice(0, 700);
+        if (!res.run.done && res.run.next) extra.cvv_next = res.run.next;
+      } else {
+        extra.cvv = "error";
+        extra.cvv_msg = res.error.slice(0, 300);
+      }
+    } catch (err) {
+      console.error("[drafts] vendor start failed:", err);
+      extra.cvv = "error";
+      extra.cvv_msg = (err instanceof Error ? err.message : String(err)).slice(0, 300);
+    }
+  }
+  revalidatePath("/admin/inventory/drafts");
+  redirect(`${draftsHref({ extra })}#cultivera-vendor`);
+}
+
+/**
+ * R74 S11 - "Look up all products from <vendor> with Gemini". Queues the SAME
+ * batch lookup the per-manifest button queues, once per manifest of the
+ * vendor that has products in review (idempotent: a running job is reused).
+ * The every-minute worker runs them; each answer is saved to the knowledge
+ * base for reuse.
+ */
+export async function lookupCultiveraVendorAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { parseVendorParam, vendorLookupNote } = await import("@/lib/inventory/cultivera-vendor-core");
+  const vendor = parseVendorParam(formData.get("vendor"));
+  const extra: Record<string, string> = vendor ? { cv_vendor: vendor } : { cv_vendors: "1" };
+  if (!vendor) {
+    extra.cvl = "error";
+    extra.cvl_msg = "No vendor was chosen.";
+  } else {
+    try {
+      const { enqueueVendorLookup } = await import("@/lib/inventory/cultivera-vendor");
+      const res = await enqueueVendorLookup(vendor, { userId: session.userId, email: session.email });
+      if (res.ok) {
+        extra.cvl = res.run.errors.length > 0 ? "warn" : res.run.created + res.run.alreadyRunning > 0 ? "ok" : "nothing";
+        extra.cvl_msg = vendorLookupNote(res.run).slice(0, 700);
+      } else {
+        extra.cvl = res.migration ? "migration" : "error";
+        extra.cvl_msg = res.error.slice(0, 300);
+      }
+    } catch (err) {
+      console.error("[drafts] vendor lookup failed:", err);
+      extra.cvl = "error";
+      extra.cvl_msg = (err instanceof Error ? err.message : String(err)).slice(0, 300);
+    }
+  }
+  revalidatePath("/admin/inventory/drafts");
+  redirect(`${draftsHref({ extra })}#cultivera-vendor`);
+}
