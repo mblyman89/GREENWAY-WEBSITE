@@ -166,7 +166,7 @@ export const ACH_POLICIES: readonly AchPolicy[] = [
     why: ["tbRetainEntries", "tbRetainAuth"],
     links: [
       { href: "/admin/settings/banking/calendar", label: "Calendar (retention review)" },
-      { href: "/admin/settings/banking/files", label: "ACH files" },
+      { href: "/admin/settings/banking/operations#files", label: "ACH files" },
     ],
   },
   {
