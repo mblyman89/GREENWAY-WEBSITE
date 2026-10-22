@@ -37,7 +37,7 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S1 | (#1453) Non-cannabis gate in the transform. Rows with Is Cannabis = false (or Cannabis Y/N = N when the stock flag is blank, or the CCRS "Non-cannabis (no limit)" type with no flag) never become cards, lots or manifest lines. The `"concentrate"` default for unknown categories is removed; a cannabis row with a non-cannabis, unknown or blank category is held hidden (`needs_category`) instead of guessed | shipped |
 | S2 | Loud WCIA JSON coverage. The crawler counts transfers that publish a JSON vs JSONs obtained; Fetch It All shows the gap as a failing check (no silent "partial"); every JSON obtained still stages | shipped |
 | S3 | (#1455) One-click crawler report (round 3). The Fetch It All run page gets a "Crawler report (for support)" box: **Download crawler report** (one `.txt`: run status + Pacific times, loud warnings, every stage, vendor-file coverage, fetch errors grouped by stage, file list, raw `state.json` + raw `errors.jsonl`, credentials redacted) and raw `state.json` / `errors.jsonl` / `manifest.json` links. Route `GET /admin/menu-imports/fetch/<runId>/report[?file=…]` (menu.import, audited `pos_fetch.report_download`) | shipped |
-| S4 | No received date = "does not exist, include in the clean up" (owner #5). `ccrs-migration-garbage-core` gains dead reason `no_received_date` (evidence: the lot's `received_on` was read and is blank); the CCRS hub's Migration clean-up panel lists and routes those lots like every other dead lot (Reconciliation zero-out if CCRS holds them, local-only if not; never a Delete), with a note + link to the import's Received dates page for any that really exist. A missing received date is no longer listed as "fixable" | in progress |
+| S4 | No received date = "does not exist, include in the clean up" (owner #5). `ccrs-migration-garbage-core` gains dead reason `no_received_date` (evidence: the lot's `received_on` was read and is blank); the CCRS hub's Migration clean-up panel lists and routes those lots like every other dead lot (Reconciliation zero-out if CCRS holds them, local-only if not; never a Delete), with a note + link to the import's Received dates page for any that really exist. A missing received date is no longer listed as "fixable" | (#1456) shipped |
 | W2 | Gmail harvest of stephen@ (bytes attachments, resumable cursor), migration-mode match by barcode, Unmatched Cultivera stock manifest, coverage report | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
@@ -102,3 +102,10 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
 - Guide step `ccrs_cleanup` and the Menu Imports page text now name the third reason.
 - Pins: core self-tests 53 → 67 (+14), `tests/compliance/r50-s10c-migration-garbage.test.tsx` +2 tests.
 - Read-only, as before: S4 writes nothing and adds no migration.
+
+## Round 3 walkthrough
+
+The owner's baby-steps guide (Railway redeploy check → fetch → **Download crawler report** → send) is
+`docs/CULTIVERA_CRAWLER_REPORT_WALKTHROUGH.md`. Railway keeps run files in the container
+(`crawler/.cache/cultivera_pos/`, newest 12) unless a Volume is attached, so the order is always: redeploy,
+then fetch, then download.
