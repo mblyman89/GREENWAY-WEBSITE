@@ -49,7 +49,8 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S5 | Mail harvest foundation (round 4). Pure `cultivera-mail-harvest-core` (52 self-tests): the CCRS monitor's keyless Google sign-in pointed at `CULTIVERA_HARVEST_MAILBOX` (default stephen@), a no-date-limit vendor-document search, a resumable Gmail-pageToken cursor, an attachment plan (json/pdf/csv/xlsx as BYTES, every skip named), magic-byte checks, Gmail quota budget. I/O: `listMessageIdsPage`, `getAttachmentBytes`. Menu imports gets a read-only **Test the vendor mailbox** button (audited `cultivera_mail.probe`). Setup guide `docs/CULTIVERA_GMAIL_HARVEST_SETUP.md` | (#1457) shipped |
 | S6 | Email match by barcode + the ONE "Unmatched Cultivera stock" manifest (round 4, owner #5). Pure `cultivera-mail-match-core` (29 self-tests): `openLotsFromTransferPlan` takes the lots the crawler's transfer match left unplaced; `planMailMatch` matches each against harvested, parsed vendor documents on barcode (WCIA `inventory_id` = Cultivera Barcode). One emailed manifest places the lot (with the manifest's name, type and cost in cents for survivorship); two or more = never guess; none = `CV-UNMATCHED` "Unmatched Cultivera stock". Same transfer emailed twice = one manifest; sold-out lines counted, never made into lots; loud summary line | (#1458) shipped |
 | S7 | The harvest RUN (round 5). Menu imports -> Vendor mailbox -> **Harvest the next batch** (menu.import, audited `cultivera_mail.harvest`, no new cron). Each press lists one Gmail page at the S5 cursor, opens up to 47 new emails inside a 200-second budget, downloads each vendor attachment as bytes (magic-byte checked), fetches each WCIA Transfer Data Link in the email body, stores every file privately in `pos-raw/mail-harvest/<mailbox>/<gmail id>/<n>-<name>`, parses JSON (WCIA / generic) and CCRS manifest CSVs with the existing parsers (PDF / spreadsheet kept as `stored`, read later), and inserts one row per document into the new `cultivera_mail_docs` (migration 0293; the insert is the claim). Pure `cultivera-mail-harvest-run-core` (49 self-tests); `mailDocsFromRows` feeds S6 | (#1459) shipped |
-| W2 | Rest of Wave 2: the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert), the per-lot coverage report (Cultivera / email / none), and reading the kept PDFs / spreadsheets | planned |
+| S8 | The per-lot coverage report (round 5), read-only. Rebuild manifests -> **Coverage report** (`/admin/menu-imports/<id>/coverage`, menu.import). Builds the SAME transfer plan as the rebuild page and Apply (`loadRehomeSources` + `planFromSources`), reads only the parsed `cultivera_mail_docs` rows that list a lot the transfers left open (`barcodes &&`, GIN index, paged, fail closed), runs S6's `planMailMatch`, and shows, per lot: Cultivera transfer / one emailed manifest / several emails (not guessed) / nothing (goes on `CV-UNMATCHED`), plus the lots with no received date (CCRS clean-up). By-vendor table (most unplaced first), filters (source, vendor, no received date) and a CSV download (formula-safe). Pure `cultivera-coverage-core` (41 self-tests) | in progress |
+| W2 | Rest of Wave 2: the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert), and reading the kept PDFs / spreadsheets | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
 ## S1 evidence (measured, not assumed)
@@ -173,6 +174,23 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
   reset KEEPS it; staff read, admin write. Proven on Postgres 15 by
   `scripts/recon/cultivera-mail-docs-0293-pg-check.sql` (CI post-apply check).
 - Before 0293 is applied the section says "Apply database update 0293 first." and the button is off.
+
+
+## S8 behavior
+
+- Read-only: no table, no migration, no audit row. Nothing is moved; it says where every lot WOULD
+  go, using exactly the plan Apply runs and the S6 match rule.
+- One row per Cultivera barcode with stock (units summed across rows; zero-unit and blank barcodes
+  left out). Each row carries the manifest number it lands on and why (how the transfer matched, why
+  Cultivera missed, or which emailed manifests compete).
+- "Several emails" = the barcode is on two or more DIFFERENT emailed manifests (a re-sent email of
+  the same manifest counts once). It is never guessed: it goes on `CV-UNMATCHED` with the candidates
+  named.
+- Before 0293 is applied (or before any harvest), the summary says the email was NOT checked /
+  that there are no harvested documents yet, so "not checked" and "nothing found" are never confused.
+- A barcode query failure is an error on the page, never a silent partial report.
+- CSV: `cultivera-coverage-<id>.csv`, same filters as the page, cells starting with = + - @ are
+  neutralised.
 
 ## Round 3 walkthrough
 
