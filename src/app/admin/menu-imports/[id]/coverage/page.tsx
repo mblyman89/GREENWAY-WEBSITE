@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
+import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
@@ -8,6 +10,9 @@ import { getImport } from "@/lib/pos/menu-version";
 import { formatDateTime } from "@/lib/pos/format";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loadCoverage } from "@/lib/pos/cultivera-coverage-store";
+import { loadRehomeSources, previewMailApply, type MailApplyPreview } from "@/lib/pos/cultivera-mail-apply-store";
+import { MAIL_APPLY_EXCEPTION_TEXT, mailApplyStage, type MailApplyExceptionCode } from "@/lib/pos/cultivera-mail-apply-core";
+import { applyMailPlanAction, rollbackMailPlanAction } from "../../mail-apply-actions";
 import { COVERAGE_SOURCES, COVERAGE_SOURCE_TEXT, coverageFilterFromParams, filterCoverage } from "@/lib/pos/cultivera-coverage-core";
 
 export const dynamic = "force-dynamic";
@@ -20,22 +25,45 @@ const SHOW = 300;
  * R74 S8 — where each Cultivera lot's manifest comes from, lot by lot, BEFORE anything moves:
  * a real Cultivera transfer, a manifest found in the stephen@ email harvest, or the one
  * "Unmatched Cultivera stock" manifest; and whether Cultivera's Received date is blank (owner #5:
- * "does not exist", CCRS clean-up). Read-only.
+ * "does not exist", CCRS clean-up). The report is read-only; R74 S10 adds the Apply that writes it.
  */
 export default async function ImportCoveragePage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ source?: string; vendor?: string; undated?: string; back?: string }>;
+  searchParams: Promise<{ source?: string; vendor?: string; undated?: string; back?: string; done?: string; error?: string }>;
 }) {
-  await requirePermission("menu.import");
+  const session = await requirePermission("menu.import");
+  const canApply = can(session.profile.role, "inventory.manage");
   const { id } = await params;
   const sp = await searchParams;
   const imp = await getImport(id);
   if (!imp) notFound();
 
-  const load = await loadCoverage(createSupabaseAdminClient(), id);
+  const admin = createSupabaseAdminClient();
+  // The import's workbooks are read ONCE for both the report and the email step's preview.
+  let sources: Awaited<ReturnType<typeof loadRehomeSources>> | null = null;
+  let sourcesError: string | null = null;
+  try {
+    sources = await loadRehomeSources(admin, id);
+  } catch (err) {
+    sourcesError = err instanceof Error ? err.message : String(err);
+  }
+  const load = sources ? await loadCoverage(admin, id, sources) : ({ ok: false, error: sourcesError ?? "Could not read the import." } as const);
+  // R74 S10: the email step's own preview (same plan as the report, plus where each lot sits now).
+  let apply: MailApplyPreview | null = null;
+  let applyError: string | null = null;
+  if (load.ok && sources) {
+    try {
+      apply = await previewMailApply(admin, id, sources, { actorId: session.userId });
+    } catch (err) {
+      applyError = err instanceof Error ? err.message : "Could not build the email step's plan.";
+    }
+  }
+  const ap = apply?.plan ?? null;
+  const stage = ap ? mailApplyStage(ap) : null;
+  const exCodes = ap ? (Object.keys(ap.summary.exceptionCounts) as MailApplyExceptionCode[]).filter((c) => ap.summary.exceptionCounts[c] > 0) : [];
   const filter = coverageFilterFromParams((k) => (sp as Record<string, string | undefined>)[k] ?? null);
   const rows = load.ok ? filterCoverage(load.report.rows, filter) : [];
   const qs = new URLSearchParams();
@@ -74,8 +102,10 @@ export default async function ImportCoveragePage({
           Every Cultivera lot of this import, and the manifest it will sit on. First Cultivera&apos;s own transfer records
           are used. For the lots they cannot place, the vendor files kept by the email harvest (Menu imports → Vendor
           mailbox) are matched by barcode. A lot on two or more emailed manifests is never guessed. Whatever neither finds
-          goes on the one &quot;Unmatched Cultivera stock&quot; manifest. Nothing on this page changes anything.
+          goes on the one &quot;Unmatched Cultivera stock&quot; manifest. The report changes nothing; only the Apply button below (inventory managers, after a tick) moves lots.
         </p>
+        {sp.done && <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]" data-testid="mail-apply-done">{sp.done}</div>}
+        {sp.error && <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid="mail-apply-error">{sp.error}</div>}
         {!load.ok && <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid="coverage-error">{load.error}</div>}
         {load.ok && (
           <>
@@ -91,6 +121,72 @@ export default async function ImportCoveragePage({
               <StatCard label="Unmatched" value={load.report.counts.unmatched + load.report.counts.several_emails} hint={`${load.report.counts.several_emails} on several emails (not guessed)`} accent="gold" />
               <StatCard label="No received date" value={load.report.counts.noReceivedDate} hint="CCRS clean-up (owner rule)" accent="muted" />
             </div>
+
+            <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="mail-apply">
+              <h2 className="text-sm font-semibold text-white">Put the email-found lots on their manifests</h2>
+              <p className="mt-1 max-w-3xl text-xs text-white/50">
+                Creates one manifest per emailed manifest above (its real number, vendor and the name, type and cost from the
+                manifest line kept for onboarding) and the one "Unmatched Cultivera stock" manifest, then moves each lot
+                onto it. Only the lot&apos;s manifest changes: quantity, cost, category, menu and register are untouched, and it is
+                migration stock (no bills, no Sage). Works before or after Rebuild manifests; run it again after more harvesting
+                and lots move off the unmatched manifest onto the manifest that was found.
+              </p>
+              {applyError && <p className="mt-2 text-xs text-red-300" data-testid="mail-apply-load-error">{applyError}</p>}
+              {ap && (
+                <div className="mt-3 space-y-2 text-xs text-white/70">
+                  <p data-testid="mail-apply-summary">
+                    {ap.summary.emailManifests} emailed manifest(s){ap.summary.unmatchedManifest ? " + the unmatched manifest" : ""} ·{" "}
+                    {ap.summary.manifestsToCreate} to create · {ap.summary.lotsToMove} lot(s) to move ({ap.summary.lotsToEmail} onto emailed manifests,{" "}
+                    {ap.summary.lotsToUnmatched} onto "Unmatched Cultivera stock") · {ap.summary.lotsAlreadyHome} already home
+                    {ap.summary.movesFromRebuilt > 0 ? ` · ${ap.summary.movesFromRebuilt} come off received-date manifests` : ""}
+                    {ap.summary.movesFromUnmatched > 0 ? ` · ${ap.summary.movesFromUnmatched} upgraded off the unmatched manifest` : ""}
+                  </p>
+                  {ap.refusals.length > 0 && (
+                    <ul className="list-disc pl-5 text-red-300" data-testid="mail-apply-refusals">
+                      {ap.refusals.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {ap.warnings.map((w) => (
+                    <p key={w} className="text-[var(--admin-gold)]">{w}</p>
+                  ))}
+                  {exCodes.map((c) => (
+                    <p key={c} className="text-white/50">
+                      <span className="text-white/80">{MAIL_APPLY_EXCEPTION_TEXT[c].title} · {ap.summary.exceptionCounts[c]}</span> — {MAIL_APPLY_EXCEPTION_TEXT[c].action}
+                    </p>
+                  ))}
+                  {canApply && apply && (stage === "ready" || stage === "partial") && (
+                    <form action={applyMailPlanAction} className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                      <input type="hidden" name="importId" value={id} />
+                      <input type="hidden" name="digest" value={apply.digest} />
+                      <label className="flex max-w-2xl items-center gap-2">
+                        <input type="checkbox" name="attest" value="1" />
+                        I reviewed this: {ap.summary.manifestsToCreate} manifest(s) to create and {ap.summary.lotsToMove} lot(s) to move. Only the lots&apos; manifest changes.
+                      </label>
+                      <button type="submit" className={CHIP_ACTION} data-testid="mail-apply-run">
+                        {stage === "partial" ? "Apply the rest" : "Apply"}
+                      </button>
+                    </form>
+                  )}
+                  {stage === "done" && <p className="text-[var(--admin-accent)]" data-testid="mail-apply-complete">Every lot left for email is on its emailed manifest or on "Unmatched Cultivera stock".</p>}
+                  {stage === "nothing" && <p className="text-white/50">No lots are waiting for the email step.</p>}
+                  {!canApply && (stage === "ready" || stage === "partial") && <p className="text-white/40">Applying needs the inventory manager permission.</p>}
+                  {canApply && ap.summary.manifestsAlreadyCreated > 0 && (
+                    <form action={rollbackMailPlanAction} className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-2" data-testid="mail-apply-rollback">
+                      <input type="hidden" name="importId" value={id} />
+                      <label className="flex max-w-2xl items-center gap-2 text-white/60">
+                        <input type="checkbox" name="attest" value="1" />
+                        Undo the email step: move these lots back to the import manifest and remove the emailed and unmatched manifests (any with onboarding work or a hand-placed lot is kept).
+                      </label>
+                      <button type="submit" className={CHIP_NEUTRAL}>
+                        Roll back
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+            </section>
 
             <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="coverage-vendors">
               <h2 className="text-sm font-semibold text-white">By vendor (most unmatched first)</h2>
