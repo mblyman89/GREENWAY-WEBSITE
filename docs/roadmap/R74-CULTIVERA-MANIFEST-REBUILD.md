@@ -23,6 +23,10 @@ Internal working name during research was "R51 round 2". The repo already has an
 
 > Thank you. Please complete another two slices. Commit and push both individually. Let me know in the summary report what was done, what’s left to build. How to setup Google workspace for email reading, and anything else important. Follow the standing rules. Thank you!
 
+## Owner request, round 5 (verbatim)
+
+> Thank you. I will work on all those things now. Please complete another 2 slices following the same principles as the ones before it. I appreciate your going above and beyond. Keep it up. Follow the standing rules please. Thank you. Make sure to give a summary report at the end with what was done, what to setup, what to test, and what’s left to build. Please commit and push each slice individually. Commit work out of the sandbox often please. Thank you.
+
 ## Decisions taken from round 2
 
 | # | Owner answer | Where it lands |
