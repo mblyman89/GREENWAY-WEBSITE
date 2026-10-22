@@ -30,6 +30,8 @@ import {
   buildHarvestQuery,
   bytesMatchKind,
   cursorLine,
+  harvestDatesLine,
+  type HarvestDates,
   resumeOrStart,
   type HarvestCursor,
 } from "@/lib/pos/cultivera-mail-harvest-core";
@@ -306,7 +308,33 @@ export async function runHarvestBatch(io: HarvestIo, cfg: Configured): Promise<H
 
 export type HarvestStatus =
   | { ready: false; why: string }
-  | { ready: true; cursorLine: string; total: number; parsed: number; stored: number; unreadable: number; failed: number; emails: number };
+  | {
+      ready: true;
+      cursorLine: string;
+      total: number;
+      parsed: number;
+      stored: number;
+      unreadable: number;
+      failed: number;
+      emails: number;
+      /** R74 S12: how far back the harvest has read, and when it last ran. */
+      dates: HarvestDates;
+      datesLine: string;
+    };
+
+/** Oldest or newest email_at among this mailbox's kept rows; null when none (or unreadable: the line then says no date). */
+async function edgeEmailAt(admin: Admin, mailbox: string, ascending: boolean): Promise<string | null> {
+  const { data, error } = await admin
+    .from(HARVEST_DOCS_TABLE)
+    .select("email_at")
+    .eq("mailbox", mailbox)
+    .not("email_at", "is", null)
+    .order("email_at", { ascending })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const r = ((data as { email_at: string | null }[] | null) ?? [])[0];
+  return r?.email_at ?? null;
+}
 
 async function countWhere(admin: Admin, mailbox: string, status: string | null): Promise<number> {
   let q = admin.from(HARVEST_DOCS_TABLE).select("id", { count: "exact", head: true }).eq("mailbox", mailbox);
@@ -322,7 +350,7 @@ async function countWhere(admin: Admin, mailbox: string, status: string | null):
 export async function readHarvestStatus(admin: Admin, mailbox: string): Promise<HarvestStatus> {
   const mb = mailbox.toLowerCase();
   try {
-    const [total, parsed, stored, unreadable, failed, emails] = await Promise.all([
+    const [total, parsed, stored, unreadable, failed, emails, oldestEmailAt, newestEmailAt] = await Promise.all([
       countWhere(admin, mb, null),
       countWhere(admin, mb, "parsed"),
       countWhere(admin, mb, "stored"),
@@ -337,10 +365,19 @@ export async function readHarvestStatus(admin: Admin, mailbox: string): Promise<
           if (error) throw new Error(error.message);
           return count ?? 0;
         }),
+      edgeEmailAt(admin, mb, true),
+      edgeEmailAt(admin, mb, false),
     ]);
     const { data } = await admin.from("site_settings").select("value_json").eq("key", HARVEST_CURSOR_KEY).maybeSingle();
     const { cursor } = resumeOrStart((data as { value_json?: unknown } | null)?.value_json ?? null, mb, buildHarvestQuery(), new Date().toISOString());
-    return { ready: true, cursorLine: cursorLine(cursor), total, parsed, stored, unreadable, failed, emails };
+    const dates: HarvestDates = {
+      oldestEmailAt,
+      newestEmailAt,
+      lastRunAt: cursor.pagesDone > 0 ? cursor.updatedAt : null,
+      done: cursor.done,
+      started: cursor.pagesDone > 0,
+    };
+    return { ready: true, cursorLine: cursorLine(cursor), total, parsed, stored, unreadable, failed, emails, dates, datesLine: harvestDatesLine(dates) };
   } catch (e) {
     if (e instanceof HarvestTableMissing) return { ready: false, why: e.message };
     return { ready: false, why: `Could not read the harvest status: ${msgOf(e)}` };
