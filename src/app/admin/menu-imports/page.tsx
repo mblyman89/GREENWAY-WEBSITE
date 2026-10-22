@@ -26,7 +26,9 @@ import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { OneTimeImportTools } from "@/components/admin/catalog/OneTimeImportTools";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 import { startFetchAction } from "./fetch-actions";
-import { probeHarvestMailboxAction } from "./mail-harvest-actions";
+import { harvestMailboxBatchAction, probeHarvestMailboxAction } from "./mail-harvest-actions";
+import { readHarvestStatus } from "@/lib/pos/cultivera-mail-harvest-store";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { harvestConfigLine, harvestMailConfigFromEnv } from "@/lib/pos/cultivera-mail-harvest-core";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import { listPosRuns } from "@/lib/pos/cultivera-fetch-client";
@@ -35,6 +37,8 @@ import { buildMenuImportsGuide, MENU_IMPORTS_HELP_STEPS, GUIDE_HREF } from "@/li
 import { MenuImportsGuide } from "@/components/admin/catalog/MenuImportsGuide";
 
 export const dynamic = "force-dynamic";
+// R74 S7: "Harvest the next batch" runs inside this page's function (a 200-second batch budget).
+export const maxDuration = 300;
 
 const IMPORT_STATUS_STYLE: Record<PosImportStatus, string> = {
   uploaded: "bg-white/10 text-white/70",
@@ -103,6 +107,11 @@ export default async function MenuImportsPage({
     readMenuImportsCutover(),
     readCutoverDone(),
   ]);
+  // R74 S7: what the email harvest has kept so far (fails soft: 0293 not applied -> says so).
+  const harvestCfg = harvestMailConfigFromEnv(process.env);
+  const harvestStatus = await readHarvestStatus(createSupabaseAdminClient(), harvestCfg.mailbox).catch(
+    (e: unknown) => ({ ready: false as const, why: e instanceof Error ? e.message : String(e) }),
+  );
   // R50 S9: recent fetch runs (a crawler outage never breaks the page).
   const recentRuns: string[] = isCrawlerConfigured() ? await listPosRuns().catch(() => []) : [];
   // R50 S10b: the guide. An unknown cutover read never claims progress (every step = "check").
@@ -365,7 +374,7 @@ export default async function MenuImportsPage({
             The test signs in and runs the search once. It opens no email and stores nothing.
           </p>
           {(() => {
-            const line = harvestConfigLine(harvestMailConfigFromEnv(process.env));
+            const line = harvestConfigLine(harvestCfg);
             return (
               <p className={`mt-2 text-xs ${line.ok ? "text-[var(--admin-accent)]" : "text-[var(--admin-gold)]"}`} data-testid="mail-harvest-config">
                 {line.text}
@@ -375,6 +384,30 @@ export default async function MenuImportsPage({
           <form action={probeHarvestMailboxAction} className="mt-3">
             <Button type="submit" variant="neutral">Test the vendor mailbox</Button>
           </form>
+          {/* R74 S7: the harvest itself, one batch per press (up to 47 emails, resumable). */}
+          <div className="mt-4 border-t border-white/10 pt-4" data-testid="mail-harvest-run">
+            <p className="text-xs text-white/50">
+              Each press reads up to 47 more emails, oldest page first, and keeps every vendor file it finds (attached
+              JSON, CSV, PDF or spreadsheet, and the WCIA transfer link in Cultivera&apos;s emails). Files are kept
+              privately; nothing in the mailbox changes. Press again until it says Finished. A second press while one is
+              running stores nothing twice.
+            </p>
+            {harvestStatus.ready ? (
+              <p className="mt-2 text-xs text-white/70" data-testid="mail-harvest-status">
+                {harvestStatus.cursorLine} Kept so far: {harvestStatus.emails} email{harvestStatus.emails === 1 ? "" : "s"},{" "}
+                {harvestStatus.parsed} document{harvestStatus.parsed === 1 ? "" : "s"} with barcodes, {harvestStatus.stored} PDF /
+                spreadsheet kept to read later, {harvestStatus.unreadable} without barcodes, {harvestStatus.failed} that
+                could not be downloaded.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-[var(--admin-gold)]" data-testid="mail-harvest-status">{harvestStatus.why}</p>
+            )}
+            <form action={harvestMailboxBatchAction} className="mt-3">
+              <Button type="submit" variant="neutral" disabled={!harvestCfg.configured || !harvestStatus.ready}>
+                Harvest the next batch
+              </Button>
+            </form>
+          </div>
         </section>
 
         <details className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">

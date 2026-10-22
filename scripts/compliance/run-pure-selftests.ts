@@ -928,6 +928,7 @@ import { __runCultiveraWciaCoverageCoreTests } from "../../src/lib/pos/cultivera
 import { __runCultiveraRunReportCoreTests } from "../../src/lib/pos/cultivera-run-report-core";
 import { __runCultiveraMailHarvestCoreTests } from "../../src/lib/pos/cultivera-mail-harvest-core";
 import { __runCultiveraMailMatchCoreTests } from "../../src/lib/pos/cultivera-mail-match-core";
+import { __runCultiveraMailHarvestRunCoreTests } from "../../src/lib/pos/cultivera-mail-harvest-run-core";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
 import { __runReceivedDateBulkCoreTests } from "../../src/lib/inventory/received-date-bulk-core";
@@ -1838,6 +1839,7 @@ __runLiquidVolumeTests();
   { const r = __runCultiveraRunReportCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`cultivera-run-report-core: ${r.failed} failed, ${r.passed} passed (expected >= 33)`); }
   { const r = __runCultiveraMailHarvestCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-harvest-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S5: stephen@ mail harvest — query, resumable cursor, attachment bytes
   { const r = __runCultiveraMailMatchCoreTests(); if (r.failed > 0 || r.passed < 29) throw new Error(`cultivera-mail-match-core: ${r.failed} failed, ${r.passed} passed (expected >= 29)`); } // R74 S6: email match by barcode + ONE "Unmatched Cultivera stock" manifest
+  { const r = __runCultiveraMailHarvestRunCoreTests(); if (r.failed > 0 || r.passed < 49) throw new Error(`cultivera-mail-harvest-run-core: ${r.failed} failed, ${r.passed} passed (expected >= 49)`); } // R74 S7: harvest run — page plan, documents per email, parse, rows for 0293
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
   assertNoFailures("received-date-bulk-core", __runReceivedDateBulkCoreTests());
