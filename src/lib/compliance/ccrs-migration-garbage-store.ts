@@ -28,9 +28,11 @@ type LotRow = {
   on_hand_qty: number | string | null;
   status: string | null;
   product_name: string | null;
+  /** R74 S4: blank = "does not exist" (owner rule) → no_received_date. */
+  received_on: string | null;
 };
 
-export const GARBAGE_LOT_SELECT = "id, pos_product_key, lot_code, ccrs_inventory_external_id, on_hand_qty, status, product_name";
+export const GARBAGE_LOT_SELECT = "id, pos_product_key, lot_code, ccrs_inventory_external_id, on_hand_qty, status, product_name, received_on";
 
 export type GarbageLoad =
   | { ok: true; state: "no_migration" }
@@ -78,6 +80,8 @@ export async function loadMigrationGarbage(env: LedgerEnv): Promise<GarbageLoad>
         onHandQty: l.on_hand_qty,
         status: l.status,
         productName: l.product_name,
+        // R74 S4: undefined only if the column was not in the row (never guessed as blank).
+        receivedOn: l.received_on,
       })),
       diagnostics: diags.rows.map((d) => ({ code: d.code })),
       view,

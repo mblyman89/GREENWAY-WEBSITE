@@ -132,7 +132,7 @@ export default async function MenuImportsPage({
               approval, and stock comes from the quantity you received.
             </p>
             <p className="text-xs text-[var(--admin-text-muted)]">
-              Migrated lots that are dead in Cultivera (no product master, no barcode) are expected. They are flagged
+              Migrated lots that are dead in Cultivera (no product master, no barcode, no received date) are expected. They are flagged
               on the{" "}
               <Link href={GUIDE_HREF.ccrsCleanup} className="text-[var(--admin-accent)] hover:underline">
                 CCRS migration clean-up panel

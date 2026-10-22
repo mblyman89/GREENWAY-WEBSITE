@@ -1653,7 +1653,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   assertRan("receiving-table-core", __runReceivingTableCoreTests(), 88); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
-  assertRan("ccrs-migration-garbage-core", __runCcrsMigrationGarbageCoreTests(), 53); // R50 S10c (D-15): migrated garbage → CCRS clean-up
+  assertRan("ccrs-migration-garbage-core", __runCcrsMigrationGarbageCoreTests(), 67); // R50 S10c (D-15): migrated garbage → CCRS clean-up; R74 S4 +14 (no received date = does not exist)
   assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 74); // R50 S10b: Menu Imports step-by-step migration guide (+A2 go/no-go links)
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
