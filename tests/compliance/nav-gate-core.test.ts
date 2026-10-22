@@ -408,6 +408,13 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * straight to it.
        */
       "/admin/settings/banking/bank-watch",
+      /*
+       * R41 S17: the Fed ACH notice-email watch. Its page gate is
+       * settings.manage (owner + admin), so it is not owner-only and this list
+       * does not strictly need it; it is named here so the decision is on
+       * record. Not a menu item: a tab of the Banking strip ("Notice email").
+       */
+      "/admin/settings/banking/notice-email",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

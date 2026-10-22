@@ -152,6 +152,11 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
         {/* 1. Notices */}
         <section id="notices" className={card}>
           <h2 className={h2}>Returns and bank corrections ({view.notices.length} open)</h2>
+          {/* R41 S17: where notices come from, and the optional heads-up watch. */}
+          <p className="mb-3 text-xs text-white/55">
+            Notices come two ways (Brenda, Timberland): a secure encrypted email from the Federal Reserve, and the Timberland portal under Reporting &rarr; Electronic Documents. Check the portal every day; the{" "}
+            <Link href="/admin/settings/banking/notice-email" className="text-emerald-300 hover:underline">Notice email</Link> watch is only a heads-up.
+          </p>
           {view.notices.length ? (
             <ul className="mb-4 space-y-3">
               {view.notices.map((n) => {
