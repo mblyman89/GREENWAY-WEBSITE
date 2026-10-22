@@ -81,7 +81,7 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
     ["", "text"],
     ["BEFORE YOU START (once per computer)", "head"],
     ["1. Excel: File › Options › Advanced › turn OFF “Enable AutoComplete for cell values”. AutoComplete can change a scan into an earlier one.", "warn"],
-    ["2. Set up the scanner on Admin › Menu Imports › Count, step 0 “Set up and test each scanner”. Tera D5100: plug in its dongle, scan Real Time Mode, United States, Conversion Off, Carriage Return. Socket D760: charge from a wall plug, scan Basic Mode (HID), Carriage Return and English while NOT connected, then pair it in Bluetooth. The test box there must say OK.", "text"],
+    ["2. Set up the scanner on Admin › Menu Imports › Count, step 0 “Set up and test each scanner”. Tera D5100: plug in its dongle, scan Real Time Mode, United States, Conversion Off, Carriage Return. Socket D760: charge from a wall plug, scan Basic Mode (HID), Carriage Return and English while NOT connected, then pair it in Bluetooth. Alacrity MJ-2020R: charge it on its cradle, plug the cradle in, scan Wedge, US English and CR (its factory setting is two Enters). The test box there must say OK.", "text"],
     ["3. Test: click the Scan sheet, cell A2, scan one item. The barcode appears, the cursor drops to A3, and column B shows the product name.", "text"],
     ["", "text"],
     ["COUNTING", "head"],

@@ -19,11 +19,12 @@ for it in idx:
     got = zxingcpp.read_barcodes(Image.open(io.BytesIO(png)).convert("L"))
     it["zxing"] = got[0].text if got else None
     it["format"] = got[0].format.name if got else None
-    it["ok"] = len(got) == 1 and got[0].text == it["payload"] and "Code128" in got[0].format.name
+    want = "QRCode" if it.get("symbology") == "qr" else "Code128"  # R74 S12: Alacrity draws QR
+    it["ok"] = len(got) == 1 and got[0].text == it["payload"] and want in got[0].format.name
     bad += not it["ok"]
     print("OK " if it["ok"] else "BAD", it["id"], it["zxing"])
 out = {
-    "_about": f"R50 S11b: each scanner setup barcode the count page draws was rasterised (cairosvg, scale 2) and decoded with zxing-cpp {version('zxing-cpp')}, an independent decoder. svgSha256 pins the exact drawing. If it changes, re-run scripts/compliance/scanner-barcode-roundtrip.py.",
+    "_about": f"R50 S11b: each scanner setup barcode the count page draws (Code 128; QR for the Alacrity, R74 S12) was rasterised (cairosvg, scale 2) and decoded with zxing-cpp {version('zxing-cpp')}, an independent decoder. svgSha256 pins the exact drawing. If it changes, re-run scripts/compliance/scanner-barcode-roundtrip.py.",
     "items": idx,
 }
 json.dump(out, open("tests/fixtures/scanner/roundtrip.json", "w"), indent=2, ensure_ascii=False)

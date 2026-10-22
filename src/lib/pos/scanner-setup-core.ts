@@ -4,6 +4,10 @@
  *
  *   • Tera D5100, 2D Wireless, Orange, with battery indicator (2.4 GHz USB dongle)
  *   • Socket Mobile DuraScan D760 (Bluetooth)
+ *   • Alacrity MJ-2020R (433 MHz charging cradle, R74 S12). Its manuals print every setting as a QR
+ *     code, so the page re-draws those as QR (src/lib/printing/qr-core.ts), never as Code 128.
+ *     The CR LF terminator is its marked factory default (ALACRITY-UM p30 "CR LF*"): two Enters,
+ *     so its setup MUST scan CR.
  *
  * Every command barcode payload below was DECODED from the maker's own PDF manual, not typed from
  * memory. The source, sha256 and page for each value are in docs/research/scanner-setup-sources.md.
@@ -26,7 +30,10 @@
  * Pure and deterministic: no DOM, no I/O.
  */
 
-export type ScannerModel = "tera-d5100" | "socket-d760";
+export type ScannerModel = "tera-d5100" | "socket-d760" | "alacrity-mj2020r";
+
+/** How the page draws a setup barcode: the symbology the maker's manual prints. */
+export type CommandSymbology = "code128" | "qr";
 
 export type CommandBarcode = {
   id: string;
@@ -37,7 +44,13 @@ export type CommandBarcode = {
   payload: string;
   /** Source id in docs/research/scanner-setup-sources.md and the page. */
   source: string;
+  /** Omitted = Code 128. "qr" when the maker prints the setting as a QR code (Alacrity). */
+  symbology?: CommandSymbology;
 };
+
+export function symbologyOf(c: Pick<CommandBarcode, "symbology">): CommandSymbology {
+  return c.symbology === "qr" ? "qr" : "code128";
+}
 
 /** Every command barcode the page can show. Payloads are decoded from the makers' PDFs. */
 export const SCANNER_COMMANDS: readonly CommandBarcode[] = [
@@ -62,15 +75,29 @@ export const SCANNER_COMMANDS: readonly CommandBarcode[] = [
   { id: "socket-english", model: "socket-d760", label: "HID Keyboard Language: English (default)", payload: "#FNB01430001#", source: "SOCKET-700-UG p31" },
   { id: "socket-pairing-reset", model: "socket-d760", label: "Pairing Reset", payload: "#FNBAB#", source: "SOCKET-700-UG p22" },
   { id: "socket-factory-reset", model: "socket-d760", label: "Factory Reset", payload: "#FNB00F0#", source: "SOCKET-700-UG p23" },
+  // Alacrity MJ-2020R: ALACRITY-UM (User Manual V1.0, printed page first, PDF page in brackets) and
+  // ALACRITY-QS (Quick Start Guide V2.2, section number). Every value was decoded from the QR codes.
+  { id: "alacrity-wedge", model: "alacrity-mj2020r", label: "Wedge (operation mode)", payload: "%%SpecCode10", source: "ALACRITY-UM p22 [23]; QS §6", symbology: "qr" },
+  { id: "alacrity-us-english", model: "alacrity-mj2020r", label: "US English* (keyboard language)", payload: "%%SpecCode40", source: "ALACRITY-UM p28 [29]; QS §12", symbology: "qr" },
+  { id: "alacrity-cr", model: "alacrity-mj2020r", label: "Data Terminator: CR", payload: "%%SpecCode9C", source: "ALACRITY-UM p30 [31]; QS §11", symbology: "qr" },
+  { id: "alacrity-433", model: "alacrity-mj2020r", label: "433Mhz Wireless", payload: "%%SpecCodeA8", source: "ALACRITY-UM p14 [15]; QS §3", symbology: "qr" },
+  { id: "alacrity-pairing", model: "alacrity-mj2020r", label: "Pairing", payload: "%%SpecCode99", source: "ALACRITY-UM p14 [15]; QS §3", symbology: "qr" },
+  { id: "alacrity-power-2h", model: "alacrity-mj2020r", label: "Auto Power Off: 2 Hours", payload: "%%SpecCodeBA1802D0", source: "ALACRITY-UM p24 [25]; QS §8", symbology: "qr" },
+  { id: "alacrity-battery", model: "alacrity-mj2020r", label: "Battery Level", payload: "%%SpecCode15", source: "ALACRITY-UM p19 [20]; QS §5", symbology: "qr" },
+  { id: "alacrity-send-batch", model: "alacrity-mj2020r", label: "Send Batch", payload: "%%SpecCode16", source: "ALACRITY-UM p23 [24]; QS §7", symbology: "qr" },
+  { id: "alacrity-free-buffer", model: "alacrity-mj2020r", label: "Free Buffer", payload: "%%SpecCode18", source: "ALACRITY-UM p23 [24]; QS §7", symbology: "qr" },
+  { id: "alacrity-factory-default", model: "alacrity-mj2020r", label: "Factory Default", payload: "%%SpecCode93", source: "ALACRITY-UM p19 [20]; QS §5", symbology: "qr" },
 ];
 
 /** Payloads the manuals print but the page deliberately never shows (they break the count). */
 export const HARMFUL_PAYLOADS: Readonly<Record<string, string>> = {
-  "%%SpecCode11": "Tera Storage Mode (holds scans instead of typing them)",
-  "%%SpecCode9D": "Tera Terminator: Line Feed",
-  "%%SpecCode9E": "Tera Terminator: CR & LF (two Enters, so every scan skips a row)",
-  "%%SpecCodeA2": "Tera Terminator: Horizontal Tab (moves right, not down)",
-  "%%SpecCode9F": "Tera Terminator: None (no Enter)",
+  // Tera and Alacrity share these codes (same %%SpecCode family; both manuals print them).
+  "%%SpecCode11": "Tera Storage Mode / Alacrity Batch (holds scans instead of typing them)",
+  "%%SpecCode9D": "Tera / Alacrity Terminator: Line Feed",
+  "%%SpecCode9E": "Tera / Alacrity Terminator: CR & LF (two Enters, so every scan skips a row; the Alacrity's factory default)",
+  "%%SpecCodeA2": "Tera / Alacrity Terminator: Tab (moves right, not down)",
+  "%%SpecCode9F": "Tera / Alacrity Terminator: None (no Enter)",
+  "%%SpecCodeAA": "Alacrity BT HID (cradleless Bluetooth; the count uses the cradle)",
   "#FNB00F40002#": "Socket Application Mode for Apple iOS (not keyboard mode)",
   "#FNB00F509C60408FFEB0468090000#": "Socket Suffix: Tab",
   "#FNB00F507C60408FFEB010000#": "Socket Suffix: Carriage Return & Line Feed",
@@ -79,6 +106,8 @@ export const HARMFUL_PAYLOADS: Readonly<Record<string, string>> = {
 
 /** How the page draws every setup barcode (code128Svg options). The round-trip fixture pins it. */
 export const SCANNER_BARCODE_DRAW = { moduleWidth: 2, height: 56, quietModules: 12 } as const;
+/** How the page draws a QR setup code (qrSvg options). Level M, as the receipt QR. */
+export const SCANNER_QR_DRAW = { scale: 4, quietModules: 4, level: "M" } as const;
 
 export function commandById(id: string): CommandBarcode | null {
   return SCANNER_COMMANDS.find((c) => c.id === id) ?? null;
@@ -163,7 +192,45 @@ export const SCANNER_GUIDES: readonly ScannerGuide[] = [
       { symptom: "It will not pair", fix: "Turn the computer's Bluetooth off and on. If it still fails: Pairing Reset, or Factory Reset, then redo every step (a factory reset clears the Enter setting too).", scan: ["socket-pairing-reset", "socket-factory-reset"] },
     ],
   },
+  {
+    model: "alacrity-mj2020r",
+    name: "Alacrity MJ-2020R (charging cradle, 433 MHz)",
+    connection: "The cradle plugs into the computer by USB. The scanner talks to the cradle by 433 MHz radio and types into whatever window has the cursor, like a keyboard (ALACRITY-UM p14). Its setup codes are QR codes, as in its manual.",
+    before: [
+      "Charge it on the cradle first: about 4 hours for a full charge. Red light on = charging, red light flashing = full (ALACRITY-UM p16).",
+      "Plug the cradle into the counting computer with its USB cable (the cradle light flashes green). Press the trigger once to turn the scanner on, set it on the cradle and pull the trigger twice. Paired = solid blue light on the scanner, solid green on the cradle (ALACRITY-UM p14).",
+      "Click in the test box below, so anything the scanner types lands there and nowhere else.",
+    ],
+    steps: [
+      { title: "Typing mode", detail: "Wedge: it types every scan straight away. Batch would keep the scans inside the scanner.", scan: ["alacrity-wedge"], expect: "A short beep, high to low." },
+      { title: "Keyboard language", detail: "US English, so the digits come out as digits.", scan: ["alacrity-us-english"], expect: "A short beep, high to low." },
+      { title: "One Enter after every scan", detail: "Its factory setting is CR LF, which is TWO Enters, so every scan would skip a row in Excel. Scan CR for one Enter.", scan: ["alacrity-cr"], expect: "A short beep, high to low." },
+      { title: "Stay on longer (optional)", detail: "By default it turns itself off after 30 minutes idle. 2 hours suits a long count. It uses more battery, so put it back on the cradle at breaks.", scan: ["alacrity-power-2h"], expect: "A short beep, high to low.", optional: true },
+      { title: "Test it", detail: "Scan the TEST barcode below into the test box. It must say OK.", scan: [], expect: "The test box turns green." },
+    ],
+    trouble: [
+      { symptom: "Two short high beeps after a setup code", fix: "The setup code was not accepted (ALACRITY-UM p18). Hold the scanner steady, a little further from the screen, turn the screen brightness up, and scan it again." },
+      { symptom: "Three low beeps, or two low beeps", fix: "It is not connected to its cradle (ALACRITY-UM p18). Check the cradle's USB cable. To pair again: scan 433Mhz Wireless, then Pairing (green light flashes), then plug the cradle in and wait for solid blue / solid green.", scan: ["alacrity-433", "alacrity-pairing"] },
+      { symptom: "It beeps but nothing appears", fix: "It may be in Batch mode. Scan Wedge. If someone scanned items while it was in Batch mode, click the next empty Scan cell, scan Send Batch, then Free Buffer so they are not sent twice.", scan: ["alacrity-wedge", "alacrity-send-batch", "alacrity-free-buffer"] },
+      { symptom: "How much battery is left?", fix: "Click in the test box (never the Scan sheet) and scan Battery Level. Five short high beeps while scanning means the battery is low (ALACRITY-UM p18).", scan: ["alacrity-battery"] },
+      { symptom: "Settings got mixed up", fix: "Scan Factory Default, then do steps 1–3 again. Factory Default brings back CR LF (two Enters), so step 3 matters.", scan: ["alacrity-factory-default"] },
+    ],
+  },
 ];
+
+/** The setup barcode that gives one Enter, per model. Every guide must scan it. */
+export const CR_COMMAND: Readonly<Record<ScannerModel, string>> = {
+  "tera-d5100": "tera-cr",
+  "socket-d760": "socket-cr",
+  "alacrity-mj2020r": "alacrity-cr",
+};
+
+/** Short name per model, for the test box's fix list. */
+export const SCANNER_SHORT_NAME: Readonly<Record<ScannerModel, string>> = {
+  "tera-d5100": "Tera",
+  "socket-d760": "Socket",
+  "alacrity-mj2020r": "Alacrity",
+};
 
 export function guideFor(model: ScannerModel): ScannerGuide {
   const g = SCANNER_GUIDES.find((x) => x.model === model);
@@ -207,10 +274,12 @@ export type TestScanVerdict = {
 const FIX_ENTER = [
   { model: "tera-d5100" as const, scan: ["tera-cr"] },
   { model: "socket-d760" as const, scan: ["socket-cr"] },
+  { model: "alacrity-mj2020r" as const, scan: ["alacrity-cr"] },
 ];
 const FIX_LAYOUT = [
   { model: "tera-d5100" as const, scan: ["tera-us-layout"] },
   { model: "socket-d760" as const, scan: ["socket-english"] },
+  { model: "alacrity-mj2020r" as const, scan: ["alacrity-us-english"] },
 ];
 
 function show(t: string): string {
@@ -230,7 +299,7 @@ export function classifyTestScan(input: TestScanInput): TestScanVerdict {
       code: "nothing",
       message:
         input.terminator === "none"
-          ? "Nothing arrived. Check the scanner is connected (Tera: dongle plugged in; Socket: paired) and the cursor is in this box."
+          ? "Nothing arrived. Check the scanner is connected (Tera: dongle plugged in; Socket: paired; Alacrity: cradle plugged in, solid blue light) and the cursor is in this box."
           : "Only an Enter arrived, with no barcode. Scan again.",
       fix: [],
     };
@@ -314,6 +383,10 @@ export function classifyTestScan(input: TestScanInput): TestScanVerdict {
 // Self-tests (pure runner: scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
+function azertyAlacrity(): string {
+  return "GZtest)à&é\"'(-è_ç";
+}
+
 export function __runScannerSetupCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -343,11 +416,23 @@ export function __runScannerSetupCoreTests(): { passed: number; failed: number }
   for (const g of SCANNER_GUIDES) {
     const all = [...g.steps.flatMap((s) => s.scan), ...g.trouble.flatMap((t) => t.scan ?? [])];
     ok(all.every((id) => commandById(id)?.model === g.model), `${g.model}: every referenced barcode exists and is for this model`);
-    ok(g.steps.some((s) => s.scan.includes(g.model === "tera-d5100" ? "tera-cr" : "socket-cr")), `${g.model}: setup sets Carriage Return`);
+    ok(g.steps.some((s) => s.scan.includes(CR_COMMAND[g.model])), `${g.model}: setup sets Carriage Return`);
     ok(g.steps[g.steps.length - 1].title === "Test it", `${g.model}: setup ends with the test`);
   }
   ok(guideFor("tera-d5100").steps[0].scan[0] === "tera-real-time", "Tera starts with Real Time Mode");
   ok(guideFor("socket-d760").steps[0].scan[0] === "socket-basic-hid", "Socket starts with Basic Mode");
+  // R74 S12: Alacrity MJ-2020R.
+  ok(SCANNER_GUIDES.length === 3 && SCANNER_GUIDES.every((g) => CR_COMMAND[g.model] && SCANNER_SHORT_NAME[g.model]), "three guides, each with a CR command and a short name");
+  ok(guideFor("alacrity-mj2020r").steps[0].scan[0] === "alacrity-wedge", "Alacrity starts with Wedge");
+  ok(commandById("alacrity-cr")?.payload === "%%SpecCode9C", "Alacrity CR payload (ALACRITY-UM p30)");
+  ok(commandById("alacrity-wedge")?.payload === "%%SpecCode10", "Alacrity Wedge payload");
+  ok(commandById("alacrity-us-english")?.payload === "%%SpecCode40", "Alacrity US English payload");
+  ok(commandById("alacrity-power-2h")?.payload === "%%SpecCodeBA1802D0", "Alacrity 2 hours payload");
+  ok(SCANNER_COMMANDS.every((c) => (c.model === "alacrity-mj2020r") === (symbologyOf(c) === "qr")), "Alacrity codes draw as QR; Tera / Socket stay Code 128");
+  ok("%%SpecCode9E" in HARMFUL_PAYLOADS && "%%SpecCode11" in HARMFUL_PAYLOADS, "Alacrity's CR LF default and Batch are never offered");
+  ok(guideFor("alacrity-mj2020r").steps.findIndex((s) => s.scan.includes("alacrity-cr")) > guideFor("alacrity-mj2020r").steps.findIndex((s) => s.scan.includes("alacrity-us-english")), "Alacrity: CR after the language");
+  ok(v(TEST_BARCODE, "enter", 1).fix.some((f) => f.model === "alacrity-mj2020r" && f.scan.includes("alacrity-cr")), "double Enter (Alacrity default) fix includes Alacrity CR");
+  ok(v(azertyAlacrity()).fix.some((f) => f.scan.includes("alacrity-us-english")), "layout fix includes Alacrity US English");
   ok(isScannerCommandText("%%specCode9c"), "command detection ignores case");
   ok(!isScannerCommandText("8710000000000001234"), "a Cultivera barcode is not a command");
   ok(!isScannerCommandText("#FNB"), "a half command is not a command");
