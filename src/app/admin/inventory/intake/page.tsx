@@ -55,10 +55,12 @@ import {
   vendorOptions,
   filterSummary,
   summarizeCultivera,
+  countSources,
   pageSlice,
   CULTIVERA_TABLE_PAGE_SIZE,
 } from "@/lib/inventory/receiving-table-core";
 import { loadReceivingCultiveraRows } from "@/lib/inventory/receiving-cultivera-store";
+import { groupByVendor } from "@/lib/inventory/cultivera-vendor-core";
 import { ReceivingFilterBar } from "@/components/admin/inventory/ReceivingFilterBar";
 import { CultiveraManifestTable } from "@/components/admin/inventory/CultiveraManifestTable";
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
@@ -176,6 +178,11 @@ export default async function IntakePage({
   const cultiveraFiltered = cultivera && cultivera.ok ? applyCultiveraFilters(cultivera.rows, filters) : [];
   const cultiveraPage = pageSlice(cultiveraFiltered, filters.page, CULTIVERA_TABLE_PAGE_SIZE);
   const cultiveraSummary = cultivera && cultivera.ok ? summarizeCultivera(cultivera.rows) : null;
+  // R74 S11: where each manifest came from (chips), and the by-vendor roll-up
+  // of the filtered rows (every row, not one page) when grouped by vendor.
+  const cultiveraSources = cultivera && cultivera.ok ? countSources(cultivera.rows) : null;
+  const cultiveraVendors =
+    cultivera && cultivera.ok && filters.group === "vendor" ? groupByVendor(cultiveraFiltered, cultivera.tallyRead) : null;
   const viewLinks = receivingViewLinks(filters, {
     processed: countProcessedRows(manifests),
     cultivera: counts.migrated,
@@ -453,6 +460,8 @@ export default async function IntakePage({
             load={cultivera}
             rows={cultiveraPage.rows}
             summary={cultiveraSummary}
+            sources={cultiveraSources}
+            vendorGroups={cultiveraVendors}
             filters={filters}
             page={cultiveraPage.page}
             pageCount={cultiveraPage.pageCount}

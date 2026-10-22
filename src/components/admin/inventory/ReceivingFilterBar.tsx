@@ -3,7 +3,7 @@
  *
  * One bar above the Receiving table:
  *   - three view links: Needs attention | All | Cultivera manifests;
- *   - filters: search, vendor, status, date range;
+ *   - filters: search, vendor, status, source (Cultivera view, R74 S11), date range;
  *   - sort.
  *
  * A plain GET form (server component, no client JS). Every choice lands in
@@ -22,6 +22,7 @@ import {
   type ReceivingFilters,
   type ReceivingView,
 } from "@/lib/inventory/receiving-table-core";
+import { SOURCE_FILTERS } from "@/lib/inventory/cultivera-vendor-core";
 
 const FIELD =
   "rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-2 py-1.5 text-xs text-[var(--admin-text)] focus:border-[var(--admin-accent)] focus:outline-none";
@@ -85,6 +86,7 @@ export function ReceivingFilterBar({
 
       <form method="get" action={RECEIVING_PATH} className="flex flex-wrap items-end gap-3" data-testid="receiving-filter-form">
         {filters.view !== "action" ? <input type="hidden" name="view" value={filters.view} /> : null}
+        {isCv && filters.group ? <input type="hidden" name="group" value={filters.group} /> : null}
         <label className={LABEL}>
           Search
           <input
@@ -118,6 +120,19 @@ export function ReceivingFilterBar({
             ))}
           </select>
         </label>
+        {isCv ? (
+          <label className={LABEL}>
+            Source
+            <select name="source" defaultValue={filters.source} className={FIELD} data-testid="receiving-filter-source">
+              <option value="">Every source</option>
+              {SOURCE_FILTERS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className={LABEL}>
           {dateWord} from
           <input type="date" name="from" defaultValue={filters.from} className={FIELD} />
@@ -152,7 +167,7 @@ export function ReceivingFilterBar({
           </button>
           {active || filters.sort !== "default" ? (
             <Link
-              href={receivingHref(filters, { q: "", vendor: "", status: "", from: "", to: "", sort: "default" })}
+              href={receivingHref(filters, { q: "", vendor: "", status: "", from: "", to: "", sort: "default", source: "" })}
               className="text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
               data-testid="receiving-filter-clear"
             >
