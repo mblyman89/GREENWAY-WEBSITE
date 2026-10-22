@@ -94,6 +94,8 @@ STAGES_PHASE_A = (
 
 # Enrichment stages (R50 S3b): the cutover import never waits on them. They run last, stop before the
 # time budget is spent, and a miss or an error is recorded as "partial" - never a failed run.
+# R74 S2: a wcia_json miss is still "partial" (the files it did get stage), but it now carries a
+# "coverage" block and a top-level state["warnings"] line, so the app fails it LOUD, never silent.
 ENRICHMENT_STAGES = frozenset({"sales", "wcia_json"})
 # Seconds of the budget an enrichment stage leaves unused (the import's go/no-go has a time check).
 ENRICHMENT_MARGIN_SECONDS = 120.0
@@ -279,6 +281,33 @@ def wcia_text_ok(text: Any) -> bool:
     except ValueError:
         return False
     return isinstance(doc, dict) and isinstance(doc.get("inventory_transfer_items"), list)
+
+
+def wcia_coverage(wanted: int, saved: int, refused: int, errors: int, stopped_for_time: bool) -> dict[str, Any]:
+    """R74 S2 - the vendor-file coverage the app shows loud. `expected` = every transfer that has a
+    vendor file (fetchable + refused); complete only when every one of them is saved. Pure."""
+    expected = wanted + refused
+    missing = expected - saved
+    return {"expected": expected, "saved": saved, "missing": missing, "refused": refused,
+            "errors": errors, "stoppedForTime": stopped_for_time, "complete": missing == 0}
+
+
+def wcia_warning(result: dict[str, Any]) -> str | None:
+    """R74 S2 - one plain sentence for state.json "warnings" when vendor files are missing. Pure."""
+    if result.get("error"):
+        return f"Vendor transfer files: the stage failed ({result['error']}). No new lab files were fetched."
+    cov = result.get("coverage") or {}
+    if not cov or cov.get("complete"):
+        return None
+    why = []
+    if cov.get("stoppedForTime"):
+        why.append("the time budget ran out")
+    if cov.get("errors"):
+        why.append(f"{cov['errors']} errors")
+    if cov.get("refused"):
+        why.append(f"{cov['refused']} refused paths")
+    tail = f" ({', '.join(why)})" if why else ""
+    return f"Vendor transfer files: {cov['missing']} of {cov['expected']} MISSING{tail}. The {cov['saved']} saved still stage."
 
 
 def sha256_bytes(b: bytes) -> str:
@@ -550,12 +579,14 @@ def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool],
     out_name = "wcia_json.jsonl"
     have = {str(r.get("Id")) for r in client.run.read_jsonl(out_name)}
     fetched = errors = 0
+    stopped_for_time = False
     for tid, url in targets:
         if str(tid) in have:
             continue
         if cancelled():
             raise StageCancelled("wcia_json")
         if out_of_time():
+            stopped_for_time = True
             break
         r = client.call("POST", Q + "transfers/incoming-load-wcia-json", {"Url": url})
         if r.status_code != 200:
@@ -575,8 +606,12 @@ def stage_wcia_json(client: PosClient, cancelled: Callable[[], bool],
         fetched += 1
     saved = {str(r.get("Id")) for r in client.run.read_jsonl(out_name)}
     missing = [t for t, _ in targets if str(t) not in saved]
+    # R74 S2: say plainly how many vendor files the run has, and why the rest are missing. A refused
+    # path is a vendor file we never got, so it counts against coverage too (never silently "fine").
     return {"file": out_name, "wanted": len(targets), "fetched_now": fetched, "errors": errors,
-            "refused": len(skipped), "missing": missing}
+            "refused": len(skipped), "missing": missing,
+            "coverage": wcia_coverage(len(targets), len(targets) - len(missing), len(skipped), errors,
+                                      stopped_for_time)}
 
 
 def stage_sales(client: PosClient, sales_from: str | None, now_epoch: float) -> dict[str, Any]:
@@ -719,13 +754,19 @@ def run_phase_a(client: PosClient, *, cancelled: Callable[[], bool] = lambda: Fa
                     result = {"error": str(e)[:300], "missing": ["?"]}
             else:
                 result = stage_batches(client, cancelled)
-            incomplete = bool(result.get("missing"))
+            # R74 S2: a refused vendor-file path is a file we do not have - partial, not done.
+            incomplete = bool(result.get("missing")) or (result.get("coverage") or {}).get("complete") is False
             enrichment = stage in ENRICHMENT_STAGES
             state["stages"][stage] = {"status": ("partial" if enrichment else "incomplete") if incomplete else "done",
                                       "seconds": round(clock() - s0, 1), **result,
                                       # R50 S11: Pacific wall clock of each stage, so the count can tell
                                       # which Cultivera sales the inventory snapshot already includes.
                                       "startedPacific": pacific_wall(s0), "endedPacific": pacific_wall(clock())}
+            if stage == "wcia_json":  # R74 S2: never a silent partial - a top-level warning the app shows
+                warn = wcia_warning(result)
+                state["warnings"] = [w for w in (state.get("warnings") or []) if not str(w).startswith("Vendor transfer files")]
+                if warn:
+                    state["warnings"].append(warn)
             run.write_json("state.json", state)
             if incomplete and not enrichment:
                 raise CultiveraPosError(f"{stage}: {len(result['missing'])} ids not fetched")

@@ -20,6 +20,7 @@ import { runImport } from "@/lib/pos/import-service";
 import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { cancelPosRun, isValidRunId, loadRunForImport, startPosRun } from "@/lib/pos/cultivera-fetch-client";
 import { importDecision } from "@/lib/pos/cultivera-fetch-button-core";
+import { missingToAcknowledge } from "@/lib/pos/cultivera-wcia-coverage-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { savePlanInputs } from "@/lib/inventory/cultivera-rehome-store";
 import { saveWciaFiles } from "@/lib/inventory/cultivera-wcia-store";
@@ -76,6 +77,8 @@ export async function importFetchAction(formData: FormData): Promise<void> {
   const session = await requirePermission("menu.import");
   const runId = String(formData.get("run_id") ?? "");
   const isTest = String(formData.get("test_mode") ?? "") === "on";
+  // R74 S2: the owner's explicit "stage without the missing vendor files" tick.
+  const ackMissing = String(formData.get("ack_missing_vendor_files") ?? "") === "on";
   if (!isValidRunId(runId)) redirect("/admin/menu-imports" + err("Unknown run."));
 
   let importId = "";
@@ -88,6 +91,8 @@ export async function importFetchAction(formData: FormData): Promise<void> {
       cutoverDone: await readCutoverDone(),
       ageMinutes: loaded.ageMinutes,
       filesVerified: loaded.verified,
+      vendorFilesMissing: missingToAcknowledge(loaded.vendorCoverage),
+      acknowledgeMissingVendorFiles: ackMissing,
     });
     if (!decision.allowed || !loaded.assembled) {
       await recordAudit({
@@ -96,7 +101,7 @@ export async function importFetchAction(formData: FormData): Promise<void> {
         action: "cultivera_pos.import_refused",
         entityType: "cultivera_pos_run",
         entityId: runId,
-        after: { isTest, reasons: [...decision.reasons, ...loaded.verifyProblems], go: report?.go ?? null },
+        after: { isTest, reasons: [...decision.reasons, ...loaded.verifyProblems], go: report?.go ?? null, vendorCoverage: loaded.vendorCoverage },
       });
       throw new Error([...decision.reasons, ...loaded.verifyProblems].join(" ") || "Import refused.");
     }
@@ -127,6 +132,8 @@ export async function importFetchAction(formData: FormData): Promise<void> {
 
     // R50 S3b: the vendors' WCIA transfer files, one per transfer, for "Start" on each rebuilt
     // manifest (lab results + certificates). Enrichment only: a failure is audited, never fatal.
+    // R74 S2: the files it DID get always stage; the coverage (and the owner's acknowledgment of any
+    // missing ones) is audited below so a silent miss can never happen again.
     let vendorFiles: Record<string, unknown> | null = null;
     if (!isTest && (loaded.wcia.records.length > 0 || loaded.wcia.problem)) {
       try {
@@ -183,6 +190,7 @@ export async function importFetchAction(formData: FormData): Promise<void> {
           : null,
         planInputs,
         vendorFiles,
+        vendorCoverage: { ...loaded.vendorCoverage, acknowledgedMissing: ackMissing && !loaded.vendorCoverage.complete },
         countSales,
         items: result.version.item_count,
         variants: result.version.variant_count,

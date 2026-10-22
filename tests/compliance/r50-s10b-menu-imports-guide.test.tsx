@@ -37,7 +37,7 @@ const statusOf = (html: string, key: string) => html.match(new RegExp(`data-test
 
 describe("R50 S10b guide core", () => {
   it("runs at its measured self-test count", () => {
-    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 74, failed: 0 });
+    expect(__runMenuImportsGuideCoreTests()).toEqual({ passed: 77, failed: 0 }); // R74 S2: +3 (missing vendor files never read as a plain GO)
   });
 });
 

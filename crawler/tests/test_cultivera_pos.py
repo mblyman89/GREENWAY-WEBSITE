@@ -702,6 +702,84 @@ def test_wcia_downloadable():
     assert "wcia_json.jsonl" in j.DOWNLOADABLE
 
 
+# ------------------------------------------------------------------ R74 S2: vendor files fail LOUD
+
+def test_r74_wcia_coverage_pure():
+    full = cp.wcia_coverage(619, 619, 0, 0, False)
+    assert full == {"expected": 619, "saved": 619, "missing": 0, "refused": 0, "errors": 0,
+                    "stoppedForTime": False, "complete": True}
+    part = cp.wcia_coverage(619, 600, 2, 5, True)
+    assert part["expected"] == 621 and part["missing"] == 21 and part["complete"] is False
+    assert cp.wcia_coverage(0, 0, 0, 0, False)["complete"] is True  # no vendor files exist: nothing missing
+
+
+def test_r74_wcia_warning_pure():
+    assert cp.wcia_warning({"coverage": cp.wcia_coverage(3, 3, 0, 0, False)}) is None
+    assert cp.wcia_warning({}) is None
+    w = cp.wcia_warning({"coverage": cp.wcia_coverage(619, 600, 2, 5, True)})
+    assert w == ("Vendor transfer files: 21 of 621 MISSING (the time budget ran out, 5 errors, 2 refused paths). "
+                 "The 600 saved still stage.")
+    assert "stage failed (boom)" in cp.wcia_warning({"error": "boom", "missing": ["?"]})
+
+
+def test_r74_full_run_has_complete_coverage_and_no_warning(tmp_path):
+    c = _client(tmp_path, FakeCultivera())
+    assert cp.run_phase_a(c)["status"] == "done"
+    st = c.run.read_json("state.json")
+    assert st["stages"]["wcia_json"]["status"] == "done"
+    assert st["stages"]["wcia_json"]["coverage"]["complete"] is True
+    assert st["stages"]["wcia_json"]["coverage"]["saved"] == 1
+    assert not st.get("warnings")
+
+
+def test_r74_http_error_is_partial_with_loud_warning_and_run_still_done(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(404) if "load-wcia" in str(r.url) else None)
+    m = cp.run_phase_a(c)
+    assert m["status"] == "done"  # the obtained files (none here) and the core stages still stage
+    st = c.run.read_json("state.json")
+    cov = st["stages"]["wcia_json"]["coverage"]
+    assert cov == {"expected": 1, "saved": 0, "missing": 1, "refused": 0, "errors": 1,
+                   "stoppedForTime": False, "complete": False}
+    assert st["warnings"] == ["Vendor transfer files: 1 of 1 MISSING (1 errors). The 0 saved still stage."]
+    assert m["stages"]["wcia_json"]["coverage"]["complete"] is False  # the manifest carries it too
+
+
+def test_r74_refused_path_counts_as_missing(tmp_path):
+    def ov(r):
+        if str(r.url).endswith("incoming/11/detail"):
+            return httpx.Response(200, json={"Id": 11, "JsonFile": "../../api/inventories/split.json"})
+        return None
+
+    c = _with(tmp_path, FakeCultivera(), ov)
+    assert cp.run_phase_a(c)["status"] == "done"
+    st = c.run.read_json("state.json")
+    assert st["stages"]["wcia_json"]["status"] == "partial"  # was "done" before R74 (silent)
+    assert st["stages"]["wcia_json"]["coverage"]["refused"] == 1
+    assert "1 refused paths" in st["warnings"][0]
+
+
+def test_r74_stage_error_is_loud(tmp_path):
+    c = _with(tmp_path, FakeCultivera(), lambda r: httpx.Response(503) if "load-wcia" in str(r.url) else None)
+    c.retries = 2
+    assert cp.run_phase_a(c)["status"] == "done"
+    st = c.run.read_json("state.json")
+    assert st["warnings"][0].startswith("Vendor transfer files: the stage failed")
+
+
+def test_r74_resume_that_completes_clears_the_warning(tmp_path):
+    fake = FakeCultivera()
+    c = _with(tmp_path, fake, lambda r: httpx.Response(404) if "load-wcia" in str(r.url) else None)
+    assert cp.run_phase_a(c)["status"] == "done"
+    st = c.run.read_json("state.json")
+    assert st["warnings"]
+    st["stages"]["wcia_json"]["status"] = "running"  # rerun the stage (as a resume would)
+    st["status"] = "failed"
+    c.run.write_json("state.json", st)
+    assert cp.run_phase_a(_client(tmp_path, fake))["status"] == "done"
+    st2 = c.run.read_json("state.json")
+    assert st2["stages"]["wcia_json"]["coverage"]["complete"] is True and st2["warnings"] == []
+
+
 # ------------------------------------------------------------------ R50 S11: Cultivera sales for the Oct 30 count
 
 NOON_OCT_31_PT = 1793473200.0  # 2026-10-31T12:00:00-07:00

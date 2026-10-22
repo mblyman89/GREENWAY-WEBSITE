@@ -43,12 +43,14 @@ export const STAGE_LABEL: Record<PhaseAStage, string> = {
   transfer_details: "Manifest details (one per delivery)",
   batches: "Batch dates for lots the export drops",
   sales: "Sales since the count (Oct 30 count only)",
-  wcia_json: "Vendor transfer files (lab results; optional)",
+  wcia_json: "Vendor transfer files (lab results)",
 };
 
 /**
  * R50 S3b: stages the cutover never waits on (the crawler's ENRICHMENT_STAGES). The crawler marks a
  * miss "partial" and still finishes the run; here a partial enrichment stage still allows Import.
+ * R74 S2: a partial wcia_json row is LOUD (red, `loud: true`) and a real import must acknowledge the
+ * missing vendor files (importDecision `vendorFilesMissing` / `acknowledgeMissingVendorFiles`).
  */
 export const ENRICHMENT_STAGES: ReadonlySet<PhaseAStage> = new Set<PhaseAStage>(["sales", "wcia_json"]);
 
@@ -74,6 +76,10 @@ export type CrawlerStage = {
   /** R50 S11: Pacific wall clock of the stage (crawler pacific_wall). */
   startedPacific?: string;
   endedPacific?: string;
+  /** R74 S2: wcia_json coverage (crawler wcia_coverage). */
+  coverage?: { expected?: unknown; saved?: unknown; missing?: unknown; refused?: unknown; errors?: unknown; stoppedForTime?: unknown; complete?: unknown };
+  /** Enrichment stage error text (stage still "partial"). */
+  error?: string;
 };
 export type CrawlerState = {
   status?: string;
@@ -83,10 +89,20 @@ export type CrawlerState = {
   seconds?: number;
   withinBudget?: boolean;
   stages?: Partial<Record<string, CrawlerStage>>;
+  /** R74 S2: loud run-level warnings (e.g. vendor transfer files missing). */
+  warnings?: unknown[];
 };
 export type CrawlerRun = { runId: string; active: boolean; state: CrawlerState | null };
 
-export type StageRow = { stage: PhaseAStage; label: string; status: "done" | "partial" | "incomplete" | "pending" | "running"; seconds: number | null; detail: string };
+export type StageRow = {
+  stage: PhaseAStage;
+  label: string;
+  status: "done" | "partial" | "incomplete" | "pending" | "running";
+  seconds: number | null;
+  detail: string;
+  /** R74 S2: shown red with a MISSING tag (a partial vendor-files stage). */
+  loud: boolean;
+};
 
 export type RunView = {
   runId: string;
@@ -103,6 +119,8 @@ export type RunView = {
   canImport: boolean;
   /** Page should auto-refresh while true. */
   poll: boolean;
+  /** R74 S2: loud warnings to show in red above the stages (crawler warnings + a loud row). */
+  warnings: string[];
 };
 
 const KNOWN = new Set(["running", "done", "failed", "cancelled"]);
@@ -115,6 +133,10 @@ function stageDetail(s: CrawlerStage): string {
   if (typeof s.wanted === "number") parts.push(`${s.wanted - (s.missing?.length ?? 0)} / ${s.wanted}`);
   if (s.missing && s.missing.length > 0) parts.push(`${s.missing.length} not fetched`);
   if (typeof s.errors === "number" && s.errors > 0) parts.push(`${s.errors} errors`);
+  const refused = s.coverage && typeof s.coverage.refused === "number" ? s.coverage.refused : 0;
+  if (refused > 0) parts.push(`${refused} refused`);
+  if (s.coverage?.stoppedForTime === true) parts.push("stopped for time");
+  if (typeof s.error === "string" && s.error) parts.push(`error: ${s.error}`);
   return parts.join(" · ");
 }
 
@@ -136,8 +158,15 @@ export function runView(run: CrawlerRun): RunView {
     else if (status === "running" && firstOpen) rowStatus = "running";
     else rowStatus = "pending";
     if (rowStatus !== "done") firstOpen = false;
-    return { stage, label: STAGE_LABEL[stage], status: rowStatus, seconds: typeof s?.seconds === "number" ? s.seconds : null, detail: s ? stageDetail(s) : stage === "sales" && rowStatus === "done" ? "not needed (no count date)" : "" };
+    // R74 S2: vendor files never go quiet - a partial is loud, so is a "done" whose coverage says incomplete.
+    const loud = stage === "wcia_json" && (rowStatus === "partial" || (rowStatus === "done" && s?.coverage?.complete === false));
+    return { stage, label: STAGE_LABEL[stage], status: rowStatus, seconds: typeof s?.seconds === "number" ? s.seconds : null, detail: s ? stageDetail(s) : stage === "sales" && rowStatus === "done" ? "not needed (no count date)" : "", loud };
   });
+  const warnings = (Array.isArray(st.warnings) ? st.warnings : []).filter((w): w is string => typeof w === "string" && w.trim() !== "");
+  const loudRow = rows.find((r) => r.loud);
+  if (loudRow && !warnings.some((w) => w.startsWith("Vendor transfer files"))) {
+    warnings.push(`Vendor transfer files: ${loudRow.detail || "incomplete"}. MISSING files mean missing lab results on those manifests.`);
+  }
   const doneStages = rows.filter((r) => r.status === "done" || r.status === "partial").length;
   return {
     runId: run.runId,
@@ -153,6 +182,7 @@ export function runView(run: CrawlerRun): RunView {
     canResume: status === "failed" || status === "cancelled",
     canImport: status === "done" && doneStages === rows.length,
     poll: status === "running",
+    warnings,
   };
 }
 
@@ -208,6 +238,13 @@ export type ImportDecisionInput = {
   ageMinutes: number | null;
   /** Every verifyFile() passed and no JSONL line was bad. */
   filesVerified: boolean;
+  /**
+   * R74 S2: vendor transfer files the run is missing (cultivera-wcia-coverage-core missingToAcknowledge).
+   * A real import with any missing needs `acknowledgeMissingVendorFiles` (the owner ticks "stage
+   * without them"); the obtained files still stage. A test import never needs it.
+   */
+  vendorFilesMissing?: number;
+  acknowledgeMissingVendorFiles?: boolean;
 };
 
 export type ImportDecision = { allowed: boolean; reasons: string[]; label: "real" | "test" };
@@ -226,6 +263,9 @@ export function importDecision(i: ImportDecisionInput): ImportDecision {
     if (i.ageMinutes === null) reasons.push("The harvest has no finish time. Fetch again.");
     else if (i.ageMinutes > MAX_HARVEST_AGE_MINUTES) reasons.push(`The harvest is ${Math.round(i.ageMinutes)} minutes old (limit ${MAX_HARVEST_AGE_MINUTES}). Fetch again so today's sales are in it.`);
     else if (i.ageMinutes < -5) reasons.push("The harvest finish time is in the future. Check the server clock and fetch again.");
+    const missing = i.vendorFilesMissing ?? 0;
+    if (missing > 0 && !i.acknowledgeMissingVendorFiles)
+      reasons.push(`${missing} vendor transfer file${missing === 1 ? " is" : "s are"} MISSING (lab results). Fetch again to get them, or tick \u201cStage without the missing vendor files\u201d. The files it did get still stage.`);
   }
   return { allowed: reasons.length === 0, reasons, label: i.isTest ? "test" : "real" };
 }
@@ -241,6 +281,8 @@ export function __runCultiveraFetchButtonCoreTests(): { passed: number; failed: 
     passed += 1;
   };
 
+  const salesPartialLoud = () =>
+    runView({ runId: "r", active: false, state: { status: "done", stages: Object.fromEntries(PHASE_A_STAGES.map((s) => [s, s === "sales" ? { status: "partial" } : { status: "done" }])) } }).rows.some((r) => r.loud);
   // ---- runView ----
   const doneStages = Object.fromEntries(PHASE_A_STAGES.map((s) => [s, { status: "done", seconds: 1 }]));
   const done = runView({ runId: "r", active: false, state: { status: "done", stages: doneStages, seconds: 478.3, withinBudget: true } });
@@ -254,6 +296,15 @@ export function __runCultiveraFetchButtonCoreTests(): { passed: number; failed: 
   // R50 S3b: a partial enrichment stage still imports; a partial CORE stage never counts.
   const partial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, wcia_json: { status: "partial", wanted: 619, missing: [1] } } } });
   ok(partial.canImport && partial.rows[8].status === "partial" && partial.rows[8].detail === "618 / 619 · 1 not fetched", "partial vendor files still import");
+  // R74 S2: …but never silently.
+  ok(partial.rows[8].loud && partial.warnings.length === 1 && partial.warnings[0].startsWith("Vendor transfer files: 618 / 619 · 1 not fetched"), "partial vendor files are LOUD (row + warning)");
+  ok(!done.rows.some((r) => r.loud) && done.warnings.length === 0, "a complete run is quiet");
+  const crawlerWarn = runView({ runId: "r", active: false, state: { status: "done", warnings: ["Vendor transfer files: 1 of 619 MISSING (1 errors). The 618 saved still stage.", 7, ""], stages: { ...doneStages, wcia_json: { status: "partial", wanted: 619, missing: [1], errors: 1, coverage: { refused: 2, stoppedForTime: true, complete: false } } } } });
+  ok(crawlerWarn.warnings.length === 1 && crawlerWarn.warnings[0].includes("1 of 619 MISSING"), "crawler warning used as-is (no duplicate), junk entries dropped");
+  ok(crawlerWarn.rows[8].detail === "618 / 619 · 1 not fetched · 1 errors · 2 refused · stopped for time", "detail names errors, refused, time");
+  const doneButIncomplete = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, wcia_json: { status: "done", coverage: { complete: false } } } } });
+  ok(doneButIncomplete.rows[8].loud && doneButIncomplete.warnings.length === 1, "coverage incomplete on a done row is still loud");
+  ok(!salesPartialLoud(), "a partial SALES row is not the vendor-files alarm");
   const corePartial = runView({ runId: "r", active: false, state: { status: "done", stages: { ...doneStages, batches: { status: "partial" } } } });
   ok(!corePartial.canImport && corePartial.rows[6].status === "pending", "\"partial\" on a core stage is not accepted");
   ok(optionalFilesToFetch({ files: [{ name: "wcia_json.jsonl", bytes: 1, sha256: "x" }] }).join() === "wcia_json.jsonl", "vendor files fetched when listed");
@@ -318,6 +369,13 @@ export function __runCultiveraFetchButtonCoreTests(): { passed: number; failed: 
   const t = { isTest: true, go: false, cutoverDone: true, ageMinutes: 9999, filesVerified: true };
   ok(importDecision(t).allowed && importDecision(t).label === "test", "test import allowed even NO-GO / stale / after cutover");
   ok(!importDecision({ ...t, filesVerified: false }).allowed, "test import still needs verified files");
+  // R74 S2: missing vendor files need an explicit acknowledgment on a real import only.
+  const miss = importDecision({ ...real, vendorFilesMissing: 3 });
+  ok(!miss.allowed && miss.reasons.length === 1 && miss.reasons[0].startsWith("3 vendor transfer files are MISSING"), "real import with missing vendor files refused until acknowledged");
+  ok(importDecision({ ...real, vendorFilesMissing: 1 }).reasons[0].startsWith("1 vendor transfer file is MISSING"), "singular wording");
+  ok(importDecision({ ...real, vendorFilesMissing: 3, acknowledgeMissingVendorFiles: true }).allowed, "acknowledged → allowed (obtained files stage)");
+  ok(importDecision({ ...real, vendorFilesMissing: 0 }).allowed, "none missing → no acknowledgment needed");
+  ok(importDecision({ ...t, vendorFilesMissing: 9 }).allowed, "test import never needs the acknowledgment");
   ok(importDecision({ ...real, go: false, cutoverDone: true }).reasons.length === 2, "every failing reason listed");
 
   return { passed, failed: 0 };
