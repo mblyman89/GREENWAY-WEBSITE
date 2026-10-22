@@ -1,0 +1,33 @@
+control (before) pass
+killed   quote reworded
+killed   staff role gets powers
+killed   owner not first
+killed   no-owner not flagged
+killed   never-signed-in not flagged
+killed   stale threshold off by a lot
+killed   fingerprint ignores active
+killed   fingerprint includes sign-in
+killed   short summary allowed
+killed   digits allowed
+killed   phone refused
+killed   confirm box ignored
+killed   any quarter allowed
+killed   future set-on allowed
+killed   quarter of month wrong
+killed   previous of Q1 wrong
+killed   wording change ignored
+killed   old-year adoption counts
+killed   fingerprint ignores rules
+killed   packet loses title
+killed   unpaged staff read
+killed   admin records
+killed   browser fingerprint
+killed   not audited
+killed   staff page
+killed   admin sees forms
+killed   forms without records
+killed   staff packet
+killed   packet not audited
+killed   tab dropped
+control (after) pass
+total 30 killed 30 survivors []
