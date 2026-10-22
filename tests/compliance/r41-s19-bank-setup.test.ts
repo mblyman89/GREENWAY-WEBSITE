@@ -167,11 +167,12 @@ describe("S19 docs and rules", () => {
     expect(read("docs/audit/TEST-PLAN.md")).toContain("**T-378 (Bank setup checklist and ACH glossary (R41 S19, no migration)):**");
     const man = read("docs/audit/test-manual/index.html");
     expect(man).toContain('data-test="T-378"');
-    expect(man).toContain('"T-377", "T-378"]');
+    expect(man).toContain('"T-377", "T-378"'); // USAGE-6 appended T-379 after it
     const rm = read("docs/roadmap/R41-TIMBERLAND.md");
     expect(rm).toContain("## S19 in detail");
     expect(rm).toContain("| S18 | Written ACH policies");
     expect(rm).toMatch(/\| S18 \|[^\n]*\| #1450 \| 0291 \|/);
+    expect(rm).toMatch(/\| S19 \|[^\n]*\| #1451 \| none \|/);
   });
   it("mutation log (mutate-s19-app.last.log): every mutant killed", () => {
     const log = read("scripts/r41/mutate-s19-app.last.log");
