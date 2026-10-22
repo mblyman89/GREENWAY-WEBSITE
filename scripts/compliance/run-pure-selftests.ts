@@ -2282,7 +2282,7 @@ __runLiquidVolumeTests();
   { const r = __runMergeReviewCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`merge-review-core: ${r.failed} failed, ${r.passed} passed`); console.log(`merge-review-core: ${r.passed} assertions passed`); }
   { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 67) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
   // R19 S13: batch manifest lookup (budget, lease, orphan, enqueue plan, copy, banner). Floor = the exact count.
-  { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 154) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
+  { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 161) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }

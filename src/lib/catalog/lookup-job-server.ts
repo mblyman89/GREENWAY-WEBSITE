@@ -62,6 +62,10 @@ import {
   LOOKUP_JOBS_TABLE,
   LOOKUP_JOB_ITEMS_TABLE,
   LOOKUP_MAX_JOB_ITEMS,
+  LOOKUP_JOB_SCAN,
+  LOOKUP_PARALLEL_JOBS_ENV,
+  lookupParallelJobs,
+  pickTickJob,
   MANIFEST_BATCH_LOOKUP_ENV,
   ORPHAN_FAIL_COPY,
   aiCallsOf,
@@ -77,7 +81,6 @@ import {
   isUuid,
   itemErrorText,
   itemTimeoutMs,
-  leaseIsFree,
   leaseUntilIso,
   lookupItemsPerTick,
   manifestBatchLookupEnabled,
@@ -625,21 +628,24 @@ export async function runLookupJobsTick(deps: {
   try {
     const admin = deps.admin ?? createSupabaseAdminClient();
 
-    // 1. The oldest open job.
+    // 1. The oldest open job whose lease is free (R74 S11: a vendor-wide
+    //    lookup queues one job per manifest, so an overlapping run takes the
+    //    next free job instead of standing down; one run per job still).
     const { data: jobs, error: jErr } = await admin
       .from(LOOKUP_JOBS_TABLE)
       .select("id, manifest_id, status, created_by, lease_until, lease_token")
       .in("status", ["queued", "running"])
       .order("created_at", { ascending: true })
-      .limit(1);
+      .limit(LOOKUP_JOB_SCAN);
     if (jErr) {
       if (isMissingLookupJobsTable(jErr)) return { ok: true, skipped: "migration", ...EMPTY };
       return { ok: false, ...EMPTY, error: "The batch lookup list could not be read." };
     }
-    const job = ((jobs as { id: string; manifest_id: string; status: string; created_by: string | null; lease_until: string | null; lease_token: string | null }[] | null) ?? [])[0];
-    if (!job) return { ok: true, skipped: "no_job", ...EMPTY };
+    const open = (jobs as { id: string; manifest_id: string; status: string; created_by: string | null; lease_until: string | null; lease_token: string | null }[] | null) ?? [];
+    if (open.length === 0) return { ok: true, skipped: "no_job", ...EMPTY };
+    const job = pickTickJob(open, t0, lookupParallelJobs(process.env[LOOKUP_PARALLEL_JOBS_ENV]));
+    if (!job) return { ...out, jobId: open[0].id, skipped: "leased" };
     out.jobId = job.id;
-    if (!leaseIsFree(job.lease_until, t0)) return { ...out, skipped: "leased" };
 
     // 2. Take the lease (compare-and-swap on the token we read).
     const token = deps.token ?? crypto.randomUUID();

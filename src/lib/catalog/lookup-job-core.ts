@@ -146,13 +146,20 @@ export function thinkingForAttempt(level: BatchThinkingLevel, attemptNo: number)
   const floor = BATCH_THINKING_LEVELS.indexOf("low");
   return BATCH_THINKING_LEVELS[Math.max(Math.min(i, floor), i - n)];
 }
-/** Hard cap per run, even when lookups are fast (rate-limit courtesy, S13.8). */
-export const LOOKUP_MAX_ITEMS_PER_TICK = 12;
+/**
+ * Hard cap per run, even when lookups are fast (rate-limit courtesy, S13.8).
+ * R74 S11 (owner, round 7: "if you can increase the limits for the cultivera
+ * look ups, please increase them so we dont run into any limitations"):
+ * 12 -> 30. The time budget below is still the real cap for slow web
+ * lookups (no product starts unless a worst case still fits in 760 s), so
+ * this only lets FAST items (knowledge-base / memory hits) keep flowing.
+ */
+export const LOOKUP_MAX_ITEMS_PER_TICK = 30;
 
 /**
  * Bible S13.8: "Gemini rate limits/timeouts - chunk size configurable".
- * LOOKUP_ITEMS_PER_TICK lowers the per-run cap (1..12). Unset, junk, zero or
- * negative = 12; above 12 is clamped to 12 (the time budget is the real cap).
+ * LOOKUP_ITEMS_PER_TICK lowers the per-run cap (1..30). Unset, junk, zero or
+ * negative = 30; above 30 is clamped to 30 (the time budget is the real cap).
  */
 export const LOOKUP_ITEMS_PER_TICK_ENV = "LOOKUP_ITEMS_PER_TICK";
 
@@ -167,8 +174,49 @@ export function lookupItemsPerTick(raw: string | undefined | null): number {
 export const LOOKUP_LEASE_MS = 840_000;
 /** An item a killed run left "running" is retried once, then failed. */
 export const LOOKUP_MAX_ATTEMPTS = 2;
-/** One manifest's job never holds more than this many items. */
-export const LOOKUP_MAX_JOB_ITEMS = 200;
+/**
+ * One manifest's job never holds more than this many items. R74 S11: 200 ->
+ * 1000 (round 7, "increase the limits"), so a large Cultivera manifest is
+ * looked up in ONE press. The job's item reads are already paged by 1000.
+ */
+export const LOOKUP_MAX_JOB_ITEMS = 1000;
+/**
+ * R74 S11: how many open jobs one run considers. A run takes the OLDEST job
+ * whose lease is free (before: only the oldest job, so an overlapping run
+ * stood down even when another manifest was waiting). With a vendor-wide
+ * lookup (one job per manifest) overlapping runs now work different
+ * manifests side by side; each job is still worked by one run at a time.
+ */
+export const LOOKUP_JOB_SCAN = 25;
+/**
+ * R74 S11: at most this many manifests are looked up AT ONCE (each by its own
+ * run). LOOKUP_PARALLEL_JOBS sets it (1..8); unset / junk / 0 = 4. 1 = the
+ * old behaviour (one manifest at a time). A 429 from the AI provider stops
+ * that job, so keep this modest.
+ */
+export const LOOKUP_PARALLEL_JOBS_ENV = "LOOKUP_PARALLEL_JOBS";
+export const LOOKUP_PARALLEL_JOBS_DEFAULT = 4;
+export const LOOKUP_PARALLEL_JOBS_MAX = 8;
+
+export function lookupParallelJobs(raw: string | undefined | null): number {
+  const v = String(raw ?? "").trim();
+  if (!/^\d+$/.test(v)) return LOOKUP_PARALLEL_JOBS_DEFAULT;
+  const n = Number(v);
+  if (!Number.isSafeInteger(n) || n < 1) return LOOKUP_PARALLEL_JOBS_DEFAULT;
+  return Math.min(n, LOOKUP_PARALLEL_JOBS_MAX);
+}
+
+/**
+ * Which open job this run takes: the oldest one whose lease is free, unless
+ * `maxParallel` jobs are already leased by live runs (then none: "leased").
+ * `open` is oldest first.
+ */
+export function pickTickJob<T extends { lease_until: string | null }>(open: readonly T[], nowMs: number, maxParallel: number): T | null {
+  const cap = Number.isFinite(maxParallel) && maxParallel >= 1 ? Math.floor(maxParallel) : 1;
+  const busy = open.filter((j) => !leaseIsFree(j.lease_until, nowMs)).length;
+  if (busy >= cap) return null;
+  return open.find((j) => leaseIsFree(j.lease_until, nowMs)) ?? null;
+}
 
 /** May this run start another item? The first one always may. */
 export function canStartItem(input: { elapsedMs: number; startedThisTick: number; maxPerTick?: number; itemWorstMs?: number }): boolean {
@@ -686,13 +734,26 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(canStartItem({ elapsedMs: 0, startedThisTick: LOOKUP_MAX_ITEMS_PER_TICK - 1 }) === true, "under cap");
   ok(canStartItem({ elapsedMs: Number.NaN, startedThisTick: 2 }) === false, "NaN elapsed never starts a second");
   // S13.8 chunk size
-  ok(lookupItemsPerTick(undefined) === 12 && lookupItemsPerTick("") === 12 && lookupItemsPerTick("abc") === 12, "unset/junk = 12");
-  ok(lookupItemsPerTick("0") === 12 && lookupItemsPerTick("-3") === 12 && lookupItemsPerTick("2.5") === 12, "zero/negative/fraction = 12");
-  ok(lookupItemsPerTick("3") === 3 && lookupItemsPerTick(" 1 ") === 1, "lower cap honoured");
-  ok(lookupItemsPerTick("99") === 12 && lookupItemsPerTick("99999999999999999999") === 12, "clamped to 12");
+  ok(lookupItemsPerTick(undefined) === 30 && lookupItemsPerTick("") === 30 && lookupItemsPerTick("abc") === 30, "unset/junk = 30");
+  ok(lookupItemsPerTick("0") === 30 && lookupItemsPerTick("-3") === 30 && lookupItemsPerTick("2.5") === 30, "zero/negative/fraction = 30");
+  ok(lookupItemsPerTick("3") === 3 && lookupItemsPerTick(" 1 ") === 1 && lookupItemsPerTick("12") === 12, "lower cap honoured");
+  ok(lookupItemsPerTick("99") === 30 && lookupItemsPerTick("99999999999999999999") === 30, "clamped to 30");
+  ok(LOOKUP_MAX_ITEMS_PER_TICK === 30 && LOOKUP_MAX_JOB_ITEMS === 1000 && LOOKUP_JOB_SCAN >= 2, "R74 S11 raised limits");
+  ok(lookupParallelJobs(undefined) === 4 && lookupParallelJobs("x") === 4 && lookupParallelJobs("0") === 4 && lookupParallelJobs("-1") === 4, "parallel default 4");
+  ok(lookupParallelJobs("1") === 1 && lookupParallelJobs(" 6 ") === 6 && lookupParallelJobs("99") === 8, "parallel honoured, clamped to 8");
+  {
+    const NOW = Date.parse("2026-10-01T12:00:00.000Z");
+    const live = new Date(NOW + 60_000).toISOString();
+    const gone = new Date(NOW - 1).toISOString();
+    const js = [{ id: "a", lease_until: live }, { id: "b", lease_until: null }, { id: "c", lease_until: gone }];
+    ok(pickTickJob(js, NOW, 4)?.id === "b", "oldest FREE job, a live lease skipped");
+    ok(pickTickJob(js, NOW, 1) === null, "cap reached: none");
+    ok(pickTickJob([{ id: "a", lease_until: live }], NOW, 4) === null, "only leased jobs: none");
+    ok(pickTickJob([], NOW, 4) === null && pickTickJob([{ id: "z", lease_until: gone }], NOW, Number.NaN)?.id === "z", "empty; NaN cap = 1");
+  }
   ok(canStartItem({ elapsedMs: 0, startedThisTick: 3, maxPerTick: 3 }) === false && canStartItem({ elapsedMs: 0, startedThisTick: 2, maxPerTick: 3 }) === true, "configured cap");
   ok(canStartItem({ elapsedMs: 0, startedThisTick: 0, maxPerTick: 1 }) === true && canStartItem({ elapsedMs: 0, startedThisTick: 1, maxPerTick: 1 }) === false, "cap 1 = one per run");
-  ok(canStartItem({ elapsedMs: 0, startedThisTick: 12, maxPerTick: 50 }) === false && canStartItem({ elapsedMs: 0, startedThisTick: 5, maxPerTick: Number.NaN }) === true, "cap cannot exceed 12; NaN = 12");
+  ok(canStartItem({ elapsedMs: 0, startedThisTick: 30, maxPerTick: 50 }) === false && canStartItem({ elapsedMs: 0, startedThisTick: 5, maxPerTick: Number.NaN }) === true, "cap cannot exceed 30; NaN = 30");
   ok(LOOKUP_TICK_BUDGET_MS < LOOKUP_TICK_MAX_DURATION_S * 1000, "budget inside maxDuration");
   ok(LOOKUP_LEASE_MS > LOOKUP_TICK_MAX_DURATION_S * 1000, "lease outlives the function");
   ok(LOOKUP_TICK_MAX_DURATION_S <= 800, "Pro maximum");

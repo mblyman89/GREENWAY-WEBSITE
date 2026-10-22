@@ -275,10 +275,11 @@ describe("S13 pure core", () => {
     const r = __runLookupJobCoreTests();
     expect(r.failed).toBe(0);
     // R21: +25 for batchLookupEntry / lookupDeliveryChoices (the button is never silently absent).
-    expect(r.passed).toBe(154);
+    // R74 S11: +7 (raised limits, LOOKUP_PARALLEL_JOBS, pickTickJob).
+    expect(r.passed).toBe(161);
   });
   it("the pure runner pins the same floor", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 154\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 161\)/);
   });
   it("the core is pure: no process.env, no server-only, no I/O imports", () => {
     const src = read("src/lib/catalog/lookup-job-core.ts");
@@ -746,12 +747,12 @@ describe("S13 cron tick: failures, Stop, caps", () => {
     expect(jobs(db)[0].status).toBe("done");
   });
 
-  it("unset / junk LOOKUP_ITEMS_PER_TICK -> the safe default 12", async () => {
+  it("unset / junk LOOKUP_ITEMS_PER_TICK -> the default 30 (R74 S11; was 12)", async () => {
     process.env.LOOKUP_ITEMS_PER_TICK = "lots";
-    seedDrafts(state.db, 15);
+    seedDrafts(state.db, 35);
     await enqueue();
     const r = await runLookupJobsTick({ admin: admin(), runItem: runner().fn, now: () => T0 });
-    expect(r.started).toBe(12);
+    expect(r.started).toBe(30);
   });
 
   it("the time budget: no product STARTS when a worst-case lookup could outrun maxDuration", async () => {
