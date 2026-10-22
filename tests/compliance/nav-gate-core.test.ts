@@ -422,6 +422,12 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * ("Policies").
        */
       "/admin/settings/banking/policies",
+      /*
+       * R41 S19: the bank-side checklist and ACH glossary. Page gate
+       * settings.manage; reads nothing and writes nothing (meeting aid). Not
+       * a menu item: a tab of the Banking strip ("Bank setup & glossary").
+       */
+      "/admin/settings/banking/bank-setup",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

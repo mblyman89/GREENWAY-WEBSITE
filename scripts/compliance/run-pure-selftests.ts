@@ -962,6 +962,7 @@ import { __runTimberlandProfileCoreTests } from "../../src/lib/payments/timberla
 import { __runAchBankWatchCoreTests } from "../../src/lib/payments/ach-bank-watch-core";
 import { __runAchNoticeMailCoreTests } from "../../src/lib/payments/ach-notice-mail-core";
 import { __runAchPoliciesCoreTests } from "../../src/lib/payments/ach-policies-core";
+import { __runAchBankSetupCoreTests } from "../../src/lib/payments/ach-bank-setup-core";
 import { __runTimberlandOriginatorCoreTests } from "../../src/lib/payments/timberland-originator-core";
 import { __runTimberlandPreviewCoreTests } from "../../src/lib/payments/timberland-preview-core";
 import { __runAchFileLedgerCoreTests } from "../../src/lib/payments/ach-file-ledger-core";
@@ -2362,6 +2363,7 @@ __runLiquidVolumeTests();
   assertRan("ach-bank-watch-core", __runAchBankWatchCoreTests(), 54); // R41 S16: daily Plaid bank watch (unexplained money out, possible returns, fee/notice gaps, feed health)
   assertRan("ach-notice-mail-core", __runAchNoticeMailCoreTests(), 57); // R41 S17: Fed ACH notice-email watch (OFF by default; sender, DMARC, link hosts; never reads the notice)
   assertRan("ach-policies-core", __runAchPoliciesCoreTests(), 69); // R41 S18: written ACH policies (8, each Why quoted word for word), quarterly access review, yearly key checks, owner-only dated records
+  assertRan("ach-bank-setup-core", __runAchBankSetupCoreTests(), 44); // R41 S19: bank-side checklist for the meeting with Timberland (nothing assumed: unanswered items are questions) and the sourced ACH glossary
   assertRan("timberland-originator-core", __runTimberlandOriginatorCoreTests(), 68); // R41 S2: every file is checked against Timberland's originator + its own built shape
   assertRan("timberland-preview-core", __runTimberlandPreviewCoreTests(), 19); // R41 S2: the card previews the builder's own 1 and 5 records + the three names
   assertRan("ach-file-ledger-core", __runAchFileLedgerCoreTests(), 56); // R41 S9: funding errors + 0276 missing named; S3: File ID Modifier A-Z/0-9 (37th refused), header facts, duplicate key, sha re-check, void reason; S6: bank-step errors, 0274 missing named
