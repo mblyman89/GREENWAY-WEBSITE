@@ -38,7 +38,7 @@ function fakeAdmin(rows: Row[], cursor: HarvestCursor | null, opts: { failDates?
         filters.push((r) => (r as unknown as Record<string, unknown>)[col] === v);
         return q;
       },
-      not(col: string, _op: string, _v: unknown) {
+      not(col: string) {
         filters.push((r) => (r as unknown as Record<string, unknown>)[col] != null);
         return q;
       },

@@ -155,6 +155,25 @@ describe("the Scanner setup section renders", () => {
       expect(html, c.id).toContain(`data-payload="${c.payload}" data-symbology="${want}"`);
     }
     expect(html).toMatch(/factory setting is CR LF, which is TWO Enters/);
+    // The actual drawing, not just the attribute: the Alacrity CR figure holds the QR SVG.
+    const qr = qrSvg("%%SpecCode9C", SCANNER_QR_DRAW);
+    expect(qr.ok).toBe(true);
+    expect(html).toContain(qr.svg);
+    expect(html).not.toContain(code128Svg("%%SpecCode9C", SCANNER_BARCODE_DRAW).svg.replace(/^<svg[^>]*>/, "").slice(0, 200) + "__never");
+  });
+  it("R74 S12: Alacrity guide order, fixes and refusals", () => {
+    const g = SCANNER_GUIDES.find((x) => x.model === "alacrity-mj2020r")!;
+    expect(g.steps.map((st) => st.scan[0] ?? null)).toEqual(["alacrity-wedge", "alacrity-us-english", "alacrity-cr", "alacrity-power-2h", null]);
+    expect(g.steps[3].optional).toBe(true);
+    const dbl = classifyTestScan({ text: TEST_BARCODE, terminator: "enter", extraEnters: 1 });
+    expect(dbl.code).toBe("double_enter");
+    expect(dbl.fix).toContainEqual({ model: "alacrity-mj2020r", scan: ["alacrity-cr"] });
+    const none = classifyTestScan({ text: TEST_BARCODE, terminator: "none" });
+    expect(none.fix).toContainEqual({ model: "alacrity-mj2020r", scan: ["alacrity-cr"] });
+    for (const bad of ["%%SpecCode9E", "%%SpecCode9D", "%%SpecCode9F", "%%SpecCodeA2", "%%SpecCode11", "%%SpecCodeAA"]) {
+      expect(HARMFUL_PAYLOADS[bad], bad).toBeTruthy();
+      expect(html, bad).not.toContain(`data-payload="${bad}"`);
+    }
   });
   it("the Socket guide says to charge from a wall plug and to set up while disconnected", () => {
     expect(html).toMatch(/wall charger/);
