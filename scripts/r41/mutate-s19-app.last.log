@@ -1,0 +1,35 @@
+control (before) pass
+killed   quote reworded
+killed   Brenda quote reworded
+killed   quote file swapped
+killed   owner note relabelled as Brenda
+killed   filter assumed confirmed
+killed   block given a fake said
+killed   dual made confirmed
+killed   dual loses Brenda off
+killed   limits question left in
+killed   testing loses test-file yes
+killed   phone dropped from portal ask
+killed   item dropped
+killed   decide before ask
+killed   order unstable
+killed   counts miscount
+killed   glossary term dropped
+killed   glossary dead link
+killed   hint guesses on unknown
+killed   hint drops term
+killed   sheet tick box
+killed   sheet glossary dropped
+killed   sheet counts wrong
+killed   digits allowed
+killed   staff page
+killed   page badge dropped
+killed   staff sheet
+killed   sheet cached
+killed   sheet not audited
+killed   tab dropped
+killed   ops hint dropped
+killed   ops glossary hint dropped
+killed   approvals hint dropped
+control (after) pass
+total 32 killed 32 survivors []
