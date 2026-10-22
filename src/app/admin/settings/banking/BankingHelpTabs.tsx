@@ -20,6 +20,8 @@ export const BANKING_HELP_TABS = [
   { key: "bankwatch", href: "/admin/settings/banking/bank-watch", label: "Bank watch" },
   // R41 S17: the Fed's encrypted ACH notice emails, a heads-up only (OFF until the owner turns it on).
   { key: "noticemail", href: "/admin/settings/banking/notice-email", label: "Notice email" },
+  // R41 S18: the written ACH policies, the quarterly access review and the yearly key checks (0291).
+  { key: "policies", href: "/admin/settings/banking/policies", label: "Policies" },
 ] as const;
 
 export type BankingHelpTabKey = (typeof BANKING_HELP_TABS)[number]["key"];
