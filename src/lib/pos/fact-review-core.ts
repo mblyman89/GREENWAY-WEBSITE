@@ -555,6 +555,7 @@ const HIDDEN_REASON_TEXT: Record<string, string> = {
     "In the inventory file but missing from the products file -- kept hidden until the product master row exists.",
   no_inventory: "In the products file but has no inventory rows -- nothing to sell yet.",
   reviewer_rejected: "Rejected by a reviewer in the fact-review queue -- will not reach the public menu.",
+  needs_category: "Cannabis, but its Cultivera category gives no product form -- held hidden until you pick its category (R74).",
 };
 
 export function hiddenReasonText(reason: string | null): string {

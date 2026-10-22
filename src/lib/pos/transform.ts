@@ -26,6 +26,13 @@ import { STATUTORY_GRAMS_PER_OUNCE, AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/co
 // parser and the sales-limit cap can never drift apart.
 import { ML_PER_FLUID_OUNCE, ML_PER_LITRE } from "@/lib/compliance/liquid-volume-core";
 import { boilerplateDescription } from "@/lib/catalog/golden-record-core";
+import { heuristicWebsiteCategory } from "@/lib/inventory/website-category-resolver";
+import { suggestForUnknownCategory } from "@/lib/pos/cultivera-type-from-category-core";
+import {
+  gateCannabisRow,
+  isNonCannabisCategory,
+  type ExcludedRow,
+} from "@/lib/pos/cultivera-noncannabis-gate-core";
 // SLICE 56: the word-by-word extraction engine (SLICE 55). Pure module — the
 // transformer cross-examines every mg-dosed row's NAME against its potency
 // COLUMNS and only trusts arithmetic-verified facts (docs/data-governance.md
@@ -139,6 +146,8 @@ type ProductGroup = {
   variants: CollapsedInventory[];
   hidden?: boolean;
   hiddenReason?: string;
+  /** R74: cannabis card whose Cultivera category gives no form; owner must pick. */
+  needsCategory?: boolean;
 };
 // Module-level transform state. Reset at the top of every transformWorkbooks()
 // call. The pipeline is fully synchronous, so this is event-loop safe.
@@ -289,53 +298,78 @@ function requireColumns(rows: Row[], columns: string[], workbookName: string) {
 // Tracks categories already flagged so we emit exactly one anomaly per new/unknown category.
 let flaggedNewCategories = new Set<string>();
 
-// Section F: industry-standard handling for a previously-unseen POS category. Rather than crash
-// the entire build for a single new spreadsheet value, we (1) flag it once as a clearly-visible
-// anomaly in the generated report and (2) route it to the best-guess fallback category so the
-// menu still builds. Operators review the flagged anomaly and add an explicit CATEGORY_MAP entry.
-function flagNewCategory(category: string, where: string): GreenwayCategory {
-  const key = normalizeWhitespace(category);
-  const lowered = key.toLowerCase();
-  let fallback: GreenwayCategory = "concentrate";
-  for (const [keyword, cat] of Object.entries(CATEGORY_FALLBACK)) {
-    if (lowered.includes(keyword)) { fallback = cat; break; }
-  }
-  if (!flaggedNewCategories.has(key)) {
-    flaggedNewCategories.add(key);
-    addDiagnostic("warning", "new_unmapped_category", `New/unmapped POS category encountered: "${key}". Routed to fallback "${fallback}". Add an explicit CATEGORY_MAP entry to control its placement.`, {
-      category: key, fallbackCategory: fallback, source: where,
-    });
-  }
-  return fallback;
-}
-
-function normalizeCategory(category: string): GreenwayCategory {
-  const exact = CATEGORY_MAP[normalizeWhitespace(category)];
-  if (exact) return exact;
-  return flagNewCategory(category, "visible-product");
-}
-
-function tryNormalizeCategory(category: string): GreenwayCategory | null {
-  const exact = CATEGORY_MAP[normalizeWhitespace(category)];
-  if (exact) return exact;
-  addDiagnostic("warning", "unmapped_category_fallback", `Unmapped POS category for hidden item, using fallback: ${category}`, { category });
-  return null;
-}
-
+// R74 Slice 1: an unknown or non-cannabis Cultivera category is NEVER guessed
+// into a menu tab any more. The old flagNewCategory()/categoryWithFallback()
+// pair ended with `return "concentrate"`, which is how Mfused batteries, Raw
+// papers and Royal Blunt wraps landed under Concentrate. Now:
+//   1. non-cannabis rows are removed before grouping (cultivera-noncannabis-gate-core);
+//   2. a kept (cannabis) row whose category is unknown / non-cannabis / blank
+//      gets a PLACEHOLDER category (best hint, for internal grouping only), is
+//      HIDDEN with hiddenReason "needs_category", and raises a needs_category
+//      warning. The owner picks the real category before the manifest can
+//      finish onboarding (owner answer 3).
+// The hint reuses receiving's resolver (rule 4 + rule 11 parity): receiving
+// returns null / "unmapped" for these and never defaults to concentrate.
 const CATEGORY_FALLBACK: Record<string, GreenwayCategory> = {
   "flower": "flower", "popcorn": "popcorn-bud", "infused-flower": "infused-flower",
   "preroll": "preroll", "cartridge": "cartridge", "concentrate": "concentrate",
   "edible-solid": "edible-solid", "edible-liquid": "edible-liquid", "topical": "topical", "trim": "trim",
 };
+/** Placeholder for a held card when NO hint exists. Hidden, never sold online. */
+const NEEDS_CATEGORY_PLACEHOLDER: GreenwayCategory = "paraphernalia";
 
-function categoryWithFallback(rawCategory: string): GreenwayCategory {
-  const normalized = tryNormalizeCategory(rawCategory);
-  if (normalized) return normalized;
+function knownCategory(category: string): GreenwayCategory | null {
+  const key = normalizeWhitespace(category);
+  if (!key || isNonCannabisCategory(key)) return null;
+  return CATEGORY_MAP[key] ?? null;
+}
+
+function categoryHint(rawCategory: string, productName: string, inventoryType: string): GreenwayCategory {
   const lowered = normalizeWhitespace(rawCategory).toLowerCase();
-  for (const [keyword, cat] of Object.entries(CATEGORY_FALLBACK)) {
-    if (lowered.includes(keyword)) return cat;
+  if (!isNonCannabisCategory(rawCategory)) {
+    for (const [keyword, cat] of Object.entries(CATEGORY_FALLBACK)) {
+      if (lowered.includes(keyword)) return cat;
+    }
   }
-  return "concentrate";
+  const fromReceiving = heuristicWebsiteCategory(productName, inventoryType);
+  if (fromReceiving && VALID_CATEGORIES.has(fromReceiving as GreenwayCategory)) return fromReceiving as GreenwayCategory;
+  return NEEDS_CATEGORY_PLACEHOLDER;
+}
+
+type ResolvedCategory = { category: GreenwayCategory; needsCategory: boolean };
+
+/** Map a Cultivera category, or hold the card for an owner pick. Never guesses. */
+function resolveCategory(rawCategory: string, productName: string, inventoryType: string, where: string): ResolvedCategory {
+  const exact = knownCategory(rawCategory);
+  if (exact) return { category: exact, needsCategory: false };
+  const hint = categoryHint(rawCategory, productName, inventoryType);
+  flagNewCategory(rawCategory, where, hint);
+  return { category: hint, needsCategory: true };
+}
+
+function flagNewCategory(category: string, where: string, hint: GreenwayCategory | null) {
+  const key = normalizeWhitespace(category);
+  if (flaggedNewCategories.has(key)) return;
+  flaggedNewCategories.add(key);
+  const label = key || "(blank)";
+  const why = isNonCannabisCategory(key) ? "is a non-cannabis category on a row flagged cannabis" : key ? "is not mapped to a website category" : "is blank";
+  addDiagnostic("warning", "new_unmapped_category", `Cultivera category "${label}" ${why}. Its products are held hidden until you pick their category; nothing was filed under a guessed category. Add an explicit mapping on the Types page to place future rows automatically.`, {
+    category: key, fallbackCategory: null, hintCategory: hint, suggestion: key ? suggestForUnknownCategory(key)?.websiteCategory ?? null : null, source: where,
+  });
+}
+
+function holdForCategory(group: ProductGroup, productName: string, rawCategory: string, inventoryType: string) {
+  // Keep an existing importer reason (no_product_master / no_inventory feed
+  // other worklists); the needs_category diagnostic carries the hold itself.
+  if (!group.hidden) {
+    group.hidden = true;
+    group.hiddenReason = "needs_category";
+  }
+  group.needsCategory = true;
+  const key = normalizeWhitespace(rawCategory);
+  addDiagnostic("warning", "needs_category", `"${productName}" is cannabis but its Cultivera category ${key ? `"${key}"` : "(blank)"} gives no product form. Pick its category before finishing its manifest.`, {
+    product: productName, category: key, inventoryType, hintCategory: group.category, suggestion: key ? suggestForUnknownCategory(key, productName)?.websiteCategory ?? null : null,
+  });
 }
 
 /**
@@ -867,7 +901,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     const matchingRows = productMap.get(inv.productKey) ?? [];
     if (matchingRows.length === 0) {
       addDiagnostic("warning", "inventory_without_product_master", "Inventory item has no Products workbook match; including as hidden menu item for review.", { product: inv.productName, inventoryType: inv.inventoryType, category: inv.category, units: inv.totalUnits });
-      const rawCategory = categoryWithFallback(inv.category);
+      const resolved = resolveCategory(inv.category, inv.productName, inv.inventoryType, "no-product-master");
+      const rawCategory = resolved.category;
       const afterPopcorn = detectPopcornBud(inv.productName, rawCategory);
       const category = detectInfusedFlower(inv.productName, afterPopcorn);
       const brand = firstNonBlank(inv.brand, "Greenway");
@@ -896,12 +931,14 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
       };
       group.productNames.add(inv.productName);
       group.variants.push(inv);
+      if (resolved.needsCategory) holdForCategory(group, inv.productName, inv.category, inv.inventoryType);
       groups.set(identity, group);
       continue;
     }
     matchedProductKeys.add(inv.productKey);
     const product = matchingRows[0];
-    const rawCategory = normalizeCategory(firstNonBlank(product.Category, inv.category));
+    const resolvedMatched = resolveCategory(firstNonBlank(product.Category, inv.category), firstNonBlank(product["Product Name"], inv.productName), firstNonBlank(product["Inventory Type"], inv.inventoryType), "visible-product");
+    const rawCategory = resolvedMatched.category;
     const afterPopcorn = detectPopcornBud(firstNonBlank(product["Product Name"], inv.productName), rawCategory);
     const category = detectInfusedFlower(firstNonBlank(product["Product Name"], inv.productName), afterPopcorn);
     const brand = firstNonBlank(product.Brand, inv.brand, "Greenway");
@@ -924,6 +961,7 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     const desc = normalizeWhitespace(product.Description);
     if (desc) group.descriptions.push(desc);
     group.variants.push(inv);
+    if (resolvedMatched.needsCategory) holdForCategory(group, firstNonBlank(product["Product Name"], inv.productName), firstNonBlank(product.Category, inv.category), firstNonBlank(product["Inventory Type"], inv.inventoryType));
     groups.set(identity, group);
   }
 
@@ -931,7 +969,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     if (!matchedProductKeys.has(productKey)) {
       const product = rows[0];
       addDiagnostic("warning", "product_without_inventory", "Products workbook item has no matching inventory; including as hidden menu item for review.", { product: product["Product Name"], brand: product.Brand, category: product.Category });
-      const rawCategory = categoryWithFallback(firstNonBlank(product.Category));
+      const resolvedNoInv = resolveCategory(firstNonBlank(product.Category), firstNonBlank(product["Product Name"]), firstNonBlank(product["Inventory Type"]), "no-inventory");
+      const rawCategory = resolvedNoInv.category;
       const afterPopcorn = detectPopcornBud(firstNonBlank(product["Product Name"]), rawCategory);
       const category = detectInfusedFlower(firstNonBlank(product["Product Name"]), afterPopcorn);
       const brand = firstNonBlank(product.Brand, "Greenway");
@@ -953,6 +992,7 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
         hidden: true,
         hiddenReason: "no_inventory",
       };
+      if (resolvedNoInv.needsCategory) holdForCategory(group, firstNonBlank(product["Product Name"]), firstNonBlank(product.Category), firstNonBlank(product["Inventory Type"]));
       groups.set(identity, group);
     }
   }
@@ -1248,6 +1288,7 @@ function collectLotSources(groups: ProductGroup[]): ImportLotSource[] {
           isSample: toBool(row["Is Sample"]),
           unitWeight: variant.package.quantity,
           unitWeightUom: variant.package.unit,
+          needsCategory: group.needsCategory === true,
           // R15a: per-row potency so each lot keeps ITS batch numbers.
           totalRaw: toNumber(row.Total),
           thcRaw: toNumber(row.Thc),
@@ -1402,6 +1443,10 @@ export type TransformResult = {
   lotSources: ImportLotSource[];
   /** Aggregate run summary (matches transform-summary.json). */
   summary: TransformSummary;
+  /** R74: rows left out because Cultivera flags them non-cannabis (owner answer 4). */
+  excludedNonCannabis: ExcludedRow[];
+  /** R74: cards held hidden until the owner picks a category (owner answer 3). */
+  needsCategoryCount: number;
   /** True when no error-severity diagnostics were raised (safe to publish). */
   ok: boolean;
 };
@@ -1442,15 +1487,12 @@ export function transformWorkbooks(input: TransformInput): TransformResult {
   requireColumns(products, PRODUCTS_REQUIRED_COLUMNS, "PRODUCTS.xlsx");
   requireColumns(inventories, INVENTORIES_REQUIRED_COLUMNS, "INVENTORIES.xlsx");
 
-  // Pre-scan every distinct POS category up front so unmapped values are flagged
-  // (and routed to a safe fallback) rather than crashing the run.
-  const allCategories = new Set([
-    ...products.map((row) => normalizeWhitespace(row.Category)).filter(Boolean),
-    ...inventories.map((row) => normalizeWhitespace(row.Category)).filter(Boolean),
-  ]);
-  for (const category of allCategories) normalizeCategory(category);
+  // R74 Slice 1: leave out every row Cultivera flags as non-cannabis (owner
+  // answer 4) BEFORE grouping, so no battery / paper / wrap can become a card,
+  // a lot, or a manifest line. Category checks then run on cannabis rows only.
+  const gated = gateNonCannabis(products, inventories);
 
-  const groups = buildGroups(products, inventories);
+  const groups = buildGroups(gated.products, gated.inventories);
   const items = groups
     .map(toMenuItem)
     .sort((a, b) => a.category.localeCompare(b.category) || a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name));
@@ -1468,8 +1510,83 @@ export function transformWorkbooks(input: TransformInput): TransformResult {
     reviewRows: buildReviewRows(items),
     lotSources: collectLotSources(groups),
     summary: summary(products, inventories, groups, items),
+    excludedNonCannabis: gated.excluded,
+    needsCategoryCount: groups.filter((g) => g.needsCategory).length,
     ok: errors === 0,
   };
+}
+
+/**
+ * R74 Slice 1: split the raw rows into cannabis (kept) and non-cannabis (left
+ * out). INVENTORIES rows read their own "Is Cannabis" first, then the matching
+ * PRODUCTS "Cannabis Y/N". A PRODUCTS row is left out only on its own flag (or
+ * when every inventory row of that product was left out), so a product whose
+ * stock is cannabis is never dropped.
+ */
+function gateNonCannabis(products: ProductRow[], inventories: InventoryRow[]) {
+  const excluded: ExcludedRow[] = [];
+  const productFlag = new Map<string, unknown>();
+  for (const row of products) {
+    const key = comparableName(row["Product Name"]);
+    if (key && !productFlag.has(key)) productFlag.set(key, row["Cannabis Y/N"]);
+  }
+  const keptInventoryProducts = new Set<string>();
+  const droppedInventoryProducts = new Set<string>();
+  const keptInventories: InventoryRow[] = [];
+  let conflicts = 0;
+  for (const row of inventories) {
+    const key = comparableName(row.Product);
+    const v = gateCannabisRow({ isCannabis: row["Is Cannabis"], cannabisYn: productFlag.get(key), inventoryType: row.InventoryType, category: row.Category });
+    if (v.flagConflict) conflicts++;
+    if (v.keep) {
+      keptInventories.push(row);
+      if (key) keptInventoryProducts.add(key);
+      continue;
+    }
+    if (key) droppedInventoryProducts.add(key);
+    excluded.push({
+      source: "inventories",
+      barcode: normalizeWhitespace(row.Barcode),
+      product: normalizeWhitespace(row.Product),
+      category: normalizeWhitespace(row.Category),
+      inventoryType: normalizeWhitespace(row.InventoryType),
+      vendor: normalizeWhitespace(row.Vendor),
+      units: Math.max(0, Math.floor(toNumber(row["Units Available For Sale"]) ?? 0)),
+      reason: v.reason,
+    });
+  }
+  const keptProducts: ProductRow[] = [];
+  for (const row of products) {
+    const key = comparableName(row["Product Name"]);
+    const v = gateCannabisRow({ cannabisYn: row["Cannabis Y/N"], inventoryType: row["Inventory Type"], category: row.Category });
+    const stockKept = key ? keptInventoryProducts.has(key) : false;
+    const stockAllDropped = key ? droppedInventoryProducts.has(key) && !stockKept : false;
+    if (stockKept || (v.keep && !stockAllDropped)) {
+      keptProducts.push(row);
+      continue;
+    }
+    if (stockAllDropped) continue; // already listed once from its inventory rows
+    excluded.push({
+      source: "products",
+      barcode: "",
+      product: normalizeWhitespace(row["Product Name"]),
+      category: normalizeWhitespace(row.Category),
+      inventoryType: normalizeWhitespace(row["Inventory Type"]),
+      vendor: "",
+      units: 0,
+      reason: v.reason,
+    });
+  }
+  if (excluded.length > 0) {
+    const units = excluded.reduce((sum, r) => sum + r.units, 0);
+    addDiagnostic("info", "non_cannabis_excluded", `${excluded.length} Cultivera row(s) flagged non-cannabis were left out (${units} unit(s) in stock). They do not become cards, lots or manifest lines.`, {
+      count: excluded.length, units, inventories: excluded.filter((r) => r.source === "inventories").length, products: excluded.filter((r) => r.source === "products").length,
+    });
+  }
+  if (conflicts > 0) {
+    addDiagnostic("warning", "cannabis_flag_conflict", `${conflicts} stock row(s) have Is Cannabis and the product's Cannabis Y/N disagreeing. The stock row's Is Cannabis was used.`, { count: conflicts });
+  }
+  return { products: keptProducts, inventories: keptInventories, excluded };
 }
 
 // Re-export the core types so callers (CLI + server) share one definition.
@@ -1681,6 +1798,63 @@ export function __runTransformCoreTests(): void {
       ok(!!jgCard && jgCard.netWeightGrams === null && jgCard.netVolumeMl === null, "mg-garbage package size yields NO net measure");
       ok(run.diagnostics.some((d) => d.code === "package_size_mg_garbage"), "25000mg package size flagged as garbage");
       ok(run.diagnostics.some((d) => d.code === "fact_extraction_review"), "unverifiable rows feed the exception queue diagnostic");
+    }
+
+    // R74 Slice 1: non-cannabis rows are left out, cannabis rows with a
+    // non-cannabis / unknown category are HELD (never filed as concentrate).
+    {
+      const toBuffer = (sheet: string, rows: Record<string, string>[]) => {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheet);
+        return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+      };
+      const prod = (name: string, type: string, category: string, yn: string) => ({
+        "Product Name": name, "Inventory Type": type, Category: category, Brand: "Test", Type: "Hybrid", Strain: "",
+        UOM: "Each", "Package Size": "1.00 Each", Price: "$10.00", Description: "", "Cannabis Y/N": yn,
+      });
+      const inv = (id: string, name: string, type: string, category: string, isCannabis: string) => ({
+        Id: id, Location: "Main", Barcode: `BC-${id}`, Alias: "", Product: name, Category: category, InventoryType: type,
+        Strain: "", Brand: "Test", Vendor: "TEST VENDOR", "Product Price": "$10.00", Cost: "$4.00",
+        "Units Available For Sale": "2", "Units In Stock": "2", "Package Size": "1.00 Each", "Storage Location": "Sales Floor",
+        "Is Medical": "False", "Is Cannabis": isCannabis, "Is Sample": "False", Lab: "", "[COA Y/N]": "N",
+        Cbd: "", Cbda: "", Thc: "", Thca: "", Total: "", "Terpene Total": "", "Units On Hold": "0",
+        "Quantity Sold": "0", "Quantity Purchased": "2", "Expiration date": "", "Received date": "06/17/2026",
+      });
+      const productsBuffer = toBuffer("Sheet1", [
+        prod("Mfused Battery Purple", "Without Inventory Type", "Accessories", "N"),
+        prod("Royal Blunt Wraps Naked", "Without Inventory Type", "Blunt Wrap", "N"),
+        prod("Mfused Orangasm Accessories 1g", "Usable Marijuana", "Accessories", "Y"),
+        prod("Cannabis Northwest - Concentrate - Cake Batter - 1g", "Concentrate for Inhalation", "Badder", "Y"),
+        prod("Mystery Rig Wax 1g", "Concentrate for Inhalation", "Hash Hole Special", "Y"),
+      ]);
+      const inventoriesBuffer = toBuffer("Inventories", [
+        inv("1", "Mfused Battery Purple", "Without Inventory Type", "Accessories", "False"),
+        inv("2", "Royal Blunt Wraps Naked", "Without Inventory Type", "Blunt Wrap", ""),
+        inv("3", "Mfused Orangasm Accessories 1g", "Usable Marijuana", "Accessories", "True"),
+        inv("4", "Cannabis Northwest - Concentrate - Cake Batter - 1g", "Concentrate for Inhalation", "Badder", "True"),
+        inv("5", "Mystery Rig Wax 1g", "Concentrate for Inhalation", "Hash Hole Special", "True"),
+      ]);
+      const run = transformWorkbooks({ productsBuffer, inventoriesBuffer });
+      const names = run.items.map((i) => i.productName ?? "");
+      ok(!names.some((n) => n.includes("Battery")) && !names.some((n) => n.includes("Royal Blunt")), "R74: battery + wraps never become cards");
+      ok(!run.lotSources.some((l) => l.barcode === "BC-1" || l.barcode === "BC-2"), "R74: non-cannabis rows never become lot sources");
+      ok(run.excludedNonCannabis.length === 2 && run.excludedNonCannabis.every((r) => r.source === "inventories"), "R74: both excluded rows listed once (from stock)");
+      ok(run.excludedNonCannabis.find((r) => r.barcode === "BC-2")?.reason === "cannabis_yn_n", "R74: blank Is Cannabis falls back to product Cannabis Y/N");
+      ok(run.diagnostics.some((d) => d.code === "non_cannabis_excluded"), "R74: exclusion is reported");
+      const orangasm = run.items.find((i) => (i.productName ?? "").includes("Orangasm"));
+      ok(!!orangasm && orangasm.hidden === true && orangasm.hiddenReason === "needs_category", "R74: cannabis + Accessories is held hidden for a pick");
+      ok(!!orangasm && orangasm.category !== "concentrate", "R74: held card is NOT filed as concentrate");
+      ok(run.lotSources.find((l) => l.barcode === "BC-3")?.needsCategory === true, "R74: held card's lot carries needsCategory");
+      const batter = run.items.find((i) => (i.productName ?? "").includes("Cake Batter"));
+      ok(!!batter && batter.category === "concentrate" && batter.hidden !== true, "R74: Cake Batter (Badder) stays a visible concentrate");
+      ok(run.lotSources.find((l) => l.barcode === "BC-4")?.needsCategory === false, "R74: mapped lot is not held");
+      const mystery = run.items.find((i) => (i.productName ?? "").includes("Mystery Rig"));
+      ok(!!mystery && mystery.hidden === true && mystery.hiddenReason === "needs_category", "R74: unknown category held, not guessed");
+      ok(run.needsCategoryCount === 2, "R74: needsCategoryCount counts held cards");
+      ok(run.diagnostics.filter((d) => d.code === "needs_category").length === 2, "R74: one needs_category warning per held card");
+      const unmapped = run.diagnostics.find((d) => d.code === "new_unmapped_category" && d.context?.category === "Hash Hole Special");
+      ok(!!unmapped && unmapped.context?.fallbackCategory === null, "R74: unmapped-category diagnostic no longer names a fallback");
+      ok(!run.diagnostics.some((d) => d.code === "new_unmapped_category" && d.context?.category === "Blunt Wrap"), "R74: excluded rows raise no category noise");
     }
 
     console.log(`transform-core: ${passed} assertions passed`);

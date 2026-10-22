@@ -99,41 +99,51 @@ function oracle(gapMin: number) {
 
 describe("R50 S1: the real export through the executor's path", () => {
   it("reads the committed export (guards the test itself)", () => {
-    expect(sources.length).toBe(4346);
-    expect(new Set(sources.map((s) => s.barcode)).size).toBe(4256);
-    expect(sources.filter((s) => !s.receivedDateRaw.trim()).length).toBe(270);
+    // R74 S1: 93 rows (90 barcodes) Cultivera flags Is Cannabis=False are left out by the
+    // non-cannabis gate (batteries, papers, wraps, devices). Every kept lot keeps its exact
+    // pre-R74 answer (verified lot by lot against the pre-R74 run, /workspace/outputs/diff_plan.py).
+    expect(sources.length).toBe(4253);
+    expect(new Set(sources.map((s) => s.barcode)).size).toBe(4166);
+    expect(sources.filter((s) => !s.receivedDateRaw.trim()).length).toBe(241);
+    expect(transformed.excludedNonCannabis.filter((x) => x.source === "inventories").length).toBe(93);
+    // + the 37 catalogue rows whose Cannabis Y/N is N (measured in PRODUCTS_NORMALIZED.xlsx).
+    expect(transformed.excludedNonCannabis.filter((x) => x.source === "products").length).toBe(37);
   });
 
   it("every non-blank Received date cell is readable with time-of-day (no silent drops)", () => {
     const nonBlank = sources.filter((s) => s.receivedDateRaw.trim());
     const bad = nonBlank.filter((s) => parseCultiveraTimestamp(s.receivedDateRaw)?.precision !== "time");
     expect(bad.map((s) => s.receivedDateRaw)).toEqual([]);
-    expect(nonBlank.length).toBe(4076);
+    expect(nonBlank.length).toBe(4012);
   });
 
   const plan = planCultiveraManifests(rows, { pacificToday: TODAY });
 
   it("pins the bible §1.1 numbers at the default 60-minute gap", () => {
     expect(plan.gapMinutes).toBe(60);
-    expect(plan.summary.lots).toBe(4256);
-    expect(plan.summary.lotsTimed).toBe(3987);
+    // R74 S1: pre-R74 4256 lots / 649 sessions / 53 undated / 124 vendors; the
+    // 90 non-cannabis lots (and the 4 accessory-only vendors) are left out.
+    expect(plan.summary.lots).toBe(4166);
+    expect(plan.summary.lotsTimed).toBe(3926);
     expect(plan.summary.lotsDayOnly).toBe(0);
-    expect(plan.summary.lotsUndated).toBe(269);
-    expect(plan.summary.sessionGroups).toBe(649);
+    expect(plan.summary.lotsUndated).toBe(240);
+    expect(plan.summary.sessionGroups).toBe(639);
     expect(plan.summary.singletonSessions).toBe(137);
     expect(plan.summary.largestGroup).toBe(71);
-    expect(plan.summary.undatedGroups).toBe(53);
-    expect(plan.summary.vendorsWithUndated).toBe(53);
-    expect(plan.summary.vendors).toBe(124);
+    expect(plan.summary.undatedGroups).toBe(51);
+    expect(plan.summary.vendorsWithUndated).toBe(51);
+    expect(plan.summary.vendors).toBe(120);
     expect(plan.summary.vendorConflicts).toBe(0);
-    expect(plan.summary.undatedReasons).toEqual({ blank: 269, unreadable: 0, out_of_window: 0 });
-    expect(plan.groups.length).toBe(649 + 53);
+    expect(plan.summary.undatedReasons).toEqual({ blank: 240, unreadable: 0, out_of_window: 0 });
+    expect(plan.groups.length).toBe(639 + 51);
     expect(plan.numberCollisions).toEqual([]);
     expect(plan.unreadableSamples).toEqual([]);
   });
 
   it("matches the independent oracle at every measured gap", () => {
-    const expected: Record<number, [number, number]> = { 10: [654, 138], 30: [652, 138], 60: [649, 137], 120: [649, 137], 240: [649, 137] };
+    // R74 S1: pre-R74 { 10: [654, 138], 30: [652, 138], 60: [649, 137], ... }. The only gap-sensitive
+    // sessions were accessory deliveries keyed in slowly; with them left out every gap agrees.
+    const expected: Record<number, [number, number]> = { 10: [639, 137], 30: [639, 137], 60: [639, 137], 120: [639, 137], 240: [639, 137] };
     for (const [g, [sessions, singles]] of Object.entries(expected)) {
       const p = planCultiveraManifests(rows, { pacificToday: TODAY, gapMinutes: Number(g) });
       const o = oracle(Number(g));
@@ -149,8 +159,8 @@ describe("R50 S1: the real export through the executor's path", () => {
 
   it("partitions every lot exactly once (nothing lost, nothing doubled)", () => {
     const all = plan.groups.flatMap((g) => g.barcodes);
-    expect(all.length).toBe(4256);
-    expect(new Set(all).size).toBe(4256);
+    expect(all.length).toBe(4166);
+    expect(new Set(all).size).toBe(4166);
     expect(new Set(all)).toEqual(new Set(sources.map((s) => s.barcode)));
   });
 
@@ -175,9 +185,9 @@ describe("R50 S1: the real export through the executor's path", () => {
         checked++;
       }
     }
-    expect(checked).toBe(4256);
+    expect(checked).toBe(4166);
     // And R50 fixed the date reader: every dated lot now carries its date.
-    expect(lots.filter((l) => l.receivedOn).length).toBe(3987);
+    expect(lots.filter((l) => l.receivedOn).length).toBe(3926);
   });
 
   it("known deliveries come out exactly as observed", () => {
@@ -196,11 +206,14 @@ describe("R50 S1: the real export through the executor's path", () => {
     const perDay = new Map<string, number>();
     for (const g of plan.groups) if (g.kind === "session") perDay.set(`${g.vendorKey}|${g.day}`, (perDay.get(`${g.vendorKey}|${g.day}`) ?? 0) + 1);
     expect([...perDay].filter(([, n]) => n > 1).map(([k]) => k)).toEqual(["AGRO COUTURE|2025-07-09"]);
-    // Longest keyed-in-slowly delivery: I502 DISTRO 2024-10-02, ~113 min span.
+    // Longest keyed-in-slowly delivery. Pre-R74 this was I502 DISTRO 2024-10-02
+    // (~113 min), an accessories-only delivery the R74 non-cannabis gate leaves out;
+    // the longest cannabis delivery is GROW OP FARMS 2025-11-26 (2 min).
     const slow = plan.groups.reduce((a, b) => (b.spanMinutes > a.spanMinutes ? b : a));
-    expect(slow.vendorKey).toBe("I502 DISTRO");
-    expect(slow.day).toBe("2024-10-02");
-    expect(slow.spanMinutes).toBe(113);
+    expect(slow.vendorKey).toBe("GROW OP FARMS");
+    expect(slow.day).toBe("2025-11-26");
+    expect(slow.spanMinutes).toBe(2);
+    expect(plan.groups.some((g) => g.vendorKey === "I502 DISTRO" && g.day === "2024-10-02")).toBe(false);
     // Biggest undated bucket.
     const und = plan.groups.filter((g) => g.kind === "undated").sort((a, b) => b.barcodes.length - a.barcodes.length)[0];
     expect([und.vendorKey, und.barcodes.length]).toEqual(["CULTIVAR FARMS", 52]);

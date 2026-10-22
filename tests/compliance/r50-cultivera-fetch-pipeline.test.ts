@@ -171,8 +171,13 @@ describe("R50 S9: Fetch It All pipeline on live-shaped workbooks", () => {
   it("every list lot reaches the transform, nothing hidden for a missing master, 0 errors: GO", () => {
     expect(full.completeness.ok).toBe(true);
     expect(full.completeness.rows).toBe(600);
-    expect(full.r.lotSources.length).toBe(600);
-    expect(new Set(full.r.lotSources.map((s) => s.barcode))).toEqual(new Set(listLots.map((l) => l.Barcode.trim())));
+    // R74 S1: the fixture's 600 rows include one the export flags Is Cannabis=False
+    // ("Pastime Accessories"); the gate leaves it out, so 599 lot sources.
+    const nonCannabis = new Set(source.filter((r) => String(r["Is Cannabis"]).toLowerCase() === "false").map((r) => String(r.Barcode).trim()));
+    expect(nonCannabis.size).toBe(1);
+    expect(full.r.excludedNonCannabis.map((x) => x.barcode)).toEqual([...nonCannabis]);
+    expect(full.r.lotSources.length).toBe(599);
+    expect(new Set(full.r.lotSources.map((s) => s.barcode))).toEqual(new Set(listLots.map((l) => l.Barcode.trim()).filter((b) => !nonCannabis.has(b))));
     expect(full.r.diagnosticCounts.errors).toBe(0);
     expect(full.hidden).toBe(0);
     expect(full.gate.go).toBe(true);
@@ -191,7 +196,7 @@ describe("R50 S9: Fetch It All pipeline on live-shaped workbooks", () => {
 
   it("time of day survives the date cells", () => {
     const withTime = full.r.lotSources.filter((s) => TS.test(s.receivedDateRaw ?? "")).length;
-    const sourceWithTime = source.filter((r) => TS.test(String(r["Received date"] ?? ""))).length;
+    const sourceWithTime = source.filter((r) => String(r["Is Cannabis"]).toLowerCase() !== "false" && TS.test(String(r["Received date"] ?? ""))).length;
     expect(sourceWithTime).toBeGreaterThan(500);
     expect(withTime).toBe(sourceWithTime);
   });
