@@ -317,3 +317,39 @@ describe("R74 S2: vendor-file coverage on loadRunForImport", () => {
     expect(r.vendorCoverage).toMatchObject({ expected: 1, saved: 0, missing: 1, complete: false });
   });
 });
+
+// R74 S3: the "Download crawler report" button reads only state.json / errors.jsonl / manifest.json,
+// carries the secret, maps a 404 to null (no errors.jsonl = no fetch errors) and builds one report.
+describe("R74 S3: getPosRunFile + buildRunReport against a fake crawler", () => {
+  it("reads the three allowlisted files, 404 → null, refuses anything else", async () => {
+    served = makeRun();
+    const mod = await import("@/lib/pos/cultivera-fetch-client");
+    const st = await mod.getPosRunFile(RID, "state.json");
+    expect(JSON.parse(String(st)).status).toBe("done");
+    expect(await mod.getPosRunFile(RID, "errors.jsonl")).toBeNull();
+    // @ts-expect-error - not an allowlisted report file
+    await expect(mod.getPosRunFile(RID, "export_inventories.xlsx")).rejects.toThrow("Not a run file");
+    await expect(mod.getPosRunFile("../etc", "state.json")).rejects.toThrow("Not a run file");
+    expect(seen.every((s) => s.secret === "s3cret")).toBe(true);
+  });
+
+  it("report from served files: stages, coverage, grouped errors, no secrets", async () => {
+    served = makeRun();
+    const st = JSON.parse(served["state.json"].toString("utf8"));
+    st.stages = { wcia_json: { status: "partial", wanted: 2, missing: [6], errors: 1, coverage: { expected: 2, saved: 1, missing: 1, refused: 0, errors: 1, stoppedForTime: false, complete: false } } };
+    st.warnings = ["Vendor transfer files: 1 of 2 MISSING (1 errors). The 1 saved still stage."];
+    served["state.json"] = Buffer.from(JSON.stringify(st));
+    served["errors.jsonl"] = Buffer.from(JSON.stringify({ stage: "wcia_json", id: 6, status: 502 }) + "\n");
+    const mod = await import("@/lib/pos/cultivera-fetch-client");
+    const { buildRunReport } = await import("@/lib/pos/cultivera-run-report-core");
+    const { PHASE_A_STAGES } = await import("@/lib/pos/cultivera-fetch-button-core");
+    const txt = (n: "state.json" | "errors.jsonl" | "manifest.json") => mod.getPosRunFile(RID, n).then((b) => (b ? b.toString("utf8") : null));
+    const [s, m, e] = await Promise.all([txt("state.json"), txt("manifest.json"), txt("errors.jsonl")]);
+    const rep = buildRunReport({ runId: RID, state: JSON.parse(s!), manifest: JSON.parse(m!), errorsText: e, readProblems: [], generatedAtIso: "2026-11-01T14:00:00Z", stageOrder: PHASE_A_STAGES });
+    expect(rep).toContain("MISSING:                      1");
+    expect(rep).toContain("[wcia_json] HTTP 502: 1 — ids 6");
+    expect(rep).toContain("⚠ Vendor transfer files: 1 of 2 MISSING");
+    expect(rep).toContain("export_inventories.xlsx");
+    expect(rep).not.toContain("s3cret");
+  });
+});

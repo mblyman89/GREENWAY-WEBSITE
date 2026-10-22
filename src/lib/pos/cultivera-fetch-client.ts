@@ -19,6 +19,7 @@ import { pacificDayKey } from "@/lib/reports/timezone";
 import { buildPlanInputs, type RehomePlanInputs } from "@/lib/inventory/cultivera-rehome-core";
 import type { WciaRunRecord } from "@/lib/inventory/cultivera-wcia-core";
 import { vendorFileCoverage, type VendorFileCoverage } from "@/lib/pos/cultivera-wcia-coverage-core";
+import { isRawReportFile, type RawReportFile } from "@/lib/pos/cultivera-run-report-core";
 import {
   REQUIRED_FILES,
   harvestAgeMinutes,
@@ -103,6 +104,19 @@ export async function cancelPosRun(runId: string): Promise<boolean> {
 
 async function getFile(runId: string, name: string): Promise<Buffer> {
   const res = await posFetch(`/runs/${runId}/files/${encodeURIComponent(name)}`, undefined, 120_000);
+  if (!res.ok) throw new Error(`${name}: crawler responded ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * R74 S3: one raw run file for the "Download crawler report" button (state.json / errors.jsonl /
+ * manifest.json only - the allowlist lives in cultivera-run-report-core). A 404 is `null` (the crawler
+ * only writes errors.jsonl when a fetch fails; a running harvest has no manifest.json yet).
+ */
+export async function getPosRunFile(runId: string, name: RawReportFile): Promise<Buffer | null> {
+  if (!isValidRunId(runId) || !isRawReportFile(name)) throw new Error("Not a run file the report may read.");
+  const res = await posFetch(`/runs/${runId}/files/${encodeURIComponent(name)}`, undefined, 60_000);
+  if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${name}: crawler responded ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }

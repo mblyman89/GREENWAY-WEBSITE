@@ -155,6 +155,25 @@ export default async function FetchRunPage({
           </section>
         )}
 
+        {/* R74 S3: one click hands the crawler data over (no digging in Railway). Plain links, so they work for any run state. */}
+        <section data-testid="fetch-run-report" className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <h2 className="text-sm font-semibold text-white">Crawler report (for support)</h2>
+          <p className="mt-1 text-xs text-white/60">
+            One text file with every stage&apos;s numbers, the vendor-file coverage, every fetch error and the raw state. Download it and send it as is. It has no passwords in it.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+            <a href={`/admin/menu-imports/fetch/${runId}/report`} data-testid="fetch-run-report-download" className="rounded-md border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-3 py-1.5 font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/20">
+              Download crawler report
+            </a>
+            <span className="text-white/40">Raw files:</span>
+            {(["state.json", "errors.jsonl", "manifest.json"] as const).map((f) => (
+              <a key={f} href={`/admin/menu-imports/fetch/${runId}/report?file=${f}`} className="text-white/70 underline">
+                {f}
+              </a>
+            ))}
+          </div>
+        </section>
+
         {loaded && (
           <section className={`rounded-xl border p-5 ${report?.go ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5" : "border-red-500/40 bg-red-500/5"}`}>
             <h2 className="text-sm font-semibold text-white">
