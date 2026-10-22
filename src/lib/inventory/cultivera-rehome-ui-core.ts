@@ -103,6 +103,7 @@ export function __runCultiveraRehomeUiCoreTests(): { passed: number; failed: num
     lotsToMove: 3,
     lotsAlreadyHome: 0,
     lotsStayOnSource: 0,
+    lotsPlacedByEmail: 0,
     vendorIdsSet: 0,
     exceptionCounts: { planned_barcode_without_lot: 0, lot_not_in_plan: 0, lot_on_foreign_manifest: 0, transfer_date_after_acceptance: 0 },
     ...o,

@@ -214,7 +214,23 @@ export type ExistingManifest = {
   dedupe_key: string | null;
   payload_kind: string | null;
   payload_import_id: string | null;
+  /** raw_payload.group_kind (transfer / session / day / undated / email / unmatched). */
+  payload_group_kind?: string | null;
 };
+
+/**
+ * R74 S10: group kinds written by the email step (cultivera-mail-apply). A lot sitting on one of
+ * this import's manifests of these kinds was placed there by the email step on purpose; the
+ * re-home leaves it alone (never moves it back, never refuses because of it).
+ */
+export const MAIL_STEP_GROUP_KINDS: readonly string[] = Object.freeze(["email", "unmatched"]);
+/** The S1 fallback kinds (rebuilt from Received dates); the email step may move lots off these. */
+export const FALLBACK_GROUP_KINDS: readonly string[] = Object.freeze(["session", "day", "undated"]);
+
+/** This import's email-step manifest (kind + import id + group kind all exact). */
+export function isMailStepManifest(m: Pick<ExistingManifest, "payload_kind" | "payload_import_id" | "payload_group_kind">, importId: string): boolean {
+  return m.payload_kind === RECONSTRUCTED_MANIFEST_KIND && m.payload_import_id === importId && MAIL_STEP_GROUP_KINDS.includes(m.payload_group_kind ?? "");
+}
 
 /** Flat projection: never pulls the (large) raw_payload. */
 /** PostgREST `.or()` keeping every manifest that is NOT rebuilt from Cultivera (null-safe: a bare `neq` drops kind-less rows). */
@@ -222,7 +238,8 @@ export const NOT_REBUILT_OR = `raw_payload->>kind.is.null,raw_payload->>kind.neq
 export function isRebuiltKind(kind: unknown): boolean {
   return kind === RECONSTRUCTED_MANIFEST_KIND;
 }
-export const REHOME_EXISTING_SELECT = "id, dedupe_key, payload_kind:raw_payload->>kind, payload_import_id:raw_payload->>import_id";
+export const REHOME_EXISTING_SELECT =
+  "id, dedupe_key, payload_kind:raw_payload->>kind, payload_import_id:raw_payload->>import_id, payload_group_kind:raw_payload->>group_kind";
 
 export type RehomeInput = {
   importId: string;
@@ -306,6 +323,8 @@ export type RehomePlan = {
     lotsToMove: number;
     lotsAlreadyHome: number;
     lotsStayOnSource: number;
+    /** R74 S10: lots the email step already placed (left alone). */
+    lotsPlacedByEmail: number;
     vendorIdsSet: number;
     exceptionCounts: Record<RehomeExceptionCode, number>;
   };
@@ -460,6 +479,9 @@ export function planRehome(input: RehomeInput): RehomePlan {
 
   const existingByKey = new Map<string, ExistingManifest>();
   for (const m of input.existing) if (m.dedupe_key) existingByKey.set(m.dedupe_key, m);
+  // R74 S10: lots on this import's email-step manifests are home already (email or CV-UNMATCHED).
+  const placedByEmail = new Set(input.existing.filter((m) => isMailStepManifest(m, input.importId)).map((m) => m.id));
+  const onEmailStep = (l: RehomeLot) => l.manifest_id != null && placedByEmail.has(l.manifest_id);
 
   const manifests: PlannedManifest[] = [];
   const keys = new Set<string>();
@@ -474,6 +496,7 @@ export function planRehome(input: RehomeInput): RehomePlan {
         addEx("planned_barcode_without_lot", b);
         continue;
       }
+      if (onEmailStep(ls[0])) continue;
       out.push(ls[0]);
     }
     return out;
@@ -537,7 +560,12 @@ export function planRehome(input: RehomeInput): RehomePlan {
   let lotsToMove = 0;
   let lotsAlreadyHome = 0;
   let lotsStayOnSource = 0;
+  let lotsPlacedByEmail = 0;
   for (const l of input.lots) {
+    if (onEmailStep(l)) {
+      lotsPlacedByEmail += 1;
+      continue;
+    }
     const key = homeOf.get(l.id);
     if (!key) {
       if (l.manifest_id === input.source.id) {
@@ -588,6 +616,7 @@ export function planRehome(input: RehomeInput): RehomePlan {
       lotsToMove,
       lotsAlreadyHome,
       lotsStayOnSource,
+      lotsPlacedByEmail,
       vendorIdsSet,
       exceptionCounts,
     },
@@ -829,6 +858,19 @@ export function __runCultiveraRehomeCoreTests(): { passed: number; failed: numbe
   ok(pf.plan.transferGroups.length === 1 && pf.plan.transferGroups[0].barcodes.join() === "A" && pf.gate.pass, "planFromSources matches the transfer and passes");
   const pfSkip = planFromSources(src, inputs.transfers, new Map(inputs.links), inputs.pacificToday, inputs.indexSkipped);
   ok(!pfSkip.gate.pass && pfSkip.gate.problems.some((x) => x.includes("without an id")), "skipped transfer records fail the gate");
+
+  // R74 S10: lots the email step placed are left alone (no move, no refusal, no exception).
+  const mailEx = [{ id: "m-mail", dedupe_key: "X|EMAIL", payload_kind: RECONSTRUCTED_MANIFEST_KIND, payload_import_id: "imp-1", payload_group_kind: "email" }];
+  const em = planRehome(base({ existing: mailEx, lots: base().lots.map((l) => (l.id === "3" ? { ...l, manifest_id: "m-mail" } : l)) }));
+  ok(em.ok && em.summary.lotsPlacedByEmail === 1 && em.summary.lotsToMove === 4, "email-placed lot left alone, rest still planned");
+  ok(em.manifests.length === 3 && !em.manifests.some((m) => m.lotIds.includes("3")), "fallback group with only email-placed lots creates no manifest");
+  ok(em.summary.exceptionCounts.lot_on_foreign_manifest === 0 && em.summary.exceptionCounts.planned_barcode_without_lot === 0, "no exception for email-placed lots");
+  ok(em.totals.lots === 6, "control totals still count the email-placed lot");
+  const otherImp = planRehome(base({ existing: [{ ...mailEx[0], payload_import_id: "imp-2" }], lots: base().lots.map((l) => (l.id === "3" ? { ...l, manifest_id: "m-mail" } : l)) }));
+  ok(!otherImp.ok && otherImp.summary.exceptionCounts.lot_on_foreign_manifest === 1, "another import's email manifest is still foreign");
+  const fbKind = planRehome(base({ existing: [{ ...mailEx[0], payload_group_kind: "session" }], lots: base().lots.map((l) => (l.id === "3" ? { ...l, manifest_id: "m-mail" } : l)) }));
+  ok(!fbKind.ok, "a non-email rebuilt kind is not treated as placed");
+  ok(isMailStepManifest({ payload_kind: RECONSTRUCTED_MANIFEST_KIND, payload_import_id: "i", payload_group_kind: "unmatched" }, "i") && !isMailStepManifest({ payload_kind: "pos-import-migration", payload_import_id: "i", payload_group_kind: "email" }, "i"), "mail-step kind is exact");
 
   ok(NOT_REBUILT_OR === "raw_payload->>kind.is.null,raw_payload->>kind.neq.cultivera-reconstructed", "null-safe rebuilt filter");
   ok(isRebuiltKind(RECONSTRUCTED_MANIFEST_KIND) && !isRebuiltKind("pos-import-migration") && !isRebuiltKind(null), "rebuilt kind only");
