@@ -11,22 +11,7 @@
 import "server-only";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { ParsedManifest } from "@/lib/inventory/intake-parser";
-import {
-  parseShippingManifestText,
-  looksLikeShippingManifest,
-} from "@/lib/inventory/pdf-manifest-core";
-import {
-  parseOpenThcInvoiceManifest,
-  looksLikeOpenThcInvoiceManifest,
-} from "@/lib/inventory/pdf-openthc-manifest-core";
-import {
-  parseGrowFlowManifest,
-  looksLikeGrowFlowManifest,
-} from "@/lib/inventory/pdf-growflow-manifest-core";
-import {
-  parseTransferLog,
-  looksLikeTransferLog,
-} from "@/lib/inventory/pdf-transferlog-core";
+import { parsePdfManifestText } from "@/lib/inventory/pdf-manifest-dispatch-core";
 import { parseCoaSummary, looksLikeCoaSummary } from "@/lib/inventory/pdf-coa-core";
 import type { PageLayer, PositionedText } from "@/lib/inventory/pdf-contingency-manifest-core";
 
@@ -168,66 +153,11 @@ export async function parsePdfManifest(
   // unpdf first (free); LlamaParse recovery only when unpdf yields nothing.
   const text = await extractPdfTextWithRecovery(bytes, recoverText);
 
-  if (!text.trim()) {
-    return {
-      ok: false,
-      error:
-        "The PDF has no extractable text (likely a scanned image). Please paste the JSON/CSV manifest instead.",
-      text: "",
-    };
-  }
-
-  // Supported PDF layouts (tried most-specific first):
-  //   1) old-method "Transfer Log (This document is NOT a manifest)"      (H16b-3)
-  //   2) GrowFlow "Manifest" document                                     (H16b-1)
-  //   3) WA LCB / Cultivera "Internal Shipping Document" (pdf-manifest-core)
-  //   4) OpenTHC / "old method" combined invoice-manifest — invoice IS the manifest
-  //
-  // The Transfer Log and GrowFlow layouts are checked before the LCB check
-  // because they carry their own unmistakable headers; the LCB classifier is
-  // broad enough that ordering matters.
-  if (looksLikeTransferLog(text)) {
-    const manifest = parseTransferLog(text);
-    if (manifest && manifest.lines.length > 0) {
-      return { ok: true, manifest, text };
-    }
-    return { ok: false, error: "No line items could be read from the Transfer Log PDF.", text };
-  }
-
-  if (looksLikeGrowFlowManifest(text)) {
-    const manifest = parseGrowFlowManifest(text);
-    if (manifest && manifest.lines.length > 0) {
-      return { ok: true, manifest, text };
-    }
-    return { ok: false, error: "No line items could be read from the GrowFlow manifest PDF.", text };
-  }
-
-  if (looksLikeShippingManifest(text)) {
-    const manifest = parseShippingManifestText(text);
-    if (manifest && manifest.lines.length > 0) {
-      return { ok: true, manifest, text };
-    }
-    return { ok: false, error: "No line items could be read from the PDF manifest.", text };
-  }
-
-  if (looksLikeOpenThcInvoiceManifest(text)) {
-    const manifest = parseOpenThcInvoiceManifest(text);
-    if (manifest && manifest.lines.length > 0) {
-      return { ok: true, manifest, text };
-    }
-    return {
-      ok: false,
-      error: "No line items could be read from the invoice-manifest PDF.",
-      text,
-    };
-  }
-
-  return {
-    ok: false,
-    error:
-      "This PDF doesn't look like a WA LCB Internal Shipping Document or an OpenTHC invoice-manifest (no Manifest ID / Inventory Lot Details table found).",
-    text,
-  };
+  // R74 S9: the layout dispatch lives in the pure pdf-manifest-dispatch-core (same parsers, same
+  // order, same messages) so the Cultivera email reader runs exactly what intake runs.
+  const r = parsePdfManifestText(text);
+  if (r.ok) return { ok: true, manifest: r.manifest, text };
+  return { ok: false, error: r.error, text: text.trim() ? text : "" };
 }
 
 /** Convenience: parse from a base64 string (as inbound-email attachments store). */
