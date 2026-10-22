@@ -126,7 +126,7 @@ export default async function ImportCoveragePage({
               <h2 className="text-sm font-semibold text-white">Put the email-found lots on their manifests</h2>
               <p className="mt-1 max-w-3xl text-xs text-white/50">
                 Creates one manifest per emailed manifest above (its real number, vendor and the name, type and cost from the
-                manifest line kept for onboarding) and the one "Unmatched Cultivera stock" manifest, then moves each lot
+                manifest line kept for onboarding) and the one &ldquo;Unmatched Cultivera stock&rdquo; manifest, then moves each lot
                 onto it. Only the lot&apos;s manifest changes: quantity, cost, category, menu and register are untouched, and it is
                 migration stock (no bills, no Sage). Works before or after Rebuild manifests; run it again after more harvesting
                 and lots move off the unmatched manifest onto the manifest that was found.
@@ -137,7 +137,7 @@ export default async function ImportCoveragePage({
                   <p data-testid="mail-apply-summary">
                     {ap.summary.emailManifests} emailed manifest(s){ap.summary.unmatchedManifest ? " + the unmatched manifest" : ""} ·{" "}
                     {ap.summary.manifestsToCreate} to create · {ap.summary.lotsToMove} lot(s) to move ({ap.summary.lotsToEmail} onto emailed manifests,{" "}
-                    {ap.summary.lotsToUnmatched} onto "Unmatched Cultivera stock") · {ap.summary.lotsAlreadyHome} already home
+                    {ap.summary.lotsToUnmatched} onto &ldquo;Unmatched Cultivera stock&rdquo;) · {ap.summary.lotsAlreadyHome} already home
                     {ap.summary.movesFromRebuilt > 0 ? ` · ${ap.summary.movesFromRebuilt} come off received-date manifests` : ""}
                     {ap.summary.movesFromUnmatched > 0 ? ` · ${ap.summary.movesFromUnmatched} upgraded off the unmatched manifest` : ""}
                   </p>
@@ -169,7 +169,7 @@ export default async function ImportCoveragePage({
                       </button>
                     </form>
                   )}
-                  {stage === "done" && <p className="text-[var(--admin-accent)]" data-testid="mail-apply-complete">Every lot left for email is on its emailed manifest or on "Unmatched Cultivera stock".</p>}
+                  {stage === "done" && <p className="text-[var(--admin-accent)]" data-testid="mail-apply-complete">Every lot left for email is on its emailed manifest or on &ldquo;Unmatched Cultivera stock&rdquo;.</p>}
                   {stage === "nothing" && <p className="text-white/50">No lots are waiting for the email step.</p>}
                   {!canApply && (stage === "ready" || stage === "partial") && <p className="text-white/40">Applying needs the inventory manager permission.</p>}
                   {canApply && ap.summary.manifestsAlreadyCreated > 0 && (

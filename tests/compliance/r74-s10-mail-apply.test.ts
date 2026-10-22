@@ -61,9 +61,11 @@ function project(r: Row, select: string): Row {
   return out;
 }
 
+// Ids must be unique across every fake client, as the database's are.
+let seq = 0;
+
 function fakeAdmin(db: Db, fails: Fail[] = []) {
   const counts: Record<string, number> = {};
-  let seq = 0;
   const failNow = (table: string, op: Op) => {
     const k = `${table}:${op}`;
     counts[k] = (counts[k] ?? 0) + 1;
