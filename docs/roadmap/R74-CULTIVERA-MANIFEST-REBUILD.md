@@ -48,7 +48,8 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S4 | No received date = "does not exist, include in the clean up" (owner #5). `ccrs-migration-garbage-core` gains dead reason `no_received_date` (evidence: the lot's `received_on` was read and is blank); the CCRS hub's Migration clean-up panel lists and routes those lots like every other dead lot (Reconciliation zero-out if CCRS holds them, local-only if not; never a Delete), with a note + link to the import's Received dates page for any that really exist. A missing received date is no longer listed as "fixable" | (#1456) shipped |
 | S5 | Mail harvest foundation (round 4). Pure `cultivera-mail-harvest-core` (52 self-tests): the CCRS monitor's keyless Google sign-in pointed at `CULTIVERA_HARVEST_MAILBOX` (default stephen@), a no-date-limit vendor-document search, a resumable Gmail-pageToken cursor, an attachment plan (json/pdf/csv/xlsx as BYTES, every skip named), magic-byte checks, Gmail quota budget. I/O: `listMessageIdsPage`, `getAttachmentBytes`. Menu imports gets a read-only **Test the vendor mailbox** button (audited `cultivera_mail.probe`). Setup guide `docs/CULTIVERA_GMAIL_HARVEST_SETUP.md` | (#1457) shipped |
 | S6 | Email match by barcode + the ONE "Unmatched Cultivera stock" manifest (round 4, owner #5). Pure `cultivera-mail-match-core` (29 self-tests): `openLotsFromTransferPlan` takes the lots the crawler's transfer match left unplaced; `planMailMatch` matches each against harvested, parsed vendor documents on barcode (WCIA `inventory_id` = Cultivera Barcode). One emailed manifest places the lot (with the manifest's name, type and cost in cents for survivorship); two or more = never guess; none = `CV-UNMATCHED` "Unmatched Cultivera stock". Same transfer emailed twice = one manifest; sold-out lines counted, never made into lots; loud summary line | (#1458) shipped |
-| W2 | Rest of Wave 2: the harvest RUN (cron/button that walks stephen@ with the S5 cursor, stores each vendor file in `pos-raw`, parses it with the existing parsers, ~2 slices), then the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert), and the per-lot coverage report (Cultivera / email / none) | planned |
+| S7 | The harvest RUN (round 5). Menu imports -> Vendor mailbox -> **Harvest the next batch** (menu.import, audited `cultivera_mail.harvest`, no new cron). Each press lists one Gmail page at the S5 cursor, opens up to 47 new emails inside a 200-second budget, downloads each vendor attachment as bytes (magic-byte checked), fetches each WCIA Transfer Data Link in the email body, stores every file privately in `pos-raw/mail-harvest/<mailbox>/<gmail id>/<n>-<name>`, parses JSON (WCIA / generic) and CCRS manifest CSVs with the existing parsers (PDF / spreadsheet kept as `stored`, read later), and inserts one row per document into the new `cultivera_mail_docs` (migration 0293; the insert is the claim). Pure `cultivera-mail-harvest-run-core` (49 self-tests); `mailDocsFromRows` feeds S6 | in review |
+| W2 | Rest of Wave 2: the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert), the per-lot coverage report (Cultivera / email / none), and reading the kept PDFs / spreadsheets | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
 ## S1 evidence (measured, not assumed)
@@ -148,6 +149,30 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
   state-issued, so the barcode decides. Agreement is reported (`vendorAgrees`, `vendorDiffers`).
 - Lines for barcodes that are not open lots (sold out, or already placed) are counted as
   `otherLines`, never turned into lots.
+
+## S7 behavior
+
+- One batch = one Gmail page (100 ids, newest first within the page; the walk goes page by page as
+  far back as Gmail allows). Ids already in `cultivera_mail_docs` are never opened again. The cursor
+  moves to the next page only when every email on the page has rows; otherwise the next press
+  finishes the same page.
+- Per email: attachments to download come from S5's plan (json / pdf / csv / xlsx, at most 10, 25 MB
+  each); when no JSON is attached, up to 4 WCIA transfer links in the body are fetched (the same
+  extractor the inbound email uses). Every document gets a numbered row: `parsed` (barcodes read),
+  `stored` (PDF / spreadsheet kept, read later), `unreadable` (kept, no barcodes, with the reason),
+  `failed` (could not download, or the bytes are not what the name says), `skipped` (too large, over
+  the per-email cap). An email with no vendor document gets ONE `no_documents` row (pictures and
+  signatures are counted on it).
+- Each line kept is `[barcode, qty, product name, inventory type, unit cost in cents]`.
+- A Gmail 429 / 5xx / timeout stops the batch and writes nothing for that email; it is read again on
+  the next press (never recorded as a permanent failure). Any other error opening an email also stops
+  the batch (never skipped silently).
+- A changed mailbox or search starts over from the oldest page and says why.
+- Database (0293): unique (mailbox, gmail_id, doc_index) is the claim; received fields immutable;
+  status only moves among stored / unreadable / parsed (a later re-read); never deleted; factory
+  reset KEEPS it; staff read, admin write. Proven on Postgres 15 by
+  `scripts/recon/cultivera-mail-docs-0293-pg-check.sql` (CI post-apply check).
+- Before 0293 is applied the section says "Apply database update 0293 first." and the button is off.
 
 ## Round 3 walkthrough
 
