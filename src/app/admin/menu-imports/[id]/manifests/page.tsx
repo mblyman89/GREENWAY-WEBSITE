@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
@@ -83,6 +84,12 @@ export default async function ImportManifestsPage({
           Only each lot&apos;s manifest changes: quantities, costs, received dates and what the menu and register show stay
           exactly the same. Nothing is a purchase — this stock is already paid for, so payables and Sage never see it. The
           rebuilt manifests then appear in Onboarding, so these products get enriched the same way as a native delivery.
+        </p>
+        {/* R74 S8: lot by lot, where each manifest comes from (Cultivera transfer / email / unmatched). */}
+        <p className="text-xs">
+          <Link href={`/admin/menu-imports/${id}/coverage`} className="text-[var(--admin-accent)] underline" data-testid="coverage-link">
+            Where each lot&apos;s manifest comes from (Cultivera transfer, email, or unmatched) →
+          </Link>
         </p>
 
         {plan && s && (
