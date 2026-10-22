@@ -925,6 +925,7 @@ import { __runReprocessCoreTests } from "../../src/lib/inventory/reprocess-core"
 import { __runTransformCoreTests } from "../../src/lib/pos/transform";
 import { __runCultiveraNoncannabisGateCoreTests } from "../../src/lib/pos/cultivera-noncannabis-gate-core";
 import { __runCultiveraWciaCoverageCoreTests } from "../../src/lib/pos/cultivera-wcia-coverage-core";
+import { __runCultiveraRunReportCoreTests } from "../../src/lib/pos/cultivera-run-report-core";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
 import { __runReceivedDateBulkCoreTests } from "../../src/lib/inventory/received-date-bulk-core";
@@ -1832,6 +1833,7 @@ __runLiquidVolumeTests();
   __runTransformCoreTests();
   { const r = __runCultiveraNoncannabisGateCoreTests(); if (r.failed > 0 || r.passed < 23) throw new Error(`cultivera-noncannabis-gate-core: ${r.failed} failed, ${r.passed} passed (expected >= 23)`); }
   { const r = __runCultiveraWciaCoverageCoreTests(); if (r.failed > 0 || r.passed < 17) throw new Error(`cultivera-wcia-coverage-core: ${r.failed} failed, ${r.passed} passed (expected >= 17)`); }
+  { const r = __runCultiveraRunReportCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`cultivera-run-report-core: ${r.failed} failed, ${r.passed} passed (expected >= 33)`); }
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
   assertNoFailures("received-date-bulk-core", __runReceivedDateBulkCoreTests());
