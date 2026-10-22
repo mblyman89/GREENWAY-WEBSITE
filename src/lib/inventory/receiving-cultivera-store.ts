@@ -25,6 +25,7 @@ import {
   type CultiveraManifestRow,
 } from "@/lib/inventory/cultivera-onboarding-core";
 import { cultiveraDayKey, cultiveraTableRows, type CultiveraTableRow } from "@/lib/inventory/receiving-table-core";
+import { sourceOfGroupKind, type CultiveraSource } from "@/lib/inventory/cultivera-vendor-core";
 
 export type ReceivingCultiveraLoad =
   | { ok: true; rows: CultiveraTableRow[]; tallyRead: boolean; truncated: boolean }
@@ -43,7 +44,9 @@ export async function loadReceivingCultiveraRows(): Promise<ReceivingCultiveraLo
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
   const admin = createSupabaseAdminClient();
 
-  const manifests: CultiveraManifestRow[] = [];
+  // R74 S11: group_kind says where each manifest came from (transfer match,
+  // emailed manifest, the CV-UNMATCHED catch-all, or a received-date group).
+  const manifests: (CultiveraManifestRow & { group_kind?: string | null })[] = [];
   let truncated = false;
   for (let off = 0; ; off += PAGE) {
     if (off >= MAX_MANIFESTS) {
@@ -52,13 +55,13 @@ export async function loadReceivingCultiveraRows(): Promise<ReceivingCultiveraLo
     }
     const { data, error } = await admin
       .from("inbound_manifests")
-      .select("id, manifest_number, vendor_label, transfer_date, accepted_at, accepted_lot_count")
+      .select("id, manifest_number, vendor_label, transfer_date, accepted_at, accepted_lot_count, group_kind:raw_payload->>group_kind")
       .eq("raw_payload->>kind", RECONSTRUCTED_MANIFEST_KIND)
       .order("accepted_at", { ascending: false, nullsFirst: false })
       .order("id", { ascending: true })
       .range(off, off + PAGE - 1);
     if (error) return { ok: false, error: short(error) };
-    const got = (data as CultiveraManifestRow[] | null) ?? [];
+    const got = (data as (CultiveraManifestRow & { group_kind?: string | null })[] | null) ?? [];
     manifests.push(...got);
     if (got.length < PAGE) break;
   }
@@ -87,5 +90,6 @@ export async function loadReceivingCultiveraRows(): Promise<ReceivingCultiveraLo
 
   const views = cultiveraManifestRows(manifests, tallyRead ? tallyCultiveraDrafts(drafts) : null);
   const dayKeys = new Map(manifests.map((m) => [m.id, cultiveraDayKey(m)] as const));
-  return { ok: true, rows: cultiveraTableRows(views, dayKeys, tallyRead), tallyRead, truncated };
+  const sources = new Map<string, CultiveraSource>(manifests.map((m) => [m.id, sourceOfGroupKind(m.group_kind)] as const));
+  return { ok: true, rows: cultiveraTableRows(views, dayKeys, tallyRead, sources), tallyRead, truncated };
 }
