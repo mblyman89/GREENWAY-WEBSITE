@@ -19,6 +19,10 @@ Internal working name during research was "R51 round 2". The repo already has an
 
 > Thank you. I will try a dry test run and set the mode to sprint. 3.8 flash is already set in vercel. Please walk me through the steps to getting you the crawler data you need. Baby steps, plain English, every step needs full explanations, every button, every screen every setting, whatever. I use railway to deploy the crawler if that matters. Please complete another two slices, commit and push each individually. Commit work out of the same box often. In the summary report, let me know what was built, what's left to build, and what and how to test it. Follow the standing rules. Thank you!
 
+## Owner request, round 4 (verbatim)
+
+> Thank you. Please complete another two slices. Commit and push both individually. Let me know in the summary report what was done, what’s left to build. How to setup Google workspace for email reading, and anything else important. Follow the standing rules. Thank you!
+
 ## Decisions taken from round 2
 
 | # | Owner answer | Where it lands |
@@ -38,6 +42,7 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S2 | Loud WCIA JSON coverage. The crawler counts transfers that publish a JSON vs JSONs obtained; Fetch It All shows the gap as a failing check (no silent "partial"); every JSON obtained still stages | shipped |
 | S3 | (#1455) One-click crawler report (round 3). The Fetch It All run page gets a "Crawler report (for support)" box: **Download crawler report** (one `.txt`: run status + Pacific times, loud warnings, every stage, vendor-file coverage, fetch errors grouped by stage, file list, raw `state.json` + raw `errors.jsonl`, credentials redacted) and raw `state.json` / `errors.jsonl` / `manifest.json` links. Route `GET /admin/menu-imports/fetch/<runId>/report[?file=…]` (menu.import, audited `pos_fetch.report_download`) | shipped |
 | S4 | No received date = "does not exist, include in the clean up" (owner #5). `ccrs-migration-garbage-core` gains dead reason `no_received_date` (evidence: the lot's `received_on` was read and is blank); the CCRS hub's Migration clean-up panel lists and routes those lots like every other dead lot (Reconciliation zero-out if CCRS holds them, local-only if not; never a Delete), with a note + link to the import's Received dates page for any that really exist. A missing received date is no longer listed as "fixable" | (#1456) shipped |
+| S5 | Mail harvest foundation (round 4). Pure `cultivera-mail-harvest-core` (52 self-tests): the CCRS monitor's keyless Google sign-in pointed at `CULTIVERA_HARVEST_MAILBOX` (default stephen@), a no-date-limit vendor-document search, a resumable Gmail-pageToken cursor, an attachment plan (json/pdf/csv/xlsx as BYTES, every skip named), magic-byte checks, Gmail quota budget. I/O: `listMessageIdsPage`, `getAttachmentBytes`. Menu imports gets a read-only **Test the vendor mailbox** button (audited `cultivera_mail.probe`). Setup guide `docs/CULTIVERA_GMAIL_HARVEST_SETUP.md` | in progress |
 | W2 | Gmail harvest of stephen@ (bytes attachments, resumable cursor), migration-mode match by barcode, Unmatched Cultivera stock manifest, coverage report | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
@@ -102,6 +107,24 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
 - Guide step `ccrs_cleanup` and the Menu Imports page text now name the third reason.
 - Pins: core self-tests 53 → 67 (+14), `tests/compliance/r50-s10c-migration-garbage.test.tsx` +2 tests.
 - Read-only, as before: S4 writes nothing and adds no migration.
+
+## S5 behavior
+
+- Sign-in is the CCRS monitor's, unchanged (`mailConfigFromEnv`), with the mailbox swapped to
+  `CULTIVERA_HARVEST_MAILBOX` (default `stephen@greenwaymarijuana.com`). The CCRS lookback setting is
+  ignored for the harvest. One domain-wide-delegation approval covers every mailbox in the domain.
+- Search: `{filename:json filename:pdf filename:csv filename:xlsx filename:xls manifest invoice COA
+  "certificate of analysis" "transfer data" wcia} -in:chats`. No date limit unless one is given (bad
+  dates are dropped, never guessed).
+- Cursor `{version, mailbox, query, pageToken, pagesDone, listed, done}`: a changed mailbox or query, or
+  an unreadable cursor, restarts the walk and says why. A page with no `nextPageToken` finishes it.
+- Attachments: kind by extension, then MIME; at most 25 MB (Gmail's limit) and 10 per email; duplicates,
+  non-documents and missing data are named as skips. Bytes are decoded from base64url directly, and
+  `bytesMatchKind` refuses a "PDF" that is not `%PDF`, a "JSON" that does not open with `{`/`[`, and a
+  binary "CSV".
+- Quota (Gmail usage-limits page, read 2026-10-21): list 5, get(full) 60, attachments.get 20; 6,000 per
+  user per minute. `messagesPerRun(2)` = 47 emails under an 80 % budget.
+- The test button reads ONE id; nothing is opened or stored.
 
 ## Round 3 walkthrough
 
