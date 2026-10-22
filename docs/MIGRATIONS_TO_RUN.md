@@ -2904,3 +2904,41 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0292_orders_updated_at_indexes.rollback.sql`.
   It drops the two indexes; nothing else.
   - Manual test T-379.
+
+## R74 — 0293 — Cultivera email harvest: kept vendor documents
+
+- [ ] `0293_cultivera_mail_docs.sql` adds one table, `cultivera_mail_docs`.
+  - The new **Harvest the next batch** button (Admin → Menu imports →
+    Vendor mailbox) reads the stephen@ mailbox a batch at a time, oldest
+    page first, and keeps every vendor document it finds: attached JSON,
+    CSV, PDF and spreadsheet files, and the WCIA "Transfer Data Link" JSON
+    the Cultivera emails link to. Each file is stored privately in the
+    `pos-raw` bucket under `mail-harvest/…`; this table holds one row per
+    document with what the site read from it (manifest number, vendor,
+    transfer date, and per line: barcode, quantity, product name, type,
+    unit cost in cents).
+  - The insert is the claim: one row per (mailbox, email, document), so a
+    double click never stores anything twice, and an email that has a row is
+    never opened again. An email with no vendor document gets one
+    `no_documents` row for that reason.
+  - Rows are never deleted (the database refuses), what was received never
+    changes, and the factory reset KEEPS this table.
+
+  Apply it **after 0292**. It is safe to re-run. Until it is applied the
+  button says "Apply database update 0293 first." and stores nothing.
+
+  **Check:**
+
+  ```sql
+  select count(*) as policies from pg_policies where tablename = 'cultivera_mail_docs';
+  -- policies
+  -- 2
+  ```
+
+  For the full proof, paste `scripts/recon/cultivera-mail-docs-0293-pg-check.sql`.
+  It rolls itself back and ends with `R74 0293 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0293_cultivera_mail_docs.rollback.sql`.
+  It drops the table (the stored files stay in `pos-raw`). So that a later
+  harvest starts over from the oldest email, also run:
+  `delete from public.site_settings where key = 'cultivera_mail_harvest_cursor';`
