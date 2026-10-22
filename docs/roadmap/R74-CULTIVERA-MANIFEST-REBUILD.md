@@ -55,7 +55,8 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S7 | The harvest RUN (round 5). Menu imports -> Vendor mailbox -> **Harvest the next batch** (menu.import, audited `cultivera_mail.harvest`, no new cron). Each press lists one Gmail page at the S5 cursor, opens up to 47 new emails inside a 200-second budget, downloads each vendor attachment as bytes (magic-byte checked), fetches each WCIA Transfer Data Link in the email body, stores every file privately in `pos-raw/mail-harvest/<mailbox>/<gmail id>/<n>-<name>`, parses JSON (WCIA / generic) and CCRS manifest CSVs with the existing parsers (PDF / spreadsheet kept as `stored`, read later), and inserts one row per document into the new `cultivera_mail_docs` (migration 0293; the insert is the claim). Pure `cultivera-mail-harvest-run-core` (49 self-tests); `mailDocsFromRows` feeds S6 | (#1459) shipped |
 | S8 | The per-lot coverage report (round 5), read-only. Rebuild manifests -> **Coverage report** (`/admin/menu-imports/<id>/coverage`, menu.import). Builds the SAME transfer plan as the rebuild page and Apply (`loadRehomeSources` + `planFromSources`), reads only the parsed `cultivera_mail_docs` rows that list a lot the transfers left open (`barcodes &&`, GIN index, paged, fail closed), runs S6's `planMailMatch`, and shows, per lot: Cultivera transfer / one emailed manifest / several emails (not guessed) / nothing (goes on `CV-UNMATCHED`), plus the lots with no received date (CCRS clean-up). By-vendor table (most unplaced first), filters (source, vendor, no received date) and a CSV download (formula-safe). Pure `cultivera-coverage-core` (41 self-tests) | (#1460) shipped |
 | S9 | Read the kept PDFs and spreadsheets (round 6). Menu imports -> Vendor mailbox -> **Read the kept PDFs and spreadsheets** (menu.import, audited `cultivera_mail.read`, no cron, no migration). Up to 12 `stored` documents per press (oldest email first, 200-second budget). PDFs: **LlamaParse** first (`parsePdfWithFallback`, the live intake's primary reader, usage logged as `cultivera-mail-read`; unpdf text layer on an outage / no key), then the intake's own layout parsers (shared via the new pure `pdf-manifest-dispatch-core`), then LlamaParse's markdown tables as a last resort; every barcode is grounded against the PDF's own text layer (an OCR-only barcode is dropped and counted). Spreadsheets: exceljs cells (exact values; not the CVE-flagged `xlsx` package), barcode only from a header-named column. Rows move `stored` -> `parsed` / `unreadable` (with the reason) via a guarded update (the claim); S6/S8 then see them. Pure `cultivera-mail-read-core` (51 self-tests) | (#1461) shipped |
-| W2 | Rest of Wave 2: the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert) | planned |
+| S10 | The email-step executor (round 6, W2). Rebuild manifests -> Coverage report -> **Apply the email step** (inventory.manage + attestation tick, audited `cultivera_mail_apply.*`, no cron, no migration; uses 0255's dedupe-key unique index). Writes S6's plan: one accepted, accounting-inert manifest per emailed manifest number (`<number>|EMAIL|IMPORT-<id>`; vendor, transfer date, per-barcode line facts and message ids in `raw_payload`) and the ONE `CV-UNMATCHED` "Unmatched Cultivera stock" manifest. Moves ONLY `inventory_lots.manifest_id`, each batch guarded by the manifest the preview saw; digest-pinned (Apply runs exactly the previewed plan); lineage grows before any move; verified from a DB re-read; empty received-date manifests the lots left are removed unless they carry onboarding work. Works before or after the re-home (the re-home now leaves email-step lots alone). Rollback moves lineage lots back and removes only empty email/unmatched manifests. Pure `cultivera-mail-apply-core` (52 self-tests), re-home core 76 | in review |
+| W2 | Rest of Wave 2: the executor that writes S6's plan | done by S10 |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
 ## S1 evidence (measured, not assumed)
@@ -225,6 +226,51 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
   the real QGT PDFs (manifest + COA) through the real text layer, and a real exceljs-built `.xlsx`.
   Mutation-checked: disabling grounding, the claim guard, the outage stop, the `.xls` check, formula
   results, the header rule, table-fallback grounding, the time budget or cents makes the suite fail.
+
+## S10 behavior
+
+- Where: Menu imports -> Rebuild manifests -> Coverage report, new section "Apply the email step"
+  (only inventory managers see the button; everyone with menu.import sees the preview).
+- What it writes: for each emailed manifest number that lists a lot the transfer plan leaves open,
+  one `inbound_manifests` row (status accepted, `accepted_at`/`received_at` null, so nothing posts
+  to accounting), keyed `<NUMBER>|EMAIL|IMPORT-<import id>` (numberless documents get
+  `CV-EMAIL-<hash>`). Vendor = the email's vendor, else the single Cultivera vendor label, else
+  "Vendor not named on the emailed manifest" (never guessed). Every open lot no email lists goes on
+  ONE `CV-UNMATCHED` "Unmatched Cultivera stock" manifest (`by_vendor` and the several-manifest
+  candidates recorded in `raw_payload`). `line_facts` (name / type / cost in cents per barcode) are
+  stored for Wave 3 survivorship; nothing on the lot except `manifest_id` changes.
+- Where a lot may come from: the import's POS-IMPORT manifest, a received-date manifest built by
+  the re-home (session / day / undated), or CV-UNMATCHED (an upgrade after a later harvest). A lot
+  already on an emailed manifest stays (never downgraded; reported). A lot on one of this import's
+  transfer manifests, or on a manifest from elsewhere, REFUSES the plan (nothing is pulled off a
+  native delivery).
+- Refuses (in the preview, before anything is written): transfer-plan gate failing, 0293 not
+  applied, no harvested document at all while lots are open (never dumps everything on unmatched),
+  missing POS-IMPORT manifest, duplicate barcodes, a planned key held by something else, an
+  existing email manifest without barcode lineage. Unread kept files only warn ("read them and
+  apply again").
+- Order and safety: (1) lineage (`raw_payload.barcodes`) grows on existing manifests first, guarded
+  by kind + import id; one that changed hands stops the run before any move; (2) missing manifests
+  are inserted (the unique dedupe key makes a resume never duplicate); (3) moves in batches of 150,
+  each `.eq("manifest_id", <manifest the preview saw>)`; a lot moved meanwhile is left alone and
+  reported; (4) emptied received-date manifests are deleted only when empty, ours, and carrying no
+  onboarding work (else kept with a warning); (5) control totals are re-read from the database.
+  The button carries the preview's sha256 digest; a new harvested file since the preview means
+  Apply writes nothing and asks for a fresh preview.
+- Rollback: moves back only the lots whose barcodes are in each manifest's lineage, checks they
+  left, then deletes the email/unmatched manifests that are empty and carry no work. A manifest
+  without lineage refuses (no guessing). After a rollback the re-home puts the lots back on
+  received-date manifests.
+- Re-home interplay: `planRehome` now skips lots on this import's email/unmatched manifests
+  (`lotsPlacedByEmail`), so the re-home and the email step never fight in either order.
+- Tests: `tests/compliance/r74-s10-mail-apply.test.ts` (22) against a fake database covering both
+  orders, resume after insert/move failures, a lying update, the move guard, the upgrade, lineage
+  union, changed-hands stop, rollback (exact + work kept), refusals and wiring. Mutation-checked
+  (19 mutants, all caught): removing the move guard, the digest check, lineage-first, the lineage
+  count check, the work check, the fallback clean-up, rollback lineage, rollback's empty check, the
+  missing-lineage refusal, DB verification, the downgrade/transfer/foreign/no-docs/0293 refusals,
+  the re-home's skip (both places), the lineage union or the inventory.manage permission makes
+  the suite fail.
 
 ## Round 3 walkthrough
 
