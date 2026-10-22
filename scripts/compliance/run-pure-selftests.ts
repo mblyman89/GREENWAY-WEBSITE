@@ -1843,7 +1843,7 @@ __runLiquidVolumeTests();
   { const r = __runCultiveraMailMatchCoreTests(); if (r.failed > 0 || r.passed < 29) throw new Error(`cultivera-mail-match-core: ${r.failed} failed, ${r.passed} passed (expected >= 29)`); } // R74 S6: email match by barcode + ONE "Unmatched Cultivera stock" manifest
   { const r = __runCultiveraMailHarvestRunCoreTests(); if (r.failed > 0 || r.passed < 49) throw new Error(`cultivera-mail-harvest-run-core: ${r.failed} failed, ${r.passed} passed (expected >= 49)`); } // R74 S7: harvest run — page plan, documents per email, parse, rows for 0293
   { const r = __runCultiveraCoverageCoreTests(); if (r.failed > 0 || r.passed < 41) throw new Error(`cultivera-coverage-core: ${r.failed} failed, ${r.passed} passed (expected >= 41)`); } // R74 S8: per-lot coverage report — transfer / email / unmatched, by vendor, CSV
-  { const r = __runCultiveraMailReadCoreTests(); if (r.failed > 0 || r.passed < 37) throw new Error(`cultivera-mail-read-core: ${r.failed} failed, ${r.passed} passed (expected >= 37)`); } // R74 S9: read the kept PDFs (LlamaParse, grounded) and spreadsheets (exceljs cells)
+  { const r = __runCultiveraMailReadCoreTests(); if (r.failed > 0 || r.passed < 51) throw new Error(`cultivera-mail-read-core: ${r.failed} failed, ${r.passed} passed (expected >= 51)`); } // R74 S9: read the kept PDFs (LlamaParse, grounded) and spreadsheets (exceljs cells)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
   assertNoFailures("received-date-bulk-core", __runReceivedDateBulkCoreTests());

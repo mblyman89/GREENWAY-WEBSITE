@@ -11,6 +11,7 @@
  * CCRS panel).
  *
  * R74 S7 adds "Harvest the next batch" below (harvestMailboxBatchAction).
+ * R74 S9 adds "Read the kept PDFs and spreadsheets" (readKeptDocumentsAction).
  */
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -20,6 +21,10 @@ import { buildHarvestQuery, harvestConfigLine, harvestMailConfigFromEnv, probeRe
 import { harvestBatchLine } from "@/lib/pos/cultivera-mail-harvest-run-core";
 import { HarvestTableMissing, runHarvestBatch, supabaseHarvestIo } from "@/lib/pos/cultivera-mail-harvest-store";
 import { fetchTransferJson } from "@/lib/inventory/transfer-fetch";
+import { readPdfLayer } from "@/lib/inventory/pdf-extract";
+import { parsePdfWithFallback } from "@/lib/inbound-email/llamaparse-provider";
+import { readBatchLine } from "@/lib/pos/cultivera-mail-read-core";
+import { loadXlsxWorkbook, runReadBatch, supabaseReadIo } from "@/lib/pos/cultivera-mail-read-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
@@ -87,6 +92,45 @@ export async function harvestMailboxBatchAction(): Promise<void> {
     entityId: configured.mailbox,
     after: result
       ? { ok: result.ok, opened: result.opened, stored: result.stored, documents: result.documents, parsed: result.parsed, failedEmails: result.failedEmails, deferred: result.deferred, pageComplete: result.pageComplete, stoppedBecause: result.stoppedBecause }
+      : { ok: false, error: line.slice(0, 300) },
+  });
+  back(ok ? `notice=${encodeURIComponent(line)}` : `error=${encodeURIComponent(line)}`);
+}
+
+/**
+ * R74 S9 — "Read the kept PDFs and spreadsheets". Reads up to 12 documents the harvest kept as
+ * "stored": PDFs through LlamaParse (the intake's primary reader; unpdf on an outage), grounded by
+ * the PDF's own text layer; spreadsheets through exceljs. Writes only the row's read fields (0293
+ * allows stored -> parsed | unreadable). Audited. A doubled click reads each document once.
+ */
+export async function readKeptDocumentsAction(): Promise<void> {
+  const session = await requirePermission("menu.import");
+  if (!isSupabaseServiceConfigured) back(`error=${encodeURIComponent("Reading kept documents: Supabase is not configured.")}`);
+  const cfg = harvestMailConfigFromEnv(process.env);
+  let line: string;
+  let ok = false;
+  let result: Awaited<ReturnType<typeof runReadBatch>> | null = null;
+  try {
+    const io = supabaseReadIo(createSupabaseAdminClient(), cfg.mailbox, {
+      readPdfLayer,
+      parsePdfWithFallback,
+      loadWorkbook: loadXlsxWorkbook,
+      actor: { id: session.userId, email: session.email },
+    });
+    result = await runReadBatch(io);
+    line = readBatchLine(result);
+    ok = result.ok;
+  } catch (e) {
+    line = e instanceof HarvestTableMissing ? `Reading kept documents: ${e.message}` : `Reading kept documents failed: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cultivera_mail.read",
+    entityType: "mailbox",
+    entityId: cfg.mailbox,
+    after: result
+      ? { ok: result.ok, waiting: result.waiting, read: result.read, parsed: result.parsed, unreadable: result.unreadable, failed: result.failed, llamaparse: result.llamaparse, unpdf: result.unpdf, left: result.left, stoppedBecause: result.stoppedBecause }
       : { ok: false, error: line.slice(0, 300) },
   });
   back(ok ? `notice=${encodeURIComponent(line)}` : `error=${encodeURIComponent(line)}`);
