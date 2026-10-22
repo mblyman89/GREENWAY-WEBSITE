@@ -27,6 +27,10 @@ Internal working name during research was "R51 round 2". The repo already has an
 
 > Thank you. I will work on all those things now. Please complete another 2 slices following the same principles as the ones before it. I appreciate your going above and beyond. Keep it up. Follow the standing rules please. Thank you. Make sure to give a summary report at the end with what was done, what to setup, what to test, and what’s left to build. Please commit and push each slice individually. Commit work out of the sandbox often please. Thank you.
 
+## Owner request, round 6 (verbatim)
+
+> Thank you. I am testing now. The harvester works. I am harvesting now. While I do that, please begin another two slices following round. Make sure when you build the pdf and spreadsheet reader to utilize llama parse ai if it helps us in any way. Please keep going above and beyond, it's working. Follow the standing rules. Test it, test the tests. Thank you!
+
 ## Decisions taken from round 2
 
 | # | Owner answer | Where it lands |
@@ -50,7 +54,8 @@ Internal working name during research was "R51 round 2". The repo already has an
 | S6 | Email match by barcode + the ONE "Unmatched Cultivera stock" manifest (round 4, owner #5). Pure `cultivera-mail-match-core` (29 self-tests): `openLotsFromTransferPlan` takes the lots the crawler's transfer match left unplaced; `planMailMatch` matches each against harvested, parsed vendor documents on barcode (WCIA `inventory_id` = Cultivera Barcode). One emailed manifest places the lot (with the manifest's name, type and cost in cents for survivorship); two or more = never guess; none = `CV-UNMATCHED` "Unmatched Cultivera stock". Same transfer emailed twice = one manifest; sold-out lines counted, never made into lots; loud summary line | (#1458) shipped |
 | S7 | The harvest RUN (round 5). Menu imports -> Vendor mailbox -> **Harvest the next batch** (menu.import, audited `cultivera_mail.harvest`, no new cron). Each press lists one Gmail page at the S5 cursor, opens up to 47 new emails inside a 200-second budget, downloads each vendor attachment as bytes (magic-byte checked), fetches each WCIA Transfer Data Link in the email body, stores every file privately in `pos-raw/mail-harvest/<mailbox>/<gmail id>/<n>-<name>`, parses JSON (WCIA / generic) and CCRS manifest CSVs with the existing parsers (PDF / spreadsheet kept as `stored`, read later), and inserts one row per document into the new `cultivera_mail_docs` (migration 0293; the insert is the claim). Pure `cultivera-mail-harvest-run-core` (49 self-tests); `mailDocsFromRows` feeds S6 | (#1459) shipped |
 | S8 | The per-lot coverage report (round 5), read-only. Rebuild manifests -> **Coverage report** (`/admin/menu-imports/<id>/coverage`, menu.import). Builds the SAME transfer plan as the rebuild page and Apply (`loadRehomeSources` + `planFromSources`), reads only the parsed `cultivera_mail_docs` rows that list a lot the transfers left open (`barcodes &&`, GIN index, paged, fail closed), runs S6's `planMailMatch`, and shows, per lot: Cultivera transfer / one emailed manifest / several emails (not guessed) / nothing (goes on `CV-UNMATCHED`), plus the lots with no received date (CCRS clean-up). By-vendor table (most unplaced first), filters (source, vendor, no received date) and a CSV download (formula-safe). Pure `cultivera-coverage-core` (41 self-tests) | (#1460) shipped |
-| W2 | Rest of Wave 2: the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert), and reading the kept PDFs / spreadsheets | planned |
+| S9 | Read the kept PDFs and spreadsheets (round 6). Menu imports -> Vendor mailbox -> **Read the kept PDFs and spreadsheets** (menu.import, audited `cultivera_mail.read`, no cron, no migration). Up to 12 `stored` documents per press (oldest email first, 200-second budget). PDFs: **LlamaParse** first (`parsePdfWithFallback`, the live intake's primary reader, usage logged as `cultivera-mail-read`; unpdf text layer on an outage / no key), then the intake's own layout parsers (shared via the new pure `pdf-manifest-dispatch-core`), then LlamaParse's markdown tables as a last resort; every barcode is grounded against the PDF's own text layer (an OCR-only barcode is dropped and counted). Spreadsheets: exceljs cells (exact values; not the CVE-flagged `xlsx` package), barcode only from a header-named column. Rows move `stored` -> `parsed` / `unreadable` (with the reason) via a guarded update (the claim); S6/S8 then see them. Pure `cultivera-mail-read-core` (51 self-tests) | planned |
+| W2 | Rest of Wave 2: the executor that writes S6's plan (moves lots onto the email manifests and onto `CV-UNMATCHED`, accounting-inert) | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
 ## S1 evidence (measured, not assumed)
@@ -191,6 +196,35 @@ errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).
 - A barcode query failure is an error on the page, never a silent partial report.
 - CSV: `cultivera-coverage-<id>.csv`, same filters as the page, cells starting with = + - @ are
   neutralised.
+
+## S9 behavior
+
+- LlamaParse helps here, so it is used: it is the PRIMARY PDF reader (same call as the inbox intake,
+  `parsePdfWithFallback`, feature tag `cultivera-mail-read` in `ai_usage`). It reads scanned PDFs
+  (no text layer), which the text layer alone cannot. Without `LLAMA_CLOUD_API_KEY` (or on an outage
+  / 402) the PDF's own text layer is used and the row's note says why.
+- Never guessed: when the PDF has a usable text layer (>= 40 chars), every barcode LlamaParse read
+  must also appear in that layer, or it is dropped (counted in the note). A scanned PDF keeps
+  LlamaParse's barcodes and the note says they are vision-only.
+- Order of readers for a PDF: LlamaParse text -> the same text with markdown tables flattened -> the
+  raw text layer, each through the intake's layout parsers (LCB shipping doc, GrowFlow, Transfer
+  Log, OpenTHC invoice). If none matches, LlamaParse's own markdown table is read like a spreadsheet
+  (barcode only from a column headed Barcode / Inventory ID / Lot ID / ...), still grounded.
+- Spreadsheets are NOT sent to LlamaParse: a cell is already exact text, and AI could only add error.
+  exceljs reads every sheet; the sheet with the most barcodes wins. Formulas count by their saved
+  result; rich text is joined; dates become YYYY-MM-DD. Quantity, product, type and unit price come
+  only from named columns (price in cents). No quantity column = each listed lot counted as present,
+  with a warning. Number / license / vendor / date come from a "Label: value" block or a column with
+  one distinct value; two values = not guessed. Old `.xls` (97-2003) and files over 15 MB are
+  unreadable with the reason.
+- Fail loud: a storage outage stops the press and leaves the document `stored` (read next press). A
+  file gone from storage, a corrupt workbook or a PDF with no readable text is marked `unreadable`
+  with the reason, so it never blocks the queue and is never silently skipped.
+- The guarded update (`status = 'stored'`) is the claim: two presses read each document once.
+- Tests: `tests/compliance/r74-s9-mail-read.test.ts` (22) with the real LCB shipping-document text,
+  the real QGT PDFs (manifest + COA) through the real text layer, and a real exceljs-built `.xlsx`.
+  Mutation-checked: disabling grounding, the claim guard, the outage stop, the `.xls` check, formula
+  results, the header rule, table-fallback grounding, the time budget or cents makes the suite fail.
 
 ## Round 3 walkthrough
 

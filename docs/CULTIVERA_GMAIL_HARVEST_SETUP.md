@@ -207,3 +207,25 @@ Wave 2 slice.
   with room to spare.
 - Attachments are downloaded as exact bytes. A PDF must really start like a PDF, and a JSON like a JSON,
   before anything reads it. A file that does not match its name is reported, never parsed.
+
+## Reading the kept PDFs and spreadsheets (R74 S9)
+
+When the harvest finds a PDF or spreadsheet, it keeps the file as "kept to read later". Under
+**Harvest the next batch** there is a second button, **Read the kept PDFs and spreadsheets**. Each
+press reads up to 12 of those files, so keep pressing until it says **Finished**. It needs no new
+database update; 0293 is enough.
+
+- **PDFs are read by LlamaParse.** This is the same AI reader the inbox intake uses, and it can read
+  scanned PDFs. It needs the Vercel setting `LLAMA_CLOUD_API_KEY`. The intake already uses this
+  setting, so it is most likely set. If it is missing or LlamaParse is down, the button still works,
+  but it only reads the PDF's own text, so scanned PDFs come back "without barcodes". The note on
+  each document says which reader ran. LlamaParse usage is logged under the feature
+  `cultivera-mail-read`.
+- **Every barcode LlamaParse reads is checked against the PDF's own text.** If a barcode appears
+  only in the AI reading, it is dropped and counted, never guessed.
+- **Spreadsheets (.xlsx) are read cell by cell, without AI.** A barcode is only taken from a column
+  whose header names it, such as Barcode, Inventory ID, Lot ID or External Identifier. An old .xls
+  file is marked "without barcodes" with the reason. To read one, open it in Excel and use Save As
+  .xlsx.
+- If storage is unreachable, the press stops and says so. Nothing is lost: the file is read on the
+  next press.
