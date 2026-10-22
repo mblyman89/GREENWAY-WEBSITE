@@ -931,6 +931,7 @@ import { __runCultiveraMailMatchCoreTests } from "../../src/lib/pos/cultivera-ma
 import { __runCultiveraMailHarvestRunCoreTests } from "../../src/lib/pos/cultivera-mail-harvest-run-core";
 import { __runCultiveraCoverageCoreTests } from "../../src/lib/pos/cultivera-coverage-core";
 import { __runCultiveraMailReadCoreTests } from "../../src/lib/pos/cultivera-mail-read-core";
+import { __runCultiveraMailApplyCoreTests } from "../../src/lib/pos/cultivera-mail-apply-core";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
 import { __runReceivedDateBulkCoreTests } from "../../src/lib/inventory/received-date-bulk-core";
@@ -1844,6 +1845,7 @@ __runLiquidVolumeTests();
   { const r = __runCultiveraMailHarvestRunCoreTests(); if (r.failed > 0 || r.passed < 49) throw new Error(`cultivera-mail-harvest-run-core: ${r.failed} failed, ${r.passed} passed (expected >= 49)`); } // R74 S7: harvest run — page plan, documents per email, parse, rows for 0293
   { const r = __runCultiveraCoverageCoreTests(); if (r.failed > 0 || r.passed < 41) throw new Error(`cultivera-coverage-core: ${r.failed} failed, ${r.passed} passed (expected >= 41)`); } // R74 S8: per-lot coverage report — transfer / email / unmatched, by vendor, CSV
   { const r = __runCultiveraMailReadCoreTests(); if (r.failed > 0 || r.passed < 51) throw new Error(`cultivera-mail-read-core: ${r.failed} failed, ${r.passed} passed (expected >= 51)`); } // R74 S9: read the kept PDFs (LlamaParse, grounded) and spreadsheets (exceljs cells)
+  { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
   assertNoFailures("received-date-bulk-core", __runReceivedDateBulkCoreTests());
@@ -2445,7 +2447,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 116); // R50 S1b + S10 rule v2 (link alias, alsoOn, link agreement)
   assertRan("migration-stock-core", __runMigrationStockCoreTests(), 31); // R50 S2a: Cultivera migration stock is never a purchase (payables, Sage, bill, receipt)
   assertRan("import-lineage-core", __runImportLineageCoreTests(), 30); // R50 S2b: an import's lots are found by import id (POS-IMPORT + rebuilt manifests)
-  assertRan("cultivera-rehome-core", __runCultiveraRehomeCoreTests(), 69); // R50 S2c: rebuild manifests + re-home lots (idempotent, guarded, control totals)
+  assertRan("cultivera-rehome-core", __runCultiveraRehomeCoreTests(), 76); // R50 S2c: rebuild manifests + re-home lots (idempotent, guarded, control totals)
   assertRan("cultivera-rehome-ui-core", __runCultiveraRehomeUiCoreTests(), 13); // R50 S2c: rebuild-manifests screen (stage, totals, text)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 41); // R50 S9: the button — run view, sha verify, import gate
