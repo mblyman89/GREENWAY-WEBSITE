@@ -127,10 +127,10 @@ beforeEach(() => {
 });
 
 describe("R50 S10a — the pure core", () => {
-  it("self-tests run at the measured 88", () => {
+  it("self-tests run at the measured 98", () => {
     const r = __runReceivingTableCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(88);
+    expect(r.passed).toBe(98);
   });
 });
 
