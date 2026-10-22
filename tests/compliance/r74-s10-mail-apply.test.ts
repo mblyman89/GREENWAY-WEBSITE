@@ -415,6 +415,9 @@ describe("R74 S10 safety", () => {
     await applyMailPlan(fakeAdmin(db), IMP, sources);
     // D shows up on the already-created 0007 manifest in a new email.
     db.cultivera_mail_docs.push({ ...db.cultivera_mail_docs[0], id: "d9", gmail_id: "gm-d", lines: [["D", 4, "Leaf D 1g", "Usable Marijuana", 700]], barcodes: ["D"] });
+    // Lineage is a union: a barcode recorded earlier (lot since sold off the manifest) is never forgotten.
+    const em0 = byGroup(db, EMAIL_GROUP_KIND)[0];
+    (em0.raw_payload as Row).barcodes = ["C", "OLD"];
     const p = await previewMailApply(fakeAdmin(db), IMP, sources);
     expect(p.plan.summary).toMatchObject({ movesFromUnmatched: 1, lineageUpdates: 1, manifestsToCreate: 0 });
     // If the lineage write fails, nothing moves.
@@ -425,9 +428,21 @@ describe("R74 S10 safety", () => {
     expect(a.lineageUpdated).toBe(1);
     expect(homeOf(db, "lot-d")).toBe("email:0007");
     const em = byGroup(db, EMAIL_GROUP_KIND)[0];
-    expect((em.raw_payload as Row).barcodes).toEqual(["C", "D"]);
+    expect((em.raw_payload as Row).barcodes).toEqual(["C", "D", "OLD"]);
     expect(em.accepted_lot_count).toBe(2);
     expect(((em.raw_payload as Row).line_facts as Row).D).toMatchObject({ unitCostCents: 700 });
+  });
+
+  it("a manifest that changed hands between preview and the lineage write stops the run before any move", async () => {
+    const { db, sources } = seed();
+    await applyMailPlan(fakeAdmin(db), IMP, sources);
+    db.cultivera_mail_docs.push({ ...db.cultivera_mail_docs[0], id: "d9", gmail_id: "gm-d", lines: [["D", 4, "Leaf D 1g", "Usable Marijuana", 700]], barcodes: ["D"] });
+    const steal = (d: Db) => {
+      const em = d.inbound_manifests.find((m) => (m.raw_payload as Row)?.group_kind === EMAIL_GROUP_KIND)!;
+      em.raw_payload = { ...(em.raw_payload as Row), import_id: "someone-else" };
+    };
+    await expect(applyMailPlan(fakeAdmin(db, [{ table: "inbound_manifests", op: "update", nth: 1, before: steal, pass: true }]), IMP, sources)).rejects.toThrow(/changed hands/);
+    expect(homeOf(db, "lot-d")).toBe("unmatched:CV-UNMATCHED");
   });
 
   it("rollback restores the original placement exactly and never destroys work", async () => {
