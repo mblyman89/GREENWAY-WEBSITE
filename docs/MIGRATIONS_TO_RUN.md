@@ -2871,3 +2871,36 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0291_ach_control_records.rollback.sql`.
   It refuses once any record exists (they are records).
   - Manual test T-377.
+
+## USAGE-6 — 0292 — Disk IO: index the Orders board's newest-change reads
+
+- [ ] `0292_orders_updated_at_indexes.sql` adds two indexes and no tables:
+  `orders_updated_at_idx` on `orders (updated_at desc)` and
+  `leafly_orders_updated_at_idx` on `leafly_orders (updated_at desc)`.
+  - Every open Orders tab calls `orders_board_snapshot()` every 15 seconds
+    (every 2 minutes when hidden). It ends with `max(updated_at)` on both
+    tables, and without these indexes each call read both tables from start
+    to end. This is the Disk IO fix from Supabase's 2026-10-21 email.
+  - No data changes. The function is unchanged. The board looks the same.
+
+  Apply it **after 0291**. It is safe to re-run. Building an index blocks
+  writes to that table until it finishes (Postgres `create index` takes a
+  SHARE lock), so apply it outside shop hours.
+
+  **Check:**
+
+  ```sql
+  select indexname from pg_indexes
+   where indexname in ('orders_updated_at_idx', 'leafly_orders_updated_at_idx')
+   order by indexname;
+  -- indexname
+  -- leafly_orders_updated_at_idx
+  -- orders_updated_at_idx
+  ```
+
+  For the full proof, paste `scripts/recon/orders-updated-at-0292-pg-check.sql`.
+  It rolls itself back and ends with `USAGE 0292 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0292_orders_updated_at_indexes.rollback.sql`.
+  It drops the two indexes; nothing else.
+  - Manual test T-379.
