@@ -415,6 +415,75 @@ is not being read; confirm `greenway-staging` stays paused (rule 13). The
 "disable Preview deployments" item from the earlier version of this section
 is now done in code (item a) and needs no dashboard change.
 
+## Slice 6 — Disk IO budget: the Orders board poll stops scanning (PR: USAGE-6)
+
+**What prompted this.** On 2026-10-21 Supabase emailed that project
+`gidjmpjexowzorfdfbss` was depleting its Disk IO Budget. The owner raised
+compute from 2 GB (Small) to 8 GB (Large) the same day. Two Supabase pages are
+mirrored in `docs/usage-sources/` and are the only basis for the platform
+facts below.
+
+**What the compute change does and does not do.** From
+`supabase-compute-and-disk.txt`: Large has a baseline of 79 MB/s and 3,600
+IOPS, with bursts to 594 MB/s and 20,000 IOPS (Small: 22 MB/s and 1,000 IOPS,
+bursting to 261 MB/s and 11,800 IOPS). The page says "Compute sizes up to 2XL
+can burst above their baseline for short periods of time, drawing on a disk
+IO budget", so Large still has a budget, just a bigger one. It also says "The
+default disk type is gp3, which comes with a baseline throughput of 125 MB/s
+and a default IOPS of 3,000" and that "The effective IOPS is the lower of the
+IOPS supported by the compute size or the provisioned IOPS of the disk." On a
+default disk the IOPS ceiling is therefore 3,000, not the compute's 3,600.
+Larger memory still helps a lot: more of the database fits in RAM, so fewer
+reads reach the disk at all.
+
+**What was found in the code (read, not assumed).**
+
+a. *The Orders board snapshot scanned two whole tables every 15 seconds per
+open tab.* `NewOrderAlert` polls `/api/admin/orders/count` every
+`VISIBLE_POLL_MS = 15000` (every `HIDDEN_POLL_MS = 120000` when the tab is
+hidden). That calls `orders_board_snapshot()` (0233), which ends with
+`(select max(updated_at) from public.orders)` and the same on
+`public.leafly_orders`. Neither column had an index, and EXPLAIN on a
+Postgres 15 with every migration applied shows a Seq Scan on both. `orders`
+grows by one row per register sale and is never pruned, so this read grew
+every day, about 240 times an hour per visible tab. **Fix:** migration 0292
+adds `orders_updated_at_idx` and `leafly_orders_updated_at_idx`
+(`updated_at desc`). After it, EXPLAIN shows `Index Only Scan` and each
+`max()` reads a handful of index pages instead of the whole table. The
+snapshot function itself is unchanged.
+
+b. *Everything else on a timer is already indexed:* `audit_logs` has
+`(action, created_at desc)` (0231); the register pickup queue filters on
+status and orders by `placed_at` with a limit; `pos_devices` heartbeats are
+throttled (Slice 3); the crons read by indexed columns, and `lookup-jobs`
+exits early when its flags are off. The middleware runs only on `/admin`.
+There is no `pg_cron`.
+
+c. *Two analytics tables grow forever.* `website_web_vitals` (0280) gets one
+row per page view and `website_click_events` (0268) one per tracked click.
+Both have a time index and the reports read at most 90 days back. Nothing
+prunes them. **Not changed:** deleting data needs the owner's approval. The
+recommendation is to delete rows older than 90 days, once a month.
+
+**Owner steps in the Supabase dashboard (not codeable).**
+1. Apply migration 0292 (SQL Editor). It is safe to re-run.
+2. Paste `scripts/recon/disk-io-diagnose.sql` and run it (read-only). Look at:
+   - the cache hit ratio (healthy is about 0.99);
+   - the tables read by sequential scan;
+   - the largest tables;
+   - indexes never used.
+3. Paste `scripts/recon/disk-io-top-queries.sql` (read-only) for the 20
+   statements that read the most from disk.
+4. Observability → Database Health → Disk IO balance. Then Settings →
+   Infrastructure, which shows "the lowest sampled balance over the last
+   seven days" (the Observability average "can hide periods when the balance
+   was exhausted").
+5. Close Orders tabs nobody is watching. A hidden tab still polls every 2
+   minutes.
+6. If the balance still reaches 0% after a week on Large with 0292 applied,
+   send the output of steps 2 and 3 back. The next lever is chosen from that
+   evidence, not guessed.
+
 ## How to verify each slice
 
 **Vercel.** Team → Usage → filter to `greenway_website`, by meter: *Function
@@ -429,6 +498,14 @@ down within a day of the Pis being reinstalled; Reports → Query Performance �
 `receipt_printer_settings` upsert near the top; Logs Explorer → Top Paths
 shows `/rest/v1/receipt_printer_settings` and `/rest/v1/rpc/announcer_claim_work`
 counts an order of magnitude lower.
+
+**Slice 6.** After 0292 is applied, Supabase → SQL Editor:
+`explain select max(updated_at) from public.orders;` shows
+`Index Only Scan using orders_updated_at_idx` (on a tiny table the planner
+may still choose a Seq Scan, which is cheap there). Reports → Query
+Performance: the `orders_board_snapshot` row's mean time drops. Observability
+→ Database Health: the Disk IO balance stops falling during shop hours.
+Settings → Infrastructure: the 7-day lowest balance rises above 0%.
 
 **Slice 5.** Builds: Vercel → Project → Deployments — from the USAGE-5 merge
 onward, pushing to any PR branch creates **no** Preview entry; only merges to
