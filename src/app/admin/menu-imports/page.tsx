@@ -26,6 +26,8 @@ import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { OneTimeImportTools } from "@/components/admin/catalog/OneTimeImportTools";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 import { startFetchAction } from "./fetch-actions";
+import { probeHarvestMailboxAction } from "./mail-harvest-actions";
+import { harvestConfigLine, harvestMailConfigFromEnv } from "@/lib/pos/cultivera-mail-harvest-core";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import { listPosRuns } from "@/lib/pos/cultivera-fetch-client";
 // R50 S10b: the step-by-step migration guide (status only from facts this page reads).
@@ -352,6 +354,27 @@ export default async function MenuImportsPage({
               ))}
             </p>
           )}
+        </section>
+
+        {/* R74 S5: the vendor mailbox the email harvest will read (stephen@ by default). Read-only test. */}
+        <section id="mail-harvest" className="scroll-mt-6 rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="mail-harvest">
+          <h2 className="text-sm font-semibold text-white">Vendor mailbox (email harvest)</h2>
+          <p className="mt-1 text-xs text-white/50">
+            Every Cultivera manifest was emailed to this mailbox. The email harvest reads it, back as far as it goes, to
+            find the vendor files Cultivera does not have. Google must be set up first (docs/CULTIVERA_GMAIL_HARVEST_SETUP.md).
+            The test signs in and runs the search once. It opens no email and stores nothing.
+          </p>
+          {(() => {
+            const line = harvestConfigLine(harvestMailConfigFromEnv(process.env));
+            return (
+              <p className={`mt-2 text-xs ${line.ok ? "text-[var(--admin-accent)]" : "text-[var(--admin-gold)]"}`} data-testid="mail-harvest-config">
+                {line.text}
+              </p>
+            );
+          })()}
+          <form action={probeHarvestMailboxAction} className="mt-3">
+            <Button type="submit" variant="neutral">Test the vendor mailbox</Button>
+          </form>
         </section>
 
         <details className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">

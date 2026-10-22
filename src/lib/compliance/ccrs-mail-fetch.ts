@@ -194,3 +194,41 @@ export async function getAttachmentText(token: string, mailbox: string, messageI
   const data = (body as { data?: string } | null)?.data;
   return decodeBodyData(typeof data === "string" ? data : undefined);
 }
+
+/* ------------------------------------------------------------------ *
+ * R74 S5: the Cultivera mail harvest (cultivera-mail-harvest-core).
+ * Same endpoints as above; ONE page per call so the caller keeps a
+ * resumable cursor, and attachments as BYTES (PDF / XLSX survive).
+ * ------------------------------------------------------------------ */
+
+/** One page of message ids (newest first) and Gmail's token for the next page (null = last page). */
+export async function listMessageIdsPage(
+  token: string,
+  mailbox: string,
+  q: string,
+  pageToken: string | null,
+  maxResults = LIST_PAGE,
+): Promise<{ ids: string[]; nextPageToken: string | null; resultSizeEstimate: number | null }> {
+  const u = new URL(`${GMAIL_BASE}/${encodeURIComponent(mailbox)}/messages`);
+  u.searchParams.set("q", q);
+  u.searchParams.set("maxResults", String(Math.min(500, Math.max(1, Math.floor(maxResults)))));
+  if (pageToken) u.searchParams.set("pageToken", pageToken);
+  const { status, body } = await fetchJson(u.toString(), { headers: { authorization: `Bearer ${token}` } });
+  if (status !== 200) throw gmailError("messages.list", status, body);
+  const o = (body ?? {}) as { messages?: { id?: string }[]; nextPageToken?: string; resultSizeEstimate?: number };
+  const ids = (o.messages ?? []).map((m) => m.id).filter((x): x is string => typeof x === "string" && x !== "");
+  const next = typeof o.nextPageToken === "string" && o.nextPageToken ? o.nextPageToken : null;
+  const est = typeof o.resultSizeEstimate === "number" && Number.isFinite(o.resultSizeEstimate) ? o.resultSizeEstimate : null;
+  return { ids, nextPageToken: next, resultSizeEstimate: est };
+}
+
+/** One attachment as raw bytes (inline data, or attachments.get). Never decoded through UTF-8. */
+export async function getAttachmentBytes(token: string, mailbox: string, messageId: string, a: AttachmentRef): Promise<Uint8Array> {
+  if (a.inlineData) return new Uint8Array(Buffer.from(a.inlineData, "base64url"));
+  if (!a.attachmentId) return new Uint8Array(0);
+  const u = `${GMAIL_BASE}/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(a.attachmentId)}`;
+  const { status, body } = await fetchJson(u, { headers: { authorization: `Bearer ${token}` } });
+  if (status !== 200) throw gmailError(`attachments.get ${a.filename}`, status, body);
+  const data = (body as { data?: string } | null)?.data;
+  return new Uint8Array(Buffer.from(typeof data === "string" ? data : "", "base64url"));
+}
