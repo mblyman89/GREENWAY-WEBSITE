@@ -23,12 +23,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 vi.mock("server-only", () => ({}));
 
 import { code128Svg } from "@/lib/printing/code128-core";
+import { qrSvg } from "@/lib/printing/qr-core";
 import {
   HARMFUL_PAYLOADS,
   SCANNER_BARCODE_DRAW,
   SCANNER_COMMANDS,
   SCANNER_GUIDES,
+  SCANNER_QR_DRAW,
   TEST_BARCODE,
+  symbologyOf,
   classifyTestScan,
   commandById,
 } from "@/lib/pos/scanner-setup-core";
@@ -56,9 +59,20 @@ const DECODED: Record<string, string> = {
   "socket-english": "#FNB01430001#",
   "socket-pairing-reset": "#FNBAB#",
   "socket-factory-reset": "#FNB00F0#",
+  // R74 S12: Alacrity MJ-2020R (QR codes in ALACRITY-UM / ALACRITY-QS).
+  "alacrity-wedge": "%%SpecCode10",
+  "alacrity-us-english": "%%SpecCode40",
+  "alacrity-cr": "%%SpecCode9C",
+  "alacrity-433": "%%SpecCodeA8",
+  "alacrity-pairing": "%%SpecCode99",
+  "alacrity-power-2h": "%%SpecCodeBA1802D0",
+  "alacrity-battery": "%%SpecCode15",
+  "alacrity-send-batch": "%%SpecCode16",
+  "alacrity-free-buffer": "%%SpecCode18",
+  "alacrity-factory-default": "%%SpecCode93",
 };
 
-type RtItem = { id: string; payload: string; svgSha256: string; zxing: string | null; format: string | null; ok: boolean };
+type RtItem = { id: string; payload: string; symbology?: string; svgSha256: string; zxing: string | null; format: string | null; ok: boolean };
 const RT: { items: RtItem[] } = JSON.parse(readFileSync("tests/fixtures/scanner/roundtrip.json", "utf8"));
 
 describe("setup barcode payloads", () => {
@@ -78,18 +92,19 @@ describe("setup barcode payloads", () => {
 });
 
 describe("drawn barcodes decode back (zxing-cpp round trip)", () => {
-  const all = [...SCANNER_COMMANDS.map((c) => ({ id: c.id, payload: c.payload })), { id: "test", payload: TEST_BARCODE }];
-  it("the fixture covers every barcode the page draws, all decoded as Code 128 to the exact payload", () => {
+  const all = [...SCANNER_COMMANDS.map((c) => ({ id: c.id, payload: c.payload, symbology: symbologyOf(c) })), { id: "test", payload: TEST_BARCODE, symbology: "code128" as const }];
+  it("the fixture covers every barcode the page draws, each decoded in its own symbology to the exact payload", () => {
     expect(RT.items.map((i) => i.id).sort()).toEqual(all.map((i) => i.id).sort());
     for (const i of RT.items) {
       expect(i.ok, i.id).toBe(true);
       expect(i.zxing, i.id).toBe(i.payload);
-      expect(i.format, i.id).toBe("Code128");
+      expect(i.format, i.id).toBe(i.symbology === "qr" ? "QRCode" : "Code128");
+      expect(i.symbology ?? "code128", i.id).toBe(all.find((a) => a.id === i.id)!.symbology);
     }
   });
   it("the live encoder still draws exactly the SVG that was decoded", () => {
     for (const it2 of all) {
-      const r = code128Svg(it2.payload, SCANNER_BARCODE_DRAW);
+      const r = it2.symbology === "qr" ? qrSvg(it2.payload, SCANNER_QR_DRAW) : code128Svg(it2.payload, SCANNER_BARCODE_DRAW);
       expect(r.ok).toBe(true);
       const fx = RT.items.find((i) => i.id === it2.id)!;
       expect(fx.payload).toBe(it2.payload);
@@ -104,6 +119,8 @@ describe("the Scanner setup section renders", () => {
     expect(html).toContain('data-testid="scanner-setup"');
     expect(html).toContain('data-testid="scanner-guide-tera-d5100"');
     expect(html).toContain('data-testid="scanner-guide-socket-d760"');
+    expect(html).toContain('data-testid="scanner-guide-alacrity-mj2020r"');
+    expect(html).toContain("Alacrity MJ-2020R");
     expect(html).toContain('data-testid="scanner-test-box"');
     expect(html).toContain(`data-payload="${TEST_BARCODE}"`);
     expect(html).toContain("Tera D5100");
@@ -127,6 +144,17 @@ describe("the Scanner setup section renders", () => {
     expect(pos("tera-case-off")).toBeLessThan(pos("tera-cr"));
     expect(pos("socket-basic-hid")).toBeLessThan(pos("socket-cr"));
     expect(pos("socket-cr")).toBeLessThan(pos("socket-english"));
+    expect(pos("alacrity-wedge")).toBeLessThan(pos("alacrity-us-english"));
+    expect(pos("alacrity-us-english")).toBeLessThan(pos("alacrity-cr"));
+  });
+  it("R74 S12: the Alacrity codes are drawn as QR (its manual prints QR), Tera / Socket stay Code 128", () => {
+    const shown = new Set(SCANNER_GUIDES.flatMap((g) => [...g.steps.flatMap((st) => st.scan), ...g.trouble.flatMap((t) => t.scan ?? [])]));
+    expect([...shown].filter((id) => id.startsWith("alacrity-")).length).toBe(10);
+    for (const c of SCANNER_COMMANDS.filter((x) => shown.has(x.id))) {
+      const want = c.model === "alacrity-mj2020r" ? "qr" : "code128";
+      expect(html, c.id).toContain(`data-payload="${c.payload}" data-symbology="${want}"`);
+    }
+    expect(html).toMatch(/factory setting is CR LF, which is TWO Enters/);
   });
   it("the Socket guide says to charge from a wall plug and to set up while disconnected", () => {
     expect(html).toMatch(/wall charger/);
@@ -154,6 +182,7 @@ describe("the count page and workbook point at the setup", () => {
     const all = text.join("\n");
     expect(all).toMatch(/Tera D5100/);
     expect(all).toMatch(/Socket D760/);
+    expect(all).toMatch(/Alacrity MJ-2020R/);
     expect(all).toMatch(/Set up and test each scanner/);
     expect(all).toMatch(/Carriage Return/);
   });

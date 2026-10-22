@@ -1,9 +1,10 @@
 {
-  "_about": "R50 S11b: each scanner setup barcode the count page draws was rasterised (cairosvg, scale 2) and decoded with zxing-cpp 3.1.1, an independent decoder. svgSha256 pins the exact drawing. If it changes, re-run scripts/compliance/scanner-barcode-roundtrip.py.",
+  "_about": "R50 S11b: each scanner setup barcode the count page draws (Code 128; QR for the Alacrity, R74 S12) was rasterised (cairosvg, scale 2) and decoded with zxing-cpp 3.1.1, an independent decoder. svgSha256 pins the exact drawing. If it changes, re-run scripts/compliance/scanner-barcode-roundtrip.py.",
   "items": [
     {
       "id": "tera-restore-defaults",
       "payload": "%%SpecCode93",
+      "symbology": "code128",
       "svgSha256": "57bdafb6e0f40522f48592b7526255167d51e7590a749e5b7757d76ba207a862",
       "zxing": "%%SpecCode93",
       "format": "Code128",
@@ -12,6 +13,7 @@
     {
       "id": "tera-battery",
       "payload": "%%SpecCode15",
+      "symbology": "code128",
       "svgSha256": "2016e7bfebb8531ecb832b49b5832b039f0ef65fa70ada9ddb9f0625f03ce8ce",
       "zxing": "%%SpecCode15",
       "format": "Code128",
@@ -20,6 +22,7 @@
     {
       "id": "tera-sleep-300",
       "payload": "%%SpecCode33",
+      "symbology": "code128",
       "svgSha256": "3a6f7b83d2fe6cdd312e3eb7f8f9fc9351b8250b637ced4bc22c50c8b254cdd5",
       "zxing": "%%SpecCode33",
       "format": "Code128",
@@ -28,6 +31,7 @@
     {
       "id": "tera-sleep-1800",
       "payload": "%%SpecCode35",
+      "symbology": "code128",
       "svgSha256": "208837ce8a7a2f576cc986f7c3930780590329d515481e0e183589d22335cb6d",
       "zxing": "%%SpecCode35",
       "format": "Code128",
@@ -36,6 +40,7 @@
     {
       "id": "tera-us-layout",
       "payload": "%%SpecCode40",
+      "symbology": "code128",
       "svgSha256": "025138991c9679dcb31634ddef2fd5366fd39b3d4d6bf697a6bb0117bfcd4a1b",
       "zxing": "%%SpecCode40",
       "format": "Code128",
@@ -44,6 +49,7 @@
     {
       "id": "tera-real-time",
       "payload": "%%SpecCode10",
+      "symbology": "code128",
       "svgSha256": "1f03b094de3139111d895fb120cc6f768f5a360d13024272caa15ab0ebb54c6d",
       "zxing": "%%SpecCode10",
       "format": "Code128",
@@ -52,6 +58,7 @@
     {
       "id": "tera-upload-stored",
       "payload": "%%SpecCode16",
+      "symbology": "code128",
       "svgSha256": "a0e07f0659181d56f1e5719b2615a468ffc291d9c21972303a683bb35893e28a",
       "zxing": "%%SpecCode16",
       "format": "Code128",
@@ -60,6 +67,7 @@
     {
       "id": "tera-clear-stored",
       "payload": "%%SpecCode18",
+      "symbology": "code128",
       "svgSha256": "684c871614c80360c5c9dcd7157ead82ac8ebe803fb5c9e43211a3b8e15aba67",
       "zxing": "%%SpecCode18",
       "format": "Code128",
@@ -68,6 +76,7 @@
     {
       "id": "tera-24ghz",
       "payload": "%%SpecCodeA8",
+      "symbology": "code128",
       "svgSha256": "94dced34f24e44756adcc45442759a2d1aa6fe9f361b0ae6fba8ea2ce78c09e3",
       "zxing": "%%SpecCodeA8",
       "format": "Code128",
@@ -76,6 +85,7 @@
     {
       "id": "tera-pairing",
       "payload": "%%SpecCode99",
+      "symbology": "code128",
       "svgSha256": "d638b7b40d09045c16d3b12af38cfb64d3dc1d5a3ded4d87fd8dac83e33a6989",
       "zxing": "%%SpecCode99",
       "format": "Code128",
@@ -84,6 +94,7 @@
     {
       "id": "tera-case-off",
       "payload": "%%SpecCodeA5",
+      "symbology": "code128",
       "svgSha256": "fe3ab4fbba1fae526d72697309140877d8ee01b944ea75e052bd468dff3f29b7",
       "zxing": "%%SpecCodeA5",
       "format": "Code128",
@@ -92,6 +103,7 @@
     {
       "id": "tera-cr",
       "payload": "%%SpecCode9C",
+      "symbology": "code128",
       "svgSha256": "d801769737420aece0a6fd55ef07b3b82e0b2be6f86f44b44b4c8dbd8952004a",
       "zxing": "%%SpecCode9C",
       "format": "Code128",
@@ -100,6 +112,7 @@
     {
       "id": "socket-basic-hid",
       "payload": "#FNB00F40001#",
+      "symbology": "code128",
       "svgSha256": "32ac0b5f3d18101b0a9895971f0232aa3035671231ec3cc51dbb6df0ef701da0",
       "zxing": "#FNB00F40001#",
       "format": "Code128",
@@ -108,6 +121,7 @@
     {
       "id": "socket-cr",
       "payload": "#FNB00F507C60408FFEB020000#",
+      "symbology": "code128",
       "svgSha256": "ba44037f847405d8aeb2a07791ab6c9fec29253a6a1ef85f56e57d931278dac8",
       "zxing": "#FNB00F507C60408FFEB020000#",
       "format": "Code128",
@@ -116,6 +130,7 @@
     {
       "id": "socket-power-8h",
       "payload": "#FNB012101E001E0#",
+      "symbology": "code128",
       "svgSha256": "ce9afbe7c33b1a6d2ceff3769bf902b4a57e7e430c01cb059ab2d7710d9e63bd",
       "zxing": "#FNB012101E001E0#",
       "format": "Code128",
@@ -124,6 +139,7 @@
     {
       "id": "socket-power-2h",
       "payload": "#FNB012100780005#",
+      "symbology": "code128",
       "svgSha256": "d35e79d3d8bf54d2d829c29901a930b7f72fab1593330b25aae440ba2d846fd6",
       "zxing": "#FNB012100780005#",
       "format": "Code128",
@@ -132,6 +148,7 @@
     {
       "id": "socket-english",
       "payload": "#FNB01430001#",
+      "symbology": "code128",
       "svgSha256": "4b6d60a133bbd89e1213b40aedbbc7a008af4e3206914bb3d73ada11947d4cea",
       "zxing": "#FNB01430001#",
       "format": "Code128",
@@ -140,6 +157,7 @@
     {
       "id": "socket-pairing-reset",
       "payload": "#FNBAB#",
+      "symbology": "code128",
       "svgSha256": "9ce4b4dd53dfc6e042d9b3dce4aaad8c13696257b60881c02815ca6f96e55e18",
       "zxing": "#FNBAB#",
       "format": "Code128",
@@ -148,14 +166,106 @@
     {
       "id": "socket-factory-reset",
       "payload": "#FNB00F0#",
+      "symbology": "code128",
       "svgSha256": "c1e6fee1a49cb14f84a9baa09a982908310c266f4ebb3dc682af46c04d8d3d35",
       "zxing": "#FNB00F0#",
       "format": "Code128",
       "ok": true
     },
     {
+      "id": "alacrity-wedge",
+      "payload": "%%SpecCode10",
+      "symbology": "qr",
+      "svgSha256": "04ba800438256b218ef3139fee7392c6e426cb573ae12d9585e3c8a2c9199895",
+      "zxing": "%%SpecCode10",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-us-english",
+      "payload": "%%SpecCode40",
+      "symbology": "qr",
+      "svgSha256": "f52f06b45e6e2c70f3a05a0bee6ea542b49a3e259d2e5aecbc6d040d2ede7d67",
+      "zxing": "%%SpecCode40",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-cr",
+      "payload": "%%SpecCode9C",
+      "symbology": "qr",
+      "svgSha256": "f1e9cf3266658ddc4431a47820971cac46e530c15d5079fc0e23aa3d02e4b061",
+      "zxing": "%%SpecCode9C",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-433",
+      "payload": "%%SpecCodeA8",
+      "symbology": "qr",
+      "svgSha256": "896a100dac6c771b882316be3c354ff6aed7b4718e03467166eabe1962b47036",
+      "zxing": "%%SpecCodeA8",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-pairing",
+      "payload": "%%SpecCode99",
+      "symbology": "qr",
+      "svgSha256": "0d7f46e8e4a8dee0cdebada1cc39e0fda8bd085c4b1d17de8df943a6a4bd978e",
+      "zxing": "%%SpecCode99",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-power-2h",
+      "payload": "%%SpecCodeBA1802D0",
+      "symbology": "qr",
+      "svgSha256": "795bd2b9f43b7c3fcf6c16e54e27098e009007240e6996767b72160c6f265447",
+      "zxing": "%%SpecCodeBA1802D0",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-battery",
+      "payload": "%%SpecCode15",
+      "symbology": "qr",
+      "svgSha256": "88415e6ea5d6d3a68832c60da948aee71fcd917f2fe15ab154e5aa3818a1a54b",
+      "zxing": "%%SpecCode15",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-send-batch",
+      "payload": "%%SpecCode16",
+      "symbology": "qr",
+      "svgSha256": "224d0e629959ffa16f2fa7a11f582bb7a1596fb6b8cfd18bbedbd8f09c8d832b",
+      "zxing": "%%SpecCode16",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-free-buffer",
+      "payload": "%%SpecCode18",
+      "symbology": "qr",
+      "svgSha256": "3e45aa92ee54f78b1b0b7257833626455fb31c57f16a96ef40b48a7759be4cc9",
+      "zxing": "%%SpecCode18",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
+      "id": "alacrity-factory-default",
+      "payload": "%%SpecCode93",
+      "symbology": "qr",
+      "svgSha256": "b8182bbece36653f59290af0a380b28deb2c241854a11b8b1a356db3b181bfbc",
+      "zxing": "%%SpecCode93",
+      "format": "QRCode",
+      "ok": true
+    },
+    {
       "id": "test",
       "payload": "GWtest-0123456789",
+      "symbology": "code128",
       "svgSha256": "fe708fa841ed5aaf25b7b849a4ffb5981ba5ffdc67692d412192113e25eae6fc",
       "zxing": "GWtest-0123456789",
       "format": "Code128",

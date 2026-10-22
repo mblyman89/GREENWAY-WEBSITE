@@ -1,4 +1,4 @@
-# Scanner setup sources: Tera D5100 and Socket DuraScan D760 (R50 S11b)
+# Scanner setup sources: Tera D5100, Socket DuraScan D760 (R50 S11b) and Alacrity MJ-2020R (R74 S12)
 
 This file records where every scanner fact and command barcode used by the count page's
 **Scanner setup** section came from (`src/lib/pos/scanner-setup-core.ts`). Nothing here is from
@@ -21,6 +21,9 @@ page shows, decodes it again and checks the round trip (`tests/compliance/r50-s1
 | SOCKET-D740-760 | DuraScan Model D740/D760 User Guide (04/2019), 50 pages | https://assets.grandandtoy.com/assets/User-Manual/10/63/1063214220.pdf | a89c7a73c28efbe0fe1deaa62817e5a07248128e94df6f1f964eb052083746b5 | Older guide. p11: "By default, the scanner is set to Basic Mode (HID)." Printed payload text under each barcode. |
 | SOCKET-WEB-700 | SocketScan 700 Series User Guide (web) | https://socketmobile.com/readers-accessories/guides/socketscan-700-series | n/a (web page) | Beep meanings, charging, power timers, factory reset. |
 | SOCKET-D750-PG | DuraScan D750 Programming Guide (EN) | https://www.cashregisterwarehouse.com.au/files/downloads/Socket-DuraScan-D750-Programming-Guide.pdf | 40099f8771bef8b6f14f4f021fe695bdae20a8f4729504d7bacd58e1d50943c6 | A different model (D750), used only as supporting evidence: "Suffix – Carriage Return (default)". |
+| ALACRITY-UM | AlacrityDirect MJ-2020R User Manual V1.0 (© 2024), 92 pages | https://alacritydirect.com/wp-content/uploads/2024/07/MJ-2020R-User-ManualV1.0.pdf | 642b9f12cd34e551476f9e6430dbc6d91ee9c0e9b004742911cfd8db5e70d3a8 | "*: Default Option". Setting codes are **QR codes**. Printed page first, PDF page in brackets. |
+| ALACRITY-QS | MJ-2020R Series Quick Start Guide V2.2, 5 pages | https://alacritydirect.com/wp-content/uploads/2024/05/MJ-2020R-Quick-Start-Guide-V2.2.pdf | 8c89d06048a8910046375e57e711036b4e5b1dbbe9f87b35dcf0f989c4aa0046 | Same codes as the manual (cross-checked one for one). Section numbers (§). |
+| ALACRITY-QS11 | MJ-2020R Quick Start Guide V1.1, 3 pages | https://alacritydirect.com/wp-content/uploads/2024/07/MJ-2020R-QuickStartGuideV1.1.pdf | 900e333fb96384ff40fc7e3bacf908e53d7ffc34369326adc1c0d033d9fbb1f3 | Older guide; Wedge, Batch, terminator and language codes match. |
 
 ## The two guides disagree, so the page does not rely on defaults
 
@@ -111,6 +114,54 @@ Behaviour quoted from the Socket sources:
   Pairing Reset.
 - The reader appears in the Bluetooth list as "D760 [xxxxxx]" or "Socket D760[xxxxxx]" (D740-760
   p14, p17).
+
+### Alacrity MJ-2020R (ALACRITY-UM, ALACRITY-QS) - R74 S12
+
+Every setting code in both Alacrity documents is a **QR code** (not Code 128), so the page re-draws
+these payloads as QR with our own encoder (`src/lib/printing/qr-core.ts`, level M) and the
+round-trip fixture decodes each one as `QRCode`. The payload family is the same `%%SpecCode..` as
+the Tera (same values for CR, US layout, real-time/Wedge, battery, factory default, 433/2.4 GHz and
+pairing), which suggests the same scan-engine maker. Each page was rendered at 300-400 dpi with
+`pdftoppm`, decoded with pyzbar, and each value matched to its printed label by position
+(`pdftotext -bbox`). The User Manual and the V2.2 Quick Start gave identical values.
+
+**The Alacrity's terminator default is marked: "CR LF\*"** (ALACRITY-UM p30 [31], QS §11 and
+QS V1.1 §12). That is two Enters per scan, so every scan would skip a row in the count workbook.
+The setup therefore always scans **CR**. The manual has no letter-case conversion setting, so
+there is no case step (Caps Lock on the computer is still checked by the test box).
+
+| Label (as printed) | Payload | Page | On the page? |
+|---|---|---|---|
+| Wedge | `%%SpecCode10` | UM p22 [23]; QS §6 | Step 1 |
+| Batch | `%%SpecCode11` | UM p22 [23]; QS §6 | Never (harmful) |
+| US English* | `%%SpecCode40` | UM p28 [29]; QS §12 | Step 2 |
+| CR | `%%SpecCode9C` | UM p30 [31]; QS §11 | Step 3 |
+| LF | `%%SpecCode9D` | UM p30 [31] | Never (harmful) |
+| CR LF* (default) | `%%SpecCode9E` | UM p30 [31] | Never (harmful) |
+| Tab | `%%SpecCodeA2` | UM p30 [31] | Never (harmful) |
+| None/ Null | `%%SpecCode9F` | UM p30 [31] | Never (harmful) |
+| 433Mhz Wireless | `%%SpecCodeA8` | UM p14 [15]; QS §3 | Trouble: re-pair |
+| Pairing | `%%SpecCode99` | UM p14 [15], p15 [16]; QS §3 | Trouble: re-pair |
+| BT HID | `%%SpecCodeAA` | UM p15 [16] (labelled by position) | Never (cradleless Bluetooth) |
+| Power Off | `%%SpecCode38` | UM p14 [15], p24 [25] | No |
+| 5 / 10 / 30 Minutes | `%%SpecCode33` / `34` / `35` | UM p24 [25]; QS §8 | No (30 min is the default per QS §1) |
+| 1 Hour / 2 Hours / 4 Hours | `%%SpecCodeBA180168` / `%%SpecCodeBA1802D0` / `%%SpecCodeBA1805A0` | UM p24 [25]; QS §8 | 2 Hours: optional step 4 |
+| Disable Auto Power Off | `%%SpecCode36` | UM p24 [25] | No |
+| Factory Default | `%%SpecCode93` | UM p19 [20]; QS §5 | Trouble |
+| Version Info | `%%SpecCode39` | QS §5 | No |
+| Battery Level | `%%SpecCode15` | UM p19 [20]; QS §5 | Trouble |
+| Send Batch | `%%SpecCode16` | UM p23 [24]; QS §7 | Trouble (stored scans) |
+| Stored Barcodes Quantity | `%%SpecCode17` | UM p23 [24]; QS §7 | No |
+| Free Buffer | `%%SpecCode18` | UM p23 [24]; QS §7 | Trouble (after Send Batch) |
+
+Beeps and lights used by the guide (UM p16-18): good read connected = one short low beep; setting
+code accepted = one short beep high to low; setting code rejected = two short high beeps; good read
+while disconnected = three low short beeps; disconnected = two short low beeps; low battery = five
+short high beeps; scanner solid blue + cradle solid green = paired; red light on = charging, red
+flashing = full (about 4 hours).
+
+Still to verify on the store's own unit: that it accepts setup QR codes from a screen (if not,
+print the page), and which scan module it has (QS §13 trigger/presentation codes are not used).
 
 ## Not found / still to verify on the store's own units
 

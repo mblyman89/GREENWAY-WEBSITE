@@ -1,18 +1,28 @@
 /**
  * R50 S11b: the "Scanner setup" section of the Oct 30 count page. One panel per model the store
- * owns (Tera D5100, Socket DuraScan D760). It shows the setup steps, with the setup barcodes
- * re-drawn by our Code 128 encoder from payloads decoded from the makers' manuals, then the test box.
+ * owns (Tera D5100, Socket DuraScan D760, Alacrity MJ-2020R). It shows the setup steps, with the setup
+ * barcodes re-drawn by our own encoders (Code 128; QR for the Alacrity, whose manual prints QR codes)
+ * from payloads decoded from the makers' manuals, then the test box.
  * Facts and sources: src/lib/pos/scanner-setup-core.ts and docs/research/scanner-setup-sources.md.
  */
 import { code128Svg } from "@/lib/printing/code128-core";
-import { SCANNER_BARCODE_DRAW, SCANNER_GUIDES, TEST_BARCODE, commandById } from "@/lib/pos/scanner-setup-core";
+import { qrSvg } from "@/lib/printing/qr-core";
+import {
+  SCANNER_BARCODE_DRAW,
+  SCANNER_GUIDES,
+  SCANNER_QR_DRAW,
+  TEST_BARCODE,
+  commandById,
+  symbologyOf,
+  type CommandSymbology,
+} from "@/lib/pos/scanner-setup-core";
 import { ScannerTestBox } from "./ScannerTestBox";
 
-function Barcode({ payload, label, source }: { payload: string; label: string; source?: string }) {
-  const bc = code128Svg(payload, SCANNER_BARCODE_DRAW);
+function Barcode({ payload, label, source, symbology = "code128" }: { payload: string; label: string; source?: string; symbology?: CommandSymbology }) {
+  const bc = symbology === "qr" ? qrSvg(payload, SCANNER_QR_DRAW) : code128Svg(payload, SCANNER_BARCODE_DRAW);
   if (!bc.ok) return <p className="text-xs text-red-300">Could not draw {label}: {bc.error}</p>;
   return (
-    <figure className="inline-block rounded bg-white p-2 text-center" data-payload={payload}>
+    <figure className="inline-block rounded bg-white p-2 text-center" data-payload={payload} data-symbology={symbology}>
       <div aria-label={`${label} barcode`} role="img" dangerouslySetInnerHTML={{ __html: bc.svg }} />
       <figcaption className="mt-1 text-[11px] font-semibold text-black">{label}</figcaption>
       {source && <figcaption className="text-[10px] text-black/50">{source}</figcaption>}
@@ -23,7 +33,7 @@ function Barcode({ payload, label, source }: { payload: string; label: string; s
 function Command({ id }: { id: string }) {
   const c = commandById(id);
   if (!c) return null;
-  return <Barcode payload={c.payload} label={c.label} source={c.source} />;
+  return <Barcode payload={c.payload} label={c.label} source={c.source} symbology={symbologyOf(c)} />;
 }
 
 export function ScannerSetupSection() {
@@ -78,8 +88,8 @@ export function ScannerSetupSection() {
         </details>
       ))}
       <p className="mt-3 text-xs text-white/40">
-        These setup barcodes were read from Tera&apos;s and Socket&apos;s own manuals and re-drawn here.
-        Setup barcodes for other choices in the manuals (Storage Mode, Tab, no Enter) are left off on purpose. They would break the count.
+        These setup barcodes were read from Tera&apos;s, Socket&apos;s and Alacrity&apos;s own manuals and re-drawn here (the Alacrity&apos;s as QR codes, like its manual).
+        Setup barcodes for other choices in the manuals (Storage Mode / Batch, Tab, no Enter, CR LF) are left off on purpose. They would break the count.
       </p>
     </section>
   );

@@ -7,7 +7,7 @@
  * to the pure classifier in scanner-setup-core.ts, which says in plain words what to fix.
  */
 import { useEffect, useRef, useState } from "react";
-import { classifyTestScan, commandById, type TestScanVerdict } from "@/lib/pos/scanner-setup-core";
+import { SCANNER_SHORT_NAME, classifyTestScan, commandById, type TestScanVerdict } from "@/lib/pos/scanner-setup-core";
 
 /** No key for this long after a character = the scan ended without a terminator. */
 const IDLE_MS = 700;
@@ -90,7 +90,7 @@ export function ScannerTestBox() {
           <p>{verdict.message}</p>
           {verdict.fix.map((f) => (
             <p key={f.model} className="mt-1">
-              {f.model === "tera-d5100" ? "Tera" : "Socket"}: scan {names(f.scan)} (below), then test again.
+              {SCANNER_SHORT_NAME[f.model]}: scan {names(f.scan)} (below), then test again.
             </p>
           ))}
         </div>
