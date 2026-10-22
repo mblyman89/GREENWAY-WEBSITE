@@ -387,10 +387,12 @@ export default async function MenuImportsPage({
           {/* R74 S7: the harvest itself, one batch per press (up to 47 emails, resumable). */}
           <div className="mt-4 border-t border-white/10 pt-4" data-testid="mail-harvest-run">
             <p className="text-xs text-white/50">
-              Each press reads up to 47 more emails, oldest page first, and keeps every vendor file it finds (attached
-              JSON, CSV, PDF or spreadsheet, and the WCIA transfer link in Cultivera&apos;s emails). Files are kept
-              privately; nothing in the mailbox changes. Press again until it says Finished. A second press while one is
-              running stores nothing twice.
+              Each press reads up to 47 more emails, newest first (Gmail&apos;s order, so each press reaches further
+              back in time), and keeps every vendor file it finds (attached JSON, CSV, PDF or spreadsheet, and the WCIA
+              transfer link in Cultivera&apos;s emails). Files are kept privately; nothing in the mailbox changes. Press
+              again until it says Finished. A second press while one is running stores nothing twice. Order: harvest
+              until Finished, then read the kept PDFs and spreadsheets below (reading in between is also fine; each
+              read only works on files already kept).
             </p>
             {harvestStatus.ready ? (
               <p className="mt-2 text-xs text-white/70" data-testid="mail-harvest-status">
@@ -398,6 +400,11 @@ export default async function MenuImportsPage({
                 {harvestStatus.parsed} document{harvestStatus.parsed === 1 ? "" : "s"} with barcodes, {harvestStatus.stored} PDF /
                 spreadsheet kept to read later, {harvestStatus.unreadable} without barcodes, {harvestStatus.failed} that
                 could not be downloaded.
+              </p>
+            ) : null}
+            {harvestStatus.ready ? (
+              <p className="mt-1 text-xs text-white/70" data-testid="mail-harvest-dates">
+                {harvestStatus.datesLine}
               </p>
             ) : (
               <p className="mt-2 text-xs text-[var(--admin-gold)]" data-testid="mail-harvest-status">{harvestStatus.why}</p>

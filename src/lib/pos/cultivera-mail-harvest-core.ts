@@ -292,6 +292,58 @@ export function messagesPerRun(attachmentsEach: number, budget = Math.floor(GMAI
  *  Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
  * ------------------------------------------------------------------ */
 
+
+/* ------------------------------------------------------------------ *
+ *  R74 S12: "how far back has it read?" (owner: "maybe there is a way to
+ *  add a date of the last email read? so i dont repeatedly push the
+ *  button for no reason")
+ * ------------------------------------------------------------------ */
+
+export type HarvestDates = {
+  /** Oldest / newest email date among the kept rows (cultivera_mail_docs.email_at); null = none or unreadable. */
+  oldestEmailAt: string | null;
+  newestEmailAt: string | null;
+  /** When the last batch ran (the cursor's updatedAt), null = never. */
+  lastRunAt: string | null;
+  /** The walk reached the end of the mailbox search. */
+  done: boolean;
+  /** The walk has started (at least one page listed). */
+  started: boolean;
+};
+
+/** "Jul 3, 2024" (UTC calendar day of an ISO time); null for anything unparseable. */
+export function harvestDay(iso: string | null | undefined): string | null {
+  if (typeof iso !== "string" || !iso.trim()) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** "Jul 3, 2024 14:05 UTC"; null for anything unparseable. */
+export function harvestStamp(iso: string | null | undefined): string | null {
+  const day = harvestDay(iso);
+  if (!day) return null;
+  const d = new Date(Date.parse(iso as string));
+  return `${day} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")} UTC`;
+}
+
+/**
+ * One line under the harvest button. Gmail lists NEWEST first, so each press
+ * reaches further back in time: the oldest email kept so far is how far the
+ * harvest has read. When the walk is finished it says so plainly ("no need to
+ * press again"); a press after that only checks for new emails.
+ */
+export function harvestDatesLine(d: HarvestDates): string {
+  const oldest = harvestDay(d.oldestEmailAt);
+  const newest = harvestDay(d.newestEmailAt);
+  const last = harvestStamp(d.lastRunAt);
+  const range = oldest && newest ? (oldest === newest ? `Emails kept are from ${oldest}.` : `Emails kept run from ${oldest} (oldest) to ${newest} (newest).`) : "No email with a date has been kept yet.";
+  const ran = d.started && last ? ` Last batch ran ${last}.` : d.started ? "" : " No batch has run yet.";
+  if (d.done) return `${range}${ran} The whole mailbox has been read - no need to press Harvest again (a press now only looks for new emails).`;
+  if (!d.started) return `${range}${ran}`;
+  return `${range}${ran} Gmail lists the newest emails first, so each press reaches further back${oldest ? ` (next: emails older than ${oldest})` : ""}. Keep pressing until it says Finished.`;
+}
+
 export function __runCultiveraMailHarvestCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   const ok = (cond: boolean, msg: string) => {
@@ -396,6 +448,18 @@ export function __runCultiveraMailHarvestCoreTests(): { passed: number; failed: 
   ok(quotaUnits({ lists: 1, gets: 10, attachments: 20 }) === 5 + 600 + 400, "units per Google's table");
   ok(messagesPerRun(2) === Math.floor((4800 - 5) / 100) && messagesPerRun(0) === Math.floor(4795 / 60), "per-run email budget under 80% of the minute limit");
   ok(messagesPerRun(1000) === 1, "never below one email");
+
+  // R74 S12: dates line
+  ok(harvestDay("2024-07-03T23:30:00Z") === "Jul 3, 2024" && harvestDay("nope") === null && harvestDay(null) === null, "harvest day (UTC), bad = null");
+  ok(harvestStamp("2024-07-03T04:05:00Z") === "Jul 3, 2024 04:05 UTC" && harvestStamp("") === null, "harvest stamp");
+  const base: HarvestDates = { oldestEmailAt: "2023-01-05T10:00:00Z", newestEmailAt: "2024-07-03T10:00:00Z", lastRunAt: "2024-07-04T15:00:00Z", done: false, started: true };
+  const l1 = harvestDatesLine(base);
+  ok(l1.startsWith("Emails kept run from Jan 5, 2023 (oldest) to Jul 3, 2024 (newest). Last batch ran Jul 4, 2024 15:00 UTC."), "in-progress range + last run");
+  ok(l1.includes("newest emails first") && l1.includes("older than Jan 5, 2023") && l1.includes("until it says Finished"), "in-progress says where the next press goes");
+  const l2 = harvestDatesLine({ ...base, done: true });
+  ok(l2.includes("whole mailbox has been read") && l2.includes("no need to press Harvest again"), "done says stop pressing");
+  ok(harvestDatesLine({ oldestEmailAt: null, newestEmailAt: null, lastRunAt: null, done: false, started: false }) === "No email with a date has been kept yet. No batch has run yet.", "never run");
+  ok(harvestDatesLine({ ...base, newestEmailAt: base.oldestEmailAt }).startsWith("Emails kept are from Jan 5, 2023."), "single day");
 
   return { passed, failed: 0 };
 }
