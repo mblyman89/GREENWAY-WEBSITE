@@ -34,7 +34,7 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S16 | Bank watch: the Plaid feed on the Main account checked daily against ACH files, books, Timberland fees, known payees and reviews; possible returns; fee/notice gaps; feed health; daily email; Plaid balance hint on the funding box | #1448 | 0289 |
 | S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | #1449 | 0290 |
 | S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | #1450 | 0291 |
-| S19 | Bank setup & glossary: the bank-side checklist for the meeting with Brenda (ask / owner decides / confirmed, each in her words; ACH debit block and ACH filter asked, not assumed), printable meeting sheet, 20-term sourced ACH glossary, glossary-backed hover help on Operations and Approvals | (this PR) | none |
+| S19 | Bank setup & glossary: the bank-side checklist for the meeting with Brenda (ask / owner decides / confirmed, each in her words; ACH debit block and ACH filter asked, not assumed), printable meeting sheet, 20-term sourced ACH glossary, glossary-backed hover help on Operations and Approvals | #1451 | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
