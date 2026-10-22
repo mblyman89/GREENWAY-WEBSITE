@@ -388,7 +388,7 @@ export function __runAchNoticeMailCoreTests(): { passed: number; failed: number 
   // query
   const now = Date.UTC(2026, 9, 21, 12);
   ok(buildNoticeQuery([FED_NOTICE_DOMAIN], now, 72) === `from:${FED_NOTICE_DOMAIN} after:${Date.UTC(2026, 9, 18, 12) / 1000}`, "one sender, epoch seconds");
-  ok(buildNoticeQuery(["a.com", "b@c.com"], now, 1) === `{from:a.com from:b@c.com} after:${now / 1000 - 3600}`, "two senders use the { } OR form");
+  ok(buildNoticeQuery(["a.test", "b@c.test"], now, 1) === `{from:a.test from:b@c.test} after:${now / 1000 - 3600}`, "two senders use the { } OR form");
   // sender
   ok(senderMatches("noreply@encryptedmail.achedi.com", [FED_NOTICE_DOMAIN]), "exact domain");
   ok(senderMatches("x@mail.encryptedmail.achedi.com", [FED_NOTICE_DOMAIN]), "sub-domain");
