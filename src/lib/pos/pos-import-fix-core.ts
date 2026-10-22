@@ -95,6 +95,7 @@ export const CULTIVERA_ONLY_CODES: readonly string[] = [
   "blank_product_name",
   "blank_inventory_product",
   "no_variants",
+  "cannabis_flag_conflict",
 ];
 
 /** Blocking errors: the file cannot be published; the fix is a corrected re-upload. */
@@ -270,10 +271,20 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
     case "new_unmapped_category":
     case "unmapped_category_fallback":
       return {
-        what: "Cultivera used a category name the importer does not know, so it was filed under a best-guess category.",
+        what: "Cultivera used a category name the importer does not know (or a non-cannabis one on a cannabis row), so its products are held hidden until you pick their category. Nothing is filed under a guessed category.",
         how: "Use the button on each row below: it opens that exact category on the Types page, where you add it with the suggested website category (the Type & category check on this page names the suggestion). That mapping re-files the back office at once; to move one product on the live menu, re-file it from the check below or its lot page.",
         links: [{ href: "/admin/settings/types?tab=inventory", label: "Open Types & Categories" }],
       };
+    case "needs_category":
+      return {
+        what: "This product is cannabis, but its Cultivera category gives no product form, so it is held hidden.",
+        how: "Pick its category on the Types page (or re-file it from its lot page). Its manifest cannot finish onboarding until every held product has a category.",
+        links: [{ href: "/admin/settings/types?tab=inventory", label: "Open Types & Categories" }],
+      };
+    case "non_cannabis_excluded":
+      return { what: "Rows Cultivera flags as non-cannabis (batteries, papers, wraps, devices) were left out on purpose.", how: "Nothing to fix. They never become cards, lots or manifest lines.", links: [] };
+    case "cannabis_flag_conflict":
+      return { what: "A stock row's Is Cannabis and its product's Cannabis Y/N disagree.", how: "The stock row's flag was used. Correct the product's Cannabis flag in Cultivera if it is wrong.", links: [] };
     case "blank_product_name":
       return { what: "Cultivera exported a row with no product name, so it was skipped.", how: "Only Cultivera can fix this row: give it a name there and re-export.", links: [] };
     case "blank_inventory_product":
@@ -357,7 +368,7 @@ export function posDiagnosticRowLink(
   const product = ctxStr(context, "product");
   // R14b: an unknown Cultivera category opens that exact type on the Types
   // page (not lot-gated: the Types page exists before any lot does).
-  if (code === "new_unmapped_category" || code === "unmapped_category_fallback") {
+  if (code === "new_unmapped_category" || code === "unmapped_category_fallback" || code === "needs_category") {
     const category = ctxStr(context, "category");
     return category
       ? { href: typeFocusHref(category, suggestForUnknownCategory(category)?.websiteCategory), label: `Add "${category}" as a type` }
@@ -439,6 +450,7 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
     "product_without_inventory", "unknown_strain_type", "unmapped_category_fallback",
     "import_lot_missing_barcode", "import_lot_barcode_conflict", "import_lot_cost_unparseable",
     "import_lots_mixed_size_cards", "import_lots_coa_missing_summary",
+    "needs_category", "cannabis_flag_conflict",
   ];
   for (const c of WARN_ERR) {
     const f = posImportFixFor(c, live);
@@ -450,6 +462,8 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(posImportFixFor("group_variant_merge", live) === null, "pure info → null");
   ok(posImportFixFor("import_lots_planned", live) === null, "planned → null");
   ok(posImportFixFor("", live) === null, "blank → null");
+  ok(posImportFixFor("unmapped_category_fallback", live)?.what.includes("best-guess") === false, "R74: copy no longer claims a best-guess filing");
+  ok(posDiagnosticRowLink("needs_category", { category: "Accessories" }, staged)?.href.startsWith("/admin/settings/types?tab=inventory&type=Accessories") === true, "R74: needs_category row opens the Types page");
 
   // Review codes → facts, in every state.
   for (const c of POS_REVIEW_CODES) {
@@ -551,6 +565,6 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(importHref(ID) === `/admin/menu-imports/${ID}`, "import href bare");
   ok(lotSearchHref(" a&b ") === "/admin/inventory?q=a%26b", "lot search encodes + trims");
   ok(productSearchHref(" x y ") === "/admin/products?q=x%20y", "product search");
-  ok(CULTIVERA_ONLY_CODES.length === 3 && POS_REVIEW_CODES.length === 4 && POS_ERROR_CODES.length === 7, "sets sized");
+  ok(CULTIVERA_ONLY_CODES.length === 4 && POS_REVIEW_CODES.length === 4 && POS_ERROR_CODES.length === 7, "sets sized");
   return { passed, failed };
 }

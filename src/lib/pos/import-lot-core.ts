@@ -22,7 +22,10 @@
  *   • Expiration date is blank on ALL rows (kept supported; surfaced as an
  *     enrichment worklist item, never invented).
  *   • [COA Y/N] is "Y" on 3,520 rows / "N" on 397 — flagged for enrichment.
- *   • Is Sample is always "False"; Is Cannabis always "True".
+ *   • Is Sample is always "False"; Is Cannabis was always "True" in that old
+ *     UI export (it hid non-cannabis rows). The API harvest now includes
+ *     non-cannabis lots; R74 Slice 1 (cultivera-noncannabis-gate-core) removes
+ *     them inside transformWorkbooks, so no lot source here is ever non-cannabis.
  *
  * Identity & idempotency: one planned lot per BARCODE. Duplicate-barcode rows
  * are merged (units summed, earliest received date kept) because CCRS treats
@@ -75,6 +78,12 @@ export type ImportLotSource = {
   unitWeight: number | null;
   /** Parsed package unit (g | mg | oz | ml | floz | ea). */
   unitWeightUom: string | null;
+  /**
+   * R74 Slice 1: the card this row rolled into is held for an owner category
+   * pick (cannabis row with a non-cannabis / unknown / blank Cultivera
+   * category). Optional; absent = false.
+   */
+  needsCategory?: boolean;
   /**
    * R15a: raw potency columns for THIS row (Total / Thc / Thca / Cbd / Cbda).
    * Optional so older callers/tests keep compiling; absent = unknown.

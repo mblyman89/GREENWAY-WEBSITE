@@ -79,19 +79,21 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
   });
 
   it("pins the bible §1.9 numbers", () => {
-    expect(plan.summary.lots).toBe(4256);
-    expect(plan.summary.matched).toBe(3987);
-    expect(plan.summary.matchedOnlyReceipt).toBe(3738);
-    expect(plan.summary.matchedFirstAfter).toBe(249);
+    // R74 S1: pre-R74 4256 / 3987 / 3738 / 249 / 269 / 651 transfers / 53 fallback; the
+    // 90 non-cannabis lots (10 accessory-only transfers) are left out by the gate.
+    expect(plan.summary.lots).toBe(4166);
+    expect(plan.summary.matched).toBe(3926);
+    expect(plan.summary.matchedOnlyReceipt).toBe(3690);
+    expect(plan.summary.matchedFirstAfter).toBe(236);
     expect(plan.summary.unmatched).toEqual({
-      no_receipt: 269,
+      no_receipt: 240,
       ambiguous_no_time: 0,
       ambiguous_none_after: 0,
       ambiguous_tie: 0,
       vendor_mismatch: 0,
     });
-    expect(plan.summary.transfersUsed).toBe(651);
-    expect(plan.summary.fallbackGroups).toBe(53);
+    expect(plan.summary.transfersUsed).toBe(641);
+    expect(plan.summary.fallbackGroups).toBe(51);
     expect(plan.fallbackGroups.every((g) => g.kind === "undated")).toBe(true);
     expect(plan.numberCollisions).toEqual([]);
   });
@@ -103,9 +105,11 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
       .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
       .map((b) => `${b}=${answer.get(b)}`)
       .join("\n");
-    expect(answer.size).toBe(4256);
+    // R74 S1: the oracle's pre-R74 answer (54b67ffc...a180a3 over 4256 lots) filtered to the
+    // 4166 cannabis lots. Every kept lot's transfer is unchanged; only non-cannabis lots left.
+    expect(answer.size).toBe(4166);
     expect(crypto.createHash("sha256").update(text).digest("hex")).toBe(
-      "54b67ffcf0c242739deb6cb3c4e703dcca7980760c03ac74ae599711d8a180a3",
+      "d66e5d285fe7d0328a290a6c4f6cbea75e2d2ea73e388fa8e282a6efdafc390d",
     );
   });
 
@@ -140,8 +144,8 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
 
   it("is a partition: every lot on exactly one manifest, vendors never mixed", () => {
     const all = [...plan.transferGroups.flatMap((g) => g.barcodes), ...plan.fallbackGroups.flatMap((g) => g.barcodes)];
-    expect(all.length).toBe(4256);
-    expect(new Set(all).size).toBe(4256);
+    expect(all.length).toBe(4166);
+    expect(new Set(all).size).toBe(4166);
     const vendorOf = new Map<string, string>();
     for (const s of sources) if (!vendorOf.has(s.barcode)) vendorOf.set(s.barcode, s.vendor.replace(/\s+/g, " ").trim().toUpperCase());
     for (const g of plan.transferGroups) for (const b of g.barcodes) expect(vendorOf.get(b), b).toBe(g.vendorKey);
@@ -162,9 +166,9 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
     // received minutes apart, which time alone cannot separate (this is why S1b exists):
     //   EDGEMONT GROUP LLC 2026-03-31 (transfers 883 + 884, lots received 13 s apart)
     //   GROW OP FARMS 2025-11-26     (transfers 682 + 683, lots received 97 s apart)
-    expect(pure).toBe(647);
+    expect(pure).toBe(637);
     expect(mixed).toBe(2);
-    expect(s1.summary.sessionGroups).toBe(649);
+    expect(s1.summary.sessionGroups).toBe(639);
     // The other direction: a real transfer split across two S1 sessions never happens.
     const sessionsOf = new Map<number, Set<string>>();
     for (const g of s1.groups.filter((x) => x.kind === "session"))
@@ -177,8 +181,10 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
 
   it("real numbers kept verbatim; one odd number recorded honestly", () => {
     const nums = plan.transferGroups.map((g) => g.manifestNumber);
-    expect(new Set(nums).size).toBe(651);
-    expect(nums.filter((n) => !/^[A-Za-z0-9._-]+$/.test(n))).toEqual(["inv02211$inv02182"]);
+    expect(new Set(nums).size).toBe(641);
+    // R74 S1: the one odd number ("inv02211$inv02182") was an accessories-only transfer,
+    // now left out by the non-cannabis gate.
+    expect(nums.filter((n) => !/^[A-Za-z0-9._-]+$/.test(n))).toEqual([]);
     expect(plan.transferGroups.every((g) => !g.manifestNumber.startsWith("CV-"))).toBe(true);
     expect(new Set(plan.transferGroups.map((g) => g.status))).toEqual(new Set(["Accepted", "Partially Accepted"]));
   });
@@ -191,9 +197,11 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
       .sort((a, b) => a.transferId - b.transferId)
       .map((g) => [g.transferId, g.manifestNumber, g.acceptedAt, g.vendorLabel, g.status, g.barcodes.join(",")].join("\t"))
       .join("\n");
-    expect(plan.transferGroups.length).toBe(651);
+    // R74 S1 re-pin (pre-R74 651 / 00339dd8...7e74): 10 accessory-only transfers left out,
+    // one mixed transfer lost its non-cannabis lines; all other manifests byte-identical.
+    expect(plan.transferGroups.length).toBe(641);
     expect(crypto.createHash("sha256").update(text).digest("hex")).toBe(
-      "00339dd861e20498708bb0db137a6e5703a4ed5afdd532d22a505f7f6aa77e74",
+      "82325df561081e9cbdc9746bf049f2ef02f1a344cd0c9606b3e686ce4fab0293",
     );
   });
 
