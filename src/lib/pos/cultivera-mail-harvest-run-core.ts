@@ -238,7 +238,7 @@ function decodeText(bytes: Uint8Array): string {
   return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
 }
 
-function summarize(m: Pick<ParsedManifest, "manifest_number" | "vendor_label" | "vendor_license" | "transfer_date" | "source_format" | "lines">, what: string): ParsedDocSummary {
+export function summarizeManifest(m: Pick<ParsedManifest, "manifest_number" | "vendor_label" | "vendor_license" | "transfer_date" | "source_format" | "lines">, what: string): ParsedDocSummary {
   const lines: DocLine[] = [];
   let dropped = 0;
   for (const l of m.lines ?? []) {
@@ -270,12 +270,12 @@ export function parseHarvestedDoc(kind: Exclude<DocKind, "none">, bytes: Uint8Ar
   if (kind === "json" || kind === "link-json") {
     const r = parseVendorJson(text);
     if (!r.ok) return { ...EMPTY, status: "unreadable", note: r.error };
-    return summarize(r.manifest, r.manifest.source_format === "wcia" ? "this WCIA transfer" : "this JSON");
+    return summarizeManifest(r.manifest, r.manifest.source_format === "wcia" ? "this WCIA transfer" : "this JSON");
   }
   // csv
   const p = parseCcrsManifestCsv(text);
   if (!p.ok) return { ...EMPTY, status: "unreadable", note: `not a CCRS manifest CSV (${p.error})` };
-  return summarize(ccrsToParsedManifest(p), "this CCRS manifest CSV");
+  return summarizeManifest(ccrsToParsedManifest(p), "this CCRS manifest CSV");
 }
 
 /* ------------------------------------------------------------------ *

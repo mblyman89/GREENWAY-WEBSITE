@@ -372,6 +372,17 @@ export function normalizeMarkdownFields(text: string | null | undefined): string
   return out.join("\n");
 }
 
+/**
+ * R74 S9: every table in markdown / HTML text (LlamaParse output), as header + rows of cells,
+ * using the same block reader as extractKeyValuePairs. Pure; [] for no tables.
+ */
+export function markdownTables(text: string | null | undefined): { header: string[] | null; rows: string[][] }[] {
+  if (!text) return [];
+  const out: { header: string[] | null; rows: string[][] }[] = [];
+  for (const b of toBlocks(text)) if (b.kind === "table") out.push({ header: b.table.header ? [...b.table.header] : null, rows: b.table.rows.map((r) => [...r]) });
+  return out;
+}
+
 /** Whole-line "Label: value" (or "Label # value") in multi-line text. */
 const LINE_PAIR_RE =
   /^([A-Za-z][A-Za-z0-9 .'/&()-]{0,46}?(?:\s*#)?)\s*:\s*(\S.{0,150})$/;
