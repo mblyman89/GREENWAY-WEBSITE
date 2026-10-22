@@ -2807,3 +2807,35 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0289_ach_bank_watch.rollback.sql`.
   It refuses once any rule or review exists (they are records).
   - Manual test T-375.
+
+## R41 — 0290 — Notice email (the Fed's encrypted ACH notice emails)
+
+- [ ] `0290_ach_notice_mail.sql` adds one table for the Notice email page
+  (Settings → Banking → Notice email): `ach_notice_mail`, one row per
+  email the optional hourly watch found from the Fed's notice sender.
+  - The subject and text are stored **encrypted** (the database refuses a row
+    that is not), with only facts in clear: the sender's domain, whether it
+    matches the senders set, Google's DMARC result, whether it was in Spam,
+    and which sites its links go to.
+  - A row is never deleted or edited. The owner or an active admin marks it
+    once: “Logged on ACH operations” or “Not a notice”, with a note.
+  - The watch itself is **off** until the owner turns it on. Applying 0290
+    does not turn anything on.
+
+  Apply it **after 0289**. It is safe to re-run. Until it is applied, the page
+  says to apply 0290 and the watch stores nothing.
+
+  **Check:**
+
+  ```sql
+  select count(*) as notice_emails from ach_notice_mail;
+  -- notice_emails
+  -- 0
+  ```
+
+  For the full proof, paste `scripts/recon/ach-notice-mail-0290-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0290 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0290_ach_notice_mail.rollback.sql`.
+  It refuses once any email is stored (they are records).
+  - Manual test T-376.

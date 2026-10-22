@@ -31,7 +31,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S13 | Notices and corrections: wrong-NOC clock (15 days), OFAC notice from Timberland, bank report download clock (60 days); reversal call sheet from the stored file | #1445 | 0287 |
 | S14 | Nacha yearly obligations: written fraud procedure tied to the Phase 2 text with a risk assessment, yearly review record (who and when), segregation-of-duties report, printable packet | #1446 | 0288 |
 | S15 | Leftovers without guessing: R90 return code from a new Nacha mirror; stale mutation anchor re-anchored | #1447 | none |
-| S16 | Bank watch: the Plaid feed on the Main account checked daily against ACH files, books, Timberland fees, known payees and reviews; possible returns; fee/notice gaps; feed health; daily email; Plaid balance hint on the funding box | (this PR) | 0289 |
+| S16 | Bank watch: the Plaid feed on the Main account checked daily against ACH files, books, Timberland fees, known payees and reviews; possible returns; fee/notice gaps; feed health; daily email; Plaid balance hint on the funding box | #1448 | 0289 |
+| S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | (this PR) | 0290 |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -271,3 +272,13 @@ Still to arrange: the testing session Brenda asked for.
 - **Migration 0289**: rules (retire-only) and reviews (append-only); see MIGRATIONS_TO_RUN.
 - **Tests.** `tests/compliance/r41-s16-bank-watch.test.ts`; pure self-test `ach-bank-watch-core` 54; `mutate-0289-sql.py` (35 mutants plus two probes) and `mutate-s16-app.py`. Manual test T-375.
 
+## S17 in detail
+
+- **Why.** Brenda (Timberland, email 3, answer 9) says notices arrive two ways: a secure encrypted email from the Federal Reserve, and the Timberland portal under Reporting → Electronic Documents. The Fed's guide (mirrored as `docs/authorities/ach/frbservices-edi-encrypted-email-guide.txt`) names the sender domain `encryptedmail.achedi.com`, keeps reports 60 calendar days, and says not to rely on the email but to check the portal daily and make sure the link goes to achedi.com.
+- **Reuse.** The Google Workspace sign-in built for the CCRS email monitor (`ccrs-mail-core` / `ccrs-mail-fetch`): same token, same list and get calls, no new keys. The Gmail `{ }` OR search and “includes Spam and Trash” are quoted from a new mirror, `docs/authorities/ach/gmail-search-operators.txt`.
+- **Off by default.** What the notice email actually looks like is not known yet, so the site never parses it. Off = the hourly cron reads one setting and returns, with no Google call. Only the owner turns it on, and must type I STILL CHECK THE PORTAL.
+- **When on** (`/api/cron/ach-notice-mail`, hourly at :50): each matching email is stored once, encrypted (refused if `DATA_ENCRYPTION_KEY` is missing), with sender match, DMARC, spam folder and link hosts; links not on achedi.com are flagged and shown as plain text. Michael gets one email per stored message, claimed in `compliance_reminder_log`, and the claim is removed if sending fails.
+- **Page** (`/admin/settings/banking/notice-email`, new “Notice email” tab; gate `settings.manage`, email text only for `finances.view`): status and readiness, the daily portal checklist with reasons, waiting and marked emails, settings, the exact Gmail search, and every source quoted. ACH operations' Notices section links to it.
+- **Backup plan.** None added: the owner already skips an ACH payroll and logs it as paid by written checks.
+- **Migration 0290**: `ach_notice_mail` (append-only, encrypted, one mark per row); see MIGRATIONS_TO_RUN.
+- **Tests.** `tests/compliance/r41-s17-notice-mail.test.ts`; pure self-test `ach-notice-mail-core` 57; `mutate-0290-sql.py` (29 mutants) and `mutate-s17-app.py`. Manual test T-376.
