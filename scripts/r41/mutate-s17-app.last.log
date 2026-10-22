@@ -1,0 +1,39 @@
+control (before) pass
+killed   quote reworded
+killed   on by default
+killed   truthy string turns on
+killed   no typed confirmation
+killed   too many senders
+killed   lookback in minutes
+killed   look-alike sender matches
+killed   user@host trick passes
+killed   look-alike portal host
+killed   one good link is enough
+killed   dmarc fail ignored
+killed   spam not flagged
+killed   off still runs
+killed   no key still runs
+killed   alert claims to read
+killed   new is a mark
+killed   short notes allowed
+killed   digits allowed in note
+killed   off check after Google config
+killed   stores in clear
+killed   claim kept on failed email
+killed   oldest alerts first
+killed   mark twice
+killed   admin changes settings
+killed   admin checks now
+killed   mark not audited
+killed   admin reads bank mail
+killed   staff page
+killed   links not called text
+killed   cron echoes failures
+killed   cron open without secret
+killed   off is an error
+killed   cron every minute
+killed   ops hint dropped
+killed   tab dropped
+control (after) pass
+total 35 killed 35 survivors []
+EXIT 0

@@ -119,6 +119,13 @@ describe("S17 core: query, sender, links, DMARC", () => {
     expect(n.linkVerdict(n.linkHosts("https://achedi.com@evil.test/a"))).toBe("other_hosts");
     expect(n.linkVerdict(n.linkHosts("https://notachedi.com/a"))).toBe("other_hosts");
   });
+  it("link hosts: the user@ part is dropped so the real host is judged; one bad link among good ones flags the email", () => {
+    expect(n.linkHosts("https://someone@achedi.com/a")).toEqual(["achedi.com"]);
+    expect(n.linkHosts("https://achedi.com@evil.test/a")).toEqual(["evil.test"]);
+    expect(n.linkVerdict(n.linkHosts("https://someone@achedi.com/a"))).toBe("portal_only");
+    expect(n.linkVerdict(n.linkHosts("https://achedi.com/a https://evil.test/b"))).toBe("other_hosts");
+    expect(n.linkVerdict(["achedi.com", "evil.test"])).toBe("other_hosts");
+  });
   it("DMARC: fail wins, pass, else unknown", () => {
     expect(n.noticeAuth(["dmarc=pass", "dmarc=fail"])).toBe("fail");
     expect(n.noticeAuth(["spf=pass dmarc=pass"])).toBe("pass");
