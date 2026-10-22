@@ -40,6 +40,7 @@
 import { normalizeStage, classifyEta } from "@/lib/inventory/manifest-pipeline-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import type { CultiveraRowView } from "@/lib/inventory/cultivera-onboarding-core";
+import { parseSourceFilter, type CultiveraSource } from "@/lib/inventory/cultivera-vendor-core";
 
 export const RECEIVING_PATH = "/admin/inventory/intake";
 
@@ -127,6 +128,10 @@ export type ReceivingFilters = {
   to: string;
   sort: ReceivingSort;
   page: number;
+  /** R74 S11: Cultivera view only - where the manifest came from ("" = any). */
+  source: CultiveraSource | "";
+  /** R74 S11: Cultivera view only - "vendor" shows the by-vendor roll-up above the table. */
+  group: "" | "vendor";
 };
 
 export const CULTIVERA_TABLE_PAGE_SIZE = 50;
@@ -170,12 +175,14 @@ export function parseReceivingFilters(sp: Record<string, unknown>): ReceivingFil
     to,
     sort: sortOk ? (sortRaw as ReceivingSort) : "default",
     page,
+    source: view === "cultivera" ? parseSourceFilter(sp.source) : "",
+    group: view === "cultivera" && str(sp.group).trim() === "vendor" ? "vendor" : "",
   };
 }
 
 /** True when any filter (not the view, sort or page) narrows the list. */
 export function hasActiveFilters(f: ReceivingFilters): boolean {
-  return Boolean(f.q || f.vendor || f.status || f.from || f.to);
+  return Boolean(f.q || f.vendor || f.status || f.from || f.to || f.source);
 }
 
 /**
@@ -191,6 +198,11 @@ export function receivingHref(f: ReceivingFilters, patch: Partial<ReceivingFilte
   if (viewChanged) {
     if (patch.status === undefined) n.status = "";
     if (patch.sort === undefined) n.sort = "default";
+    // Source and grouping exist only on the Cultivera view.
+    if (n.view !== "cultivera") {
+      n.source = "";
+      n.group = "";
+    }
   }
   const qs = new URLSearchParams();
   if (n.view !== "action") qs.set("view", n.view);
@@ -200,6 +212,8 @@ export function receivingHref(f: ReceivingFilters, patch: Partial<ReceivingFilte
   if (n.from) qs.set("from", n.from);
   if (n.to) qs.set("to", n.to);
   if (n.sort !== "default") qs.set("sort", n.sort);
+  if (n.source) qs.set("source", n.source);
+  if (n.group) qs.set("group", n.group);
   if (n.page > 1) qs.set("page", String(n.page));
   const q = qs.toString();
   return q ? `${RECEIVING_PATH}?${q}` : RECEIVING_PATH;
@@ -210,7 +224,7 @@ export function receivingViewLinks(
   f: ReceivingFilters,
   counts: { processed: number; cultivera: number | null },
 ): { view: ReceivingView; href: string; label: string; active: boolean; title: string }[] {
-  const base: ReceivingFilters = { ...f, q: "", vendor: "", status: "", from: "", to: "", sort: "default", page: 1 };
+  const base: ReceivingFilters = { ...f, q: "", vendor: "", status: "", from: "", to: "", sort: "default", page: 1, source: "", group: "" };
   return [
     {
       view: "action",
@@ -370,6 +384,8 @@ export type CultiveraTableRow = CultiveraRowView & {
   /** YYYY-MM-DD the rebuilt manifest represents (Pacific accepted day, else transfer day). */
   dayKey: string;
   completion: CultiveraCompletion;
+  /** R74 S11: where it came from (raw_payload.group_kind); "unknown" when not recorded. */
+  source: CultiveraSource;
 };
 
 /** The YYYY-MM-DD a rebuilt manifest represents (same precedence as its display day). */
@@ -394,6 +410,7 @@ export function applyCultiveraFilters(rows: readonly CultiveraTableRow[], f: Rec
       if ((f.status === "not_started" || f.status === "in_review") && (r.completion === "unknown" || r.state !== f.status))
         return false;
     }
+    if (f.source && r.source !== f.source) return false;
     if (!inRange(r.dayKey, f.from, f.to)) return false;
     if (q && !`${lc(r.number)} \u0000 ${lc(r.vendor)}`.includes(q)) return false;
     return true;
@@ -436,8 +453,23 @@ export function cultiveraTableRows(
   views: readonly CultiveraRowView[],
   dayKeys: ReadonlyMap<string, string>,
   tallyRead: boolean,
+  sources: ReadonlyMap<string, CultiveraSource> = new Map(),
 ): CultiveraTableRow[] {
-  return views.map((v) => ({ ...v, dayKey: dayKeys.get(v.id) ?? "", completion: cultiveraCompletion(v.state, tallyRead) }));
+  return views.map((v) => ({
+    ...v,
+    dayKey: dayKeys.get(v.id) ?? "",
+    completion: cultiveraCompletion(v.state, tallyRead),
+    source: sources.get(v.id) ?? "unknown",
+  }));
+}
+
+export type SourceCounts = Record<CultiveraSource, number>;
+
+/** How many manifests came from each source (the chips above the table). */
+export function countSources(rows: readonly { source: CultiveraSource }[]): SourceCounts {
+  const c: SourceCounts = { transfer: 0, email: 0, unmatched: 0, received: 0, unknown: 0 };
+  for (const r of rows) c[r.source] += 1;
+  return c;
 }
 
 export type CultiveraSummary = { total: number; complete: number; notComplete: number; unknown: number };
@@ -469,6 +501,14 @@ export function vendorOptions(labels: readonly (string | null | undefined)[]): s
   return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, "en-US", { sensitivity: "base" }));
 }
 
+const SOURCE_WORD: Record<CultiveraSource, string> = {
+  transfer: "Cultivera transfer",
+  email: "Emailed manifest",
+  unmatched: "Unmatched stock",
+  received: "Received-date group",
+  unknown: "Not recorded",
+};
+
 /** One sentence describing what the list is showing (shown above the table). */
 export function filterSummary(f: ReceivingFilters, shown: number, total: number): string {
   const parts: string[] = [];
@@ -478,6 +518,7 @@ export function filterSummary(f: ReceivingFilters, shown: number, total: number)
     parts.push(`status "${lbl}"`);
   }
   if (f.vendor) parts.push(`vendor "${f.vendor}"`);
+  if (f.source) parts.push(`source "${SOURCE_WORD[f.source]}"`);
   if (f.q) parts.push(`matching "${f.q}"`);
   if (f.from && f.to) parts.push(`dated ${f.from} to ${f.to}`);
   else if (f.from) parts.push(`dated on or after ${f.from}`);
@@ -637,5 +678,29 @@ export function __runReceivingTableCoreTests(): { passed: number; failed: number
   ok(filterSummary(P({ to: "2026-01-01" }), 0, 1).endsWith("manifest, dated on or before 2026-01-01."), "singular + to-only");
   ok(sortOptionsFor("cultivera").every((o) => o.value !== "eta") && sortOptionsFor("all").every((o) => o.value !== "lots_desc"), "per-view sorts");
 
+  // R74 S11: source filter + vendor grouping (Cultivera view only)
+  ok(P({ view: "cultivera", source: "email" }).source === "email" && P({ source: "email" }).source === "", "source only on the Cultivera view");
+  ok(P({ view: "cultivera", source: "bogus" }).source === "", "bad source = any");
+  ok(P({ view: "cultivera", group: "vendor" }).group === "vendor" && P({ group: "vendor" }).group === "" && P({ view: "cultivera", group: "x" }).group === "", "group only vendor, only Cultivera");
+  ok(hasActiveFilters(P({ view: "cultivera", source: "unmatched" })) && !hasActiveFilters(P({ view: "cultivera", group: "vendor" })), "source narrows, grouping does not");
+  {
+    const cv = P({ view: "cultivera", source: "email", group: "vendor" });
+    ok(receivingHref(cv) === `${RECEIVING_PATH}?view=cultivera&source=email&group=vendor`, "href keeps source + group");
+    ok(receivingHref(cv, { view: "all" }) === `${RECEIVING_PATH}?view=all`, "leaving the Cultivera view drops source + group");
+    const srcRows = cultiveraTableRows(
+      [
+        { id: "a", number: "1", vendor: "V", day: null, lots: 1, state: "done", stateLabel: "", inReview: 0, approved: 1 },
+        { id: "b", number: "2", vendor: "V", day: null, lots: 1, state: "done", stateLabel: "", inReview: 0, approved: 1 },
+      ],
+      new Map(),
+      true,
+      new Map([["a", "email" as const]]),
+    );
+    ok(srcRows[0].source === "email" && srcRows[1].source === "unknown", "source from the map; missing = unknown, never guessed");
+    ok(applyCultiveraFilters(srcRows, cv).map((r) => r.id).join() === "a", "source filter applies");
+    const c = countSources(srcRows);
+    ok(c.email === 1 && c.unknown === 1 && c.transfer === 0, "source counts");
+    ok(filterSummary(cv, 1, 2).includes('source "Emailed manifest"'), "summary names the source");
+  }
   return { passed, failed };
 }

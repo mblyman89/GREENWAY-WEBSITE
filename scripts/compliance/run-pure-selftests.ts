@@ -747,6 +747,7 @@ import { __runGrowflowMenuUiCoreTests } from "../../src/lib/purchasing/growflow-
 import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-autosave-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runCultiveraOnboardingCoreTests } from "../../src/lib/inventory/cultivera-onboarding-core";
+import { __runCultiveraVendorCoreTests } from "../../src/lib/inventory/cultivera-vendor-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
@@ -1652,13 +1653,14 @@ __runLiquidVolumeTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 55);
+  assertRan("cultivera-vendor-core", __runCultiveraVendorCoreTests(), 54); // R74 S11: vendor roll-up, vendor Start-all, vendor Gemini lookup, mastering summary
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
   assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);
   assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 58);
   assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
-  assertRan("receiving-table-core", __runReceivingTableCoreTests(), 88); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
+  assertRan("receiving-table-core", __runReceivingTableCoreTests(), 98); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
   assertRan("ccrs-migration-garbage-core", __runCcrsMigrationGarbageCoreTests(), 67); // R50 S10c (D-15): migrated garbage → CCRS clean-up; R74 S4 +14 (no received date = does not exist)
   assertRan("menu-imports-guide-core", __runMenuImportsGuideCoreTests(), 74); // R50 S10b: Menu Imports step-by-step migration guide (+A2 go/no-go links)
   __runWedgeScanCoreTests();
