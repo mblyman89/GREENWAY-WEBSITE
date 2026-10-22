@@ -33,7 +33,8 @@ sent by Michael at the end of the build). The owner acts alone; an admin's reque
 | S15 | Leftovers without guessing: R90 return code from a new Nacha mirror; stale mutation anchor re-anchored | #1447 | none |
 | S16 | Bank watch: the Plaid feed on the Main account checked daily against ACH files, books, Timberland fees, known payees and reviews; possible returns; fee/notice gaps; feed health; daily email; Plaid balance hint on the funding box | #1448 | 0289 |
 | S17 | Notice email: optional hourly watch (off by default) for the Fed's encrypted ACH notice emails in the Workspace mailbox the CCRS monitor reads; encrypted store, sender/DMARC/link checks, owner alert, mark once; daily portal checklist | #1449 | 0290 |
-| S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | (this PR) | 0291 |
+| S18 | Written ACH policies (8, each quoted to the State Auditor or the Timberland agreement), quarterly access review, yearly key checks, owner-only dated records, printable packet | #1450 | 0291 |
+| S19 | Bank setup & glossary: the bank-side checklist for the meeting with Brenda (ask / owner decides / confirmed, each in her words; ACH debit block and ACH filter asked, not assumed), printable meeting sheet, 20-term sourced ACH glossary, glossary-backed hover help on Operations and Approvals | (this PR) | none |
 
 Round 9 (between S5 and S6) added Reports, then ACH Payments (#1379).
 
@@ -291,3 +292,11 @@ Still to arrange: the testing session Brenda asked for.
 - **Backup plan.** Policy 8 is the owner's existing procedure (skip the ACH payroll, pay by written checks), quoted from his own Round 16 words; nothing new was built for it.
 - **Migration 0291**: `ach_control_records` (append-only, never backdated, owner-only, period rules); see MIGRATIONS_TO_RUN.
 - **Tests.** `tests/compliance/r41-s18-policies.test.ts`; pure self-test `ach-policies-core` 69; `mutate-0291-sql.py` (27 mutants) and `mutate-s18-app.py`. Manual test T-377.
+
+## S19 in detail
+
+- **Why.** The owner is waiting for Brenda (Timberland Cash Management) to set up the interview about testing. The S19 page puts everything for that meeting in one place so nothing is forgotten, and it never guesses: an item is "Confirmed" only when Brenda's words (`timberland-brenda-2026-10.txt`, `timberland-brenda-2026-10-19-email-3.txt`) or the signed agreement say so. Whether Timberland offers an ACH debit block or an ACH filter (ACH positive pay) is not in any mirror, so both are questions, backed by the State Auditor's words. No mirror mentions BAI2, so it is not on the list.
+- **Page** (`/admin/settings/banking/bank-setup`, new "Bank setup & glossary" tab; gate `settings.manage`; reads and writes nothing): 11 items in meeting order (5 ask, 1 owner decides, 5 confirmed), each with a hover hint, what is on record and the source's own words; a printable plain-text meeting sheet (`bank-setup/sheet`, tick boxes and answer lines, audit line only); a 20-term ACH glossary, each term in plain words with the definition quoted from the Timberland agreement, Nacha, the Fed or the State Auditor, linking to where Greenway does it.
+- **Hover help.** Every section heading on ACH operations and Banking approvals now has an InfoHint; the Returns, Account checks and ACH files hints come from the glossary (`glossaryHint`).
+- **No migration.**
+- **Tests.** `tests/compliance/r41-s19-bank-setup.test.ts`; pure self-test `ach-bank-setup-core` 44; `mutate-s19-app.py`. Manual test T-378.

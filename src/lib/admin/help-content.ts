@@ -783,6 +783,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/settings/banking/policies",
       },
       {
+        q: "What do I need to settle with Timberland before the first ACH payroll, and what do the ACH words mean?",
+        a: "Banking \u2192 Bank setup & glossary. It lists what to ask Brenda (how the test file works, the release code, an ACH debit block, an ACH filter, the Fed notice email), your own decision (dual approval) and what she has already confirmed, each with her words. Print the meeting sheet and write her answers on it. The glossary below explains ODFI, RDFI, prenote, NOC, returns and the rest in plain words.",
+        href: "/admin/settings/banking/bank-setup",
+      },
+      {
         q: "How do I confirm the money is in the account for an ACH file?",
         a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the owner also sees the Plaid balance beside the box as a hint; it can lag), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date, and Brenda confirmed that is when it must be there (Email 3, answer 5). Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",
