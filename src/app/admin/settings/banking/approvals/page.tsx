@@ -20,7 +20,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs } from "@/components/admin/ux";
+import { Breadcrumbs, InfoHint } from "@/components/admin/ux";
 import { achActionLabel, achAuthority } from "@/lib/auth/ach-authority-core";
 import { pacificWhen, summaryObject } from "@/lib/payments/ach-gate-core";
 import { listChangeRequests, listOwnerReviews, staffNames, type OwnerReview, type RequestListRow } from "@/lib/payments/ach-requests-store";
@@ -30,7 +30,7 @@ import { DecisionForm } from "./ApprovalButtons";
 export const dynamic = "force-dynamic";
 
 const card = "rounded-[var(--admin-radius-lg)] border border-white/10 bg-white/[0.03] p-4";
-const h2 = "mb-3 text-sm font-black uppercase tracking-[0.1em] text-white/70";
+const h2 = "mb-3 flex items-center gap-1 text-sm font-black uppercase tracking-[0.1em] text-white/70";
 
 function when(iso: string | null): string {
   return iso ? pacificWhen(new Date(iso)) : "";
@@ -99,7 +99,7 @@ export default async function BankingApprovalsPage() {
         ) : null}
 
         <section>
-          <h2 className={h2}>Waiting for Michael ({reqs.pending.length})</h2>
+          <h2 className={h2}>Waiting for Michael ({reqs.pending.length})<InfoHint text="Stephen's live ACH changes. Michael approves or rejects each one; Stephen can withdraw his own. A request whose record changed since it was sent is refused on approve." /></h2>
           {reqs.pending.length === 0 ? (
             <p className="text-sm text-white/50">Nothing is waiting.</p>
           ) : (
@@ -158,7 +158,7 @@ export default async function BankingApprovalsPage() {
         </section>
 
         <section>
-          <h2 className={h2}>Stephen&apos;s stop actions to check off ({reviews.open.length})</h2>
+          <h2 className={h2}>Stephen&apos;s stop actions to check off ({reviews.open.length})<InfoHint text="Stephen's stop actions (a hold, a return or NOC notice) take effect at once. Michael checks each one off here." /></h2>
           {reviews.open.length === 0 ? (
             <p className="text-sm text-white/50">Nothing to check off.</p>
           ) : (
@@ -195,7 +195,7 @@ export default async function BankingApprovalsPage() {
         </section>
 
         <section>
-          <h2 className={h2}>Recently decided</h2>
+          <h2 className={h2}>Recently decided<InfoHint text="The latest decisions, for the record." /></h2>
           {reqs.recent.length === 0 && reviews.done.length === 0 ? (
             <p className="text-sm text-white/50">Nothing yet.</p>
           ) : (

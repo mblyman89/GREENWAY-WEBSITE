@@ -29,7 +29,8 @@ import { can } from "@/lib/auth/roles";
 import { fundingBalanceHint } from "@/lib/payments/ach-bank-watch-core";
 import { readMainBalances } from "@/lib/payments/ach-bank-watch-store";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, InfoHint } from "@/components/admin/ux";
+import { glossaryHint } from "@/lib/payments/ach-bank-setup-core";
 import { Badge } from "@/components/admin/ui";
 import { BankingHelpTabs } from "../BankingHelpTabs";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -67,7 +68,7 @@ const labelCls = "mb-1 block text-xs font-semibold uppercase tracking-wide text-
 const btnPrimary = "rounded-[var(--admin-radius)] bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400";
 const btnGhost = "rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/[0.06]";
 const card = "rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4";
-const h2 = "mb-3 text-base font-semibold text-white";
+const h2 = "mb-3 flex items-center gap-1 text-base font-semibold text-white";
 
 const METHOD_WORDS = { prenote: "Prenote ($0)", micro_entry: "Test credit (under $1)", voided_check_callback: "Callback (voided check)" } as const;
 
@@ -151,7 +152,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 1. Notices */}
         <section id="notices" className={card}>
-          <h2 className={h2}>Returns and bank corrections ({view.notices.length} open)</h2>
+          <h2 className={h2}>Returns and bank corrections ({view.notices.length} open)<InfoHint text={`${glossaryHint("return")} ${glossaryHint("noc")}`} /></h2>
           {/* R41 S17: where notices come from, and the optional heads-up watch. */}
           <p className="mb-3 text-xs text-white/55">
             Notices come two ways (Brenda, Timberland): a secure encrypted email from the Federal Reserve, and the Timberland portal under Reporting &rarr; Electronic Documents. Check the portal every day; the{" "}
@@ -241,7 +242,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 2. Employee holds */}
         <section id="holds" className={card}>
-          <h2 className={h2}>Employee holds ({view.holds.length})</h2>
+          <h2 className={h2}>Employee holds ({view.holds.length})<InfoHint text="A hold stops ACH to one employee until it is cleared. A logged return or correction puts that payee on hold at once." /></h2>
           <p className="mb-3 text-xs text-white/50">Vendor holds are released on the Vendors tab of Banking, with the callback.</p>
           {view.holds.length ? (
             <ul className="space-y-3">
@@ -274,7 +275,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 3. Account checks */}
         <section id="checks" className={card}>
-          <h2 className={h2}>Account checks ({view.checks.length})</h2>
+          <h2 className={h2}>Account checks ({view.checks.length})<InfoHint text={`A new account is checked before real pay goes to it. ${glossaryHint("prenote")} A test credit is a few cents the payee reads back to you.`} /></h2>
           {view.checks.length ? (
             <table className="mb-4 w-full text-left text-sm">
               <thead className="text-xs text-white/40">
@@ -406,7 +407,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 4. Annual reviews */}
         <section id="reviews" className={card}>
-          <h2 className={h2}>Annual reviews ({view.reviews.length} due)</h2>
+          <h2 className={h2}>Annual reviews ({view.reviews.length} due)<InfoHint text="Every active authorization is reviewed at least once a year. The list shows the ones that are due." /></h2>
           {view.reviews.length ? (
             <ul className="space-y-3">
               {view.reviews.map((r) => (
@@ -433,7 +434,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 5. Monitoring */}
         <section id="monitor" className={card}>
-          <h2 className={h2}>Test-credit monitoring</h2>
+          <h2 className={h2}>Test-credit monitoring<InfoHint text="Counts Greenway's own test credits sent and returned over the last 30 and 365 days, and flags anything unusual." /></h2>
           <p className="text-sm text-white/80">{mon.headline}</p>
           {view.monitor.flags.length ? (
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-200">
@@ -446,7 +447,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 7. Released ACH files (R41 S3) */}
         <section id="files" className={card}>
-          <h2 className={h2}>Released ACH files ({files.rows.length})</h2>
+          <h2 className={h2}>Released ACH files ({files.rows.length})<InfoHint text={`${glossaryHint("file")} Every download is the same bytes; tick the box once it is uploaded to Timberland.`} /></h2>
           <p className="mb-3 text-xs text-white/50">
             Every file the site released, kept forever. A download is always the same bytes, checked against their fingerprint first. A voided file is never served again and its File ID Modifier is never reused that day.
           </p>
@@ -547,7 +548,7 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
 
         {/* 6. Records */}
         <section id="records" className={card}>
-          <h2 className={h2}>Records and legal hold ({view.records.length})</h2>
+          <h2 className={h2}>Records and legal hold ({view.records.length})<InfoHint text="Records are archived, never deleted. A legal hold keeps one past its normal keep period." /></h2>
           <p className="mb-3 text-xs text-white/50">Authorizations are archived, never deleted. A legal hold keeps a record until it is taken off.</p>
           <table className="w-full text-left text-sm">
             <tbody className="text-white/80">
