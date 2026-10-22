@@ -1336,7 +1336,9 @@ describe("D-65 — the connections survive the reset", () => {
     //       watch saved, encrypted, and who marked each; append-only, the
     //       database refuses DELETE and TRUNCATE)
     // R41 S18: +1 KEEP for ach_control_records (0291).
-    expect(plan.keep.length).toBe(170);
+    // R74 S7: +1 KEEP for cultivera_mail_docs (0293; harvested vendor
+    // documents from the real mailbox; the database refuses DELETE).
+    expect(plan.keep.length).toBe(171);
     expect(plan.wipe.length).toBe(139);
   });
 
