@@ -267,3 +267,53 @@ describe("R50 S11: startPosRun sends the sales day only when given", () => {
     expect(bodies).toEqual([{ fresh: true }, { fresh: false, salesFrom: "2026-10-31" }]);
   });
 });
+
+// R74 S2: vendor transfer files fail LOUD - coverage is counted from the run's own transfer details,
+// the obtained files still load (they stage), and a real import needs the owner's acknowledgment.
+describe("R74 S2: vendor-file coverage on loadRunForImport", () => {
+  const WDOC = JSON.stringify({ inventory_transfer_items: [] });
+  function withVendorFiles(detailsJsonFile: (string | null)[], wciaIds: number[], stage?: Record<string, unknown>): Files {
+    const details = detailsJsonFile
+      .map((jf, k) => JSON.stringify({ ...TRANSFER_5, Id: 5 + k, ...(jf ? { JsonFile: jf } : {}), Details: k === 0 ? TRANSFER_5.Details : [] }))
+      .join("\n") + "\n";
+    const base = makeRun({ details });
+    const data: Files = Object.fromEntries(Object.entries(base).filter(([n]) => n !== "state.json" && n !== "manifest.json"));
+    data["wcia_json.jsonl"] = Buffer.from(wciaIds.map((id) => JSON.stringify({ Id: id, Url: "wa_pos/x.json", JsonFile: WDOC })).join("\n") + "\n");
+    const st = JSON.parse(base["state.json"].toString("utf8"));
+    if (stage) st.stages = { wcia_json: stage };
+    const man = JSON.parse(base["manifest.json"].toString("utf8"));
+    man.files = Object.entries(data).sort().map(([name, b]) => ({ name, bytes: b.length, sha256: sha(b) }));
+    return { ...data, "state.json": Buffer.from(JSON.stringify(st)), "manifest.json": Buffer.from(JSON.stringify(man)) };
+  }
+
+  it("every transfer with a vendor file saved → complete, quiet", async () => {
+    served = withVendorFiles(["wa_pos/a.json", null], [5]);
+    const r = await load();
+    expect(r.vendorCoverage).toMatchObject({ basis: "details", expected: 1, saved: 1, missing: 0, complete: true, loud: null });
+  });
+
+  it("a missing vendor file is LOUD, the obtained one still loads, real import needs the tick", async () => {
+    served = withVendorFiles(["wa_pos/a.json", "wa_pos/b.json"], [5], { status: "partial", coverage: { errors: 1, stoppedForTime: false, refused: 0 } });
+    const r = await load();
+    expect(r.verified).toBe(true);
+    expect(r.wcia.records.map((x) => x.Id)).toEqual([5]); // the file it got still stages
+    expect(r.vendorCoverage).toMatchObject({ expected: 2, saved: 1, missing: 1, missingTransferIds: [6], complete: false });
+    expect(r.vendorCoverage.loud).toContain("1 of 2 MISSING (1 errors)");
+    const { missingToAcknowledge } = await import("@/lib/pos/cultivera-wcia-coverage-core");
+    const base = { isTest: false, go: Boolean(r.assembled?.report.go), cutoverDone: false, ageMinutes: r.ageMinutes, filesVerified: r.verified };
+    expect(r.assembled?.report.go).toBe(true); // GO is about the core cutover; vendor files are reported apart
+    expect(importDecision({ ...base, vendorFilesMissing: missingToAcknowledge(r.vendorCoverage) }).allowed).toBe(false);
+    expect(importDecision({ ...base, vendorFilesMissing: missingToAcknowledge(r.vendorCoverage), acknowledgeMissingVendorFiles: true }).allowed).toBe(true);
+  });
+
+  it("a run with vendor files but no wcia_json.jsonl at all → every one missing", async () => {
+    const f = withVendorFiles(["wa_pos/a.json"], []);
+    delete f["wcia_json.jsonl"];
+    const man = JSON.parse(f["manifest.json"].toString("utf8"));
+    man.files = man.files.filter((x: { name: string }) => x.name !== "wcia_json.jsonl");
+    f["manifest.json"] = Buffer.from(JSON.stringify(man));
+    served = f;
+    const r = await load();
+    expect(r.vendorCoverage).toMatchObject({ expected: 1, saved: 0, missing: 1, complete: false });
+  });
+});

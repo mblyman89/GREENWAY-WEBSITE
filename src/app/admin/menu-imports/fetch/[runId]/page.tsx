@@ -8,6 +8,7 @@ import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefr
 import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { getPosRun, isValidRunId, loadRunForImport, type LoadedRun } from "@/lib/pos/cultivera-fetch-client";
 import { MAX_HARVEST_AGE_MINUTES, importDecision, runView } from "@/lib/pos/cultivera-fetch-button-core";
+import { coverageCheck, missingToAcknowledge } from "@/lib/pos/cultivera-wcia-coverage-core";
 import { cancelFetchAction, importFetchAction, startFetchAction } from "../../fetch-actions";
 // R50 S10b: one plain "what to do now" line, from the same facts this page shows.
 import { fetchRunNextStep } from "@/lib/pos/menu-imports-guide-core";
@@ -63,8 +64,12 @@ export default async function FetchRunPage({
   const report = loaded?.assembled?.report ?? null;
   const age = loaded ? loaded.ageMinutes : null;
   const realDecision = loaded
-    ? importDecision({ isTest: false, go: Boolean(report?.go), cutoverDone: await readCutoverDone(), ageMinutes: age, filesVerified: loaded.verified })
+    ? importDecision({ isTest: false, go: Boolean(report?.go), cutoverDone: await readCutoverDone(), ageMinutes: age, filesVerified: loaded.verified, vendorFilesMissing: missingToAcknowledge(loaded.vendorCoverage), acknowledgeMissingVendorFiles: true })
     : null;
+  // R74 S2: missing vendor transfer files, LOUD. (realDecision above assumes the tick, so it shows the
+  // other reasons; the tick itself is required on the form below.)
+  const vendorMissing = loaded ? missingToAcknowledge(loaded.vendorCoverage) : 0;
+  const vendorLine = loaded ? coverageCheck(loaded.vendorCoverage) : null;
 
   const next = fetchRunNextStep({
     view: view ? { status: view.status, canImport: view.canImport } : null,
@@ -73,6 +78,7 @@ export default async function FetchRunPage({
     checked: loaded !== null,
     go: loaded ? Boolean(report?.go) : null,
     realAllowed: realDecision ? realDecision.allowed : null,
+    vendorFilesMissing: vendorMissing,
   });
   const NEXT_TONE = {
     wait: "border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 text-[var(--admin-orange)]",
@@ -126,12 +132,17 @@ export default async function FetchRunPage({
               <div className="h-2 bg-[var(--admin-accent)]" style={{ width: `${view.percent}%` }} />
             </div>
             {view.error && <p className="mt-3 text-xs text-red-300">{view.error}</p>}
+            {view.warnings.length > 0 && (
+              <div data-testid="fetch-run-warnings" className="mt-3 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">
+                {view.warnings.map((w) => <p key={w}>⚠ {w}</p>)}
+              </div>
+            )}
             <table className="mt-4 w-full text-left text-xs">
               <tbody>
                 {view.rows.map((r) => (
                   <tr key={r.stage} className="border-t border-white/5">
                     <td className="py-1.5 text-white/80">{r.label}</td>
-                    <td className={`py-1.5 font-semibold uppercase ${ROW_TONE[r.status]}`}>{r.status}</td>
+                    <td className={`py-1.5 font-semibold uppercase ${r.loud ? "text-red-300" : ROW_TONE[r.status]}`}>{r.loud ? `${r.status} · MISSING` : r.status}</td>
                     <td className="py-1.5 text-white/50">{r.detail}</td>
                     <td className="py-1.5 text-right text-white/40">{r.seconds !== null ? `${r.seconds} s` : ""}</td>
                   </tr>
@@ -156,6 +167,14 @@ export default async function FetchRunPage({
             )}
             {report && (
               <>
+                {vendorLine && (
+                  <p data-testid="vendor-files-check" className={`mt-3 text-xs ${vendorLine.pass ? "text-[var(--admin-accent)]" : "rounded border border-red-500/50 bg-red-500/10 px-2 py-1 font-semibold text-red-300"}`}>
+                    {vendorLine.pass ? "✓" : "✗"} <strong>{vendorLine.id}</strong> — {vendorLine.detail}
+                    {!vendorLine.pass && loaded.vendorCoverage.missingTransferIds.length > 0 && (
+                      <> Transfers: {loaded.vendorCoverage.missingTransferIds.join(", ")}{loaded.vendorCoverage.missing > loaded.vendorCoverage.missingTransferIds.length ? " …" : ""}</>
+                    )}
+                  </p>
+                )}
                 <ul className="mt-3 space-y-1 text-xs">
                   {report.checks.map((c) => (
                     <li key={c.id} className={c.pass ? "text-[var(--admin-accent)]" : "text-red-300"}>
@@ -223,6 +242,12 @@ export default async function FetchRunPage({
                 <input type="checkbox" name="test_mode" defaultChecked={!realDecision?.allowed} />
                 <span><strong>Test mode</strong>: flag it as rehearsal data (Clean Slate removes it)</span>
               </label>
+              {vendorMissing > 0 && (
+                <label className="flex items-center gap-2 text-xs font-semibold text-red-300">
+                  <input type="checkbox" name="ack_missing_vendor_files" />
+                  <span>Stage without the missing vendor files ({vendorMissing}). The ones it got still stage; the rest have no lab results until fetched.</span>
+                </label>
+              )}
               <Button type="submit" variant="confirm">Stage this harvest for review</Button>
             </form>
             <p className="mt-2 text-xs text-white/40">

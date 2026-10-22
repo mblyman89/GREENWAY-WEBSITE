@@ -18,6 +18,7 @@ import type { ListLot } from "@/lib/pos/cultivera-fetch-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { buildPlanInputs, type RehomePlanInputs } from "@/lib/inventory/cultivera-rehome-core";
 import type { WciaRunRecord } from "@/lib/inventory/cultivera-wcia-core";
+import { vendorFileCoverage, type VendorFileCoverage } from "@/lib/pos/cultivera-wcia-coverage-core";
 import {
   REQUIRED_FILES,
   harvestAgeMinutes,
@@ -130,6 +131,11 @@ export type LoadedRun = {
    * only: a missing or unverifiable file is reported here and NEVER refuses the import.
    */
   wcia: { records: WciaRunRecord[]; problem: string | null; file: { name: string; bytes: number; sha256: string } | null };
+  /**
+   * R74 S2: how many vendor transfer files the run SHOULD have (transfers with a JsonFile) vs saved.
+   * Shown loud on the run page; a real import with any missing needs the owner's acknowledgment.
+   */
+  vendorCoverage: VendorFileCoverage;
   /**
    * R50 S11: Cultivera's Sales Details for the Oct 30 count roll-forward (sales.jsonl +
    * sales_summary.json), each verified against the manifest. Raw bytes are kept unchanged so the
@@ -258,7 +264,13 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
     transferDetails && problems.length === 0
       ? (importId: string) => buildPlanInputs({ importId, runId, pacificToday: harvestDay, transferDetails: transferDetails!, listLots })
       : null;
-  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor, wcia, sales };
+  const vendorCoverage = vendorFileCoverage({
+    transferDetails,
+    records: wcia.records,
+    problem: wcia.problem,
+    stage: state.stages?.wcia_json ?? null,
+  });
+  return { runId, state, manifest, verified: problems.length === 0, verifyProblems: problems, assembled, files, ageMinutes, planInputsFor, wcia, vendorCoverage, sales };
 }
 
 /**

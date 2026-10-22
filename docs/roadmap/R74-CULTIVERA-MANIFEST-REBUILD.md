@@ -30,8 +30,8 @@ Internal working name during research was "R51 round 2". The repo already has an
 
 | # | Slice | Status |
 |---|---|---|
-| S1 | Non-cannabis gate in the transform. Rows with Is Cannabis = false (or Cannabis Y/N = N when the stock flag is blank, or the CCRS "Non-cannabis (no limit)" type with no flag) never become cards, lots or manifest lines. The `"concentrate"` default for unknown categories is removed; a cannabis row with a non-cannabis, unknown or blank category is held hidden (`needs_category`) instead of guessed | shipped |
-| S2 | Loud WCIA JSON coverage. The crawler counts transfers that publish a JSON vs JSONs obtained; Fetch It All shows the gap as a failing check (no silent "partial"); every JSON obtained still stages | next |
+| S1 | (#1453) Non-cannabis gate in the transform. Rows with Is Cannabis = false (or Cannabis Y/N = N when the stock flag is blank, or the CCRS "Non-cannabis (no limit)" type with no flag) never become cards, lots or manifest lines. The `"concentrate"` default for unknown categories is removed; a cannabis row with a non-cannabis, unknown or blank category is held hidden (`needs_category`) instead of guessed | shipped |
+| S2 | Loud WCIA JSON coverage. The crawler counts transfers that publish a JSON vs JSONs obtained; Fetch It All shows the gap as a failing check (no silent "partial"); every JSON obtained still stages | shipped |
 | W2 | Gmail harvest of stephen@ (bytes attachments, resumable cursor), migration-mode match by barcode, Unmatched Cultivera stock manifest, no-received-date CCRS-cleanup flag, coverage report | planned |
 | W3 | Auto-Start rebuilt manifests, Cultivera tab + vendor filter + batch Gemini by vendor, field survivorship, category-pick finish gate | planned |
 
@@ -45,3 +45,28 @@ Internal working name during research was "R51 round 2". The repo already has an
   10 accessory-only transfers and 4 accessory-only vendors drop out; tests re-pinned with the old numbers in comments.
 - Receiving (`website-category-resolver.ts`) already returns null / "unmapped" for these and never defaults
   to concentrate, so rule 11 parity holds; S1 reuses its `heuristicWebsiteCategory` for the held card's hint.
+
+## S2 evidence and behavior
+
+- Crawler (`crawler/app/cultivera_pos.py`): `stage_wcia_json` now returns a `coverage` block
+  (`expected` = transfers with a vendor file incl. refused paths, `saved`, `missing`, `refused`, `errors`,
+  `stoppedForTime`, `complete`). A refused path now makes the stage `partial` (it was a silent `done`).
+  Any miss or a stage error writes one plain line into `state.json` `warnings`; a resume that completes clears it.
+  The run itself still finishes `done` so the obtained files stage. 7 new pytest cases (101 pass).
+- App: `src/lib/pos/cultivera-wcia-coverage-core.ts` (pure, 17 self-tests) counts coverage from the run's
+  own `transfer_details.jsonl` (transfers with a `JsonFile`) vs readable documents in `wcia_json.jsonl`, plus
+  any checksum / unreadable-line problem. No details and no crawler block = "coverage UNKNOWN" (never complete).
+- Fetch run page: a red warning box above the stages, the vendor-files row turns red `PARTIAL · MISSING`,
+  a red `vendor_files_complete` line lists missing transfer ids, and "What to do now" never says a plain GO.
+- A real import with any missing vendor file needs the owner's tick **"Stage without the missing vendor
+  files (N)"**; otherwise it is refused with the count. Test imports never need it. The files it did get are
+  saved (`saveWciaFiles`) and the coverage + acknowledgment are written to the `pos_import.staged` audit row.
+- GO itself stays about the core cutover (lots, columns, control totals, manifest plan); vendor files are
+  reported beside it, per owner decision #10 (obtained JSONs must still stage).
+
+### Where the stage report lives
+
+The Fetch It All run page (`/admin/menu-imports/fetch/<runId>`) shows it: the "Vendor transfer files" row
+(saved / wanted, not fetched, errors, refused, stopped for time) and the red `vendor_files_complete` line. The raw
+numbers are in the run's `state.json` → `stages.wcia_json` (and `manifest.json` → `stages.wcia_json`); per-transfer
+errors are in the run's `errors.jsonl` (lines with `"stage": "wcia_json"`).

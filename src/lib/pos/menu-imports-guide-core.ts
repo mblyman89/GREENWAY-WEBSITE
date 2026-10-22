@@ -298,6 +298,8 @@ export type FetchRunNextInput = {
   go: boolean | null;
   /** importDecision(...).allowed for a REAL import, or null when not computed. */
   realAllowed: boolean | null;
+  /** R74 S2: vendor transfer files the run is missing (0 / absent = none). */
+  vendorFilesMissing?: number;
 };
 export type FetchRunNext = { tone: "wait" | "go" | "fix"; text: string };
 
@@ -317,6 +319,9 @@ export function fetchRunNextStep(i: FetchRunNextInput): FetchRunNext {
     return { tone: "fix", text: "The harvest finished, but checking its files failed. Reload. If it happens again, start a fresh fetch." };
   if (!i.checked || i.go === null || i.realAllowed === null)
     return { tone: "fix", text: "The go / no-go check has not run. Reload this page." };
+  const vm = i.vendorFilesMissing ?? 0;
+  if (i.go && i.realAllowed && vm > 0)
+    return { tone: "fix", text: `GO, but ${vm} vendor transfer file${vm === 1 ? " is" : "s are"} MISSING (lab results). Fetch again to get them, or tick \u201cStage without the missing vendor files\u201d and stage. The files it did get still stage.` };
   if (i.go && i.realAllowed)
     return { tone: "go", text: "GO. Leave Test mode off and press \u201cStage this harvest for review\u201d. Then open the import, work Fact Review, and publish." };
   if (i.go)
@@ -447,6 +452,10 @@ export function __runMenuImportsGuideCoreTests(): { passed: number; failed: numb
   ok(fr({ checked: false }).text.includes("has not run"), "unchecked never says GO");
   ok(fr({ go: null }).tone === "fix" && fr({ realAllowed: null }).tone === "fix", "nulls never say GO");
   ok(fr({ view: { status: "running", canImport: true } }).tone === "wait", "running wins over canImport");
+  // R74 S2: missing vendor files never read as a plain GO.
+  ok(fr({ vendorFilesMissing: 3 }).tone === "fix" && fr({ vendorFilesMissing: 3 }).text.includes("3 vendor transfer files are MISSING"), "missing vendor files → fix, loud");
+  ok(fr({ vendorFilesMissing: 1 }).text.includes("1 vendor transfer file is MISSING"), "singular");
+  ok(fr({ vendorFilesMissing: 0 }).tone === "go", "none missing → GO");
 
   return { passed: n, failed: 0 };
 }
