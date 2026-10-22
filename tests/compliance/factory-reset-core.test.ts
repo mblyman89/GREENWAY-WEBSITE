@@ -1335,7 +1335,8 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R41 S17 / 0290: ach_notice_mail (the Fed ACH notice emails the
     //       watch saved, encrypted, and who marked each; append-only, the
     //       database refuses DELETE and TRUNCATE)
-    expect(plan.keep.length).toBe(169);
+    // R41 S18: +1 KEEP for ach_control_records (0291).
+    expect(plan.keep.length).toBe(170);
     expect(plan.wipe.length).toBe(139);
   });
 
