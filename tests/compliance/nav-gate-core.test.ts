@@ -415,6 +415,13 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * record. Not a menu item: a tab of the Banking strip ("Notice email").
        */
       "/admin/settings/banking/notice-email",
+      /*
+       * R41 S18: the written ACH policies, quarterly access review and yearly
+       * key checks. Page gate settings.manage (owner + admin); only the owner
+       * records (ach.act). Not a menu item: a tab of the Banking strip
+       * ("Policies").
+       */
+      "/admin/settings/banking/policies",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

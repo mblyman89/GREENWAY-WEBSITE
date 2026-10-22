@@ -778,6 +778,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/settings/banking/notice-email",
       },
       {
+        q: "Where are Greenway's written ACH policies, and what do I have to do each year?",
+        a: "Banking \u2192 Policies. There are eight short policies: how a payment is made, how long records are kept, what to do if something looks wrong, who can touch ACH, looking after logins and keys, watching the account, the banking computer, and what happens if an ACH payroll cannot go out (it is skipped and paid by written checks). Hover the small i next to each one for a plain explanation, and open Why to read the exact words from the State Auditor's guidance or the Timberland agreement. Michael does three things: once a year he reads and adopts the policies (if the wording changes later, the page asks him to adopt again); every quarter he records the access review (the page lists everyone who holds owner or admin and flags anyone inactive or not signed in for 90 days); and once a year he records the six key checks (Timberland token, Timberland login, back-office passkeys, the encryption key backup, the Google Workspace sign-in and the banking computer). Records are dated today and are never changed. If anything looks wrong, call Timberland at 1-800-562-8761 at once.",
+        href: "/admin/settings/banking/policies",
+      },
+      {
         q: "How do I confirm the money is in the account for an ACH file?",
         a: "On ACH operations, each released or uploaded file has a 'Confirm funding' box. It shows the file total plus Timberland's $50.00 monthly ACH Service Fee (Schedule B). Look at the balance of the account ending 6048 yourself (the owner also sees the Plaid balance beside the box as a hint; it can lag), type the balance you saw and tick the box. It must be at least the file total. Timberland's agreement (section 14) needs the money there by 9:00 am Pacific on the settlement date, and Brenda confirmed that is when it must be there (Email 3, answer 5). Never let the account go negative: Timberland only asks for pre-funding from customers who overdraw. You get an email at 8:00 am Pacific on the settlement day. If it is short, move money in and call Timberland at 1-800-562-8761. Only the owner confirms funding.",
         href: "/admin/settings/banking/operations#files",
