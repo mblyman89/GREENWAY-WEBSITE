@@ -127,7 +127,7 @@ function fakeAdmin(db: Db) {
     };
     return q;
   };
-  return { from } as unknown as NonNullable<Parameters<typeof runCultiveraAutoStart>[0]>["admin"];
+  return { from } as unknown as NonNullable<NonNullable<Parameters<typeof runCultiveraAutoStart>[0]>["admin"]>;
 }
 
 function makeDb(n: number, opts: { started?: number[]; otherImport?: number[] } = {}): Db {
