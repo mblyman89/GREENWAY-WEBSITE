@@ -9,6 +9,7 @@ import {
   listMenuProducts,
   listSavedAudiences,
   previewAffectedProductsWithImages,
+  listLotRefsForKeys,
 } from "@/lib/promotions/promotions-store";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { SaleBadgePreview } from "@/components/admin/promotions/SaleBadgePreview";
@@ -18,10 +19,16 @@ import {
   setPromotionStatusAction,
   deletePromotionAction,
   hidePromotionBlockersAction,
+  fixPromotionBlockersAction,
 } from "../actions";
 import type { PostStatus } from "@/lib/promotions/types";
 import { isAiConfigured } from "@/lib/promotions/ai-copy";
-import { guardPromotionPublish } from "@/lib/promotions/promo-guard";
+import { guardPromotionPublish, guardRuleShapeFor } from "@/lib/promotions/promo-guard";
+import {
+  minPriceToClearFloor,
+  maxSafePercent,
+  lotForPriceFix,
+} from "@/lib/promotions/promo-blocker-fix-core";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { guardSkipNote, MAX_HIDE_PER_PRESS } from "@/lib/promotions/promo-fix-core";
 
@@ -64,6 +71,11 @@ export default async function EditPromotionPage({
   const guardRegularBelow = guard.findings.filter((f) => f.reason === "regular_below_cost");
   // R74 S22: what the guard left out (hidden cards, never-discount products).
   const guardSkipped = guardSkipNote(guard.hiddenSkipped, guard.neverSkipped);
+  // R74 S23: the numbers that fix each blocker, with the guard's own math.
+  const guardShape = guardRuleShapeFor(promotion);
+  const blockerLots = guardBelowCost.length
+    ? await listLotRefsForKeys(guardBelowCost.slice(0, 50).map((f) => f.key))
+    : [];
 
   // Pick a representative product (or a sensible default) for the live badge preview.
   const sample = affected[0] ?? null;
@@ -184,6 +196,28 @@ export default async function EditPromotionPage({
                       Hide {Math.min(guardBelowCost.length, MAX_HIDE_PER_PRESS) === 1 ? "this product" : `all ${Math.min(guardBelowCost.length, MAX_HIDE_PER_PRESS)} products`} from the menu
                     </Button>
                   </form>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <form action={fixPromotionBlockersAction}>
+                      <input type="hidden" name="id" value={promotion.id} />
+                      <input type="hidden" name="fix" value="exclude" />
+                      <input type="hidden" name="all" value="1" />
+                      <Button type="submit" variant="neutral" size="sm" fullWidth data-testid="promo-exclude-all">
+                        Leave all out of this deal
+                      </Button>
+                    </form>
+                    <form action={fixPromotionBlockersAction}>
+                      <input type="hidden" name="id" value={promotion.id} />
+                      <input type="hidden" name="fix" value="never" />
+                      <input type="hidden" name="all" value="1" />
+                      <Button type="submit" variant="neutral" size="sm" fullWidth data-testid="promo-never-all">
+                        Never discount all
+                      </Button>
+                    </form>
+                  </div>
+                  <p className="mt-1 text-[11px] text-white/40">
+                    Hide = off the menu until you fix it. Leave out = still sold, just not in this
+                    deal. Never discount = still sold, never in any deal. Or fix the price below.
+                  </p>
                   <ul className="mt-2 max-h-72 space-y-1.5 overflow-y-auto" data-testid="promo-blockers">
                     {guardBelowCost.slice(0, 50).map((f) => (
                       <li key={f.key} className="rounded-md bg-black/30 px-2 py-1.5 text-xs text-[#ffb0b0]/90">
@@ -198,16 +232,70 @@ export default async function EditPromotionPage({
                           {formatMoneyMinor(f.worstCasePriceMinorUnits)} {"<"} floor{" "}
                           {formatMoneyMinor(f.floorMinorUnits)}
                         </div>
-                        <form action={hidePromotionBlockersAction} className="mt-1">
-                          <input type="hidden" name="id" value={promotion.id} />
-                          <input type="hidden" name="key" value={f.key} />
-                          <button
-                            type="submit"
-                            className="rounded border border-[#ff6b6b]/40 px-2 py-0.5 text-[11px] text-[#ffb0b0] hover:bg-[#ff6b6b]/15"
-                          >
-                            Hide from menu
-                          </button>
-                        </form>
+                        {(() => {
+                          const needPrice = minPriceToClearFloor(guardShape, f.floorMinorUnits);
+                          const safePct =
+                            guardShape.discountType === "percent" && !guardShape.config.eitherOr
+                              ? maxSafePercent(f.priceMinorUnits, f.floorMinorUnits)
+                              : null;
+                          const lotId = lotForPriceFix(blockerLots, f.key);
+                          return (
+                            <p className="mt-0.5 text-[11px] text-white/50" data-testid="promo-blocker-fix-hint">
+                              {needPrice != null ? (
+                                <>Price it at {formatMoneyMinor(needPrice)} or more and this deal is legal for it. </>
+                              ) : null}
+                              {safePct != null ? <>At today&apos;s price it can take at most {safePct}% off. </> : null}
+                              {f.costMinorUnits != null ? (
+                                <>Cost on file {formatMoneyMinor(f.costMinorUnits)} (from the manifest; if it is wrong, fix the lot&apos;s cost at receiving). </>
+                              ) : null}
+                              {lotId ? (
+                                <a
+                                  href={`/admin/inventory/${lotId}#after_tax_price`}
+                                  className="text-[var(--admin-accent)] underline"
+                                  data-testid="promo-blocker-fix-price"
+                                >
+                                  Fix price on the lot
+                                </a>
+                              ) : (
+                                <span>No inventory lot found for it.</span>
+                              )}
+                            </p>
+                          );
+                        })()}
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <form action={hidePromotionBlockersAction}>
+                            <input type="hidden" name="id" value={promotion.id} />
+                            <input type="hidden" name="key" value={f.key} />
+                            <button
+                              type="submit"
+                              className="rounded border border-[#ff6b6b]/40 px-2 py-0.5 text-[11px] text-[#ffb0b0] hover:bg-[#ff6b6b]/15"
+                            >
+                              Hide from menu
+                            </button>
+                          </form>
+                          <form action={fixPromotionBlockersAction}>
+                            <input type="hidden" name="id" value={promotion.id} />
+                            <input type="hidden" name="fix" value="exclude" />
+                            <input type="hidden" name="key" value={f.key} />
+                            <button
+                              type="submit"
+                              className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/10"
+                            >
+                              Leave out of this deal
+                            </button>
+                          </form>
+                          <form action={fixPromotionBlockersAction}>
+                            <input type="hidden" name="id" value={promotion.id} />
+                            <input type="hidden" name="fix" value="never" />
+                            <input type="hidden" name="key" value={f.key} />
+                            <button
+                              type="submit"
+                              className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/10"
+                            >
+                              Never discount
+                            </button>
+                          </form>
+                        </div>
                       </li>
                     ))}
                     {guardBelowCost.length > 50 && (

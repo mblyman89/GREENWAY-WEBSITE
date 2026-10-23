@@ -21,6 +21,7 @@ import {
   listNeverDiscount,
   addNeverDiscount,
   removeNeverDiscount,
+  addPromotionProductExclusions,
   listMenuBrands,
   type PromotionInput,
   type RuleInput,
@@ -57,6 +58,12 @@ import {
   type BlockerRef,
   type HideOutcome,
 } from "@/lib/promotions/promo-fix-core";
+import {
+  planProductExclusions,
+  neverDiscountReason,
+  fixOutcomeMessage,
+  type FixOutcome,
+} from "@/lib/promotions/promo-blocker-fix-core";
 import { applyProductVisibility } from "@/lib/enrichment/product-visibility-store";
 import { ensureEnrichment, updateEnrichment } from "@/lib/enrichment/store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
@@ -677,6 +684,98 @@ export async function hidePromotionBlockersAction(formData: FormData): Promise<v
   revalidatePath(`/admin/promotions/${id}`);
   revalidatePath("/admin/products");
   const msg = hideOutcomeMessage(outcome);
+  back(msg.tone, msg.text);
+}
+
+/**
+ * R74 S23 (owner round 11): "I also need a way to fix the issues the
+ * promotion builder is saying it has with publishing the promotion."
+ *
+ * Fix one blocker (`key`, repeatable) or every current blocker (`all=1`):
+ *  - fix=exclude: leave it out of THIS promotion (a product exclusion, insert
+ *    only; the promotion's other rules are untouched).
+ *  - fix=never: add it to the global never-discount list (every deal).
+ * Same press-time re-check as S22 (pickProductsToHide): only products that
+ * block this promotion right now, else nothing changes. Audited per press
+ * (promotion.blockers_excluded / promotion.never_discount.add per product).
+ */
+export async function fixPromotionBlockersAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("promotions.manage");
+  const id = str(formData, "id");
+  if (!id) redirect("/admin/promotions");
+  const back = (tone: "ok" | "error", text: string) =>
+    redirect(`/admin/promotions/${id}?fixTone=${tone}&fix=${encodeURIComponent(text)}#cost-floor`);
+  const kindRaw = str(formData, "fix");
+  if (kindRaw !== "exclude" && kindRaw !== "never") back("error", "Nothing was changed: unknown fix.");
+  const kind = kindRaw as "exclude" | "never";
+
+  const promo = await getPromotion(id);
+  if (!promo) redirect("/admin/promotions");
+  const guard = await guardPromotionPublish(promo);
+  const blockers: BlockerRef[] = guard.findings
+    .filter((f) => f.reason === "below_cost")
+    .map((f) => ({ key: f.key, name: f.name }));
+  const requested =
+    str(formData, "all") === "1" ? ("all" as const) : formData.getAll("key").map((k) => String(k));
+  const pick = pickProductsToHide(requested, blockers);
+  if (!pick.ok) back("error", pick.error.replace("Nothing was hidden", "Nothing was changed").replace("Pick a product to hide.", "Pick a product."));
+  const picks = pick.ok ? pick.picks : [];
+
+  const outcome: FixOutcome = { kind, done: [], already: [], failed: [], stillBlocking: 0 };
+  if (kind === "exclude") {
+    const toAdd = planProductExclusions(promo.exclusions, picks.map((p) => p.key));
+    const addSet = new Set(toAdd);
+    for (const p of picks) if (!addSet.has(p.key)) outcome.already.push(p);
+    const res = await addPromotionProductExclusions(id, toAdd);
+    const added = picks.filter((p) => addSet.has(p.key));
+    if (res.ok) outcome.done.push(...added);
+    else for (const p of added) outcome.failed.push({ ...p, error: res.error });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "promotion.blockers_excluded",
+      entityType: "promotion",
+      entityId: id,
+      after: {
+        excluded: outcome.done.map((p) => p.key),
+        already: outcome.already.map((p) => p.key),
+        failed: outcome.failed.map((p) => ({ key: p.key, error: p.error })),
+      },
+    });
+  } else {
+    const reason = neverDiscountReason(promo.title);
+    for (const p of picks) {
+      const res = await addNeverDiscount(p.key, p.name, reason, session.userId);
+      if (!res.ok) {
+        outcome.failed.push({ ...p, error: res.error });
+        continue;
+      }
+      if (res.alreadyListed) {
+        outcome.already.push(p);
+        continue;
+      }
+      outcome.done.push(p);
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "promotion.never_discount.add",
+        entityType: "promotion_never_discount",
+        entityId: res.id,
+        after: { productKey: p.key, productName: p.name, reason, source: "promotion_page", promotionId: id },
+      });
+    }
+  }
+
+  const fresh = (await getPromotion(id)) ?? promo;
+  const after = await guardPromotionPublish(fresh);
+  outcome.stillBlocking = after.findings.filter((f) => f.reason === "below_cost").length;
+  revalidatePath("/admin/promotions");
+  revalidatePath(`/admin/promotions/${id}`);
+  if (outcome.done.length > 0) {
+    // Prices depend on exclusions and the never-discount list (cart, cards).
+    revalidatePath("/", "layout");
+  }
+  const msg = fixOutcomeMessage(outcome);
   back(msg.tone, msg.text);
 }
 
