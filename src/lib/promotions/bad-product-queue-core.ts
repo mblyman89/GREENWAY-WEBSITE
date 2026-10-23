@@ -456,6 +456,7 @@ export function __runBadProductQueueCoreTests(): { passed: number; failed: numbe
   ok(rowAllowsFix(row("coa"), "hide") && !rowAllowsFix(row("coa"), "never"), "missing_coa: hide only");
   ok(!rowAllowsFix(row("held"), "hide") && !rowAllowsFix(row("held"), "never"), "needs_category: links only");
   ok(!rowAllowsFix(row("low"), "never") && rowAllowsFix(row("low"), "hide"), "already on never list: no never button");
+  ok(!rowAllowsFix({ ...row("nocost"), hidden: true }, "hide") && rowAllowsFix({ ...row("nocost"), hidden: true }, "never"), "already hidden: no hide button");
 
   // pickQueueFix: fail closed.
   const p1 = pickQueueFix(["nocost", "coa"], q, "hide");
