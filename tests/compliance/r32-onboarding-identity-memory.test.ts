@@ -341,7 +341,7 @@ describe("R32 D - one verdict, three surfaces", () => {
     expect(drafts).toMatch(/assessment: gateAssessment,/);
     expect(drafts).toMatch(/machineFill: effectiveStrain,/);
     // Provenance merged BEFORE the pinned write.
-    const merge = drafts.indexOf("classificationProvenance = { ...classificationProvenance, ...onboardingProvenance };");
+    const merge = drafts.indexOf("classificationProvenance = { ...classificationProvenance, ...onboardingProvenance, ...categoryHoldPickProvenance(heldPickedNow) };");
     const write = drafts.indexOf("update.chosen_classification_provenance = classificationProvenance;");
     expect(merge).toBeGreaterThan(0);
     expect(write).toBeGreaterThan(merge);

@@ -260,7 +260,9 @@ describe("S12 end to end through the staging planner (the row that gets INSERTed
 describe("R19 defect - the approve path reads the approver's compliance answers", () => {
   const src = read("src/lib/pos/intake-menu-staging.ts");
   it("selects 0218 + 0224 in the widest tier with a graduated fallback", () => {
-    expect(src).toMatch(/", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg" \+\s*\n\s*", chosen_net_volume_ml";/);
+    expect(src).toMatch(/", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg" \+\s*\n\s*", chosen_net_volume_ml" \+/);
+    // R74 S17: the approval's provenance (also 0218) rides in the same tier.
+    expect(src).toMatch(/", chosen_classification_provenance";/);
     expect(src).toMatch(/const firstTry = missingCol\(withCompliance\.error\)/);
   });
   it("never turns a null count / dose / volume into zero", () => {
