@@ -110,6 +110,8 @@ the workbook fix for your scanner error) makes the day shorter but is not needed
 
 ## Vercel settings for quality lookups
 
+Product Onboarding shows a **Gemini sprint** line near the top (R74 S21). Green means everything below is set correctly. Gold or red names the exact variable to change; change it in Vercel, redeploy, reload the page.
+
 | Variable | Set to | Why |
 |---|---|---|
 | `AI_MODE` | `sprint` | **This is the "sprint" one.** Heavy tasks (the web-search lookup) use `AI_MODEL_HEAVY`. |
