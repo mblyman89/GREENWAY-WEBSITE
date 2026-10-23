@@ -750,6 +750,7 @@ import { __runCultiveraOnboardingCoreTests } from "../../src/lib/inventory/culti
 import { __runCultiveraVendorCoreTests } from "../../src/lib/inventory/cultivera-vendor-core";
 import { __runCultiveraAutoStartCoreTests } from "../../src/lib/inventory/cultivera-auto-start-core";
 import { __runCultiveraSurvivorshipCoreTests } from "../../src/lib/inventory/cultivera-survivorship-core";
+import { __runCultiveraCategoryGateCoreTests } from "../../src/lib/inventory/cultivera-category-gate-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
@@ -1654,10 +1655,11 @@ __runLiquidVolumeTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();
   assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
-  assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 56); // R74 S14: +1 (manifest values in the note)
+  assertRan("cultivera-onboarding-core", __runCultiveraOnboardingCoreTests(), 61); // R74 S14: +1 (manifest values in the note); R74 S15: +5 (never Done while a product is held for a category)
   assertRan("cultivera-vendor-core", __runCultiveraVendorCoreTests(), 63); // R74 S11: vendor roll-up, vendor Start-all, vendor Gemini lookup, mastering summary
   assertRan("cultivera-auto-start-core", __runCultiveraAutoStartCoreTests(), 57); // R74 S13: automatic onboarding Start of rebuilt manifests
   assertRan("cultivera-survivorship-core", __runCultiveraSurvivorshipCoreTests(), 36); // R74 S14: manifest wins on name, type, cost; Cultivera on category, quantity
+  assertRan("cultivera-category-gate-core", __runCultiveraCategoryGateCoreTests(), 22); // R74 S15: pick a category before finishing
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
   assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);

@@ -41,6 +41,7 @@
  * No I/O. Self-tests at the bottom (scripts/compliance/run-pure-selftests.ts).
  */
 import type { LandedDraftFact } from "@/lib/catalog/attach-facts-core";
+import { CATEGORY_HOLD_UNREAD_NOTE, categoryHoldNote } from "@/lib/inventory/cultivera-category-gate-core";
 
 // --- 1. Constants ---------------------------------------------------------------
 
@@ -281,17 +282,36 @@ export function tallyCultiveraDrafts(rows: readonly { manifest_id: unknown; stat
 export function cultiveraManifestRows(
   manifests: readonly CultiveraManifestRow[],
   tally: ReadonlyMap<string, CultiveraDraftTally> | null,
+  /**
+   * R74 S15: products per manifest still held for a category
+   * (tallyCategoryHolds). A manifest is never "Done" while one remains.
+   * `null` = the holds could not be read: a manifest that would be Done says
+   * so and stays open (fail closed). Omitted = not checked (older callers).
+   */
+  holds?: ReadonlyMap<string, number> | null,
 ): CultiveraRowView[] {
   return manifests.map((m) => {
     const t = tally ? tally.get(m.id) ?? { inReview: 0, approved: 0, dismissed: 0 } : null;
     const any = t ? t.inReview + t.approved + t.dismissed : 0;
-    const state: CultiveraRowView["state"] = !t || any === 0 ? "not_started" : t.inReview > 0 ? "in_review" : "done";
+    const held = holds ? holds.get(m.id) ?? 0 : 0;
+    const holdsUnread = holds === null;
+    const wouldBeDone = Boolean(t) && any > 0 && (t?.inReview ?? 0) === 0;
+    const blocked = wouldBeDone && (held > 0 || holdsUnread);
+    const state: CultiveraRowView["state"] = !t || any === 0 ? "not_started" : t.inReview > 0 || blocked ? "in_review" : "done";
+    const holdPart = held > 0 ? categoryHoldNote(held) : "";
     const stateLabel = !t
       ? "Unknown (counts could not be read)"
       : state === "not_started"
         ? "Not started"
         : state === "in_review"
-          ? `${t.inReview} in review${t.approved > 0 ? `, ${t.approved} approved` : ""}`
+          ? [
+              t.inReview > 0 ? `${t.inReview} in review` : "",
+              t.approved > 0 ? `${t.approved} approved` : "",
+              holdPart,
+              blocked && holdsUnread ? `Not finished: ${CATEGORY_HOLD_UNREAD_NOTE.toLowerCase()}` : "",
+            ]
+              .filter(Boolean)
+              .join(", ")
           : `Done: ${t.approved} approved${t.dismissed > 0 ? `, ${t.dismissed} dismissed` : ""}`;
     return {
       id: m.id,
@@ -474,6 +494,15 @@ export function __runCultiveraOnboardingCoreTests(): { passed: number; failed: n
   ok(unknown.every((r) => r.stateLabel.startsWith("Unknown")), "failed count read is unknown, never not started");
   ok(cultiveraManifestRows([{ ...ms[0], accepted_at: "2026-08-21T06:30:00Z" }], tally)[0].day === "Aug 20, 2026", "Pacific day of the acceptance");
   ok(cultiveraManifestRows([{ ...ms[2], id: "m9" }], new Map([["m9", { inReview: 0, approved: 2, dismissed: 0 }]]))[0].stateLabel === "Done: 2 approved", "done without dismissed");
+  // R74 S15: a manifest is never Done while a product is held for a category.
+  const heldRows = cultiveraManifestRows(ms, tally, new Map([["m3", 1]]));
+  ok(heldRows[2].state === "in_review" && heldRows[2].stateLabel === "1 approved, 1 product needs a category before this manifest can finish", "S15: held product keeps the manifest open: " + heldRows[2].stateLabel);
+  const heldOpen = cultiveraManifestRows(ms, tally, new Map([["m1", 2]]));
+  ok(heldOpen[0].state === "in_review" && heldOpen[0].stateLabel === "1 in review, 1 approved, 2 products need a category before this manifest can finish", "S15: an open manifest names its holds too: " + heldOpen[0].stateLabel);
+  const holdsUnread = cultiveraManifestRows(ms, tally, null);
+  ok(holdsUnread[2].state === "in_review" && holdsUnread[2].stateLabel.includes("Not finished: category holds could not be read"), "S15: unreadable holds never show Done: " + holdsUnread[2].stateLabel);
+  ok(holdsUnread[0].stateLabel === "1 in review, 1 approved" && holdsUnread[1].state === "not_started", "S15: unreadable holds leave open / not-started rows as they were");
+  ok(cultiveraManifestRows(ms, tally, new Map())[2].state === "done" && cultiveraManifestRows(ms, tally, new Map([["m1", 0]]))[2].state === "done", "S15: no holds -> Done as before");
 
   ok(parseCultiveraPage("3") === 3 && parseCultiveraPage("0") === 1 && parseCultiveraPage("x") === 1 && parseCultiveraPage(undefined) === 1 && parseCultiveraPage("99999") === 1 && parseCultiveraPage(" 2 ") === 2, "page parse");
 

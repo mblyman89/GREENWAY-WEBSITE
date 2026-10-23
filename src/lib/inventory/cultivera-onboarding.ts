@@ -59,6 +59,8 @@ import { identityForDraft } from "@/lib/catalog/product-identity-core";
 import { RECONSTRUCTED_MANIFEST_KIND } from "@/lib/inventory/cultivera-manifest-group-core";
 import { attachWciaLabResults } from "@/lib/inventory/cultivera-wcia-store";
 import { applyManifestSurvivorship } from "@/lib/inventory/cultivera-survivorship";
+import { loadPublishedCategoryHoldKeys } from "@/lib/inventory/cultivera-category-gate";
+import { tallyCategoryHolds } from "@/lib/inventory/cultivera-category-gate-core";
 import { SURVIVORSHIP_EVENT, emptySurvivorshipRun, survivorshipNote, type SurvivorshipRun } from "@/lib/inventory/cultivera-survivorship-core";
 import { CULTIVERA_WCIA_EVENT, emptyWciaResult, wciaAttachNote, type WciaAttachResult } from "@/lib/inventory/cultivera-wcia-core";
 import {
@@ -409,16 +411,17 @@ export async function loadCultiveraManifestSection(page: number): Promise<Cultiv
   const manifests = (data as CultiveraManifestRow[] | null) ?? [];
   const total = count ?? manifests.length;
   let tally: ReturnType<typeof tallyCultiveraDrafts> | null = null;
+  let holds: Map<string, number> | null = new Map();
   if (manifests.length > 0) {
     // Paged (PostgREST caps a response): a truncated read would under-count
     // and could show "Not started" on a manifest that is in review.
-    const all: { manifest_id: string | null; status: string | null }[] = [];
+    const all: { manifest_id: string | null; status: string | null; pos_product_key?: string | null }[] = [];
     let failed = false;
     const PAGE = 1000;
     for (let off = 0; off < 100_000; off += PAGE) {
       const { data: dRows, error: dErr } = await admin
         .from("catalog_product_drafts")
-        .select("id, manifest_id, status")
+        .select("id, manifest_id, status, pos_product_key")
         .in(
           "manifest_id",
           manifests.map((m) => m.id),
@@ -429,15 +432,21 @@ export async function loadCultiveraManifestSection(page: number): Promise<Cultiv
         failed = true;
         break;
       }
-      const got = (dRows as { manifest_id: string | null; status: string | null }[] | null) ?? [];
+      const got = (dRows as { manifest_id: string | null; status: string | null; pos_product_key?: string | null }[] | null) ?? [];
       all.push(...got);
       if (got.length < PAGE) break;
     }
-    if (!failed) tally = tallyCultiveraDrafts(all);
+    if (!failed) {
+      tally = tallyCultiveraDrafts(all);
+      // R74 S15: products still held for a category keep their manifest open.
+      const keys = all.map((d) => d.pos_product_key ?? "").filter(Boolean);
+      const read = await loadPublishedCategoryHoldKeys(admin, keys);
+      holds = read.ok ? tallyCategoryHolds(all, read.held) : null;
+    }
   }
   return {
     ok: true,
-    rows: cultiveraManifestRows(manifests, tally),
+    rows: cultiveraManifestRows(manifests, tally, holds),
     total,
     page: safePage,
     pageCount: Math.max(1, Math.ceil(total / size)),
