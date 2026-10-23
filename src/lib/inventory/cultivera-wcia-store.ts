@@ -89,9 +89,10 @@ export async function saveWciaFiles(admin: Admin, importId: string, records: rea
   return { saved, failed, rejected: plan.rejected, duplicates: plan.duplicates, firstError };
 }
 
-type LoadOutcome = { kind: "ok"; text: string } | { kind: "missing" } | { kind: "unreadable"; error: string };
+export type LoadOutcome = { kind: "ok"; text: string } | { kind: "missing" } | { kind: "unreadable"; error: string };
 
-async function loadWciaText(admin: Admin, key: string): Promise<LoadOutcome> {
+/** One kept transfer file (shared with R74 S14 survivorship). */
+export async function loadWciaText(admin: Admin, key: string): Promise<LoadOutcome> {
   try {
     const { data, error } = await admin.storage.from(WCIA_BUCKET).download(key);
     if (error || !data) {
