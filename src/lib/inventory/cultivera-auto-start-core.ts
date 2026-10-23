@@ -298,7 +298,8 @@ export function autoStartReturnPage(v: unknown): AutoStartPage {
 
 /** The rebuild / coverage page with the result banner (done / error). */
 export function autoStartHref(importId: string, page: AutoStartPage, q: { done?: string; error?: string } = {}): string {
-  const base = `/admin/menu-imports/${encodeURIComponent(importId)}/${page}`;
+  const id = encodeURIComponent(importId);
+  const base = page === "coverage" ? `/admin/menu-imports/${id}/coverage` : `/admin/menu-imports/${id}/manifests`;
   const p = new URLSearchParams();
   if (q.done) p.set("done", q.done.slice(0, 700));
   if (q.error) p.set("error", q.error.slice(0, 700));
