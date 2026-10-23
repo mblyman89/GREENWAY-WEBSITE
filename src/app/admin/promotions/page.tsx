@@ -31,7 +31,7 @@ import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
 import type { PromotionRow, Weekday, DiscountType } from "@/lib/promotions/types";
-import { storeWeekday } from "@/lib/reports/timezone";
+import { pacificDayKey, storeWeekday } from "@/lib/reports/timezone";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 import { PromotionsAdvisorPanel } from "@/components/admin/promotions/PromotionsAdvisorPanel";
 import { GuidedThursdayLauncher } from "@/components/admin/promotions/GuidedThursdayLauncher";
@@ -607,7 +607,7 @@ export default async function PromotionsAdminPage({
                     {p.weekday !== null
                       ? `Every ${WEEKDAY_LABELS[p.weekday as Weekday]}`
                       : p.starts_at
-                        ? `${p.starts_at.slice(0, 10)} → ${p.ends_at?.slice(0, 10) ?? "…"}`
+                        ? `${pacificDayKey(p.starts_at)} → ${p.ends_at ? pacificDayKey(p.ends_at) : "…"}`
                         : "—"}
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">

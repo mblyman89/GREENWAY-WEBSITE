@@ -31,6 +31,15 @@ import {
 } from "@/lib/promotions/promo-blocker-fix-core";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { guardSkipNote, MAX_HIDE_PER_PRESS } from "@/lib/promotions/promo-fix-core";
+import {
+  buildPromoPreview,
+  promoScheduleSummary,
+  scheduleGate,
+  PREVIEW_VERDICTS,
+  VERDICT_LABEL,
+  VERDICT_MEANING,
+  type PreviewVerdict,
+} from "@/lib/promotions/promo-preview-core";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +49,7 @@ const NEXT_STATUS: {
   variant: "neutral" | "save" | "confirm";
 }[] = [
   { label: "Save as draft", value: "draft", variant: "neutral" },
-  { label: "Schedule", value: "scheduled", variant: "save" },
+  { label: "Schedule (goes live at Starts)", value: "scheduled", variant: "save" },
   { label: "Publish (go live)", value: "published", variant: "confirm" },
   { label: "Archive", value: "archived", variant: "neutral" },
 ];
@@ -73,6 +82,19 @@ export default async function EditPromotionPage({
   const guardSkipped = guardSkipNote(guard.hiddenSkipped, guard.neverSkipped);
   // R74 S23: the numbers that fix each blocker, with the guard's own math.
   const guardShape = guardRuleShapeFor(promotion);
+  // R74 S28: preview before publishing. Every product the guard checked, with
+  // the guard's own verdict, and when the deal will actually be live.
+  const preview = buildPromoPreview(guardShape, guard.affected);
+  const nowIso = new Date().toISOString();
+  const scheduleInput = {
+    status: promotion.status,
+    weekday: promotion.weekday,
+    startsAt: promotion.starts_at,
+    endsAt: promotion.ends_at,
+  };
+  const schedule = promoScheduleSummary(scheduleInput, nowIso);
+  const gate = scheduleGate(scheduleInput, nowIso);
+  const PREVIEW_CAP = 500;
   const blockerLots = guardBelowCost.length
     ? await listLotRefsForKeys(guardBelowCost.slice(0, 50).map((f) => f.key))
     : [];
@@ -112,9 +134,124 @@ export default async function EditPromotionPage({
         )}
         {status && (
           <div className="mb-4 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
-            Status set to {status}.
+            {status === "scheduled" ? `Scheduled. ${schedule.text}` : `Status set to ${status}.`}
           </div>
         )}
+
+        <section
+          id="preview"
+          data-testid="promo-preview"
+          className={`mb-6 rounded-xl border p-4 ${
+            guard.readProblems.length > 0
+              ? "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/[0.06]"
+              : "border-white/10 bg-[#0a0a0a]"
+          }`}
+        >
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+            Preview before publishing
+          </h2>
+          <p className="mt-1 text-xs text-white/50">
+            Every product this deal would discount on the live menu, at its deepest possible
+            discount, against the legal minimum built from its cost. These are the exact numbers
+            Publish and Schedule check. {schedule.text}
+          </p>
+          {guard.readProblems.length > 0 && (
+            <p data-testid="promo-preview-incomplete" className="mt-2 text-xs text-[var(--admin-gold)]">
+              This check could not read everything ({guard.readProblems.join("; ")}). The list may be
+              short, so Publish and Schedule are refused until a reload reads it in full.
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {PREVIEW_VERDICTS.map((v: PreviewVerdict) => (
+              <span
+                key={v}
+                data-testid={`promo-preview-count-${v}`}
+                title={VERDICT_MEANING[v]}
+                className={`rounded-md border px-2 py-1 text-xs ${
+                  v === "blocks" && preview.counts.blocks > 0
+                    ? "border-[#ff6b6b]/40 text-[#ffb0b0]"
+                    : v === "ok"
+                      ? "border-[var(--admin-accent)]/30 text-[var(--admin-accent)]"
+                      : "border-white/15 text-white/60"
+                }`}
+              >
+                {VERDICT_LABEL[v]}: {preview.counts[v]}
+              </span>
+            ))}
+            <span className="rounded-md px-2 py-1 text-xs text-white/40">
+              {preview.total} product{preview.total === 1 ? "" : "s"} in this deal
+            </span>
+          </div>
+          {preview.total === 0 ? (
+            <p data-testid="promo-preview-empty" className="mt-3 text-xs text-white/40">
+              No product on the live menu matches this deal yet (or no menu is published). Check the
+              targets and exclusions below.
+            </p>
+          ) : (
+            <div className="mt-3 max-h-96 overflow-auto rounded-lg border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-[#0a0a0a] text-white/40">
+                  <tr>
+                    <th className="px-2 py-1.5 font-medium">Product</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Price</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Lowest with this deal</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Legal minimum</th>
+                    <th className="px-2 py-1.5 font-medium">Check</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.slice(0, PREVIEW_CAP).map((r) => (
+                    <tr key={r.key} data-testid={`promo-preview-row-${r.verdict}`} className="border-t border-white/5">
+                      <td className="px-2 py-1 text-white/75">
+                        <a
+                          href={`/admin/products/${encodeURIComponent(r.key)}`}
+                          className="underline decoration-white/15 hover:decoration-white/60"
+                        >
+                          {r.brand ? `${r.brand} · ` : ""}
+                          {r.name}
+                        </a>
+                      </td>
+                      <td className="px-2 py-1 text-right text-white/60">{formatMoneyMinor(r.priceMinor)}</td>
+                      <td className="px-2 py-1 text-right text-white/80">{formatMoneyMinor(r.lowestMinor)}</td>
+                      <td className="px-2 py-1 text-right text-white/60">
+                        {r.costMinor == null ? "no cost" : formatMoneyMinor(r.floorMinor)}
+                      </td>
+                      <td
+                        className={`px-2 py-1 ${
+                          r.verdict === "blocks"
+                            ? "text-[#ffb0b0]"
+                            : r.verdict === "ok"
+                              ? "text-[var(--admin-accent)]"
+                              : "text-[var(--admin-gold)]/90"
+                        }`}
+                        title={VERDICT_MEANING[r.verdict]}
+                      >
+                        {VERDICT_LABEL[r.verdict]}
+                        {r.verdict === "ok" && r.headroomMinor != null ? ` (${formatMoneyMinor(r.headroomMinor)} to spare)` : ""}
+                        {r.verdict === "blocks" ? (
+                          <a href="#cost-floor" className="ml-1 underline">
+                            fix
+                          </a>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {preview.total > PREVIEW_CAP && (
+                <p data-testid="promo-preview-more" className="px-2 py-1.5 text-xs text-white/40">
+                  Showing the first {PREVIEW_CAP} of {preview.total} (problems first). The counts above
+                  cover all {preview.total}.
+                </p>
+              )}
+            </div>
+          )}
+          {guardSkipped && <p className="mt-2 text-[11px] text-white/40">{guardSkipped}</p>}
+          <p className="mt-2 text-[11px] text-white/35">
+            Lowest with this deal assumes every tier or threshold is met (the deepest it can go). The
+            register also clamps every ticket at the legal minimum.
+          </p>
+        </section>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <div>
@@ -142,19 +279,34 @@ export default async function EditPromotionPage({
                     <input type="hidden" name="status" value={s.value} />
                     <Button
                       type="submit"
-                      disabled={promotion.status === s.value}
+                      disabled={s.value === "scheduled" ? !gate.ok : promotion.status === s.value}
                       variant={s.variant}
                       size="sm"
                       fullWidth
                     >
                       {s.label}
-                      {promotion.status === s.value ? " (current)" : ""}
+                      {promotion.status === s.value && s.value !== "scheduled" ? " (current)" : ""}
                     </Button>
                   </form>
                 ))}
               </div>
+              <p data-testid="promo-schedule-summary" className="mt-3 text-xs text-white/70">
+                {schedule.text}
+              </p>
+              {!gate.ok && promotion.status !== "published" && (
+                <p data-testid="promo-schedule-why" className="mt-1 text-[11px] text-white/40">
+                  Schedule: {gate.error.replace(/^Nothing was scheduled: /, "")}
+                </p>
+              )}
+              {schedule.warnings.map((w) => (
+                <p key={w} data-testid="promo-schedule-warning" className="mt-1 text-[11px] text-[var(--admin-gold)]/90">
+                  {w}
+                </p>
+              ))}
               <p className="mt-3 text-xs text-white/40">
-                Publishing takes an audit snapshot of the rules + affected products, and is
+                Schedule runs the same cost-floor check as Publish, then publishes it with its future
+                start: the website, the menu and the register keep it off until that moment, then it
+                turns on by itself. Publishing takes an audit snapshot of the rules + affected products, and is
                 HARD-BLOCKED if any product&apos;s worst case would fall below its acquisition cost
                 (CCRS).
               </p>
