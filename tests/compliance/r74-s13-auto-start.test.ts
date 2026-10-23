@@ -47,6 +47,8 @@ type Db = {
   fail?: { settingsRead?: boolean; manifests?: boolean; drafts?: boolean; update?: boolean };
   /** Called before every site_settings update lands (to simulate a concurrent writer). */
   beforeUpdate?: () => void;
+  /** Called right after a site_settings update lands (to simulate a writer between two steps). */
+  afterUpdate?: () => void;
   writes: number;
 };
 
@@ -99,6 +101,7 @@ function fakeAdmin(db: Db) {
           if (!db.settings || db.settings.updated_at !== want) return done({ data: [], error: null });
           db.settings = { value_json: JSON.parse(JSON.stringify(patch.value_json)), updated_at: tick() };
           db.writes += 1;
+          db.afterUpdate?.();
           return done({ data: [{ key: AUTO_START_KEY }], error: null });
         }
         if (table === "inbound_manifests") {
@@ -289,6 +292,26 @@ describe("R74 S13 run loop", () => {
     const r = await runCultiveraAutoStart({ admin, startOne: s.fn, now: () => T0, token: "me" });
     expect(r).toMatchObject({ ok: true, skipped: "leased" });
     expect(s.calls).toEqual([]);
+  });
+
+  it("a lease taken over between two manifests stops the run before the next Start (checked before every manifest)", async () => {
+    const db = makeDb(4);
+    const admin = fakeAdmin(db);
+    const s = starter(db);
+    await armCultiveraAutoStart(IMP, null, { admin });
+    let stolen = false;
+    db.afterUpdate = () => {
+      const v = db.settings?.value_json as { cursor?: string | null } | undefined;
+      if (!stolen && db.settings && v?.cursor === M(1)) {
+        stolen = true;
+        db.settings = { value_json: { ...(db.settings.value_json as object), leaseToken: "other-run", leaseUntil: "2099-01-01T00:00:00.000Z" }, updated_at: "stolen" };
+      }
+    };
+    const r = await runCultiveraAutoStart({ admin, startOne: s.fn, now: () => T0, token: "me" });
+    expect(stolen).toBe(true);
+    expect(s.calls).toEqual([M(1)]);
+    expect(r.ok && r.run?.stoppedBy).toBe("lost_lease");
+    expect(r.ok && r.run?.started).toBe(1);
   });
 
   it("Pause stops the run after the manifest it is on; Start now (re-arm) resumes from the start of the not-started list", async () => {
