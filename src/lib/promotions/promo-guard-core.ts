@@ -59,7 +59,7 @@ export type BelowCostFinding = {
   reason: "below_cost" | "cost_unknown" | "regular_below_cost";
 };
 
-const MERCH_TOKENS = ["merch", "accessories", "paraphernalia"];
+export const MERCH_TOKENS = ["merch", "accessories", "paraphernalia"];
 
 function isMerchCats(categories: string[]): boolean {
   return categories.some((c) => MERCH_TOKENS.includes(c.toLowerCase()));
