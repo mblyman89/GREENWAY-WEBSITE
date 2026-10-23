@@ -11,6 +11,9 @@
  *           pure readPdfText (the intake's layout parsers; LlamaParse tables as a last resort).
  *   XLSX -> exceljs cells (exact values; an AI adds nothing to a cell) -> readSpreadsheetCells.
  *
+ * R74 S19: READ_CONCURRENCY documents are read at once (newest email first), up to READ_BATCH_MAX_DOCS
+ * per press inside the time budget.
+ *
  * Every decision is in the PURE cultivera-mail-read-core. This file only moves bytes.
  *
  * WRITES: the row's read fields only (status stored -> parsed | unreadable, note, format, number,
@@ -31,6 +34,9 @@ import {
   OLD_XLS_NOTE,
   READ_BATCH_MAX_DOCS,
   READ_BATCH_TIME_BUDGET_MS,
+  READ_CONCURRENCY,
+  readMayStart,
+  readWidth,
   SHEET_MAX_BYTES,
   excelCellValue,
   isOldExcel,
@@ -150,36 +156,55 @@ export async function readOneDocument(io: ReadIo, doc: StoredDoc): Promise<{ pat
   return { patch: unreadablePatch(`a ${doc.kind} document is read at harvest time, not here`), engine: null };
 }
 
-/** One press: read up to READ_BATCH_MAX_DOCS stored documents inside the time budget. */
-export async function runReadBatch(io: ReadIo): Promise<ReadBatchResult> {
+/**
+ * One press: read up to READ_BATCH_MAX_DOCS stored documents inside the time budget.
+ *
+ * R74 S19: READ_CONCURRENCY workers read at once (LlamaParse runs up to 5 parse jobs at a time on
+ * our plan), each taking the next document from one shared list. A worker starts a document only
+ * while readMayStart says "go": time is left and nobody hit a storage outage. A started document is
+ * always finished and written (the budget leaves room for LlamaParse's own 90 s wait). A storage
+ * outage stops every worker from starting more; the documents already in flight are still written.
+ */
+export async function runReadBatch(io: ReadIo, opts: { budgetMs?: number; concurrency?: number } = {}): Promise<ReadBatchResult> {
   const started = io.now();
+  const budgetMs = opts.budgetMs ?? READ_BATCH_TIME_BUDGET_MS;
   const waiting = await io.countStored();
   const res: ReadBatchResult = { ok: true, waiting, read: 0, parsed: 0, unreadable: 0, failed: 0, llamaparse: 0, unpdf: 0, left: waiting, stoppedBecause: null };
   if (waiting === 0) return res;
   const docs = await io.listStored(READ_BATCH_MAX_DOCS);
-  for (const doc of docs) {
-    if (io.now() - started > READ_BATCH_TIME_BUDGET_MS) {
-      res.stoppedBecause = "time budget reached; the rest wait for the next press";
-      break;
+  let next = 0;
+  let stopped = false;
+  let budgetHit = false;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const may = readMayStart({ elapsedMs: io.now() - started, budgetMs, stopped, next, total: docs.length });
+      if (may === "budget") budgetHit = true;
+      if (may !== "go") return;
+      const doc = docs[next];
+      next += 1;
+      let out: Awaited<ReturnType<typeof readOneDocument>>;
+      try {
+        out = await readOneDocument(io, doc);
+      } catch (e) {
+        // Storage outage / refusal: stop loudly, leave this and the rest stored.
+        res.failed += 1;
+        res.ok = false;
+        stopped = true;
+        res.stoppedBecause ??= `could not open ${doc.filename || doc.storage_key}: ${msgOf(e).slice(0, 160)}`;
+        return;
+      }
+      const wrote = await io.update(doc.id, out.patch);
+      if (!wrote) continue; // another press read it first (the guarded update is the claim)
+      res.read += 1;
+      if (out.patch.status === "parsed") res.parsed += 1;
+      else res.unreadable += 1;
+      if (out.engine === "llamaparse") res.llamaparse += 1;
+      if (out.engine === "unpdf") res.unpdf += 1;
     }
-    let out: Awaited<ReturnType<typeof readOneDocument>>;
-    try {
-      out = await readOneDocument(io, doc);
-    } catch (e) {
-      // Storage outage / refusal: stop loudly, leave this and the rest stored.
-      res.failed += 1;
-      res.ok = false;
-      res.stoppedBecause = `could not open ${doc.filename || doc.storage_key}: ${msgOf(e).slice(0, 160)}`;
-      break;
-    }
-    const wrote = await io.update(doc.id, out.patch);
-    if (!wrote) continue; // another press read it first (the guarded update is the claim)
-    res.read += 1;
-    if (out.patch.status === "parsed") res.parsed += 1;
-    else res.unreadable += 1;
-    if (out.engine === "llamaparse") res.llamaparse += 1;
-    if (out.engine === "unpdf") res.unpdf += 1;
-  }
+  };
+  const width = readWidth(opts.concurrency ?? READ_CONCURRENCY, docs.length);
+  await Promise.all(Array.from({ length: width }, () => worker()));
+  if (budgetHit && !res.stoppedBecause) res.stoppedBecause = "time budget reached; the rest wait for the next press";
   res.left = await io.countStored();
   return res;
 }
@@ -218,7 +243,9 @@ export function supabaseReadIo(
         .select("id, kind, filename, storage_key")
         .eq("mailbox", mb)
         .eq("status", "stored")
-        .order("email_at", { ascending: true, nullsFirst: false })
+        // R74 S19: newest email first (the lots on the shelf now came on the latest manifests, so
+        // a part-read mailbox already places them). cultivera_mail_docs_recent_idx serves it.
+        .order("email_at", { ascending: false, nullsFirst: false })
         .order("id", { ascending: true })
         .limit(limit);
       if (error) {

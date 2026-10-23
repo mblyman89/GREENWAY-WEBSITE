@@ -28,6 +28,7 @@
  *   readSpreadsheetCells all sheets -> the best sheet's manifest (most barcodes) -> summary
  *   pdfReadNote          the engine note kept on the row (which reader ran, and why)
  *   READ_BATCH_* / readBatchLine   the button's batch size, time budget and result sentence
+ *   READ_CONCURRENCY / readMayStart / readWidth   S19: documents read at once, inside the budget
  *
  * Reads nothing, writes nothing.
  */
@@ -40,10 +41,37 @@ import { markdownTables } from "@/lib/inventory/markdown-fields-core";
 import { summarizeManifest, type ParsedDocSummary } from "@/lib/pos/cultivera-mail-harvest-run-core";
 
 export const MAIL_READ_RULE_VERSION = 1;
-/** Documents read per press (each PDF is one LlamaParse job, ~5–40 s). */
-export const READ_BATCH_MAX_DOCS = 12;
-/** Stop starting new documents after this long (inside the page's 300 s function). */
-export const READ_BATCH_TIME_BUDGET_MS = 200_000;
+/**
+ * R74 S19 (round 10: "it says it can do up to 12 at a time ... I am hoping we can bump up the read
+ * rate from llama parse"). The most documents one press may pick up. Each PDF is one LlamaParse job
+ * (~5–40 s), so in practice the time budget, not this number, ends a press.
+ */
+export const READ_BATCH_MAX_DOCS = 100;
+/**
+ * Documents read AT ONCE. 5 = LlamaParse's concurrent parse jobs on the Free and Starter plans
+ * (developers.llamaindex.ai/llamaparse/general/billing, read 2026-10). Its request-rate caps
+ * (500 job creations per 10 s, 80 status reads per s) are far above 5 jobs polled every 2 s.
+ */
+export const READ_CONCURRENCY = 5;
+/**
+ * Stop STARTING new documents after this long. The page's function lives 300 s; a document started
+ * at 180 s has 120 s left, more than LlamaParse's own 90 s wait plus the download and the write.
+ */
+export const READ_BATCH_TIME_BUDGET_MS = 180_000;
+
+/** Whether a read worker may start another document. Pure; the store asks it before each one. */
+export function readMayStart(i: { elapsedMs: number; budgetMs: number; stopped: boolean; next: number; total: number }): "go" | "done" | "budget" | "stopped" {
+  if (i.stopped) return "stopped";
+  if (i.next >= i.total) return "done";
+  if (i.elapsedMs > i.budgetMs) return "budget";
+  return "go";
+}
+
+/** The worker count for a batch: never more than the documents, never below 1, never above the cap. */
+export function readWidth(requested: number, docs: number): number {
+  const w = Number.isFinite(requested) ? Math.floor(requested) : READ_CONCURRENCY;
+  return Math.max(0, Math.min(Math.max(1, Math.min(w, READ_CONCURRENCY)), docs));
+}
 /** A spreadsheet larger than this many cells is not a manifest (a price list / export); refused by name. */
 export const SHEET_MAX_CELLS = 200_000;
 
@@ -635,6 +663,17 @@ export function __runCultiveraMailReadCoreTests(): { passed: number; failed: num
   const line = readBatchLine({ ok: true, waiting: 20, read: 12, parsed: 9, unreadable: 3, failed: 0, llamaparse: 11, unpdf: 1, left: 8, stoppedBecause: null });
   ok(/Read 12 kept documents: 9 with barcodes, 3 without \(LlamaParse 11, text layer 1\) 8 left; press again\./.test(line), "batch line");
   ok(/Finished/.test(readBatchLine({ ok: true, waiting: 2, read: 2, parsed: 2, unreadable: 0, failed: 0, llamaparse: 2, unpdf: 0, left: 0, stoppedBecause: null })), "finished line");
+
+  // R74 S19: parallel reads inside the budget
+  ok(READ_CONCURRENCY === 5 && READ_BATCH_MAX_DOCS === 100 && READ_BATCH_TIME_BUDGET_MS === 180_000, "S19 limits");
+  ok(READ_BATCH_TIME_BUDGET_MS + 90_000 + 25_000 <= 300_000, "a document started at the budget still ends inside the 300 s page");
+  ok(readMayStart({ elapsedMs: 0, budgetMs: 10, stopped: false, next: 0, total: 3 }) === "go", "start when time and documents remain");
+  ok(readMayStart({ elapsedMs: 10, budgetMs: 10, stopped: false, next: 0, total: 3 }) === "go", "exactly at the budget still starts");
+  ok(readMayStart({ elapsedMs: 11, budgetMs: 10, stopped: false, next: 0, total: 3 }) === "budget", "past the budget stops");
+  ok(readMayStart({ elapsedMs: 11, budgetMs: 10, stopped: false, next: 3, total: 3 }) === "done", "no documents left wins over the budget");
+  ok(readMayStart({ elapsedMs: 0, budgetMs: 10, stopped: true, next: 0, total: 3 }) === "stopped", "a storage outage stops every worker");
+  ok(readWidth(5, 100) === 5 && readWidth(5, 2) === 2 && readWidth(5, 0) === 0, "width = min(cap, documents)");
+  ok(readWidth(50, 100) === 5 && readWidth(0, 9) === 1 && readWidth(-3, 9) === 1 && readWidth(Number.NaN, 9) === 5, "width never above the cap, never below 1");
 
   return { passed, failed };
 }

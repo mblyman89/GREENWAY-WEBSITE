@@ -212,7 +212,8 @@ Wave 2 slice.
 
 When the harvest finds a PDF or spreadsheet, it keeps the file as "kept to read later". Under
 **Harvest the next batch** there is a second button, **Read the kept PDFs and spreadsheets**. Each
-press reads up to 12 of those files, so keep pressing until it says **Finished**. It needs no new
+press (R74 S19) reads five files at once, newest email first, for about three minutes (up to 100
+files), so keep pressing until it says **Finished**. It needs no new
 database update; 0293 is enough.
 
 - **PDFs are read by LlamaParse.** This is the same AI reader the inbox intake uses, and it can read

@@ -419,7 +419,8 @@ export default async function MenuImportsPage({
           {/* R74 S9: read the kept PDFs (LlamaParse, checked against the PDF's own text) and spreadsheets (exact cells). */}
           <div className="mt-4 border-t border-white/10 pt-4" data-testid="mail-read-run">
             <p className="text-xs text-white/50">
-              Reads the kept PDFs and spreadsheets, up to 12 per press, oldest email first. PDFs are read by LlamaParse
+              Reads the kept PDFs and spreadsheets, newest email first, five at a time, for about three minutes per press
+              (often 30 to 60 documents). PDFs are read by LlamaParse
               (the same reader as the inbox intake; the PDF&apos;s own text is used if LlamaParse is unavailable), and any
               barcode LlamaParse sees that the PDF&apos;s own text does not contain is dropped, never guessed.
               Spreadsheets are read cell by cell; a barcode is only taken from a column headed Barcode, Inventory ID,
