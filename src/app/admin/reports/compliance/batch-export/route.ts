@@ -214,6 +214,8 @@ export async function GET(request: Request) {
     outboxNote = [
       `NOT recorded in the CCRS outbox: ${why}. Rows were routed as before S-12b`,
       "(every row Insert, our ids). Do not upload a production batch until the seed is finalized.",
+      "Production exports in this state are refused (E53): an Insert would file Cultivera's lots as",
+      "NEW records instead of updating the ids Cultivera already filed.",
     ];
   }
 
