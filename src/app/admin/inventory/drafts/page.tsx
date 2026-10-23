@@ -67,6 +67,7 @@ import { WCIA_BACKFILL_HELP, parseBackfillCursor } from "@/lib/inventory/cultive
 import { COA_BACKFILL_HELP, parseCoaCursor } from "@/lib/inventory/coa-archive-backfill-core";
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
+import { fieldSourcesLine } from "@/lib/inventory/cultivera-survivorship-core";
 import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, startCultiveraVendorAction, lookupCultiveraVendorAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
@@ -2072,6 +2073,10 @@ export default async function CatalogDraftsPage({
                                       {cultiveraApproveCopy(d.suggested_price_minor_units != null ? fmtMoney(d.suggested_price_minor_units) : "differs by size", process.env[CARD_REFRESH_ENV])}
                                     </span>
                                     <Button type="submit" variant="save" size="sm">{"\u2713"} Approve</Button>
+                                    {/* R74 S14: manifest wins on name, type, cost; Cultivera on category, quantity. */}
+                                    <span className="basis-full text-xs text-[var(--admin-text-faint)]" data-testid="cultivera-field-sources">
+                                      {fieldSourcesLine(attachedFactsOf(d as unknown as Record<string, unknown>))}
+                                    </span>
                                   </div>
                                 ) : (<>
                                 <FieldLabel on={v2Row} htmlFor={`price-${d.id}`}>Menu price</FieldLabel>

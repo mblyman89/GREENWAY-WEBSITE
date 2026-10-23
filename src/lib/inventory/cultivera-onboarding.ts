@@ -21,6 +21,9 @@
  *   3. attachLabFactsToManifestDrafts                    (certificate facts)
  *   4. the Cultivera THC/CBD as an attached fact, source "cultivera"
  *      (shown on the row, never counted as reviewed), with provenance.
+ *   4b. R74 S14 field survivorship: the vendor's manifest line (transfer file
+ *      or emailed manifest) wins on name, type and cost on the OPEN rows;
+ *      Cultivera keeps category and quantity (cultivera-survivorship.ts).
  *   5. one timeline note + one audit row.
  *
  * WHAT IT NEVER DOES (standing rule "sellable stays sellable"): change a lot's
@@ -55,6 +58,8 @@ import {
 import { identityForDraft } from "@/lib/catalog/product-identity-core";
 import { RECONSTRUCTED_MANIFEST_KIND } from "@/lib/inventory/cultivera-manifest-group-core";
 import { attachWciaLabResults } from "@/lib/inventory/cultivera-wcia-store";
+import { applyManifestSurvivorship } from "@/lib/inventory/cultivera-survivorship";
+import { SURVIVORSHIP_EVENT, emptySurvivorshipRun, survivorshipNote, type SurvivorshipRun } from "@/lib/inventory/cultivera-survivorship-core";
 import { CULTIVERA_WCIA_EVENT, emptyWciaResult, wciaAttachNote, type WciaAttachResult } from "@/lib/inventory/cultivera-wcia-core";
 import {
   CULTIVERA_ONBOARDING_AUDIT,
@@ -110,7 +115,9 @@ export async function startCultiveraManifestOnboarding(
   //    delivery at all. Unreadable = refuse (never guess which rules apply).
   const { data: mRow, error: mErr } = await admin
     .from("inbound_manifests")
-    .select("id, status, payload_kind:raw_payload->>kind, import_id:raw_payload->>import_id, cultivera_transfer_id:raw_payload->>cultivera_transfer_id")
+    .select(
+      "id, status, payload_kind:raw_payload->>kind, group_kind:raw_payload->>group_kind, import_id:raw_payload->>import_id, cultivera_transfer_id:raw_payload->>cultivera_transfer_id",
+    )
     .eq("id", manifestId)
     .maybeSingle();
   if (mErr) return { ok: false, error: `The manifest could not be read: ${short(mErr)}` };
@@ -118,6 +125,7 @@ export async function startCultiveraManifestOnboarding(
     id: string;
     status: string | null;
     payload_kind: string | null;
+    group_kind?: string | null;
     import_id?: string | null;
     cultivera_transfer_id?: string | null;
   } | null;
@@ -203,6 +211,18 @@ export async function startCultiveraManifestOnboarding(
   const cv = await attachCultiveraPotencyFacts(admin, manifestId, actorId);
   errors.push(...cv.errors);
 
+  // 4b. R74 S14 field survivorship: the vendor's manifest line wins on name, type and cost
+  //     (the open onboarding rows only); Cultivera keeps category and quantity. Lots untouched.
+  let surv: SurvivorshipRun = emptySurvivorshipRun(null);
+  if (draftsRes.status === "fulfilled") {
+    surv = await applyManifestSurvivorship(admin, manifestId, m, actorId).catch(
+      (reason: unknown): SurvivorshipRun => ({ ...emptySurvivorshipRun(null), errors: [short(reason)] }),
+    );
+    errors.push(...surv.errors.map((e) => `manifest values: ${e}`));
+    const survNote = survivorshipNote(surv);
+    if (survNote) await logEvent(admin, manifestId, SURVIVORSHIP_EVENT, survNote, actorId);
+  }
+
   // 5. Timeline + audit.
   const note = cultiveraOnboardingNote({
     seeded,
@@ -214,6 +234,7 @@ export async function startCultiveraManifestOnboarding(
     labFacts,
     cultiveraFacts: cv.facts,
     vendorLabLinked: wcia.linked,
+    manifestValues: surv.updated,
     errors,
   });
   await logEvent(admin, manifestId, CULTIVERA_ONBOARDING_EVENT, note, actorId);
@@ -238,6 +259,15 @@ export async function startCultiveraManifestOnboarding(
         reused: wcia.reused,
         skipped_changed: wcia.skippedChanged,
         outcomes: wcia.outcomes,
+      },
+      manifest_values: {
+        source: surv.source,
+        updated: surv.updated,
+        unchanged: surv.unchanged,
+        no_line: surv.noLine,
+        ambiguous: surv.ambiguous,
+        kept_human: surv.keptHuman,
+        changed: surv.changedByField,
       },
       errors: errors.slice(0, 10),
       live_menu_changed: false,

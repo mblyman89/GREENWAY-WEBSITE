@@ -327,11 +327,14 @@ export function cultiveraOnboardingNote(r: {
   cultiveraFacts: number;
   /** R50 S3b: lots newly linked to the vendor's lab result (optional for older callers). */
   vendorLabLinked?: number;
+  /** R74 S14: products that took the name, type and cost from the vendor's manifest (optional for older callers). */
+  manifestValues?: number;
   errors: readonly string[];
 }): string {
   const parts = [
     `${r.seeded} product${r.seeded === 1 ? "" : "s"} added to Onboarding`,
     (r.vendorLabLinked ?? 0) > 0 ? `${r.vendorLabLinked} lot${r.vendorLabLinked === 1 ? "" : "s"} linked to the vendor's lab result` : "",
+    (r.manifestValues ?? 0) > 0 ? `${r.manifestValues} took the name, type and cost from the vendor's manifest` : "",
     r.skippedOpen > 0 ? `${r.skippedOpen} already waiting in review` : "",
     r.skippedOnboarded > 0 ? `${r.skippedOnboarded} already onboarded` : "",
     r.sameCard > 0 ? `${r.sameCard} more lot${r.sameCard === 1 ? "" : "s"} of the same cards` : "",
@@ -482,6 +485,8 @@ export function __runCultiveraOnboardingCoreTests(): { passed: number; failed: n
   );
   const note2 = cultiveraOnboardingNote({ seeded: 1, skippedOpen: 0, skippedOnboarded: 0, sameCard: 0, kbPromoted: null, kbLinked: null, labFacts: 4, cultiveraFacts: 0, errors: ["a", "b", "c", "d"] });
   ok(note2 === "Cultivera manifest started through Onboarding: 1 product added to Onboarding, 4 lab facts attached. The live menu was not changed. Problems: a; b; c.", "note2: " + note2);
+  const note3 = cultiveraOnboardingNote({ seeded: 2, skippedOpen: 0, skippedOnboarded: 0, sameCard: 0, kbPromoted: null, kbLinked: null, labFacts: 0, cultiveraFacts: 0, manifestValues: 2, errors: [] });
+  ok(note3 === "Cultivera manifest started through Onboarding: 2 products added to Onboarding, 2 took the name, type and cost from the vendor's manifest. The live menu was not changed.", "note3 (R74 S14): " + note3);
 
   return { passed, failed: 0 };
 }
