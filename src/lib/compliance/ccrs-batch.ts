@@ -66,6 +66,15 @@ import {
   type MenuPresence,
 } from "@/lib/compliance/ccrs-lot-product-core";
 import { ledgerSelfCheckIssues, type LedgerProblem } from "@/lib/compliance/ccrs-outbox-core";
+import {
+  applyIdentityHolds,
+  buildIdentityProof,
+  cultiveraLotsToHold,
+  identityIssues,
+  CULTIVERA_NOT_ON_RECORD_REASON,
+  type IdentityLot,
+  type IdentityProof,
+} from "@/lib/compliance/ccrs-identity-guard-core";
 
 /** S-17b: the export route's ledger self-check codes, carried with their own pins. */
 type LedgerProblemCode = LedgerProblem["code"];
@@ -162,6 +171,12 @@ export type CcrsBatch = {
     unassignedProductKeys: string[];
   };
   /**
+   * R74 S25: what every lot and product is filed under (Cultivera lots on the
+   * ids Cultivera filed vs our intake lots on our ids / GWP- products). Null
+   * when no lots were read (not configured).
+   */
+  identity: IdentityProof | null;
+  /**
    * R5-1: customer-return Sale corrections carried in this batch's Sale file.
    * `exportReturnIds` is filled ONLY for a production emission (preprod never
    * marks the shared correction_status); the route marks them after emit.
@@ -193,7 +208,7 @@ async function getPublishedVersionId(admin: Admin): Promise<string | null> {
 }
 
 const LOT_COLUMNS =
-  "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample";
+  "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample, notes, manifest_id";
 
 /**
  * R6-2: every ACCEPTED lot of a delivery received on or before `toDay` (live
@@ -293,6 +308,28 @@ async function readTransferLots(admin: Admin, toDay: string): Promise<{ kind: "a
     };
   });
   return { kind: "loaded", lots };
+}
+
+/**
+ * R74 S25: ids of the migration manifests the batch's lots sit on (the shared
+ * lineage predicate, cultiveraManifestIdSet). A read error THROWS: without it a
+ * re-homed Cultivera lot whose notes lost the marker could pass as ours.
+ */
+async function readMigrationManifestIds(admin: Admin, lots: readonly { manifest_id: string | null }[]): Promise<Set<string>> {
+  const ids = [...new Set(lots.map((l) => (l.manifest_id ?? "").trim()).filter(Boolean))];
+  let failed: string | null = null;
+  const rows = await chunkedIn<string, LineageManifestRow>(ids, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("inbound_manifests")
+      .select(LINEAGE_MANIFEST_SELECT)
+      .in("id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) failed = error.message;
+    return (data as LineageManifestRow[] | null) ?? [];
+  });
+  if (failed) throw new Error(`R74 S25: reading lot manifests for the CCRS identity guard failed: ${failed}`);
+  return cultiveraManifestIdSet(rows);
 }
 
 const TRANSFER_ISSUE_TEXT: Record<TransferIssueCode, (n: number) => string> = {
@@ -517,6 +554,13 @@ type LotRow = {
    * apart from a lot whose cost was never entered.
    */
   is_sample: boolean | null;
+  /**
+   * R74 S25: the Cultivera flag (lotFlaggedCultivera) reads the notes marker
+   * and the lot's manifest, so the identity guard can tell a migrated lot
+   * (keeps the id Cultivera filed) from one we received (our id, GWP- product).
+   */
+  notes: string | null;
+  manifest_id: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -875,6 +919,8 @@ function buildInventoryFile(
     const planned = plan.lots.get(l.id);
     if (!planned) throw new Error(`S-11 invariant: lot ${l.id} has no ledger plan`);
     if (planned.action === "withhold") {
+      // R74 S25: a held Cultivera lot is reported once, by E52 (identity guard).
+      if (planned.reason === CULTIVERA_NOT_ON_RECORD_REASON) continue;
       // S-17b: "its product is not in the published menu" says WHY (hidden
       // with its reason / staged only / no item / blank key).
       e41Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: enrichLotWithholdReason(planned.reason, key, menuPresence) });
@@ -1041,6 +1087,7 @@ export async function buildCcrsBatch(
     totalRecords: 0,
     generatedAt: now.toISOString(),
     ledger: { env, view: null, absentReason: "not-configured", lastStamp: null, unassignedProductKeys: [] },
+    identity: null,
     corrections: { exportReturnIds: [], emitted: 0, withheld: 0, invalid: 0, reflected: 0 },
   });
 
@@ -1165,9 +1212,23 @@ export async function buildCcrsBatch(
     if (merged.duplicates.length > 0) throw new Error(`R5-1: Sale ledger entries collide with the batch ledger: ${merged.duplicates.join(", ")}`);
     saleAwareLedger = merged.view;
   }
-  const plan = planLedgerBatch({
+  // R74 S25: the identity guard. A Cultivera lot whose id CCRS does not hold
+  // (production) is held BEFORE planning, so it neither becomes an Insert nor
+  // makes its product ask for a GWP- id (ccrs-identity-guard-core).
+  const migrationManifestIds = await readMigrationManifestIds(admin, lots);
+  const identityLots: IdentityLot[] = lots.map((l) => ({
+    lotId: l.id,
+    label: l.lot_code ?? l.product_name ?? l.id,
+    lotCode: l.lot_code,
+    ccrsId: assignedInventoryExternalId(l),
+    productKey: (l.pos_product_key ?? "").trim(),
+    isCultivera: lotFlaggedCultivera(l, migrationManifestIds),
+  }));
+  const identityHeld = cultiveraLotsToHold({ env, view: ledger, lots: identityLots });
+  const rawPlan = planLedgerBatch({
     view: ledger,
     lots: lots
+      .filter((l) => !identityHeld.has(l.id))
       .map((l) => ({ l, ext: assignedInventoryExternalId(l) }))
       .filter((x): x is { l: LotRow; ext: string } => !!x.ext)
       .map(({ l, ext }) => {
@@ -1187,6 +1248,9 @@ export async function buildCcrsBatch(
     })),
     strains: items.map((it) => (it.strain_name ?? "").trim()).filter(Boolean),
   });
+  const plan = applyIdentityHolds(rawPlan, identityHeld, identityLots);
+  const identity = buildIdentityProof({ env, view: ledger, lots: identityLots, plan, held: identityHeld });
+  syncIssues.push(...identityIssues(identity, slice.kind === "loaded" ? null : slice.reason));
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
   const area = buildAreaFile(env, license.licenseNumber, createdBy, createdDate, ledger);
   const product = { ...productBuild, ...applyProductPlan(productBuild.rows, productBuild.keys, plan) };
@@ -1609,6 +1673,7 @@ export async function buildCcrsBatch(
         .map(([k]) => k)
         .sort(),
     },
+    identity,
     corrections: {
       exportReturnIds: correctionExportIds(env, corrections, e38WithheldLines),
       emitted: corrections.rows.length - correctionE38.withheld.length,

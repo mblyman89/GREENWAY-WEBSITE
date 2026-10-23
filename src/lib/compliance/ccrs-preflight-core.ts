@@ -79,6 +79,10 @@ export const CCRS_ISSUE_CODES = [
   "E14_TRANSFER_LEDGER_WITHHELD",
   "E14_TRANSFER_LOT_NOT_REPORTED",
   "E51_INVENTORY_UNCHANGED_NOT_SENT",
+  "E52_CULTIVERA_LOT_NOT_ON_RECORD",
+  "E53_PROD_LEDGER_NOT_LOADED",
+  "E54_CULTIVERA_ID_NOT_BARCODE",
+  "E55_INTAKE_LOT_ON_CULTIVERA_RECORD",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -443,6 +447,21 @@ const PINS: Record<CcrsIssueCode, string> = {
   // R6-3: an Update row equal to what CCRS last accepted is not re-sent:
   // "No report is needed if there are no changes." Advisory (nothing to fix).
   E51_INVENTORY_UNCHANGED_NOT_SENT: "[G L0525-L0527]",
+  // R74 S25 (ccrs-identity-guard-core): a Cultivera lot whose id is not on the
+  // CCRS record would be an Insert, "create a new record with a unique external
+  // identifier", instead of updating Cultivera's filing (examiner: "continue to
+  // use the IDs already submitted and use the update path" [EXAM L0096]).
+  // Blocking: the lot is held (production only).
+  E52_CULTIVERA_LOT_NOT_ON_RECORD: "[G L0246-L0248]",
+  // R74 S25: a production batch without the ledger routes every row Insert
+  // under our ids. Blocking: the export is refused.
+  E53_PROD_LEDGER_NOT_LOADED: "[G L0246-L0248]",
+  // R74 S25: the ExternalIdentifier "assigned by the licensee (or integrator)"
+  // differs from the barcode the Cultivera lot was imported with. Advisory.
+  E54_CULTIVERA_ID_NOT_BARCODE: "[G L0219-L0225]",
+  // R74 S25: an intake lot whose id CCRS already holds under a Cultivera-filed
+  // product is an Update named by that filed product. Advisory.
+  E55_INTAKE_LOT_ON_CULTIVERA_RECORD: "[G L0580-L0583]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

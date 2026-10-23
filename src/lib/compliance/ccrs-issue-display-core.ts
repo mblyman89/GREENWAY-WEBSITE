@@ -29,6 +29,7 @@
  * PURE. No I/O, no React, no `server-only`.
  */
 import { NO_PRODUCT_ID_REASON, type LedgerEnv } from "./ccrs-ledger-core";
+import { CULTIVERA_NOT_ON_RECORD_REASON } from "./ccrs-identity-guard-core";
 
 /** One row of an issue (structurally identical to CcrsIssueRow in ccrs-preflight-core). */
 export type DisplayRow = { id: string; label: string; detail?: string };
@@ -54,6 +55,7 @@ export const WITHHOLD_CLASSES = [
   "name-already-filed",
   "conflicting-renames",
   "cannot-delete",
+  "cultivera-not-on-record",
   "unclassified",
 ] as const;
 export type WithholdClass = (typeof WITHHOLD_CLASSES)[number];
@@ -86,6 +88,8 @@ export function classifyWithholdReason(reason: string | null | undefined): Withh
   if (r.startsWith("this exact name is already filed under CCRS product")) return "name-already-filed";
   if (r.startsWith("conflicting renames of filed Product")) return "conflicting-renames";
   if (r.startsWith("cannot Delete a record")) return "cannot-delete";
+  // R74 S25: held by ccrs-identity-guard-core (exact constant).
+  if (r === CULTIVERA_NOT_ON_RECORD_REASON) return "cultivera-not-on-record";
   return "unclassified";
 }
 
@@ -100,6 +104,7 @@ export const WITHHOLD_CLASS_LABEL: Record<WithholdClass, string> = {
   "name-already-filed": "name already filed under another CCRS product",
   "conflicting-renames": "two different renames chosen",
   "cannot-delete": "cannot Delete (not on file)",
+  "cultivera-not-on-record": "Cultivera lot not on the CCRS record",
   unclassified: "other reason (read the row)",
 };
 
@@ -130,6 +135,8 @@ export function nextStepFor(cls: WithholdClass, env: LedgerEnv): string {
       return "Two different new names were chosen for one filed product. Choose one name for that product, then rebuild.";
     case "cannot-delete":
       return "A Delete was asked for a record CCRS does not hold. Nothing is sent; check the record before rebuilding.";
+    case "cultivera-not-on-record":
+      return "This lot came over from Cultivera, but its id is not in our copy of what CCRS holds, so sending it would create a NEW record instead of updating Cultivera's filing. Merge the fresh CCRS data copy (re-seed, Part 17 \u00a7G, slice S-15). If the lot's id is wrong, correct it to the barcode Cultivera filed. Then rebuild. Nothing is sent on a guess.";
     case "unclassified":
       return "No automatic advice for this reason. Read the reason on the row; do not upload until it is understood.";
   }
@@ -151,7 +158,7 @@ export function groupRowsByReason(rows: readonly DisplayRow[], env: LedgerEnv): 
 
 /** Issues whose rows are ledger withholds and get reason grouping + next steps. */
 export function isWithholdIssue(i: Pick<DisplayIssue, "code">): boolean {
-  return i.code === "E41_LEDGER_WITHHELD";
+  return i.code === "E41_LEDGER_WITHHELD" || i.code === "E52_CULTIVERA_LOT_NOT_ON_RECORD";
 }
 
 /** One row as one plain-text line. Never truncated. */
@@ -241,6 +248,8 @@ export function __runCcrsIssueDisplayTests(): { passed: number; failed: number }
   ok(classifyWithholdReason("something new") === "unclassified", "unknown reason is unclassified, not guessed");
   ok(classifyWithholdReason(undefined) === "unclassified", "missing reason");
   ok(nextStepFor("no-product-id", "prod").includes("Assign CCRS Product ids"), "prod hint names prod button");
+  ok(classifyWithholdReason(CULTIVERA_NOT_ON_RECORD_REASON) === "cultivera-not-on-record", "R74 S25: held Cultivera lot classified");
+  ok(isWithholdIssue({ code: "E52_CULTIVERA_LOT_NOT_ON_RECORD" }), "R74 S25: E52 rows get reason grouping");
   ok(nextStepFor("no-product-id", "preprod").includes("Assign PREprod ids"), "preprod hint names preprod button");
 
   const rows: DisplayRow[] = [
