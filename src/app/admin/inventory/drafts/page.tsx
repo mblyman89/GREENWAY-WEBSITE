@@ -68,6 +68,8 @@ import { COA_BACKFILL_HELP, parseCoaCursor } from "@/lib/inventory/coa-archive-b
 import { CULTIVERA_ROW_BADGE, CULTIVERA_SECTION_HELP, cultiveraStartBanner, parseCultiveraPage } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultivera-card-refresh-core";
 import { fieldSourcesLine } from "@/lib/inventory/cultivera-survivorship-core";
+import { CATEGORY_HOLD_ROW_NOTE, CATEGORY_HOLD_UNREAD_NOTE } from "@/lib/inventory/cultivera-category-gate-core";
+import { loadHeldKeysForPage } from "@/lib/inventory/cultivera-category-gate";
 import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, startCultiveraVendorAction, lookupCultiveraVendorAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
@@ -317,6 +319,12 @@ export default async function CatalogDraftsPage({
   const aliasCode = aliasResultCode(sp.alias);
   const aliasNote = aliasCode ? aliasBanner(aliasCode, sp.alias_msg) : null;
   const focusIsRebuilt = Boolean(focus.manifestId && rebuiltIds?.has(focus.manifestId));
+  // R74 S15: rows on a rebuilt manifest whose live card is HELD for a
+  // category (Cultivera's category gave no product form). null = could not
+  // tell; the server gate re-reads at approval either way.
+  const heldKeys = view === "draft"
+    ? await loadHeldKeysForPage(drafts.filter((d) => d.manifest_id && rebuiltIds?.has(d.manifest_id)).map((d) => d.pos_product_key))
+    : new Set<string>();
   // R32 (T-328): the CURRENT markup setting, so the price fine print is
   // recomputed live (never a stale frozen sentence) and drift is flagged.
   const pricingSettings = await getPricingSettings();
@@ -1248,7 +1256,7 @@ export default async function CatalogDraftsPage({
                       role={tone === "warn" ? "alert" : "status"}
                       data-testid="wcia-backfill-result"
                       data-tone={tone}
-                      className={tone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-accent)]"}
+                      className={tone === "warn" ? "mb-2 text-[var(--admin-warning)]" : "mb-2 text-[var(--admin-accent)]"}
                     >
                       {sp.lab_bf_msg.slice(0, 700)}
                     </p>
@@ -1271,7 +1279,7 @@ export default async function CatalogDraftsPage({
                             role={pvTone === "warn" ? "alert" : "status"}
                             data-testid="wcia-preview-result"
                             data-tone={pvTone}
-                            className={pvTone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-text)]"}
+                            className={pvTone === "warn" ? "mb-2 text-[var(--admin-warning)]" : "mb-2 text-[var(--admin-text)]"}
                           >
                             {sp.lab_pv_msg.slice(0, 700)}
                           </p>
@@ -1300,7 +1308,7 @@ export default async function CatalogDraftsPage({
                       role={tone === "warn" ? "alert" : "status"}
                       data-testid="coa-backfill-result"
                       data-tone={tone}
-                      className={tone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-accent)]"}
+                      className={tone === "warn" ? "mb-2 text-[var(--admin-warning)]" : "mb-2 text-[var(--admin-accent)]"}
                     >
                       {sp.coa_bf_msg.slice(0, 700)}
                     </p>
@@ -1322,7 +1330,7 @@ export default async function CatalogDraftsPage({
                             role={pvTone === "warn" ? "alert" : "status"}
                             data-testid="coa-preview-result"
                             data-tone={pvTone}
-                            className={pvTone === "warn" ? "mb-2 text-[var(--admin-warning,#b45309)]" : "mb-2 text-[var(--admin-text)]"}
+                            className={pvTone === "warn" ? "mb-2 text-[var(--admin-warning)]" : "mb-2 text-[var(--admin-text)]"}
                           >
                             {sp.coa_pv_msg.slice(0, 700)}
                           </p>
@@ -1584,8 +1592,11 @@ export default async function CatalogDraftsPage({
                   });
                   const autoType = effType.value;
                   const displayType = d.chosen_house_type ?? autoType;
+                  // R74 S15: a held card needs a person's pick - the placeholder
+                  // category and a remembered pick do not count (same as the server).
+                  const heldForCategoryPick = view === "draft" && rowRebuilt && Boolean(d.pos_product_key && heldKeys?.has(d.pos_product_key));
                   const needsCategoryPick =
-                    view === "draft" && Boolean(a?.needsCategoryPick) && !recall?.websiteCategory;
+                    (view === "draft" && Boolean(a?.needsCategoryPick) && !recall?.websiteCategory) || heldForCategoryPick;
                   const needsTypePick = view === "draft" && effType.needsTypePick;
                   const effStrain = effectiveStrainType({
                     recalled: recall?.strainType ?? null,
@@ -1823,6 +1834,16 @@ export default async function CatalogDraftsPage({
                                       onboarding — name it in the box below. */}
                                   <option value="__new__">➕ Create a new category…</option>
                                 </Select>
+                                {heldForCategoryPick && (
+                                  <p className="text-xs font-semibold text-[var(--admin-warning)]" data-testid="cultivera-category-hold">
+                                    {CATEGORY_HOLD_ROW_NOTE}
+                                  </p>
+                                )}
+                                {rowRebuilt && view === "draft" && heldKeys === null && (
+                                  <p className="text-xs text-[var(--admin-text-muted)]" data-testid="cultivera-category-hold-unread">
+                                    {CATEGORY_HOLD_UNREAD_NOTE}. If this product is waiting for a category, Approve will say so.
+                                  </p>
+                                )}
                                 <Input
                                   name="new_category_label"
                                   placeholder="New category name (only if creating one)"
@@ -1968,7 +1989,7 @@ export default async function CatalogDraftsPage({
                                       </span>
                                     ) : null}
                                     {ca.suspected ? (
-                                      <span className="text-[10px] text-[var(--admin-warning,#b45309)]">
+                                      <span className="text-[10px] text-[var(--admin-warning)]">
                                         This name looks like a suppository — please confirm.
                                       </span>
                                     ) : null}

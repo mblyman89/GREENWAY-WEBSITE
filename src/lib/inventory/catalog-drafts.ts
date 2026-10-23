@@ -128,6 +128,9 @@ import {
   stagingSkipForManifestKind,
 } from "@/lib/inventory/cultivera-onboarding-core";
 import { CARD_REFRESH_ENV, refreshStagingForKind } from "@/lib/inventory/cultivera-card-refresh-core";
+// R74 S15: a card held for a category needs a person's pick at approval.
+import { categoryGate, type CategoryHoldRead } from "@/lib/inventory/cultivera-category-gate-core";
+import { loadPublishedCategoryHoldKeys } from "@/lib/inventory/cultivera-category-gate";
 // SLICE 18F: the onboarding memory. This module only SUPPLIES rows to it.
 import {
   recallClassification,
@@ -1310,6 +1313,22 @@ export async function approveDraftWithPrice(
         return { ok: false, error: "Could not read the live menu price, so it was not approved. Try again." };
       }
       live = read.prices.get(key) ?? null;
+    }
+    // R74 S15: the "pick a category before finishing" gate. A live card the
+    // transform HELD for a category (hidden_reason "needs_category") carries
+    // a placeholder category, which the resolver below would accept as
+    // resolved. It needs a person's pick in THIS submission - never the
+    // placeholder, never a remembered pick. An unreadable hold refuses.
+    // The published version is re-read STRICTLY here (getPublishedVersion
+    // answers null on a read error too, which would look like "no hold").
+    let holdRead: CategoryHoldRead = { ok: true, held: false };
+    if (key) {
+      const holds = await loadPublishedCategoryHoldKeys(admin, [key]);
+      holdRead = holds.ok ? { ok: true, held: holds.held.has(key) } : { ok: false };
+    }
+    const hold = categoryGate(holdRead, classification?.chosenWebsiteCategory ?? null);
+    if (!hold.ok) {
+      return { ok: false, error: hold.error };
     }
     const plan = reonboardApproval(live);
     recordedPrice = plan.priceMinor; // null = no single live price; nothing recorded

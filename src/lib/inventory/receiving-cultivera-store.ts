@@ -26,6 +26,8 @@ import {
 } from "@/lib/inventory/cultivera-onboarding-core";
 import { cultiveraDayKey, cultiveraTableRows, type CultiveraTableRow } from "@/lib/inventory/receiving-table-core";
 import { sourceOfGroupKind, type CultiveraSource } from "@/lib/inventory/cultivera-vendor-core";
+import { loadAllPublishedCategoryHoldKeys } from "@/lib/inventory/cultivera-category-gate";
+import { tallyCategoryHolds } from "@/lib/inventory/cultivera-category-gate-core";
 
 export type ReceivingCultiveraLoad =
   | { ok: true; rows: CultiveraTableRow[]; tallyRead: boolean; truncated: boolean }
@@ -67,14 +69,14 @@ export async function loadReceivingCultiveraRows(): Promise<ReceivingCultiveraLo
   }
 
   // Onboarding tally, chunked by manifest id and paged inside each chunk.
-  const drafts: { manifest_id: string | null; status: string | null }[] = [];
+  const drafts: { manifest_id: string | null; status: string | null; pos_product_key?: string | null }[] = [];
   let tallyRead = true;
   outer: for (let i = 0; i < manifests.length; i += ID_CHUNK) {
     const ids = manifests.slice(i, i + ID_CHUNK).map((m) => m.id);
     for (let off = 0; off < 200_000; off += PAGE) {
       const { data, error } = await admin
         .from("catalog_product_drafts")
-        .select("id, manifest_id, status")
+        .select("id, manifest_id, status, pos_product_key")
         .in("manifest_id", ids)
         .order("id", { ascending: true })
         .range(off, off + PAGE - 1);
@@ -82,13 +84,21 @@ export async function loadReceivingCultiveraRows(): Promise<ReceivingCultiveraLo
         tallyRead = false;
         break outer;
       }
-      const got = (data as { manifest_id: string | null; status: string | null }[] | null) ?? [];
+      const got = (data as { manifest_id: string | null; status: string | null; pos_product_key?: string | null }[] | null) ?? [];
       drafts.push(...got);
       if (got.length < PAGE) break;
     }
   }
 
-  const views = cultiveraManifestRows(manifests, tallyRead ? tallyCultiveraDrafts(drafts) : null);
+  // R74 S15: a manifest with a product still held for a category is never
+  // Complete. One read of every held live card (there are few); a failed read
+  // keeps would-be-Complete manifests open (fail closed).
+  let holds: Map<string, number> | null = new Map();
+  if (tallyRead && drafts.some((d) => d.pos_product_key)) {
+    const read = await loadAllPublishedCategoryHoldKeys(admin);
+    holds = read.ok ? tallyCategoryHolds(drafts, read.held) : null;
+  }
+  const views = cultiveraManifestRows(manifests, tallyRead ? tallyCultiveraDrafts(drafts) : null, holds);
   const dayKeys = new Map(manifests.map((m) => [m.id, cultiveraDayKey(m)] as const));
   const sources = new Map<string, CultiveraSource>(manifests.map((m) => [m.id, sourceOfGroupKind(m.group_kind)] as const));
   return { ok: true, rows: cultiveraTableRows(views, dayKeys, tallyRead, sources), tallyRead, truncated };
