@@ -13,6 +13,7 @@ import { loadCoverage } from "@/lib/pos/cultivera-coverage-store";
 import { loadRehomeSources, previewMailApply, type MailApplyPreview } from "@/lib/pos/cultivera-mail-apply-store";
 import { MAIL_APPLY_EXCEPTION_TEXT, mailApplyStage, type MailApplyExceptionCode } from "@/lib/pos/cultivera-mail-apply-core";
 import { applyMailPlanAction, rollbackMailPlanAction } from "../../mail-apply-actions";
+import { CultiveraAutoStartPanel } from "@/components/admin/inventory/CultiveraAutoStartPanel";
 import { COVERAGE_SOURCES, COVERAGE_SOURCE_TEXT, coverageFilterFromParams, filterCoverage } from "@/lib/pos/cultivera-coverage-core";
 
 export const dynamic = "force-dynamic";
@@ -187,6 +188,9 @@ export default async function ImportCoveragePage({
                 </div>
               )}
             </section>
+
+            {/* R74 S13: emailed + unmatched manifests start onboarding automatically after Apply. */}
+            {ap && ap.summary.manifestsAlreadyCreated > 0 && <CultiveraAutoStartPanel importId={id} page="coverage" canApply={canApply} />}
 
             <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="coverage-vendors">
               <h2 className="text-sm font-semibold text-white">By vendor (most unmatched first)</h2>

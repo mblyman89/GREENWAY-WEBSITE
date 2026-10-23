@@ -13,6 +13,7 @@ import { loadRehomeSources, previewRehome, type RehomePreview } from "@/lib/inve
 import { REHOME_EXCEPTION_TEXT, rehomeStage, totalsLine } from "@/lib/inventory/cultivera-rehome-ui-core";
 import type { RehomeExceptionCode } from "@/lib/inventory/cultivera-rehome-core";
 import { applyRehomeAction, rollbackRehomeAction } from "../../rehome-actions";
+import { CultiveraAutoStartPanel } from "@/components/admin/inventory/CultiveraAutoStartPanel";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -83,7 +84,7 @@ export default async function ImportManifestsPage({
           own transfer records (number, vendor, acceptance time), or, where a lot has no transfer, from its Received date.
           Only each lot&apos;s manifest changes: quantities, costs, received dates and what the menu and register show stay
           exactly the same. Nothing is a purchase — this stock is already paid for, so payables and Sage never see it. The
-          rebuilt manifests then appear in Onboarding, so these products get enriched the same way as a native delivery.
+          rebuilt manifests then start in Onboarding automatically (Automatic onboarding start, below), so these products get enriched the same way as a native delivery.
         </p>
         {/* R74 S8: lot by lot, where each manifest comes from (Cultivera transfer / email / unmatched). */}
         <p className="text-xs">
@@ -184,12 +185,15 @@ export default async function ImportManifestsPage({
             )}
             {stage === "done" && (
               <p className="rounded-xl border border-white/10 bg-[#0a0a0a] p-6 text-center text-sm text-white/70" data-testid="rehome-complete">
-                Every lot is on its rebuilt manifest. The manifests are in Onboarding, ready for enrichment.
+                Every lot is on its rebuilt manifest. Onboarding starts for each of them automatically (see Automatic onboarding start).
               </p>
             )}
             {stage === "nothing" && <p className="rounded-xl border border-white/10 bg-[#0a0a0a] p-6 text-center text-sm text-white/70">This import has no lots to rebuild manifests for.</p>}
           </>
         )}
+
+        {/* R74 S13: rebuilt manifests start onboarding automatically after Apply. */}
+        {(s?.manifestsAlreadyCreated ?? 0) > 0 && <CultiveraAutoStartPanel importId={id} page="manifests" canApply={canApply} />}
 
         {canApply && (s?.manifestsAlreadyCreated ?? 0) > 0 && (
           <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="rehome-rollback">

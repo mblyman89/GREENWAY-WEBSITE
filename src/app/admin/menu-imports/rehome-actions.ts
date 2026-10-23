@@ -18,6 +18,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { armCultiveraAutoStart } from "@/lib/inventory/cultivera-auto-start";
 import { applyRehome, loadRehomeSources, rollbackRehome } from "@/lib/inventory/cultivera-rehome-store";
 import { REHOME_AUDIT, rehomeHref, rehomeSummaryText } from "@/lib/inventory/cultivera-rehome-ui-core";
 
@@ -64,6 +65,17 @@ export async function applyRehomeAction(formData: FormData): Promise<void> {
     });
     msg = rehomeSummaryText(r);
     failed = !r.ok;
+    // R74 S13: a successful Apply queues the automatic onboarding Start of this import's rebuilt
+    // manifests (the every-minute worker runs it; the page's Start onboarding now runs it at once).
+    if (r.ok) {
+      try {
+        await armCultiveraAutoStart(importId, session.userId);
+        msg += " Onboarding starts automatically for the rebuilt manifests (see Automatic onboarding start below).";
+      } catch (armErr) {
+        failed = true;
+        msg += ` But the automatic onboarding start could not be queued: ${armErr instanceof Error ? armErr.message : String(armErr)}. Press Start onboarding now below.`;
+      }
+    }
   } catch (err) {
     unstable_rethrow(err);
     await recordAudit({

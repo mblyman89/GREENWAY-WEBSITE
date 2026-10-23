@@ -39,6 +39,10 @@
  * FLAG. MANIFEST_BATCH_LOOKUP (default on). Off: returns before any database
  * read. AI_API_KEY unset or ATTACH_FACTS_V2 off: returns before any write.
  *
+ * R74 S13 (no new cron). When a tick had no product to look up, it runs the
+ * automatic onboarding Start of rebuilt Cultivera manifests
+ * (runCultiveraAutoStart, 600 s budget, its own lease in site_settings).
+ *
  * AUTH. The same fail-closed preamble as /api/cron/leafly-ack-sweep (copied,
  * not shared, for the reason recorded there):
  *   - CRON_SECRET set            -> Bearer must match, else staff session.
@@ -49,6 +53,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runLookupJobsTick } from "@/lib/catalog/lookup-job-server";
+import { runCultiveraAutoStart } from "@/lib/inventory/cultivera-auto-start";
+import { AUTO_START_CRON_BUDGET_MS } from "@/lib/inventory/cultivera-auto-start-core";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +92,14 @@ export async function GET(req: NextRequest) {
   // batch carries on; only a broken run (database unreadable) is a 500, so
   // the logs stay quiet when the system is healthy.
   const result = await runLookupJobsTick();
-  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  // R74 S13: a tick that had no product to look up (no job, or every job leased by another run)
+  // carries on the automatic onboarding Start of rebuilt Cultivera manifests. No new cron. Its
+  // own lease means one run at a time; an idle state costs one read of one site_settings row.
+  let autoStart: Awaited<ReturnType<typeof runCultiveraAutoStart>> | null = null;
+  if (result.ok && result.skipped) {
+    autoStart = await runCultiveraAutoStart({ budgetMs: AUTO_START_CRON_BUDGET_MS, trigger: "worker" });
+  }
+  return NextResponse.json({ ...result, autoStart }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.
