@@ -142,7 +142,7 @@ export function buildRebuiltRefreshStagingPlan(inputs: {
 export const REFRESH_EVENT = "cultivera_cards_refreshed";
 
 /** The timeline note for a refresh (what changed, what did not, plainly). */
-export function refreshEventNote(p: { refreshed: number; notLive: number; published: boolean }): string {
+export function refreshEventNote(p: { refreshed: number; notLive: number; published: boolean; released?: number }): string {
   const n = Math.max(0, Math.floor(p.refreshed));
   const what = n === 1 ? "1 live card was" : `${n} live cards were`;
   const where = p.published ? "The update is live." : "The update is waiting on Admin \u2192 Publish Menu.";
@@ -150,7 +150,9 @@ export function refreshEventNote(p: { refreshed: number; notLive: number; publis
     p.notLive > 0
       ? ` ${p.notLive === 1 ? "1 approved product is" : `${p.notLive} approved products are`} not on the live menu, so nothing was added for ${p.notLive === 1 ? "it" : "them"}.`
       : "";
-  return `${what} rebuilt from your onboarding (received via Cultivera): name, type, strain and verified facts now come from our records. Prices, sizes, stock and visibility did not change. ${where}${missing}`;
+  // R74 S17: when a held card was released in the same update, visibility DID change (said in its own note).
+  const unchanged = (p.released ?? 0) > 0 ? "Prices, sizes and stock did not change." : "Prices, sizes, stock and visibility did not change.";
+  return `${what} rebuilt from your onboarding (received via Cultivera): name, type, strain and verified facts now come from our records. ${unchanged} ${where}${missing}`;
 }
 
 /**
@@ -722,6 +724,11 @@ export function __runCultiveraCardRefreshCoreTests(): { passed: number; failed: 
 
   // Notes
   ok(/^1 live card was rebuilt/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true })) && /Prices, sizes, stock and visibility did not change/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true })), "event note");
+  ok(
+    !/visibility/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true, released: 1 })) &&
+      /Prices, sizes and stock did not change/.test(refreshEventNote({ refreshed: 1, notLive: 0, published: true, released: 1 })),
+    "event note: R74 S17 a released card means visibility DID change",
+  );
   ok(/waiting on Admin/.test(refreshEventNote({ refreshed: 2, notLive: 1, published: false })) && /1 approved product is not on the live menu/.test(refreshEventNote({ refreshed: 2, notLive: 1, published: false })), "event note: waiting + not live");
   ok(/still on sale/.test(refreshWithheldNote(1, true)) && !/kept off/.test(refreshWithheldNote(3, true)), "withheld note never says kept off");
   ok(/^The menu update published\. 1 product/.test(refreshWithheldNote(1, true)) && /^No menu update was needed\. 2 products/.test(refreshWithheldNote(2, false)), "withheld note: published vs nothing staged");

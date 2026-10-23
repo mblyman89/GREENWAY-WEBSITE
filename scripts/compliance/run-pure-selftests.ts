@@ -752,6 +752,7 @@ import { __runCultiveraAutoStartCoreTests } from "../../src/lib/inventory/cultiv
 import { __runCultiveraSurvivorshipCoreTests } from "../../src/lib/inventory/cultivera-survivorship-core";
 import { __runCultiveraCategoryGateCoreTests } from "../../src/lib/inventory/cultivera-category-gate-core";
 import { __runXlsxStructureCoreTests } from "../../src/lib/pos/xlsx-structure-core";
+import { __runCultiveraCategoryReleaseCoreTests } from "../../src/lib/inventory/cultivera-category-release-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
@@ -1662,11 +1663,12 @@ __runLiquidVolumeTests();
   assertRan("cultivera-survivorship-core", __runCultiveraSurvivorshipCoreTests(), 36); // R74 S14: manifest wins on name, type, cost; Cultivera on category, quantity
   assertRan("cultivera-category-gate-core", __runCultiveraCategoryGateCoreTests(), 22); // R74 S15: pick a category before finishing
   assertRan("xlsx-structure-core", __runXlsxStructureCoreTests(), 29); // R74 S16: Excel-strict workbook structure
+  assertRan("cultivera-category-release-core", __runCultiveraCategoryReleaseCoreTests(), 33); // R74 S17: a picked category-hold card goes live
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
   assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);
   assertRan("cultivera-intake-suggestion-core", __runCultiveraIntakeSuggestionCoreTests(), 58);
-  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 83); // R50 S3c: rebuilt card refresh by survivorship
+  assertRan("cultivera-card-refresh-core", __runCultiveraCardRefreshCoreTests(), 84); // R50 S3c: rebuilt card refresh by survivorship
   assertRan("cultivera-received-flag-core", __runCultiveraReceivedFlagCoreTests(), 20); // R50 S3d: the "via Cultivera" flag (list + lot page)
   assertRan("receiving-table-core", __runReceivingTableCoreTests(), 98); // R50 S10a: Receiving views (Cultivera manifests), filters, sorting
   assertRan("ccrs-migration-garbage-core", __runCcrsMigrationGarbageCoreTests(), 67); // R50 S10c (D-15): migrated garbage → CCRS clean-up; R74 S4 +14 (no received date = does not exist)

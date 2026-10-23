@@ -38,6 +38,14 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { strainSlug } from "@/lib/catalog/slug-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
+import {
+  applyCategoryHoldReleases,
+  categoryReleaseEnabled,
+  categoryReleaseNote,
+  categoryReleaseNotesSuffix,
+  CATEGORY_RELEASE_ENV,
+  RELEASE_EVENT,
+} from "@/lib/inventory/cultivera-category-release-core";
 import { archiveSupersededStaged } from "@/lib/pos/menu-version";
 import {
   WAITING_VERSION_READ_LIMIT,
@@ -294,7 +302,10 @@ export async function stageIntakeMenuVersionForManifest(
     // loses ONLY those columns and stages exactly as before.
     const COMPLIANCE_COLS =
       ", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg" +
-      ", chosen_net_volume_ml";
+      ", chosen_net_volume_ml" +
+      // R74 S17: the approval's provenance (0218) carries the "category hold
+      // picked by a person" marker; a tier without it releases nothing.
+      ", chosen_classification_provenance";
     const withCompliance = await admin
       .from("catalog_product_drafts")
       .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type" + COMPLIANCE_COLS)
@@ -344,6 +355,7 @@ export async function stageIntakeMenuVersionForManifest(
       chosen_low_thc_liquid?: boolean | null;
       chosen_unit_thc_mg?: number | string | null;
       chosen_net_volume_ml?: number | string | null;
+      chosen_classification_provenance?: unknown;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
@@ -658,6 +670,23 @@ export async function stageIntakeMenuVersionForManifest(
     // R50 S3c: what the refresh changed, from the FINAL plan (after any withhold re-plan).
     const refreshPlan = refreshMode ? refreshOfPlan(plan) : null;
 
+    // R74 S17: a card the transform held for a category goes live once a
+    // person picked its category at approval (draft marker) AND the card was
+    // rebuilt onto that shelf in THIS plan. Only hidden_reason
+    // "needs_category" is ever cleared; any other hide reason is untouched.
+    const releasePlan = refreshPlan
+      ? applyCategoryHoldReleases({
+          items: plan.items,
+          drafts,
+          rebuiltKeys: new Set([...refreshPlan.refreshed, ...refreshPlan.unchanged]),
+          enabled: categoryReleaseEnabled(process.env[CATEGORY_RELEASE_ENV]),
+        })
+      : null;
+    if (releasePlan && releasePlan.released.length > 0 && !plan.hasChanges) {
+      // Visibility is the only change (the card was already rebuilt earlier).
+      plan = { ...plan, hasChanges: true };
+    }
+
     // SLICE 62: persist the VERIFIED extraction facts on the source lots —
     // the golden record lives on inventory_lots (migration 0138 columns), so
     // COAs, audits, and future re-processing see the same facts the menu
@@ -823,6 +852,10 @@ export async function stageIntakeMenuVersionForManifest(
                   unchanged: refreshPlan.unchanged,
                   not_live: refreshPlan.notLive,
                 },
+                // R74 S17: present only when a held card was released or kept.
+                ...(releasePlan && (releasePlan.released.length > 0 || releasePlan.skipped.length > 0)
+                  ? { cultivera_category_release: { released: releasePlan.released, skipped: releasePlan.skipped } }
+                  : {}),
               }
             : {}),
         },
@@ -832,7 +865,7 @@ export async function stageIntakeMenuVersionForManifest(
             added: plan.addedCount,
             merged: plan.mergedCount,
             carried: plan.carriedCount,
-          }) + batchNotesSuffix(opts.batchCount) + refreshNotesSuffix(refreshPlan?.refreshed.length ?? 0),
+          }) + batchNotesSuffix(opts.batchCount) + refreshNotesSuffix(refreshPlan?.refreshed.length ?? 0) + categoryReleaseNotesSuffix(releasePlan?.released.length ?? 0),
         created_by: actorId,
       })
       .select("*")
@@ -953,12 +986,34 @@ export async function stageIntakeMenuVersionForManifest(
             refreshed: refreshPlan.refreshed.length,
             notLive: refreshPlan.notLive.length,
             published: publishedOk,
+            released: releasePlan?.released.length ?? 0,
           }),
           actor_id: actorId,
         });
       } catch (err) {
         console.error("[intake-menu-staging] card refresh event insert failed:", err);
       }
+    }
+
+    // R74 S17: say on the timeline which held cards went live (and which stayed hidden).
+    if (releasePlan && (releasePlan.released.length > 0 || releasePlan.skipped.length > 0)) {
+      try {
+        await admin.from("manifest_events").insert({
+          manifest_id: manifestId,
+          event_type: RELEASE_EVENT,
+          note: categoryReleaseNote({ released: releasePlan.released.length, skipped: releasePlan.skipped.length, published: publishedOk }),
+          actor_id: actorId,
+        });
+      } catch (err) {
+        console.error("[intake-menu-staging] category release event insert failed:", err);
+      }
+      await recordAudit({
+        actorId,
+        action: "cultivera_category_hold.released",
+        entityType: "menu_version",
+        entityId: version.id,
+        after: { manifest_id: manifestId, released: releasePlan.released, skipped: releasePlan.skipped, published: publishedOk },
+      });
     }
 
     return {
