@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { GmailMessage } from "@/lib/compliance/ccrs-mail-core";
 import { buildHarvestQuery, startCursor, type HarvestCursor } from "@/lib/pos/cultivera-mail-harvest-core";
-import { __runCultiveraMailHarvestRunCoreTests, mailDocsFromRows, type HarvestDocRow } from "@/lib/pos/cultivera-mail-harvest-run-core";
+import { __runCultiveraMailHarvestRunCoreTests, harvestBatchLine, mailDocsFromRows, type HarvestDocRow } from "@/lib/pos/cultivera-mail-harvest-run-core";
 import { HarvestTableMissing, runHarvestBatch, type HarvestIo } from "@/lib/pos/cultivera-mail-harvest-store";
 import { planMailMatch } from "@/lib/pos/cultivera-mail-match-core";
 
@@ -116,12 +116,12 @@ describe("R74 S7 pure core", () => {
   it("self-tests pass at the pinned count", () => {
     const r = __runCultiveraMailHarvestRunCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(49);
+    expect(r.passed).toBe(53);
   });
   it("is registered in the pure self-test runner with its floor", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
     expect(src).toContain("__runCultiveraMailHarvestRunCoreTests()");
-    expect(src).toMatch(/cultivera-mail-harvest-run-core: .*expected >= 49/);
+    expect(src).toMatch(/cultivera-mail-harvest-run-core: .*expected >= 53/);
   });
 });
 
@@ -186,11 +186,14 @@ describe("R74 S7 one batch with fake Gmail", () => {
     expect(io.opened).toEqual(["msgPdf00004"]);
     expect(last.cursorLine).toMatch(/^Finished/);
     expect((io.cursor as HarvestCursor | null)?.done).toBe(true);
-    // finished: a press does nothing
+    // finished + no new mail (R74 S18): the press checks the newest page, opens nothing, ends the pass
     io.opened.length = 0;
     const done = await runHarvestBatch(io, CFG);
     expect(done.ok).toBe(true);
     expect(io.opened).toEqual([]);
+    expect(done.newMailPass).toBe("finished");
+    expect((io.cursor as HarvestCursor | null)?.topUp ?? null).toBeNull();
+    expect(harvestBatchLine(done)).toContain("none since the last press");
   });
 
   it("a Gmail rate limit stops the batch, writes nothing for that email and keeps the cursor on the page", async () => {

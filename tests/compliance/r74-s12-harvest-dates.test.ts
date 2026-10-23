@@ -101,11 +101,11 @@ describe("readHarvestStatus dates (R74 S12)", () => {
     expect(st.emails).toBe(3);
   });
 
-  it("finished: says the whole mailbox is read and there is no need to press Harvest again", async () => {
+  it("finished: says the whole mailbox is read and a press picks up emails that arrived since (S18)", async () => {
     const st = await readHarvestStatus(fakeAdmin(ROWS, cursorAt(9, true)), MAILBOX);
     expect(st.ready && st.dates.done).toBe(true);
     if (!st.ready) return;
-    expect(st.datesLine).toContain("The whole mailbox has been read - no need to press Harvest again");
+    expect(st.datesLine).toContain("The whole mailbox has been read. Press Harvest any time to pick up emails that arrived since");
     expect(st.cursorLine).toMatch(/^Finished:/);
   });
 

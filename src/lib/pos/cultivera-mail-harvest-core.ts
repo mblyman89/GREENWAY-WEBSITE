@@ -123,6 +123,20 @@ export type HarvestCursor = {
   done: boolean;
   startedAt: string;
   updatedAt: string;
+  /**
+   * R74 S18: a "new mail" pass after the walk finished. Gmail lists NEWEST first, so emails that
+   * arrived after Finished sit on the first pages. The pass walks from the top, opens only ids not
+   * yet kept, and ends at the first page on which every id was ALREADY kept (or the last page).
+   * Absent / null = no pass running. Optional so a cursor saved before S18 still reads (no restart).
+   */
+  topUp?: TopUp | null;
+};
+
+export type TopUp = {
+  /** Gmail nextPageToken for the NEXT page of this pass; null = its first page. */
+  pageToken: string | null;
+  pagesDone: number;
+  startedAt: string;
 };
 
 export function startCursor(mailbox: string, query: string, nowIso: string): HarvestCursor {
@@ -142,6 +156,15 @@ export function parseCursor(v: unknown): HarvestCursor | null {
   if (typeof o.startedAt !== "string" || typeof o.updatedAt !== "string") return null;
   // A walk in progress past page 0 must carry the token for the next page.
   if (!o.done && (o.pagesDone as number) > 0 && o.pageToken === null) return null;
+  // R74 S18: a new-mail pass only exists on a finished walk, and must be well formed.
+  if (o.topUp !== undefined && o.topUp !== null) {
+    if (!o.done) return null;
+    const t = o.topUp as Record<string, unknown>;
+    if (typeof t !== "object" || Array.isArray(t)) return null;
+    if (!(t.pageToken === null || (typeof t.pageToken === "string" && t.pageToken !== ""))) return null;
+    if (!nonNegInt(t.pagesDone) || typeof t.startedAt !== "string") return null;
+    if ((t.pagesDone as number) > 0 && t.pageToken === null) return null;
+  }
   return o as unknown as HarvestCursor;
 }
 
@@ -161,7 +184,27 @@ export function advanceCursor(c: HarvestCursor, page: { ids: readonly string[]; 
   return { ...c, pageToken: next, pagesDone: c.pagesDone + 1, listed: c.listed + page.ids.length, done: next === null, updatedAt: nowIso };
 }
 
+/** R74 S18: the page a new-mail pass lists next (its first page when none is running). */
+export function topUpPageToken(c: HarvestCursor): string | null {
+  return c.topUp ? c.topUp.pageToken : null;
+}
+
+/**
+ * R74 S18: fold one page of a new-mail pass into a FINISHED cursor. `allKnown` = every id on the
+ * page was already kept before this press opened anything. The pass ends there (everything older
+ * was read by the walk), or on the last page. Otherwise it moves to the next page. Never touches
+ * the walk's own totals; only updatedAt (so "Last batch ran" stays true).
+ */
+export function advanceTopUp(c: HarvestCursor, page: { ids: readonly string[]; nextPageToken: string | null }, allKnown: boolean, nowIso: string): HarvestCursor {
+  if (!c.done) return c;
+  const next = page.nextPageToken && page.nextPageToken.trim() ? page.nextPageToken : null;
+  if (allKnown || next === null) return { ...c, topUp: null, updatedAt: nowIso };
+  const t = c.topUp ?? { pageToken: null, pagesDone: 0, startedAt: nowIso };
+  return { ...c, topUp: { ...t, pageToken: next, pagesDone: t.pagesDone + 1 }, updatedAt: nowIso };
+}
+
 export function cursorLine(c: HarvestCursor): string {
+  if (c.done && c.topUp) return `Finished: ${c.listed} matching emails listed in ${c.pagesDone} pages. Checking for new emails: ${c.topUp.pagesDone} page${c.topUp.pagesDone === 1 ? "" : "s"} checked so far - press again to continue.`;
   return c.done
     ? `Finished: ${c.listed} matching emails listed in ${c.pagesDone} pages.`
     : c.pagesDone === 0
@@ -330,8 +373,8 @@ export function harvestStamp(iso: string | null | undefined): string | null {
 /**
  * One line under the harvest button. Gmail lists NEWEST first, so each press
  * reaches further back in time: the oldest email kept so far is how far the
- * harvest has read. When the walk is finished it says so plainly ("no need to
- * press again"); a press after that only checks for new emails.
+ * harvest has read. When the walk is finished it says so plainly; a press after
+ * that only checks for new emails (R74 S18: it really does - see advanceTopUp).
  */
 export function harvestDatesLine(d: HarvestDates): string {
   const oldest = harvestDay(d.oldestEmailAt);
@@ -339,7 +382,7 @@ export function harvestDatesLine(d: HarvestDates): string {
   const last = harvestStamp(d.lastRunAt);
   const range = oldest && newest ? (oldest === newest ? `Emails kept are from ${oldest}.` : `Emails kept run from ${oldest} (oldest) to ${newest} (newest).`) : "No email with a date has been kept yet.";
   const ran = d.started && last ? ` Last batch ran ${last}.` : d.started ? "" : " No batch has run yet.";
-  if (d.done) return `${range}${ran} The whole mailbox has been read - no need to press Harvest again (a press now only looks for new emails).`;
+  if (d.done) return `${range}${ran} The whole mailbox has been read. Press Harvest any time to pick up emails that arrived since: it opens only new emails and stops at the first page it has already kept.`;
   if (!d.started) return `${range}${ran}`;
   return `${range}${ran} Gmail lists the newest emails first, so each press reaches further back${oldest ? ` (next: emails older than ${oldest})` : ""}. Keep pressing until it says Finished.`;
 }
@@ -457,7 +500,34 @@ export function __runCultiveraMailHarvestCoreTests(): { passed: number; failed: 
   ok(l1.startsWith("Emails kept run from Jan 5, 2023 (oldest) to Jul 3, 2024 (newest). Last batch ran Jul 4, 2024 15:00 UTC."), "in-progress range + last run");
   ok(l1.includes("newest emails first") && l1.includes("older than Jan 5, 2023") && l1.includes("until it says Finished"), "in-progress says where the next press goes");
   const l2 = harvestDatesLine({ ...base, done: true });
-  ok(l2.includes("whole mailbox has been read") && l2.includes("no need to press Harvest again"), "done says stop pressing");
+  ok(l2.includes("whole mailbox has been read") && l2.includes("pick up emails that arrived since") && l2.includes("opens only new emails"), "done says a press picks up new mail (S18)");
+  ok(!l2.includes("no need to press"), "done no longer says pressing is pointless (S18)");
+
+  // R74 S18: the new-mail pass on a finished cursor
+  {
+    const fin = advanceCursor(advanceCursor(startCursor("s@x.com", q, "t0"), { ids: ["a"], nextPageToken: "P2" }, "t1"), { ids: ["b"], nextPageToken: null }, "t2");
+    ok(fin.done && !fin.topUp && topUpPageToken(fin) === null, "a finished cursor's pass starts at the first page");
+    const t1 = advanceTopUp(fin, { ids: ["n1", "a"], nextPageToken: "Q2" }, false, "t3");
+    ok(t1.topUp?.pageToken === "Q2" && t1.topUp.pagesDone === 1 && t1.topUp.startedAt === "t3" && topUpPageToken(t1) === "Q2", "a page with new mail moves the pass on");
+    ok(t1.done && t1.listed === fin.listed && t1.pagesDone === fin.pagesDone && t1.pageToken === null, "the walk's own totals never change");
+    ok(t1.updatedAt === "t3", "the pass stamps the last run");
+    const t2 = advanceTopUp(t1, { ids: ["a", "b"], nextPageToken: "Q3" }, true, "t4");
+    ok(t2.topUp === null && t2.done && t2.updatedAt === "t4", "the first all-kept page ends the pass");
+    const t3 = advanceTopUp(t1, { ids: ["n9"], nextPageToken: null }, false, "t5");
+    ok(t3.topUp === null, "the last page ends the pass");
+    const t4 = advanceTopUp(fin, { ids: ["n1"], nextPageToken: "  " }, false, "t6");
+    ok(t4.topUp === null, "a blank token is the last page");
+    const t5 = advanceTopUp(t1, { ids: ["n2"], nextPageToken: "Q3" }, false, "t7");
+    ok(t5.topUp?.pagesDone === 2 && t5.topUp.startedAt === "t3", "a running pass keeps its start");
+    const walking = advanceCursor(startCursor("s@x.com", q, "t0"), { ids: ["a"], nextPageToken: "P2" }, "t1");
+    ok(advanceTopUp(walking, { ids: ["z"], nextPageToken: "Q" }, false, "t9") === walking, "a pass never runs on a walk still in progress");
+    ok(parseCursor(JSON.parse(JSON.stringify(t1)))?.topUp?.pageToken === "Q2", "a running pass round-trips");
+    ok(parseCursor(JSON.parse(JSON.stringify(fin)))?.done === true, "a cursor saved before S18 (no topUp) still reads");
+    ok(parseCursor({ ...walking, topUp: { pageToken: null, pagesDone: 0, startedAt: "x" } }) === null, "a pass on an unfinished walk is unreadable");
+    ok(parseCursor({ ...t1, topUp: { pageToken: null, pagesDone: 2, startedAt: "x" } }) === null, "a pass past page 0 with no token is unreadable");
+    ok(parseCursor({ ...t1, topUp: { pageToken: "Q", pagesDone: -1, startedAt: "x" } }) === null && parseCursor({ ...t1, topUp: [1] }) === null && parseCursor({ ...t1, topUp: { pageToken: "", pagesDone: 0, startedAt: "x" } }) === null, "a junk pass is unreadable");
+    ok(cursorLine(t1).includes("Checking for new emails: 1 page checked so far") && cursorLine(t2) === cursorLine(fin), "pass line, then back to Finished");
+  }
   ok(harvestDatesLine({ oldestEmailAt: null, newestEmailAt: null, lastRunAt: null, done: false, started: false }) === "No email with a date has been kept yet. No batch has run yet.", "never run");
   ok(harvestDatesLine({ ...base, newestEmailAt: base.oldestEmailAt }).startsWith("Emails kept are from Jan 5, 2023."), "single day");
 

@@ -12,6 +12,8 @@
  *      attachment as bytes, fetch each WCIA Transfer Data Link, store each file privately in
  *      pos-raw (mail-harvest/...), parse it with the site's own parsers, and insert its rows;
  *   5. move the cursor to the next page only when every email of this page has rows.
+ *   6. R74 S18: once the walk is Finished, a press runs a NEW-MAIL pass from the newest page: it
+ *      opens only emails not yet kept and ends at the first page that was already fully kept.
  *
  * THE INSERT IS THE CLAIM (AGENTS rule 12): rows go in with ON CONFLICT DO NOTHING on
  * (mailbox, gmail_id, doc_index). Two people pressing the button store each document once.
@@ -27,12 +29,14 @@ import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { walkMessage, type AttachmentRef, type GmailMessage, type MailConfig } from "@/lib/compliance/ccrs-mail-core";
 import {
   advanceCursor,
+  advanceTopUp,
   buildHarvestQuery,
   bytesMatchKind,
   cursorLine,
   harvestDatesLine,
   type HarvestDates,
   resumeOrStart,
+  topUpPageToken,
   type HarvestCursor,
 } from "@/lib/pos/cultivera-mail-harvest-core";
 import {
@@ -235,18 +239,15 @@ export async function runHarvestBatch(io: HarvestIo, cfg: Configured): Promise<H
   const { cursor: start, why } = resumeOrStart(await io.readCursor(), mailbox, query, iso());
   let cursor = start;
   const restartNote = why ? ` (Started over from the oldest page: ${why}.)` : "";
-  if (cursor.done) {
-    res.ok = true;
-    res.pageComplete = true;
-    res.cursorLine = cursorLine(cursor) + restartNote;
-    return res;
-  }
+  // R74 S18: a finished walk does not mean "do nothing". New vendor emails arrive at the TOP of the
+  // newest-first list, so the press runs a new-mail pass from the first page (see advanceTopUp).
+  const topUp = cursor.done;
 
   let token: string;
   let page: { ids: string[]; nextPageToken: string | null };
   try {
     token = await io.token();
-    page = await io.listPage(token, query, cursor.pageToken);
+    page = await io.listPage(token, query, topUp ? topUpPageToken(cursor) : cursor.pageToken);
   } catch (e) {
     res.stoppedBecause = msgOf(e);
     res.cursorLine = cursorLine(cursor) + restartNote;
@@ -290,7 +291,13 @@ export async function runHarvestBatch(io: HarvestIo, cfg: Configured): Promise<H
 
   res.deferred = unfinished;
   res.pageComplete = unfinished === 0;
-  if (res.pageComplete) {
+  if (res.pageComplete && topUp) {
+    // Every id was already kept before this press opened anything -> everything older is read: stop.
+    const allKnown = plan.fetch.length === 0 && plan.deferred === 0;
+    cursor = advanceTopUp(cursor, page, allKnown, iso());
+    await io.saveCursor(cursor);
+    res.newMailPass = cursor.topUp ? "continues" : "finished";
+  } else if (res.pageComplete) {
     cursor = advanceCursor(cursor, page, iso());
     await io.saveCursor(cursor);
   } else if (why) {
