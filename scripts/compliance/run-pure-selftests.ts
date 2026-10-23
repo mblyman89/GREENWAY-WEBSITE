@@ -939,6 +939,7 @@ import { __runCultiveraCoverageCoreTests } from "../../src/lib/pos/cultivera-cov
 import { __runCultiveraMailReadCoreTests } from "../../src/lib/pos/cultivera-mail-read-core";
 import { __runCultiveraMailReadBgCoreTests } from "../../src/lib/pos/cultivera-mail-read-bg-core";
 import { __runSprintStatusCoreTests } from "../../src/lib/ai/sprint-status-core";
+import { __runPromoFixCoreTests } from "../../src/lib/promotions/promo-fix-core";
 import { __runCultiveraMailApplyCoreTests } from "../../src/lib/pos/cultivera-mail-apply-core";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
@@ -1861,6 +1862,7 @@ __runLiquidVolumeTests();
   { const r = __runCultiveraMailReadCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`cultivera-mail-read-core: ${r.failed} failed, ${r.passed} passed (expected >= 60)`); } // R74 S9: read the kept PDFs (LlamaParse, grounded) and spreadsheets (exceljs cells)
   { const r = __runCultiveraMailReadBgCoreTests(); if (r.failed > 0 || r.passed < 43) throw new Error(`cultivera-mail-read-bg-core: ${r.failed} failed, ${r.passed} passed (expected >= 43)`); } // R74 S20: read every kept document in the background (worker, lease, self-pause)
   { const r = __runSprintStatusCoreTests(); if (r.failed > 0 || r.passed < 42) throw new Error(`sprint-status-core: ${r.failed} failed, ${r.passed} passed (expected >= 42)`); } // R74 S21: Gemini sprint status indicator on Product Onboarding
+  { const r = __runPromoFixCoreTests(); if (r.failed > 0 || r.passed < 31) throw new Error(`promo-fix-core: ${r.failed} failed, ${r.passed} passed (expected >= 31)`); } // R74 S22: publish guard skips hidden + never-discount; hide blockers from the promotion page
   { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());

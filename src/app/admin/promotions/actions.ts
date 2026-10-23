@@ -51,6 +51,17 @@ import {
 import { guardPromotionPublish, auditPublishedPromotions } from "@/lib/promotions/promo-guard";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import {
+  pickProductsToHide,
+  promoHideReason,
+  hideOutcomeMessage,
+  type BlockerRef,
+  type HideOutcome,
+} from "@/lib/promotions/promo-fix-core";
+import { applyProductVisibility } from "@/lib/enrichment/product-visibility-store";
+import { ensureEnrichment, updateEnrichment } from "@/lib/enrichment/store";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { can } from "@/lib/auth/roles";
+import {
   generatePromotionsAdvice,
   isAiConfigured as isAdvisorAiConfigured,
   type PromotionsAdvice,
@@ -538,7 +549,7 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
         });
         redirect(
           `/admin/promotions/${id}?error=${encodeURIComponent(
-            `Publish blocked — ${hits.length} product${hits.length === 1 ? "" : "s"} would be discounted below acquisition cost (CCRS): ${sample}${more}. Raise the price, soften the discount, or exclude the product.`,
+            `Publish blocked — ${hits.length} product${hits.length === 1 ? "" : "s"} would be discounted below acquisition cost (CCRS): ${sample}${more}. Hide it from the menu (CCRS cost-floor check, right side), raise the price, soften the discount, or exclude the product.`,
           )}`,
         );
       }
@@ -564,6 +575,109 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
   // publish/unpublish must refresh every route that renders the layout.
   revalidatePath("/", "layout");
   redirect(`/admin/promotions/${id}?status=${status}`);
+}
+
+/**
+ * R74 S22 (owner round 11): "I need a way to hide these items from the menu so
+ * I can publish the promotion right away."
+ *
+ * Hide one blocking product (form field `key`, repeatable) or every product
+ * blocking THIS promotion right now (`all=1`). The blockers are re-checked
+ * here at press time (pickProductsToHide): a stale page or a hand-made form
+ * can never hide a product that is not blocking this promotion.
+ *
+ * Each hide reuses the product page's Visibility write (applyProductVisibility
+ * "hide": the published menu and every staged draft, reversible with
+ * "Inherit POS") and also sets the product page's Visibility to "Always hide",
+ * so saving that page later cannot quietly undo it. Audited per product
+ * (product.visibility_changed, same as the product page) and once for the
+ * press (promotion.blockers_hidden). Hiding needs products.enrich as well.
+ */
+export async function hidePromotionBlockersAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("promotions.manage");
+  const id = str(formData, "id");
+  if (!id) redirect("/admin/promotions");
+  const back = (tone: "ok" | "error", text: string) =>
+    redirect(`/admin/promotions/${id}?fixTone=${tone}&fix=${encodeURIComponent(text)}#cost-floor`);
+
+  if (!can(session.profile.role, "products.enrich")) {
+    back("error", "Nothing was hidden: hiding a product from the menu needs the Enrich products permission.");
+  }
+  const promo = await getPromotion(id);
+  if (!promo) redirect("/admin/promotions");
+
+  const guard = await guardPromotionPublish(promo);
+  const blockers: BlockerRef[] = guard.findings
+    .filter((f) => f.reason === "below_cost")
+    .map((f) => ({ key: f.key, name: f.name }));
+  const requested =
+    str(formData, "all") === "1" ? ("all" as const) : formData.getAll("key").map((k) => String(k));
+  const pick = pickProductsToHide(requested, blockers);
+  if (!pick.ok) back("error", pick.error);
+  const picks = pick.ok ? pick.picks : [];
+
+  const outcome: HideOutcome = { hidden: [], alreadyHidden: [], failed: [], stillBlocking: 0 };
+  const reason = promoHideReason(promo.title);
+  for (const ref of picks) {
+    const res = await applyProductVisibility(ref.key, "hide");
+    if (!res.ok) {
+      outcome.failed.push({ ref, error: res.error });
+      continue;
+    }
+    if (res.changed.length === 0) {
+      outcome.alreadyHidden.push(ref);
+    } else {
+      outcome.hidden.push(ref);
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "product.visibility_changed",
+        entityType: "product",
+        entityId: ref.key,
+        before: { rows: res.changed.map((r) => ({ versionId: r.versionId, versionStatus: r.versionStatus, ...r.before })) },
+        after: {
+          choice: "hide",
+          source: "promotion_page",
+          promotionId: id,
+          rows: res.changed.map((r) => ({ versionId: r.versionId, versionStatus: r.versionStatus, ...r.after })),
+        },
+      });
+    }
+    // Keep the product page's Visibility in step, so saving it never un-hides.
+    try {
+      await ensureEnrichment(ref.key, { name: ref.name }, session.userId);
+      await updateEnrichment(ref.key, { hidden_override: true, hidden_reason: reason }, session.userId);
+    } catch (e) {
+      outcome.failed.push({
+        ref,
+        error: `hidden on the menu, but its product page still says Inherit POS (${e instanceof Error ? e.message : String(e)}); set Visibility to Always hide there`,
+      });
+    }
+  }
+
+  if (outcome.hidden.length > 0) revalidatePublicMenuSurfaces();
+  const after = await guardPromotionPublish(promo);
+  outcome.stillBlocking = after.findings.filter((f) => f.reason === "below_cost").length;
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "promotion.blockers_hidden",
+    entityType: "promotion",
+    entityId: id,
+    after: {
+      requested: requested === "all" ? "all" : requested.length,
+      hidden: outcome.hidden.map((r) => r.key),
+      alreadyHidden: outcome.alreadyHidden.map((r) => r.key),
+      failed: outcome.failed.map((f) => ({ key: f.ref.key, error: f.error })),
+      stillBlocking: outcome.stillBlocking,
+    },
+  });
+  revalidatePath("/admin/promotions");
+  revalidatePath(`/admin/promotions/${id}`);
+  revalidatePath("/admin/products");
+  const msg = hideOutcomeMessage(outcome);
+  back(msg.tone, msg.text);
 }
 
 export async function deletePromotionAction(formData: FormData): Promise<void> {

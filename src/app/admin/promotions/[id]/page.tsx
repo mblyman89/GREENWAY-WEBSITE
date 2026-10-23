@@ -17,11 +17,13 @@ import {
   updatePromotionAction,
   setPromotionStatusAction,
   deletePromotionAction,
+  hidePromotionBlockersAction,
 } from "../actions";
 import type { PostStatus } from "@/lib/promotions/types";
 import { isAiConfigured } from "@/lib/promotions/ai-copy";
 import { guardPromotionPublish } from "@/lib/promotions/promo-guard";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
+import { guardSkipNote, MAX_HIDE_PER_PRESS } from "@/lib/promotions/promo-fix-core";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +43,11 @@ export default async function EditPromotionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; status?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; status?: string; fix?: string; fixTone?: string }>;
 }) {
   await requirePermission("promotions.manage");
   const { id } = await params;
-  const { error, saved, status } = await searchParams;
+  const { error, saved, status, fix, fixTone } = await searchParams;
 
   const promotion = await getPromotion(id);
   if (!promotion) notFound();
@@ -60,6 +62,8 @@ export default async function EditPromotionPage({
   const guardBelowCost = guard.findings.filter((f) => f.reason === "below_cost");
   const guardCostUnknown = guard.findings.filter((f) => f.reason === "cost_unknown");
   const guardRegularBelow = guard.findings.filter((f) => f.reason === "regular_below_cost");
+  // R74 S22: what the guard left out (hidden cards, never-discount products).
+  const guardSkipped = guardSkipNote(guard.hiddenSkipped, guard.neverSkipped);
 
   // Pick a representative product (or a sensible default) for the live badge preview.
   const sample = affected[0] ?? null;
@@ -75,6 +79,18 @@ export default async function EditPromotionPage({
         {error && (
           <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300">
             {error}
+          </div>
+        )}
+        {fix && (
+          <div
+            data-testid="promo-fix-banner"
+            className={`mb-4 rounded-lg border px-4 py-2 text-sm ${
+              fixTone === "error"
+                ? "border-red-500/40 bg-red-500/10 text-red-300"
+                : "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]"
+            }`}
+          >
+            {fix}
           </div>
         )}
         {saved && (
@@ -134,6 +150,7 @@ export default async function EditPromotionPage({
 
             {/* CCRS cost-floor pre-publish check */}
             <div
+              id="cost-floor"
               className={`rounded-xl border p-4 ${
                 guard.blocked
                   ? "border-[#ff6b6b]/40 bg-[#ff6b6b]/10"
@@ -155,17 +172,47 @@ export default async function EditPromotionPage({
                     acquisition in the worst case. Soften the discount, raise the price, or exclude
                     the product.
                   </p>
-                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
-                    {guardBelowCost.slice(0, 10).map((f) => (
-                      <li key={f.key} className="text-xs text-[#ffb0b0]/90">
-                        <span className="text-white/80">{f.name}</span> — worst case{" "}
-                        {formatMoneyMinor(f.worstCasePriceMinorUnits)} &lt; floor{" "}
-                        {formatMoneyMinor(f.floorMinorUnits)}
+                  <p className="mt-2 text-xs text-white/60">
+                    Bad apple from the import? Hide it from the menu: a hidden product is not sold
+                    on the website or the register, so it cannot break this deal, and Publish
+                    works right away. Undo any time on the product page (Visibility: Inherit POS).
+                  </p>
+                  <form action={hidePromotionBlockersAction} className="mt-2">
+                    <input type="hidden" name="id" value={promotion.id} />
+                    <input type="hidden" name="all" value="1" />
+                    <Button type="submit" variant="danger" size="sm" fullWidth data-testid="promo-hide-all">
+                      Hide {Math.min(guardBelowCost.length, MAX_HIDE_PER_PRESS) === 1 ? "this product" : `all ${Math.min(guardBelowCost.length, MAX_HIDE_PER_PRESS)} products`} from the menu
+                    </Button>
+                  </form>
+                  <ul className="mt-2 max-h-72 space-y-1.5 overflow-y-auto" data-testid="promo-blockers">
+                    {guardBelowCost.slice(0, 50).map((f) => (
+                      <li key={f.key} className="rounded-md bg-black/30 px-2 py-1.5 text-xs text-[#ffb0b0]/90">
+                        <div>
+                          <a
+                            href={`/admin/products/${encodeURIComponent(f.key)}`}
+                            className="text-white/80 underline decoration-white/20 hover:decoration-white/60"
+                          >
+                            {f.name}
+                          </a>{" "}
+                          — price {formatMoneyMinor(f.priceMinorUnits)}, worst case{" "}
+                          {formatMoneyMinor(f.worstCasePriceMinorUnits)} {"<"} floor{" "}
+                          {formatMoneyMinor(f.floorMinorUnits)}
+                        </div>
+                        <form action={hidePromotionBlockersAction} className="mt-1">
+                          <input type="hidden" name="id" value={promotion.id} />
+                          <input type="hidden" name="key" value={f.key} />
+                          <button
+                            type="submit"
+                            className="rounded border border-[#ff6b6b]/40 px-2 py-0.5 text-[11px] text-[#ffb0b0] hover:bg-[#ff6b6b]/15"
+                          >
+                            Hide from menu
+                          </button>
+                        </form>
                       </li>
                     ))}
-                    {guardBelowCost.length > 10 && (
+                    {guardBelowCost.length > 50 && (
                       <li className="text-xs text-[#ffb0b0]/60">
-                        …and {guardBelowCost.length - 10} more.
+                        …and {guardBelowCost.length - 50} more (Hide all covers up to {MAX_HIDE_PER_PRESS} per press).
                       </li>
                     )}
                   </ul>
@@ -175,6 +222,11 @@ export default async function EditPromotionPage({
                   Worst case checked against {guard.affectedCount} affected product
                   {guard.affectedCount === 1 ? "" : "s"}: no price can fall below its acquisition
                   cost. The register also clamps every ticket at the floor (defense in depth).
+                </p>
+              )}
+              {guardSkipped && (
+                <p data-testid="promo-guard-skipped" className="mt-2 text-xs text-white/50">
+                  {guardSkipped}
                 </p>
               )}
               {(guardCostUnknown.length > 0 || guardRegularBelow.length > 0) && (
