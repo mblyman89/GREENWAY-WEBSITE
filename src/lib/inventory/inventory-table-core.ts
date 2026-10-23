@@ -31,6 +31,7 @@ import { lotThcValue, lotCbdValue, lotMinorValue, lotPotencySource } from "@/lib
 import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
 import { lotWebsiteCategoryOf, websiteCategorySourceLabel, type FilterableLot } from "@/lib/inventory/inventory-filter-core";
 import { receivedOnSourceLabel } from "@/lib/inventory/received-date-core";
+import { lotAcidFigures, shelfPriceSourceLabel } from "@/lib/inventory/lot-live-price-core";
 import { columnSortDef } from "@/lib/inventory/inventory-sort-core";
 import { paramsFrom, INVENTORY_DISPLAY_PARAMS, type RawParams } from "@/lib/inventory/inventory-url-core";
 
@@ -58,8 +59,16 @@ export type TableLot = FilterableLot & {
   disposition?: string | null;
   reject_reason?: string | null;
   created_at?: string | null;
+  /** R74 S24: the lot page's extra figures (lot-live-price-core). */
+  pos_thca?: number | null;
+  pos_cbda?: number | null;
+  shelf_price_ambiguous?: boolean;
+  shelf_pre_tax_minor?: number | null;
+  shelf_floor_minor?: number | null;
   lab: (FilterableLot["lab"] & {
     id?: string;
+    thca_pct?: number | null;
+    cbda_pct?: number | null;
     tested_on?: string | null;
     labtest_external_identifier?: string | null;
     total_cannabinoids_pct?: number | null;
@@ -220,6 +229,15 @@ export function packFactLines(lot: TableLot): string[] {
 
 const m = (l: TableLot) => l.inv_metrics;
 
+/** R74 S24: the price the table shows (shelf price when joined, else onboarding). */
+export function shelfPriceOf(l: Pick<TableLot, "shelf_price_minor" | "onboarding_price_minor">): number | null {
+  return ("shelf_price_minor" in l ? l.shelf_price_minor : l.onboarding_price_minor) ?? null;
+}
+/** R74 S24: the margin on the price shown. */
+export function shelfMarginOf(l: Pick<TableLot, "shelf_margin_pct" | "onboarding_margin_pct">): number | null {
+  return ("shelf_margin_pct" in l ? l.shelf_margin_pct : l.onboarding_margin_pct) ?? null;
+}
+
 /**
  * THE REGISTRY. Order = on-screen order = export order. Append-only ids.
  * The first column (product) is always shown and frozen on screen.
@@ -297,6 +315,15 @@ export const INVENTORY_TABLE_COLUMNS: readonly TableColumn[] = [
   {
     id: "cbd", label: "CBD", group: "Lab & potency", align: "right", sortKey: "cbd",
     fields: [{ key: "cbd", header: "CBD", type: "number", meaning: "CBD figure (same rules and unit as THC).", get: (l) => lotCbdValue(l) }],
+  },
+  {
+    // R74 S24: the lot page shows THCA and CBDA (COA, else Cultivera export).
+    id: "acids", label: "THCA · CBDA", group: "Lab & potency", align: "right", sortKey: "thca",
+    fields: [
+      { key: "thca", header: "THCA", type: "number", meaning: "THCA: the COA's percent first, else the Cultivera export's figure (as on the lot page).", get: (l) => lotAcidFigures(l).thca },
+      { key: "cbda", header: "CBDA", type: "number", meaning: "CBDA (same rule as THCA).", get: (l) => lotAcidFigures(l).cbda },
+      { key: "acid_source", header: "THCA/CBDA source", type: "text", meaning: "Where THCA/CBDA came from (COA or POS export).", get: (l) => { const s = lotAcidFigures(l).source; return s === "coa" ? "COA" : s === "pos" ? "POS export" : null; } },
+    ],
   },
   {
     id: "cbg", label: "CBG", group: "Lab & potency", align: "right", sortKey: "cbg",
@@ -392,15 +419,20 @@ export const INVENTORY_TABLE_COLUMNS: readonly TableColumn[] = [
   },
   {
     id: "price", label: "Price", group: "Money", align: "right", sortKey: "price",
-    fields: [{ key: "price", header: "Price (tax incl.)", type: "currency", meaning: "Shelf price approved at Product Onboarding, tax included.", get: (l) => numOrNull(l.onboarding_price_minor) }],
+    fields: [
+      { key: "price", header: "Price (tax incl.)", type: "currency", meaning: "Out-the-door price, tax included: the live menu price the lot page shows, else the price approved at Product Onboarding.", get: (l) => numOrNull(shelfPriceOf(l)) },
+      { key: "price_source", header: "Price source", type: "text", meaning: "Where the price came from (live menu, or onboarding when the lot is not on the menu or its card has several sizes).", get: (l) => shelfPriceSourceLabel({ source: (l.shelf_price_source as "menu" | "onboarding" | null | undefined) ?? (numOrNull(l.onboarding_price_minor) != null ? "onboarding" : null), ambiguous: l.shelf_price_ambiguous === true }) },
+      { key: "price_pre_tax", header: "Pre-tax base", type: "currency", meaning: "Price with tax backed out (as on the lot page).", get: (l) => numOrNull(l.shelf_pre_tax_minor) },
+      { key: "price_floor", header: "Legal floor (cost + tax)", type: "currency", meaning: "Lowest legal out-the-door price: ceil(unit cost x tax divisor), as on the lot page.", get: (l) => numOrNull(l.shelf_floor_minor) },
+    ],
   },
   {
     id: "margin", label: "Margin", group: "Money", align: "right", sortKey: "margin",
-    fields: [{ key: "margin_pct", header: "Margin %", type: "number", meaning: "Pre-tax margin on the approved price.", get: (l) => numOrNull(l.onboarding_margin_pct) }],
+    fields: [{ key: "margin_pct", header: "Margin %", type: "number", meaning: "Pre-tax margin on the price shown (live menu, else onboarding).", get: (l) => numOrNull(shelfMarginOf(l)) }],
   },
   {
     id: "extretail", label: "Ext. retail", group: "Money", align: "right", sortKey: "extretail",
-    fields: [{ key: "ext_retail", header: "Ext. retail", type: "currency", meaning: "On hand × approved shelf price (tax incl.).", get: (l) => m(l)?.extRetailMinor ?? null }],
+    fields: [{ key: "ext_retail", header: "Ext. retail", type: "currency", meaning: "On hand × the price shown (tax incl.).", get: (l) => m(l)?.extRetailMinor ?? null }],
   },
   {
     id: "shelf", label: "Website category", group: "Menu & onboarding", align: "left", sortKey: "shelf",
@@ -486,7 +518,7 @@ export const COLUMN_PRESETS: readonly ColumnPreset[] = [
   },
   { key: "stock", label: "Stock & velocity", ids: ["product", "vendor", "type", "size", "received", "age", "onhand", "sold", "sellthrough", "velocity", "supply", "abc", "counted", "expires", "status"] },
   { key: "money", label: "Cost & margin", ids: ["product", "vendor", "type", "onhand", "cost", "extcost", "price", "margin", "extretail", "sellthrough", "abc", "status"] },
-  { key: "lab", label: "Lab & potency", ids: ["product", "vendor", "type", "strain", "strainType", "coa", "thc", "cbd", "cbg", "cbn", "cbc", "lab", "coaexp", "pack", "status"] },
+  { key: "lab", label: "Lab & potency", ids: ["product", "vendor", "type", "strain", "strainType", "coa", "thc", "cbd", "acids", "cbg", "cbn", "cbc", "lab", "coaexp", "pack", "status"] },
   { key: "compliance", label: "Compliance & audit", ids: ["product", "ids", "vendor", "type", "received", "onhand", "expires", "compliance", "disposition", "counted", "notes", "updated", "status"] },
 ];
 

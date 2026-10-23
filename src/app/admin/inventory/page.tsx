@@ -74,6 +74,9 @@ import { loadLotOnboardingIndex } from "@/lib/inventory/lot-onboarding-server";
 import { attachLotOnboarding, fmtLotMoney, fmtLotMargin } from "@/lib/inventory/lot-onboarding-core";
 // R38 S1: the effective website category (any source), joined onto every lot.
 import { attachLotWebsiteCategories } from "@/lib/inventory/lot-website-category-server";
+import { loadLotLivePrices } from "@/lib/inventory/lot-live-price-server";
+import { attachLotParity, lotAcidFigures, shelfPriceSourceLabel } from "@/lib/inventory/lot-live-price-core";
+import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
 
 export const dynamic = "force-dynamic";
 
@@ -284,7 +287,15 @@ export default async function InventoryPage({
   // was never hand-picked at onboarding. Resolve the category the WEBSITE uses
   // for every lot (override > live menu > onboarding pick > type map > product
   // name), with its source, so the column, its filter and its sort all agree.
-  const categorized = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
+  const categorizedRaw = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
+  // R74 S24 (owner round 11): "the table does not show all of the data in the
+  // columns even though it exists in the detail ... the price column". The lot
+  // page shows the LIVE menu price of the lot's own variant and the compliance
+  // flags from the MENU row; the table now reads the same two sources (one
+  // bulk read each), so Price, Margin, Ext. retail and Compliance match it.
+  const lotKeys = categorizedRaw.lots.map((l) => l.pos_product_key);
+  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotKeys), getMenuClassificationFlags(lotKeys)]);
+  const categorized = attachLotParity(categorizedRaw, livePrices.index, menuFlags);
   // R38 S2: derived metrics (age, sell-through, velocity, days of supply,
   // extended cost/retail, ABC, on-menu) computed ONCE per lot, so the cells,
   // the sorts, the totals footer and the export all read the same number.
@@ -740,6 +751,16 @@ export default async function InventoryPage({
           </div>
         )}
 
+        {!livePrices.complete && (
+          <div
+            data-testid="inventory-live-price-incomplete"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-2.5 text-xs text-[var(--admin-gold)]"
+          >
+            The live menu prices could not be fully loaded, so the Price, Margin and Ext. retail columns show the
+            onboarding price (or &ldquo;&mdash;&rdquo;) instead of the price on each lot&apos;s page. Reload the page to try again.
+          </div>
+        )}
+
         {!categorized.complete && (
           <div
             data-testid="inventory-website-category-incomplete"
@@ -786,6 +807,8 @@ export default async function InventoryPage({
                   {show("thc") && <SortableHeader columnKey="thc" label="THC" raw={sp as RawParams} align="right" />}
                   {/* R15a: CBD / CBN / CBC beside THC. COA first, else the Cultivera export. */}
                   {show("cbd") && <SortableHeader columnKey="cbd" label="CBD" raw={sp as RawParams} align="right" />}
+                  {/* R74 S24: THCA / CBDA, as on the lot page (COA, else Cultivera export). */}
+                  {show("acids") && <SortableHeader columnKey="thca" label="THCA · CBDA" raw={sp as RawParams} align="right" />}
                   {/* R29: CBG joins CBN / CBC (verified package mg, minor_cannabinoids_json). */}
                   {show("cbg") && <SortableHeader columnKey="cbg" label="CBG" raw={sp as RawParams} align="right" />}
                   {show("cbn") && <SortableHeader columnKey="cbn" label="CBN" raw={sp as RawParams} align="right" />}
@@ -935,6 +958,17 @@ export default async function InventoryPage({
                         </td>
                       )}
                       {show("cbd") && <td className={`${td} text-right text-[var(--admin-text-muted)]`}>{lotPotencyLabel(lotCbdValue(l), l)}</td>}
+                      {show("acids") && (() => {
+                        const acids = lotAcidFigures(t);
+                        const fmt = (v: number | null) => (v == null ? "\u2014" : acids.source === "coa" ? `${v}%` : lotPotencyLabel(v, l));
+                        return (
+                          <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} data-testid="inventory-acids">
+                            <div title="THCA">{fmt(acids.thca)}</div>
+                            <div className={sub} title="CBDA">{fmt(acids.cbda)}</div>
+                            {acids.source && <div className={sub}>{acids.source === "coa" ? "COA" : "Cultivera export"}</div>}
+                          </td>
+                        );
+                      })()}
                       {show("cbg") && (
                         <td className={`${td} text-right text-[var(--admin-text-muted)]`}>
                           {lotMinorValue(l, "cbg") == null ? "\u2014" : `${lotMinorValue(l, "cbg")} mg`}
@@ -1070,20 +1104,30 @@ export default async function InventoryPage({
                         </td>
                       )}
                       {show("price") && (
-                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title={l.onboarding_price_minor != null ? "Shelf price approved at Product Onboarding (tax included)" : undefined}>
-                          {fmtLotMoney(l.onboarding_price_minor)}
+                        <td
+                          className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`}
+                          data-testid="inventory-price"
+                          title={l.shelf_price_source === "menu" ? "Live menu price of this lot's variant, tax included (same as the lot page)" : l.shelf_price_source === "onboarding" ? "Shelf price approved at Product Onboarding (tax included)" : undefined}
+                        >
+                          {fmtLotMoney(l.shelf_price_minor)}
+                          {shelfPriceSourceLabel({ source: l.shelf_price_source, ambiguous: l.shelf_price_ambiguous }) && (
+                            <div className={sub} data-testid="inventory-price-source">
+                              {shelfPriceSourceLabel({ source: l.shelf_price_source, ambiguous: l.shelf_price_ambiguous })}
+                            </div>
+                          )}
+                          {l.shelf_floor_minor != null && <div className={sub}>floor {fmtLotMoney(l.shelf_floor_minor)}</div>}
                         </td>
                       )}
                       {show("margin") && (
                         <td
-                          className={`${td} text-right ${l.onboarding_margin_pct != null && l.onboarding_margin_pct < 0 ? "font-semibold text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
-                          title={l.onboarding_margin_pct != null ? "Pre-tax margin: (price before tax − unit cost) ÷ price before tax" : "Needs both an approved price and a unit cost"}
+                          className={`${td} text-right ${l.shelf_margin_pct != null && l.shelf_margin_pct < 0 ? "font-semibold text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
+                          title={l.shelf_margin_pct != null ? "Pre-tax margin: (price before tax − unit cost) ÷ price before tax" : "Needs both a price and a unit cost"}
                         >
-                          {fmtLotMargin(l.onboarding_margin_pct)}
+                          {fmtLotMargin(l.shelf_margin_pct)}
                         </td>
                       )}
                       {show("extretail") && (
-                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title="On hand × approved shelf price (tax included)">
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title="On hand × the price shown (tax included)">
                           {m.extRetailMinor == null ? "\u2014" : fmtMoney(m.extRetailMinor)}
                         </td>
                       )}

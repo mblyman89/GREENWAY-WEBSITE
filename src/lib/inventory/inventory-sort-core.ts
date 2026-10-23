@@ -43,6 +43,7 @@ import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
 import { lotThcValue, lotCbdValue, lotMinorValue } from "@/lib/pos/lot-potency-core";
 import { lotTypeLabel, lotStrainTypeLabel } from "@/lib/inventory/lot-table-core";
 import { lotWebsiteCategoryOf, type FilterableLot } from "@/lib/inventory/inventory-filter-core";
+import { lotAcidFigures } from "@/lib/inventory/lot-live-price-core";
 
 export type SortDirection = "asc" | "desc";
 
@@ -136,8 +137,8 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
   { key: "expires", label: "Expires", kind: "date", firstClick: "asc", date: (l) => l.expires_on },
   { key: "status", label: "Status", kind: "text", firstClick: "asc", text: (l) => l.status },
   // R32 (T-328): onboarding columns (append only — URL contract).
-  { key: "price", label: "Price", kind: "number", firstClick: "desc", number: (l) => l.onboarding_price_minor ?? null },
-  { key: "margin", label: "Margin", kind: "number", firstClick: "desc", number: (l) => l.onboarding_margin_pct ?? null },
+  { key: "price", label: "Price", kind: "number", firstClick: "desc", number: (l) => ("shelf_price_minor" in l ? l.shelf_price_minor : l.onboarding_price_minor) ?? null },
+  { key: "margin", label: "Margin", kind: "number", firstClick: "desc", number: (l) => ("shelf_margin_pct" in l ? l.shelf_margin_pct : l.onboarding_margin_pct) ?? null },
   { key: "shelf", label: "Website category", kind: "text", firstClick: "asc", text: (l) => lotWebsiteCategoryOf(l) },
   { key: "onboarded", label: "Onboarded", kind: "date", firstClick: "desc", date: (l) => l.onboarded_on ?? null },
   // R38 S2: enterprise columns (append only \u2014 URL contract). Each reads the
@@ -154,6 +155,8 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
   { key: "coaexp", label: "COA expires in", kind: "number", firstClick: "asc", number: (l) => l.inv_metrics?.coaDaysToExpiry ?? null },
   { key: "counted", label: "Last counted", kind: "date", firstClick: "asc", date: (l) => l.last_counted_at ?? null },
   { key: "updated", label: "Updated", kind: "date", firstClick: "desc", date: (l) => l.updated_at ?? null },
+  // R74 S24: THCA (the lot page's lab / Cultivera row). Append only.
+  { key: "thca", label: "THCA", kind: "number", firstClick: "desc", number: (l) => lotAcidFigures(l as Parameters<typeof lotAcidFigures>[0]).thca },
 ];
 
 export function columnSortDef(key: string | undefined | null): ColumnSortDef | undefined {

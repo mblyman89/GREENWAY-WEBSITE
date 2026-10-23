@@ -58,6 +58,8 @@ export type MetricsLot = {
   expires_on?: string | null;
   pos_product_key?: string | null;
   onboarding_price_minor?: number | null;
+  /** R74 S24: the price the table shows (live menu, else onboarding). Wins when present. */
+  shelf_price_minor?: number | null;
   lab?: { coa_expire_date?: string | null } | null;
 };
 
@@ -102,7 +104,9 @@ export function computeInventoryMetrics(lot: MetricsLot, ctx: MetricsContext): I
   const received = Math.max(0, num(lot.received_qty) ?? 0);
   const sold = Math.max(0, received - onHand);
   const cost = num(lot.unit_cost_minor_units);
-  const price = num(lot.onboarding_price_minor);
+  // R74 S24: the shelf price (lot page's live price, else onboarding) when the
+  // page joined it; older callers keep the onboarding price.
+  const price = num("shelf_price_minor" in lot ? lot.shelf_price_minor : lot.onboarding_price_minor);
 
   const age = signedDays(lot.received_on, ctx.today);
   const ageDays = age == null ? null : Math.max(0, age);

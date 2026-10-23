@@ -73,8 +73,15 @@ export async function GET(request: Request) {
   );
 
   const data = await loadInventoryTableLots();
-  if (!data.onboardingComplete || !data.categoriesComplete) {
-    const what = [!data.onboardingComplete && "onboarding decisions", !data.categoriesComplete && "website categories"]
+  // R74 S24: live menu prices are part of the file too (pricesComplete is
+  // absent only in older test doubles, which never had the join).
+  const pricesComplete = data.pricesComplete !== false;
+  if (!data.onboardingComplete || !data.categoriesComplete || !pricesComplete) {
+    const what = [
+      !data.onboardingComplete && "onboarding decisions",
+      !data.categoriesComplete && "website categories",
+      !pricesComplete && "live menu prices",
+    ]
       .filter(Boolean)
       .join(" and ");
     return new Response(
