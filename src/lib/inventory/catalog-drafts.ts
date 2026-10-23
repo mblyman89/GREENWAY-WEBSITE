@@ -131,6 +131,7 @@ import { CARD_REFRESH_ENV, refreshStagingForKind } from "@/lib/inventory/cultive
 // R74 S15: a card held for a category needs a person's pick at approval.
 import { categoryGate, type CategoryHoldRead } from "@/lib/inventory/cultivera-category-gate-core";
 import { loadPublishedCategoryHoldKeys } from "@/lib/inventory/cultivera-category-gate";
+import { categoryHoldPickProvenance } from "@/lib/inventory/cultivera-category-release-core";
 // SLICE 18F: the onboarding memory. This module only SUPPLIES rows to it.
 import {
   recallClassification,
@@ -1285,6 +1286,10 @@ export async function approveDraftWithPrice(
   // approval is refused - we cannot tell which rules apply (fail closed).
   let reonboarding = false;
   let refreshesCard = false;
+  // R74 S17: true when the S15 gate saw a category hold on this product and
+  // passed it with a person's pick in THIS submission. Marked on the draft's
+  // provenance so the card refresh may un-hide that one card.
+  let heldPickedNow = false;
   let recordedPrice: number | null = priceMinor;
   if (row?.manifest_id) {
     const { data: kindRow, error: kindErr } = await admin
@@ -1330,6 +1335,7 @@ export async function approveDraftWithPrice(
     if (!hold.ok) {
       return { ok: false, error: hold.error };
     }
+    heldPickedNow = holdRead.ok && holdRead.held;
     const plan = reonboardApproval(live);
     recordedPrice = plan.priceMinor; // null = no single live price; nothing recorded
     // A batch caller's skipStaging is always kept (it stages once itself).
@@ -1578,7 +1584,7 @@ export async function approveDraftWithPrice(
       };
     }
   }
-  classificationProvenance = { ...classificationProvenance, ...onboardingProvenance };
+  classificationProvenance = { ...classificationProvenance, ...onboardingProvenance, ...categoryHoldPickProvenance(heldPickedNow) };
   update.chosen_classification_provenance = classificationProvenance;
   if (compliance.unitsPerPackage !== null) update.chosen_units_per_package = compliance.unitsPerPackage;
   // The low-THC pair stays absent when unanswered - here silence is safe (the

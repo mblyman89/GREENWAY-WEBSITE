@@ -170,6 +170,8 @@ describe("A. approval of a card held for a category", () => {
     expect(row(D_HELD).status).toBe("approved");
     expect(row(D_HELD).chosen_website_category).toBe("edible-solid");
     expect(row(D_HELD).price_minor_units).toBe(1500);
+    // R74 S17: the gate's own read marks the pick so the next rebuild may release the hold.
+    expect((row(D_HELD).chosen_classification_provenance as Record<string, unknown>)?.categoryHold).toBe("human");
   });
 
   it("a pick outside our categories is still refused by the vocabulary check", async () => {
@@ -184,6 +186,8 @@ describe("A. approval of a card held for a category", () => {
     expect(res).toEqual({ ok: true });
     expect(row(D_FREE).status).toBe("approved");
     expect(row(D_FREE).chosen_website_category ?? null).toBeNull();
+    // R74 S17: a card that was not held never carries the release marker.
+    expect((row(D_FREE).chosen_classification_provenance as Record<string, unknown> | null)?.categoryHold).toBeUndefined();
   });
 
   it("a remembered pick for the same product does not satisfy the hold", async () => {
