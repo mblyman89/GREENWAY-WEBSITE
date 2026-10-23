@@ -58,6 +58,8 @@ import {
   approvedRowCopy,
 } from "@/lib/catalog/approved-row-core";
 import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lookup-ai";
+import { loadSprintStatus } from "@/lib/ai/sprint-status";
+import { GeminiSprintStatus } from "@/components/admin/catalog/GeminiSprintStatus";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { loadCultiveraManifestSection, loadRebuiltManifestIds } from "@/lib/inventory/cultivera-onboarding";
 import { loadCultiveraVendors, loadVendorMastering } from "@/lib/inventory/cultivera-vendor";
@@ -801,6 +803,9 @@ export default async function CatalogDraftsPage({
 
         {/* W4: one plain-English next action for the tab you're on. */}
         <WhatDoIDoHere action={draftsWhatDoIDoHere(view, counts)} />
+
+        {/* R74 S21: is Gemini sprint set correctly? (Vercel values only; keys never shown.) */}
+        <GeminiSprintStatus status={loadSprintStatus()} />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Needs review" value={counts.draft} accent={counts.draft > 0 ? "gold" : "muted"} href="/admin/inventory/drafts?status=draft" />
