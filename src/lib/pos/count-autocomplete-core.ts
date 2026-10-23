@@ -70,29 +70,25 @@ export function prefixBarcodes(codes: Iterable<string>): { prefix: string; longe
 /**
  * Re-play Excel's AutoComplete rules over one column, top to bottom.
  *
- * @param column  cell values in row order (already trimmed/normalized); "" = blank.
- * @param known   every barcode Excel could have been given (the workbook's Lots list).
- * @param firstRow the 1-based spreadsheet row of column[0].
+ * @param column     cell values in row order (already trimmed/normalized); "" = blank.
+ * @param candidates the shorter barcodes that could have been typed (the caller
+ *                   decides which, see scanSheetCandidates / handSheetCandidates).
+ * @param firstRow   the 1-based spreadsheet row of column[0].
  *
  * A cell is flagged when its value V appeared earlier in the same block (no
- * blank row in between) and, for some known-or-scanned barcode P that is a
- * strict prefix of V, V is the ONLY entry in that block longer than P that
- * starts with P. Entries equal to P are ignored when judging "only" (the
- * stricter reading: it can only flag more, never fewer).
+ * blank row in between) and, for some candidate P that is a strict prefix of
+ * V, V is the ONLY entry in that block longer than P that starts with P.
+ * Entries equal to P are ignored when judging "only" (the stricter reading: it
+ * can only flag more, never fewer).
  */
-export function autocompleteRisks(column: readonly string[], known: Iterable<string>, firstRow: number): AutocompleteHit[] {
+export function autocompleteRisks(column: readonly string[], candidates: Iterable<string>, firstRow: number): AutocompleteHit[] {
   const original = new Map<string, string>();
-  const add = (s: string) => {
-    const v = String(s ?? "").trim();
-    if (!v) return;
-    const k = v.toLowerCase();
-    if (!original.has(k)) original.set(k, v);
-  };
-  for (const k of known) add(k);
-  for (const v of column) add(v);
-  const candidates = new Set(original.keys());
-
+  for (const c of candidates) {
+    const v = String(c ?? "").trim();
+    if (v && !original.has(v.toLowerCase())) original.set(v.toLowerCase(), v);
+  }
   const hits: AutocompleteHit[] = [];
+  if (original.size === 0) return hits;
   let seen = new Set<string>();
   let byPrefix = new Map<string, Set<string>>();
   column.forEach((raw, i) => {
@@ -108,7 +104,7 @@ export function autocompleteRisks(column: readonly string[], known: Iterable<str
       const couldBe: string[] = [];
       for (let n = 1; n < vl.length; n++) {
         const p = vl.slice(0, n);
-        if (!candidates.has(p)) continue;
+        if (!original.has(p)) continue;
         const above = byPrefix.get(p);
         if (above && above.size === 1 && above.has(vl)) couldBe.push(original.get(p)!);
       }
@@ -117,13 +113,62 @@ export function autocompleteRisks(column: readonly string[], known: Iterable<str
     seen.add(vl);
     for (let n = 1; n < vl.length; n++) {
       const p = vl.slice(0, n);
-      if (!candidates.has(p)) continue;
-      let s = byPrefix.get(p);
-      if (!s) byPrefix.set(p, (s = new Set()));
-      s.add(vl);
+      if (!original.has(p)) continue;
+      let set = byPrefix.get(p);
+      if (!set) byPrefix.set(p, (set = new Set()));
+      set.add(vl);
     }
   });
   return hits;
+}
+
+/**
+ * Scan sheet candidates. The workbook tells counters to count a prefix barcode
+ * from the product list on the Hand Count sheet, not to scan it, so it is a
+ * candidate here only when this workbook shows it WAS scanned (it appears on
+ * the Scan sheet as itself). A prefix nobody counted at all is caught by
+ * uncountedPrefixRisks instead. Any scanned value that is the start of another
+ * scanned value is a candidate too (a barcode that is not on the list).
+ * Returns the candidates and the listed prefixes found scanned.
+ */
+export function scanSheetCandidates(column: readonly string[], listedPrefixes: Iterable<string>): { candidates: string[]; scannedPrefixes: string[] } {
+  const values = new Map<string, string>();
+  for (const raw of column) {
+    const v = String(raw ?? "").trim();
+    if (v && !values.has(v.toLowerCase())) values.set(v.toLowerCase(), v);
+  }
+  const scannedPrefixes: string[] = [];
+  const cand = new Map<string, string>();
+  for (const p of listedPrefixes) {
+    const k = String(p ?? "").trim().toLowerCase();
+    if (k && values.has(k) && !cand.has(k)) {
+      cand.set(k, values.get(k)!);
+      scannedPrefixes.push(values.get(k)!);
+    }
+  }
+  for (const { prefix } of prefixBarcodes(values.values())) if (!cand.has(prefix.toLowerCase())) cand.set(prefix.toLowerCase(), prefix);
+  return { candidates: [...cand.values()], scannedPrefixes };
+}
+
+/**
+ * The case the column cannot show: a counter scans prefix barcode P, Excel
+ * completes it to a longer V, and P never appears anywhere. So a prefix
+ * barcode from the product list that NOBODY counted (no scan, no Hand Count
+ * row, not even 0) while some longer barcode starting with it WAS counted
+ * leaves P and those longer barcodes unknowable: they are all left alone.
+ * The fix is one Hand Count row for P (its quantity, 0 if none) and a re-upload.
+ *
+ * @param lotCodes    every product-list barcode (the imported lots).
+ * @param countedKeys lower-cased barcodes counted at least once (any workbook, 0 counts).
+ */
+export function uncountedPrefixRisks(lotCodes: Iterable<string>, countedKeys: ReadonlySet<string>): { prefix: string; longer: string[] }[] {
+  const out: { prefix: string; longer: string[] }[] = [];
+  for (const { prefix, longer } of prefixBarcodes(lotCodes)) {
+    if (countedKeys.has(prefix.toLowerCase())) continue;
+    const counted = longer.filter((v) => countedKeys.has(v.toLowerCase()));
+    if (counted.length) out.push({ prefix, longer: counted });
+  }
+  return out;
 }
 
 /** Every barcode a hit touches (lower-cased): the stored value and each shorter one it could be. */
@@ -155,39 +200,44 @@ export function __runCountAutocompleteCoreTests(): { passed: number; failed: num
   ok(prefixBarcodes(["A1", "B2", "C3"]).length === 0, "no prefixes, no list");
   ok(prefixBarcodes(["ab", "AB"]).length === 0, "case duplicates are not a prefix of each other");
 
-  const known = ["RoyalBlunt", "RoyalBluntWrap", "WA1", "WA2"];
-  // V repeated directly under itself, P known -> flagged on the 2nd.
-  let h = autocompleteRisks(["RoyalBluntWrap", "RoyalBluntWrap"], known, 2);
+  const P = ["RoyalBlunt", "WA1"];
+  // V repeated directly under itself, P a candidate -> flagged on the 2nd.
+  let h = autocompleteRisks(["RoyalBluntWrap", "RoyalBluntWrap"], P, 2);
   ok(h.length === 1 && h[0].row === 3 && h[0].couldBe[0] === "RoyalBlunt", "second V could be a completed P");
   ok(h[0].value === "RoyalBluntWrap", "value as stored");
-  // first occurrence is never flagged (nothing above to complete from).
-  ok(autocompleteRisks(["RoyalBluntWrap"], known, 2).length === 0, "first occurrence not flagged");
-  // a blank row between -> new block -> not flagged.
-  ok(autocompleteRisks(["RoyalBluntWrap", "", "RoyalBluntWrap"], known, 2).length === 0, "blank row stops AutoComplete");
-  // P itself scanned stays P; never flagged.
-  ok(autocompleteRisks(["RoyalBluntWrap", "RoyalBlunt", "RoyalBlunt"], known, 2).length === 0, "a stored P is never flagged");
-  // two different longer values above -> typed P is ambiguous -> no completion.
-  h = autocompleteRisks(["WA1.AAA", "WA1.BBB", "WA1.AAA"], known, 2);
-  ok(h.length === 0, "two candidates above: not unique, no completion");
-  // unique again inside a fresh block.
-  h = autocompleteRisks(["WA1.AAA", "WA1.BBB", "", "WA1.AAA", "WA1.AAA"], known, 2);
+  ok(autocompleteRisks(["RoyalBluntWrap"], P, 2).length === 0, "first occurrence not flagged");
+  ok(autocompleteRisks(["RoyalBluntWrap", "", "RoyalBluntWrap"], P, 2).length === 0, "blank row stops AutoComplete");
+  ok(autocompleteRisks(["RoyalBluntWrap", "RoyalBlunt", "RoyalBlunt"], P, 2).length === 0, "a stored P is never flagged");
+  ok(autocompleteRisks(["WA1.AAA", "WA1.BBB", "WA1.AAA"], P, 2).length === 0, "two candidates above: not unique, no completion");
+  h = autocompleteRisks(["WA1.AAA", "WA1.BBB", "", "WA1.AAA", "WA1.AAA"], P, 2);
   ok(h.length === 1 && h[0].row === 6 && h[0].couldBe.join() === "WA1", "fresh block: unique again, row is 1-based offset");
-  // case-insensitive.
-  h = autocompleteRisks(["ROYALBLUNTWRAP", "royalbluntwrap"], known, 2);
+  h = autocompleteRisks(["ROYALBLUNTWRAP", "royalbluntwrap"], P, 2);
   ok(h.length === 1 && h[0].couldBe[0] === "RoyalBlunt", "case-insensitive");
-  // an unknown shorter code that was SCANNED elsewhere in the column is a candidate too.
-  h = autocompleteRisks(["ZZ", "", "ZZ9", "ZZ9"], [], 2);
-  ok(h.length === 1 && h[0].couldBe[0] === "ZZ", "scanned-elsewhere prefix is a candidate");
-  // no candidate prefix -> not flagged even if repeated.
-  ok(autocompleteRisks(["1111111111111111", "1111111111111111", "0222222222222222"], ["1111111111111111", "0222222222222222"], 2).length === 0, "plain repeats are safe");
-  // several prefixes at once.
+  ok(autocompleteRisks(["1111111111111111", "1111111111111111"], [], 2).length === 0, "no candidates, nothing flagged");
   h = autocompleteRisks(["1234", "1234"], ["1", "12"], 2);
   ok(h.length === 1 && h[0].couldBe.join() === "1,12", "every shorter barcode listed");
-  // riskyBarcodeKeys
   const keys = riskyBarcodeKeys(h);
   ok(keys.has("1234") && keys.has("1") && keys.has("12") && keys.size === 3, "risky keys = value + every couldBe, lower-cased");
-  // entries equal to P above do not break "only".
-  h = autocompleteRisks(["RoyalBlunt", "RoyalBluntWrap", "RoyalBluntWrap"], known, 2);
+  h = autocompleteRisks(["RoyalBlunt", "RoyalBluntWrap", "RoyalBluntWrap"], P, 2);
   ok(h.length === 1 && h[0].row === 4, "an exact P above does not make it ambiguous (stricter)");
+
+  // scanSheetCandidates: a listed prefix counts only when it was scanned.
+  let sc = scanSheetCandidates(["100270836", "100270836"], ["1", "RoyalBlunt"]);
+  ok(sc.candidates.length === 0 && sc.scannedPrefixes.length === 0, "the '1' item not scanned: repeats of 1xxxx are not flagged");
+  ok(autocompleteRisks(["100270836", "100270836"], sc.candidates, 2).length === 0, "so a normal repeat count is clean");
+  sc = scanSheetCandidates(["100270836", "1", "100270836", "100270836"], ["1", "RoyalBlunt"]);
+  ok(sc.scannedPrefixes.join() === "1" && sc.candidates.join() === "1", "'1' scanned: it becomes a candidate and is reported");
+  ok(autocompleteRisks(["100270836", "1", "100270836", "100270836"], sc.candidates, 2).length === 2, "then the repeats after it are flagged");
+  sc = scanSheetCandidates(["ZZ", "", "ZZ9", "ZZ9"], []);
+  ok(sc.candidates.join() === "ZZ" && sc.scannedPrefixes.length === 0, "an unlisted scanned short code is a candidate");
+
+  // uncountedPrefixRisks
+  const lotCodes = ["1", "100270836", "11007548756737634", "RoyalBlunt", "RoyalBluntWrap", "WA9"];
+  let u = uncountedPrefixRisks(lotCodes, new Set(["100270836", "royalbluntwrap"]));
+  ok(u.length === 2 && u[0].prefix === "1" && u[0].longer.join() === "100270836", "'1' not counted, a 1-barcode counted: risk, only the counted longer listed");
+  ok(u[1].prefix === "RoyalBlunt" && u[1].longer.join() === "RoyalBluntWrap", "RoyalBlunt not counted");
+  u = uncountedPrefixRisks(lotCodes, new Set(["1", "100270836", "royalblunt", "royalbluntwrap"]));
+  ok(u.length === 0, "prefix counted (even 0 on Hand Count): no risk");
+  ok(uncountedPrefixRisks(lotCodes, new Set(["wa9"])).length === 0, "no longer barcode counted: nothing at risk");
   return { passed, failed };
 }
