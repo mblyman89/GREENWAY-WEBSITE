@@ -43,7 +43,7 @@ vi.mock("@/lib/supabase/env", () => ({ isSupabaseServiceConfigured: true }));
 vi.mock("@/lib/pos/menu-version", () => ({
   getPublishedVersion: async () => ({ id: "v1" }),
   getVersionItems: async () => state.items.map((i) => ({ ...i })),
-  countVersionItems: async () => (state.count === null ? state.items.length : state.count),
+  countVersionItems: async () => (state.count === null ? state.items.length : state.count < 0 ? null : state.count),
 }));
 vi.mock("@/lib/promotions/discount-engine", async () => {
   const core = await vi.importActual<typeof import("@/lib/promotions/published-rules-core")>(
@@ -184,6 +184,8 @@ describe("R74 S28 preview = the guard's own numbers", () => {
     const g = await guard.guardPromotionPublish(promo);
     expect(g.blocked).toBe(false);
     expect(g.readProblems.join()).toMatch(/published menu could not be read/);
+    state.count = -1; // the independent count is unavailable: cannot tell empty from failed
+    expect((await guard.guardPromotionPublish(promo)).readProblems.join()).toMatch(/published menu could not be read/);
     state.count = 0; // genuinely empty menu: not a problem
     expect((await guard.guardPromotionPublish(promo)).readProblems).toEqual([]);
   });
