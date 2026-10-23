@@ -111,6 +111,14 @@ export type FilterableLot = LotTableFields & {
   onboarding_margin_pct?: number | null;
   onboarded_on?: string | null;
   /**
+   * R74 S24: the price the lot page shows (live menu variant, else the
+   * onboarding price) and the margin on it (lot-live-price-core). Optional:
+   * absent in older callers, which fall back to the onboarding values.
+   */
+  shelf_price_minor?: number | null;
+  shelf_margin_pct?: number | null;
+  shelf_price_source?: string | null;
+  /**
    * R38 S1: the EFFECTIVE website category (lot-website-category-core) —
    * override > live menu > onboarding pick > type map > product name — and
    * where it came from. Optional: absent in tests and pre-R38 callers, which

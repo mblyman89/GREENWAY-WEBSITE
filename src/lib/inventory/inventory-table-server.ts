@@ -18,6 +18,9 @@ import { loadLotOnboardingIndex } from "@/lib/inventory/lot-onboarding-server";
 import { attachLotOnboarding } from "@/lib/inventory/lot-onboarding-core";
 import { attachLotWebsiteCategories } from "@/lib/inventory/lot-website-category-server";
 import { attachInventoryMetrics } from "@/lib/inventory/inventory-metrics-core";
+import { loadLotLivePrices } from "@/lib/inventory/lot-live-price-server";
+import { attachLotParity } from "@/lib/inventory/lot-live-price-core";
+import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
 import { loadLeaflyBadgeData } from "@/lib/inventory/leafly-badge-server";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -31,7 +34,11 @@ export async function loadInventoryTableLots() {
   ]);
   const onboardingIndex = await onboardingPromise;
   const onboardedLots = attachLotOnboarding(allLots, onboardingIndex.byLot);
-  const categorized = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
+  const categorizedRaw = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
+  // R74 S24: the same live price + menu flags join as the page.
+  const lotKeys = categorizedRaw.lots.map((l) => l.pos_product_key);
+  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotKeys), getMenuClassificationFlags(lotKeys)]);
+  const categorized = attachLotParity(categorizedRaw, livePrices.index, menuFlags);
   const lots = attachInventoryMetrics(categorized.lots, {
     today: pacificToday(),
     liveKeys: categorized.liveKeys,
@@ -42,5 +49,6 @@ export async function loadInventoryTableLots() {
     leafly,
     onboardingComplete: onboardingIndex.complete,
     categoriesComplete: categorized.complete,
+    pricesComplete: livePrices.complete,
   };
 }
