@@ -40,21 +40,40 @@ import {
   seedConfigFor,
   type EngineRule,
 } from "./discount-engine";
-import { getPublishedPromotions } from "./promotions-store";
+import { getPublishedPromotions, listNeverDiscountKeys } from "./promotions-store";
+import { splitGuardable } from "./promo-fix-core";
 import type { PromotionWithRules, PromoScope } from "./types";
 
 // ---------------------------------------------------------------------------
 // Menu + costs join
 // ---------------------------------------------------------------------------
 
-/** Published-menu products joined with weighted-average acquisition costs. */
-export async function loadGuardProducts(): Promise<GuardProduct[]> {
-  if (!isSupabaseServiceConfigured) return [];
+/** The guard's menu: the cards a deal can discount, plus what was left out. */
+export type GuardMenu = {
+  products: GuardProduct[];
+  /** R74 S22: hidden cards (not sellable, so never discounted). */
+  hiddenSkipped: number;
+  /** R74 S22: visible cards on the never-discount list (the engine never discounts them). */
+  neverSkipped: number;
+};
+
+/**
+ * Published-menu products joined with weighted-average acquisition costs.
+ * R74 S22: hidden cards and never-discount products are left out (see
+ * promo-fix-core.ts for why that is exactly what the register does).
+ */
+export async function loadGuardMenu(): Promise<GuardMenu> {
+  if (!isSupabaseServiceConfigured) return { products: [], hiddenSkipped: 0, neverSkipped: 0 };
   const version = await getPublishedVersion();
-  if (!version) return [];
-  const [items, costs] = await Promise.all([getVersionItems(version.id), loadProductCosts()]);
-  return items.map((i) => ({
+  if (!version) return { products: [], hiddenSkipped: 0, neverSkipped: 0 };
+  const [items, costs, neverKeys] = await Promise.all([
+    getVersionItems(version.id),
+    loadProductCosts(),
+    listNeverDiscountKeys(),
+  ]);
+  const rows = items.map((i) => ({
     key: i.source_item_id,
+    hidden: i.hidden === true,
     name: i.name,
     brand: i.brand_name ?? "",
     categories: (i.filter_categories?.length ? i.filter_categories : [i.category]).map((c) =>
@@ -63,6 +82,21 @@ export async function loadGuardProducts(): Promise<GuardProduct[]> {
     priceMinorUnits: i.price_minor_units,
     costMinorUnits: costs.get(i.source_item_id) ?? null,
   }));
+  const split = splitGuardable(rows, neverKeys);
+  const products: GuardProduct[] = split.kept.map((r) => ({
+    key: r.key,
+    name: r.name,
+    brand: r.brand,
+    categories: r.categories,
+    priceMinorUnits: r.priceMinorUnits,
+    costMinorUnits: r.costMinorUnits,
+  }));
+  return { products, hiddenSkipped: split.hiddenSkipped, neverSkipped: split.neverSkipped };
+}
+
+/** The discountable published-menu products (see loadGuardMenu). */
+export async function loadGuardProducts(): Promise<GuardProduct[]> {
+  return (await loadGuardMenu()).products;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +166,10 @@ export type PublishGuardResult = {
   findings: BelowCostFinding[];
   /** How many published-menu products the promotion applies to. */
   affectedCount: number;
+  /** R74 S22: hidden cards left out of the check (whole menu, not just this deal). */
+  hiddenSkipped: number;
+  /** R74 S22: never-discount products left out of the check (whole menu). */
+  neverSkipped: number;
 };
 
 /**
@@ -142,8 +180,10 @@ export type PublishGuardResult = {
 export async function guardPromotionPublish(
   promo: PromotionWithRules,
 ): Promise<PublishGuardResult> {
-  const products = await loadGuardProducts();
-  if (products.length === 0) return { blocked: false, findings: [], affectedCount: 0 };
+  const { products, hiddenSkipped, neverSkipped } = await loadGuardMenu();
+  if (products.length === 0) {
+    return { blocked: false, findings: [], affectedCount: 0, hiddenSkipped, neverSkipped };
+  }
 
   const targets = promo.targets.map((t) => ({ scope: t.scope, value: t.value }));
   const exclusions = promo.exclusions.map((e) => ({ scope: e.scope, value: e.value }));
@@ -161,7 +201,13 @@ export async function guardPromotionPublish(
   };
 
   const findings = findBelowCost(shape, affected);
-  return { blocked: hasPublishBlock(findings), findings, affectedCount: affected.length };
+  return {
+    blocked: hasPublishBlock(findings),
+    findings,
+    affectedCount: affected.length,
+    hiddenSkipped,
+    neverSkipped,
+  };
 }
 
 // ---------------------------------------------------------------------------
