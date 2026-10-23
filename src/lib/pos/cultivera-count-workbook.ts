@@ -25,6 +25,7 @@ import crypto from "node:crypto";
 import ExcelJS from "exceljs";
 import { COUNT_WORKBOOK_SPEC as S } from "@/lib/pos/cultivera-count-core";
 import { xlsxStructureProblems } from "@/lib/pos/xlsx-structure-core";
+import { prefixBarcodes } from "@/lib/pos/count-autocomplete-core";
 
 export type CountWorkbookLot = { barcode: string; productName: string; storage: string };
 
@@ -70,6 +71,11 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
   }
   const lots = [...byCode.values()].sort((a, b) => a.barcode.localeCompare(b.barcode));
   const lastLot = Math.max(2, lots.length + 1);
+  // R74 S26: barcodes that are the start of a longer barcode. Excel AutoComplete (an Excel-wide
+  // setting no .xlsx can switch off) could finish a scan of one into the longer one, so these are
+  // counted on Hand Count, and the upload re-checks every column (count-autocomplete-core).
+  const prefixes = prefixBarcodes(lots.map((l) => l.barcode));
+  const nameOf = new Map(lots.map((l) => [l.barcode.toLowerCase(), l.productName]));
   const lotsRange = (col: "A" | "B") => `'${S.lotsSheet}'!$${col}$2:$${col}$${lastLot}`;
 
   // ---------------- Start Here ----------------
@@ -83,7 +89,14 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
     [`Counter: ${input.counter}     Count date: ${input.countDate}`, "head"],
     ["", "text"],
     ["BEFORE YOU START (once per computer)", "head"],
-    ["1. Excel: File › Options › Advanced › turn OFF “Enable AutoComplete for cell values”. AutoComplete can change a scan into an earlier one.", "warn"],
+    ["1. Turn OFF Excel AutoComplete (it can finish a scan into an earlier, longer barcode). Windows: File › Options › Advanced › clear “Enable AutoComplete for cell values”. Mac: Excel menu › Preferences › AutoComplete (under Formulas and Lists) › clear “Enable AutoComplete for cell values”. It is an Excel setting, not a setting in this file, so do it once on every computer.", "warn"],
+    ["   Safety net if a computer was missed: the upload re-checks every Scan and Hand Count column, and any barcode AutoComplete could have changed is left exactly as Cultivera said and listed for a hand recount. Also watch column B: if the product shown is not the item in your hand, delete that scan and tell the manager.", "text"],
+    ...(prefixes.length
+      ? ([
+          [`   Count these ${prefixes.length} item(s) on the Hand Count sheet, never on the Scan sheet (their barcode is the start of a longer one). Type the barcode exactly and the quantity, 0 if there are none:`, "warn"],
+          ...prefixes.map((p): [string, "text"] => [`      ${p.prefix}  —  ${nameOf.get(p.prefix.toLowerCase()) || "(no name)"}`, "text"]),
+        ] as [string, "title" | "head" | "text" | "warn"][])
+      : []),
     ["2. Set up the scanner on Admin › Menu Imports › Count, step 0 “Set up and test each scanner”. Tera D5100: plug in its dongle, scan Real Time Mode, United States, Conversion Off, Carriage Return. Socket D760: charge from a wall plug, scan Basic Mode (HID), Carriage Return and English while NOT connected, then pair it in Bluetooth. Alacrity MJ-2020R: charge it on its cradle, plug the cradle in, scan Wedge, US English and CR (its factory setting is two Enters). The test box there must say OK.", "text"],
     ["3. Test: click the Scan sheet, cell A2, scan one item. The barcode appears, the cursor drops to A3, and column B shows the product name.", "text"],
     ["", "text"],

@@ -31,6 +31,7 @@
 
 import { normalizeScan } from "@/lib/inventory/cycle-count-scan-core";
 import { TEST_BARCODE, isScannerCommandText } from "@/lib/pos/scanner-setup-core";
+import { autocompleteRisks, prefixBarcodes, riskyBarcodeKeys, scanSheetCandidates, uncountedPrefixRisks } from "@/lib/pos/count-autocomplete-core";
 
 /** A scanner setup command, or the count page's TEST barcode (R50 S11b). Never a product. */
 export function isScannerSetupText(code: string): boolean {
@@ -80,7 +81,9 @@ export type CountProblem = {
     | "duplicate_workbook"
     | "duplicate_file"
     | "mixed_count_date"
-    | "scanner_text";
+    | "scanner_text"
+    /** R74 S26: Excel AutoComplete could have turned a shorter barcode into this one. */
+    | "autocomplete_risk";
   sheet?: string;
   row?: number; // 1-based spreadsheet row
   value?: string;
@@ -97,6 +100,11 @@ export type ParsedCountWorkbook = {
   scanCount: number;
   handUnits: number;
   problems: CountProblem[];
+  /**
+   * R74 S26: barcodes (lower-cased) whose count Excel AutoComplete could have
+   * changed (the stored value and the shorter barcode it could have been).
+   */
+  autocompleteRisk: Set<string>;
 };
 
 function cellText(v: unknown): string {
@@ -132,8 +140,25 @@ export function parseCountWorkbook(input: { fileName: string; sha256: string; ce
     scanCount: 0,
     handUnits: 0,
     problems: [],
+    autocompleteRisk: new Set(),
   };
   const sheets = input.cells.sheets ?? {};
+  // R74 S26: every barcode the workbook offered (hidden Lots sheet, column A, row 1 = header).
+  const listedPrefixes = prefixBarcodes((sheets[S.lotsSheet] ?? []).slice(1).map((r) => normalizeScan(cellText(r?.[0])))).map((x) => x.prefix);
+  const flagAutocomplete = (sheet: string, column: string[], candidates: string[]) => {
+    const hits = autocompleteRisks(column, candidates, 2);
+    for (const h of hits) {
+      out.problems.push({
+        severity: "warning",
+        code: "autocomplete_risk",
+        sheet,
+        row: h.row,
+        value: h.value,
+        message: `${input.fileName} ${sheet} row ${h.row}: "${h.value}" could be a scan of ${h.couldBe.map((c) => `"${c}"`).join(" or ")} that Excel AutoComplete finished into "${h.value}". Both are left as Cultivera said; recount them by hand.`,
+      });
+    }
+    for (const k of riskyBarcodeKeys(hits)) out.autocompleteRisk.add(k);
+  };
 
   // ---- Meta ----
   const meta = sheets[S.metaSheet];
@@ -163,6 +188,9 @@ export function parseCountWorkbook(input: { fileName: string; sha256: string; ce
   if (!scan) {
     out.problems.push({ severity: "blocking", code: "missing_sheet", sheet: S.scanSheet, message: `${input.fileName}: the "${S.scanSheet}" sheet is missing.` });
   } else {
+    // A listed prefix barcode belongs on Hand Count; it is a candidate here only if it was scanned.
+    const col = scan.slice(1).map((row) => normalizeScan(cellText(row?.[0])));
+    flagAutocomplete(S.scanSheet, col, scanSheetCandidates(col, listedPrefixes).candidates);
     for (let r = 1; r < scan.length; r++) {
       const code = normalizeScan(cellText(scan[r]?.[0]));
       if (code === "") continue;
@@ -205,6 +233,9 @@ export function parseCountWorkbook(input: { fileName: string; sha256: string; ce
     if (bi < 0 || qi < 0) {
       out.problems.push({ severity: "blocking", code: "missing_sheet", sheet: S.handSheet, message: `${input.fileName}: the "${S.handSheet}" sheet has no Barcode/Qty header.` });
     } else {
+      // Typed by hand: every listed prefix barcode, and any typed value that starts another.
+      const col = hand.slice(1).map((row) => normalizeScan(cellText(row?.[bi])));
+      flagAutocomplete(S.handSheet, col, [...listedPrefixes, ...prefixBarcodes(col).map((x) => x.prefix)]);
       for (let r = 1; r < hand.length; r++) {
         const code = normalizeScan(cellText(hand[r]?.[bi]));
         const qtyRaw = cellText(hand[r]?.[qi]).trim();
@@ -240,6 +271,8 @@ export function mergeCountWorkbooks(books: ParsedCountWorkbook[]): {
   problems: CountProblem[];
   /** canonical (lowercased) barcode → { code as scanned, units, by counter } */
   counted: Map<string, { code: string; units: number; byCounter: Record<string, number> }>;
+  /** R74 S26: union of every accepted workbook's AutoComplete-risk barcodes (lower-cased). */
+  autocompleteRisk: Set<string>;
 } {
   const accepted: ParsedCountWorkbook[] = [];
   const problems: CountProblem[] = [];
@@ -290,7 +323,9 @@ export function mergeCountWorkbooks(books: ParsedCountWorkbook[]): {
       }
     }
   }
-  return { accepted, problems, counted };
+  const autocompleteRisk = new Set<string>();
+  for (const b of accepted) for (const k of b.autocompleteRisk ?? []) autocompleteRisk.add(k);
+  return { accepted, problems, counted, autocompleteRisk };
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +513,8 @@ export type CountException =
   | "negative_rolled" // more sold after the count than were counted
   | "unknown_order_status" // a sale line with an OrderStatus we have never measured
   | "uncounted" // an imported lot with stock that nobody scanned
-  | "moved_since_import"; // on_hand_qty ≠ Cultivera qty + earlier count adjustments
+  | "moved_since_import" // on_hand_qty ≠ Cultivera qty + earlier count adjustments
+  | "autocomplete_risk"; // R74 S26: Excel AutoComplete could have moved scans between this and a similar barcode
 
 export type CountPlanLine = {
   lotId: string | null;
@@ -517,6 +553,7 @@ export type CountPlan = {
     negativeRolled: number;
     unknownStatus: number;
     movedSinceImport: number;
+    autocompleteRisk: number;
     uncountedLots: number;
     uncountedUnits: number;
     salesUnitsNet: number;
@@ -538,8 +575,20 @@ export function planCount(input: {
   sales: SalesRollup;
   problems: CountProblem[];
   uncountedPolicy?: UncountedPolicy;
+  /** R74 S26: lower-cased barcodes whose count AutoComplete could have changed; left alone. */
+  autocompleteRisk?: ReadonlySet<string>;
 }): CountPlan {
   const policy = input.uncountedPolicy ?? "leave";
+  // R74 S26: a prefix barcode nobody counted while a longer one was: its scans may have been
+  // AutoCompleted into the longer one, so both are left alone (count the prefix on Hand Count).
+  const acRisk = new Set<string>(input.autocompleteRisk ?? []);
+  for (const r of uncountedPrefixRisks(
+    input.lots.map((l) => normalizeScan(l.lotCode)),
+    new Set(input.counted.keys()),
+  )) {
+    acRisk.add(r.prefix.toLowerCase());
+    for (const v of r.longer) acRisk.add(v.toLowerCase());
+  }
   const byCode = new Map<string, CountLot[]>();
   for (const l of input.lots) {
     const k = normalizeScan(l.lotCode).toLowerCase();
@@ -584,6 +633,7 @@ export function planCount(input: {
     const prior = lot.priorCountDelta ?? 0;
     let exception: CountException | null = null;
     if (lot.currentOnHand !== undefined && lot.currentOnHand !== lot.onHand + prior) exception = "moved_since_import";
+    else if (acRisk.has(k)) exception = "autocomplete_risk";
     else if (!wasCounted && policy === "leave") exception = lot.onHand > 0 || netSold !== 0 ? "uncounted" : null;
     else if (s && s.unknownStatus > 0) exception = "unknown_order_status";
     else if (rolled < 0) exception = "negative_rolled";
@@ -628,6 +678,7 @@ export function planCount(input: {
     negativeRolled: ex("negative_rolled").length,
     unknownStatus: ex("unknown_order_status").length,
     movedSinceImport: ex("moved_since_import").length,
+    autocompleteRisk: ex("autocomplete_risk").length,
     uncountedLots: ex("uncounted").length,
     uncountedUnits: ex("uncounted").reduce((a, v) => a + (v.onHand ?? 0), 0),
     salesUnitsNet: [...input.sales.netSold.values()].reduce((a, v) => a + v.units, 0),

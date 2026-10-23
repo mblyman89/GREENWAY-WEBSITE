@@ -354,7 +354,7 @@ export async function buildCountPreview(admin: Admin, importId: string, batchId:
 
   const plan =
     sales.rollup && merged.accepted.length > 0
-      ? planCount({ lots: lotsLoad.lots, counted: merged.counted, sales: sales.rollup, problems: merged.problems, uncountedPolicy: policy })
+      ? planCount({ lots: lotsLoad.lots, counted: merged.counted, sales: sales.rollup, problems: merged.problems, uncountedPolicy: policy, autocompleteRisk: merged.autocompleteRisk })
       : null;
   const canApply = plan != null && !plan.blocked && refusals.length === 0 && plan.adjustments.length > 0;
   return {

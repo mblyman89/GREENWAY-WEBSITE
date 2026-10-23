@@ -31,6 +31,7 @@ const EXCEPTION_COPY: Record<string, string> = {
   unknown_order_status: "A sale has a Cultivera order status never seen before. Left alone.",
   uncounted: "Has stock in Cultivera but nobody scanned it. Go and look.",
   moved_since_import: "Changed since the import by something other than this count (a sale, a disposition). Left alone.",
+  autocomplete_risk: "Excel AutoComplete could have turned a scan of a shorter barcode into this one (or this one into it). Left alone: recount it by hand on the Hand Count sheet.",
 };
 
 export default async function CountPage({
