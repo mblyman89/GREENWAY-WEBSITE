@@ -898,6 +898,7 @@ import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventor
 import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-gate-core";
 // CCRS Bible Part 17 S-17a: withhold-reason classes, next steps, uncapped row text.
 import { __runCcrsIssueDisplayTests } from "../../src/lib/compliance/ccrs-issue-display-core";
+import { __runCcrsIdentityGuardCoreTests } from "../../src/lib/compliance/ccrs-identity-guard-core";
 import { __runCcrsLotProductTests } from "../../src/lib/compliance/ccrs-lot-product-core";
 import { __runCcrsSigninTests } from "../../src/lib/compliance/ccrs-signin-core";
 // CCRS Bible Part 09 S-17d: hand-over plan from the integrator (first upload date).
@@ -1867,6 +1868,7 @@ __runLiquidVolumeTests();
   { const r = __runPromoFixCoreTests(); if (r.failed > 0 || r.passed < 31) throw new Error(`promo-fix-core: ${r.failed} failed, ${r.passed} passed (expected >= 31)`); } // R74 S22: publish guard skips hidden + never-discount; hide blockers from the promotion page
   { const r = __runPromoBlockerFixCoreTests(); if (r.failed > 0 || r.passed < 30) throw new Error(`promo-blocker-fix-core: ${r.failed} failed, ${r.passed} passed (expected >= 30)`); } // R74 S23: fix-it controls per publish blocker (leave out, never discount, price needed)
   { const r = __runLotLivePriceCoreTests(); if (r.failed > 0 || r.passed < 36) throw new Error(`lot-live-price-core: ${r.failed} failed, ${r.passed} passed (expected >= 36)`); } // R74 S24: inventory table price/flags/THCA = the lot page
+  { const r = __runCcrsIdentityGuardCoreTests(); if (r.failed > 0 || r.passed < 43) throw new Error(`ccrs-identity-guard-core: ${r.failed} failed, ${r.passed} passed (expected >= 43)`); } // R74 S25: Cultivera lots keep their filed CCRS ids; ours get GWP-
   { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());

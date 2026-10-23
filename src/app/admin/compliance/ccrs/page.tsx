@@ -78,6 +78,7 @@ import {
   pollCcrsMailNowAction,
 } from "./mail-actions";
 import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
+import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
 import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
 import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
@@ -562,6 +563,17 @@ export default async function CcrsCommandCenterPage({
                   </form>
                 ) : null}
               </div>
+            ) : null}
+            {/* R74 S25: which CCRS ids this file uses (Cultivera's filed ids vs ours) */}
+            {batch.identity ? (
+              <details className="rounded-xl border border-white/10 bg-white/5 px-4 py-3" open={batch.identity.rows.held.length > 0}>
+                <summary className="cursor-pointer text-xs font-semibold text-white/80">
+                  CCRS ids in this file: Cultivera&apos;s filed ids vs ours
+                </summary>
+                <div className="mt-3">
+                  <CcrsIdentityProofPanel proof={batch.identity} />
+                </div>
+              </details>
             ) : null}
             <div
               className={`rounded-xl border px-4 py-3 text-xs font-semibold ${
