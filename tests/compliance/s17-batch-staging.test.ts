@@ -462,7 +462,7 @@ describe("S17 wiring", () => {
     expect(stage).toContain("approved_draft_ids: draftIdList(drafts.map((d) => d.id)),");
     expect(stage).toContain("...(opts.batchCount && opts.batchCount > 1 ? { batch_count: opts.batchCount } : {}),");
     // R50 S3c: the rebuilt-card refresh count follows the batch suffix (empty for a received delivery).
-    expect(stage).toMatch(/\}\) \+ batchNotesSuffix\(opts\.batchCount\) \+ refreshNotesSuffix\(refreshPlan\?\.refreshed\.length \?\? 0\),/);
+    expect(stage).toMatch(/\}\) \+ batchNotesSuffix\(opts\.batchCount\) \+ refreshNotesSuffix\(refreshPlan\?\.refreshed\.length \?\? 0\) \+ categoryReleaseNotesSuffix\(releasePlan\?\.released\.length \?\? 0\),/);
   });
 
   it("the coalesce runs AFTER the fresh snapshot's items are written, behind the flag", () => {
