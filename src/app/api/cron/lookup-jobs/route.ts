@@ -55,6 +55,8 @@ import { getStaffSession } from "@/lib/auth/session";
 import { runLookupJobsTick } from "@/lib/catalog/lookup-job-server";
 import { runCultiveraAutoStart } from "@/lib/inventory/cultivera-auto-start";
 import { AUTO_START_CRON_BUDGET_MS } from "@/lib/inventory/cultivera-auto-start-core";
+import { runMailReadBg } from "@/lib/pos/cultivera-mail-read-bg";
+import { MAIL_READ_BG_BUDGET_MS } from "@/lib/pos/cultivera-mail-read-bg-core";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +101,14 @@ export async function GET(req: NextRequest) {
   if (result.ok && result.skipped) {
     autoStart = await runCultiveraAutoStart({ budgetMs: AUTO_START_CRON_BUDGET_MS, trigger: "worker" });
   }
-  return NextResponse.json({ ...result, autoStart }, { status: result.ok ? 200 : 500 });
+  // R74 S20: a tick that had no lookup AND whose automatic start did not run reads the kept vendor
+  // documents in the background ("Read everything in the background"). No new cron. Its own lease
+  // means one run at a time; an idle state costs one read of one site_settings row.
+  let mailRead: Awaited<ReturnType<typeof runMailReadBg>> | null = null;
+  if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run)) {
+    mailRead = await runMailReadBg({ budgetMs: MAIL_READ_BG_BUDGET_MS, trigger: "worker" });
+  }
+  return NextResponse.json({ ...result, autoStart, mailRead }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.

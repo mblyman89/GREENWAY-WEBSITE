@@ -26,7 +26,8 @@ import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { OneTimeImportTools } from "@/components/admin/catalog/OneTimeImportTools";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 import { startFetchAction } from "./fetch-actions";
-import { harvestMailboxBatchAction, probeHarvestMailboxAction, readKeptDocumentsAction } from "./mail-harvest-actions";
+import { harvestMailboxBatchAction, pauseBackgroundReadAction, probeHarvestMailboxAction, readEverythingInBackgroundAction, readKeptDocumentsAction } from "./mail-harvest-actions";
+import { loadMailReadBgStatus } from "@/lib/pos/cultivera-mail-read-bg";
 import { readHarvestStatus } from "@/lib/pos/cultivera-mail-harvest-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { harvestConfigLine, harvestMailConfigFromEnv } from "@/lib/pos/cultivera-mail-harvest-core";
@@ -112,6 +113,8 @@ export default async function MenuImportsPage({
   const harvestStatus = await readHarvestStatus(createSupabaseAdminClient(), harvestCfg.mailbox).catch(
     (e: unknown) => ({ ready: false as const, why: e instanceof Error ? e.message : String(e) }),
   );
+  // R74 S20: the background reader's status line (one read of one site_settings row; never throws).
+  const mailReadBg = await loadMailReadBgStatus(harvestStatus.ready ? harvestStatus.stored : null);
   // R50 S9: recent fetch runs (a crawler outage never breaks the page).
   const recentRuns: string[] = isCrawlerConfigured() ? await listPosRuns().catch(() => []) : [];
   // R50 S10b: the guide. An unknown cutover read never claims progress (every step = "check").
@@ -438,6 +441,40 @@ export default async function MenuImportsPage({
                 Read the kept PDFs and spreadsheets
               </Button>
             </form>
+            {/* R74 S20: one press, then the every-minute worker reads until nothing is left (no new cron). */}
+            <div className="mt-4 rounded-lg border border-white/10 p-3" data-testid="mail-read-bg">
+              <p className="text-xs text-white/50">
+                Read everything in the background: press once (for example before bed). It reads for about three
+                minutes right away, then the every-minute worker keeps reading, five at a time, newest email first,
+                until nothing is left. You can close this page. If LlamaParse is unavailable it waits instead of
+                reading the PDFs another way, and after three failed runs in a row it pauses itself and says why here.
+              </p>
+              {mailReadBg.ok ? (
+                <p
+                  className={`mt-2 text-xs ${mailReadBg.tone === "good" ? "text-emerald-300" : mailReadBg.tone === "warn" ? "text-[var(--admin-gold)]" : "text-white/70"}`}
+                  data-testid="mail-read-bg-status"
+                >
+                  {mailReadBg.text}
+                  {mailReadBg.lastRunAt ? ` Last run ${mailReadBg.lastRunAt.replace("T", " ").slice(0, 16)} UTC: ${mailReadBg.lastNote ?? ""}` : ""}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--admin-gold)]" data-testid="mail-read-bg-status">
+                  The background reading state could not be read: {mailReadBg.error}
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <form action={readEverythingInBackgroundAction}>
+                  <Button type="submit" variant="neutral" disabled={!harvestStatus.ready || !mailReadBg.ok || !mailReadBg.canStart}>
+                    Read everything in the background
+                  </Button>
+                </form>
+                <form action={pauseBackgroundReadAction}>
+                  <Button type="submit" variant="neutral" disabled={!mailReadBg.ok || !mailReadBg.canPause}>
+                    Pause background reading
+                  </Button>
+                </form>
+              </div>
+            </div>
           </div>
         </section>
 
