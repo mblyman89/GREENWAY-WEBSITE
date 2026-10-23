@@ -46,6 +46,7 @@ import {
   type PdfEngine,
   type ReadBatchResult,
 } from "@/lib/pos/cultivera-mail-read-core";
+import { llamaOutage } from "@/lib/pos/cultivera-mail-read-bg-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -87,6 +88,13 @@ export type ReadIo = {
 
 /** Storage says the object is not there: the document can never be read; marked unreadable. */
 export class DocumentGone extends Error {}
+
+/**
+ * R74 S20: the LlamaParse SERVICE could not run (key unset, credits used up, rate limit, outage).
+ * Thrown only by an I/O built with holdOnLlamaOutage (the background reader): the document stays
+ * "stored" for LlamaParse later instead of being read from the text layer unattended.
+ */
+export class LlamaUnavailable extends Error {}
 
 function msgOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -134,6 +142,7 @@ export async function readOneDocument(io: ReadIo, doc: StoredDoc): Promise<{ pat
     try {
       reading = await io.readPdf(bytes, doc);
     } catch (e) {
+      if (e instanceof LlamaUnavailable) throw e; // S20: hold the document, stop the run loudly
       reading = { text: "", engine: "none", note: msgOf(e).slice(0, 160) };
     }
     const sum = readPdfText({ text: reading.text, engine: reading.engine, layer, engineNote: reading.note });
@@ -165,13 +174,23 @@ export async function readOneDocument(io: ReadIo, doc: StoredDoc): Promise<{ pat
  * always finished and written (the budget leaves room for LlamaParse's own 90 s wait). A storage
  * outage stops every worker from starting more; the documents already in flight are still written.
  */
-export async function runReadBatch(io: ReadIo, opts: { budgetMs?: number; concurrency?: number } = {}): Promise<ReadBatchResult> {
+export async function runReadBatch(
+  io: ReadIo,
+  opts: {
+    budgetMs?: number;
+    concurrency?: number;
+    /** S20: the most documents this run picks up (the press: READ_BATCH_MAX_DOCS). */
+    maxDocs?: number;
+    /** S20: asked before each new document; false = paused / restarted, start no more. */
+    keepGoing?: () => Promise<boolean>;
+  } = {},
+): Promise<ReadBatchResult> {
   const started = io.now();
   const budgetMs = opts.budgetMs ?? READ_BATCH_TIME_BUDGET_MS;
   const waiting = await io.countStored();
   const res: ReadBatchResult = { ok: true, waiting, read: 0, parsed: 0, unreadable: 0, failed: 0, llamaparse: 0, unpdf: 0, left: waiting, stoppedBecause: null };
   if (waiting === 0) return res;
-  const docs = await io.listStored(READ_BATCH_MAX_DOCS);
+  const docs = await io.listStored(opts.maxDocs ?? READ_BATCH_MAX_DOCS);
   let next = 0;
   let stopped = false;
   let budgetHit = false;
@@ -180,17 +199,27 @@ export async function runReadBatch(io: ReadIo, opts: { budgetMs?: number; concur
       const may = readMayStart({ elapsedMs: io.now() - started, budgetMs, stopped, next, total: docs.length });
       if (may === "budget") budgetHit = true;
       if (may !== "go") return;
+      if (opts.keepGoing && !(await opts.keepGoing())) {
+        stopped = true;
+        res.stoppedBecause ??= "paused or restarted by a person";
+        return;
+      }
+      if (stopped || next >= docs.length) return; // another worker stopped or took the last one meanwhile
       const doc = docs[next];
       next += 1;
       let out: Awaited<ReturnType<typeof readOneDocument>>;
       try {
         out = await readOneDocument(io, doc);
       } catch (e) {
-        // Storage outage / refusal: stop loudly, leave this and the rest stored.
+        // Storage outage / refusal (or, in the background, LlamaParse down): stop loudly, leave
+        // this and the rest stored.
         res.failed += 1;
         res.ok = false;
         stopped = true;
-        res.stoppedBecause ??= `could not open ${doc.filename || doc.storage_key}: ${msgOf(e).slice(0, 160)}`;
+        res.stoppedBecause ??=
+          e instanceof LlamaUnavailable
+            ? `LlamaParse is unavailable (${msgOf(e).slice(0, 160)}); ${doc.filename || doc.storage_key} and the rest wait for LlamaParse`
+            : `could not open ${doc.filename || doc.storage_key}: ${msgOf(e).slice(0, 160)}`;
         return;
       }
       const wrote = await io.update(doc.id, out.patch);
@@ -225,6 +254,8 @@ export function supabaseReadIo(
     ) => Promise<{ ok: boolean; text: string; via: PdfEngine; error: string | null; note: string | null }>;
     loadWorkbook: (bytes: Uint8Array) => Promise<{ name: string; rows: unknown[][] }[]>;
     actor?: { id: string | null; email: string | null };
+    /** S20 (background reader): a LlamaParse SERVICE outage throws LlamaUnavailable instead of falling back. */
+    holdOnLlamaOutage?: boolean;
   },
 ): ReadIo {
   const mb = mailbox.toLowerCase();
@@ -271,6 +302,10 @@ export function supabaseReadIo(
         { filename: doc.filename || undefined, mimeType: "application/pdf" },
         { feature: "cultivera-mail-read", entityType: "cultivera_mail_doc", entityId: doc.id, actorId: deps.actor?.id ?? null, actorEmail: deps.actor?.email ?? null },
       );
+      if (deps.holdOnLlamaOutage && (o.via === "unpdf" || !o.ok)) {
+        const why = [o.error, o.note].filter(Boolean).join("; ");
+        if (llamaOutage(why)) throw new LlamaUnavailable(why.slice(0, 200));
+      }
       if (o.ok) return { text: o.text, engine: o.via === "unpdf" ? "unpdf" : "llamaparse", note: o.via === "unpdf" ? o.note : null };
       return { text: "", engine: "none", note: o.note ?? o.error };
     },

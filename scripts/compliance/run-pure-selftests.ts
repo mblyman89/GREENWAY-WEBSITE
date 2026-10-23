@@ -937,6 +937,7 @@ import { __runCultiveraMailMatchCoreTests } from "../../src/lib/pos/cultivera-ma
 import { __runCultiveraMailHarvestRunCoreTests } from "../../src/lib/pos/cultivera-mail-harvest-run-core";
 import { __runCultiveraCoverageCoreTests } from "../../src/lib/pos/cultivera-coverage-core";
 import { __runCultiveraMailReadCoreTests } from "../../src/lib/pos/cultivera-mail-read-core";
+import { __runCultiveraMailReadBgCoreTests } from "../../src/lib/pos/cultivera-mail-read-bg-core";
 import { __runCultiveraMailApplyCoreTests } from "../../src/lib/pos/cultivera-mail-apply-core";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
@@ -1857,6 +1858,7 @@ __runLiquidVolumeTests();
   { const r = __runCultiveraMailHarvestRunCoreTests(); if (r.failed > 0 || r.passed < 53) throw new Error(`cultivera-mail-harvest-run-core: ${r.failed} failed, ${r.passed} passed (expected >= 53)`); } // R74 S7: harvest run — page plan, documents per email, parse, rows for 0293; S18 new-mail line
   { const r = __runCultiveraCoverageCoreTests(); if (r.failed > 0 || r.passed < 41) throw new Error(`cultivera-coverage-core: ${r.failed} failed, ${r.passed} passed (expected >= 41)`); } // R74 S8: per-lot coverage report — transfer / email / unmatched, by vendor, CSV
   { const r = __runCultiveraMailReadCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`cultivera-mail-read-core: ${r.failed} failed, ${r.passed} passed (expected >= 60)`); } // R74 S9: read the kept PDFs (LlamaParse, grounded) and spreadsheets (exceljs cells)
+  { const r = __runCultiveraMailReadBgCoreTests(); if (r.failed > 0 || r.passed < 43) throw new Error(`cultivera-mail-read-bg-core: ${r.failed} failed, ${r.passed} passed (expected >= 43)`); } // R74 S20: read every kept document in the background (worker, lease, self-pause)
   { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());

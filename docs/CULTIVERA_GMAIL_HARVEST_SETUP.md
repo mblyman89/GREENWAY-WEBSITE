@@ -213,7 +213,14 @@ Wave 2 slice.
 When the harvest finds a PDF or spreadsheet, it keeps the file as "kept to read later". Under
 **Harvest the next batch** there is a second button, **Read the kept PDFs and spreadsheets**. Each
 press (R74 S19) reads five files at once, newest email first, for about three minutes (up to 100
-files), so keep pressing until it says **Finished**. It needs no new
+files), so keep pressing until it says **Finished**.
+
+**Or press once and walk away (R74 S20).** Below it, **Read everything in the background** reads for
+about three minutes right away, then the every-minute worker keeps reading (five at a time, newest
+email first) until nothing is left, even with the page closed. Press it before bed; the status line
+shows how many were read, how many are left and the last run. **Pause background reading** stops it
+(documents already being read finish). If LlamaParse is unavailable it waits rather than reading the
+PDFs another way, and after three failed runs in a row it pauses itself and the line says why. It needs no new
 database update; 0293 is enough.
 
 - **PDFs are read by LlamaParse.** This is the same AI reader the inbox intake uses, and it can read

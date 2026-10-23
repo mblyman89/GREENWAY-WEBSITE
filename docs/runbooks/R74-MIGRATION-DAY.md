@@ -51,8 +51,10 @@ the workbook fix for your scanner error) makes the day shorter but is not needed
    press it whenever new vendor emails may have arrived: it lists the newest page, opens only emails not
    yet kept, and stops at the first page that was already fully kept ("Checked for new emails: none since
    the last press" / "up to date now"). If it says "press the button again", press until it does not.
-4. Then press **Read the kept PDFs and spreadsheets** until nothing is left to read (five at a time,
-   newest email first, about three minutes and up to 100 per press).
+4. Then press **Read everything in the background** once (R74 S20; for example before bed) and let the
+   every-minute worker read every kept PDF and spreadsheet until the line says "Background reading
+   finished". Or press **Read the kept PDFs and spreadsheets** by hand (five at a time, newest email
+   first, about three minutes and up to 100 per press).
    Order: harvest everything first, then read. Reading in between is also fine; a read only works on
    files already kept.
 

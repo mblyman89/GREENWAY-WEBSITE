@@ -12,6 +12,7 @@
  *
  * R74 S7 adds "Harvest the next batch" below (harvestMailboxBatchAction).
  * R74 S9 adds "Read the kept PDFs and spreadsheets" (readKeptDocumentsAction).
+ * R74 S20 adds "Read everything in the background" + "Pause background reading".
  */
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -25,6 +26,7 @@ import { readPdfLayer } from "@/lib/inventory/pdf-extract";
 import { parsePdfWithFallback } from "@/lib/inbound-email/llamaparse-provider";
 import { readBatchLine } from "@/lib/pos/cultivera-mail-read-core";
 import { loadXlsxWorkbook, runReadBatch, supabaseReadIo } from "@/lib/pos/cultivera-mail-read-store";
+import { armMailReadBg, pauseMailReadBgNow, runMailReadBg } from "@/lib/pos/cultivera-mail-read-bg";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
@@ -135,4 +137,40 @@ export async function readKeptDocumentsAction(): Promise<void> {
       : { ok: false, error: line.slice(0, 300) },
   });
   back(ok ? `notice=${encodeURIComponent(line)}` : `error=${encodeURIComponent(line)}`);
+}
+
+/**
+ * R74 S20 - "Read everything in the background". Queues reading every kept document, then reads
+ * for one press-length run right now (so the first results show at once). After that the
+ * every-minute worker carries on until nothing is left; the page can be closed. Audited
+ * (cultivera_mail.read_bg_*). Writes only the documents' read fields, exactly like the Read button.
+ */
+export async function readEverythingInBackgroundAction(): Promise<void> {
+  const session = await requirePermission("menu.import");
+  if (!isSupabaseServiceConfigured) back(`error=${encodeURIComponent("Background reading: Supabase is not configured.")}`);
+  let q: string;
+  try {
+    await armMailReadBg(session.userId);
+    const r = await runMailReadBg({ actorId: session.userId, trigger: "press" });
+    if (!r.ok) q = `error=${encodeURIComponent(`Background reading is queued, but the first run stopped: ${r.error}`)}`;
+    else if (r.result) q = `${r.result.ok ? "notice" : "error"}=${encodeURIComponent(`Background reading is on. First run: ${r.note} The every-minute worker keeps reading until nothing is left; you can close this page.`)}`;
+    else q = `notice=${encodeURIComponent(`Background reading is on. ${r.note} The every-minute worker keeps reading until nothing is left; you can close this page.`)}`;
+  } catch (e) {
+    q = `error=${encodeURIComponent(`Background reading could not be started: ${e instanceof Error ? e.message : String(e)}`)}`;
+  }
+  back(q);
+}
+
+/** R74 S20 - "Pause background reading". The run stops starting documents at once; the ones in flight finish. */
+export async function pauseBackgroundReadAction(): Promise<void> {
+  const session = await requirePermission("menu.import");
+  if (!isSupabaseServiceConfigured) back(`error=${encodeURIComponent("Background reading: Supabase is not configured.")}`);
+  let q: string;
+  try {
+    await pauseMailReadBgNow(session.userId);
+    q = `notice=${encodeURIComponent("Background reading paused. Documents already being read are finished; nothing new starts. Press Read everything in the background to resume.")}`;
+  } catch (e) {
+    q = `error=${encodeURIComponent(`Background reading could not be paused: ${e instanceof Error ? e.message : String(e)}`)}`;
+  }
+  back(q);
 }
