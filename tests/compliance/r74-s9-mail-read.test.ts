@@ -33,12 +33,12 @@ describe("R74 S9 pure core", () => {
   it("self-tests pass at the pinned count", () => {
     const r = core.__runCultiveraMailReadCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(51);
+    expect(r.passed).toBe(60);
   });
   it("is registered in the pure self-test runner with its floor", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
     expect(src).toContain("__runCultiveraMailReadCoreTests()");
-    expect(src).toMatch(/cultivera-mail-read-core: .*expected >= 51/);
+    expect(src).toMatch(/cultivera-mail-read-core: .*expected >= 60/);
   });
 });
 
@@ -233,7 +233,8 @@ describe("R74 S9 batch runner (fake I/O)", () => {
       { id: "b", kind: "pdf", filename: "b.pdf", storage_key: "mail-harvest/b.pdf", status: "stored" },
     ];
     const { io, calls } = fakeIo(rows, new Map([["mail-harvest/a.pdf", new Error("storage: 503")]]));
-    const r = await store.runReadBatch(io);
+    // one at a time, so "the rest" is never started (S19 reads in parallel; r74-s19 covers that)
+    const r = await store.runReadBatch(io, { concurrency: 1 });
     expect(r.ok).toBe(false);
     expect(r.failed).toBe(1);
     expect(r.read).toBe(0);

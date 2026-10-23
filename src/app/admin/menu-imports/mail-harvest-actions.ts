@@ -98,7 +98,8 @@ export async function harvestMailboxBatchAction(): Promise<void> {
 }
 
 /**
- * R74 S9 — "Read the kept PDFs and spreadsheets". Reads up to 12 documents the harvest kept as
+ * R74 S9 — "Read the kept PDFs and spreadsheets". R74 S19: reads five at a time, newest email
+ * first, for up to 180 s (READ_BATCH_TIME_BUDGET_MS; at most 100 per press) the documents the harvest kept as
  * "stored": PDFs through LlamaParse (the intake's primary reader; unpdf on an outage), grounded by
  * the PDF's own text layer; spreadsheets through exceljs. Writes only the row's read fields (0293
  * allows stored -> parsed | unreadable). Audited. A doubled click reads each document once.
