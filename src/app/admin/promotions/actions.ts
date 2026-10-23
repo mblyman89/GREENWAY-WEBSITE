@@ -51,6 +51,7 @@ import {
 } from "@/lib/promotions/ai-copy";
 import { guardPromotionPublish, auditPublishedPromotions } from "@/lib/promotions/promo-guard";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
+import { parsePromoWindow, scheduleGate } from "@/lib/promotions/promo-preview-core";
 import {
   pickProductsToHide,
   promoHideReason,
@@ -344,6 +345,12 @@ function buildConfig(formData: FormData, discountType: DiscountType): Record<str
   return config;
 }
 
+/** R74 S28: the converted window, or nulls (callers check parsePromoWindow first). */
+function windowOrNull(formData: FormData): { startsAt: string | null; endsAt: string | null } {
+  const w = parsePromoWindow(str(formData, "starts_at"), str(formData, "ends_at"));
+  return w.ok ? { startsAt: w.startsAt, endsAt: w.endsAt } : { startsAt: null, endsAt: null };
+}
+
 function buildInput(formData: FormData): PromotionInput {
   const discountTypeRaw = str(formData, "discount_type") as DiscountType;
   const discount_type = DISCOUNT_TYPES.includes(discountTypeRaw) ? discountTypeRaw : "percent";
@@ -363,14 +370,19 @@ function buildInput(formData: FormData): PromotionInput {
     per_item_sale: formData.get("per_item_sale") === "on",
     bonus_note: str(formData, "bonus_note") || null,
     weekday: weekday !== null && weekday >= 0 && weekday <= 6 ? weekday : null,
-    starts_at: str(formData, "starts_at") || null,
-    ends_at: str(formData, "ends_at") || null,
+    // R74 S28: Starts/Ends are Pacific wall time (datetime-local has no zone);
+    // the callers run parsePromoWindow first and refuse an unreadable value,
+    // so this is always the converted UTC instant or null.
+    starts_at: windowOrNull(formData).startsAt,
+    ends_at: windowOrNull(formData).endsAt,
     priority: Math.round(num(formData, "priority", 0)),
   };
 }
 
 export async function createPromotionAction(formData: FormData): Promise<void> {
   const session = await requirePermission("promotions.manage");
+  const win = parsePromoWindow(str(formData, "starts_at"), str(formData, "ends_at"));
+  if (!win.ok) redirect(`/admin/promotions/new?error=${encodeURIComponent(win.error)}`);
   const input = buildInput(formData);
   if (!input.title) redirect("/admin/promotions/new?error=Title+is+required");
 
@@ -492,6 +504,8 @@ export async function updatePromotionAction(formData: FormData): Promise<void> {
   const existing = await getPromotion(id);
   if (!existing) redirect("/admin/promotions");
 
+  const win = parsePromoWindow(str(formData, "starts_at"), str(formData, "ends_at"));
+  if (!win.ok) redirect(`/admin/promotions/${id}?error=${encodeURIComponent(win.error)}`);
   const input = buildInput(formData);
   if (!input.title) redirect(`/admin/promotions/${id}?error=Title+is+required`);
 
@@ -518,15 +532,56 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
   const id = str(formData, "id");
   const status = str(formData, "status") as PostStatus;
   if (!id) redirect("/admin/promotions");
+  if (!["draft", "scheduled", "published", "archived"].includes(status)) {
+    redirect(`/admin/promotions/${id}?error=${encodeURIComponent("Nothing was changed: unknown status.")}`);
+  }
+
+  // R74 S28 (owner round 12, "preview before publishing ... schedule it to go
+  // live automatically"). Verified: nothing ever read status "scheduled", so
+  // the old Schedule button parked a promotion forever. What DOES go live by
+  // itself is a PUBLISHED promotion whose start is still ahead (isActiveNow /
+  // isPromoActive keep it off until then, the Thursday planner's pattern). So
+  // Schedule = scheduleGate (a real future start) + the SAME floor check as
+  // Publish + publish. The stored status is "published"; the start decides.
+  let effective: PostStatus = status;
+  let scheduledFor: string | null = null;
+  if (status === "scheduled") {
+    const current = await getPromotion(id);
+    if (!current) redirect("/admin/promotions");
+    const gate = scheduleGate(
+      { status: current.status, weekday: current.weekday, startsAt: current.starts_at, endsAt: current.ends_at },
+      new Date().toISOString(),
+    );
+    if (!gate.ok) redirect(`/admin/promotions/${id}?error=${encodeURIComponent(gate.error)}`);
+    effective = "published";
+    scheduledFor = gate.ok ? gate.startsAt : null;
+  }
 
   // CCRS HARD BLOCK: a discount may not take the sale price below the cost of
   // acquisition (CCRS Upload User Guide, Sale.csv Discount; RCW 69.50.357).
   // Refuse to publish any promotion whose worst case would cross a product's
   // cost floor — the register clamp would silently break the advertised deal.
-  if (status === "published") {
+  if (effective === "published") {
     const promo = await getPromotion(id);
     if (promo) {
       const guard = await guardPromotionPublish(promo);
+      // R74 S28: a check that could not see the whole menu and every cost
+      // proves nothing. Refuse instead of publishing on a partial read.
+      if (guard.readProblems.length > 0) {
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: "promotion.publish_blocked",
+          entityType: "promotion",
+          entityId: id,
+          after: { reason: "read_incomplete", problems: guard.readProblems, scheduled: scheduledFor != null },
+        });
+        redirect(
+          `/admin/promotions/${id}?error=${encodeURIComponent(
+            `Nothing was ${scheduledFor ? "scheduled" : "published"}: the cost-floor check could not read everything (${guard.readProblems.join("; ")}). Reload and try again.`,
+          )}`,
+        );
+      }
       if (guard.blocked) {
         const hits = guard.findings.filter((f) => f.reason === "below_cost");
         const sample = hits
@@ -545,6 +600,7 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
           entityId: id,
           after: {
             reason: "below_cost",
+            scheduled: scheduledFor != null,
             blockedCount: hits.length,
             products: hits.slice(0, 20).map((f) => ({
               key: f.key,
@@ -556,21 +612,21 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
         });
         redirect(
           `/admin/promotions/${id}?error=${encodeURIComponent(
-            `Publish blocked — ${hits.length} product${hits.length === 1 ? "" : "s"} would be discounted below acquisition cost (CCRS): ${sample}${more}. Hide it from the menu (CCRS cost-floor check, right side), raise the price, soften the discount, or exclude the product.`,
+            `${scheduledFor ? "Schedule" : "Publish"} blocked — ${hits.length} product${hits.length === 1 ? "" : "s"} would be discounted below acquisition cost (CCRS): ${sample}${more}. Hide it from the menu (CCRS cost-floor check, right side), raise the price, soften the discount, or exclude the product.`,
           )}`,
         );
       }
     }
   }
 
-  await setPromotionStatus(id, status, session.userId);
+  await setPromotionStatus(id, effective, session.userId);
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
-    action: `promotion.${status}`,
+    action: scheduledFor ? "promotion.scheduled" : `promotion.${effective}`,
     entityType: "promotion",
     entityId: id,
-    after: { status },
+    after: scheduledFor ? { status: effective, goesLiveAt: scheduledFor } : { status: effective },
   });
   revalidatePath("/admin/promotions");
   revalidatePath(`/admin/promotions/${id}`);
@@ -581,7 +637,7 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
   // in the ROOT LAYOUT (it prices the cart + card badges everywhere), so a
   // publish/unpublish must refresh every route that renders the layout.
   revalidatePath("/", "layout");
-  redirect(`/admin/promotions/${id}?status=${status}`);
+  redirect(`/admin/promotions/${id}?status=${scheduledFor ? "scheduled" : effective}`);
 }
 
 /**

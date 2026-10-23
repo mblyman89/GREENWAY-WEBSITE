@@ -26,6 +26,7 @@ import {
   type Weekday,
 } from "@/lib/promotions/types";
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
+import { utcToPacificLocal } from "@/lib/cms/content-schedule-core";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
 import { PromotionAiMechanics } from "@/components/admin/promotions/PromotionAiMechanics";
@@ -401,7 +402,8 @@ export function PromotionForm({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Schedule</h2>
         <p className="text-xs text-white/40">
           Pick a weekday for a recurring daily deal, OR leave it blank and set a date window for a
-          one-off / seasonal promo. Store timezone: America/Los_Angeles.
+          one-off / seasonal promo. Starts and Ends are store time (Pacific). To have it go live by
+          itself, set a future Starts, save, then press Schedule.
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="block">
@@ -424,7 +426,7 @@ export function PromotionForm({
             <input
               name="starts_at"
               type="datetime-local"
-              defaultValue={promotion?.starts_at?.slice(0, 16) ?? ""}
+              defaultValue={promotion?.starts_at ? utcToPacificLocal(promotion.starts_at) : ""}
               className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
@@ -433,7 +435,7 @@ export function PromotionForm({
             <input
               name="ends_at"
               type="datetime-local"
-              defaultValue={promotion?.ends_at?.slice(0, 16) ?? ""}
+              defaultValue={promotion?.ends_at ? utcToPacificLocal(promotion.ends_at) : ""}
               className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>

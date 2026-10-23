@@ -23,7 +23,7 @@
  * never publish a promise the register would have to silently break.
  */
 import "server-only";
-import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
+import { countVersionItems, getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { brandMatches } from "@/lib/promotions/brand-match-core";
 import {
@@ -34,7 +34,7 @@ import {
   type GuardRuleShape,
 } from "./promo-guard-core";
 import {
-  loadProductCosts,
+  loadProductCostsChecked,
   loadPublishedRules,
   parseEngineConfig,
   seedConfigFor,
@@ -55,6 +55,12 @@ export type GuardMenu = {
   hiddenSkipped: number;
   /** R74 S22: visible cards on the never-discount list (the engine never discounts them). */
   neverSkipped: number;
+  /**
+   * R74 S28: reads that failed or came back short. Empty = the check saw the
+   * whole menu and every cost. Not empty = a clean result proves nothing, so
+   * Publish and Schedule refuse (fail closed) and the preview says why.
+   */
+  readProblems: string[];
 };
 
 /**
@@ -63,14 +69,24 @@ export type GuardMenu = {
  * promo-fix-core.ts for why that is exactly what the register does).
  */
 export async function loadGuardMenu(): Promise<GuardMenu> {
-  if (!isSupabaseServiceConfigured) return { products: [], hiddenSkipped: 0, neverSkipped: 0 };
+  if (!isSupabaseServiceConfigured) return { products: [], hiddenSkipped: 0, neverSkipped: 0, readProblems: [] };
   const version = await getPublishedVersion();
-  if (!version) return { products: [], hiddenSkipped: 0, neverSkipped: 0 };
-  const [items, costs, neverKeys] = await Promise.all([
+  if (!version) return { products: [], hiddenSkipped: 0, neverSkipped: 0, readProblems: [] };
+  const [items, costRead, neverKeys] = await Promise.all([
     getVersionItems(version.id),
-    loadProductCosts(),
+    loadProductCostsChecked(),
     listNeverDiscountKeys(),
   ]);
+  const costs = costRead.costs;
+  const readProblems: string[] = [];
+  // getVersionItems returns [] on ANY failed read (never a partial menu), so
+  // an empty published menu is cross-checked with the independent count: a
+  // count that is unavailable or above zero means the read failed.
+  if (items.length === 0) {
+    const n = await countVersionItems(version.id);
+    if (n == null || n > 0) readProblems.push("the published menu could not be read");
+  }
+  if (!costRead.verdict.complete) readProblems.push(`costs: ${costRead.verdict.message}`);
   const rows = items.map((i) => ({
     key: i.source_item_id,
     hidden: i.hidden === true,
@@ -91,7 +107,7 @@ export async function loadGuardMenu(): Promise<GuardMenu> {
     priceMinorUnits: r.priceMinorUnits,
     costMinorUnits: r.costMinorUnits,
   }));
-  return { products, hiddenSkipped: split.hiddenSkipped, neverSkipped: split.neverSkipped };
+  return { products, hiddenSkipped: split.hiddenSkipped, neverSkipped: split.neverSkipped, readProblems };
 }
 
 /** The discountable published-menu products (see loadGuardMenu). */
@@ -170,6 +186,10 @@ export type PublishGuardResult = {
   hiddenSkipped: number;
   /** R74 S22: never-discount products left out of the check (whole menu). */
   neverSkipped: number;
+  /** R74 S28: the exact products checked (the preview lists every one). */
+  affected: GuardProduct[];
+  /** R74 S28: failed/short reads (see GuardMenu.readProblems). */
+  readProblems: string[];
 };
 
 /** The guard's view of a promotion's mechanics (R74 S23: shared with the fix-price hint). */
@@ -194,9 +214,9 @@ export function guardRuleShapeFor(promo: PromotionWithRules): GuardRuleShape {
 export async function guardPromotionPublish(
   promo: PromotionWithRules,
 ): Promise<PublishGuardResult> {
-  const { products, hiddenSkipped, neverSkipped } = await loadGuardMenu();
+  const { products, hiddenSkipped, neverSkipped, readProblems } = await loadGuardMenu();
   if (products.length === 0) {
-    return { blocked: false, findings: [], affectedCount: 0, hiddenSkipped, neverSkipped };
+    return { blocked: false, findings: [], affectedCount: 0, hiddenSkipped, neverSkipped, affected: [], readProblems };
   }
 
   const targets = promo.targets.map((t) => ({ scope: t.scope, value: t.value }));
@@ -212,6 +232,8 @@ export async function guardPromotionPublish(
     affectedCount: affected.length,
     hiddenSkipped,
     neverSkipped,
+    affected,
+    readProblems,
   };
 }
 
