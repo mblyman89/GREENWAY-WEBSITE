@@ -59,6 +59,10 @@ Round 10 plan: S19 makes one press of **Read the kept PDFs and spreadsheets** re
 
 Round 11 plan: S22 lets the publish guard skip products that are hidden from the menu or on the never-discount list (neither can be sold at a discount), and adds **Hide from menu** next to each blocking product on the promotion page, so a promotion publishes right away. S23 adds the other fix-it controls per blocking product (exclude from this promotion, never discount, fix the price or cost on the lot page) and a one-press hide of every blocker. S24 makes the inventory table show the same price the lot page shows (the live menu price when there is no onboarding price), with margin, extended retail, sort and export following it, and audits the other detail fields.
 
+## Owner request, round 12 (verbatim)
+
+> Thank you! I like the bad product queue and preview before publishing features. Please add those in this next round. I also want you to enhance the inventory audit count spreadsheet. A few of the laptops that we will use for the count are Mac’s, and they do not have the setting for disabling autocomplete for cells. Can you add this feature in programmatically? The last thing I want you to give me peace of mind about is, do the Cultivera products we migrate over to our system, and they move through our intake pipeline, will the keep their original CCRS designation or whatever it’s called when we go to upload the weekly CCRS data. I want to make sure products we actually intake get our new convention, while at the same time ensuring the cultivera products have their original CCRS identifier, so they get uploaded correctly with their original CCRS identification. Please go above and beyond. Break it up into slices, commit and push each individually. Commit work out of the sandbox, it’s very unstable. Follow the standing rules and never guess! Thank you!
+
 ## Decisions taken from round 2
 
 | # | Owner answer | Where it lands |
