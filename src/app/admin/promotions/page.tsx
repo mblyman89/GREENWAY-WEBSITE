@@ -225,6 +225,13 @@ export default async function PromotionsAdminPage({
         action={
           <div className="flex items-center gap-2">
             <Link
+              href="/admin/promotions/bad-products"
+              data-testid="promo-bad-products-link"
+              className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+            >
+              Bad product queue
+            </Link>
+            <Link
               href="/admin/promotions/never-discount"
               className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
             >
