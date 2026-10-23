@@ -172,6 +172,20 @@ export type PublishGuardResult = {
   neverSkipped: number;
 };
 
+/** The guard's view of a promotion's mechanics (R74 S23: shared with the fix-price hint). */
+export function guardRuleShapeFor(promo: PromotionWithRules): GuardRuleShape {
+  const rawConfig =
+    promo.config && Object.keys(promo.config).length > 0
+      ? parseEngineConfig(promo.config)
+      : seedConfigFor(promo.promo_key);
+  return {
+    discountType: promo.discount_type,
+    discountPercent: Number(promo.discount_percent),
+    discountFixed: promo.discount_fixed,
+    config: rawConfig,
+  };
+}
+
 /**
  * Worst-case-check a promotion against the published menu BEFORE publishing.
  * `blocked=true` when any affected product's worst-case discounted price would
@@ -189,16 +203,7 @@ export async function guardPromotionPublish(
   const exclusions = promo.exclusions.map((e) => ({ scope: e.scope, value: e.value }));
   const affected = affectedByScopes(products, targets, exclusions);
 
-  const rawConfig =
-    promo.config && Object.keys(promo.config).length > 0
-      ? parseEngineConfig(promo.config)
-      : seedConfigFor(promo.promo_key);
-  const shape: GuardRuleShape = {
-    discountType: promo.discount_type,
-    discountPercent: Number(promo.discount_percent),
-    discountFixed: promo.discount_fixed,
-    config: rawConfig,
-  };
+  const shape = guardRuleShapeFor(promo);
 
   const findings = findBelowCost(shape, affected);
   return {

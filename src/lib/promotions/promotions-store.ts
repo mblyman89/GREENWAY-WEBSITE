@@ -16,6 +16,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, mediaUrlsForIds } from "@/lib/enrichment/store";
 import { brandMatches } from "@/lib/promotions/brand-match-core";
@@ -143,6 +144,67 @@ async function replaceRules(
       .insert(
         exclusions.map((e) => ({ promotion_id: promotionId, scope: e.scope, value: e.value })),
       );
+  }
+}
+
+/**
+ * R74 S23: add product exclusions to ONE promotion without touching its other
+ * rules (insert only; the edit form's replaceRules would rewrite them all).
+ * Returns ok:false with the database's message on any failure (loud).
+ */
+export async function addPromotionProductExclusions(
+  promotionId: string,
+  keys: string[],
+): Promise<{ ok: true; added: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "The database isn't configured in this environment." };
+  }
+  if (keys.length === 0) return { ok: true, added: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("promotion_exclusions")
+      .insert(keys.map((k) => ({ promotion_id: promotionId, scope: "product", value: k })));
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, added: keys.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * R74 S23: the inventory lots behind some product keys (id, key, status,
+ * created_at), for the promotion page's "Fix price on the lot" links.
+ * Fail-soft [] (the links are a convenience; the product link stays).
+ */
+export async function listLotRefsForKeys(
+  keys: string[],
+): Promise<{ id: string; posProductKey: string; status: string; createdAt: string }[]> {
+  const uniq = Array.from(new Set(keys.filter(Boolean)));
+  if (!isSupabaseServiceConfigured || uniq.length === 0) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    type Row = { id: string; pos_product_key: string; status: string; created_at: string };
+    // Chunked AND paged (chunked-in.ts), so a key with many lots can never be
+    // silently cut at PostgREST's 1,000-row cap.
+    const data = await chunkedIn<string, Row>(uniq, async (chunk, from, to) => {
+      const { data: page, error } = await admin
+        .from("inventory_lots")
+        .select("id, pos_product_key, status, created_at")
+        .in("pos_product_key", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return [];
+      return (page as Row[] | null) ?? [];
+    });
+    return data.map((r) => ({
+      id: r.id,
+      posProductKey: r.pos_product_key,
+      status: r.status,
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
   }
 }
 
