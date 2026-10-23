@@ -24,6 +24,7 @@ import "server-only";
 import crypto from "node:crypto";
 import ExcelJS from "exceljs";
 import { COUNT_WORKBOOK_SPEC as S } from "@/lib/pos/cultivera-count-core";
+import { xlsxStructureProblems } from "@/lib/pos/xlsx-structure-core";
 
 export type CountWorkbookLot = { barcode: string; productName: string; storage: string };
 
@@ -39,6 +40,8 @@ export type CountWorkbookInput = {
 };
 
 const GREEN = "FF1F4D2B";
+/** Scan!B red-flag rule (relative to B2). Exported so the structural test pins the exact rule. */
+export const NOT_IN_CULTIVERA_CF_FORMULA = 'LEFT(B2,16)="NOT IN CULTIVERA"';
 const PALE = "FFEFF7F1";
 const AMBER = "FFFFF4CC";
 
@@ -135,7 +138,18 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
   }
   scan.addConditionalFormatting({
     ref: `B2:B${scanLast}`,
-    rules: [{ type: "beginsWith", operator: "beginsWith", text: "NOT IN CULTIVERA", priority: 1, style: { font: { bold: true, color: { argb: "FFC00000" } } } } as unknown as ExcelJS.ConditionalFormattingRule],
+    // R74 S16: an "expression" rule. exceljs 4.4 has no "beginsWith" rule type — it silently wrote an
+    // EMPTY <conditionalFormatting/> (no <cfRule>), which breaks the OOXML schema, and Excel showed
+    // "We found a problem with some content… Repaired Part: /xl/worksheets/sheet2.xml". The formula
+    // is relative to B2 (the top-left of the range) so Excel applies it row by row.
+    rules: [
+      {
+        type: "expression",
+        priority: 1,
+        formulae: [NOT_IN_CULTIVERA_CF_FORMULA],
+        style: { font: { bold: true, color: { argb: "FFC00000" } } },
+      },
+    ],
   });
   await scan.protect("", { selectLockedCells: true, selectUnlockedCells: true });
 
@@ -204,8 +218,27 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
 
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 1, visibility: "visible" }];
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+  // R74 S16: fail closed — never hand a counter a file Excel will "repair" (and maybe strip).
+  const problems = xlsxStructureProblems(await xlsxParts(buffer));
+  if (problems.length) throw new Error(`Count workbook failed its Excel structure check: ${problems.slice(0, 5).join("; ")}`);
   const who = input.counter.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "counter";
   return { buffer, workbookId, fileName: `greenway-count-${input.countDate}-${who}-${workbookId.slice(0, 8)}.xlsx` };
+}
+
+/** Unzip an .xlsx into { "xl/worksheets/sheet1.xml": text, … } (xlsx's own zip reader; no new dependency). */
+export async function xlsxParts(buffer: Buffer): Promise<Record<string, string>> {
+  const mod = await import("xlsx");
+  // CFB is not always a detected named export of the CJS build under ESM interop; fall back to default.
+  const CFB = mod.CFB ?? (mod as unknown as { default: typeof mod }).default.CFB;
+  if (!CFB) throw new Error("xlsx zip reader (CFB) is unavailable");
+  const cfb = CFB.read(buffer, { type: "buffer" });
+  const parts: Record<string, string> = {};
+  cfb.FileIndex.forEach((f: { type: number; content?: unknown }, i: number) => {
+    if (f.type !== 2 || !f.content) return;
+    const name = cfb.FullPaths[i].replace(/^Root Entry\//, "");
+    if (/\.(xml|rels)$/.test(name)) parts[name] = Buffer.from(f.content as Uint8Array).toString("utf8");
+  });
+  return parts;
 }
 
 /** xlsx buffer → the cell grids parseCountWorkbook takes (header:1, raw:false = formatted text). */

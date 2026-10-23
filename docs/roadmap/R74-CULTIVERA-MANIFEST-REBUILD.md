@@ -41,6 +41,12 @@ Internal working name during research was "R51 round 2". The repo already has an
 
 The four remaining pieces (round 7 report, "Left to do"): (1) start rebuilt manifests automatically -> S13; (2) field survivorship (manifest wins on name, type, cost; Cultivera wins on category, quantity) -> S14; (3) the "pick a category before finishing" gate -> S15; (4) the count workbook error fix -> waits for the owner's error message.
 
+## Owner request, round 9 (verbatim)
+
+> thank you. I am uploading the error text I see. the first part of the message appears first as a pop up, click continue and it opens the spreadsheet with another popup with the second part of the message. close that and then I can use the spreadsheet. it seems to work as designed, but I want to make sure it is solid and ready to go. after this slice, please provide for me a pdf of every step, very very detailed explanations, for everything my team and I need to do to both dry run the pipeline as well as one for the real migration day. what I should be doing right now to test everything, what I should do on October 30th. what I should do November 1st. and what I should be doing the first week after migration. I have run the email fetch all the way back as far as it goes now. will it find new emails that show up in that email address from now until migration day? in other words, if a manifest comes in tomorrow, and after it does, I click harvest next batch, will it find the new ones? if I get an updated ccrs account record next week before migration day, what should I do with it? when I get the final updated ccrs account data file sometime between november 1st and november 6th, what should I do with it? then, once its loaded into the system, how do we reconcile and clean everything up properly? I want to have a very thorough pdf report for us to use so we can not mess this up. it is far too important to get this wrong. please also include in this round the automatic go live feature for products held back for no category. I think this would be a huge efficiency boost and will make the process so much faster and smoother. keep going above and beyond for me, its working. follow the standing rules. thank you.
+
+Round 9 plan: S16 fixes the count workbook (the error text is recorded below under "S16 behavior"); S17 un-hides a card held for a category once a person has picked and approved it; then a detailed runbook PDF (dry run, now -> Oct 29, Oct 30 count, Nov 1 migration, the final CCRS file Nov 1-6, reconciliation, first week).
+
 ## Decisions taken from round 2
 
 | # | Owner answer | Where it lands |
@@ -71,6 +77,7 @@ The four remaining pieces (round 7 report, "Left to do"): (1) start rebuilt mani
 | S13 | Rebuilt manifests start onboarding automatically (round 8, piece 1; owner round 1: "the new manifests we recreate ... need to move automatically into onboarding"). A successful **Apply rebuild** or **Apply the email step** queues an automatic pass over that import's rebuilt manifests that have **no onboarding row yet**, running the SAME per-manifest Start (vendor lab results, onboarding rows, certificate archive + read, KB write-back + link, lab facts, Cultivera potency). It runs on a press (**Start onboarding now**, 200 s) and on the existing every-minute lookup worker when it had no lookup to do (600 s; no new cron, still 15). State is one `site_settings` row (`cultivera_auto_start`), every write a compare-and-swap on `updated_at`, one lease at a time, cursor saved after every manifest, **Pause** stops after the current manifest. Failures are named on the page, never hidden; an unreadable list or count stops the pass (nothing started blind). Panel "Automatic onboarding start" on the rebuild and coverage pages. Pure `cultivera-auto-start-core` (57 self-tests). No migration | (#1465) shipped |
 | S14 | Field survivorship (round 8, piece 2; owner round 2 answer 3: "Manifest wins on name, type, cost; Cultivera wins on category, quantity"). Inside Start on a rebuilt manifest (by hand, by vendor or by S13's automatic start), after the onboarding rows exist: the manifest's own line source - the kept Cultivera transfer file (parsed by the native vendor parser) or, for a manifest rebuilt from an emailed manifest, `raw_payload.line_facts` - decides the **name, type and cost** of each OPEN onboarding row matched by barcode (lot_code or CCRS barcode). Each lands as an attached fact with source `manifest` plus the row's own column, with fact history. Category and quantity are never written; lots (stock, quantity, cost accounting, CCRS) are never written; a person's value is kept; an approved row is never touched; two disagreeing lines = not guessed. Timeline note, Start note, audit `manifest_values`. The rebuilt onboarding row says where each field came from. Pure `cultivera-survivorship-core` (36 self-tests). No migration | (#1466) shipped |
 | S15 | The "pick a category before finishing" gate (round 8, piece 3; owner round 2 answer 3: "If Is Cannabis = true but the category is non-cannabis, owner must pick a category before the manifest can finish onboarding"). S1 holds such a card (hidden, `hidden_reason = needs_category`, a placeholder category). Approving its onboarding row on a rebuilt manifest now needs a **person's category pick in the same submission**: the placeholder the resolver accepts and a remembered pick do not count; a blank pick or the unresolved "create new" option is no pick; the vocabulary check still runs. The hold is read from the PUBLISHED menu version (strict version read); an unreadable hold refuses the approval even with a pick. "Approve all priced" (no picks) skips held rows and says why. A rebuilt manifest is never **Done** (drafts page section, Receiving table, vendor roll-up) while a held product is not approved; an unreadable hold read never shows Done. The onboarding row makes the category picker required with a note saying why. Pure `cultivera-category-gate-core` (22 self-tests); `cultivera-onboarding-core` +5. No migration, no new action | (#1467) shipped |
+| S16 | The count workbook opens in Excel with no repair prompt (round 9; owner round 7 + the uploaded error). Root cause: exceljs 4.4 has no `beginsWith` conditional-format type, so the Scan sheet's red "NOT IN CULTIVERA" rule was written as an EMPTY `<conditionalFormatting sqref="B2:B5001"/>`, which the OOXML schema forbids; Excel repaired `/xl/worksheets/sheet2.xml` (= Scan). Now an `expression` rule `LEFT(B2,16)="NOT IN CULTIVERA"` with its bold-red dxf. New pure `xlsx-structure-core` (29 self-tests): an Excel-strict check (well-formed XML, worksheet child order, non-empty conditional formats with formula/priority/dxf in range, data-validation counts). The builder runs it on every workbook and **refuses to hand out** a file that fails it. Reports and LIQ-1295 checked too: clean. No migration | in progress |
 | W2 | Rest of Wave 2: the executor that writes S6's plan | done by S10 |
 | W3 | Auto-Start rebuilt manifests (S13), Cultivera tab + vendor filter + batch Gemini by vendor (S11), field survivorship (S14), category-pick finish gate (S15) | in progress |
 
@@ -349,11 +356,49 @@ Where to see it. The Start note adds "N took the name, type and cost from the ve
 - **The onboarding row.** A held row shows the "Pick a category" chip, the category picker becomes required (no "Keep auto"), and a note explains the hold. If the page could not read the holds, the row says so; the server re-checks at Approve either way.
 - **Not changed.** Stock, prices, sizes and the live card's visibility are untouched. The card stays hidden after the pick (the card refresh never changes visibility, by design since R50 S3c); un-hiding a picked card is listed as a follow-up for the owner to decide.
 
-## Pending: the count workbook error (owner, round 7)
+## S16 behavior (the count workbook error, owner rounds 7 and 9)
 
-Owner: "i have set up all my scanners per the count page, i have tested the spreadsheet and it works. it gives me an error. i will upload the error message to add to the roadmap. lets complete all the remaining work first before we fix and enhance the workbook."
+Owner (round 7): "i have set up all my scanners per the count page, i have tested the spreadsheet and it works. it gives me an error. i will upload the error message to add to the roadmap. lets complete all the remaining work first before we fix and enhance the workbook."
 
-Status: **waiting for the error message** (screenshot or text). Once uploaded it is recorded here verbatim and fixed in a later slice, after the remaining R74 work (W3).
+The error the owner uploaded in round 9 (Mac Excel), verbatim. First popup:
+
+> We found a problem with some content in 'greenway-count-2026-10-22-michael-627e354e.xlsx'. Do you want us to try to recover as much as we can? If you trust the source of this workbook, click Yes.
+
+Second popup, after Excel opens the file:
+
+> Repair Result to greenway-count-2026-10-22-michael-627e354e0.xml
+> Errors were detected in file '/Users/michaellyman/Downloads/greenway-count-2026-10-22-michael-627e354e.xlsx'
+> Following is a list of repairs: Repaired Part: /xl/worksheets/sheet2.xml part with XML error. HRESULT 0x8000ffff
+
+- **Root cause (reproduced, not guessed).** `sheet2.xml` is the **Scan** sheet. Its red "NOT IN CULTIVERA" highlight was declared as a `beginsWith` rule. exceljs 4.4 has no such rule type: it wrote `<conditionalFormatting sqref="B2:B5001"/>` with **no `<cfRule>` inside**. The OOXML schema requires at least one rule, so Excel threw the element away ("repair"). Everything else in the file was valid, which is why the workbook still worked after the popups. LibreOffice, the `xlsx` reader and exceljs all ignore the empty element, so no earlier test could see it.
+- **Fix.** The rule is now an `expression` rule, `LEFT(B2,16)="NOT IN CULTIVERA"` on `B2:B5001`, with a bold dark-red font (its dxf is written to `styles.xml`). This is the form Excel itself writes for "Text that begins with". Scanned items that are not in Cultivera now turn **bold red** in column B, as first designed. Before, the highlight never showed.
+- **Strict check on every workbook (fail closed).** A new pure module, `xlsx-structure-core`, reads the generated file as strictly as Excel does. It checks that:
+  - every part is well-formed XML;
+  - worksheet elements follow the schema order (ECMA-376 CT_Worksheet);
+  - no conditional format is empty;
+  - every rule has a known type, a priority and a non-empty formula when its type needs one;
+  - text rules carry `text=` and `operator=`;
+  - a rule's dxf exists in `styles.xml`;
+  - data-validation counts match.
+
+  `buildCountWorkbook` runs this check before returning. If any problem is found, the download fails with the problem named, and **no file is handed to a counter**.
+- **Checked too.** The report exports (`buildXlsx`) and the LIQ-1295 excise return pass the same check with no problems.
+- **Not changed.** These all stay the same:
+  - sheet order, tab colours and the frozen header;
+  - which cells are unlocked;
+  - the lookup formula and the Hand Count whole-number rule;
+  - hidden Lots / very hidden Meta;
+  - the workbook id, the file name and the upload/parse path.
+
+  A workbook a counter already downloaded still uploads fine. Excel just shows the popups once (the repair only removes the empty highlight). **Download fresh workbooks for the real Oct 30 count anyway.**
+- **Tests.** `r74-s16-count-workbook-structure.test.ts` covers five things:
+  - the real workbook is clean;
+  - the Scan rule's exact XML and its dxf;
+  - the old rule shape, written by the same exceljs, is caught with the owner's exact symptom;
+  - the builder refuses when the check reports a problem;
+  - a counter's re-saved file is still clean and still parses.
+
+  The self-test runner pins 29 checks.
 
 ## Round 3 walkthrough
 

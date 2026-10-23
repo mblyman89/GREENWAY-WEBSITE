@@ -751,6 +751,7 @@ import { __runCultiveraVendorCoreTests } from "../../src/lib/inventory/cultivera
 import { __runCultiveraAutoStartCoreTests } from "../../src/lib/inventory/cultivera-auto-start-core";
 import { __runCultiveraSurvivorshipCoreTests } from "../../src/lib/inventory/cultivera-survivorship-core";
 import { __runCultiveraCategoryGateCoreTests } from "../../src/lib/inventory/cultivera-category-gate-core";
+import { __runXlsxStructureCoreTests } from "../../src/lib/pos/xlsx-structure-core";
 import { __runCultiveraWciaCoreTests } from "../../src/lib/inventory/cultivera-wcia-core";
 import { __runCultiveraWciaBackfillCoreTests } from "../../src/lib/inventory/cultivera-wcia-backfill-core";
 import { __runCoaArchiveBackfillCoreTests } from "../../src/lib/inventory/coa-archive-backfill-core";
@@ -1660,6 +1661,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-auto-start-core", __runCultiveraAutoStartCoreTests(), 57); // R74 S13: automatic onboarding Start of rebuilt manifests
   assertRan("cultivera-survivorship-core", __runCultiveraSurvivorshipCoreTests(), 36); // R74 S14: manifest wins on name, type, cost; Cultivera on category, quantity
   assertRan("cultivera-category-gate-core", __runCultiveraCategoryGateCoreTests(), 22); // R74 S15: pick a category before finishing
+  assertRan("xlsx-structure-core", __runXlsxStructureCoreTests(), 29); // R74 S16: Excel-strict workbook structure
   assertRan("cultivera-wcia-core", __runCultiveraWciaCoreTests(), 35);
   assertRan("cultivera-wcia-backfill-core", __runCultiveraWciaBackfillCoreTests(), 27);
   assertRan("coa-archive-backfill-core", __runCoaArchiveBackfillCoreTests(), 52);
