@@ -21,13 +21,13 @@ describe("R74 S5 pure core", () => {
   it("self-tests pass at the pinned count", () => {
     const r = __runCultiveraMailHarvestCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(59);
+    expect(r.passed).toBe(75);
   });
 
   it("is registered in the pure self-test runner with its floor", () => {
     const src = readFileSync("scripts/compliance/run-pure-selftests.ts", "utf8");
     expect(src).toContain("__runCultiveraMailHarvestCoreTests()");
-    expect(src).toMatch(/cultivera-mail-harvest-core: .*expected >= 59/);
+    expect(src).toMatch(/cultivera-mail-harvest-core: .*expected >= 75/);
   });
 });
 

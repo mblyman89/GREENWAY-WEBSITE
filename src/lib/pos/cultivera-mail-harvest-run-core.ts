@@ -397,6 +397,8 @@ export type HarvestBatchResult = {
   cursorLine: string;
   stoppedBecause: string | null;
   errors: string[];
+  /** R74 S18: set when the press ran a new-mail pass on a finished walk. */
+  newMailPass?: "continues" | "finished";
 };
 
 export function harvestBatchLine(r: HarvestBatchResult): string {
@@ -404,8 +406,9 @@ export function harvestBatchLine(r: HarvestBatchResult): string {
   const head = `Email harvest of ${r.mailbox}: ${r.opened} email${r.opened === 1 ? "" : "s"} read, ${r.documents} vendor document${r.documents === 1 ? "" : "s"} kept (${r.parsed} with barcodes).`;
   const fails = r.failedEmails > 0 ? ` ${r.failedEmails} email${r.failedEmails === 1 ? "" : "s"} could not be read and will be tried again: ${r.errors[0] ?? ""}` : "";
   const stop = r.stoppedBecause ? ` Stopped early: ${r.stoppedBecause}.` : "";
-  const more = r.deferred > 0 || !r.pageComplete ? " Press the button again for the next batch." : "";
-  return `${head}${fails}${stop} ${r.cursorLine}${more}`.replace(/\s+/g, " ").trim();
+  const more = r.deferred > 0 || !r.pageComplete || r.newMailPass === "continues" ? " Press the button again for the next batch." : "";
+  const fresh = r.newMailPass === "finished" ? (r.opened > 0 ? " Checked for new emails: up to date now." : " Checked for new emails: none since the last press.") : "";
+  return `${head}${fails}${stop} ${r.cursorLine}${fresh}${more}`.replace(/\s+/g, " ").trim();
 }
 
 /* ------------------------------------------------------------------ *
@@ -593,6 +596,12 @@ export function __runCultiveraMailHarvestRunCoreTests(): { passed: number; faile
     ok(/3 emails read, 4 vendor documents kept \(2 with barcodes\)/.test(line) && /next batch/.test(line), "batch line");
     ok(/did not run: Not set up/.test(harvestBatchLine({ ...r, ok: false, opened: 0, stoppedBecause: "Not set up" })), "not-run line");
     ok(/1 email could not be read/.test(harvestBatchLine({ ...r, failedEmails: 1, errors: ["m1: x"] })), "failure is loud");
+    // R74 S18: the new-mail pass says what it found
+    const fin = { ...r, deferred: 0, pageComplete: true, cursorLine: "Finished." };
+    ok(/none since the last press/.test(harvestBatchLine({ ...fin, opened: 0, newMailPass: "finished" })) && !/again/.test(harvestBatchLine({ ...fin, opened: 0, newMailPass: "finished" })), "no new mail: says so, no press-again");
+    ok(/up to date now/.test(harvestBatchLine({ ...fin, newMailPass: "finished" })), "new mail kept: up to date");
+    ok(/press the button again/i.test(harvestBatchLine({ ...fin, newMailPass: "continues" })), "a pass that continues asks for another press");
+    ok(!/new emails/.test(harvestBatchLine(fin)), "the walk's own batch line is unchanged");
   }
 
   // ---- mailDocsFromRows ----

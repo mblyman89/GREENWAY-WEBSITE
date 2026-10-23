@@ -47,8 +47,10 @@ the workbook fix for your scanner error) makes the day shorter but is not needed
 2. Press **Harvest the next batch**. Each press reads up to 47 emails, **newest first**, so each press
    reaches further back in time. The line under the button now says:
    "Emails kept run from <oldest> (oldest) to <newest> (newest). Last batch ran <time>."
-3. Keep pressing until it says **Finished** and "The whole mailbox has been read - no need to press
-   Harvest again". After that a press only looks for new emails.
+3. Keep pressing until it says **Finished** and "The whole mailbox has been read". After that (R74 S18)
+   press it whenever new vendor emails may have arrived: it lists the newest page, opens only emails not
+   yet kept, and stops at the first page that was already fully kept ("Checked for new emails: none since
+   the last press" / "up to date now"). If it says "press the button again", press until it does not.
 4. Then press **Read the kept PDFs and spreadsheets** until nothing is left to read (12 per press).
    Order: harvest everything first, then read. Reading in between is also fine; a read only works on
    files already kept.

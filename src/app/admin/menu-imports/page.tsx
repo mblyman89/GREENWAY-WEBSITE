@@ -392,7 +392,8 @@ export default async function MenuImportsPage({
               transfer link in Cultivera&apos;s emails). Files are kept privately; nothing in the mailbox changes. Press
               again until it says Finished. A second press while one is running stores nothing twice. Order: harvest
               until Finished, then read the kept PDFs and spreadsheets below (reading in between is also fine; each
-              read only works on files already kept).
+              read only works on files already kept). After Finished, press it whenever new vendor emails may have
+              arrived: it opens only the new ones (newest first) and stops at the first page it has already kept.
             </p>
             {harvestStatus.ready ? (
               <p className="mt-2 text-xs text-white/70" data-testid="mail-harvest-status">
