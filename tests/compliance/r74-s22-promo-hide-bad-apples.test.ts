@@ -42,6 +42,7 @@ vi.mock("@/lib/supabase/env", () => ({ isSupabaseServiceConfigured: true }));
 vi.mock("@/lib/pos/menu-version", () => ({
   getPublishedVersion: async () => ({ id: "v1" }),
   getVersionItems: async () => state.items.map((i) => ({ ...i })),
+  countVersionItems: async () => state.items.length,
 }));
 vi.mock("@/lib/promotions/discount-engine", async () => {
   const core = await vi.importActual<typeof import("@/lib/promotions/published-rules-core")>(
@@ -49,6 +50,8 @@ vi.mock("@/lib/promotions/discount-engine", async () => {
   );
   return {
     loadProductCosts: async () => state.costs,
+    // R74 S28: the guard now reads costs with the completeness verdict.
+    loadProductCostsChecked: async () => ({ costs: state.costs, verdict: { complete: true, reason: "complete", rowsRead: state.costs.size, missing: 0, message: "" } }),
     loadPublishedRules: async () => [],
     parseEngineConfig: core.parseEngineConfig,
     seedConfigFor: () => ({}),
