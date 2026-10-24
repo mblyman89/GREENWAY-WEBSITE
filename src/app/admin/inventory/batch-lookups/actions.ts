@@ -13,6 +13,8 @@ import { cancelManifestLookup, enqueueManifestLookup } from "@/lib/catalog/looku
 import { readBatchControl, writeBatchControl } from "@/lib/ai/batch-control-server";
 import { cancelGeminiBatch } from "@/lib/ai/gemini-batch-server";
 import { loadBatchConsole, requeueFailedItems } from "@/lib/ai/batch-console-server";
+import { runVendorConfidenceAttach } from "@/lib/catalog/cultivera-confidence-server";
+import { CONFIDENCE_TAB, parseAttachMode, type AttachMode } from "@/lib/catalog/cultivera-confidence-core";
 import { BATCH_CONSOLE_PATH, BATCH_WAVE, isRateLimitFailure, planBatches, waveManifestIds, withJobPaused } from "@/lib/ai/batch-console-core";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -121,4 +123,26 @@ export async function rerunFailedAction(formData: FormData): Promise<void> {
   const { items: n, jobs: jobCount, reopened } = await requeueFailedItems(pick.map((f) => f.itemId));
   await recordAudit({ actorId: who.userId, actorEmail: who.email, action: "ai_batch.failed_rerun", entityType: "lookup_job_items", entityId: null, after: { scope, items: n, jobs: jobCount } });
   back("monitor", `${n} failed product${n === 1 ? "" : "s"} queued again across ${jobCount} manifest${jobCount === 1 ? "" : "s"}${reopened < jobCount ? " (a manifest with another open lookup picks them up when that one finishes)" : ""}.`);
+}
+
+/**
+ * R74 S38: the Cultivera vendor confidence buttons. mode "confident" = every
+ * fact at or above CULTIVERA_AUTO_ATTACH_MIN, "all" = every fact found,
+ * "selected" = the ticked products (every fact). Approves only rows with a
+ * strain type; the rest wait on the onboarding page for the pick.
+ */
+export async function attachVendorConfidenceAction(formData: FormData): Promise<void> {
+  const who = await actor();
+  const vendor = String(formData.get("vendor") ?? "").trim().slice(0, 120);
+  const mode = parseAttachMode(formData.get("mode"));
+  const view = String(formData.get("view") ?? "") === "unsure" ? "&view=unsure" : "";
+  const to = (msg: string, bad: boolean): never => {
+    revalidatePath(BATCH_CONSOLE_PATH);
+    revalidatePath("/admin/inventory/drafts");
+    redirect(`${BATCH_CONSOLE_PATH}?tab=${CONFIDENCE_TAB}&vendor=${encodeURIComponent(vendor)}${view}&${bad ? "err" : "msg"}=${encodeURIComponent(msg.slice(0, 400))}`);
+  };
+  if (!vendor || !mode) to("Pick a vendor and a button.", true);
+  const draftIds = formData.getAll("d").map(String).filter((x) => UUID.test(x)).slice(0, 500);
+  const r = await runVendorConfidenceAttach({ vendor, mode: mode as AttachMode, draftIds, actor: who });
+  to(r.sentence, !r.ok);
 }
