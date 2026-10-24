@@ -100,15 +100,28 @@ export async function assignProductIds(
   assignedBy: string,
   preprodRun?: string,
 ): Promise<AssignedProductId[]> {
-  const { data, error } = await admin.rpc("ccrs_assign_product_ids", {
-    p_env: env,
-    p_keys: [...keys],
-    p_assigned_by: assignedBy,
-    p_preprod_run: env === "preprod" ? (preprodRun ?? null) : null,
-  });
-  if (error) throw new Error(`ccrs_assign_product_ids: ${error.code ?? "?"} ${error.message ?? ""}`.trim());
-  return checkAssignResult(env, keys, data, preprodRun);
+  // R74 S39: chunked. A table-returning RPC answer is capped by PostgREST's
+  // max-rows (1,000), so one call for 1,139 keys came back short and
+  // checkAssignResult refused it. Each chunk is its own idempotent call.
+  const out: AssignedProductId[] = [];
+  const uniq = [...new Set(keys.map((k) => k.trim()).filter((k) => k !== ""))];
+  if (uniq.length === 0) return checkAssignResult(env, [], [], preprodRun);
+  for (let i = 0; i < uniq.length; i += ASSIGN_CHUNK) {
+    const chunk = uniq.slice(i, i + ASSIGN_CHUNK);
+    const { data, error } = await admin.rpc("ccrs_assign_product_ids", {
+      p_env: env,
+      p_keys: [...chunk],
+      p_assigned_by: assignedBy,
+      p_preprod_run: env === "preprod" ? (preprodRun ?? null) : null,
+    });
+    if (error) throw new Error(`ccrs_assign_product_ids: ${error.code ?? "?"} ${error.message ?? ""}`.trim());
+    out.push(...checkAssignResult(env, chunk, data, preprodRun));
+  }
+  return out;
 }
+
+/** Keys per ccrs_assign_product_ids call: well under PostgREST's 1,000-row answer cap. */
+export const ASSIGN_CHUNK = 500;
 
 export async function emitOutboxFiles(
   admin: Admin,

@@ -13,6 +13,7 @@
 import "server-only";
 import { generateJSON, isAiConfigured, aiModelId } from "@/lib/ai/provider";
 import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
+import { isHeldBack } from "@/lib/compliance/ccrs-submit-gate-core";
 
 export { isAiConfigured };
 
@@ -60,10 +61,15 @@ function summarize(batch: CcrsBatch): string {
   for (const f of batch.files) {
     lines.push(`  Group ${f.group} ${f.type}.csv: ${f.recordCount} records${f.empty ? " (empty)" : ""}${f.skipped ? `, ${f.skipped} skipped` : ""}`);
   }
-  const errors = batch.syncIssues.filter((s) => s.severity === "error");
+  // R74 S39: held-back groups are left out of the files and do not block the upload.
+  const all = batch.syncIssues.filter((s) => s.severity === "error");
+  const held = all.filter((s) => isHeldBack({ severity: "error", code: s.code }));
+  const errors = all.filter((s) => !held.includes(s));
   const warns = batch.syncIssues.filter((s) => s.severity === "warning");
   lines.push(`Blocking sync errors: ${errors.length}`);
   for (const e of errors) lines.push(`  ERROR [${e.file}]: ${e.message}${e.count ? ` (${e.count})` : ""}`);
+  lines.push(`Held back (left out of the files, still owed, NOT blocking): ${held.length}`);
+  for (const h of held) lines.push(`  HELD [${h.file}]: ${h.message}${h.count ? ` (${h.count})` : ""}`);
   lines.push(`Sync warnings: ${warns.length}`);
   for (const w of warns.slice(0, 20)) lines.push(`  WARN [${w.file}]: ${w.message}${w.count ? ` (${w.count})` : ""}`);
   // The AI prompt is bounded (20 lines); say so rather than hide the rest.

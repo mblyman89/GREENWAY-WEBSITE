@@ -684,3 +684,245 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
   - A vendor picker and a scorecard (confidence, facts at the bar, will auto-approve, need strain type, held back).
   - Buttons: "Attach all facts at or above 85% - hold back N products for review" (enabled only when the vendor scores 85% or more), "Attach every fact found", and "Show unsure".
   - A per-product table with each fact's confidence, checkboxes to attach the ticked products, and links to the onboarding row.
+
+
+## Round 19 - owner request (verbatim)
+
+> thank you. I want to shift our attention to the ccrs weekly upload. the production page and the preproduction page have blocking errors that we need to work out. we can not be blocked from reporting to the state. we can hold off on reporting until we know for sure, but we cant block good records from being uploaded. on the production page it shows 2 blocking errors, one is due to our copy of my ccrs record ends at 9/15/26 and so 800 or so are not recognized due to being added to the ccrs record since then. the other one is saying I need to assign our own gw ccrs ids to 12 products. I did a factory reset before testing the cultivera migration pipeline. so there should not have been the need to assign our own ccrs ids I dont think. but regardless, we need a solution that allows us to report what we can, keep track of what we still need to report so that I can fix them and then reupload them. the big error I see right now is the system does not have all of our most current ccrs data loaded. so 800 or so products are blocking the upload process. this is what the production page says, "Step 2 — Review week 2026-10-18 – 2026-10-24
+> Due Sunday 2026-10-25. This week is still in progress — you can preview, but record it after Saturday.
+>
+> Total records
+>
+> 2,618
+>
+> Blocking errors
+>
+> 1
+>
+> Warnings
+>
+> 37
+>
+> Medical sale rows
+>
+> 0
+>
+> CCRS ids in this file: Cultivera's filed ids vs ours
+> Cultivera lots (migrated)
+>
+> Lots
+>
+> 3379
+>
+> Sent under Cultivera's id
+>
+> 2530
+>
+> Cultivera products named
+>
+> 2204
+>
+> Held: not on the CCRS record (E52)
+>
+> 849
+>
+> Left out for another reason
+>
+> 0
+>
+> Sent as new
+>
+> 0
+>
+> No CCRS id
+>
+> 0
+>
+> Id is not the barcode (E54)
+>
+> 0
+>
+> Lots we received (our intake)
+>
+> Lots
+>
+> 0
+>
+> New records (our id)
+>
+> 0
+>
+> Already filed by us
+>
+> 0
+>
+> On a Cultivera record (E55)
+>
+> 0
+>
+> Left out
+>
+> 0
+>
+> No CCRS id
+>
+> 0
+>
+> Products
+>
+> GWP- new (Insert)
+>
+> 12
+>
+> GWP- update
+>
+> 0
+>
+> Cultivera's filed product used
+>
+> 669
+>
+> Cultivera-only, held
+>
+> 319
+>
+> Left out (no GWP- id yet)
+>
+> 0
+>
+> Non-GWP id (old way)
+>
+> 0
+>
+> ✕ Validation FAILED — the zip download is blocked until these errors are fixed:
+> • [Inventory] 849 Cultivera lot(s) were left out of Inventory.csv because their id is not in our copy of what CCRS holds. Sending them would create new records (Insert [G L0246]) and ask for new GWP- product ids, instead of updating what Cultivera filed [EXAM L0096]. Merge the fresh CCRS data copy (re-seed, Part 17 §G), or correct the lot's id to the barcode Cultivera filed, then rebuild. (849)E52_CULTIVERA_LOT_NOT_ON_RECORD
+> 849 × Cultivera lot not on the CCRS record. Next step: This lot came over from Cultivera, but its id is not in our copy of what CCRS holds, so sending it would create a NEW record instead of updating Cultivera's filing. Merge the fresh CCRS data copy (re-seed, Part 17 §G, slice S-15). If the lot's id is wrong, correct it to the barcode Cultivera filed. Then rebuild. Nothing is sent on a guess.
+> Show all 849 row(s)"
+> I already assigned the gwp ids so thats not shown any more. the preproduction page has an error for every product. it shows, "CCRS ids in this file: Cultivera's filed ids vs ours
+> Every Cultivera lot in this week's file keeps the CCRS id Cultivera filed, and every lot we received ourselves goes out under our own id with a GWP- product id.
+>
+> PREprod is a separate system from production, so lots there are sent as new records. This is expected.
+>
+> Cultivera lots (migrated)
+>
+> Lots
+>
+> 3379
+>
+> Sent under Cultivera's id
+>
+> 0
+>
+> Cultivera products named
+>
+> 0
+>
+> Held: not on the CCRS record (E52)
+>
+> 0
+>
+> Left out for another reason
+>
+> 3379
+>
+> Sent as new
+>
+> 0
+>
+> No CCRS id
+>
+> 0
+>
+> Id is not the barcode (E54)
+>
+> 0
+>
+> Lots we received (our intake)
+>
+> Lots
+>
+> 0
+>
+> New records (our id)
+>
+> 0
+>
+> Already filed by us
+>
+> 0
+>
+> On a Cultivera record (E55)
+>
+> 0
+>
+> Left out
+>
+> 0
+>
+> No CCRS id
+>
+> 0
+>
+> Products
+>
+> GWP- new (Insert)
+>
+> 0
+>
+> GWP- update
+>
+> 0
+>
+> Cultivera's filed product used
+>
+> 0
+>
+> Cultivera-only, held
+>
+> 0
+>
+> Left out (no GWP- id yet)
+>
+> 1000
+>
+> Non-GWP id (old way)
+>
+> 0
+>
+> ✕ Validation FAILED — the zip download is blocked until these errors are fixed:
+> • [Product] 1000 product(s) were left out of Product.csv because no CCRS Product id is assigned or its CCRS status is unproven [G L0246-L0248]. Lots of these products are withheld from Inventory.csv too. (1000)E41_LEDGER_WITHHELD
+> 1000 × no CCRS Product id assigned. Next step: Scroll to "CCRS files — PREprod", PREprod set-up step 2, and press "Assign PREprod ids". PREprod ids are separate from production ids by design, so assigning in production does not carry over. Go to PREprod set-up
+> Show all 1000 row(s)
+> • [Inventory] 3379 lot(s) were left out of Inventory.csv because we cannot prove what CCRS holds for them. Insert creates a record and Update alters "an existing record indicated by external identifier" [G L0246-L0248], so sending either on a guess risks a rejected file. Each row says why; reconcile it, then rebuild. (3379)E41_LEDGER_WITHHELD
+> 2240 × product not in the published menu. Next step: The lot's POS product key matches no visible item in the published menu, so Product.csv cannot name it. Open Menu review: if the item is hidden, fix the reason it is hidden and publish; if it is only in a staged version, publish that version; if no item has this key, the lot's product key is wrong. Then rebuild.
+> 1139 × no CCRS Product id assigned. Next step: Scroll to "CCRS files — PREprod", PREprod set-up step 2, and press "Assign PREprod ids". PREprod ids are separate from production ids by design, so assigning in production does not carry over. Go to PREprod set-up
+> Show all 3379 row(s)
+> • [Sale] 2 Sale row(s) name a lot that CCRS does not hold and this batch does not report in Inventory.csv. CCRS answers "Invalid InventoryExternalIdentifier" and asks that the inventory was "already reported … in an inventory.CSV" [G L1302-L1304]. Fix why each lot is left out of Inventory.csv (see the Inventory errors), then rebuild. (2)L_REF_INVENTORY
+> Show all 2 row(s)".
+> please deep dive into this, it is the final piece that is preventing me from migrating over. please go above and beyond for me. follow the standing rules. please complete a full round of fixes and enhances to knock out any remaining bugs in this upload pipeline. let me know at the end in the summary report what was done and what is left to do to make it work properly. thank you.
+
+### S39 - CCRS upload: report what we can, track what is owed
+
+- **Root cause.** The upload gate refused the whole zip on ANY error. But E52 (849 Cultivera lots not on our 9/15 CCRS copy), E41 (withheld products and lots), E3, E7, E8, E38/E42, E49-uncertain and the E14 transfer holds all describe rows that are ALREADY LEFT OUT of the files. So good records were blocked by records that were never going to be sent.
+- **Gate.** `ccrs-submit-gate-core` now sorts each error into one of two groups:
+  - `held`: left out of the files, still owed, not blocking (`HELD_BACK_CODES`, `isHeldBack`).
+  - `errors`: would put a bad row INTO the files, so still blocking, e.g. L_REF_INVENTORY, ledger duplicates, license, legacy prod.
+  - The verdict summary says "Safe to submit the good records - N group(s) held back".
+- **1,000-row cap bugs (PREprod's "exactly 1000 products").** These reads stopped at PostgREST's 1,000 rows and are now paged:
+  - `buildCcrsBatch` read the published menu in one call. Products past row 1,000 vanished, which explains PREprod's 1000 products and its 2,240 lots marked "product not in the published menu". In production, lots of those products could not be named either.
+  - Same fix for the `inventory_adjustments` read in `ccrs-inventory-adjustment.ts`.
+  - `assignProductIds` now chunks at 500 keys per RPC, because the RPC answer is capped too.
+- **Event rows of held lots (L_REF_INVENTORY on 2 PREprod sale rows).**
+  - Sale and Adjustment rows naming a held-back lot are left out (new `E56_EVENT_ROW_LOT_HELD`, pinned [G L1302-L1304]) instead of failing the batch. Pure `ccrs-held-back-core.ts`, 10 self-tests.
+  - Their customer-return corrections are not marked exported.
+  - The duplicate uncoded "no usable CCRS external identifier" error, which repeated E3, is removed.
+- **Still owed to CCRS.** Migration `0297_ccrs_held_sync.sql` adds table `ccrs_held_sync` (env, week, type, id, code, reason, first held / last seen / resolved) and the RPC `ccrs_record_held`, which runs in one transaction.
+  - On every emit, the export route records what was held back and resolves what is no longer held.
+  - Master data (Strain/Area/Product/Inventory/Transfer) resolves across weeks, since every batch re-plans it in full. Sale and Adjustment rows resolve when their own week is rebuilt.
+  - The table is KEEP in factory reset. RLS is on, with staff read.
+  - Supporting files: a rollback, and `scripts/recon/ccrs-held-sync-0297-pg-check.sql`. All 297 migrations ran on local Postgres 15 and the pg-check passed; rollback and re-apply are clean.
+- **UI.**
+  - The CCRS hub banner passes when only held items remain. It also gets an amber "Held back - not in these files, still owed to CCRS" panel (every row, next step per reason, copy button) and a "Still owed to CCRS from earlier uploads" panel grouped by week with links to the weeks to rebuild.
+  - The Reports > Compliance page and the AI advisor show held-back items separately from blocking ones.
+  - The zip README lists every held-back record.
+  - The E52 next step now gives the exact re-seed CLI command.

@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 311 tables across 295 migrations at the time of writing.
+ * Measured 312 tables across 297 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -68,6 +68,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "ccrs_file_rows",
   "ccrs_filed_entities",
   "ccrs_files",
+  "ccrs_held_sync",
   "ccrs_mail_messages",
   "ccrs_product_ids",
   "ccrs_week_submissions",

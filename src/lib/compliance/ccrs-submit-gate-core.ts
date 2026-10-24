@@ -67,9 +67,46 @@ export type CcrsSubmitVerdict = {
   warningCount: number;
   errors: GateIssue[];
   warnings: GateIssue[];
-  /** All issues (errors first) for a single ordered report. */
+  /**
+   * R74 S39: records HELD BACK. Their rows were left out of the files (so the
+   * files are correct without them); they wait until fixed and are reported
+   * by a later batch. They never block the good records.
+   */
+  held: GateIssue[];
+  heldCount: number;
+  /** All issues (errors, then held, then warnings) for a single ordered report. */
   issues: GateIssue[];
 };
+
+/**
+ * R74 S39 (owner, Round 19): "we can not be blocked from reporting to the
+ * state ... we cant block good records from being uploaded". Each code below
+ * is raised ONLY for rows the builder already LEFT OUT of every file, so the
+ * files are complete and correct without them; CCRS accepts row by row
+ * (U-17 CLOSED FALSE). Every other error still blocks: it means a row IN a
+ * file would be rejected (ledger self-check, E9, E11, a bad category), or the
+ * whole batch is unsafe (license, ledger duplicates, E53).
+ */
+export const HELD_BACK_CODES: ReadonlySet<string> = new Set([
+  "E3_EXTERNAL_ID_UNASSIGNED",
+  "E7_TOTALCOST_ZERO",
+  "E8_ONHAND_GT_INITIAL",
+  "E38_FIELD_HAS_LINE_BREAK",
+  "E42_FIELD_HAS_COMMA",
+  "E41_LEDGER_WITHHELD",
+  "E49_SALE_LINE_ALREADY_HELD",
+  "E52_CULTIVERA_LOT_NOT_ON_RECORD",
+  "E56_EVENT_ROW_LOT_HELD",
+  "E14_TRANSFER_FIELD_MISSING",
+  "E14_TRANSFER_VENDOR_ID_UNKNOWN",
+  "E14_TRANSFER_SAME_LICENSE",
+  "E14_TRANSFER_QUANTITY",
+]);
+
+/** True when an error-severity issue only describes rows left out of the files. */
+export function isHeldBack(i: { severity: GateSeverity; code?: string }): boolean {
+  return i.severity === "error" && !!i.code && HELD_BACK_CODES.has(i.code);
+}
 
 /**
  * S-17a: the ONE mapping from a builder sync issue to gate input. Every caller
@@ -172,7 +209,8 @@ export function assertCcrsBatchSubmittable(input: {
     deduped.push(i);
   }
 
-  const errors = deduped.filter((i) => i.severity === "error");
+  const held = deduped.filter((i) => isHeldBack(i));
+  const errors = deduped.filter((i) => i.severity === "error" && !isHeldBack(i));
   const warnings = deduped.filter((i) => i.severity === "warning");
 
   return {
@@ -181,12 +219,17 @@ export function assertCcrsBatchSubmittable(input: {
     warningCount: warnings.length,
     errors,
     warnings,
-    issues: [...errors, ...warnings],
+    held,
+    heldCount: held.length,
+    issues: [...errors, ...held, ...warnings],
   };
 }
 
 /** A short human summary line for banners/logs. PURE. */
 export function verdictSummary(v: CcrsSubmitVerdict): string {
+  if (v.submittable && v.heldCount > 0) {
+    return `Safe to submit the good records — ${v.heldCount} group(s) of records are held back (left out of the files) until fixed${v.warningCount > 0 ? `; ${v.warningCount} advisory warning(s)` : ""}.`;
+  }
   if (v.submittable) {
     return v.warningCount > 0
       ? `Safe to submit — ${v.warningCount} advisory warning(s) to review.`
@@ -284,9 +327,32 @@ export function __runCcrsSubmitGateTests(): { passed: number; failed: number } {
     verifierProblems: [],
     files: [],
   });
-  ok(withRows.errors.length === 1, "duplicate collapsed");
-  ok(withRows.errors[0].rows?.length === 2, "duplicate's rows merged, none lost");
-  ok(withRows.errors[0].code === "E41_LEDGER_WITHHELD" && withRows.errors[0].specPin === "[G L0246-L0248]", "code + pin carried");
+  // (E41 is a held-back code since S39, so the merged issue is in `held`.)
+  ok(withRows.held.length === 1 && withRows.errors.length === 0, "duplicate collapsed");
+  ok(withRows.held[0].rows?.length === 2, "duplicate's rows merged, none lost");
+  ok(withRows.held[0].code === "E41_LEDGER_WITHHELD" && withRows.held[0].specPin === "[G L0246-L0248]", "code + pin carried");
+
+  // R74 S39: held-back codes never block; a genuine error still does.
+  const heldOnly = assertCcrsBatchSubmittable({
+    syncIssues: [
+      { severity: "error", file: "Inventory", message: "849 held", code: "E52_CULTIVERA_LOT_NOT_ON_RECORD" },
+      { severity: "error", file: "Product", message: "no id", code: "E41_LEDGER_WITHHELD" },
+    ],
+    verifierProblems: [],
+    files: [],
+  });
+  ok(heldOnly.submittable && heldOnly.heldCount === 2 && heldOnly.errorCount === 0, "S39: held-back issues do not block");
+  ok(verdictSummary(heldOnly).includes("held back"), "S39: summary names the held records");
+  const heldPlusReal = assertCcrsBatchSubmittable({
+    syncIssues: [
+      { severity: "error", file: "Inventory", message: "held", code: "E52_CULTIVERA_LOT_NOT_ON_RECORD" },
+      { severity: "error", file: "Sale", message: "ref", code: "L_REF_INVENTORY" },
+    ],
+    verifierProblems: [],
+    files: [],
+  });
+  ok(!heldPlusReal.submittable && heldPlusReal.errors[0].code === "L_REF_INVENTORY", "S39: a row IN a file that CCRS would reject still blocks");
+  ok(!isHeldBack({ severity: "warning", code: "E41_LEDGER_WITHHELD" }) && !isHeldBack({ severity: "error" }), "S39: only coded errors are held");
 
   if (failed === 0) console.log(`ccrs-submit-gate-core: all ${passed} tests passed`);
   return { passed, failed };

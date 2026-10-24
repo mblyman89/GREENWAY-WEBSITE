@@ -29,6 +29,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
 import { resolveRange } from "@/lib/reports/range";
+import { heldRecordsOf } from "@/lib/compliance/ccrs-held-back-core";
+import { recordHeldBack } from "@/lib/compliance/ccrs-held-store";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
 import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
 import {
@@ -186,9 +188,18 @@ export async function GET(request: Request) {
       else zipFiles.push(await readStoredFile(admin, r.id).then((s) => ({ name: s.fileName, content: s.csv })));
     }
     const dupes = result.filter((r) => r.status === "duplicate");
+    // R74 S39: what this emission held back is now owed to CCRS; what it no
+    // longer holds is resolved. Recorded AFTER the bytes are stored; a failure
+    // here never withholds the zip (the good records must go out).
+    const owed = await recordHeldBack(admin, env, range.fromDate, heldRecordsOf(verdict.held));
     outboxNote = [
       `Recorded in the CCRS outbox (${env}): ${result.length - dupes.length} new file(s), ${dupes.length} already emitted.`,
       ...dupes.map((d) => `  ALREADY EMITTED (${d.state}): ${d.file_name} — same bytes as before; do NOT upload it again if CCRS already processed it.`),
+      owed.error
+        ? `WARNING: the still-owed list was NOT updated (${owed.error}). The held-back list below is still complete.`
+        : owed.available
+          ? `Still-owed list updated: ${owed.held} record(s) held back this time, ${owed.resolved} earlier record(s) now reported.`
+          : "Still-owed list not available yet (migration 0297 not applied); the held-back list below is complete.",
     ];
     await recordAudit({
       actorId: session.userId,
@@ -246,6 +257,15 @@ export async function GET(request: Request) {
     "Do not rename any file and do not open and save it in Excel: CCRS matches its emails by exact file name,",
     "and refuses the same file name or the same data twice [BRIAN A29].",
     "",
+    ...(verdict.held.length
+      ? [
+          `HELD BACK \u2014 NOT in these files, still owed to CCRS (${verdict.heldCount} record(s)):`,
+          "  Every other record is in the files and should be uploaded now. Fix each group",
+          "  below (Compliance > CCRS shows the next step), rebuild, and upload again.",
+          ...verdict.held.map(fmt),
+          "",
+        ]
+      : ["Nothing held back: every record of this range is in the files.", ""]),
     warnings.length ? `Advisory warnings (${warnings.length}):` : "No advisory warnings.",
     ...warnings.map(fmt),
   ].join("\r\n");
