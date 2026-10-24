@@ -618,7 +618,7 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 
 > Thank you! I am on tier 2 currently. Overnight is fine. Ideally I'd like to get them all done before the price doubles in January, so if you have a professional strategy that capitalizes on speed and efficiency? I want them all by the end of November if possible. Worst case by the end of December. I have about 95 vendors I think, 2700 unique lots. I feel like we should be able to work through all of them fairly quickly. Especially since several are the same product, just a use second or third, or is a variant in size so the same product with the same facts. We don't need a spend cap, I have one set on my Gemini online portal. Please begin a two slice round. We are spending too much in here on these requests. Please reduce the number of testing you do please. Or find other ways to spend less tokens in here so we have enough to finish the project. Follow the standing rules. Thank you. Let me know in the summary results what was done and still left to do.
 
-### S33 - stop the bleeding + expand-all keeps its place
+### S33 - stop the bleeding + expand-all keeps its place (#1487) shipped
 
 - Batch thinking default `high` -> `low` (`LOOKUP_BATCH_THINKING_DEFAULT`; `AI_BATCH_THINKING_LEVEL` still overrides).
 - Bulk mode (`generateWebSearch({ bulk: true })`, set by the background runner only): google_search only (no url_context page reads) and no paid built-in-knowledge chat fallback.
