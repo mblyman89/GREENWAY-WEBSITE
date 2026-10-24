@@ -628,7 +628,7 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - Expand-all / search / vendor / page / size / tab survive every drafts action: `backTo` reads the posting page's URL (Referer) through pure `listStateFromUrl` (onboarding-list-core).
 - Self-tests: lookup-job-core 161 -> 164, onboarding-list-core 77 -> 80.
 
-### S34 - Gemini Batch API engine (half price, one question per product family)
+### S34 - Gemini Batch API engine (half price, one question per product family) (#1488) shipped
 
 - Switch: `AI_LOOKUP_ENGINE=batch` (Vercel env; unset = `live`, unchanged). `AI_BATCH_MAX_INFLIGHT` (default 4) caps batches waiting at Google.
 - Migration `0295_ai_batches.sql` (+ rollback + `scripts/recon/ai-batches-0295-pg-check.sql`, executed on local Postgres 15: passes, rollback clean, re-apply clean). `ai_batches` = one row per Gemini batch with its tokens, search queries and estimated cost (the cost ledger); `lookup_job_items.batch_id` = the batch a product waits on.
