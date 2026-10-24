@@ -202,10 +202,15 @@ describe("the wire itself — reachability, which nothing pure can see", () => {
   it("mirrors the decrement's lot filters, so both see the same lots", () => {
     // Same lines + same lots + same planner = the same draw. A divergence in
     // this query is a divergence between the stock move and its cost.
+    // R74 S31: both now read lots through ONE shared reader (sale-lot-read.ts),
+    // so the filters can no longer drift apart. Pin the reader and that both use it.
     expect(svc).toContain("buildLotDecrementPlan");
-    expect(svc).toContain('.eq("status", "active")');
-    expect(svc).toContain('.gt("on_hand_qty", 0)');
-    expect(svc).toContain('.order("created_at", { ascending: true })');
+    expect(svc).toContain("readSaleLots(");
+    expect(read("src/lib/inventory/sale-decrement.ts")).toContain("readSaleLots(");
+    const lotRead = read("src/lib/inventory/sale-lot-read.ts");
+    expect(lotRead).toContain('.eq("status", "active")');
+    expect(lotRead).toContain('.gt("on_hand_qty", 0)');
+    expect(lotRead).toContain('.order("created_at", { ascending: true })');
   });
 
   it("surfaces the rounding residual rather than resolving it", () => {

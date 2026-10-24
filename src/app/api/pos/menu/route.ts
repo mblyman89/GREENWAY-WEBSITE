@@ -68,6 +68,7 @@ import {
 const BARCODE_SCAN_MAX_ROWS = 100_000;
 // Mastering Slice 1: intake variants encode their own lot key (`${key}-onboarded`).
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+import { costForLine } from "@/lib/promotions/size-cost-core";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -313,7 +314,8 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         categories,
         variantLabel: variant.label || null,
         regularPriceMinor: variant.priceMinorUnits,
-        costMinorUnits: (variantLotKey ? costs.get(variantLotKey) : undefined) ?? cost,
+        // R74 S31: the size's own cost (0294 link) before the card average.
+        costMinorUnits: (variantLotKey ? costs.get(variantLotKey) : undefined) ?? costForLine(costs, item.id, variant.id) ?? cost,
         // AN-1 — true per-unit grams parsed from the package-size label the
         // transform generated ("3.5g" → 3.5, "1oz" → 28; mg/ml/pack/each →
         // null = unknown → the limit engine keeps its category default).

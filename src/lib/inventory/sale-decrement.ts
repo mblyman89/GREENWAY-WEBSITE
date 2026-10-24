@@ -45,6 +45,8 @@ import { applyLotDelta, applyVariantDelta } from "@/lib/inventory/atomic-quantit
 // Product Mastering Slice 1: sold lines resolve the VARIANT's own lot key
 // (mastered cards carry one lot per size) before the product_id fallback.
 import { lotKeyForSaleLine, lotKeysForLines } from "@/lib/pos/variant-lot-core";
+// R74 S31: one lot read shared with the cost replan (sale-posting-service).
+import { readSaleLots } from "@/lib/inventory/sale-lot-read";
 
 const EVENT_TYPE = "inventory_decremented";
 
@@ -173,23 +175,14 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     // is fetched; mastered cards: every size's lot is present for the plan).
     const lotKeys = lotKeysForLines(lines);
     let lots: LotForDecrement[] = [];
+    // R74 S31: the shared reader (the cost replan uses the same one) also
+    // carries each lot's size link (0294) so a sold size draws from its own lots.
+    let sizeLinkPending = false;
     if (lotKeys.length > 0) {
-      const { data: lotRows } = await admin
-        .from("inventory_lots")
-        .select("id, pos_product_key, on_hand_qty, ccrs_inventory_external_id, lot_code")
-        .in("pos_product_key", lotKeys)
-        .eq("status", "active")
-        .gt("on_hand_qty", 0)
-        .order("created_at", { ascending: true });
-      lots = ((lotRows as
-        | {
-            id: string;
-            pos_product_key: string | null;
-            on_hand_qty: number;
-            ccrs_inventory_external_id: string | null;
-            lot_code: string | null;
-          }[]
-        | null) ?? [])
+      const read = await readSaleLots(admin, lotKeys);
+      if (!read.ok) throw new Error(`Could not read the lots to draw from: ${read.error}`);
+      sizeLinkPending = read.sizeLinkPending;
+      lots = read.rows
         .filter((r) => !!r.pos_product_key)
         .map((r) => ({
           id: r.id,
@@ -203,6 +196,7 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
             lot_code: r.lot_code,
             id: r.id,
           }),
+          sizeId: r.menu_source_variant_id,
         }));
     }
     const lotPlan = buildLotDecrementPlan(lines, lots);
@@ -226,8 +220,10 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     // Only fills blanks: an explicit per-line override is never overwritten.
     for (const line of lines) {
       // Same key the plan aggregated the line's demand under (variant-first).
+      // R74 S31: the line's own size group first (two sizes of one card stamp
+      // their own lots), then the per-key id (the pre-S31 behaviour).
       const key = lotKeyForSaleLine(line);
-      const extId = key ? lotPlan.lineExternalIds.get(key) : undefined;
+      const extId = lotPlan.lineExternalIdsByLine?.get(line.lineId) ?? (key ? lotPlan.lineExternalIds.get(key) : undefined);
       if (!extId) continue;
       await admin
         .from("order_lines")
@@ -240,7 +236,12 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     // (The latch row itself was inserted FIRST — see the claim above.)
     await admin
       .from("order_events")
-      .update({ note: summarizeDecrement({ variantPlan, lotPlan, lineCount: lines.length }).slice(0, 2000) })
+      .update({
+        note: (
+          summarizeDecrement({ variantPlan, lotPlan, lineCount: lines.length }) +
+          (sizeLinkPending ? " (Lot sizes not read: database update 0294 is not applied, so stock came from the oldest lots of the product.)" : "")
+        ).slice(0, 2000),
+      })
       .eq("id", claimId);
   } catch (err) {
     // Never block or throw past completion — leave a visible failure note.

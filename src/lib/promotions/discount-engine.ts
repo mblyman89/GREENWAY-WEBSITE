@@ -20,6 +20,8 @@
  * legacy `config.stackable` values are ignored.
  */
 import "server-only";
+// R74 S31: per-size acquisition cost (the lot size link, 0294).
+import { buildCostMap } from "@/lib/promotions/size-cost-core";
 
 import { getPublishedPromotions, listNeverDiscountKeys } from "./promotions-store";
 import type { PublishedPromotion } from "./types";
@@ -239,37 +241,39 @@ export async function loadProductCostsChecked(): Promise<{
     pos_product_key: string | null;
     received_qty: number | null;
     unit_cost_minor_units: number | null;
+    menu_source_variant_id?: string | null;
   };
 
+  // R74 S31: also read each lot's menu SIZE (0294) so a size is floored at
+  // its own lots' cost. Before 0294 the page is re-read without it (the
+  // card averages are then exactly the pre-S31 numbers).
+  const { isMissingSizeLinkColumnError } = await import("@/lib/inventory/lot-size-link-store");
+  let withSize = true;
   const { rows: data, verdict } = await pagedAllChecked<CostRow>(
     async (from, to) => {
-      const { data: page, error } = await admin
-        .from("inventory_lots")
-        .select("id, pos_product_key, received_qty, unit_cost_minor_units")
-        .not("pos_product_key", "is", null)
-        .not("unit_cost_minor_units", "is", null)
-        // Stable UNIQUE ordering — REQUIRED for deterministic .range() paging.
-        .order("id", { ascending: true })
-        .range(from, to);
-      if (error) return { rows: [], ok: false };
-      return { rows: (page as CostRow[] | null) ?? [], ok: true };
+      const read = (cols: string) =>
+        admin
+          .from("inventory_lots")
+          .select(cols)
+          .not("pos_product_key", "is", null)
+          .not("unit_cost_minor_units", "is", null)
+          // Stable UNIQUE ordering — REQUIRED for deterministic .range() paging.
+          .order("id", { ascending: true })
+          .range(from, to);
+      const base = "id, pos_product_key, received_qty, unit_cost_minor_units";
+      let res = await read(withSize ? `${base}, menu_source_variant_id` : base);
+      if (res.error && withSize && isMissingSizeLinkColumnError(res.error)) {
+        withSize = false;
+        res = await read(base);
+      }
+      if (res.error) return { rows: [], ok: false };
+      return { rows: (res.data as unknown as CostRow[] | null) ?? [], ok: true };
     },
     { maxRows: COST_READ_MAX_ROWS },
   );
 
-  const num = new Map<string, number>();
-  const den = new Map<string, number>();
-  for (const row of data as { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]) {
-    const key = row.pos_product_key;
-    if (!key || row.unit_cost_minor_units == null) continue;
-    const qty = Math.max(1, Math.round(row.received_qty ?? 1));
-    num.set(key, (num.get(key) ?? 0) + row.unit_cost_minor_units * qty);
-    den.set(key, (den.get(key) ?? 0) + qty);
-  }
-  for (const [key, total] of num.entries()) {
-    const d = den.get(key) ?? 0;
-    if (d > 0) costs.set(key, Math.round(total / d));
-  }
+  // Card averages exactly as before, plus per-size entries (size-cost-core).
+  for (const [k, v] of buildCostMap(data)) costs.set(k, v);
   return { costs, verdict };
 }
 

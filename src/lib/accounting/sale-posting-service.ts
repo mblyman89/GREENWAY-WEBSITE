@@ -374,21 +374,16 @@ async function gatherCosts(
 
   const keys = lotKeysForLines(forPlan);
   // These filters MIRROR sale-decrement.ts exactly (active, on_hand > 0,
-  // oldest first). Same lines + same lots + same planner = the same draw, so
-  // the cost booked here is the cost of the units the decrement removes. Any
-  // divergence in this query is a divergence in the books.
-  const { data: lotRows, error } = await admin
-    .from("inventory_lots")
-    .select("id, pos_product_key, on_hand_qty, unit_cost_minor_units")
-    .in("pos_product_key", keys)
-    .eq("status", "active")
-    .gt("on_hand_qty", 0)
-    .order("created_at", { ascending: true });
-  if (error) {
-    return { kind: "failed", message: `Lot costs could not be read: ${error.message}` };
+  // oldest first): R74 S31 made it ONE shared read (readSaleLots), which also
+  // carries each lot's size link, so both see the same lots by construction.
+  // Same lines + same lots + same planner = the same draw, so the cost booked
+  // here is the cost of the units the decrement removes.
+  const { readSaleLots } = await import("@/lib/inventory/sale-lot-read");
+  const read = await readSaleLots(admin, keys);
+  if (!read.ok) {
+    return { kind: "failed", message: `Lot costs could not be read: ${read.error}` };
   }
-
-  const rows = (lotRows as { id: string; pos_product_key: string | null; on_hand_qty: number; unit_cost_minor_units: number | null }[] | null) ?? [];
+  const rows = read.rows;
 
   // Reconstruct the draw with the SAME planner that moved the stock. Writing a
   // second FIFO rule here would be the classic accounting failure: two
@@ -416,10 +411,14 @@ async function gatherCosts(
       id: r.id,
       posProductKey: r.pos_product_key as string,
       onHandQty: r.on_hand_qty,
+      sizeId: r.menu_source_variant_id,
     }));
 
   const plan = buildLotDecrementPlan(forPlan, preSaleLots);
-  const draws: LotDraw[] = [...drawsFromLotUpdates(plan.lotUpdates)];
+  // R74 S31: cost each line from ITS size's draws. `groupDraws` keys every
+  // draw by the line's size group (identical to lotUpdates when no lot of
+  // the key is size-linked, i.e. the pre-S31 books).
+  const draws: LotDraw[] = [...drawsFromLotUpdates(plan.groupDraws ?? plan.lotUpdates)];
   const costByLot = new Map<string, number | null>();
   for (const r of rows) costByLot.set(r.id, r.unit_cost_minor_units);
   const costRows = plan.lotUpdates.map((u) => ({
@@ -438,7 +437,7 @@ async function gatherCosts(
 
   const costable: CostableLine[] = forPlan.map((l) => ({
     lineId: l.lineId,
-    posProductKey: lotKeyForSaleLine(l),
+    posProductKey: plan.lineDrawKeys?.get(l.lineId) ?? lotKeyForSaleLine(l),
     quantity: l.quantity,
   }));
 
