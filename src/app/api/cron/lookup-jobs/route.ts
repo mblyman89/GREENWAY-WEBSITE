@@ -53,6 +53,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runLookupJobsTick } from "@/lib/catalog/lookup-job-server";
+import { runGeminiBatchTick } from "@/lib/ai/gemini-batch-server";
 import { runCultiveraAutoStart } from "@/lib/inventory/cultivera-auto-start";
 import { AUTO_START_CRON_BUDGET_MS } from "@/lib/inventory/cultivera-auto-start-core";
 import { runMailReadBg } from "@/lib/pos/cultivera-mail-read-bg";
@@ -93,10 +94,15 @@ export async function GET(req: NextRequest) {
   // Never throws. A product that fails is recorded on its own row and the
   // batch carries on; only a broken run (database unreadable) is a 500, so
   // the logs stay quiet when the system is healthy.
+  // R74 S34: with AI_LOOKUP_ENGINE=batch, poll / ingest / submit Gemini
+  // batches (a few quick calls); the live tick below then stands down.
+  const batch = await runGeminiBatchTick({ budgetMs: 180_000 });
   const result = await runLookupJobsTick();
   // R74 S13: a tick that had no product to look up (no job, or every job leased by another run)
   // carries on the automatic onboarding Start of rebuilt Cultivera manifests. No new cron. Its
   // own lease means one run at a time; an idle state costs one read of one site_settings row.
+  // R74 S34: a minute that submitted or ingested a batch has used its time.
+  if (batch.submitted > 0 || batch.ingested > 0) return NextResponse.json({ ...result, batch, autoStart: null, mailRead: null }, { status: 200 });
   let autoStart: Awaited<ReturnType<typeof runCultiveraAutoStart>> | null = null;
   if (result.ok && result.skipped) {
     autoStart = await runCultiveraAutoStart({ budgetMs: AUTO_START_CRON_BUDGET_MS, trigger: "worker" });
@@ -108,7 +114,7 @@ export async function GET(req: NextRequest) {
   if (result.ok && result.skipped && !(autoStart?.ok && autoStart.run)) {
     mailRead = await runMailReadBg({ budgetMs: MAIL_READ_BG_BUDGET_MS, trigger: "worker" });
   }
-  return NextResponse.json({ ...result, autoStart, mailRead }, { status: result.ok ? 200 : 500 });
+  return NextResponse.json({ ...result, batch, autoStart, mailRead }, { status: result.ok ? 200 : 500 });
 }
 
 // Vercel Cron uses GET. POST runs the same consider-and-maybe-work path.

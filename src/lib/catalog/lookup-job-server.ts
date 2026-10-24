@@ -101,6 +101,7 @@ import {
   type JobSummary,
 } from "./lookup-job-core";
 import { AGAIN_MARKER, isAgainMarker, parseAgainIds } from "./lookup-history-core";
+import { AI_LOOKUP_ENGINE_ENV, lookupEngine } from "@/lib/ai/gemini-batch-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -419,7 +420,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
 export interface TickResult {
   ok: boolean;
   /** Why nothing ran, when nothing ran. */
-  skipped?: "flag_off" | "not_configured" | "ai_off" | "attach_v2_off" | "migration" | "no_job" | "leased";
+  skipped?: "flag_off" | "not_configured" | "ai_off" | "attach_v2_off" | "migration" | "no_job" | "leased" | "batch_engine";
   jobId?: string;
   started: number;
   done: number;
@@ -493,7 +494,7 @@ export async function lookupQueryForDraft(d: DraftForLookup): Promise<{ query: s
 }
 
 /** Thrown when a product left Needs review before its turn (not an error; recorded as canceled). */
-class SkipItem extends Error {
+export class SkipItem extends Error {
   constructor(readonly copy: string) {
     super(copy);
     this.name = "SkipItem";
@@ -565,6 +566,27 @@ export async function runOneItem(
     model = outcome.model;
   }
 
+  return completeItem(admin, draftId, actor, { safe, outcome, memory, skipWeb, model, aiCalls });
+}
+
+/**
+ * R74 S34: everything after the answer - attach facts, keep the snapshot,
+ * classify - shared by the live run and the Gemini Batch API ingest.
+ */
+export async function completeItem(
+  _admin: Admin,
+  draftId: string,
+  actor: { userId: string | null; email: string | null },
+  x: {
+    safe: ReturnType<typeof postProcessLookup>;
+    outcome: Awaited<ReturnType<typeof lookupProduct>> | null;
+    memory: Awaited<ReturnType<typeof recallForDraft>>;
+    skipWeb: boolean;
+    model: string;
+    aiCalls: number;
+  },
+): Promise<ItemRunOutcome> {
+  const { safe, outcome, memory, skipWeb, model, aiCalls } = x;
   const res = await attachProductFacts({
     context: { kind: "draft", draftId },
     safe,
@@ -622,6 +644,9 @@ export async function runLookupJobsTick(deps: {
   token?: string;
 } = {}): Promise<TickResult> {
   if (!lookupJobsOn()) return { ok: true, skipped: "flag_off", ...EMPTY };
+  // R74 S34: AI_LOOKUP_ENGINE=batch hands the queue to the Gemini Batch API
+  // (gemini-batch-server, run by the same cron); no live call here.
+  if (!deps.runItem && lookupEngine(process.env[AI_LOOKUP_ENGINE_ENV]) === "batch") return { ok: true, skipped: "batch_engine", ...EMPTY };
   if (!deps.admin && !isSupabaseServiceConfigured) return { ok: true, skipped: "not_configured", ...EMPTY };
   if (!isAiConfigured && !deps.runItem) return { ok: true, skipped: "ai_off", ...EMPTY };
   if (!attachFactsV2Enabled()) return { ok: true, skipped: "attach_v2_off", ...EMPTY };

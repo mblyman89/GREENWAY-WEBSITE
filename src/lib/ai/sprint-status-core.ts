@@ -20,7 +20,7 @@
  *   - row lookup thinking:   provider.ts `AI_THINKING_LEVEL ?? "low"` ->
  *               gemini-request-core thinkingLevelFor (junk = model default),
  *               clamped to what the model accepts.
- *   - batch thinking:        lookup-job-core batchThinkingLevel (junk = high),
+ *   - batch thinking:        lookup-job-core batchThinkingLevel (junk = low, R74 S33),
  *               clamped the same way.
  *   - batch lookups:         lookup-job-core manifestBatchLookupEnabled.
  *   - parallel manifests:    lookup-job-core lookupParallelJobs.
@@ -239,7 +239,7 @@ export function sprintStatus(env: SprintEnv): SprintStatus {
         tone: "warn",
         label: "Batch lookup thinking",
         detail: `AI_BATCH_THINKING_LEVEL is ${shown(raw)}, which is not a thinking level, so the batch uses ${level}.`,
-        fix: "Delete AI_BATCH_THINKING_LEVEL (the default high is best for data quality) or set low, medium or high, then redeploy.",
+        fix: "Delete AI_BATCH_THINKING_LEVEL (the default low keeps bulk lookups cheap) or set low, medium or high, then redeploy.",
       });
     } else {
       checks.push({
@@ -296,7 +296,7 @@ export function __runSprintStatusCoreTests(): { passed: number; failed: number }
   ok(g.checks.every((c) => c.fix === null), "nothing to fix");
   ok(g.checks.length === 8, "all eight checks for Gemini");
   ok(byId(g, "row_thinking")!.detail.includes("at low"), "row thinks low");
-  ok(byId(g, "batch_thinking")!.detail.includes("at high"), "batch default high");
+  ok(byId(g, "batch_thinking")!.detail.includes("at low"), "batch default low (R74 S33)");
   ok(byId(g, "parallel")!.detail.startsWith("4 manifests"), "parallel default 4");
 
   // Mode, exactly as router.ts.
@@ -347,7 +347,7 @@ export function __runSprintStatusCoreTests(): { passed: number; failed: number }
 
   // Batch thinking.
   const bj = byId(sprintStatus({ ...good, AI_BATCH_THINKING_LEVEL: "max" }), "batch_thinking")!;
-  ok(bj.tone === "warn" && bj.detail.includes("uses high"), "junk batch level = warn, high used");
+  ok(bj.tone === "warn" && bj.detail.includes("uses low"), "junk batch level = warn, low used");
   ok(byId(sprintStatus({ ...good, AI_BATCH_THINKING_LEVEL: "Medium" }), "batch_thinking")!.tone === "good", "valid batch level");
   ok(byId(sprintStatus({ ...good, AI_BATCH_THINKING_LEVEL: "" }), "batch_thinking")!.tone === "good", "empty batch level = default, fine");
 
