@@ -13,6 +13,7 @@ import { draftWeedmapsDescription } from "@/lib/weedmaps/ai";
 import { recordSyndicationLog } from "@/lib/syndication/store";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
 import { PreflightBlockedError } from "@/lib/syndication/preflight-core";
+import { describePreflightRefusal } from "@/lib/syndication/preflight-triage-core";
 import {
   resolveWeedmapsSettings,
   type WeedmapsSyncSettings,
@@ -76,7 +77,12 @@ export async function pushWeedmapsAction(formData: FormData): Promise<PushAction
     return { ok: true, result };
   } catch (err) {
     const blocked = err instanceof PreflightBlockedError;
-    const message = err instanceof Error ? err.message : "WeedMaps push failed.";
+    // R74 S29: name every product and the fix, not just the first three messages.
+    const message = blocked
+      ? describePreflightRefusal((err as PreflightBlockedError).report, "weedmaps")
+      : err instanceof Error
+        ? err.message
+        : "WeedMaps push failed.";
     await recordSyndicationLog({
       channel: "weedmaps",
       mode: "live",

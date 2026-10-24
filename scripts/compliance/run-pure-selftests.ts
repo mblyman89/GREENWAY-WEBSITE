@@ -902,6 +902,7 @@ import { __runCcrsIdentityGuardCoreTests } from "../../src/lib/compliance/ccrs-i
 import { __runCountAutocompleteCoreTests } from "../../src/lib/pos/count-autocomplete-core";
 import { __runBadProductQueueCoreTests } from "../../src/lib/promotions/bad-product-queue-core";
 import { __runPromoPreviewCoreTests } from "../../src/lib/promotions/promo-preview-core";
+import { __runPreflightTriageCoreTests } from "../../src/lib/syndication/preflight-triage-core";
 import { __runCcrsLotProductTests } from "../../src/lib/compliance/ccrs-lot-product-core";
 import { __runCcrsSigninTests } from "../../src/lib/compliance/ccrs-signin-core";
 // CCRS Bible Part 09 S-17d: hand-over plan from the integrator (first upload date).
@@ -1875,6 +1876,7 @@ __runLiquidVolumeTests();
   { const r = __runCountAutocompleteCoreTests(); if (r.failed > 0 || r.passed < 26) throw new Error(`count-autocomplete-core: ${r.failed} failed, ${r.passed} passed (expected >= 26)`); } // R74 S26: Excel AutoComplete defence for the count workbook (Mac)
   { const r = __runBadProductQueueCoreTests(); if (r.failed > 0 || r.passed < 49) throw new Error(`bad-product-queue-core: ${r.failed} failed, ${r.passed} passed (expected >= 49)`); } // R74 S27: bad product queue
   { const r = __runPromoPreviewCoreTests(); if (r.failed > 0 || r.passed < 46) throw new Error(`promo-preview-core: ${r.failed} failed, ${r.passed} passed (expected >= 46)`); } // R74 S28: promotion preview before publishing
+  { const r = __runPreflightTriageCoreTests(); if (r.failed > 0 || r.passed < 42) throw new Error(`preflight-triage-core: ${r.failed} failed, ${r.passed} passed (expected >= 42)`); } // R74 S29: per-product preflight errors hold that product back (named); duplicates still stop the menu
   { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());

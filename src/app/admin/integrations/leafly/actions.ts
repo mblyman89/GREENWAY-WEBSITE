@@ -34,6 +34,7 @@ import type { ReadbackBaseline } from "@/lib/leafly/readback-baseline-core";
 import { recordSyndicationLog } from "@/lib/syndication/store";
 import { buildReadbackVerdict } from "@/lib/leafly/readback-proof-core";
 import { PreflightBlockedError } from "@/lib/syndication/preflight-core";
+import { describePreflightRefusal } from "@/lib/syndication/preflight-triage-core";
 import {
   resolveLeaflySettings,
   type LeaflySyncSettings,
@@ -115,12 +116,9 @@ export async function previewReplaceLeaflyMenuAction(input: {
     return { ok: true, preview: await previewReplaceLeaflyMenu({ repair: input?.repair === true }) };
   } catch (err) {
     if (err instanceof PreflightBlockedError) {
-      return {
-        ok: false,
-        error:
-          "The menu data itself failed its safety check, so no payload could be built. " +
-          "This is about the feed, not individual products.",
-      };
+      // R74 S29: name the actual problem. The old sentence ("about the feed,
+      // not individual products") was false for three of the five codes.
+      return { ok: false, error: describePreflightRefusal(err.report, "leafly") };
     }
     return { ok: false, error: err instanceof Error ? err.message : "Could not preview the replacement." };
   }
@@ -218,7 +216,11 @@ export async function replaceLeaflyMenuAction(input: {
     return { ok: true, result };
   } catch (err) {
     const blocked = err instanceof PreflightBlockedError;
-    const message = err instanceof Error ? err.message : "Replacing the Leafly menu failed.";
+    const message = blocked
+      ? describePreflightRefusal((err as PreflightBlockedError).report, "leafly")
+      : err instanceof Error
+        ? err.message
+        : "Replacing the Leafly menu failed.";
     await finishManualRun({
       id: manualRunId,
       ok: blocked,
@@ -270,13 +272,9 @@ export async function previewFullMenuPassingOnlyAction(input: {
     return { ok: true, preview };
   } catch (err) {
     if (err instanceof PreflightBlockedError) {
-      return {
-        ok: false,
-        error:
-          `The menu data itself failed its safety check, so no payload could be built. ` +
-          `This is not about individual products meeting Leafly's rules — it is the feed, ` +
-          `and withholding products cannot fix it.`,
-      };
+      // R74 S29: name the actual problem. The old sentence ("about the feed,
+      // not individual products") was false for three of the five codes.
+      return { ok: false, error: describePreflightRefusal(err.report, "leafly") };
     }
     return {
       ok: false,
@@ -435,7 +433,11 @@ export async function pushFullMenuPassingOnlyAction(input: {
     }
 
     const blocked = err instanceof PreflightBlockedError;
-    const message = err instanceof Error ? err.message : "Sending the menu failed.";
+    const message = blocked
+      ? describePreflightRefusal((err as PreflightBlockedError).report, "leafly")
+      : err instanceof Error
+        ? err.message
+        : "Sending the menu failed.";
     await finishManualRun({
       id: manualRunId,
       ok: blocked,

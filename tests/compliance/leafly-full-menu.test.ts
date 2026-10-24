@@ -346,7 +346,10 @@ describe("ask 2: the fix-and-edit redirect buttons", () => {
     // Building it from the wire would let a split id confirm itself as
     // "direct" and reintroduce the 404.
     const src = read("lib/leafly/full-menu-server.ts");
-    expect(src).toMatch(/knownSourceIds\s*=\s*new Set\(items\.map/);
+    // R74 S29: the source feed is now named `feedItems` (preflight-held
+    // products are filtered out into `items`, but they are still real products
+    // and still need a working fix link, so the known set reads the FULL feed).
+    expect(src).toMatch(/knownSourceIds\s*=\s*new Set\(feedItems\.map/);
   });
 });
 
