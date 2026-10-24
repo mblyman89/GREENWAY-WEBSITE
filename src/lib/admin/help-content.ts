@@ -579,6 +579,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/compliance/ccrs",
       },
       {
+        q: "How do I compare our records with what CCRS holds?",
+        a: "Ask the LCB Service Desk for a CCRS data copy, then upload its four CSVs (Inventory, Product, Strain, Area) on CCRS Records. It compares the State's copy with our live lots, our CCRS ledger and every record we sent, shows a sync score and a needs-action list (CSV download), and lets you merge the copy into our ledger with one guarded button.",
+        href: "/admin/compliance/ccrs/records",
+      },
+      {
         q: "How do I know if I'm compliant overall right now?",
         a: "Compliance Health is the one-glance \"am I safe?\" page — it checks every compliance gate live (filings, limits, data integrity) and tells you what needs attention.",
         href: "/admin/compliance/health",

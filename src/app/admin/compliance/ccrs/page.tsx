@@ -360,6 +360,9 @@ export default async function CcrsCommandCenterPage({
           </p>
         </div>
         <div className="flex gap-2 text-xs">
+          <Link href="/admin/compliance/ccrs/records" className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 font-semibold text-emerald-100 transition hover:bg-emerald-400/20">
+            CCRS Records (State copy)
+          </Link>
           <Link href="/admin/compliance/health" className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-white/60 transition hover:bg-white/5">
             Compliance Health
           </Link>
