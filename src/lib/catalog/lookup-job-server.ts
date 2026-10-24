@@ -102,6 +102,7 @@ import {
 } from "./lookup-job-core";
 import { AGAIN_MARKER, isAgainMarker, parseAgainIds } from "./lookup-history-core";
 import { AI_LOOKUP_ENGINE_ENV, lookupEngine } from "@/lib/ai/gemini-batch-core";
+import { readBatchControl } from "@/lib/ai/batch-control-server";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -420,7 +421,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
 export interface TickResult {
   ok: boolean;
   /** Why nothing ran, when nothing ran. */
-  skipped?: "flag_off" | "not_configured" | "ai_off" | "attach_v2_off" | "migration" | "no_job" | "leased" | "batch_engine";
+  skipped?: "flag_off" | "not_configured" | "ai_off" | "attach_v2_off" | "migration" | "no_job" | "leased" | "batch_engine" | "paused";
   jobId?: string;
   started: number;
   done: number;
@@ -670,7 +671,11 @@ export async function runLookupJobsTick(deps: {
       if (isMissingLookupJobsTable(jErr)) return { ok: true, skipped: "migration", ...EMPTY };
       return { ok: false, ...EMPTY, error: "The batch lookup list could not be read." };
     }
-    const open = (jobs as { id: string; manifest_id: string; status: string; created_by: string | null; lease_until: string | null; lease_token: string | null }[] | null) ?? [];
+    // R74 S35: the console's pause switch (whole queue or chosen jobs).
+    const control = deps.admin ? null : await readBatchControl(admin);
+    if (control?.paused) return { ok: true, skipped: "paused", ...EMPTY };
+    const held = new Set(control?.pausedJobIds ?? []);
+    const open = ((jobs as { id: string; manifest_id: string; status: string; created_by: string | null; lease_until: string | null; lease_token: string | null }[] | null) ?? []).filter((j) => !held.has(j.id));
     if (open.length === 0) return { ok: true, skipped: "no_job", ...EMPTY };
     const job = pickTickJob(open, t0, lookupParallelJobs(process.env[LOOKUP_PARALLEL_JOBS_ENV]));
     if (!job) return { ...out, jobId: open[0].id, skipped: "leased" };

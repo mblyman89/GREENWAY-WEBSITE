@@ -72,6 +72,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Purchasing", href: "/admin/purchasing", permission: "inventory.manage", icon: "\ud83e\uddfe", group: "Product Intake" }, // 🧾 1 · Order
   { label: "Receiving", href: "/admin/inventory/intake", permission: "inventory.manage", icon: "\ud83d\ude9a", group: "Product Intake" }, // 🚚 2 · Receive
   { label: "Product Onboarding", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "\ud83c\udd95", group: "Product Intake" }, // 🆕 3 · Onboard
+  { label: "Batch Lookups", href: "/admin/inventory/batch-lookups", permission: "inventory.manage", icon: "\ud83c\udf81", group: "Product Intake" }, // R74 S35 Gemini Batch console
   { label: "Publish Menu", href: "/admin/publish", permission: "menu.import", icon: "\ud83d\udce2", group: "Product Intake" }, // 📢 4 · Publish (SLICE 76 command center)
   { label: "Product Enrichment", href: "/admin/products", permission: "products.enrich", icon: "\u2728", group: "Product Intake" }, // ✨ 5 · Enrich
   { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "\ud83e\uddec", group: "Product Intake" }, // 🧬 6 · Master
