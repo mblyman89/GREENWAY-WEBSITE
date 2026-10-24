@@ -54,7 +54,9 @@ import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-r
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // T-324: after-tax price correction (pure math + write path).
 import { parsePriceCorrection } from "@/lib/inventory/price-correction-core";
-import { applyLotAfterTaxPrice } from "@/lib/inventory/price-write-store";
+import { applyLotAfterTaxPrice, getLotPriceState } from "@/lib/inventory/price-write-store";
+import { sharedSizeFloor, sharedFloorRefusal, checkOwnerSizePick, type SizeLot } from "@/lib/inventory/lot-size-link-core";
+import { listLotsSharingSize, listActiveLotsForKey, setLotSizeLink } from "@/lib/inventory/lot-size-link-store";
 // SLICE 18A: the compliance-classification editor. The RULES are the same pure
 // gate the receiving door uses (18-0) — imported, never re-implemented, so the
 // two doors into this store cannot drift apart.
@@ -736,8 +738,51 @@ export async function updateLotAfterTaxPriceAction(lotId: string, formData: Form
     redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(parsed.error));
   }
 
+  // R74 S30: the lot's own size (0294) when linked, so one size of a
+  // multi-size Cultivera card can be priced without onboarding.
+  const target = { posProductKey: key, menuSourceVariantId: lot.menu_source_variant_id ?? null };
+  const state = await getLotPriceState(target);
+  if (state.status === "ambiguous") {
+    redirect(
+      `/admin/inventory/${lotId}?error=` +
+        encodeURIComponent(
+          "This product has several sizes on one menu card and this lot isn't linked to one yet. Pick this lot's size in \"Which size is this lot?\" first, then set the price.",
+        ) + "#lot-size",
+    );
+  }
+  if (state.status !== "priced") {
+    redirect(
+      `/admin/inventory/${lotId}?error=` +
+        encodeURIComponent(
+          state.status === "not-on-menu"
+            ? "This product isn't on the published menu, so there is no menu price to set yet. Publish the import (or approve it at onboarding) first."
+            : "The menu price couldn't be read right now, so nothing was saved. Try again in a moment.",
+        ),
+    );
+  }
+
+  // The price is ONE menu price shared by every lot that sells at it, so the
+  // legal floor is the highest cost + tax among those lots, not just this one.
+  let sharingLots: SizeLot[] = [];
+  try {
+    sharingLots =
+      state.kind === "linked"
+        ? await listLotsSharingSize(key, lot.menu_source_variant_id ?? "")
+        : await listActiveLotsForKey(key); // one-size card / onboarded variant: every lot of the key shares it
+  } catch (err) {
+    redirect(
+      `/admin/inventory/${lotId}?error=` +
+        encodeURIComponent(`Couldn't check the other lots that share this price (${err instanceof Error ? err.message : "read failed"}), so nothing was saved.`),
+    );
+  }
+  const floor = sharedSizeFloor([{ id: lot.id, lot_code: lot.lot_code, product_name: lot.product_name, unit_cost_minor_units: lot.unit_cost_minor_units }, ...sharingLots], resolution.websiteCategory);
+  const sharedRefusal = sharedFloorRefusal(parsed.afterTaxMinor, floor, state.sizeLabel);
+  if (sharedRefusal) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(sharedRefusal));
+  }
+
   const before = lot; // captured for the audit "old → new"
-  const result = await applyLotAfterTaxPrice(key, parsed.afterTaxMinor);
+  const result = await applyLotAfterTaxPrice(target, parsed.afterTaxMinor);
   if (!result.ok) {
     redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(result.error));
   }
@@ -752,9 +797,16 @@ export async function updateLotAfterTaxPriceAction(lotId: string, formData: Form
       pos_product_key: key,
       product_name: before.product_name,
       cost_minor_units: before.unit_cost_minor_units,
+      after_tax_minor_units: state.priceMinor,
     },
     after: {
       pos_product_key: key,
+      // R74 S30: which menu price changed and how many lots share it.
+      price_match: state.kind,
+      menu_source_variant_id: state.kind === "linked" ? lot.menu_source_variant_id ?? null : null,
+      size_label: state.sizeLabel,
+      lots_sharing_price: floor.lotCount,
+      shared_floor_minor_units: floor.floorMinor,
       website_category: resolution.websiteCategory,
       after_tax_minor_units: parsed.afterTaxMinor,
       pre_tax_base_minor_units: parsed.baseMinor,
@@ -772,6 +824,50 @@ export async function updateLotAfterTaxPriceAction(lotId: string, formData: Form
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
   redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+/**
+ * R74 S30 — "Which size is this lot?" The owner links a lot to one size of
+ * its own menu card (inventory_lots.menu_source_variant_id, source "owner",
+ * which imports never overwrite), or clears the link. The choices are re-read
+ * here from the PUBLISHED card; a size of any other product is refused.
+ */
+export async function setLotSizeAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const dest = `/admin/inventory/${lotId}`;
+  const lot = await getLotById(lotId);
+  if (!lot) redirect(dest + "?error=" + encodeURIComponent("That lot no longer exists."));
+  const key = (lot.pos_product_key ?? "").trim();
+  if (!key) redirect(dest + "?error=" + encodeURIComponent("Link this lot to its product first; then its sizes appear here.") + "#product-link");
+
+  const clear = String(formData.get("clear") ?? "") === "1";
+  let sizeId: string | null = null;
+  let sizeLabel: string | null = null;
+  if (!clear) {
+    // The card's sizes, read WITHOUT the current link so the full list shows.
+    const state = await getLotPriceState({ posProductKey: key, menuSourceVariantId: null });
+    if (state.status !== "priced" && state.status !== "ambiguous") {
+      redirect(dest + "?error=" + encodeURIComponent("This product isn't on the published menu, so it has no sizes to pick from yet.") + "#lot-size");
+    }
+    const pick = checkOwnerSizePick(formData.get("size") as string | null, state.sizes);
+    if (!pick.ok) redirect(dest + "?error=" + encodeURIComponent(pick.error) + "#lot-size");
+    sizeId = pick.sourceVariantId;
+    sizeLabel = pick.option.label;
+  }
+  const res = await setLotSizeLink(lotId, sizeId);
+  if (!res.ok) redirect(dest + "?error=" + encodeURIComponent(res.error) + "#lot-size");
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: clear ? "inventory_lot.size_link_cleared" : "inventory_lot.size_link_set",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { menu_source_variant_id: res.previous, menu_source_variant_source: res.previousSource },
+    after: { menu_source_variant_id: sizeId, menu_source_variant_source: sizeId ? "owner" : null, size_label: sizeLabel },
+  });
+  revalidatePath(dest);
+  revalidatePath("/admin/inventory");
+  redirect(dest + "?saved=1#lot-size");
 }
 
 /**

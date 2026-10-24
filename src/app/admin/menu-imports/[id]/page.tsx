@@ -32,7 +32,7 @@ import {
   removalListTitle,
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
-import { publishVersion, backfillLotsAction, refileFromTypeCheck, fillLotFactsAction, previewLotFactsAction } from "../actions";
+import { publishVersion, backfillLotsAction, refileFromTypeCheck, fillLotFactsAction, previewLotFactsAction, linkLotSizesAction } from "../actions";
 import { bulkRefileFromTypeCheck } from "../fix-actions";
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { isValidWebsiteCategory } from "@/lib/menu/menu-category-override-core";
@@ -85,7 +85,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string; refiled?: string; facts_pv?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string; refiled?: string; facts_pv?: string; sizes?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { id } = await params;
@@ -702,6 +702,37 @@ export default async function ImportReviewPage({
                     Preview first (writes nothing)
                   </Button>
                 </form>
+              </div>
+            ) : null}
+            {/* R74 S30: link each lot to the exact menu size (price) it was sold as,
+                so a multi-size card prices per lot. Fill-only; an owner pick is never overwritten. */}
+            {hasCreatedLots && canRefile && !imp.is_test ? (
+              <div className="mt-3" id="lot-sizes" data-testid="lot-plan-link-sizes">
+                {sp.sizes && (
+                  <p role="status" data-testid="lot-plan-link-sizes-result" className="mb-2 text-xs text-white/80">
+                    {sp.sizes.slice(0, 900)}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <form action={linkLotSizesAction}>
+                    <input type="hidden" name="importId" value={imp.id} />
+                    <Button type="submit" variant="confirm" size="sm" data-testid="lot-plan-link-sizes-button">
+                      Link lots to their menu sizes
+                    </Button>
+                  </form>
+                  <form action={linkLotSizesAction}>
+                    <input type="hidden" name="importId" value={imp.id} />
+                    <input type="hidden" name="mode" value="preview" />
+                    <Button type="submit" variant="neutral" size="sm" data-testid="lot-plan-link-sizes-preview">
+                      Preview first (writes nothing)
+                    </Button>
+                  </form>
+                </div>
+                <p className="mt-1 text-xs text-white/45">
+                  Re-reads this import&apos;s stored Cultivera files and records which menu size (and so which price) each
+                  lot is. After this, a lot&apos;s price edit changes only its own size. Only blank links are filled; a size
+                  you picked on a lot page is never changed. Lots it cannot place are listed so you can pick them by hand.
+                </p>
               </div>
             ) : null}
             {/* R50 S2c: put the lots back on the real Cultivera deliveries (opens a read-only preview first). */}

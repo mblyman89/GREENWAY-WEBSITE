@@ -37,7 +37,9 @@ export async function loadInventoryTableLots() {
   const categorizedRaw = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
   // R74 S24: the same live price + menu flags join as the page.
   const lotKeys = categorizedRaw.lots.map((l) => l.pos_product_key);
-  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotKeys), getMenuClassificationFlags(lotKeys)]);
+  // R74 S30: each lot's own menu size (0294) so a multi-size card prices per size.
+  const lotPriceRefs = categorizedRaw.lots.map((l) => ({ key: l.pos_product_key, linked: l.menu_source_variant_id ?? null }));
+  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotPriceRefs), getMenuClassificationFlags(lotKeys)]);
   const categorized = attachLotParity(categorizedRaw, livePrices.index, menuFlags);
   const lots = attachInventoryMetrics(categorized.lots, {
     today: pacificToday(),

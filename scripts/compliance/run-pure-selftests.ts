@@ -577,7 +577,8 @@ import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
 import { __runPriceVariantMatchCoreTests } from "../../src/lib/inventory/price-variant-match-core";
 import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-correction-core";
-import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/lib/pos/import-lot-core";
+import { __runImportLotCoreTests, __runImportLotFactFillTests, __runImportLotSizeLinkTests } from "../../src/lib/pos/import-lot-core";
+import { __runLotSizeLinkCoreTests } from "../../src/lib/inventory/lot-size-link-core";
 import { __runCultiveraManifestGroupCoreTests } from "../../src/lib/inventory/cultivera-manifest-group-core";
 import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cultivera-transfer-match-core";
 import { __runMigrationStockCoreTests } from "../../src/lib/accounting/migration-stock-core";
@@ -1871,12 +1872,14 @@ __runLiquidVolumeTests();
   { const r = __runSprintStatusCoreTests(); if (r.failed > 0 || r.passed < 42) throw new Error(`sprint-status-core: ${r.failed} failed, ${r.passed} passed (expected >= 42)`); } // R74 S21: Gemini sprint status indicator on Product Onboarding
   { const r = __runPromoFixCoreTests(); if (r.failed > 0 || r.passed < 31) throw new Error(`promo-fix-core: ${r.failed} failed, ${r.passed} passed (expected >= 31)`); } // R74 S22: publish guard skips hidden + never-discount; hide blockers from the promotion page
   { const r = __runPromoBlockerFixCoreTests(); if (r.failed > 0 || r.passed < 30) throw new Error(`promo-blocker-fix-core: ${r.failed} failed, ${r.passed} passed (expected >= 30)`); } // R74 S23: fix-it controls per publish blocker (leave out, never discount, price needed)
-  { const r = __runLotLivePriceCoreTests(); if (r.failed > 0 || r.passed < 36) throw new Error(`lot-live-price-core: ${r.failed} failed, ${r.passed} passed (expected >= 36)`); } // R74 S24: inventory table price/flags/THCA = the lot page
+  { const r = __runLotLivePriceCoreTests(); if (r.failed > 0 || r.passed < 44) throw new Error(`lot-live-price-core: ${r.failed} failed, ${r.passed} passed (expected >= 44)`); } // R74 S24: inventory table price/flags/THCA = the lot page (S30: per-size link, 44)
   { const r = __runCcrsIdentityGuardCoreTests(); if (r.failed > 0 || r.passed < 43) throw new Error(`ccrs-identity-guard-core: ${r.failed} failed, ${r.passed} passed (expected >= 43)`); } // R74 S25: Cultivera lots keep their filed CCRS ids; ours get GWP-
   { const r = __runCountAutocompleteCoreTests(); if (r.failed > 0 || r.passed < 26) throw new Error(`count-autocomplete-core: ${r.failed} failed, ${r.passed} passed (expected >= 26)`); } // R74 S26: Excel AutoComplete defence for the count workbook (Mac)
   { const r = __runBadProductQueueCoreTests(); if (r.failed > 0 || r.passed < 49) throw new Error(`bad-product-queue-core: ${r.failed} failed, ${r.passed} passed (expected >= 49)`); } // R74 S27: bad product queue
   { const r = __runPromoPreviewCoreTests(); if (r.failed > 0 || r.passed < 46) throw new Error(`promo-preview-core: ${r.failed} failed, ${r.passed} passed (expected >= 46)`); } // R74 S28: promotion preview before publishing
   { const r = __runPreflightTriageCoreTests(); if (r.failed > 0 || r.passed < 42) throw new Error(`preflight-triage-core: ${r.failed} failed, ${r.passed} passed (expected >= 42)`); } // R74 S29: per-product preflight errors hold that product back (named); duplicates still stop the menu
+  { const r = __runLotSizeLinkCoreTests(); if (r.failed > 0 || r.passed < 22) throw new Error(`lot-size-link-core: ${r.failed} failed, ${r.passed} passed (expected >= 22)`); } // R74 S30: lot size link - shared floor, owner size pick, price scope
+  { const r = __runImportLotSizeLinkTests(); if (r.failed > 0 || r.passed < 21) throw new Error(`import-lot-core size-link: ${r.failed} failed, ${r.passed} passed (expected >= 21)`); } // R74 S30: import writes / backfills each lot's menu size link (owner picks never overwritten)
   { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());

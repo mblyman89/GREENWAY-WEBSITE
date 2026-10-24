@@ -139,6 +139,13 @@ export type InventoryLot = {
    * pos_import | owner_entered). Optional: older reads may not carry it.
    */
   pos_product_key_source?: string | null;
+  /**
+   * R74 S30 (migration 0294) — the menu size this lot sells as
+   * (menu_variants.source_variant_id). Optional: absent before 0294 is applied.
+   */
+  menu_source_variant_id?: string | null;
+  /** R74 S30 — who set menu_source_variant_id: "pos_import" | "owner". */
+  menu_source_variant_source?: string | null;
   product_name: string | null;
   strain_name: string | null;
   /** "indica" | "sativa" | "hybrid" | null (migration 0138 — Rule 1.4, own box). */

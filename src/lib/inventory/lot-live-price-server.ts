@@ -17,12 +17,19 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { ONBOARDED_VARIANT_SUFFIX } from "@/lib/inventory/price-variant-match-core";
-import { buildLivePriceIndex, type LivePrice, type PriceCard, type PriceVariant } from "@/lib/inventory/lot-live-price-core";
+import { buildLivePriceIndex, type LivePrice, type LotPriceRef, type PriceCard, type PriceVariant } from "@/lib/inventory/lot-live-price-core";
 
+/**
+ * R74 S30: refs may carry the lot's size link (0294); the index is then keyed
+ * by livePriceIndexKey(key, linked) so each size of a card gets its own price.
+ * The size's variant is always one of its card's variants, so the card read
+ * below already loads it: no extra query.
+ */
 export async function loadLotLivePrices(
-  keys: ReadonlyArray<string | null | undefined>,
+  refs: ReadonlyArray<LotPriceRef>,
 ): Promise<{ index: Map<string, LivePrice>; complete: boolean }> {
-  const unique = Array.from(new Set(keys.map((k) => (k ?? "").trim()).filter((k) => k.length > 0)));
+  const keyOf = (r: LotPriceRef) => ((r && typeof r === "object" ? r.key : r) ?? "").trim();
+  const unique = Array.from(new Set(refs.map(keyOf).filter((k) => k.length > 0)));
   if (!isSupabaseServiceConfigured || unique.length === 0) return { index: new Map(), complete: true };
   let failed = false;
   try {
@@ -126,7 +133,7 @@ export async function loadLotLivePrices(
     if (failed) return { index: new Map(), complete: false };
     const byId = new Map<string, PriceVariant>();
     for (const v of [...onboarded, ...cardVariants]) byId.set(v.id, v);
-    return { index: buildLivePriceIndex(unique, cards, Array.from(byId.values())), complete: true };
+    return { index: buildLivePriceIndex(refs, cards, Array.from(byId.values())), complete: true };
   } catch (err) {
     console.error("[lot-live-price] load failed:", err);
     return { index: new Map(), complete: false };

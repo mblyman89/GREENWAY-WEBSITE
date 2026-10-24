@@ -30,16 +30,39 @@ export type PriceCard = { id: string; source_item_id: string | null };
 export type PriceVariant = { id: string; menu_item_id: string; source_variant_id: string | null; price_minor_units: number | null };
 
 export type LivePrice =
-  | { kind: "onboarded" | "single-card"; priceMinor: number }
+  | { kind: "linked" | "onboarded" | "single-card"; priceMinor: number }
   | { kind: "ambiguous"; variantCount: number };
 
 /**
- * Resolve the live price for every key at once. Keys with no card and no
+ * R74 S30: a lot as the price index sees it: its card key plus, when the lot
+ * is linked to a size (inventory_lots.menu_source_variant_id, 0294), that
+ * size. A bare string is a key with no link (the pre-S30 shape).
+ */
+export type LotPriceRef = string | null | undefined | { key: string | null | undefined; linked?: string | null };
+
+/**
+ * The index entry for one lot. An unlinked lot's entry is its key, exactly as
+ * before S30 (so every existing reader keeps working); a linked lot's entry
+ * also names its size, so two sizes of one card get two prices.
+ */
+export function livePriceIndexKey(key: string | null | undefined, linked?: string | null): string {
+  const k = (key ?? "").trim();
+  const l = (linked ?? "").trim();
+  return l ? `${k}\u0000${l}` : k;
+}
+
+function refParts(ref: LotPriceRef): { key: string; linked: string } {
+  if (ref && typeof ref === "object") return { key: (ref.key ?? "").trim(), linked: (ref.linked ?? "").trim() };
+  return { key: (ref ?? "").trim(), linked: "" };
+}
+
+/**
+ * Resolve the live price for every lot ref at once. Refs with no card and no
  * -onboarded variant are simply absent (not on the published menu).
  * A variant with no usable price (null, NaN, <= 0) yields no price.
  */
 export function buildLivePriceIndex(
-  keys: ReadonlyArray<string | null | undefined>,
+  keys: ReadonlyArray<LotPriceRef>,
   cards: readonly PriceCard[],
   variants: readonly PriceVariant[],
 ): Map<string, LivePrice> {
@@ -69,20 +92,21 @@ export function buildLivePriceIndex(
   }
   const seen = new Set<string>();
   for (const raw of keys) {
-    const key = (raw ?? "").trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
+    const { key, linked } = refParts(raw);
+    const entry = livePriceIndexKey(key, linked);
+    if (!key || seen.has(entry)) continue;
+    seen.add(entry);
     const onboarded: VariantCandidate[] = variantsBySourceId.get(`${key}${ONBOARDED_VARIANT_SUFFIX}`) ?? [];
     const cardVariants: VariantCandidate[] = (cardsByKey.get(key) ?? []).flatMap((id) => variantsByItem.get(id) ?? []);
-    const decision = resolveLotVariant(key, onboarded, cardVariants);
+    const decision = resolveLotVariant(key, onboarded, cardVariants, linked || null);
     if (decision.kind === "ambiguous") {
-      out.set(key, { kind: "ambiguous", variantCount: decision.variantCount });
+      out.set(entry, { kind: "ambiguous", variantCount: decision.variantCount });
       continue;
     }
     if (decision.kind === "none") continue;
     const price = byId.get(decision.variantId)?.price_minor_units;
     if (price == null || !Number.isFinite(price) || price <= 0) continue;
-    out.set(key, { kind: decision.kind, priceMinor: price });
+    out.set(entry, { kind: decision.kind, priceMinor: price });
   }
   return out;
 }
@@ -128,6 +152,8 @@ export type LotShelfPriceFields = {
 
 type PriceableLot = {
   pos_product_key?: string | null;
+  /** R74 S30 (0294): the lot's own menu size, when linked. */
+  menu_source_variant_id?: string | null;
   onboarding_price_minor?: number | null;
   unit_cost_minor_units?: number | null;
   category?: string | null;
@@ -145,7 +171,7 @@ export function attachLotShelfPrice<L extends PriceableLot>(
 ): Array<L & LotShelfPriceFields> {
   return lots.map((lot) => {
     const key = (lot.pos_product_key ?? "").trim();
-    const p = effectiveShelfPrice(lot.onboarding_price_minor ?? null, key ? index.get(key) ?? null : null);
+    const p = effectiveShelfPrice(lot.onboarding_price_minor ?? null, key ? index.get(livePriceIndexKey(key, lot.menu_source_variant_id)) ?? null : null);
     const taxCategory = lot.website_category_value ?? lot.category ?? null;
     return {
       ...lot,
@@ -349,6 +375,33 @@ export function __runLotLivePriceCoreTests(): { passed: number; failed: number }
     const out = attachLotParity(res, new Map([["K1", { kind: "onboarded", priceMinor: 1999 } as LivePrice]]), new Map([["K1", { otherwiseTaken: true, unitsPerPackage: null, lowThcLiquid: null, unitThcMg: null }]]));
     ok(out.lots[0].shelf_price_minor === 1999 && out.lots[0].otherwise_taken === true, "parity attaches price and flags");
     ok(out.complete === true && out.liveKeys.has("K1"), "parity keeps the rest of the result");
+  }
+
+  // R74 S30: per-lot size link on a multi-size card
+  {
+    const cards: PriceCard[] = [{ id: "cM", source_item_id: "KM" }];
+    const variants: PriceVariant[] = [
+      { id: "m1", menu_item_id: "cM", source_variant_id: "KM-1g", price_minor_units: 1200 },
+      { id: "m3", menu_item_id: "cM", source_variant_id: "KM-3g", price_minor_units: 3000 },
+    ];
+    const idx = buildLivePriceIndex(["KM", { key: "KM", linked: "KM-1g" }, { key: "KM", linked: "KM-3g" }, { key: "KM", linked: "KM-9g" }, { key: " KM ", linked: " KM-3g " }], cards, variants);
+    ok(idx.get("KM")?.kind === "ambiguous", "unlinked lot on a multi-size card stays ambiguous");
+    const l1 = idx.get(livePriceIndexKey("KM", "KM-1g"));
+    const l3 = idx.get(livePriceIndexKey("KM", "KM-3g"));
+    ok(l1?.kind === "linked" && l1.priceMinor === 1200, "1g lot reads the 1g price");
+    ok(l3?.kind === "linked" && l3.priceMinor === 3000, "3g lot reads the 3g price");
+    ok(idx.get(livePriceIndexKey("KM", "KM-9g"))?.kind === "ambiguous", "stale link falls back to ambiguous");
+    ok(idx.size === 4, "trimmed duplicate ref collapses onto one entry");
+    ok(livePriceIndexKey("KM", null) === "KM" && livePriceIndexKey(" KM ", "  ") === "KM", "unlinked index key is the bare key");
+    const lots = attachLotShelfPrice(
+      [
+        { pos_product_key: "KM", menu_source_variant_id: "KM-3g", unit_cost_minor_units: 500, category: "flower" },
+        { pos_product_key: "KM", menu_source_variant_id: null, onboarding_price_minor: 2222, unit_cost_minor_units: 500, category: "flower" },
+      ],
+      idx,
+    );
+    ok(lots[0].shelf_price_minor === 3000 && lots[0].shelf_price_source === "menu", "table row uses the lot's own size price");
+    ok(lots[1].shelf_price_minor === 2222 && lots[1].shelf_price_ambiguous === true, "unlinked row keeps the old fallback");
   }
 
   return { passed, failed };

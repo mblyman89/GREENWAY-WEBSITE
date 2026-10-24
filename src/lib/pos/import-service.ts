@@ -44,6 +44,11 @@ import {
   potencyColumns,
   planLotFactFill,
   POS_POTENCY_COLUMNS,
+  SIZE_LINK_COLUMNS,
+  sizeLinkColumns,
+  planSizeLinkFill,
+  type ExistingLotSizeLink,
+  type SizeLinkFillPlan,
   type ExistingLotFacts,
   type PlannedImportLot,
 } from "@/lib/pos/import-lot-core";
@@ -51,7 +56,7 @@ import { storeNow, pacificToday } from "@/lib/reports/timezone";
 import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
-import { getImportDiagnostics, getVersionItems, countVersionItems } from "@/lib/pos/menu-version";
+import { getImportDiagnostics, getVersionItems, countVersionItems, getPublishedVersion } from "@/lib/pos/menu-version";
 import { listFactReviewsResult, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import {
   buildFactReviewBuckets,
@@ -643,6 +648,9 @@ async function createImportLots(importId: string, actorId: string | null): Promi
   const importCreatedAtFallback = storeNow().toISOString();
   const todayPacific = pacificToday();
   let potencyColsOk = true;
+  // R74 S30: the lot -> menu size link (migration 0294). Dropped on retry when
+  // the owner has not applied 0294 yet; the link button fills it afterwards.
+  let sizeLinkColsOk = true;
   let created = 0;
   for (let start = 0; start < toCreate.length; start += LOT_BATCH) {
     const batch = toCreate.slice(start, start + LOT_BATCH);
@@ -690,22 +698,36 @@ async function createImportLots(importId: string, actorId: string | null): Promi
         // R15a: the POS export's THC/CBD (migration 0241; dropped on retry
         // when the owner has not applied it yet).
         ...(potencyColsOk ? potencyColumns(lot.potency, importCreatedAtFallback) : {}),
+        // R74 S30: NEVER conditional per row (uniform keys): null when the
+        // lot has no single size (import_lot_size_link_conflict).
+        ...(sizeLinkColsOk ? sizeLinkColumns(lot.menuSourceVariantId) : {}),
       });
     }
     const batchNumber = start / LOT_BATCH + 1;
     // Fail loudly and precisely BEFORE the network call if the row builder ever
     // regresses into a ragged key set (Rule 3: precise warnings, never invent).
     assertUniformInsertKeys(rows, `inventory_lots batch ${batchNumber}`);
-    let { error: insErr } = await admin.from("inventory_lots").insert(rows);
-    if (insErr && potencyColsOk && isMissingPosPotencyColumn(insErr)) {
-      // 0241 not applied yet: retry this batch without the pos_* columns and
-      // stop sending them for the rest of the run. Dates + minors still land.
-      potencyColsOk = false;
-      const stripped = rows.map((r) => withoutPosPotency(r));
-      ({ error: insErr } = await admin.from("inventory_lots").insert(stripped));
+    let sendRows = rows;
+    let { error: insErr } = await admin.from("inventory_lots").insert(sendRows);
+    // Each optional column group may be missing (owner applies migrations by
+    // hand). Strip the group the error names, stop sending it for the rest of
+    // the run, retry. At most one retry per group; any other error is fatal.
+    for (let attempt = 0; attempt < 2 && insErr; attempt += 1) {
+      if (potencyColsOk && isMissingPosPotencyColumn(insErr)) {
+        // 0241 not applied yet: dates + minors still land.
+        potencyColsOk = false;
+        sendRows = sendRows.map((r) => withoutPosPotency(r));
+      } else if (sizeLinkColsOk && isMissingSizeLinkColumn(insErr)) {
+        // 0294 not applied yet: lots land unlinked (prices fall back to the card).
+        sizeLinkColsOk = false;
+        sendRows = sendRows.map((r) => withoutSizeLink(r));
+      } else {
+        break;
+      }
+      ({ error: insErr } = await admin.from("inventory_lots").insert(sendRows));
     }
     if (insErr) throw new Error(`Lot creation failed while inserting batch ${batchNumber}: ${insErr.message}`);
-    created += rows.length;
+    created += sendRows.length;
   }
 
   await persistDiagnostics(importId, [
@@ -715,6 +737,16 @@ async function createImportLots(importId: string, actorId: string | null): Promi
       message: `Created ${created} compliance inventory lot(s) (${existingIds.size} already existed) under migration manifest POS-IMPORT-${importId.slice(0, 8)}. Lots are ACTIVE: this stock was already received and CCRS-reported by the previous POS; the import migrates the system of record.`,
       context: { created, skippedExisting: existingIds.size, manifestId, plan: plan.summary },
     },
+    ...(sizeLinkColsOk
+      ? []
+      : [
+          {
+            severity: "warning",
+            code: "import_lots_size_link_pending",
+            message:
+              "Lots were created WITHOUT their menu size link because migration 0294 is not applied yet. Apply 0294, then press \"Link lots to their menu sizes\" on this import so multi-size products get per-size prices.",
+          },
+        ]),
   ]);
 }
 
@@ -726,6 +758,21 @@ function isMissingPosPotencyColumn(error: { code?: string | null; message?: stri
   const msg = String(error.message ?? "").toLowerCase();
   const signalled = ["42703", "PGRST204"].includes(String(error.code ?? "")) || /column .* does not exist|could not find the .* column/.test(msg);
   return signalled && POS_POTENCY_COLUMNS.some((c) => new RegExp(`(^|[^a-z0-9_])${c}([^a-z0-9_]|$)`).test(msg));
+}
+
+// R74 S30 — pre-migration tolerance for the 0294 size-link columns.
+function isMissingSizeLinkColumn(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false;
+  const msg = String(error.message ?? "").toLowerCase();
+  const signalled = ["42703", "PGRST204"].includes(String(error.code ?? "")) || /column .* does not exist|could not find the .* column/.test(msg);
+  return signalled && SIZE_LINK_COLUMNS.some((c) => new RegExp(`(^|[^a-z0-9_])${c}([^a-z0-9_]|$)`).test(msg));
+}
+
+function withoutSizeLink(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const drop = new Set<string>(SIZE_LINK_COLUMNS);
+  for (const [k, v] of Object.entries(row)) if (!drop.has(k)) out[k] = v;
+  return out;
 }
 
 function withoutPosPotency(row: Record<string, unknown>): Record<string, unknown> {
@@ -836,6 +883,129 @@ export async function fillImportLotFacts(
   };
   await Promise.all(Array.from({ length: 8 }, worker));
   return { matched: plan.matched, datesFilled, potencyFilled, potencyColumnsPresent };
+}
+
+/**
+ * R74 S30 — LINK lots an earlier publish created to their menu SIZE
+ * (inventory_lots.menu_source_variant_id, migration 0294).
+ *
+ * Same re-read as fillImportLotFacts: the import's STORED raw workbooks, the
+ * same transform, the same planner, matched by CCRS inventory external id.
+ * planSizeLinkFill decides (never guessing): the lot must still be on the
+ * planned card, the planned size must be on the PUBLISHED menu, and a size
+ * the owner picked by hand is never overwritten. Each UPDATE re-asserts the
+ * "not owner" rule in SQL, so a pick made between preview and apply wins.
+ */
+export async function fillImportLotSizeLinks(
+  importId: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<{ plan: SizeLinkFillPlan; written: number }> {
+  const admin = createSupabaseAdminClient();
+  const { data: importRow, error: impErr } = await admin
+    .from("pos_imports")
+    .select("id, products_storage_key, inventories_storage_key, is_test")
+    .eq("id", importId)
+    .single();
+  if (impErr || !importRow) throw new Error(`Link failed: import ${importId} not found.`);
+  const imp = importRow as Pick<PosImport, "id" | "products_storage_key" | "inventories_storage_key" | "is_test">;
+  if (imp.is_test) throw new Error("Link refused: this is a TEST import — test imports never create real lots.");
+  if (!imp.products_storage_key || !imp.inventories_storage_key) {
+    throw new Error("Link failed: this import has no stored raw workbook files to re-read.");
+  }
+  const [productsDl, inventoriesDl] = await Promise.all([
+    admin.storage.from(POS_RAW_BUCKET).download(imp.products_storage_key),
+    admin.storage.from(POS_RAW_BUCKET).download(imp.inventories_storage_key),
+  ]);
+  if (productsDl.error || !productsDl.data || inventoriesDl.error || !inventoriesDl.data) {
+    throw new Error(`Link failed: could not re-read the raw workbook files (${productsDl.error?.message ?? inventoriesDl.error?.message ?? "unknown"}).`);
+  }
+  const result = transformWorkbooks({
+    productsBuffer: Buffer.from(await productsDl.data.arrayBuffer()),
+    inventoriesBuffer: Buffer.from(await inventoriesDl.data.arrayBuffer()),
+    productsSheet: "Sheet1",
+    inventoriesSheet: "Inventories",
+  });
+  const planned: PlannedImportLot[] = planImportLots(result.lotSources).lots;
+  const emptyPlan = planSizeLinkFill([], [], new Set());
+  if (planned.length === 0) return { plan: emptyPlan, written: 0 };
+
+  // The sizes on the PUBLISHED menu for the planned cards (a size that is not
+  // there is never linked: the link would point at nothing).
+  const published = await getPublishedVersion();
+  if (!published) throw new Error("Link failed: there is no published menu to link sizes to. Publish first.");
+  const cardKeys = Array.from(new Set(planned.map((l) => l.posProductKey)));
+  const cards = await chunkedIn<string, { id: string }>(cardKeys, async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("menu_items")
+      .select("id")
+      .eq("menu_version_id", published.id)
+      .in("source_item_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) throw new Error(`Link failed reading the published cards: ${error.message}`);
+    return (data as { id: string }[] | null) ?? [];
+  });
+  const sizeRows = await chunkedIn<string, { source_variant_id: string }>(cards.map((c) => c.id), async (chunk, from, to) => {
+    const { data, error } = await admin
+      .from("menu_variants")
+      .select("source_variant_id")
+      .in("menu_item_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) throw new Error(`Link failed reading the published sizes: ${error.message}`);
+    return (data as { source_variant_id: string }[] | null) ?? [];
+  });
+  const liveSizes = new Set(sizeRows.map((r) => r.source_variant_id));
+
+  let existing: ExistingLotSizeLink[];
+  try {
+    existing = await chunkedIn(planned.map((l) => l.ccrsExternalId), async (chunk, from, to) => {
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select("id, ccrs_inventory_external_id, pos_product_key, menu_source_variant_id, menu_source_variant_source")
+        .in("ccrs_inventory_external_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) throw error;
+      return (data as unknown as ExistingLotSizeLink[] | null) ?? [];
+    });
+  } catch (e) {
+    if (isMissingSizeLinkColumn(e as { code?: string; message?: string })) {
+      throw new Error("Link failed: migration 0294 (the lot size link) is not applied yet. Apply it in the Supabase SQL editor, then press this button again.");
+    }
+    throw new Error(`Link failed reading the lots: ${e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)}`);
+  }
+
+  const plan = planSizeLinkFill(planned, existing, liveSizes);
+  if (opts.dryRun) return { plan, written: 0 };
+
+  // One UPDATE per size (lots of one size share it), guarded in SQL so an
+  // owner pick made meanwhile is never overwritten.
+  const bySize = new Map<string, string[]>();
+  for (const w of plan.writes) {
+    const ids = bySize.get(w.menuSourceVariantId) ?? [];
+    ids.push(w.id);
+    bySize.set(w.menuSourceVariantId, ids);
+  }
+  let written = 0;
+  const queue = [...bySize.entries()];
+  const worker = async () => {
+    for (let item = queue.shift(); item; item = queue.shift()) {
+      const [sizeId, ids] = item;
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await admin
+          .from("inventory_lots")
+          .update({ menu_source_variant_id: sizeId, menu_source_variant_source: "pos_import" })
+          .in("id", ids.slice(i, i + 200))
+          .or("menu_source_variant_source.is.null,menu_source_variant_source.eq.pos_import")
+          .select("id");
+        if (error) throw new Error(`Link failed writing sizes: ${error.message}`);
+        written += (data as unknown[] | null)?.length ?? 0;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  return { plan, written };
 }
 
 function sanitize(name: string): string {
