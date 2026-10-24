@@ -1339,7 +1339,8 @@ describe("D-65 — the connections survive the reset", () => {
     // R74 S7: +1 KEEP for cultivera_mail_docs (0293; harvested vendor
     // documents from the real mailbox; the database refuses DELETE).
     // R74 S34: +1 KEEP for ai_batches (0295; the Gemini batch cost ledger).
-    expect(plan.keep.length).toBe(173);
+    // R74 S40: +2 KEEP ccrs_record_copies, ccrs_record_copy_stage (0298).
+    expect(plan.keep.length).toBe(175);
     expect(plan.wipe.length).toBe(139);
   });
 

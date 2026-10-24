@@ -709,6 +709,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   // R74 S39 (0297): records a CCRS batch held back and still owes the State.
   // A later emission resolves them; a reset must not forget a debt to CCRS.
   { table: "ccrs_held_sync", disposition: "KEEP", because: "Records still owed to CCRS (held back from an upload until fixed) — a reset must not forget what the State is still owed." },
+  // R74 S40 (0298): CCRS data copies the owner uploaded (what the State said
+  // it holds, and when) are evidence; the merge stage is emptied by the merge.
+  { table: "ccrs_record_copies", disposition: "KEEP", because: "The CCRS data copies you uploaded from the LCB Service Desk — the State's own record of what it holds, and when." },
+  { table: "ccrs_record_copy_stage", disposition: "KEEP", because: "A merge plan staged for a moment before it is applied to State records; the merge itself empties it, so nothing is left to reset." },
   { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
   // S-12d (0250): the owner's written reasons for checking off a real State
   // deadline. Evidence for an examiner, not test activity.

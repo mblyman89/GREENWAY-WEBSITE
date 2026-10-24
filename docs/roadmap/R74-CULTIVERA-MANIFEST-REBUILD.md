@@ -926,3 +926,39 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
   - The Reports > Compliance page and the AI advisor show held-back items separately from blocking ones.
   - The zip README lists every held-back record.
   - The E52 next step now gives the exact re-seed CLI command.
+
+## Round 20 - owner request (verbatim)
+
+> Thank you. I will request a fresh up to date CCRS record from the examiners office. Please build for me a button and method for uploading the data when I receive it, so I don’t have to have it hard coded into the system. I think it would be useful to have this for both Cultivera clean up, CCRS accuracy, and future cleanups, so we can compare our record with the states periodically. Please build for me a professional, enterprise grade page for uploading CCRS records received from the examiners office. And a fancy enterprise grade method for comparing what the CCRS has vs what we have in our records. Please make sure this is an all inclusive and incredibly useful and powerful new page for keeping our data clean and in sync with the states. Minimal testing please, I’ll test the page and features. Use our style and theme and format for the page. Save credits however possible. Follow the standing rules. Thank you!
+
+### S40 - CCRS Records page: upload a State copy, compare, merge (#PR)
+
+- **Page** `/admin/compliance/ccrs/records`. It is linked from the CCRS hub header, the E52 next step and Help.
+  - Who can use it: `reports.view` can see it; `settings.manage` can upload, merge and discard.
+- **Upload.** You can drag in or choose the four LCB delivery CSVs (Inventory, Product, Strain, Area).
+  - Each file is recognised by its exact header row, whatever its name.
+  - You set the as-of date and can add notes (for example the ticket number).
+  - The files go straight from the browser to the private `ccrs-records` bucket on signed URLs, with a progress bar. Vercel's 4.5 MB limit does not apply.
+  - The server re-checks each header and records the sha256, row count and bytes of each file.
+- **Compare (three ways)** in `ccrs-records-compare-core.ts` (pure, 13 self-tests):
+  1. **Our lots vs CCRS.** Matches; quantity differs; not on the CCRS record (the E52 lots); no CCRS id; closed in CCRS but open with us; open in CCRS but empty with us; open in CCRS only (Cultivera ghosts).
+  2. **Ledger merge plan** (S-15 `planReseed`). New, refreshed, migration lots now filed, and uncertain rows settled, plus every review bucket.
+  3. **Our filings vs CCRS** (S-16 `verifyCopy`).
+  - Each part fails on its own without hiding the others.
+  - The page shows a sync-score gauge, a needs-action count, stat cards and bucket bars that link into the findings.
+  - The findings explorer filters by area, finding and type, has a needs-action toggle, search and paging, and shows what each finding means.
+  - Two CSV downloads: needs-action and full. Both are safe against formula injection.
+  - History of every copy: score, needs-action count, who uploaded, merge result.
+- **Merge** (replaces the S-15 command line). Type MERGE to confirm. If seeded records are missing from the copy, you also type that exact count to accept it.
+  - The server re-plans fresh and refuses if the counts moved since the page showed them.
+  - It stages the writes, then the RPC `ccrs_apply_record_copy` applies them all-or-nothing with the same guards (STALE / NOT_SEEDED). It runs `ccrs_link_unfiled_migration_lots(true)` and records the four provenance files in `ccrs_files` (purpose seed, state closed).
+  - Every step is audited.
+- **Migration `0298_ccrs_record_copies.sql`.**
+  - Tables `ccrs_record_copies` and `ccrs_record_copy_stage`, both with RLS on and staff read, and both KEEP in factory reset.
+  - Paged read RPCs `ccrs_records_ledger_page` / `ccrs_records_sent_page` (so PostgREST's row cap never truncates them) and `ccrs_apply_record_copy`. All are security definer and service_role only.
+  - Private bucket `ccrs-records` (100 MB, CSV).
+  - Also: a rollback and `scripts/recon/ccrs-record-copies-0298-pg-check.sql`.
+- **Owner steps.**
+  1. Apply 0298.
+  2. When the copy arrives, upload it, review the comparison and press Merge.
+  3. Rebuild the weekly batch so the released Cultivera lots go out.
