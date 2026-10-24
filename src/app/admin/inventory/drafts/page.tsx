@@ -72,6 +72,7 @@ import { CARD_REFRESH_ENV, cultiveraApproveCopy } from "@/lib/inventory/cultiver
 import { fieldSourcesLine } from "@/lib/inventory/cultivera-survivorship-core";
 import { CATEGORY_HOLD_ROW_NOTE, CATEGORY_HOLD_UNREAD_NOTE } from "@/lib/inventory/cultivera-category-gate-core";
 import { loadHeldKeysForPage } from "@/lib/inventory/cultivera-category-gate";
+import { AI_LOOKUP_ENGINE_ENV, lookupEngine } from "@/lib/ai/gemini-batch-core";
 import { acceptCardAliasAction, forgetCardAliasAction, previewCoaArchiveBackfillAction, previewWciaBackfillAction, runCoaArchiveBackfillAction, runWciaBackfillAction, startCultiveraOnboardingAction, startCultiveraVendorAction, lookupCultiveraVendorAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
@@ -295,6 +296,36 @@ export default async function CatalogDraftsPage({
   const pinned = focus.draftId ? listed.find((d) => d.id === focus.draftId) ?? null : null;
   const view = effectiveDraftView(focus, pinned);
   const drafts = listed.filter((d) => d.status === view);
+  // R74 S36 (speed): every read below that needs only the tab + its rows
+  // starts NOW, in parallel, and is awaited where it was before (same data,
+  // same order of use). Previously ~10 reads ran one after another.
+  const early = <T,>(f: () => T | Promise<T>): Promise<T> => {
+    const p = Promise.resolve().then(f);
+    p.catch(() => {}); // awaited below; never an unhandled rejection
+    return p;
+  };
+  const earlyCvParam = parseVendorParam(sp.cv_vendor);
+  const earlyWantVendors = !focus.draftId && !focus.manifestId && (Boolean(earlyCvParam) || sp.cv_vendors === "1");
+  const earlyBatchOn = Boolean(focus.manifestId) && view === "draft" && lookupJobsOn() && isAiConfigured;
+  const earlyRowsOpen = view === "draft" || view === "approved";
+  const earlyFactRows = focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts;
+  const cvVendorsP = early(() => (earlyWantVendors ? loadCultiveraVendors() : null));
+  const pricingP = early(() => getPricingSettings());
+  const batchLookupP = early(() => (earlyBatchOn && focus.manifestId ? loadManifestLookup(focus.manifestId) : null));
+  const brandCtxP = early(() => (focus.manifestId && view !== "dismissed" ? loadDeliveryBrandContext(focus.manifestId) : null));
+  const resolveP = early(() =>
+    resolveWebsiteCategoriesWithLiveKeys(
+      drafts.map((d) => ({ posProductKey: d.pos_product_key, productName: d.name, inventoryType: d.inventory_type, category: d.category })),
+    ),
+  );
+  const priorP = early(() => Promise.all([listPriorClassifications(), listPriorOnboardingPicks()]));
+  const factFlagsP = early(() => (view === "approved" ? loadOpenIntakeFactFlags(earlyFactRows) : null));
+  const earlyWaitingKeys = new Map(drafts.map((d) => [d.id, waitingKeyForDraft(d)] as const));
+  const strainP = early(() => loadStrainTypeSignals(drafts));
+  const waitingP = early(() => (earlyRowsOpen ? loadWaitingSuggestions(Array.from(earlyWaitingKeys.values())) : { ok: true as const, rows: [] }));
+  const labP = early(() => (earlyRowsOpen ? loadLabViewsForDrafts(drafts) : null));
+  const imagesP = early(() => (earlyRowsOpen ? loadOnboardingImageRecommendations(drafts, earlyWaitingKeys) : (null as OnboardingImagesRead | null)));
+  const savedFactsP = early(() => (earlyRowsOpen && onboardingV2RowEnabled(process.env[ONBOARDING_V2_ROW_ENV]) ? loadSavedProductFacts(earlyFactRows) : null));
   // R50 S3: rows whose delivery was rebuilt from the Cultivera export (cards
   // already selling) + the "Cultivera manifests" section. Both best-effort:
   // a failed read shows the ordinary row / an honest error, and the server
@@ -308,7 +339,7 @@ export default async function CatalogDraftsPage({
   // ordinary review page stays as fast as before.
   const cvVendorParam = parseVendorParam(sp.cv_vendor);
   const wantVendors = !focus.draftId && !focus.manifestId && (Boolean(cvVendorParam) || sp.cv_vendors === "1");
-  const cvVendors = wantVendors ? await loadCultiveraVendors() : null;
+  const cvVendors = wantVendors ? await cvVendorsP : null;
   const cvSelected =
     cvVendors && cvVendors.ok && cvVendorParam
       ? cvVendors.vendors.find((g) => g.key !== "" && g.key === vendorKeyOf(cvVendorParam)) ?? null
@@ -329,7 +360,7 @@ export default async function CatalogDraftsPage({
     : new Set<string>();
   // R32 (T-328): the CURRENT markup setting, so the price fine print is
   // recomputed live (never a stale frozen sentence) and drift is flagged.
-  const pricingSettings = await getPricingSettings();
+  const pricingSettings = await pricingP;
   const pinnedMissing = Boolean(focus.draftId) && !pinned;
   const pinnedMovedTab = Boolean(pinned) && view !== focus.view;
   // S14: paging copy, the focused delivery's header, the picker's choices.
@@ -341,10 +372,10 @@ export default async function CatalogDraftsPage({
   // Hidden when the flag is off or AI is not set up; the job and the exact
   // button count are read on the server (never guessed).
   const batchLookupOn = Boolean(focus.manifestId) && view === "draft" && lookupJobsOn() && isAiConfigured;
-  const batchLookup = batchLookupOn && focus.manifestId ? await loadManifestLookup(focus.manifestId) : null;
+  const batchLookup = batchLookupOn && focus.manifestId ? await batchLookupP : null;
   // R37 S5: the delivery's brand, the vendor's remembered brand, and what the
   // field prefills with (delivery > vendor > the one brand the rows share).
-  const brandCtx = focus.manifestId && view !== "dismissed" ? await loadDeliveryBrandContext(focus.manifestId) : null;
+  const brandCtx = await brandCtxP;
   const brandPrefill = brandCtx
     ? deliveryBrandPrefill({
         deliveryBrand: brandCtx.deliveryBrand,
@@ -354,6 +385,9 @@ export default async function CatalogDraftsPage({
       })
     : null;
   const batchLookupJob = batchLookup?.state === "job" ? batchLookup.job : null;
+  // R74 S36: with the Batch engine answers land per batch (minutes to hours),
+  // so the whole page re-renders every 2 min instead of every 20 s.
+  const batchSlowRefresh = lookupEngine(process.env[AI_LOOKUP_ENGINE_ENV]) === "batch";
   const batchLookupActive = batchLookupJob !== null && (batchLookupJob.status === "queued" || batchLookupJob.status === "running");
   const batchLookupProgress = batchLookupJob
     ? batchProgress({ items: [...batchLookupJob.items.values()], jobStartedAt: batchLookupJob.startedAt, nowMs: now.getTime() })
@@ -411,14 +445,7 @@ export default async function CatalogDraftsPage({
   // the approver can decide with full information.
   // S02: the same published-menu read also says which keys are LIVE cards,
   // so Enrich now can open the product itself (no extra query).
-  const { resolutions, liveKeys } = await resolveWebsiteCategoriesWithLiveKeys(
-    drafts.map((d) => ({
-      posProductKey: d.pos_product_key,
-      productName: d.name,
-      inventoryType: d.inventory_type,
-      category: d.category,
-    })),
-  );
+  const { resolutions, liveKeys } = await resolveP;
   const assessments = new Map<string, DraftClassificationAssessment>();
   // SLICE 18-0: the COMPLIANCE assessment - does this product need somebody to
   // answer the suppository question before it can go on the shelf? Computed
@@ -435,11 +462,8 @@ export default async function CatalogDraftsPage({
   //
   // OPTION B (owner's decision): pre-fill the ANSWER, never the DECISION. The
   // pick below stays `required`, so the fail-permissive gate is not weakened.
-  const [priorClassifications, priorOnboardingPicks] = await Promise.all([
-    listPriorClassifications(),
-    // R32: the approved history of shelf / type / strain-type picks.
-    listPriorOnboardingPicks(),
-  ]);
+  // R32: + the approved history of shelf / type / strain-type picks.
+  const [priorClassifications, priorOnboardingPicks] = await priorP;
   const allowedTypeLabels = new Set<string>([
     ...INVENTORY_TYPE_CATALOG.map((e) => e.label),
     ...ownerTypes.map((t) => t.label),
@@ -567,9 +591,9 @@ export default async function CatalogDraftsPage({
   // read, the same suggestion key the S07 door files under). R23 (item 5):
   // the approved tab recalls memory too, so its opened row shows the facts.
   const rowsOpen = view === "draft" || view === "approved";
-  const waitingKeys = new Map(drafts.map((d) => [d.id, waitingKeyForDraft(d)] as const));
+  const waitingKeys = earlyWaitingKeys;
   const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels, unitWeightsG: lotUnitWeightsG }, shadowSummary, productMemories, waitingRead, labViews, imageRead] = await Promise.all([
-    loadStrainTypeSignals(drafts),
+    strainP,
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
     kbFirst && rowsOpen
       ? recallProductMemories(
@@ -583,13 +607,13 @@ export default async function CatalogDraftsPage({
           priorClassifications,
         )
       : Promise.resolve(null),
-    rowsOpen ? loadWaitingSuggestions(Array.from(waitingKeys.values())) : Promise.resolve({ ok: true, rows: [] }),
+    waitingP,
     // R30: each row's stored lab-certificate read (terpenes chip + the
     // Product facts panel's lab block) and the strain library's terpenes.
-    rowsOpen ? loadLabViewsForDrafts(drafts) : Promise.resolve(null),
+    labP,
     // R51 (items 2-5): library photo recommendations (memory > on record >
     // name match, with confidence) for each open row. Never throws.
-    rowsOpen ? loadOnboardingImageRecommendations(drafts, waitingKeys) : Promise.resolve(null as OnboardingImagesRead | null),
+    imagesP,
   ]);
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
 
@@ -649,9 +673,7 @@ export default async function CatalogDraftsPage({
   // R13a: a delivery-focused view reads THAT delivery's flags even when none
   // of its flagged rows is on this page (the Approved view is paged).
   const factFlags =
-    view === "approved"
-      ? await loadOpenIntakeFactFlags(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)
-      : null;
+    view === "approved" ? await factFlagsP : null;
   // R13a: every open flag for the focused delivery, each with a link that
   // pins its row - so a flag on page 3 is never invisible from page 1.
   const factWorklist =
@@ -661,9 +683,7 @@ export default async function CatalogDraftsPage({
   const factResult = parseFactResult(sp.fact);
   // R27: the facts a person saved for each shown product (review AND
   // approved tabs) - shown and editable on the row's Product facts panel.
-  const savedFacts = rowsOpen && v2Row
-    ? await loadSavedProductFacts(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)
-    : null;
+  const savedFacts = rowsOpen && v2Row ? await savedFactsP : null;
 
   // S11: what is attached to each row (records + attached facts + S09
   // memory), one chip per field. Computed ONCE here so the row and the R37 S6
@@ -1033,7 +1053,8 @@ export default async function CatalogDraftsPage({
                 {batchLookupProgress && etaLine(batchLookupProgress, batchLookupActive) && (
                   <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-eta">{etaLine(batchLookupProgress, batchLookupActive)}</p>
                 )}
-                <BatchLookupAutoRefresh active={batchLookupActive} />
+                <BatchLookupAutoRefresh active={batchLookupActive} everyMs={batchSlowRefresh ? 120_000 : undefined} />
+                <Link href="/admin/inventory/batch-lookups?tab=monitor" className="text-[11px] text-[var(--admin-accent)] hover:underline">Open Batch Lookups (all batches, ETA, cost) →</Link>
                 <p className="text-xs text-[var(--admin-text-muted)]">{costLine(batchLookupJob.summary, batchLookupJob.model)}</p>
                 {batchLookupJob.summary.failed > 0 && (
                   <p className="text-xs text-[var(--admin-danger)]">
