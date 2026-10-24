@@ -625,6 +625,10 @@ const GEMINI_INTERACTIONS_URL =
 
 /** The Gemini API key. Falls back to the shared AI_API_KEY. */
 const GEMINI_API_KEY = process.env.AI_GEMINI_API_KEY ?? AI_API_KEY;
+/** R74 S34: the Gemini key for the Batch API engine (gemini-batch-server). */
+export function geminiApiKey(): string {
+  return GEMINI_API_KEY;
+}
 
 /** True when the heavy (web-search) model is a Gemini model. */
 const IS_GEMINI_WEBSEARCH = /^gemini/i.test(AI_WEBSEARCH_MODEL);

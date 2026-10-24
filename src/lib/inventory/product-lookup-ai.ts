@@ -144,20 +144,11 @@ export async function lookupProduct(input: {
   /** R74 S33: background batch - search only, no chat fallback. */
   bulk?: boolean;
 }): Promise<ProductLookupOutcome> {
-  // SLICE S06 rollback switch (Vercel env). Default ON. With it off, the call
-  // below is byte-identical to pre-S06 (same system, user, shape, maxTokens).
-  const v2On = lookupSchemaV2Enabled(process.env[LOOKUP_SCHEMA_V2_ENV]);
-  const promptInput = {
-    query: input.query,
-    productName: input.productName,
-    vendorOrBrand: input.vendorOrBrand,
-  };
-
+  const prompt = buildProductLookupPrompt({ query: input.query, productName: input.productName, vendorOrBrand: input.vendorOrBrand, alreadyKnown: input.alreadyKnown });
+  const v2On = prompt.v2On;
   const ws = await generateWebSearch({
-    system: v2On ? PRODUCT_LOOKUP_SYSTEM_V2 : PRODUCT_LOOKUP_SYSTEM,
-    user: v2On
-      ? `${buildLookupUserPromptV2(promptInput)}${input.alreadyKnown ? input.alreadyKnown : ""}${LOOKUP_V2_SHAPE_HINT}`
-      : `${buildLookupUserPrompt(promptInput)}${SHAPE_HINT}`,
+    system: prompt.system,
+    user: prompt.user,
     // T-321: do NOT force a low temperature here. This call runs on Gemini 3's
     // google_search grounding path, and Google's official Gemini 3 docs warn
     // that setting temperature below the default (1.0) "may lead to unexpected
@@ -170,7 +161,7 @@ export async function lookupProduct(input: {
     // (a truncated reply loses `found`/`confidence` and looked like a miss).
     // S06: the per-field v2 record is roughly twice the v1 JSON, so it gets
     // LOOKUP_V2_MAX_TOKENS (a ceiling -- billing is per token produced).
-    maxTokens: v2On ? LOOKUP_V2_MAX_TOKENS : 2000,
+    maxTokens: prompt.maxTokens,
     ...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
     ...(typeof input.timeoutMs === "number" ? { timeoutMs: input.timeoutMs } : {}),
     ...(input.bulk ? { bulk: true } : {}),
@@ -180,6 +171,35 @@ export async function lookupProduct(input: {
     },
   });
 
+  return finishProductLookup(ws, v2On, input.extraBanned ?? []);
+}
+
+/**
+ * R74 S34: the exact system / user / token ceiling lookupProduct sends, so the
+ * Gemini Batch API path asks the same question (one source of truth).
+ */
+export function buildProductLookupPrompt(input: { query: string; productName?: string | null; vendorOrBrand?: string | null; alreadyKnown?: string }): { system: string; user: string; maxTokens: number; v2On: boolean } {
+  const v2On = lookupSchemaV2Enabled(process.env[LOOKUP_SCHEMA_V2_ENV]);
+  const promptInput = { query: input.query, productName: input.productName, vendorOrBrand: input.vendorOrBrand };
+  return {
+    system: v2On ? PRODUCT_LOOKUP_SYSTEM_V2 : PRODUCT_LOOKUP_SYSTEM,
+    user: v2On
+      ? `${buildLookupUserPromptV2(promptInput)}${input.alreadyKnown ? input.alreadyKnown : ""}${LOOKUP_V2_SHAPE_HINT}`
+      : `${buildLookupUserPrompt(promptInput)}${SHAPE_HINT}`,
+    maxTokens: v2On ? LOOKUP_V2_MAX_TOKENS : 2000,
+    v2On,
+  };
+}
+
+/** The web-search answer pieces finishProductLookup needs (live call or a Batch API response). */
+export type LookupAnswer = { text: string; sources: string[]; citations?: WebCitation[]; searchSuggestions?: string[]; model: string; usedWebSearch: boolean; thinkingLevel?: string; incomplete?: boolean };
+
+/**
+ * R74 S34: parse + compliance-gate + post-process an answer, exactly as
+ * lookupProduct does after its call (shared by the Batch API ingest).
+ */
+export function finishProductLookup(ws: LookupAnswer, v2On: boolean, extraBanned: readonly ExtraBannedPhrase[] = []): ProductLookupOutcome {
+  const input = { extraBanned: [...extraBanned] };
   const citations = ws.citations ?? [];
   const searchSuggestions = ws.searchSuggestions ?? [];
   const parsed = looseParseLookupJson(ws.text);
