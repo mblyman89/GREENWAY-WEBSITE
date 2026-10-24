@@ -34,6 +34,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
 vi.mock("@/lib/supabase/env", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   isSupabaseServiceConfigured: true,

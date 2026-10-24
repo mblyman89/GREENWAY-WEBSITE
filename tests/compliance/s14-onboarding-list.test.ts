@@ -111,7 +111,7 @@ describe("S14 pure core — embedded self-tests", () => {
   it("pass with no failures", () => {
     const r = __runOnboardingListCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(77);
+    expect(r.passed).toBe(80);
   });
 });
 
@@ -801,7 +801,7 @@ describe("S14 drafts page wiring", () => {
 describe("S14 runner registration", () => {
   it("the pure core is registered with a floor", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 77);');
+    expect(runner).toContain('assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 80);');
     expect(runner).toMatch(/import \{ __runOnboardingListCoreTests \} from "\.\.\/\.\.\/src\/lib\/catalog\/onboarding-list-core"/);
   });
   it("the core is pure (no server-only / supabase / env)", () => {

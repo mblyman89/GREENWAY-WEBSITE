@@ -23,6 +23,7 @@
  */
 import Link from "next/link";
 import { Button } from "@/components/admin/ui";
+import { BatchLookupAutoRefresh } from "@/components/admin/catalog/BatchLookupAutoRefresh";
 import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
 import {
   FACT_SOURCE_LABEL,
@@ -203,8 +204,10 @@ export function CultiveraVendorOnboarding({
                           ? "Gemini lookups could not be read."
                           : mastering.lookup.jobs === 0
                             ? "No Gemini lookups running for this vendor."
-                            : `Gemini is working: ${n(mastering.lookup.done)} of ${n(mastering.lookup.total)} products looked up across ${n(mastering.lookup.jobs)} manifest${mastering.lookup.jobs === 1 ? "" : "s"}. Refresh to follow along.`}
+                            : `Gemini is working: ${n(mastering.lookup.done)} of ${n(mastering.lookup.total)} products looked up across ${n(mastering.lookup.jobs)} manifest${mastering.lookup.jobs === 1 ? "" : "s"}. This updates on its own.`}
                       </p>
+                      {/* R74 S33: live progress - re-reads while lookups run. */}
+                      <BatchLookupAutoRefresh active={(mastering?.lookup?.jobs ?? 0) > 0} />
                       {s.byField.length > 0 && (
                         <p className="mt-1" data-testid="mastering-by-field">
                           Facts by field: {s.byField.slice(0, 12).map((f) => `${f.field} ${n(f.count)}`).join(", ")}

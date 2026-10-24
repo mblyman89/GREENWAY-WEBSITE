@@ -90,6 +90,8 @@ import {
   retryNote,
   startNeedMs,
   stopsWholeJob,
+  isRateLimitError,
+  RATE_LIMIT_NOTE,
   summarizeJob,
   thinkingForAttempt,
   type BatchThinkingLevel,
@@ -549,6 +551,8 @@ export async function runOneItem(
         // (nobody is waiting on it); the tick sets both per attempt.
         ...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
         ...(typeof opts.timeoutMs === "number" ? { timeoutMs: opts.timeoutMs } : {}),
+        // R74 S33: search only, no url_context, no paid chat fallback.
+        bulk: true,
       });
     } catch (err) {
       // Budget / not-configured are refused BEFORE any request (provider.ts).
@@ -694,6 +698,7 @@ export async function runLookupJobsTick(deps: {
 
     // 4. Work items inside the budget.
     let stopAll: string | null = null;
+    let rateLimited = false;
     // A claim that keeps missing (another run, or a failing write) must not
     // spin until the time budget runs out.
     let claimMisses = 0;
@@ -754,7 +759,15 @@ export async function runLookupJobsTick(deps: {
         } else {
           const calls = aiCallsOf((err as { aiCalls?: unknown } | null)?.aiCalls);
           out.aiCalls += calls;
-          if (stopsWholeJob(err)) {
+          if (isRateLimitError(err)) {
+            // R74 S33: a 429 is the account's spend-per-10-minutes limit, not
+            // this product. Give the try back, requeue it, and pause the job
+            // until the next run (every later call would hit the same wall).
+            requeue = true;
+            out.retrying += 1;
+            rateLimited = true;
+            patch = { status: "queued", attempts: attempts, error: RATE_LIMIT_NOTE, ai_calls: priorCalls + calls };
+          } else if (stopsWholeJob(err)) {
             out.failed += 1;
             patch = { status: "failed", error: itemErrorText(err), ai_calls: priorCalls + calls };
             stopAll = itemErrorText(err);
@@ -785,7 +798,15 @@ export async function runLookupJobsTick(deps: {
         .update(requeue ? { ...patch, updated_at: finishedAt } : { ...patch, finished_at: finishedAt, updated_at: finishedAt })
         .eq("id", item.id)
         .eq("status", "running");
-      if (stopAll) break;
+      // R74 S33: live progress - the page and the vendor panel read
+      // lookup_jobs.done, so it is written after every product, not only at
+      // the end of the run.
+      if (!requeue) {
+        const progress = await readItems(admin, job.id);
+        const s = progress ? summarizeJob(progress) : null;
+        if (s) await admin.from(LOOKUP_JOBS_TABLE).update({ done: s.lookedUp + s.canceled }).eq("id", job.id).eq("lease_token", token);
+      }
+      if (stopAll || rateLimited) break;
     }
 
     // 5. The budget cap stops the job: every later product would be refused the same way.

@@ -653,6 +653,12 @@ export type WebSearchOptions = {
    * AI_WEBSEARCH_TIMEOUT_MS. The batch (800s function) passes a longer one.
    */
   timeoutMs?: number;
+  /**
+   * R74 S33: bulk (background batch) mode - google_search only (no
+   * url_context page reads) and NO built-in-knowledge chat fallback (a failed
+   * bulk call throws instead of paying for a second, source-less answer).
+   */
+  bulk?: boolean;
 };
 
 export type WebSearchResult = {
@@ -906,7 +912,7 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
       const geminiEnv = {
         AI_THINKING_LEVEL: process.env.AI_THINKING_LEVEL ?? "low",
         AI_GEMINI_MAX_OUTPUT_TOKENS: process.env.AI_GEMINI_MAX_OUTPUT_TOKENS,
-        AI_GEMINI_URL_CONTEXT: process.env.AI_GEMINI_URL_CONTEXT,
+        AI_GEMINI_URL_CONTEXT: opts.bulk ? "off" : process.env.AI_GEMINI_URL_CONTEXT,
         AI_GEMINI_SERVICE_TIER: process.env.AI_GEMINI_SERVICE_TIER,
         AI_GEMINI_SEED: process.env.AI_GEMINI_SEED,
       };
@@ -1094,6 +1100,13 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
       );
     }
 
+    // R74 S33: the background batch never pays for a source-less fallback.
+    if (opts.bulk) {
+      throw new AiLookupError(
+        "The web search did not finish. The batch will try this product again.",
+        "gemini google_search failed in bulk mode (fallback skipped)",
+      );
+    }
     // Gemini failed → built-in-knowledge fallback (no live sources). We hit
     // Gemini's OpenAI-compat /chat/completions layer directly so this path is
     // self-contained and does NOT depend on AI_BASE_URL pointing at Google.

@@ -202,20 +202,20 @@ afterEach(() => {
 
 // === 1. Depth: thinking + deadline ================================================
 describe("R66 batch depth: the batch thinks deeper and waits longer than the row", () => {
-  it("first product of a run: thinking 'high' + the full 600 s deadline (defaults)", async () => {
+  it("first product of a run: thinking 'low' (R74 S33) + the full 600 s deadline (defaults)", async () => {
     seedDrafts(state.db, 1);
     await enqueue();
     const r = runner();
     await tick(r.fn);
-    expect(r.calls).toEqual([{ id: draftId(1), opts: { refresh: false, thinkingLevel: "high", timeoutMs: 600_000 } }]);
+    expect(r.calls).toEqual([{ id: draftId(1), opts: { refresh: false, thinkingLevel: "low", timeoutMs: 600_000 } }]);
   });
 
   it("env overrides: AI_BATCH_THINKING_LEVEL / AI_BATCH_TIMEOUT_MS; junk -> defaults; out-of-range -> clamped", async () => {
     const cases: Array<[string | undefined, string | undefined, string, number]> = [
       ["medium", "300000", "medium", 300_000],
       ["LOW", "120000", "low", 120_000],
-      ["ultra", "abc", "high", 600_000],
-      ["", "-5", "high", 600_000],
+      ["ultra", "abc", "low", 600_000],
+      ["", "-5", "low", 600_000],
       ["minimal", "5", "minimal", 60_000],
       ["high", "999999999", "high", 700_000],
     ];
@@ -306,7 +306,7 @@ describe("R66 batch retries: a product that did not finish is tried again (deepe
     expect(items(state.db)[0]).toMatchObject({ status: "queued", attempts: 2, ai_calls: 2 });
     expect(String(items(state.db)[0].error)).toMatch(/^Try 2 did not finish .*1 more try queued\.$/);
     const last = await tick(r.fn);
-    expect(r.calls.map((c) => c.opts.thinkingLevel)).toEqual(["high", "medium", "low"]);
+    expect(r.calls.map((c) => c.opts.thinkingLevel)).toEqual(["low", "low", "low"]); // R74 S33: default low; never below low
     expect(LOOKUP_RETRY_MAX_ATTEMPTS).toBe(3);
     expect(last).toMatchObject({ failed: 1, retrying: 0 });
     const it0 = items(state.db)[0];
@@ -335,9 +335,16 @@ describe("R66 batch retries: a product that did not finish is tried again (deepe
     expect((items(state.db)[0].result_json as { found: number }).found).toBe(4);
   });
 
-  it("429 / 401 / 403 / budget fail at once (retrying cannot help and would spend)", async () => {
+  it("401 / 403 / budget fail at once; a 429 pauses with the try given back (R74 S33)", async () => {
+    freshDb();
+    seedDrafts(state.db, 1);
+    await enqueue();
+    const paused = await tick(runner(() => {
+      throw named("AiLookupError", "gemini google_search HTTP 429: quota", { aiCalls: 1 });
+    }).fn);
+    expect(paused).toMatchObject({ failed: 0, retrying: 1 });
+    expect(items(state.db)[0]).toMatchObject({ status: "queued", attempts: 0 });
     const errs = [
-      named("AiLookupError", "gemini google_search HTTP 429: quota", { aiCalls: 1 }),
       named("AiLookupError", "gemini google_search HTTP 401: bad key", { aiCalls: 1 }),
       named("AiLookupError", "gemini google_search HTTP 403: denied", { aiCalls: 1 }),
     ];
@@ -443,7 +450,7 @@ describe("R66 snapshot: runOneItem keeps every finding and the page hands it to 
     state.attach = attachOk;
     const out = await runLookupJobsTick({ admin: admin(), now: () => T0 });
     expect(out).toMatchObject({ done: 1, aiCalls: 1 });
-    expect(state.lookupArgs[0]).toMatchObject({ thinkingLevel: "high", timeoutMs: 600_000 });
+    expect(state.lookupArgs[0]).toMatchObject({ thinkingLevel: "low", timeoutMs: 600_000, bulk: true });
     const rj = items(state.db)[0].result_json as Record<string, unknown>;
     expect(rj.outcome).toBe("attached");
     expect(rj.snapshot).toBeTruthy();

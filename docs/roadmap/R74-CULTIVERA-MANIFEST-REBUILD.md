@@ -613,3 +613,17 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - Cost stays locked: no screen writes `unit_cost_minor_units`; S30–S32 never select it for writing (the S32 test pins this).
 - Leafly: a per-product preflight problem holds back only that product, by name (S29). The measured hold-back is Mfused Lemon Loopz Beverage 60ml ($0 in Cultivera): price it on its lot page.
 - Known, by design: (1) a size id contains Cultivera's price, so a NEW Cultivera import where Cultivera changed a price creates a new size id with Cultivera's price; prices typed here are not carried into that new size (stop importing from Cultivera and this cannot happen). (2) The promotion publish guard (`promo-guard`) checks the card's average cost; the register, order pricing and loyalty use each size's own cost (S31). (3) A multi-size card whose lot is not linked gets no menu-stock change on an adjustment; the owner is told and asked to pick the size. (4) The old cycle-count apply stays refused (it never wrote the books); use the Cultivera count or lot adjustments.
+
+## Round 15 - owner request (verbatim)
+
+> Thank you! I am on tier 2 currently. Overnight is fine. Ideally I'd like to get them all done before the price doubles in January, so if you have a professional strategy that capitalizes on speed and efficiency? I want them all by the end of November if possible. Worst case by the end of December. I have about 95 vendors I think, 2700 unique lots. I feel like we should be able to work through all of them fairly quickly. Especially since several are the same product, just a use second or third, or is a variant in size so the same product with the same facts. We don't need a spend cap, I have one set on my Gemini online portal. Please begin a two slice round. We are spending too much in here on these requests. Please reduce the number of testing you do please. Or find other ways to spend less tokens in here so we have enough to finish the project. Follow the standing rules. Thank you. Let me know in the summary results what was done and still left to do.
+
+### S33 - stop the bleeding + expand-all keeps its place
+
+- Batch thinking default `high` -> `low` (`LOOKUP_BATCH_THINKING_DEFAULT`; `AI_BATCH_THINKING_LEVEL` still overrides).
+- Bulk mode (`generateWebSearch({ bulk: true })`, set by the background runner only): google_search only (no url_context page reads) and no paid built-in-knowledge chat fallback.
+- A 429 / RESOURCE_EXHAUSTED (Tier 2 spend-per-10-min limit) no longer fails the product: the try is given back, the product requeued with a "Paused:" note, and the run stops; the next minute's run resumes (`isRateLimitError`, `RATE_LIMIT_NOTE`).
+- `lookup_jobs.done` is written after every finished product (live progress; fixes the vendor panel's zeros).
+- Vendor mastering panel auto-refreshes while lookups run (`BatchLookupAutoRefresh`).
+- Expand-all / search / vendor / page / size / tab survive every drafts action: `backTo` reads the posting page's URL (Referer) through pure `listStateFromUrl` (onboarding-list-core).
+- Self-tests: lookup-job-core 161 -> 164, onboarding-list-core 77 -> 80.

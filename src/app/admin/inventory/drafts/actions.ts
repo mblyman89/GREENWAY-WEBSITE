@@ -1,6 +1,8 @@
 "use server";
 
 import { safeFactReturnPath, PRODUCT_FACTS_ANCHOR } from "@/lib/inventory/coa-panel-core";
+import { headers } from "next/headers";
+import { listStateFromUrl } from "@/lib/catalog/onboarding-list-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -50,10 +52,18 @@ import { enqueueManifestLookup, cancelManifestLookup } from "@/lib/catalog/looku
  * row. Success redirects pass no id (an approved row has left this tab).
  * ONBOARDING_V2_ROW=off keeps the previous redirect (no draft pin).
  */
-function backTo(formData: FormData | undefined, extra: Record<string, string>, failedDraftId?: string): string {
+async function backTo(formData: FormData | undefined, extra: Record<string, string>, failedDraftId?: string): Promise<string> {
   const raw = formData?.get("return_manifest");
   const anchor = failedDraftId && onboardingV2RowOn() ? failedDraftId : null;
-  return draftsHref({ manifestId: typeof raw === "string" ? raw : null, draftId: anchor, extra });
+  // R74 S33: keep the list where it was (expand-all, search, vendor, page,
+  // page size, tab) - read from the page the form was posted from.
+  let list: Record<string, string> = {};
+  try {
+    list = listStateFromUrl((await headers()).get("referer"));
+  } catch {
+    list = {};
+  }
+  return draftsHref({ manifestId: typeof raw === "string" ? raw : null, draftId: anchor, extra: { ...list, ...extra } });
 }
 
 export async function approveDraftAction(draftId: string, formData: FormData) {
@@ -68,7 +78,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   // on any ordinary draft, so the flag can never approve at $0.
   const reonboardForm = formData.get("reonboard") === "1";
   if (!(reonboardForm && !raw) && (!raw || Number.isNaN(dollars) || dollars <= 0)) {
-    redirect(backTo(formData, { error: "price" }, draftId));
+    redirect(await backTo(formData, { error: "price" }, draftId));
   }
   const priceMinor = reonboardForm && !raw ? 0 : Math.round(dollars * 100);
   // SLICE 64: the approver's classification picks. The server re-derives what
@@ -106,7 +116,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       existingValues: registry.map((r) => r.value),
     });
     if (!parsed.ok) {
-      redirect(backTo(formData, { error: "floor", msg: parsed.error }, draftId));
+      redirect(await backTo(formData, { error: "floor", msg: parsed.error }, draftId));
     }
     const admin = createSupabaseAdminClient();
     const { error } = await admin.from("website_category_types").insert({
@@ -118,7 +128,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       is_system: false,
     });
     if (error) {
-      redirect(backTo(formData, { error: "floor", msg: error.message }, draftId));
+      redirect(await backTo(formData, { error: "floor", msg: error.message }, draftId));
     }
     await recordAudit({
       actorId: session.userId,
@@ -146,7 +156,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       existingKeys: existing.map((t) => t.key),
     });
     if (!parsed.ok) {
-      redirect(backTo(formData, { error: "floor", msg: parsed.error }, draftId));
+      redirect(await backTo(formData, { error: "floor", msg: parsed.error }, draftId));
     }
     const admin = createSupabaseAdminClient();
     // Map the new type to the category this approval files under: the human's
@@ -189,7 +199,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       is_system: false,
     });
     if (error) {
-      redirect(backTo(formData, { error: "floor", msg: error.message }, draftId));
+      redirect(await backTo(formData, { error: "floor", msg: error.message }, draftId));
     }
     await recordAudit({
       actorId: session.userId,
@@ -220,11 +230,11 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
     // Surface the floor-violation / classification-gate message.
-    redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }, draftId));
+    redirect(await backTo(formData, { error: "floor", msg: result.error ?? "" }, draftId));
   }
   // R23 (item 5): the review queue stays put (no pin), and the banner gets
   // a link to the product on the Approved tab (validated as a UUID there).
-  redirect(backTo(formData, { approved: "1", approved_draft: draftId }));
+  redirect(await backTo(formData, { approved: "1", approved_draft: draftId }));
 }
 
 /**
@@ -238,9 +248,9 @@ export async function approveAllPricedAction(manifestId: string, formData?: Form
   const result = await approveAllPricedForManifest(manifestId, session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok || !result.result) {
-    redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }));
+    redirect(await backTo(formData, { error: "floor", msg: result.error ?? "" }));
   }
-  redirect(backTo(formData, batchResultParams(result.result)));
+  redirect(await backTo(formData, batchResultParams(result.result)));
 }
 
 export async function dismissDraftAction(draftId: string, formData?: FormData) {
@@ -248,9 +258,9 @@ export async function dismissDraftAction(draftId: string, formData?: FormData) {
   const result = await setCatalogDraftStatus(draftId, "dismissed", session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    redirect(backTo(formData, { error: "update" }, draftId));
+    redirect(await backTo(formData, { error: "update" }, draftId));
   }
-  redirect(backTo(formData, { dismissed: "1" }));
+  redirect(await backTo(formData, { dismissed: "1" }));
 }
 
 export async function restoreDraftAction(draftId: string, formData?: FormData) {
@@ -258,9 +268,9 @@ export async function restoreDraftAction(draftId: string, formData?: FormData) {
   const result = await setCatalogDraftStatus(draftId, "draft", session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    redirect(backTo(formData, { error: "update" }, draftId));
+    redirect(await backTo(formData, { error: "update" }, draftId));
   }
-  redirect(backTo(formData, { restored: "1" }));
+  redirect(await backTo(formData, { restored: "1" }));
 }
 
 /**
@@ -396,10 +406,10 @@ export async function lookupAllAction(manifestId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const res = await enqueueManifestLookup(manifestId, { userId: session.userId, email: session.email });
   revalidatePath("/admin/inventory/drafts");
-  if (res.ok) redirect(backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
-  if (res.code === "migration") redirect(backTo(formData, { lookup: "migration" }));
-  if (res.code === "nothing") redirect(backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
-  redirect(backTo(formData, { lookup: "error", lookup_msg: res.message }));
+  if (res.ok) redirect(await backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
+  if (res.code === "migration") redirect(await backTo(formData, { lookup: "migration" }));
+  if (res.code === "nothing") redirect(await backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
+  redirect(await backTo(formData, { lookup: "error", lookup_msg: res.message }));
 }
 
 /**
@@ -416,10 +426,10 @@ export async function lookupAgainAction(manifestId: string, formData?: FormData)
   const ids = formData ? formData.getAll("again_id") : [];
   const res = await enqueueManifestLookup(manifestId, { userId: session.userId, email: session.email }, { againDraftIds: ids });
   revalidatePath("/admin/inventory/drafts");
-  if (res.ok) redirect(backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
-  if (res.code === "migration") redirect(backTo(formData, { lookup: "migration" }));
-  if (res.code === "nothing") redirect(backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
-  redirect(backTo(formData, { lookup: "error", lookup_msg: res.message }));
+  if (res.ok) redirect(await backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
+  if (res.code === "migration") redirect(await backTo(formData, { lookup: "migration" }));
+  if (res.code === "nothing") redirect(await backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
+  redirect(await backTo(formData, { lookup: "error", lookup_msg: res.message }));
 }
 
 /** R19 S13: stop a batch. Products not started yet are canceled; the one in flight finishes. */
@@ -427,7 +437,7 @@ export async function cancelLookupAction(jobId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const res = await cancelManifestLookup(jobId, { userId: session.userId, email: session.email });
   revalidatePath("/admin/inventory/drafts");
-  redirect(backTo(formData, { lookup: res.ok ? "stopped" : "stop_error", lookup_msg: res.message }));
+  redirect(await backTo(formData, { lookup: res.ok ? "stopped" : "stop_error", lookup_msg: res.message }));
 }
 
 /**
@@ -442,7 +452,7 @@ export async function cancelLookupAction(jobId: string, formData?: FormData) {
  */
 export async function rereadDeliveryCoasAction(manifestId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
-  if (!isUuid(manifestId)) redirect(backTo(formData, { coa_all: "error" }));
+  if (!isUuid(manifestId)) redirect(await backTo(formData, { coa_all: "error" }));
   const { rereadCoasForManifest } = await import("@/lib/inventory/coa-extract");
   const core = await import("@/lib/inventory/coa-reread-delivery-core");
   let params: Record<string, string> = { coa_all: "error" };
@@ -497,7 +507,7 @@ export async function rereadDeliveryCoasAction(manifestId: string, formData?: Fo
   }
   revalidatePath("/admin/inventory/drafts");
   revalidatePath("/admin/knowledge-base/products");
-  redirect(backTo(formData, params) + "#batch-lookup");
+  redirect(await backTo(formData, params) + "#batch-lookup");
 }
 
 /**
@@ -511,7 +521,7 @@ export async function rereadDeliveryCoasAction(manifestId: string, formData?: Fo
 export async function setDeliveryBrandAction(manifestId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const core = await import("@/lib/inventory/delivery-brand-core");
-  if (!isUuid(manifestId)) redirect(backTo(formData, core.deliveryBrandParams({ code: "refused", reason: "That delivery link is not valid." })) + "#batch-lookup");
+  if (!isUuid(manifestId)) redirect(await backTo(formData, core.deliveryBrandParams({ code: "refused", reason: "That delivery link is not valid." })) + "#batch-lookup");
   const { setDeliveryBrand } = await import("@/lib/inventory/delivery-brand-store");
   const mode = core.parseBrandMode(formData?.get("brand_mode"));
   const run = await setDeliveryBrand({ manifestId, rawName: formData?.get("brand"), mode, actorId: session.userId });
@@ -563,14 +573,14 @@ export async function setDeliveryBrandAction(manifestId: string, formData?: Form
   revalidatePath("/admin/inventory/drafts");
   revalidatePath("/admin/inventory");
   revalidatePath("/admin/vendors");
-  redirect(backTo(formData, core.deliveryBrandParams(run)) + "#batch-lookup");
+  redirect(await backTo(formData, core.deliveryBrandParams(run)) + "#batch-lookup");
 }
 
 /** R37 S5 - the brand of ONE product row (empty clears it). */
 export async function setDraftBrandAction(draftId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const core = await import("@/lib/inventory/delivery-brand-core");
-  if (!isUuid(draftId)) redirect(backTo(formData, core.deliveryBrandParams({ code: "refused", reason: "That product link is not valid." })));
+  if (!isUuid(draftId)) redirect(await backTo(formData, core.deliveryBrandParams({ code: "refused", reason: "That product link is not valid." })));
   const { setDraftBrand } = await import("@/lib/inventory/delivery-brand-store");
   const run = await setDraftBrand({ draftId, rawName: formData?.get("brand"), actorId: session.userId });
   if (run.code === "ok" || (run.code === "cleared" && (run.changed ?? 0) > 0)) {

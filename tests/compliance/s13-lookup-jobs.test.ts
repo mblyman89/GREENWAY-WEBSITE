@@ -276,10 +276,10 @@ describe("S13 pure core", () => {
     expect(r.failed).toBe(0);
     // R21: +25 for batchLookupEntry / lookupDeliveryChoices (the button is never silently absent).
     // R74 S11: +7 (raised limits, LOOKUP_PARALLEL_JOBS, pickTickJob).
-    expect(r.passed).toBe(161);
+    expect(r.passed).toBe(164);
   });
   it("the pure runner pins the same floor", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 161\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 164\)/);
   });
   it("the core is pure: no process.env, no server-only, no I/O imports", () => {
     const src = read("src/lib/catalog/lookup-job-core.ts");
@@ -665,17 +665,32 @@ describe("S13 cron tick: failures, Stop, caps", () => {
     const db = state.db;
     seedDrafts(db, 3);
     await enqueue();
-    // R66: a timeout / 5xx is now tried again (tests/compliance/r66-batch-lookup.test.ts);
-    // a rate-limit refusal (429) cannot be helped by a retry, so it fails as before.
+    // R66: a timeout / 5xx is tried again; a rejected key (401) cannot be helped by a retry.
+    const r0 = runner((_id, idx) => {
+      if (idx === 1) throw named("AiLookupError", "gemini google_search HTTP 401: bad key", { friendly: "The AI key was rejected.", aiCalls: 1 });
+      return okResult();
+    });
+    const r = await runLookupJobsTick({ admin: admin(), runItem: r0.fn, now: () => T0 });
+    expect(r).toMatchObject({ ok: true, started: 3, done: 2, failed: 1, retrying: 0, aiCalls: 3, finished: true });
+    expect(items(db)[1]).toMatchObject({ status: "failed", error: "The AI key was rejected.", ai_calls: 1 });
+    expect(items(db)[2].status).toBe("done");
+    expect(jobs(db)[0]).toMatchObject({ status: "done", done: 3 });
+  });
+
+  it("R74 S33: a 429 pauses the job - the try is given back, the product requeued, the run stops", async () => {
+    const db = state.db;
+    seedDrafts(db, 3);
+    await enqueue();
     const r0 = runner((_id, idx) => {
       if (idx === 1) throw named("AiLookupError", "gemini google_search HTTP 429: quota", { friendly: "The AI provider is rate limiting.", aiCalls: 1 });
       return okResult();
     });
     const r = await runLookupJobsTick({ admin: admin(), runItem: r0.fn, now: () => T0 });
-    expect(r).toMatchObject({ ok: true, started: 3, done: 2, failed: 1, retrying: 0, aiCalls: 3, finished: true });
-    expect(items(db)[1]).toMatchObject({ status: "failed", error: "The AI provider is rate limiting.", ai_calls: 1 });
-    expect(items(db)[2].status).toBe("done");
-    expect(jobs(db)[0]).toMatchObject({ status: "done", done: 3 });
+    expect(r).toMatchObject({ ok: true, started: 2, done: 1, failed: 0, retrying: 1, finished: false });
+    expect(items(db)[1]).toMatchObject({ status: "queued", attempts: 0 });
+    expect(String(items(db)[1].error)).toMatch(/^Paused:/);
+    expect(items(db)[2].status).toBe("queued");
+    expect(jobs(db)[0]).toMatchObject({ done: 1 });
   });
 
   it("the AI budget cap stops the WHOLE job (every later product would be refused): 0 spend, the rest failed with the same reason", async () => {
