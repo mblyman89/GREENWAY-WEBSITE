@@ -901,7 +901,7 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 > Show all 2 row(s)".
 > please deep dive into this, it is the final piece that is preventing me from migrating over. please go above and beyond for me. follow the standing rules. please complete a full round of fixes and enhances to knock out any remaining bugs in this upload pipeline. let me know at the end in the summary report what was done and what is left to do to make it work properly. thank you.
 
-### S39 - CCRS upload: report what we can, track what is owed
+### S39 - CCRS upload: report what we can, track what is owed (#1493) shipped
 
 - **Root cause.** The upload gate refused the whole zip on ANY error. But E52 (849 Cultivera lots not on our 9/15 CCRS copy), E41 (withheld products and lots), E3, E7, E8, E38/E42, E49-uncertain and the E14 transfer holds all describe rows that are ALREADY LEFT OUT of the files. So good records were blocked by records that were never going to be sent.
 - **Gate.** `ccrs-submit-gate-core` now sorts each error into one of two groups:
