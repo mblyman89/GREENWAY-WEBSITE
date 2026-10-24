@@ -247,7 +247,7 @@ describe("S02 structural pins — the pages use the core", () => {
 
   it("actions: every redirect goes through the filter-preserving helper", () => {
     expect(actions).not.toMatch(/redirect\(\s*["`]\/admin\/inventory\/drafts/);
-    expect(actions.match(/redirect\(backTo\(formData, /g)?.length).toBeGreaterThanOrEqual(11);
+    expect(actions.match(/redirect\(await backTo\(formData, /g)?.length).toBeGreaterThanOrEqual(11);
     expect(actions).toContain("draftsHref({ manifestId:");
   });
 

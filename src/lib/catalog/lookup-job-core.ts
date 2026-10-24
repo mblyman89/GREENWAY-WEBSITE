@@ -127,7 +127,9 @@ export const LOOKUP_ITEM_WORST_MS = LOOKUP_BATCH_MIN_USEFUL_MS + LOOKUP_ITEM_IO_
 export const AI_BATCH_THINKING_LEVEL_ENV = "AI_BATCH_THINKING_LEVEL";
 export const BATCH_THINKING_LEVELS = ["minimal", "low", "medium", "high"] as const;
 export type BatchThinkingLevel = (typeof BATCH_THINKING_LEVELS)[number];
-export const LOOKUP_BATCH_THINKING_DEFAULT: BatchThinkingLevel = "high";
+// R74 S33: "low" (owner, round 15) - a bulk lookup reads a label and a
+// few search results; deep thinking cost more and tripped the spend limit.
+export const LOOKUP_BATCH_THINKING_DEFAULT: BatchThinkingLevel = "low";
 
 export function batchThinkingLevel(raw: string | undefined | null): BatchThinkingLevel {
   const v = String(raw ?? "").trim().toLowerCase();
@@ -273,6 +275,21 @@ export function isRetryableItemError(err: unknown): boolean {
   }
   return true;
 }
+
+/**
+ * R74 S33: a 429 is the account's spend-per-10-minutes limit (Tier 2 =
+ * $50 / rolling 10 min), never this product. The tick gives the try back,
+ * requeues the product and pauses the job until the next run.
+ */
+export function isRateLimitError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const msg = "message" in err ? String((err as { message: unknown }).message ?? "") : "";
+  const m = /\bHTTP (\d{3})\b/.exec(msg) ?? /\((\d{3})\)/.exec(msg);
+  if (m && Number(m[1]) === 429) return true;
+  return /RESOURCE_EXHAUSTED/.test(msg);
+}
+
+export const RATE_LIMIT_NOTE = "Paused: Gemini's spend-per-10-minutes limit was reached. This product is queued again and the batch resumes on its own.";
 
 export function failureDecision(err: unknown, attemptsAfterClaim: unknown): "retry" | "fail" {
   const n = typeof attemptsAfterClaim === "number" && Number.isFinite(attemptsAfterClaim) ? attemptsAfterClaim : LOOKUP_RETRY_MAX_ATTEMPTS;
@@ -925,7 +942,10 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   for (const e of [0, 100_000, 460_000]) {
     if (canStartItem({ elapsedMs: e, startedThisTick: 1, itemWorstMs: startNeedMs(600_000) })) ok(itemTimeoutMs({ configuredMs: 600_000, elapsedMs: e }) >= 290_000, `later item at ${e}ms gets >= 290s`);
   }
-  ok(batchThinkingLevel(undefined) === "high" && batchThinkingLevel("max") === "high" && batchThinkingLevel("") === "high", "thinking unset/junk = high");
+  ok(batchThinkingLevel(undefined) === "low" && batchThinkingLevel("max") === "low" && batchThinkingLevel("") === "low", "thinking unset/junk = low (S33)");
+  ok(isRateLimitError(new Error("gemini google_search HTTP 429: quota")) && isRateLimitError(new Error("gemini fallback (429)")) && isRateLimitError(new Error("RESOURCE_EXHAUSTED")), "429 = rate limit");
+  ok(!isRateLimitError(new Error("HTTP 403: x")) && !isRateLimitError(new Error("HTTP 503: x")) && !isRateLimitError(null) && !isRateLimitError({ name: "SkipItem" }), "not 429 = not rate limit");
+  ok(RATE_LIMIT_NOTE.startsWith("Paused:") && RATE_LIMIT_NOTE.length <= 240, "rate limit note");
   ok(batchThinkingLevel(" LOW ") === "low" && batchThinkingLevel("minimal") === "minimal" && batchThinkingLevel("medium") === "medium", "thinking honoured");
   ok(thinkingForAttempt("high", 1) === "high" && thinkingForAttempt("high", 2) === "medium" && thinkingForAttempt("high", 3) === "low", "retry thinks one step less");
   ok(thinkingForAttempt("high", 9) === "low" && thinkingForAttempt("medium", 3) === "low" && thinkingForAttempt("low", 3) === "low", "never below low");

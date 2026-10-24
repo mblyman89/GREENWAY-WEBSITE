@@ -2291,7 +2291,7 @@ __runLiquidVolumeTests();
   // SLICE S07: the single write door planner (attachProductFacts).
   // R23: +19 for the human-confirmed attach (case 26). Floor = the exact count.
   assertRan("attach-plan-core", __runAttachPlanCoreTests(), 178);
-  assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 77);
+  assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 80);
   // S30 receiving fact review: flag signature, decision partition (stale
   // signature re-asks), fix/reject applied to the snapshot, the shared form
   // parsers, open-flag lookup, the narrow 0237 detector, held-copy retire.
@@ -2322,7 +2322,7 @@ __runLiquidVolumeTests();
   { const r = __runMergeReviewCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`merge-review-core: ${r.failed} failed, ${r.passed} passed`); console.log(`merge-review-core: ${r.passed} assertions passed`); }
   { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 67) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
   // R19 S13: batch manifest lookup (budget, lease, orphan, enqueue plan, copy, banner). Floor = the exact count.
-  { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 161) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
+  { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 164) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }

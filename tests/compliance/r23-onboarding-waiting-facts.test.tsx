@@ -396,7 +396,7 @@ describe("R23 C. panel + page", () => {
     expect(page).toContain("{APPROVED_BANNER_LINK_TEXT}");
     expect(APPROVED_BANNER_LINK_TEXT).toBe("Open it on the Approved tab");
     const actions = read("src/app/admin/inventory/drafts/actions.ts");
-    expect(actions).toContain('redirect(backTo(formData, { approved: "1", approved_draft: draftId }));');
+    expect(actions).toContain('redirect(await backTo(formData, { approved: "1", approved_draft: draftId }));');
   });
 
   it("the action is permission-gated and never trusts a posted value", () => {

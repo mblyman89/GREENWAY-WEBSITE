@@ -551,6 +551,33 @@ export function onboardingListHref(o: OnboardingListHrefOpts = {}): string {
   return draftsHref({ status: o.status ?? null, manifestId: o.manifestId ?? null, extra });
 }
 
+/**
+ * R74 S33 (expand-all keeps its place): the list state a drafts-page action
+ * must carry back - read from the page URL the form was posted from (the
+ * Referer). Only the drafts page's own q / vendor / size / page / rows /
+ * status survive, each re-validated; anything else (or another page) = {}.
+ */
+export function listStateFromUrl(url: unknown): Record<string, string> {
+  if (typeof url !== "string" || url.length === 0 || url.length > 4000) return {};
+  let u: URL;
+  try {
+    u = new URL(url, "http://x");
+  } catch {
+    return {};
+  }
+  if (u.pathname.replace(/\/+$/, "") !== "/admin/inventory/drafts") return {};
+  const sp = u.searchParams;
+  const l = parseOnboardingListParams({ q: sp.get("q") ?? undefined, vendor: sp.get("vendor") ?? undefined, page: sp.get("page") ?? undefined, size: sp.get("size") ?? undefined, rows: sp.get("rows") ?? undefined });
+  const href = onboardingListHref({ q: l.q, vendorId: l.vendorId, page: l.page, pageSize: l.pageSize, rows: l.rows });
+  const out: Record<string, string> = {};
+  new URL(href, "http://x").searchParams.forEach((v, k) => {
+    out[k] = v;
+  });
+  const status = sp.get("status");
+  if (status && /^[a-z_]{1,24}$/.test(status)) out.status = status;
+  return out;
+}
+
 // ─── 8. Embedded self-tests ──────────────────────────────────────────────────
 
 export function __runOnboardingListCoreTests(): { passed: number; failed: number } {
@@ -693,5 +720,12 @@ export function __runOnboardingListCoreTests(): { passed: number; failed: number
   ok(isPastEndError({ code: "PGRST103" }) && isPastEndError({ message: "Requested range not satisfiable" }), "past-end error");
   ok(!isPastEndError({ code: "42703" }) && !isPastEndError(null), "other errors are not past-end");
 
+  {
+    const D = "/admin/inventory/drafts";
+    const st = listStateFromUrl(`https://g.example${D}?manifest=${M}&rows=expanded&page=3&size=100&q=gelato&status=pending`);
+    ok(st.rows === "expanded" && st.page === "3" && st.size === "100" && st.q === "gelato" && st.status === "pending" && !("manifest" in st), "S33 list state kept from referer");
+    ok(Object.keys(listStateFromUrl(`https://g.example/admin/other?rows=expanded`)).length === 0 && Object.keys(listStateFromUrl(null)).length === 0 && Object.keys(listStateFromUrl("::bad")).length === 0, "S33 other page / junk = nothing");
+    ok(listStateFromUrl(`${D}?rows=weird&page=-4&size=7`).rows === undefined && listStateFromUrl(`${D}?page=-4`).page === undefined && listStateFromUrl(`${D}?status=<x>`).status === undefined, "S33 junk values dropped");
+  }
   return { passed, failed };
 }

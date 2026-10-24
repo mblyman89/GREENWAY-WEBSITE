@@ -141,6 +141,8 @@ export async function lookupProduct(input: {
    */
   thinkingLevel?: string | null;
   timeoutMs?: number;
+  /** R74 S33: background batch - search only, no chat fallback. */
+  bulk?: boolean;
 }): Promise<ProductLookupOutcome> {
   // SLICE S06 rollback switch (Vercel env). Default ON. With it off, the call
   // below is byte-identical to pre-S06 (same system, user, shape, maxTokens).
@@ -171,6 +173,7 @@ export async function lookupProduct(input: {
     maxTokens: v2On ? LOOKUP_V2_MAX_TOKENS : 2000,
     ...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
     ...(typeof input.timeoutMs === "number" ? { timeoutMs: input.timeoutMs } : {}),
+    ...(input.bulk ? { bulk: true } : {}),
     context: {
       feature: "inventory.product_lookup",
       ...input.context,

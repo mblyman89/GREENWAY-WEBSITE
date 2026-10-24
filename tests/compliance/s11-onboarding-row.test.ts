@@ -381,17 +381,17 @@ describe("F-033: a failed row action comes back pinned to that row", () => {
     const actions = read("src/app/admin/inventory/drafts/actions.ts");
     const fn = (name: string, next: string) => actions.slice(actions.indexOf(`export async function ${name}`), actions.indexOf(`export async function ${next}`));
     const approve = fn("approveDraftAction", "approveAllPricedAction");
-    expect(approve.match(/redirect\(backTo\(formData, \{ error: [^\n]*\}, draftId\)\);/g)?.length).toBe(6);
-    expect(approve).not.toMatch(/redirect\(backTo\(formData, \{ error: [^\n]*\}\)\);/);
+    expect(approve.match(/redirect\(await backTo\(formData, \{ error: [^\n]*\}, draftId\)\);/g)?.length).toBe(6);
+    expect(approve).not.toMatch(/redirect\(await backTo\(formData, \{ error: [^\n]*\}\)\);/);
     // R23: the success redirect also names the approved draft for the banner link (still unpinned).
-    expect(approve).toContain('redirect(backTo(formData, { approved: "1", approved_draft: draftId }));');
-    expect(fn("dismissDraftAction", "restoreDraftAction")).toContain('redirect(backTo(formData, { error: "update" }, draftId));');
-    expect(fn("restoreDraftAction", "resolveIntakeFactReview")).toContain('redirect(backTo(formData, { error: "update" }, draftId));');
+    expect(approve).toContain('redirect(await backTo(formData, { approved: "1", approved_draft: draftId }));');
+    expect(fn("dismissDraftAction", "restoreDraftAction")).toContain('redirect(await backTo(formData, { error: "update" }, draftId));');
+    expect(fn("restoreDraftAction", "resolveIntakeFactReview")).toContain('redirect(await backTo(formData, { error: "update" }, draftId));');
     expect(fn("approveAllPricedAction", "dismissDraftAction")).not.toContain(", draftId)");
     expect(actions).toContain(
       "const anchor = failedDraftId && onboardingV2RowOn() ? failedDraftId : null;",
     );
-    expect(actions).toContain('return draftsHref({ manifestId: typeof raw === "string" ? raw : null, draftId: anchor, extra });');
+    expect(actions).toContain('return draftsHref({ manifestId: typeof raw === "string" ? raw : null, draftId: anchor, extra: { ...list, ...extra } });');
   });
 });
 
