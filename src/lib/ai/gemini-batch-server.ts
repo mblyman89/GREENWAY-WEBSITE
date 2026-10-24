@@ -32,6 +32,7 @@ import { KB_FIRST_ONBOARDING_ENV, alreadyKnownPromptBlock, kbFirstOnboardingEnab
 import { completeItem, lookupQueryForDraft, SkipItem } from "@/lib/catalog/lookup-job-server";
 import { DRAFT_GONE_COPY, LEFT_REVIEW_COPY, LOOKUP_RETRY_MAX_ATTEMPTS, batchThinkingLevel, AI_BATCH_THINKING_LEVEL_ENV, itemErrorText, summarizeJob } from "@/lib/catalog/lookup-job-core";
 import { isAgainMarker } from "@/lib/catalog/lookup-history-core";
+import { readBatchControl } from "@/lib/ai/batch-control-server";
 import {
   AI_BATCH_MAX_INFLIGHT_ENV,
   AI_LOOKUP_ENGINE_ENV,
@@ -124,11 +125,11 @@ async function settleJobs(admin: Admin, jobIds: Iterable<string>): Promise<void>
 
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
-async function submitOne(admin: Admin): Promise<{ families: number; items: number } | null> {
+async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set()): Promise<{ families: number; items: number } | null> {
   // Oldest queued products of open jobs; never a job whose live lease is held.
   const { data: jobs } = await admin.from("lookup_jobs").select("id, lease_until").in("status", ["queued", "running"]).order("created_at").limit(200);
   const now = Date.now();
-  const jobIds = ((jobs as { id: string; lease_until: string | null }[] | null) ?? []).filter((j) => !j.lease_until || Date.parse(j.lease_until) < now).map((j) => j.id);
+  const jobIds = ((jobs as { id: string; lease_until: string | null }[] | null) ?? []).filter((j) => (!j.lease_until || Date.parse(j.lease_until) < now) && !pausedJobs.has(j.id)).map((j) => j.id);
   if (jobIds.length === 0) return null;
   const { data: q } = await admin
     .from("lookup_job_items")
@@ -320,6 +321,13 @@ async function pollAll(admin: Admin, out: BatchTickResult, deadline: number): Pr
   }
 }
 
+/** R74 S35: ask Google to stop a batch. The next poll sees 'canceled' and requeues its products. */
+export async function cancelGeminiBatch(name: string): Promise<{ ok: boolean; message: string }> {
+  if (!/^batches\/[A-Za-z0-9_-]+$/.test(name)) return { ok: false, message: "That batch name is not valid." };
+  const res = await gemini(`v1beta/${name}:cancel`, { method: "POST" });
+  return res.ok ? { ok: true, message: "Cancel sent to Gemini. Its products go back in the queue on the next poll." } : { ok: false, message: `Gemini refused the cancel (HTTP ${res.status}).` };
+}
+
 export async function runGeminiBatchTick(deps: { budgetMs?: number } = {}): Promise<BatchTickResult> {
   const out: BatchTickResult = { ok: true, submitted: 0, families: 0, items: 0, polled: 0, ingested: 0 };
   if (!batchEngineOn()) return { ...out, skipped: "engine_live" };
@@ -328,11 +336,16 @@ export async function runGeminiBatchTick(deps: { budgetMs?: number } = {}): Prom
   try {
     const admin = createSupabaseAdminClient();
     await pollAll(admin, out, deadline);
+    // R74 S35: the console's pause switch. Batches already at Google are
+    // still polled and ingested (they are paid for); nothing new goes out.
+    const control = await readBatchControl(admin);
+    if (control.paused) return { ...out, skipped: "paused" };
+    const pausedJobs = new Set(control.pausedJobIds);
     const { count } = await admin.from("ai_batches").select("id", { count: "exact", head: true }).in("state", ["submitting", "pending", "running"]);
     let open = count ?? 0;
     const cap = batchMaxInflight(process.env[AI_BATCH_MAX_INFLIGHT_ENV]);
     while (open < cap && Date.now() < deadline) {
-      const s = await submitOne(admin);
+      const s = await submitOne(admin, pausedJobs);
       if (!s || s.items === 0) {
         if (!s) break;
         continue;
