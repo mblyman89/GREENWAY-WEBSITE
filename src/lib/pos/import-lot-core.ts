@@ -47,6 +47,12 @@ import { parseCultiveraTimestamp } from "@/lib/inventory/cultivera-manifest-grou
 export type ImportLotSource = {
   /** menu_items.source_item_id of the card this row rolled into (`pos-…`). */
   posProductKey: string;
+  /**
+   * R74 S30: menu_variants.source_variant_id of the SIZE this row sells as
+   * (`${posProductKey}-${hash}`, transform.ts collectLotSources). Optional so
+   * older callers/tests keep compiling; absent = not linked.
+   */
+  menuSourceVariantId?: string | null;
   /** Card display name (messages only). */
   itemName: string;
   /** Cultivera Barcode — the CCRS-filed inventory identifier. */
@@ -102,6 +108,12 @@ export type PlannedImportLot = {
   ccrsExternalId: string;
   /** inventory_lots.pos_product_key = menu_items.source_item_id (card key). */
   posProductKey: string;
+  /**
+   * R74 S30: inventory_lots.menu_source_variant_id, the menu size this lot
+   * sells as. Null when the source carried none, or when merged rows of one
+   * barcode disagreed (flagged import_lot_size_link_conflict; never guessed).
+   */
+  menuSourceVariantId: string | null;
   productName: string;
   strainName: string | null;
   /** inventory_lots.strain_type — card strain type, null when unknown (Rule 1.4). */
@@ -350,6 +362,125 @@ function potencyForRows(rows: readonly ImportLotSource[]): LotPotency | null {
 /** 0241 columns — dropped on retry when the migration is not applied yet. */
 export const POS_POTENCY_COLUMNS = ["pos_thc", "pos_thca", "pos_cbd", "pos_cbda", "pos_potency_unit", "pos_potency_set_at"] as const;
 
+// ---------------------------------------------------------------------------
+// R74 S30 — the lot -> menu size link (migration 0294)
+// ---------------------------------------------------------------------------
+
+/** 0294 columns — dropped on retry when the migration is not applied yet. */
+export const SIZE_LINK_COLUMNS = ["menu_source_variant_id", "menu_source_variant_source"] as const;
+
+/** The insert's size-link columns for one planned lot (the 0294 pair rule: both or neither). */
+export function sizeLinkColumns(menuSourceVariantId: string | null | undefined): Record<string, unknown> {
+  const id = (menuSourceVariantId ?? "").trim();
+  return id
+    ? { menu_source_variant_id: id, menu_source_variant_source: "pos_import" }
+    : { menu_source_variant_id: null, menu_source_variant_source: null };
+}
+
+export type ExistingLotSizeLink = {
+  id: string;
+  ccrs_inventory_external_id: string | null;
+  pos_product_key: string | null;
+  menu_source_variant_id: string | null;
+  menu_source_variant_source: string | null;
+};
+
+export type SizeLinkFillPlan = {
+  /** Lot id -> the size id to write (source pos_import). */
+  writes: { id: string; menuSourceVariantId: string; previous: string | null }[];
+  matched: number;
+  /** Already linked to this exact size. */
+  unchanged: number;
+  /** The owner picked the size by hand: never overwritten by a machine read. */
+  ownerKept: number;
+  /** The planned lot has no single size (merged rows disagreed / no source). */
+  noSize: number;
+  /** The lot was re-linked to a different product since the import: left alone. */
+  keyMismatch: number;
+  /** The planned size is not on the menu being checked: left alone, never guessed. */
+  notOnMenu: number;
+  /** A few examples per refusal, for the owner's message. */
+  examples: { reason: "no_size" | "key_mismatch" | "not_on_menu"; ccrsExternalId: string; productName: string }[];
+};
+
+/**
+ * Which existing lots get which size link. Matching is by the CCRS inventory
+ * external id (the barcode — the key createImportLots dedupes on). Rules,
+ * never guessing:
+ *   • the lot's product key must still be the planned card key (an owner
+ *     re-link wins);
+ *   • the planned size must be on the menu being checked (`liveVariantIds`;
+ *     pass null only when the planned ids ARE that menu's ids);
+ *   • an "owner" link is never overwritten;
+ *   • a "pos_import" link may be refreshed (a size id contains Cultivera's
+ *     price, so it changes when that price changes).
+ */
+export function planSizeLinkFill(
+  planned: readonly Pick<PlannedImportLot, "ccrsExternalId" | "posProductKey" | "menuSourceVariantId" | "productName">[],
+  existing: readonly ExistingLotSizeLink[],
+  liveVariantIds: ReadonlySet<string> | null,
+): SizeLinkFillPlan {
+  const byExt = new Map(planned.map((l) => [l.ccrsExternalId, l]));
+  const out: SizeLinkFillPlan = { writes: [], matched: 0, unchanged: 0, ownerKept: 0, noSize: 0, keyMismatch: 0, notOnMenu: 0, examples: [] };
+  const example = (reason: SizeLinkFillPlan["examples"][number]["reason"], l: { ccrsExternalId: string; productName: string }) => {
+    if (out.examples.filter((e) => e.reason === reason).length < 5) out.examples.push({ reason, ccrsExternalId: l.ccrsExternalId, productName: l.productName });
+  };
+  for (const lot of existing) {
+    const ext = (lot.ccrs_inventory_external_id ?? "").trim();
+    const plan = ext ? byExt.get(ext) : undefined;
+    if (!plan) continue;
+    out.matched += 1;
+    const current = (lot.menu_source_variant_id ?? "").trim() || null;
+    if (current && lot.menu_source_variant_source === "owner") {
+      out.ownerKept += 1;
+      continue;
+    }
+    const target = (plan.menuSourceVariantId ?? "").trim();
+    if (!target) {
+      out.noSize += 1;
+      example("no_size", plan);
+      continue;
+    }
+    if ((lot.pos_product_key ?? "").trim() !== plan.posProductKey) {
+      out.keyMismatch += 1;
+      example("key_mismatch", plan);
+      continue;
+    }
+    if (liveVariantIds && !liveVariantIds.has(target)) {
+      out.notOnMenu += 1;
+      example("not_on_menu", plan);
+      continue;
+    }
+    if (current === target) {
+      out.unchanged += 1;
+      continue;
+    }
+    out.writes.push({ id: lot.id, menuSourceVariantId: target, previous: current });
+  }
+  return out;
+}
+
+/** The owner's one-paragraph summary of a size-link fill (or its preview). */
+export function sizeLinkFillNote(plan: SizeLinkFillPlan, opts: { dryRun: boolean; written: number }): string {
+  const parts: string[] = [];
+  parts.push(
+    opts.dryRun
+      ? `Preview (nothing written): ${plan.writes.length} lot(s) would be linked to their menu size.`
+      : `Linked ${opts.written} lot(s) to their menu size.`,
+  );
+  parts.push(`${plan.matched} lot(s) matched this import; ${plan.unchanged} were already linked.`);
+  if (plan.ownerKept > 0) parts.push(`${plan.ownerKept} keep the size you picked by hand.`);
+  const why: string[] = [];
+  if (plan.noSize > 0) why.push(`${plan.noSize} have no single size in the export`);
+  if (plan.keyMismatch > 0) why.push(`${plan.keyMismatch} were re-linked to another product since`);
+  if (plan.notOnMenu > 0) why.push(`${plan.notOnMenu} sell as a size that is not on the live menu`);
+  if (why.length > 0) {
+    const ex = plan.examples.slice(0, 3).map((e) => `${e.productName} (${e.ccrsExternalId})`).join(", ");
+    parts.push(`Left unlinked: ${why.join("; ")}.${ex ? ` For example: ${ex}.` : ""} You can pick their size on each lot's page.`);
+  }
+  return parts.join(" ");
+}
+
 /**
  * The received date as the DB will accept it. 0214 refuses dates before
  * 2014-07-08 or after tomorrow (Pacific); one bad cell must never abort a
@@ -522,6 +653,23 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
 
     const first = rows[0];
     const receivedQty = rows.reduce((s, r) => s + r.units, 0);
+
+    // R74 S30: one lot = one size. Rows of one barcode that roll into
+    // different sizes cannot be linked to either without guessing.
+    const sizeIds = new Set(rows.map((r) => (r.menuSourceVariantId ?? "").trim()));
+    let menuSourceVariantId: string | null = null;
+    if (sizeIds.size === 1) {
+      const only = [...sizeIds][0];
+      menuSourceVariantId = only || null;
+    } else {
+      diagnostics.push({
+        severity: "warning",
+        code: "import_lot_size_link_conflict",
+        message:
+          "Rows sharing this barcode sell as DIFFERENT menu sizes in the POS export; the lot is left unlinked to a size (its price is read from the card only when the card has one size).",
+        context: { barcode, product: first.productName, sizes: [...sizeIds].filter(Boolean) },
+      });
+    }
     unitsTotal += receivedQty;
 
     const receivedDates = rows.map((r) => parseUsDate(r.receivedDateRaw)).filter((d): d is string => !!d).sort();
@@ -573,6 +721,7 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
       lotCode: (first.barcode ?? "").trim() ? barcode : null,
       ccrsExternalId,
       posProductKey: first.posProductKey,
+      menuSourceVariantId,
       productName: first.productName,
       strainName: first.strainName.trim() || null,
       // "unknown" is the pipeline's null — store real types only (Rule 1.4).
@@ -975,4 +1124,101 @@ export function __runImportLotFactFillTests(): { passed: number } {
   );
   ok(plan.dateGroups.get("2026-05-01")?.join() === "1" && plan.potencyPatches.length === 1 && plan.potencyPatches[0].id === "1", "fill-only: owner/previous values never overwritten");
   return { passed };
+}
+
+/** R74 S30: the lot -> menu size link (sizeLinkColumns / planSizeLinkFill / note / merge conflict). */
+export function __runImportLotSizeLinkTests(): { passed: number; failed: number } {
+  let passed = 0;
+  let failed = 0;
+  const ok = (c: boolean, m: string) => {
+    if (c) passed += 1;
+    else {
+      failed += 1;
+      console.error(`import-lot-core size-link self-test failed: ${m}`);
+    }
+  };
+  // 0294 pair rule: both or neither.
+  const both = sizeLinkColumns(" pos-a-111 ");
+  ok(both.menu_source_variant_id === "pos-a-111" && both.menu_source_variant_source === "pos_import", "id -> both columns, source pos_import");
+  const none = sizeLinkColumns(null);
+  ok(none.menu_source_variant_id === null && none.menu_source_variant_source === null, "null -> neither");
+  ok(sizeLinkColumns("   ").menu_source_variant_source === null, "blank -> neither");
+  ok(Object.keys(both).sort().join() === [...SIZE_LINK_COLUMNS].sort().join(), "columns = SIZE_LINK_COLUMNS (retry strips exactly these)");
+
+  const P = (ext: string, size: string | null, key = "pos-a") => ({ ccrsExternalId: ext, posProductKey: key, menuSourceVariantId: size, productName: `P${ext}` });
+  const E = (id: string, ext: string | null, cur: string | null, src: string | null, key: string | null = "pos-a"): ExistingLotSizeLink => ({
+    id,
+    ccrs_inventory_external_id: ext,
+    pos_product_key: key,
+    menu_source_variant_id: cur,
+    menu_source_variant_source: src,
+  });
+  const live = new Set(["pos-a-1g", "pos-a-3g"]);
+  const plan = planSizeLinkFill(
+    [P("A", "pos-a-1g"), P("B", "pos-a-3g"), P("C", "pos-a-1g"), P("D", null), P("E", "pos-a-1g"), P("F", "pos-a-9g"), P("G", "pos-a-3g")],
+    [
+      E("1", "A", null, null), // blank -> write
+      E("2", "B", "pos-a-old", "pos_import"), // stale machine link -> refresh
+      E("3", "C", "pos-a-3g", "owner"), // owner pick -> kept
+      E("4", "D", null, null), // no size -> skip
+      E("5", "E", null, null, "pos-z"), // re-linked product -> skip
+      E("6", "F", null, null), // size not on menu -> skip
+      E("7", "G", "pos-a-3g", "pos_import"), // same -> unchanged
+      E("8", "ZZ", null, null), // not in this import -> ignored
+      E("9", null, null, null), // no barcode -> ignored
+    ],
+    live,
+  );
+  ok(plan.matched === 7, "matched counts only lots of this import");
+  ok(plan.writes.length === 2 && plan.writes[0].id === "1" && plan.writes[0].menuSourceVariantId === "pos-a-1g" && plan.writes[0].previous === null, "blank lot gets its size");
+  ok(plan.writes[1].id === "2" && plan.writes[1].previous === "pos-a-old", "a stale import link is refreshed (previous kept for the audit)");
+  ok(plan.ownerKept === 1 && !plan.writes.some((w) => w.id === "3"), "an owner pick is never overwritten");
+  ok(plan.noSize === 1 && plan.keyMismatch === 1 && plan.notOnMenu === 1 && plan.unchanged === 1, "refusal counters");
+  ok(plan.examples.map((e) => e.reason).sort().join() === "key_mismatch,no_size,not_on_menu", "one example per refusal");
+  const noMenu = planSizeLinkFill([P("F", "pos-a-9g")], [E("6", "F", null, null)], null);
+  ok(noMenu.writes.length === 1 && noMenu.notOnMenu === 0, "liveVariantIds null = planned ids are the menu's ids");
+  ok(planSizeLinkFill([], [E("1", "A", null, null)], live).matched === 0, "empty plan writes nothing");
+
+  const preview = sizeLinkFillNote(plan, { dryRun: true, written: 0 });
+  ok(/^Preview \(nothing written\): 2 lot\(s\) would be linked/.test(preview), "preview note says nothing written");
+  ok(/1 keep the size you picked by hand/.test(preview) && /Left unlinked: 1 have no single size/.test(preview), "note lists owner-kept and refusals");
+  ok(/pick their size on each lot's page/.test(preview), "note points to the per-lot picker");
+  ok(/^Linked 5 lot\(s\)/.test(sizeLinkFillNote(plan, { dryRun: false, written: 5 })), "apply note reports rows actually written");
+  ok(!/Left unlinked/.test(sizeLinkFillNote(noMenu, { dryRun: false, written: 1 })), "no refusal sentence when nothing was left");
+
+  // planImportLots: one barcode, two sizes -> unlinked + warning; same size -> linked.
+  const base: ImportLotSource = {
+    posProductKey: "pos-a",
+    itemName: "Blue Dream",
+    barcode: "GF1",
+    productName: "Acme - Blue Dream",
+    category: "Flower",
+    inventoryType: "Usable Marijuana",
+    strainName: "Blue Dream",
+    strainType: "hybrid",
+    brand: "Acme",
+    vendor: "ACME",
+    units: 5,
+    costRaw: "$5.00",
+    receivedDateRaw: "06/17/2026",
+    expirationDateRaw: "",
+    coaRaw: "Y",
+    isMedical: false,
+    isSample: false,
+    unitWeight: 1,
+    unitWeightUom: "g",
+  };
+  const conflict = planImportLots([
+    { ...base, menuSourceVariantId: "pos-a-1g" },
+    { ...base, menuSourceVariantId: "pos-a-3g", receivedDateRaw: "06/18/2026" },
+  ]);
+  ok(conflict.lots.length === 1 && conflict.lots[0].menuSourceVariantId === null, "merged rows that disagree on size -> no link (never guessed)");
+  ok(conflict.diagnostics.some((d) => d.code === "import_lot_size_link_conflict" && d.severity === "warning"), "conflict is flagged loud");
+  const agree = planImportLots([
+    { ...base, menuSourceVariantId: "pos-a-1g" },
+    { ...base, menuSourceVariantId: "pos-a-1g", receivedDateRaw: "06/18/2026" },
+  ]);
+  ok(agree.lots[0].menuSourceVariantId === "pos-a-1g" && !agree.diagnostics.some((d) => d.code === "import_lot_size_link_conflict"), "rows agreeing on size keep it");
+  ok(planImportLots([base]).lots[0].menuSourceVariantId === null, "no source size -> null, no conflict");
+  return { passed, failed };
 }

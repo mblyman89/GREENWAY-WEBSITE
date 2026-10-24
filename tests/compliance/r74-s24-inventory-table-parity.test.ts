@@ -56,11 +56,11 @@ const { GET: exportGET } = await import("@/app/admin/inventory/export/route");
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("R74 S24 A — pure self-tests", () => {
-  it("runs exactly 36 self-tests, all passing, pinned in the runner", () => {
+  it("runs exactly 44 self-tests (S30: +8 per-size link), all passing, pinned in the runner", () => {
     const r = core.__runLotLivePriceCoreTests();
-    expect(r).toEqual({ passed: 36, failed: 0 });
+    expect(r).toEqual({ passed: 44, failed: 0 });
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toMatch(/__runLotLivePriceCoreTests\(\);\s*if \(r\.failed > 0 \|\| r\.passed < 36\)/);
+    expect(runner).toMatch(/__runLotLivePriceCoreTests\(\);\s*if \(r\.failed > 0 \|\| r\.passed < 44\)/);
   });
   it("core is pure (no env, no DB)", () => {
     const src = read("src/lib/inventory/lot-live-price-core.ts");

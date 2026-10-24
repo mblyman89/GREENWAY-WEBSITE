@@ -294,7 +294,9 @@ export default async function InventoryPage({
   // flags from the MENU row; the table now reads the same two sources (one
   // bulk read each), so Price, Margin, Ext. retail and Compliance match it.
   const lotKeys = categorizedRaw.lots.map((l) => l.pos_product_key);
-  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotKeys), getMenuClassificationFlags(lotKeys)]);
+  // R74 S30: each lot's own menu size (0294) so a multi-size card prices per size.
+  const lotPriceRefs = categorizedRaw.lots.map((l) => ({ key: l.pos_product_key, linked: l.menu_source_variant_id ?? null }));
+  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotPriceRefs), getMenuClassificationFlags(lotKeys)]);
   const categorized = attachLotParity(categorizedRaw, livePrices.index, menuFlags);
   // R38 S2: derived metrics (age, sell-through, velocity, days of supply,
   // extended cost/retail, ABC, on-menu) computed ONCE per lot, so the cells,

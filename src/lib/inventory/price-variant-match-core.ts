@@ -15,6 +15,13 @@
  *     "pos-${stableId(identityKey)}"), so the card is still findable.
  *
  * Rule (never guess a price):
+ *   0. R74 S30: if the LOT is linked to a size (inventory_lots.
+ *      menu_source_variant_id, migration 0294) and that size is one of the
+ *      card's variants → edit it ("linked"). The link is per lot, so this is
+ *      what lets one size of a multi-size Cultivera card be priced without
+ *      onboarding. A link whose size is not on the card (stale after a price
+ *      change in Cultivera, or the lot was re-linked to another product) is
+ *      ignored and the rules below apply.
  *   1. If an -onboarded variant exists for this key → edit it ("onboarded").
  *   2. Else, among the variants of the card whose source_item_id === key:
  *        • exactly one variant → edit it ("single-card").
@@ -35,7 +42,7 @@ export type VariantCandidate = {
 };
 
 export type LotVariantDecision =
-  | { kind: "onboarded" | "single-card"; variantId: string }
+  | { kind: "linked" | "onboarded" | "single-card"; variantId: string }
   | { kind: "ambiguous"; variantCount: number }
   | { kind: "none" };
 
@@ -53,9 +60,19 @@ export function resolveLotVariant(
   key: string,
   onboarded: VariantCandidate[],
   cardVariants: VariantCandidate[],
+  linkedSourceVariantId?: string | null,
 ): LotVariantDecision {
   const k = (key ?? "").trim();
   if (!k) return { kind: "none" };
+
+  // 0) R74 S30: the lot's own size, only when it is on the lot's card.
+  const linked = (linkedSourceVariantId ?? "").trim();
+  if (linked) {
+    const hits = (Array.isArray(cardVariants) ? cardVariants : []).filter((v) => v && v.source_variant_id === linked);
+    if (hits.length === 1) return { kind: "linked", variantId: hits[0].id };
+    // 2+ rows with one source id on one card would be a data fault: fall
+    // through to the card rules (which call it ambiguous) rather than pick.
+  }
 
   // 1) Intake fast path.
   const onboardedId = `${k}${ONBOARDED_VARIANT_SUFFIX}`;
@@ -132,6 +149,30 @@ export function __runPriceVariantMatchCoreTests(): void {
     [{ id: "v-c", source_variant_id: `${key}-dddd` }],
   );
   ok(d7.kind === "single-card", "onboarded suffix is case-sensitive");
+
+  // 8) R74 S30: the linked size wins on a multi-size card.
+  const multi = [
+    { id: "v-1g", source_variant_id: `${key}-aaaa` },
+    { id: "v-3g", source_variant_id: `${key}-bbbb` },
+  ];
+  const d8 = resolveLotVariant(key, [], multi, `${key}-bbbb`);
+  ok(d8.kind === "linked" && d8.variantId === "v-3g", "linked size picks its own variant on a multi-size card");
+  // 9) The linked size beats an -onboarded variant on the card key.
+  const d9 = resolveLotVariant(key, [{ id: "v-onb", source_variant_id: `${key}-onboarded` }], multi, `${key}-aaaa`);
+  ok(d9.kind === "linked" && d9.variantId === "v-1g", "linked size beats the card-wide -onboarded id");
+  // 10) A stale link (size not on the card) falls back to the old rules.
+  ok(resolveLotVariant(key, [], multi, `${key}-zzzz`).kind === "ambiguous", "stale link on a multi-size card stays ambiguous");
+  const d10b = resolveLotVariant(key, [], [multi[0]], `${key}-zzzz`);
+  ok(d10b.kind === "single-card" && d10b.variantId === "v-1g", "stale link on a one-size card uses the one size");
+  // 11) A link that only exists on ANOTHER card is never used.
+  ok(resolveLotVariant(key, [], multi, "pos-other-aaaa").kind === "ambiguous", "a size on another card is ignored");
+  // 12) Blank/whitespace link = no link.
+  ok(resolveLotVariant(key, [], multi, "   ").kind === "ambiguous", "blank link is no link");
+  // 13) Duplicate source ids on one card: refuse to pick.
+  ok(
+    resolveLotVariant(key, [], [...multi, { id: "v-3g-dup", source_variant_id: `${key}-bbbb` }], `${key}-bbbb`).kind === "ambiguous",
+    "duplicate linked rows fall through to ambiguous",
+  );
 
   console.log(`price-variant-match-core: ${passed} assertions passed`);
 }

@@ -26,7 +26,9 @@ import { getKbProductByPosKey } from "@/lib/ai/kb/store";
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
 // T-324: after-tax price correction (current price read + pure formula math).
-import { getLotAfterTaxPrice } from "@/lib/inventory/price-write-store";
+import { getLotPriceState } from "@/lib/inventory/price-write-store";
+import { sharedSizeFloor, sizeOptionLabel, priceScopeNote, type SizeLot } from "@/lib/inventory/lot-size-link-core";
+import { listLotsSharingSize, listActiveLotsForKey } from "@/lib/inventory/lot-size-link-store";
 // S26: fix links land here (#coa, #website-category); KB + enrichment buttons
 // are pre-searched / live-guarded (F-100, F-101).
 import { kbProductsHref, lotEnrichmentHref } from "@/lib/pos/issue-fix-link-core";
@@ -48,6 +50,7 @@ import {
   linkLotProductAction,
   linkLotCoaAction,
   rereadLotCoaAction,
+  setLotSizeAction,
 } from "../actions";
 // R28: the lab certificate the system read, and the product facts (view + edit).
 import { labCertificateView, coaFactsView, lotFactRows, coaRereadBanner, factSaveBanner } from "@/lib/inventory/coa-panel-core";
@@ -153,7 +156,7 @@ export default async function LotDetailPage({
   // SLICE 77: vendors + brands feed the correction form's pickers; the
   // enrichment record (keyed by the lot's POS product key) surfaces the
   // customer-facing photo/description right here.
-  const [adjustments, manifest, vendors, brands, enrichment, kbProduct, categoryTypes, inventoryTypes, override, currentAfterTaxMinor] =
+  const [adjustments, manifest, vendors, brands, enrichment, kbProduct, categoryTypes, inventoryTypes, override, priceState] =
     await Promise.all([
       listLotAdjustments(id),
       lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
@@ -168,10 +171,14 @@ export default async function LotDetailPage({
       listWebsiteCategoryTypes({ includeInactive: false }),
       listInventoryTypes({ includeInactive: false }),
       lot.pos_product_key ? getOverrideForKey(lot.pos_product_key) : Promise.resolve(null),
-      // T-324: the CURRENT after-tax (out-the-door) price of THIS lot's variant
-      // on the published menu — null until the product has been published.
-      getLotAfterTaxPrice(lot.pos_product_key),
+      // T-324 / R74 S30: the CURRENT after-tax (out-the-door) price of THIS
+      // lot's size on the published menu (its 0294 size link first), or why
+      // there is none (several sizes and no link / not published / unreadable).
+      getLotPriceState({ posProductKey: lot.pos_product_key, menuSourceVariantId: lot.menu_source_variant_id ?? null }),
     ]);
+  const currentAfterTaxMinor = priceState.status === "priced" ? priceState.priceMinor : null;
+  // R74 S30: the sizes on this lot's published card, for "Which size is this lot?".
+  const cardSizes = priceState.status === "priced" || priceState.status === "ambiguous" ? priceState.sizes : [];
   // Round 12: Cultivera-upload lots get a callout pointing at Bulk fill.
   const migrationCallout = migrationLotCallout(lot);
   // R50 S3d: same rule as the Inventory list (manifest kind, or the import marker).
@@ -313,6 +320,28 @@ export default async function LotDetailPage({
   const priceFloorMinor = afterTaxFloorMinor(lot.unit_cost_minor_units, priceCategory);
   const currentBaseMinor =
     currentAfterTaxMinor != null ? baseFromAfterTax(currentAfterTaxMinor, priceCategory) : null;
+  // R74 S30: one menu price can be shared by several lots (same size). The
+  // save enforces the HIGHEST cost + tax among them; show it up front. A read
+  // failure only hides the hint (the save re-checks and fails closed).
+  let sharingLots: SizeLot[] = [];
+  let sharingReadFailed = false;
+  if (priceState.status === "priced" && lot.pos_product_key) {
+    try {
+      sharingLots =
+        priceState.kind === "linked"
+          ? await listLotsSharingSize(lot.pos_product_key, lot.menu_source_variant_id ?? "")
+          : await listActiveLotsForKey(lot.pos_product_key);
+    } catch {
+      sharingReadFailed = true;
+    }
+  }
+  const sharedFloor = sharedSizeFloor(
+    [{ id: lot.id, lot_code: lot.lot_code, product_name: lot.product_name, unit_cost_minor_units: lot.unit_cost_minor_units }, ...sharingLots],
+    priceCategory,
+  );
+  const scopeNote =
+    priceState.status === "priced" ? priceScopeNote(priceState.kind, priceState.sizeLabel, sharedFloor.lotCount) : null;
+  const sizeAction = setLotSizeAction.bind(null, id);
 
   const expired = lot.expires_on != null && lot.expires_on < today;
   // R34: where the expiration date came from (document vs owner rule) + countdown.
@@ -461,6 +490,12 @@ export default async function LotDetailPage({
               </p>
               {/* The full formula, right below the after-tax value. */}
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">{priceFormula}</p>
+              {priceState.status === "priced" && priceState.sizes.length > 1 ? (
+                <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]" data-testid="lot-price-size">
+                  Size: {priceState.sizeLabel}
+                  {priceState.kind === "linked" ? "" : " (the card's only matching size)"}
+                </p>
+              ) : null}
             </div>
             <div className="text-right text-xs text-[var(--admin-text-faint)]">
               {currentAfterTaxMinor != null ? (
@@ -470,8 +505,11 @@ export default async function LotDetailPage({
                 </>
               ) : (
                 <p className="max-w-[16rem]">
-                  No published price yet. A price appears once this product is
-                  onboarded and published to the menu.
+                  {priceState.status === "ambiguous"
+                    ? "This product has several sizes on its menu card. Pick this lot\u2019s size in \u201cWhich size is this lot?\u201d below to see and set its price."
+                    : priceState.status === "unavailable" && priceState.reason !== "no-key"
+                      ? "The menu price couldn\u2019t be read right now. Reload the page in a moment."
+                      : "No published price yet. A price appears once this product\u2019s import is published to the menu."}
                 </p>
               )}
             </div>
@@ -994,6 +1032,18 @@ export default async function LotDetailPage({
             be grouped with. It can never go below the legal cost+tax floor
             {priceFloorMinor != null ? <> (<strong>{fmtUsd(priceFloorMinor)}</strong> for this lot)</> : null}.
           </p>
+          {scopeNote ? (
+            <p className="mb-3 text-xs text-[var(--admin-text-muted)]" data-testid="lot-price-scope">
+              {scopeNote}
+              {sharedFloor.lotCount > 1 && sharedFloor.floorMinor != null && sharedFloor.lotId !== lot.id ? (
+                <>
+                  {" "}Because lot {sharedFloor.lotLabel ?? "?"} costs more, the minimum for this shared price is{" "}
+                  <strong>{fmtUsd(sharedFloor.floorMinor)}</strong>.
+                </>
+              ) : null}
+              {sharingReadFailed ? " (The other lots sharing this price couldn\u2019t be read just now; the save re-checks them.)" : null}
+            </p>
+          ) : null}
           {lot.pos_product_key ? (
             currentAfterTaxMinor != null ? (
               <form action={priceAction} className="space-y-4">
@@ -1024,8 +1074,8 @@ export default async function LotDetailPage({
                     name="after_tax_price"
                     type="text"
                     inputMode="decimal"
-                    placeholder={fmtUsd(currentAfterTaxMinor).replace("$", "")}
-                    defaultValue={(currentAfterTaxMinor / 100).toFixed(2)}
+                    placeholder={currentAfterTaxMinor > 0 ? fmtUsd(currentAfterTaxMinor).replace("$", "") : "0.00"}
+                    defaultValue={currentAfterTaxMinor > 0 ? (currentAfterTaxMinor / 100).toFixed(2) : ""}
                   />
                 </Field>
                 <p className="text-[11px] text-[var(--admin-text-faint)]">
@@ -1041,11 +1091,22 @@ export default async function LotDetailPage({
                 </Button>
               </form>
             ) : (
-              <p className="text-sm text-[var(--admin-text-faint)]">
-                This product doesn&apos;t have a published menu price yet, so
-                there&apos;s nothing to correct. It gets a price when it&apos;s
-                onboarded and published to the menu; come back here after that to
-                adjust it.
+              <p className="text-sm text-[var(--admin-text-faint)]" data-testid="lot-price-unavailable">
+                {priceState.status === "ambiguous" ? (
+                  <>
+                    This product has several sizes on one menu card and this lot isn&apos;t linked to one yet, so
+                    we can&apos;t tell which price is its. Pick its size in{" "}
+                    <a href="#lot-size" className="underline">Which size is this lot?</a> below; the price field
+                    appears here right after.
+                  </>
+                ) : priceState.status === "unavailable" ? (
+                  <>The menu price couldn&apos;t be read right now, so it can&apos;t be edited. Reload the page in a moment.</>
+                ) : (
+                  <>
+                    This product isn&apos;t on the published menu, so there&apos;s no menu price to set yet. Publish
+                    its import (Menu imports) and the price field appears here. Onboarding is not required.
+                  </>
+                )}
               </p>
             )
           ) : (
@@ -1056,6 +1117,55 @@ export default async function LotDetailPage({
             </p>
           )}
         </div>
+
+        {/* R74 S30 — WHICH SIZE IS THIS LOT? A Cultivera card can carry several
+            sizes (e.g. 1g and 3.5g) each with its own price. The lot's link to its
+            size (0294) decides which price the lot shows and edits. The import
+            fills it; the owner can pick or correct it here (an owner pick is never
+            overwritten by a later import). */}
+        {lot.pos_product_key && cardSizes.length > 1 ? (
+          <div
+            id="lot-size"
+            className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"
+            data-testid="lot-size-panel"
+          >
+            <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Which size is this lot?</h2>
+            <p className="mb-3 text-xs text-[var(--admin-text-faint)]">
+              This product&apos;s menu card has {cardSizes.length} sizes, each with its own price. Pick the one this lot
+              sells as; its price above then edits only that size.{" "}
+              {lot.menu_source_variant_id
+                ? lot.menu_source_variant_source === "owner"
+                  ? "You picked this size."
+                  : "The Cultivera import set this size."
+                : "Not linked yet."}
+            </p>
+            <form action={sizeAction} className="flex flex-wrap items-end gap-3">
+              <Field label="Size" htmlFor="lot_size">
+                <Select id="lot_size" name="size" defaultValue={lot.menu_source_variant_id ?? ""}>
+                  <option value="" disabled>
+                    Pick a size…
+                  </option>
+                  {cardSizes.map((o) => (
+                    <option key={o.sourceVariantId} value={o.sourceVariantId}>
+                      {sizeOptionLabel(o)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Button type="submit" variant="save" size="sm">
+                Save size
+              </Button>
+            </form>
+            {lot.menu_source_variant_id ? (
+              <form action={sizeAction} className="mt-2">
+                <input type="hidden" name="clear" value="1" />
+                <Button type="submit" variant="neutral" size="sm">
+                  Clear the size link
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Option A — correct THIS product's WEBSITE Type & Category (what the
             menu filters by). Behaves like the onboarding approval card: pick an

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData, backfillImportLots, fillImportLotFacts } from "@/lib/pos/import-service";
+import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData, backfillImportLots, fillImportLotFacts, fillImportLotSizeLinks } from "@/lib/pos/import-service";
 import {
   getPublishedVersion,
   diffVersions,
@@ -489,6 +489,53 @@ export async function previewLotFactsAction(formData: FormData): Promise<void> {
     msg = `Preview stopped: ${err instanceof Error ? err.message : "the preview failed"}. Nothing was written.`;
   }
   redirect(dest + "?facts_pv=" + encodeURIComponent(msg.slice(0, 700)) + "#lot-plan");
+}
+
+/**
+ * R74 S30 — link this import's lots to their menu SIZE (0294), so each size
+ * of a multi-size Cultivera card can be priced on the lot page without
+ * onboarding. mode=preview runs the same re-read and plan and writes nothing.
+ */
+export async function linkLotSizesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const importId = String(formData.get("importId") ?? "");
+  if (!importId) redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import id."));
+  const dryRun = String(formData.get("mode") ?? "") === "preview";
+  const dest = `/admin/menu-imports/${importId}`;
+  const { sizeLinkFillNote } = await import("@/lib/pos/import-lot-core");
+  let msg: string;
+  try {
+    const r = await fillImportLotSizeLinks(importId, { dryRun });
+    msg = sizeLinkFillNote(r.plan, { dryRun, written: r.written });
+    if (!dryRun) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "pos_import.link_lot_sizes",
+        entityType: "pos_import",
+        entityId: importId,
+        after: {
+          written: r.written,
+          planned: r.plan.writes.length,
+          matched: r.plan.matched,
+          unchanged: r.plan.unchanged,
+          owner_kept: r.plan.ownerKept,
+          no_size: r.plan.noSize,
+          key_mismatch: r.plan.keyMismatch,
+          not_on_menu: r.plan.notOnMenu,
+        },
+      });
+    }
+  } catch (err) {
+    msg = dryRun
+      ? `Preview stopped: ${err instanceof Error ? err.message : "it failed"}. Nothing was written.`
+      : `Linking stopped: ${err instanceof Error ? err.message : "it failed"}. Some lots may already be linked; pressing the button again is safe (it only fills blanks and never touches a size you picked).`;
+  }
+  if (!dryRun) {
+    revalidatePath(dest);
+    revalidatePath("/admin/inventory");
+  }
+  redirect(dest + "?sizes=" + encodeURIComponent(msg.slice(0, 900)) + "#lot-plan");
 }
 
 /**

@@ -8,6 +8,12 @@
  * "starting at" rollup so the card stays truthful without touching any sibling
  * variant's price.
  *
+ * R74 S30: a lot may now carry its own menu SIZE (inventory_lots.
+ * menu_source_variant_id, migration 0294). Callers pass the lot as a
+ * LotPriceTarget; the linked size is used first, so one size of a multi-size
+ * Cultivera card can be priced without onboarding. Editing a size changes the
+ * price of that size for every lot that sells as it (it is one menu price).
+ *
  * WHY THIS IS SAFE (verified, never guessed):
  *  - A lot maps 1:1 to a menu VARIANT via
  *    `source_variant_id = "${lot.pos_product_key}-onboarded"` (variant-lot-core
@@ -29,6 +35,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 import { formatMoney } from "@/lib/pos/format";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import {
   ONBOARDED_VARIANT_SUFFIX,
   resolveLotVariant,
@@ -58,73 +65,96 @@ export type PriceWriteResult =
   | { ok: false; error: string };
 
 /**
- * How a lot maps to a menu variant on one version.
- *  - "onboarded": the intake variant (source_variant_id = "${key}-onboarded").
- *  - "single-card": no -onboarded variant, but the lot's card
- *    (menu_items.source_item_id = key) has exactly ONE variant — safe to edit.
- *  - "ambiguous": the card has MULTIPLE variants and no -onboarded id, so we
- *    can't tell which one this lot is from pos_product_key alone. Refuse
- *    (never guess a price).
- *  - "none": the lot isn't on this version's menu at all.
- *
- * WHY the fallback exists (T-327 Slice 3): Cultivera MENU-IMPORT variants are
- * keyed `${itemId}-${hash}` (transform.ts:1011), NOT `-onboarded`. But a lot's
- * pos_product_key ALWAYS equals its card's menu_items.source_item_id (both are
- * `pos-${stableId(identityKey)}` — transform.ts:1179 vs :982/persistMenuItems).
- * So we can still locate the card by source_item_id and, when it's a single-
- * variant card (the overwhelming majority), edit that variant.
+ * R74 S30: what identifies a lot's price. The card key (pos_product_key) plus,
+ * when the lot is linked to a size (inventory_lots.menu_source_variant_id,
+ * migration 0294), that size. A bare string is a key with no link.
  */
-type LotVariantMatch =
-  | { kind: "onboarded" | "single-card"; variant: MenuVariantRow }
-  | { kind: "ambiguous"; variantCount: number }
-  | { kind: "none" };
+export type LotPriceTarget =
+  | string
+  | null
+  | undefined
+  | { posProductKey: string | null | undefined; menuSourceVariantId?: string | null };
 
-/** Chunked helper: fetch item ids for a version. */
-async function itemIdsForVersion(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
-  versionId: string,
-): Promise<string[]> {
-  const { data, error } = await admin
-    .from("menu_items")
-    .select("id")
-    .eq("menu_version_id", versionId);
-  if (error) throw new Error(`load items: ${error.message}`);
-  return ((data as { id: string }[] | null) ?? []).map((r) => r.id);
+function targetParts(t: LotPriceTarget): { key: string; linked: string | null } {
+  if (t && typeof t === "object") {
+    return { key: (t.posProductKey ?? "").trim(), linked: (t.menuSourceVariantId ?? "").trim() || null };
+  }
+  return { key: (t ?? "").trim(), linked: null };
 }
 
 /**
- * Locate the single menu_variant for one lot on one version. Tries the intake
- * `-onboarded` id first (fast path, intake lots), then falls back to the card
- * matched by source_item_id (import lots). Read-only.
+ * How a lot maps to a menu variant on one version.
+ *  - "linked": R74 S30 - the lot's own size (menu_source_variant_id) on its card.
+ *  - "onboarded": the intake variant (source_variant_id = "${key}-onboarded").
+ *  - "single-card": no -onboarded variant, but the lot's card
+ *    (menu_items.source_item_id = key) has exactly ONE variant - safe to edit.
+ *  - "ambiguous": the card has MULTIPLE variants and the lot is not linked to
+ *    one, so we can't tell which one this lot is. Refuse (never guess a price);
+ *    the lot page offers "pick this lot's size", which sets the link.
+ *  - "none": the lot isn't on this version's menu at all.
+ *
+ * WHY the fallback exists (T-327 Slice 3): Cultivera MENU-IMPORT variants are
+ * keyed `${itemId}-${hash}` (transform.ts toMenuItem), NOT `-onboarded`. A
+ * lot's pos_product_key ALWAYS equals its card's menu_items.source_item_id
+ * (both are `pos-${stableId(identityKey)}`), so the card is still findable.
+ */
+type LotVariantMatch =
+  | { kind: "linked" | "onboarded" | "single-card"; variant: MenuVariantRow; cardVariants: MenuVariantRow[] }
+  | { kind: "ambiguous"; variantCount: number; cardVariants: MenuVariantRow[] }
+  | { kind: "none" };
+
+/**
+ * Locate the single menu_variant for one lot on one version. Read-only.
+ *
+ * R74 S30: no longer reads every item id of the version first (that read was
+ * unpaged, so past 1,000 cards PostgREST cut it short and an -onboarded
+ * variant on a later card was "not found"). The -onboarded candidates are
+ * found by their exact source id (a handful of rows across all versions) and
+ * then kept only when their card is on THIS version.
  */
 async function findLotVariantOnVersion(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   versionId: string,
-  key: string,
+  target: LotPriceTarget,
 ): Promise<LotVariantMatch> {
-  const itemIds = await itemIdsForVersion(admin, versionId);
-  if (itemIds.length === 0) return { kind: "none" };
+  const { key, linked } = targetParts(target);
+  if (!key) return { kind: "none" };
 
-  const CHUNK = 200;
-
-  // 1) Fetch the intake `-onboarded` candidate(s) for this key.
+  // 1) The intake `-onboarded` candidate(s) for this key, on this version.
   const onboardedId = `${key}${ONBOARDED_VARIANT_SUFFIX}`;
-  const onboarded: MenuVariantRow[] = [];
-  for (let i = 0; i < itemIds.length; i += CHUNK) {
-    const slice = itemIds.slice(i, i + CHUNK);
+  // Archived versions keep copies of the same source id, so page the read
+  // (never a silent cap) and keep only the copy whose card is on this version.
+  const obAll = await pagedAll<MenuVariantRow>(async (from, to) => {
     const { data, error } = await admin
       .from("menu_variants")
       .select("*")
       .eq("source_variant_id", onboardedId)
-      .in("menu_item_id", slice);
+      .order("id", { ascending: true })
+      .range(from, to);
     if (error) throw new Error(`find onboarded variant: ${error.message}`);
-    onboarded.push(...((data as MenuVariantRow[] | null) ?? []));
+    return (data as MenuVariantRow[] | null) ?? [];
+  });
+  let onboarded: MenuVariantRow[] = [];
+  if (obAll.length > 0) {
+    const onVersion = await chunkedIn<string, { id: string }>(
+      obAll.map((v) => v.menu_item_id),
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("menu_items")
+          .select("id")
+          .eq("menu_version_id", versionId)
+          .in("id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(`check onboarded card version: ${error.message}`);
+        return (data as { id: string }[] | null) ?? [];
+      },
+    );
+    const ids = new Set(onVersion.map((r) => r.id));
+    onboarded = obAll.filter((v) => ids.has(v.menu_item_id));
   }
 
-  // 2) Fetch the card's variants (import fallback): find the card by
-  //    source_item_id = key (a lot's pos_product_key always equals its card's
-  //    source_item_id). One card per source_item_id in practice, but gather
-  //    across all matches defensively.
+  // 2) The card's variants: the card is found by source_item_id = key.
   const cardVariants: MenuVariantRow[] = [];
   const { data: cardRows, error: cardErr } = await admin
     .from("menu_items")
@@ -137,49 +167,82 @@ async function findLotVariantOnVersion(
     const { data: vRows, error: vErr } = await admin
       .from("menu_variants")
       .select("*")
-      .in("menu_item_id", cardIds);
+      .in("menu_item_id", cardIds)
+      .order("sort_order", { ascending: true });
     if (vErr) throw new Error(`load card variants: ${vErr.message}`);
     cardVariants.push(...((vRows as MenuVariantRow[] | null) ?? []));
   }
 
-  // 3) Make the decision with the PURE core (single source of truth), then map
-  //    the chosen variant id back to its full row.
+  // 3) The PURE core decides (single source of truth); map the id back.
   const byId = new Map<string, MenuVariantRow>();
   for (const v of [...onboarded, ...cardVariants]) byId.set(v.id, v);
-  const decision = resolveLotVariant(key, onboarded, cardVariants);
+  const decision = resolveLotVariant(key, onboarded, cardVariants, linked);
   if (decision.kind === "ambiguous") {
-    return { kind: "ambiguous", variantCount: decision.variantCount };
+    return { kind: "ambiguous", variantCount: decision.variantCount, cardVariants };
   }
   if (decision.kind === "none") return { kind: "none" };
   const variant = byId.get(decision.variantId);
   if (!variant) return { kind: "none" };
-  return { kind: decision.kind, variant };
+  return { kind: decision.kind, variant, cardVariants };
+}
+
+/** One size of a lot's card, for the lot page's "pick this lot's size". */
+export type LotCardSize = { sourceVariantId: string; label: string; priceMinor: number; medical: boolean };
+
+/**
+ * R74 S30: everything the lot page needs about this lot's price on the
+ * PUBLISHED menu, in one read.
+ *  - "priced": the lot's variant is known (`kind` says how). priceMinor may be
+ *    0 (a Cultivera product with no price): the owner can still set one.
+ *  - "ambiguous": several sizes and the lot isn't linked to one: `sizes`
+ *    lists them so the owner can pick.
+ *  - "not-on-menu": no published card for this key.
+ *  - "unavailable": no key, no DB, or the read failed (never shown as "$0").
+ */
+export type LotPriceState =
+  | { status: "priced"; kind: "linked" | "onboarded" | "single-card"; priceMinor: number; sizeLabel: string; sizes: LotCardSize[] }
+  | { status: "ambiguous"; sizes: LotCardSize[] }
+  | { status: "not-on-menu" }
+  | { status: "unavailable"; reason: string };
+
+function toSizes(rows: MenuVariantRow[]): LotCardSize[] {
+  return rows.map((v) => ({
+    sourceVariantId: v.source_variant_id,
+    label: v.label && v.label !== "each" ? v.label : "each",
+    priceMinor: v.price_minor_units,
+    medical: v.medical === true,
+  }));
+}
+
+export async function getLotPriceState(target: LotPriceTarget): Promise<LotPriceState> {
+  const { key } = targetParts(target);
+  if (!key) return { status: "unavailable", reason: "no-key" };
+  if (!isSupabaseServiceConfigured) return { status: "unavailable", reason: "no-db" };
+  try {
+    const published = await getPublishedVersion();
+    if (!published) return { status: "not-on-menu" };
+    const admin = createSupabaseAdminClient();
+    const match = await findLotVariantOnVersion(admin, published.id, target);
+    if (match.kind === "none") return { status: "not-on-menu" };
+    if (match.kind === "ambiguous") return { status: "ambiguous", sizes: toSizes(match.cardVariants) };
+    const label = match.variant.label && match.variant.label !== "each" ? match.variant.label : "each";
+    return { status: "priced", kind: match.kind, priceMinor: match.variant.price_minor_units, sizeLabel: label, sizes: toSizes(match.cardVariants) };
+  } catch (err) {
+    console.error("[price-write-store] getLotPriceState failed:", err);
+    return { status: "unavailable", reason: "read-failed" };
+  }
 }
 
 /**
  * Read the CURRENT after-tax (out-the-door) price for one lot from the
- * published menu — the price of ITS variant. Intake lots resolve via the
- * `-onboarded` id; import lots resolve via the card's source_item_id (single-
- * variant cards only). Returns null when there's no published price yet, the
- * card is multi-variant/ambiguous, or the menu DB isn't configured. Read-only.
+ * published menu - the price of ITS variant (the linked size, the intake
+ * variant, or a one-size card). Null when there's no published price, the
+ * card is multi-size and the lot isn't linked, or the menu DB isn't
+ * configured. Read-only.
  */
-export async function getLotAfterTaxPrice(
-  posProductKey: string | null | undefined,
-): Promise<number | null> {
-  const key = (posProductKey ?? "").trim();
-  if (!key || !isSupabaseServiceConfigured) return null;
-  try {
-    const published = await getPublishedVersion();
-    if (!published) return null;
-    const admin = createSupabaseAdminClient();
-    const match = await findLotVariantOnVersion(admin, published.id, key);
-    if (match.kind === "onboarded" || match.kind === "single-card") {
-      return match.variant.price_minor_units;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+export async function getLotAfterTaxPrice(target: LotPriceTarget): Promise<number | null> {
+  const st = await getLotPriceState(target);
+  return st.status === "priced" ? st.priceMinor : null;
 }
 
 /**
@@ -191,13 +254,13 @@ async function updateVariantPriceOnVersion(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   versionId: string,
   status: string,
-  posProductKey: string,
+  target: LotPriceTarget,
   afterTaxMinor: number,
 ): Promise<PriceWriteVersionResult> {
   // Locate this lot's variant on this version. Intake lots match the
   // `-onboarded` id; import lots fall back to the card's source_item_id
   // (single-variant cards only — a multi-variant card is ambiguous and refused).
-  const match = await findLotVariantOnVersion(admin, versionId, posProductKey);
+  const match = await findLotVariantOnVersion(admin, versionId, target);
   if (match.kind === "none") {
     // This lot isn't on this version's menu (e.g. staged version that predates
     // the onboarding, or a hidden/removed card). Nothing to do here.
@@ -208,13 +271,13 @@ async function updateVariantPriceOnVersion(
     // can't tell which one this lot is. Refuse rather than guess.
     return { versionId, status, variantFound: false, cardRepriced: null, ambiguous: true };
   }
-  const target = match.variant;
+  const variant = match.variant;
 
   // 3) Update ONLY this variant's price. Never touches siblings.
   const { error: upErr } = await admin
     .from("menu_variants")
     .update({ price_minor_units: afterTaxMinor })
-    .eq("id", target.id);
+    .eq("id", variant.id);
   if (upErr) throw new Error(`update variant (${status}): ${upErr.message}`);
 
   // 4) Re-derive the parent card's "starting at" rollup = MIN over its
@@ -223,7 +286,7 @@ async function updateVariantPriceOnVersion(
   const { data: siblingRows, error: sibErr } = await admin
     .from("menu_variants")
     .select("id, price_minor_units, label, sort_order")
-    .eq("menu_item_id", target.menu_item_id)
+    .eq("menu_item_id", variant.menu_item_id)
     .order("sort_order", { ascending: true });
   if (sibErr) throw new Error(`load siblings (${status}): ${sibErr.message}`);
   const siblings = (siblingRows as { price_minor_units: number; label: string }[] | null) ?? [];
@@ -241,7 +304,7 @@ async function updateVariantPriceOnVersion(
         price_minor_units: cheapest.price_minor_units,
         price_label: priceLabel,
       })
-      .eq("id", target.menu_item_id);
+      .eq("id", variant.menu_item_id);
     if (cardErr) throw new Error(`reprice card (${status}): ${cardErr.message}`);
     cardRepriced = cheapest.price_minor_units;
   }
@@ -257,10 +320,10 @@ async function updateVariantPriceOnVersion(
  * throws to the caller — errors come back as { ok:false }.
  */
 export async function applyLotAfterTaxPrice(
-  posProductKey: string,
+  target: LotPriceTarget,
   afterTaxMinor: number,
 ): Promise<PriceWriteResult> {
-  const key = (posProductKey ?? "").trim();
+  const { key } = targetParts(target);
   if (!key) return { ok: false, error: "This lot isn't linked to a POS product key yet, so it has no menu price to edit." };
   if (!Number.isInteger(afterTaxMinor) || afterTaxMinor <= 0) {
     return { ok: false, error: "Internal: the price to write must be a positive whole number of cents." };
@@ -279,12 +342,12 @@ export async function applyLotAfterTaxPrice(
     const versions: PriceWriteVersionResult[] = [];
     if (published) {
       versions.push(
-        await updateVariantPriceOnVersion(admin, published.id, "published", key, afterTaxMinor),
+        await updateVariantPriceOnVersion(admin, published.id, "published", target, afterTaxMinor),
       );
     }
     for (const v of staged) {
       versions.push(
-        await updateVariantPriceOnVersion(admin, v.id, "staged", key, afterTaxMinor),
+        await updateVariantPriceOnVersion(admin, v.id, "staged", target, afterTaxMinor),
       );
     }
 
@@ -296,7 +359,7 @@ export async function applyLotAfterTaxPrice(
         return {
           ok: false,
           error:
-            "This product has multiple sizes/prices on one menu card, so we can't tell which one this lot's price should change. Edit the price for this size directly on the menu (per-variant editing) instead of on the lot.",
+            "This product has several sizes on one menu card and this lot isn't linked to one yet, so we can't tell which price to change. Pick this lot's size in \"Which size is this lot?\" on this page, then set the price.",
         };
       }
       return {

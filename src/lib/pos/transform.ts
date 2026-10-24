@@ -1267,9 +1267,15 @@ function collectLotSources(groups: ProductGroup[]): ImportLotSource[] {
   for (const group of groups) {
     const itemId = `pos-${stableId(group.identityKey)}`;
     for (const variant of group.variants) {
+      // R74 S30: the menu size (menu_variants.source_variant_id) this row sells
+      // as. SAME formula as toMenuItem's variant id; mergeVariantDuplicates
+      // merges on exactly these three parts, so a pre-merge variant yields the
+      // id of the merged variant it rolled into.
+      const menuSourceVariantId = `${itemId}-${stableId(variant.package.label, variant.priceMinorUnits, variant.medical ? "medical" : "adult")}`;
       for (const row of variant.rows) {
         sources.push({
           posProductKey: itemId,
+          menuSourceVariantId,
           itemName: group.displayName,
           barcode: normalizeWhitespace(row.Barcode),
           productName: variant.productName,
