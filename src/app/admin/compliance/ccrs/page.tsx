@@ -81,6 +81,8 @@ import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGa
 import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
 import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
 import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
+import { readOwed } from "@/lib/compliance/ccrs-held-store";
+import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
 import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
 
@@ -243,12 +245,19 @@ export default async function CcrsCommandCenterPage({
   const submittable = verdict?.submittable ?? false;
   const errors = verdict?.errors ?? [];
   const warnings = verdict?.warnings ?? [];
+  // R74 S39: records left out of the files (still owed) never block the good rows.
+  const held = verdict?.held ?? [];
   const totalRecords = batch?.totalRecords ?? 0;
   const nothingToReport = totalRecords === 0 && errors.length === 0;
   const qs = `from=${week.start}&to=${week.end}${envQ}`;
   const ccrsFiles = isSupabaseServiceConfigured
     ? await listCcrsFiles(createSupabaseAdminClient(), env)
     : { available: false, files: [], issues: [], error: null };
+  // R74 S39: every record an earlier upload held back and still owes CCRS.
+  const owed = isSupabaseServiceConfigured
+    ? await readOwed(createSupabaseAdminClient(), env)
+    : { available: false, rows: [], error: null };
+  const owedWeeks = owedByWeek(owed.rows);
   // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
   const ccrsMail = await listRecentCcrsMail(25);
   const mailCfg = mailConfigFromEnv(process.env);
@@ -585,7 +594,9 @@ export default async function CcrsCommandCenterPage({
               {submittable
                 ? nothingToReport
                   ? "✓ Validation passed — but this week has ZERO records. If there was truly no activity, no upload is needed: record it as “nothing to report” below."
-                  : "✓ Validation passed — the batch is cleared for upload. This is the same hard gate the zip download enforces."
+                  : held.length > 0
+                    ? `✓ Validation passed for the records in these files — upload them. ${verdict?.heldCount ?? 0} record(s) in ${held.length} group(s) are HELD BACK (not in the files) and listed below as still owed to CCRS; fix them and rebuild to send them.`
+                    : "✓ Validation passed — the batch is cleared for upload. This is the same hard gate the zip download enforces."
                 : "✕ Validation FAILED — the zip download is blocked until these errors are fixed:"}
             </div>
             {/* S-17a: every row of every issue, with the next step per reason (Part 17 §C.4 defect 1). */}
@@ -595,6 +606,62 @@ export default async function CcrsCommandCenterPage({
               tone="error"
               copyTitle={`CCRS blocking errors — ${env} — week ${week.start} to ${week.end}`}
             />
+            {held.length > 0 ? (
+              <div
+                className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3"
+                data-testid="ccrs-held-back"
+              >
+                <p className="text-xs font-semibold text-amber-200">
+                  Held back — not in these files, still owed to CCRS ({verdict?.heldCount ?? 0} record(s))
+                </p>
+                <p className="mt-1 text-[11px] text-amber-100/70">
+                  These rows were left out so the good records can upload now. Nothing is sent on a guess. Fix each
+                  group with its next step, rebuild this week, and upload again: the rebuilt files carry them.
+                </p>
+                <div className="mt-2">
+                  <CcrsIssueList
+                    issues={held}
+                    env={env}
+                    tone="held"
+                    copyTitle={`CCRS held back (still owed) — ${env} — week ${week.start} to ${week.end}`}
+                  />
+                </div>
+              </div>
+            ) : null}
+            {owed.available && (owedWeeks.length > 0 || owed.error) ? (
+              <details className="rounded-xl border border-amber-400/20 bg-white/5 px-4 py-3" data-testid="ccrs-still-owed">
+                <summary className="cursor-pointer text-xs font-semibold text-amber-200">
+                  Still owed to CCRS from earlier uploads — {owedSentence(owedWeeks)}
+                </summary>
+                {owed.error ? <p className="mt-2 text-xs text-red-200">Could not read the full list: {owed.error}</p> : null}
+                <ul className="mt-2 space-y-2 text-xs text-white/70">
+                  {owedWeeks.map((w) => (
+                    <li key={w.weekStart}>
+                      <span className="font-semibold">Week of {w.weekStart}</span> — {w.total} record(s):{" "}
+                      {w.byType.map((t) => `${t.count} ${t.type}${t.rebuildWeek ? " (rebuild this week after fixing)" : ""}`).join(", ")}
+                      {w.byType.some((t) => t.rebuildWeek) ? (
+                        <>
+                          {" "}
+                          <Link className="underline" href={`/admin/compliance/ccrs?week=W-${w.weekStart}${envQ}`}>
+                            Open this week
+                          </Link>
+                        </>
+                      ) : null}
+                      <details className="mt-1 pl-4">
+                        <summary className="cursor-pointer opacity-80">Show all {w.rows.length}</summary>
+                        <ol className="mt-1 list-decimal space-y-0.5 pl-5 font-mono text-[11px]">
+                          {w.rows.map((r) => (
+                            <li key={`${r.record_type}-${r.record_id}`}>
+                              {r.record_type} {r.label ?? r.record_id} [{r.code}] {r.reason ?? ""} (held since {r.first_held_at.slice(0, 10)})
+                            </li>
+                          ))}
+                        </ol>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             {warnings.length > 0 ? (
               <details className="text-xs text-white/50">
                 <summary className="cursor-pointer font-semibold text-white/60">

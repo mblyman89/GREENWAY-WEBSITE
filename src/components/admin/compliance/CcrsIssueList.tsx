@@ -26,14 +26,14 @@ import { CopyCommandButton } from "@/components/admin/orders/CopyCommandButton";
 type Props = {
   issues: readonly DisplayIssue[];
   env: LedgerEnv;
-  tone: "error" | "warning";
+  tone: "error" | "warning" | "held";
   /** Title of the copy-all text (e.g. "CCRS blocking errors — week 2026-10-11"). */
   copyTitle: string;
 };
 
 export function CcrsIssueList({ issues, env, tone, copyTitle }: Props) {
   if (issues.length === 0) return null;
-  const text = tone === "error" ? "text-red-200" : "text-white/50";
+  const text = tone === "error" ? "text-red-200" : tone === "held" ? "text-amber-100" : "text-white/50";
   const anyRows = issues.some((i) => (i.rows?.length ?? 0) > 0);
   return (
     <div className={`space-y-1 text-xs ${text}`} data-testid={`ccrs-issues-${tone}`}>
@@ -93,8 +93,20 @@ export function CcrsIssueList({ issues, env, tone, copyTitle }: Props) {
         <div className="pt-1">
           <CopyCommandButton
             command={issuesPlainText(issues, env, copyTitle)}
-            describeAs={tone === "error" ? "every blocking error with its rows" : "every warning with its rows"}
-            idleLabel={tone === "error" ? "Copy every error with its rows" : "Copy every warning with its rows"}
+            describeAs={
+              tone === "error"
+                ? "every blocking error with its rows"
+                : tone === "held"
+                  ? "every held-back record (still owed to CCRS)"
+                  : "every warning with its rows"
+            }
+            idleLabel={
+              tone === "error"
+                ? "Copy every error with its rows"
+                : tone === "held"
+                  ? "Copy every held-back record"
+                  : "Copy every warning with its rows"
+            }
           />
         </div>
       ) : null}

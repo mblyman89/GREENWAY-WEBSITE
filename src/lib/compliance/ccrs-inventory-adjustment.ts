@@ -12,6 +12,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import {
   buildAdjustmentFile,
@@ -79,17 +80,28 @@ export async function buildCcrsInventoryAdjustmentCsv(
   }
 
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("inventory_adjustments")
-    .select(
-      "id, qty_delta, reason, note, created_at, lot:inventory_lots(id, lot_code, pos_product_key, ccrs_inventory_external_id)",
-    )
-    .gte("created_at", fromISO)
-    .lte("created_at", toISO)
-    .order("created_at", { ascending: true });
+  // R74 S39: paged. One read stopped at PostgREST's 1,000-row cap, so a week
+  // with more adjustments silently dropped the rest from the file.
+  let error: { message: string } | null = null;
+  const data = await pagedAll<unknown>(async (from, to) => {
+    if (error) return [];
+    const r = await admin
+      .from("inventory_adjustments")
+      .select(
+        "id, qty_delta, reason, note, created_at, lot:inventory_lots(id, lot_code, pos_product_key, ccrs_inventory_external_id)",
+      )
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (r.error) error = r.error;
+    return (r.data as unknown[] | null) ?? [];
+  });
 
-  if (error) {
-    result.warnings.push(`Could not load adjustments: ${error.message}`);
+  const loadErr = error as { message: string } | null; // assigned inside the pager
+  if (loadErr) {
+    result.warnings.push(`Could not load adjustments: ${loadErr.message}`);
     result.csv = buildAdjustmentFile([], license);
     return result;
   }

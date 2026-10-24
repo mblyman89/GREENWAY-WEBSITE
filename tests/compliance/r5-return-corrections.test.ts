@@ -473,7 +473,9 @@ describe("wiring (source pins)", () => {
     expect(body).toMatch(/routed\.alreadyHeld\.length > 0\) \{\s*syncIssues\.push\(\{\s*severity: "warning",[\s\S]*?code: "E49_SALE_LINE_ALREADY_HELD"/);
     expect(body).toMatch(/routed\.uncertain\.length > 0\) \{\s*syncIssues\.push\(\{\s*severity: "error",[\s\S]*?code: "E49_SALE_LINE_ALREADY_HELD"/);
     expect(batch).toContain("insertedDetailIds: new Set(insertRows.map((r) => r[SALE_DETAIL])),");
-    expect(batch).toContain("const saleRows = [...insertRows, ...correctionE38.rows];");
+    // R74 S39: the same rows, minus any whose lot is held back (E56).
+    expect(batch).toContain('const saleDrop = dropEventRowsForHeldLots("Sale", [...insertRows, ...correctionE38.rows], sendableLots, heldWhy);');
+    expect(batch).toContain("const saleRows = saleDrop.rows;");
   });
   it("the self-check and the returned view use the Sale-aware ledger", () => {
     expect(batch).toMatch(/ledgerSelfCheckIssues\(\s*saleAwareLedger \?\? ledger/);

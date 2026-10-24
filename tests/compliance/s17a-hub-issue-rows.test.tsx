@@ -111,17 +111,19 @@ describe("gate carries rows (Part 17 §C.4 defect 1)", () => {
 
   it("the verdict's error has all 17 rows", () => {
     const v = assertCcrsBatchSubmittable({ syncIssues: [toGateInput(issue)], verifierProblems: [], files: [] });
-    expect(v.submittable).toBe(false);
-    expect(v.errors[0].rows).toHaveLength(17);
-    expect(v.errors[0].code).toBe("E41_LEDGER_WITHHELD");
+    // R74 S39: withheld lots are left out of the files (held back, still owed);
+    // they no longer block the good records. Every row is still carried.
+    expect(v.submittable).toBe(true);
+    expect(v.held[0].rows).toHaveLength(17);
+    expect(v.held[0].code).toBe("E41_LEDGER_WITHHELD");
   });
 
   it("dedupe merges a duplicate's rows instead of dropping them", () => {
     const a = { ...issue, rows: rows17.slice(0, 10) };
     const b = { ...issue, rows: rows17.slice(5) };
     const v = assertCcrsBatchSubmittable({ syncIssues: [a, b].map(toGateInput), verifierProblems: [], files: [] });
-    expect(v.errors).toHaveLength(1);
-    expect(v.errors[0].rows!.map((r) => r.id)).toEqual(rows17.map((r) => r.id));
+    expect(v.held).toHaveLength(1);
+    expect(v.held[0].rows!.map((r) => r.id)).toEqual(rows17.map((r) => r.id));
   });
 
   it("mergeRows treats same id with a different reason as a different row", () => {
@@ -170,7 +172,7 @@ describe("every withhold reason in ccrs-ledger-core is classified", () => {
   });
   it("an unrecognised reason is 'unclassified', never guessed", () => {
     expect(classifyWithholdReason("a reason nobody wrote yet")).toBe("unclassified");
-    expect(nextStepFor("unclassified", "prod")).toMatch(/do not upload/i);
+    expect(nextStepFor("unclassified", "prod")).toMatch(/held back \(not sent\) until it is understood/i);
   });
 });
 
@@ -213,7 +215,7 @@ describe("real planner output → gate → display", () => {
       verifierProblems: [],
       files: [],
     });
-    const text = issuePlainText(v.errors[0], "prod").join("\n");
+    const text = issuePlainText(v.held[0], "prod").join("\n");
     for (const r of rows) expect(text).toContain(rowLine(r));
     expect(text).toContain("Every row (5):");
     expect(groupRowsByReason(rows, "prod")).toHaveLength(5);

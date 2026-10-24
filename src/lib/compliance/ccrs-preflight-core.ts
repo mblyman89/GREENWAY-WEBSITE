@@ -83,6 +83,7 @@ export const CCRS_ISSUE_CODES = [
   "E53_PROD_LEDGER_NOT_LOADED",
   "E54_CULTIVERA_ID_NOT_BARCODE",
   "E55_INTAKE_LOT_ON_CULTIVERA_RECORD",
+  "E56_EVENT_ROW_LOT_HELD",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -462,6 +463,9 @@ const PINS: Record<CcrsIssueCode, string> = {
   // R74 S25: an intake lot whose id CCRS already holds under a Cultivera-filed
   // product is an Update named by that filed product. Advisory.
   E55_INTAKE_LOT_ON_CULTIVERA_RECORD: "[G L0580-L0583]",
+  // R74 S39: a Sale/Adjustment row naming a lot this batch holds back is held
+  // with it (re-sent once the lot is on file) instead of failing the upload.
+  E56_EVENT_ROW_LOT_HELD: "[G L1302-L1304]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

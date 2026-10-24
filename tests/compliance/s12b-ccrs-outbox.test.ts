@@ -276,6 +276,7 @@ describe("S-12b GWP- Product id assignment (D-01a)", () => {
     expect(fn).toContain('action: "ccrs.product_ids.assigned",');
     expect(fn.indexOf("if (!batch.ledger.view)")).toBeLessThan(fn.indexOf("assignProductIds("));
     expect(PAGE).toContain("<form action={assignProductIdsAction}");
-    expect(STORE).toContain("return checkAssignResult(env, keys, data, preprodRun);");
+    // R74 S39: chunked (PostgREST caps an RPC answer at 1,000 rows); every chunk is checked.
+    expect(STORE).toContain("out.push(...checkAssignResult(env, chunk, data, preprodRun));");
   });
 });

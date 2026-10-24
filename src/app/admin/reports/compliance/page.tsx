@@ -84,6 +84,8 @@ export default async function CompliancePage({
   const batchErrors = verdict?.errors ?? [];
   const batchWarnings = verdict?.warnings ?? [];
   const batchSubmittable = verdict?.submittable ?? false;
+  // R74 S39: held-back records are left out of the files and never block the upload.
+  const batchHeld = verdict?.held ?? [];
 
   // Recent export batches.
   let recentBatches: { file_name: string; record_count: number; created_at: string }[] = [];
@@ -274,6 +276,20 @@ export default async function CompliancePage({
                 ✓ No blocking sync issues detected — every file’s dependencies resolve.
               </div>
             )}
+
+            {batchHeld.length > 0 ? (
+              <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.07] p-4">
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-amber-200">
+                  Held back — not in the files, still owed to CCRS ({verdict?.heldCount ?? 0})
+                </p>
+                <CcrsIssueList
+                  issues={batchHeld}
+                  env="prod"
+                  tone="held"
+                  copyTitle={`CCRS held back — prod — ${range.fromDate} to ${range.toDate}`}
+                />
+              </div>
+            ) : null}
 
             {batchWarnings.length > 0 ? (
               <div className="mb-3 max-h-96 overflow-y-auto rounded-xl border border-orange-500/25 bg-orange-500/[0.05] p-3">

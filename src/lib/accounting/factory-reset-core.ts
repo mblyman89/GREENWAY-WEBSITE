@@ -706,6 +706,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   // (confirmations and error CSVs), read from the submitting mailbox. The
   // database refuses DELETE, so a WIPE rule would make the reset fail part-way.
   { table: "ccrs_mail_messages", disposition: "KEEP", because: "CCRS's own answers (confirmation and error emails) about files the State already received; the database refuses DELETE." },
+  // R74 S39 (0297): records a CCRS batch held back and still owes the State.
+  // A later emission resolves them; a reset must not forget a debt to CCRS.
+  { table: "ccrs_held_sync", disposition: "KEEP", because: "Records still owed to CCRS (held back from an upload until fixed) — a reset must not forget what the State is still owed." },
   { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
   // S-12d (0250): the owner's written reasons for checking off a real State
   // deadline. Evidence for an examiner, not test activity.

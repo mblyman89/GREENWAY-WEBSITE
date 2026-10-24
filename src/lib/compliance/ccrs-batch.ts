@@ -96,6 +96,7 @@ import {
   type TransferLot,
 } from "@/lib/compliance/ccrs-transfer-core";
 import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
+import { csvDataRows, dropEventRowsForHeldLots, heldEventRowsMessage, sendableLotIds } from "@/lib/compliance/ccrs-held-back-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
 import { LINEAGE_MANIFEST_SELECT, type LineageManifestRow } from "@/lib/inventory/import-lineage-core";
@@ -1110,14 +1111,24 @@ export async function buildCcrsBatch(
   const versionId = await getPublishedVersionId(admin);
   let items: MenuItemRow[] = [];
   if (versionId) {
-    const { data } = await admin
-      .from("menu_items")
-      .select(
-        "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total_cbd_json, compounds_json",
-      )
-      .eq("menu_version_id", versionId)
-      .eq("hidden", false);
-    items = (data as MenuItemRow[] | null) ?? [];
+    // R74 S39: PAGED. The bare select hit the PostgREST 1,000-row cap, so a
+    // menu of more than 1,000 visible items lost the rest: PREprod showed
+    // exactly "1000 products" and 2,240 lots "product not in the published
+    // menu" (their items were past row 1,000), and production lots of those
+    // products could not be named either.
+    items = await pagedAll<MenuItemRow>(async (from, to) => {
+      const { data, error } = await admin
+        .from("menu_items")
+        .select(
+          "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total_cbd_json, compounds_json",
+        )
+        .eq("menu_version_id", versionId)
+        .eq("hidden", false)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) throw new Error(`R74 S39: reading the published menu for CCRS failed: ${error.message}`);
+      return (data as MenuItemRow[] | null) ?? [];
+    });
   } else {
     syncIssues.push({
       severity: "warning",
@@ -1377,17 +1388,8 @@ export async function buildCcrsBatch(
   // R6-3: Inventory is pushed AFTER the event files below, because a lot an
   // event row of this batch names is always re-sent (planInventoryDelta).
 
-  // Adjustment + Sale come pre-assembled by their own builders; adopt their CSV.
-  files.push({
-    type: "InventoryAdjustment",
-    group: uploadGroupOf("InventoryAdjustment"),
-    fileName: adj.fileName,
-    csv: adj.csv,
-    recordCount: adj.recordCount,
-    skipped: adj.skipped,
-    warnings: adj.warnings,
-    empty: adj.recordCount === 0,
-  });
+  // Adjustment + Sale come pre-assembled by their own builders; the
+  // Adjustment file is pushed after R74 S39 drops rows whose lot is held.
   // --- InventoryTransfer (R6-2) ----------------------------------------------
   // The retailer is the RECEIVING licensee, so the retailer files it, weekly:
   // "only the receiving licensee is required to submit ... inventory transfer"
@@ -1509,7 +1511,51 @@ export async function buildCcrsBatch(
   }
   const correctionE38 = encode("Sale", corrections.rows);
   const e38WithheldLines = new Set(correctionE38.withheld.map((w) => w.label));
-  const saleRows = [...insertRows, ...correctionE38.rows];
+  // R74 S39: an event row (Sale / Adjustment) whose lot is HELD BACK (not in
+  // this Inventory.csv and not held by CCRS) is left out too, instead of
+  // blocking the whole batch with L_REF_INVENTORY: CCRS would reject that one
+  // row ("Invalid InventoryExternalIdentifier" [G L1302-L1304]) and nothing
+  // else. The row is tracked as owed and goes out when the week is rebuilt
+  // after its lot is fixed (an already-filed sale line is never re-Inserted:
+  // routeSaleInserts / E49).
+  const sendableLots = sendableLotIds(inventory.rows, saleAwareLedger ?? ledger);
+  const heldWhy = new Map<string, string>();
+  for (const l of lots) {
+    const ext = assignedInventoryExternalId(l);
+    const pl = plan.lots.get(l.id);
+    if (ext && pl?.action === "withhold") heldWhy.set(ext, pl.reason);
+  }
+  const saleDrop = dropEventRowsForHeldLots("Sale", [...insertRows, ...correctionE38.rows], sendableLots, heldWhy);
+  const adjDrop = dropEventRowsForHeldLots("InventoryAdjustment", csvDataRows(adj.csv), sendableLots, heldWhy);
+  for (const d of saleDrop.dropped) e38WithheldLines.add(d.id);
+  const saleRows = saleDrop.rows;
+  if (adjDrop.dropped.length > 0) {
+    adj.csv = assembleCcrsFile({ type: "InventoryAdjustment", submittedBy: license.submittedBy, rows: adjDrop.rows });
+    adj.recordCount = adjDrop.rows.length;
+    adj.skipped += adjDrop.dropped.length;
+  }
+  for (const d of [saleDrop, adjDrop]) {
+    if (d.dropped.length === 0) continue;
+    syncIssues.push({
+      severity: "error",
+      file: d.type,
+      code: "E56_EVENT_ROW_LOT_HELD",
+      specPin: specPinFor("E56_EVENT_ROW_LOT_HELD"),
+      count: d.dropped.length,
+      rows: d.dropped,
+      message: heldEventRowsMessage(d.type, d.dropped.length),
+    });
+  }
+  files.push({
+    type: "InventoryAdjustment",
+    group: uploadGroupOf("InventoryAdjustment"),
+    fileName: adj.fileName,
+    csv: adj.csv,
+    recordCount: adj.recordCount,
+    skipped: adj.skipped,
+    warnings: adj.warnings,
+    empty: adj.recordCount === 0,
+  });
   const withheldNotes = [...corrections.withheld, ...saleNotes];
   if (withheldNotes.length > 0 || corrections.invalid.length > 0) {
     const all = [...withheldNotes, ...corrections.invalid];
@@ -1570,15 +1616,10 @@ export async function buildCcrsBatch(
   // --- Sync / data-integrity analysis (flag out-of-sync BEFORE upload) ------
   // S-10: same rule as buildInventoryFile's E3 — an unassigned id is missing,
   // whatever could be minted for it.
-  const lotsMissingId = lots.filter((l) => !assignedInventoryExternalId(l)).length;
-  if (lotsMissingId > 0) {
-    syncIssues.push({
-      severity: "error",
-      file: "Inventory",
-      message: "Inventory lots have no usable CCRS external identifier and cannot be reported.",
-      count: lotsMissingId,
-    });
-  }
+  // R74 S39: the uncoded duplicate of E3 that stood here was removed. It
+  // counted the same lots as buildInventoryFile's coded E3 (which lists each
+  // one and is held back, not blocking) and, having no code, blocked the
+  // whole batch for lots that were already left out.
 
   // S-17b (U-60): lots whose product key has NO product plan, i.e. the product
   // is not a visible item of the published menu, so Product.csv cannot carry
