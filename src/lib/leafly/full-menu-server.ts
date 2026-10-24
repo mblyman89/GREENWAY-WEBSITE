@@ -119,6 +119,11 @@ import { getMedTaxSettings } from "@/lib/medical/store";
 import { applyLeaflySettings } from "@/lib/syndication/apply-settings-core";
 import { hashItems } from "@/lib/syndication/sync-plan-core";
 import { runPreflight, PreflightBlockedError } from "@/lib/syndication/preflight-core";
+import {
+  triagePreflight,
+  preflightFixHint,
+  type PreflightHeldProduct,
+} from "@/lib/syndication/preflight-triage-core";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
 
 /* ========================================================================== */
@@ -234,6 +239,11 @@ export type FullMenuBuild = {
   feedCount: number;
   /** The wire payload after settings and any repair. */
   items: LeaflyItem[];
+  /**
+   * R74 S29: products held back by the SOURCE safety check (no name, a $0
+   * price, a flower size with no weight). Also listed in `withheld`.
+   */
+  preflightHeld: PreflightHeldProduct[];
   plan: FullMenuPlan;
   withheld: FullMenuWithheldProduct[];
   repair: FullMenuRepairSummary | null;
@@ -269,20 +279,29 @@ async function buildFullMenuDecision(input: {
   repair: boolean;
 }): Promise<FullMenuBuild> {
   await refreshLeaflyConfig();
-  const { versionId, items } = await loadSyndicationFeed();
+  const { versionId, items: feedItems } = await loadSyndicationFeed();
 
   // Preflight guards the SOURCE data, exactly as the ordinary sync does.
   //
-  // This still THROWS rather than withholding, and that is deliberate.
-  // Preflight failures are structural problems with the feed itself (a
-  // missing price field, a malformed row) rather than one product failing
-  // Leafly's contract. Withholding cannot fix a broken feed, and pretending
-  // otherwise would send a partial menu built from data we already know is
-  // untrustworthy.
-  const preflight = runPreflight(items);
-  if (!preflight.ok) {
+  // R74 S29. This used to THROW on any preflight error, beside a comment
+  // claiming every preflight failure is "structural ... withholding cannot fix
+  // a broken feed". Reading preflight-core disproved that: only the two
+  // duplicate-id codes are about the feed; the other three (no name, a $0
+  // price, a flower size with no weight) are about ONE product each. The
+  // owner's real menu was refused outright because one product was priced $0
+  // in Cultivera. So:
+  //   - structural (or unrecognised) errors still throw -- unchanged;
+  //   - per-product errors HOLD THAT PRODUCT BACK, named, with the real reason
+  //     and a fix link, through the same plan that holds back products
+  //     Leafly's contract rejects. The product is removed from the feed
+  //     BEFORE the payload is built, so its bad data is never sent.
+  const preflight = runPreflight(feedItems);
+  const feedNameOf = new Map(feedItems.map((i) => [i.id, i.name] as const));
+  const triage = triagePreflight(preflight, "leafly", (id) => feedNameOf.get(id) ?? null);
+  if (!triage.sendableAfterHolding) {
     throw new PreflightBlockedError(preflight);
   }
+  const items = feedItems.filter((i) => !triage.heldIds.has(i.id));
 
   const [settings, medSettings] = await Promise.all([
     getLeaflySyncSettings(),
@@ -317,14 +336,31 @@ async function buildFullMenuDecision(input: {
           clean: repaired.clean,
         };
 
+  // The preflight-held products join the plan as products with errors, so
+  // they are named in `withheld`, excluded from `sendIds`, and COUNTED against
+  // the same 25% ceiling -- a menu where a quarter of the products are priced
+  // $0 is still refused as "too widespread" rather than published gutted.
   const plan = planFullMenuPush({
-    items: wire.map((i) => ({ id: i.id, name: i.name })),
-    issues: validation.issues.map((i) => ({
-      severity: i.severity,
-      code: i.code,
-      itemId: i.itemId,
-      message: i.message,
-    })),
+    items: [
+      ...wire.map((i) => ({ id: i.id, name: i.name })),
+      ...triage.held.map((h) => ({ id: h.itemId, name: h.itemName })),
+    ],
+    issues: [
+      ...validation.issues.map((i) => ({
+        severity: i.severity,
+        code: i.code,
+        itemId: i.itemId,
+        message: i.message,
+      })),
+      ...triage.held.flatMap((h) =>
+        h.entries.map((e) => ({
+          severity: "error" as const,
+          code: e.code,
+          itemId: h.itemId,
+          message: `${e.message} ${preflightFixHint(e.code)}`,
+        })),
+      ),
+    ],
     repair: repairSummary,
   });
 
@@ -334,7 +370,7 @@ async function buildFullMenuDecision(input: {
   // because the wire payload is exactly where the synthetic ids live. Handing
   // the resolver the wire ids would let it confirm a split id as "direct" and
   // reintroduce the 404 this is here to prevent.
-  const knownSourceIds = new Set(items.map((i) => i.id));
+  const knownSourceIds = new Set(feedItems.map((i) => i.id));
 
   const withheld: FullMenuWithheldProduct[] = plan.withheld.map((w) => {
     const link = resolveFixLink(w.itemId, knownSourceIds);
@@ -378,8 +414,9 @@ async function buildFullMenuDecision(input: {
 
   return {
     versionId,
-    feedCount: items.length,
+    feedCount: feedItems.length,
     items: wire,
+    preflightHeld: triage.held,
     plan,
     withheld,
     repair: repairSummary,
