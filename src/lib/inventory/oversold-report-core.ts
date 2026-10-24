@@ -45,7 +45,8 @@
 export const OVERSOLD_MARKER = "OVERSOLD:";
 
 /** Markers that can FOLLOW the oversold section in the same note. */
-const TRAILING_MARKERS = ["UNMATCHED:", "LOT SHORTFALL:"] as const;
+// R74 S31: "SIZE MISMATCH:" (a sold size drew from other sizes' lots) also follows it.
+const TRAILING_MARKERS = ["UNMATCHED:", "LOT SHORTFALL:", "SIZE MISMATCH:"] as const;
 
 /** One product needing a recount, as the report shows it. */
 export type OversoldReportRow = {

@@ -45,6 +45,7 @@ import { spreadCodeValue, type LoyaltySaleLine } from "@/lib/loyalty/loyalty-sal
 import { loadProductCosts } from "@/lib/promotions/discount-engine";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
+import { costForLine } from "@/lib/promotions/size-cost-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
@@ -103,7 +104,8 @@ async function toSaleLines(lines: DeviceLine[]): Promise<LoyaltySaleLine[]> {
     // resolve the identical key either way.
     costMinorUnits: (() => {
       const key = lotKeyForSaleLine({ productId: l.productId, variantId: l.variantId ?? null });
-      return key ? (costs.get(key) ?? null) : null;
+      // R74 S31: the size's own cost (0294 link) first, then the lot/card key.
+      return key ? (costForLine(costs, key, l.variantId ?? null) ?? null) : null;
     })(),
   }));
 }

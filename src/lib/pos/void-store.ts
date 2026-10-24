@@ -40,12 +40,14 @@ import { recordAudit } from "@/lib/auth/audit";
 import { setOrderStatus } from "@/lib/orders/orders-store";
 import { getAccountByCustomer, adjustPoints } from "@/lib/loyalty/loyalty-store";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
-import { statusForLevelTotal } from "@/lib/inventory/sale-decrement-core";
+import { statusForLevelTotal, pickRestockLot } from "@/lib/inventory/sale-decrement-core";
 // GW-011/GW-012: DB-latched restock marker + atomic quantity deltas.
 import { isUniqueViolation } from "@/lib/db/rpc-fallback-core";
 import { applyLotDelta, applyVariantDelta } from "@/lib/inventory/atomic-quantity";
 // Mastering Slice 1: restock lands on the variant's own lot (variant-first key).
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
+// R74 S31: a void restocks the lot of the size that was sold (pickRestockLot).
+import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
 import { receiptLookupSuffix, clientUuidMatchesReceipt } from "@/lib/pos/returns-core";
 import { receiptNumber } from "@/lib/pos/receipt-core";
 import { pacificToday, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -273,14 +275,27 @@ async function restockInventoryForVoid(
     // THAT size's lot (single-lot cards resolve identically to product_id).
     const restockKey = lotKeyForSaleLine(line);
     if (!restockKey) continue;
-    const { data: lotRows } = await admin
-      .from("inventory_lots")
-      .select("id, on_hand_qty, status")
-      .eq("pos_product_key", restockKey)
-      .neq("status", "quarantine")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const lot = ((lotRows as { id: string; on_hand_qty: number; status: string }[] | null) ?? [])[0];
+    // R74 S31: read the key's lots newest first WITH their size link (0294)
+    // and put the units back on a lot of the sold size (pickRestockLot).
+    // Before 0294 the read retries without it (the pre-S31 newest lot).
+    const readLots = (cols: string) =>
+      admin
+        .from("inventory_lots")
+        .select(cols)
+        .eq("pos_product_key", restockKey)
+        .neq("status", "quarantine")
+        .order("created_at", { ascending: false })
+        .limit(50);
+    let lotRead = await readLots("id, on_hand_qty, status, menu_source_variant_id");
+    if (lotRead.error && isMissingSizeLinkColumnError(lotRead.error)) lotRead = await readLots("id, on_hand_qty, status");
+    if (lotRead.error) {
+      notes.push(`lot read FAILED for ${line.productName} (${lotRead.error.message}) — restock it manually`);
+      continue;
+    }
+    const candidates = ((lotRead.data as unknown as { id: string; on_hand_qty: number; status: string; menu_source_variant_id?: string | null }[] | null) ?? []).map(
+      (r) => ({ ...r, sizeId: r.menu_source_variant_id ?? null }),
+    );
+    const lot = pickRestockLot(candidates, line.variantId);
     if (!lot) {
       notes.push(`lot MISSING for ${line.productName} — restock it manually`);
       continue;

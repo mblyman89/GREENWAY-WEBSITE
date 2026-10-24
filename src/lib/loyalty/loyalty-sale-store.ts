@@ -27,6 +27,7 @@ import { computeOrderTotals } from "@/lib/orders/order-pricing-core";
 import { loadProductCosts } from "@/lib/promotions/discount-engine";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
+import { costForLine } from "@/lib/promotions/size-cost-core";
 import {
   applyTierPricing,
   spreadCodeValue,
@@ -91,7 +92,8 @@ function toSaleLines(
       // Mastering Slice 1: the variant's own lot cost wins; single-lot cards
       // resolve the identical key either way.
       const key = lotKeyForSaleLine({ productId: l.product_id, variantId: l.variant_id });
-      return key ? (costs.get(key) ?? null) : null;
+      // R74 S31: the size's own cost (0294 link) first, then the lot/card key.
+      return key ? (costForLine(costs, key, l.variant_id) ?? null) : null;
     })(),
   }));
 }

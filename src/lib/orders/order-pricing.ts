@@ -28,6 +28,7 @@ import { loadLiveMenuAll } from "@/lib/pos/live-menu";
 import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 // Mastering Slice 1: intake variants encode their own lot key.
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+import { costForLine } from "@/lib/promotions/size-cost-core";
 import {
   computePromotions,
   lineCostFloor,
@@ -215,9 +216,10 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       // Mastering Slice 1: the variant's own lot cost wins (each size on a
       // mastered card has its own acquisition cost); single-lot cards
       // resolve the identical key either way.
+      // R74 S31: then the SIZE's own cost (lot size link, 0294), then the card.
       costMinorUnits:
         (variantLotKey ? productCosts.get(variantLotKey) : undefined) ??
-        productCosts.get(item.id) ??
+        costForLine(productCosts, item.id, w.resolved.variant.id) ??
         null,
     };
   });

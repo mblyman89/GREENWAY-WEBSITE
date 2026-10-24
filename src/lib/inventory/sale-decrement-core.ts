@@ -112,6 +112,13 @@ export type LotForDecrement = {
    * lines can be stamped for a precise "line"-source CCRS Sale.csv.
    */
   ccrsExternalId?: string | null;
+  /**
+   * R74 S30/S31: inventory_lots.menu_source_variant_id, the menu SIZE this lot
+   * sells as (migration 0294). Optional; absent/null = not linked. A sold line
+   * of size V draws first from lots linked to V, then from unlinked lots, and
+   * NEVER from a lot linked to a different size.
+   */
+  sizeId?: string | null;
 };
 
 export type LotDecrementPlan = {
@@ -126,6 +133,22 @@ export type LotDecrementPlan = {
   lineExternalIds: Map<string, string>;
   /** Human notes: demand that exceeded ALL active lots for a product key. */
   shortfalls: string[];
+  /**
+   * R74 S31: order_lines.id -> CCRS id of the FIRST lot that line's own size
+   * group consumed (two sizes of one card stamp different ids). Optional so
+   * older literal plans keep working.
+   */
+  lineExternalIdsByLine?: Map<string, string>;
+  /**
+   * R74 S31: per size group, which lots it drew from (delta < 0) under a draw
+   * key, plus order_lines.id -> that draw key. The COGS replan costs each
+   * line from ITS size's lots. With no size links the draw key is the lot key
+   * and the draws equal lotUpdates (pre-S31 behaviour).
+   */
+  groupDraws?: { id: string; posProductKey: string; delta: number }[];
+  lineDrawKeys?: Map<string, string>;
+  /** R74 S31: a sold size no lot is linked to drew from the card's lots by age (noted, not hidden). */
+  sizeNotes?: string[];
 };
 
 export type InventoryStatusSlug = "in-stock" | "low-stock" | "unavailable";
@@ -255,43 +278,128 @@ export function buildLotDecrementPlan(
   // present (mastered cards carry one lot per size variant), else the line's
   // product_id snapshot (single-lot cards: the two keys coincide, so this is
   // byte-for-byte the pre-mastering behaviour). See variant-lot-core.ts.
-  const demand = new Map<string, number>();
+  //
+  // R74 S31: within one key, lines are grouped by their SIZE (variantId) when
+  // any lot of that key is size-linked (0294). A key with no linked lot keeps
+  // the exact pre-S31 single-group FIFO.
+  const sizedKeys = new Set<string>();
+  for (const lot of lotsFifo) {
+    if (lot && (lot.sizeId ?? "").trim()) sizedKeys.add(lot.posProductKey);
+  }
+  type Group = { key: string; size: string | null; qty: number; lineIds: string[] };
+  const groups = new Map<string, Group>();
+  const lineDrawKeys = new Map<string, string>();
   for (const line of lines) {
     const key = lotKeyForSaleLine(line);
     if (!key) continue;
     const qty = Math.max(0, Math.trunc(Number(line.quantity) || 0));
     if (qty <= 0) continue;
-    demand.set(key, (demand.get(key) ?? 0) + qty);
+    const size = sizedKeys.has(key) ? (line.variantId ?? "").trim() || null : null;
+    const gk = size ? `${key}\u0000${size}` : key;
+    const g = groups.get(gk) ?? { key, size, qty: 0, lineIds: [] };
+    g.qty += qty;
+    g.lineIds.push(line.lineId);
+    groups.set(gk, g);
+    lineDrawKeys.set(line.lineId, gk);
   }
 
-  const lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean; delta: number }[] = [];
+  const remaining = new Map<string, number>();
+  for (const lot of lotsFifo) remaining.set(lot.id, Math.max(0, Math.trunc(Number(lot.onHandQty) || 0)));
+  const takenByLot = new Map<string, number>();
   const lineExternalIds = new Map<string, string>();
+  const lineExternalIdsByLine = new Map<string, string>();
+  const groupDraws: { id: string; posProductKey: string; delta: number }[] = [];
   const shortfalls: string[] = [];
+  const sizeNotes: string[] = [];
 
-  for (const [key, qtyNeeded] of demand) {
-    let remaining = qtyNeeded;
-    for (const lot of lotsFifo) {
-      if (remaining <= 0) break;
-      if (lot.posProductKey !== key) continue;
-      const onHand = Math.max(0, Math.trunc(Number(lot.onHandQty) || 0));
+  const drawFrom = (gk: string, g: Group, pool: LotForDecrement[], need: number): number => {
+    let left = need;
+    for (const lot of pool) {
+      if (left <= 0) break;
+      const onHand = remaining.get(lot.id) ?? 0;
       if (onHand <= 0) continue;
-      const take = Math.min(onHand, remaining);
-      remaining -= take;
-      const newOnHand = onHand - take;
-      lotUpdates.push({ id: lot.id, posProductKey: key, newOnHand, soldOut: newOnHand === 0, delta: -take });
+      const take = Math.min(onHand, left);
+      left -= take;
+      remaining.set(lot.id, onHand - take);
+      takenByLot.set(lot.id, (takenByLot.get(lot.id) ?? 0) + take);
+      groupDraws.push({ id: lot.id, posProductKey: gk, delta: -take });
       // POS B20: the FIRST (oldest) consumed lot's canonical CCRS id stamps
-      // the sale lines for this product key — matching the FIFO consumption.
+      // the sale lines (per key; S31 also per line, so each size is exact).
       const extId = (lot.ccrsExternalId ?? "").trim();
-      if (extId && !lineExternalIds.has(key)) lineExternalIds.set(key, extId);
+      if (extId) {
+        if (!lineExternalIds.has(g.key)) lineExternalIds.set(g.key, extId);
+        for (const id of g.lineIds) if (!lineExternalIdsByLine.has(id)) lineExternalIdsByLine.set(id, extId);
+      }
     }
-    if (remaining > 0) {
+    return left;
+  };
+
+  for (const [gk, g] of groups) {
+    const ofKey = lotsFifo.filter((l) => l.posProductKey === g.key);
+    let left: number;
+    if (!sizedKeys.has(g.key)) {
+      left = drawFrom(gk, g, ofKey, g.qty);
+    } else {
+      const linkedSizes = new Set(ofKey.map((l) => (l.sizeId ?? "").trim()).filter(Boolean));
+      const unlinked = ofKey.filter((l) => !(l.sizeId ?? "").trim());
+      if (g.size && linkedSizes.has(g.size)) {
+        // Its own size first, then lots nobody has placed yet; never another size.
+        left = drawFrom(gk, g, ofKey.filter((l) => (l.sizeId ?? "").trim() === g.size), g.qty);
+        left = drawFrom(gk, g, unlinked, left);
+      } else {
+        // A size no lot is linked to (or a line with no size): unlinked lots
+        // first, then the card's lots by age, and say so (never silent).
+        left = drawFrom(gk, g, unlinked, g.qty);
+        if (left > 0) {
+          const before = left;
+          left = drawFrom(gk, g, ofKey, left);
+          if (left < before) {
+            sizeNotes.push(
+              `Product key ${g.key}: ${before - left} unit(s) of a size no lot is linked to (${g.size ?? "no size on the line"}) came from the oldest lots of other sizes. Check those lots' sizes on their lot pages.`,
+            );
+          }
+        }
+      }
+    }
+    if (left > 0) {
       shortfalls.push(
-        `Product key ${key}: ${remaining} unit(s) had no active lot to consume (lots exhausted or never intaken).`,
+        `Product key ${g.key}: ${left} unit(s) had no active lot to consume (lots exhausted or never intaken).`,
       );
     }
   }
 
-  return { lotUpdates, lineExternalIds, shortfalls };
+  const lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean; delta: number }[] = [];
+  for (const lot of lotsFifo) {
+    const take = takenByLot.get(lot.id);
+    if (!take) continue;
+    if (lotUpdates.some((u) => u.id === lot.id)) continue;
+    const onHand = Math.max(0, Math.trunc(Number(lot.onHandQty) || 0));
+    const newOnHand = onHand - take;
+    lotUpdates.push({ id: lot.id, posProductKey: lot.posProductKey, newOnHand, soldOut: newOnHand === 0, delta: -take });
+  }
+
+  return { lotUpdates, lineExternalIds, shortfalls, lineExternalIdsByLine, groupDraws, lineDrawKeys, sizeNotes };
+}
+
+/**
+ * R74 S31: which lot a VOID puts a line's units back on. Candidates are the
+ * key's non-quarantine lots NEWEST first (the returns desk convention). A
+ * lot linked to the sold size wins; else an unlinked lot; else (a size no lot
+ * is linked to) the newest lot. Never a lot of another size while a lot of
+ * the right size or an unplaced lot exists.
+ */
+export function pickRestockLot<T extends { id: string; sizeId?: string | null }>(
+  newestFirst: readonly T[],
+  soldSize: string | null | undefined,
+): T | null {
+  const size = (soldSize ?? "").trim();
+  const sized = newestFirst.some((l) => (l.sizeId ?? "").trim());
+  if (!sized) return newestFirst[0] ?? null;
+  if (size) {
+    const same = newestFirst.find((l) => (l.sizeId ?? "").trim() === size);
+    if (same) return same;
+  }
+  return newestFirst.find((l) => !(l.sizeId ?? "").trim()) ?? newestFirst[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +420,7 @@ export function summarizeDecrement(opts: {
   if (opts.variantPlan.oversold.length) parts.push(`OVERSOLD: ${opts.variantPlan.oversold.join(" ")}`);
   if (opts.variantPlan.unmatched.length) parts.push(`UNMATCHED: ${opts.variantPlan.unmatched.join(" ")}`);
   if (opts.lotPlan.shortfalls.length) parts.push(`LOT SHORTFALL: ${opts.lotPlan.shortfalls.join(" ")}`);
+  if (opts.lotPlan.sizeNotes?.length) parts.push(`SIZE MISMATCH: ${opts.lotPlan.sizeNotes.join(" ")}`);
   return parts.join(" ");
 }
 
@@ -512,4 +621,96 @@ export function __runSaleDecrementCoreTests(): void {
 
   if (fail > 0) throw new Error(`sale-decrement-core: ${fail} failure(s)`);
   console.log(`sale-decrement-core: ${pass} assertions passed`);
+}
+
+/** R74 S31: a sale draws from the lots of the size it sold (0294 size link). */
+export function __runSaleSizeDrawTests(): { passed: number; failed: number } {
+  let passed = 0;
+  let failed = 0;
+  const ok = (c: boolean, m: string) => {
+    if (c) passed += 1;
+    else {
+      failed += 1;
+      console.error(`sale-decrement-core size-draw self-test failed: ${m}`);
+    }
+  };
+  const L = (lineId: string, variantId: string | null, quantity: number, productId = "card") => ({
+    lineId,
+    productId,
+    variantId,
+    productName: `P ${lineId}`,
+    quantity,
+  });
+  // Oldest first: an old 3.5g lot, a 1g lot, an unplaced lot, a newer 3.5g lot.
+  const lots: LotForDecrement[] = [
+    { id: "old-35", posProductKey: "card", onHandQty: 2, ccrsExternalId: "C-OLD35", sizeId: "card-35" },
+    { id: "g1", posProductKey: "card", onHandQty: 5, ccrsExternalId: "C-1G", sizeId: "card-1g" },
+    { id: "free", posProductKey: "card", onHandQty: 3, ccrsExternalId: "C-FREE", sizeId: null },
+    { id: "new-35", posProductKey: "card", onHandQty: 4, ccrsExternalId: "C-NEW35", sizeId: "card-35" },
+  ];
+
+  // 1g sold: only the 1g lot, never the older 3.5g lot.
+  const p1 = buildLotDecrementPlan([L("a", "card-1g", 2)], lots);
+  ok(p1.lotUpdates.length === 1 && p1.lotUpdates[0].id === "g1" && p1.lotUpdates[0].delta === -2, "1g sale draws only the 1g lot");
+  ok(p1.lineExternalIdsByLine?.get("a") === "C-1G", "the 1g line stamps the 1g lot's CCRS id");
+  ok(p1.shortfalls.length === 0 && (p1.sizeNotes ?? []).length === 0, "clean draw: no shortfall, no size note");
+
+  // 3.5g sold: FIFO within its own size (old then new).
+  const p2 = buildLotDecrementPlan([L("b", "card-35", 5)], lots);
+  ok(
+    p2.lotUpdates.map((u) => `${u.id}:${u.delta}`).join() === "old-35:-2,new-35:-3",
+    "3.5g sale: FIFO within its size only",
+  );
+
+  // Own size runs out -> unplaced lots next -> never the other size.
+  const p3 = buildLotDecrementPlan([L("c", "card-1g", 9)], lots);
+  ok(p3.lotUpdates.map((u) => `${u.id}:${u.delta}`).join() === "g1:-5,free:-3", "own size, then the unplaced lot");
+  ok(!p3.lotUpdates.some((u) => u.id === "old-35" || u.id === "new-35"), "never another size's lot");
+  ok(p3.shortfalls.length === 1 && p3.shortfalls[0].includes("1 unit(s)"), "the rest is a loud shortfall");
+
+  // Two sizes on one order: each from its own lots, ids stamped per line.
+  const p4 = buildLotDecrementPlan([L("d", "card-1g", 1), L("e", "card-35", 1)], lots);
+  ok(p4.lineExternalIdsByLine?.get("d") === "C-1G" && p4.lineExternalIdsByLine?.get("e") === "C-OLD35", "two sizes stamp two different CCRS ids");
+  ok(p4.lineDrawKeys?.get("d") !== p4.lineDrawKeys?.get("e"), "two sizes cost from two different draw groups");
+  ok(
+    (p4.groupDraws ?? []).find((g) => g.id === "g1")?.posProductKey === p4.lineDrawKeys?.get("d") &&
+      (p4.groupDraws ?? []).find((g) => g.id === "old-35")?.posProductKey === p4.lineDrawKeys?.get("e"),
+    "each group draw is keyed by its own line group",
+  );
+
+  // A size no lot is linked to: unplaced first, then oldest of any size, noted.
+  const p5 = buildLotDecrementPlan([L("f", "card-7g", 5)], lots);
+  ok(p5.lotUpdates.map((u) => `${u.id}:${u.delta}`).join() === "old-35:-2,free:-3", "unknown size: unplaced lot, then oldest lot");
+  ok((p5.sizeNotes ?? []).length === 1 && /2 unit\(s\) of a size no lot is linked to/.test((p5.sizeNotes ?? [])[0]), "the cross-size draw is noted with its count");
+  const sum = summarizeDecrement({
+    variantPlan: { variantUpdates: [], itemStatusUpdates: [], oversold: [], unmatched: [] } as unknown as VariantDecrementPlan,
+    lotPlan: p5,
+    lineCount: 1,
+  });
+  ok(sum.includes("SIZE MISMATCH:"), "the order note carries the SIZE MISMATCH section");
+
+  // Same lot hit by two groups -> ONE lot update with the summed delta.
+  const shared: LotForDecrement[] = [{ id: "only", posProductKey: "card", onHandQty: 10, sizeId: null }, { id: "x", posProductKey: "card", onHandQty: 1, sizeId: "card-x" }];
+  const p6 = buildLotDecrementPlan([L("g", "card-1g", 2), L("h", "card-35", 3)], shared);
+  ok(p6.lotUpdates.length === 1 && p6.lotUpdates[0].id === "only" && p6.lotUpdates[0].delta === -5 && p6.lotUpdates[0].newOnHand === 5, "one write per lot, deltas summed");
+  ok((p6.groupDraws ?? []).length === 2, "but two group draws for the cost of each size");
+
+  // No size links on the key: byte-for-byte pre-S31 (one group, key-keyed draws).
+  const plain: LotForDecrement[] = [{ id: "p1", posProductKey: "card", onHandQty: 2 }, { id: "p2", posProductKey: "card", onHandQty: 5 }];
+  const p7 = buildLotDecrementPlan([L("i", "card-1g", 1), L("j", "card-35", 2)], plain);
+  ok(p7.lotUpdates.map((u) => `${u.id}:${u.delta}`).join() === "p1:-2,p2:-1", "unlinked card: one FIFO across sizes (unchanged)");
+  ok((p7.groupDraws ?? []).every((g) => g.posProductKey === "card") && p7.lineDrawKeys?.get("i") === "card", "unlinked card: draw key = lot key (books unchanged)");
+
+  // Restock (void) lot choice, newest first.
+  const newest = [
+    { id: "n35", sizeId: "card-35" },
+    { id: "nfree", sizeId: null },
+    { id: "n1", sizeId: "card-1g" },
+  ];
+  ok(pickRestockLot(newest, "card-1g")?.id === "n1", "void puts a 1g back on a 1g lot");
+  ok(pickRestockLot(newest, "card-7g")?.id === "nfree", "void of an unlinked size goes to an unplaced lot");
+  ok(pickRestockLot([{ id: "a", sizeId: "card-35" }], "card-7g")?.id === "a", "no unplaced lot: newest lot (noted by the caller)");
+  ok(pickRestockLot([{ id: "a" }, { id: "b" }], "card-1g")?.id === "a", "no links: the newest lot (pre-S31)");
+  ok(pickRestockLot([], "x") === null, "no lot: null (the caller says restock manually)");
+  return { passed, failed };
 }
