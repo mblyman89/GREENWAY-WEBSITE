@@ -426,7 +426,7 @@ describe("R37 S6 action + page wiring", () => {
     expect(src).toContain("const facts = factsByDraft.get(d.id) ?? null;");
     expect(src).toMatch(/missing: f \? f\.missing\.filter\(\(m\) => \(HARVEST_FIELDS as readonly string\[\]\)\.includes\(m\)\) : null/);
     // history read only where the bar shows
-    expect(src).toMatch(/batchLookupOn && focus\.manifestId && drafts\.length > 0\s*\? await loadDeliveryLookupHistory/);
+    expect(src).toMatch(/earlyBatchOn && focus\.manifestId && drafts\.length > 0\s*\? loadDeliveryLookupHistory/);
   });
 
   it("the history reader never uses .limit() and is server-only", () => {

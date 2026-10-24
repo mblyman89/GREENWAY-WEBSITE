@@ -19,6 +19,7 @@ import {
   DEFAULT_TARGET_DATE,
   batchEtaMin,
   daysUntil,
+  ledgerBasis,
   fmtCents,
   fmtMinutes,
   planBatches,
@@ -310,12 +311,13 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
           <div className="grid gap-5 xl:grid-cols-2">
             <section className="rounded-[var(--admin-radius-md,8px)] border border-[var(--admin-border)]">
               <h2 className="border-b border-[var(--admin-border)] p-3 text-base font-bold">Cost ledger by vendor</h2>
+              <p className="px-3 pt-2 text-xs text-[var(--admin-text-muted)]">Exact = priced from Google&apos;s own token and search counts for each product (Batch prices). "est." = live lookups or older rows, priced at the average per product.</p>
               <div className="max-h-[26rem] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-[var(--admin-surface)]"><tr><th className={th}>Vendor</th><th className={th}>Lots</th><th className={th}>Paid questions</th><th className={th}>Answered</th><th className={th}>Failed</th><th className={th}>Est. cost</th></tr></thead>
+                  <thead className="sticky top-0 bg-[var(--admin-surface)]"><tr><th className={th}>Vendor</th><th className={th}>Lots</th><th className={th}>Paid questions</th><th className={th}>Answered</th><th className={th}>Failed</th><th className={th}>Cost</th></tr></thead>
                   <tbody>
                     {c.ledgerVendor.map((r) => (
-                      <tr key={r.key} className="border-t border-[var(--admin-border)]"><td className={td}>{r.label}</td><td className={td}>{r.items}</td><td className={td}>{r.families}</td><td className={td}>{r.answered}</td><td className={td}>{r.failed}</td><td className={td}>{fmtCents(r.cents)}</td></tr>
+                      <tr key={r.key} className="border-t border-[var(--admin-border)]"><td className={td}>{r.label}</td><td className={td}>{r.items}</td><td className={td}>{r.families}</td><td className={td}>{r.answered}</td><td className={td}>{r.failed}</td><td className={td}>{fmtCents(r.cents)}{ledgerBasis(r) !== "exact" && <span className="ml-1 text-xs text-[var(--admin-text-muted)]">{ledgerBasis(r) === "mixed" ? "part est." : "est."}</span>}</td></tr>
                     ))}
                     {c.ledgerVendor.length === 0 && <tr><td className={td} colSpan={6}>No lookups yet.</td></tr>}
                   </tbody>
@@ -326,10 +328,10 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
               <h2 className="border-b border-[var(--admin-border)] p-3 text-base font-bold">Cost ledger by manifest</h2>
               <div className="max-h-[26rem] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-[var(--admin-surface)]"><tr><th className={th}>Manifest</th><th className={th}>Lots</th><th className={th}>Paid questions</th><th className={th}>Answered</th><th className={th}>Est. cost</th></tr></thead>
+                  <thead className="sticky top-0 bg-[var(--admin-surface)]"><tr><th className={th}>Manifest</th><th className={th}>Lots</th><th className={th}>Paid questions</th><th className={th}>Answered</th><th className={th}>Cost</th></tr></thead>
                   <tbody>
                     {c.ledgerJob.map((r) => (
-                      <tr key={r.key} className="border-t border-[var(--admin-border)]"><td className={td}>{r.label}</td><td className={td}>{r.items}</td><td className={td}>{r.families}</td><td className={td}>{r.answered}</td><td className={td}>{fmtCents(r.cents)}</td></tr>
+                      <tr key={r.key} className="border-t border-[var(--admin-border)]"><td className={td}>{r.label}</td><td className={td}>{r.items}</td><td className={td}>{r.families}</td><td className={td}>{r.answered}</td><td className={td}>{fmtCents(r.cents)}{ledgerBasis(r) !== "exact" && <span className="ml-1 text-xs text-[var(--admin-text-muted)]">{ledgerBasis(r) === "mixed" ? "part est." : "est."}</span>}</td></tr>
                     ))}
                   </tbody>
                 </table>

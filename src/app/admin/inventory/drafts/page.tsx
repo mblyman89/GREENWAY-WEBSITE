@@ -332,7 +332,10 @@ export default async function CatalogDraftsPage({
   // re-derives the rule at approval either way.
   const [rebuiltIds, cvSection] = await Promise.all([
     loadRebuiltManifestIds([...drafts.map((d) => d.manifest_id), focus.manifestId]),
-    focus.draftId ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
+    // R74 S37 (speed): the collapsed list of every Cultivera manifest is not
+    // read while working ONE delivery (it re-read every lot of 25 manifests
+    // on each page load and auto-refresh); it shows on the overview.
+    focus.draftId || (focus.manifestId && !sp.cv_page) ? Promise.resolve(null) : loadCultiveraManifestSection(parseCultiveraPage(sp.cv_page)),
   ]);
   // R74 S11: Cultivera manifests by vendor. Loaded only when asked for (a
   // vendor link, "Show vendors", or a by-vendor button's result), so the
@@ -446,6 +449,19 @@ export default async function CatalogDraftsPage({
   // S02: the same published-menu read also says which keys are LIVE cards,
   // so Enrich now can open the product itself (no extra query).
   const { resolutions, liveKeys } = await resolveP;
+  // R74 S37 (speed): the delivery's search history needs only the rows and
+  // their categories, so it starts here and runs beside the reads below.
+  const lookupHistoryP = early(() =>
+    earlyBatchOn && focus.manifestId && drafts.length > 0
+      ? loadDeliveryLookupHistory(
+          focus.manifestId,
+          drafts.map((d, i) => ({
+            draftId: d.id,
+            keys: [identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, identityForDraft(d).identityKey, d.identity_key ?? ""],
+          })),
+        )
+      : null,
+  );
   const assessments = new Map<string, DraftClassificationAssessment>();
   // SLICE 18-0: the COMPLIANCE assessment - does this product need somebody to
   // answer the suppository question before it can go on the shelf? Computed
@@ -718,16 +734,7 @@ export default async function CatalogDraftsPage({
   // paying for (lookup-history-core: completeness of the web-fillable facts
   // + a 90-day refresh cadence). Only where the search bar shows (one
   // delivery, Needs review). Never throws; an incomplete read is said.
-  const lookupHistory =
-    batchLookupOn && focus.manifestId && drafts.length > 0
-      ? await loadDeliveryLookupHistory(
-          focus.manifestId,
-          drafts.map((d, i) => ({
-            draftId: d.id,
-            keys: [identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, identityForDraft(d).identityKey, d.identity_key ?? ""],
-          })),
-        )
-      : null;
+  const lookupHistory = batchLookupOn && focus.manifestId && drafts.length > 0 ? await lookupHistoryP : null;
   const harvest =
     lookupHistory && lookupHistory.ok
       ? summarizeDeliveryHarvest(
