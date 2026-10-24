@@ -13,7 +13,7 @@ import { geminiApiKey } from "@/lib/ai/provider";
 import { readBatchControl } from "@/lib/ai/batch-control-server";
 import { AI_BATCH_MAX_INFLIGHT_ENV, AI_LOOKUP_ENGINE_ENV, BATCH_MAX_FAMILIES, batchMaxInflight, lookupEngine, productFamilyKey } from "@/lib/ai/gemini-batch-core";
 import { AI_BATCH_THINKING_LEVEL_ENV, batchThinkingLevel } from "@/lib/catalog/lookup-job-core";
-import { OPEN_CONTROL, addLedger, isRateLimitFailure, measurePace, type BatchControl, type BatchRowLite, type LedgerRow, type Pace, type PlanManifest } from "@/lib/ai/batch-console-core";
+import { OPEN_CONTROL, addLedger, itemLedgerCents, isRateLimitFailure, measurePace, type BatchControl, type BatchRowLite, type LedgerRow, type Pace, type PlanManifest } from "@/lib/ai/batch-console-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 const PAGE = 1000;
@@ -100,7 +100,7 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
     const admin = createSupabaseAdminClient();
     const since = new Date(Date.now() - DAYS * 86_400_000).toISOString();
     const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const [control, batchesRes, jobsRes, drafts, usage] = await Promise.all([
+    const [control, batchesRes, jobsRes, drafts, usage, costProbe] = await Promise.all([
       readBatchControl(admin),
       admin
         .from("ai_batches")
@@ -112,18 +112,21 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
         admin.from("catalog_product_drafts").select("id, manifest_id, name, brand_name, vendor_name, category").eq("status", "draft").not("manifest_id", "is", null).order("id").range(a, b),
       ),
       paged<{ total_tokens: number | null }>((a, b) => admin.from("ai_usage").select("total_tokens").like("feature", "inventory.product_lookup%").neq("feature", "inventory.product_lookup.batch").gte("created_at", since30).order("created_at").range(a, b)),
+      // R74 S37: is 0296 (per-product cost) applied? Without it the ledger estimates.
+      admin.from("lookup_job_items").select("cost_cents").limit(1),
     ]);
+    const hasCost = !costProbe.error;
     if (batchesRes.error && /ai_batches/.test(String(batchesRes.error.message))) return { ...base, control, error: "Migration 0295 (ai_batches) is not applied yet." };
     const batches = ((batchesRes.data as BatchRow[] | null) ?? []).map((b) => ({ ...b, cost_cents: Number(b.cost_cents ?? 0) }));
     const jobs0 = (jobsRes.data as { id: string; manifest_id: string; status: string; total: number; done: number; created_at: string; started_at: string | null; finished_at: string | null }[] | null) ?? [];
     const jobIds = jobs0.map((j) => j.id);
 
     // One pass over the products of recent jobs.
-    type Item = { id: string; job_id: string; draft_id: string; status: string; ai_calls: number | null; error: string | null; finished_at: string | null; updated_at: string };
+    type Item = { id: string; job_id: string; draft_id: string; status: string; ai_calls: number | null; error: string | null; finished_at: string | null; updated_at: string; cost_cents?: unknown };
     const items: Item[] = [];
     const chunks: string[][] = [];
     for (let i = 0; i < jobIds.length; i += 100) chunks.push(jobIds.slice(i, i + 100));
-    const parts = await Promise.all(chunks.map((c) => paged<Item>((a, b) => admin.from("lookup_job_items").select("id, job_id, draft_id, status, ai_calls, error, finished_at, updated_at").in("job_id", c).order("id").range(a, b))));
+    const parts = await Promise.all(chunks.map((c) => paged<Item>((a, b) => admin.from("lookup_job_items").select(`id, job_id, draft_id, status, ai_calls, error, finished_at, updated_at${hasCost ? ", cost_cents" : ""}`).in("job_id", c).order("id").range(a, b))));
     for (const p of parts) items.push(...p);
 
     const manifestIds = [...new Set([...jobs0.map((j) => j.manifest_id), ...drafts.map((d) => d.manifest_id as string)])];
@@ -152,7 +155,8 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
       if (k === "done" || k === "queued" || k === "running") handled.add(it.draft_id);
       if (k === "failed") failures.push({ itemId: it.id, jobId: j.id, draftId: it.draft_id, label: j.label, vendor: j.vendor, error: it.error ?? "", at: it.finished_at ?? it.updated_at, rateLimited: isRateLimitFailure(it.error) });
       if ((k === "done" || k === "failed" || k === "canceled") && it.finished_at) activity.push({ at: it.finished_at, kind: k, text: `${j.vendor} \u00b7 ${j.label}${k === "failed" ? ` \u00b7 ${String(it.error ?? "").slice(0, 90)}` : ""}` });
-      const add = { items: 1, families: it.ai_calls ?? 0, answered: k === "done" ? 1 : 0, failed: k === "failed" ? 1 : 0, cents: (it.ai_calls ?? 0) * pace.centsPerFamily };
+      const cost = itemLedgerCents(it.cost_cents, it.ai_calls ?? 0, pace.centsPerFamily);
+      const add = { items: 1, families: it.ai_calls ?? 0, answered: k === "done" ? 1 : 0, failed: k === "failed" ? 1 : 0, cents: cost.cents, measured: cost.measured };
       addLedger(ledgerJob, j.id, `${j.vendor} \u00b7 ${j.label}`, add);
       addLedger(ledgerVendor, j.vendor, j.vendor, add);
     }

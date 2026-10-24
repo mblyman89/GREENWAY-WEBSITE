@@ -200,16 +200,33 @@ export function scheduleVendors(vs: readonly VendorLoad[], perDay: number, start
 
 // ─── Re-run, ledger ──────────────────────────────────────────────────────
 
+/**
+ * R74 S37: one product's ledger cost. Measured (0296 cost_cents) when the
+ * batch ingest priced it; otherwise its paid calls x the average per product.
+ */
+export function itemLedgerCents(costCents: unknown, paidCalls: number, centsPerFamily: number): { cents: number; measured: number } {
+  const c = costCents === null || costCents === undefined || costCents === "" ? NaN : Number(costCents);
+  if (Number.isFinite(c) && c >= 0) return { cents: c, measured: c };
+  return { cents: Math.max(0, paidCalls) * centsPerFamily, measured: 0 };
+}
+
+/** "exact", "partly estimated" or "estimated" for a ledger line. */
+export function ledgerBasis(r: Pick<LedgerRow, "cents" | "measured">): "exact" | "mixed" | "estimate" {
+  if (r.cents <= 0 || r.measured >= r.cents - 1e-9) return "exact";
+  return r.measured > 0 ? "mixed" : "estimate";
+}
+
 /** A failure the 429 / spend-limit storm caused (safe to run again). */
 export function isRateLimitFailure(error: string | null | undefined): boolean {
   const e = String(error ?? "").toLowerCase();
   return /\b429\b|resource_exhausted|rate.?limit|spend-per-10-minutes|quota|too many requests/.test(e);
 }
 
-export type LedgerRow = { key: string; label: string; batches: number; families: number; items: number; answered: number; failed: number; searches: number; cents: number };
+/** cents = measured + estimated; `measured` = the part Google's own usage numbers priced (R74 S37). */
+export type LedgerRow = { key: string; label: string; batches: number; families: number; items: number; answered: number; failed: number; searches: number; cents: number; measured: number };
 
 export function addLedger(map: Map<string, LedgerRow>, key: string, label: string, add: Partial<Omit<LedgerRow, "key" | "label">>): void {
-  const r = map.get(key) ?? { key, label, batches: 0, families: 0, items: 0, answered: 0, failed: 0, searches: 0, cents: 0 };
+  const r = map.get(key) ?? { key, label, batches: 0, families: 0, items: 0, answered: 0, failed: 0, searches: 0, cents: 0, measured: 0 };
   r.batches += add.batches ?? 0;
   r.families += add.families ?? 0;
   r.items += add.items ?? 0;
@@ -217,6 +234,7 @@ export function addLedger(map: Map<string, LedgerRow>, key: string, label: strin
   r.failed += add.failed ?? 0;
   r.searches += add.searches ?? 0;
   r.cents += add.cents ?? 0;
+  r.measured += add.measured ?? 0;
   map.set(key, r);
 }
 
@@ -268,5 +286,7 @@ export function __runBatchConsoleCoreTests(): { passed: number; failed: number }
   addLedger(L, "v", "V", { cents: 5, batches: 1 });
   addLedger(L, "v", "V", { cents: 7 });
   ok(L.get("v")?.cents === 12 && L.get("v")?.batches === 1, "ledger adds");
+  ok(itemLedgerCents("4.5", 1, 6).measured === 4.5 && itemLedgerCents(null, 1, 6).cents === 6 && itemLedgerCents(null, 1, 6).measured === 0, "measured cost wins; else estimate");
+  ok(itemLedgerCents(0, 0, 6).cents === 0 && ledgerBasis({ cents: 10, measured: 10 }) === "exact" && ledgerBasis({ cents: 10, measured: 4 }) === "mixed" && ledgerBasis({ cents: 10, measured: 0 }) === "estimate", "ledger basis");
   return { passed, failed };
 }

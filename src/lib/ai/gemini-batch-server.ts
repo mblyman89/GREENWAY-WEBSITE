@@ -105,6 +105,23 @@ async function finishItem(admin: Admin, itemId: string, patch: Record<string, un
     .eq("status", "running");
 }
 
+/**
+ * R74 S37: this product's own cost (0296 lookup_job_items.cost_cents), added
+ * to any earlier try. Best-effort and separate from the status write, so a
+ * database without 0296 still ingests (the ledger then estimates).
+ */
+async function addItemCost(admin: Admin, itemId: string, cents: number): Promise<void> {
+  if (!(cents > 0)) return;
+  try {
+    const { data, error } = await admin.from("lookup_job_items").select("cost_cents").eq("id", itemId).maybeSingle();
+    if (error) return;
+    const prior = Number((data as { cost_cents: unknown } | null)?.cost_cents ?? 0) || 0;
+    await admin.from("lookup_job_items").update({ cost_cents: Math.round((prior + cents) * 1000) / 1000 }).eq("id", itemId);
+  } catch {
+    /* the ledger estimates this product instead */
+  }
+}
+
 /** Progress + finish for each touched job (the same rule as the live tick). */
 async function settleJobs(admin: Admin, jobIds: Iterable<string>): Promise<void> {
   for (const jobId of new Set(jobIds)) {
@@ -250,6 +267,8 @@ async function ingest(admin: Admin, b: { id: string; name: string; model: string
     const { data } = await admin.from("lookup_job_items").select("id, job_id, draft_id, attempts, ai_calls").in("id", itemIds).eq("batch_id", b.id).eq("status", "running");
     const rows = (data as { id: string; job_id: string; draft_id: string; attempts: number | null; ai_calls: number | null }[] | null) ?? [];
     const outcome = a && !a.error && a.text ? finishProductLookup({ text: a.text, sources: a.sources, model: b.model, usedWebSearch: a.usage.searchQueries > 0 || a.sources.length > 0, ...(a.truncated ? { incomplete: true } : {}) }, v2On, banned) : null;
+    // The family's tokens + searches, priced once, land on its first lot.
+    if (a && rows[0]) await addItemCost(admin, rows[0].id, batchCostCents(a.usage));
     for (let i = 0; i < rows.length; i += 1) {
       const it = rows[i];
       jobs.push(it.job_id);

@@ -150,6 +150,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/cultivera-mail-docs-0293-pg-check.sql", mustPrint: "R74 0293 CHECK PASSED" },
   { file: "scripts/recon/inventory-lot-menu-variant-0294-pg-check.sql", mustPrint: "R74 0294 CHECK PASSED" },
   { file: "scripts/recon/ai-batches-0295-pg-check.sql", mustPrint: "R74 0295 CHECK PASSED" },
+  { file: "scripts/recon/lookup-item-cost-0296-pg-check.sql", mustPrint: "R74 0296 CHECK PASSED" },
   { file: "scripts/recon/ccrs-reseed-pg-check.sql", mustPrint: "CCRS RESEED CHECK PASSED" },
   { file: "scripts/recon/ccrs-equalize-pg-check.sql", mustPrint: "CCRS EQUALIZE CHECK PASSED" },
   { file: "scripts/recon/ccrs-copy-verify-pg-check.sql", mustPrint: "CCRS COPY VERIFY CHECK PASSED" },
