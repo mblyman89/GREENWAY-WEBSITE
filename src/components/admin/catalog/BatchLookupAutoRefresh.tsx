@@ -43,7 +43,7 @@ export function BatchLookupAutoRefresh({ active, everyMs = BATCH_REFRESH_MS }: {
   if (!active) return null;
   return (
     <p className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--admin-text-muted)]" data-testid="batch-lookup-autorefresh">
-      <span>{paused ? BATCH_REFRESH_PAUSED_COPY : BATCH_REFRESH_ON_COPY}</span>
+      <span>{paused ? BATCH_REFRESH_PAUSED_COPY : everyMs === BATCH_REFRESH_MS ? BATCH_REFRESH_ON_COPY : `Updates by itself every ${Math.round(everyMs / 60_000) || 1} min while this tab is open.`}</span>
       <button
         type="button"
         onClick={() => setPaused((p) => !p)}

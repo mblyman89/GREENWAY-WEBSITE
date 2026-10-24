@@ -566,7 +566,7 @@ describe("6. wiring pins", () => {
 
   it("the onboarding page loads lab views only when rows are open and passes them to the row + panel", () => {
     const src = read("src/app/admin/inventory/drafts/page.tsx");
-    expect(src).toContain("rowsOpen ? loadLabViewsForDrafts(drafts) : Promise.resolve(null)");
+    expect(src).toContain("earlyRowsOpen ? loadLabViewsForDrafts(drafts) : null");
     expect(src).toMatch(/lab=\{labPanelView\(/);
     expect(src).toContain("coaTerpenes");
     expect(src).toContain("strainTerpenes");
