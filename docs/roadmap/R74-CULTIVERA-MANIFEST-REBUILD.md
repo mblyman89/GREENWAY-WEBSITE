@@ -931,7 +931,7 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 
 > Thank you. I will request a fresh up to date CCRS record from the examiners office. Please build for me a button and method for uploading the data when I receive it, so I don’t have to have it hard coded into the system. I think it would be useful to have this for both Cultivera clean up, CCRS accuracy, and future cleanups, so we can compare our record with the states periodically. Please build for me a professional, enterprise grade page for uploading CCRS records received from the examiners office. And a fancy enterprise grade method for comparing what the CCRS has vs what we have in our records. Please make sure this is an all inclusive and incredibly useful and powerful new page for keeping our data clean and in sync with the states. Minimal testing please, I’ll test the page and features. Use our style and theme and format for the page. Save credits however possible. Follow the standing rules. Thank you!
 
-### S40 - CCRS Records page: upload a State copy, compare, merge (#PR)
+### S40 - CCRS Records page: upload a State copy, compare, merge (#1494) shipped
 
 - **Page** `/admin/compliance/ccrs/records`. It is linked from the CCRS hub header, the E52 next step and Help.
   - Who can use it: `reports.view` can see it; `settings.manage` can upload, merge and discard.
