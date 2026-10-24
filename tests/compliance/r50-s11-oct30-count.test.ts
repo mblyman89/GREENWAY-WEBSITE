@@ -29,6 +29,15 @@ vi.mock("@/lib/inventory/import-lineage-store", () => ({
   importManifestIds: async () => ["m-1"],
   readLotsOnManifests: async () => db.lots.filter((l) => l.status !== "destroyed").map((l) => ({ ...l })),
 }));
+// R74 S32: each applied lot's menu size follows the count (lot-menu-stock).
+const menuSync: { lotId: string; delta: number }[] = [];
+vi.mock("@/lib/inventory/lot-menu-stock", () => ({
+  loadMenuVersionsForStock: async () => [{ id: "pub", status: "published" }],
+  syncLotMenuStock: async (_a: unknown, lotId: string, delta: number) => {
+    menuSync.push({ lotId, delta });
+    return { outcomes: [{ status: "published", result: "written" }], sentence: null };
+  },
+}));
 vi.mock("@/lib/inventory/atomic-quantity", () => ({
   applyLotDelta: async (_a: unknown, p: { lotId: string; delta: number; clamp: boolean }) => {
     const lot = db.lots.find((l) => l.id === p.lotId);
@@ -175,7 +184,10 @@ describe("R50 S11: the Oct 30 count end to end", () => {
     expect(p.canApply).toBe(true);
 
     const out = await applyCountPlan(fakeAdmin(), IMPORT, p.plan!, "staff-1");
-    expect(out).toEqual({ applied: 2, unitsUp: 0, unitsDown: 4, failed: [] });
+    expect(out).toEqual({ applied: 2, unitsUp: 0, unitsDown: 4, failed: [], menuStockProblems: [] });
+    // R74 S32: the menu moved by exactly the lots' deltas (Leafly + website follow the count).
+    expect(menuSync.reduce((s, m) => s + m.delta, 0)).toBe(-4);
+    expect(menuSync.length).toBe(2);
     expect(db.lots.find((l) => l.id === "L1")!.on_hand_qty).toBe(8);
     expect(db.lots.find((l) => l.id === "L2")!.on_hand_qty).toBe(2);
     expect(db.lots.find((l) => l.id === "L4")!.on_hand_qty).toBe(5);

@@ -18,6 +18,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 // GW-012: atomic lot quantity writes (strict for reductions).
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
+import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
 import {
   DEFAULT_SAMPLE_SETTINGS,
   type SampleSettings,
@@ -273,6 +274,11 @@ async function postReduction(
     return { ok: false, error: written.error ?? "Could not update the lot." };
   }
 
+  // R74 S32: the menu size this lot sells as loses the same units, so Leafly
+  // and the website stop offering stock that left the shelf. Never throws;
+  // a problem is logged loudly (the lot write is the legal record).
+  await syncLotMenuStock(admin, lotId, -Math.abs(qtyMagnitude));
+
   return { ok: true, adjustmentId: (adj as { id: string }).id };
 }
 
@@ -286,6 +292,7 @@ async function postAddition(
   reason: string,
   note: string | null,
   actorId: string | null,
+  opts: { sellable: boolean },
 ): Promise<{ ok: true; adjustmentId: string } | { ok: false; error: string }> {
   const admin = createSupabaseAdminClient();
   const { data: lot } = await admin
@@ -317,6 +324,10 @@ async function postAddition(
     await admin.from("inventory_adjustments").delete().eq("id", (adj as { id: string }).id);
     return { ok: false, error: written.error ?? "Could not update the lot." };
   }
+
+  // R74 S32: a returned unit that goes back on the shelf goes back on the
+  // menu. One headed for destruction does not (it is not for sale).
+  if (opts.sellable) await syncLotMenuStock(admin, lotId, Math.abs(qtyMagnitude));
 
   return { ok: true, adjustmentId: (adj as { id: string }).id };
 }
@@ -696,7 +707,7 @@ export async function createCustomerReturn(
     saleExternalId,
     detail: input.detail,
   });
-  const posted = await postAddition(lotId, input.quantity, "return", note, actorId);
+  const posted = await postAddition(lotId, input.quantity, "return", note, actorId, { sellable: input.disposition !== "destroy" });
   if (!posted.ok) return posted;
 
   // ── If destroying, open the destruction event for the returned quantity ───

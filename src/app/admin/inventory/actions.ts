@@ -132,6 +132,10 @@ export async function adjustLotAction(lotId: string, formData: FormData) {
   if (!result.ok) {
     redirect(`/admin/inventory/${lotId}?error=save`);
   }
+  // R74 S32: the menu size moved with the lot; say so when it could not.
+  if (result.menuStock) {
+    redirect(`/admin/inventory/${lotId}?saved=1&lot_msg=${encodeURIComponent(result.menuStock.slice(0, 600))}`);
+  }
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
 

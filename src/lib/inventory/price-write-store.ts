@@ -98,7 +98,7 @@ function targetParts(t: LotPriceTarget): { key: string; linked: string | null } 
  * lot's pos_product_key ALWAYS equals its card's menu_items.source_item_id
  * (both are `pos-${stableId(identityKey)}`), so the card is still findable.
  */
-type LotVariantMatch =
+export type LotVariantMatch =
   | { kind: "linked" | "onboarded" | "single-card"; variant: MenuVariantRow; cardVariants: MenuVariantRow[] }
   | { kind: "ambiguous"; variantCount: number; cardVariants: MenuVariantRow[] }
   | { kind: "none" };
@@ -112,7 +112,7 @@ type LotVariantMatch =
  * found by their exact source id (a handful of rows across all versions) and
  * then kept only when their card is on THIS version.
  */
-async function findLotVariantOnVersion(
+export async function findLotVariantOnVersion(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   versionId: string,
   target: LotPriceTarget,

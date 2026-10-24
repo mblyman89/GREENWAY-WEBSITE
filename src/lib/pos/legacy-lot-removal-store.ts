@@ -10,6 +10,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
+import { loadMenuVersionsForStock, syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
 import { getVersionItems } from "@/lib/pos/menu-version";
 import {
   planLegacyRemoval,
@@ -68,12 +69,15 @@ export async function adjustOutLegacyLots(
   plan: LegacyRemovalPlan,
   note: string,
   actorId: string | null,
-): Promise<{ removed: number; units: number; failed: { id: string; error: string }[] }> {
+): Promise<{ removed: number; units: number; failed: { id: string; error: string }[]; menuStockProblems: string[] }> {
   const admin = createSupabaseAdminClient();
   let removed = 0;
   let units = 0;
   const failed: { id: string; error: string }[] = [];
+  const menuStockProblems: string[] = [];
   const queue = [...plan.rows];
+  // R74 S32: units adjusted out of a lot leave its menu size too.
+  const versions = queue.length > 0 ? await loadMenuVersionsForStock() : [];
   const worker = async () => {
     for (;;) {
       const r = queue.shift();
@@ -99,8 +103,10 @@ export async function adjustOutLegacyLots(
       }
       removed += 1;
       units += r.qty;
+      const synced = await syncLotMenuStock(admin, r.id, -r.qty, { versions });
+      if (synced.sentence) menuStockProblems.push(synced.sentence);
     }
   };
   await Promise.all(Array.from({ length: Math.min(6, queue.length) }, () => worker()));
-  return { removed, units, failed };
+  return { removed, units, failed, menuStockProblems };
 }
