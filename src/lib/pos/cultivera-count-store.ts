@@ -23,6 +23,7 @@ import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
 import { isSafeImportId } from "@/lib/inventory/import-lineage-core";
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
+import { loadMenuVersionsForStock, syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
 import { parseJsonl } from "@/lib/pos/cultivera-fetch-button-core";
 import type { SalesFiles } from "@/lib/pos/cultivera-fetch-client";
 import { workbookCells } from "@/lib/pos/cultivera-count-workbook";
@@ -260,13 +261,23 @@ export function countPlanDigest(plan: CountPlan): string {
 
 /* ---------------- apply ---------------- */
 
-export type CountApplyResult = { applied: number; unitsUp: number; unitsDown: number; failed: { lotId: string; lotCode: string; error: string }[] };
+export type CountApplyResult = {
+  applied: number;
+  unitsUp: number;
+  unitsDown: number;
+  failed: { lotId: string; lotCode: string; error: string }[];
+  /** R74 S32: lots whose menu stock could not follow the count (one sentence each). */
+  menuStockProblems: string[];
+};
 
 export async function applyCountPlan(admin: Admin, importId: string, plan: CountPlan, actorId: string | null): Promise<CountApplyResult> {
   need(importId);
   if (plan.blocked) throw new Error("The count plan is blocked; nothing was written.");
-  const out: CountApplyResult = { applied: 0, unitsUp: 0, unitsDown: 0, failed: [] };
+  const out: CountApplyResult = { applied: 0, unitsUp: 0, unitsDown: 0, failed: [], menuStockProblems: [] };
   const queue = [...plan.adjustments];
+  // R74 S32: the menu versions are loaded once; each counted lot's menu size
+  // then moves by the same delta (Leafly and the website follow the count).
+  const versions = queue.length > 0 ? await loadMenuVersionsForStock() : [];
   const worker = async () => {
     for (;;) {
       const a = queue.shift();
@@ -294,6 +305,8 @@ export async function applyCountPlan(admin: Admin, importId: string, plan: Count
       out.applied += 1;
       if (a.delta > 0) out.unitsUp += a.delta;
       else out.unitsDown -= a.delta;
+      const synced = await syncLotMenuStock(admin, a.lotId, a.delta, { versions });
+      if (synced.sentence) out.menuStockProblems.push(synced.sentence);
     }
   };
   await Promise.all(Array.from({ length: Math.min(6, queue.length) }, () => worker()));

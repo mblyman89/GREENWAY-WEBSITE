@@ -273,12 +273,14 @@ export async function adjustOutLegacyLotsAction(formData: FormData): Promise<voi
       entityType: "pos_import",
       entityId: importId,
       before: { lots: plan.lots, units: plan.units },
-      after: { removed: r.removed, units: r.units, failed: r.failed.slice(0, 50), note },
+      after: { removed: r.removed, units: r.units, failed: r.failed.slice(0, 50), note, menuStockProblems: r.menuStockProblems.slice(0, 50) },
     });
     msg =
       `Adjusted out ${r.removed} lot(s), ${r.units} unit(s), as CCRS "Reconciliation". ` +
       "They are on your next Inventory Adjustment export (Compliance → CCRS)." +
-      (r.failed.length > 0 ? ` ${r.failed.length} lot(s) could not be adjusted (stock moved or a write failed) — press again to retry just those.` : "");
+      (r.failed.length > 0 ? ` ${r.failed.length} lot(s) could not be adjusted (stock moved or a write failed) — press again to retry just those.` : "") +
+      // R74 S32: the menu stock follows; say when it could not.
+      (r.menuStockProblems.length > 0 ? ` Menu stock: ${r.menuStockProblems.slice(0, 3).join(" ")}`.slice(0, 700) : "");
   } catch (err) {
     unstable_rethrow(err);
     redirect(`${back}?error=${encodeURIComponent(err instanceof Error ? err.message : "Could not adjust the lots out.")}#remove-legacy`);

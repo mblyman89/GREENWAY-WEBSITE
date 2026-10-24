@@ -87,12 +87,17 @@ export async function applyCountAction(formData: FormData): Promise<void> {
         unitsUp: out.unitsUp,
         unitsDown: out.unitsDown,
         failed: out.failed,
+        menuStockProblems: out.menuStockProblems.slice(0, 50),
       },
     });
     notice =
       out.failed.length === 0
         ? `Count applied: ${out.applied} lots adjusted (+${out.unitsUp} / -${out.unitsDown} units).`
         : `Count applied to ${out.applied} lots; ${out.failed.length} were refused and left unchanged (listed in the audit log). Review again: the refused lots show up as still to adjust.`;
+    // R74 S32: say when the menu (Leafly + website) could not follow a lot.
+    if (out.menuStockProblems.length > 0) {
+      notice += ` Menu stock: ${out.menuStockProblems.length} lot(s) need attention. ${out.menuStockProblems.slice(0, 3).join(" ")}`.slice(0, 900);
+    }
   } catch (e) {
     redirect(err(q, e instanceof Error ? e.message : "Apply failed."));
   }

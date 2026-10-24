@@ -26,6 +26,7 @@ import type {
   LabResult,
   LotWithDetail,
 } from "@/lib/inventory/types";
+import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
 
 /** Number of days within which an expiry counts as "expiring soon". */
 export const EXPIRING_SOON_DAYS = 30;
@@ -577,7 +578,7 @@ export async function getManifestById(id: string): Promise<InboundManifest | nul
 export async function createAdjustment(
   input: { lotId: string; qtyDelta: number; reason: string; note?: string | null },
   actorId: string | null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; menuStock?: string | null } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
@@ -607,7 +608,11 @@ export async function createAdjustment(
     .eq("id", input.lotId);
   if (updErr) return { ok: false, error: updErr.message };
 
-  return { ok: true };
+  // R74 S32: move the menu size this lot sells as by the same amount
+  // (published + staged), so Leafly and the website match the shelf. Never
+  // throws; a sentence comes back when the menu could not follow.
+  const synced = await syncLotMenuStock(admin, input.lotId, input.qtyDelta);
+  return { ok: true, menuStock: synced.sentence };
 }
 
 /**

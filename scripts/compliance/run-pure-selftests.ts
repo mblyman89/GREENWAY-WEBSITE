@@ -580,6 +580,7 @@ import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-cor
 import { __runImportLotCoreTests, __runImportLotFactFillTests, __runImportLotSizeLinkTests } from "../../src/lib/pos/import-lot-core";
 import { __runLotSizeLinkCoreTests } from "../../src/lib/inventory/lot-size-link-core";
 import { __runSizeCostCoreTests } from "../../src/lib/promotions/size-cost-core";
+import { __runLotMenuStockCoreTests } from "../../src/lib/inventory/lot-menu-stock-core";
 import { __runCultiveraManifestGroupCoreTests } from "../../src/lib/inventory/cultivera-manifest-group-core";
 import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cultivera-transfer-match-core";
 import { __runMigrationStockCoreTests } from "../../src/lib/accounting/migration-stock-core";
@@ -1883,6 +1884,7 @@ __runLiquidVolumeTests();
   { const r = __runImportLotSizeLinkTests(); if (r.failed > 0 || r.passed < 21) throw new Error(`import-lot-core size-link: ${r.failed} failed, ${r.passed} passed (expected >= 21)`); } // R74 S30: import writes / backfills each lot's menu size link (owner picks never overwritten)
   { const r = __runSaleSizeDrawTests(); if (r.failed > 0 || r.passed < 22) throw new Error(`sale-decrement-core size-draw: ${r.failed} failed, ${r.passed} passed (expected >= 22)`); } // R74 S31: a sale draws (and a void restocks) the lots of the size it sold
   { const r = __runSizeCostCoreTests(); if (r.failed > 0 || r.passed < 12) throw new Error(`size-cost-core: ${r.failed} failed, ${r.passed} passed (expected >= 12)`); } // R74 S31: each size is floored at its own lots' acquisition cost
+  { const r = __runLotMenuStockCoreTests(); if (r.failed > 0 || r.passed < 20) throw new Error(`lot-menu-stock-core: ${r.failed} failed, ${r.passed} passed (expected >= 20)`); } // R74 S32: a lot quantity change moves the menu stock Leafly and the website read
   { const r = __runCultiveraMailApplyCoreTests(); if (r.failed > 0 || r.passed < 52) throw new Error(`cultivera-mail-apply-core: ${r.failed} failed, ${r.passed} passed (expected >= 52)`); } // R74 S10: email-step executor (emailed manifests + ONE CV-UNMATCHED, guarded moves, lineage-first upgrade)
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
