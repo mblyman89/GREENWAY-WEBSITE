@@ -648,7 +648,7 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - Pause is one `site_settings` row (`ai_batch_control`; no migration). Both cron ticks read it: paused = nothing new is sent (batches already at Gemini still finish and are filed); held manifests are skipped. A failed read fails open.
 - Pure `src/lib/ai/batch-console-core.ts` (24 self-tests: plan packing, pace/ETA, schedule, 429 detection, ledger, pause parse), `batch-control-server.ts`, `batch-console-server.ts` (parallel, paged reads), `cancelGeminiBatch` in `gemini-batch-server.ts`.
 
-### S36 - Product Onboarding speed
+### S36 - Product Onboarding speed (#1490) shipped
 - `drafts/page.tsx`: the 13 reads that only need the tab and its rows (Cultivera vendors, pricing settings, the delivery's batch lookup, delivery brand, website-category resolve, prior classifications and picks, strain signals, waiting facts, lab views, photo recommendations, fact flags, saved facts) now **start together** as soon as the rows are read and are awaited where they were used. Before, about 10 of them ran one after another, so each page load (and every auto-refresh) paid their sum; now it pays roughly the slowest one. Same data, same rendering.
 - With the Batch engine on, the review page's auto-refresh is **every 2 minutes** instead of every 20 seconds (answers land per batch). Each full-page re-render was the main drag while working a manifest during a running lookup.
 - Link from the delivery's batch panel to the new Batch Lookups console.
