@@ -27,16 +27,18 @@ import {
   type VendorLoad,
 } from "@/lib/ai/batch-console-core";
 import { BATCH_MAX_FAMILIES, BATCH_PRICE } from "@/lib/ai/gemini-batch-core";
+import { ConfidenceTab } from "./ConfidenceTab";
 import { cancelBatchAction, cancelJobAction, rerunFailedAction, sendSelectedAction, sendWaveAction, setJobPausedAction, setPausedAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-type Tab = "smart" | "monitor" | "costs";
+type Tab = "smart" | "monitor" | "costs" | "confidence";
 const TABS: readonly TabSpec<Tab>[] = [
   { key: "smart", label: "Smart batching", icon: "\ud83c\udf81", blurb: "Plan and send batches of 200 products" },
   { key: "monitor", label: "Monitor", icon: "\ud83d\udce1", blurb: "Live batches, progress, pause, failures, activity" },
   { key: "costs", label: "Costs & health", icon: "\ud83d\udcca", blurb: "Cost ledger, search health, schedule, settings" },
+  { key: "confidence", label: "Vendor confidence", icon: "\ud83c\udfaf", blurb: "Cultivera: score each vendor, attach facts at 85%+" },
 ];
 
 const n = (x: number) => x.toLocaleString("en-US");
@@ -296,6 +298,8 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
           </div>
         </div>
       )}
+
+      {tab === "confidence" && <ConfidenceTab vendor={vendorFilter} view={sp.view ?? ""} />}
 
       {tab === "costs" && (
         <div className="space-y-5">
