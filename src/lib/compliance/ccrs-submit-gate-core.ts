@@ -84,8 +84,9 @@ export type CcrsSubmitVerdict = {
  * is raised ONLY for rows the builder already LEFT OUT of every file, so the
  * files are complete and correct without them; CCRS accepts row by row
  * (U-17 CLOSED FALSE). Every other error still blocks: it means a row IN a
- * file would be rejected (ledger self-check, E9, E11, a bad category), or the
- * whole batch is unsafe (license, ledger duplicates, E53).
+ * file would be rejected, or the whole batch is unsafe (license, E53).
+ * R74 S42: E9, E11, an unknown type (E57), ledger duplicates (E59) and rows
+ * the verifier / ledger self-check refuse (E60) are held back too.
  */
 export const HELD_BACK_CODES: ReadonlySet<string> = new Set([
   "E3_EXTERNAL_ID_UNASSIGNED",
@@ -101,6 +102,15 @@ export const HELD_BACK_CODES: ReadonlySet<string> = new Set([
   "E14_TRANSFER_VENDOR_ID_UNKNOWN",
   "E14_TRANSFER_SAME_LICENSE",
   "E14_TRANSFER_QUANTITY",
+  // R74 S42 (owner, Round 22): "remove all blockers ... the records we have
+  // that are factual are able to be uploaded no matter what". Each of these
+  // now LEAVES its rows (and every row that would name them) out of the files.
+  "E9_UNITWEIGHT_ZERO_USABLE",
+  "E11_STRAIN_NAME_RESERVED",
+  "E57_PRODUCT_TYPE_UNKNOWN",
+  "E46_AREA_LEDGER",
+  "E59_LEDGER_DUPLICATE_HELD",
+  "E60_ROW_REFUSED_HELD",
 ]);
 
 /** True when an error-severity issue only describes rows left out of the files. */

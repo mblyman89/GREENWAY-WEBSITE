@@ -30,6 +30,7 @@
  */
 import { NO_PRODUCT_ID_REASON, type LedgerEnv } from "./ccrs-ledger-core";
 import { CULTIVERA_NOT_ON_RECORD_REASON } from "./ccrs-identity-guard-core";
+import { LEDGER_DUPLICATE_REASON, PRODUCT_FIX_HOLD_PREFIX, RESERVED_STRAIN_LOT_REASON, fixLinksFor } from "./ccrs-never-block-core";
 
 /** One row of an issue (structurally identical to CcrsIssueRow in ccrs-preflight-core). */
 export type DisplayRow = { id: string; label: string; detail?: string };
@@ -56,6 +57,9 @@ export const WITHHOLD_CLASSES = [
   "conflicting-renames",
   "cannot-delete",
   "cultivera-not-on-record",
+  "product-needs-fix",
+  "reserved-strain",
+  "ledger-duplicate",
   "unclassified",
 ] as const;
 export type WithholdClass = (typeof WITHHOLD_CLASSES)[number];
@@ -90,6 +94,10 @@ export function classifyWithholdReason(reason: string | null | undefined): Withh
   if (r.startsWith("cannot Delete a record")) return "cannot-delete";
   // R74 S25: held by ccrs-identity-guard-core (exact constant).
   if (r === CULTIVERA_NOT_ON_RECORD_REASON) return "cultivera-not-on-record";
+  // R74 S42: held by ccrs-never-block-core.
+  if (r.startsWith(PRODUCT_FIX_HOLD_PREFIX) || r.startsWith("its InventoryType is not a CCRS type") || r.includes("needs a unit weight in grams")) return "product-needs-fix";
+  if (r === RESERVED_STRAIN_LOT_REASON) return "reserved-strain";
+  if (r === LEDGER_DUPLICATE_REASON) return "ledger-duplicate";
   return "unclassified";
 }
 
@@ -105,6 +113,9 @@ export const WITHHOLD_CLASS_LABEL: Record<WithholdClass, string> = {
   "conflicting-renames": "two different renames chosen",
   "cannot-delete": "cannot Delete (not on file)",
   "cultivera-not-on-record": "Cultivera lot not on the CCRS record",
+  "product-needs-fix": "its product needs a fix (unit weight or inventory type)",
+  "reserved-strain": "strain name reserved by CCRS",
+  "ledger-duplicate": "id held twice in our CCRS record copy",
   unclassified: "other reason (read the row)",
 };
 
@@ -137,6 +148,12 @@ export function nextStepFor(cls: WithholdClass, env: LedgerEnv): string {
       return "A Delete was asked for a record CCRS does not hold. Nothing is sent; check the record before rebuilding.";
     case "cultivera-not-on-record":
       return "This lot came over from Cultivera, but its id is not in our copy of what CCRS holds, so sending it would create a NEW record instead of updating Cultivera's filing. Merge the fresh CCRS data copy (re-seed, Part 17 \u00a7G, slice S-15). If the lot's id is wrong, correct it to the barcode Cultivera filed. Then rebuild. Until then these lots are HELD BACK: the rest of the batch still uploads, and the lots stay on the \"Still owed to CCRS\" list. Easiest: upload the copy on Compliance \u2192 CCRS \u2192 CCRS Records (/admin/compliance/ccrs/records), review the comparison, and press Merge. Command line alternative: npx tsx scripts/compliance/reseed-ccrs-ledger.ts --as-of <copy date> --inventory Inventory.csv --product Product.csv --strain Strain.csv --area Area.csv --psql \"<PGURL>\" --report reseed-plan.md (plan, writes nothing), then the same with --expect and --apply.";
+    case "product-needs-fix":
+      return 'The product this lot belongs to is held back (see the Product group above: no unit weight, or an inventory type CCRS does not know). Open the product from the links on that row, fix it, and rebuild: the product and its lots then go out together. If it is a relic of old Cultivera data, press "Add to CCRS clean-up list" on the product row instead.';
+    case "reserved-strain":
+      return 'The product uses the strain name "Unknown", "THC" or "Other", which CCRS refuses [G L0358]. Open the product from the Strain group above, set the real strain (or leave it blank for a non-strain product), and rebuild.';
+    case "ledger-duplicate":
+      return "Our copy of the CCRS record lists this id twice. Upload the examiner's fresh CCRS data copy on Compliance \u2192 CCRS \u2192 CCRS Records and press Merge, then rebuild. Everything else uploads in the meantime.";
     case "unclassified":
       return "No automatic advice for this reason. Read the reason on the row. The record is held back (not sent) until it is understood; the rest of the batch still uploads.";
   }
@@ -158,7 +175,7 @@ export function groupRowsByReason(rows: readonly DisplayRow[], env: LedgerEnv): 
 
 /** Issues whose rows are ledger withholds and get reason grouping + next steps. */
 export function isWithholdIssue(i: Pick<DisplayIssue, "code">): boolean {
-  return i.code === "E41_LEDGER_WITHHELD" || i.code === "E52_CULTIVERA_LOT_NOT_ON_RECORD";
+  return i.code === "E41_LEDGER_WITHHELD" || i.code === "E52_CULTIVERA_LOT_NOT_ON_RECORD" || i.code === "E59_LEDGER_DUPLICATE_HELD";
 }
 
 /** One row as one plain-text line. Never truncated. */
@@ -184,7 +201,10 @@ export function issuePlainText(i: DisplayIssue, env: LedgerEnv, indent = ""): st
     }
   }
   out.push(`${indent}  Every row (${rows.length}):`);
-  for (const r of rows) out.push(`${indent}    - ${rowLine(r)}`);
+  for (const r of rows) {
+    const links = fixLinksFor(i, r);
+    out.push(`${indent}    - ${rowLine(r)}${links.length ? `  (fix: ${links[0].href})` : ""}`);
+  }
   return out;
 }
 
