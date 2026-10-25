@@ -65,6 +65,7 @@ export const CCRS_KNOWN_MESSAGES: readonly { text: string; cls: CcrsMessageClass
   { text: "Inventory Adjustment Details missing", cls: "row", source: "2026-09-17 T-48" },
   { text: "Only Medical Sales Excise tax can be 0", cls: "row", source: "2026-09-17 T-42" },
   { text: "Operation is invalid must be Insert, Update or Delete", cls: "row", source: "2026-10-06 P20261005A (3 of 8 rows; the rest filed)" },
+  { text: "Duplicate Sale for Licensee", cls: "row-contradicts-ledger", source: "2026-10-25 PREprod re-upload of the 2026-10-20 Sale file (7 of 7 rows; U-07 answered)" },
 ];
 
 /** The column that carries a row's identity, per file type (same as 0248's v_idcol). */

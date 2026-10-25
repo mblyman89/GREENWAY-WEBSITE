@@ -31,6 +31,7 @@ import {
   type MailAnalysis,
 } from "@/lib/compliance/ccrs-mail-core";
 import { getCcrsMail, markCcrsMailHandled, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { isAnsweredState, planReuploadSetAside, type AnsweredFile } from "@/lib/compliance/ccrs-reupload-core";
 
 const BASE = "/admin/compliance/ccrs";
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -148,6 +149,24 @@ async function candidatesFor(
   return { candidates, uploadedAt };
 }
 
+/** R74 S46: files CCRS already answered (newest first, at most 25 per type), with their rows, for the re-upload check. */
+async function answeredFor(admin: ReturnType<typeof createSupabaseAdminClient>, types: readonly string[]): Promise<AnsweredFile[]> {
+  const out: AnsweredFile[] = [];
+  for (const env of ["prod", "preprod"] as const) {
+    const list = await listCcrsFiles(admin, env, 200);
+    if (list.error) throw new Error(list.error);
+    const perType = new Map<string, number>();
+    for (const f of list.files) {
+      if (!isAnsweredState(f.state) || !types.includes(f.fileType)) continue;
+      const n = perType.get(f.fileType) ?? 0;
+      if (n >= 25) continue;
+      perType.set(f.fileType, n + 1);
+      out.push({ fileId: f.id, fileName: f.fileName, env: f.env, fileType: f.fileType, state: f.state, answeredAt: f.successEmailAt ?? f.errorEmailAt, rows: await fileRowsForEcho(admin, f.id, f.numberRecords) });
+    }
+  }
+  return out;
+}
+
 /**
  * Apply a stored CCRS error email. Every error CSV in it must be tied, row by
  * row, to exactly one uploaded file (classifyEcho) or the owner's choice
@@ -170,6 +189,28 @@ export async function applyCcrsErrorMailAction(formData: FormData): Promise<void
   }
   const bad = picks.filter((p) => p.pick.kind !== "unique");
   if (bad.length) {
+    // R74 S46 (Round 26): an email answering a RE-UPLOAD of files CCRS already
+    // answered (every row "already held") has no waiting file to tie to. Set it
+    // aside with the exact reason; nothing is written to the ledger.
+    let reupload: ReturnType<typeof planReuploadSetAside> = null;
+    try {
+      reupload = planReuploadSetAside(errors, await answeredFor(admin, errors.map((e) => e.fileType).filter((t): t is NonNullable<typeof t> => !!t)));
+    } catch {
+      reupload = null;
+    }
+    if (reupload) {
+      const changed = await markCcrsMailHandled(admin, mail.id, "dismissed", session.profile.id, reupload.note);
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.email,
+        action: "ccrs.mail.reupload_set_aside",
+        entityType: "ccrs_mail_messages",
+        entityId: mail.id,
+        after: { gmailId: mail.gmail_id, subject: mail.subject, files: reupload.matches.map((m) => ({ id: m.fileId, name: m.fileName, env: m.env, state: m.state })) },
+      });
+      revalidatePath(BASE);
+      backMail(weekKey, changed ? okQ(`Set aside, nothing to fix. ${reupload.note}`) : errQ("This email was already handled."));
+    }
     const why = bad
       .map((b) =>
         b.pick.kind === "ambiguous"

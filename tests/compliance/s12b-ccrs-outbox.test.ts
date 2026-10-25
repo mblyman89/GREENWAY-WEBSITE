@@ -212,7 +212,9 @@ describe("S-12b batch builder loads the ledger", () => {
   it("loads the slice and routes against it; duplicates surface as an error issue", () => {
     expect(BATCH).toContain("const slice = await loadLedgerForBatch(");
     expect(BATCH).toContain('const ledger: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;');
-    expect(BATCH).toContain("if (slice.kind === \"loaded\" && slice.ledger.duplicates.length > 0) {");
+    // R74 S42: duplicates hold back only the records they name (E59); pin refreshed in S46.
+    expect(BATCH).toContain('const dupIds = new Set(slice.kind === "loaded" ? slice.ledger.duplicates : []);');
+    expect(BATCH).toContain('code: "E59_LEDGER_DUPLICATE_HELD",');
     expect(BATCH).toContain('absentReason: slice.kind === "loaded" ? null : slice.reason,');
   });
   it("the Area file is planned over the ledger by the S-13 core (E23 interim superseded)", () => {

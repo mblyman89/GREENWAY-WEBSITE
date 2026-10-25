@@ -1172,6 +1172,7 @@ import { __runTestingLabsCoreTests } from "../../src/lib/inventory/testing-labs-
 import { __runExpiryReportExportTests } from "../../src/lib/inventory/expiry-report-export";
 import { __runScannerSetupCoreTests } from "../../src/lib/pos/scanner-setup-core";
 import { websiteCategoryDefinitions as __r34Categories } from "../../src/lib/pos/category-taxonomy";
+import { __runCcrsReuploadTests } from "../../src/lib/compliance/ccrs-reupload-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2343,6 +2344,7 @@ __runLiquidVolumeTests();
   { const r = __runPosMenuTransportTests(); if (r.failed > 0 || r.passed < 11) throw new Error(`pos-menu-transport-core: ${r.failed} failed, ${r.passed} passed`); console.log(`pos-menu-transport-core: ${r.passed} assertions passed`); }
   { const r = __runVendorLookupProgressTests(); if (r.failed > 0 || r.passed < 14) throw new Error(`vendor-lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`vendor-lookup-progress-core: ${r.passed} assertions passed`); }
   { const r = __runBatchRequeueTests(); if (r.failed > 0 || r.passed < 12) throw new Error(`batch-requeue-core: ${r.failed} failed, ${r.passed} passed`); console.log(`batch-requeue-core: ${r.passed} assertions passed`); }
+  { const r = __runCcrsReuploadTests(); if (r.failed > 0 || r.passed < 13) throw new Error(`ccrs-reupload-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-reupload-core: ${r.passed} assertions passed`); } // R74 S46: re-upload echoes of files CCRS already answered are set aside, not applied
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }

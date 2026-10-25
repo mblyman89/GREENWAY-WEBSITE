@@ -1036,3 +1036,16 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - Fix: the plan reads answered / in-line products across ALL jobs (paged); Send N and Smart-batch waves walk the whole plan and keep going past empty manifests until the 200 x N products are filled (cap 120 manifests per press); an empty send is no longer "allowed" silently - it says so and points at Re-run stopped / Re-run failed.
 - Credits: Re-run stopped / failed never resends a product another lookup already answered or is asking about (closed with a plain note).
 - New pure core `batch-requeue-core.ts` (12 self-tests) + `tests/compliance/r74-s45-batch-requeue.test.ts`.
+
+## Round 26 - owner request (verbatim)
+
+> thank you. that is working now to get batches started on gemini. i went to test the preprod ccrs upload now that it is unblocked. all files failed. i am uploading the files sent that were sent back failed. i am uploading the .csv with the failures inside. i see that i can apply error file to get the error cleared. i have not yet tried that. i want to first go through the code to see if this is a failure due to my doing tests with cultivera imported products, or if there are real errors that will hold back real data from going to the ccrs upload. i tested the cultivera migration, the products are on the menu and sellable. i have tested sales and see them in the ccrs file to be uploaded. it too failed. please read through everything, then audit the code, then write up your strategy and opinion for the best most practical way to test this pipeline with cultivera products so i can see if we will be able to do it for real in two weeks. please really make sure you go through everything thoroughly... expert level understanding of both the requirements and the code logic... go above and beyond. follow the standing rules. test it minimally... dont push broken code or code that will break the system. add value.
+
+### S46 - CCRS re-upload guard + Cultivera rehearsal plan
+
+- Finding: the six files uploaded on 10/25 are byte-identical (md5) to the 10/20 files CCRS had already processed. Every error means "already on file" (Duplicate External Identifier / Duplicate Strain / the first "Duplicate Sale for Licensee"). There is no data defect, and the Cultivera products, lots and sales were accepted on 10/20.
+- "Duplicate Sale for Licensee" is now a known message with a playbook entry `[G L1390-L1397]`, so there is no more "never seen before" examiner draft. U-07 is answered. The evidence is in `docs/ccrs-bible/evidence/2026-10-25-reupload/`.
+- Apply on an email with no waiting file now checks the files CCRS already answered. If every row ties to one and says "already held", it sets the email aside with the reason and writes nothing to the ledger (new pure `ccrs-reupload-core.ts`, 13 self-tests).
+- The zip README says DO NOT UPLOAD for a re-served file CCRS already answered. The files list warns next to "Download exact file" on answered files.
+- New `docs/ccrs-bible/19-cultivera-preprod-rehearsal-plan.md`: the two-week plan, the real risks for 11/08 and the go/no-go list.
+- Also refreshed a stale s12b source pin left by S42 (E59).
