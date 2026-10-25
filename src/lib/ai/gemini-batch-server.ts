@@ -33,6 +33,21 @@ import { completeItem, lookupQueryForDraft, SkipItem } from "@/lib/catalog/looku
 import { DRAFT_GONE_COPY, LEFT_REVIEW_COPY, LOOKUP_RETRY_MAX_ATTEMPTS, batchThinkingLevel, AI_BATCH_THINKING_LEVEL_ENV, itemErrorText, summarizeJob } from "@/lib/catalog/lookup-job-core";
 import { isAgainMarker } from "@/lib/catalog/lookup-history-core";
 import { readBatchControl } from "@/lib/ai/batch-control-server";
+import { createBackoffUntil, logBatchEvent } from "@/lib/ai/batch-events-server";
+import {
+  BATCH_LOST_NOTE,
+  BATCH_STOPPED_NOTE,
+  GOOGLE_STATES,
+  OPEN_BATCH_STATES,
+  POLL_BATCH_STATES,
+  curlFor,
+  explainGemini,
+  googleBatchRow,
+  googleStateKey,
+  parseBatchList,
+  sendDecision,
+  type GoogleBatchRow,
+} from "@/lib/ai/gemini-batch-explain-core";
 import {
   AI_BATCH_MAX_INFLIGHT_ENV,
   AI_LOOKUP_ENGINE_ENV,
@@ -65,16 +80,22 @@ export function batchEngineOn(): boolean {
 
 export type BatchTickResult = { ok: boolean; skipped?: string; submitted: number; families: number; items: number; polled: number; ingested: number; error?: string };
 
-async function gemini(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
-  const res = await fetch(`${API}/${path}`, { ...init, headers: { "x-goog-api-key": geminiApiKey(), "content-type": "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(120_000) });
-  const text = await res.text();
-  let json: unknown = null;
+/** One call to the Gemini API. Never throws: a network failure is status 0. */
+export async function gemini(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
   try {
-    json = JSON.parse(text);
-  } catch {
-    json = null;
+    const res = await fetch(`${API}/${path}`, { ...init, headers: { "x-goog-api-key": geminiApiKey(), "content-type": "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(120_000) });
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+    return { ok: res.ok, status: res.status, json, text };
+  } catch (err) {
+    const text = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: 0, json: null, text };
   }
-  return { ok: res.ok, status: res.status, json, text };
 }
 
 type Actor = { userId: string | null; email: string | null };
@@ -142,7 +163,7 @@ async function settleJobs(admin: Admin, jobIds: Iterable<string>): Promise<void>
 
 // ─── Submit ─────────────────────────────────────────────────────────────────
 
-async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set()): Promise<{ families: number; items: number } | null> {
+async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set()): Promise<{ families: number; items: number; refused?: boolean } | null> {
   // Oldest queued products of open jobs; never a job whose live lease is held.
   const { data: jobs } = await admin.from("lookup_jobs").select("id, lease_until").in("status", ["queued", "running"]).order("created_at").limit(200);
   const now = Date.now();
@@ -235,10 +256,15 @@ async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set
   if (!res.ok || !op.name) {
     // Nothing went out: hand the products back untouched.
     for (let i = 0; i < claimed.length; i += 200) await admin.from("lookup_job_items").update({ status: "queued", batch_id: null, updated_at: new Date().toISOString() }).in("id", claimed.slice(i, i + 200)).eq("batch_id", batchId);
-    await admin.from("ai_batches").update({ state: "failed", error: `create HTTP ${res.status}: ${res.text.slice(0, 200)}`, finished_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", batchId);
-    throw new Error(`Gemini batch create failed (HTTP ${res.status}).`);
+    const x = explainGemini(res.status, res.json ?? res.text);
+    await admin.from("ai_batches").update({ state: "failed", error: `${x.title} (${x.googleWord}): ${res.text.slice(0, 200)}`, poll_status: res.status, finished_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", batchId);
+    await logBatchEvent(admin, { kind: "create", batchId, severity: x.severity === "ok" ? "bad" : x.severity, httpStatus: res.status, title: `Google refused the new batch: ${x.title}`, plain: `${x.plain} The ${claimed.length} products went back in line untouched; nothing was charged.`, fix: x.fix, command: `POST ${API}/v1beta/${batchModelPath(model.id)}`, raw: res.text.slice(0, 4000) });
+    return { families: 0, items: 0, refused: true };
   }
+  const g = googleBatchRow(res.json);
   await admin.from("ai_batches").update({ name: op.name, state: op.state === "unknown" ? "pending" : op.state, submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", batchId);
+  await recordGoogle(admin, batchId, g, res.status, null);
+  await logBatchEvent(admin, { kind: "create", batchId, batchName: op.name, severity: "ok", httpStatus: res.status, googleState: g ? `BATCH_STATE_${g.state}` : null, title: `Batch sent to Google: ${entries.length} questions covering ${claimed.length} products`, plain: `Google accepted the batch and named it ${op.name}. ${GOOGLE_STATES[g?.state ?? "PENDING"].meaning}`, fix: "Nothing to do. Watch it move along the steps below.", command: curlFor("get", op.name) });
   return { families: entries.length, items: claimed.length };
 }
 
@@ -274,6 +300,11 @@ async function ingest(admin: Admin, b: { id: string; name: string; model: string
       jobs.push(it.job_id);
       // The family's paid call is counted once (on its first lot).
       const calls = (it.ai_calls ?? 0) + (a && i === 0 ? 1 : 0);
+      if (!outcome && final === "canceled" && !a) {
+        // R74 S41: a batch you stopped keeps its products aside (never resent by itself).
+        await finishItem(admin, it.id, { status: "canceled", error: BATCH_STOPPED_NOTE, ai_calls: calls });
+        continue;
+      }
       if (!outcome) {
         const n = (it.attempts ?? 0) + 1;
         const reason = a?.error ? `Gemini batch: ${a.error}` : final === "succeeded" ? "Gemini returned no answer for this product." : `Gemini batch ${final}.`;
@@ -308,75 +339,213 @@ async function ingest(admin: Admin, b: { id: string; name: string; model: string
     .from("ai_batches")
     .update({ state: "ingested", answered, failed, prompt_tokens: usage.promptTokens, output_tokens: usage.outputTokens, search_queries: usage.searchQueries, cost_cents: cost, ingested_at: new Date().toISOString(), lease_until: null, updated_at: new Date().toISOString() })
     .eq("id", b.id);
+  await logBatchEvent(admin, { kind: "ingest", batchId: b.id, batchName: b.name, severity: final === "succeeded" ? "ok" : "warn", googleState: `BATCH_STATE_${googleStateKey(final)}`, title: final === "succeeded" ? `Facts saved: ${answered} products answered, ${failed} with no usable answer` : `Batch closed (${GOOGLE_STATES[googleStateKey(final)].plain}): ${answered} answered`, plain: `${final === "succeeded" ? "Every answer Google sent back is now on its product." : GOOGLE_STATES[googleStateKey(final)].meaning} Google used ${usage.searchQueries} web searches and ${usage.promptTokens + usage.outputTokens} tokens (about $${(cost / 100).toFixed(2)}).`, fix: final === "succeeded" ? "Nothing. Review the products on Product Onboarding." : GOOGLE_STATES[googleStateKey(final)].todo });
   await logAiUsage({ feature: "inventory.product_lookup.batch", entityType: "ai_batches", entityId: b.id, model: b.model, promptTokens: usage.promptTokens, completionTokens: usage.outputTokens, totalTokens: usage.promptTokens + usage.outputTokens, estimated: false, ok: final === "succeeded", errorNote: `batch ${b.name}: ${answered} answered, ${failed} failed, ${usage.searchQueries} searches, ~$${(cost / 100).toFixed(2)}` });
   await settleJobs(admin, jobs);
   return answered;
 }
 
+/** R74 S41: Google's own view of one batch, saved on our row (needs 0299; best effort). */
+async function recordGoogle(admin: Admin, batchId: string, g: GoogleBatchRow | null, status: number, pollError: string | null): Promise<void> {
+  try {
+    await admin
+      .from("ai_batches")
+      .update({
+        ...(g ? { google_state: `BATCH_STATE_${g.state}`, batch_stats: g.stats, google_create_time: g.createTime, google_update_time: g.updateTime } : {}),
+        last_polled_at: new Date().toISOString(),
+        poll_status: status,
+        poll_error: pollError,
+      })
+      .eq("id", batchId);
+  } catch {
+    /* 0299 not applied: the engine still runs */
+  }
+}
+
+/** Products still riding on a batch that will never answer: set aside with a note. */
+async function holdBatchItems(admin: Admin, batchId: string, note: string): Promise<number> {
+  const at = new Date().toISOString();
+  const { data } = await admin.from("lookup_job_items").update({ status: "canceled", error: note, batch_id: null, finished_at: at, updated_at: at }).eq("batch_id", batchId).eq("status", "running").select("job_id");
+  const rows = (data as { job_id: string }[] | null) ?? [];
+  if (rows.length) await settleJobs(admin, rows.map((r) => r.job_id));
+  return rows.length;
+}
+
+type PollRow = { id: string; name: string | null; model: string; state: string; request_keys: unknown; lease_until: string | null; created_at: string; answered: number; failed: number; poll_status?: number | null };
+
 async function pollAll(admin: Admin, out: BatchTickResult, deadline: number): Promise<void> {
-  const { data } = await admin.from("ai_batches").select("id, name, model, state, request_keys, lease_until, created_at, answered, failed").in("state", ["pending", "running", "succeeded", "failed", "canceled", "expired", "ingesting"]).order("created_at").limit(50);
-  for (const b of (data as { id: string; name: string | null; model: string; state: string; request_keys: unknown; lease_until: string | null; created_at: string; answered: number; failed: number }[] | null) ?? []) {
+  let res0: { data: unknown; error: unknown } = await admin.from("ai_batches").select("id, name, model, state, request_keys, lease_until, created_at, answered, failed, poll_status").in("state", [...POLL_BATCH_STATES]).order("created_at").limit(50);
+  if (res0.error) res0 = await admin.from("ai_batches").select("id, name, model, state, request_keys, lease_until, created_at, answered, failed").in("state", [...POLL_BATCH_STATES]).order("created_at").limit(50);
+  for (const b of (res0.data as PollRow[] | null) ?? []) {
     if (Date.now() > deadline) return;
     if (!b.name) continue;
     if (b.lease_until && Date.parse(b.lease_until) > Date.now()) continue;
     const res = await gemini(`v1beta/${b.name}`);
     out.polled += 1;
-    if (!res.ok) continue;
+    if (!res.ok) {
+      // R74 S41: never silent. Saved on the row; logged once per new status.
+      const x = explainGemini(res.status, res.json ?? res.text);
+      await recordGoogle(admin, b.id, null, res.status, `${x.title}: ${res.text.slice(0, 200)}`);
+      if (b.poll_status !== res.status) await logBatchEvent(admin, { kind: "poll", batchId: b.id, batchName: b.name, severity: x.severity, httpStatus: res.status, title: `Checking ${b.name}: ${x.title}`, plain: x.plain, fix: x.fix, command: curlFor("get", b.name), raw: res.text.slice(0, 4000) });
+      if (res.status === 404 && b.state !== "ingesting") {
+        await admin.from("ai_batches").update({ state: "lost", error: "Google no longer has this batch (404).", finished_at: new Date().toISOString(), lease_until: null, updated_at: new Date().toISOString() }).eq("id", b.id).eq("state", b.state);
+        await holdBatchItems(admin, b.id, BATCH_LOST_NOTE);
+      }
+      continue;
+    }
     const op = parseBatchOperation(res.json);
+    const g = googleBatchRow(res.json);
+    await recordGoogle(admin, b.id, g, res.status, null);
     // An ingest a killed run left behind is picked up again once its lease ends.
     if (!isFinalBatchState(op.state)) {
-      if (op.state !== b.state && op.state !== "unknown") await admin.from("ai_batches").update({ state: op.state, updated_at: new Date().toISOString() }).eq("id", b.id);
+      if (op.state !== b.state && op.state !== "unknown") {
+        await admin.from("ai_batches").update({ state: op.state, updated_at: new Date().toISOString() }).eq("id", b.id);
+        const k = googleStateKey(op.state);
+        await logBatchEvent(admin, { kind: "poll", batchId: b.id, batchName: b.name, severity: "info", httpStatus: res.status, googleState: `BATCH_STATE_${k}`, title: `${b.name}: ${GOOGLE_STATES[k].plain}`, plain: GOOGLE_STATES[k].meaning, fix: GOOGLE_STATES[k].todo, command: curlFor("get", b.name) });
+      }
       continue;
     }
     // Lease the ingest (CAS on the state we read) so two runs never attach twice.
     const { data: won } = await admin.from("ai_batches").update({ state: "ingesting", lease_until: new Date(Date.now() + LEASE_MS).toISOString(), ...(b.state === "ingesting" ? {} : { finished_at: new Date().toISOString(), error: op.error }), updated_at: new Date().toISOString() }).eq("id", b.id).eq("state", b.state).select("id");
     if (((won as unknown[] | null) ?? []).length !== 1) continue;
+    if (b.state !== "ingesting") {
+      const k = googleStateKey(op.state);
+      await logBatchEvent(admin, { kind: "poll", batchId: b.id, batchName: b.name, severity: GOOGLE_STATES[k].severity, httpStatus: res.status, googleState: `BATCH_STATE_${k}`, title: `${b.name}: ${GOOGLE_STATES[k].plain}${g?.stats ? ` (${g.stats.succeeded} answered, ${g.stats.failed} failed of ${g.stats.total})` : ""}`, plain: `${GOOGLE_STATES[k].meaning}${op.error ? ` Google said: "${op.error}"` : ""}`, fix: GOOGLE_STATES[k].todo, command: curlFor("get", b.name) });
+    }
     let answers = op.inlined;
     if (answers.length === 0 && op.responsesFile) {
       const f = await gemini(`download/v1beta/${op.responsesFile}:download?alt=media`);
       if (f.ok) answers = parseJsonl(f.text);
+      else {
+        const x = explainGemini(f.status, f.json ?? f.text);
+        await logBatchEvent(admin, { kind: "ingest", batchId: b.id, batchName: b.name, severity: "warn", httpStatus: f.status, title: `Could not download the answers file: ${x.title}`, plain: x.plain, fix: "Nothing. The app tries again in 10 minutes.", raw: f.text.slice(0, 2000) });
+        await admin.from("ai_batches").update({ lease_until: new Date(Date.now() + LEASE_MS).toISOString() }).eq("id", b.id);
+        continue;
+      }
     }
     out.ingested += await ingest(admin, { id: b.id, name: b.name, model: b.model, request_keys: b.request_keys, answered: b.answered ?? 0, failed: b.failed ?? 0 }, answers, op.state, deadline);
   }
 }
 
-/** R74 S35: ask Google to stop a batch. The next poll sees 'canceled' and requeues its products. */
-export async function cancelGeminiBatch(name: string): Promise<{ ok: boolean; message: string }> {
+/**
+ * R74 S35/S41: ask Google to stop a batch (POST batches/{id}:cancel). The
+ * next poll sees CANCELLED, saves any answers Google already made, and sets
+ * the rest of its products aside (never resent by itself).
+ */
+export async function cancelGeminiBatch(name: string, actorEmail: string | null = null): Promise<{ ok: boolean; message: string }> {
   if (!/^batches\/[A-Za-z0-9_-]+$/.test(name)) return { ok: false, message: "That batch name is not valid." };
   const res = await gemini(`v1beta/${name}:cancel`, { method: "POST" });
-  return res.ok ? { ok: true, message: "Cancel sent to Gemini. Its products go back in the queue on the next poll." } : { ok: false, message: `Gemini refused the cancel (HTTP ${res.status}).` };
+  const x = explainGemini(res.status, res.json ?? res.text);
+  if (isSupabaseServiceConfigured) {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin.from("ai_batches").select("id").eq("name", name).maybeSingle();
+    await logBatchEvent(admin, { kind: "cancel", batchId: (data as { id: string } | null)?.id ?? null, batchName: name, severity: res.ok ? "ok" : x.severity, httpStatus: res.status, title: res.ok ? `Cancel sent for ${name}` : `Cancel refused for ${name}: ${x.title}`, plain: res.ok ? "Google stops the batch within a few minutes. Anything it already answered is still saved; the rest of its products are set aside, not resent." : x.plain, fix: res.ok ? "Nothing. Watch it turn Cancelled." : x.fix, command: curlFor("cancel", name), raw: res.text.slice(0, 2000), actorEmail });
+  }
+  return res.ok
+    ? { ok: true, message: `Cancel sent to Google for ${name}. Within a few minutes it shows Cancelled; its unanswered products are set aside (not resent).` }
+    : { ok: false, message: `${x.title}. ${x.fix}` };
 }
 
+/**
+ * R74 S41: delete a FINISHED batch at Google (DELETE batches/{id}). Google
+ * then forgets it (and its results). Only for batches already ended; to stop
+ * a running one use cancel.
+ */
+export async function deleteGeminiBatch(name: string, actorEmail: string | null = null): Promise<{ ok: boolean; message: string }> {
+  if (!/^batches\/[A-Za-z0-9_-]+$/.test(name)) return { ok: false, message: "That batch name is not valid." };
+  if (isSupabaseServiceConfigured) {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin.from("ai_batches").select("id, state").eq("name", name).maybeSingle();
+    const row = data as { id: string; state: string } | null;
+    if (row && (OPEN_BATCH_STATES as readonly string[]).includes(row.state)) return { ok: false, message: "That batch is still open, so its answers are not saved yet. Cancel it first (or let it finish), then delete." };
+  }
+  const res = await gemini(`v1beta/${name}`, { method: "DELETE" });
+  const x = explainGemini(res.status, res.json ?? res.text);
+  if (isSupabaseServiceConfigured) {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin.from("ai_batches").select("id").eq("name", name).maybeSingle();
+    await logBatchEvent(admin, { kind: "delete", batchId: (data as { id: string } | null)?.id ?? null, batchName: name, severity: res.ok ? "ok" : x.severity, httpStatus: res.status, title: res.ok ? `Deleted ${name} at Google` : `Delete refused for ${name}: ${x.title}`, plain: res.ok ? "Google no longer keeps this batch or its results. Facts already saved on your products are untouched." : x.plain, fix: res.ok ? "Nothing." : x.fix, command: curlFor("delete", name), raw: res.text.slice(0, 2000), actorEmail });
+  }
+  return res.ok ? { ok: true, message: `Google deleted ${name}. Facts already saved on your products are untouched.` } : { ok: false, message: `${x.title}. ${x.fix}` };
+}
+
+/** R74 S41: the Check now button. Ask Google about every open batch right away (no sending). */
+export async function checkBatchesNow(): Promise<BatchTickResult> {
+  const out: BatchTickResult = { ok: true, submitted: 0, families: 0, items: 0, polled: 0, ingested: 0 };
+  if (!isSupabaseServiceConfigured || !geminiApiKey()) return { ...out, ok: false, skipped: "not_configured" };
+  const admin = createSupabaseAdminClient();
+  try {
+    await pollAll(admin, out, Date.now() + 200_000);
+    return out;
+  } catch (err) {
+    return { ...out, ok: false, error: itemErrorText(err) };
+  }
+}
+
+/** R74 S41: every page of GET v1beta/batches (Google's own list). */
+export async function listGoogleBatches(maxPages = 10): Promise<{ ok: boolean; status: number; rows: GoogleBatchRow[]; raw: string; error: string | null }> {
+  const rows: GoogleBatchRow[] = [];
+  let token: string | null = null;
+  let raw = "";
+  for (let p = 0; p < maxPages; p += 1) {
+    const res = await gemini(`v1beta/batches?pageSize=100${token ? `&pageToken=${encodeURIComponent(token)}` : ""}`);
+    if (p === 0) raw = res.text;
+    if (!res.ok) {
+      const x = explainGemini(res.status, res.json ?? res.text);
+      return { ok: false, status: res.status, rows, raw: res.text, error: `${x.title}. ${x.fix}` };
+    }
+    const page = parseBatchList(res.json);
+    rows.push(...page.rows);
+    token = page.nextPageToken;
+    if (!token) break;
+  }
+  return { ok: true, status: 200, rows, raw, error: null };
+}
+
+/**
+ * R74 S41: one cron minute. Poll every open batch (always, even when paused:
+ * those are paid for). Then, holding the ONE sender lease, send at most one
+ * new batch if sendDecision allows it (pause, manual budget, the cap counted
+ * as every batch not yet saved, the back-off after Google refused a send).
+ */
 export async function runGeminiBatchTick(deps: { budgetMs?: number } = {}): Promise<BatchTickResult> {
   const out: BatchTickResult = { ok: true, submitted: 0, families: 0, items: 0, polled: 0, ingested: 0 };
   if (!batchEngineOn()) return { ...out, skipped: "engine_live" };
   if (!isSupabaseServiceConfigured || !geminiApiKey()) return { ...out, skipped: "not_configured" };
   const deadline = Date.now() + (deps.budgetMs ?? 600_000);
+  const holder = `tick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let leased = false;
+  const admin = createSupabaseAdminClient();
   try {
-    const admin = createSupabaseAdminClient();
     await pollAll(admin, out, deadline);
-    // R74 S35: the console's pause switch. Batches already at Google are
-    // still polled and ingested (they are paid for); nothing new goes out.
     const control = await readBatchControl(admin);
     if (control.paused) return { ...out, skipped: "paused" };
-    const pausedJobs = new Set(control.pausedJobIds);
-    const { count } = await admin.from("ai_batches").select("id", { count: "exact", head: true }).in("state", ["submitting", "pending", "running"]);
-    let open = count ?? 0;
+    if (control.mode === "manual" && control.budget <= 0) return { ...out, skipped: "manual_no_budget" };
+    const lease = await admin.rpc("ai_batch_send_lease", { p_holder: holder, p_seconds: 300 });
+    if (lease.error || lease.data !== true) return { ...out, skipped: lease.error ? "no_lease_migration_0299" : "another_sender" };
+    leased = true;
+    const { count } = await admin.from("ai_batches").select("id", { count: "exact", head: true }).in("state", [...OPEN_BATCH_STATES]);
+    const backoff = await createBackoffUntil(admin);
     const cap = batchMaxInflight(process.env[AI_BATCH_MAX_INFLIGHT_ENV]);
-    while (open < cap && Date.now() < deadline) {
+    const d = sendDecision({ paused: control.paused, mode: control.mode, budget: control.budget, open: count ?? 0, cap, backoffUntil: backoff.until, now: Date.now(), queued: 1 });
+    if (!d.send) return { ...out, skipped: d.why };
+    const pausedJobs = new Set(control.pausedJobIds);
+    for (let tries = 0; tries < 10 && Date.now() < deadline; tries += 1) {
       const s = await submitOne(admin, pausedJobs);
-      if (!s || s.items === 0) {
-        if (!s) break;
-        continue;
-      }
+      if (!s || s.refused) break;
+      if (s.items === 0) continue; // every product was already known (KB first): look further
       out.submitted += 1;
       out.families += s.families;
       out.items += s.items;
-      open += 1;
+      if (control.mode === "manual") await admin.rpc("ai_batch_budget_spend");
+      break;
     }
     return out;
   } catch (err) {
     console.error("[gemini-batch] tick failed:", err);
+    await logBatchEvent(admin, { kind: "error", severity: "bad", title: "The batch engine hit an error", plain: itemErrorText(err), fix: "It tries again next minute. If this repeats, copy it to your developer." });
     return { ...out, ok: false, error: itemErrorText(err) };
+  } finally {
+    if (leased) await admin.rpc("ai_batch_send_release", { p_holder: holder });
   }
 }

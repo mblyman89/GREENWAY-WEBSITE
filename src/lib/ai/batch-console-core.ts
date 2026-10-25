@@ -20,8 +20,15 @@ export const DEFAULT_TARGET_DATE = "2026-11-30";
 
 // ─── Pause switch ─────────────────────────────────────────────────────────
 
-export type BatchControl = { paused: boolean; pausedJobIds: string[]; note: string | null; at: string | null; by: string | null };
-export const OPEN_CONTROL: BatchControl = { paused: false, pausedJobIds: [], note: null, at: null, by: null };
+/**
+ * R74 S41: mode "manual" (the default) sends only the batches you allow
+ * (budget, used up one per batch sent); "auto" keeps the cap full until the
+ * queue is empty.
+ */
+export type BatchMode = "manual" | "auto";
+export type BatchControl = { paused: boolean; pausedJobIds: string[]; note: string | null; at: string | null; by: string | null; mode: BatchMode; budget: number };
+export const OPEN_CONTROL: BatchControl = { paused: false, pausedJobIds: [], note: null, at: null, by: null, mode: "manual", budget: 0 };
+export const MAX_BUDGET = 20;
 
 export function parseBatchControl(raw: unknown): BatchControl {
   if (!raw || typeof raw !== "object") return { ...OPEN_CONTROL };
@@ -33,6 +40,8 @@ export function parseBatchControl(raw: unknown): BatchControl {
     note: typeof o.note === "string" ? o.note.slice(0, 200) : null,
     at: typeof o.at === "string" ? o.at : null,
     by: typeof o.by === "string" ? o.by : null,
+    mode: o.mode === "auto" ? "auto" : "manual",
+    budget: typeof o.budget === "number" && Number.isFinite(o.budget) ? Math.max(0, Math.min(MAX_BUDGET, Math.floor(o.budget))) : 0,
   };
 }
 
@@ -252,6 +261,7 @@ export function __runBatchConsoleCoreTests(): { passed: number; failed: number }
   };
   const id = "11111111-1111-1111-1111-111111111111";
   ok(parseBatchControl(null).paused === false, "no row = running");
+  ok(parseBatchControl(null).mode === "manual" && parseBatchControl({ mode: "auto", budget: 99 }).budget === MAX_BUDGET && parseBatchControl({ budget: -3 }).budget === 0, "manual by default, budget clamped");
   ok(parseBatchControl({ paused: true, pausedJobIds: [id, id, "x"] }).pausedJobIds.length === 1, "ids deduped and validated");
   ok(withJobPaused(OPEN_CONTROL, id, true).pausedJobIds[0] === id && withJobPaused({ ...OPEN_CONTROL, pausedJobIds: [id] }, id, false).pausedJobIds.length === 0, "job pause toggles");
 

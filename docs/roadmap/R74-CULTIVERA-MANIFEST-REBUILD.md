@@ -962,3 +962,34 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
   1. Apply 0298.
   2. When the copy arrives, upload it, review the comparison and press Merge.
   3. Rebuild the weekly batch so the released Cultivera lots go out.
+
+
+## Round 21 - owner request (verbatim)
+
+> Thank you. Will you deep research the Gemini batch lookup feature again. I am not sure how I can tell better if a batch is working or not. We are allowed to send 4 batches, but when I start one, it starts sending all batches, so the dashboard shows 11/4 at Gemini. Even if I cancel them, they keep getting sent again. Our app uses terms like "ingested", "running", "failed". But Gemini uses terms like "pending", "running", "succeeded", "failed". I have tokens in my account and auto top up enabled. Is there a better more professional way to communicate with Gemini or a better way to manage batches so it's easier to see if something is actually working. It's really hard to know what is happening. Would it be better to go through the workspace cloud enterprise api or whatever? So I can see on their side what's happening? Or is there a terminal command that can be used to ask Gemini what it's doing or where our batch is in the queue or anything else that makes it known what is going on inside Gemini. I want to test the feature out with just one batch of 200 first, to see how it works. I don't want to send all 12 batches in one go. I think something in the code is causing it to keep sending every batch or something. Maybe it's causing issues? Is there a better way to do this, an enterprise grade method that lets me have more control or at least have more sight into what's happening? Please deep research this, recon the code, then report back with your professional strategy for doing this the right way so we get results and can see the results. We have a good foundation, and I know it's working in some way, as I am seeing details come in, it's just been about 18 hours since the last fact dropped, and the first batch returned facts very quickly. So I feel like maybe we have a bug we need to find and squash. Please help me find the absolute best method for doing this the professional enterprise grade way. Give me your best, genius plan that utilizes every known method for completing this task in the most effective and efficient way possible that makes my life so much easier and better knowing it's working rather than just having faith that it is. Follow the standing rules. Thank you!
+
+> thank you. I am not technical or confident enough to run terminal commands. I need you to add to the system a way for me to send the terminal commands and then see the response it gets back, so I can copy that and paste it to you. I need cancel or stop buttons so I dont have to use the terminal. I dont need to use google cloud. I already have an account set up there, its where I set up the ccrs mail fetch feature. we had to go through a boat load of steps getting it all setup with the iam settings and such. but its fine, vertex is fine, I just want to know we are doing it properly. I also have google cloud credits. please give the batch lookup feature a massive mission control upgrade. use gemini official docs to write the code properly. let google gemini tell you what it needs, then we just build that. use their terms and language and methods and logic. I want to be fully connected and have everything be plain english. I only have like 14 batches of 200 to do, so we have plenty of time to get it all done by the end of the year. please use expert logic, professional techniques and methods. please make sure it is plain english, and that it gives every detail possible. I dont understand any of this, so it needs to be spoon fed to me. also, I am a tier 2 subscriber at gemini. please complete all work related to this task before reporting back with what was done, and what I should expect. how to stop all batches, and allow me to restart fresh with a new test of just one batch for now. any messages google sends to the app, I want shown to me with plain english, and what I should do to fix it. add funds, clear the queue, etc. please go above and beyond for me. follow the standing rules. minimal testing please. we need to save money and credits. test what you need to, tell me how to test the rest. thank you.
+
+### S41 - Batch Mission Control: one sender, one test batch, Ask Google, every message in plain English
+
+- **Root causes fixed.**
+  1. No lock around sending: overlapping cron minutes each filled the cap (11 / 4). Now one sender lease (`ai_batch_send_lease` RPC) and at most ONE batch per minute.
+  2. The cap counted fewer states than the page. Both now use `OPEN_BATCH_STATES` (submitting, pending, running, succeeded, ingesting).
+  3. Cancel requeued the products, so they were resent. Now they are set aside (`BATCH_STOPPED_NOTE`) until **Re-run stopped**.
+  4. No one-batch mode. Now `ai_batch_control.mode` is `manual` (default) with a `budget` of allowed sends, or `auto`.
+  5. Silent poll failures. Every check saves Google's state, `batchStats`, times, HTTP status and error. A 404 marks the batch `lost` and sets its products aside.
+  6. A refused create was retried every minute. Now it backs off 5, 10, 20, 40, 60 min and says why.
+- **Explain core** `src/lib/ai/gemini-batch-explain-core.ts` (pure, 14 self-tests): Google's states in plain English, the 7-step pipeline, `explainGemini` (funds / spend cap, enqueued-token limit, 429, bad key, billing, 400, 404, 5xx, offline), `parseBatchList`, `sendDecision`, `createBackoffMin`, `curlFor`.
+- **Mission Control tab** (new default):
+  - Heartbeat with a one-sentence "what it is doing".
+  - Big buttons: Stop everything, Send 1 test batch, Allow N, One at a time / Automatic, Pause / Resume, Check now, Re-run stopped.
+  - Each batch on the pipeline with Google's progress.
+  - Google's own list (`GET v1beta/batches`) reconciled against ours (orphans / ghosts).
+  - **Ask Google** console (list / get / cancel / delete / models.get) with the full raw reply, copy buttons and the terminal equivalent.
+  - The message feed (`ai_batch_events`) with what to do, a glossary and a start-fresh guide.
+- **Migration `0299_ai_batch_mission_control.sql`.**
+  - New ai_batches columns: google_state, batch_stats, google_create/update_time, last_polled_at, poll_status, poll_error, and the state 'lost'.
+  - Table `ai_batch_events` (KEEP).
+  - RPCs `ai_batch_send_lease` / `ai_batch_send_release` / `ai_batch_budget_spend` (service_role only).
+  - Also: a rollback and `scripts/recon/ai-batch-mission-control-0299-pg-check.sql`. The local Postgres was not available this round, so the scenario check runs in CI / by hand.
+- **Owner steps:** apply 0299 in the Supabase SQL editor, then Stop everything, then Check now, then Send 1 test batch.
