@@ -117,7 +117,8 @@ describe("classifyEcho over the REAL 2026-09-17 error files", () => {
     const corpus =
       readdirSync(path.join(ROOT, RUN, "errors")).map((e) => read(`${RUN}/errors/${e}`)).join("\n") +
       read(`${EV}/P20261005A/Product__20261006T113333390.csv`) +
-      readdirSync(path.join(ROOT, `${EV}/2026-10-25-reupload/errors`)).map((e) => read(`${EV}/2026-10-25-reupload/errors/${e}`)).join("\n");
+      readdirSync(path.join(ROOT, `${EV}/2026-10-25-reupload/errors`)).map((e) => read(`${EV}/2026-10-25-reupload/errors/${e}`)).join("\n") +
+      readdirSync(path.join(ROOT, `${EV}/2026-10-25-week/errors`)).map((e) => read(`${EV}/2026-10-25-week/errors/${e}`)).join("\n");
     for (const m of CCRS_KNOWN_MESSAGES) expect(corpus.includes(m.text), m.text).toBe(true);
   });
 });

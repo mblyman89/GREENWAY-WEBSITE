@@ -8,6 +8,7 @@
  * and audited. The ledger store enforces the hard rules (a week can only be
  * resolved after it has completed; on_time computed at write).
  */
+import { NOT_PROCESSED_MESSAGE, parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -360,6 +361,26 @@ export async function recordErrorAction(formData: FormData): Promise<void> {
   if (!at) backTo(weekKey, env, errQ("Enter when the error email arrived (Pacific)."));
   const { admin, file } = await loadFileFor(env, fileId, weekKey);
   if (file.state !== "uploaded") backTo(weekKey, env, errQ(`${file.fileName} is ${file.state}; only an uploaded file takes an answer.`));
+  // R74 S47 (Round 27): the pasted text is the body-only "has not been
+  // processed" email for THIS file: CCRS refused it whole and sent no CSV.
+  if (parseNotProcessed(pasted).includes(file.fileName)) {
+    let fatal: Awaited<ReturnType<typeof recordOutcome>>;
+    try {
+      fatal = await recordOutcome(admin, file.id, "error-fatal", at, [], [NOT_PROCESSED_MESSAGE]);
+    } catch (e) {
+      backTo(weekKey, env, errQ(asText(e)));
+    }
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "ccrs.file.error-fatal",
+      entityType: "ccrs_files",
+      entityId: file.id,
+      after: { env, fileName: fatal.fileName, state: fatal.state, rows: fatal.rows, messages: [NOT_PROCESSED_MESSAGE] },
+    });
+    revalidatePath(BASE);
+    backTo(weekKey, env, okQ(`${fatal.fileName}: refused whole by CCRS (no error file). Now ${fatal.state}; its rows go again in the next export.`));
+  }
   let verdict: ReturnType<typeof classifyEcho>;
   try {
     const rows = await fileRowsForEcho(admin, file.id, file.numberRecords);
