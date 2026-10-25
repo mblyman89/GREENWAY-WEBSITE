@@ -179,6 +179,7 @@ import type { PosCardCapture } from "@/lib/pos/medical-pos-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { SaleFlow, type PosMemberHit } from "./SaleFlow";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
+import { menuRefreshFailureMessage } from "@/lib/pos/pos-menu-transport-core";
 
 // ---------------------------------------------------------------------------
 // Local storage keys (device-scoped; every durable fact lives server-side)
@@ -300,6 +301,8 @@ export function RegisterShell({
   const [saleActive, setSaleActive] = useState(false);
   const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
+  // R74 S43: latest bundle for callbacks (failure banner, order-load retry).
+  const menuBundleRef = useRef<PosMenuBundle | null>(null);
   // B17 — the last frozen receipt snapshot (survives the post-sale auto-lock)
   // and the parked sale, both hydrated from localStorage at boot.
   const [lastReceipt, setLastReceipt] = useState<PosReceiptInput | null>(null);
@@ -520,7 +523,10 @@ export function RegisterShell({
       const rawMenu = posStorageGet(LS_MENU);
       if (rawMenu) {
         const cached = JSON.parse(rawMenu) as PosMenuBundle;
-        if (cached && Array.isArray(cached.products)) setMenuBundle(cached);
+        if (cached && Array.isArray(cached.products)) {
+          setMenuBundle(cached);
+          menuBundleRef.current = cached;
+        }
       }
     } catch {
       // Corrupted cache — the online refresh replaces it.
@@ -874,8 +880,8 @@ export function RegisterShell({
   }, [creds, online, persistCreds, pairingRecheck]);
 
   // ── menu bundle: refresh when online, cache for offline sales ──
-  const refreshMenu = useCallback(async () => {
-    if (!creds || menuLoading) return;
+  const refreshMenu = useCallback(async (): Promise<PosMenuBundle | false> => {
+    if (!creds || menuLoading) return false;
     setMenuLoading(true);
     try {
       const res = await posFetch("/api/pos/menu", {
@@ -884,16 +890,29 @@ export function RegisterShell({
           "x-pos-device-key": creds.deviceKey,
         },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        // R74 S43: never fail silently - a stale cache looked like "the
+        // Cultivera products are not sellable" and emptied loaded orders.
+        setBanner(menuRefreshFailureMessage(res.status, menuBundleRef.current?.products.length ?? null));
+        return false;
+      }
       const bundle = (await res.json()) as PosMenuBundle;
+      if (!bundle || !Array.isArray(bundle.products)) {
+        setBanner(menuRefreshFailureMessage(res.status, menuBundleRef.current?.products.length ?? null));
+        return false;
+      }
       setMenuBundle(bundle);
+      menuBundleRef.current = bundle;
       try {
         posStorageSet(LS_MENU, JSON.stringify(bundle));
       } catch {
         // Cache write failure is non-fatal — the in-memory bundle still works.
       }
+      return bundle;
     } catch {
-      // Offline — the cached bundle (loaded below) covers the sale.
+      // Offline — the cached bundle (loaded below) covers the sale. Say so.
+      setBanner(menuRefreshFailureMessage(null, menuBundleRef.current?.products.length ?? null));
+      return false;
     } finally {
       setMenuLoading(false);
     }
@@ -2040,7 +2059,7 @@ export function RegisterShell({
             // length is the truth for the home-screen badge.
             if (typeof queueLength === "number") setPickupCount(queueLength);
           }}
-          onLoaded={(loaded) => {
+          onLoaded={async (loaded) => {
             // AM-D2 — the order is NOT superseded on load; it stays active and
             // is only cancelled when THIS sale completes (sync-store). Rebuild
             // its lines against the CURRENT bundle (fresh prices, live promos;
@@ -2052,7 +2071,14 @@ export function RegisterShell({
               setBanner(`Order ${loaded.orderNumber} was loaded but the menu isn't ready — refresh the menu and ring the items manually.`);
               return;
             }
-            const rebuilt = rebuildOrderCart(loaded.lines, effectiveBundle.products);
+            let rebuilt = rebuildOrderCart(loaded.lines, effectiveBundle.products);
+            // R74 S43: a line missing from the menu usually means this
+            // register's saved menu is old (e.g. it predates the Cultivera
+            // import). Pull a fresh menu ONCE and rebuild before dropping.
+            if (rebuilt.dropped.some((d) => d.endsWith("(no longer on the menu)"))) {
+              const fresh = await refreshMenu();
+              if (fresh) rebuilt = rebuildOrderCart(loaded.lines, applyMedicalTestMode(fresh, medicalTestMode).products);
+            }
             const parts: string[] = [
               // SLICE L-12 - name the marketplace IN the banner.
               //

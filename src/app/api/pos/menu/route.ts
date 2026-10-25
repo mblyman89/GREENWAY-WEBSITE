@@ -74,9 +74,14 @@ import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+// R74 S43: the post-Cultivera bundle crossed Vercel's 4.5 MB response cap.
+import { gzipSync } from "node:zlib";
+import { acceptsGzip, bundleSizeVerdict } from "@/lib/pos/pos-menu-transport-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// R74 S43: ~5,600 sizes + a full lot scan needs more than the default budget.
+export const maxDuration = 60;
 
 async function handleGet(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
@@ -448,7 +453,28 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     fetchedAt: new Date().toISOString(),
   };
 
-  return NextResponse.json(bundle);
+  // R74 S43: gzip the bundle. Uncompressed, the post-Cultivera menu is over
+  // Vercel's 4.5 MB Function response cap, so the download failed and the
+  // register kept selling from an old cache without the imported products.
+  const json = JSON.stringify(bundle);
+  const headers: Record<string, string> = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "x-pos-menu-products": String(products.length),
+  };
+  if (acceptsGzip(req.headers.get("accept-encoding"))) {
+    const body = gzipSync(Buffer.from(json, "utf8"));
+    const verdict = bundleSizeVerdict(body.byteLength, true);
+    if (!verdict.ok) console.warn(`[pos/menu] ${verdict.message}`);
+    return new NextResponse(new Uint8Array(body), {
+      status: 200,
+      headers: { ...headers, "content-encoding": "gzip", vary: "accept-encoding" },
+    });
+  }
+  const plainBytes = Buffer.byteLength(json, "utf8");
+  const verdict = bundleSizeVerdict(plainBytes, false);
+  if (!verdict.ok) console.warn(`[pos/menu] ${verdict.message}`);
+  return new NextResponse(json, { status: 200, headers });
 }
 
 /**
