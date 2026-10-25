@@ -1025,3 +1025,14 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - `VendorProgressTable` on the Vendor confidence tab: every vendor as an expandable row (native details) with a progress bar, counts and a "Score & attach" link to the vendor's attach buttons; products link to their onboarding row.
 - Exact search text now saved per lookup (`result_json.asked`): live path from lookupQueryForDraft, batch path via `request_keys._asked` per question. Older rows show a rebuilt query, labelled as such.
 - Batch Lookups page now shows the CatalogStageStrip pipeline bar (Discover -> ... -> Pay).
+
+## Round 25 - owner request (verbatim)
+
+> the batch lookup has been working really well so far. but all of a sudden, the send one test batch, started sending smaller and smaller quantity of lots, and now it is sending nothing. even when i go to the smart batching page and tick manifests to send. it worked once, but it too doenst work any more. i have sent 1509 products, and there is still another 1200 to ask about. ... please review, recon, and audit the code so you can find and work out what is wrong, if anything at all. then please enhance, harden, make more robust the code logic so i can finish the remaining products. minimal testing. ... follow the standing rules.
+
+### S45 - Batch sends keep finding the unanswered products
+
+- Root cause: the Smart-batch plan counted a product as answered only if its item sat in the newest 600 lookup jobs, while the send-time planner skips products answered in ANY job. Older answered products looked "waiting" forever; every wave picked those manifests first ("47 with nothing left") and queued nothing.
+- Fix: the plan reads answered / in-line products across ALL jobs (paged); Send N and Smart-batch waves walk the whole plan and keep going past empty manifests until the 200 x N products are filled (cap 120 manifests per press); an empty send is no longer "allowed" silently - it says so and points at Re-run stopped / Re-run failed.
+- Credits: Re-run stopped / failed never resends a product another lookup already answered or is asking about (closed with a plain note).
+- New pure core `batch-requeue-core.ts` (12 self-tests) + `tests/compliance/r74-s45-batch-requeue.test.ts`.

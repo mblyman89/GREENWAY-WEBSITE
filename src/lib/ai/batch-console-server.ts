@@ -15,6 +15,7 @@ import { AI_BATCH_MAX_INFLIGHT_ENV, AI_LOOKUP_ENGINE_ENV, BATCH_MAX_FAMILIES, ba
 import { AI_BATCH_THINKING_LEVEL_ENV, batchThinkingLevel } from "@/lib/catalog/lookup-job-core";
 import { createBackoffUntil, recentBatchEvents, type BatchEvent } from "@/lib/ai/batch-events-server";
 import { BATCH_LOST_NOTE, BATCH_STOPPED_NOTE } from "@/lib/ai/gemini-batch-explain-core";
+import { ALREADY_ANSWERED_NOTE, HANDLED_ITEM_STATUSES, pickRequeue } from "@/lib/ai/batch-requeue-core";
 import { OPEN_CONTROL, addLedger, itemLedgerCents, isRateLimitFailure, measurePace, type BatchControl, type BatchRowLite, type LedgerRow, type Pace, type PlanManifest } from "@/lib/ai/batch-console-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -126,7 +127,7 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
     const since = new Date(Date.now() - DAYS * 86_400_000).toISOString();
     const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
     const BATCH_COLS = "id, name, model, state, families, items, answered, failed, prompt_tokens, output_tokens, search_queries, cost_cents, error, lease_until, created_at, submitted_at, finished_at, ingested_at, updated_at";
-    const [control, batchesRes1, jobsRes, drafts, usage, costProbe, ev, heldRes, backoff] = await Promise.all([
+    const [control, batchesRes1, jobsRes, drafts, usage, costProbe, ev, heldRes, backoff, handledAll] = await Promise.all([
       readBatchControl(admin),
       admin.from("ai_batches").select(`${BATCH_COLS}, google_state, batch_stats, last_polled_at, poll_status, poll_error`).order("created_at", { ascending: false }).limit(300),
       admin.from("lookup_jobs").select("id, manifest_id, status, total, done, created_at, started_at, finished_at").gte("created_at", since).order("created_at", { ascending: false }).limit(600),
@@ -139,6 +140,9 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
       recentBatchEvents(admin, 80),
       admin.from("lookup_job_items").select("id", { count: "exact", head: true }).eq("status", "canceled").in("error", [BATCH_STOPPED_NOTE, BATCH_LOST_NOTE]),
       createBackoffUntil(admin),
+      // R74 S45: answered / in-line products across ALL jobs (not only recent ones),
+      // so the plan never offers a product the send-time planner will skip.
+      paged<{ draft_id: string }>((a, b) => admin.from("lookup_job_items").select("draft_id").in("status", [...HANDLED_ITEM_STATUSES]).order("id").range(a, b)),
     ]);
     // Before 0299 the Google columns do not exist: read the old ones.
     const missionReady = !batchesRes1.error && ev.ok;
@@ -168,7 +172,7 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
       const m = man(j.manifest_id);
       byJob.set(j.id, { id: j.id, manifestId: j.manifest_id, label: m.label, vendor: m.vendor, status: j.status, total: j.total, queued: 0, running: 0, done: 0, failed: 0, canceled: 0, paidCalls: 0, createdAt: j.created_at, startedAt: j.started_at, finishedAt: j.finished_at, paused: held.has(j.id) });
     }
-    const handled = new Set<string>();
+    const handled = new Set<string>(handledAll.map((r) => r.draft_id));
     const failures: FailRow[] = [];
     const activity: ActivityRow[] = [];
     const ledgerJob = new Map<string, LedgerRow>();
@@ -274,13 +278,31 @@ export async function stoppedItemIds(): Promise<string[]> {
 }
 
 /** Re-run failed products: back to queued with a fresh try count; their finished jobs re-open. */
-export async function requeueFailedItems(itemIds: readonly string[], fromStatus: "failed" | "canceled" = "failed"): Promise<{ items: number; jobs: number; reopened: number }> {
+export async function requeueFailedItems(itemIds: readonly string[], fromStatus: "failed" | "canceled" = "failed"): Promise<{ items: number; jobs: number; reopened: number; skipped: number }> {
   const admin = createSupabaseAdminClient();
   const at = new Date().toISOString();
+  // R74 S45: never resend a product another lookup already answered (or is
+  // asking right now) - those are closed with a note instead. Saves credits.
+  const rows: { id: string; draft_id: string }[] = [];
+  for (let i = 0; i < itemIds.length; i += 100) {
+    const { data } = await admin.from("lookup_job_items").select("id, draft_id").in("id", itemIds.slice(i, i + 100)).eq("status", fromStatus);
+    rows.push(...((data as { id: string; draft_id: string }[] | null) ?? []));
+  }
+  const busy = new Set<string>();
+  const draftIds = [...new Set(rows.map((r) => r.draft_id))];
+  for (let i = 0; i < draftIds.length; i += 100) {
+    const { data } = await admin.from("lookup_job_items").select("draft_id").in("draft_id", draftIds.slice(i, i + 100)).in("status", [...HANDLED_ITEM_STATUSES]);
+    for (const r of (data as { draft_id: string }[] | null) ?? []) busy.add(String(r.draft_id).toLowerCase());
+  }
+  const { keep, skipped } = pickRequeue(rows, busy);
+  const drop = rows.map((r) => r.id).filter((id) => !keep.includes(id));
+  for (let i = 0; i < drop.length; i += 100) {
+    await admin.from("lookup_job_items").update({ status: "canceled", error: ALREADY_ANSWERED_NOTE, finished_at: at, updated_at: at }).in("id", drop.slice(i, i + 100)).eq("status", fromStatus);
+  }
   let items = 0;
   const jobs = new Set<string>();
-  for (let i = 0; i < itemIds.length; i += 100) {
-    const { data } = await admin.from("lookup_job_items").update({ status: "queued", attempts: 0, error: null, batch_id: null, finished_at: null, updated_at: at }).in("id", itemIds.slice(i, i + 100)).eq("status", fromStatus).select("job_id");
+  for (let i = 0; i < keep.length; i += 100) {
+    const { data } = await admin.from("lookup_job_items").update({ status: "queued", attempts: 0, error: null, batch_id: null, finished_at: null, updated_at: at }).in("id", keep.slice(i, i + 100)).eq("status", fromStatus).select("job_id");
     for (const r of (data as { job_id: string }[] | null) ?? []) {
       items += 1;
       jobs.add(r.job_id);
@@ -293,5 +315,5 @@ export async function requeueFailedItems(itemIds: readonly string[], fromStatus:
     const { data } = await admin.from("lookup_jobs").update({ status: "queued", finished_at: null, lease_until: null, lease_token: null, updated_at: at }).eq("id", id).in("status", ["done", "canceled"]).select("id");
     reopened += ((data as unknown[] | null) ?? []).length;
   }
-  return { items, jobs: jobs.size, reopened };
+  return { items, jobs: jobs.size, reopened, skipped };
 }
