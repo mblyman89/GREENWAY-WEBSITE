@@ -72,8 +72,10 @@ import { CcrsMailPanel, type CcrsMailPanelRow } from "@/components/admin/complia
 import { listRecentCcrsMail } from "@/lib/compliance/ccrs-mail-store";
 import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
 import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
+import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 import {
   applyCcrsErrorMailAction,
+  applyCcrsNotProcessedMailAction,
   applyCcrsSuccessMailAction,
   dismissCcrsMailAction,
   pollCcrsMailNowAction,
@@ -269,6 +271,8 @@ export default async function CcrsCommandCenterPage({
   // The week stays a placeholder in the examiner draft: an error file does not say which week it answers.
   const ccrsMailRows = ccrsMail.rows.map((r) => ({
     ...r,
+    // R74 S47: a body-only "has not been processed" email (whole file refused, no CSV).
+    notProcessed: r.kind === "unknown" && r.state === "new" ? parseNotProcessed(r.body_text ?? "") : [],
     strategy:
       r.kind === "error" && r.state === "new"
         ? buildCcrsStrategy(errorsFromStored(r.csvs ?? []), {
@@ -727,6 +731,7 @@ export default async function CcrsCommandCenterPage({
             poll: pollCcrsMailNowAction,
             applySuccess: applyCcrsSuccessMailAction,
             applyError: applyCcrsErrorMailAction,
+            applyNotProcessed: applyCcrsNotProcessedMailAction,
             dismiss: dismissCcrsMailAction,
           }}
         />

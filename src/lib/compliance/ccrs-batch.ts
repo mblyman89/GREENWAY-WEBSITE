@@ -86,6 +86,7 @@ import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
+import { ccrsUnitWeightCell, fitUtf8Bytes, plainPunctuation } from "@/lib/compliance/ccrs-whole-file-core";
 import { loadInventoryTold, loadLedgerForBatch, loadSaleSlice, loadTransferSlice } from "@/lib/compliance/ccrs-ledger-store";
 import { lotsNamedByEventRows, planInventoryDelta } from "@/lib/compliance/ccrs-inventory-delta-core";
 import {
@@ -843,7 +844,9 @@ function buildProductFile(
     }
     // Record the exact Name for the Inventory.Product join (keyed by raw key).
     nameByProductKey.set(key, nameClamp.value);
-    const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
+    // R74 S47: typographic dashes/quotes become ASCII before the 250 limit.
+    const descFull = clampText(plainPunctuation(it.description ?? ""), CCRS_PRODUCT_DESCRIPTION_MAX);
+    const descClamp = { value: fitUtf8Bytes(descFull.value, CCRS_PRODUCT_DESCRIPTION_MAX), truncated: descFull.truncated };
     if (descClamp.truncated) {
       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
     }
@@ -876,7 +879,10 @@ function buildProductFile(
       type,
       nameClamp.value,
       descClamp.value,
-      grams,
+      // R74 S47 (Round 27): never blank, at most 2 decimals [G L0487-L0490].
+      // A blank / 3-decimal weight got the whole 2026-10-25 Product file
+      // refused ("has not been processed", no error file).
+      ccrsUnitWeightCell(grams, type),
       ext,
       createdBy,
       createdDate,

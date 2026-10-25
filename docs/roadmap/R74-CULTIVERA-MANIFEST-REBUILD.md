@@ -1049,3 +1049,25 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - The zip README says DO NOT UPLOAD for a re-served file CCRS already answered. The files list warns next to "Download exact file" on answered files.
 - New `docs/ccrs-bible/19-cultivera-preprod-rehearsal-plan.md`: the two-week plan, the real risks for 11/08 and the go/no-go list.
 - Also refreshed a stale s12b source pin left by S42 (E59).
+
+## Round 27 - owner request (verbatim)
+
+> I must have given you the wrong files. look at these new correct ones. I am testing the week of 10/25/26-11/01/2026. I get errors for all files. the examiners office did not send a an error csv file to examine for the product file. just an error message. I have tested new sales today, and still get the processing error. please try again to fix what ever is broken here. again, i just want to reiterate, this is not a duplicate upload. this is a new week, the most current week. minimal testing please, i will test it. follow the standing rules. thank you.
+
+### S47 - Product file refused whole (blank / 3-decimal UnitWeightGrams) + "not processed" email
+
+- **Root cause.** The Product file (2,604 rows) carried:
+  - 14 blank UnitWeightGrams (Concentrate for Inhalation);
+  - 140 weights with 3 decimals, against `Decimal (10,2)`, which is required on Insert `[G L0487-L0490]`.
+
+  CCRS refused the whole file ("has not been processed", no CSV). Inventory then failed `Invalid Product` and Sale failed `Invalid InventoryExternalIdentifier`.
+- **New pure core** `ccrs-whole-file-core.ts` (`__runCcrsWholeFileTests`, 17):
+  - `ccrsUnitWeightCell`: never blank for other types (writes 0), 2 decimals, a positive weight never becomes 0;
+  - `plainPunctuation` and `fitUtf8Bytes`: Description is ASCII punctuation and at most 250 bytes;
+  - `parseNotProcessed` and `notProcessedAdvice`.
+- **Wiring:**
+  - `buildProductFile` writes the safe cell;
+  - the mail panel shows "Record as not processed" (`applyCcrsNotProcessedMailAction`, error-fatal, audited);
+  - the S-12c paste box accepts the same email text.
+- **Known message** `Invalid InventoryExternalIdentifier` (row, `[G L1302-L1304]`).
+- **Evidence:** `docs/ccrs-bible/evidence/2026-10-25-week/`.

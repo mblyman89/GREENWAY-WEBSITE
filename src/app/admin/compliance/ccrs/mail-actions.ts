@@ -32,6 +32,7 @@ import {
 } from "@/lib/compliance/ccrs-mail-core";
 import { getCcrsMail, markCcrsMailHandled, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
 import { isAnsweredState, planReuploadSetAside, type AnsweredFile } from "@/lib/compliance/ccrs-reupload-core";
+import { NOT_PROCESSED_MESSAGE, parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 
 const BASE = "/admin/compliance/ccrs";
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -257,6 +258,61 @@ export async function applyCcrsErrorMailAction(formData: FormData): Promise<void
   revalidatePath(BASE);
   if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proofTexts.join(" ")}`.trim()));
   backMail(weekKey, okQ(`${done.join(" | ")} ${proofTexts.join(" ")}`.trim()));
+}
+
+/**
+ * R74 S47 (Round 27): a body-only "has not been processed" email. CCRS refused
+ * the whole file and sent no error CSV. Each named file that is uploaded and
+ * waiting is recorded error-fatal: every row refused, nothing marked on file,
+ * so the next export sends those rows again. Names are re-read from the stored
+ * body, never from the form.
+ */
+export async function applyCcrsNotProcessedMailAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const { weekKey, admin, mail } = await loadMail(formData);
+  const names = parseNotProcessed(mail.body_text ?? "");
+  if (names.length === 0) backMail(weekKey, errQ("This email does not say a file was not processed."));
+  const now = Date.now();
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const name of names) {
+    let hits: Awaited<ReturnType<typeof ccrsFilesByName>> = [];
+    try {
+      for (const env of ["preprod", "prod"] as const) hits.push(...(await ccrsFilesByName(admin, env, [name])));
+    } catch (e) {
+      failed.push(`${name}: ${asText(e)}`);
+      continue;
+    }
+    hits = hits.filter((f) => f.state === "uploaded");
+    if (hits.length !== 1) {
+      failed.push(`${name}: ${hits.length === 0 ? "no uploaded file waiting for an answer has this name (mark it uploaded first)" : "the name is waiting in both PREprod and production; record it by hand"}`);
+      continue;
+    }
+    const f = hits[0];
+    const at = applyTimeISO(f.uploadedAt, mail.received_at, now);
+    if (!at) {
+      failed.push(`${name}: no upload time recorded`);
+      continue;
+    }
+    try {
+      const out = await recordOutcome(admin, f.id, "error-fatal", at, [], [NOT_PROCESSED_MESSAGE]);
+      done.push(`${out.fileName}: refused whole by CCRS. Now ${out.state}; its rows go again in the next export`);
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.email,
+        action: "ccrs.file.error-fatal",
+        entityType: "ccrs_files",
+        entityId: f.id,
+        after: { env: f.env, fileName: out.fileName, state: out.state, rows: out.rows, messages: [NOT_PROCESSED_MESSAGE], fromEmail: mail.gmail_id, auth: mail.auth },
+      });
+    } catch (e) {
+      failed.push(`${name}: ${asText(e)}`);
+    }
+  }
+  if (done.length > 0) await markCcrsMailHandled(admin, mail.id, "applied", session.profile.id, done.join(" | "));
+  revalidatePath(BASE);
+  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; NOT recorded ${failed.length}: ${failed.join(" | ")}`));
+  backMail(weekKey, okQ(done.join(" | ")));
 }
 
 /** Audit row for an automatic proof-by-reference after an email answer (R6-1, 0284). */

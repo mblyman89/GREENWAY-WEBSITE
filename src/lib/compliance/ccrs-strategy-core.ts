@@ -72,6 +72,9 @@ export const SOURCE_QUOTES = {
     1376: "CannabisExciseTax must be numeric (do not use $ symbol or parentheses)",
     1377: "CannabisExciseTax does not equal 37% of UnitPrice",
     1378: "Only Medical Sales can be 0",
+    1302: "Invalid InventoryExternalIdentifier",
+    1303: "Note: If you have received this error, ensure that you have already reported the",
+    1304: "inventory in an inventory.CSV",
     1390: "Duplicate Sale for Licensee",
     1391: "Note: If you have received this error ensure:",
     1392: "Records within a single sale have the same",
@@ -237,6 +240,19 @@ export const STRATEGY_PLAYBOOK: Record<string, PlaybookEntry> = {
       "Note: Brian wrote that operation errors are full file [EXAM L0532], but in P20261005A only the 3 comma rows failed and the other 5 were filed. Check the confirmation of the re-sent rows before assuming either way.",
     ],
     seen: "2026-10-06 P20261005A",
+  },
+  "Invalid InventoryExternalIdentifier": {
+    cls: "row",
+    action: "fix-resend",
+    meaning:
+      "A sale (or adjustment) names a lot CCRS does not hold. In PREprod on 2026-10-25 every sale line failed this way because the Inventory file carrying those lots had failed (\"Invalid Product\"), and that was because CCRS refused the whole Product file.",
+    cite: ["[G L1302-L1304]"],
+    fix: [
+      "Fix the files it depends on first: the Product file must be confirmed, then the Inventory file naming these lots.",
+      "Then send the Sale file again (the hub holds sales of lots CCRS does not hold yet, so a fresh export after the Inventory confirmation carries them).",
+      RESEND_ROWS,
+    ],
+    seen: "2026-10-25 PREprod week 10/25-11/01",
   },
   "Duplicate Sale for Licensee": {
     cls: "row-contradicts-ledger",

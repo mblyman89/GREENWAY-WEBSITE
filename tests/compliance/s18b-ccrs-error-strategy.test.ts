@@ -75,6 +75,8 @@ const ERROR_FILES = [
   `${EV}/P20261005A/Product__20261006T113333390.csv`,
   // R74 S46: the first "Duplicate Sale for Licensee" (re-upload of the accepted 2026-10-20 Sale file).
   `${EV}/2026-10-25-reupload/errors/Sale__20261025T123200526.csv`,
+  // R74 S47: the first "Invalid InventoryExternalIdentifier" (week 10/25: Product refused whole, cascade).
+  `${EV}/2026-10-25-week/errors/Sale__20261025T142209583.csv`,
 ];
 const real = (p: string): ErrorAttachment => readErrorAttachment(path.basename(p), read(p))!;
 
@@ -195,9 +197,9 @@ describe("every real error CSV gets a report with no examiner escalation", () =>
     expect(f[0].ids).toHaveLength(1);
     expect(f[0].ids[0]).toBe(read(`${RUN}/errors/Inventory__20260917T131424499.csv`).split(/\r?\n/)[1].split(",")[4]);
   });
-  it("all 16 files at once: one report, dependency order, no draft", () => {
+  it("all 17 files at once: one report, dependency order, no draft", () => {
     const s = buildCcrsStrategy(ERROR_FILES.map(real), CTX);
-    expect(s.files).toHaveLength(16);
+    expect(s.files).toHaveLength(17);
     expect(s.examinerDraft).toBeNull();
     // Strain only ever had duplicate (none) and invalid-name (fix) -> it is re-sent; Area only 'confirm' -> not.
     expect(s.resendOrder).toEqual(["Strain", "Product", "Inventory", "InventoryAdjustment", "Sale"]);

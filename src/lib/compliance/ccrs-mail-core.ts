@@ -58,6 +58,7 @@
  *    20 (2,500) = 4,025, under 6,000 even if the whole tick ran in one minute.
  */
 import { parseSuccessEmails, type SuccessNotice } from "./ccrs-lifecycle-core";
+import { notProcessedAdvice, parseNotProcessed } from "./ccrs-whole-file-core";
 import { CCRS_KNOWN_MESSAGES, classifyEcho, CcrsEchoError, echoHeaderLooksRight, type EchoVerdict, type OurRow } from "./ccrs-outcome-core";
 import { ccrsReaderSplit, type CcrsRetailerFileType } from "./ccrs-batch-core";
 import type { LedgerEnv } from "./ccrs-ledger-core";
@@ -589,7 +590,9 @@ export function classifyCcrsMail(m: NormalizedMail): MailAnalysis {
         ? "this email both confirms a file and carries an error file; that has never been seen. Read it in Gmail."
         : PROCESSED_RE.test(m.text)
           ? "says a file was processed, but the file name is not in the shape this system emits (for example a renamed copy with an extra _1). Read it in Gmail and record it by hand."
-          : "from CCRS, but neither a confirmation nor an error file. Read it in Gmail.",
+          : parseNotProcessed(m.text).length > 0
+            ? notProcessedAdvice(parseNotProcessed(m.text))
+            : "from CCRS, but neither a confirmation nor an error file. Read it in Gmail.",
     );
   }
   return { ...base, kind, env, envVerified, successes, errors, otherAttachments: other, needsHuman };

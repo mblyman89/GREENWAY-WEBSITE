@@ -25,6 +25,8 @@ export type CcrsMailPanelRow = {
   analysis: Omit<Partial<MailAnalysis>, "errors"> & { errors?: { filename: string; fileType: string | null; typeProblem: string | null; dataLines: number; messages: string[] }[] };
   state: "new" | "applied" | "dismissed";
   handled_note: string | null;
+  /** R74 S47: our file names in a "has not been processed" email (whole file refused, no CSV). */
+  notProcessed?: string[];
   /** S-18b: built by the page from the stored CSVs (error mail only). */
   strategy?: CcrsStrategy | null;
 };
@@ -71,6 +73,7 @@ export function CcrsMailPanel({
     poll: (fd: FormData) => Promise<void>;
     applySuccess: (fd: FormData) => Promise<void>;
     applyError: (fd: FormData) => Promise<void>;
+    applyNotProcessed?: (fd: FormData) => Promise<void>;
     dismiss: (fd: FormData) => Promise<void>;
   };
 }) {
@@ -211,6 +214,15 @@ export function CcrsMailPanel({
                     })}
                     <Button type="submit" size="sm" variant="save">
                       Apply error file
+                    </Button>
+                  </form>
+                ) : null}
+                {r.notProcessed?.length && actions.applyNotProcessed ? (
+                  <form action={actions.applyNotProcessed} className="flex flex-wrap items-end gap-2" data-testid="ccrs-mail-not-processed">
+                    <input type="hidden" name="week_key" value={weekKey} />
+                    <input type="hidden" name="mail_id" value={r.id} />
+                    <Button type="submit" size="sm" variant="save">
+                      Record as not processed ({r.notProcessed.join(", ")})
                     </Button>
                   </form>
                 ) : null}

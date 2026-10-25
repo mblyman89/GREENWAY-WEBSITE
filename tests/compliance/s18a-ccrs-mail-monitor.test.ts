@@ -686,10 +686,13 @@ describe("drafts-only (standing rule 3): only the owner's Apply writes the ledge
       "pollCcrsMailNowAction",
       "applyCcrsSuccessMailAction",
       "applyCcrsErrorMailAction",
+      // R74 S47: a body-only "has not been processed" email -> error-fatal (audited).
+      "applyCcrsNotProcessedMailAction",
       "dismissCcrsMailAction",
     ]);
     for (const f of fns) expect(f).toMatch(/requirePermission\("settings\.manage"\)/);
-    expect((ACT.match(/recordOutcome\(/g) ?? []).length).toBe(2);
+    expect((ACT.match(/recordOutcome\(/g) ?? []).length).toBe(3);
+    expect(ACT).toMatch(/action: "ccrs\.file\.error-fatal"/);
     expect((ACT.match(/action: "ccrs\.file\.success"/g) ?? []).length).toBe(1);
     expect(ACT).toMatch(/action: `ccrs\.file\.\$\{pick\.verdict\.outcome\}`/);
     expect(ACT).toMatch(/action: "ccrs\.mail\.dismissed"/);
