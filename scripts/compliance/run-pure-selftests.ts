@@ -705,6 +705,7 @@ import { __runCcrsHeldBackTests } from "../../src/lib/compliance/ccrs-held-back-
 import { __runCcrsRecordsCompareTests } from "../../src/lib/compliance/ccrs-records-compare-core";
 import { __runGeminiBatchExplainTests } from "../../src/lib/ai/gemini-batch-explain-core";
 import { __runCcrsNeverBlockTests } from "../../src/lib/compliance/ccrs-never-block-core";
+import { __runPosMenuTransportTests } from "../../src/lib/pos/pos-menu-transport-core";
 // R21 (C): the enrichment media-library picker (pickable, search, order, copy).
 import { __runLibraryPickerCoreTests } from "../../src/lib/media/library-picker-core";
 import { __runImageRecommendCoreTests } from "../../src/lib/catalog/image-recommend-core";
@@ -2337,6 +2338,7 @@ __runLiquidVolumeTests();
   { const r = __runCcrsRecordsCompareTests(); if (r.failed > 0 || r.passed < 13) throw new Error(`ccrs-records-compare-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-records-compare-core: ${r.passed} assertions passed`); }
   { const r = __runGeminiBatchExplainTests(); if (r.failed > 0 || r.passed < 14) throw new Error(`gemini-batch-explain-core: ${r.failed} failed, ${r.passed} passed`); console.log(`gemini-batch-explain-core: ${r.passed} assertions passed`); }
   { const r = __runCcrsNeverBlockTests(); if (r.failed > 0 || r.passed < 19) throw new Error(`ccrs-never-block-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-never-block-core: ${r.passed} assertions passed`); }
+  { const r = __runPosMenuTransportTests(); if (r.failed > 0 || r.passed < 11) throw new Error(`pos-menu-transport-core: ${r.failed} failed, ${r.passed} passed`); console.log(`pos-menu-transport-core: ${r.passed} assertions passed`); }
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }
