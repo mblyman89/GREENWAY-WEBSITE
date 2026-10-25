@@ -376,6 +376,8 @@ export interface ItemResult {
    * only the ones that attached or were listed). 0 for older rows.
    */
   found: number;
+  /** R74 S44: the exact search text sent to Google (absent on older rows / memory). */
+  asked?: string;
 }
 
 /** Decide the outcome from what the lookup and the write door reported. */
