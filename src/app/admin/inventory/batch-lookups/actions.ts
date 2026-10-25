@@ -19,7 +19,9 @@ import { resolveGeminiModel } from "@/lib/ai/gemini-models-core";
 import { curlFor, explainGemini, googleStateKey, isGoogleOpen, validBatchName, type ConsoleCommand } from "@/lib/ai/gemini-batch-explain-core";
 import { runVendorConfidenceAttach } from "@/lib/catalog/cultivera-confidence-server";
 import { CONFIDENCE_TAB, parseAttachMode, type AttachMode } from "@/lib/catalog/cultivera-confidence-core";
-import { BATCH_CONSOLE_PATH, BATCH_WAVE, MAX_BUDGET, isRateLimitFailure, planBatches, waveManifestIds, withJobPaused } from "@/lib/ai/batch-console-core";
+import { BATCH_CONSOLE_PATH, BATCH_WAVE, MAX_BUDGET, isRateLimitFailure, planBatches, withJobPaused, type PlanManifest } from "@/lib/ai/batch-console-core";
+import { BATCH_MAX_FAMILIES } from "@/lib/ai/gemini-batch-core";
+import { keepQueuing, waveSummary } from "@/lib/ai/batch-requeue-core";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,22 +35,41 @@ async function actor() {
   return { userId: s.userId, email: s.email };
 }
 
+type Tally = { created: number; products: number; already: number; nothing: number; errors: string[] };
+
+async function queueOne(id: string, who: { userId: string | null; email: string | null }, t: Tally): Promise<void> {
+  const r = await enqueueManifestLookup(id, who);
+  if (r.ok && r.kind === "created") {
+    t.created += 1;
+    t.products += r.total ?? 0;
+  } else if (r.ok) t.already += 1;
+  else if (r.code === "nothing") t.nothing += 1;
+  else t.errors.push(r.message || r.code);
+}
+
 async function queueManifests(ids: string[], who: { userId: string | null; email: string | null }): Promise<string> {
-  let created = 0;
-  let products = 0;
-  let already = 0;
-  let nothing = 0;
-  const errors: string[] = [];
-  for (const id of ids) {
-    const r = await enqueueManifestLookup(id, who);
-    if (r.ok && r.kind === "created") {
-      created += 1;
-      products += r.total;
-    } else if (r.ok) already += 1;
-    else if (r.code === "nothing") nothing += 1;
-    else errors.push(r.message || r.code);
+  const t: Tally = { created: 0, products: 0, already: 0, nothing: 0, errors: [] };
+  for (const id of ids) await queueOne(id, who, t);
+  return waveSummary(t);
+}
+
+/**
+ * R74 S45: fill N batches. Walks the WHOLE plan in order and keeps going past
+ * manifests that turn out to have nothing left (a stale plan used to stop the
+ * wave there, so each send queued less until it queued nothing).
+ */
+async function queueWave(plan: readonly PlanManifest[], n: number, who: { userId: string | null; email: string | null }): Promise<{ msg: string; tried: number; products: number }> {
+  const order: string[] = [];
+  for (const b of planBatches(plan)) for (const m of b.manifests) if (!order.includes(m.manifestId)) order.push(m.manifestId);
+  const t: Tally = { created: 0, products: 0, already: 0, nothing: 0, errors: [] };
+  let tried = 0;
+  for (const id of order) {
+    if (!keepQueuing({ queuedProducts: t.products, target: n * BATCH_MAX_FAMILIES, tried })) break;
+    tried += 1;
+    await queueOne(id, who, t);
+    if (t.errors.length >= 5) break;
   }
-  return `Queued ${created} manifest${created === 1 ? "" : "s"} (${products} products)${already ? `, ${already} already queued` : ""}${nothing ? `, ${nothing} with nothing left` : ""}${errors.length ? `. Problems: ${errors.slice(0, 2).join("; ")}` : ""}. The engine sends them to Gemini on the next minute.`;
+  return { msg: waveSummary(t), tried, products: t.products };
 }
 
 /** Smart batching: queue the manifests that fill the next N gift-wrapped batches. */
@@ -58,11 +79,10 @@ export async function sendWaveAction(formData: FormData): Promise<void> {
   const vendor = String(formData.get("vendor") ?? "").trim();
   const c = await loadBatchConsole();
   if (!c.ok) back("smart", c.error ?? "Could not read the queue.", true);
-  const plan = planBatches(vendor ? c.plan.filter((m) => m.vendor === vendor) : c.plan);
-  const ids = waveManifestIds(plan, n);
-  if (ids.length === 0) back("smart", "Nothing is waiting to be looked up.", true);
-  const msg = await queueManifests(ids, who);
-  await recordAudit({ actorId: who.userId, actorEmail: who.email, action: "ai_batch.wave_sent", entityType: "ai_batches", entityId: null, after: { batches: n, vendor: vendor || null, manifests: ids.length } });
+  const pool = vendor ? c.plan.filter((m) => m.vendor === vendor) : c.plan;
+  if (pool.length === 0) back("smart", "Nothing is waiting to be looked up.", true);
+  const { msg, tried } = await queueWave(pool, n, who);
+  await recordAudit({ actorId: who.userId, actorEmail: who.email, action: "ai_batch.wave_sent", entityType: "ai_batches", entityId: null, after: { batches: n, vendor: vendor || null, manifests: tried } });
   back("smart", msg);
 }
 
@@ -136,9 +156,14 @@ export async function allowBatchesAction(formData: FormData): Promise<void> {
   const queued = c.jobs.filter((j) => j.status === "queued" || j.status === "running").reduce((s, j) => s + j.queued, 0);
   let queuedMsg = `${queued} products were already waiting in line, so nothing new was added.`;
   if (queued === 0) {
-    const ids = waveManifestIds(planBatches(c.plan), want);
-    if (ids.length === 0) back(M, "Nothing is waiting to be looked up, so there is nothing to send.", true);
-    queuedMsg = await queueManifests(ids, who);
+    if (c.plan.length === 0) back(M, "Nothing is waiting to be looked up, so there is nothing to send.", true);
+    const w = await queueWave(c.plan, want, who);
+    queuedMsg = w.msg;
+    // Never "allow" a send with an empty line: say so plainly instead.
+    if (w.products === 0) {
+      await logBatchEvent(createSupabaseAdminClient(), { kind: "control", severity: "warn", title: "Nothing new to send", plain: `${w.msg} Products that failed or were stopped wait for Re-run failed / Re-run stopped.`, fix: "Press Re-run stopped (Mission tab) or Re-run failed (Monitor tab), then Send 1 test batch.", actorEmail: who.email });
+      back(M, `${w.msg} Use Re-run stopped / Re-run failed for products set aside.`, true);
+    }
   }
   const admin = createSupabaseAdminClient();
   const cur = await readBatchControl(admin);
@@ -201,8 +226,8 @@ export async function rerunStoppedAction(): Promise<void> {
   const ids = await stoppedItemIds();
   if (ids.length === 0) back(M, "No stopped products are waiting.", true);
   const r = await requeueFailedItems(ids, "canceled");
-  await logBatchEvent(createSupabaseAdminClient(), { kind: "control", severity: "info", title: `Put ${r.items} stopped products back in line`, plain: `They wait in the queue across ${r.jobs} manifests. They go to Google with the next batch you allow (or by themselves in Automatic).`, fix: "Press Send 1 test batch (or Allow) when ready.", actorEmail: who.email });
-  back(M, `${r.items} stopped products are back in line. They go with the next batch you allow.`);
+  await logBatchEvent(createSupabaseAdminClient(), { kind: "control", severity: "info", title: `Put ${r.items} stopped products back in line${r.skipped ? ` (${r.skipped} already answered elsewhere, not resent)` : ""}`, plain: `They wait in the queue across ${r.jobs} manifests. They go to Google with the next batch you allow (or by themselves in Automatic).`, fix: "Press Send 1 test batch (or Allow) when ready.", actorEmail: who.email });
+  back(M, `${r.items} stopped products are back in line${r.skipped ? ` (${r.skipped} were already answered by another lookup, so they are not resent)` : ""}. They go with the next batch you allow.`);
 }
 
 /** Check now: ask Google about every open batch immediately (no new sends). */
@@ -269,9 +294,9 @@ export async function rerunFailedAction(formData: FormData): Promise<void> {
   const c = await loadBatchConsole();
   const pick = UUID.test(one) ? c.failures.filter((f) => f.itemId === one) : c.failures.filter((f) => scope === "all" || isRateLimitFailure(f.error));
   if (pick.length === 0) back("monitor", "No failed products match.", true);
-  const { items: n, jobs: jobCount, reopened } = await requeueFailedItems(pick.map((f) => f.itemId));
+  const { items: n, jobs: jobCount, reopened, skipped } = await requeueFailedItems(pick.map((f) => f.itemId));
   await recordAudit({ actorId: who.userId, actorEmail: who.email, action: "ai_batch.failed_rerun", entityType: "lookup_job_items", entityId: null, after: { scope, items: n, jobs: jobCount } });
-  back("monitor", `${n} failed product${n === 1 ? "" : "s"} queued again across ${jobCount} manifest${jobCount === 1 ? "" : "s"}${reopened < jobCount ? " (a manifest with another open lookup picks them up when that one finishes)" : ""}.`);
+  back("monitor", `${n} failed product${n === 1 ? "" : "s"} queued again across ${jobCount} manifest${jobCount === 1 ? "" : "s"}${skipped ? ` (${skipped} already answered by another lookup - closed, not resent)` : ""}${reopened < jobCount ? " (a manifest with another open lookup picks them up when that one finishes)" : ""}.`);
 }
 
 /**
