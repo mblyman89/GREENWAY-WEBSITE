@@ -22,6 +22,7 @@ import {
   type DisplayIssue,
 } from "@/lib/compliance/ccrs-issue-display-core";
 import { CopyCommandButton } from "@/components/admin/orders/CopyCommandButton";
+import { fixLinksFor, productKeyOfRow } from "@/lib/compliance/ccrs-never-block-core";
 
 type Props = {
   issues: readonly DisplayIssue[];
@@ -29,9 +30,15 @@ type Props = {
   tone: "error" | "warning" | "held";
   /** Title of the copy-all text (e.g. "CCRS blocking errors — week 2026-10-11"). */
   copyTitle: string;
+  /**
+   * R74 S42: when given, every product row gets "Add to CCRS clean-up list"
+   * (or "Remove from clean-up list" on E58). A server action; hidden fields
+   * bring the operator back to the same week and environment.
+   */
+  cleanup?: { action: (fd: FormData) => Promise<void>; weekKey: string };
 };
 
-export function CcrsIssueList({ issues, env, tone, copyTitle }: Props) {
+export function CcrsIssueList({ issues, env, tone, copyTitle, cleanup }: Props) {
   if (issues.length === 0) return null;
   const text = tone === "error" ? "text-red-200" : tone === "held" ? "text-amber-100" : "text-white/50";
   const anyRows = issues.some((i) => (i.rows?.length ?? 0) > 0);
@@ -72,9 +79,33 @@ export function CcrsIssueList({ issues, env, tone, copyTitle }: Props) {
                 <details className="mt-1 pl-4">
                   <summary className="cursor-pointer opacity-80">Show all {rows.length} row(s)</summary>
                   <ol className="mt-1 list-decimal space-y-0.5 pl-5 font-mono text-[11px]" data-testid="issue-rows">
-                    {rows.map((r, j) => (
-                      <li key={`${r.id}-${j}`}>{rowLine(r)}</li>
-                    ))}
+                    {rows.map((r, j) => {
+                      // R74 S42: every row says where to fix it.
+                      const links = fixLinksFor(e, r);
+                      const key = productKeyOfRow(e, r);
+                      return (
+                        <li key={`${r.id}-${j}`}>
+                          {rowLine(r)}
+                          {links.map((l) => (
+                            <a key={l.href} href={l.href} className="ml-2 font-sans text-sky-300 underline" data-testid="fix-link">
+                              {l.label}
+                            </a>
+                          ))}
+                          {cleanup && key ? (
+                            <form action={cleanup.action} className="ml-2 inline">
+                              <input type="hidden" name="op" value={e.code === "E58_PRODUCT_ON_CLEANUP_LIST" ? "remove" : "add"} />
+                              <input type="hidden" name="product_key" value={key} />
+                              <input type="hidden" name="label" value={r.label} />
+                              <input type="hidden" name="week_key" value={cleanup.weekKey} />
+                              <input type="hidden" name="env" value={env} />
+                              <button type="submit" className="font-sans text-[10px] text-amber-200 underline" data-testid="cleanup-button">
+                                {e.code === "E58_PRODUCT_ON_CLEANUP_LIST" ? "Remove from clean-up list" : "Add to CCRS clean-up list"}
+                              </button>
+                            </form>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ol>
                   <div className="mt-1">
                     <CopyCommandButton

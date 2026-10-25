@@ -36,6 +36,8 @@ import {
   CCRS_UNENCODABLE_CODE,
   CCRS_FREE_TEXT_COLUMNS,
   CCRS_COLUMNS,
+  ccrsReaderSplit,
+  verifyCcrsBatch,
   CCRS_PRODUCT_NAME_MAX,
   CCRS_PRODUCT_DESCRIPTION_MAX,
   type CcrsRetailerFileType,
@@ -65,7 +67,7 @@ import {
   menuPresenceFromRows,
   type MenuPresence,
 } from "@/lib/compliance/ccrs-lot-product-core";
-import { ledgerSelfCheckIssues, type LedgerProblem } from "@/lib/compliance/ccrs-outbox-core";
+import { ledgerSelfCheckIssues, planOutboxFiles, verifyOutboxAgainstLedger, type LedgerProblem } from "@/lib/compliance/ccrs-outbox-core";
 import {
   applyIdentityHolds,
   buildIdentityProof,
@@ -98,6 +100,18 @@ import {
 import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
 import { csvDataRows, dropEventRowsForHeldLots, heldEventRowsMessage, sendableLotIds } from "@/lib/compliance/ccrs-held-back-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import {
+  CCRS_CLEANUP_SETTING_KEY,
+  CLEANUP_LOT_REASON,
+  LEDGER_DUPLICATE_REASON,
+  applyProductHolds,
+  dropCsvDataRows,
+  normalizeCleanup,
+  rowNumbersOf,
+  type CleanupProduct,
+  type ProductHold,
+} from "@/lib/compliance/ccrs-never-block-core";
+import { CCRS_CHUNK_ROWS } from "@/lib/compliance/ccrs-chunk-core";
 import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
 import { LINEAGE_MANIFEST_SELECT, type LineageManifestRow } from "@/lib/inventory/import-lineage-core";
 import { cultiveraManifestIdSet, lotFlaggedCultivera } from "@/lib/inventory/cultivera-received-flag-core";
@@ -316,6 +330,23 @@ async function readTransferLots(admin: Admin, toDay: string): Promise<{ kind: "a
  * lineage predicate, cultiveraManifestIdSet). A read error THROWS: without it a
  * re-homed Cultivera lot whose notes lost the marker could pass as ours.
  */
+/** R74 S42: true when the batch has a non-empty Sale file to check. */
+function f_saleRowsChecked(files: readonly CcrsFile[]): boolean {
+  const sf = files.find((f) => f.type === "Sale");
+  return !!sf && sf.recordCount > 0;
+}
+
+/** R74 S42: the owner's CCRS clean-up list (relic products never reported). */
+async function readCleanupList(admin: Admin): Promise<{ items: CleanupProduct[]; error: string | null }> {
+  try {
+    const { data, error } = await admin.from("site_settings").select("value_json").eq("key", CCRS_CLEANUP_SETTING_KEY).maybeSingle();
+    if (error) return { items: [], error: error.message };
+    return { items: normalizeCleanup((data as { value_json?: unknown } | null)?.value_json ?? null), error: null };
+  } catch (e) {
+    return { items: [], error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 async function readMigrationManifestIds(admin: Admin, lots: readonly { manifest_id: string | null }[]): Promise<Set<string>> {
   const ids = [...new Set(lots.map((l) => (l.manifest_id ?? "").trim()).filter(Boolean))];
   let failed: string | null = null;
@@ -649,7 +680,7 @@ function buildStrainFile(
       specPin: specPinFor("E11_STRAIN_NAME_RESERVED"),
       count: reserved.length,
       rows: reserved,
-      message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. Set the real strain name (or leave it blank for a non-strain product) and rebuild.`,
+      message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. HELD BACK, not blocking: the strain is not sent and the lots that would name it are left out of this upload. Open the product (links on each row), set the real strain name (or leave it blank for a non-strain product), and rebuild.`,
     });
   }
   return { rows, warnings, issues };
@@ -703,8 +734,12 @@ function buildProductFile(
   /** S-11: the product key behind each row in `rows`, same order. */
   keys: string[];
   issues: CcrsSyncIssue[];
+  /** R74 S42: product key -> why its Product row is held (E9 / E57). */
+  holds: Map<string, ProductHold>;
 } {
   const warnings: string[] = [];
+  const holds = new Map<string, ProductHold>();
+  const e57Rows: CcrsIssueRow[] = [];
   const e9Rows: CcrsIssueRow[] = [];
   const e10Rows: CcrsIssueRow[] = [];
   // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
@@ -786,7 +821,10 @@ function buildProductFile(
         warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
       }
     } else {
-      warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
+      // R74 S42: HELD, never blocking. The row is kept for planning only;
+      // applyProductHolds withholds it and every lot that names it.
+      e57Rows.push({ id: key, label: productName || ext, detail: `${cls.error} Set the product's LCB inventory type.` });
+      holds.set(key, { reason: `its InventoryType is not a CCRS type (${cls.error})` });
     }
 
     // C2: clamp Name (75) and Description (250); flag truncation (don't silently cut).
@@ -826,8 +864,10 @@ function buildProductFile(
       unitWeightGrams: grams,
       description: descClamp.value,
     })) {
-      if (found.code === "E9_UNITWEIGHT_ZERO_USABLE") e9Rows.push(found.row);
-      else e10Rows.push(found.row);
+      if (found.code === "E9_UNITWEIGHT_ZERO_USABLE") {
+        e9Rows.push({ ...found.row, id: key });
+        if (!holds.has(key)) holds.set(key, { reason: `"${type}" needs a unit weight in grams and none is recorded [G L0434]` });
+      } else e10Rows.push(found.row);
     }
 
     rows.push([
@@ -856,6 +896,9 @@ function buildProductFile(
   const dedupWarnings = errorsFirst.slice(0, 30);
   const issues: CcrsSyncIssue[] = [];
   if (e9Rows.length > 0) {
+    // R74 S42: held back, NOT blocking. The product row and every lot naming
+    // it are left out (CCRS would reject them: "If Useable Cannabis is
+    // selected, Unit Weight Gram cannot be 0" [G L0434]); the rest uploads.
     issues.push({
       severity: "error",
       file: "Product",
@@ -863,7 +906,18 @@ function buildProductFile(
       specPin: specPinFor("E9_UNITWEIGHT_ZERO_USABLE"),
       count: e9Rows.length,
       rows: e9Rows,
-      message: `${e9Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no unit weight. CCRS rejects the Product file — "If Useable Cannabis is selected, Unit Weight Gram cannot be 0" [G L0434]. Set the gram weight on each product and rebuild.`,
+      message: `${e9Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no unit weight, so CCRS would reject them ("If Useable Cannabis is selected, Unit Weight Gram cannot be 0" [G L0434]). HELD BACK, not blocking: each product and its lots are left out of this upload and stay on the still-owed list. Open the product (links on each row), set the gram weight, and rebuild. If it is a relic of old Cultivera data, press "Add to CCRS clean-up list" instead.`,
+    });
+  }
+  if (e57Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Product",
+      code: "E57_PRODUCT_TYPE_UNKNOWN",
+      specPin: specPinFor("E57_PRODUCT_TYPE_UNKNOWN"),
+      count: e57Rows.length,
+      rows: e57Rows,
+      message: `${e57Rows.length} product(s) have an LCB inventory type that is not a CCRS type, so CCRS would reject them ("Invalid InventoryCategory/InventoryType combination" [G L0415-L0417]). HELD BACK, not blocking: each product and its lots are left out of this upload. Open the product (links on each row), set its inventory type, and rebuild, or add a relic to the CCRS clean-up list.`,
     });
   }
   if (e10Rows.length > 0) {
@@ -881,7 +935,7 @@ function buildProductFile(
       message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description. They are still filed: CCRS accepted an empty Description in PREprod (T-19), because the guide states it only as a Note [G L0482-L0483]. The examiner says "There is an expectation that a description is on file" [EXAM L0552], so add a short description (250 characters max) when you can.`,
     });
   }
-  return { rows, warnings: dedupWarnings, nameByProductKey, keys, issues };
+  return { rows, warnings: dedupWarnings, nameByProductKey, keys, issues, holds };
 }
 
 function buildInventoryFile(
@@ -922,6 +976,8 @@ function buildInventoryFile(
     if (planned.action === "withhold") {
       // R74 S25: a held Cultivera lot is reported once, by E52 (identity guard).
       if (planned.reason === CULTIVERA_NOT_ON_RECORD_REASON) continue;
+      // R74 S42: a clean-up-list product's lots are reported once, by E58.
+      if (planned.reason === CLEANUP_LOT_REASON) continue;
       // S-17b: "its product is not in the published menu" says WHY (hidden
       // with its reason / staged only / no item / blank key).
       e41Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: enrichLotWithholdReason(planned.reason, key, menuPresence) });
@@ -1096,7 +1152,7 @@ export async function buildCcrsBatch(
     syncIssues.push({
       severity: "error",
       file: "General",
-      message: "License number is not set. Add it in Compliance settings before generating a batch.",
+      message: "License number is not set, so no file can name the store. Add it on Reports → Compliance (/admin/reports/compliance, License settings), then rebuild. This is the only setting the upload cannot work without.",
     });
   }
 
@@ -1198,13 +1254,19 @@ export async function buildCcrsBatch(
     [...productBuild.nameByProductKey.values()],
   );
   const ledger: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;
-  if (slice.kind === "loaded" && slice.ledger.duplicates.length > 0) {
+  // R74 S42: a duplicated ledger id holds back ONLY the records it names
+  // (lots with that Inventory id, products with that Product id), never the
+  // whole batch. Listed as E59; the rest uploads.
+  const dupIds = new Set(slice.kind === "loaded" ? slice.ledger.duplicates : []);
+  if (dupIds.size > 0) {
     syncIssues.push({
       severity: "error",
-      file: "General",
-      message: `The CCRS ledger holds ${slice.ledger.duplicates.length} duplicate record(s). Routing cannot prove which one CCRS holds; reconcile the ledger before exporting.`,
-      count: slice.ledger.duplicates.length,
-      rows: slice.ledger.duplicates.map((d) => ({ id: d, label: d, detail: "duplicate ledger record" })),
+      file: "Inventory",
+      code: "E59_LEDGER_DUPLICATE_HELD",
+      specPin: specPinFor("E59_LEDGER_DUPLICATE_HELD"),
+      count: dupIds.size,
+      rows: [...dupIds].map((d) => ({ id: d, label: d, detail: LEDGER_DUPLICATE_REASON })),
+      message: `Our copy of the CCRS record holds ${dupIds.size} id(s) twice, so what CCRS holds for them cannot be proven. HELD BACK, not blocking: only the lots and products with these ids are left out of this upload; everything else uploads. Merging the examiner's fresh CCRS data copy (Compliance \u2192 CCRS \u2192 CCRS Records) settles them; then rebuild.`,
     });
   }
   // --- R5-1: the Sale ledger for this batch's sale lines ----------------------
@@ -1259,7 +1321,59 @@ export async function buildCcrsBatch(
     })),
     strains: items.map((it) => (it.strain_name ?? "").trim()).filter(Boolean),
   });
-  const plan = applyIdentityHolds(rawPlan, identityHeld, identityLots);
+  const identityPlan = applyIdentityHolds(rawPlan, identityHeld, identityLots);
+  // R74 S42: products CCRS would reject (E9 no unit weight, E57 unknown type)
+  // and products on the owner's clean-up list (E58) are withheld with every
+  // lot that would name them; a reserved strain (E11) or a duplicated ledger
+  // id (E59) holds only its own lots. Nothing here blocks the batch.
+  const cleanup = await readCleanupList(admin);
+  const cleanupKeys = new Map(cleanup.items.map((c) => [c.key, c]));
+  const productHolds = new Map<string, ProductHold>(productBuild.holds);
+  for (const c of cleanup.items) productHolds.set(c.key, { reason: "on the CCRS clean-up list (removed from CCRS reporting by the owner)", cleanup: true });
+  for (const [key, id] of ledger?.productIdByKey ?? new Map<string, string>()) {
+    if (dupIds.has(`Product/${id}`) && !productHolds.has(key)) productHolds.set(key, { reason: LEDGER_DUPLICATE_REASON });
+  }
+  const dupLots = new Map<string, string>();
+  for (const l of lots) {
+    const ext = assignedInventoryExternalId(l);
+    if (ext && dupIds.has(`Inventory/${ext}`)) dupLots.set(l.id, LEDGER_DUPLICATE_REASON);
+  }
+  const holdResult = applyProductHolds({
+    plan: identityPlan,
+    view: ledger,
+    products: productHolds,
+    lots: dupLots,
+    lotKeys: lots.map((l) => ({ lotId: l.id, productKey: (l.pos_product_key ?? "").trim() })),
+  });
+  const plan = holdResult.plan;
+  // E9 / E57 list only the products really left out (a product with no row of
+  // its own, because every lot names a filed product, is not held).
+  productBuild.issues = productBuild.issues.flatMap((i) => {
+    if (i.code !== "E9_UNITWEIGHT_ZERO_USABLE" && i.code !== "E57_PRODUCT_TYPE_UNKNOWN") return [i];
+    const rows = (i.rows ?? []).filter((r) => holdResult.heldProducts.has(r.id) && !cleanupKeys.has(r.id));
+    if (rows.length === 0) return [];
+    return [{ ...i, rows, count: rows.length, message: i.message.replace(/^\d+ /, `${rows.length} `) }];
+  });
+  if (cleanup.error) {
+    syncIssues.push({ severity: "warning", file: "General", message: `Could not read the CCRS clean-up list (${cleanup.error}); products on it may appear as held back this time.` });
+  }
+  const cleanupInMenu = items.filter((it) => cleanupKeys.has((it.source_item_id ?? "").trim()));
+  if (cleanup.items.length > 0) {
+    const lotsByKey = new Map<string, number>();
+    for (const l of lots) {
+      const k = (l.pos_product_key ?? "").trim();
+      if (cleanupKeys.has(k)) lotsByKey.set(k, (lotsByKey.get(k) ?? 0) + 1);
+    }
+    syncIssues.push({
+      severity: "warning",
+      file: "Product",
+      code: "E58_PRODUCT_ON_CLEANUP_LIST",
+      specPin: specPinFor("E58_PRODUCT_ON_CLEANUP_LIST"),
+      count: cleanup.items.length,
+      rows: cleanup.items.map((c) => ({ id: c.key, label: c.label, detail: `on the clean-up list since ${c.at.slice(0, 10) || "?"}; ${lotsByKey.get(c.key) ?? 0} lot(s) left out${cleanupInMenu.some((i) => (i.source_item_id ?? "").trim() === c.key) ? "" : " (no longer in the published menu)"}` })),
+      message: `${cleanup.items.length} product(s) are on your CCRS clean-up list, so they and their lots are not reported (and are not counted as owed). Remove one from the list (button on its row) to report it again.`,
+    });
+  }
   const identity = buildIdentityProof({ env, view: ledger, lots: identityLots, plan, held: identityHeld });
   syncIssues.push(...identityIssues(identity, slice.kind === "loaded" ? null : slice.reason));
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
@@ -1285,15 +1399,16 @@ export async function buildCcrsBatch(
     keysNeedingMenuLookup(coverageLots, plannedKeys),
   );
   const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);
-  if (product.withheld.length > 0) {
+  const routingWithheld = product.withheld.filter((w) => !productHolds.has(w.key) || productHolds.get(w.key)!.reason === LEDGER_DUPLICATE_REASON);
+  if (routingWithheld.length > 0) {
     syncIssues.push({
       severity: "error",
       file: "Product",
       code: "E41_LEDGER_WITHHELD",
       specPin: specPinFor("E41_LEDGER_WITHHELD"),
-      count: product.withheld.length,
-      rows: product.withheld.map((w) => ({ id: w.key, label: w.label, detail: w.reason })),
-      message: `${product.withheld.length} product(s) were left out of Product.csv because no CCRS Product id is assigned or its CCRS status is unproven [G L0246-L0248]. Lots of these products are withheld from Inventory.csv too.`,
+      count: routingWithheld.length,
+      rows: routingWithheld.map((w) => ({ id: w.key, label: w.label, detail: w.reason })),
+      message: `${routingWithheld.length} product(s) were left out of Product.csv because no CCRS Product id is assigned or its CCRS status is unproven [G L0246-L0248]. Lots of these products are withheld from Inventory.csv too.`,
     });
   }
   if (plan.nameFromLedger.length > 0) {
@@ -1643,6 +1758,76 @@ export async function buildCcrsBatch(
       count: notInMenu.length,
       rows: notInMenu,
       message: e47Message(notInMenu.length, !ledger),
+    });
+  }
+
+  // R74 S42 (owner, Round 22: "remove all blockers"): a ROW the offline
+  // verifier or the ledger self-check would refuse is taken out of its file
+  // and held back (E60) instead of refusing the whole zip. CCRS accepts row
+  // by row (U-17 CLOSED FALSE). Repeated so a row that named a removed row
+  // (a lot of a removed product, a sale of a removed lot) goes too. A FILE-
+  // level problem (header, line endings, totals) is a code fault and still
+  // blocks: it is never data the owner can fix.
+  const e60Rows = new Map<CcrsRetailerFileType, CcrsIssueRow[]>();
+  for (let pass = 0; pass < 4; pass += 1) {
+    const refused = new Map<CcrsRetailerFileType, Map<number, string>>();
+    const mark = (t: CcrsRetailerFileType, row: number, why: string) => {
+      if (!refused.has(t)) refused.set(t, new Map());
+      if (!refused.get(t)!.has(row)) refused.get(t)!.set(row, why);
+    };
+    for (const f of files) {
+      for (const pr of verifyCcrsBatch([{ type: f.type, csv: f.csv }]).problems) {
+        if (pr.severity !== "error") continue;
+        for (const n of rowNumbersOf(pr.message)) mark(f.type, n, pr.message);
+      }
+    }
+    if (f_saleRowsChecked(files)) {
+      const sf = files.find((f) => f.type === "Sale")!;
+      verifySaleNumericColumns(csvDataRows(sf.csv)).forEach((pr) => rowNumbersOf(pr.message).forEach((n) => mark("Sale", n, pr.message)));
+    }
+    if (ledger) {
+      const planned = planOutboxFiles(
+        files.map((f) => ({ type: f.type, csv: f.csv })),
+        { licenseNumber: license.licenseNumber, now, lastStamp: null },
+      );
+      const chunkByName = new Map(planned.map((pf) => [pf.fileName, pf]));
+      for (const pr of verifyOutboxAgainstLedger(saleAwareLedger ?? ledger, planned)) {
+        if (pr.code === "L_TOTALS") continue;
+        const pf = chunkByName.get(pr.fileName);
+        if (pf) mark(pr.type, (pf.chunkNo - 1) * CCRS_CHUNK_ROWS + pr.row, `[${pr.code}] ${pr.message}`);
+      }
+    }
+    if (refused.size === 0) break;
+    for (const f of files) {
+      const rows = refused.get(f.type);
+      if (!rows) continue;
+      const cols = CCRS_COLUMNS[f.type];
+      const idCol = cols.indexOf(f.type === "Sale" ? "SaleDetailExternalIdentifier" : f.type === "Strain" ? "Strain" : "ExternalIdentifier");
+      const nameCol = cols.indexOf(f.type === "Area" ? "Area" : "Name");
+      const d = dropCsvDataRows(f.csv, new Set(rows.keys()));
+      const nums = [...rows.keys()].sort((x, y) => x - y);
+      d.dropped.forEach((line, i) => {
+        const cells = ccrsReaderSplit(line);
+        const id = (idCol >= 0 && cells[idCol]) || `${f.type} row ${nums[i]}`;
+        const label = (nameCol >= 0 && cells[nameCol]) || id;
+        if (!e60Rows.has(f.type)) e60Rows.set(f.type, []);
+        e60Rows.get(f.type)!.push({ id, label, detail: rows.get(nums[i]) ?? "" });
+      });
+      f.csv = d.csv;
+      f.recordCount = d.kept;
+      f.skipped += d.dropped.length;
+      f.empty = d.kept === 0;
+    }
+  }
+  for (const [type, rows] of e60Rows) {
+    syncIssues.push({
+      severity: "error",
+      file: type,
+      code: "E60_ROW_REFUSED_HELD",
+      specPin: specPinFor("E60_ROW_REFUSED_HELD"),
+      count: rows.length,
+      rows,
+      message: `${rows.length} ${type} row(s) failed the last check before upload (a bad value, or a reference CCRS does not hold), so CCRS would reject them. HELD BACK, not blocking: each row was taken out of its file and everything else uploads. Each row says what is wrong; fix it at the source and rebuild.`,
     });
   }
 

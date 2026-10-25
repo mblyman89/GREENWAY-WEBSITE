@@ -84,6 +84,10 @@ export const CCRS_ISSUE_CODES = [
   "E54_CULTIVERA_ID_NOT_BARCODE",
   "E55_INTAKE_LOT_ON_CULTIVERA_RECORD",
   "E56_EVENT_ROW_LOT_HELD",
+  "E57_PRODUCT_TYPE_UNKNOWN",
+  "E58_PRODUCT_ON_CLEANUP_LIST",
+  "E59_LEDGER_DUPLICATE_HELD",
+  "E60_ROW_REFUSED_HELD",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -466,6 +470,16 @@ const PINS: Record<CcrsIssueCode, string> = {
   // R74 S39: a Sale/Adjustment row naming a lot this batch holds back is held
   // with it (re-sent once the lot is on file) instead of failing the upload.
   E56_EVENT_ROW_LOT_HELD: "[G L1302-L1304]",
+  // R74 S42 (owner, Round 22: "nothing blocks me"). Each is HELD BACK: the
+  // rows are left out of the files, the rest uploads (U-17 CLOSED FALSE).
+  // E57: a product whose InventoryType resolves to no CCRS type.
+  E57_PRODUCT_TYPE_UNKNOWN: "[G L0415-L0417]",
+  // E58: a product the owner put on the CCRS clean-up list (relic data).
+  E58_PRODUCT_ON_CLEANUP_LIST: "[G L0579]",
+  // E59: our ledger copy holds an id twice; only those records wait.
+  E59_LEDGER_DUPLICATE_HELD: "[G L0246-L0248]",
+  // E60: a row the offline check or the ledger self-check refuses.
+  E60_ROW_REFUSED_HELD: "[G L0246-L0248]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

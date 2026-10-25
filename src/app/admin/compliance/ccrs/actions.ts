@@ -48,6 +48,7 @@ import {
   undoDismissal,
 } from "@/lib/compliance/obligation-waiver-store";
 import { HANDOVER_SETTING_KEY, getHandoverFacts, setHandoverFacts } from "@/lib/compliance/ccrs-handover-store";
+import { updateCcrsCleanup } from "@/lib/compliance/ccrs-cleanup-store";
 
 const BASE = "/admin/compliance/ccrs";
 
@@ -647,4 +648,36 @@ export async function undoDismissalAction(formData: FormData): Promise<void> {
   });
   revalidateNagSurfaces();
   backToWeek(formData, `saved=1&note=${encodeURIComponent(`Dismissal of ${res.row?.period_key} undone. It shows as due again.`)}`);
+}
+
+/**
+ * R74 S42 (owner, Round 22): "allow me to add it to the clean up list of
+ * products we will remove from our ccrs record file". A product on the list
+ * (and its lots) is never reported and never counted as owed. Reversible.
+ */
+export async function ccrsCleanupAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const op = String(formData.get("op") ?? "") === "remove" ? "remove" : "add";
+  const key = String(formData.get("product_key") ?? "").trim().slice(0, 200);
+  const label = String(formData.get("label") ?? "").trim().slice(0, 300);
+  if (!key) backToWeek(formData, `error=${encodeURIComponent("No product was named.")}`);
+  const res = await updateCcrsCleanup(op, { key, label }, session.profile.id);
+  if (!res.ok) backToWeek(formData, `error=${encodeURIComponent(res.error ?? "Could not save the clean-up list.")}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: op === "add" ? "ccrs.cleanup.add" : "ccrs.cleanup.remove",
+    entityType: "ccrs_cleanup_product",
+    entityId: key,
+    after: { label, listSize: res.items?.length ?? null },
+  });
+  revalidateNagSurfaces();
+  backToWeek(
+    formData,
+    `saved=1&note=${encodeURIComponent(
+      op === "add"
+        ? `"${label || key}" is on the CCRS clean-up list: it and its lots are no longer reported or counted as owed.`
+        : `"${label || key}" was removed from the CCRS clean-up list and will be reported again.`,
+    )}`,
+  );
 }

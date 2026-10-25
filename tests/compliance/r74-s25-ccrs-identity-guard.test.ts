@@ -154,7 +154,7 @@ describe("R74 S25 ccrs-identity-guard-core", () => {
   it("batch wiring: lots carry notes/manifest_id, holds happen before planning, E41 does not double-report", () => {
     expect(BATCH).toMatch(/const LOT_COLUMNS =[^;]*notes, manifest_id/);
     expect(BATCH).toMatch(/cultiveraLotsToHold\([\s\S]*planLedgerBatch\(\{[\s\S]*\.filter\(\(l\) => !identityHeld\.has\(l\.id\)\)/);
-    expect(BATCH).toContain("const plan = applyIdentityHolds(rawPlan, identityHeld, identityLots);");
+    expect(BATCH).toContain("const identityPlan = applyIdentityHolds(rawPlan, identityHeld, identityLots);");
     expect(BATCH).toContain("syncIssues.push(...identityIssues(identity,");
     expect(BATCH).toMatch(/CULTIVERA_NOT_ON_RECORD_REASON\)\s*continue;/);
     expect(BATCH).toMatch(/readMigrationManifestIds[\s\S]*chunkedIn/);
