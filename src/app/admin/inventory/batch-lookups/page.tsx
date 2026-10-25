@@ -28,13 +28,16 @@ import {
 } from "@/lib/ai/batch-console-core";
 import { BATCH_MAX_FAMILIES, BATCH_PRICE } from "@/lib/ai/gemini-batch-core";
 import { ConfidenceTab } from "./ConfidenceTab";
+import { MissionTab } from "./MissionTab";
+import { OPEN_BATCH_STATES, pipelineFor } from "@/lib/ai/gemini-batch-explain-core";
 import { cancelBatchAction, cancelJobAction, rerunFailedAction, sendSelectedAction, sendWaveAction, setJobPausedAction, setPausedAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-type Tab = "smart" | "monitor" | "costs" | "confidence";
+type Tab = "mission" | "smart" | "monitor" | "costs" | "confidence";
 const TABS: readonly TabSpec<Tab>[] = [
+  { key: "mission", label: "Mission Control", icon: "\ud83d\udef0\ufe0f", blurb: "Stop, send a test batch, ask Google, read every message" },
   { key: "smart", label: "Smart batching", icon: "\ud83c\udf81", blurb: "Plan and send batches of 200 products" },
   { key: "monitor", label: "Monitor", icon: "\ud83d\udce1", blurb: "Live batches, progress, pause, failures, activity" },
   { key: "costs", label: "Costs & health", icon: "\ud83d\udcca", blurb: "Cost ledger, search health, schedule, settings" },
@@ -44,7 +47,7 @@ const TABS: readonly TabSpec<Tab>[] = [
 const n = (x: number) => x.toLocaleString("en-US");
 const pct = (x: number | null) => (x === null ? "-" : `${Math.round(x * 100)}%`);
 const ago = (iso: string | null, now: number) => (iso ? `${fmtMinutes((now - Date.parse(iso)) / 60_000)} ago` : "-");
-const STATE_TONE: Record<string, "neutral" | "green" | "gold" | "orange" | "danger" | "outline"> = { submitting: "outline", pending: "outline", running: "gold", succeeded: "green", ingesting: "gold", ingested: "green", failed: "danger", canceled: "neutral", expired: "danger" };
+const STATE_TONE: Record<string, "neutral" | "green" | "gold" | "orange" | "danger" | "outline"> = { submitting: "outline", pending: "outline", running: "gold", succeeded: "green", ingesting: "gold", ingested: "green", failed: "danger", canceled: "neutral", expired: "danger", lost: "danger" };
 const btn = "rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1.5 text-sm font-semibold hover:bg-[var(--admin-surface-2)]";
 const btnPrimary = "rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black hover:opacity-90";
 const th = "px-2 py-1.5 text-left text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]";
@@ -53,13 +56,13 @@ const td = "px-2 py-1.5 align-top";
 export default async function BatchLookupsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const tab = resolveTab(TABS, sp, "smart");
+  const tab = resolveTab(TABS, sp, "mission");
   const c = await loadBatchConsole();
   const now = Date.now();
   const target = /^\d{4}-\d{2}-\d{2}$/.test(sp.target ?? "") ? (sp.target as string) : DEFAULT_TARGET_DATE;
   const vendorFilter = (sp.vendor ?? "").trim();
 
-  const open = c.batches.filter((b) => ["submitting", "pending", "running", "succeeded", "ingesting"].includes(b.state));
+  const open = c.batches.filter((b) => (OPEN_BATCH_STATES as readonly string[]).includes(b.state));
   const openJobs = c.jobs.filter((j) => j.status === "queued" || j.status === "running");
   const live = open.length > 0 || openJobs.length > 0;
   const planAll = planBatches(vendorFilter ? c.plan.filter((m) => m.vendor === vendorFilter) : c.plan);
@@ -112,6 +115,8 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
       {c.engine !== "batch" && <p className="text-sm text-amber-300">The Batch engine is off: set <code>AI_LOOKUP_ENGINE=batch</code> in Vercel and redeploy. Until then queued products run through the live (full price) lookup.</p>}
 
       <PageTabs base={BATCH_CONSOLE_PATH} tabs={TABS} active={tab} ariaLabel="Batch lookup views" />
+
+      {tab === "mission" && <MissionTab c={c} now={now} eventId={sp.event ?? null} />}
 
       {tab === "smart" && (
         <div className="space-y-5">
@@ -204,7 +209,7 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
                     const prog = b.items ? Math.round(((b.answered + b.failed) / b.items) * 100) : 0;
                     return (
                       <tr key={b.id} className="border-t border-[var(--admin-border)]">
-                        <td className={td}><Badge tone={STATE_TONE[b.state] ?? "neutral"}>{b.state}</Badge>{b.state === "ingesting" && <div className="mt-1 h-1.5 w-20 rounded bg-white/10"><div className="h-1.5 rounded bg-[var(--admin-accent)]" style={{ width: `${prog}%` }} /></div>}</td>
+                        <td className={td}><Badge tone={STATE_TONE[b.state] ?? "neutral"}>{pipelineFor(b).label}</Badge>{b.state === "ingesting" && <div className="mt-1 h-1.5 w-20 rounded bg-white/10"><div className="h-1.5 rounded bg-[var(--admin-accent)]" style={{ width: `${prog}%` }} /></div>}</td>
                         <td className={td} title={b.name ?? ""}>{new Date(start).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
                         <td className={td}>{fmtMinutes(((end ? Date.parse(end) : now) - Date.parse(start)) / 60_000)}</td>
                         <td className={td}>{eta === null ? "-" : `~${fmtMinutes(eta)}`}</td>
@@ -216,7 +221,7 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
                         <td className={td}>{b.state === "ingested" ? fmtCents(Number(b.cost_cents)) : "-"}</td>
                         <td className={td}>
                           {isOpen && b.name && (
-                            <form action={cancelBatchAction}><input type="hidden" name="name" value={b.name} /><button className={btn} title="Stop this batch at Gemini; its products go back in the queue">Cancel</button></form>
+                            <form action={cancelBatchAction}><input type="hidden" name="name" value={b.name} /><button className={btn} title="Stop this batch at Gemini. Answers already made are saved; the rest are set aside until Re-run stopped (Mission Control)">Cancel</button></form>
                           )}
                           {b.error && <span className="text-xs text-red-300">{b.error.slice(0, 80)}</span>}
                         </td>

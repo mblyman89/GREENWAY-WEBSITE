@@ -580,6 +580,8 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "lookup_jobs", disposition: "KEEP", because: "The record of each batch product lookup you started (which manifest, when, by whom). It holds no money, stock or customer data, and after a wipe a job for a manifest that is gone is simply never shown again." },
   { table: "lookup_job_items", disposition: "KEEP", because: "One line per product inside a batch lookup, with its short result and how many paid AI lookups it used. It goes with its batch record and holds no money, stock or customer data." },
   { table: "ai_batches", disposition: "KEEP", because: "The record of each Gemini batch of product lookups (R74 S34, 0295) with its tokens, searches and estimated cost: your AI spending history. It holds no money owed, stock or customer data." },
+  // R74 S41 (0299): every message to / from the Gemini Batch API, explained.
+  { table: "ai_batch_events", disposition: "KEEP", because: "The message log of every request to and reply from Google's Gemini Batch API (what was sent, what Google said, what was paid for) — kept with the batch cost ledger." },
   { table: "product_classification_overrides", disposition: "KEEP", because: "Your manual corrections to how a product is classified — decisions, and they must keep applying after the wipe." },
   { table: "noncannabis_products", disposition: "KEEP", because: "Your curated non-cannabis catalogue." },
   { table: "noncannabis_sku_sequences", disposition: "KEEP", because: "SKU counters. Resetting them would re-issue SKUs you have already printed on labels." },

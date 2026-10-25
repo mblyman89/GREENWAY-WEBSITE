@@ -13,6 +13,8 @@ import { geminiApiKey } from "@/lib/ai/provider";
 import { readBatchControl } from "@/lib/ai/batch-control-server";
 import { AI_BATCH_MAX_INFLIGHT_ENV, AI_LOOKUP_ENGINE_ENV, BATCH_MAX_FAMILIES, batchMaxInflight, lookupEngine, productFamilyKey } from "@/lib/ai/gemini-batch-core";
 import { AI_BATCH_THINKING_LEVEL_ENV, batchThinkingLevel } from "@/lib/catalog/lookup-job-core";
+import { createBackoffUntil, recentBatchEvents, type BatchEvent } from "@/lib/ai/batch-events-server";
+import { BATCH_LOST_NOTE, BATCH_STOPPED_NOTE } from "@/lib/ai/gemini-batch-explain-core";
 import { OPEN_CONTROL, addLedger, itemLedgerCents, isRateLimitFailure, measurePace, type BatchControl, type BatchRowLite, type LedgerRow, type Pace, type PlanManifest } from "@/lib/ai/batch-console-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -20,7 +22,20 @@ const PAGE = 1000;
 const MAX_PAGES = 30;
 const DAYS = 120;
 
-export type BatchRow = BatchRowLite & { id: string; name: string | null; model: string; error: string | null; updated_at: string; lease_until: string | null };
+export type BatchRow = BatchRowLite & {
+  id: string;
+  name: string | null;
+  model: string;
+  error: string | null;
+  updated_at: string;
+  lease_until: string | null;
+  // R74 S41 (0299): Google's own view, saved on every check.
+  google_state?: string | null;
+  batch_stats?: { total: number; succeeded: number; failed: number; pending: number } | null;
+  last_polled_at?: string | null;
+  poll_status?: number | null;
+  poll_error?: string | null;
+};
 export type JobRow = { id: string; manifestId: string; label: string; vendor: string; status: string; total: number; queued: number; running: number; done: number; failed: number; canceled: number; paidCalls: number; createdAt: string; startedAt: string | null; finishedAt: string | null; paused: boolean };
 export type FailRow = { itemId: string; jobId: string; draftId: string; label: string; vendor: string; error: string; at: string | null; rateLimited: boolean };
 export type ActivityRow = { at: string; kind: "done" | "failed" | "canceled" | "batch"; text: string };
@@ -46,6 +61,12 @@ export type BatchConsole = {
   totals: { cents: number; batches: number; families: number; searches: number; promptTokens: number; outputTokens: number; answered: number; failed: number };
   lastTickAt: string | null;
   liveUsage30d: { calls: number; tokens: number };
+  /** R74 S41: is migration 0299 (Mission Control) applied? */
+  missionReady: boolean;
+  /** Products set aside by a stop / a lost batch (wait for Re-run stopped). */
+  held: number;
+  events: BatchEvent[];
+  backoff: { until: string | null; streak: number };
 };
 
 async function paged<T>(run: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
@@ -94,19 +115,20 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
     totals: { cents: 0, batches: 0, families: 0, searches: 0, promptTokens: 0, outputTokens: 0, answered: 0, failed: 0 },
     lastTickAt: null,
     liveUsage30d: { calls: 0, tokens: 0 },
+    missionReady: false,
+    held: 0,
+    events: [],
+    backoff: { until: null, streak: 0 },
   };
   if (!isSupabaseServiceConfigured) return { ...base, error: "The database is not configured." };
   try {
     const admin = createSupabaseAdminClient();
     const since = new Date(Date.now() - DAYS * 86_400_000).toISOString();
     const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const [control, batchesRes, jobsRes, drafts, usage, costProbe] = await Promise.all([
+    const BATCH_COLS = "id, name, model, state, families, items, answered, failed, prompt_tokens, output_tokens, search_queries, cost_cents, error, lease_until, created_at, submitted_at, finished_at, ingested_at, updated_at";
+    const [control, batchesRes1, jobsRes, drafts, usage, costProbe, ev, heldRes, backoff] = await Promise.all([
       readBatchControl(admin),
-      admin
-        .from("ai_batches")
-        .select("id, name, model, state, families, items, answered, failed, prompt_tokens, output_tokens, search_queries, cost_cents, error, lease_until, created_at, submitted_at, finished_at, ingested_at, updated_at")
-        .order("created_at", { ascending: false })
-        .limit(300),
+      admin.from("ai_batches").select(`${BATCH_COLS}, google_state, batch_stats, last_polled_at, poll_status, poll_error`).order("created_at", { ascending: false }).limit(300),
       admin.from("lookup_jobs").select("id, manifest_id, status, total, done, created_at, started_at, finished_at").gte("created_at", since).order("created_at", { ascending: false }).limit(600),
       paged<{ id: string; manifest_id: string | null; name: string | null; brand_name: string | null; vendor_name: string | null; category: string | null }>((a, b) =>
         admin.from("catalog_product_drafts").select("id, manifest_id, name, brand_name, vendor_name, category").eq("status", "draft").not("manifest_id", "is", null).order("id").range(a, b),
@@ -114,7 +136,13 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
       paged<{ total_tokens: number | null }>((a, b) => admin.from("ai_usage").select("total_tokens").like("feature", "inventory.product_lookup%").neq("feature", "inventory.product_lookup.batch").gte("created_at", since30).order("created_at").range(a, b)),
       // R74 S37: is 0296 (per-product cost) applied? Without it the ledger estimates.
       admin.from("lookup_job_items").select("cost_cents").limit(1),
+      recentBatchEvents(admin, 80),
+      admin.from("lookup_job_items").select("id", { count: "exact", head: true }).eq("status", "canceled").in("error", [BATCH_STOPPED_NOTE, BATCH_LOST_NOTE]),
+      createBackoffUntil(admin),
     ]);
+    // Before 0299 the Google columns do not exist: read the old ones.
+    const missionReady = !batchesRes1.error && ev.ok;
+    const batchesRes = batchesRes1.error ? await admin.from("ai_batches").select(BATCH_COLS).order("created_at", { ascending: false }).limit(300) : batchesRes1;
     const hasCost = !costProbe.error;
     if (batchesRes.error && /ai_batches/.test(String(batchesRes.error.message))) return { ...base, control, error: "Migration 0295 (ai_batches) is not applied yet." };
     const batches = ((batchesRes.data as BatchRow[] | null) ?? []).map((b) => ({ ...b, cost_cents: Number(b.cost_cents ?? 0) }));
@@ -222,6 +250,10 @@ export async function loadBatchConsole(): Promise<BatchConsole> {
       totals,
       lastTickAt,
       liveUsage30d: { calls: usage.length, tokens: usage.reduce((s, u) => s + (u.total_tokens ?? 0), 0) },
+      missionReady,
+      held: heldRes.count ?? 0,
+      events: ev.events,
+      backoff: { until: backoff.until, streak: backoff.streak },
     };
   } catch (err) {
     console.error("[batch-console] load failed:", err);
@@ -234,14 +266,21 @@ export function batchesLeft(families: number): number {
   return Math.ceil(families / BATCH_MAX_FAMILIES);
 }
 
+/** R74 S41: every product a stop / lost batch set aside (paged ids). */
+export async function stoppedItemIds(): Promise<string[]> {
+  const admin = createSupabaseAdminClient();
+  const rows = await paged<{ id: string }>((a, b) => admin.from("lookup_job_items").select("id").eq("status", "canceled").in("error", [BATCH_STOPPED_NOTE, BATCH_LOST_NOTE]).order("id").range(a, b));
+  return rows.map((r) => r.id);
+}
+
 /** Re-run failed products: back to queued with a fresh try count; their finished jobs re-open. */
-export async function requeueFailedItems(itemIds: readonly string[]): Promise<{ items: number; jobs: number; reopened: number }> {
+export async function requeueFailedItems(itemIds: readonly string[], fromStatus: "failed" | "canceled" = "failed"): Promise<{ items: number; jobs: number; reopened: number }> {
   const admin = createSupabaseAdminClient();
   const at = new Date().toISOString();
   let items = 0;
   const jobs = new Set<string>();
   for (let i = 0; i < itemIds.length; i += 100) {
-    const { data } = await admin.from("lookup_job_items").update({ status: "queued", attempts: 0, error: null, batch_id: null, finished_at: null, updated_at: at }).in("id", itemIds.slice(i, i + 100)).eq("status", "failed").select("job_id");
+    const { data } = await admin.from("lookup_job_items").update({ status: "queued", attempts: 0, error: null, batch_id: null, finished_at: null, updated_at: at }).in("id", itemIds.slice(i, i + 100)).eq("status", fromStatus).select("job_id");
     for (const r of (data as { job_id: string }[] | null) ?? []) {
       items += 1;
       jobs.add(r.job_id);

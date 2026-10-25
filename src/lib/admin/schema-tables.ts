@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 314 tables across 298 migrations at the time of writing.
+ * Measured 315 tables across 299 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -42,6 +42,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "ach_return_notices",
   "ach_timberland_comms",
   "ach_verifications",
+  "ai_batch_events",
   "ai_batches",
   "ai_suggestions",
   "ai_usage",

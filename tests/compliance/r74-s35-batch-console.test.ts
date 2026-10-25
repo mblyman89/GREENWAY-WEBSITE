@@ -9,11 +9,11 @@ import { __runBatchConsoleCoreTests, planBatches } from "@/lib/ai/batch-console-
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf8");
 
 describe("R74 S35 batch-console-core", () => {
-  it("self-tests run at the measured 26 and are registered", () => {
+  it("self-tests run at the measured 27 and are registered", () => {
     const r = __runBatchConsoleCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(26);
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runBatchConsoleCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 26\)/);
+    expect(r.passed).toBe(27);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runBatchConsoleCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 27\)/);
   });
   it("batches never exceed 200 products", () => {
     const p = planBatches([{ manifestId: "a", vendor: "V", label: "a", lots: 900, families: 777 }]);
