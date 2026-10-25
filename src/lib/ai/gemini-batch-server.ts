@@ -231,19 +231,22 @@ async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set
   const level = batchThinkingLevel(process.env[AI_BATCH_THINKING_LEVEL_ENV]);
   const entries: { key: string; request: Record<string, unknown> }[] = [];
   const requestKeys: Record<string, string[]> = {};
+  // R74 S44: the exact search text per question, kept beside the item ids.
+  const askedByKey: Record<string, string> = {};
   for (let i = 0; i < fams.length; i += 1) {
     const lead = fams[i][0];
     const q3 = await lookupQueryForDraft(lead.draft);
     const memory = kbFirst && !lead.refresh ? await recallForDraft(lead.draft.id) : null;
     const p = buildProductLookupPrompt({ query: q3.query, productName: q3.productName, vendorOrBrand: q3.vendorOrBrand, alreadyKnown: lead.refresh ? "" : alreadyKnownPromptBlock(memory) });
     const key = `f${i}`;
+    askedByKey[key] = q3.query;
     entries.push({ key, request: buildBatchRequest({ system: p.system, user: p.user, maxOutputTokens: effectiveMaxOutputTokens(model, p.maxTokens), thinkingLevel: level === "minimal" ? "low" : level }) });
     requestKeys[key] = fams[i].map((m) => m.itemId);
   }
   const itemIds = Object.values(requestKeys).flat();
 
   // The row first (the claim), then Google, then the products.
-  const { data: row, error: insErr } = await admin.from("ai_batches").insert({ model: model.id, state: "submitting", families: entries.length, items: itemIds.length, request_keys: requestKeys }).select("id").single();
+  const { data: row, error: insErr } = await admin.from("ai_batches").insert({ model: model.id, state: "submitting", families: entries.length, items: itemIds.length, request_keys: { ...requestKeys, ...(Object.keys(askedByKey).length ? { _asked: askedByKey } : {}) } }).select("id").single();
   if (insErr || !row) throw new Error("The batch record could not be written (is migration 0295 applied?).");
   const batchId = (row as { id: string }).id;
   const claimed: string[] = [];
@@ -271,7 +274,11 @@ async function submitOne(admin: Admin, pausedJobs: ReadonlySet<string> = new Set
 // ─── Poll + ingest ──────────────────────────────────────────────────────────
 
 async function ingest(admin: Admin, b: { id: string; name: string; model: string; request_keys: unknown; answered: number; failed: number }, answers: KeyedAnswer[], final: string, deadline: number): Promise<number> {
-  const keys = (b.request_keys && typeof b.request_keys === "object" ? b.request_keys : {}) as Record<string, string[]>;
+  const allKeys = (b.request_keys && typeof b.request_keys === "object" ? b.request_keys : {}) as Record<string, unknown>;
+  // R74 S44: "_asked" holds the search text per question; the rest are item-id lists.
+  const askedRaw = allKeys._asked && typeof allKeys._asked === "object" ? (allKeys._asked as Record<string, unknown>) : {};
+  const keys: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(allKeys)) if (k !== "_asked" && Array.isArray(v)) keys[k] = v.filter((x): x is string => typeof x === "string");
   const byKey = new Map(answers.map((a) => [a.key, a]));
   const banned = await loadBannedPhrases();
   const v2On = buildProductLookupPrompt({ query: "x" }).v2On;
@@ -318,7 +325,7 @@ async function ingest(admin: Admin, b: { id: string; name: string; model: string
       }
       try {
         const memory = await recallForDraft(it.draft_id);
-        const r = await completeItem(admin, it.draft_id, await actorFor(admin, it.job_id, actors), { safe: outcome.result, outcome, memory, skipWeb: false, model: b.model, aiCalls: i === 0 ? 1 : 0 });
+        const r = await completeItem(admin, it.draft_id, await actorFor(admin, it.job_id, actors), { safe: outcome.result, outcome, memory, skipWeb: false, model: b.model, aiCalls: i === 0 ? 1 : 0, asked: typeof askedRaw[key] === "string" ? (askedRaw[key] as string) : undefined });
         await finishItem(admin, it.id, { status: "done", attempts: (it.attempts ?? 0) + 1, result_json: { ...r.result, snapshot: r.snapshot }, ai_calls: calls, error: null });
         answered += 1;
       } catch (err) {

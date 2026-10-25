@@ -533,6 +533,7 @@ export async function runOneItem(
   const skipWeb = shouldSkipGemini({ enabled: kbFirst, refresh, memory });
 
   let aiCalls = 0;
+  let askedText = "";
   let outcome: Awaited<ReturnType<typeof lookupProduct>> | null = null;
   let safe;
   let model: string;
@@ -541,6 +542,7 @@ export async function runOneItem(
     model = MEMORY_MODEL_LABEL;
   } else {
     const q = await lookupQueryForDraft(d);
+    askedText = q.query;
     try {
       outcome = await lookupProduct({
         query: q.query,
@@ -567,7 +569,7 @@ export async function runOneItem(
     model = outcome.model;
   }
 
-  return completeItem(admin, draftId, actor, { safe, outcome, memory, skipWeb, model, aiCalls });
+  return completeItem(admin, draftId, actor, { safe, outcome, memory, skipWeb, model, aiCalls, asked: askedText });
 }
 
 /**
@@ -585,6 +587,8 @@ export async function completeItem(
     skipWeb: boolean;
     model: string;
     aiCalls: number;
+    /** R74 S44: the exact search text sent to Google (shown per product). */
+    asked?: string;
   },
 ): Promise<ItemRunOutcome> {
   const { safe, outcome, memory, skipWeb, model, aiCalls } = x;
@@ -627,6 +631,7 @@ export async function completeItem(
       sentence: res.sentence,
       model,
       found: parsed ? snapshotFoundCount(parsed) : 0,
+      ...(x.asked ? { asked: x.asked.slice(0, 300) } : {}),
     },
   };
 }

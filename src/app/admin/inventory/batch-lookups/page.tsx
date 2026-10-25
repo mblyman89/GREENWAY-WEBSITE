@@ -10,6 +10,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge, PageTabs } from "@/components/admin/ui";
 import { Breadcrumbs } from "@/components/admin/ux/Breadcrumbs";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { BatchLookupAutoRefresh } from "@/components/admin/catalog/BatchLookupAutoRefresh";
 import { resolveTab, type TabSpec } from "@/lib/admin/page-tabs-core";
 import { loadBatchConsole, batchesLeft } from "@/lib/ai/batch-console-server";
@@ -93,6 +94,8 @@ export default async function BatchLookupsPage({ searchParams }: { searchParams:
         subtitle="Gemini Batch API product lookups: plan, send, watch and pay for them in one place."
         breadcrumbs={<Breadcrumbs items={[{ label: "Product Onboarding", href: "/admin/inventory/drafts" }, { label: "Batch Lookups" }]} />}
       />
+      {/* R74 S44: the pipeline bar (Discover -> ... -> Pay), like every intake page. */}
+      <CatalogStageStrip current="onboard" />
       <BatchLookupAutoRefresh active={live} />
 
       {sp.msg && <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)] px-3 py-2 text-sm text-[var(--admin-accent)]">{sp.msg}</p>}

@@ -17,6 +17,7 @@ import {
   type ProductScore,
 } from "@/lib/catalog/cultivera-confidence-core";
 import { attachVendorConfidenceAction } from "./actions";
+import { VendorProgressTable } from "./VendorProgressTable";
 
 const btn = "rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1.5 text-sm font-semibold hover:bg-[var(--admin-surface-2)]";
 const btnPrimary = "rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black hover:opacity-90 disabled:opacity-40";
@@ -132,6 +133,9 @@ export async function ConfidenceTab({ vendor, view }: { vendor: string; view: st
           </form>
         </>
       )}
+
+      {/* R74 S44: every vendor, expandable to every product's lookup story. */}
+      <VendorProgressTable selectedVendor={sel?.vendor ?? vendor} />
     </div>
   );
 }
