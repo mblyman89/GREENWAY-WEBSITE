@@ -72,6 +72,14 @@ export const SOURCE_QUOTES = {
     1376: "CannabisExciseTax must be numeric (do not use $ symbol or parentheses)",
     1377: "CannabisExciseTax does not equal 37% of UnitPrice",
     1378: "Only Medical Sales can be 0",
+    1390: "Duplicate Sale for Licensee",
+    1391: "Note: If you have received this error ensure:",
+    1392: "Records within a single sale have the same",
+    1393: "SaleExternaldentifier.",
+    1394: "Records with the same SaleExternalIdentifier have the same",
+    1395: "SaleType and SaleDate",
+    1396: "All records with the same SaleExternalIdentifier have a unique",
+    1397: "SaleDetailExternalIdentifier",
   } as Record<number, string>,
   FAQ: {
     35: "A: CCRS requires a value above $0.00 to be entered on the Total Cost field for an inventory ID to be reported. While the provided Trade Samples do not have a value, a value of $0.01 needs to be entered into the Total Cost field for Trade Samples. Please ensure you are including in the name and Description: Trade Sample.",
@@ -229,6 +237,20 @@ export const STRATEGY_PLAYBOOK: Record<string, PlaybookEntry> = {
       "Note: Brian wrote that operation errors are full file [EXAM L0532], but in P20261005A only the 3 comma rows failed and the other 5 were filed. Check the confirmation of the re-sent rows before assuming either way.",
     ],
     seen: "2026-10-06 P20261005A",
+  },
+  "Duplicate Sale for Licensee": {
+    cls: "row-contradicts-ledger",
+    action: "confirm",
+    meaning:
+      "The sale was sent as Insert, but CCRS already holds a sale with this SaleExternalIdentifier. In PREprod on 2026-10-25 every row of a re-uploaded, already-accepted Sale file came back this way: CCRS refuses the same sale twice. The guide also lists one other cause: lines of one sale that disagree on SaleType or SaleDate, or share a detail id.",
+    cite: ["[G L1390-L1397]"],
+    fix: [
+      "First check: was this file (or the same sales) already uploaded and accepted? If so, nothing is wrong. Press \"Apply error file\": when every row ties to a file CCRS already answered, the hub sets the email aside by itself with the reason, and records nothing.",
+      "Two uploaders (Cultivera and Greenway) filing the same week also causes it. Only one system may file each week.",
+      "Otherwise apply the error file. The hub marks the lines \"uncertain\" and holds them out of exports. The exporter already keeps one SaleType and SaleDate per sale and a unique detail id per line [G L1392-L1397], so a fresh export should not repeat it.",
+      "Production: settle it with a copy of the data from the CCRS Service Desk (servicedesk@lcb.wa.gov). Never re-send it as Insert.",
+    ],
+    seen: "2026-10-25 PREprod re-upload",
   },
 };
 

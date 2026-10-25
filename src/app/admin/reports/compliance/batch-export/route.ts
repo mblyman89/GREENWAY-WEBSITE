@@ -25,6 +25,7 @@
  *
  * Generating regulatory files requires the "Change settings" permission.
  */
+import { duplicateEmitLine } from "@/lib/compliance/ccrs-reupload-core";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
@@ -194,7 +195,7 @@ export async function GET(request: Request) {
     const owed = await recordHeldBack(admin, env, range.fromDate, heldRecordsOf(verdict.held));
     outboxNote = [
       `Recorded in the CCRS outbox (${env}): ${result.length - dupes.length} new file(s), ${dupes.length} already emitted.`,
-      ...dupes.map((d) => `  ALREADY EMITTED (${d.state}): ${d.file_name} — same bytes as before; do NOT upload it again if CCRS already processed it.`),
+      ...dupes.map((d) => duplicateEmitLine(d.state, d.file_name)),
       owed.error
         ? `WARNING: the still-owed list was NOT updated (${owed.error}). The held-back list below is still complete.`
         : owed.available

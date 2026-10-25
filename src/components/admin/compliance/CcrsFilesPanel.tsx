@@ -18,6 +18,7 @@
  */
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { fileActions, noEmailAllowedAt } from "@/lib/compliance/ccrs-outcome-core";
+import { ANSWERED_DOWNLOAD_WARNING, isAnsweredState } from "@/lib/compliance/ccrs-reupload-core";
 import { FILE_STATE_TEXT, ccrsPortalUrl, pacificLocalInputValue, pendingDuplicateCount } from "@/lib/compliance/ccrs-lifecycle-core";
 
 export type PanelFile = {
@@ -212,6 +213,11 @@ export function CcrsFilesPanel(p: Props) {
                         <a href={`/admin/compliance/ccrs/file/${f.id}`} className="ml-auto text-[11px] font-semibold text-[var(--admin-accent)] underline">
                           Download exact file
                         </a>
+                      ) : null}
+                      {isAnsweredState(f.state) ? (
+                        <span className="w-full text-right text-[10px] text-amber-200/70" data-testid="answered-download-warning">
+                          {ANSWERED_DOWNLOAD_WARNING}
+                        </span>
                       ) : null}
                     </div>
                     <p className="mt-1 text-white/50">{FILE_STATE_TEXT[f.state] ?? f.state}</p>
