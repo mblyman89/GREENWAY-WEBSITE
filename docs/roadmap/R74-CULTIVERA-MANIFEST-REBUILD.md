@@ -1054,7 +1054,7 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 
 > I must have given you the wrong files. look at these new correct ones. I am testing the week of 10/25/26-11/01/2026. I get errors for all files. the examiners office did not send a an error csv file to examine for the product file. just an error message. I have tested new sales today, and still get the processing error. please try again to fix what ever is broken here. again, i just want to reiterate, this is not a duplicate upload. this is a new week, the most current week. minimal testing please, i will test it. follow the standing rules. thank you.
 
-### S47 - Product file refused whole (blank / 3-decimal UnitWeightGrams) + "not processed" email
+### S47 - Product file refused whole (blank / 3-decimal UnitWeightGrams) + "not processed" email (#1501) shipped
 
 - **Root cause.** The Product file (2,604 rows) carried:
   - 14 blank UnitWeightGrams (Concentrate for Inhalation);
