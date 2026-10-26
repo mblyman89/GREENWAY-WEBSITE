@@ -4,7 +4,7 @@ import { __runVendorLookupProgressTests } from "@/lib/catalog/vendor-lookup-prog
 
 describe("R74 S44 - lookup progress by vendor + pipeline bar", () => {
   it("self-tests pass", () => {
-    expect(__runVendorLookupProgressTests()).toEqual({ passed: 14, failed: 0 });
+    expect(__runVendorLookupProgressTests()).toEqual({ passed: 16, failed: 0 }) // R74 S49: +2 (stuck);
   });
   it("is wired into the tab, the page and the lookup writers", () => {
     expect(readFileSync("src/app/admin/inventory/batch-lookups/ConfidenceTab.tsx", "utf8")).toContain("<VendorProgressTable");

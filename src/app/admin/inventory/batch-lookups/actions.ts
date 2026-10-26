@@ -16,12 +16,14 @@ import { loadBatchConsole, requeueFailedItems, stoppedItemIds } from "@/lib/ai/b
 import { logBatchEvent } from "@/lib/ai/batch-events-server";
 import { aiWebSearchModelId } from "@/lib/ai/provider";
 import { resolveGeminiModel } from "@/lib/ai/gemini-models-core";
-import { curlFor, explainGemini, googleStateKey, isGoogleOpen, validBatchName, type ConsoleCommand } from "@/lib/ai/gemini-batch-explain-core";
+import { curlFor, explainGemini, googleStateKey, isGoogleOpen, OPEN_BATCH_STATES, validBatchName, type ConsoleCommand } from "@/lib/ai/gemini-batch-explain-core";
 import { runVendorConfidenceAttach } from "@/lib/catalog/cultivera-confidence-server";
 import { CONFIDENCE_TAB, parseAttachMode, type AttachMode } from "@/lib/catalog/cultivera-confidence-core";
 import { BATCH_CONSOLE_PATH, BATCH_WAVE, MAX_BUDGET, isRateLimitFailure, planBatches, withJobPaused, type PlanManifest } from "@/lib/ai/batch-console-core";
 import { BATCH_MAX_FAMILIES } from "@/lib/ai/gemini-batch-core";
 import { keepQueuing, waveSummary } from "@/lib/ai/batch-requeue-core";
+import { planUnstick, unstickSentence, UNSTUCK_NOTE, type UnstickItem, type UnstickJob } from "@/lib/ai/batch-unstick-core";
+import { loadCultiveraVendors } from "@/lib/inventory/cultivera-vendor";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -319,4 +321,73 @@ export async function attachVendorConfidenceAction(formData: FormData): Promise<
   const draftIds = formData.getAll("d").map(String).filter((x) => UUID.test(x)).slice(0, 500);
   const r = await runVendorConfidenceAttach({ vendor, mode: mode as AttachMode, draftIds, actor: who });
   to(r.sentence, !r.ok);
+}
+
+/**
+ * R74 S49: "Unstick & re-ask". Every product shown in progress (blue) or failed
+ * (red) while nothing is open at Google: its stuck / failed rows are closed and
+ * a FRESH lookup is queued for its delivery (only products still in review that
+ * no lookup answered). Products inside a batch still open at Google, and jobs
+ * the runner holds right now, are left alone. vendor = one vendor; empty = all.
+ */
+export async function unstickAndRequeueAction(formData: FormData): Promise<void> {
+  const who = await actor();
+  const vendor = String(formData.get("vendor") ?? "").trim().slice(0, 120);
+  const to = (msg: string, bad: boolean): never => {
+    revalidatePath(BATCH_CONSOLE_PATH);
+    redirect(`${BATCH_CONSOLE_PATH}?tab=${CONFIDENCE_TAB}${vendor ? `&vendor=${encodeURIComponent(vendor)}` : ""}&${bad ? "err" : "msg"}=${encodeURIComponent(msg.slice(0, 400))}`);
+  };
+  const admin = createSupabaseAdminClient();
+  let only: Set<string> | null = null;
+  if (vendor) {
+    const load = await loadCultiveraVendors();
+    if (!load.ok) to(`The vendor list could not be read: ${load.error}`, true);
+    if (load.ok) only = new Set(load.rows.filter((r) => r.vendor.trim().toLowerCase() === vendor.toLowerCase()).map((r) => r.id));
+  }
+  // Every stuck / failed row (paged, never .limit >= 1000).
+  const items: UnstickItem[] = [];
+  for (let from = 0; from < 40_000; from += 500) {
+    const { data, error } = await admin.from("lookup_job_items").select("id, job_id, draft_id, status, batch_id").in("status", ["queued", "running", "failed"]).order("id").range(from, from + 499);
+    if (error) to(`The lookup list could not be read: ${error.message}`, true);
+    const rows = (data as { id: string; job_id: string; draft_id: string; status: string; batch_id: string | null }[] | null) ?? [];
+    for (const r of rows) items.push({ id: r.id, jobId: r.job_id, draftId: r.draft_id, status: r.status, batchId: r.batch_id });
+    if (rows.length < 500) break;
+  }
+  const jobIds = [...new Set(items.map((i) => i.jobId))];
+  const jobs: UnstickJob[] = [];
+  const now = Date.now();
+  for (let i = 0; i < jobIds.length; i += 100) {
+    const { data, error } = await admin.from("lookup_jobs").select("id, manifest_id, status, lease_until").in("id", jobIds.slice(i, i + 100));
+    if (error) to(`The lookup jobs could not be read: ${error.message}`, true);
+    for (const j of (data as { id: string; manifest_id: string; status: string; lease_until: string | null }[] | null) ?? []) {
+      jobs.push({ id: j.id, manifestId: j.manifest_id, status: j.status, leaseLive: !!j.lease_until && Date.parse(j.lease_until) > now });
+    }
+  }
+  const { data: bRows, error: bErr } = await admin.from("ai_batches").select("id").in("state", [...OPEN_BATCH_STATES]).limit(300);
+  if (bErr) to(`The batch list could not be read: ${bErr.message}`, true);
+  const openBatchIds = new Set(((bRows as { id: string }[] | null) ?? []).map((b) => b.id));
+  const plan = planUnstick({ items, jobs, openBatchIds, onlyManifests: only });
+  // An open job of the same delivery with no stuck rows would still block the fresh job: close it too.
+  if (plan.manifests.length > 0) {
+    const { data: more } = await admin.from("lookup_jobs").select("id, manifest_id, status").in("manifest_id", plan.manifests).in("status", ["queued", "running"]).limit(300);
+    for (const j of (more as { id: string; manifest_id: string; status: string }[] | null) ?? []) if (!plan.closeJobIds.includes(j.id)) plan.closeJobIds.push(j.id);
+  }
+  const at = new Date().toISOString();
+  for (let i = 0; i < plan.closeItemIds.length; i += 100) {
+    await admin.from("lookup_job_items").update({ status: "canceled", error: UNSTUCK_NOTE, finished_at: at, updated_at: at }).in("id", plan.closeItemIds.slice(i, i + 100)).in("status", ["queued", "running", "failed"]);
+  }
+  for (let i = 0; i < plan.closeJobIds.length; i += 100) {
+    await admin.from("lookup_jobs").update({ status: "canceled", finished_at: at, lease_until: null, lease_token: null, updated_at: at }).in("id", plan.closeJobIds.slice(i, i + 100)).in("status", ["queued", "running"]);
+  }
+  const t: Tally = { created: 0, products: 0, already: 0, nothing: 0, errors: [] };
+  for (const m of plan.manifests) {
+    await queueOne(m, who, t);
+    if (t.errors.length >= 5) break;
+  }
+  const msg = unstickSentence(plan, { queuedProducts: t.products, queuedManifests: t.created + t.already, nothing: t.nothing, errors: t.errors });
+  if (plan.manifests.length > 0) {
+    await logBatchEvent(admin, { kind: "control", severity: "info", title: `Unstick & re-ask${vendor ? ` (${vendor})` : ""}: ${plan.products} products freed, ${t.products} queued`, plain: msg, fix: "Press Send 1 test batch (or Allow) on the Mission tab.", actorEmail: who.email });
+  }
+  await recordAudit({ actorId: who.userId, actorEmail: who.email, action: "ai_batch.unstick_requeue", entityType: "lookup_job_items", entityId: null, after: { vendor: vendor || null, manifests: plan.manifests.length, closedItems: plan.closeItemIds.length, closedJobs: plan.closeJobIds.length, queued: t.products, atGoogle: plan.atGoogle, remaining: plan.remaining } });
+  to(msg, t.errors.length > 0 && t.created === 0);
 }

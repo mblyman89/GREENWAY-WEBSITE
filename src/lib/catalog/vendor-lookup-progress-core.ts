@@ -39,6 +39,8 @@ export type ProgressItem = {
   usedWebSearch: boolean | null;
   sources: number | null;
   answerFound: boolean | null;
+  /** R74 S49: open on paper but nothing will ever send it (job closed / batch over). */
+  orphan?: boolean;
 };
 
 export type AskState =
@@ -49,6 +51,7 @@ export type AskState =
   | "nothing_found"
   | "from_memory"
   | "failed"
+  | "stuck"
   | "stopped";
 
 export const ASK_STATE_LABEL: Record<AskState, string> = {
@@ -59,6 +62,7 @@ export const ASK_STATE_LABEL: Record<AskState, string> = {
   nothing_found: "Asked - nothing found",
   from_memory: "Not asked - already on file",
   failed: "Failed",
+  stuck: "Stuck - press Unstick & re-ask",
   stopped: "Stopped / skipped",
 };
 
@@ -70,6 +74,7 @@ export const ASK_STATE_TONE: Record<AskState, "neutral" | "green" | "gold" | "or
   nothing_found: "orange",
   from_memory: "green",
   failed: "danger",
+  stuck: "danger",
   stopped: "neutral",
 };
 
@@ -107,6 +112,10 @@ export type VendorProgress = {
   notAsked: number;
   inFlight: number;
   failed: number;
+  /** R74 S49: in progress on paper, but nothing will send them */
+  stuck: number;
+  /** of inFlight: waiting in line (not yet at Google) */
+  waiting: number;
   factsFound: number;
   attached: number;
   /** Products with info (answered or on file) / products, 0-100. */
@@ -129,6 +138,7 @@ export function rebuiltQuery(d: Pick<ProgressDraft, "name" | "brand" | "vendor">
 
 function stateOf(it: ProgressItem): AskState {
   const s = (it.status ?? "").toLowerCase();
+  if ((s === "queued" || s === "running") && it.orphan) return "stuck";
   if (s === "queued") return "queued";
   if (s === "running") return it.batchId ? "at_google" : "queued";
   if (s === "failed") return "failed";
@@ -165,7 +175,12 @@ export function productProgress(d: ProgressDraft, items: readonly ProgressItem[]
     attached: n(facts.attached),
     queuedForReview: n(facts.queued),
     lastAt: head.finishedAt ?? head.updatedAt,
-    note: head.status === "failed" || head.status === "canceled" ? (head.error ?? "").slice(0, 200) || null : null,
+    note:
+      head.status === "failed" || head.status === "canceled"
+        ? (head.error ?? "").slice(0, 200) || null
+        : stateOf(head) === "stuck"
+          ? "Nothing is sending this one (its lookup was closed or its batch ended without an answer). Press Unstick & re-ask."
+          : null,
   };
 }
 
@@ -184,7 +199,7 @@ export function vendorProgress(drafts: readonly ProgressDraft[], items: readonly
     const key = vkey(d.vendor || "Unknown vendor");
     let v = byVendor.get(key);
     if (!v) {
-      v = { vendor: d.vendor || "Unknown vendor", key, products: 0, approved: 0, asked: 0, answered: 0, nothingFound: 0, fromMemory: 0, notAsked: 0, inFlight: 0, failed: 0, factsFound: 0, attached: 0, completeness: 0, rows: [] };
+      v = { vendor: d.vendor || "Unknown vendor", key, products: 0, approved: 0, asked: 0, answered: 0, nothingFound: 0, fromMemory: 0, notAsked: 0, inFlight: 0, failed: 0, stuck: 0, waiting: 0, factsFound: 0, attached: 0, completeness: 0, rows: [] };
       byVendor.set(key, v);
     }
     const p = productProgress(d, byDraft.get(d.id.toLowerCase()) ?? []);
@@ -197,11 +212,13 @@ export function vendorProgress(drafts: readonly ProgressDraft[], items: readonly
     if (p.state === "from_memory") v.fromMemory += 1;
     if (p.state === "not_asked") v.notAsked += 1;
     if (p.state === "queued" || p.state === "at_google") v.inFlight += 1;
+    if (p.state === "queued") v.waiting += 1;
     if (p.state === "failed") v.failed += 1;
+    if (p.state === "stuck") v.stuck += 1;
     v.factsFound += p.factsFound;
     v.attached += p.attached;
   }
-  const order: Record<AskState, number> = { failed: 0, not_asked: 1, nothing_found: 2, stopped: 3, queued: 4, at_google: 5, answered: 6, from_memory: 7 };
+  const order: Record<AskState, number> = { stuck: 0, failed: 0, not_asked: 1, nothing_found: 2, stopped: 3, queued: 4, at_google: 5, answered: 6, from_memory: 7 };
   const out = [...byVendor.values()];
   for (const v of out) {
     v.completeness = v.products === 0 ? 0 : Math.round(((v.answered + v.fromMemory) / v.products) * 100);
@@ -239,6 +256,8 @@ export function __runVendorLookupProgressTests(): { passed: number; failed: numb
   ok(productProgress(d("a"), [it("a", { status: "running", batchId: "b1" })]).state === "at_google", "running in a batch -> at Google");
   const failedRow = productProgress(d("a"), [it("a", { status: "failed", error: "Gemini batch: boom" })]);
   ok(failedRow.state === "failed" && failedRow.note === "Gemini batch: boom", "failed carries its note");
+  ok(productProgress(d("a"), [it("a", { status: "running", batchId: "b0", orphan: true })]).state === "stuck", "orphaned running -> stuck");
+  ok(vendorProgress([d("a")], [it("a", { status: "queued", orphan: true })])[0].stuck === 1, "stuck counted per vendor");
 
   const reask = productProgress(d("a"), [it("a"), it("a", { status: "queued", finishedAt: null, updatedAt: "2026-01-03T00:00:00Z" })]);
   ok(reask.state === "queued" && reask.timesAsked === 2 && reask.factsFound === 6, "re-queued keeps last facts, shows live state");
