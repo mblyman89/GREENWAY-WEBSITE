@@ -214,3 +214,15 @@ export async function markCcrsMailHandled(admin: Admin, id: string, state: "appl
   if (error) throw new Error(`ccrs_mail_messages: ${error.message}`);
   return ((data as unknown[] | null) ?? []).length === 1;
 }
+
+/** R74 S48: every CCRS email still waiting to be applied, oldest first (the order "Answer all" works in). */
+export async function listOpenCcrsMail(admin: Admin, limit = 60): Promise<StoredCcrsMail[]> {
+  const { data, error } = await admin
+    .from("ccrs_mail_messages")
+    .select(COLS)
+    .eq("state", "new")
+    .order("received_at", { ascending: true, nullsFirst: true })
+    .limit(limit);
+  if (error) throw new Error(`ccrs_mail_messages: ${error.message}`);
+  return (data as StoredCcrsMail[] | null) ?? [];
+}
