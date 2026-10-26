@@ -217,7 +217,7 @@ function categoryStyle(category: string): { chip: string; dot: string } {
 /** Employee-identity PIN check (/api/pos/witness); friends & family adds the guest's usage. */
 export type WitnessFn = (
   pin: string,
-  opts?: { friendsFamilyCustomerId?: string },
+  opts?: { friendsFamilyCustomerId?: string; secondPersonFor?: string },
 ) => Promise<
   | {
       ok: true;
@@ -2718,6 +2718,8 @@ function CartScreen({
   const [expandedLine, setExpandedLine] = useState<string | null>(null);
   // B24 — the line the manager is overriding (engine-priced snapshot).
   const [overrideTarget, setOverrideTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
+  // Register round S4 — two-person discount adjust target.
+  const [adjustTarget, setAdjustTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
@@ -3387,7 +3389,7 @@ function CartScreen({
                                   className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
                                   title="Remove the manager override — the line returns to the engine price."
                                 >
-                                  Undo override
+                                  {activeOverride.kind === "discount_adjust" ? "Undo adjust" : "Undo override"}
                                 </button>
                               ) : (
                                 <button
@@ -3399,6 +3401,16 @@ function CartScreen({
                                   Override price…
                                 </button>
                               )}
+                              {!activeOverride && onWitness && employeeId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setAdjustTarget({ product: cartEntry.product, engineLine })}
+                                  className="pos-tile ml-2 min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
+                                  title="Adjust this line's discount — a SECOND on-duty employee approves with their PIN (never the cashier)."
+                                >
+                                  Adjust discount…
+                                </button>
+                              ) : null}
                             </td>
                           </tr>
                         ) : null}
@@ -4041,6 +4053,20 @@ function CartScreen({
         </div>
       ) : null}
 
+      {adjustTarget && onWitness && employeeId ? (
+        <DiscountAdjustModal
+          product={adjustTarget.product}
+          engineLine={adjustTarget.engineLine}
+          cashierEmployeeId={employeeId}
+          onWitness={onWitness}
+          onClose={() => setAdjustTarget(null)}
+          onApplied={(o) => {
+            setOverrides({ ...overrides, [adjustTarget.product.variantId]: o });
+            setAdjustTarget(null);
+          }}
+        />
+      ) : null}
+
       {overrideTarget && onApprove ? (
         <PriceOverrideModal
           product={overrideTarget.product}
@@ -4539,6 +4565,165 @@ function PriceOverrideModal({
           className="pos-tile mt-4 w-full rounded-xl bg-[var(--pos-warn-solid)] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Approve override"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Register round S4 — two-person discount adjust. Owner: "There should also
+ * be a button for adjusting the discount, but it will require getting the
+ * second employee on duty to use their code on the register. If employee a
+ * wants to override on their register, the pin used needs to be employee b."
+ * The cashier picks a % off (or a new price) and a reason; a DIFFERENT
+ * clocked-in employee enters their PIN (/api/pos/witness checks on-duty and
+ * not-the-cashier; sync re-refuses self-approval). Rides the B24 override
+ * block with kind "discount_adjust", so the cost floor, markdown-only rule,
+ * receipt "was" line and audit all apply. Replaces (never stacks on) the
+ * engine price: the override is the final unit price.
+ */
+function DiscountAdjustModal({
+  product,
+  engineLine,
+  cashierEmployeeId,
+  onWitness,
+  onClose,
+  onApplied,
+}: {
+  product: PosMenuProduct;
+  engineLine: PricedSaleLine;
+  cashierEmployeeId: string;
+  onWitness: WitnessFn;
+  onClose: () => void;
+  onApplied: (o: PosLineOverride) => void;
+}) {
+  const PCTS = [5, 10, 15, 20, 25];
+  const REASONS = ["Customer service recovery", "Price match", "Damaged / open package", "Manager-approved courtesy"];
+  const [pct, setPct] = useState<number | null>(null);
+  const [priceText, setPriceText] = useState("");
+  const [reason, setReason] = useState<string>("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const current = engineLine.unitPriceMinor;
+  const floorMinor = overrideFloorMinor(product);
+  const newUnitMinor =
+    pct !== null ? Math.max(1, Math.round((current * (100 - pct)) / 100)) : dollarsToMinor(priceText);
+  const request =
+    newUnitMinor !== null
+      ? validateOverrideRequest({ engineUnitMinor: current, floorMinor, newUnitMinor, reason: reason.trim() })
+      : null;
+  const ready = request?.ok === true && pin.length >= 4 && !busy;
+
+  const approve = async () => {
+    if (!ready || newUnitMinor === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await onWitness(pin, { secondPersonFor: cashierEmployeeId });
+      if (!res.ok) {
+        setError(res.error);
+        setPin("");
+        return;
+      }
+      if (res.employee.id === cashierEmployeeId) {
+        setError("That's your own PIN — a second employee on duty must approve.");
+        setPin("");
+        return;
+      }
+      onApplied({
+        unitPriceMinor: newUnitMinor,
+        originalUnitPriceMinor: current,
+        reason: reason.trim(),
+        approvedByEmployeeId: res.employee.id,
+        approvedByName: res.employee.fullName,
+        kind: "discount_adjust",
+      });
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chip = (on: boolean) =>
+    `rounded-full px-3 py-1.5 text-xs font-semibold ${
+      on ? "bg-[var(--pos-warn-solid)] text-white" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+    }`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Adjust discount</h2>
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-sm">
+          {engineLine.productName} — currently {money(current)} each{engineLine.appliedLabel ? ` (${engineLine.appliedLabel})` : ""}.
+        </p>
+        <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+          Replaces the current price (never stacks). Floor: {money(Math.max(1, floorMinor))}. A second employee who is
+          clocked in — not you — approves with their PIN. Every adjust is audited.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PCTS.map((p) => (
+            <button key={p} type="button" className={chip(pct === p)} onClick={() => { setPct(pct === p ? null : p); setPriceText(""); setError(null); }}>
+              {p}% off
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
+          inputMode="decimal"
+          placeholder="Or a new price per unit (0.00)"
+          value={priceText}
+          onChange={(e) => { setPriceText(e.target.value); setPct(null); setError(null); }}
+        />
+        {newUnitMinor !== null ? (
+          <p className="mt-2 text-sm font-semibold">New price: {money(newUnitMinor)} each</p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {REASONS.map((r) => (
+            <button key={r} type="button" className={chip(reason === r)} onClick={() => setReason(reason === r ? "" : r)}>
+              {r}
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
+          placeholder="Or type a reason (3–500 characters)…"
+          value={REASONS.includes(reason) ? "" : reason}
+          maxLength={500}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+          Second employee&apos;s PIN (on duty, not you)
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={6}
+          value={pin}
+          onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setError(null); }}
+        />
+        {request && !request.ok ? (
+          <p className="mt-3 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">{request.error}</p>
+        ) : null}
+        {error ? (
+          <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">{error}</p>
+        ) : null}
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={approve}
+          className="pos-tile mt-4 w-full rounded-xl bg-[var(--pos-warn-solid)] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+        >
+          {busy ? "Verifying…" : "Approve adjustment"}
         </button>
       </div>
     </div>

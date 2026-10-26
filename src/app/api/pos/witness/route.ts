@@ -23,7 +23,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { getEmployeeByPin } from "@/lib/staffing/store";
+import { getEmployeeByPin, openWorkPunch } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
@@ -47,10 +47,12 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
 
   let pin = "";
   let ffCustomerId = "";
+  let secondPersonFor = "";
   try {
-    const body = (await req.json()) as { pin?: unknown; friendsFamilyCustomerId?: unknown };
+    const body = (await req.json()) as { pin?: unknown; friendsFamilyCustomerId?: unknown; secondPersonFor?: unknown };
     pin = String(body?.pin ?? "");
     ffCustomerId = typeof body?.friendsFamilyCustomerId === "string" ? body.friendsFamilyCustomerId : "";
+    secondPersonFor = typeof body?.secondPersonFor === "string" ? body.secondPersonFor : "";
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
@@ -64,6 +66,24 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "No active employee for that PIN." }, { status: 401 });
   }
   await notePinSuccess(throttleScope);
+
+  // Register round S4 — two-person discount adjust: the approver must be a
+  // DIFFERENT employee from the cashier AND currently clocked in (on duty).
+  if (secondPersonFor) {
+    if (employee.id === secondPersonFor) {
+      return NextResponse.json(
+        { error: "That's your own PIN — a second employee on duty must approve." },
+        { status: 403 },
+      );
+    }
+    const punch = await openWorkPunch(employee.id);
+    if (!punch) {
+      return NextResponse.json(
+        { error: `${employee.full_name} is not clocked in — the approver must be on duty.` },
+        { status: 403 },
+      );
+    }
+  }
 
   // Deliberately no audit row HERE: the sale itself is validated + audited at
   // sync with both employee ids inside it (special_discount_uses ledger), so
