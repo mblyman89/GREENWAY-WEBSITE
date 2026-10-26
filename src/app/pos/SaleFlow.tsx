@@ -418,6 +418,45 @@ export type SaleFlowProps = {
 };
 
 /**
+ * Discount transparency: the per-line facts the receipt needs to explain a
+ * saving, read off the priced line (which carries every stage's stamp) and
+ * the raw engine line it started from. Optional fields only; anything not
+ * applicable is omitted so the frozen snapshot stays small.
+ */
+function discountTransparencyFields(
+  l: PricedSaleLine & { loyaltyDiscountMinor?: number; specialDiscountMinor?: number },
+  engineLines: PricedSaleLine[],
+  medicalSavingsMinor: number,
+  labels: { loyaltyLabel: string | null; specialLabel: string | null },
+): Partial<PosReceiptInput["lines"][number]> {
+  const engine = engineLines.find((e) => (e.variantId ?? e.productId) === (l.variantId ?? l.productId));
+  const out: Partial<PosReceiptInput["lines"][number]> = {};
+  if (typeof l.appliedPercent === "number") out.appliedPercent = l.appliedPercent;
+  if (l.atCostFloor) out.atCostFloor = true;
+  if (engine) out.promoUnitPriceMinor = engine.unitPriceMinor;
+  const override = (l as { override?: { originalUnitPriceMinor: number } }).override;
+  if (override && engine) {
+    // The override replaced the engine price; its unit price is the line's
+    // price BEFORE the medical / loyalty / special stages took theirs off.
+    const later =
+      Math.round(medicalSavingsMinor / Math.max(1, l.quantity)) +
+      (l.loyaltyDiscountMinor ?? 0) +
+      (l.specialDiscountMinor ?? 0);
+    out.overrideUnitPriceMinor = l.unitPriceMinor + later;
+  }
+  if (medicalSavingsMinor > 0) out.medicalSavingsMinor = medicalSavingsMinor;
+  if ((l.loyaltyDiscountMinor ?? 0) > 0) {
+    out.loyaltyDiscountMinor = l.loyaltyDiscountMinor;
+    if (labels.loyaltyLabel) out.loyaltyLabel = labels.loyaltyLabel;
+  }
+  if ((l.specialDiscountMinor ?? 0) > 0) {
+    out.specialDiscountMinor = l.specialDiscountMinor;
+    if (labels.specialLabel) out.specialLabel = labels.specialLabel;
+  }
+  return out;
+}
+
+/**
  * Price the cart for the buyer in front of the register: the shared
  * promotions engine first (identical to the website + server gate), then —
  * when the bundle carries the DOH medical config — the B7 exemption
@@ -1082,8 +1121,19 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                 // which is exactly right.
                 salesExempt: medLine?.salesExempt === true,
                 exciseExempt: medLine?.exciseExempt === true,
+                // Discount transparency — every reduction this line got,
+                // in application order, so the receipt can explain each
+                // one: deal (engine price) → manager override → medical
+                // tax pass-through → loyalty OR special. Display only.
+                ...discountTransparencyFields(l, base.engineLines, medLine?.medicalSavingsMinor ?? 0, {
+                  loyaltyLabel: appliedLoyalty ? `Loyalty reward ${appliedLoyalty.code}` : null,
+                  specialLabel: appliedSpecial
+                    ? `${SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} (${formatBps(appliedSpecial.percentBps)})`
+                    : null,
+                }),
               };
             }),
+            discountDisplay: rc.registerDiscount,
             subtotalMinor: priced.totals.subtotalMinorUnits,
             taxMinor: priced.totals.estimatedTaxMinorUnits,
             totalMinor: priced.totals.totalMinorUnits,

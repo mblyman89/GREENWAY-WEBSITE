@@ -36,6 +36,15 @@ import {
   salesTaxCompositionNote,
   type ReceiptTaxLine,
 } from "@/lib/pos/receipt-tax-core";
+import {
+  computeDiscountBreakdown,
+  dealNameShownInRows,
+  lineDiscountRows,
+  normalizeDiscountDisplayConfig,
+  orderSummaryBlock,
+  type DiscountDisplayConfig,
+  type DiscountLineInput,
+} from "@/lib/pos/receipt-discount-core";
 
 export type PosReceiptLine = {
   productName: string;
@@ -76,7 +85,45 @@ export type PosReceiptLine = {
   salesExempt?: boolean;
   /** Cannabis excise was exempted on this line (medical). */
   exciseExempt?: boolean;
+
+  // -- Discount transparency (all optional; absent = not explained) --------
+  /** Engine's effective percent off for the deal on this line. */
+  appliedPercent?: number | null;
+  /** The cost floor capped this line's deal (never sold below cost). */
+  atCostFloor?: boolean | null;
+  /** Unit price after the deal, before override/medical/loyalty/special. */
+  promoUnitPriceMinor?: number | null;
+  /** Unit price set by a manager override (replaces promoUnitPriceMinor). */
+  overrideUnitPriceMinor?: number | null;
+  /** Tax removed for a medical patient on this line (LINE total). */
+  medicalSavingsMinor?: number | null;
+  /** Per-UNIT loyalty reward reduction. */
+  loyaltyDiscountMinor?: number | null;
+  loyaltyLabel?: string | null;
+  /** Per-UNIT special discount (employee / veteran / industry ...). */
+  specialDiscountMinor?: number | null;
+  specialLabel?: string | null;
 };
+
+/** Map a receipt line onto the shared discount-explanation input. */
+export function receiptLineDiscountInput(line: PosReceiptLine): DiscountLineInput {
+  return {
+    productName: line.productName,
+    quantity: line.quantity,
+    regularUnitMinor: line.regularPriceMinor,
+    finalUnitMinor: line.unitPriceMinor,
+    appliedLabel: line.appliedLabel ?? null,
+    promoPercent: line.appliedPercent ?? null,
+    promoUnitMinor: line.promoUnitPriceMinor ?? null,
+    atCostFloor: line.atCostFloor ?? null,
+    overrideUnitMinor: line.overrideUnitPriceMinor ?? null,
+    medicalSavingsMinor: line.medicalSavingsMinor ?? null,
+    loyaltyUnitMinor: line.loyaltyDiscountMinor ?? null,
+    loyaltyLabel: line.loyaltyLabel ?? null,
+    specialUnitMinor: line.specialDiscountMinor ?? null,
+    specialLabel: line.specialLabel ?? null,
+  };
+}
 
 export type PosReceiptInput = {
   /** Offline client UUID of the sale event — the durable receipt number. */
@@ -173,6 +220,12 @@ export type PosReceiptInput = {
   logoDataUri?: string | null;
   /** SLICE 23 — printed logo width in px (receipt body is 576px). Default 220. */
   logoWidthPx?: number;
+  /**
+   * Discount transparency switches (owner's receipt builder). Absent = the
+   * legacy receipt (a strike-through "was" price only), so historical
+   * snapshots replay byte-identical; every live caller passes the config.
+   */
+  discountDisplay?: DiscountDisplayConfig | null;
 };
 
 /** Escape text for safe embedding in the receipt HTML. */
@@ -341,8 +394,11 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
   const rows: string[] = [];
 
   const showDetail = onByDefault(input.showItemDetail);
+  const discountCfg = input.discountDisplay ? normalizeDiscountDisplayConfig(input.discountDisplay) : null;
+  const discount = discountCfg ? computeDiscountBreakdown(input.lines.map(receiptLineDiscountInput)) : null;
 
-  for (const line of input.lines) {
+  input.lines.forEach((line, idx) => {
+    const dLine = discount ? discount.lines[idx] : null;
     const lineTotal = line.unitPriceMinor * line.quantity;
     const discounted = line.unitPriceMinor < line.regularPriceMinor;
     rows.push(
@@ -353,7 +409,10 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     if (showDetail) {
       // Slice 22b — the second, smaller line: brand, size, potency, the deal
       // that saved them money, and the per-unit price on multi-unit lines.
-      const detail = receiptItemDetailParts(line);
+      // When the discount rows below already name the deal, the caption
+      // does not repeat it.
+      const hideDeal = !!(dLine && discountCfg && dealNameShownInRows(dLine, discountCfg));
+      const detail = receiptItemDetailParts(hideDeal ? { ...line, appliedLabel: null } : line);
       const unitNote = receiptUnitPriceNote(line);
       const bits = [...detail, unitNote].filter(Boolean);
       if (bits.length > 0) {
@@ -362,7 +421,18 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
         );
       }
     }
-  }
+    if (dLine && discountCfg) {
+      for (const r of lineDiscountRows(dLine, discountCfg)) {
+        rows.push(
+          r.amountMinor != null
+            ? `<tr class="${r.emphasis ? "dx de" : "dx"}"><td class="n">${escapeReceiptHtml(r.text)}</td><td class="a">-${formatMoneyMinor(r.amountMinor)}</td></tr>`
+            : `<tr class="${r.emphasis ? "dx de" : "dx"}"><td class="n" colspan="2">${escapeReceiptHtml(r.text)}</td></tr>`,
+        );
+      }
+    }
+  });
+
+  const discountBlock = discount && discountCfg ? orderSummaryBlock(discount.summary, discountCfg) : null;
 
   const totals: string[] = [
     `<tr><td class="n">Subtotal (pre-tax)</td><td class="a">${formatMoneyMinor(input.subtotalMinor)}</td></tr>`,
@@ -525,6 +595,17 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     // as a caption under its product rather than as another product. Thermal
     // paper has no grey, so hierarchy comes from SIZE, not colour.
     "td.d{font-size:20px;text-align:left;padding:0 0 6px 24px;}",
+    // Discount transparency rows: indented captions under the product, the
+    // headline saving in bold; the summary block is a boxed table.
+    "tr.dx td{font-size:20px;padding:0 0 3px 0;}",
+    "tr.dx td.n{padding-left:24px;}",
+    "tr.de td{font-weight:bold;}",
+    ".dsum{border:2px solid #000;padding:6px 8px;margin:10px 0 4px;}",
+    ".dsumh{font-size:24px;font-weight:bold;text-align:center;margin:0 0 4px;}",
+    ".dsum table{font-size:22px;}",
+    ".dsum tr.e td{font-weight:bold;}",
+    ".dsum tr.i td.n{padding-left:20px;font-size:20px;}",
+    ".dnote{font-size:19px;margin:4px 0 0;line-height:1.3;}",
     // The wordmark. display:block + auto margins centre it; explicit
     // dimensions are emitted inline on the tag itself so the offscreen
     // WKWebView measures the right height before it snapshots.
@@ -581,6 +662,22 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     `<table>${rows.join("")}</table>`,
     "<hr>",
     `<table>${totals.join("")}</table>`,
+    ...(discountBlock
+      ? [
+          '<div class="dsum">',
+          `<p class="dsumh">${escapeReceiptHtml(discountBlock.title)}</p>`,
+          discountBlock.rows.length > 0
+            ? `<table>${discountBlock.rows
+                .map(
+                  (r) =>
+                    `<tr${r.emphasis ? ' class="e"' : r.label.startsWith("  ") ? ' class="i"' : ""}><td class="n">${escapeReceiptHtml(r.label.trim())}</td><td class="a">${escapeReceiptHtml(r.value)}</td></tr>`,
+                )
+                .join("")}</table>`
+            : "",
+          ...discountBlock.notes.map((n) => `<p class="dnote">&bull; ${escapeReceiptHtml(n)}</p>`),
+          "</div>",
+        ]
+      : []),
     // Every bit is escaped individually and the &middot; separator is added
     // afterwards, so the separator survives while the content cannot inject.
     // Mutation testing showed removing the escape here changes nothing today
@@ -1022,6 +1119,48 @@ export function __runPosReceiptCoreTests(): void {
   ok(url.includes("&drawer=after&drawerpulse=200"), "drawer kick after print");
   const noDrawer = buildPassPrntUrl("x", { backUrl: "b", openDrawer: false });
   ok(!noDrawer.includes("drawer="), "drawer omitted when disabled");
+
+  // Discount transparency: rows + summary only when the config is passed.
+  const dealLines: PosReceiptLine[] = [
+    {
+      productName: "Gummies <10pk>",
+      quantity: 3,
+      unitPriceMinor: 1334,
+      regularPriceMinor: 2000,
+      appliedLabel: "Sunday Funday \u00b7 3 for 2",
+      promoUnitPriceMinor: 1334,
+    },
+    {
+      productName: "Pre-roll",
+      quantity: 1,
+      unitPriceMinor: 800,
+      regularPriceMinor: 1000,
+      appliedLabel: "Happy Hour \u00b7 30% off",
+      atCostFloor: true,
+      promoUnitPriceMinor: 800,
+    },
+  ];
+  const legacyDeal = buildPosReceiptHtml({ ...base, lines: dealLines, savingsMinor: 2198 });
+  ok(!legacyDeal.includes("YOUR SAVINGS"), "no discount block without config (old snapshots unchanged)");
+  const rich = buildPosReceiptHtml({
+    ...base,
+    lines: dealLines,
+    savingsMinor: 2198,
+    discountDisplay: normalizeDiscountDisplayConfig({}),
+  });
+  ok(rich.includes("YOUR SAVINGS"), "discount summary block printed");
+  ok(rich.includes("Total off your order"), "order percent row printed");
+  ok(rich.includes("Capped at our cost"), "cost-floor note printed");
+  ok(rich.includes("Gummies &lt;10pk&gt;") && !rich.includes("Gummies <10pk>"), "product name still escaped");
+  ok(rich.includes("Deal: Sunday Funday"), "deal name printed in discount rows");
+  ok(!rich.includes("&middot; Sunday Funday"), "deal name not duplicated in caption");
+  const quiet = buildPosReceiptHtml({
+    ...base,
+    lines: dealLines,
+    savingsMinor: 2198,
+    discountDisplay: normalizeDiscountDisplayConfig({ showOrderSummary: false, showExplanation: false, showRegularPrice: false, showLineSavings: false, showLinePercent: false, showDealName: false, showDealMechanic: false, showCostFloorNote: false, showOtherDiscounts: false }),
+  });
+  ok(!quiet.includes("YOUR SAVINGS") && !quiet.includes("Capped at our cost"), "all switches off = no extra rows");
 
   console.log(`pos/receipt-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error("pos/receipt-core self-tests failed");

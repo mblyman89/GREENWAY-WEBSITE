@@ -107,6 +107,7 @@ export async function testPrintAction(): Promise<void> {
     headerText: settings?.header_text ?? config?.headerText ?? null,
     footerText: settings?.footer_text ?? config?.footerText ?? null,
     addressText: config?.addressText ?? null,
+    discountDisplay: config?.onlineDiscount ?? null,
   });
 
   const id = await queueJob({ bodyText: body, title: "Test print" });

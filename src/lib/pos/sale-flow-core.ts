@@ -362,6 +362,10 @@ export type PricedSaleLine = PosSaleLine & {
   brand: string | null;
   variantLabel: string | null;
   appliedLabel?: string;
+  /** Discount transparency (receipt display only, never synced). */
+  appliedPercent?: number;
+  /** The cost / statutory floor raised this line above the deal price. */
+  atCostFloor?: boolean;
   /**
    * AN-1 — per-UNIT grams carried from the menu variant (null = unknown).
    * Drives the register's limit meter AND rides the sale payload so the
@@ -455,6 +459,8 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       brand: entry.product.brand,
       variantLabel: entry.product.variantLabel,
       appliedLabel: d?.appliedLabel,
+      ...(d && d.appliedLabel ? { appliedPercent: d.appliedPercent } : {}),
+      ...(d && d.appliedLabel && (d.atCostFloor || unit > rawUnit) ? { atCostFloor: true } : {}),
       // AN-1: true per-unit weight from the bundle (null/absent = unknown).
       unitGrams: entry.product.unitGrams ?? null,
       // SLICE L4: per-unit millilitres travel with the line so the register's

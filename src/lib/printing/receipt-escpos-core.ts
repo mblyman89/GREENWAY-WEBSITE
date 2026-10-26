@@ -87,6 +87,14 @@ import {
 } from "@/lib/pos/receipt-tax-core";
 import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 import {
+  computeDiscountBreakdown,
+  dealNameShownInRows,
+  lineDiscountRows,
+  normalizeDiscountDisplayConfig,
+  orderSummaryBlock,
+  type DiscountDisplayConfig,
+} from "@/lib/pos/receipt-discount-core";
+import {
   DEFAULT_ORDER_ORIGIN,
   orderOriginReceiptLine,
   type OrderOrigin,
@@ -133,6 +141,9 @@ export type EscposReceiptLine = {
    * readable even when the per-unit "was" price cannot be stated.
    */
   lineDiscountMinorUnits?: number | null;
+  /** Discount transparency: the engine's percent and cost-floor flag. */
+  appliedPercent?: number | null;
+  atCostFloor?: boolean | null;
 };
 
 export type EscposReceiptInput = {
@@ -195,6 +206,11 @@ export type EscposReceiptInput = {
   showReturnPolicy?: boolean;
   /** Return-policy wording. Blank = generated from returns-core. */
   returnPolicyText?: string | null;
+  /**
+   * Discount transparency switches (the owner's "Online orders" section of
+   * the receipt builder). Absent = the legacy "was"/"Discount" rows only.
+   */
+  discountDisplay?: DiscountDisplayConfig | null;
 };
 
 export type EscposFormatOptions = {
@@ -392,7 +408,26 @@ export function toPosLine(line: EscposReceiptLine): PosReceiptLine {
     unitGrams: line.unitGrams ?? null,
     unitThcMg: line.unitThcMg ?? null,
     appliedLabel: line.appliedLabel ?? null,
+    appliedPercent: line.appliedPercent ?? null,
+    atCostFloor: line.atCostFloor ?? null,
   };
+}
+
+/**
+ * One discount row as fixed-width text: the description wraps, and the
+ * saving (when present) sits right-aligned on the FIRST row.
+ */
+function escposDiscountRow(text: string, amountMinor: number | undefined, cols: number): string[] {
+  const indent = "    ";
+  if (amountMinor == null) {
+    return wrapText(text, cols - indent.length).map((w) => `${indent}${w}`);
+  }
+  const amt = `-${formatMoneyMinor(amountMinor)}`;
+  const width = Math.max(8, cols - indent.length - amt.length - 1);
+  const wrapped = wrapText(text, width);
+  const out = [twoColumn(`${indent}${wrapped[0] ?? ""}`, amt, cols)];
+  for (const w of wrapped.slice(1)) out.push(`${indent}${w}`);
+  return out;
 }
 
 /**
@@ -489,6 +524,28 @@ export function formatEscposReceipt(
   // -- Items ----------------------------------------------------------------
   const posLines = input.lines.map(toPosLine);
   const showDetail = onByDefault(input.showItemDetail);
+  const discountCfg = input.discountDisplay ? normalizeDiscountDisplayConfig(input.discountDisplay) : null;
+  // The owner's free text is folded like every other string before layout.
+  if (discountCfg) {
+    discountCfg.summaryTitle = asciiFold(discountCfg.summaryTitle);
+    discountCfg.explanationText = asciiFold(discountCfg.explanationText);
+  }
+  const discount = discountCfg
+    ? computeDiscountBreakdown(
+        posLines.map((l, k) => ({
+          productName: l.productName,
+          quantity: l.quantity,
+          regularUnitMinor: l.regularPriceMinor,
+          finalUnitMinor: l.unitPriceMinor,
+          // Parse the UNFOLDED label: folding turns the engine's " \u00b7 "
+          // separator into " * ", which the label parser does not read. The
+          // rows it produces are folded when printed below.
+          appliedLabel: rawInput.lines[k]?.appliedLabel ?? null,
+          promoPercent: l.appliedPercent ?? null,
+          atCostFloor: l.atCostFloor ?? null,
+        })),
+      )
+    : null;
 
   for (let i = 0; i < input.lines.length; i += 1) {
     const posLine = posLines[i];
@@ -499,12 +556,16 @@ export function formatEscposReceipt(
 
     // The register strikes through the old price. Plain text has no strike, so
     // the same fact is stated in words on its own indented line.
-    if (posLine.unitPriceMinor < posLine.regularPriceMinor) {
+    const dLine = discount ? discount.lines[i] : null;
+    const richDiscount = !!(dLine && discountCfg && dLine.discounted);
+    if (posLine.unitPriceMinor < posLine.regularPriceMinor && !(richDiscount && discountCfg?.showRegularPrice)) {
       out.push(`  was ${formatMoneyMinor(posLine.regularPriceMinor)} each`.slice(0, cols));
     }
 
     if (showDetail) {
-      const bits = [...receiptItemDetailParts(posLine), receiptUnitPriceNote(posLine)].filter(
+      const hideDeal = !!(dLine && discountCfg && dealNameShownInRows(dLine, discountCfg));
+      const detailLine = hideDeal ? { ...posLine, appliedLabel: null } : posLine;
+      const bits = [...receiptItemDetailParts(detailLine), receiptUnitPriceNote(posLine)].filter(
         Boolean,
       );
       if (bits.length > 0) {
@@ -530,8 +591,16 @@ export function formatEscposReceipt(
 
     // SLICE L-36 - the line's discount in money, always (not a detail toggle:
     // it is part of the price breakdown, like the "was" line above).
+    if (richDiscount && dLine && discountCfg) {
+      for (const r of lineDiscountRows(dLine, discountCfg)) {
+        out.push(...escposDiscountRow(asciiFold(r.text), r.amountMinor, cols));
+      }
+    }
     const disc = input.lines[i].lineDiscountMinorUnits;
-    if (typeof disc === "number" && Number.isFinite(disc) && disc > 0) {
+    // When the breakdown already printed the line's saving, the money row
+    // would say the same thing twice.
+    const savingPrinted = richDiscount && discountCfg?.showLineSavings;
+    if (typeof disc === "number" && Number.isFinite(disc) && disc > 0 && !savingPrinted) {
       out.push(twoColumn("  Discount", `-${formatMoneyMinor(disc)}`, cols));
     }
   }
@@ -603,6 +672,26 @@ export function formatEscposReceipt(
   // customer holding an unpaid ticket that looks paid.
   out.push(centerLine("** NOT PAID — pay in store at pickup **", cols));
 
+  // -- Discount summary (owner's "Online orders" discount settings) ---------
+  const discountBlock = discount && discountCfg ? orderSummaryBlock(discount.summary, discountCfg) : null;
+  if (discountBlock) {
+    out.push(divider(cols));
+    out.push(...centeredBlock(discountBlock.title, cols));
+    for (const r of discountBlock.rows) {
+      const indented = r.label.startsWith("  ");
+      const label = asciiFold(r.label.trim());
+      const value = asciiFold(r.value);
+      const width = Math.max(8, cols - value.length - 1 - (indented ? 2 : 0));
+      const wrapped = wrapText(label, width);
+      out.push(twoColumn(`${indented ? "  " : ""}${wrapped[0] ?? ""}`, value, cols));
+      for (const w of wrapped.slice(1)) out.push(`${indented ? "    " : "  "}${w}`);
+    }
+    for (const n of discountBlock.notes) {
+      const wrapped = wrapText(asciiFold(n), cols - 2);
+      wrapped.forEach((w, k) => out.push(`${k === 0 ? "- " : "  "}${w}`));
+    }
+  }
+
   // -- Summary strip --------------------------------------------------------
   if (onByDefault(input.showSaleSummary)) {
     const bits: string[] = [];
@@ -673,6 +762,8 @@ export function buildTestPrintBody(opts: {
   addressText?: string | null;
   placedAt?: string;
   note?: string | null;
+  /** Show the owner's online discount-detail settings on the sample. */
+  discountDisplay?: DiscountDisplayConfig | null;
 }): string {
   return formatEscposReceipt(
     {
@@ -691,7 +782,11 @@ export function buildTestPrintBody(opts: {
           category: "flower",
           brand: "Greenway",
           unitGrams: 3.5,
-          appliedLabel: "Sample Deal",
+          // A capped deal, so the sample shows the cost-floor explanation.
+          appliedLabel: "Sample Deal \u00b7 25% off",
+          appliedPercent: 16.67,
+          atCostFloor: true,
+          lineDiscountMinorUnits: 200,
         },
         {
           productName: "Sample Gummies 10pk",
@@ -709,6 +804,7 @@ export function buildTestPrintBody(opts: {
       headerText: opts.headerText ?? null,
       footerText: opts.footerText ?? null,
       addressText: opts.addressText ?? null,
+      discountDisplay: opts.discountDisplay ?? null,
     },
     { columns: opts.columns },
   );
@@ -1139,6 +1235,21 @@ export function __runReceiptEscposTests(): void {
     testBody.split("\n").every((l) => l.length <= 48),
     "test print: fits the paper",
   );
+  // Discount transparency on the online ticket.
+  const richTest = buildTestPrintBody({
+    columns: 48,
+    placedAt: "2024-01-15T13:05:00.000Z",
+    discountDisplay: normalizeDiscountDisplayConfig({}),
+  });
+  ok(richTest.includes("YOUR SAVINGS"), "online ticket: discount summary block");
+  ok(richTest.includes("Total off your order"), "online ticket: order percent");
+  ok(richTest.includes("Capped at our cost"), "online ticket: cost-floor note");
+  ok(richTest.includes("Deal: Sample Deal (25% off)"), "online ticket: deal row");
+  ok(!richTest.includes("  Discount "), "online ticket: no duplicate Discount row");
+  ok(richTest.split("\n").every((l) => l.length <= 48), "online ticket: discount rows fit the paper");
+  ok(/^[\x00-\x7F]*$/.test(richTest), "online ticket: discount rows are printable ASCII");
+  const richNarrow = buildTestPrintBody({ columns: 32, discountDisplay: normalizeDiscountDisplayConfig({}) });
+  ok(richNarrow.split("\n").every((l) => l.length <= 32), "online ticket: discount rows fit 58mm");
   const testNarrow = buildTestPrintBody({ columns: 32 });
   ok(
     testNarrow.split("\n").every((l) => l.length <= 32),

@@ -536,8 +536,8 @@ export function lineDiscountRows(
         rows.push({
           text:
             head != null
-              ? `Capped at our cost: this item got ${eff} instead of ${trimNum(head)}% because we cannot sell below cost.`
-              : `Capped at our cost: this item's deal was limited to ${eff} because we cannot sell below cost.`,
+              ? `Capped at our cost: this item got ${eff} instead of ${trimNum(head)}% because our pricing never goes below what we paid for the product.`
+              : `Capped at our cost: this item's deal was limited to ${eff} because our pricing never goes below what we paid for the product.`,
         });
       }
     } else if (cfg.showOtherDiscounts) {
@@ -608,7 +608,7 @@ export function orderSummaryBlock(
     }
     if (summary.anyCostFloor) {
       notes.push(
-        "Some discounts were capped at our cost: Washington law does not allow cannabis to be sold below what the store paid for it.",
+        "Some discounts were capped at our cost: our pricing never sells a product below what the store paid for it, so on those items you received the largest discount possible instead of the full advertised percent.",
       );
     }
     if (summary.anyLoyaltyOrSpecial) {

@@ -27,9 +27,70 @@ import { prepareLogoForPrint } from "@/lib/printing/logo-print-core";
 import { RECEIPT_LOGO_MIN_WIDTH, RECEIPT_LOGO_WIDTH } from "@/lib/pos/receipt-logo-core";
 import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 import { saveReceiptConfigAction } from "@/app/admin/registers/receipt/actions";
+import {
+  DISCOUNT_EXPLANATION_MAX,
+  DISCOUNT_SUMMARY_TITLE_MAX,
+  type DiscountDisplayConfig,
+} from "@/lib/pos/receipt-discount-core";
+import { computeOrderTotals } from "@/lib/orders/order-pricing-core";
+import { buildTestPrintBody } from "@/lib/printing/receipt-escpos-core";
+
+/**
+ * Sample lines that exercise every discount explanation: a percent deal the
+ * cost floor capped, a 3-for-2 bundle spread across the units with a loyalty
+ * reward on top, and an undiscounted item.
+ */
+const SAMPLE_LINES: PosReceiptInput["lines"] = [
+  {
+    productName: "Blue Dream 3.5g",
+    quantity: 1,
+    unitPriceMinor: 2500,
+    regularPriceMinor: 3000,
+    category: "flower",
+    brand: "Sky High Farms",
+    unitGrams: 3.5,
+    appliedLabel: "Happy Hour \u00b7 25% off",
+    appliedPercent: 16.67,
+    atCostFloor: true,
+    promoUnitPriceMinor: 2500,
+  },
+  {
+    productName: "Gummy Bites 100mg",
+    quantity: 3,
+    unitPriceMinor: 1100,
+    regularPriceMinor: 1800,
+    category: "edible",
+    brand: "Craft Elixirs",
+    unitThcMg: 10,
+    appliedLabel: "Sunday Funday \u00b7 3 for 2",
+    appliedPercent: 33.33,
+    promoUnitPriceMinor: 1200,
+    loyaltyDiscountMinor: 100,
+    loyaltyLabel: "Loyalty reward GW-AB12-CD34",
+  },
+  {
+    productName: "Pre-roll 1g",
+    quantity: 1,
+    unitPriceMinor: 900,
+    regularPriceMinor: 900,
+    category: "preroll",
+    brand: "Greenway",
+    unitGrams: 1,
+  },
+];
+
+const SAMPLE_TOTALS = computeOrderTotals(
+  SAMPLE_LINES.map((l) => ({
+    category: l.category ?? "flower",
+    quantity: l.quantity,
+    unitPriceMinorUnits: l.unitPriceMinor,
+    regularPriceMinorUnits: l.regularPriceMinor,
+  })),
+);
 
 /** Representative sample sale so every toggle is visible in the preview. */
 function sampleReceipt(cfg: PosReceiptConfig): PosReceiptInput {
+  const tendered = Math.ceil(SAMPLE_TOTALS.totalMinorUnits / 1000) * 1000;
   return {
     saleClientUuid: "00000000-0000-4000-8000-0000eeff1234",
     soldAtIso: new Date().toISOString(),
@@ -37,35 +98,15 @@ function sampleReceipt(cfg: PosReceiptConfig): PosReceiptInput {
     // Slice 22b — the sample carries the SAME rich fields a real sale does,
     // so every toggle below actually changes something visible, and the
     // excise/sales split renders with real category-correct arithmetic.
-    lines: [
-      {
-        productName: "Blue Dream 3.5g",
-        quantity: 1,
-        unitPriceMinor: 2500,
-        regularPriceMinor: 3000,
-        category: "flower",
-        brand: "Sky High Farms",
-        unitGrams: 3.5,
-        appliedLabel: "Happy Hour 15%",
-      },
-      {
-        productName: "Gummy Bites 100mg",
-        quantity: 2,
-        unitPriceMinor: 1800,
-        regularPriceMinor: 1800,
-        category: "edible",
-        brand: "Craft Elixirs",
-        unitThcMg: 10,
-      },
-    ],
-    subtotalMinor: 4172,
-    taxMinor: 1928,
-    totalMinor: 6100,
-    savingsMinor: 500,
+    lines: SAMPLE_LINES,
+    subtotalMinor: SAMPLE_TOTALS.subtotalMinorUnits,
+    taxMinor: SAMPLE_TOTALS.estimatedTaxMinorUnits,
+    totalMinor: SAMPLE_TOTALS.totalMinorUnits,
+    savingsMinor: SAMPLE_TOTALS.savingsMinorUnits,
     medicalSavingsMinor: 0,
     medicalSale: false,
-    tenderedMinor: 7000,
-    changeMinor: 900,
+    tenderedMinor: tendered,
+    changeMinor: tendered - SAMPLE_TOTALS.totalMinorUnits,
     headerText: cfg.headerText,
     footerText: cfg.footerText,
     addressLines: receiptAddressLines(cfg),
@@ -86,7 +127,150 @@ function sampleReceipt(cfg: PosReceiptConfig): PosReceiptInput {
     displayName: "Purple Rain",
     logoDataUri: cfg.bottomLogoDataUri || null,
     logoWidthPx: cfg.bottomLogoWidth,
+    discountDisplay: cfg.registerDiscount,
   };
+}
+
+/**
+ * The owner's discount-transparency switches for ONE surface (register or
+ * online). Every switch maps 1:1 to a DiscountDisplayConfig field so the
+ * preview beside it changes the moment a box is ticked.
+ */
+function DiscountSettings({
+  idPrefix,
+  value,
+  onChange,
+}: {
+  idPrefix: string;
+  value: DiscountDisplayConfig;
+  onChange: (next: DiscountDisplayConfig) => void;
+}) {
+  const set = <K extends keyof DiscountDisplayConfig>(key: K, v: DiscountDisplayConfig[K]) =>
+    onChange({ ...value, [key]: v });
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+        Under each discounted item
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Toggle
+          label="Regular (before) price"
+          help={'"Regular 3 x $18.00 = $54.00" so the customer sees the starting point.'}
+          checked={value.showRegularPrice}
+          onChange={(v) => set("showRegularPrice", v)}
+        />
+        <Toggle
+          label="Money saved per item"
+          help={'"You saved ... -$18.00" on every discounted line, plus the price each.'}
+          checked={value.showLineSavings}
+          onChange={(v) => set("showLineSavings", v)}
+        />
+        <Toggle
+          label="Percent off per item"
+          help="The real percent this line got, worked out from the exact cents."
+          checked={value.showLinePercent}
+          onChange={(v) => set("showLinePercent", v)}
+        />
+        <Toggle
+          label="Deal name"
+          help={'"Deal: Sunday Funday (Buy 3, pay for 2)" \u2014 which deal applied and its type.'}
+          checked={value.showDealName}
+          onChange={(v) => set("showDealName", v)}
+        />
+        <Toggle
+          label="How the deal works"
+          help="One plain sentence, e.g. how a bundle's saving is shared across the items to the cent."
+          checked={value.showDealMechanic}
+          onChange={(v) => set("showDealMechanic", v)}
+        />
+        <Toggle
+          label="Cost-floor note"
+          help="When a deal was capped so the item isn't sold below cost, say so and show the percent it actually got."
+          checked={value.showCostFloorNote}
+          onChange={(v) => set("showCostFloorNote", v)}
+        />
+        <Toggle
+          label="Other discounts on the item"
+          help="Loyalty rewards, employee/veteran/industry discounts, manager price adjustments and medical tax savings, each on its own row."
+          checked={value.showOtherDiscounts}
+          onChange={(v) => set("showOtherDiscounts", v)}
+        />
+      </div>
+      <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+        Order savings summary
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Toggle
+          label="Savings summary box"
+          help="Regular total, total discounts, your price and items discounted \u2014 below the totals."
+          checked={value.showOrderSummary}
+          onChange={(v) => set("showOrderSummary", v)}
+        />
+        <Toggle
+          label="Total percent off the order"
+          help={'"Total off your order 22.4%" inside the summary.'}
+          checked={value.showOrderPercent}
+          onChange={(v) => set("showOrderPercent", v)}
+        />
+        <Toggle
+          label="Savings by deal"
+          help="One row per deal or program with what it saved across the whole order."
+          checked={value.showDealBreakdown}
+          onChange={(v) => set("showDealBreakdown", v)}
+        />
+        <Toggle
+          label={'"How your discounts work" notes'}
+          help="No-stacking rule, bundle spreading, cost-floor caps, tax-inclusive pricing \u2014 only the notes that apply to the order print."
+          checked={value.showExplanation}
+          onChange={(v) => set("showExplanation", v)}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Percent decimals"
+          help="How percentages print: 22%, 22.4% or 22.41%. Always rounded down so we never overstate a saving."
+          htmlFor={`${idPrefix}-dec`}
+        >
+          <select
+            id={`${idPrefix}-dec`}
+            value={value.percentDecimals}
+            onChange={(e) => set("percentDecimals", Number(e.target.value))}
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2 text-sm text-[var(--admin-text)]"
+          >
+            <option value={0}>Whole number (22%)</option>
+            <option value={1}>One decimal (22.4%)</option>
+            <option value={2}>Two decimals (22.41%)</option>
+          </select>
+        </Field>
+        <Field
+          label="Summary heading"
+          help={`Max ${DISCOUNT_SUMMARY_TITLE_MAX} characters; blank resets to "YOUR SAVINGS".`}
+          htmlFor={`${idPrefix}-title`}
+        >
+          <Input
+            id={`${idPrefix}-title`}
+            value={value.summaryTitle}
+            maxLength={DISCOUNT_SUMMARY_TITLE_MAX}
+            onChange={(e) => set("summaryTitle", e.target.value)}
+          />
+        </Field>
+      </div>
+      <Field
+        label="Your own note (optional)"
+        help={`Printed as the last note in the summary when the order has a discount (needs the notes switch on). Max ${DISCOUNT_EXPLANATION_MAX} characters.`}
+        htmlFor={`${idPrefix}-note`}
+      >
+        <Textarea
+          id={`${idPrefix}-note`}
+          rows={2}
+          value={value.explanationText}
+          maxLength={DISCOUNT_EXPLANATION_MAX}
+          onChange={(e) => set("explanationText", e.target.value)}
+          placeholder="e.g. Questions about a discount? Ask any budtender."
+        />
+      </Field>
+    </div>
+  );
 }
 
 function Toggle({
@@ -137,6 +321,9 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
   const [useQrCode, setUseQrCode] = useState(initial.useQrCode);
   const [bottomLogoDataUri, setBottomLogoDataUri] = useState(initial.bottomLogoDataUri);
   const [bottomLogoWidth, setBottomLogoWidth] = useState(initial.bottomLogoWidth);
+  // -- Discount transparency ----------------------------------------------
+  const [registerDiscount, setRegisterDiscount] = useState<DiscountDisplayConfig>(initial.registerDiscount);
+  const [onlineDiscount, setOnlineDiscount] = useState<DiscountDisplayConfig>(initial.onlineDiscount);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoNote, setLogoNote] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -162,6 +349,8 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
         useQrCode,
         bottomLogoDataUri,
         bottomLogoWidth,
+        registerDiscount,
+        onlineDiscount,
       }),
     [
       headerText,
@@ -181,10 +370,28 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
       useQrCode,
       bottomLogoDataUri,
       bottomLogoWidth,
+      registerDiscount,
+      onlineDiscount,
     ],
   );
 
   const previewHtml = useMemo(() => buildPosReceiptHtml(sampleReceipt(draft)), [draft]);
+  // The online pickup ticket, rendered by the SAME function a real online
+  // order goes through (48 columns = 80 mm paper). Fixed timestamp keeps the
+  // render deterministic between server and client.
+  const onlinePreview = useMemo(
+    () =>
+      buildTestPrintBody({
+        columns: 48,
+        headerText: draft.headerText,
+        footerText: draft.footerText,
+        addressText: draft.addressText,
+        placedAt: "2026-01-15T20:30:00.000Z",
+        note: "Sample online order \u2014 shows how discounts print on the pickup ticket.",
+        discountDisplay: draft.onlineDiscount,
+      }),
+    [draft],
+  );
 
   function save() {
     startTransition(async () => {
@@ -206,6 +413,8 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
         useQrCode,
         bottomLogoDataUri,
         bottomLogoWidth,
+        registerDiscount: draft.registerDiscount,
+        onlineDiscount: draft.onlineDiscount,
       });
       if (res.ok) {
         toast({ tone: "success", message: "Receipt saved. Registers pick it up on their next menu refresh." });
@@ -498,6 +707,32 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
             </Field>
           ) : null}
         </div>
+        {/* Discount transparency — register */}
+        <div className="space-y-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--admin-text)]">Discount details — register receipt</p>
+            <p className="text-xs text-[var(--admin-text-faint)]">
+              What the printed register receipt (and its emailed copy) explains about every
+              discount. The register&apos;s checkout screen always shows the full detail to the
+              cashier and customer.
+            </p>
+          </div>
+          <DiscountSettings idPrefix="rc-rd" value={registerDiscount} onChange={setRegisterDiscount} />
+        </div>
+
+        {/* Discount transparency — online orders */}
+        <div className="space-y-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--admin-text)]">Discount details — online orders</p>
+            <p className="text-xs text-[var(--admin-text-faint)]">
+              The online receipt: the website checkout summary, the order confirmation page and
+              the printed pickup ticket. Preview of the pickup ticket is below the register
+              preview.
+            </p>
+          </div>
+          <DiscountSettings idPrefix="rc-od" value={onlineDiscount} onChange={setOnlineDiscount} />
+        </div>
+
         <Button onClick={save} disabled={pending}>
           {pending ? "Saving…" : "Save receipt"}
         </Button>
@@ -523,6 +758,16 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
         <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
           Sample sale shown at 72&nbsp;mm print width. The preview runs the identical receipt
           builder the register hands to Star PassPRNT — what you see is what prints.
+        </p>
+        <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">
+          Online pickup ticket preview
+        </p>
+        <pre className="max-h-[760px] overflow-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-white p-3 font-mono text-[10px] leading-tight text-black">
+          {onlinePreview}
+        </pre>
+        <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
+          Rendered by the same formatter a real online order uses (80&nbsp;mm paper). The
+          website checkout and confirmation page follow the same online settings.
         </p>
       </div>
     </div>

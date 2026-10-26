@@ -18,6 +18,11 @@
  */
 
 import { RECEIPT_LOGO_WIDTH, clampLogoWidth } from "./receipt-logo-core";
+import {
+  DEFAULT_DISCOUNT_DISPLAY_CONFIG,
+  normalizeDiscountDisplayConfig,
+  type DiscountDisplayConfig,
+} from "./receipt-discount-core";
 
 export type PosReceiptConfig = {
   /** Big centered store name at the top. */
@@ -88,6 +93,18 @@ export type PosReceiptConfig = {
   bottomLogoDataUri: string;
   /** SLICE 23 — printed width of the bottom logo, in dots. */
   bottomLogoWidth: number;
+  /**
+   * Discount transparency — what the REGISTER receipt (paper + email copy)
+   * shows about every discount: regular price, amount and percent saved per
+   * line, the deal and how it works, cost-floor caps, and an order-level
+   * savings summary with total percent off.
+   */
+  registerDiscount: DiscountDisplayConfig;
+  /**
+   * Same switches for ONLINE orders: the website checkout, order
+   * confirmation page, and the printed pickup ticket.
+   */
+  onlineDiscount: DiscountDisplayConfig;
 };
 
 /** SLICE 23 — default printed width of the bottom logo (body is 576 dots). */
@@ -161,6 +178,8 @@ export const DEFAULT_POS_RECEIPT_CONFIG: PosReceiptConfig = {
   useQrCode: true,
   bottomLogoDataUri: "",
   bottomLogoWidth: RECEIPT_BOTTOM_LOGO_WIDTH,
+  registerDiscount: { ...DEFAULT_DISCOUNT_DISPLAY_CONFIG },
+  onlineDiscount: { ...DEFAULT_DISCOUNT_DISPLAY_CONFIG },
 };
 
 function clampText(v: unknown, max: number, fallback: string): string {
@@ -203,7 +222,13 @@ function coerceBool(v: unknown, fallback: boolean): boolean {
  */
 export function normalizePosReceiptConfig(raw: unknown): PosReceiptConfig {
   const d = DEFAULT_POS_RECEIPT_CONFIG;
-  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return { ...d };
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      ...d,
+      registerDiscount: { ...d.registerDiscount },
+      onlineDiscount: { ...d.onlineDiscount },
+    };
+  }
   const o = raw as Record<string, unknown>;
   // Address may be legitimately EMPTY (owner clears it) — clamp separately.
   const rawAddress = typeof o.addressText === "string" ? o.addressText : "";
@@ -236,6 +261,10 @@ export function normalizePosReceiptConfig(raw: unknown): PosReceiptConfig {
     useQrCode: coerceBool(o.useQrCode, d.useQrCode),
     bottomLogoDataUri: sanitizeBottomLogo(o.bottomLogoDataUri),
     bottomLogoWidth: clampBottomLogoWidth(coerceNumber(o.bottomLogoWidth, d.bottomLogoWidth)),
+    // A config saved before discount transparency carries neither key, so
+    // these fall back to the all-on defaults (most transparent receipt).
+    registerDiscount: normalizeDiscountDisplayConfig(o.registerDiscount),
+    onlineDiscount: normalizeDiscountDisplayConfig(o.onlineDiscount),
   };
 }
 
@@ -306,6 +335,20 @@ export function __runReceiptConfigCoreTests(): void {
   ok(strBools.showEmployee === false, '"false" coerces to false');
   ok(strBools.showSavings === true, '"true" coerces to true');
   ok(strBools.showLoyalty === true, "non-bool falls back to default");
+
+  // Discount transparency settings
+  const legacy = normalizePosReceiptConfig({ headerText: "X" });
+  ok(legacy.registerDiscount.showOrderPercent === true, "legacy config → register discount detail on");
+  ok(legacy.onlineDiscount.showLinePercent === true, "legacy config → online discount detail on");
+  const disc = normalizePosReceiptConfig({
+    registerDiscount: { showDealMechanic: false, percentDecimals: 2 },
+    onlineDiscount: { showOrderSummary: "false" },
+  });
+  ok(disc.registerDiscount.showDealMechanic === false, "register mechanic off round-trips");
+  ok(disc.registerDiscount.percentDecimals === 2, "register decimals round-trip");
+  ok(disc.onlineDiscount.showOrderSummary === false, "online summary off round-trips");
+  ok(disc.registerDiscount.showOrderSummary === true, "copies are independent");
+  ok(normalizePosReceiptConfig(null).registerDiscount !== DEFAULT_POS_RECEIPT_CONFIG.registerDiscount, "defaults not shared by reference");
 
   console.log(`receipt-config-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`receipt-config-core: ${fail} failure(s)`);

@@ -709,6 +709,7 @@ export async function testPrintFromOrdersAction(): Promise<void> {
     footerText: printerSettings?.footer_text ?? receiptConfig?.footerText ?? null,
     addressText: receiptConfig?.addressText ?? null,
     note: "This is a test print from the Orders page.",
+    discountDisplay: receiptConfig?.onlineDiscount ?? null,
   });
 
   const id = await queueJob({ bodyText: body, title: "Test print" });

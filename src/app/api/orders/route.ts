@@ -284,7 +284,11 @@ export async function POST(request: Request) {
         // All of this is data the server ALREADY computed and persisted above
         // — it was simply being dropped at this boundary. Positionally
         // aligned with `lines`.
-        lineExtras: input.lines.map((l) => {
+        lineExtras: input.lines.map((l, i) => {
+          // The deal label/percent are not persisted on the order row, so
+          // they come from the server reprice (positionally aligned: the
+          // persisted lines are a 1:1 map of repriced.lines).
+          const pricedLine = repriced.lines[i];
           const facts = l.productId ? menuFacts.get(l.productId) : undefined;
           const regular = l.regularPriceMinorUnits ?? null;
           const discount =
@@ -299,6 +303,9 @@ export async function POST(request: Request) {
             inventoryType: facts?.inventoryType ?? null,
             categoryLabel: slug ? formatWebsiteCategory(slug) : null,
             lineDiscountMinorUnits: discount,
+            appliedLabel: pricedLine?.appliedLabel ?? null,
+            appliedPercent: pricedLine?.appliedPercent ?? null,
+            atCostFloor: pricedLine?.atCostFloor ?? null,
           };
         }),
         subtotalMinorUnits: input.subtotalMinorUnits,
