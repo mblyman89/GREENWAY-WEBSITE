@@ -38,6 +38,17 @@ export type CountWorkbookInput = {
   lotsSource: string;
   generatedAt?: Date;
   workbookId?: string;
+  /**
+   * R74 S50: who opens it. "windows" / "mac" tailor the Start Here steps (Excel desktop, Protected
+   * View; or Excel for Mac, not Numbers, the Keyboard Setup Assistant). Omitted = both, as before.
+   */
+  platform?: "windows" | "mac";
+  /** R74 S50: the roster line this workbook is (recorded in Meta; the upload matches on it). */
+  roster?: { rosterId: string; mode: "live" | "test"; sheetNumber: number; zone: string };
+  /** R74 S50: practice only — scans / hand-count rows written in, as if counted. */
+  prefill?: { scans: string[]; hand: { barcode: string; qty: number; note: string }[] };
+  /** R74 S50: the download name (the roster names it after the person and the platform). */
+  fileName?: string;
 };
 
 const GREEN = "FF1F4D2B";
@@ -84,12 +95,36 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
   start.getColumn(2).width = 100;
   const scanLast = S.scanRows + 1;
   const handLast = S.handRows + 1;
+  const practice = input.roster?.mode === "test";
+  const WIN_AC = "Windows: File › Options › Advanced › clear “Enable AutoComplete for cell values”";
+  const MAC_AC = "Mac: Excel menu › Preferences › AutoComplete (under Formulas and Lists) › clear “Enable AutoComplete for cell values”";
+  const acLine =
+    input.platform === "mac"
+      ? `1. Turn OFF Excel AutoComplete (it can finish a scan into an earlier, longer barcode). ${MAC_AC} (on newer Macs the menu says Settings instead of Preferences). It is an Excel setting, not a setting in this file, so do it once on every Mac.`
+      : input.platform === "windows"
+        ? `1. Turn OFF Excel AutoComplete (it can finish a scan into an earlier, longer barcode). ${WIN_AC} › OK. It is an Excel setting, not a setting in this file, so do it once on every PC.`
+        : `1. Turn OFF Excel AutoComplete (it can finish a scan into an earlier, longer barcode). ${WIN_AC}. ${MAC_AC}. It is an Excel setting, not a setting in this file, so do it once on every computer.`;
+  const platformLines: [string, "title" | "head" | "text" | "warn"][] =
+    input.platform === "mac"
+      ? [
+          ["MAC: open this file in Microsoft Excel for Mac. Do NOT use Numbers, Preview or Google Sheets: they drop the hidden sheet this workbook needs and the upload will refuse it. If it opened in Numbers, close it, right-click the file › Open With › Microsoft Excel.", "warn"],
+          ["MAC: when you plug in a USB scanner or its dongle, macOS may show “Keyboard Setup Assistant”. Just close it (red dot or Quit); the scanner works without it. Save with ⌘S and keep the .xlsx format if Excel asks.", "text"],
+        ]
+      : input.platform === "windows"
+        ? [
+            ["WINDOWS: open this file in the Excel desktop app. If a yellow bar says PROTECTED VIEW (files from email do this), click Enable Editing first, or your scans will not go in. Do not use the Excel website or Google Sheets.", "warn"],
+            ["WINDOWS: save with Ctrl+S and keep the Excel Workbook (.xlsx) format if asked.", "text"],
+          ]
+        : [];
   const lines: [string, "title" | "head" | "text" | "warn"][] = [
-    ["Greenway — Cultivera count workbook", "title"],
-    [`Counter: ${input.counter}     Count date: ${input.countDate}`, "head"],
+    [practice ? "PRACTICE — Greenway count workbook (NOT the real count)" : "Greenway — Cultivera count workbook", "title"],
+    [`Counter: ${input.counter}     Count date: ${input.countDate}${input.roster ? `     Sheet ${input.roster.sheetNumber}` : ""}${input.platform ? `     For: ${input.platform === "mac" ? "Mac" : "Windows"}` : ""}`, "head"],
+    ...(input.roster?.zone ? ([[`Your area: ${input.roster.zone}. Count only this area.`, "head"]] as [string, "head"][]) : []),
+    ...(practice ? ([["This is a practice copy built from real products. Nothing you count in it can change inventory.", "warn"]] as [string, "warn"][]) : []),
     ["", "text"],
     ["BEFORE YOU START (once per computer)", "head"],
-    ["1. Turn OFF Excel AutoComplete (it can finish a scan into an earlier, longer barcode). Windows: File › Options › Advanced › clear “Enable AutoComplete for cell values”. Mac: Excel menu › Preferences › AutoComplete (under Formulas and Lists) › clear “Enable AutoComplete for cell values”. It is an Excel setting, not a setting in this file, so do it once on every computer.", "warn"],
+    ...platformLines,
+    [acLine, "warn"],
     ["   Safety net if a computer was missed: the upload re-checks every Scan and Hand Count column, and any barcode AutoComplete could have changed is left exactly as Cultivera said and listed for a hand recount. Also watch column B: if the product shown is not the item in your hand, delete that scan and tell the manager.", "text"],
     ...(prefixes.length
       ? ([
@@ -109,7 +144,12 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
     ["• Do not rename, add or delete sheets, and do not paste over column B.", "text"],
     ["", "text"],
     ["WHEN YOU ARE DONE", "head"],
-    ["Save (keep it .xlsx) and give the file to the manager. The manager uploads every counter's workbook on Admin › Menu Imports › Count.", "text"],
+    [
+      input.roster
+        ? "Save (keep it .xlsx) and EMAIL THE FILE BACK as an attachment (not a link, not a copy, do not rename it). The manager uploads it on Admin › Menu Imports › Count, where it is checked off by its sheet number."
+        : "Save (keep it .xlsx) and give the file to the manager. The manager uploads every counter's workbook on Admin › Menu Imports › Count.",
+      "text",
+    ],
     ["", "text"],
   ];
   lines.forEach(([t, kind], i) => {
@@ -164,6 +204,10 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
       },
     ],
   });
+  // R74 S50: a practice copy can come pre-filled (as if scanned), one barcode per row.
+  (input.prefill?.scans ?? []).slice(0, S.scanRows).forEach((code, i) => {
+    scan.getCell(i + 2, 1).value = code;
+  });
   await scan.protect("", { selectLockedCells: true, selectUnlockedCells: true });
 
   // ---------------- Hand Count ----------------
@@ -197,6 +241,11 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
     errorTitle: "Whole number",
     error: "Type a whole number of units (0 or more).",
   });
+  (input.prefill?.hand ?? []).slice(0, S.handRows).forEach((h, i) => {
+    hand.getCell(i + 2, 1).value = h.barcode;
+    hand.getCell(i + 2, 2).value = h.qty;
+    hand.getCell(i + 2, 3).value = h.note;
+  });
   await hand.protect("", { selectLockedCells: true, selectUnlockedCells: true });
 
   // ---------------- Lots (hidden) ----------------
@@ -227,6 +276,11 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
     const row = meta.addRow([k, metaValues[k]]);
     row.getCell(2).numFmt = "@";
   }
+  // R74 S50: optional roster keys (older workbooks simply do not have them).
+  const extra: [string, string][] = [];
+  if (input.roster) extra.push(["roster_id", input.roster.rosterId], ["roster_mode", input.roster.mode], ["sheet_number", String(input.roster.sheetNumber)], ["zone", input.roster.zone]);
+  if (input.platform) extra.push(["platform", input.platform]);
+  for (const [k, v] of extra) meta.addRow([k, v]).getCell(2).numFmt = "@";
   await meta.protect("", {});
 
   wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 1, visibility: "visible" }];
@@ -235,7 +289,7 @@ export async function buildCountWorkbook(input: CountWorkbookInput): Promise<{ b
   const problems = xlsxStructureProblems(await xlsxParts(buffer));
   if (problems.length) throw new Error(`Count workbook failed its Excel structure check: ${problems.slice(0, 5).join("; ")}`);
   const who = input.counter.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "counter";
-  return { buffer, workbookId, fileName: `greenway-count-${input.countDate}-${who}-${workbookId.slice(0, 8)}.xlsx` };
+  return { buffer, workbookId, fileName: input.fileName ?? `greenway-count-${input.countDate}-${who}-${workbookId.slice(0, 8)}.xlsx` };
 }
 
 /** Unzip an .xlsx into { "xl/worksheets/sheet1.xml": text, … } (xlsx's own zip reader; no new dependency). */

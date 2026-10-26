@@ -63,6 +63,11 @@ export type CountMeta = {
   countDate: string;
   generatedAt: string;
   lotsFromImport: string;
+  /** R74 S50: the roster line (absent on workbooks made before the roster). */
+  rosterId?: string;
+  rosterMode?: "live" | "test";
+  sheetNumber?: number;
+  platform?: "windows" | "mac";
 };
 
 /** A cell grid as produced by xlsx sheet_to_json(ws, {header:1, defval:"", raw:false}). */
@@ -182,6 +187,13 @@ export function parseCountWorkbook(input: { fileName: string; sha256: string; ce
     generatedAt: kv.get("generated_at") ?? "",
     lotsFromImport: kv.get("lots_from_import") ?? "",
   };
+  if (kv.get("roster_id")) out.meta.rosterId = kv.get("roster_id");
+  const rm = kv.get("roster_mode");
+  if (rm === "live" || rm === "test") out.meta.rosterMode = rm;
+  const sn = Number(kv.get("sheet_number"));
+  if (Number.isInteger(sn) && sn > 0) out.meta.sheetNumber = sn;
+  const pf = kv.get("platform");
+  if (pf === "windows" || pf === "mac") out.meta.platform = pf;
 
   // ---- Scan: column A, row 1 header, one non-blank cell = one unit ----
   const scan = sheets[S.scanSheet];
