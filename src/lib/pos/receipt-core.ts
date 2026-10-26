@@ -151,6 +151,8 @@ export type PosReceiptInput = {
    * Square and Toast disclose it. Omitted on non-rounded sales.
    */
   roundingAdjustmentMinor?: number;
+  /** Register S5 — employee pay-later: prints a PAY LATER row instead of cash rows. */
+  employeeTabMinor?: number;
   /** B33 — cash amount due after rounding (multiple of 5¢). */
   roundedDueMinor?: number;
   headerText?: string | null;
@@ -510,10 +512,16 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
       `<tr><td class="n">Cash due</td><td class="a">${formatMoneyMinor(input.roundedDueMinor)}</td></tr>`,
     );
   }
-  totals.push(
-    `<tr><td class="n">Cash tendered</td><td class="a">${formatMoneyMinor(input.tenderedMinor)}</td></tr>`,
-    `<tr><td class="n">Change</td><td class="a">${formatMoneyMinor(input.changeMinor)}</td></tr>`,
-  );
+  if (typeof input.employeeTabMinor === "number" && input.employeeTabMinor > 0) {
+    totals.push(
+      `<tr><td class="n">EMPLOYEE TAB — PAY LATER</td><td class="a">${formatMoneyMinor(input.employeeTabMinor)}</td></tr>`,
+    );
+  } else {
+    totals.push(
+      `<tr><td class="n">Cash tendered</td><td class="a">${formatMoneyMinor(input.tenderedMinor)}</td></tr>`,
+      `<tr><td class="n">Change</td><td class="a">${formatMoneyMinor(input.changeMinor)}</td></tr>`,
+    );
+  }
 
   const receiptNo = receiptNumber(input.saleClientUuid);
 

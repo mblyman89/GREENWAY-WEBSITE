@@ -1342,7 +1342,8 @@ describe("D-65 — the connections survive the reset", () => {
     // R74 S40: +2 KEEP ccrs_record_copies, ccrs_record_copy_stage (0298).
     // R74 S41: +1 KEEP ai_batch_events (0299).
     // Register S3: +1 KEEP pos_cart_adjustments (0301).
-    expect(plan.keep.length).toBe(177);
+    // Register S5: +1 KEEP employee_product_loans (0302).
+    expect(plan.keep.length).toBe(178);
     expect(plan.wipe.length).toBe(139);
   });
 
