@@ -10,6 +10,7 @@ import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
 import { BATCH_CONSOLE_PATH } from "@/lib/ai/batch-console-core";
 import { CONFIDENCE_TAB } from "@/lib/catalog/cultivera-confidence-core";
 import { loadVendorLookupProgress } from "@/lib/catalog/vendor-lookup-progress-server";
+import { unstickAndRequeueAction } from "./actions";
 import { ASK_STATE_LABEL, ASK_STATE_TONE, type VendorProgress } from "@/lib/catalog/vendor-lookup-progress-core";
 
 const th = "px-2 py-1.5 text-left text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]";
@@ -22,11 +23,11 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en
 function Bar({ v }: { v: VendorProgress }) {
   const w = (x: number) => `${v.products === 0 ? 0 : (x / v.products) * 100}%`;
   return (
-    <div className="flex h-2 w-40 overflow-hidden rounded-full bg-[var(--admin-surface-2)]" title={`${v.answered} found info, ${v.fromMemory} on file, ${v.nothingFound} nothing found, ${v.inFlight} in progress, ${v.failed} failed, ${v.notAsked} not asked`}>
+    <div className="flex h-2 w-40 overflow-hidden rounded-full bg-[var(--admin-surface-2)]" title={`${v.answered} found info, ${v.fromMemory} on file, ${v.nothingFound} nothing found, ${v.inFlight} in progress, ${v.failed} failed, ${v.stuck} stuck, ${v.notAsked} not asked`}>
       <span className="bg-emerald-500" style={{ width: w(v.answered + v.fromMemory) }} />
       <span className="bg-amber-500" style={{ width: w(v.nothingFound) }} />
       <span className="bg-sky-500" style={{ width: w(v.inFlight) }} />
-      <span className="bg-red-500" style={{ width: w(v.failed) }} />
+      <span className="bg-red-500" style={{ width: w(v.failed + v.stuck) }} />
     </div>
   );
 }
@@ -36,8 +37,8 @@ export async function VendorProgressTable({ selectedVendor }: { selectedVendor: 
   if (!load.ok) return <p className="text-sm text-red-300">Lookup progress could not load: {load.error}</p>;
   const vendors = load.vendors;
   const t = vendors.reduce(
-    (a, v) => ({ products: a.products + v.products, asked: a.asked + v.asked, answered: a.answered + v.answered + v.fromMemory, notAsked: a.notAsked + v.notAsked }),
-    { products: 0, asked: 0, answered: 0, notAsked: 0 },
+    (a, v) => ({ products: a.products + v.products, asked: a.asked + v.asked, answered: a.answered + v.answered + v.fromMemory, notAsked: a.notAsked + v.notAsked, redo: a.redo + v.stuck + v.failed + v.inFlight }),
+    { products: 0, asked: 0, answered: 0, notAsked: 0, redo: 0 },
   );
   const sel = selectedVendor.trim().toLowerCase();
 
@@ -50,8 +51,16 @@ export async function VendorProgressTable({ selectedVendor }: { selectedVendor: 
         </p>
       </div>
       <p className="text-xs text-[var(--admin-text-muted)]">
-        Every Cultivera product, grouped by vendor. Open a vendor to see each product: whether we asked Google, the exact words searched, whether anything came back, how many facts were found and how many were attached. Bar: green = has info, amber = asked but nothing found, blue = in progress, red = failed, grey = not asked. Use <strong>Score &amp; attach</strong> to work a vendor with the buttons above.
+        Every Cultivera product, grouped by vendor. Open a vendor to see each product: whether we asked Google, the exact words searched, whether anything came back, how many facts were found and how many were attached. Bar: green = has info, amber = asked but nothing found, blue = in progress (really waiting for Google), red = failed or stuck (nothing is sending it), grey = not asked. Use <strong>Score &amp; attach</strong> to work a vendor with the buttons above.
       </p>
+      {t.redo > 0 && (
+        <form action={unstickAndRequeueAction} className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-sm)] border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm" data-testid="unstick-all">
+          <span className="flex-1">
+            <strong>{t.redo}</strong> products are in progress, stuck or failed. <strong>Unstick & re-ask</strong> closes them and queues a fresh lookup for each (products already answered, or &ldquo;asked - nothing found&rdquo;, are not resent; anything inside a batch still open at Google is left alone). Then press <strong>Send 1 test batch</strong> on the Mission tab.
+          </span>
+          <button type="submit" className="rounded-[var(--admin-radius-sm)] bg-red-500 px-3 py-1.5 font-bold text-white hover:opacity-90">Unstick & re-ask all vendors</button>
+        </form>
+      )}
       <div className="divide-y divide-[var(--admin-border)] rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)]">
         {vendors.map((v) => (
           <details key={v.key} open={v.key === sel} className="group">
@@ -61,8 +70,16 @@ export async function VendorProgressTable({ selectedVendor }: { selectedVendor: 
               <Bar v={v} />
               <Badge tone={pctTone(v.completeness)}>{v.completeness}% with info</Badge>
               <span className="text-xs text-[var(--admin-text-muted)]">
-                {v.products} products · {v.asked} asked · {v.answered} found · {v.fromMemory} on file · {v.nothingFound} nothing · {v.notAsked} not asked{v.failed ? ` · ${v.failed} failed` : ""} · {v.factsFound} facts · {v.attached} attached · {v.approved} approved
+                {v.products} products · {v.asked} asked · {v.answered} found · {v.fromMemory} on file · {v.nothingFound} nothing · {v.notAsked} not asked{v.inFlight ? ` · ${v.inFlight} in progress` : ""}{v.stuck ? ` · ${v.stuck} stuck` : ""}{v.failed ? ` · ${v.failed} failed` : ""} · {v.factsFound} facts · {v.attached} attached · {v.approved} approved
               </span>
+              {v.stuck + v.failed + v.inFlight > 0 && (
+                <form action={unstickAndRequeueAction}>
+                  <input type="hidden" name="vendor" value={v.vendor} />
+                  <button type="submit" className="rounded border border-red-500/50 bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-100 hover:bg-red-500/30" title="Close this vendor's stuck, in-progress and failed lookups and queue a fresh one">
+                    Unstick & re-ask ({v.stuck + v.failed + v.inFlight})
+                  </button>
+                </form>
+              )}
               <Link className="rounded border border-[var(--admin-border)] px-2 py-0.5 text-xs font-semibold hover:bg-[var(--admin-surface)]" href={`${BATCH_CONSOLE_PATH}?tab=${CONFIDENCE_TAB}&vendor=${encodeURIComponent(v.vendor)}`}>
                 Score &amp; attach
               </Link>

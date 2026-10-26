@@ -1176,6 +1176,7 @@ import { __runCcrsReuploadTests } from "../../src/lib/compliance/ccrs-reupload-c
 import { __runCcrsWholeFileTests } from "../../src/lib/compliance/ccrs-whole-file-core";
 import { __runCcrsAnswerTests } from "../../src/lib/compliance/ccrs-answer-core";
 import { __runCcrsScoreboardTests } from "../../src/lib/compliance/ccrs-scoreboard-core";
+import { __runBatchUnstickTests } from "../../src/lib/ai/batch-unstick-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2345,12 +2346,13 @@ __runLiquidVolumeTests();
   { const r = __runGeminiBatchExplainTests(); if (r.failed > 0 || r.passed < 14) throw new Error(`gemini-batch-explain-core: ${r.failed} failed, ${r.passed} passed`); console.log(`gemini-batch-explain-core: ${r.passed} assertions passed`); }
   { const r = __runCcrsNeverBlockTests(); if (r.failed > 0 || r.passed < 19) throw new Error(`ccrs-never-block-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-never-block-core: ${r.passed} assertions passed`); }
   { const r = __runPosMenuTransportTests(); if (r.failed > 0 || r.passed < 11) throw new Error(`pos-menu-transport-core: ${r.failed} failed, ${r.passed} passed`); console.log(`pos-menu-transport-core: ${r.passed} assertions passed`); }
-  { const r = __runVendorLookupProgressTests(); if (r.failed > 0 || r.passed < 14) throw new Error(`vendor-lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`vendor-lookup-progress-core: ${r.passed} assertions passed`); }
+  { const r = __runVendorLookupProgressTests(); if (r.failed > 0 || r.passed < 16) throw new Error(`vendor-lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`vendor-lookup-progress-core: ${r.passed} assertions passed`); }
   { const r = __runBatchRequeueTests(); if (r.failed > 0 || r.passed < 12) throw new Error(`batch-requeue-core: ${r.failed} failed, ${r.passed} passed`); console.log(`batch-requeue-core: ${r.passed} assertions passed`); }
   { const r = __runCcrsReuploadTests(); if (r.failed > 0 || r.passed < 13) throw new Error(`ccrs-reupload-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-reupload-core: ${r.passed} assertions passed`); } // R74 S46: re-upload echoes of files CCRS already answered are set aside, not applied
   { const r = __runCcrsWholeFileTests(); if (r.failed > 0 || r.passed < 17) throw new Error(`ccrs-whole-file-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-whole-file-core: ${r.passed} assertions passed`); } // R74 S47: Product weight never blank / 2 decimals; "has not been processed" email = whole file refused
   assertRan("ccrs-answer-core", __runCcrsAnswerTests(), 16); // R74 S48: answer files never marked uploaded; unanswered warning; in-flight strain/area
   assertRan("ccrs-scoreboard-core", __runCcrsScoreboardTests(), 14); // R74 S48: CCRS PREprod test scoreboard
+  assertRan("batch-unstick-core", __runBatchUnstickTests(), 9); // R74 S49: Unstick & re-ask (stuck / failed lookups)
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }

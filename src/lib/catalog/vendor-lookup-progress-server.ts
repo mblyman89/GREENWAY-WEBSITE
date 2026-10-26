@@ -11,6 +11,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { loadCultiveraVendors } from "@/lib/inventory/cultivera-vendor";
+import { OPEN_BATCH_STATES } from "@/lib/ai/gemini-batch-explain-core";
 import { vendorProgress, type ProgressDraft, type ProgressItem, type VendorProgress } from "@/lib/catalog/vendor-lookup-progress-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -18,10 +19,11 @@ const CHUNK = 100;
 const PAGE = 500;
 
 const ITEM_COLS =
-  "draft_id, status, error, finished_at, updated_at, outcome:result_json->>outcome, found:result_json->found, attached:result_json->attached, queued:result_json->queued, model:result_json->>model, asked:result_json->>asked, web:result_json->snapshot->usedWebSearch, srcs:result_json->snapshot->sources, sfound:result_json->snapshot->found";
+  "draft_id, job_id, status, error, finished_at, updated_at, outcome:result_json->>outcome, found:result_json->found, attached:result_json->attached, queued:result_json->queued, model:result_json->>model, asked:result_json->>asked, web:result_json->snapshot->usedWebSearch, srcs:result_json->snapshot->sources, sfound:result_json->snapshot->found";
 
 type ItemRow = {
   draft_id: string;
+  job_id: string;
   status: string;
   batch_id?: string | null;
   error: string | null;
@@ -96,12 +98,37 @@ async function readItems(admin: Admin, draftIds: string[]): Promise<ProgressItem
           usedWebSearch: typeof r.web === "boolean" ? r.web : null,
           sources: Array.isArray(r.srcs) ? r.srcs.length : null,
           answerFound: typeof r.sfound === "boolean" ? r.sfound : null,
-        });
+          jobId: r.job_id,
+        } as ProgressItem & { jobId: string });
       }
       if (rows.length < PAGE) break;
     }
   }
   return out;
+}
+
+/**
+ * R74 S49: an open row (queued / running) is an ORPHAN when nothing will ever
+ * send it: its lookup job is closed, or it sits in a Gemini batch that is no
+ * longer open. Those show red "Stuck" (not blue) and Unstick & re-ask frees
+ * them. Bounded reads; on any error nothing is marked (the old view).
+ */
+async function markOrphans(admin: Admin, items: (ProgressItem & { jobId?: string })[]): Promise<void> {
+  const open = items.filter((i) => i.status === "queued" || i.status === "running");
+  if (open.length === 0) return;
+  const jobIds = [...new Set(open.map((i) => i.jobId).filter((x): x is string => !!x))];
+  const openJobs = new Set<string>();
+  for (let i = 0; i < jobIds.length; i += CHUNK) {
+    const { data, error } = await admin.from("lookup_jobs").select("id").in("id", jobIds.slice(i, i + CHUNK)).in("status", ["queued", "running"]);
+    if (error) return;
+    for (const r of (data as { id: string }[] | null) ?? []) openJobs.add(r.id);
+  }
+  const { data: b, error: be } = await admin.from("ai_batches").select("id").in("state", [...OPEN_BATCH_STATES]).limit(300);
+  const openBatches = be ? null : new Set(((b as { id: string }[] | null) ?? []).map((r) => r.id));
+  for (const it of open) {
+    if (it.jobId && !openJobs.has(it.jobId)) it.orphan = true;
+    else if (openBatches && it.status === "running" && it.batchId && !openBatches.has(it.batchId)) it.orphan = true;
+  }
 }
 
 export type VendorProgressLoad = { ok: true; vendors: VendorProgress[] } | { ok: false; error: string };
@@ -117,6 +144,7 @@ export async function loadVendorLookupProgress(): Promise<VendorProgressLoad> {
     const admin = createSupabaseAdminClient();
     const drafts = await readDrafts(admin, manifestVendor);
     const items = await readItems(admin, drafts.map((d) => d.id));
+    await markOrphans(admin, items as (ProgressItem & { jobId?: string })[]);
     return { ok: true, vendors: vendorProgress(drafts, items) };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err).slice(0, 200) };
