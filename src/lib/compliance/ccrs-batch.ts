@@ -87,7 +87,8 @@ import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory
 import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
 import { ccrsUnitWeightCell, fitUtf8Bytes, plainPunctuation } from "@/lib/compliance/ccrs-whole-file-core";
-import { loadInventoryTold, loadLedgerForBatch, loadSaleSlice, loadTransferSlice } from "@/lib/compliance/ccrs-ledger-store";
+import { loadInventoryTold, loadLedgerForBatch, loadSaleSlice, loadTransferSlice, readInflightMasterRows } from "@/lib/compliance/ccrs-ledger-store";
+import { inflightNote, withInflight } from "@/lib/compliance/ccrs-answer-core";
 import { lotsNamedByEventRows, planInventoryDelta } from "@/lib/compliance/ccrs-inventory-delta-core";
 import {
   TRANSFER_BLOCKING,
@@ -1259,7 +1260,19 @@ export async function buildCcrsBatch(
     lots.map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x),
     [...productBuild.nameByProductKey.values()],
   );
-  const ledger: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;
+  const ledgerBase: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;
+  // R74 S48 (Round 28): strains and Areas carried by an earlier file still
+  // waiting for its CCRS answer count as on file for THIS plan (as an earlier
+  // file of the same emission does), so they are not sent twice ("Duplicate
+  // Strain" x1,500, "Duplicate External Identifier" on the Sales Floor).
+  // Planning only: nothing is written. Abandon that file and they go again.
+  let ledger: LedgerView | null = ledgerBase;
+  if (ledgerBase) {
+    const inflight = withInflight(ledgerBase, await readInflightMasterRows(admin, env));
+    ledger = inflight.view;
+    const note = inflightNote(inflight);
+    if (note) syncIssues.push({ severity: "warning", file: "Strain", message: note });
+  }
   // R74 S42: a duplicated ledger id holds back ONLY the records it names
   // (lots with that Inventory id, products with that Product id), never the
   // whole batch. Listed as E59; the rest uploads.

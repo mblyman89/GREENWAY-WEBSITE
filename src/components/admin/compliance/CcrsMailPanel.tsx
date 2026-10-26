@@ -74,6 +74,8 @@ export function CcrsMailPanel({
     applySuccess: (fd: FormData) => Promise<void>;
     applyError: (fd: FormData) => Promise<void>;
     applyNotProcessed?: (fd: FormData) => Promise<void>;
+    /** R74 S48: answer every waiting email, oldest first. */
+    applyAll?: (fd: FormData) => Promise<void>;
     dismiss: (fd: FormData) => Promise<void>;
   };
 }) {
@@ -120,6 +122,20 @@ export function CcrsMailPanel({
       ) : null}
 
       {available && open.length === 0 ? <p className="text-white/40">No CCRS email waiting to be applied.</p> : null}
+
+      {canEdit && actions.applyAll && open.length > 0 ? (
+        <form action={actions.applyAll} className="rounded-lg border border-emerald-400/30 bg-emerald-400/5 p-3" data-testid="ccrs-mail-answer-all">
+          <input type="hidden" name="week_key" value={weekKey} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" size="sm" variant="save">
+              Answer every waiting CCRS email ({open.length})
+            </Button>
+            <span className="text-white/55">
+              Oldest first. A file you never marked uploaded is marked from the email&apos;s time (logged). An email that needs your choice stays here with the reason.
+            </span>
+          </div>
+        </form>
+      ) : null}
 
       {open.map((r) => {
         const a = r.analysis ?? {};

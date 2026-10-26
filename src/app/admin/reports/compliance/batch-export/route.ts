@@ -42,7 +42,8 @@ import {
 } from "@/lib/compliance/ccrs-submit-gate-core";
 import { issuePlainText } from "@/lib/compliance/ccrs-issue-display-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
-import { emitOutboxFiles, readStoredFile } from "@/lib/compliance/ccrs-ledger-store";
+import { emitOutboxFiles, listCcrsFiles, readStoredFile } from "@/lib/compliance/ccrs-ledger-store";
+import { unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
 import { markCorrectionsExported } from "@/lib/inventory/disposition";
 import {
   emitPayload,
@@ -189,11 +190,16 @@ export async function GET(request: Request) {
       else zipFiles.push(await readStoredFile(admin, r.id).then((s) => ({ name: s.fileName, content: s.csv })));
     }
     const dupes = result.filter((r) => r.status === "duplicate");
+    // R74 S48 (Round 28, item 2): earlier files still waiting for their CCRS answer.
+    const thisEmission = new Set(result.map((r) => r.id));
+    const earlier = await listCcrsFiles(admin, env, 200).then((l) => l.files.filter((f) => !thisEmission.has(f.id))).catch(() => []);
+    const waitingLines = unansweredWarningLines(earlier);
     // R74 S39: what this emission held back is now owed to CCRS; what it no
     // longer holds is resolved. Recorded AFTER the bytes are stored; a failure
     // here never withholds the zip (the good records must go out).
     const owed = await recordHeldBack(admin, env, range.fromDate, heldRecordsOf(verdict.held));
     outboxNote = [
+      ...(waitingLines.length ? [...waitingLines, ""] : []),
       `Recorded in the CCRS outbox (${env}): ${result.length - dupes.length} new file(s), ${dupes.length} already emitted.`,
       ...dupes.map((d) => duplicateEmitLine(d.state, d.file_name)),
       owed.error
