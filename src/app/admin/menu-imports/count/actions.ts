@@ -16,6 +16,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSafeImportId } from "@/lib/inventory/import-lineage-core";
 import { applyCountPlan, buildCountPreview, isCountBatchId, saveCountUpload } from "@/lib/pos/cultivera-count-store";
 import type { UncountedPolicy } from "@/lib/pos/cultivera-count-core";
+import { isRosterId, loadRoster, saveRoster } from "@/lib/pos/count-roster-store";
+import { pushEvent } from "@/lib/pos/count-roster-core";
 
 const base = "/admin/menu-imports/count";
 const err = (q: string, m: string) => `${base}?${q}${q ? "&" : ""}error=${encodeURIComponent(m)}`;
@@ -57,7 +59,8 @@ export async function applyCountAction(formData: FormData): Promise<void> {
   const policy = policyOf(formData.get("policy"));
   const confirmed = String(formData.get("confirm") ?? "") === "on";
   if (!isSafeImportId(importId) || !isCountBatchId(batchId)) redirect(err("", "Unknown import or upload."));
-  const q = `import=${importId}&batch=${batchId}&policy=${policy}`;
+  const rq = String(formData.get("roster_id") ?? "");
+  const q = `import=${importId}&batch=${batchId}&policy=${policy}${isRosterId(rq) ? `&roster=${rq}` : ""}`;
   if (!confirmed) redirect(err(q, "Tick the box to confirm you checked the preview."));
 
   let notice = "";
@@ -90,6 +93,17 @@ export async function applyCountAction(formData: FormData): Promise<void> {
         menuStockProblems: out.menuStockProblems.slice(0, 50),
       },
     });
+    // R74 S50: the roster this upload was combined from is marked applied (its checklist goes green).
+    const rosterId = String(formData.get("roster_id") ?? "");
+    if (isRosterId(rosterId)) {
+      const r = await loadRoster(admin, rosterId);
+      if (r && r.mode === "live" && r.combined?.batchId === batchId) {
+        const at = new Date().toISOString();
+        r.applied = { at, batchId, adjustments: out.applied };
+        pushEvent(r, at, session.email ?? "", `Count applied from upload ${batchId.slice(0, 8)}: ${out.applied} lot(s) adjusted.`);
+        await saveRoster(admin, r);
+      }
+    }
     notice =
       out.failed.length === 0
         ? `Count applied: ${out.applied} lots adjusted (+${out.unitsUp} / -${out.unitsDown} units).`
