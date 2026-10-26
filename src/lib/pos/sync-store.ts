@@ -76,8 +76,8 @@ import { getPublishedVersion } from "./menu-version";
 // SLICE 28 — special discounts (employee/industry/veteran): the pure rules +
 // percent math the register used, re-run server-side, plus the settings and
 // the migration-0133 use ledger.
-import { applySpecialDiscount } from "@/lib/discounts/special-discount-core";
-import { getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
+import { applySpecialDiscount, friendsFamilyCapReached } from "@/lib/discounts/special-discount-core";
+import { countFriendsFamilyUses, getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
 import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard } from "@/lib/medical/store";
@@ -740,9 +740,39 @@ async function processSale(
       approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
       companyName: sd.companyName ?? null,
       militaryIdChecked: sd.militaryIdChecked,
+      customerId: sd.customerId ?? null,
     });
     if (ruleError) {
       return markException(admin, ledgerId, envelope.clientUuid, `Special discount refused: ${ruleError}`);
+    }
+    if (sd.kind === "friends_family") {
+      // The sponsor must still be an ACTIVE employee, and the guest's
+      // rolling-30-day cap (owner setting) is re-counted from the ledger.
+      const { data: sp } = await admin
+        .from("employees")
+        .select("id, active")
+        .eq("id", sd.approvedByEmployeeId!)
+        .maybeSingle<{ id: string; active: boolean }>();
+      if (!sp || !sp.active) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Friends & family: the sponsoring employee (${sd.approvedByEmployeeId}) is not an active employee — refused.`,
+        );
+      }
+      const used = await countFriendsFamilyUses(sd.customerId!, {
+        at: new Date(envelope.occurredAt),
+        excludeClientUuid: envelope.clientUuid,
+      });
+      if (used != null && friendsFamilyCapReached(used, program.usesPer30dCap)) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Friends & family: this guest already used ${used} of ${program.usesPer30dCap} allowed in the last 30 days — refused. Re-ring at regular price (or raise the cap in Settings → Special discounts), then resolve this exception.`,
+        );
+      }
     }
     if (sd.kind === "employee") {
       const ids = [sd.beneficiaryEmployeeId!, sd.approvedByEmployeeId!];
@@ -1123,6 +1153,7 @@ async function processSale(
       approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
       companyName: sd.companyName ?? null,
       militaryIdChecked: sd.militaryIdChecked === true,
+      customerId: sd.customerId ?? null,
       subtotalMinor: sale.subtotalMinor,
       discountMinor: sd.appliedMinor,
       clientUuid: envelope.clientUuid,

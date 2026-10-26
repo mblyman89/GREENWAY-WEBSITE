@@ -213,6 +213,19 @@ function categoryStyle(category: string): { chip: string; dot: string } {
 }
 
 /** A loyalty member hit from the server lookup (B14). */
+/** Employee-identity PIN check (/api/pos/witness); friends & family adds the guest's usage. */
+export type WitnessFn = (
+  pin: string,
+  opts?: { friendsFamilyCustomerId?: string },
+) => Promise<
+  | {
+      ok: true;
+      employee: { id: string; fullName: string };
+      friendsFamily?: { usedLast30d: number | null; cap: number | null };
+    }
+  | { ok: false; error: string }
+>;
+
 export type PosMemberHit = {
   customerId: string;
   label: string;
@@ -361,7 +374,7 @@ export type SaleFlowProps = {
    * identifies themselves, once for the WITNESS; the register refuses to
    * proceed when both resolve to the same person.
    */
-  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onWitness?: WitnessFn;
   /**
    * SLICE 23 — draw ONE fun name from the shared pool for the receipt this
    * sale is about to print.
@@ -882,6 +895,14 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
       setAppliedSpecial(null);
     }
   }, [appliedSpecial, loyaltyFingerprint]);
+  // Friends & family is tied to the guest's ACCOUNT: detaching or swapping
+  // the member drops it (the sync would refuse a mismatch anyway).
+  useEffect(() => {
+    if (appliedSpecial?.kind === "friends_family" && appliedSpecial.customerId !== member?.customerId) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setAppliedSpecial(null);
+    }
+  }, [appliedSpecial, member]);
 
   // Sales hours (WAC 314-55-147) checked on-device with the owner's window;
   // the server completion gate re-checks with ITS clock at sync time.
@@ -1109,6 +1130,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                       : {}),
                     ...(appliedSpecial.companyName ? { companyName: appliedSpecial.companyName } : {}),
                     ...(appliedSpecial.militaryIdChecked === true ? { militaryIdChecked: true } : {}),
+                    ...(appliedSpecial.customerId ? { customerId: appliedSpecial.customerId } : {}),
                   },
                 }
               : {}),
@@ -2585,7 +2607,7 @@ function CartScreen({
   appliedSpecial: AppliedSpecialDiscount | null;
   setAppliedSpecial: (a: AppliedSpecialDiscount | null) => void;
   /** SLICE 28 — employee-identity PIN check (ONLINE-ONLY; /api/pos/witness via the shell). */
-  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onWitness?: WitnessFn;
   /** SLICE 28 — the unlocked cashier's employees.id (employee-program rules). */
   employeeId?: string;
   /** SLICE 28 — this device's register id (employee-program rules). */
@@ -3619,6 +3641,7 @@ function CartScreen({
               registerId={registerId}
               employeeName={employeeName}
               cartEmpty={cart.length === 0}
+              member={member}
             />
             <Row label="Subtotal (pre-tax)" value={money(railTotals.subtotalMinorUnits)} />
             {/* Promo savings only — the loyalty reduction gets its OWN row
@@ -4654,6 +4677,7 @@ const SPECIAL_DISCOUNT_LABELS: Record<SpecialDiscountKind, string> = {
   employee: "Employee discount",
   industry: "Industry discount",
   veteran: "Veteran discount",
+  friends_family: "Friends & family",
 };
 
 /**
@@ -4683,13 +4707,15 @@ function SpecialDiscountPanel({
   registerId,
   employeeName,
   cartEmpty,
+  member,
 }: {
+  member: PosMemberHit | null;
   bundle: PosMenuBundle;
   appliedSpecial: AppliedSpecialDiscount | null;
   setAppliedSpecial: (a: AppliedSpecialDiscount | null) => void;
   loyaltyFingerprint: string;
   pricedLines: PricedSaleLine[];
-  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onWitness?: WitnessFn;
   employeeId?: string;
   registerId?: string;
   employeeName?: string;
@@ -4730,6 +4756,7 @@ function SpecialDiscountPanel({
       approvedByEmployeeId: facts.approvedByEmployeeId ?? null,
       companyName: facts.companyName ?? null,
       militaryIdChecked: facts.militaryIdChecked,
+      customerId: facts.customerId ?? null,
     });
     if (gate) return gate;
     const applied = applySpecialDiscountToLines(
@@ -4772,6 +4799,9 @@ function SpecialDiscountPanel({
           ★ {SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} {formatBps(appliedSpecial.percentBps)} — {money(appliedSpecial.appliedMinor)} off
           {appliedSpecial.kind === "employee" && appliedSpecial.beneficiaryName ? ` (${appliedSpecial.beneficiaryName})` : ""}
           {appliedSpecial.kind === "industry" && appliedSpecial.companyName ? ` (${appliedSpecial.companyName})` : ""}
+          {appliedSpecial.kind === "friends_family"
+            ? ` (${appliedSpecial.customerLabel ?? "guest"} · sponsor ${appliedSpecial.approvedByName ?? "?"})`
+            : ""}
         </p>
         <button
           type="button"
@@ -4786,7 +4816,9 @@ function SpecialDiscountPanel({
 
   if (programs.length === 0) return null;
 
-  const verifyPin = async (): Promise<{ id: string; fullName: string } | null> => {
+  const verifyPin = async (
+    opts?: { friendsFamilyCustomerId?: string },
+  ): Promise<{ id: string; fullName: string; ffUsed?: number | null; ffCap?: number | null } | null> => {
     if (!onWitness) {
       setError("PIN checks need the register shell — restart the app.");
       return null;
@@ -4797,14 +4829,14 @@ function SpecialDiscountPanel({
     }
     setBusy(true);
     setError(null);
-    const res = await onWitness(pinInput);
+    const res = await onWitness(pinInput, opts);
     setBusy(false);
     setPinInput("");
     if (!res.ok) {
       setError(res.error);
       return null;
     }
-    return res.employee;
+    return { ...res.employee, ffUsed: res.friendsFamily?.usedLast30d ?? null, ffCap: res.friendsFamily?.cap ?? null };
   };
 
   return (
@@ -4824,7 +4856,9 @@ function SpecialDiscountPanel({
                 ? "Staff purchase — needs the buying employee's PIN plus a second employee's witness PIN, on a register the buyer is NOT logged into."
                 : p.kind === "industry"
                   ? "Visiting vendor/industry guest — records the company name."
-                  : "Veteran discount — confirm a military ID first."
+                  : p.kind === "friends_family"
+                    ? "Friends & family — the guest's customer account must be attached, and an employee other than the cashier sponsors with their PIN."
+                    : "Veteran discount — confirm a military ID first."
             }
             className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)] disabled:opacity-40"
           >
@@ -4832,6 +4866,60 @@ function SpecialDiscountPanel({
           </button>
         ))}
       </div>
+      {open === "friends_family" ? (
+        <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+          {!member ? (
+            <p className="text-xs font-semibold text-[var(--pos-warn)]">
+              Attach the guest&apos;s customer account first (look them up or sign them up). Friends & family is
+              tracked per account — no account, no discount.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-[var(--pos-text-muted)]">
+                Guest: <span className="text-[var(--pos-accent)]">{member.label}</span>. The SPONSORING employee (who knows
+                them) enters their PIN{employeeName ? ` — not ${employeeName}, the cashier` : ""}.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Sponsor's PIN"
+                  className="min-w-0 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={busy || pinInput.length < 4}
+                  onClick={() => {
+                    void verifyPin({ friendsFamilyCustomerId: member.customerId }).then((sponsor) => {
+                      if (!sponsor) return;
+                      if (employeeId && sponsor.id === employeeId) {
+                        setError("The sponsor must be someone OTHER than the cashier ringing this sale.");
+                        return;
+                      }
+                      const err = applyProgram(
+                        "friends_family",
+                        programs.find((p) => p.kind === "friends_family")!.percentBps,
+                        {
+                          approvedByEmployeeId: sponsor.id,
+                          approvedByName: sponsor.fullName,
+                          customerId: member.customerId,
+                          customerLabel: member.label,
+                        },
+                      );
+                      if (err) setError(err);
+                    });
+                  }}
+                  className="pos-tile min-h-11 rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+                >
+                  Sponsor & apply
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
       {open === "veteran" ? (
         <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
           <label className="flex min-h-11 items-center gap-2 text-xs font-semibold">

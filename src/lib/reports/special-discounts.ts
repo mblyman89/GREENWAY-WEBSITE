@@ -51,6 +51,10 @@ export type SpecialDiscountReport = {
   byCashier: NamedPersonSummary[];
   byBeneficiary: NamedPersonSummary[];
   byApprover: NamedPersonSummary[];
+  /** friends_family: guest accounts (name = customer), most cents first. */
+  byGuest: NamedPersonSummary[];
+  /** friends_family: sponsoring employees. */
+  bySponsor: NamedPersonSummary[];
   /** Newest-first detail rows, capped for display/export sanity. */
   recentUses: SpecialDiscountUseDisplayRow[];
 };
@@ -62,6 +66,8 @@ const EMPTY_REPORT: SpecialDiscountReport = {
   byCashier: [],
   byBeneficiary: [],
   byApprover: [],
+  byGuest: [],
+  bySponsor: [],
   recentUses: [],
 };
 
@@ -75,6 +81,23 @@ async function employeeNames(ids: string[]): Promise<Map<string, string>> {
     return (data as { id: string; full_name: string | null }[] | null) ?? [];
   });
   for (const r of rows) map.set(r.id, r.full_name?.trim() || "Employee");
+  return map;
+}
+
+/** Resolve customer ids → "First L." (privacy-light; the full card is one click away in Customers). */
+async function customerNames(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!ids.length) return map;
+  const admin = createSupabaseAdminClient();
+  const rows = await chunkedIn(ids, async (chunk) => {
+    const { data } = await admin.from("customers").select("id, first_name, last_name").in("id", chunk);
+    return (data as { id: string; first_name: string | null; last_name: string | null }[] | null) ?? [];
+  });
+  for (const r of rows) {
+    const first = r.first_name?.trim() || "Customer";
+    const last = r.last_name?.trim();
+    map.set(r.id, last ? `${first} ${last.charAt(0)}.` : first);
+  }
   return map;
 }
 
@@ -116,9 +139,12 @@ export async function getSpecialDiscountReport(
     if (u.approvedByEmployeeId) employeeIds.add(u.approvedByEmployeeId);
     if (u.registerId) registerIds.add(u.registerId);
   }
-  const [empNames, regNames] = await Promise.all([
+  const customerIds = new Set<string>();
+  for (const u of uses) if (u.customerId) customerIds.add(u.customerId);
+  const [empNames, regNames, custNames] = await Promise.all([
     employeeNames([...employeeIds]),
     registerNames([...registerIds]),
+    customerNames([...customerIds]),
   ]);
 
   // The store returns newest-first already; cap the detail table.
@@ -132,7 +158,9 @@ export async function getSpecialDiscountReport(
         ? (u.beneficiaryEmployeeId && empNames.get(u.beneficiaryEmployeeId)) || "Employee"
         : u.kind === "industry"
           ? u.companyName?.trim() || "Company"
-          : u.militaryIdChecked
+          : u.kind === "friends_family"
+            ? `F&F guest: ${(u.customerId && custNames.get(u.customerId)) || "Customer"}`
+            : u.militaryIdChecked
             ? "Veteran (ID checked)"
             : "Veteran",
     approverName: u.approvedByEmployeeId
@@ -147,6 +175,8 @@ export async function getSpecialDiscountReport(
     byCashier: withNames(summary.byCashier, empNames),
     byBeneficiary: withNames(summary.byBeneficiary, empNames),
     byApprover: withNames(summary.byApprover, empNames),
+    byGuest: withNames(summary.byGuest, custNames),
+    bySponsor: withNames(summary.bySponsor, empNames),
     recentUses,
   };
 }

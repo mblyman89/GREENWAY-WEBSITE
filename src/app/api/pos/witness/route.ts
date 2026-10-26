@@ -27,6 +27,8 @@ import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+import { countFriendsFamilyUses, getSpecialDiscountSettings } from "@/lib/discounts/special-discount-store";
+import { friendsFamilyCapReached } from "@/lib/discounts/special-discount-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,8 +46,11 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   if (locked) return NextResponse.json({ error: locked }, { status: 429 });
 
   let pin = "";
+  let ffCustomerId = "";
   try {
-    pin = String(((await req.json()) as { pin?: unknown })?.pin ?? "");
+    const body = (await req.json()) as { pin?: unknown; friendsFamilyCustomerId?: unknown };
+    pin = String(body?.pin ?? "");
+    ffCustomerId = typeof body?.friendsFamilyCustomerId === "string" ? body.friendsFamilyCustomerId : "";
   } catch {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
@@ -63,6 +68,26 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   // Deliberately no audit row HERE: the sale itself is validated + audited at
   // sync with both employee ids inside it (special_discount_uses ledger), so
   // one purchase never produces two competing audit trails.
+  // Friends & family sponsor check: report the guest account's rolling
+  // 30-day usage and refuse at the counter when the owner's cap is reached
+  // (the sync re-counts from the ledger, so this is a courtesy, not the gate).
+  if (ffCustomerId) {
+    const settings = await getSpecialDiscountSettings();
+    const ff = settings.find((s) => s.kind === "friends_family");
+    const used = await countFriendsFamilyUses(ffCustomerId);
+    const cap = ff?.usesPer30dCap ?? null;
+    if (used != null && friendsFamilyCapReached(used, cap)) {
+      return NextResponse.json(
+        { error: `This guest already used friends & family ${used} time(s) in the last 30 days (limit ${cap}).` },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({
+      employee: { id: employee.id, fullName: employee.full_name },
+      friendsFamily: { usedLast30d: used, cap },
+    });
+  }
+
   return NextResponse.json({
     employee: { id: employee.id, fullName: employee.full_name },
   });

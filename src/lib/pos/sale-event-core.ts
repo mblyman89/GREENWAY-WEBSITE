@@ -304,7 +304,7 @@ export type PosSalePayload = {
    * double-record), and audits it.
    */
   specialDiscount?: {
-    kind: "employee" | "industry" | "veteran";
+    kind: "employee" | "industry" | "veteran" | "friends_family";
     /** The program rate the device applied, basis points (3500 = 35%). */
     percentBps: number;
     /** Σ per-line specialDiscountMinor × quantity (server re-sums and must match). */
@@ -317,6 +317,8 @@ export type PosSalePayload = {
     companyName?: string;
     /** veteran program: cashier confirmed a physical military ID. */
     militaryIdChecked?: boolean;
+    /** friends_family: the guest's customers.id (must equal loyalty.customerId). */
+    customerId?: string;
   };
   /**
    * Present when CASH ROUNDING adjusted the amount due (POS B33). WA DOR
@@ -626,8 +628,18 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
     if (sd == null || typeof sd !== "object") {
       errors.push("specialDiscount must be an object when present.");
     } else {
-      if (sd.kind !== "employee" && sd.kind !== "industry" && sd.kind !== "veteran") {
-        errors.push('specialDiscount.kind must be "employee", "industry", or "veteran".');
+      if (sd.kind !== "employee" && sd.kind !== "industry" && sd.kind !== "veteran" && sd.kind !== "friends_family") {
+        errors.push('specialDiscount.kind must be "employee", "industry", "veteran", or "friends_family".');
+      }
+      if (sd.kind === "friends_family") {
+        if (!isUuid(sd.customerId)) {
+          errors.push("Friends & family must record the guest's customer account (customerId).");
+        } else if (p.loyalty?.customerId !== sd.customerId) {
+          errors.push("Friends & family: the guest's account must be the customer attached to the sale.");
+        }
+        if (!isUuid(sd.approvedByEmployeeId)) {
+          errors.push("Friends & family must record the sponsoring employee (approvedByEmployeeId).");
+        }
       }
       if (!Number.isInteger(sd.percentBps) || sd.percentBps <= 0 || sd.percentBps > 10_000) {
         errors.push("specialDiscount.percentBps must be an integer between 1 and 10000 (basis points).");
@@ -1107,6 +1119,19 @@ export function __runPosSaleEventTests(): void {
     }).ok,
     "unknown special-discount kind refused",
   );
+  {
+    const ffSale = {
+      ...veteranSale,
+      loyalty: { customerId: U4, memberLabel: "Guest G." },
+      specialDiscount: { kind: "friends_family" as const, percentBps: 3500, appliedMinor: 438, customerId: U4, approvedByEmployeeId: U1 },
+    };
+    ok(validateSalePayload(ffSale).ok, "friends & family with account + sponsor ok");
+    ok(!validateSalePayload({ ...ffSale, loyalty: undefined }).ok, "F&F account must be the attached customer");
+    ok(
+      !validateSalePayload({ ...ffSale, specialDiscount: { ...ffSale.specialDiscount, approvedByEmployeeId: undefined } }).ok,
+      "F&F needs a sponsor",
+    );
+  }
   ok(
     !validateSalePayload({
       ...veteranSale,

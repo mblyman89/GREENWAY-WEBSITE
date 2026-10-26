@@ -17,6 +17,7 @@ const KIND_LABEL: Record<string, string> = {
   employee: "Employee",
   industry: "Industry",
   veteran: "Veteran",
+  friends_family: "Friends & family",
 };
 
 /**
@@ -43,13 +44,25 @@ export async function saveSpecialDiscountAction(formData: FormData): Promise<voi
 
   const enabled = formData.get("enabled") === "on";
 
-  const res = await saveSpecialDiscountSetting(kind, percentBps, enabled, session.profile.id);
+  let cap: number | null = null;
+  if (kind === "friends_family") {
+    const rawCap = String(formData.get("cap") ?? "").trim();
+    if (rawCap !== "") {
+      const n = Number(rawCap);
+      if (!Number.isInteger(n) || n < 1 || n > 100) {
+        redirect(`${ROOT}?error=${encodeURIComponent("Uses per 30 days must be a whole number 1–100, or blank for no cap.")}`);
+      }
+      cap = n;
+    }
+  }
+
+  const res = await saveSpecialDiscountSetting(kind, percentBps, enabled, session.profile.id, cap);
   await recordAudit({
     actorId: session.profile.id,
     action: "special_discount.settings.save",
     entityType: "special_discount_settings",
     entityId: kind,
-    after: { percentBps, enabled },
+    after: { percentBps, enabled, ...(kind === "friends_family" ? { usesPer30dCap: cap } : {}) },
   }).catch(() => {});
 
   revalidatePath(ROOT);

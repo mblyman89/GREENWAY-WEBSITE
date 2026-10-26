@@ -99,6 +99,10 @@ export type AppliedSpecialDiscount = {
   companyName?: string;
   /** veteran program: cashier ticked the military-ID-checked box. */
   militaryIdChecked?: boolean;
+  /** friends_family: the guest's customers.id (the attached member). */
+  customerId?: string;
+  /** friends_family: guest display label (UI only). */
+  customerLabel?: string;
   /** pricingFingerprint() of the cart the reductions were computed for. */
   fingerprint: string;
   /** (variantId ?? productId) → per-UNIT reduction (whole cents). */
@@ -252,6 +256,7 @@ export function checkSpecialDiscountAtRegister(args: {
   approvedByEmployeeId?: string | null;
   companyName?: string | null;
   militaryIdChecked?: boolean;
+  customerId?: string | null;
 }): string | null {
   return validateSpecialDiscountUse({
     kind: args.kind,
@@ -268,6 +273,7 @@ export function checkSpecialDiscountAtRegister(args: {
         : null,
     companyName: args.companyName ?? null,
     militaryIdChecked: args.militaryIdChecked,
+    customerId: args.customerId ?? null,
   });
 }
 

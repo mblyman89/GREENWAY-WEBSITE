@@ -26,7 +26,7 @@
  * compliance pure runner and mirrored in vitest.
  */
 
-export const SPECIAL_DISCOUNT_KINDS = ["employee", "industry", "veteran"] as const;
+export const SPECIAL_DISCOUNT_KINDS = ["employee", "industry", "veteran", "friends_family"] as const;
 export type SpecialDiscountKind = (typeof SPECIAL_DISCOUNT_KINDS)[number];
 
 export type SpecialDiscountSetting = {
@@ -34,6 +34,12 @@ export type SpecialDiscountSetting = {
   /** Discount rate in basis points (3500 = 35%). */
   percentBps: number;
   enabled: boolean;
+  /**
+   * friends_family only: most uses ONE customer account may get in any
+   * rolling 30 days (null/absent = no cap). Enforced at the register via
+   * the online sponsor check (PINs are online-only anyway).
+   */
+  usesPer30dCap?: number | null;
 };
 
 /** Owner-specified defaults: employee 35%, veteran 15%; industry OFF until
@@ -42,10 +48,22 @@ export const DEFAULT_SPECIAL_DISCOUNTS: SpecialDiscountSetting[] = [
   { kind: "employee", percentBps: 3500, enabled: true },
   { kind: "industry", percentBps: 0, enabled: false },
   { kind: "veteran", percentBps: 1500, enabled: true },
+  // Owner-stated (verbatim request): "a friends and family discount button.
+  // It is a 35% off discount." Default cap 4 uses / rolling 30 days.
+  { kind: "friends_family", percentBps: 3500, enabled: true, usesPer30dCap: 4 },
 ];
 
+/** Default friends & family cap when the setting row predates migration 0300. */
+export const FRIENDS_FAMILY_DEFAULT_CAP = 4;
+
+/** True when this customer has used up their friends & family allowance. */
+export function friendsFamilyCapReached(usesInLast30d: number, cap: number | null | undefined): boolean {
+  if (cap == null || !Number.isInteger(cap) || cap <= 0) return false;
+  return usesInLast30d >= cap;
+}
+
 export function isSpecialDiscountKind(raw: string | undefined | null): raw is SpecialDiscountKind {
-  return raw === "employee" || raw === "industry" || raw === "veteran";
+  return raw === "employee" || raw === "industry" || raw === "veteran" || raw === "friends_family";
 }
 
 /**
@@ -108,6 +126,8 @@ export type SpecialDiscountUseInput = {
   companyName?: string | null;
   /** veteran program: cashier confirmed a physical military ID. */
   militaryIdChecked?: boolean;
+  /** friends_family program: the guest's customer account (customers.id). */
+  customerId?: string | null;
 };
 
 /**
@@ -141,6 +161,16 @@ export function validateSpecialDiscountUse(input: SpecialDiscountUseInput): stri
       if (company.length < 2) return "Enter the visitor's company name.";
       return null;
     }
+    case "friends_family": {
+      // Enterprise pattern: no list of names — an ACCOUNT (who got it) plus
+      // an accountable SPONSOR employee (who vouched), never the cashier
+      // (two people on every friends & family sale), every use on the ledger.
+      if (!input.customerId) return "Friends & family needs the guest's customer account attached to the sale.";
+      if (!input.approvedByEmployeeId) return "An employee must sponsor the guest with their PIN.";
+      if (input.approvedByEmployeeId === input.cashierEmployeeId)
+        return "The sponsoring employee must be someone OTHER than the cashier ringing the sale.";
+      return null;
+    }
     case "veteran": {
       if (input.militaryIdChecked !== true)
         return "Confirm you checked a military ID before applying the veteran discount.";
@@ -157,12 +187,15 @@ export function __runSpecialDiscountTests(): void {
     const w = JSON.stringify(want);
     if (g !== w) throw new Error(`special-discount-core: ${what}: got ${g}, want ${w}`);
   };
+  const ok = (c: boolean, what: string) => {
+    if (!c) throw new Error(`special-discount-core: ${what}`);
+  };
 
   // Defaults honor the owner's numbers and never guess industry's rate.
   eq(DEFAULT_SPECIAL_DISCOUNTS.find((d) => d.kind === "employee")?.percentBps, 3500, "employee default 35%");
   eq(DEFAULT_SPECIAL_DISCOUNTS.find((d) => d.kind === "veteran")?.percentBps, 1500, "veteran default 15%");
   eq(DEFAULT_SPECIAL_DISCOUNTS.find((d) => d.kind === "industry")?.enabled, false, "industry starts disabled");
-  eq(DEFAULT_SPECIAL_DISCOUNTS.length, 3, "exactly three programs");
+  eq(DEFAULT_SPECIAL_DISCOUNTS.length, 4, "exactly four programs");
 
   // parsePercentToBps
   eq(parsePercentToBps("35"), 3500, "35 → 3500 bps");
@@ -264,6 +297,15 @@ export function __runSpecialDiscountTests(): void {
     "Missing the cashier on the sale.",
     "missing cashier rejected",
   );
+  const ff = { cashierEmployeeId: "emp-cashier", registerId: "reg-1", kind: "friends_family" as const };
+  eq(validateSpecialDiscountUse({ ...ff, customerId: "c1", approvedByEmployeeId: "emp-sponsor" }), null, "F&F valid");
+  ok(validateSpecialDiscountUse({ ...ff, approvedByEmployeeId: "emp-sponsor" }) !== null, "F&F needs an account");
+  ok(validateSpecialDiscountUse({ ...ff, customerId: "c1" }) !== null, "F&F needs a sponsor");
+  ok(validateSpecialDiscountUse({ ...ff, customerId: "c1", approvedByEmployeeId: "emp-cashier" }) !== null, "F&F sponsor != cashier");
+  eq(friendsFamilyCapReached(3, 4), false, "under cap");
+  eq(friendsFamilyCapReached(4, 4), true, "at cap");
+  eq(friendsFamilyCapReached(99, null), false, "no cap");
+  eq(DEFAULT_SPECIAL_DISCOUNTS.find((d) => d.kind === "friends_family")?.percentBps, 3500, "F&F default 35%");
   eq(isSpecialDiscountKind("employee"), true, "kind guard yes");
   eq(isSpecialDiscountKind("bogus"), false, "kind guard no");
 

@@ -18,6 +18,7 @@ import { pagedAll } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   DEFAULT_SPECIAL_DISCOUNTS,
+  FRIENDS_FAMILY_DEFAULT_CAP,
   type SpecialDiscountKind,
   type SpecialDiscountSetting,
   isSpecialDiscountKind,
@@ -37,16 +38,35 @@ export async function getSpecialDiscountSettings(): Promise<SpecialDiscountSetti
   if (isSupabaseServiceConfigured) {
     try {
       const admin = createSupabaseAdminClient();
-      const { data } = await admin
+      // 0300 adds uses_per_30d_cap; a pre-0300 database falls back to the
+      // three original columns (schema-tolerant, never a broken register).
+      let res = await admin
         .from("special_discount_settings")
-        .select("kind, percent_bps, enabled");
-      for (const r of (data as { kind: string; percent_bps: number; enabled: boolean }[] | null) ??
-        []) {
+        .select("kind, percent_bps, enabled, uses_per_30d_cap");
+      if (res.error) {
+        res = (await admin
+          .from("special_discount_settings")
+          .select("kind, percent_bps, enabled")) as typeof res;
+      }
+      const data = res.data;
+      for (const r of (data as
+        | { kind: string; percent_bps: number; enabled: boolean; uses_per_30d_cap?: number | null }[]
+        | null) ?? []) {
         if (!isSpecialDiscountKind(r.kind)) continue;
         byKind.set(r.kind, {
           kind: r.kind,
           percentBps: Math.max(0, Math.min(10_000, Math.round(Number(r.percent_bps) || 0))),
           enabled: !!r.enabled,
+          ...(r.kind === "friends_family"
+            ? {
+                usesPer30dCap:
+                  r.uses_per_30d_cap === undefined
+                    ? FRIENDS_FAMILY_DEFAULT_CAP
+                    : r.uses_per_30d_cap == null
+                      ? null
+                      : Math.round(Number(r.uses_per_30d_cap)),
+              }
+            : {}),
         });
       }
     } catch {
@@ -62,6 +82,7 @@ export async function saveSpecialDiscountSetting(
   percentBps: number,
   enabled: boolean,
   updatedBy: string | null,
+  usesPer30dCap?: number | null,
 ): Promise<SaveResult> {
   if (!isSpecialDiscountKind(kind)) return { ok: false, error: "Unknown discount program." };
   if (!Number.isInteger(percentBps) || percentBps < 0 || percentBps > 10_000)
@@ -76,6 +97,9 @@ export async function saveSpecialDiscountSetting(
         enabled,
         updated_by: updatedBy,
         updated_at: new Date().toISOString(),
+        ...(kind === "friends_family" && usesPer30dCap !== undefined
+          ? { uses_per_30d_cap: usesPer30dCap }
+          : {}),
       },
       { onConflict: "kind" },
     );
@@ -96,6 +120,7 @@ export type SpecialDiscountUseRow = {
   approvedByEmployeeId: string | null;
   companyName: string | null;
   militaryIdChecked: boolean;
+  customerId: string | null;
   subtotalMinor: number;
   discountMinor: number;
   clientUuid: string | null;
@@ -112,6 +137,8 @@ export type RecordSpecialDiscountUse = {
   approvedByEmployeeId?: string | null;
   companyName?: string | null;
   militaryIdChecked?: boolean;
+  /** friends_family: the guest's customers.id (migration 0300). */
+  customerId?: string | null;
   subtotalMinor: number;
   discountMinor: number;
   clientUuid?: string | null;
@@ -139,6 +166,7 @@ export async function recordSpecialDiscountUse(u: RecordSpecialDiscountUse): Pro
       discount_minor: Math.max(0, Math.round(u.discountMinor)),
       client_uuid: u.clientUuid ?? null,
       order_id: u.orderId ?? null,
+      ...(u.customerId ? { customer_id: u.customerId } : {}),
     });
     if (error) {
       // Unique client_uuid hit = this sale's use is already on file (retry).
@@ -151,8 +179,10 @@ export async function recordSpecialDiscountUse(u: RecordSpecialDiscountUse): Pro
   }
 }
 
-const USE_SELECT =
+const USE_SELECT_BASE =
   "id, kind, cashier_employee_id, register_id, beneficiary_employee_id, approved_by_employee_id, company_name, military_id_checked, subtotal_minor, discount_minor, client_uuid, order_id, occurred_at";
+/** customer_id arrives with migration 0300; pre-0300 reads fall back to the base list. */
+let useSelect = `${USE_SELECT_BASE}, customer_id`;
 
 /** Map raw ledger rows to typed rows, skipping any with an unknown kind. */
 function mapUseRows(data: Record<string, unknown>[] | null): SpecialDiscountUseRow[] {
@@ -169,6 +199,7 @@ function mapUseRows(data: Record<string, unknown>[] | null): SpecialDiscountUseR
       approvedByEmployeeId: r.approved_by_employee_id ? String(r.approved_by_employee_id) : null,
       companyName: r.company_name ? String(r.company_name) : null,
       militaryIdChecked: r.military_id_checked === true,
+      customerId: r.customer_id ? String(r.customer_id) : null,
       subtotalMinor: Math.round(Number(r.subtotal_minor) || 0),
       discountMinor: Math.round(Number(r.discount_minor) || 0),
       clientUuid: r.client_uuid ? String(r.client_uuid) : null,
@@ -193,14 +224,20 @@ export async function listSpecialDiscountUsesBetween(
   try {
     const admin = createSupabaseAdminClient();
     const raw = await pagedAll(async (from, to) => {
-      const { data } = await admin
-        .from("special_discount_uses")
-        .select(USE_SELECT)
-        .gte("occurred_at", fromISO)
-        .lte("occurred_at", toISO)
-        .order("occurred_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(from, to);
+      const page = () =>
+        admin
+          .from("special_discount_uses")
+          .select(useSelect)
+          .gte("occurred_at", fromISO)
+          .lte("occurred_at", toISO)
+          .order("occurred_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to);
+      let { data, error } = await page();
+      if (error && useSelect !== USE_SELECT_BASE) {
+        useSelect = USE_SELECT_BASE;
+        ({ data, error } = await page());
+      }
       return (data as Record<string, unknown>[] | null) ?? [];
     });
     return mapUseRows(raw);
@@ -217,15 +254,51 @@ export async function listSpecialDiscountUses(opts?: {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    let query = admin
-      .from("special_discount_uses")
-      .select(USE_SELECT)
-      .order("occurred_at", { ascending: false })
-      .limit(Math.max(1, Math.min(500, Math.round(opts?.limit ?? 100))));
-    if (opts?.kind && isSpecialDiscountKind(opts.kind)) query = query.eq("kind", opts.kind);
-    const { data } = await query;
+    const run = () => {
+      let query = admin
+        .from("special_discount_uses")
+        .select(useSelect)
+        .order("occurred_at", { ascending: false })
+        .limit(Math.max(1, Math.min(500, Math.round(opts?.limit ?? 100))));
+      if (opts?.kind && isSpecialDiscountKind(opts.kind)) query = query.eq("kind", opts.kind);
+      return query;
+    };
+    let { data, error } = await run();
+    if (error && useSelect !== USE_SELECT_BASE) {
+      useSelect = USE_SELECT_BASE;
+      ({ data, error } = await run());
+    }
     return mapUseRows((data as Record<string, unknown>[] | null) ?? []);
   } catch {
     return [];
+  }
+}
+
+/**
+ * friends_family: how many uses this customer account had in the rolling 30
+ * days before `at` (excluding one sale's own row on a sync retry). Returns
+ * null when the ledger cannot be read (pre-0300) — callers fail OPEN only
+ * for the count, never for the sponsor rule.
+ */
+export async function countFriendsFamilyUses(
+  customerId: string,
+  opts: { at?: Date; excludeClientUuid?: string | null } = {},
+): Promise<number | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const since = new Date((opts.at ?? new Date()).getTime() - 30 * 86_400_000).toISOString();
+    let q = admin
+      .from("special_discount_uses")
+      .select("id", { count: "exact", head: true })
+      .eq("kind", "friends_family")
+      .eq("customer_id", customerId)
+      .gte("occurred_at", since);
+    if (opts.excludeClientUuid) q = q.neq("client_uuid", opts.excludeClientUuid);
+    const { count, error } = await q;
+    if (error) return null;
+    return count ?? 0;
+  } catch {
+    return null;
   }
 }
