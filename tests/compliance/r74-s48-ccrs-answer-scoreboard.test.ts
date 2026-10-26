@@ -31,6 +31,8 @@ describe("R74 S48 wiring", () => {
     expect(PAGE).toContain("<CcrsScoreboardPanel read={scoreboard}");
   });
   it("scoreboard reads are bounded (never 1000+)", () => {
-    for (const m of STORE.matchAll(/\.limit\(([^)]*)\)/g)) expect(m[1]).not.toMatch(/\b\d{4,}\b/);
+    const code = STORE.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(code).toMatch(/\.limit\(/);
+    for (const m of code.matchAll(/\.limit\(([^)]*)\)/g)) expect(m[1]).not.toMatch(/\d{4,}/);
   });
 });
