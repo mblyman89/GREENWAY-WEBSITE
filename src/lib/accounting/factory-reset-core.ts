@@ -428,6 +428,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "deposit_bag_sessions", disposition: "WIPE", because: "Test links from a bag to the drawer sessions it carried." },
   { table: "safe_counts", disposition: "WIPE", because: "Safe counts recorded while testing cash handling." },
   { table: "safe_swaps", disposition: "WIPE", because: "Test till/safe swaps." },
+  { table: "pos_cart_adjustments", disposition: "KEEP", because: "The register minus / remove / cancel trail (who reduced which cart, when) — an anti-abuse audit record kept like the audit log." },
   { table: "registers", disposition: "KEEP", because: "Your physical registers. Hardware you own; deleting them would stop the POS from opening." },
   { table: "pos_devices", disposition: "KEEP", because: "The tablets and terminals you have paired." },
   { table: "receipt_printer_settings", disposition: "KEEP", because: "Printer configuration." },
