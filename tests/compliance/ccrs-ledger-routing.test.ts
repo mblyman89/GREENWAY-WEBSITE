@@ -452,7 +452,8 @@ describe("issue codes and wiring (source guards)", () => {
     expect(SRC).toContain("applyProductPlan(productBuild.rows, productBuild.keys, plan)");
     expect(SRC).not.toContain("const ledger: LedgerView | null = null;");
     expect(SRC).toContain("const slice = await loadLedgerForBatch(");
-    expect(SRC).toContain('const ledger: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;');
+    // R74 S48: the slice view is the base; unanswered Strain/Area files are merged in as in flight.
+    expect(SRC).toContain('const ledgerBase: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;');
     expect(SRC).toContain('code: "E41_LEDGER_WITHHELD"');
     expect(SRC).toContain('code: "E40_PRODUCT_NAME_FROM_LEDGER"');
     expect(SRC).toContain('code: "E39_STRAIN_CASE_VARIANT"');

@@ -1268,10 +1268,15 @@ export async function buildCcrsBatch(
   // Planning only: nothing is written. Abandon that file and they go again.
   let ledger: LedgerView | null = ledgerBase;
   if (ledgerBase) {
-    const inflight = withInflight(ledgerBase, await readInflightMasterRows(admin, env));
-    ledger = inflight.view;
-    const note = inflightNote(inflight);
-    if (note) syncIssues.push({ severity: "warning", file: "Strain", message: note });
+    try {
+      const inflight = withInflight(ledgerBase, await readInflightMasterRows(admin, env));
+      ledger = inflight.view;
+      const note = inflightNote(inflight);
+      if (note) syncIssues.push({ severity: "warning", file: "Strain", message: note });
+    } catch (e) {
+      // Never block the export: plan over what CCRS holds, and say so.
+      syncIssues.push({ severity: "warning", file: "Strain", message: `Could not check earlier files still waiting for CCRS's answer (${e instanceof Error ? e.message : String(e)}), so strains or the Sales Floor they carry may be sent again (CCRS answers "Duplicate"; harmless).` });
+    }
   }
   // R74 S42: a duplicated ledger id holds back ONLY the records it names
   // (lots with that Inventory id, products with that Product id), never the
