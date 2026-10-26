@@ -13,8 +13,9 @@
  *     box; industry: the visitor's company name; employee: WHO is buying +
  *     a DIFFERENT employee's PIN verified ONLINE by /api/pos/witness — and
  *     the buyer can never be the employee logged into THIS register).
- *  2. applySpecialDiscountToLines takes percentBps off each line's CURRENT
- *     (post-promotion) unit price as whole-cent per-unit reductions, clamped
+ *  2. applySpecialDiscountToLines prices each line at the BETTER of its
+ *     current (post-promotion) price and percentBps off the REGULAR price
+ *     (best deal wins, never stacked) as whole-cent per-unit reductions, clamped
  *     to the SAME legal floors loyalty uses: the statutory 1¢ cannabis floor
  *     (RCW 69.50.357) and the acquisition-cost floor (WAC 314-55-155(5)(g))
  *     via loyaltyUnitFloor. A line at its floor simply absorbs less.
@@ -133,9 +134,13 @@ export function applySpecialDiscountToLines(
       regularPriceMinorUnits: Math.max(0, Math.round(l.regularPriceMinor)),
       costMinorUnits: l.costMinorUnits,
     });
-    // The program's cut of THIS unit price, floored to the cent — then the
-    // legal floor caps it (a line at floor absorbs nothing, never negative).
-    const want = applySpecialDiscount(current, percentBps).discountMinor;
+    // NO STACKING (owner directive "only the best deal wins"): the program
+    // price is percentBps off the REGULAR price, and the customer pays the
+    // LOWER of that and the price the line already carries (a promotion,
+    // tier or override). Never the percent compounded on a promo price.
+    const regular = Math.max(current, Math.round(l.regularPriceMinor));
+    const programUnit = regular - applySpecialDiscount(regular, percentBps).discountMinor;
+    const want = Math.max(0, current - programUnit);
     const room = Math.max(0, current - floor);
     const perUnit = Math.min(want, room);
     out.push({
@@ -149,7 +154,8 @@ export function applySpecialDiscountToLines(
   if (applied <= 0) {
     return {
       ok: false,
-      reason: "Every item is already at its legal floor — nothing can be discounted.",
+      reason:
+        "Nothing to take off — every item is already at a better deal than this program (best deal wins, no stacking) or at its legal floor.",
     };
   }
   return { ok: true, lines: out, appliedMinor: applied };
@@ -207,6 +213,16 @@ export function applySpecialDiscountToPricedLines<T extends SpecialPricedLine>(
     })),
   );
   return { lines: out, totals, appliedMinor: applied };
+}
+
+/**
+ * The lowest unit price a special-discount line may carry: the program's
+ * percent off the REGULAR price. Anything lower means the program was
+ * stacked on top of another deal — the sync refuses it.
+ */
+export function specialNoStackFloor(regularPriceMinor: number, percentBps: number): number {
+  const regular = Math.max(0, Math.round(regularPriceMinor));
+  return regular - applySpecialDiscount(regular, percentBps).discountMinor;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +319,15 @@ export function __runSpecialDiscountSaleTests(): void {
   ok(m.ok && m.lines[1].specialDiscountMinor === 200, "roomy line takes 20%");
 
   // Garbage rates refused (0, negative, over 100%, non-integer).
+  // NO STACKING: a line already on a 20%-off promo ($8) under a 35% program
+  // goes to 35% off REGULAR ($6.50), never 35% off the promo ($5.20).
+  const promo = applySpecialDiscountToLines([line({ unitPriceMinor: 800 })], 3500);
+  ok(promo.ok && promo.lines[0].unitPriceMinor === 650, "best deal: 35% off regular, not compounded on promo");
+  ok(promo.ok && promo.lines[0].specialDiscountMinor === 150, "only the difference to the better price is taken");
+  // A promo BETTER than the program keeps the promo; the program adds nothing.
+  const better = applySpecialDiscountToLines([line({ unitPriceMinor: 500 })], 1500);
+  ok(!better.ok, "promo already beats the program -> nothing stacked, refused with a reason");
+  ok(specialNoStackFloor(1000, 3500) === 650, "no-stack floor = program price on the regular");
   ok(!applySpecialDiscountToLines([line()], 0).ok, "0 bps refused");
   ok(!applySpecialDiscountToLines([line()], -100).ok, "negative bps refused");
   ok(!applySpecialDiscountToLines([line()], 10_001).ok, "over 100% refused");

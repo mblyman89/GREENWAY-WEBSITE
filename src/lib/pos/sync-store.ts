@@ -78,7 +78,7 @@ import { getPublishedVersion } from "./menu-version";
 // the migration-0133 use ledger.
 import { applySpecialDiscount } from "@/lib/discounts/special-discount-core";
 import { getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
-import { checkSpecialDiscountAtRegister } from "./special-discount-sale-core";
+import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -713,6 +713,16 @@ async function processSale(
       if (!l.specialDiscountMinor) continue;
       const preDiscountUnit = l.unitPriceMinor + l.specialDiscountMinor;
       const maxCut = applySpecialDiscount(preDiscountUnit, sd.percentBps).discountMinor;
+      // No stacking: the charged price may never sit below the program's
+      // percent off the REGULAR price (best deal wins, never compounded).
+      if (l.unitPriceMinor < specialNoStackFloor(l.regularPriceMinor, sd.percentBps)) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Line ${i + 1} ("${l.productName}") stacked the ${sd.kind} discount on top of another deal (charged ${l.unitPriceMinor}¢, the best single deal is ${specialNoStackFloor(l.regularPriceMinor, sd.percentBps)}¢) — refused.`,
+        );
+      }
       if (l.specialDiscountMinor > maxCut) {
         return markException(
           admin,
