@@ -41,6 +41,17 @@ const PROGRAM_COPY: Record<
       "The cashier must tick the \u201cmilitary ID checked\u201d box before the discount applies — the confirmation is stored with every use.",
     ],
   },
+  friends_family: {
+    title: "Friends & family",
+    icon: "👪",
+    blurb: "For an employee's friends and family — no name list; tracked by customer account.",
+    rules: [
+      "The guest must have a customer account attached to the sale (look up or sign up at the counter).",
+      "A sponsoring employee — not the cashier — vouches with their own PIN. Every use records guest, sponsor, cashier, and cents saved.",
+      "Each account can use it at most the cap below in any rolling 30 days (blank = no cap).",
+      "Never stacks: the guest gets the better of the sale price or this discount, never both.",
+    ],
+  },
 };
 
 /**
@@ -60,7 +71,7 @@ export default async function SpecialDiscountsSettingsPage({
     <div>
       <AdminPageHeader
         title="Special discounts"
-        subtitle="Employee, industry, and veterans discounts — admin-only, tracked on every use, and kept separate from promotions."
+        subtitle="Employee, industry, veterans, and friends & family discounts — admin-only, tracked on every use, and kept separate from promotions."
         breadcrumbs={
           <Breadcrumbs
             items={[{ label: "Settings", href: "/admin/settings" }, { label: "Special discounts" }]}
@@ -69,7 +80,7 @@ export default async function SpecialDiscountsSettingsPage({
         help={
           <HelpPanel
             id="special-discounts-settings"
-            title="How the three programs work"
+            title="How the four programs work"
             steps={[
               "Set each program's percent (like 35 or 12.5) and tick Enabled to make it available at the registers.",
               "Employee purchases always need a second employee's PIN, on a register the buyer is not logged into.",
@@ -97,7 +108,7 @@ export default async function SpecialDiscountsSettingsPage({
           </div>
         ) : null}
 
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
           {settings.map((s) => {
             const copy = PROGRAM_COPY[s.kind];
             return (
@@ -139,6 +150,16 @@ export default async function SpecialDiscountsSettingsPage({
                       required
                     />
                   </Field>
+                  {s.kind === "friends_family" ? (
+                    <Field label="Uses per account per 30 days" help="1 to 100. Leave blank for no cap.">
+                      <Input
+                        name="cap"
+                        defaultValue={s.usesPer30dCap == null ? "" : String(s.usesPer30dCap)}
+                        inputMode="numeric"
+                        placeholder="4"
+                      />
+                    </Field>
+                  ) : null}
                   <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
                     <input
                       type="checkbox"

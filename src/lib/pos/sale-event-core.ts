@@ -23,7 +23,9 @@
 // Payment methods
 // ---------------------------------------------------------------------------
 
-export const POS_PAYMENT_METHODS = ["cash", "point_of_banking", "ach", "debit"] as const;
+// Register S5: "employee_tab" = employee pay-later (product loan). Never cash
+// in the drawer; only valid on an employee-discount sale (see validate).
+export const POS_PAYMENT_METHODS = ["cash", "point_of_banking", "ach", "debit", "employee_tab"] as const;
 export type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[number];
 
 /**
@@ -31,7 +33,7 @@ export type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[number];
  * CASH-ONLY at launch; POSaBIT (point_of_banking/debit) pre-approved for the
  * future but NOT enabled. Enabling later = config change, not surgery.
  */
-export const ENABLED_PAYMENT_METHODS: ReadonlySet<PosPaymentMethod> = new Set(["cash"]);
+export const ENABLED_PAYMENT_METHODS: ReadonlySet<PosPaymentMethod> = new Set(["cash", "employee_tab"]);
 
 export function isPaymentMethodEnabled(method: string): method is PosPaymentMethod {
   return (POS_PAYMENT_METHODS as readonly string[]).includes(method) &&
@@ -88,6 +90,11 @@ export const POS_EVENT_TYPES = [
    * abandoned. Requires migration 0121.
    */
   "medical_card_capture",
+  /**
+   * Register round S3 — a minus (−), line remove (✕) or cancelled sale, so the
+   * owner can see who reduces carts, when, and how often. Requires 0301.
+   */
+  "cart_adjustment",
 ] as const;
 export type PosEventType = (typeof POS_EVENT_TYPES)[number];
 
@@ -182,6 +189,11 @@ export type PosSaleLine = {
     reason: string;
     /** employees.id of the approving manager/lead. */
     approvedByEmployeeId: string;
+    /**
+     * Register round S4 — "discount_adjust": approved by a SECOND on-duty
+     * employee who can never be the cashier (envelope.employeeId).
+     */
+    kind?: "discount_adjust";
   };
   /**
    * Per-UNIT loyalty reduction taken by a redemption code (Task AM-B).
@@ -304,7 +316,7 @@ export type PosSalePayload = {
    * double-record), and audits it.
    */
   specialDiscount?: {
-    kind: "employee" | "industry" | "veteran";
+    kind: "employee" | "industry" | "veteran" | "friends_family";
     /** The program rate the device applied, basis points (3500 = 35%). */
     percentBps: number;
     /** Σ per-line specialDiscountMinor × quantity (server re-sums and must match). */
@@ -317,6 +329,8 @@ export type PosSalePayload = {
     companyName?: string;
     /** veteran program: cashier confirmed a physical military ID. */
     militaryIdChecked?: boolean;
+    /** friends_family: the guest's customers.id (must equal loyalty.customerId). */
+    customerId?: string;
   };
   /**
    * Present when CASH ROUNDING adjusted the amount due (POS B33). WA DOR
@@ -327,6 +341,13 @@ export type PosSalePayload = {
    * byte-identical. When present, the cash-tender check runs against
    * dueMinor (the cash actually owed at the drawer).
    */
+  /**
+   * Register S5 — employee pay-later. Present iff paymentMethod is
+   * "employee_tab": the buying employee (must equal the employee discount's
+   * beneficiary) acknowledged that an unpaid tab older than the owner's N
+   * days is deducted from pay. Sync opens an employee_product_loans row.
+   */
+  employeeTab?: { employeeId: string; acknowledged: true };
   rounding?: {
     /** The owner's policy that produced this adjustment. */
     mode: "nearest" | "up" | "down";
@@ -434,6 +455,9 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
           if (!isUuid(o.approvedByEmployeeId)) {
             errors.push(`Line ${i + 1}: override.approvedByEmployeeId must be the approving manager's employee id.`);
           }
+          if (o.kind !== undefined && o.kind !== "discount_adjust") {
+            errors.push(`Line ${i + 1}: override.kind must be "discount_adjust" when present.`);
+          }
         }
       }
     });
@@ -474,6 +498,20 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
     } else {
       roundedDueMinor = rb.dueMinor;
     }
+  }
+  if (method === "employee_tab") {
+    const t = p.employeeTab;
+    const sd = p.specialDiscount;
+    if (!t || !isUuid(t.employeeId) || t.acknowledged !== true) {
+      errors.push("Employee tab sales must record the buying employee and their payroll-deduction acknowledgement.");
+    } else if (!sd || sd.kind !== "employee" || sd.beneficiaryEmployeeId !== t.employeeId) {
+      errors.push("Employee tab is only allowed on an employee-discount sale for the same employee.");
+    }
+    if (p.tenderedMinor !== undefined || p.changeMinor !== undefined || p.rounding !== undefined) {
+      errors.push("Employee tab sales take no cash: omit tenderedMinor, changeMinor and rounding.");
+    }
+  } else if (p.employeeTab !== undefined) {
+    errors.push("employeeTab is only allowed when paymentMethod is \"employee_tab\".");
   }
   if (method === "cash") {
     if (!Number.isInteger(p.tenderedMinor)) {
@@ -626,8 +664,18 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
     if (sd == null || typeof sd !== "object") {
       errors.push("specialDiscount must be an object when present.");
     } else {
-      if (sd.kind !== "employee" && sd.kind !== "industry" && sd.kind !== "veteran") {
-        errors.push('specialDiscount.kind must be "employee", "industry", or "veteran".');
+      if (sd.kind !== "employee" && sd.kind !== "industry" && sd.kind !== "veteran" && sd.kind !== "friends_family") {
+        errors.push('specialDiscount.kind must be "employee", "industry", "veteran", or "friends_family".');
+      }
+      if (sd.kind === "friends_family") {
+        if (!isUuid(sd.customerId)) {
+          errors.push("Friends & family must record the guest's customer account (customerId).");
+        } else if (p.loyalty?.customerId !== sd.customerId) {
+          errors.push("Friends & family: the guest's account must be the customer attached to the sale.");
+        }
+        if (!isUuid(sd.approvedByEmployeeId)) {
+          errors.push("Friends & family must record the sponsoring employee (approvedByEmployeeId).");
+        }
       }
       if (!Number.isInteger(sd.percentBps) || sd.percentBps <= 0 || sd.percentBps > 10_000) {
         errors.push("specialDiscount.percentBps must be an integer between 1 and 10000 (basis points).");
@@ -922,6 +970,20 @@ export function __runPosSaleEventTests(): void {
     "B24: override without a manager employee id refused",
   );
   ok(
+    validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, kind: "discount_adjust" } }],
+    }).ok,
+    "S4: discount_adjust override ok",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, kind: "bogus" as "discount_adjust" } }],
+    }).ok,
+    "S4: unknown override kind refused",
+  );
+  ok(
     !validateSalePayload({
       ...goodSale,
       lines: [{ ...goodSale.lines[0], override: { ...goodOverride, originalUnitPriceMinor: 16.63 as unknown as number } }],
@@ -1107,6 +1169,19 @@ export function __runPosSaleEventTests(): void {
     }).ok,
     "unknown special-discount kind refused",
   );
+  {
+    const ffSale = {
+      ...veteranSale,
+      loyalty: { customerId: U4, memberLabel: "Guest G." },
+      specialDiscount: { kind: "friends_family" as const, percentBps: 3500, appliedMinor: 438, customerId: U4, approvedByEmployeeId: U1 },
+    };
+    ok(validateSalePayload(ffSale).ok, "friends & family with account + sponsor ok");
+    ok(!validateSalePayload({ ...ffSale, loyalty: undefined }).ok, "F&F account must be the attached customer");
+    ok(
+      !validateSalePayload({ ...ffSale, specialDiscount: { ...ffSale.specialDiscount, approvedByEmployeeId: undefined } }).ok,
+      "F&F needs a sponsor",
+    );
+  }
   ok(
     !validateSalePayload({
       ...veteranSale,
@@ -1134,6 +1209,20 @@ export function __runPosSaleEventTests(): void {
     }).ok,
     "employee self-approval refused at the payload gate",
   );
+  {
+    const empSale = {
+      ...veteranSale,
+      specialDiscount: { kind: "employee" as const, percentBps: 3500, appliedMinor: 438, beneficiaryEmployeeId: U1, approvedByEmployeeId: U2 },
+    };
+    const { tenderedMinor: _t, changeMinor: _c, ...noCash } = empSale;
+    void _t; void _c;
+    const tab = { ...noCash, paymentMethod: "employee_tab" as const, employeeTab: { employeeId: U1, acknowledged: true as const } };
+    ok(validateSalePayload(tab).ok, "S5: employee tab on an employee-discount sale passes");
+    ok(!validateSalePayload({ ...tab, employeeTab: { employeeId: U2, acknowledged: true as const } }).ok, "S5: tab for a different employee refused");
+    ok(!validateSalePayload({ ...tab, specialDiscount: undefined }).ok, "S5: tab without the employee discount refused");
+    ok(!validateSalePayload({ ...tab, tenderedMinor: 100 }).ok, "S5: tab with cash tender refused");
+    ok(!validateSalePayload({ ...empSale, employeeTab: tab.employeeTab }).ok, "S5: employeeTab on a cash sale refused");
+  }
   ok(
     !validateSalePayload({
       ...veteranSale,

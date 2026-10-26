@@ -23,7 +23,7 @@ describe("special-discount-core", () => {
   });
 
   it("keeps the three programs stable (DB contract — never rename)", () => {
-    expect([...SPECIAL_DISCOUNT_KINDS]).toEqual(["employee", "industry", "veteran"]);
+    expect([...SPECIAL_DISCOUNT_KINDS]).toEqual(["employee", "industry", "veteran", "friends_family"]);
   });
 
   it("seeds the owner's defaults: employee 35% on, veteran 15% on, industry off", () => {
@@ -31,6 +31,7 @@ describe("special-discount-core", () => {
       { kind: "employee", percentBps: 3500, enabled: true },
       { kind: "industry", percentBps: 0, enabled: false },
       { kind: "veteran", percentBps: 1500, enabled: true },
+      { kind: "friends_family", percentBps: 3500, enabled: true, usesPer30dCap: 4 },
     ]);
   });
 

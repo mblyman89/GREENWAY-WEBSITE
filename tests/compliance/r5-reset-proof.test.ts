@@ -188,8 +188,10 @@ describe("guard: every table the rehearsal code WRITES is wiped, or deliberately
     // R74 S41/S45: lookup_jobs + lookup_job_items are KEEP in factory-reset-core
     // (the batch product-lookup record; no money, stock or customer data) and
     // are written by the batch-lookups admin actions.
-    "audit_logs", "brands", "disposition_settings", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
-    "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_devices", "product_classification_overrides", "sample_settings", "site_settings",
+    // Register S3: pos_cart_adjustments (0301) is KEEP, written by sync-store.
+    // Register S5: employee_product_loans (0302) is KEEP (wage-deduction record).
+    "audit_logs", "brands", "disposition_settings", "employee_product_loans", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
+    "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_cart_adjustments", "pos_devices", "product_classification_overrides", "sample_settings", "site_settings",
     "testing_labs", "vendor_aliases", "vendors", "website_category_types",
   ];
   function written(): Map<string, string> {

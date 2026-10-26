@@ -180,6 +180,8 @@ import {
   receiptAddressLines,
 } from "@/lib/pos/receipt-config-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
+import { type CartAdjustAction, type CartAdjustPayload } from "@/lib/pos/cart-adjust-core";
+import { LOAN_ACK_TEXT } from "@/lib/pos/employee-loan-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
@@ -213,6 +215,19 @@ function categoryStyle(category: string): { chip: string; dot: string } {
 }
 
 /** A loyalty member hit from the server lookup (B14). */
+/** Employee-identity PIN check (/api/pos/witness); friends & family adds the guest's usage. */
+export type WitnessFn = (
+  pin: string,
+  opts?: { friendsFamilyCustomerId?: string; secondPersonFor?: string },
+) => Promise<
+  | {
+      ok: true;
+      employee: { id: string; fullName: string };
+      friendsFamily?: { usedLast30d: number | null; cap: number | null };
+    }
+  | { ok: false; error: string }
+>;
+
 export type PosMemberHit = {
   customerId: string;
   label: string;
@@ -361,7 +376,7 @@ export type SaleFlowProps = {
    * identifies themselves, once for the WITNESS; the register refuses to
    * proceed when both resolve to the same person.
    */
-  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onWitness?: WitnessFn;
   /**
    * SLICE 23 — draw ONE fun name from the shared pool for the receipt this
    * sale is about to print.
@@ -419,7 +434,7 @@ export type SaleFlowProps = {
   ) => Promise<{ ok: true; grant: PosLoyaltyGrant } | { ok: false; error: string }>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
-    eventType: "sale" | "manual_id_verification" | "medical_card_capture",
+    eventType: "sale" | "manual_id_verification" | "medical_card_capture" | "cart_adjustment",
     payload: Record<string, unknown>,
   ) => string;
   /** Sale finished (change given). The shell locks the register. */
@@ -882,6 +897,14 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
       setAppliedSpecial(null);
     }
   }, [appliedSpecial, loyaltyFingerprint]);
+  // Friends & family is tied to the guest's ACCOUNT: detaching or swapping
+  // the member drops it (the sync would refuse a mismatch anyway).
+  useEffect(() => {
+    if (appliedSpecial?.kind === "friends_family" && appliedSpecial.customerId !== member?.customerId) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setAppliedSpecial(null);
+    }
+  }, [appliedSpecial, member]);
 
   // Sales hours (WAC 314-55-147) checked on-device with the owner's window;
   // the server completion gate re-checks with ITS clock at sync time.
@@ -898,6 +921,44 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     const t = setInterval(() => setHoursTick((n) => n + 1), 15_000);
     return () => clearInterval(t);
   }, [hoursBlocked]);
+  // Register round S3 — every minus / remove / cancel is an audit fact (who,
+  // when, what, how much) so the owner can spot cart-reduction abuse.
+  const trackAdjust = (
+    action: CartAdjustAction,
+    entry: PosCartEntry | null,
+    unitsRemoved: number,
+  ) => {
+    if (unitsRemoved < 1) return;
+    const payload: CartAdjustPayload =
+      action === "cart_cancel"
+        ? {
+            action,
+            unitsRemoved,
+            valueMinor: cart.reduce((t, e) => t + e.product.regularPriceMinor * e.quantity, 0),
+            lineCount: cart.length,
+          }
+        : {
+            action,
+            variantId: entry?.product.variantId ?? null,
+            productName: entry
+              ? entry.product.variantLabel
+                ? `${entry.product.name} (${entry.product.variantLabel})`
+                : entry.product.name
+              : null,
+            unitsRemoved,
+            valueMinor: (entry?.product.regularPriceMinor ?? 0) * unitsRemoved,
+          };
+    try {
+      onEnqueue("cart_adjustment", payload as unknown as Record<string, unknown>);
+    } catch {
+      // Never block the counter on the tracker.
+    }
+  };
+  const trackCancel = () => {
+    const units = cart.reduce((t, e) => t + e.quantity, 0);
+    trackAdjust("cart_cancel", null, units);
+  };
+
   if (hoursBlocked) {
     return (
       <Frame title="Sales hours" onCancel={onCancel}>
@@ -955,6 +1016,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         bundle={bundle}
         cart={cart}
         setCart={setCart}
+        onAdjust={trackAdjust}
         medicalCard={medicalCard}
         verdict={verdict}
         member={member}
@@ -980,6 +1042,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onCancel={() => {
           // AM-B — a cancelled sale returns the customer's points at once.
           releaseLoyalty(appliedLoyalty);
+          trackCancel();
           onCancel();
         }}
         onHold={
@@ -1025,9 +1088,15 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onBack={() => setStep("cart")}
         onCancel={() => {
           releaseLoyalty(appliedLoyalty);
+          trackCancel();
           onCancel();
         }}
-        onPaid={(tenderedMinor) => {
+        onPaid={(tenderedMinor, payLater) => {
+          // Register S5 — employee pay-later only rides an employee-discount
+          // sale (the payload gate re-checks the beneficiary match).
+          const tabEmployeeId =
+            payLater && appliedSpecial?.kind === "employee" ? appliedSpecial.beneficiaryEmployeeId ?? null : null;
+          if (payLater && !tabEmployeeId) return "Pay later is only for an employee purchase (apply the employee discount first).";
           const base = priceForBuyer(cart, bundle, !!medicalCard, overrides);
           // AM-B — apply the server-computed loyalty spread to the FINAL
           // priced lines (the drift effect guarantees the fingerprint still
@@ -1062,6 +1131,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             totals: priced.totals,
             tenderedMinor,
             drawerSessionId,
+            ...(tabEmployeeId ? { employeeTab: { employeeId: tabEmployeeId } } : {}),
             // Omitted entirely when there is no name, so an offline sale's
             // payload stays byte-identical to its pre-Slice-23 shape.
             ...(funNameForSale ? { displayName: funNameForSale } : {}),
@@ -1109,6 +1179,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                       : {}),
                     ...(appliedSpecial.companyName ? { companyName: appliedSpecial.companyName } : {}),
                     ...(appliedSpecial.militaryIdChecked === true ? { militaryIdChecked: true } : {}),
+                    ...(appliedSpecial.customerId ? { customerId: appliedSpecial.customerId } : {}),
                   },
                 }
               : {}),
@@ -1239,8 +1310,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             savingsMinor: priced.totals.savingsMinorUnits,
             medicalSavingsMinor: isMedical ? (priced.med?.medicalSavingsMinor ?? 0) : 0,
             medicalSale: isMedical,
-            tenderedMinor,
+            tenderedMinor: tabEmployeeId ? 0 : tenderedMinor,
             changeMinor: built.changeMinor,
+            ...(tabEmployeeId ? { employeeTabMinor: priced.totals.totalMinorUnits } : {}),
             // B33 — cash-rounding disclosure: separate line + cash due, only
             // when the policy actually adjusted this sale.
             ...(built.roundingAdjustmentMinor !== 0
@@ -2525,6 +2597,7 @@ function CartScreen({
   bundle,
   cart,
   setCart,
+  onAdjust,
   medicalCard,
   verdict,
   member,
@@ -2556,6 +2629,8 @@ function CartScreen({
   bundle: PosMenuBundle;
   cart: PosCartEntry[];
   setCart: (c: PosCartEntry[]) => void;
+  /** Register round S3 — minus / remove tracker. */
+  onAdjust: (action: CartAdjustAction, entry: PosCartEntry | null, unitsRemoved: number) => void;
   /** Non-null = medical sale (card captured at the gate). */
   medicalCard: PosCardCapture | null;
   verdict: Extract<IdGateVerdict, { allowed: true }>;
@@ -2585,7 +2660,7 @@ function CartScreen({
   appliedSpecial: AppliedSpecialDiscount | null;
   setAppliedSpecial: (a: AppliedSpecialDiscount | null) => void;
   /** SLICE 28 — employee-identity PIN check (ONLINE-ONLY; /api/pos/witness via the shell). */
-  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onWitness?: WitnessFn;
   /** SLICE 28 — the unlocked cashier's employees.id (employee-program rules). */
   employeeId?: string;
   /** SLICE 28 — this device's register id (employee-program rules). */
@@ -2651,6 +2726,8 @@ function CartScreen({
   const [expandedLine, setExpandedLine] = useState<string | null>(null);
   // B24 — the line the manager is overriding (engine-priced snapshot).
   const [overrideTarget, setOverrideTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
+  // Register round S4 — two-person discount adjust target.
+  const [adjustTarget, setAdjustTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
@@ -3257,7 +3334,13 @@ function CartScreen({
                           <td className="border-t border-[var(--pos-border)] px-2 py-2.5 text-right tabular-nums">{money(l.unitPriceMinor)}</td>
                           <td className="border-t border-[var(--pos-border)] px-2 py-2.5">
                             <span className="flex items-center justify-center gap-1.5">
-                              <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
+                              <QtyButton
+                                label="−"
+                                onClick={() => {
+                                  onAdjust(l.quantity - 1 > 0 ? "qty_decrease" : "line_remove", cartEntry ?? null, 1);
+                                  setCart(setCartQuantity(cart, variantId, l.quantity - 1));
+                                }}
+                              />
                               <span className="w-7 text-center font-bold tabular-nums">{l.quantity}</span>
                               <QtyButton
                                 label="+"
@@ -3288,6 +3371,7 @@ function CartScreen({
                             <button
                               type="button"
                               onClick={() => {
+                                onAdjust("line_remove", cartEntry ?? null, l.quantity);
                                 setCart(setCartQuantity(cart, variantId, 0));
                                 setExpandedLine(null);
                               }}
@@ -3313,7 +3397,7 @@ function CartScreen({
                                   className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
                                   title="Remove the manager override — the line returns to the engine price."
                                 >
-                                  Undo override
+                                  {activeOverride.kind === "discount_adjust" ? "Undo adjust" : "Undo override"}
                                 </button>
                               ) : (
                                 <button
@@ -3325,6 +3409,16 @@ function CartScreen({
                                   Override price…
                                 </button>
                               )}
+                              {!activeOverride && onWitness && employeeId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setAdjustTarget({ product: cartEntry.product, engineLine })}
+                                  className="pos-tile ml-2 min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
+                                  title="Adjust this line's discount — a SECOND on-duty employee approves with their PIN (never the cashier)."
+                                >
+                                  Adjust discount…
+                                </button>
+                              ) : null}
                             </td>
                           </tr>
                         ) : null}
@@ -3619,6 +3713,7 @@ function CartScreen({
               registerId={registerId}
               employeeName={employeeName}
               cartEmpty={cart.length === 0}
+              member={member}
             />
             <Row label="Subtotal (pre-tax)" value={money(railTotals.subtotalMinorUnits)} />
             {/* Promo savings only — the loyalty reduction gets its OWN row
@@ -3964,6 +4059,20 @@ function CartScreen({
 
           </div>
         </div>
+      ) : null}
+
+      {adjustTarget && onWitness && employeeId ? (
+        <DiscountAdjustModal
+          product={adjustTarget.product}
+          engineLine={adjustTarget.engineLine}
+          cashierEmployeeId={employeeId}
+          onWitness={onWitness}
+          onClose={() => setAdjustTarget(null)}
+          onApplied={(o) => {
+            setOverrides({ ...overrides, [adjustTarget.product.variantId]: o });
+            setAdjustTarget(null);
+          }}
+        />
       ) : null}
 
       {overrideTarget && onApprove ? (
@@ -4471,6 +4580,165 @@ function PriceOverrideModal({
 }
 
 /**
+ * Register round S4 — two-person discount adjust. Owner: "There should also
+ * be a button for adjusting the discount, but it will require getting the
+ * second employee on duty to use their code on the register. If employee a
+ * wants to override on their register, the pin used needs to be employee b."
+ * The cashier picks a % off (or a new price) and a reason; a DIFFERENT
+ * clocked-in employee enters their PIN (/api/pos/witness checks on-duty and
+ * not-the-cashier; sync re-refuses self-approval). Rides the B24 override
+ * block with kind "discount_adjust", so the cost floor, markdown-only rule,
+ * receipt "was" line and audit all apply. Replaces (never stacks on) the
+ * engine price: the override is the final unit price.
+ */
+function DiscountAdjustModal({
+  product,
+  engineLine,
+  cashierEmployeeId,
+  onWitness,
+  onClose,
+  onApplied,
+}: {
+  product: PosMenuProduct;
+  engineLine: PricedSaleLine;
+  cashierEmployeeId: string;
+  onWitness: WitnessFn;
+  onClose: () => void;
+  onApplied: (o: PosLineOverride) => void;
+}) {
+  const PCTS = [5, 10, 15, 20, 25];
+  const REASONS = ["Customer service recovery", "Price match", "Damaged / open package", "Manager-approved courtesy"];
+  const [pct, setPct] = useState<number | null>(null);
+  const [priceText, setPriceText] = useState("");
+  const [reason, setReason] = useState<string>("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const current = engineLine.unitPriceMinor;
+  const floorMinor = overrideFloorMinor(product);
+  const newUnitMinor =
+    pct !== null ? Math.max(1, Math.round((current * (100 - pct)) / 100)) : dollarsToMinor(priceText);
+  const request =
+    newUnitMinor !== null
+      ? validateOverrideRequest({ engineUnitMinor: current, floorMinor, newUnitMinor, reason: reason.trim() })
+      : null;
+  const ready = request?.ok === true && pin.length >= 4 && !busy;
+
+  const approve = async () => {
+    if (!ready || newUnitMinor === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await onWitness(pin, { secondPersonFor: cashierEmployeeId });
+      if (!res.ok) {
+        setError(res.error);
+        setPin("");
+        return;
+      }
+      if (res.employee.id === cashierEmployeeId) {
+        setError("That's your own PIN — a second employee on duty must approve.");
+        setPin("");
+        return;
+      }
+      onApplied({
+        unitPriceMinor: newUnitMinor,
+        originalUnitPriceMinor: current,
+        reason: reason.trim(),
+        approvedByEmployeeId: res.employee.id,
+        approvedByName: res.employee.fullName,
+        kind: "discount_adjust",
+      });
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chip = (on: boolean) =>
+    `rounded-full px-3 py-1.5 text-xs font-semibold ${
+      on ? "bg-[var(--pos-warn-solid)] text-white" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+    }`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/70 p-4 *:my-auto">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Adjust discount</h2>
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-sm">
+          {engineLine.productName} — currently {money(current)} each{engineLine.appliedLabel ? ` (${engineLine.appliedLabel})` : ""}.
+        </p>
+        <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+          Replaces the current price (never stacks). Floor: {money(Math.max(1, floorMinor))}. A second employee who is
+          clocked in — not you — approves with their PIN. Every adjust is audited.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PCTS.map((p) => (
+            <button key={p} type="button" className={chip(pct === p)} onClick={() => { setPct(pct === p ? null : p); setPriceText(""); setError(null); }}>
+              {p}% off
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
+          inputMode="decimal"
+          placeholder="Or a new price per unit (0.00)"
+          value={priceText}
+          onChange={(e) => { setPriceText(e.target.value); setPct(null); setError(null); }}
+        />
+        {newUnitMinor !== null ? (
+          <p className="mt-2 text-sm font-semibold">New price: {money(newUnitMinor)} each</p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {REASONS.map((r) => (
+            <button key={r} type="button" className={chip(reason === r)} onClick={() => setReason(reason === r ? "" : r)}>
+              {r}
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
+          placeholder="Or type a reason (3–500 characters)…"
+          value={REASONS.includes(reason) ? "" : reason}
+          maxLength={500}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+          Second employee&apos;s PIN (on duty, not you)
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={6}
+          value={pin}
+          onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setError(null); }}
+        />
+        {request && !request.ok ? (
+          <p className="mt-3 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">{request.error}</p>
+        ) : null}
+        {error ? (
+          <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">{error}</p>
+        ) : null}
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={approve}
+          className="pos-tile mt-4 w-full rounded-xl bg-[var(--pos-warn-solid)] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+        >
+          {busy ? "Verifying…" : "Approve adjustment"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * POS B14 — loyalty member panel: search (online only), pick, or detach. The
  * privacy budget is deliberately tiny — first name + last initial, points,
  * tier — and nothing is cached beyond the current sale.
@@ -4654,6 +4922,7 @@ const SPECIAL_DISCOUNT_LABELS: Record<SpecialDiscountKind, string> = {
   employee: "Employee discount",
   industry: "Industry discount",
   veteran: "Veteran discount",
+  friends_family: "Friends & family",
 };
 
 /**
@@ -4683,13 +4952,15 @@ function SpecialDiscountPanel({
   registerId,
   employeeName,
   cartEmpty,
+  member,
 }: {
+  member: PosMemberHit | null;
   bundle: PosMenuBundle;
   appliedSpecial: AppliedSpecialDiscount | null;
   setAppliedSpecial: (a: AppliedSpecialDiscount | null) => void;
   loyaltyFingerprint: string;
   pricedLines: PricedSaleLine[];
-  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onWitness?: WitnessFn;
   employeeId?: string;
   registerId?: string;
   employeeName?: string;
@@ -4730,6 +5001,7 @@ function SpecialDiscountPanel({
       approvedByEmployeeId: facts.approvedByEmployeeId ?? null,
       companyName: facts.companyName ?? null,
       militaryIdChecked: facts.militaryIdChecked,
+      customerId: facts.customerId ?? null,
     });
     if (gate) return gate;
     const applied = applySpecialDiscountToLines(
@@ -4772,6 +5044,9 @@ function SpecialDiscountPanel({
           ★ {SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} {formatBps(appliedSpecial.percentBps)} — {money(appliedSpecial.appliedMinor)} off
           {appliedSpecial.kind === "employee" && appliedSpecial.beneficiaryName ? ` (${appliedSpecial.beneficiaryName})` : ""}
           {appliedSpecial.kind === "industry" && appliedSpecial.companyName ? ` (${appliedSpecial.companyName})` : ""}
+          {appliedSpecial.kind === "friends_family"
+            ? ` (${appliedSpecial.customerLabel ?? "guest"} · sponsor ${appliedSpecial.approvedByName ?? "?"})`
+            : ""}
         </p>
         <button
           type="button"
@@ -4786,7 +5061,9 @@ function SpecialDiscountPanel({
 
   if (programs.length === 0) return null;
 
-  const verifyPin = async (): Promise<{ id: string; fullName: string } | null> => {
+  const verifyPin = async (
+    opts?: { friendsFamilyCustomerId?: string },
+  ): Promise<{ id: string; fullName: string; ffUsed?: number | null; ffCap?: number | null } | null> => {
     if (!onWitness) {
       setError("PIN checks need the register shell — restart the app.");
       return null;
@@ -4797,14 +5074,14 @@ function SpecialDiscountPanel({
     }
     setBusy(true);
     setError(null);
-    const res = await onWitness(pinInput);
+    const res = await onWitness(pinInput, opts);
     setBusy(false);
     setPinInput("");
     if (!res.ok) {
       setError(res.error);
       return null;
     }
-    return res.employee;
+    return { ...res.employee, ffUsed: res.friendsFamily?.usedLast30d ?? null, ffCap: res.friendsFamily?.cap ?? null };
   };
 
   return (
@@ -4824,7 +5101,9 @@ function SpecialDiscountPanel({
                 ? "Staff purchase — needs the buying employee's PIN plus a second employee's witness PIN, on a register the buyer is NOT logged into."
                 : p.kind === "industry"
                   ? "Visiting vendor/industry guest — records the company name."
-                  : "Veteran discount — confirm a military ID first."
+                  : p.kind === "friends_family"
+                    ? "Friends & family — the guest's customer account must be attached, and an employee other than the cashier sponsors with their PIN."
+                    : "Veteran discount — confirm a military ID first."
             }
             className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)] disabled:opacity-40"
           >
@@ -4832,6 +5111,60 @@ function SpecialDiscountPanel({
           </button>
         ))}
       </div>
+      {open === "friends_family" ? (
+        <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+          {!member ? (
+            <p className="text-xs font-semibold text-[var(--pos-warn)]">
+              Attach the guest&apos;s customer account first (look them up or sign them up). Friends & family is
+              tracked per account — no account, no discount.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-[var(--pos-text-muted)]">
+                Guest: <span className="text-[var(--pos-accent)]">{member.label}</span>. The SPONSORING employee (who knows
+                them) enters their PIN{employeeName ? ` — not ${employeeName}, the cashier` : ""}.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Sponsor's PIN"
+                  className="min-w-0 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={busy || pinInput.length < 4}
+                  onClick={() => {
+                    void verifyPin({ friendsFamilyCustomerId: member.customerId }).then((sponsor) => {
+                      if (!sponsor) return;
+                      if (employeeId && sponsor.id === employeeId) {
+                        setError("The sponsor must be someone OTHER than the cashier ringing this sale.");
+                        return;
+                      }
+                      const err = applyProgram(
+                        "friends_family",
+                        programs.find((p) => p.kind === "friends_family")!.percentBps,
+                        {
+                          approvedByEmployeeId: sponsor.id,
+                          approvedByName: sponsor.fullName,
+                          customerId: member.customerId,
+                          customerLabel: member.label,
+                        },
+                      );
+                      if (err) setError(err);
+                    });
+                  }}
+                  className="pos-tile min-h-11 rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+                >
+                  Sponsor & apply
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
       {open === "veteran" ? (
         <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
           <label className="flex min-h-11 items-center gap-2 text-xs font-semibold">
@@ -5466,7 +5799,7 @@ function TenderScreen({
   onBack: () => void;
   onCancel: () => void;
   /** Returns an error string, or null when the sale was enqueued. */
-  onPaid: (tenderedMinor: number) => string | null;
+  onPaid: (tenderedMinor: number, payLater?: boolean) => string | null;
 }) {
   const priced = useMemo(() => {
     const base = priceForBuyer(cart, bundle, medicalCard !== null, overrides);
@@ -5527,6 +5860,14 @@ function TenderScreen({
 
   const pay = () => {
     const err = onPaid(tendered);
+    if (err) setError(err);
+  };
+  // Register S5 — employee pay-later (product loan). Offered only on an
+  // employee-discount sale; the buyer must acknowledge the pay deduction.
+  const canTab = appliedSpecial?.kind === "employee" && !!appliedSpecial.beneficiaryEmployeeId;
+  const [tabAck, setTabAck] = useState(false);
+  const payLater = () => {
+    const err = onPaid(0, true);
     if (err) setError(err);
   };
 
@@ -5621,6 +5962,14 @@ function TenderScreen({
       </p>
       {tendered >= due && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}
 
+      {canTab ? (
+        <label className="mt-5 flex max-w-md items-start gap-2 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-left text-xs text-[var(--pos-warn)]">
+          <input type="checkbox" className="mt-0.5" checked={tabAck} onChange={(e) => setTabAck(e.target.checked)} />
+          <span>
+            <span className="font-bold">{appliedSpecial?.beneficiaryName ?? "Employee"} — pay later:</span> {LOAN_ACK_TEXT}
+          </span>
+        </label>
+      ) : null}
       <div className="mt-6 flex gap-3">
         <button
           type="button"
@@ -5630,6 +5979,16 @@ function TenderScreen({
         >
           Complete sale
         </button>
+        {canTab ? (
+          <button
+            type="button"
+            onClick={payLater}
+            disabled={!tabAck}
+            className="pos-tile rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-6 py-4 text-lg font-bold text-[var(--pos-warn)] disabled:opacity-40"
+          >
+            Pay later (employee tab)
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onBack}

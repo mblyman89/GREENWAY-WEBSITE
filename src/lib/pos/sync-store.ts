@@ -76,9 +76,12 @@ import { getPublishedVersion } from "./menu-version";
 // SLICE 28 — special discounts (employee/industry/veteran): the pure rules +
 // percent math the register used, re-run server-side, plus the settings and
 // the migration-0133 use ledger.
-import { applySpecialDiscount } from "@/lib/discounts/special-discount-core";
-import { getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
+import { applySpecialDiscount, friendsFamilyCapReached } from "@/lib/discounts/special-discount-core";
+import { openEmployeeLoan } from "@/lib/pos/employee-loan-store";
+import { LOAN_ACK_TEXT } from "@/lib/pos/employee-loan-core";
+import { countFriendsFamilyUses, getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
 import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
+import { validateCartAdjustPayload, type CartAdjustPayload } from "./cart-adjust-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -377,6 +380,13 @@ async function ingestOne(
           "Medical card-capture events are not accepted yet — apply supabase/migrations/0121_pos_medical.sql first.",
       };
     }
+    if (insertError.code === "23514" && envelope.eventType === "cart_adjustment") {
+      return {
+        clientUuid: envelope.clientUuid,
+        status: "rejected",
+        reason: "Cart adjustments are not accepted yet — apply supabase/migrations/0301_pos_cart_adjustments.sql first.",
+      };
+    }
     // FK violations (unknown employee/register) are rejections — the event
     // never became a ledger fact, the device keeps it visible.
     return { clientUuid: envelope.clientUuid, status: "rejected", reason: insertError.message };
@@ -424,6 +434,8 @@ async function processEnvelope(
         return await processManualId(admin, envelope, ledgerId);
       case "medical_card_capture":
         return await processCardCapture(admin, envelope, ledgerId);
+      case "cart_adjustment":
+        return await processCartAdjustment(admin, envelope, ledgerId);
       default:
         return await markException(admin, ledgerId, envelope.clientUuid, "Unknown event type.");
     }
@@ -478,6 +490,20 @@ async function processSale(
     return markException(admin, ledgerId, envelope.clientUuid, `Invalid sale payload: ${check.errors.join(" ")}`);
   }
   const sale = payload as PosSalePayload;
+
+  // Register round S4 — two-person discount adjust: the approver can NEVER be
+  // the cashier ringing the sale (owner: "If employee a wants to override on
+  // their register, the pin used needs to be employee b").
+  for (const l of sale.lines) {
+    if (l.override?.kind === "discount_adjust" && l.override.approvedByEmployeeId === envelope.employeeId) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        "Discount adjust refused: approved by the same employee who rang the sale (a second employee is required).",
+      );
+    }
+  }
 
   // AN-3(c) — the drawer session must be REAL: it must exist, belong to the
   // register this device is bound to, and its open interval must contain the
@@ -740,9 +766,39 @@ async function processSale(
       approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
       companyName: sd.companyName ?? null,
       militaryIdChecked: sd.militaryIdChecked,
+      customerId: sd.customerId ?? null,
     });
     if (ruleError) {
       return markException(admin, ledgerId, envelope.clientUuid, `Special discount refused: ${ruleError}`);
+    }
+    if (sd.kind === "friends_family") {
+      // The sponsor must still be an ACTIVE employee, and the guest's
+      // rolling-30-day cap (owner setting) is re-counted from the ledger.
+      const { data: sp } = await admin
+        .from("employees")
+        .select("id, active")
+        .eq("id", sd.approvedByEmployeeId!)
+        .maybeSingle<{ id: string; active: boolean }>();
+      if (!sp || !sp.active) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Friends & family: the sponsoring employee (${sd.approvedByEmployeeId}) is not an active employee — refused.`,
+        );
+      }
+      const used = await countFriendsFamilyUses(sd.customerId!, {
+        at: new Date(envelope.occurredAt),
+        excludeClientUuid: envelope.clientUuid,
+      });
+      if (used != null && friendsFamilyCapReached(used, program.usesPer30dCap)) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Friends & family: this guest already used ${used} of ${program.usesPer30dCap} allowed in the last 30 days — refused. Re-ring at regular price (or raise the cap in Settings → Special discounts), then resolve this exception.`,
+        );
+      }
     }
     if (sd.kind === "employee") {
       const ids = [sd.beneficiaryEmployeeId!, sd.approvedByEmployeeId!];
@@ -772,6 +828,19 @@ async function processSale(
           );
         }
       }
+    }
+  }
+  // Register S5 — refuse a pay-later sale when the loan ledger (0302) is
+  // missing, so product can never leave the store untracked.
+  if (sale.paymentMethod === "employee_tab") {
+    const { error: loanTableError } = await admin.from("employee_product_loans").select("id").limit(1);
+    if (loanTableError) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Employee tab refused: the loan ledger is unavailable (${loanTableError.message}). Apply migration 0302, then resolve this exception.`,
+      );
     }
   }
 
@@ -949,7 +1018,7 @@ async function processSale(
     await recordAudit({
       actorId: null,
       actorEmail: `pos-device:${device.id}`,
-      action: "register.price_override",
+      action: l.override.kind === "discount_adjust" ? "register.discount_adjust" : "register.price_override",
       entityType: "order",
       entityId: order.id,
       after: {
@@ -961,6 +1030,7 @@ async function processSale(
         overriddenUnitPriceMinor: l.unitPriceMinor,
         reason: l.override.reason,
         approvedByEmployeeId: l.override.approvedByEmployeeId,
+        kind: l.override.kind ?? "price_override",
         soldByEmployeeId: envelope.employeeId,
         clientUuid: envelope.clientUuid,
         occurredAt: envelope.occurredAt,
@@ -1107,6 +1177,36 @@ async function processSale(
     );
   }
 
+  // Register S5 — employee pay-later: open the product loan (idempotent by
+  // client_uuid). The preflight above proved the table exists; a failure
+  // here leaves a loud audit row for the manager.
+  if (sale.paymentMethod === "employee_tab" && sale.employeeTab) {
+    const loanError = await openEmployeeLoan({
+      clientUuid: envelope.clientUuid,
+      orderId: order.id,
+      employeeId: sale.employeeTab.employeeId,
+      cashierId: envelope.employeeId,
+      witnessId: sale.specialDiscount?.approvedByEmployeeId ?? null,
+      registerId: envelope.registerId,
+      amountMinor: sale.totalMinor,
+      ackText: LOAN_ACK_TEXT,
+      takenAtIso: envelope.occurredAt,
+    });
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-device:${device.id}`,
+      action: loanError ? "register.employee_tab_record_failed" : "register.employee_tab",
+      entityType: "order",
+      entityId: order.id,
+      after: {
+        employeeId: sale.employeeTab.employeeId,
+        amountMinor: sale.totalMinor,
+        witnessId: sale.specialDiscount?.approvedByEmployeeId ?? null,
+        ...(loanError ? { error: loanError } : {}),
+      },
+    });
+  }
+
   // SLICE 28 — the sale completed with a special discount on it: write the
   // migration-0133 use ledger row (who gave it, who got it, cents saved) and
   // the audit trail. Idempotent by client_uuid — a sync retry can never
@@ -1123,6 +1223,7 @@ async function processSale(
       approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
       companyName: sd.companyName ?? null,
       militaryIdChecked: sd.militaryIdChecked === true,
+      customerId: sd.customerId ?? null,
       subtotalMinor: sale.subtotalMinor,
       discountMinor: sd.appliedMinor,
       clientUuid: envelope.clientUuid,
@@ -1362,6 +1463,50 @@ async function processPunch(
       };
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// cart_adjustment — minus / remove / cancel tracker (Register round S3, 0301)
+// ---------------------------------------------------------------------------
+
+async function processCartAdjustment(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  envelope: PosEventEnvelope,
+  ledgerId: string,
+): Promise<PosSyncAck> {
+  const payload = envelope.payload as Partial<CartAdjustPayload>;
+  const check = validateCartAdjustPayload(payload);
+  if (!check.ok) {
+    return markException(admin, ledgerId, envelope.clientUuid, `Invalid cart adjustment: ${check.errors.join(" ")}`);
+  }
+  const p = payload as CartAdjustPayload;
+  const { error } = await admin.from("pos_cart_adjustments").upsert(
+    {
+      client_uuid: envelope.clientUuid,
+      register_id: envelope.registerId,
+      employee_id: envelope.employeeId,
+      action: p.action,
+      variant_id: p.variantId && isUuid(p.variantId) ? p.variantId : null,
+      product_name: p.productName ? String(p.productName).slice(0, 300) : null,
+      units_removed: p.unitsRemoved,
+      value_minor: p.valueMinor,
+      line_count: Number.isInteger(p.lineCount) ? p.lineCount : null,
+      occurred_at: envelope.occurredAt,
+    },
+    { onConflict: "client_uuid", ignoreDuplicates: true },
+  );
+  if (error) {
+    return markException(
+      admin,
+      ledgerId,
+      envelope.clientUuid,
+      isMissingSchemaError(error)
+        ? "Cart adjustments need supabase/migrations/0301_pos_cart_adjustments.sql applied."
+        : `Cart adjustment not recorded: ${error.message}`,
+    );
+  }
+  await markProcessed(admin, ledgerId);
+  return { clientUuid: envelope.clientUuid, status: "processed" };
 }
 
 // ---------------------------------------------------------------------------

@@ -41,6 +41,8 @@ export type SpecialDiscountUseLike = {
   companyName: string | null;
   /** veteran program: cashier confirmed a physical military ID. */
   militaryIdChecked: boolean;
+  /** friends_family program: the guest's customer account. */
+  customerId?: string | null;
   /** Pre-discount subtotal snapshot, cents. */
   subtotalMinor: number;
   /** Cents taken off. */
@@ -101,6 +103,10 @@ export type SpecialDiscountReportSummary = {
   byBeneficiary: SpecialDiscountPersonSummary[];
   /** WHO approves them (employee program) — witnesses, most uses first. */
   byApprover: SpecialDiscountPersonSummary[];
+  /** friends_family: guest accounts (WHO got it, how often), most cents first. */
+  byGuest: SpecialDiscountPersonSummary[];
+  /** friends_family: sponsoring employees (WHO vouched), most cents first. */
+  bySponsor: SpecialDiscountPersonSummary[];
   /** TO WHOM (industry program) — companies, most cents first. */
   byCompany: SpecialDiscountCompanySummary[];
   /** HOW OFTEN — per-Pacific-day trend, oldest day first. */
@@ -111,7 +117,7 @@ export type SpecialDiscountReportSummary = {
 // The summarizer
 // ---------------------------------------------------------------------------
 
-const KIND_ORDER: SpecialDiscountKind[] = ["employee", "industry", "veteran"];
+const KIND_ORDER: SpecialDiscountKind[] = ["employee", "industry", "veteran", "friends_family"];
 
 function cleanMinor(n: number): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
@@ -149,6 +155,8 @@ export function summarizeSpecialDiscountUses(
   const byCashier = new Map<string, SpecialDiscountPersonSummary>();
   const byBeneficiary = new Map<string, SpecialDiscountPersonSummary>();
   const byApprover = new Map<string, SpecialDiscountPersonSummary>();
+  const byGuest = new Map<string, SpecialDiscountPersonSummary>();
+  const bySponsor = new Map<string, SpecialDiscountPersonSummary>();
   const byCompany = new Map<string, SpecialDiscountCompanySummary>();
   const byDay = new Map<string, SpecialDiscountDaySummary>();
 
@@ -175,6 +183,10 @@ export function summarizeSpecialDiscountUses(
     if (row.kind === "employee") {
       bumpPerson(byBeneficiary, row.beneficiaryEmployeeId, discount, at);
       bumpPerson(byApprover, row.approvedByEmployeeId, discount, at);
+    }
+    if (row.kind === "friends_family") {
+      bumpPerson(byGuest, row.customerId ?? null, discount, at);
+      bumpPerson(bySponsor, row.approvedByEmployeeId, discount, at);
     }
     if (row.kind === "industry") {
       const display = (row.companyName ?? "").trim();
@@ -219,6 +231,8 @@ export function summarizeSpecialDiscountUses(
     byApprover: [...byApprover.values()].sort(
       (a, b) => b.uses - a.uses || b.discountMinor - a.discountMinor || a.id.localeCompare(b.id),
     ),
+    byGuest: [...byGuest.values()].sort(personSort),
+    bySponsor: [...bySponsor.values()].sort(personSort),
     byCompany: [...byCompany.values()].sort(
       (a, b) => b.discountMinor - a.discountMinor || b.uses - a.uses || a.key.localeCompare(b.key),
     ),
@@ -251,11 +265,12 @@ export function __runSpecialDiscountReportTests(): void {
   ok(empty.totalUses === 0 && empty.totalDiscountMinor === 0, "empty totals are zero");
   ok(empty.avgDiscountMinor === 0, "empty avg is zero (no divide-by-zero)");
   ok(
-    empty.byKind.length === 3 &&
+    empty.byKind.length === 4 &&
       empty.byKind[0].kind === "employee" &&
       empty.byKind[1].kind === "industry" &&
-      empty.byKind[2].kind === "veteran",
-    "byKind always has the three programs in canonical order",
+      empty.byKind[2].kind === "veteran" &&
+      empty.byKind[3].kind === "friends_family",
+    "byKind always has the four programs in canonical order",
   );
   ok(empty.byCashier.length === 0 && empty.byCompany.length === 0 && empty.byDay.length === 0, "empty rollups are empty");
 

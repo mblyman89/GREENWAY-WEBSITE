@@ -54,6 +54,13 @@ export type DaySummary = {
    */
   roundedSaleCount: number;
   roundingMinor: number;
+  /**
+   * Register S5 — employee pay-later (employee_tab) sales. Included in
+   * grossMinor (they ARE sales) but NO cash entered the drawer: cash
+   * expected = grossMinor + roundingMinor − employeeTabMinor.
+   */
+  employeeTabCount?: number;
+  employeeTabMinor?: number;
   /** Audited no-sale drawer opens. */
   noSaleCount: number;
   /** Events the gate bounced to the manager exception queue. */
@@ -105,6 +112,10 @@ export function summarizeDayEvents(rows: DayEventRow[]): DaySummary {
     out.grossMinor += intOrZero(p.totalMinor);
     out.subtotalMinor += intOrZero(p.subtotalMinor);
     out.taxMinor += intOrZero(p.taxMinor);
+    if (p.paymentMethod === "employee_tab") {
+      out.employeeTabCount = (out.employeeTabCount ?? 0) + 1;
+      out.employeeTabMinor = (out.employeeTabMinor ?? 0) + intOrZero(p.totalMinor);
+    }
     const medical = p.medical && typeof p.medical === "object" ? (p.medical as Record<string, unknown>) : null;
     if (medical) {
       out.medicalSaleCount += 1;
@@ -295,6 +306,10 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
     ...(s.roundedSaleCount > 0
       ? [row(`Cash rounding (${s.roundedSaleCount} sales)`, formatCents(s.roundingMinor))]
       : []),
+    // Register S5 — employee tabs: a sale, but NOT cash in the drawer.
+    ...(s.employeeTabCount
+      ? [row(`Employee tab, no cash (${s.employeeTabCount})`, `-${formatCents(s.employeeTabMinor ?? 0)}`)]
+      : []),
   ].join("");
 
   // AN-4 — cash refunded OUT (store-wide: voids + counter returns carry no
@@ -408,6 +423,12 @@ export function __runDayReportCoreTests(): void {
   ok(s.medicalSaleCount === 1 && s.medicalSavingsMinor === 555, "medical sale + exempt savings counted");
   ok(s.roundedSaleCount === 0 && s.roundingMinor === 0, "no rounding blocks → zero rounding row");
   ok(s.noSaleCount === 1, "no-sale counted");
+  ok(s.employeeTabCount === undefined, "S5: no employee tab rows when none sold");
+  const tabDay = summarizeDayEvents([
+    { eventType: "sale", status: "processed", payload: { totalMinor: 2000, paymentMethod: "employee_tab" } },
+    { eventType: "sale", status: "processed", payload: { totalMinor: 1000, paymentMethod: "cash" } },
+  ]);
+  ok(tabDay.grossMinor === 3000 && tabDay.employeeTabCount === 1 && tabDay.employeeTabMinor === 2000, "S5: employee tab is a sale but tracked as no-cash");
 
   // B33 — rounding adjustments sum into their own row (net of + and −).
   const roundedDay = summarizeDayEvents([

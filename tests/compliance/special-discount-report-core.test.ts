@@ -64,7 +64,7 @@ describe("special-discount-report-core", () => {
 
   it("always reports the three programs in canonical order, even when empty", () => {
     const s = summarizeSpecialDiscountUses([]);
-    expect(s.byKind.map((k) => k.kind)).toEqual(["employee", "industry", "veteran"]);
+    expect(s.byKind.map((k) => k.kind)).toEqual(["employee", "industry", "veteran", "friends_family"]);
     expect(s.totalUses).toBe(0);
     expect(s.avgDiscountMinor).toBe(0);
   });

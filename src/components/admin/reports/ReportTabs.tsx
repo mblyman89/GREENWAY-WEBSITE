@@ -29,6 +29,8 @@ export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports/customers", label: "Customers", icon: "👥" },
   { href: "/admin/reports/loyalty", label: "Loyalty & Discounts", icon: "🎁" },
   { href: "/admin/reports/special-discounts", label: "Special Discounts", icon: "🤝" },
+  // Register round S3: minus / remove / cancel + voids, per employee.
+  { href: "/admin/reports/register-adjustments", label: "Register Adjustments", icon: "➖" },
   { href: "/admin/reports/employees", label: "Employees", icon: "⏱" },
   { href: "/admin/reports/medical", label: "Medical", icon: "⚕" },
   { href: "/admin/reports/compliance", label: "Compliance (CCRS)", icon: "🛡️" },
