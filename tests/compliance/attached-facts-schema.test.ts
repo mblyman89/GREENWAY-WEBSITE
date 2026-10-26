@@ -382,6 +382,10 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // pinned by the R74 S11 test below.
       .filter((f) => !f.endsWith(path.join("inventory", "cultivera-vendor-core.ts")))
       .filter((f) => !f.endsWith(path.join("inventory", "cultivera-vendor.ts")))
+      // R74 S38: the Cultivera vendor confidence scorecard READS attached_facts
+      // of each draft (one named select, no writes) to score how complete the
+      // vendor's facts are. Read-only, same as the S11 reader above.
+      .filter((f) => !f.endsWith(path.join("catalog", "cultivera-confidence-server.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
