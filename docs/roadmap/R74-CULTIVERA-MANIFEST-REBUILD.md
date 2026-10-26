@@ -1071,3 +1071,15 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
   - the S-12c paste box accepts the same email text.
 - **Known message** `Invalid InventoryExternalIdentifier` (row, `[G L1302-L1304]`).
 - **Evidence:** `docs/ccrs-bible/evidence/2026-10-25-week/`.
+
+## Round 29 - owner request (verbatim)
+
+> thank you. please build all 5 of these improvements and enhancements. complete all tasks before reporting back to me. commit and push work often as the sandbox is unstable. minimal testing, I will do the tests. will you also build in a loud congratulations green banner or what ever for every ccrs event having been tested, logged and recorded, and checked off as passing and good to go. I want to continue testing this, but I also want the system to tell me what I have tested so far that it is aware of, and if I have passed those tests. what tests remain, and how I can go about testing it to get a green passing mark on that test. follow the standing rules. thank you.
+
+### S48 - CCRS answers reach un-marked files, unanswered warning, no re-sent strains/area, Answer-all, test scoreboard
+
+1. **Answers work on files never marked uploaded.** The success, error and "not processed" answers (and the email Apply buttons) now mark a file uploaded automatically, using the email's time (clamped to between file creation and now), with a logged override reason and the `ccrs.file.uploaded_from_email` audit entry. A file made after the email can never be picked as its answer (`ccrs-answer-core.ts`).
+2. **Unanswered-files warning.** The hub shows an amber banner, and every export's README lists the earlier files still waiting for CCRS's answer.
+3. **Area not re-sent / 4. strains not re-sent.** Strain and Area rows in files still waiting for an answer (emitted or uploaded) count as on file when planning the next export (`readInflightMasterRows` + `withInflight`). Planning only: abandon the file and they are sent again. A failed read never blocks the export.
+5. **"Answer every waiting CCRS email (N)".** One click, oldest first, each answered as its own Apply would, audited `ccrs.mail.answer_all`.
+6. **CCRS PREprod test scoreboard** (`ccrs-scoreboard-core.ts`, `ccrs-scoreboard-store.ts`, `CcrsScoreboardPanel.tsx`). 13 required and 5 optional events. Each one is read from the hub's own record (rows sent and CCRS's answer) and shown as PASSED, Waiting, Not passed (with the reason) or Not tested, with "How to pass" text and a "Next tests to do" list. When every required event has passed, a large green CONGRATULATIONS banner appears. Bounded reads (limit at most 300), read-only and fault-tolerant. No migration.
