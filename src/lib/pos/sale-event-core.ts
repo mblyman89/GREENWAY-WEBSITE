@@ -88,6 +88,11 @@ export const POS_EVENT_TYPES = [
    * abandoned. Requires migration 0121.
    */
   "medical_card_capture",
+  /**
+   * Register round S3 — a minus (−), line remove (✕) or cancelled sale, so the
+   * owner can see who reduces carts, when, and how often. Requires 0301.
+   */
+  "cart_adjustment",
 ] as const;
 export type PosEventType = (typeof POS_EVENT_TYPES)[number];
 

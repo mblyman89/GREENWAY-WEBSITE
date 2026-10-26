@@ -79,6 +79,7 @@ import { getPublishedVersion } from "./menu-version";
 import { applySpecialDiscount, friendsFamilyCapReached } from "@/lib/discounts/special-discount-core";
 import { countFriendsFamilyUses, getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
 import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
+import { validateCartAdjustPayload, type CartAdjustPayload } from "./cart-adjust-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -377,6 +378,13 @@ async function ingestOne(
           "Medical card-capture events are not accepted yet — apply supabase/migrations/0121_pos_medical.sql first.",
       };
     }
+    if (insertError.code === "23514" && envelope.eventType === "cart_adjustment") {
+      return {
+        clientUuid: envelope.clientUuid,
+        status: "rejected",
+        reason: "Cart adjustments are not accepted yet — apply supabase/migrations/0301_pos_cart_adjustments.sql first.",
+      };
+    }
     // FK violations (unknown employee/register) are rejections — the event
     // never became a ledger fact, the device keeps it visible.
     return { clientUuid: envelope.clientUuid, status: "rejected", reason: insertError.message };
@@ -424,6 +432,8 @@ async function processEnvelope(
         return await processManualId(admin, envelope, ledgerId);
       case "medical_card_capture":
         return await processCardCapture(admin, envelope, ledgerId);
+      case "cart_adjustment":
+        return await processCartAdjustment(admin, envelope, ledgerId);
       default:
         return await markException(admin, ledgerId, envelope.clientUuid, "Unknown event type.");
     }
@@ -1393,6 +1403,50 @@ async function processPunch(
       };
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// cart_adjustment — minus / remove / cancel tracker (Register round S3, 0301)
+// ---------------------------------------------------------------------------
+
+async function processCartAdjustment(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  envelope: PosEventEnvelope,
+  ledgerId: string,
+): Promise<PosSyncAck> {
+  const payload = envelope.payload as Partial<CartAdjustPayload>;
+  const check = validateCartAdjustPayload(payload);
+  if (!check.ok) {
+    return markException(admin, ledgerId, envelope.clientUuid, `Invalid cart adjustment: ${check.errors.join(" ")}`);
+  }
+  const p = payload as CartAdjustPayload;
+  const { error } = await admin.from("pos_cart_adjustments").upsert(
+    {
+      client_uuid: envelope.clientUuid,
+      register_id: envelope.registerId,
+      employee_id: envelope.employeeId,
+      action: p.action,
+      variant_id: p.variantId && isUuid(p.variantId) ? p.variantId : null,
+      product_name: p.productName ? String(p.productName).slice(0, 300) : null,
+      units_removed: p.unitsRemoved,
+      value_minor: p.valueMinor,
+      line_count: Number.isInteger(p.lineCount) ? p.lineCount : null,
+      occurred_at: envelope.occurredAt,
+    },
+    { onConflict: "client_uuid", ignoreDuplicates: true },
+  );
+  if (error) {
+    return markException(
+      admin,
+      ledgerId,
+      envelope.clientUuid,
+      isMissingSchemaError(error)
+        ? "Cart adjustments need supabase/migrations/0301_pos_cart_adjustments.sql applied."
+        : `Cart adjustment not recorded: ${error.message}`,
+    );
+  }
+  await markProcessed(admin, ledgerId);
+  return { clientUuid: envelope.clientUuid, status: "processed" };
 }
 
 // ---------------------------------------------------------------------------
