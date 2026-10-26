@@ -6,7 +6,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { DEFAULT_LOAN_DEDUCT_DAYS, canSettle, type LoanStatus } from "@/lib/pos/employee-loan-core";
 
 export const LOAN_POLICY_KEY = "employee_loan_policy";
@@ -92,13 +92,27 @@ export type LoanListRow = {
 
 export async function listEmployeeLoans(): Promise<{ rows: LoanListRow[]; migrationMissing: boolean }> {
   if (!isSupabaseServiceConfigured) return { rows: [], migrationMissing: false };
-  const { data, error } = await createSupabaseAdminClient()
-    .from("employee_product_loans")
-    .select("id, employee_id, order_id, amount_minor, status, taken_at, settled_at, settle_note, witness_id")
-    .order("taken_at", { ascending: false })
-    .limit(2000);
-  if (error) return { rows: [], migrationMissing: /does not exist|42P01/i.test(`${error.code} ${error.message}`) };
-  return { rows: (data ?? []) as LoanListRow[], migrationMissing: false };
+  // Paged (never a .limit(N>=1000): PostgREST caps a single read at 1000).
+  const admin = createSupabaseAdminClient();
+  let failure: { code?: string; message: string } | null = null;
+  const rows = await pagedAll<LoanListRow>(async (from, to) => {
+    const { data, error } = await admin
+      .from("employee_product_loans")
+      .select("id, employee_id, order_id, amount_minor, status, taken_at, settled_at, settle_note, witness_id")
+      .order("taken_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      failure = error;
+      return [];
+    }
+    return (data ?? []) as LoanListRow[];
+  });
+  if (failure) {
+    const f = failure as { code?: string; message: string };
+    return { rows: [], migrationMissing: /does not exist|42P01/i.test(`${f.code} ${f.message}`) };
+  }
+  return { rows, migrationMissing: false };
 }
 
 export async function settleEmployeeLoan(
