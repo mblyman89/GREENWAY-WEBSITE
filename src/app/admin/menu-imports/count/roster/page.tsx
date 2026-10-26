@@ -1,3 +1,4 @@
+import type React from "react";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -42,6 +43,21 @@ const STATUS_STYLE: Record<SheetStatus, string> = {
 };
 
 const STEPS: SheetStatus[] = ["assigned", "downloaded", "sent", "received"];
+
+/** A plain <a> (never next/link): a prefetch of a download route would build a file and log a download. */
+function DL({ href, children, tone = "neutral" }: { href: string; children: React.ReactNode; tone?: "primary" | "neutral" | "special" }) {
+  const c =
+    tone === "primary"
+      ? "bg-[var(--admin-orange)] text-black hover:brightness-110"
+      : tone === "special"
+        ? "bg-[var(--admin-purple)] text-black hover:brightness-110"
+        : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)] ring-1 ring-[var(--admin-orange)]/40 hover:bg-[var(--admin-orange)] hover:text-black";
+  return (
+    <a href={href} download className={`admin-focus inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-[0.7rem] font-black uppercase tracking-[0.08em] transition ${c}`}>
+      {children}
+    </a>
+  );
+}
 
 function Steps({ s }: { s: RosterSheet }) {
   const st = sheetStatus(s);
@@ -175,9 +191,9 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
             <h2 className="text-sm font-semibold text-white">Sheets: assign, download, email</h2>
             {!r.archived && (
               <div className="flex flex-wrap gap-2">
-                <Button href={`${base}/zip?roster=${r.rosterId}&platform=assigned`} variant="neutral" size="sm">Download all (each person&apos;s computer) .zip</Button>
-                <Button href={`${base}/zip?roster=${r.rosterId}&platform=windows`} variant="neutral" size="sm">All for Windows .zip</Button>
-                <Button href={`${base}/zip?roster=${r.rosterId}&platform=mac`} variant="neutral" size="sm">All for Mac .zip</Button>
+                <DL href={`${base}/zip?roster=${r.rosterId}&platform=assigned`}>Download all (each person&apos;s computer) .zip</DL>
+                <DL href={`${base}/zip?roster=${r.rosterId}&platform=windows`}>All for Windows .zip</DL>
+                <DL href={`${base}/zip?roster=${r.rosterId}&platform=mac`}>All for Mac .zip</DL>
               </div>
             )}
           </div>
@@ -216,9 +232,9 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
                   )}
                   {st !== "void" && !r.archived && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                      <Button href={`${base}/sheet?roster=${r.rosterId}&sheet=${s.number}&platform=windows`} variant={s.platform === "windows" ? "primary" : "neutral"} size="sm">⊞ Windows .xlsx</Button>
-                      <Button href={`${base}/sheet?roster=${r.rosterId}&sheet=${s.number}&platform=mac`} variant={s.platform === "mac" ? "primary" : "neutral"} size="sm"> Mac .xlsx</Button>
-                      {practice && <Button href={`${base}/sheet?roster=${r.rosterId}&sheet=${s.number}&platform=${s.platform}&prefill=1`} variant="special" size="sm">Pre-filled practice copy</Button>}
+                      <DL href={`${base}/sheet?roster=${r.rosterId}&sheet=${s.number}&platform=windows`} tone={s.platform === "windows" ? "primary" : "neutral"}>Windows .xlsx</DL>
+                      <DL href={`${base}/sheet?roster=${r.rosterId}&sheet=${s.number}&platform=mac`} tone={s.platform === "mac" ? "primary" : "neutral"}>Mac .xlsx</DL>
+                      {practice && <DL href={`${base}/sheet?roster=${r.rosterId}&sheet=${s.number}&platform=${s.platform}&prefill=1`} tone="special">Pre-filled practice copy</DL>}
                       {s.email && <a href={mailtoFor(r, s, replyTo)} className="rounded-full border border-white/20 px-3 py-1 text-white/80 hover:bg-white/10">✉ Draft email to {s.email}</a>}
                       <form action={markSentAction} className="inline">
                         <input type="hidden" name="roster_id" value={r.rosterId} />
