@@ -36,6 +36,7 @@ const KIND_LABELS: Record<string, string> = {
   employee: "Employee",
   industry: "Industry",
   veteran: "Veteran",
+  friends_family: "Friends & family",
 };
 
 function Section({
@@ -141,11 +142,11 @@ export default async function SpecialDiscountsReportPage({
     discountLabel: formatMinorCurrency(u.discountMinor),
   }));
 
-  const kindStat = (kind: "employee" | "industry" | "veteran") =>
+  const kindStat = (kind: "employee" | "industry" | "veteran" | "friends_family") =>
     s.byKind.find((k) => k.kind === kind) ?? { uses: 0, discountMinor: 0 };
-  const setting = (kind: "employee" | "industry" | "veteran") =>
+  const setting = (kind: "employee" | "industry" | "veteran" | "friends_family") =>
     settings.find((x) => x.kind === kind);
-  const kindHint = (kind: "employee" | "industry" | "veteran") => {
+  const kindHint = (kind: "employee" | "industry" | "veteran" | "friends_family") => {
     const cfg = setting(kind);
     const state = cfg?.enabled ? `${formatBps(cfg.percentBps)} \u00b7 on` : "off";
     return `${formatMinorCurrency(kindStat(kind).discountMinor)} given \u00b7 ${state}`;
@@ -183,7 +184,7 @@ export default async function SpecialDiscountsReportPage({
       </div>
 
       {/* Per-program split with the CURRENT dials for context */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <StatCard
           label="Employee purchases"
           value={kindStat("employee").uses.toLocaleString("en-US")}
@@ -201,6 +202,12 @@ export default async function SpecialDiscountsReportPage({
           value={kindStat("veteran").uses.toLocaleString("en-US")}
           hint={kindHint("veteran")}
           accent="orange"
+        />
+        <StatCard
+          label="Friends & family"
+          value={kindStat("friends_family").uses.toLocaleString("en-US")}
+          hint={kindHint("friends_family")}
+          accent="muted"
         />
       </div>
 
@@ -251,6 +258,30 @@ export default async function SpecialDiscountsReportPage({
             columns={PERSON_COLUMNS}
             rows={personRows(r.byApprover)}
             emptyLabel="No employee purchases in this window."
+          />
+        </Section>
+      </div>
+
+      {/* TO WHOM — friends & family (account-tracked, sponsor-vouched) */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section
+          title={"Friends & family \u2014 who got it"}
+          subtitle="One row per guest account: how often and how much. Watch for one guest every few days."
+        >
+          <ReportTable
+            columns={PERSON_COLUMNS.map((c) => (c.key === "name" ? { ...c, header: "Guest" } : c))}
+            rows={personRows(r.byGuest)}
+            emptyLabel="No friends & family discounts in this window."
+          />
+        </Section>
+        <Section
+          title={"Friends & family \u2014 who sponsored"}
+          subtitle="The employee whose PIN vouched for the guest (never the cashier)."
+        >
+          <ReportTable
+            columns={PERSON_COLUMNS}
+            rows={personRows(r.bySponsor)}
+            emptyLabel="No friends & family discounts in this window."
           />
         </Section>
       </div>

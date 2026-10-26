@@ -1513,7 +1513,7 @@ export function RegisterShell({
             return null;
           }
         }}
-        onWitness={async (pin) => {
+        onWitness={async (pin, opts) => {
           // SLICE 28 — employee-identity PIN check for the EMPLOYEE purchase
           // program: /api/pos/witness (scrypt + shared throttle, NO role
           // gate — any active employee counts). ONLINE-ONLY; the PIN never
@@ -1529,15 +1529,26 @@ export function RegisterShell({
                 "x-pos-device-id": creds.deviceId,
                 "x-pos-device-key": creds.deviceKey,
               },
-              body: JSON.stringify({ pin }),
+              body: JSON.stringify({
+                pin,
+                ...(opts?.friendsFamilyCustomerId ? { friendsFamilyCustomerId: opts.friendsFamilyCustomerId } : {}),
+              }),
             });
             const body = (await res.json().catch(() => null)) as
-              | { employee?: { id: string; fullName: string }; error?: string }
+              | {
+                  employee?: { id: string; fullName: string };
+                  friendsFamily?: { usedLast30d: number | null; cap: number | null };
+                  error?: string;
+                }
               | null;
             if (!res.ok || !body?.employee) {
               return { ok: false as const, error: body?.error ?? "PIN check failed." };
             }
-            return { ok: true as const, employee: body.employee };
+            return {
+              ok: true as const,
+              employee: body.employee,
+              ...(body.friendsFamily ? { friendsFamily: body.friendsFamily } : {}),
+            };
           } catch {
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
