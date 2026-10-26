@@ -34,6 +34,7 @@ import {
   type OutcomeAnswer,
 } from "./ccrs-lifecycle-core";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+import type { InflightRow } from "./ccrs-answer-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -351,4 +352,39 @@ export async function proveAfterOutcome(admin: Admin, env: LedgerEnv): Promise<{
     const msg = e instanceof Error ? e.message : String(e);
     return { text: `Proof-by-sale check did not run (${msg}); it runs again after the next answer.`, proved: [], filesClosed: 0, error: msg };
   }
+}
+
+/**
+ * R74 S48 (Round 28): the Strain / Area rows of files still waiting for a CCRS
+ * answer (emitted or uploaded), so the next export does not send them again.
+ * Complete or it throws (a short read would re-send a strain).
+ */
+export async function readInflightMasterRows(admin: Admin, env: LedgerEnv): Promise<InflightRow[]> {
+  const { data, error } = await admin
+    .from("ccrs_files")
+    .select("id, file_name, file_type, number_records")
+    .eq("env", env)
+    .in("state", ["emitted", "uploaded"])
+    .in("file_type", ["Strain", "Area"])
+    .order("stamp_at", { ascending: true })
+    .limit(50);
+  if (error) throw new Error(`ccrs_files (in flight): ${error.message}`);
+  const out: InflightRow[] = [];
+  for (const f of (data as { id: string; file_name: string; file_type: string; number_records: number | null }[] | null) ?? []) {
+    const { rows, verdict } = await pagedAllChecked<{ operation: string | null; payload: Record<string, unknown> }>(
+      async (from, to) => {
+        const { data: r, error: e2 } = await admin
+          .from("ccrs_file_rows")
+          .select("operation, payload")
+          .eq("file_id", f.id)
+          .order("row_no", { ascending: true })
+          .range(from, to);
+        return { rows: (r as { operation: string | null; payload: Record<string, unknown> }[] | null) ?? [], ok: !e2 };
+      },
+      { expectedTotal: f.number_records },
+    );
+    if (!verdict.complete) throw new Error(`ccrs_file_rows ${f.file_name}: ${verdict.message}`);
+    for (const r of rows) out.push({ fileType: f.file_type, fileName: f.file_name, operation: r.operation, payload: r.payload ?? {} });
+  }
+  return out;
 }

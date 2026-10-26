@@ -74,6 +74,7 @@ import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
 import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
 import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 import {
+  applyAllCcrsMailAction,
   applyCcrsErrorMailAction,
   applyCcrsNotProcessedMailAction,
   applyCcrsSuccessMailAction,
@@ -88,6 +89,7 @@ import { readOwed } from "@/lib/compliance/ccrs-held-store";
 import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
 import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
+import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
 
 export const dynamic = "force-dynamic";
 
@@ -696,6 +698,23 @@ export default async function CcrsCommandCenterPage({
       {/* AI helper — drafts-only briefing grounded in this week's batch */}
       {batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null}
 
+      {/* R74 S48 (Round 28, item 2): earlier files still waiting for their CCRS answer */}
+      {unansweredWarningLines(ccrsFiles.files).length > 0 ? (
+        <div className="rounded-2xl border-2 border-amber-400/60 bg-amber-400/10 p-4 text-sm text-amber-100" data-testid="ccrs-unanswered-warning">
+          <p className="font-black uppercase tracking-wide">Before you export again: answer the earlier files</p>
+          <ul className="mt-2 space-y-0.5 text-xs">
+            {unansweredWarningLines(ccrsFiles.files).map((l, i) => (
+              <li key={i} className={i === 0 ? "font-bold" : ""}>
+                {l}
+              </li>
+            ))}
+          </ul>
+          <a href="#ccrs-mail" className="mt-2 inline-block rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-bold text-black">
+            Go to the CCRS emails &rarr;
+          </a>
+        </div>
+      ) : null}
+
       {/* 4) Guided upload walkthrough */}
       {batch && !nothingToReport ? (
         <UploadWalkthrough
@@ -723,7 +742,7 @@ export default async function CcrsCommandCenterPage({
           setup={mailSetup}
           heartbeat={ccrsMail.heartbeat}
           rows={ccrsMailRows as unknown as CcrsMailPanelRow[]}
-          uploadedFiles={ccrsFiles.files.filter((f) => f.state === "uploaded")}
+          uploadedFiles={ccrsFiles.files.filter((f) => isUnansweredState(f.state))}
           canEdit={canEdit}
           weekKey={week.key}
           nowISO={new Date().toISOString()}
@@ -732,6 +751,7 @@ export default async function CcrsCommandCenterPage({
             applySuccess: applyCcrsSuccessMailAction,
             applyError: applyCcrsErrorMailAction,
             applyNotProcessed: applyCcrsNotProcessedMailAction,
+            applyAll: applyAllCcrsMailAction,
             dismiss: dismissCcrsMailAction,
           }}
         />
