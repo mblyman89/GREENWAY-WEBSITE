@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { weekFromKey } from "@/lib/compliance/ccrs-week-core";
-import { ccrsFilesByName, fileRowsForEcho, listCcrsFiles, proveAfterOutcome, recordOutcome } from "@/lib/compliance/ccrs-ledger-store";
+import { ccrsFilesByName, fileRowsForEcho, listCcrsFiles, markUploaded, proveAfterOutcome, recordOutcome, type CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
 import { lifecycleErrorText, matchSuccessNames, parseSuccessEmails } from "@/lib/compliance/ccrs-lifecycle-core";
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError } from "@/lib/compliance/ccrs-outcome-core";
@@ -30,7 +30,8 @@ import {
   type EchoPick,
   type MailAnalysis,
 } from "@/lib/compliance/ccrs-mail-core";
-import { getCcrsMail, markCcrsMailHandled, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { getCcrsMail, listOpenCcrsMail, markCcrsMailHandled, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { AUTO_UPLOAD_REASON, autoUploadTimeISO, couldAnswer, isUnansweredState } from "@/lib/compliance/ccrs-answer-core";
 import { isAnsweredState, planReuploadSetAside, type AnsweredFile } from "@/lib/compliance/ccrs-reupload-core";
 import { NOT_PROCESSED_MESSAGE, parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
 
@@ -70,26 +71,69 @@ export async function pollCcrsMailNowAction(formData: FormData): Promise<void> {
   backMail(weekKey, okQ(`Mailbox checked: ${r.listed} CCRS email(s) in the window, ${r.stored} new.${r.deferred ? ` ${r.deferred} more next check.` : ""}`));
 }
 
+type Admin = ReturnType<typeof createSupabaseAdminClient>;
+type Session = Awaited<ReturnType<typeof requirePermission>>;
+/** What one email's Apply did; the buttons turn it into the page message. */
+type ApplyOutcome = { ok: boolean; text: string };
+
+/**
+ * R74 S48 (Round 28): a CCRS email about a file the hub still shows as
+ * "emitted" proves the file was uploaded. Mark it uploaded (CCRS's time when
+ * it gave one, else the email's), with a logged reason, before the answer is
+ * recorded. Returns the upload time the answer is checked against.
+ */
+async function ensureUploaded(
+  admin: Admin,
+  session: Session,
+  f: { id: string; fileName: string; state: string; emittedAt: string | null; uploadedAt: string | null; env: LedgerEnv },
+  evidenceAt: string | null,
+  gmailId: string,
+): Promise<string> {
+  if (f.state === "uploaded" && f.uploadedAt) return f.uploadedAt;
+  if (f.state !== "emitted") throw new Error(`${f.fileName} is ${f.state}; it is not waiting for an answer`);
+  const at = autoUploadTimeISO(f.emittedAt, evidenceAt, Date.now());
+  if (!at) throw new Error(`${f.fileName} has no emission time`);
+  const res = await markUploaded(admin, f.id, at, session.profile.id, AUTO_UPLOAD_REASON);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.file.uploaded_from_email",
+    entityType: "ccrs_files",
+    entityId: f.id,
+    after: { env: f.env, fileName: res.fileName, uploadedAt: at, overridden: res.overridden, waitingOn: res.waitingOn, fromEmail: gmailId },
+  });
+  return at;
+}
+
 /** Apply a stored CCRS confirmation: same matching and time rule as the success paste box. */
 export async function applyCcrsSuccessMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const { weekKey, admin, mail } = await loadMail(formData);
+  const r = await applySuccessMail(admin, session, mail, String(formData.get("env") ?? "") || null, formData.get("confirm_checked") === "on");
+  revalidatePath(BASE);
+  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text));
+}
+
+async function applySuccessMail(admin: Admin, session: Session, mail: StoredCcrsMail, chosenEnv: string | null, confirmed: boolean): Promise<ApplyOutcome> {
   const analysis = mail.analysis as unknown as MailAnalysis;
-  const plan = planSuccessEnv(
-    { kind: mail.kind, env: mail.env, envVerified: mail.env_verified },
-    String(formData.get("env") ?? "") || null,
-    formData.get("confirm_checked") === "on",
-  );
-  if (!plan.ok) backMail(weekKey, errQ(plan.error));
+  const plan = planSuccessEnv({ kind: mail.kind, env: mail.env, envVerified: mail.env_verified }, chosenEnv, confirmed);
+  if (!plan.ok) return { ok: false, text: plan.error };
   const env: LedgerEnv = plan.env;
   // Re-read the names from the stored body, never from the form or the stored analysis.
   const notices = parseSuccessEmails(mail.body_text);
-  if (notices.length === 0) backMail(weekKey, errQ("No CCRS file name in this email. Open it in Gmail and record it with the paste box."));
+  if (notices.length === 0) return { ok: false, text: "No CCRS file name in this email. Open it in Gmail and record it with the paste box." };
   let named: Awaited<ReturnType<typeof ccrsFilesByName>>;
   try {
     named = await ccrsFilesByName(admin, env, notices.map((n) => n.fileName));
+    // R74 S48: a named file still "emitted" was uploaded (CCRS processed it): mark it first.
+    for (const f of named) {
+      if (f.state !== "emitted" || !couldAnswer(f.emittedAt, mail.received_at)) continue;
+      const n = notices.find((x) => x.fileName === f.fileName);
+      f.uploadedAt = await ensureUploaded(admin, session, f, n?.submittedAt ?? mail.received_at, mail.gmail_id);
+      f.state = "uploaded";
+    }
   } catch (e) {
-    backMail(weekKey, errQ(asText(e)));
+    return { ok: false, text: asText(e) };
   }
   const match = matchSuccessNames(
     notices,
@@ -98,9 +142,9 @@ export async function applyCcrsSuccessMailAction(formData: FormData): Promise<vo
   if (match.record.length === 0) {
     const why = [
       match.unknown.length ? `not a ${env} outbox file: ${match.unknown.join(", ")}` : "",
-      match.notWaiting.length ? `not waiting for an answer: ${match.notWaiting.map((n) => `${n.fileName} (${n.state})`).join(", ")}` : "",
+      match.notWaiting.length ? `already answered: ${match.notWaiting.map((n) => `${n.fileName} (${n.state})`).join(", ")}` : "",
     ].filter(Boolean).join("; ");
-    backMail(weekKey, errQ(`Nothing recorded: ${why}. Mark the file uploaded first, or Dismiss this email if it is about a file this system did not make.`));
+    return { ok: false, text: `Nothing recorded: ${why}. Set this email aside if it is about a file this system did not make or one already recorded.` };
   }
   const now = Date.now();
   const done: string[] = [];
@@ -126,32 +170,34 @@ export async function applyCcrsSuccessMailAction(formData: FormData): Promise<vo
   // R6-1 (0284): an accepted Sale/Adjustment may prove an uncertain lot.
   const proof = done.length > 0 ? await proveAfterOutcome(admin, env) : null;
   if (proof && proof.proved.length > 0) await auditMailProof(session, env, proof.proved, proof.filesClosed);
-  revalidatePath(BASE);
-  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proof?.text ?? ""}`.trim()));
-  backMail(weekKey, okQ(`From the CCRS email: ${done.join("; ")}. ${proof?.text ?? ""}`.trim()));
+  if (failed.length) return { ok: false, text: `Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proof?.text ?? ""}`.trim() };
+  return { ok: true, text: `From the CCRS email: ${done.join("; ")}. ${proof?.text ?? ""}`.trim() };
 }
 
-/** Every uploaded (waiting) file of these types in both envs, with its rows; plus each file's upload time. */
+/** Every file of these types still waiting for an answer (uploaded, or emitted and never marked), both envs, with its rows. */
 async function candidatesFor(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
+  admin: Admin,
   types: readonly string[],
-): Promise<{ candidates: EchoCandidate[]; uploadedAt: Map<string, string | null> }> {
+  emailAt: string | null,
+): Promise<{ candidates: EchoCandidate[]; byId: Map<string, CcrsFileRecord> }> {
   const candidates: EchoCandidate[] = [];
-  const uploadedAt = new Map<string, string | null>();
+  const byId = new Map<string, CcrsFileRecord>();
   for (const env of ["prod", "preprod"] as const) {
     const list = await listCcrsFiles(admin, env, 200);
     if (list.error) throw new Error(list.error);
     for (const f of list.files) {
-      if (f.state !== "uploaded" || !types.includes(f.fileType)) continue;
-      uploadedAt.set(f.id, f.uploadedAt);
+      if (!isUnansweredState(f.state) || !types.includes(f.fileType)) continue;
+      // R74 S48: a file made after the email arrived cannot be what it answers.
+      if (!couldAnswer(f.emittedAt, emailAt)) continue;
+      byId.set(f.id, f);
       candidates.push({ fileId: f.id, fileName: f.fileName, env: f.env, fileType: f.fileType, state: f.state, rows: await fileRowsForEcho(admin, f.id, f.numberRecords) });
     }
   }
-  return { candidates, uploadedAt };
+  return { candidates, byId };
 }
 
 /** R74 S46: files CCRS already answered (newest first, at most 25 per type), with their rows, for the re-upload check. */
-async function answeredFor(admin: ReturnType<typeof createSupabaseAdminClient>, types: readonly string[]): Promise<AnsweredFile[]> {
+async function answeredFor(admin: Admin, types: readonly string[]): Promise<AnsweredFile[]> {
   const out: AnsweredFile[] = [];
   for (const env of ["prod", "preprod"] as const) {
     const list = await listCcrsFiles(admin, env, 200);
@@ -170,23 +216,29 @@ async function answeredFor(admin: ReturnType<typeof createSupabaseAdminClient>, 
 
 /**
  * Apply a stored CCRS error email. Every error CSV in it must be tied, row by
- * row, to exactly one uploaded file (classifyEcho) or the owner's choice
+ * row, to exactly one waiting file (classifyEcho) or the owner's choice
  * among the files that fit; otherwise NOTHING is recorded.
  */
 export async function applyCcrsErrorMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const { weekKey, admin, mail } = await loadMail(formData);
-  if (mail.kind !== "error") backMail(weekKey, errQ("This email is not a CCRS error email."));
+  const r = await applyErrorMail(admin, session, mail, (i) => String(formData.get(`file_${i}`) ?? "") || null);
+  revalidatePath(BASE);
+  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text));
+}
+
+async function applyErrorMail(admin: Admin, session: Session, mail: StoredCcrsMail, chosen: (i: number) => string | null): Promise<ApplyOutcome> {
+  if (mail.kind !== "error") return { ok: false, text: "This email is not a CCRS error email." };
   const errors = errorsFromStored(mail.csvs ?? []);
-  if (errors.length === 0) backMail(weekKey, errQ("No CCRS error file in this email."));
+  if (errors.length === 0) return { ok: false, text: "No CCRS error file in this email." };
   let picks: { filename: string; pick: EchoPick }[];
-  let uploadedAt: Map<string, string | null>;
+  let byId: Map<string, CcrsFileRecord>;
   try {
-    const found = await candidatesFor(admin, errors.map((e) => e.fileType).filter((t): t is NonNullable<typeof t> => !!t));
-    uploadedAt = found.uploadedAt;
-    picks = errors.map((e, i) => ({ filename: e.filename, pick: resolveEchoPick(e, found.candidates, String(formData.get(`file_${i}`) ?? "") || null) }));
+    const found = await candidatesFor(admin, errors.map((e) => e.fileType).filter((t): t is NonNullable<typeof t> => !!t), mail.received_at);
+    byId = found.byId;
+    picks = errors.map((e, i) => ({ filename: e.filename, pick: resolveEchoPick(e, found.candidates, chosen(i)) }));
   } catch (e) {
-    backMail(weekKey, errQ(e instanceof CcrsEchoError ? e.message : asText(e)));
+    return { ok: false, text: e instanceof CcrsEchoError ? e.message : asText(e) };
   }
   const bad = picks.filter((p) => p.pick.kind !== "unique");
   if (bad.length) {
@@ -209,24 +261,31 @@ export async function applyCcrsErrorMailAction(formData: FormData): Promise<void
         entityId: mail.id,
         after: { gmailId: mail.gmail_id, subject: mail.subject, files: reupload.matches.map((m) => ({ id: m.fileId, name: m.fileName, env: m.env, state: m.state })) },
       });
-      revalidatePath(BASE);
-      backMail(weekKey, changed ? okQ(`Set aside, nothing to fix. ${reupload.note}`) : errQ("This email was already handled."));
+      return changed ? { ok: true, text: `Set aside, nothing to fix. ${reupload.note}` } : { ok: false, text: "This email was already handled." };
     }
     const why = bad
       .map((b) =>
         b.pick.kind === "ambiguous"
-          ? `${b.filename} fits more than one uploaded file (${b.pick.files.map((f) => f.fileName).join(", ")}); choose one`
+          ? `${b.filename} fits more than one waiting file (${b.pick.files.map((f) => f.fileName).join(", ")}); choose one`
           : `${b.filename}: ${b.pick.kind === "none" ? b.pick.reasons.join("; ") : ""}`,
       )
       .join(" | ");
-    backMail(weekKey, errQ(`Nothing recorded. ${why}`));
+    return { ok: false, text: `Nothing recorded. ${why}` };
   }
   const now = Date.now();
   const done: string[] = [];
   const failed: string[] = [];
   for (const { pick } of picks) {
     if (pick.kind !== "unique") continue;
-    const at = applyTimeISO(uploadedAt.get(pick.fileId) ?? null, mail.received_at, now);
+    const f = byId.get(pick.fileId);
+    let up: string | null = f?.uploadedAt ?? null;
+    try {
+      if (f) up = await ensureUploaded(admin, session, f, mail.received_at, mail.gmail_id);
+    } catch (e) {
+      failed.push(`${pick.fileName}: ${asText(e)}`);
+      continue;
+    }
+    const at = applyTimeISO(up, mail.received_at, now);
     if (!at) {
       failed.push(`${pick.fileName}: no upload time recorded`);
       continue;
@@ -255,23 +314,29 @@ export async function applyCcrsErrorMailAction(formData: FormData): Promise<void
     if (proof.proved.length > 0) await auditMailProof(session, env, proof.proved, proof.filesClosed);
     if (proof.text) proofTexts.push(proof.text);
   }
-  revalidatePath(BASE);
-  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proofTexts.join(" ")}`.trim()));
-  backMail(weekKey, okQ(`${done.join(" | ")} ${proofTexts.join(" ")}`.trim()));
+  if (failed.length) return { ok: false, text: `Recorded ${done.length}; FAILED ${failed.length}: ${failed.join(" | ")} ${proofTexts.join(" ")}`.trim() };
+  return { ok: true, text: `${done.join(" | ")} ${proofTexts.join(" ")}`.trim() };
 }
 
 /**
  * R74 S47 (Round 27): a body-only "has not been processed" email. CCRS refused
- * the whole file and sent no error CSV. Each named file that is uploaded and
- * waiting is recorded error-fatal: every row refused, nothing marked on file,
- * so the next export sends those rows again. Names are re-read from the stored
- * body, never from the form.
+ * the whole file and sent no error CSV. Each named file that is waiting is
+ * recorded error-fatal: every row refused, nothing marked on file, so the
+ * next export sends those rows again. Names are re-read from the stored body,
+ * never from the form. R74 S48: a named file still "emitted" is marked
+ * uploaded first (the email proves it was).
  */
 export async function applyCcrsNotProcessedMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const { weekKey, admin, mail } = await loadMail(formData);
+  const r = await applyNotProcessedMail(admin, session, mail);
+  revalidatePath(BASE);
+  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text));
+}
+
+async function applyNotProcessedMail(admin: Admin, session: Session, mail: StoredCcrsMail): Promise<ApplyOutcome> {
   const names = parseNotProcessed(mail.body_text ?? "");
-  if (names.length === 0) backMail(weekKey, errQ("This email does not say a file was not processed."));
+  if (names.length === 0) return { ok: false, text: "This email does not say a file was not processed." };
   const now = Date.now();
   const done: string[] = [];
   const failed: string[] = [];
@@ -283,13 +348,20 @@ export async function applyCcrsNotProcessedMailAction(formData: FormData): Promi
       failed.push(`${name}: ${asText(e)}`);
       continue;
     }
-    hits = hits.filter((f) => f.state === "uploaded");
+    hits = hits.filter((f) => isUnansweredState(f.state));
     if (hits.length !== 1) {
-      failed.push(`${name}: ${hits.length === 0 ? "no uploaded file waiting for an answer has this name (mark it uploaded first)" : "the name is waiting in both PREprod and production; record it by hand"}`);
+      failed.push(`${name}: ${hits.length === 0 ? "no file waiting for an answer has this name (already answered or abandoned)" : "the name is waiting in both PREprod and production; record it by hand"}`);
       continue;
     }
     const f = hits[0];
-    const at = applyTimeISO(f.uploadedAt, mail.received_at, now);
+    let up: string;
+    try {
+      up = await ensureUploaded(admin, session, f, mail.received_at, mail.gmail_id);
+    } catch (e) {
+      failed.push(`${name}: ${asText(e)}`);
+      continue;
+    }
+    const at = applyTimeISO(up, mail.received_at, now);
     if (!at) {
       failed.push(`${name}: no upload time recorded`);
       continue;
@@ -310,14 +382,59 @@ export async function applyCcrsNotProcessedMailAction(formData: FormData): Promi
     }
   }
   if (done.length > 0) await markCcrsMailHandled(admin, mail.id, "applied", session.profile.id, done.join(" | "));
+  if (failed.length) return { ok: false, text: `Recorded ${done.length}; NOT recorded ${failed.length}: ${failed.join(" | ")}` };
+  return { ok: true, text: done.join(" | ") };
+}
+
+/**
+ * R74 S48 (Round 28, item 5): "Answer every waiting CCRS email". Oldest email
+ * first, each through the SAME Apply as its own button (same proofs, same
+ * all-or-nothing rule per email). An email that needs the owner's choice
+ * (env not known, an error file that fits two files, an unreadable email) is
+ * left waiting with the reason; nothing is guessed.
+ */
+export async function applyAllCcrsMailAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const weekKey = String(formData.get("week_key") ?? "");
+  const admin = createSupabaseAdminClient();
+  let open: StoredCcrsMail[];
+  try {
+    open = await listOpenCcrsMail(admin);
+  } catch (e) {
+    backMail(weekKey, errQ(asText(e)));
+  }
+  if (open.length === 0) backMail(weekKey, okQ("No CCRS email is waiting to be applied."));
+  const done: string[] = [];
+  const left: string[] = [];
+  for (const mail of open) {
+    const label = mail.subject || mail.gmail_id;
+    let r: ApplyOutcome;
+    try {
+      if (mail.kind === "success") r = await applySuccessMail(admin, session, mail, null, false);
+      else if (mail.kind === "error") r = await applyErrorMail(admin, session, mail, () => null);
+      else if (parseNotProcessed(mail.body_text ?? "").length > 0) r = await applyNotProcessedMail(admin, session, mail);
+      else r = { ok: false, text: "needs reading (not a confirmation, error file or \"not processed\" notice)" };
+    } catch (e) {
+      r = { ok: false, text: asText(e) };
+    }
+    (r.ok ? done : left).push(`${label}: ${r.text}`);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.mail.answer_all",
+    entityType: "ccrs_mail_messages",
+    entityId: null,
+    after: { applied: done.length, leftWaiting: left.length, left },
+  });
   revalidatePath(BASE);
-  if (failed.length) backMail(weekKey, errQ(`Recorded ${done.length}; NOT recorded ${failed.length}: ${failed.join(" | ")}`));
-  backMail(weekKey, okQ(done.join(" | ")));
+  const text = `Answered ${done.length} of ${open.length} CCRS email(s).${left.length ? ` Still waiting (${left.length}), each needs your choice: ${left.join(" | ")}` : ""}${done.length ? ` Done: ${done.join(" | ")}` : ""}`;
+  backMail(weekKey, left.length && !done.length ? errQ(text) : okQ(text));
 }
 
 /** Audit row for an automatic proof-by-reference after an email answer (R6-1, 0284). */
 async function auditMailProof(
-  session: Awaited<ReturnType<typeof requirePermission>>,
+  session: Session,
   env: LedgerEnv,
   proved: string[],
   filesClosed: number,

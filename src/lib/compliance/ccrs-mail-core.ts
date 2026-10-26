@@ -609,9 +609,12 @@ export type EchoPick =
 
 export function pickEchoFile(e: ErrorAttachment, candidates: readonly EchoCandidate[], env: LedgerEnv | null): EchoPick {
   if (!e.fileType) return { kind: "none", reasons: [e.typeProblem ?? "file type unknown"] };
-  const pool = candidates.filter((c) => c.fileType === e.fileType && c.state === "uploaded" && (env === null || c.env === env));
+  // R74 S48: a file still "emitted" (handed out, never marked uploaded) is a
+  // candidate too: the CCRS email is the proof it was uploaded, and the Apply
+  // marks it uploaded (logged) before recording the answer.
+  const pool = candidates.filter((c) => c.fileType === e.fileType && (c.state === "uploaded" || c.state === "emitted") && (env === null || c.env === env));
   if (pool.length === 0) {
-    return { kind: "none", reasons: [`no ${e.fileType} file${env ? ` in ${env}` : ""} is marked uploaded and waiting. Mark the file uploaded first.`] };
+    return { kind: "none", reasons: [`no ${e.fileType} file${env ? ` in ${env}` : ""} is waiting for an answer (every one is already answered or abandoned)`] };
   }
   const ok: { c: EchoCandidate; v: EchoVerdict }[] = [];
   const reasons: string[] = [];
