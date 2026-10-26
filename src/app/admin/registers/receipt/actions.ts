@@ -13,6 +13,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { normalizePosReceiptConfig } from "@/lib/pos/receipt-config-core";
 import { savePosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import type { DiscountDisplayConfig } from "@/lib/pos/receipt-discount-core";
 
 const BASE = "/admin/registers/receipt";
 
@@ -38,6 +39,9 @@ export async function saveReceiptConfigAction(input: {
   useQrCode: boolean;
   bottomLogoDataUri: string;
   bottomLogoWidth: number;
+  // -- Discount transparency ---------------------------------------------
+  registerDiscount: DiscountDisplayConfig;
+  onlineDiscount: DiscountDisplayConfig;
 }): Promise<SaveReceiptConfigResult> {
   const session = await requirePermission("settings.manage");
 
@@ -54,5 +58,9 @@ export async function saveReceiptConfigAction(input: {
     after: { ...result.config },
   });
   revalidatePath(BASE);
+  // Discount transparency: the storefront checkout + confirmation read the
+  // ONLINE discount settings; refresh them now instead of within 60 s.
+  revalidatePath("/checkout");
+  revalidatePath("/checkout/confirmation");
   return { ok: true };
 }

@@ -116,7 +116,13 @@ type CartItem = CartItemInput & {
 };
 
 /** A cart item with its authoritative (cart-engine) discounted unit price. */
-type PricedCartItem = CartItem & { effectivePriceMinorUnits: number };
+type PricedCartItem = CartItem & {
+  effectivePriceMinorUnits: number;
+  /** Discount transparency — the deal the engine applied (display only). */
+  appliedLabel?: string;
+  appliedPercent?: number;
+  atCostFloor?: boolean;
+};
 
 type CartContextValue = {
   items: PricedCartItem[];
@@ -236,6 +242,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     for (const line of discount.lines) map.set(line.lineId, line.unitPriceMinorUnits);
     return map;
   }, [discount]);
+  const dealByLine = useMemo(() => {
+    const map = new Map<string, { appliedLabel: string; appliedPercent: number; atCostFloor: boolean }>();
+    for (const line of discount.lines) {
+      if (line.appliedLabel && line.unitPriceMinorUnits < line.regularPriceMinorUnits) {
+        map.set(line.lineId, {
+          appliedLabel: line.appliedLabel,
+          appliedPercent: line.appliedPercent,
+          atCostFloor: line.atCostFloor,
+        });
+      }
+    }
+    return map;
+  }, [discount]);
 
   // Items carrying their authoritative (engine) per-unit price.
   const pricedItems = useMemo<PricedCartItem[]>(
@@ -243,8 +262,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       items.map((item) => ({
         ...item,
         effectivePriceMinorUnits: effectivePriceByLine.get(item.lineId) ?? item.regularPriceMinorUnits,
+        ...(dealByLine.get(item.lineId) ?? {}),
       })),
-    [items, effectivePriceByLine],
+    [items, effectivePriceByLine, dealByLine],
   );
 
   // Card prices are tax-INCLUSIVE out-the-door prices, so the cart total is the

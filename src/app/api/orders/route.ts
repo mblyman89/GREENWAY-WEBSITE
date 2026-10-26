@@ -22,6 +22,8 @@ import { createOrder } from "@/lib/orders/orders-store";
 import { notifyOrderPlaced } from "@/lib/orders/notify";
 import { recordOrderNotifyFailure } from "@/lib/orders/notify-event";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
+import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { discountEmailSectionHtml } from "@/lib/pos/receipt-discount-core";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { stripLicenseSuffix } from "@/lib/inventory/vendor-resolve-core";
@@ -202,7 +204,28 @@ export async function POST(request: Request) {
   // writes a visible warning onto the order's back-office timeline.
   after(async () => {
     try {
+      // Discount transparency — the customer email explains the savings
+      // with the owner's ONLINE settings. Best-effort: never blocks the email.
+      let savingsHtml = "";
+      try {
+        const cfg = (await getPosReceiptConfig()).onlineDiscount;
+        savingsHtml = discountEmailSectionHtml(
+          repriced.lines.map((l) => ({
+            productName: l.productName,
+            quantity: l.quantity,
+            regularUnitMinor: l.regularPriceMinorUnits,
+            finalUnitMinor: l.priceMinorUnits,
+            appliedLabel: l.appliedLabel ?? null,
+            promoPercent: l.appliedPercent ?? null,
+            atCostFloor: l.atCostFloor ?? null,
+          })),
+          cfg,
+        );
+      } catch (err) {
+        console.error(`[orders/notify] ${displayLabel}: savings section skipped`, err);
+      }
       const summary = await notifyOrderPlaced({
+        savingsHtml,
         orderNumber: displayLabel,
         customerFirstName: input.customerFirstName,
         customerEmail: input.customerEmail ?? null,
@@ -284,7 +307,11 @@ export async function POST(request: Request) {
         // All of this is data the server ALREADY computed and persisted above
         // — it was simply being dropped at this boundary. Positionally
         // aligned with `lines`.
-        lineExtras: input.lines.map((l) => {
+        lineExtras: input.lines.map((l, i) => {
+          // The deal label/percent are not persisted on the order row, so
+          // they come from the server reprice (positionally aligned: the
+          // persisted lines are a 1:1 map of repriced.lines).
+          const pricedLine = repriced.lines[i];
           const facts = l.productId ? menuFacts.get(l.productId) : undefined;
           const regular = l.regularPriceMinorUnits ?? null;
           const discount =
@@ -299,6 +326,9 @@ export async function POST(request: Request) {
             inventoryType: facts?.inventoryType ?? null,
             categoryLabel: slug ? formatWebsiteCategory(slug) : null,
             lineDiscountMinorUnits: discount,
+            appliedLabel: pricedLine?.appliedLabel ?? null,
+            appliedPercent: pricedLine?.appliedPercent ?? null,
+            atCostFloor: pricedLine?.atCostFloor ?? null,
           };
         }),
         subtotalMinorUnits: input.subtotalMinorUnits,
@@ -346,6 +376,15 @@ export async function POST(request: Request) {
       limitFlag,
       limitReasons,
       totals: repriced.totals,
+      // Discount transparency — the server's per-line deal facts
+      // (positionally aligned with the submitted lines). The server is the
+      // only side that knows the cost floor, so the confirmation page uses
+      // these to explain a capped deal. Display only; no cost is exposed.
+      lineDeals: repriced.lines.map((l) => ({
+        appliedLabel: l.appliedLabel ?? null,
+        appliedPercent: typeof l.appliedPercent === "number" ? l.appliedPercent : null,
+        atCostFloor: l.atCostFloor === true,
+      })),
     },
     { status: 201 },
   );

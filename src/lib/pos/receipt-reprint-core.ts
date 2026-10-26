@@ -48,6 +48,8 @@
  * always produces the same receipt.
  */
 
+import type { DiscountDisplayConfig } from "./receipt-discount-core";
+
 /** A stored sale line, as it sits in `pos_sale_events.payload.lines`. */
 export type StoredSaleLine = {
   productName?: unknown;
@@ -138,6 +140,8 @@ export type ReprintDisplayConfig = {
   bottomLogoWidth: number;
   showSaleSummary: boolean;
   showSavings: boolean;
+  /** Discount transparency switches (optional: older callers omit it). */
+  registerDiscount?: DiscountDisplayConfig;
 };
 
 /** The rebuilt receipt, shaped for `buildPosReceiptHtml`. */
@@ -190,6 +194,8 @@ export type RebuiltReceipt = {
    * new name for the same sale.
    */
   displayName?: string | null;
+  /** Discount transparency switches from the owner's receipt builder. */
+  discountDisplay?: DiscountDisplayConfig | null;
 };
 
 export type RebuildResult =
@@ -345,6 +351,7 @@ export function rebuildReceiptFromPayload(
             useQrCode: ctx.config.useQrCode,
             logoDataUri: ctx.config.bottomLogoDataUri || null,
             logoWidthPx: ctx.config.bottomLogoWidth,
+            ...(ctx.config.registerDiscount ? { discountDisplay: ctx.config.registerDiscount } : {}),
           }
         : {}),
     },

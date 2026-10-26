@@ -30,6 +30,7 @@ import {
   shouldWritePrinterHeartbeat,
 } from "@/lib/printing/printer-heartbeat-core";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { normalizeDiscountDisplayConfig } from "@/lib/pos/receipt-discount-core";
 import {
   MAX_FAILS_PER_CLAIM,
   hasExhaustedPrintAttempts,
@@ -196,6 +197,9 @@ export type OrderReceiptLineExtras = {
   inventoryType?: string | null;
   categoryLabel?: string | null;
   lineDiscountMinorUnits?: number | null;
+  /** Discount transparency: engine percent + cost-floor flag. */
+  appliedPercent?: number | null;
+  atCostFloor?: boolean | null;
 };
 
 /**
@@ -266,6 +270,8 @@ export async function queueOrderReceipt(input: ReceiptInput & {
       inventoryType: extra?.inventoryType ?? null,
       categoryLabel: extra?.categoryLabel ?? null,
       lineDiscountMinorUnits: extra?.lineDiscountMinorUnits ?? null,
+      appliedPercent: extra?.appliedPercent ?? null,
+      atCostFloor: extra?.atCostFloor ?? null,
     };
   });
 
@@ -296,6 +302,9 @@ export async function queueOrderReceipt(input: ReceiptInput & {
       showSaleSummary: config?.showSaleSummary,
       showReturnPolicy: config?.showReturnPolicy,
       returnPolicyText: config?.returnPolicyText ?? null,
+      // The owner's "Online orders" discount-detail settings. Null config
+      // (settings read failed) still explains discounts with the defaults.
+      discountDisplay: config?.onlineDiscount ?? normalizeDiscountDisplayConfig(null),
     },
     { columns: settings.paper_columns },
   );

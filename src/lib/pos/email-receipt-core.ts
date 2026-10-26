@@ -23,10 +23,17 @@
 import { formatMoneyMinor, formatReceiptTimestamp } from "@/lib/printing/receipt-core";
 import {
   escapeReceiptHtml,
+  receiptLineDiscountInput,
   receiptNumber,
   type PosReceiptInput,
   type PosReceiptLine,
 } from "@/lib/pos/receipt-core";
+import {
+  computeDiscountBreakdown,
+  lineDiscountRows,
+  normalizeDiscountDisplayConfig,
+  orderSummaryBlock,
+} from "@/lib/pos/receipt-discount-core";
 
 // ---------------------------------------------------------------------------
 // Email validation + masking
@@ -126,6 +133,20 @@ export function validateEmailReceiptSnapshot(
         unitPriceMinor: line.unitPriceMinor as number,
         regularPriceMinor: line.regularPriceMinor as number,
         medicalTaxOff: line.medicalTaxOff === true,
+        // Discount transparency fields — optional, passed through only
+        // when well-formed so a hostile payload can't inject anything.
+        ...(isShortString(line.appliedLabel, 200) ? { appliedLabel: (line.appliedLabel as string).trim() } : {}),
+        ...(typeof line.appliedPercent === "number" && Number.isFinite(line.appliedPercent)
+          ? { appliedPercent: line.appliedPercent }
+          : {}),
+        ...(line.atCostFloor === true ? { atCostFloor: true } : {}),
+        ...(isMoney(line.promoUnitPriceMinor) ? { promoUnitPriceMinor: line.promoUnitPriceMinor } : {}),
+        ...(isMoney(line.overrideUnitPriceMinor) ? { overrideUnitPriceMinor: line.overrideUnitPriceMinor } : {}),
+        ...(isMoney(line.medicalSavingsMinor) ? { medicalSavingsMinor: line.medicalSavingsMinor } : {}),
+        ...(isMoney(line.loyaltyDiscountMinor) ? { loyaltyDiscountMinor: line.loyaltyDiscountMinor } : {}),
+        ...(isShortString(line.loyaltyLabel, 120) ? { loyaltyLabel: (line.loyaltyLabel as string).trim() } : {}),
+        ...(isMoney(line.specialDiscountMinor) ? { specialDiscountMinor: line.specialDiscountMinor } : {}),
+        ...(isShortString(line.specialLabel, 120) ? { specialLabel: (line.specialLabel as string).trim() } : {}),
       });
     }
   }
@@ -204,6 +225,9 @@ export function validateEmailReceiptSnapshot(
       servedBy: isShortString(r.servedBy, 80) ? (r.servedBy as string) : null,
       hideSavings: r.hideSavings === true,
       loyalty,
+      ...(typeof r.discountDisplay === "object" && r.discountDisplay !== null
+        ? { discountDisplay: normalizeDiscountDisplayConfig(r.discountDisplay) }
+        : {}),
     },
   };
 }
@@ -233,7 +257,9 @@ export function buildEmailReceiptHtml(receipt: PosReceiptInput): string {
   const footer = escapeReceiptHtml((receipt.footerText ?? DEFAULT_FOOTER).trim());
 
   const rows: string[] = [];
-  for (const line of receipt.lines) {
+  const discountCfg = receipt.discountDisplay ? normalizeDiscountDisplayConfig(receipt.discountDisplay) : null;
+  const discount = discountCfg ? computeDiscountBreakdown(receipt.lines.map(receiptLineDiscountInput)) : null;
+  for (const [idx, line] of receipt.lines.entries()) {
     const lineTotal = line.unitPriceMinor * line.quantity;
     const discounted = line.unitPriceMinor < line.regularPriceMinor;
     rows.push(
@@ -243,7 +269,36 @@ export function buildEmailReceiptHtml(receipt: PosReceiptInput): string {
           : ""
       }${discounted ? ` <s style="color:#888;">${formatMoneyMinor(line.regularPriceMinor)}</s>` : ""}</td><td style="padding:4px 0;text-align:right;white-space:nowrap;">${formatMoneyMinor(lineTotal)}</td></tr>`,
     );
+    const dLine = discount ? discount.lines[idx] : null;
+    if (dLine && discountCfg) {
+      for (const r of lineDiscountRows(dLine, discountCfg)) {
+        const style = `padding:0 0 2px 14px;text-align:left;font-size:12px;color:#12351f;${r.emphasis ? "font-weight:bold;" : ""}`;
+        rows.push(
+          r.amountMinor != null
+            ? `<tr><td style="${style}">${escapeReceiptHtml(r.text)}</td><td style="padding:0 0 2px;text-align:right;font-size:12px;color:#12351f;white-space:nowrap;${r.emphasis ? "font-weight:bold;" : ""}">-${formatMoneyMinor(r.amountMinor)}</td></tr>`
+            : `<tr><td colspan="2" style="${style}">${escapeReceiptHtml(r.text)}</td></tr>`,
+        );
+      }
+    }
   }
+  const block = discount && discountCfg ? orderSummaryBlock(discount.summary, discountCfg) : null;
+  const discountBlock = block
+    ? '<div style="border:1px solid #12351f;border-radius:6px;padding:10px 12px;margin:12px 0 0;background:#f3f8f4;">' +
+      `<p style="margin:0 0 6px;text-align:center;font-size:14px;font-weight:bold;color:#12351f;">${escapeReceiptHtml(block.title)}</p>` +
+      (block.rows.length > 0
+        ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">${block.rows
+            .map((r) => {
+              const indent = r.label.startsWith("  ") ? "padding-left:12px;font-size:12px;" : "";
+              const bold = r.emphasis ? "font-weight:bold;" : "";
+              return `<tr><td style="padding:2px 0;text-align:left;${indent}${bold}">${escapeReceiptHtml(r.label.trim())}</td><td style="padding:2px 0;text-align:right;white-space:nowrap;${bold}">${escapeReceiptHtml(r.value)}</td></tr>`;
+            })
+            .join("")}</table>`
+        : "") +
+      block.notes
+        .map((n) => `<p style="margin:6px 0 0;font-size:11px;color:#333;line-height:1.4;">${"\u2022"} ${escapeReceiptHtml(n)}</p>`)
+        .join("") +
+      "</div>"
+    : "";
 
   const totals: string[] = [
     `<tr><td style="padding:3px 0;text-align:left;">Subtotal (pre-tax)</td><td style="padding:3px 0;text-align:right;">${formatMoneyMinor(receipt.subtotalMinor)}</td></tr>`,
@@ -318,6 +373,7 @@ export function buildEmailReceiptHtml(receipt: PosReceiptInput): string {
     `<table style="width:100%;border-collapse:collapse;font-size:14px;">${rows.join("")}</table>`,
     '<hr style="border:none;border-top:1px dashed #999;margin:12px 0;">',
     `<table style="width:100%;border-collapse:collapse;font-size:14px;">${totals.join("")}</table>`,
+    discountBlock,
     loyaltyBlock,
     '<hr style="border:none;border-top:1px dashed #999;margin:12px 0;">',
     `<p style="margin:0;text-align:center;font-size:12px;color:#555;">${footer}</p>`,
@@ -457,6 +513,34 @@ export function __runEmailReceiptCoreTests(): void {
       "Your Greenway receipt 14174000",
     "subject carries the receipt number",
   );
+
+  // Discount transparency passthrough + render
+  const discSnap = validateEmailReceiptSnapshot({
+    ...goodReceipt,
+    lines: [
+      {
+        productName: "Blue Dream 3.5g",
+        quantity: 2,
+        unitPriceMinor: 2500,
+        regularPriceMinor: 3000,
+        appliedLabel: "Happy Hour \u00b7 20% off",
+        atCostFloor: true,
+        promoUnitPriceMinor: 2500,
+        loyaltyLabel: 42,
+      },
+    ],
+    discountDisplay: { showExplanation: false },
+  });
+  ok(discSnap.ok && discSnap.receipt.lines[0].appliedLabel === "Happy Hour \u00b7 20% off", "deal label passes through");
+  ok(discSnap.ok && discSnap.receipt.lines[0].atCostFloor === true, "cost floor passes through");
+  ok(discSnap.ok && discSnap.receipt.lines[0].loyaltyLabel === undefined, "malformed optional field dropped");
+  ok(discSnap.ok && discSnap.receipt.discountDisplay?.showExplanation === false, "discount config normalized through");
+  if (discSnap.ok) {
+    const html = buildEmailReceiptHtml(discSnap.receipt);
+    ok(html.includes("YOUR SAVINGS") && html.includes("Total off your order"), "email shows savings summary");
+    ok(html.includes("Deal: Happy Hour"), "email shows deal row");
+  }
+  ok(!buildEmailReceiptHtml({ ...goodReceipt } as PosReceiptInput).includes("YOUR SAVINGS"), "no summary without config");
 
   console.log("email-receipt-core self-tests passed");
 }

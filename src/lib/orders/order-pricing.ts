@@ -81,6 +81,10 @@ export type PricedOrderLine = {
   /** SERVER regular (pre-discount) unit price from the published menu. */
   regularPriceMinorUnits: number;
   appliedLabel?: string;
+  /** Discount transparency (display only): the engine's percent off. */
+  appliedPercent?: number;
+  /** The cost / statutory floor raised this line above the deal price. */
+  atCostFloor?: boolean;
   /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
   unitGrams?: number | null;
   /**
@@ -259,6 +263,8 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       priceMinorUnits: unit,
       regularPriceMinorUnits: regular,
       appliedLabel: d?.appliedLabel,
+      ...(d && d.appliedLabel ? { appliedPercent: d.appliedPercent } : {}),
+      ...(d && d.appliedLabel && (d.atCostFloor || unit > rawUnit) ? { atCostFloor: true } : {}),
       // AN-1: true per-unit weight from the resolved variant's label.
       unitGrams: gramsFromVariantLabel(w.resolved.variant.label),
       // SLICE L4: true per-unit VOLUME. Prefers the L3-plumbed net_volume_ml

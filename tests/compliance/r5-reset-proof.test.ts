@@ -185,8 +185,11 @@ describe("guard: every table the rehearsal code WRITES is wiped, or deliberately
   // knowledge base (facts learned while receiving are kept on purpose).
   // Exact: an entry no longer written fails too, so the list cannot rot.
   const KEEP_WRITES = [
+    // R74 S41/S45: lookup_jobs + lookup_job_items are KEEP in factory-reset-core
+    // (the batch product-lookup record; no money, stock or customer data) and
+    // are written by the batch-lookups admin actions.
     "audit_logs", "brands", "disposition_settings", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
-    "kb_products", "kb_strains", "pos_devices", "product_classification_overrides", "sample_settings", "site_settings",
+    "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_devices", "product_classification_overrides", "sample_settings", "site_settings",
     "testing_labs", "vendor_aliases", "vendors", "website_category_types",
   ];
   function written(): Map<string, string> {
