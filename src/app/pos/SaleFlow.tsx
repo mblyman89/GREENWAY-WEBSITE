@@ -180,6 +180,7 @@ import {
   receiptAddressLines,
 } from "@/lib/pos/receipt-config-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
+import { type CartAdjustAction, type CartAdjustPayload } from "@/lib/pos/cart-adjust-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
@@ -432,7 +433,7 @@ export type SaleFlowProps = {
   ) => Promise<{ ok: true; grant: PosLoyaltyGrant } | { ok: false; error: string }>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
-    eventType: "sale" | "manual_id_verification" | "medical_card_capture",
+    eventType: "sale" | "manual_id_verification" | "medical_card_capture" | "cart_adjustment",
     payload: Record<string, unknown>,
   ) => string;
   /** Sale finished (change given). The shell locks the register. */
@@ -919,6 +920,44 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     const t = setInterval(() => setHoursTick((n) => n + 1), 15_000);
     return () => clearInterval(t);
   }, [hoursBlocked]);
+  // Register round S3 — every minus / remove / cancel is an audit fact (who,
+  // when, what, how much) so the owner can spot cart-reduction abuse.
+  const trackAdjust = (
+    action: CartAdjustAction,
+    entry: PosCartEntry | null,
+    unitsRemoved: number,
+  ) => {
+    if (unitsRemoved < 1) return;
+    const payload: CartAdjustPayload =
+      action === "cart_cancel"
+        ? {
+            action,
+            unitsRemoved,
+            valueMinor: cart.reduce((t, e) => t + e.product.regularPriceMinor * e.quantity, 0),
+            lineCount: cart.length,
+          }
+        : {
+            action,
+            variantId: entry?.product.variantId ?? null,
+            productName: entry
+              ? entry.product.variantLabel
+                ? `${entry.product.name} (${entry.product.variantLabel})`
+                : entry.product.name
+              : null,
+            unitsRemoved,
+            valueMinor: (entry?.product.regularPriceMinor ?? 0) * unitsRemoved,
+          };
+    try {
+      onEnqueue("cart_adjustment", payload as unknown as Record<string, unknown>);
+    } catch {
+      // Never block the counter on the tracker.
+    }
+  };
+  const trackCancel = () => {
+    const units = cart.reduce((t, e) => t + e.quantity, 0);
+    trackAdjust("cart_cancel", null, units);
+  };
+
   if (hoursBlocked) {
     return (
       <Frame title="Sales hours" onCancel={onCancel}>
@@ -976,6 +1015,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         bundle={bundle}
         cart={cart}
         setCart={setCart}
+        onAdjust={trackAdjust}
         medicalCard={medicalCard}
         verdict={verdict}
         member={member}
@@ -1001,6 +1041,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onCancel={() => {
           // AM-B — a cancelled sale returns the customer's points at once.
           releaseLoyalty(appliedLoyalty);
+          trackCancel();
           onCancel();
         }}
         onHold={
@@ -1046,6 +1087,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onBack={() => setStep("cart")}
         onCancel={() => {
           releaseLoyalty(appliedLoyalty);
+          trackCancel();
           onCancel();
         }}
         onPaid={(tenderedMinor) => {
@@ -2547,6 +2589,7 @@ function CartScreen({
   bundle,
   cart,
   setCart,
+  onAdjust,
   medicalCard,
   verdict,
   member,
@@ -2578,6 +2621,8 @@ function CartScreen({
   bundle: PosMenuBundle;
   cart: PosCartEntry[];
   setCart: (c: PosCartEntry[]) => void;
+  /** Register round S3 — minus / remove tracker. */
+  onAdjust: (action: CartAdjustAction, entry: PosCartEntry | null, unitsRemoved: number) => void;
   /** Non-null = medical sale (card captured at the gate). */
   medicalCard: PosCardCapture | null;
   verdict: Extract<IdGateVerdict, { allowed: true }>;
@@ -3279,7 +3324,13 @@ function CartScreen({
                           <td className="border-t border-[var(--pos-border)] px-2 py-2.5 text-right tabular-nums">{money(l.unitPriceMinor)}</td>
                           <td className="border-t border-[var(--pos-border)] px-2 py-2.5">
                             <span className="flex items-center justify-center gap-1.5">
-                              <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
+                              <QtyButton
+                                label="−"
+                                onClick={() => {
+                                  onAdjust(l.quantity - 1 > 0 ? "qty_decrease" : "line_remove", cartEntry ?? null, 1);
+                                  setCart(setCartQuantity(cart, variantId, l.quantity - 1));
+                                }}
+                              />
                               <span className="w-7 text-center font-bold tabular-nums">{l.quantity}</span>
                               <QtyButton
                                 label="+"
@@ -3310,6 +3361,7 @@ function CartScreen({
                             <button
                               type="button"
                               onClick={() => {
+                                onAdjust("line_remove", cartEntry ?? null, l.quantity);
                                 setCart(setCartQuantity(cart, variantId, 0));
                                 setExpandedLine(null);
                               }}

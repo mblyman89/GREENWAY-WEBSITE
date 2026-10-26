@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 315 tables across 299 migrations at the time of writing.
+ * Measured 316 tables across 301 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -260,6 +260,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "plaid_mortgages",
   "plaid_transactions",
   "plaid_webhook_events",
+  "pos_cart_adjustments",
   "pos_devices",
   "pos_fact_reviews",
   "pos_import_diagnostics",
