@@ -1532,6 +1532,7 @@ export function RegisterShell({
               body: JSON.stringify({
                 pin,
                 ...(opts?.friendsFamilyCustomerId ? { friendsFamilyCustomerId: opts.friendsFamilyCustomerId } : {}),
+                ...(opts?.secondPersonFor ? { secondPersonFor: opts.secondPersonFor } : {}),
               }),
             });
             const body = (await res.json().catch(() => null)) as

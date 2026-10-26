@@ -187,6 +187,11 @@ export type PosSaleLine = {
     reason: string;
     /** employees.id of the approving manager/lead. */
     approvedByEmployeeId: string;
+    /**
+     * Register round S4 — "discount_adjust": approved by a SECOND on-duty
+     * employee who can never be the cashier (envelope.employeeId).
+     */
+    kind?: "discount_adjust";
   };
   /**
    * Per-UNIT loyalty reduction taken by a redemption code (Task AM-B).
@@ -440,6 +445,9 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
           if (reason.length > 500) errors.push(`Line ${i + 1}: override.reason is too long (max 500 characters).`);
           if (!isUuid(o.approvedByEmployeeId)) {
             errors.push(`Line ${i + 1}: override.approvedByEmployeeId must be the approving manager's employee id.`);
+          }
+          if (o.kind !== undefined && o.kind !== "discount_adjust") {
+            errors.push(`Line ${i + 1}: override.kind must be "discount_adjust" when present.`);
           }
         }
       }
@@ -937,6 +945,20 @@ export function __runPosSaleEventTests(): void {
       lines: [{ ...goodSale.lines[0], override: { ...goodOverride, approvedByEmployeeId: "mgr-1" } }],
     }).ok,
     "B24: override without a manager employee id refused",
+  );
+  ok(
+    validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, kind: "discount_adjust" } }],
+    }).ok,
+    "S4: discount_adjust override ok",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, kind: "bogus" as "discount_adjust" } }],
+    }).ok,
+    "S4: unknown override kind refused",
   );
   ok(
     !validateSalePayload({

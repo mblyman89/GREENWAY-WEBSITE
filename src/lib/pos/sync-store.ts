@@ -489,6 +489,20 @@ async function processSale(
   }
   const sale = payload as PosSalePayload;
 
+  // Register round S4 — two-person discount adjust: the approver can NEVER be
+  // the cashier ringing the sale (owner: "If employee a wants to override on
+  // their register, the pin used needs to be employee b").
+  for (const l of sale.lines) {
+    if (l.override?.kind === "discount_adjust" && l.override.approvedByEmployeeId === envelope.employeeId) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        "Discount adjust refused: approved by the same employee who rang the sale (a second employee is required).",
+      );
+    }
+  }
+
   // AN-3(c) — the drawer session must be REAL: it must exist, belong to the
   // register this device is bound to, and its open interval must contain the
   // sale's occurredAt (a late offline flush is fine; a sale claiming to
@@ -989,7 +1003,7 @@ async function processSale(
     await recordAudit({
       actorId: null,
       actorEmail: `pos-device:${device.id}`,
-      action: "register.price_override",
+      action: l.override.kind === "discount_adjust" ? "register.discount_adjust" : "register.price_override",
       entityType: "order",
       entityId: order.id,
       after: {
@@ -1001,6 +1015,7 @@ async function processSale(
         overriddenUnitPriceMinor: l.unitPriceMinor,
         reason: l.override.reason,
         approvedByEmployeeId: l.override.approvedByEmployeeId,
+        kind: l.override.kind ?? "price_override",
         soldByEmployeeId: envelope.employeeId,
         clientUuid: envelope.clientUuid,
         occurredAt: envelope.occurredAt,

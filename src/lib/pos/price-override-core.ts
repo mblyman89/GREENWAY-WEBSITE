@@ -60,6 +60,12 @@ export type PosLineOverride = {
   approvedByEmployeeId: string;
   /** Approver display name — UI only, never enters the payload. */
   approvedByName: string;
+  /**
+   * Register round S4 — "discount_adjust" = the two-person discount button
+   * (any OTHER clocked-in employee approves; never the cashier). Absent =
+   * the classic manager price override.
+   */
+  kind?: "discount_adjust";
 };
 
 /** Reason bounds shared with validateSalePayload's override block. */
@@ -192,6 +198,7 @@ export function applyPriceOverrides(
         originalUnitPriceMinor: o.originalUnitPriceMinor,
         reason: o.reason.trim(),
         approvedByEmployeeId: o.approvedByEmployeeId,
+        ...(o.kind ? { kind: o.kind } : {}),
       },
     };
   });
