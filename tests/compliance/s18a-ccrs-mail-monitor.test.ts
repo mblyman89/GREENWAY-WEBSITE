@@ -688,6 +688,8 @@ describe("drafts-only (standing rule 3): only the owner's Apply writes the ledge
       "applyCcrsErrorMailAction",
       // R74 S47: a body-only "has not been processed" email -> error-fatal (audited).
       "applyCcrsNotProcessedMailAction",
+      // R74 S48: one click answers every waiting CCRS email, oldest first.
+      "applyAllCcrsMailAction",
       "dismissCcrsMailAction",
     ]);
     for (const f of fns) expect(f).toMatch(/requirePermission\("settings\.manage"\)/);

@@ -211,7 +211,8 @@ describe("S-12b seed CLI ends with finalize", () => {
 describe("S-12b batch builder loads the ledger", () => {
   it("loads the slice and routes against it; duplicates surface as an error issue", () => {
     expect(BATCH).toContain("const slice = await loadLedgerForBatch(");
-    expect(BATCH).toContain('const ledger: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;');
+    // R74 S48: the slice view is the base; unanswered Strain/Area files are merged in as in flight.
+    expect(BATCH).toContain('const ledgerBase: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;');
     // R74 S42: duplicates hold back only the records they name (E59); pin refreshed in S46.
     expect(BATCH).toContain('const dupIds = new Set(slice.kind === "loaded" ? slice.ledger.duplicates : []);');
     expect(BATCH).toContain('code: "E59_LEDGER_DUPLICATE_HELD",');
