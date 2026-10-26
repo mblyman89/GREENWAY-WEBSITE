@@ -563,6 +563,9 @@ import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
 import { __runMedicalPosCoreTests } from "../../src/lib/pos/medical-pos-core";
 import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
 import { __runReceiptConfigCoreTests } from "../../src/lib/pos/receipt-config-core";
+// Discount transparency: the shared per-line / order-level discount breakdown
+// every receipt + checkout surface renders. Pure: no I/O.
+import { __runReceiptDiscountCoreTests } from "../../src/lib/pos/receipt-discount-core";
 import { __runReceiptTaxCoreTests } from "../../src/lib/pos/receipt-tax-core";
 import { __runReceiptLogoCoreTests } from "../../src/lib/pos/receipt-logo-core";
 import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
@@ -1596,6 +1599,7 @@ __runLiquidVolumeTests();
   __runMedicalPosCoreTests();
   __runPosReceiptCoreTests();
   __runReceiptConfigCoreTests();
+  __runReceiptDiscountCoreTests();
   __runReceiptTaxCoreTests();
   __runReceiptLogoCoreTests();
   __runPosReturnsCoreTests();
