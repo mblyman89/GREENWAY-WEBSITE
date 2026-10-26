@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { readCompletedOrder, type CompletedOrder } from "@/lib/checkout/order";
 import { useHydratedValue } from "@/lib/hooks/useHydratedValue";
+import {
+  computeDiscountBreakdown,
+  normalizeDiscountDisplayConfig,
+  type DiscountDisplayConfig,
+} from "@/lib/pos/receipt-discount-core";
+import { WebLineDiscount, WebOrderSavings } from "@/components/checkout/DiscountDetails";
 import {
   CONFIRMATION_POLL_MS,
   confirmationPollState,
@@ -17,7 +23,12 @@ import {
   type PollState,
 } from "@/lib/ui/poll-gate-core";
 
-export function OrderConfirmation() {
+export function OrderConfirmation({
+  discountDisplay,
+}: {
+  /** The owner's ONLINE discount-detail settings (receipt builder). */
+  discountDisplay?: DiscountDisplayConfig | null;
+} = {}) {
   const searchParams = useSearchParams();
   const orderFromUrl = searchParams.get("order") ?? undefined;
   const tokenFromUrl = searchParams.get("t") ?? undefined;
@@ -113,6 +124,26 @@ export function OrderConfirmation() {
   const order = localOrder ?? fetchedOrder;
   const orderNumber = order?.orderNumber ?? orderFromUrl;
 
+  // Discount transparency — the same breakdown the emailed + printed
+  // receipts use. Lines without a regular price (legacy) simply show nothing.
+  const discountCfg = useMemo(() => normalizeDiscountDisplayConfig(discountDisplay ?? null), [discountDisplay]);
+  const discountBreakdown = useMemo(
+    () =>
+      computeDiscountBreakdown(
+        (order?.lines ?? []).map((l) => ({
+          productName: l.productName,
+          quantity: l.quantity,
+          regularUnitMinor:
+            typeof l.regularPriceMinorUnits === "number" ? l.regularPriceMinorUnits : l.priceMinorUnits,
+          finalUnitMinor: l.priceMinorUnits,
+          appliedLabel: l.appliedLabel ?? null,
+          promoPercent: l.appliedPercent ?? null,
+          atCostFloor: l.atCostFloor ?? null,
+        })),
+      ),
+    [order],
+  );
+
   return (
     <section className="px-4 py-10 md:px-8 md:py-16">
       <div className="mx-auto max-w-xl">
@@ -157,13 +188,14 @@ export function OrderConfirmation() {
               <div className="grid gap-2.5">
                 {order.lines.map((line, index) => (
                   <div key={`${line.productName}-${index}`} className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-black text-white">{line.productName}</p>
                       <p className="text-[0.66rem] font-bold uppercase tracking-[0.12em] text-zinc-500">
                         {/* SLICE 98: ounce display for topicals/edibles/liquids (display only;
                             legacy lines without a category snapshot keep the raw label). */}
                         {line.brand} · Qty {line.quantity}{line.variantLabel ? ` · ${displayVariantLabel(line.variantLabel, line.category ?? null)}` : ""}
                       </p>
+                      <WebLineDiscount line={discountBreakdown.lines[index]} cfg={discountCfg} />
                     </div>
                     <div className="shrink-0 text-right leading-tight">
                       {typeof line.regularPriceMinorUnits === "number" && line.regularPriceMinorUnits > line.priceMinorUnits ? (
@@ -189,6 +221,7 @@ export function OrderConfirmation() {
                   <dd className="text-xl font-black text-[var(--orange)]">{formatMinorCurrency(order.totalMinorUnits)}</dd>
                 </div>
               </dl>
+              <WebOrderSavings breakdown={discountBreakdown} cfg={discountCfg} className="mt-4" />
             </div>
           ) : null}
 

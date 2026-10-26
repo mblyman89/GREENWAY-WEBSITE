@@ -151,8 +151,18 @@ import { pacificDayKey } from "@/lib/reports/timezone";
 import { SAW_LOGIN_URL, sanitizeSawUsername } from "@/lib/pos/saw-prefill-core";
 import {
   buildPosReceiptHtml,
+  receiptLineDiscountInput,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
+import {
+  computeDiscountBreakdown,
+  formatPercent,
+  lineDiscountRows,
+  orderSummaryBlock,
+  type DiscountBreakdown,
+  type DiscountDisplayConfig,
+  type LineDiscountBreakdown,
+} from "@/lib/pos/receipt-discount-core";
 // SLICE 24 — the rules for WHEN the register draws its fun name, and what it
 // may do with an answer that arrives late. Pure + mutation-tested, so the race
 // that shipped in Slice 23 cannot come back unnoticed.
@@ -454,6 +464,95 @@ function discountTransparencyFields(
     if (labels.specialLabel) out.specialLabel = labels.specialLabel;
   }
   return out;
+}
+
+/**
+ * Discount transparency — the register SCREEN's view of the same breakdown
+ * the receipt prints. Built from exactly the fields the frozen receipt uses
+ * (discountTransparencyFields), so the cashier, the customer-facing screen
+ * and the paper slip can never disagree. Display only.
+ */
+function screenDiscountBreakdown(
+  lines: (PricedSaleLine & { loyaltyDiscountMinor?: number; specialDiscountMinor?: number })[],
+  engineLines: PricedSaleLine[],
+  med: MedicalPricingResult | null,
+  labels: { loyaltyLabel: string | null; specialLabel: string | null },
+): DiscountBreakdown {
+  return computeDiscountBreakdown(
+    lines.map((l, i) =>
+      receiptLineDiscountInput({
+        productName: l.productName,
+        quantity: l.quantity,
+        unitPriceMinor: l.unitPriceMinor,
+        regularPriceMinor: l.regularPriceMinor,
+        appliedLabel: l.appliedLabel ?? null,
+        ...discountTransparencyFields(l, engineLines, med?.lines[i]?.medicalSavingsMinor ?? 0, labels),
+      }),
+    ),
+  );
+}
+
+/** The loyalty / special labels the receipt uses, for the on-screen view. */
+function discountLabels(
+  appliedLoyalty: AppliedLoyalty | null,
+  appliedSpecial: AppliedSpecialDiscount | null,
+): { loyaltyLabel: string | null; specialLabel: string | null } {
+  return {
+    loyaltyLabel: appliedLoyalty ? `Loyalty reward ${appliedLoyalty.code}` : null,
+    specialLabel: appliedSpecial
+      ? `${SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} (${formatBps(appliedSpecial.percentBps)})`
+      : null,
+  };
+}
+
+/** Per-line discount detail under a cart row (honours the register settings). */
+function LineDiscountDetail({ line, cfg }: { line: LineDiscountBreakdown | undefined; cfg: DiscountDisplayConfig }) {
+  if (!line || !line.discounted) return null;
+  const rows = lineDiscountRows(line, cfg);
+  if (rows.length === 0) return null;
+  return (
+    <span className="mt-1 block space-y-0.5 text-xs">
+      {rows.map((r, k) => (
+        <span
+          key={k}
+          className={`flex justify-between gap-3 ${r.emphasis ? "font-semibold text-[var(--pos-accent)]" : "text-[var(--pos-text-muted)]"}`}
+        >
+          <span>{r.text}</span>
+          {r.amountMinor != null ? <span className="tabular-nums">{`\u2212${money(r.amountMinor)}`}</span> : null}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Order-level savings summary for the rail / tender screen. */
+function OrderDiscountPanel({ breakdown, cfg }: { breakdown: DiscountBreakdown; cfg: DiscountDisplayConfig }) {
+  const block = orderSummaryBlock(breakdown.summary, cfg);
+  if (!block) return null;
+  return (
+    <div className="my-2 rounded-lg border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-left text-xs">
+      <p className="mb-1 font-bold uppercase tracking-wider text-[var(--pos-accent)]">{block.title}</p>
+      {block.rows.map((r, k) => (
+        <div
+          key={k}
+          className={`flex justify-between gap-3 ${r.emphasis ? "font-bold text-[var(--pos-accent)]" : "text-[var(--pos-text-muted)]"} ${r.label.startsWith("  ") ? "pl-3" : ""}`}
+        >
+          <span>{r.label.trim()}</span>
+          <span className="tabular-nums">{r.value}</span>
+        </div>
+      ))}
+      {block.notes.length > 0 ? (
+        <details className="mt-1 text-[var(--pos-text-muted)]">
+          <summary className="cursor-pointer font-semibold">How these discounts work</summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {block.notes.map((n, k) => (
+              <li key={k}>{n}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -2775,6 +2874,19 @@ function CartScreen({
     [priced.lines, appliedSpecial],
   );
   const railTotals = loyaltyView ? loyaltyView.totals : specialView ? specialView.totals : priced.totals;
+  // Discount transparency — the same breakdown + owner switches the
+  // printed register receipt uses, shown live on the cart.
+  const discountCfg = useMemo(() => normalizePosReceiptConfig(bundle.receipt).registerDiscount, [bundle.receipt]);
+  const discountView = useMemo(
+    () =>
+      screenDiscountBreakdown(
+        loyaltyView ? loyaltyView.lines : specialView ? specialView.lines : priced.lines,
+        priced.engineLines,
+        carded ? priced.med : null,
+        discountLabels(appliedLoyalty, appliedSpecial),
+      ),
+    [loyaltyView, specialView, priced, carded, appliedLoyalty, appliedSpecial],
+  );
 
   // B24 — an override approved against a price the engine no longer charges
   // (promo tier moved with a quantity change) is dropped LOUDLY: clear it
@@ -3133,6 +3245,7 @@ function CartScreen({
                               {l.appliedLabel ? (
                                 <span className="mt-0.5 block text-xs text-[var(--pos-accent)]">{l.appliedLabel}</span>
                               ) : null}
+                              <LineDiscountDetail line={discountView.lines[i]} cfg={discountCfg} />
                               {activeOverride ? (
                                 <span className="mt-0.5 block text-xs text-[var(--pos-warn)]">was {money(activeOverride.originalUnitPriceMinor)}</span>
                               ) : null}
@@ -3535,6 +3648,7 @@ function CartScreen({
               <span>TOTAL</span>
               <span className="text-[var(--pos-accent)]">{money(railTotals.totalMinorUnits)}</span>
             </div>
+            <OrderDiscountPanel breakdown={discountView} cfg={discountCfg} />
 
             {/* AO-4 — the mockup's big green tender button, TOTAL on its
                 face, quick-tender denomination chips underneath: one tap
@@ -5370,6 +5484,19 @@ function TenderScreen({
     return base;
   }, [cart, bundle, medicalCard, overrides, appliedLoyalty, appliedSpecial]);
   const total = priced.totals.totalMinorUnits;
+  // Discount transparency — the order's total saving + percent off, from
+  // the same breakdown the receipt prints.
+  const discountCfg = useMemo(() => normalizePosReceiptConfig(bundle.receipt).registerDiscount, [bundle.receipt]);
+  const discountSummary = useMemo(
+    () =>
+      screenDiscountBreakdown(
+        priced.lines,
+        priced.engineLines,
+        medicalCard !== null ? priced.med : null,
+        discountLabels(appliedLoyalty, appliedSpecial),
+      ).summary,
+    [priced, medicalCard, appliedLoyalty, appliedSpecial],
+  );
   // B33 — the owner's cash-rounding policy decides the amount DUE at the
   // drawer. TOTAL (and its tax) stays pre-rounded per WA DOR guidance; the
   // adjustment is shown as its own line, Square/Toast style.
@@ -5424,6 +5551,14 @@ function TenderScreen({
         {appliedLoyalty ? (
           <p className="mt-1 text-sm font-semibold text-[var(--pos-accent)]">
             Loyalty {appliedLoyalty.code} −{money(appliedLoyalty.appliedMinor)}
+          </p>
+        ) : null}
+        {discountSummary.savedTotalMinor > 0 && (discountCfg.showLineSavings || discountCfg.showOrderPercent) ? (
+          <p className="mt-1 text-sm font-semibold text-[var(--pos-accent)]">
+            Customer saved {money(discountSummary.savedTotalMinor)}
+            {discountCfg.showOrderPercent
+              ? ` (${formatPercent(discountSummary.savedTotalMinor, discountSummary.regularTotalMinor, discountCfg.percentDecimals)} off the regular ${money(discountSummary.regularTotalMinor)})`
+              : ` off the regular ${money(discountSummary.regularTotalMinor)}`}
           </p>
         ) : null}
       </div>

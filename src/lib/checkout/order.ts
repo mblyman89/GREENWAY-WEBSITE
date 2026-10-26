@@ -24,6 +24,14 @@ export type CompletedOrderLine = {
   priceMinorUnits: number;
   /** Pre-discount per-item price (tax-inclusive). Equals priceMinorUnits when no sale. */
   regularPriceMinorUnits?: number;
+  /**
+   * Discount transparency (display only, optional — legacy entries and the
+   * token lookup lack them): the deal that applied, its effective percent,
+   * and whether the cost floor capped it.
+   */
+  appliedLabel?: string | null;
+  appliedPercent?: number | null;
+  atCostFloor?: boolean | null;
 };
 
 export type CompletedOrder = {

@@ -10,6 +10,12 @@ import { cartLimitBlock } from "@/lib/menu/cart-limit-meter-core";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { generateOrderNumber, persistCompletedOrder } from "@/lib/checkout/order";
+import {
+  computeDiscountBreakdown,
+  normalizeDiscountDisplayConfig,
+  type DiscountDisplayConfig,
+} from "@/lib/pos/receipt-discount-core";
+import { WebLineDiscount, WebOrderSavings } from "@/components/checkout/DiscountDetails";
 
 type CustomerInfo = {
   firstName: string;
@@ -42,7 +48,12 @@ function isValid(info: CustomerInfo) {
   return Boolean(info.firstName.trim() && info.lastName.trim() && emailOk && phoneOk && birthdayOk);
 }
 
-export function CheckoutFlow() {
+export function CheckoutFlow({
+  discountDisplay,
+}: {
+  /** The owner's ONLINE discount-detail settings (receipt builder). */
+  discountDisplay?: DiscountDisplayConfig | null;
+} = {}) {
   const router = useRouter();
   const {
     items,
@@ -54,6 +65,24 @@ export function CheckoutFlow() {
     recordSale,
     clearCart,
   } = useMockCart();
+
+  // Discount transparency — the same breakdown every receipt uses.
+  const discountCfg = useMemo(() => normalizeDiscountDisplayConfig(discountDisplay ?? null), [discountDisplay]);
+  const discountBreakdown = useMemo(
+    () =>
+      computeDiscountBreakdown(
+        items.map((item) => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          regularUnitMinor: item.regularPriceMinorUnits,
+          finalUnitMinor: item.effectivePriceMinorUnits,
+          appliedLabel: item.appliedLabel ?? null,
+          promoPercent: item.appliedPercent ?? null,
+          atCostFloor: item.atCostFloor ?? null,
+        })),
+      ),
+    [items],
+  );
 
   const [info, setInfo] = useState<CustomerInfo>(EMPTY_INFO);
   const [infoSaved, setInfoSaved] = useState(false);
@@ -124,6 +153,9 @@ export function CheckoutFlow() {
     let orderNumber = generateOrderNumber();
     let publicToken: string | undefined;
     let limitNotice: string | undefined;
+    // The server's per-line deal facts (it alone knows the cost floor).
+    let lineDeals: { appliedLabel: string | null; appliedPercent: number | null; atCostFloor: boolean }[] | null =
+      null;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -147,7 +179,9 @@ export function CheckoutFlow() {
           publicToken?: string;
           limitFlag?: boolean;
           limitReasons?: string[];
+          lineDeals?: { appliedLabel: string | null; appliedPercent: number | null; atCostFloor: boolean }[];
         };
+        if (Array.isArray(data.lineDeals) && data.lineDeals.length === items.length) lineDeals = data.lineDeals;
         if (data.orderNumber) orderNumber = data.orderNumber;
         if (data.publicToken) publicToken = data.publicToken;
         if (data.limitFlag) {
@@ -183,10 +217,15 @@ export function CheckoutFlow() {
       publicToken,
       placedAt: new Date().toISOString(),
       customerFirstName: info.firstName.trim(),
-      lines: items.map((item) => ({
+      lines: items.map((item, i) => ({
         productName: item.productName,
         brand: item.brand,
         variantLabel: item.variantLabel,
+        // Discount transparency — server facts when available, else the
+        // cart engine's (same rules, minus the cost data).
+        appliedLabel: lineDeals ? lineDeals[i]?.appliedLabel ?? null : item.appliedLabel ?? null,
+        appliedPercent: lineDeals ? lineDeals[i]?.appliedPercent ?? null : item.appliedPercent ?? null,
+        atCostFloor: lineDeals ? lineDeals[i]?.atCostFloor === true : item.atCostFloor === true,
         // SLICE 98: category snapshot so the confirmation receipt can show
         // ounces for topicals/edibles/liquids (display only).
         category: item.category,
@@ -296,17 +335,18 @@ export function CheckoutFlow() {
           </div>
 
           <div className="grid gap-3 px-5 py-5 md:px-7">
-            {items.map((item) => {
+            {items.map((item, idx) => {
               const hasSale = item.regularPriceMinorUnits > item.effectivePriceMinorUnits;
               return (
                 <div key={item.lineId} className="flex items-start justify-between gap-4 rounded-2xl bg-black/40 p-4">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-zinc-500">{item.brand}</p>
                     <p className="mt-0.5 truncate text-base font-black text-white">{item.productName}</p>
                     <p className="mt-1 text-xs font-bold uppercase tracking-[0.1em] text-[var(--greenway)]">
                       {/* SLICE 98: ounce display for topicals/edibles/liquids (display only). */}
                       Qty {item.quantity}{item.variantLabel ? ` · ${displayVariantLabel(item.variantLabel, item.category)}` : ""}
                     </p>
+                    <WebLineDiscount line={discountBreakdown.lines[idx]} cfg={discountCfg} />
                   </div>
                   <div className="text-right leading-tight">
                     {hasSale ? (
@@ -330,6 +370,9 @@ export function CheckoutFlow() {
               <dd className="text-2xl font-black text-[var(--orange)]">{formatMinorCurrency(totalMinorUnits)}</dd>
             </div>
           </dl>
+          <div className="px-5 pb-5 md:px-7">
+            <WebOrderSavings breakdown={discountBreakdown} cfg={discountCfg} />
+          </div>
         </div>
 
         {/* WAC 314-55-095 legal-limit meter — mirrors the front-end POS

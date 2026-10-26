@@ -57,6 +57,7 @@ export default async function ReceiptConfigPage() {
             "Toggles control the optional lines: the budtender's name, the \"You saved\" promo line, and the loyalty points block.",
             "Save, then refresh the menu on each register (automatic when online) — offline registers keep the last downloaded design.",
             "Compliance text is not optional: keep the intoxicating-effects warning in the footer. Blank header/footer reset to safe defaults.",
+            "Discount details: two separate sets of switches — one for the register (cart screen, printed + emailed receipt) and one for online orders (website checkout, order confirmation page, confirmation email, printed pickup ticket). Choose what is shown: regular price, savings, percent off, the deal and how it works, cost-floor caps, and the order savings summary with total percent off.",
           ]}
         />
         <Card>

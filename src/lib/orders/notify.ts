@@ -80,6 +80,12 @@ export type OrderPlacedNotification = {
    * Leafly.
    */
   origin?: OrderOrigin | string | null;
+  /**
+   * Discount transparency — pre-rendered, inline-styled savings section
+   * (receipt-discount-core discountEmailSectionHtml, already escaped).
+   * Optional: absent/"" = the email is unchanged.
+   */
+  savingsHtml?: string | null;
 };
 
 /**
@@ -200,6 +206,7 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
             <h2 style="color:#12351f">Thanks, ${n.customerFirstName}!</h2>
             <p>Your pickup order <strong>${n.orderNumber}</strong> is confirmed.</p>
             <p>${n.itemCount} ${itemWord} &middot; estimated total ${total}</p>
+            ${n.savingsHtml ?? ""}
             <p style="color:#555;font-size:13px">
               This is a pickup reservation only — no payment was taken. Final
               price, tax, and purchase limits are confirmed in store. Please

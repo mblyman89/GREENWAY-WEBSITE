@@ -640,6 +640,68 @@ export function dealNameShownInRows(line: LineDiscountBreakdown, cfg: DiscountDi
 }
 
 // ---------------------------------------------------------------------------
+// Email section (online order confirmation email)
+// ---------------------------------------------------------------------------
+
+function escHtml(v: string): string {
+  return v
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Inline-styled HTML for an email: every discounted item with its rows, then
+ * the order summary block. "" when there is no saving or nothing to show.
+ */
+export function discountEmailSectionHtml(lines: readonly DiscountLineInput[], cfg: DiscountDisplayConfig): string {
+  const bd = computeDiscountBreakdown(lines);
+  const block = orderSummaryBlock(bd.summary, cfg);
+  const items: string[] = [];
+  for (const l of bd.lines) {
+    const rows = lineDiscountRows(l, cfg);
+    if (rows.length === 0) continue;
+    items.push(
+      `<p style="margin:8px 0 2px;font-size:13px;font-weight:bold;">${l.quantity}x ${escHtml(l.productName)}</p>` +
+        rows
+          .map(
+            (r) =>
+              `<p style="margin:0 0 1px 12px;font-size:12px;color:#12351f;${r.emphasis ? "font-weight:bold;" : ""}">${escHtml(r.text)}${
+                r.amountMinor != null ? ` (-${money(r.amountMinor)})` : ""
+              }</p>`,
+          )
+          .join(""),
+    );
+  }
+  if (!block && items.length === 0) return "";
+  const parts: string[] = [
+    '<div style="border:1px solid #12351f;border-radius:6px;padding:10px 12px;margin:12px 0;background:#f3f8f4;">',
+  ];
+  if (block) parts.push(`<p style="margin:0 0 6px;font-size:14px;font-weight:bold;color:#12351f;">${escHtml(block.title)}</p>`);
+  parts.push(...items);
+  if (block && block.rows.length > 0) {
+    parts.push(
+      `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">${block.rows
+        .map((r) => {
+          const indent = r.label.startsWith("  ") ? "padding-left:12px;font-size:12px;" : "";
+          const bold = r.emphasis ? "font-weight:bold;" : "";
+          return `<tr><td style="padding:2px 0;text-align:left;${indent}${bold}">${escHtml(r.label.trim())}</td><td style="padding:2px 0;text-align:right;white-space:nowrap;${bold}">${escHtml(r.value)}</td></tr>`;
+        })
+        .join("")}</table>`,
+    );
+  }
+  if (block) {
+    for (const n of block.notes) {
+      parts.push(`<p style="margin:6px 0 0;font-size:11px;color:#333;line-height:1.4;">\u2022 ${escHtml(n)}</p>`);
+    }
+  }
+  parts.push("</div>");
+  return parts.join("");
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (wired into scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -715,7 +777,7 @@ export function __runReceiptDiscountCoreTests(): void {
     specialLabel: "Veteran discount (5%)",
   });
   ok(thin.parts.find((p) => p.kind === "deal")?.amountMinor === 150, "thin deal = 150");
-  ok(thin.parts.find((p) => p.kind === "special")?.label.startsWith("Veteran"), "special label kept");
+  ok(thin.parts.find((p) => p.kind === "special")?.label.startsWith("Veteran") === true, "special label kept");
 
   // Undiscounted line: no rows
   const none = breakdownLine({ productName: "Y", quantity: 1, regularUnitMinor: 500, finalUnitMinor: 500 });
@@ -765,6 +827,19 @@ export function __runReceiptDiscountCoreTests(): void {
   ok(normalizeDiscountDisplayConfig({ showDealName: "false" }).showDealName === false, "string bool");
   const custom = orderSummaryBlock(bd.summary, normalizeDiscountDisplayConfig({ explanationText: "Ask us anything!" }));
   ok(custom !== null && custom.notes[custom.notes.length - 1] === "Ask us anything!", "owner text appended last");
+
+  // Email section
+  const emailHtml = discountEmailSectionHtml(
+    [
+      { productName: "Blue <Dream>", quantity: 2, regularUnitMinor: 2000, finalUnitMinor: 1600, appliedLabel: "Friday \u00b7 25% off", atCostFloor: true },
+      { productName: "Pre-roll", quantity: 1, regularUnitMinor: 500, finalUnitMinor: 500 },
+    ],
+    cfg,
+  );
+  ok(emailHtml.includes("Blue &lt;Dream&gt;"), "email escapes product names");
+  ok(emailHtml.includes("Total off your order"), "email has order percent");
+  ok(!emailHtml.includes("Pre-roll"), "email skips undiscounted lines");
+  ok(discountEmailSectionHtml([{ productName: "Y", quantity: 1, regularUnitMinor: 500, finalUnitMinor: 500 }], cfg) === "", "email empty without savings");
 
   console.log(`receipt-discount-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`receipt-discount-core: ${fail} failure(s)`);

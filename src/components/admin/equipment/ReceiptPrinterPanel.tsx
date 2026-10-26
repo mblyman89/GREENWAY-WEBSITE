@@ -108,6 +108,8 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
     addressText: receiptConfig?.addressText ?? null,
     placedAt: "2024-01-15T21:05:00.000Z",
     note: "Sample preview \u2014 a real order shows the customer's note here.",
+    // Discount transparency — the owner's ONLINE discount-detail settings.
+    discountDisplay: receiptConfig?.onlineDiscount ?? null,
   });
 
   const codeCls =

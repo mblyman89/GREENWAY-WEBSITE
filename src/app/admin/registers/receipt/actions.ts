@@ -58,5 +58,9 @@ export async function saveReceiptConfigAction(input: {
     after: { ...result.config },
   });
   revalidatePath(BASE);
+  // Discount transparency: the storefront checkout + confirmation read the
+  // ONLINE discount settings; refresh them now instead of within 60 s.
+  revalidatePath("/checkout");
+  revalidatePath("/checkout/confirmation");
   return { ok: true };
 }
