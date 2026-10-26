@@ -25,7 +25,7 @@ export type CountPlatform = "windows" | "mac";
 export type RosterMode = "live" | "test";
 
 export const ROSTER_LIMITS = {
-  maxSheets: 40,
+  maxSheets: 30,
   maxPracticeSheets: 6,
   maxPracticeLots: 60,
   defaultPracticeLots: 20,
