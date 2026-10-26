@@ -70,6 +70,8 @@ import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obli
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
 import { CcrsMailPanel, type CcrsMailPanelRow } from "@/components/admin/compliance/CcrsMailPanel";
 import { listRecentCcrsMail } from "@/lib/compliance/ccrs-mail-store";
+import { readCcrsScoreboard } from "@/lib/compliance/ccrs-scoreboard-store";
+import { CcrsScoreboardPanel } from "@/components/admin/compliance/CcrsScoreboardPanel";
 import { buildCcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
 import { errorsFromStored, mailConfigFromEnv } from "@/lib/compliance/ccrs-mail-core";
 import { parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
@@ -265,6 +267,10 @@ export default async function CcrsCommandCenterPage({
   const owedWeeks = owedByWeek(owed.rows);
   // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
   const ccrsMail = await listRecentCcrsMail(25);
+  // R74 S48: the PREprod test scoreboard (what was tested, what passed, what remains).
+  const scoreboard = isSupabaseServiceConfigured
+    ? await readCcrsScoreboard(createSupabaseAdminClient(), "preprod")
+    : { available: false as const, message: "database not configured" };
   const mailCfg = mailConfigFromEnv(process.env);
   const mailSetup = mailCfg.configured
     ? { configured: true as const, mode: mailCfg.mode, mailbox: mailCfg.mailbox }
@@ -398,6 +404,9 @@ export default async function CcrsCommandCenterPage({
           </span>
         ) : null}
       </div>
+
+      {/* R74 S48: the CCRS test scoreboard. Full on PREprod; a one-line strip on Production. */}
+      <CcrsScoreboardPanel read={scoreboard} compact={env !== "preprod"} />
 
       {sp.saved ? (
         <p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-200">
