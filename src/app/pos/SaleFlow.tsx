@@ -181,6 +181,7 @@ import {
 } from "@/lib/pos/receipt-config-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import { type CartAdjustAction, type CartAdjustPayload } from "@/lib/pos/cart-adjust-core";
+import { LOAN_ACK_TEXT } from "@/lib/pos/employee-loan-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
@@ -1090,7 +1091,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           trackCancel();
           onCancel();
         }}
-        onPaid={(tenderedMinor) => {
+        onPaid={(tenderedMinor, payLater) => {
+          // Register S5 — employee pay-later only rides an employee-discount
+          // sale (the payload gate re-checks the beneficiary match).
+          const tabEmployeeId =
+            payLater && appliedSpecial?.kind === "employee" ? appliedSpecial.beneficiaryEmployeeId ?? null : null;
+          if (payLater && !tabEmployeeId) return "Pay later is only for an employee purchase (apply the employee discount first).";
           const base = priceForBuyer(cart, bundle, !!medicalCard, overrides);
           // AM-B — apply the server-computed loyalty spread to the FINAL
           // priced lines (the drift effect guarantees the fingerprint still
@@ -1125,6 +1131,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             totals: priced.totals,
             tenderedMinor,
             drawerSessionId,
+            ...(tabEmployeeId ? { employeeTab: { employeeId: tabEmployeeId } } : {}),
             // Omitted entirely when there is no name, so an offline sale's
             // payload stays byte-identical to its pre-Slice-23 shape.
             ...(funNameForSale ? { displayName: funNameForSale } : {}),
@@ -1303,8 +1310,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             savingsMinor: priced.totals.savingsMinorUnits,
             medicalSavingsMinor: isMedical ? (priced.med?.medicalSavingsMinor ?? 0) : 0,
             medicalSale: isMedical,
-            tenderedMinor,
+            tenderedMinor: tabEmployeeId ? 0 : tenderedMinor,
             changeMinor: built.changeMinor,
+            ...(tabEmployeeId ? { employeeTabMinor: priced.totals.totalMinorUnits } : {}),
             // B33 — cash-rounding disclosure: separate line + cash due, only
             // when the policy actually adjusted this sale.
             ...(built.roundingAdjustmentMinor !== 0
@@ -5791,7 +5799,7 @@ function TenderScreen({
   onBack: () => void;
   onCancel: () => void;
   /** Returns an error string, or null when the sale was enqueued. */
-  onPaid: (tenderedMinor: number) => string | null;
+  onPaid: (tenderedMinor: number, payLater?: boolean) => string | null;
 }) {
   const priced = useMemo(() => {
     const base = priceForBuyer(cart, bundle, medicalCard !== null, overrides);
@@ -5852,6 +5860,14 @@ function TenderScreen({
 
   const pay = () => {
     const err = onPaid(tendered);
+    if (err) setError(err);
+  };
+  // Register S5 — employee pay-later (product loan). Offered only on an
+  // employee-discount sale; the buyer must acknowledge the pay deduction.
+  const canTab = appliedSpecial?.kind === "employee" && !!appliedSpecial.beneficiaryEmployeeId;
+  const [tabAck, setTabAck] = useState(false);
+  const payLater = () => {
+    const err = onPaid(0, true);
     if (err) setError(err);
   };
 
@@ -5946,6 +5962,14 @@ function TenderScreen({
       </p>
       {tendered >= due && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}
 
+      {canTab ? (
+        <label className="mt-5 flex max-w-md items-start gap-2 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-left text-xs text-[var(--pos-warn)]">
+          <input type="checkbox" className="mt-0.5" checked={tabAck} onChange={(e) => setTabAck(e.target.checked)} />
+          <span>
+            <span className="font-bold">{appliedSpecial?.beneficiaryName ?? "Employee"} — pay later:</span> {LOAN_ACK_TEXT}
+          </span>
+        </label>
+      ) : null}
       <div className="mt-6 flex gap-3">
         <button
           type="button"
@@ -5955,6 +5979,16 @@ function TenderScreen({
         >
           Complete sale
         </button>
+        {canTab ? (
+          <button
+            type="button"
+            onClick={payLater}
+            disabled={!tabAck}
+            className="pos-tile rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-6 py-4 text-lg font-bold text-[var(--pos-warn)] disabled:opacity-40"
+          >
+            Pay later (employee tab)
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onBack}

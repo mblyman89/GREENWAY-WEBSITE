@@ -117,6 +117,12 @@ export default async function EodReportPage({
                 <td className="py-0.5 text-right font-bold tabular-nums">{formatCents(sales.roundingMinor)}</td>
               </tr>
             ) : null}
+            {sales.employeeTabCount ? (
+              <tr>
+                <td className="py-0.5">Employee tab, no cash ({sales.employeeTabCount})</td>
+                <td className="py-0.5 text-right font-bold tabular-nums">-{formatCents(sales.employeeTabMinor ?? 0)}</td>
+              </tr>
+            ) : null}
             {sales.medicalSaleCount > 0 ? (
               <tr>
                 <td className="py-0.5">Medical sales (tax savings)</td>

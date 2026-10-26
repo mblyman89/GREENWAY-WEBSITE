@@ -562,6 +562,12 @@ export type BuildSaleArgs = {
   tenderedMinor: number;
   drawerSessionId: string;
   /**
+   * Register S5 — employee pay-later. When set, the sale is recorded as
+   * paymentMethod "employee_tab": no cash tender, change or rounding (the
+   * drawer never sees it); tenderedMinor is ignored.
+   */
+  employeeTab?: { employeeId: string };
+  /**
    * Present when this sale was started from a website pickup order loaded into
    * the register: the source order's UUID. Forwarded verbatim into the payload
    * so the sync supersedes the website order ONLY when this register sale
@@ -638,14 +644,17 @@ export type BuildSaleResult =
 export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
   const totalMinor = args.totals.totalMinorUnits;
   // POS B33 — the owner's rounding policy decides the cash amount DUE.
-  const mode = args.rounding?.mode ?? "off";
+  const tab = args.employeeTab ?? null;
+  const mode = tab ? "off" : (args.rounding?.mode ?? "off");
   const rounded = roundCashDue(totalMinor, mode);
   if (!rounded) return { ok: false, errors: ["Order total must be a non-negative integer (cents)."] };
   const dueMinor = rounded.dueMinor;
-  const tender = computeCashChange({
-    totalMinor: dueMinor,
-    tenderedMinor: args.tenderedMinor,
-  });
+  const tender = tab
+    ? ({ ok: true, changeMinor: 0 } as const)
+    : computeCashChange({
+        totalMinor: dueMinor,
+        tenderedMinor: args.tenderedMinor,
+      });
   if (!tender.ok) return { ok: false, errors: [tender.error] };
 
   const payload: PosSalePayload = {
@@ -675,9 +684,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     totalMinor: args.totals.totalMinorUnits,
     subtotalMinor: args.totals.subtotalMinorUnits,
     taxMinor: args.totals.estimatedTaxMinorUnits,
-    paymentMethod: "cash",
-    tenderedMinor: args.tenderedMinor,
-    changeMinor: tender.changeMinor,
+    ...(tab
+      ? { paymentMethod: "employee_tab" as const, employeeTab: { employeeId: tab.employeeId, acknowledged: true as const } }
+      : { paymentMethod: "cash" as const, tenderedMinor: args.tenderedMinor, changeMinor: tender.changeMinor }),
     drawerSessionId: args.drawerSessionId,
     idVerification: args.idVerification,
     // Carry the source website order id only when this sale was loaded from
@@ -943,6 +952,18 @@ export function __runSaleFlowCoreTests(): void {
     maxName.ok && maxName.payload.displayName === "y".repeat(POS_DISPLAY_NAME_MAX_LEN),
     "SLICE 23: a fun name of exactly the max length still rides the payload",
   );
+
+  // Register S5 — employee tab: no cash fields; the payload gate demands the
+  // employee discount, so a bare tab build is refused.
+  const bareTab = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 0,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    employeeTab: { employeeId: "11111111-1111-4111-8111-111111111111" },
+  });
+  ok(!bareTab.ok, "S5: employee tab without the employee discount is refused");
 
   // POS B33 — rounding policy shapes the payload and the change math.
   const oddTotals = { ...priced.totals, totalMinorUnits: 3502 };

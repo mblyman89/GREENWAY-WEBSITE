@@ -819,6 +819,7 @@ import { __runReservationExpiryTests } from "../../src/lib/orders/reservation-ex
 import { __runListWindowTests } from "../../src/lib/admin/list-window-core";
 import { __runListFilterTests } from "../../src/lib/admin/list-filter-core";
 import { __runSpecialDiscountTests } from "../../src/lib/discounts/special-discount-core";
+import { __runEmployeeLoanTests } from "../../src/lib/pos/employee-loan-core";
 import { __runSpecialDiscountSaleTests } from "../../src/lib/pos/special-discount-sale-core";
 import { __runSpecialDiscountReportTests } from "../../src/lib/discounts/special-discount-report-core";
 import { __runSafeCoreTests } from "../../src/lib/registers/safe-core";
@@ -1771,6 +1772,7 @@ __runLiquidVolumeTests();
   __runListWindowTests();
   __runListFilterTests();
   __runSpecialDiscountTests();
+  __runEmployeeLoanTests();
   __runSpecialDiscountSaleTests();
   __runSpecialDiscountReportTests();
   __runSafeCoreTests();

@@ -31,10 +31,10 @@ const U5 = "55555555-5555-4555-8555-555555555555";
 
 describe("payment methods (owner decision: cash-only launch)", () => {
   it("enum carries the four planned methods", () => {
-    expect([...POS_PAYMENT_METHODS]).toEqual(["cash", "point_of_banking", "ach", "debit"]);
+    expect([...POS_PAYMENT_METHODS]).toEqual(["cash", "point_of_banking", "ach", "debit", "employee_tab"]);
   });
   it("ONLY cash is enabled at launch", () => {
-    expect([...ENABLED_PAYMENT_METHODS]).toEqual(["cash"]);
+    expect([...ENABLED_PAYMENT_METHODS]).toEqual(["cash", "employee_tab"]);
     expect(isPaymentMethodEnabled("cash")).toBe(true);
     expect(isPaymentMethodEnabled("debit")).toBe(false);
     expect(isPaymentMethodEnabled("point_of_banking")).toBe(false);

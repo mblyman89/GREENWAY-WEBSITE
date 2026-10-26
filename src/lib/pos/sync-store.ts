@@ -77,6 +77,8 @@ import { getPublishedVersion } from "./menu-version";
 // percent math the register used, re-run server-side, plus the settings and
 // the migration-0133 use ledger.
 import { applySpecialDiscount, friendsFamilyCapReached } from "@/lib/discounts/special-discount-core";
+import { openEmployeeLoan } from "@/lib/pos/employee-loan-store";
+import { LOAN_ACK_TEXT } from "@/lib/pos/employee-loan-core";
 import { countFriendsFamilyUses, getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
 import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
 import { validateCartAdjustPayload, type CartAdjustPayload } from "./cart-adjust-core";
@@ -828,6 +830,19 @@ async function processSale(
       }
     }
   }
+  // Register S5 — refuse a pay-later sale when the loan ledger (0302) is
+  // missing, so product can never leave the store untracked.
+  if (sale.paymentMethod === "employee_tab") {
+    const { error: loanTableError } = await admin.from("employee_product_loans").select("id").limit(1);
+    if (loanTableError) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Employee tab refused: the loan ledger is unavailable (${loanTableError.message}). Apply migration 0302, then resolve this exception.`,
+      );
+    }
+  }
 
   // Employee name for the customer-facing snapshot (orders require a name).
   const { data: emp } = await admin
@@ -1160,6 +1175,36 @@ async function processSale(
       `Order passed the gate but the status write failed${completed.refusal ? `: ${completed.refusal}` : "."}`,
       { order_id: order.id },
     );
+  }
+
+  // Register S5 — employee pay-later: open the product loan (idempotent by
+  // client_uuid). The preflight above proved the table exists; a failure
+  // here leaves a loud audit row for the manager.
+  if (sale.paymentMethod === "employee_tab" && sale.employeeTab) {
+    const loanError = await openEmployeeLoan({
+      clientUuid: envelope.clientUuid,
+      orderId: order.id,
+      employeeId: sale.employeeTab.employeeId,
+      cashierId: envelope.employeeId,
+      witnessId: sale.specialDiscount?.approvedByEmployeeId ?? null,
+      registerId: envelope.registerId,
+      amountMinor: sale.totalMinor,
+      ackText: LOAN_ACK_TEXT,
+      takenAtIso: envelope.occurredAt,
+    });
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-device:${device.id}`,
+      action: loanError ? "register.employee_tab_record_failed" : "register.employee_tab",
+      entityType: "order",
+      entityId: order.id,
+      after: {
+        employeeId: sale.employeeTab.employeeId,
+        amountMinor: sale.totalMinor,
+        witnessId: sale.specialDiscount?.approvedByEmployeeId ?? null,
+        ...(loanError ? { error: loanError } : {}),
+      },
+    });
   }
 
   // SLICE 28 — the sale completed with a special discount on it: write the
