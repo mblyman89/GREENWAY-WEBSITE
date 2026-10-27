@@ -1,7 +1,7 @@
 # SOP Program — Catalog of SOPs + Slice Roadmap
 
 Slice SOP-00 · 2026-10-27 · audited at `main@54445a68`
-Updated in slice SOP-05a · owner answers D29–D35 applied (SOP-04 v1.1); SOP-05 split into 05a/05b per D35 (earlier: slice SOP-04, D21–D28, SOP-04 written; slice SOP-03, D14–D20; slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
+Updated in slice SOP-05a · owner answers D29–D35 applied (SOP-04 v1.1); SOP-05 split into 05a/05b per D35; SOP-05a written (v1.0 draft) (earlier: slice SOP-04, D21–D28, SOP-04 written; slice SOP-03, D14–D20; slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
 
 Every SOP below is mapped to the **real code** it will be verified against. Code sizes come from a census of the tree (`.ts/.tsx` files and lines) and show how much audit work each slice involves. "Requested" quotes the owner. EXISTS/PARTIAL/MISSING is the recon verdict and is re-verified in depth in the SOP's own slice.
 
@@ -46,6 +46,9 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 #### SOP-05a · Inventory Core: lots, holds, labels, labs, expiry (daily)
 **Code:** `/admin/inventory` (`page.tsx` 1,297 lines, `actions.ts` 1,260), `/admin/inventory/[id]` (lot page, 1,560 lines: lifecycle status, edit, carry-over F-04-2 / G-19), `/admin/inventory/lots/[id]/label`, `/admin/inventory/tags`, `/admin/inventory/labs` (`testing-labs-*`, `coa-*`), `/admin/inventory/expiration-rules` (`expiry-rules-*`), recall holds (`src/lib/pos/recall-hold-*`), restore to sale (`restore-to-sale-*`), register sellability (`register-sellability-store.ts`), oversold report (`oversold-report-*`), low stock (`src/lib/pos/low-stock-core.ts`), register stock flags (`/api/pos/stock-flag`, `stock-flag-core.ts`).
+
+**Status:** **WRITTEN** in slice SOP-05a as `docs/sop/SOP-05a-inventory-core.md` v1.0 (draft for owner review). Covers the lot from go-live to sold out: reading the Inventory list and lot page, lifecycle status and recall holds, manual adjustments, restore to sale, the register 86, expiry dates and expiration rules, labels, tags, testing labs and COAs, bulk fill, the Issues tab, and a written recall plan (WAC 314-55-225). Forms 8.1–8.5 (status/recall log, adjustment log, daily Issues check, recall plan, recall event worksheet). 17 findings (F-05a-1…F-05a-16 + F-05a-C), gaps G-22…G-26 (G-19 extended), open questions Q-05a-1…Q-05a-5.
+**SOP-05a audit verdict: MET with serious gaps.** The daily lot work runs end to end and every rule is enforceable on paper today. Gaps: setting **Destroyed** by hand leaves units on file and drops the lot from the CCRS Inventory file (F-05a-1, **S1**; G-22). A recall hold is placed and released with no audit, no reason and no role limit (F-05a-2, **S1**; G-22). Manual adjustments are not atomic, can go negative and offer Receive / Destruction / Recall removal reasons that bypass CCRS and SOP-15 (F-05a-3…F-05a-7; G-23). Nothing stops the register selling an expired lot (F-05a-8; G-24, waits on Q-05a-1). There is no recall plan or log in the app, and a recall hold does not reach the website or online orders (F-05a-15, F-05a-16; G-25). The concierge has no recall or expiry content (F-05a-C).
 
 #### SOP-05b · Non-Cannabis, Merch, Menu Publishing & Classification
 **Code:** `/admin/inventory/noncannabis` (+ `[id]/label`, ≈2k lines), `/admin/inventory/merch` (Greenway Merchandising LLC, never on the cannabis POS), `/admin/publish` (`menu.import`; `src/lib/pos/publish-*`), `/admin/settings/types` (Types & Categories, `settings.manage`), `/admin/compliance/classification` (sales-limit worklist, `classification-status-*`).
@@ -132,7 +135,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-02** | Master Till / Safe | Same cash model; finish while it is loaded in context | S · **DONE** (draft v1.2) |
 | **SOP-03** | EOD Close & Deposit Bag | Completes the cash chain till → safe → bank | M · **DONE** (draft v1.1) |
 | **SOP-04** | Receiving Intake (+ monthly CCRS PRR) | Rule 11: the business-critical pipeline | XL · **DONE** (draft v1.1) |
-| **SOP-05a** | Inventory Core: lots, holds, labels, labs, expiry | Follows intake downstream; split per D35 | L |
+| **SOP-05a** | Inventory Core: lots, holds, labels, labs, expiry | Follows intake downstream; split per D35 | L · **DONE** (draft v1.0) |
 | **SOP-05b** | Non-Cannabis, Merch, Menu Publishing & Classification | Second half of SOP-05 (D35) | L |
 | **SOP-06** | Cycle Counts, Audits & Daily Checklists | Depends on SOP-05 vocabulary | M |
 | **SOP-15** | Returns to Vendor & Destruction | Inventory exit, license-critical | M |
