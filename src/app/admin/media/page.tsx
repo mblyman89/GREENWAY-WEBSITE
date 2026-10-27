@@ -5,7 +5,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { countMedia, publicUrlForKey } from "@/lib/media/store";
-import { listAllMedia, buildMediaUses } from "@/lib/media/folders-server";
+import { listAllMedia, buildMediaUses, loadMediaUseSources } from "@/lib/media/folders-server";
 import { folderIndex, buildFolderTree, folderTrail, safeFolderId, type FolderNode } from "@/lib/media/folders-core";
 import { MediaFolderTree } from "@/components/admin/media/MediaFolderTree";
 import type { MediaAsset } from "@/lib/supabase/types";
@@ -48,11 +48,14 @@ export default async function MediaPage({
     );
   }
 
-  const counts = await countMedia();
   // R65: load EVERY asset (the old page only ever showed the newest 200),
   // work out where each is used, then file them into smart folders.
-  const everything = await listAllMedia();
-  const uses = await buildMediaUses(everything);
+  // PERF-S10: counts, the asset list and the 11 usage-source reads all run in
+  // PARALLEL (they used to be three serial steps).
+  const sourcesPromise = loadMediaUseSources();
+  sourcesPromise.catch(() => undefined);
+  const [counts, everything] = await Promise.all([countMedia(), listAllMedia()]);
+  const uses = await buildMediaUses(everything, sourcesPromise);
   const index = folderIndex(everything, uses);
   const tree = buildFolderTree(index);
   const ql = (q ?? "").trim().toLowerCase();
