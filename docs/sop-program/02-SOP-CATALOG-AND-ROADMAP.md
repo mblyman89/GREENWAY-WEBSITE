@@ -1,18 +1,21 @@
 # SOP Program — Catalog of SOPs + Slice Roadmap
 
 Slice SOP-00 · 2026-10-27 · audited at `main@54445a68`
+Updated in slice SOP-01 · 2026-10-27 · owner answers D1–D9 applied (see `00-OWNER-REQUEST-VERBATIM.md`), SOP-21 SEO added (D6)
 
 Every SOP below is mapped to the **real code** it will be verified against. Code sizes come from a census of the tree (`.ts/.tsx` files and lines) and show how much audit work each slice involves. "Requested" quotes the owner. EXISTS/PARTIAL/MISSING is the recon verdict and is re-verified in depth in the SOP's own slice.
 
 ---
 
-## Part 1 — The SOP catalog (20 SOPs)
+## Part 1 — The SOP catalog (21 SOPs)
 
 ### SOP-01 · Register Operations: Shift, Till & Cash (the flagship)
 **Audience:** every employee (budtender), plus a manager section · **Requested:** clocking in, counting the till, entering the amount, closing the till, what to do with the money, balancing, second-person sign-off, shift-close and day-close reports, the EOD sheet, morning recount → seal bag → safe → bank.
 **Code (≈25.6k lines, 70 files):** `src/app/pos/RegisterShell.tsx`, `SaleFlow.tsx`, `RegisterCartEditor.tsx`, `RegisterInterruptModal.tsx`; `/api/pos/{unlock,till,approve,witness,void,returns,day-report,sync,transactions,reprint,email-receipt,loyalty,member*,stock-flag,interrupts,pickup}`; `src/lib/pos/{till-core,sale-flow-core,day-report-core,void-sale-core,returns-core,price-override-core,cash-rounding-core,change-calc-core,id-scan-core,medical-pos-core,special-discount-sale-core,employee-loan-core,receipt-*}`; `src/lib/registers/*`; `/admin/registers/**`; `src/lib/compliance/sales-limit*`, `sales-hours-*`.
 **Covers:** unlock & PIN; handbook gate; clock in/out at the register; count-in (denominations); ringing a sale (scan-required, ID check, sales limits, medical, special discounts, rounding, change); hold/resume; no-sale, price override, void (manager/lead PIN); returns desk; mid-shift drops (witness PIN); safe swaps (approver PIN); blind close + tips; X/Z day report; what to do with the cash; manager reconcile + morning verify; EOD report; offline mode and the exception queue.
-**Recon verdict:** count-in, drop, swap, blind close, reconcile and the EOD print **EXIST**. Second-person close sign-off is **MISSING** (F-00-5). Morning recount is **BROKEN/PARTIAL** (F-00-3, F-00-4). Bag seal → safe → bank is **MISSING** in the UI (F-00-6). Report export is **MISSING** (print only, F-00-8).
+**Status:** **WRITTEN** in slice SOP-01 as `docs/sop/SOP-01-register-operations.md` v1.0 (draft for owner review). Per D9 it covers every kind of sale, every discount, every block and warning, and how to read the register and checkout screens. 16 findings (F-01-1…F-01-16), gaps G-01…G-05 in `05-GAP-REGISTER.md`.
+**SOP-01 audit verdict:** count-in, drop, swap, blind close, reconcile, verify, X/Z report, offline queue **EXIST**. Expected close shows $0.00 on the reconcile screen (F-01-3). Cash sales are hand-typed (F-01-4, S1). Second count at close **MISSING** (F-01-9, D2). Swap denominations **MISSING** (F-01-8, D3). $5 warnings screen **MISSING** (F-01-11, D7). Medical test mode can record a tax-removed sale with no exemption record (F-01-14, S1).
+**Recon verdict (SOP-00, kept for history):** count-in, drop, swap, blind close, reconcile and the EOD print **EXIST**. Second-person close sign-off is **MISSING** (F-00-5). Morning recount is **BROKEN/PARTIAL** (F-00-3, F-00-4). Bag seal → safe → bank is **MISSING** in the UI (F-00-6). Report export is **MISSING** (print only, F-00-8).
 
 ### SOP-02 · Master Till / Store Safe Routine
 **Audience:** opening + closing employees, manager · **Requested:** count twice a day (AM/PM); balance using small bills from the little safe in exchange for big bills from the master; exportable and printable.
@@ -49,7 +52,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 ### SOP-09 · Purchasing & Purchase Orders (incl. vendor menus: Cultivera / GrowFlow / LeafLink / emailed)
 **Audience:** purchase manager · **Requested:** "purchase orders and how to fetch the menu from Cultivera marketplace and growflow marketplace."
-**Code (≈20.8k lines):** `/admin/purchasing/**`, `/purchasing/menus/**` (`cultivera`, `growflow`, `leaflink`, `email`), `src/lib/purchasing/*` (po-core, po-builder, po-document, po-review-ai, unified-search), crawler worker (`crawler/app/*_auth.py`, `*_api.py`), `/admin/vendor-payments` (AP, drafts-only NACHA), `/admin/discovery`. **Owner question Q4** (F-00-15) must be answered first.
+**Code (≈20.8k lines):** `/admin/purchasing/**`, `/purchasing/menus/**` (`cultivera`, `growflow`, `leaflink`, `email`), `src/lib/purchasing/*` (po-core, po-builder, po-document, po-review-ai, unified-search), crawler worker (`crawler/app/*_auth.py`, `*_api.py`), `/admin/vendor-payments` (AP, drafts-only NACHA), `/admin/discovery`.
+**Owner answer D4:** *"The po builder using the crawler will continue to be allowed going forward and should have a proper sop explaining how to use it, and save the data we get from it."* SOP-09 therefore includes a full **crawler PO builder** procedure, and the slice audits whether fetched menu data is saved (gap G-07). The "ONE-TIME IMPORT ONLY" banner (F-00-15) is a doc fix for Phase C.
 
 ### SOP-10 · Product Enrichment & Mastering + Vendor/Brand Enrichment
 **Audience:** content/inventory staff · **Requested:** "product enrichment and how to do it, as well as vendor enrichment."
@@ -59,8 +63,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 **Audience:** content editor, manager · **Requested:** "utilize the creative studio to create banners, ads and marketing content, graphics for garments."
 **Code (≈18.3k lines):** `/admin/marketing`, `/admin/marketing/midjourney` (Creative Studio), `/admin/merch-studio` (garment graphics, proofs, ads), `/admin/merch-site/*`, `src/lib/marketing/*` (campaign-rules-core: WA advertising compliance, creative placements), `src/lib/merch-studio/*`, banner studio, `/admin/helpers`, WAC 314-55-155 advertising rules (already in `compliance-general`).
 
-### SOP-12 · Digital Content: Digital Assets, Website Content & Scheduling
-**Audience:** content editor · **Requested:** "how to use digital content." **Assumption to confirm (Q5):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
+### SOP-12 · Digital Assets (Mktg & Adv menu): use, clean up, keep organized
+**Audience:** content editor · **Requested:** "how to use digital content." **Owner answer D5:** it is *"the digital assets page in the mktg & adv dropdown menu"*. The SOP covers how to use it, clean it up and keep it organized (`/admin/media`, nav label "Digital Assets", group MKTG & ADV, permission `media.manage`). SEO moved to its own SOP-21 (D6). **Original assumption (superseded):** I read this as the **Digital Assets** media library (renamed from Media Library in R69) plus the website content tools that use it (shop banner, carousel, content schedule/releases, SEO, store listing). If you meant in-store screens/menu boards: **no such feature exists in the code** (verified: no signage/menu-board module).
 **Code (≈28.7k lines):** `/admin/media/**`, `src/lib/media/*` (upload policy, folders, optimize), `/admin/content/*`, `src/lib/cms/*`, the content-schedule cron.
 
 ### SOP-13 · Online Orders (website pickup + Leafly orders + merch orders)
@@ -92,6 +96,11 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 ### SOP-20 · Incident, Security & Emergency Procedures
 **Audience:** all staff · **Added (enterprise recommendation).** Covers cash discrepancy over threshold, suspected theft, robbery, power or internet outage (register offline mode), system down, recall notice (recall-hold), LCB inspection visit, who to call. Built only from what the system and existing docs support. Anything policy-only is marked as **owner to confirm**.
 
+### SOP-21 · SEO (search engine optimization)
+**Audience:** content editor, manager · **Requested (D6):** *"we should add an seo sop"*.
+**Code (≈1.9k lines, recon only, mapped in full in its slice):** `/admin/content/seo` (`page.tsx`), `src/components/admin/SeoEntryEditor.tsx`, `src/lib/seo/*` (`seo.ts`, `seo-override-core.ts`, `seo-entries-server.ts`, `store-hours-*`), `src/lib/cms/ai-seo.ts`, `src/lib/enrichment/seo-draft-core.ts` (AI drafts, **drafts-only, rule 3**), `src/components/seo/JsonLd.tsx`, `src/app/sitemap.ts`, `src/app/robots.ts`, per-page metadata on public pages.
+**Recon verdict:** SEO editor + overrides + structured data **EXIST**. Verified in its slice. Advertising wording must still follow WAC 314-55-155 (see SOP-11).
+
 > **Program governance (not a numbered SOP).** `SOP-00 · How SOPs are written, versioned, acknowledged and updated`. Document control: owner approval, version bump rules, re-acknowledgment, annual review. Written in the integration phase.
 
 ---
@@ -103,7 +112,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | Slice | SOP | Why this position | Est. audit size |
 |---|---|---|---|
 | **SOP-00** | Recon + roadmap (this) | Owner asked for it first | — |
-| **SOP-01** | Register Operations | Owner's first and most detailed request; most findings already | XL (25.6k) |
+| **SOP-01** | Register Operations | Owner's first and most detailed request; most findings already | XL (25.6k) · **DONE** (draft v1.0) |
 | **SOP-02** | Master Till / Safe | Same cash model; finish while it is loaded in context | S |
 | **SOP-03** | EOD Close & Deposit Bag | Completes the cash chain till → safe → bank | M |
 | **SOP-04** | Receiving Intake | Rule 11: the business-critical pipeline | XL |
@@ -116,29 +125,32 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-08** | New Hire & Access | Needed before rollout of the SOP library | M |
 | **SOP-19** | Customers, ID, Limits, Medical | Floor compliance | M |
 | **SOP-17** | Hardware | Self-contained | M |
-| **SOP-09** | Purchasing & Vendor Menus | Needs Q4 answered | L |
+| **SOP-09** | Purchasing, Vendor Menus & Crawler PO Builder | Q4 answered (D4): crawler PO builder approved; own procedure + saved data | L |
 | **SOP-10** | Enrichment (product + vendor) | | L |
 | **SOP-11** | Creative & Merch Studio | | M |
-| **SOP-12** | Digital Content | Needs Q5 answered | M |
+| **SOP-12** | Digital Assets page | Q5 answered (D5) | M |
+| **SOP-21** | SEO | New per D6; pairs with SOP-12 | M |
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |
 | **SOP-INT** | Phase C strategy session | Walk the findings ledger + gap register with the owner | — |
 
-Each slice ends the same way: commit `docs/sop/SOP-XX-*.md` + ledger updates → push → PR → rebase-merge → sync main. That is 20 PRs, each small and independently reviewable.
+Each slice ends the same way: commit `docs/sop/SOP-XX-*.md` + ledger updates → push → PR → rebase-merge → sync main. That is 21 PRs, each small and independently reviewable.
 
 **Pace:** one SOP per slice, as the owner asked. XL slices (01, 04, 05, 14) may need a mid-slice WIP push for sandbox safety (rule 14). The SOP is still delivered as one unit.
 
 ---
 
-## Part 3 — Open questions for the owner (answers change what the SOPs say)
+## Part 3 — Owner questions: ANSWERED (2026-10-27)
 
-| # | Question | Blocks |
-|---|---|---|
-| **Q1** | Should each SOP need an in-app "read & acknowledged" sign-off (like the handbook), and should SOP-01 acknowledgment **gate register unlock**? | Phase D design |
-| **Q2** | Second-person till sign-off: at **every close** (night) only, or also at **count-in** (morning)? Must the second person be a lead/manager, or any employee (like the employee-purchase witness)? | SOP-01 wording and the build spec |
-| **Q3** | The "little safe": is it a separate physical safe whose balance we should **track and count** (a second $ target), or just a supply of small bills with no tracked balance? What is its target amount? | SOP-02 |
-| **Q4** | Is browsing **Cultivera Marketplace** vendor menus to build POs an ongoing, approved workflow (rule 11 only forbids it as a product-entry path)? | SOP-09 |
-| **Q5** | "Digital content": the Digital Assets library + website content tools, or in-store TV/menu screens (which do not exist in the code)? | SOP-12 |
-| **Q6** | Over/short tolerance: is there a dollar threshold that must be escalated (for example ±$5 = note, ±$20 = manager call)? None exists in code today. I will not invent one. | SOP-01/03 |
-| **Q7** | Who is "manager" at the register? The code's PIN approver roles are `manager` and `lead` (employee `job_role`), separate from back-office `StaffRole`. Is that split intended? | SOP-01/08 |
+The owner answered every question. The decision record (D1–D9, with verbatim quotes) is in `00-OWNER-REQUEST-VERBATIM.md`. The original questions are kept below for history.
+
+| # | Question (original) | Owner answer | Decision | Where it lands |
+|---|---|---|---|---|
+| **Q1** | In-app "read & acknowledged" sign-off; should SOP-01 gate register unlock? | "no … the system doesn't need to require anything from them" | **D1** — no gate, no required acknowledgment | Phase D (ack design dropped) |
+| **Q2** | Second-person till sign-off: close only or also count-in? Lead/manager or any employee? | "close only, and it can be any second employee" | **D2** | SOP-01 §4.27 step 8, form 8.4 · gap G-01 |
+| **Q3** | Little safe: tracked balance/target, or just a supply? | "no, I just want to know when big bills leave the master till and go into the little safe. And what the small bills and coin are that came out of the little safe." | **D3** — no balance; log the denominations both ways | SOP-01 §4.26, form 8.3 · SOP-02 · gap G-02 |
+| **Q4** | Is browsing Cultivera menus to build POs an ongoing approved workflow? | "The po builder using the crawler will continue to be allowed going forward and should have a proper sop explaining how to use it, and save the data we get from it." | **D4** | SOP-09 · gap G-07 |
+| **Q5** | "Digital content": Digital Assets library or in-store screens? | "the digital assets page in the mktg & adv dropdown menu … clean it up and keep it organized" | **D5** (+ **D6** SEO SOP) | SOP-12 · new SOP-21 |
+| **Q6** | Over/short tolerance threshold? | "$5. It should be an admin only screen … Just warnings for now. Who, when, how much, their reason … (should be required …)" | **D7** — $5; admin-only warnings screen; reason required | SOP-01 §4.30, form 8.5 · gap G-03 |
+| **Q7** | Is the `job_role` (register) vs `StaffRole` (back office) split intended? | "yes, please keep those separate … not all users are employees. All employees are users." | **D8** | SOP-01 §2 · SOP-08 |

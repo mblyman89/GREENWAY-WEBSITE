@@ -1,5 +1,7 @@
 # Greenway POS — Operations Guide
 
+> **Note (SOP program, 2026-10-27):** parts of this guide are stale (finding F-00-11). For day-to-day register work, use **[SOP-01 Register Operations](sop/SOP-01-register-operations.md)**. Once the owner approves it, SOP-01 supersedes §2 (Daily operations) of this guide. Nothing here has been deleted.
+
 *POS Slice B18 (Task AD). Handoff-ready reference for owners, managers, and
 budtenders. Every statement in this guide was verified against the code that
 ships it — file references are included so a future maintainer can follow the
