@@ -143,6 +143,15 @@ async function extractPdfTextWithRecovery(
  * the markdown flattened to plain text, and (when the primary text came from
  * LlamaParse) the PDF's own unpdf text layer. Free; never throws.
  */
+/** Copy bytes before pdf.js can detach them; a detached/empty input yields an empty copy. */
+function safeCopy(bytes: Uint8Array): Uint8Array {
+  try {
+    return bytes.slice();
+  } catch {
+    return new Uint8Array(0);
+  }
+}
+
 async function altTexts(primary: string, bytes: Uint8Array, primaryWasVision: boolean): Promise<string[]> {
   const out: string[] = [];
   const plain = markdownToPlain(primary);
@@ -172,7 +181,7 @@ export async function parsePdfManifest(
   recoverText?: PdfTextRecovery,
 ): Promise<PdfManifestResult> {
   // unpdf first (free); LlamaParse recovery only when unpdf yields nothing.
-  const keep = bytes.slice(); // R74 S51: pdf.js may detach the buffer it reads
+  const keep = safeCopy(bytes); // R74 S51: pdf.js may detach the buffer it reads
   const text = await extractPdfTextWithRecovery(bytes, recoverText);
 
   // R74 S9: the layout dispatch lives in the pure pdf-manifest-dispatch-core (same parsers, same
@@ -225,7 +234,7 @@ export async function parseCoaFromBase64(
     return { ok: false, error: "Attachment was not valid base64.", text: null };
   }
   // unpdf first (free); LlamaParse recovery only when a scanned COA has no text.
-  const keep = bytes.slice(); // R74 S51
+  const keep = safeCopy(bytes); // R74 S51
   const text = await extractPdfTextWithRecovery(bytes, recoverText);
   if (!text.trim()) {
     return { ok: false, error: "The COA PDF has no extractable text.", text: "" };
