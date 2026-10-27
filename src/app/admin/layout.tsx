@@ -5,15 +5,10 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { AdminTopNav } from "@/components/admin/AdminTopNav";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
 import { ToastProvider, ScrollKeeper, PendingKeeper, AdminBlockFocus, EditConflictNotice } from "@/components/admin/ux";
-import { HelpLauncher } from "@/components/admin/HelpLauncher";
-import { CommandPalette } from "@/components/admin/CommandPalette";
-import { ConciergeWidget } from "@/components/admin/ConciergeWidget";
-import { MobileLauncher } from "@/components/admin/mobile/MobileLauncher";
+import { LazyAdminWidgets } from "@/components/admin/perf/LazyAdminWidgets";
+import { AdminNavWithBadges } from "@/components/admin/perf/AdminNavWithBadges";
 import { adminNav } from "@/components/admin/admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
-import { posExceptionSnapshot } from "@/lib/pos/sync-store";
-import { formatBadgeCount } from "@/lib/pos/exception-reminder-core";
-import { countWaitingForOwner } from "@/lib/payments/ach-requests-store";
 import { backOfficeGateForStaff } from "@/lib/staffing/handbook-ack-store";
 import { HandbookGateScreen } from "@/components/admin/HandbookGateScreen";
 import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
@@ -97,34 +92,26 @@ export default async function AdminLayout({
       group: item.group,
     }));
 
-  // AN-6: unresolved POS-exception count → nav badge on "Register Activity"
-  // (and its Employee group tab). Only fetched for roles that can even open
-  // the page; best-effort inside posExceptionSnapshot (failure → 0 → no chip).
-  const badges: Record<string, string> = {};
-  if (can(session.profile.role, "orders.manage" as Permission)) {
-    const snap = await posExceptionSnapshot();
-    const label = formatBadgeCount(snap.count);
-    if (label) badges["/admin/registers"] = label;
-  }
-  // R41 S0 (D-6): Michael sees how many of Stephen's ACH requests and stop
-  // actions are waiting for him on the Banking nav item. Best-effort: a read
-  // failure counts as 0 (countWaitingForOwner never throws on a query error).
-  if (session.profile.role === "owner") {
-    const waiting = await countWaitingForOwner().catch(() => ({ pending: 0, toReview: 0 }));
-    const label = formatBadgeCount(waiting.pending + waiting.toReview);
-    if (label) badges["/admin/settings/banking"] = label;
-  }
+  // AN-6 + R41 S0 (D-6): nav badges (POS exceptions for orders.manage roles,
+  // Michael's waiting ACH items for the owner). PERF-S3: these are no longer
+  // awaited here. They stream in behind <Suspense>, fetched in parallel and
+  // cached for 30 s (src/components/admin/perf/admin-badges-server.ts); the
+  // fallback is the identical nav without chips.
+  const showExceptionBadge = can(session.profile.role, "orders.manage" as Permission);
+  const showOwnerBadge = session.profile.role === "owner";
+  const navBase = {
+    role: session.profile.role,
+    fullName: session.profile.full_name ?? "",
+    email: session.email,
+  };
 
   return (
     <AdminDocument>
     <div className="admin-shell flex min-h-screen flex-col">
       <div className="admin-chrome">
-        <AdminTopNav
-          role={session.profile.role}
-          fullName={session.profile.full_name ?? ""}
-          email={session.email}
-          badges={badges}
-        />
+        <Suspense fallback={<AdminTopNav {...navBase} />}>
+          <AdminNavWithBadges {...navBase} exceptions={showExceptionBadge} owner={showOwnerBadge} />
+        </Suspense>
       </div>
       <main className="admin-main min-w-0 flex-1">
         {/* H12e/H13a: restore the scroll position after server-action saves —
@@ -146,10 +133,8 @@ export default async function AdminLayout({
         <ToastProvider>{children}</ToastProvider>
       </main>
       <div className="admin-chrome">
-        <HelpLauncher />
-        <CommandPalette items={paletteItems} />
-        <ConciergeWidget />
-        <MobileLauncher />
+        {/* PERF-S3: code-split, loaded after hydration. */}
+        <LazyAdminWidgets paletteItems={paletteItems} />
       </div>
     </div>
     </AdminDocument>
