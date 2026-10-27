@@ -356,7 +356,7 @@ describe("SLICE 122 (SET-3): hero image lives in the presentation model", () => 
 
 describe("SLICE 122 (SET-3): public hero image = presentation first, then copy", () => {
   it("specials/page.tsx feeds the hero image with a graceful fallback", () => {
-    const src = read("src/app/specials/page.tsx");
+    const src = read("src/app/(site)/specials/page.tsx");
     // presentation wins when set; otherwise the seeded content-copy image; else
     // undefined. This keeps the live page byte-identical until Michael edits.
     expect(src).toContain(

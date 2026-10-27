@@ -63,7 +63,7 @@ describe("R41 S6 all banners", () => {
   });
 
   it("Home page uses the shared pinnedImageFocus (no local copy)", () => {
-    const src = read("src/app/page.tsx");
+    const src = read("src/app/(site)/page.tsx");
     expect(src).not.toContain("function pinnedFocus");
     expect(src).toContain("imageFocus={pinnedImageFocus(s.imageFocus)}");
   });

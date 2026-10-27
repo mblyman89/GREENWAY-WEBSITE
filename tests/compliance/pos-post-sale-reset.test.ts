@@ -32,8 +32,8 @@ import { describe, expect, it } from "vitest";
 
 import { evaluateResume, snapshotFromSale, type ActiveSaleLine, type ResumableVerdict } from "@/lib/pos/active-sale-resume-core";
 
-const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
-const saleFlow = readFileSync(join(process.cwd(), "src/app/pos/SaleFlow.tsx"), "utf8");
+const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
+const saleFlow = readFileSync(join(process.cwd(), "src/app/(site)/pos/SaleFlow.tsx"), "utf8");
 
 /** Collapse whitespace so assertions survive reformatting. */
 const flat = (s: string) => s.replace(/\s+/g, " ");

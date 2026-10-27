@@ -105,7 +105,7 @@ describe("R29 - ratio product card (rendered)", () => {
 });
 
 describe("R29 - the PDP uses the same slot helpers as the card (no drift)", () => {
-  const pdp = readFileSync(join(process.cwd(), "src/app/menu/products/[id]/page.tsx"), "utf8");
+  const pdp = readFileSync(join(process.cwd(), "src/app/(site)/menu/products/[id]/page.tsx"), "utf8");
   it("imports the shared ratio slot + servings helpers", () => {
     expect(pdp).toContain("cardRatioSlot");
     expect(pdp).toContain("cardServingLine");

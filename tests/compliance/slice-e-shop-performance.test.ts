@@ -266,7 +266,7 @@ describe("Slice E — a cache problem degrades to slow, never to broken", () => 
 });
 
 describe("Slice E — /menu is no longer rebuilt for every visitor", () => {
-  const menuPage = () => stripComments(read("src/app/menu/page.tsx"));
+  const menuPage = () => stripComments(read("src/app/(site)/menu/page.tsx"));
 
   it("declares a revalidate window", () => {
     // Next.js: reading `searchParams` opts a page into dynamic rendering. The
@@ -372,13 +372,13 @@ describe("Slice E — the grid ships less", () => {
 describe("Slice E — the product detail page keeps its full copy", () => {
   it("loads its own item instead of receiving the trimmed grid item", () => {
     // This is why blanking `description` on the grid is safe.
-    const code = stripComments(read("src/app/menu/products/[id]/page.tsx"));
+    const code = stripComments(read("src/app/(site)/menu/products/[id]/page.tsx"));
     expect(code).toContain("getLiveMenuItemByIdCached");
     expect(code).toMatch(/item\.description/);
   });
 
   it("the grid projection is not applied on the detail page", () => {
-    const code = stripComments(read("src/app/menu/products/[id]/page.tsx"));
+    const code = stripComments(read("src/app/(site)/menu/products/[id]/page.tsx"));
     expect(code).not.toContain("toMenuGridItems");
   });
 });

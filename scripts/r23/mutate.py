@@ -38,8 +38,8 @@ LJC = "src/lib/catalog/lookup-job-core.ts"
 MFC = "src/lib/products/masters-filter-core.ts"
 SFC = "src/lib/enrichment/sensory-fill-core.ts"
 SEO = "src/lib/enrichment/seo-draft-core.ts"
-HOME = "src/app/page.tsx"
-SPEC = "src/app/specials/page.tsx"
+HOME = "src/app/(site)/page.tsx"
+SPEC = "src/app/(site)/specials/page.tsx"
 
 MUTANTS = [
     # ==================================================================== A ==

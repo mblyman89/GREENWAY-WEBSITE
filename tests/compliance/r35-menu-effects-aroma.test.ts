@@ -518,7 +518,7 @@ describe("F. wiring pins", () => {
     expect(cols.MENU_ITEM_COLUMNS).not.toMatch(/\beffects\b|aroma_notes/);
   });
   it("the product page reads own-first through resolvePageSensory and keeps the KB fallback", () => {
-    const src = read("src/app/menu/products/[id]/page.tsx");
+    const src = read("src/app/(site)/menu/products/[id]/page.tsx");
     expect(src).toMatch(/import \{ resolvePageSensory \} from "@\/lib\/menu\/product-sensory-server"/);
     expect(src).toMatch(/resolvePageSensory\(item\.id, \{ effects: knowledge\?\.effects \?\? \[\], aroma: knowledge\?\.aromaNotes \?\? \[\] \}\)/);
     expect(src).toMatch(/const kbEffects = pageSensory\.effects;/);

@@ -40,7 +40,7 @@ const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 const AGE_GATE = read("src/components/age-gate/AgeGate.tsx");
-const LAYOUT = read("src/app/layout.tsx");
+const LAYOUT = read("src/app/(site)/layout.tsx");
 const GLOBALS = read("src/app/globals.css");
 const SELFTESTS = read("scripts/compliance/run-pure-selftests.ts");
 

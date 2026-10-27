@@ -164,7 +164,7 @@ describe("the public /loyalty render uses the editable hero banner", () => {
   });
 
   it("the page resolves the presentation and feeds the signup form", () => {
-    const page = read("src/app/loyalty/page.tsx");
+    const page = read("src/app/(site)/loyalty/page.tsx");
     expect(page).toContain("LOYALTY_HERO_PRESENTATION_BLOCK");
     expect(page).toContain("resolveLoyaltyHeroPresentation");
     expect(page).toContain("heroPresentation={heroPresentation}");

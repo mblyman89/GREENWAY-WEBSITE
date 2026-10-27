@@ -39,8 +39,8 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const read = (...parts: string[]) => readFileSync(path.join(repoRoot, ...parts), "utf8");
 
 const infoPlist = read("ios", "App", "App", "Info.plist");
-const saleFlow = read("src", "app", "pos", "SaleFlow.tsx");
-const registerShell = read("src", "app", "pos", "RegisterShell.tsx");
+const saleFlow = read("src", "app", "(site)", "pos", "SaleFlow.tsx");
+const registerShell = read("src", "app", "(site)", "pos", "RegisterShell.tsx");
 const swiftPlugin = read("ios", "App", "App", "StarPrinterPlugin.swift");
 
 /** The same readers the preflight uses, so this proves the real parse. */

@@ -145,7 +145,7 @@ describe("public wiring is in place", () => {
   const header = read("src/components/site/Header.tsx");
   const desktop = read("src/components/site/DesktopMenu.tsx");
   const mobile = read("src/components/site/MobileNavigation.tsx");
-  const route = read("src/app/medical/page.tsx");
+  const route = read("src/app/(site)/medical/page.tsx");
 
   it("MedicalProgramContent renders every editable block via SiteText", () => {
     for (const cb of MEDICAL_CONTENT_BLOCKS) {

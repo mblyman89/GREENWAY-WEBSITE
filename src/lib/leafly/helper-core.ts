@@ -1141,8 +1141,8 @@ export const OTHER_SURFACES: readonly HelperWalkthrough[] = [
       },
     ],
     source: [
-      "src/app/pos/RegisterShell.tsx",
-      "src/app/pos/RegisterInterruptModal.tsx",
+      "src/app/(site)/pos/RegisterShell.tsx",
+      "src/app/(site)/pos/RegisterInterruptModal.tsx",
       "src/lib/leafly/register-claim-core.ts",
       "src/lib/announcer/announcer-core.ts",
     ],

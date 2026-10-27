@@ -55,7 +55,7 @@ describe("vendor-relations core", () => {
 
 describe("vendor-relations wiring (public vendors page)", () => {
   const directory = readFileSync("src/components/vendors/VendorDirectory.tsx", "utf8");
-  const page = readFileSync("src/app/vendor-delivery/page.tsx", "utf8");
+  const page = readFileSync("src/app/(site)/vendor-delivery/page.tsx", "utf8");
   const seeds = readFileSync("src/lib/cms/content-blocks-seed.ts", "utf8");
 
   it("VendorDirectory renders the channel cards from the shared core", () => {

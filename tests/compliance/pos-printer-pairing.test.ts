@@ -53,7 +53,7 @@ import { INTEGRATED_DEVICES } from "../../src/lib/equipment/store";
 const repoRoot = path.resolve(__dirname, "..", "..");
 const read = (...parts: string[]) => readFileSync(path.join(repoRoot, ...parts), "utf8");
 
-const registerShell = read("src", "app", "pos", "RegisterShell.tsx");
+const registerShell = read("src", "app", "(site)", "pos", "RegisterShell.tsx");
 const starBridge = read("src", "lib", "pos", "star-printer.ts");
 const pairingCore = read("src", "lib", "pos", "printer-pairing-core.ts");
 const equipmentPage = read("src", "app", "admin", "equipment", "page.tsx");

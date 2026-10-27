@@ -28,7 +28,7 @@ import {
   DEFAULT_HEADING_FONT_ID,
   DEFAULT_BODY_FONT_ID,
 } from "@/lib/cms/fonts";
-import "./globals.css";
+import "../globals.css";
 
 const ogImageUrl = `${SITE_URL}${DEFAULT_OG_IMAGE}`;
 

@@ -67,7 +67,7 @@ function assertNoCommentTraps(rel: string) {
   expect(offenders).toEqual([]);
 }
 
-const SALE_FLOW = "src/app/pos/SaleFlow.tsx";
+const SALE_FLOW = "src/app/(site)/pos/SaleFlow.tsx";
 const GRID_CORE = "src/lib/pos/sale-grid-core.ts";
 const SEARCH_CORE = "src/lib/pos/classification-search-core.ts";
 const SELFTESTS = "scripts/compliance/run-pure-selftests.ts";

@@ -207,7 +207,7 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
   // MIG-5a-fix: these 8 keys are NOT orphans and never needed a new editor.
   // They are the LEGACY render fallback behind the Home "Sections" tab, whose
   // home.category / home.brand banner rows (page_sections) are the real editor
-  // and the source of truth on the public homepage (src/app/page.tsx:
+  // and the source of truth on the public homepage (src/app/(site)/page.tsx:
   // `category?.image || copy["home.category.image"]`). MIG-5a mistakenly
   // surfaced them a SECOND time in a Page wording card (a duplicate); this fix
   // removes "home" from PAGES_WITH_WORDING and records the honest owner as the

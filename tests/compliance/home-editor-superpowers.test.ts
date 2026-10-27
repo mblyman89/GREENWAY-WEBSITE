@@ -137,7 +137,7 @@ describe("render wiring — hardcoded LIMIT = 16 is gone; count is threaded", ()
   });
 
   it("page.tsx resolves both counts from page_sections.settings and threads them", () => {
-    const src = read("src/app/page.tsx");
+    const src = read("src/app/(site)/page.tsx");
     expect(src).toContain("readHomeCardCount");
     expect(src).toContain('sections.find((s) => s.key === "home.settings")');
     expect(src).toContain("count={dailyDealsCount}");

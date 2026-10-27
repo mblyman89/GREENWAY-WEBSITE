@@ -211,11 +211,11 @@ describe("every public browsing page reads the cached loader", () => {
     // is still "/menu" -- only the file that performs the read changed, so this
     // list keeps its length and the CACHEABLE_SURFACE_NAMES cross-check holds.
     { file: "src/components/menu/ShopPage.tsx", needle: "loadLiveMenuItemsCached" },
-    { file: "src/app/page.tsx", needle: "loadLiveMenuItemsCached" },
-    { file: "src/app/specials/page.tsx", needle: "loadLiveMenuItemsCached" },
-    { file: "src/app/vendor-delivery/page.tsx", needle: "loadLiveMenuAllCached" },
+    { file: "src/app/(site)/page.tsx", needle: "loadLiveMenuItemsCached" },
+    { file: "src/app/(site)/specials/page.tsx", needle: "loadLiveMenuItemsCached" },
+    { file: "src/app/(site)/vendor-delivery/page.tsx", needle: "loadLiveMenuAllCached" },
     { file: "src/app/sitemap.ts", needle: "loadLiveMenuItemsCached" },
-    { file: "src/app/menu/products/[id]/page.tsx", needle: "getLiveMenuItemByIdCached" },
+    { file: "src/app/(site)/menu/products/[id]/page.tsx", needle: "getLiveMenuItemByIdCached" },
   ];
 
   for (const c of CASES) {
@@ -228,8 +228,8 @@ describe("every public browsing page reads the cached loader", () => {
     // SLICE H: assert across BOTH shop route files AND the shared renderer, so
     // reintroducing the uncached loader anywhere in the shop is caught.
     for (const file of [
-      "src/app/menu/page.tsx",
-      "src/app/menu/[category]/page.tsx",
+      "src/app/(site)/menu/page.tsx",
+      "src/app/(site)/menu/[category]/page.tsx",
       "src/components/menu/ShopPage.tsx",
     ]) {
       // `loadLiveMenuItemsCached` contains `loadLiveMenuItems`, so match the call.
@@ -238,7 +238,7 @@ describe("every public browsing page reads the cached loader", () => {
   });
 
   it("the product page's related-items query is cached too (it loaded the catalog twice)", () => {
-    const PID = read("src/app/menu/products/[id]/page.tsx");
+    const PID = read("src/app/(site)/menu/products/[id]/page.tsx");
     expect(PID).toContain("loadLiveMenuItemsCached()");
     expect(PID).not.toContain("await loadLiveMenuItems()");
   });

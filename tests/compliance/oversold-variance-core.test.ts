@@ -28,7 +28,7 @@ const line = (
   variantLabel: string | null = null,
 ): OversoldCartLine => ({ productName, variantLabel, quantity, unitsLeft });
 
-const saleFlow = readFileSync("src/app/pos/SaleFlow.tsx", "utf8");
+const saleFlow = readFileSync("src/app/(site)/pos/SaleFlow.tsx", "utf8");
 
 /** Comments describe intent; assertions about WIRING must read real code. */
 const stripLineComments = (s: string) =>

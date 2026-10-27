@@ -39,7 +39,7 @@ import { MENU_ROOT_PATH } from "@/lib/menu/menu-facet-core";
  * ───────
  * `searchParams` is gone from this file. The category facet — the only filter
  * with a closed, enumerable value set — was promoted to a real route segment at
- * `src/app/menu/[category]/page.tsx`, which `generateStaticParams` prerenders
+ * `src/app/(site)/menu/[category]/page.tsx`, which `generateStaticParams` prerenders
  * into the CDN as 21 indexable pages.
  *
  * NOTHING BREAKS FOR SHOPPERS

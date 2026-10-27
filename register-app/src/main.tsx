@@ -1,7 +1,7 @@
 /**
  * register-app/src/main.tsx — the packaged register's entry point.
  *
- * This is the Vite equivalent of src/app/pos/page.tsx. That file is how
+ * This is the Vite equivalent of src/app/(site)/pos/page.tsx. That file is how
  * Next.js mounts the register for the browser PWA; this is how the iPad app
  * mounts the very same component. Both render <RegisterShell/> and pass it the
  * same two props, so there is one register, mounted two ways.
@@ -20,7 +20,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { RegisterShell } from "@/app/pos/RegisterShell";
+import { RegisterShell } from "@/app/(site)/pos/RegisterShell";
 import { resolveRegisterHostConfig } from "@/lib/pos/register-host-core";
 
 import "./register.css";

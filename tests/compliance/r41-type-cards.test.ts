@@ -46,7 +46,7 @@ describe("R41 S3 Type Cards", () => {
   });
 
   it("home page passes typeCards only when the owner saved a custom list", () => {
-    const src = read("src/app/page.tsx");
+    const src = read("src/app/(site)/page.tsx");
     expect(src).toContain("hasCustomTypeCards(category?.settings)");
     expect(src).toContain("visibleTypeCards(readTypeCards(category?.settings))");
     expect(src).toContain("typeCards={typeCards}");

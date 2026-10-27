@@ -394,7 +394,7 @@ describe("BUG — defects 1 & 2: Enter did nothing, typed OR scanned", () => {
   // receipt box had onChange but no onKeyDown, and there is no wrapping
   // <form>, so the keystrokes landed and then nothing happened — which reads
   // at the counter as "the scanner is broken" when the scan worked perfectly.
-  const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+  const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
   const modal = shell.slice(shell.indexOf("function ReturnsModal("));
 
   it("the returns receipt input HANDLES Enter", () => {
@@ -427,7 +427,7 @@ describe("BUG — defects 1 & 2: Enter did nothing, typed OR scanned", () => {
     // SaleFlow's document-level wedge listeners deliberately stand down over
     // INPUT/TEXTAREA/SELECT so manual typing still works. That is correct —
     // and it is precisely why the modal had to handle its own Enter.
-    const flow = readFileSync(join(process.cwd(), "src/app/pos/SaleFlow.tsx"), "utf8");
+    const flow = readFileSync(join(process.cwd(), "src/app/(site)/pos/SaleFlow.tsx"), "utf8");
     expect(flow).toMatch(/INPUT/);
     // And the modal genuinely has no <form> doing an implicit submit. Ignore
     // comment lines — the fix's own comment mentions the word, and matching
@@ -508,7 +508,7 @@ describe("BUG — defect 3: search could not see past the item preview", () => {
   });
 
   it("the register no longer re-filters client-side over what it holds", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     // Re-running searchTransactions in the browser would re-introduce the
     // "only searches the 50 rows already fetched" bug on top of the fix.
     expect(shell.includes("searchTransactions")).toBe(false);
@@ -713,13 +713,13 @@ describe("BUG — defect 4b: 'we stopped looking' is never shown as 'nothing exi
   });
 
   it("the register SHOWS the truncation warning to staff", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     expect(shell).toContain("historyTruncated");
     expect(shell).toContain("use its receipt number");
   });
 
   it("the empty state distinguishes 'no match' from 'no sales at all'", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     expect(shell).toContain("Nothing matches");
     expect(shell).toContain("No register sales in the last");
   });
@@ -837,7 +837,7 @@ describe("BUG — the API carries the query, and the panel sends it", () => {
   });
 
   it("the register uses that pure builder rather than its own string", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     expect(shell).toContain("historyRequestPath(query)");
   });
 
@@ -854,20 +854,20 @@ describe("BUG — the API carries the query, and the panel sends it", () => {
   });
 
   it("the register uses that pure reader rather than reading json itself", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     expect(shell).toContain("readHistoryResponse(json)");
     expect(shell).toContain("setHistoryTruncated(parsed.scanTruncated)");
   });
 
   it("typing is DEBOUNCED so a name is one query, not nine", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     expect(shell).toContain("HISTORY_SEARCH_DEBOUNCE_MS");
     expect(shell).toContain("setTimeout");
     expect(shell).toContain("clearTimeout");
   });
 
   it("a slow earlier response cannot overwrite a newer one", () => {
-    const shell = readFileSync(join(process.cwd(), "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = readFileSync(join(process.cwd(), "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     // Out-of-order autocomplete: typing "kush" then the late "ku" response
     // landing last would show the wrong results with the right text in the box.
     expect(shell).toContain("historySeqRef");

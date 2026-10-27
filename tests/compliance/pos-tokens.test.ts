@@ -23,8 +23,8 @@ const TOKENS_CSS = fs.readFileSync(path.join(ROOT, "src/app/pos-tokens.css"), "u
 const GLOBALS_CSS = fs.readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
 
 const REGISTER_FILES = [
-  "src/app/pos/RegisterShell.tsx",
-  "src/app/pos/SaleFlow.tsx",
+  "src/app/(site)/pos/RegisterShell.tsx",
+  "src/app/(site)/pos/SaleFlow.tsx",
 ];
 
 /** Names declared in a given CSS block, e.g. "--pos-surface". */

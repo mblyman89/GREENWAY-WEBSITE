@@ -42,7 +42,7 @@ describe("R41 S4 Specials hero", () => {
   });
 
   it("public page prefers saved buttons, else the legacy row", () => {
-    const src = read("src/app/specials/page.tsx");
+    const src = read("src/app/(site)/specials/page.tsx");
     expect(src).toContain("buttons: presentation.heroButtonsSet ? presentation.heroButtons : hero?.buttons");
   });
 

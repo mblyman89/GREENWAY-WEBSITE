@@ -74,7 +74,7 @@ describe("vendor directory enrichment (SLICE 97)", () => {
   });
 
   it("page + card + store wiring persisted", () => {
-    const page = read("src/app/vendor-delivery/page.tsx");
+    const page = read("src/app/(site)/vendor-delivery/page.tsx");
     expect(page).toContain("enrichVendorDirectory(buildVendorDirectory(menuItems), profiles)");
     expect(page).toContain("listPublicVendorProfiles()");
     const card = read("src/components/vendors/VendorDirectory.tsx");

@@ -123,7 +123,7 @@ describe("the real capacitor.config.ts", () => {
   });
 
   it("keeps every register dialog pannable instead of clipping tall content", () => {
-    for (const file of ["src/app/pos/RegisterShell.tsx", "src/app/pos/SaleFlow.tsx"]) {
+    for (const file of ["src/app/(site)/pos/RegisterShell.tsx", "src/app/(site)/pos/SaleFlow.tsx"]) {
       const src = read(path.join(repoRoot, file));
       // A centred, non-scrolling overlay clips anything taller than the iPad.
       expect(src).not.toMatch(/fixed inset-0 z-50 flex items-center justify-center/);
@@ -134,7 +134,7 @@ describe("the real capacitor.config.ts", () => {
         expect(cls).toContain("*:my-auto");
       }
     }
-    const sale = read(path.join(repoRoot, "src/app/pos/SaleFlow.tsx"));
+    const sale = read(path.join(repoRoot, "src/app/(site)/pos/SaleFlow.tsx"));
     expect(sale).not.toContain("lg:h-dvh lg:min-h-0 lg:overflow-hidden");
     expect(sale).toContain("lg:overflow-y-auto");
   });

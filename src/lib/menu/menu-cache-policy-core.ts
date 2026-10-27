@@ -122,32 +122,32 @@ export const MENU_READ_SURFACES: readonly MenuReadSurface[] = [
   // ── Safe to cache: read-only, public, display-only ──────────────────────
   {
     name: "Shop menu (/menu)",
-    anchor: "src/app/menu/page.tsx:57",
+    anchor: "src/app/(site)/menu/page.tsx:57",
     cacheable: true,
     reason: "Browsing surface. Shows cards; charges nobody.",
   },
   {
     name: "Home page featured products (/)",
-    anchor: "src/app/page.tsx:63",
+    anchor: "src/app/(site)/page.tsx:63",
     cacheable: true,
     reason: "Browsing surface. Shows cards; charges nobody.",
   },
   {
     name: "Specials (/specials)",
-    anchor: "src/app/specials/page.tsx:42",
+    anchor: "src/app/(site)/specials/page.tsx:42",
     cacheable: true,
     reason: "Browsing surface. Shows cards; charges nobody.",
   },
   {
     name: "Product detail (/menu/products/[id])",
-    anchor: "src/app/menu/products/[id]/page.tsx:109",
+    anchor: "src/app/(site)/menu/products/[id]/page.tsx:109",
     cacheable: true,
     reason:
       "Browsing surface. The price shown is re-verified server-side at order placement by repriceOrderLines, so a stale card cannot become a stale charge.",
   },
   {
     name: "Vendors & Partners (/vendor-delivery)",
-    anchor: "src/app/vendor-delivery/page.tsx:38",
+    anchor: "src/app/(site)/vendor-delivery/page.tsx:38",
     cacheable: true,
     reason: "Directory derived from menu vendor names. Display only.",
   },

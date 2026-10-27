@@ -3,14 +3,14 @@
  *
  * THE DEFECT
  * ──────────
- * `src/app/loading.tsx` was the ONLY loading file in the entire app. Next.js
+ * `src/app/(site)/loading.tsx` was the ONLY loading file in the entire app. Next.js
  * resolves `loading.js` by walking UP the segment tree from the requested
  * route, so a shopper opening `/menu` was served the ROOT skeleton — which is
  * shaped like the HOME page: a `film-strip` hero and a `md:grid-cols-3` row of
  * three promo cards. Nothing about it resembles a shop.
  *
  * This was not inferred. The raw first chunk off the wire was dumped and
- * matched byte-for-byte against `src/app/loading.tsx`.
+ * matched byte-for-byte against `src/app/(site)/loading.tsx`.
  *
  * Measured on the live site (Node fetch, `Accept-Encoding: identity`, reading
  * the body chunk by chunk — `curl` buffers and misreports chunk timing):
@@ -99,7 +99,7 @@ export const CARD_MIN_HEIGHT = "min-h-[37.25rem]";
  *
  * SLICE G — THE SECOND MEASURED SHIFT
  * ───────────────────────────────────
- * `src/app/menu/loading.tsx` rendered no header; `src/app/menu/page.tsx`
+ * `src/app/(site)/menu/loading.tsx` rendered no header; `src/app/(site)/menu/page.tsx`
  * renders `<Header />`. When the route handed off, the header appeared and
  * pushed everything below it down. Captured as a position timeline on the live
  * deployment (412px, 4x CPU throttle, Slow 4G):

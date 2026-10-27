@@ -74,7 +74,7 @@ describe("registry + seed", () => {
 
 describe("public render", () => {
   const form = read("src/components/loyalty/LoyaltySignupForm.tsx");
-  const page = read("src/app/loyalty/page.tsx");
+  const page = read("src/app/(site)/loyalty/page.tsx");
   it("form resolves the wording with a non-empty fallback and keeps line breaks", () => {
     expect(form).toContain("consentText?: string;");
     expect(form).toContain("const consentText = content?.consentText?.trim() ? content.consentText : DEFAULT_CONSENT_TEXT;");

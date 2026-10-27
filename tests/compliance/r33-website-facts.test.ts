@@ -286,7 +286,7 @@ describe("R33 productSchema weight", () => {
 
 // === 6. Wiring pins ==========================================================
 describe("R33 wiring", () => {
-  const pdp = read("src/app/menu/products/[id]/page.tsx");
+  const pdp = read("src/app/(site)/menu/products/[id]/page.tsx");
   it("PDP: category/type override + DOH + profile on the item and the related rail", () => {
     expect(pdp).toContain("await withCategoryOverride(await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem]))))");
     expect(pdp).toContain("withCategoryOverride(await withMenuProfile(await loadLiveMenuItemsCached()))");
@@ -297,7 +297,7 @@ describe("R33 wiring", () => {
     expect(pdp).toContain("weight: isNonCannabisItem(item) ? null : productSchemaWeight(item)");
   });
   it("home + specials apply the override after the profile", () => {
-    for (const f of ["src/app/page.tsx", "src/app/specials/page.tsx"]) {
+    for (const f of ["src/app/(site)/page.tsx", "src/app/(site)/specials/page.tsx"]) {
       expect(read(f)).toContain(".then((items) => withMenuProfile(items)).then((items) => withCategoryOverride(items))");
     }
   });

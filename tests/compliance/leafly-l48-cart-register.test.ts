@@ -377,11 +377,11 @@ describe("L-48 wiring", () => {
   });
 
   it("the register editor is offered for marketplace orders and blocks handover while open", () => {
-    const s = read("src/app/pos/RegisterShell.tsx");
+    const s = read("src/app/(site)/pos/RegisterShell.tsx");
     expect(s).toContain("<RegisterCartEditor");
     expect(s).toMatch(/detail\.isMarketplace \? \(\s*cartOpen \?/);
     expect(s).toContain("disabled={busy || cancelOpen || cartOpen}");
-    const r = read("src/app/pos/RegisterCartEditor.tsx");
+    const r = read("src/app/(site)/pos/RegisterCartEditor.tsx");
     expect(r).toContain("cartLoad: {}");
     expect(r).toContain("review: true");
     // The PIN is only sent when the server's review asked for one.

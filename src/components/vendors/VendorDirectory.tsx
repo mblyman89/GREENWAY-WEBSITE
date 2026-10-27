@@ -23,7 +23,7 @@ import {
 
 // SLICE 48 (owner Q3): the static vendors.json snapshot is retired. Vendors
 // now arrive as a prop, derived from the LIVE published menu by the server
-// page (src/app/vendor-delivery/page.tsx via buildVendorDirectory), so the
+// page (src/app/(site)/vendor-delivery/page.tsx via buildVendorDirectory), so the
 // directory always reflects what is actually on the shelves.
 type Vendor = VendorDirectoryEntry;
 

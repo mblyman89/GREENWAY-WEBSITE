@@ -41,10 +41,10 @@ function fnBody(source: string, name: string): string {
 }
 
 const ROUTES = [
-  "src/app/specials/page.tsx",
-  "src/app/loyalty/page.tsx",
-  "src/app/medical/page.tsx",
-  "src/app/menu/products/[id]/page.tsx",
+  "src/app/(site)/specials/page.tsx",
+  "src/app/(site)/loyalty/page.tsx",
+  "src/app/(site)/medical/page.tsx",
+  "src/app/(site)/menu/products/[id]/page.tsx",
 ] as const;
 
 describe("USAGE-5 · the three public pages share one render per minute", () => {
@@ -66,9 +66,9 @@ describe("USAGE-5 · the three public pages share one render per minute", () => 
   it("the pages that read drafts still ask Draft Mode (route-cache bypass for staff preview)", () => {
     // Draft Mode bypasses the route cache by design; that is what keeps staff
     // preview live while the public shares a render.
-    expect(stripComments(read("src/app/specials/page.tsx"))).toContain("isPreviewActive()");
-    expect(stripComments(read("src/app/loyalty/page.tsx"))).toContain("isPreviewActive()");
-    expect(stripComments(read("src/app/medical/page.tsx"))).toContain("getContentForRender(");
+    expect(stripComments(read("src/app/(site)/specials/page.tsx"))).toContain("isPreviewActive()");
+    expect(stripComments(read("src/app/(site)/loyalty/page.tsx"))).toContain("isPreviewActive()");
+    expect(stripComments(read("src/app/(site)/medical/page.tsx"))).toContain("getContentForRender(");
   });
 });
 
@@ -90,7 +90,7 @@ describe("USAGE-5 · the product page (dynamic segment) is cleared by every menu
     // production hit. Next.js: "You must always return an array from
     // generateStaticParams, even if it's empty. Otherwise, the route will be
     // dynamically rendered." An empty array = no build-time menu pull.
-    const code = stripComments(read("src/app/menu/products/[id]/page.tsx"));
+    const code = stripComments(read("src/app/(site)/menu/products/[id]/page.tsx"));
     expect(code).toMatch(/export function generateStaticParams\(\): Array<\{ id: string \}> \{\s*return \[\];\s*\}/);
     // Unknown ids must still reach the page and 404 there — never a frozen list.
     expect(code).not.toMatch(/export const dynamicParams\s*=\s*false/);
@@ -140,7 +140,7 @@ describe("USAGE-5 · every writer still clears the page it changes", () => {
     }
     // And the public page really does read config + tiers, otherwise the
     // assertions above would be guarding nothing.
-    const page = stripComments(read("src/app/loyalty/page.tsx"));
+    const page = stripComments(read("src/app/(site)/loyalty/page.tsx"));
     expect(page).toContain("getConfig()");
     expect(page).toContain("listTiers()");
   });

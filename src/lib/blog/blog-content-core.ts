@@ -31,7 +31,7 @@ export type BlogContentBlock = {
 // ---------------------------------------------------------------------------
 // The curated, byte-identical blog page-chrome blocks.
 // (Values mirror src/components/blog/BlogContent.tsx + the detail chrome in
-//  src/app/blog/[slug]/page.tsx and the card "Read article" button.)
+//  src/app/(site)/blog/[slug]/page.tsx and the card "Read article" button.)
 // ---------------------------------------------------------------------------
 export const BLOG_CONTENT_BLOCKS: readonly BlogContentBlock[] = [
   {

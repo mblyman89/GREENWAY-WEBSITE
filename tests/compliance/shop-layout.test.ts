@@ -33,8 +33,8 @@ const GLOBALS = read("src/app/globals.css");
 // so the shop's width-capped wrappers live there now. The route files are thin
 // entry points. Pointing at the renderer keeps this guard covering BOTH routes.
 const MENU_PAGE = read("src/components/menu/ShopPage.tsx");
-const MENU_ROUTE = read("src/app/menu/page.tsx");
-const CATEGORY_ROUTE = read("src/app/menu/[category]/page.tsx");
+const MENU_ROUTE = read("src/app/(site)/menu/page.tsx");
+const CATEGORY_ROUTE = read("src/app/(site)/menu/[category]/page.tsx");
 const BROWSER = read("src/components/menu/InteractiveMenuBrowser.tsx");
 const CRUMBS = read("src/components/site/Breadcrumbs.tsx");
 const LEGAL = read("src/app/admin/legal-policies/page.tsx");
@@ -47,7 +47,7 @@ describe("SLICE 116 — shop width token", () => {
   it("menu page consumes the token for hero, banners, and suspense (3 wrappers)", () => {
     // SLICE F2 moved the Suspense fallback's wrappers out of this file and into
     // the SHARED skeleton (src/components/menu/MenuSkeleton.tsx), so that the
-    // navigation placeholder (src/app/menu/loading.tsx) and the streaming
+    // navigation placeholder (src/app/(site)/menu/loading.tsx) and the streaming
     // placeholder are the same markup and cannot drift apart.
     //
     // The token was NOT dropped — it moved. So the invariant is asserted across

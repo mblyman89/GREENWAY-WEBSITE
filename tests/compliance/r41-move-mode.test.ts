@@ -80,7 +80,7 @@ describe("R41 S7 iframe + parent contract", () => {
   });
   it("mounted by the Draft-Mode-only overlay", () => {
     expect(read("src/components/site/PreviewEditOverlay.tsx")).toContain("<PreviewDesignDrag />");
-    expect(read("src/app/layout.tsx")).toContain("{isPreview && <PreviewEditOverlay");
+    expect(read("src/app/(site)/layout.tsx")).toContain("{isPreview && <PreviewEditOverlay");
   });
   it("parent side: own iframe + origin only, re-validates, ignores moves when off", () => {
     expect(frame).toContain("e.source !== frameRef.current.contentWindow");

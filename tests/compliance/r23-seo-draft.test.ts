@@ -265,7 +265,7 @@ describe("R23 fix 4 - the public product page serves the accepted SEO", () => {
   });
 
   it("generateMetadata reads it, merch skipped; the enrichment page offers the button + length help", () => {
-    const pub = read("src/app/menu/products/[id]/page.tsx");
+    const pub = read("src/app/(site)/menu/products/[id]/page.tsx");
     expect(pub).toContain("isMerchItem(item) ? null : await getEnrichmentForPublicItem({ posKey: item.id, identityKey: item.identityKey })");
     expect(pub).toMatch(/title: seo\.title,\s*description: seo\.description,/);
     const page = read("src/app/admin/products/[key]/page.tsx");

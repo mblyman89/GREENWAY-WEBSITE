@@ -263,7 +263,7 @@ export function __runFixLinkContractCoreTests(): { passed: number; failed: numbe
   // pageFileToRoute
   ok(pageFileToRoute("src/app/admin/inventory/[id]/page.tsx") === "/admin/inventory/[id]", "dynamic route");
   ok(pageFileToRoute("src/app/(marketing)/about/page.tsx") === "/about", "group stripped");
-  ok(pageFileToRoute("src/app/page.tsx") === "/", "root page");
+  ok(pageFileToRoute("src/app/(site)/page.tsx") === "/", "root page");
   ok(pageFileToRoute("src/app/api/x/route.ts") === "/api/x", "route handler maps too");
   ok(pageFileToRoute("src/app/admin/x/layout.tsx") === null, "layout is not a route");
   ok(pageFileToRoute("/abs/repo/src/app/admin/page.tsx") === "/admin", "absolute prefix tolerated");

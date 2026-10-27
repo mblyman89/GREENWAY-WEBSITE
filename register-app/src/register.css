@@ -28,7 +28,7 @@
 /* Generate utilities for the register source, which lives outside this folder.
    Scoped to the two directories the register actually uses so Tailwind is not
    scanning the whole repository on every build. */
-@source "../../src/app/pos";
+@source "../../src/app/(site)/pos";
 @source "../../src/lib";
 
 /* The single source of truth for every --pos-* token and .pos-* rule. */

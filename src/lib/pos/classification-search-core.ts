@@ -92,7 +92,7 @@ export const OTHERWISE_TAKEN_SEARCH_KEYWORDS: readonly string[] = [
  * SLICE 18D — the two lanes the register can show and filter by.
  *
  * Named identically to the shop's `ClassificationFilterKind` on purpose, but
- * declared HERE rather than imported: `src/app/pos/SaleFlow.tsx` imports
+ * declared HERE rather than imported: `src/app/(site)/pos/SaleFlow.tsx` imports
  * nothing from `@/lib/menu/*` (recon F9), and the register must not start
  * depending on the storefront to render its own chips. The two stay in step
  * because both derive from the same `sales-limits-core` predicates and the same

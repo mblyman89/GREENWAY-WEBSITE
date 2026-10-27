@@ -129,7 +129,7 @@ describe("seeds are live-look-safe (byte-identical)", () => {
 describe("public wiring is in place", () => {
   const form = read("src/components/loyalty/LoyaltySignupForm.tsx");
   const terms = read("src/components/loyalty/LoyaltyProgramTerms.tsx");
-  const route = read("src/app/loyalty/page.tsx");
+  const route = read("src/app/(site)/loyalty/page.tsx");
 
   it("the signup form accepts + renders the friendly copy props with fallbacks", () => {
     expect(form).toContain("birthdayHelp");

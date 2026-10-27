@@ -2,7 +2,7 @@
  * register-app/vite.config.ts — the packaged register's build.
  *
  * WHAT THIS IS
- * Greenway's register exists as ONE React component, src/app/pos/RegisterShell.tsx.
+ * Greenway's register exists as ONE React component, src/app/(site)/pos/RegisterShell.tsx.
  * Next.js serves it at /pos for the browser PWA. This Vite build wraps that
  * SAME file — not a copy — into a plain static bundle (HTML + JS + CSS) that
  * Capacitor drops inside the iPad app "Greenway Point of Transaction".

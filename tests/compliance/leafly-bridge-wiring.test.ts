@@ -185,7 +185,7 @@ const PATHS = {
   pickupCore: "src/lib/pos/pickup-core.ts",
   pickupStore: "src/lib/pos/pickup-store.ts",
   pickupRoute: "src/app/api/pos/pickup/route.ts",
-  registerShell: "src/app/pos/RegisterShell.tsx",
+  registerShell: "src/app/(site)/pos/RegisterShell.tsx",
   ordersList: "src/app/admin/orders/page.tsx",
   orderDetail: "src/app/admin/orders/[id]/page.tsx",
   originBadge: "src/components/admin/orders/OrderOriginBadge.tsx",
