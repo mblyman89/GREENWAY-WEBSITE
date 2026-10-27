@@ -665,4 +665,193 @@ Each of these is on the lot page. All are manager-level and audited. None of the
 
 **Oversold sales.** When a sale takes more units than a lot had on file, the sale still completes and an **OVERSOLD** note is recorded. The list is on **Inventory → Cycle Counts** (`cycle-counts/page.tsx` L70, L96). An oversold product means the count is wrong: count it under **SOP-06**. Never "fix" it with **Receive (add)** (§4.7).
 
-<!-- SECTIONS 5-10 and appendices are appended in the next commit. -->
+---
+
+## 5. Messages: "If you see this message"
+
+Every message below was read from the code at `main@ac251766`. Messages in *italics* are word for word. `<...>` marks a value the screen fills in.
+
+### 5.1 Lot page (top banner)
+
+The green or red banner at the top of the lot page (`src/app/admin/inventory/[id]/page.tsx` L385–401).
+
+| Message | Cause | Do this |
+|---|---|---|
+| *"Saved."* | The last button worked | Check the card or section you changed |
+| *"Saved."* followed by a sentence about the menu | **Record adjustment** worked, but the menu stock for this lot's size could not follow (`actions.ts` L135–138; `src/lib/inventory/store.ts` L615) | Read the sentence. If it says the menu did not move, tell the owner (§4.6 step 4) |
+| *"Enter a non-zero quantity."* | **Quantity change** was blank or 0 (`actions.ts` L120) | Type the difference, negative to remove |
+| *"Choose a valid reason."* | No reason picked (L123) | Pick a reason from §4.7 |
+| *"Choose a valid status."* | No status picked (L146) | Pick one allowed by the §4.8 table |
+| *"Something went wrong saving that."* | The save failed (L133, L152) | Reload the lot and check **On hand** / **Status** before trying again. **Never press Record adjustment twice without checking**: the first may have saved. Twice → owner |
+| *"That lot no longer exists."* | The lot was removed or the link is old (L184, L234, L279, L331) | Go back to the Inventory list and search for it |
+| *"Enter the received date as YYYY-MM-DD (for example 2026-08-14)."* | Wrong date format (`received-date-core.ts` L171) | Retype |
+| *"<date> isn't a real calendar date — check the month and day."* | For example 2026-02-30 (L174) | Retype from the manifest |
+| *"The received date can't be in the future. Today is <date> in Port Orchard."* | A future date (L176–180) | Check the manifest |
+| *"<date> is before Washington retail cannabis sales began (<floor date>). Check the year — that looks like a typo."* | A date before the WA floor date (L182–188) | Check the year |
+| *"That vendor isn't in the vendors database — pick one from the list."* | **Correct lot details** (`actions.ts` L340) | Pick from the list; a new vendor is added under Vendors first |
+| *"That brand isn't in the brands database — pick one from the list."* | (L343) | Pick from the list |
+| *"That brand belongs to a different vendor. Pick the brand's own vendor, or clear the brand."* | (L346) | Fix the pair |
+| *"This lot is already linked to a product. Linking only fills an empty key; it never re-points one."* | **Product link** on a lot that already has one (`lot-link-core.ts` L75) | Leave it. A wrong link → owner |
+| *"This lot already has a lab result linked. Attaching only fills an empty link; it never replaces a COA."* | **Attach a lab result** on a lot with one (L77) | Leave it. A wrong COA → owner |
+| *"This lot is destroyed and out of inventory, so it cannot be linked."* | (L73) | Nothing to do |
+| *"No published menu card, menu size or Product Onboarding draft uses that product key. Check the key, or onboard the product first."* | The typed key does not exist (L173) | Check the key in Product Onboarding |
+| *"That product key is only on a dismissed Product Onboarding draft. Restore the draft in Product Onboarding first, then link the lot."* | (L167) | Restore the draft first (SOP-04 §4.22) |
+| *"That lab result no longer exists. Search again."* | (`actions.ts` L285) | Search by **Lab test ID** again |
+
+**Re-read lab certificate** banners (`coa-panel-core.ts` L304–319):
+
+| Message | Do this |
+|---|---|
+| *"The lab certificate was read again and every check agrees."* (may add *"The delivery's menu update was rebuilt with what it says."*) | Nothing |
+| *"The lab certificate was read again, but only partly - see what it did and did not give below."* | Read the panel. Missing facts → owner |
+| *"The lab certificate could not be read - the reasons are below. Set the facts by hand if the lab cannot be reached."* | Check the host (§4.18). Otherwise owner |
+| *"This lot has no lab result attached, so there is no certificate to read."* | Attach the lab result first (§4.21) |
+| *"Reading the lab certificate failed. Try again in a minute."* | Wait one minute, then try once more. Twice → owner |
+| *"Lab certificates cannot be read yet: the database is missing migration 0252 (lab certificate reading)."* | Developer |
+
+### 5.2 Expiration rules
+
+| Message | Cause | Do this |
+|---|---|---|
+| *"Rules saved: N saved, N removed, N unchanged. Lots are not changed until you Preview and Apply."* | **Save rules** worked (`expiration-rules/page.tsx` L329–330) | Preview next (§4.15 step 4) |
+| **Nothing was saved**, with a list of rows (L316–325) | One or more rows are invalid; **nothing** was saved | Fix every listed row and save again |
+| *"Choose months, days, a fixed date, or does not expire."* | A row with a number but no rule (`expiry-rules-core.ts` L232) | Pick the rule |
+| *"Enter a whole number of months."* / *"...of days."* | (L215) | Whole numbers only |
+| *"Months must be 1 to 120."* / *"Days must be 1 to 3650."* | (L218; maxima L55–56) | Use a smaller number |
+| *"Enter a real date (YYYY-MM-DD)."* | **Fixed date** typed wrong (L224) | Retype |
+| *"That date is before WA legal retail cannabis began (<floor date>)."* | (L227) | Check the year |
+| *"That date is more than 10 years out - check for a typo."* | (L229) | Check the year |
+| *"Count from must be the received date or the lab test date."* | (L209) | Pick one |
+| *"Unknown category or type."* | The category or type was renamed or removed while the page was open (L321) | Reload the page |
+| *"Notes are limited to N characters."* | (L340) | Shorten the note |
+| *"Applied to N lots: …"* | **Apply** worked (L335–342) | Read every number. *"N writes failed - see the audit log."* → owner |
+| *"Something changed since your preview (a lot, a rule, or a date). Nothing was written. Here is the fresh preview - review it and apply again."* | The plan changed after you previewed (L405–409) | Review the new preview, then apply |
+
+**Why lots are left alone** (the preview's fold-out; `SKIP_REASON_LABELS`, `expiry-rules-core.ts` L438–447):
+
+| Line in the fold-out | Meaning | Do this |
+|---|---|---|
+| *"Destroyed lot - never changed"* | Destroyed lots are skipped | Nothing |
+| *"Has a manifest / JSON / COA / POS date - always kept"* | A document date | Nothing. A wrong document date → owner |
+| *"Has a date on file with no recorded source - kept (never guess)"* | An old date of unknown origin | Nothing. The owner may check the package |
+| *"Owner-typed date - kept (turn on override to replace)"* | Someone typed this date | Replace only on the owner's say-so |
+| *"No rule for its type or category"* | No rule covers it | Add a rule, or leave it undated on purpose |
+| *"Rule says does not expire"* | **Does not expire** | Nothing |
+| *"No date to count from (received / lab test date missing)"* | The rule counts from a date the lot lacks | Set the received date (§4.21), then preview again |
+| *"Already has this exact rule date"* | Nothing to change | Nothing |
+
+### 5.3 Restore to sale, the 86 and the register
+
+**Restore to sale** results appear at the top of the Inventory page (`inventory/page.tsx` L535–550).
+
+| Message | Cause | Do this |
+|---|---|---|
+| *"<product> is back on sale (N units on hand — <status>)."* | Success (`restore-to-sale-core.ts` L167) | Check the shelf matches |
+| *"That product is under a recall hold — it cannot be put back on sale until the hold is lifted."* | A lot of this product is **Recalled** (L132) | **Do not** work around it. §4.10. Only the owner releases a hold |
+| *"Could not confirm this product is free of recall holds — not restoring. Try again in a moment."* | The recall check failed, so the restore failed closed (`restore-to-sale-store.ts` L137) | Wait a minute and try once more. Twice → owner |
+| *"That product is hidden from the menu — unhide it first; restoring stock will not reveal a hidden card."* | Its card is hidden (`restore-to-sale-core.ts` L140) | Find out **why** it was hidden first; it may be a recall (§4.10 step 5). Ask the owner |
+| *"That product is already available on the register — nothing to restore."* | Someone already restored it, or the next menu download did (L122) | Nothing |
+| *"No inventory lots are linked to that product, so there is no stock to put back on sale. Receive it in, or link the lot's product key."* | (L155) | §4.21 (product link) |
+| *"Every lot for that product is empty or not active, so there is nothing to sell. Receive stock in and it returns on its own."* | (L156) | Check the shelf; count (SOP-06) |
+| *"That product is not on the published menu — publish the menu first, then restore it."* | (`restore-to-sale-store.ts` L96) | SOP-05b (Publish Menu) |
+| *"There is no published menu to update."* | (L75) | Owner |
+| *"Could not read this product's inventory lots - try again in a moment."* | (L121) | Try once more, then owner |
+
+**At the register** (budtenders):
+
+| Message | Cause | Do this |
+|---|---|---|
+| *"Sale blocked: "<product>" is under an active RECALL hold — …"* | A recall hold (§4.11) | Remove the item. No override. Tell the manager |
+| *"Sale blocked: the recall-hold status of this order's products could not be verified (inventory read failed). …"* | The recall table could not be read (`completion-gate.ts` L117–118) | Try once. Repeats → manager → owner. No sale proceeds |
+| *"Offline — flagging stock needs a connection (it changes the shared menu)."* | The 86 was pressed while offline (`RegisterShell.tsx` L1563–1565) | Tell the manager; take the product off the shelf display by hand |
+| *"Item not found on the published menu — refresh and try again."* | (`api/pos/stock-flag/route.ts` L70) | Download the menu, try again |
+| *"No published menu to update."* | (L56) | Manager → owner |
+| *"Could not flag the item — try again."* / *"Could not reach the server — try again."* | (`RegisterShell.tsx` L1578, L1592) | Try once. Then tell the manager |
+
+**Back office, Issues tab**: *"Restored to the register: inventory shows N units on hand in active lots, but the published menu still had it marked unavailable."* (`register-availability-core.ts` L389). The 86 was undone by the next menu download (§4.12, F-05a-9). The manager checks why it was 86'd.
+
+### 5.4 Tags, testing labs and bulk fill
+
+| Screen | Message | Cause | Do this |
+|---|---|---|---|
+| Tags | *"Give the tag a name."* | Blank name (`product-tags-core.ts` L163) | Type a name |
+| Tags | *"Keep the name to 32 characters or fewer."* | (L164) | Shorten it |
+| Tags | *"The name needs at least one letter or number."* | (L166) | Retype |
+| Tags | *"A tag called "<name>" already exists."* | (L168) | Use the existing tag |
+| Tags | *"Pick a colour (for example #c2410c)."* | (L171) | Pick one |
+| Tags | *"Only the built-in New tag can be automatic."* | (L176) | Nothing |
+| Tags | *"Tick "Yes, delete" to delete a tag."* | Delete pressed without the tick (`tags/actions.ts` L111) | Tick, if you mean it (§4.17) |
+| Tags | *"Tick at least one product first."* | (L136) | Tick products |
+| Tags | *"That tag no longer exists."* | Someone deleted it (L78, L140) | Reload |
+| Testing labs | *"Enter the lab's name."* | (`testing-labs-core.ts` L238) | Type the name |
+| Testing labs | *"The lab # is the whole number on the WSLCB / WSDA list (e.g. 18)."* | (L242) | Check the WSLCB list |
+| Testing labs | *"<name> is already on the list."* / *"Lab #N is already on the list."* | (L246–247) | Use the existing lab |
+| Testing labs | *"Enter a host name, e.g. files.cultivera.com, or paste a certificate link."* | Blank host (L141) | Paste the link |
+| Testing labs | *"Wildcards are not allowed - add each exact host."* | (L143) | Add the exact host |
+| Testing labs | *"Only https certificate links are read (that one is <protocol>)."* | (L151) | Ask the lab for the https link. Never work around it |
+| Testing labs | *"IP addresses are not allowed - only named hosts."* | (L160) | Same. Owner |
+| Testing labs | *"<host> is already built in - certificates from it are always read."* | (L300) | The fault is elsewhere; owner |
+| Testing labs | *"A lab can have at most N hosts."* | (L302) | Owner |
+| Bulk fill | *"Enter an expiration date."* / *"Enter a unit cost."* / *"Enter a POS product key."* | Blank value (`bulk-fill-core.ts` L164, L197, L218) | Type the value |
+| Bulk fill | *"That expiration date is more than 10 years away — check for a typo."* (or *"…past…"*) | | Check the package |
+| Bulk fill | *"Enter a dollar amount like 12.50 (no negative costs)."* / *"That cost is too large."* | | Check the invoice |
+| Bulk fill | *"Select at least one lot first."* | The filters show no lots (L290) | Change the filters |
+
+---
+
+## 6. Exceptions & escalation
+
+| Situation | What to do | Who to tell |
+|---|---|---|
+| **A recall notice arrives** (vendor, LCB, news, email) | §4.10 at once: form 8.5, set Recalled, pull, count, hide on the website, check open orders | Recall coordinator (owner) **within 1 hour** |
+| **The owner cannot be reached within 1 hour of a recall** | The on-duty manager makes the LCB call (§4.10 step 8) and writes it on form 8.5 | Owner as soon as reachable |
+| **Unsure whether it is a recall or a market withdrawal** | Treat it as a **recall** | Owner |
+| **A recalled product was sold before the hold** (or synced from an offline register) | Record the units on form 8.5 ("sold before the hold"). Do not contact the customer yourself | Owner, same day; owner decides customer notice (form 8.4 part D) |
+| **A recalled product still shows at a register after a menu refresh** | Tell every budtender by word of mouth; the sale will still be refused at completion (§4.11) | Owner, same hour |
+| **A recalled product still shows on the website** | Expected (F-05a-16). Set **Always hide** (§4.10 step 5) | Owner |
+| **"Sale blocked: … could not be verified"** repeats | No sales of that order. Try once more | Owner, at once; developer |
+| **Someone set a lot to Destroyed by hand** | Do not change it back. Form 8.1 | Owner, same day (§4.9) |
+| **Someone set Active a lot that has no COA, no CCRS id or a FAILED result** | Set it back to **Quarantine** at once with a form 8.1 line; check whether any units sold | Owner, same day (F-04-2) |
+| **On hand is below zero** | Do not add units to "fix" it. Count the lot (SOP-06) | Owner, same day (F-05a-3) |
+| **A count is short by more than 1 unit or more than $50 at cost** | Recount with a second person. **Shrink** with a full note | Owner, same day (§4.7) |
+| **Theft or seizure** | Do not adjust. SOP-20 | Owner, at once (§4.7) |
+| **An expired lot is Active** | Pull, quarantine, form 8.1 (§4.16) | Owner, same morning |
+| **An 86'd product keeps coming back** | The count is wrong, or the product should be quarantined (§4.12) | Manager, same shift |
+| **A label will not scan** | The lot has no lot code (§4.19) | Owner (F-05a-10) |
+| **Bulk fill or Expiration rules wrote the wrong date** | Do not fix it by hand. The audit row holds every old date | Owner, same day |
+| **A COA host will not open** | §4.18. Never add a host just to make a link open | Owner |
+| **"Something went wrong saving that."** twice | Stop. Write the lot, what you pressed and the time | Owner or developer |
+| **The Issues tab will not load, or shows rows nobody can explain** | Write it on form 8.3 | Owner, same morning |
+| **An LCB officer asks for the recall plan or the recall records** | Show form 8.4 and the form 8.5 for that recall | Owner, at once |
+
+---
+
+## 7. Controls & compliance (why the rules exist)
+
+| Control | Why | Where it comes from |
+|---|---|---|
+| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L836–851; `ccrs-batch.ts` L1209–1217, L380–391; `disposition.ts` L1087–1094 |
+| **A form 8.1 line before every status change** | **Lifecycle status** writes no audit row and asks no reason (F-05a-2; F-04-2) | `actions.ts` L142–155 |
+| **Active from quarantine only from a "now clear" Issues row** | No go-live check on the manual path (F-04-2, **S1**). WAC 314-55-102: no retail sale without a passing COA | SOP-04 §4.19; `lot-activation-gate-core.ts` |
+| **A recall placed the same hour; segregate, count, hide on the website, check open orders** | WAC 314-55-225(3)(b)(i): secure, isolate and prevent distribution; the hold does not reach the website (F-05a-16) | §4.10; `live-menu.ts` L167–171; `order-pricing.ts` L124–134 |
+| **LCB notified immediately (recall) or within 48 hours (withdrawal)** | WAC 314-55-225(3)(b)(i)(A); (2)(b) | §4.10 step 8 |
+| **Nothing recalled is destroyed before LCB coordination** | WAC 314-55-225(3)(b)(i)(B), (3)(e) | §4.10 step 9; `disposition-core.ts` L226–243 |
+| **Weekly recall tracking** | WAC 314-55-225(3)(f) | Form 8.5 |
+| **A written, signed recall plan with a named coordinator, reviewed yearly** | WAC 314-55-225(3)(d) (mandatory) | Form 8.4; F-05a-15 |
+| **Only the owner releases a recall hold, on written clearance** | The app lets any manager release with no record | §4.10; F-05a-2 |
+| **Every manual adjustment: reason, note, double count, form 8.2** | CCRS withholds an Other / Employee-sample row with no note (E13); the history shows no name; the write is not atomic and has no floor (F-05a-3, F-05a-4, F-05a-13) | `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `store.ts` L578–616 |
+| **Never use Receive (add), Destruction or Recall removal on the lot page** | Receive is not sent to CCRS (F-05a-7); the other two bypass SOP-15 (F-05a-5) | `ccrs-inventory-adjustment-core.ts` L101–105 |
+| **Theft and seizure go to the owner, never straight to an adjustment** | No Theft / Seizure reason on the form (F-05a-6) | Lot page L118–128 |
+| **The daily Issues check, logged on form 8.3** | It is the only stop on expired stock (F-05a-8) and the place every blocked lot shows | §4.4 |
+| **Expired product pulled and quarantined until Q-05a-1 is answered** | The register sells expired lots and draws FIFO, not FEFO (F-05a-8) | `sale-lot-read.ts` L39–47 |
+| **Expiration rules: owner decides, Save → Preview → Apply** | The fingerprint check stops a different plan being applied; every date is audited | `expiration-rules/actions.ts` L146–180 |
+| **Document dates are never overwritten** | A manifest, COA or POS date is the authoritative record | `expiry-rules-core.ts` L10–34, L49 |
+| **The manager investigates every 86 the same shift** | The 86 is not sticky while units are on file (F-05a-9) | `register-availability-core.ts` L318–421 |
+| **Restore only product that is physically on the shelf** | The restore recomputes from the books; the shelf is the truth | `restore-to-sale-core.ts` L115–167 |
+| **Scan every reprinted label before use** | A label without a lot code does not scan (F-05a-10) | `lots/[id]/label/page.tsx` L38–40; `scan-to-cart-core.ts` L55–70 |
+| **Cannabis unit cost by bulk fill only by owner or admin** | The permission model says cannabis cost entry is not built (F-05a-11) | `roles.ts` L143–148; `actions.ts` L904 |
+| **New COA hosts only with owner approval** | The host list is the certificate reader's security allow-list | `labs/page.tsx` header L7–12 |
+| **Tags say nothing an advertising rule forbids** | Tags show on the public website | §4.17; SOP-11 |
+| **Every status and adjustment record kept 5 years** | WAC 314-55-087 (records retention) | Forms 8.1–8.5 in the binder |
+
+<!-- SECTIONS 8-10 and appendices are appended in the next commit. -->
