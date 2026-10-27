@@ -160,19 +160,44 @@ export async function chunkedIn<Id, Row>(
  */
 export async function pagedAll<Row>(
   fetchPage: (fromIndex: number, toIndex: number) => Promise<Row[]>,
-  opts: { pageSize?: number } = {},
+  opts: { pageSize?: number; concurrency?: number } = {},
 ): Promise<Row[]> {
   const pageSize = Math.max(1, opts.pageSize ?? CHUNKED_IN_PAGE_SIZE);
+  const concurrency = Math.max(1, Math.floor(opts.concurrency ?? 1));
   const out: Row[] = [];
   let from = 0;
-  for (;;) {
-    const rows = await fetchPage(from, from + pageSize - 1);
-    if (rows.length > 0) out.push(...rows);
-    if (rows.length < pageSize) break;
-    from += pageSize;
+  if (concurrency === 1) {
+    // SERIAL PATH (the default) - byte-for-byte the original loop.
+    for (;;) {
+      const rows = await fetchPage(from, from + pageSize - 1);
+      if (rows.length > 0) out.push(...rows);
+      if (rows.length < pageSize) break;
+      from += pageSize;
+    }
+    return out;
   }
-  return out;
+  // PERF2-P8 (opt-in): WAVES of `concurrency` pages. A 4,200-lot table was 5
+  // round trips one after another; now it is one wave. The pages of a wave
+  // are appended in index order and the walk stops at the FIRST short page,
+  // so the returned rows are exactly what the serial loop returns (same
+  // stable `.order()` contract). Cost of the overshoot: at most
+  // `concurrency - 1` empty pages past the end, each a cheap indexed read.
+  for (;;) {
+    const starts = Array.from({ length: concurrency }, (_, i) => from + i * pageSize);
+    const pages = await Promise.all(starts.map((s) => fetchPage(s, s + pageSize - 1)));
+    for (const rows of pages) {
+      if (rows.length > 0) out.push(...rows);
+      if (rows.length < pageSize) return out;
+    }
+    from += concurrency * pageSize;
+  }
 }
+
+/**
+ * PERF2-P8: wave width for full-table ADMIN reads (inventory lots, stats).
+ * Same reasoning as MENU_READ_CONCURRENCY: a few at once, never a burst.
+ */
+export const ADMIN_PAGED_CONCURRENCY = 4;
 
 // ---------------------------------------------------------------------------
 // SLICE 5A — paging that can PROVE it was complete

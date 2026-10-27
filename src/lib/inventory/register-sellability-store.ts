@@ -32,7 +32,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY, ADMIN_PAGED_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
@@ -230,6 +230,10 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
   try {
     const admin = createSupabaseAdminClient();
 
+    // PERF2-P8: the published cards do not depend on the lots, so start that
+    // read now and await it after the lot walk (was strictly one-then-other).
+    const loadedP = loadPublishedCards();
+    loadedP.catch(() => undefined); // awaited below
     let lotsFailed = false;
     const rows = await pagedAll<LotRow>(async (from, to) => {
       const { data, error } = await admin
@@ -243,10 +247,10 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
         return [];
       }
       return (data as LotRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
     if (lotsFailed) return EMPTY;
 
-    const loaded = await loadPublishedCards();
+    const loaded = await loadedP;
     if (!loaded) return EMPTY;
     const cards = loaded.byKey;
 
