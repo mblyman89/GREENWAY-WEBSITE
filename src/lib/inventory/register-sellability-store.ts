@@ -32,7 +32,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { pagedAll } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
@@ -157,19 +157,32 @@ async function loadPublishedCards(): Promise<{ byKey: Map<string, SnapshotCard>;
 
   const rowIdToKey = new Map(items.map((i) => [i.id, i.source_item_id]));
 
+  // PERF2-P2: this used to page through EVERY menu_variants row in the
+  // database (every archived snapshot ever written, ordered by id) and then
+  // throw away everything not on the published version. menu_variants grows
+  // by a full catalog copy with every menu change, so this single read grew
+  // without bound and ran on every /admin/inventory load. Now it reads only
+  // the published version's variants, by menu_item_id (indexed), in parallel
+  // disjoint chunks. Same rows the old loop kept; any failed page still fails
+  // the whole report (never a partial verdict).
   let variantsFailed = false;
-  const variants = await pagedAll<VariantRow>(async (from, to) => {
-    const { data, error } = await admin
-      .from("menu_variants")
-      .select("menu_item_id, source_variant_id")
-      .order("id", { ascending: true })
-      .range(from, to);
-    if (error) {
-      variantsFailed = true;
-      return [];
-    }
-    return (data as VariantRow[] | null) ?? [];
-  });
+  const variants = await chunkedIn<string, VariantRow>(
+    items.map((i) => i.id),
+    async (chunk, from, to) => {
+      const { data, error } = await admin
+        .from("menu_variants")
+        .select("menu_item_id, source_variant_id")
+        .in("menu_item_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        variantsFailed = true;
+        return [];
+      }
+      return (data as VariantRow[] | null) ?? [];
+    },
+    { chunkSize: 200, concurrency: MENU_READ_CONCURRENCY },
+  );
   if (variantsFailed) return null;
 
   const recalled = await recalledProductKeys();
