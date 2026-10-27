@@ -357,4 +357,130 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 
 # Part 3: Recalls, the 86 and restore to sale
 
-<!-- PART 3 (sections 4.10 onward) is appended in the next commit. -->
+### 4.10 Placing and releasing a recall hold
+
+**What a recall hold is in this app.** It is not a separate screen. A lot is "on recall hold" when its **Lifecycle status** is **Recalled** (`HOLD_LOT_STATUS = "recalled"`, `src/lib/pos/recall-hold-core.ts` L44). Every product key that has at least one Recalled lot is held (`buildRecallHoldIndex`, L53–63; read by `recalledProductKeys`, `recall-hold-store.ts` L72–121). Routine **Quarantine** lots do **not** trip the hold (`completion-gate.ts` L98–100).
+
+**What the law requires** (WAC 314-55-225, read 2026-10-27 at app.leg.wa.gov):
+- **Recall** (a risk to consumers, for example pesticides or residual solvents above action levels, (3)(a)): *"Immediately notify the local LCB enforcement officer"* and *"Secure, isolate, and prevent the distribution"* of all product that may have been exposed. The licensee *"is prohibited from destroying any affected product prior to notifying the LCB and coordinating with the local LCB officer on destruction activities."* ((3)(b)(i)(A)–(B))
+- **Market withdrawal** (no risk to consumers, for example aesthetics or packaging, (2)(a)): *"notify the LCB by contacting the local LCB enforcement officer assigned to the local area within 48 hours of beginning the market withdrawal."* ((2)(b))
+- **Tracking.** An affected licensee *"must track the total amount of affected product and the amount of affected product returned"*, and report progress to the LCB at least once a week ((3)(f)).
+- **Destruction** of recalled product is coordinated with, and may be overseen by, LCB enforcement ((3)(e)).
+
+**Recall or withdrawal: who decides.** The **recall coordinator** (the owner until Q-05a-2 is answered, §2) decides which one it is. A manager who is unsure treats it as a **recall** and calls the owner.
+
+**Procedure: placing a recall hold** (manager, the moment a recall notice, a vendor notice, an LCB call or a failed-safety finding arrives):
+1. **Open form 8.5** (recall event worksheet). Write who told you, when, how, and the product, vendor, lot or batch numbers and recall reference exactly as given.
+2. **Find every affected lot.** Inventory → type into the search box (*"Product, lot code, POS key, vendor, brand, strain, notes…"*, `InventoryFilterPanel.tsx` L345): the product, the vendor, and each lot number. Use the **All** status tab, so sold-out and quarantined lots also show. List each lot on form 8.5 with its **On hand**.
+3. **Set each affected lot to Recalled.** For each lot: write a form 8.1 line first, then **Lifecycle status → Set status → Recalled → Update status** (§4.8). The page shows **Saved.**
+4. **Pull the product physically.** Remove every unit from the sales floor, the display cases and the vault shelf. Put it in a sealed bin or bag marked **"RECALL — DO NOT SELL — <product> — <date>"**, in the quarantine area. Count it; the count must match **On hand**. Write the count on form 8.5. Any difference is reported to the owner the same hour.
+5. **Hide it from the website as well** (finding F-05a-16, below). Open **Product Intake → Product Enrichment** (`admin-nav-data.ts` L77), open the product, set **Visibility** to **Always hide**, type the reason (for example "RECALL 2026-10-27") in **Reason if hidden**, and press **Save enrichment** (`products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270, audited `product.visibility_changed`). The recall hold alone does not stop online reservations.
+6. **Check the register.** Scan or search the product at a register (download the menu first: a register that has not refreshed may still show it). It should not appear. If it is still listed after a refresh, stop the register from selling it by word of mouth and call the owner (§4.11 explains why the sale would still be refused at completion).
+7. **Check open orders.** Open **Online Orders** (`admin-nav-data.ts` L53) and look for pending pickup orders that hold the product. Call those customers, tell them the item is unavailable, and remove it at pickup. (The pickup cannot be completed with it in the order, §4.11.)
+8. **Notify.** The **recall coordinator** notifies the LCB: immediately for a **recall**, within **48 hours** for a **market withdrawal**. Write the officer's name, the time and the method on form 8.5. A manager acting in the owner's absence makes the call if the owner cannot be reached within 1 hour of a recall.
+9. **Do not destroy anything.** Recalled product stays in the bin until the coordinator has notified the LCB and agreed the destruction with the officer. When that is done, destruction runs through **Returns & Destruction** (SOP-15), which refuses a recall destruction until **LCB coordination** is confirmed and the **officer is named**: *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* and *"Record the LCB enforcement officer you coordinated with."* (`disposition-core.ts` L226–243). Never use the **Recall removal** adjustment reason (§4.7), and never set **Destroyed** by hand (§4.9).
+10. **Track weekly.** Each week while the recall is open, write on form 8.5 the units held, returned, destroyed and sold before the hold, and the date the progress was reported to the LCB ((3)(f)).
+
+**Procedure: releasing a recall hold** (**owner** only, as recall coordinator):
+1. Release only on **written** clearance: the recall notice withdrawn, the vendor's written clearance for these lots, or the LCB's release. Put the copy in the compliance binder.
+2. Write a form 8.1 line: lot, Recalled → Active, the clearance reference, your name, time.
+3. **Lifecycle status → Active → Update status** on each cleared lot. Lots that will be destroyed or returned are **not** set Active. They stay Recalled until SOP-15 completes, and SOP-15 sets **Destroyed** when the destruction empties the lot (§4.9).
+4. Set **Visibility** back to **Inherit POS** (or **Always show**) on Product Enrichment if you hid it in step 5 above.
+5. Scan the product at a register to confirm it rings up again. Close form 8.5 with the date and a one-line outcome.
+
+**What the app does not record** (findings F-05a-2, F-05a-15): placing or lifting **Recalled** writes **no audit row**, asks for **no reason**, and the release is open to any manager-level login (§4.8). The app has no recall-plan record and no recall-coordinator field (the only mention is `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136). Forms 8.1, 8.4 and 8.5 are the record until gaps **G-22** and **G-25** are built.
+
+**Finding F-05a-16 (S2): a recall hold does not reach the website or online ordering.** The public menu filters out only **hidden** cards (`src/lib/pos/live-menu.ts` L167–171, L289–292). Online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). Neither reads lot status: `recalledProductKeys` has exactly four callers, the register menu route, the completion gate, restore to sale and the sellability report (`api/pos/menu/route.ts` L121; `completion-gate.ts` L103; `restore-to-sale-store.ts` L131; `register-sellability-store.ts` L175). A customer can still see a recalled product on the website and **reserve** it for pickup. The sale is refused only when staff try to complete the pickup (§4.11). Step 5 above (**Always hide**) is the interim control. It hides every size of the product, so if only one size of a mastered product is recalled, ask the owner before hiding.
+
+> **Control: a recall is placed by a manager, on form 8.1 and form 8.5, the same hour the notice arrives; the product is physically segregated and counted; the website card is hidden; the LCB is notified (immediately for a recall, 48 hours for a withdrawal); nothing is destroyed before LCB coordination; only the owner releases a hold, on written clearance.** The app's hold stops register sales but writes no record, and does not reach the website (F-05a-2, F-05a-15, F-05a-16; gaps G-22, G-25).
+
+### 4.11 What a recall hold does at the register
+
+Budtenders: read this section.
+
+**Two layers stop a recalled product at the register.**
+
+| Layer | What it does | How strong | Where |
+|---|---|---|---|
+| 1. The register menu | When a register downloads the menu, a product with any Recalled lot is left out. If only one size of a mastered product is recalled, only **that size** is left out | **Advisory.** If the recall read fails, the register gets the full menu rather than a blank screen | `api/pos/menu/route.ts` L116–121, L225–238, L302–304 |
+| 2. The completion gate | When the sale is completed (at the register, at sync, or a pickup order in the back office), every line is checked again. A held product refuses the whole sale | **Hard. No override.** If the recall table cannot be read, the sale is refused | `completion-gate.ts` L95–119; `recall-hold-core.ts` L108–117 |
+
+**The message the register shows** (layer 2), word for word:
+
+> *"Sale blocked: "<product>" is under an active RECALL hold — recalled product must be segregated and may NOT be sold. Remove the item from the sale. There is no override for this rule; the hold clears only when a manager releases or destroys the recalled lot in Admin → Inventory."* (`recall-hold-core.ts` L108–117)
+
+If the recall status cannot be read at all:
+
+> *"Sale blocked: the recall-hold status of this order's products could not be verified (inventory read failed). Try again; if it persists, contact the administrator. Selling cannot proceed while recall status is unknown."* (`completion-gate.ts` L117–118)
+
+**What the budtender does:**
+1. Remove the item from the sale. Do not try another register, another size code or a keypad line to get around it.
+2. Tell the customer the product is not available today. Do not say "recall" to the customer unless the owner has approved the wording (§4.13, communications plan).
+3. Tell the manager on duty. The manager checks that the product is off the shelf (§4.10 step 4).
+4. If it was the second message (status could not be verified), try once more. If it repeats, the manager calls the owner. No sale proceeds while recall status is unknown.
+
+**The manager override does not apply.** The sales-limit override (`sales_limit.override`) is evaluated after the recall gate (`completion-gate.ts` L199) and never lifts a recall. A sale synced from a register **never** carries an override (`sync-store.ts` L1133–1141).
+
+**An offline sale.** A register selling offline uses its last downloaded menu. If a recalled product was sold offline, the sale is refused when it syncs, recorded as `order.completion_blocked`, and sent to the sync exception queue (`sync-store.ts` L1136–1162). The product has already left the store. The manager treats it as a recall incident: write it on form 8.5 (units sold before the hold) and tell the owner the same day. The exception queue itself is SOP-01 / SOP-03.
+
+**On the back office.** The **Issues** tab shows **N lots currently flagged RECALLED — pull from sale** (§4.4). The **Stock on hand that the register cannot sell** panel lists recalled lots under *"under a recall hold"* (`issues-core.ts` L281–285). The register's own reconciler describes it as: *"Blocked by a recall hold. Recalled product cannot be sold even though stock is on hand — clear the recall in the back office first."* (`register-availability-core.ts` L333–345). Stock on hand never overrides a recall (L332–333).
+
+### 4.12 The register's "86" and Restore to sale
+
+**The 86 (register).** On a product's detail sheet at the register there is a small link **"Shelf is empty? Mark out of stock…"** (`src/app/pos/SaleFlow.tsx` L4266–4276). Pressing it asks:
+
+> *"Remove <product> from every register and the website? Pick why — a manager brings it back through the back office when stock returns."* (L4279–4280)
+
+The reasons are buttons: **shelf empty**, **damaged / unsellable**, **wrong listing**, and **Cancel** (`stock-flag-core.ts` L32; free text is deliberately not allowed, L31). It is not offered on keypad (custom) lines (`canFlagOutOfStock`, L79–81).
+
+**What it does.** The register calls `/api/pos/stock-flag`. The route checks the device (L28–34), sets the product's published menu card to **unavailable** (L77–83) and writes an audit row `pos.stock_flag` with the device, the register, the reason and the name the register sent (L85–102). The name is supplied by the register, not checked by the server (L48–52). It changes **only the menu card**. It does **not** change any lot, quantity or status, and nothing is reported to CCRS.
+
+**When a budtender uses it.** Only when a product shows on the menu but there is truly none on the shelf or in the back stock, or the listing is plainly wrong. Tell the manager right after. Never use it for a recall. A recall is a lot status set by a manager (§4.10), and the 86 can come undone on its own (next paragraph).
+
+**Finding F-05a-9 (S3): the 86 does not stick while stock is on file.** Every time a register downloads the menu, the reconciler checks each unavailable card against live **Active** lots. If units are on hand, the card is put back on sale automatically: *"Restored to the register: inventory shows N units on hand in active lots, but the published menu still had it marked unavailable."* (`register-availability-core.ts` L318–421, message L389; called at `api/pos/menu/route.ts` L240). So an 86 on a product the system thinks it still has, for example **damaged / unsellable** with units still on the lot, reappears at the next menu download. The register's own prompt says a manager brings it back. The code brings it back without one.
+
+**What the manager does when an item is 86'd** (same shift):
+1. Find the reason. Check the shelf, the back stock and the lot's **On hand**.
+2. **Shelf truly empty, On hand above zero:** the count is wrong. Do not adjust by hand on a guess. Count it (SOP-06 cycle count, or §4.6 with form 8.2 if the owner approves). Until the count is fixed, the item will keep coming back at the register.
+3. **Damaged or unsellable:** move the units to quarantine, set the lot to **Quarantine** with a form 8.1 line (§4.8), and handle it under SOP-15. Quarantine takes the lot out of the live count, so the card stays unavailable.
+4. **Wrong listing:** tell the owner. Menu listings are SOP-05b.
+5. **Stock is really there** (someone 86'd it by mistake, or it was restocked): use **Restore to sale** below.
+
+**Restore to sale (back office).** On **Inventory → Issues**, the panel **Marked unavailable, but you have stock** appears only when a product is flagged unavailable while Active lot units sit behind it (`RegisterSellabilityBanner.tsx` L142–188; placed at `inventory/page.tsx` L584–586). Its text: *"Someone pressed "86" on these at a register, or they were emptied and then restocked. They are on the shelf now. Restoring recomputes each one from its live lot count, so it can only clear a stale flag — it can never invent stock."* (L154–158). Each row shows the product and **N units on hand**, with the button **Restore to sale → <status>** (L180).
+
+**Procedure: Restore to sale** (manager):
+1. Look at the shelf. Restore only when the product is physically there and sellable.
+2. Press **Restore to sale → …**. The server rechecks everything (`actions.ts` L1174–1198 → `restore-to-sale-store.ts`). It refuses if the product is under a recall hold (that check fails closed, `restore-to-sale-store.ts` L125–140), if the card is hidden, or if no Active lot holds stock (`restore-to-sale-core.ts` L115–158). The status it sets is computed from live units: **0 or less → unavailable, 1–3 → low-stock, more than 3 → in-stock** (`statusForUnits`, `register-availability-core.ts` L141–145).
+3. Read the banner at the top of Inventory. Success: *"<product> is back on sale (N units on hand — <status>)."* (`restore-to-sale-core.ts` L167). The restore writes an audit row `inventory.restore_to_sale` with the old and new status (`restore-to-sale-store.ts` L166–172) and refreshes the website.
+4. A refusal (§5.3) tells you what is wrong. Fix that; do not try to work around it.
+
+> **Control: the 86 is a register shortcut, not a stock record. The manager investigates every 86 the same shift, fixes the cause (count, quarantine or listing), and restores only product that is physically on the shelf.** The 86 is audited (`pos.stock_flag`) but comes back on its own while units are on file (F-05a-9; gap G-26 proposes a sticky 86 option, owner question Q-05a-5).
+
+### 4.13 The written recall plan (WAC 314-55-225)
+
+**The law.** *"All licensees must develop a recall plan"* setting the procedures the licensee will follow in a recall of product under its control. At a minimum it must include ((3)(d)(i)):
+- **(A)** *"Designation of a member of the licensee's staff who serves as the licensee's recall coordinator"*;
+- **(B)** *"Procedures for identifying and isolating product to prevent or minimize its distribution to consumers"*;
+- **(C)** *"Procedures to retrieve and destroy product"*; and
+- **(D)** *"A communications plan to notify those affected by the recall"*, including how other licensees in possession are told and the use of press releases or other notices when product reached consumers.
+
+A recall *"must follow the procedures outlined in the recall plan unless otherwise agreed by the LCB and the licensee."* ((3)(d)(ii))
+
+**What the app has.** No recall plan, no coordinator field and no recall log (finding F-05a-15, **S2**; gap G-25). It has the pieces a plan points to: the **Recalled** status and its register hold (§4.10–§4.11) and the recall-destruction block in Returns & Destruction (SOP-15).
+
+**What Greenway does.** **Form 8.4** in §8 is the recall plan, written to (A)–(D) and built on this SOP:
+- (A) **Recall coordinator**: named on the form (the owner until Q-05a-2 is answered), with a back-up.
+- (B) **Identify and isolate**: §4.10 steps 1–7.
+- (C) **Retrieve and destroy**: §4.10 steps 8–10 and SOP-15. Greenway is a retailer. It does not sell to other licensees, so "retrieve" means customer returns brought back to the store (SOP-15 customer returns) and the product held in the bin.
+- (D) **Communications**: who calls the LCB officer, the vendor, and the customers with open orders, and who approves any public notice. Only the owner speaks to the press or posts publicly.
+
+**Procedure.**
+1. The owner fills in form 8.4, signs and dates it, and files it in the compliance binder. Staff sign that they have read it.
+2. Review it **every year** and whenever the coordinator, the LCB officer's contact or this SOP changes. Write the review date on the form.
+3. In a recall, follow form 8.4 and §4.10. Any departure must be agreed with the LCB and written on form 8.5.
+
+> **Control: a signed, current recall plan (form 8.4) with a named coordinator is in the binder, and every recall follows it.** WAC 314-55-225(3)(d) makes the plan mandatory. The app does not hold one (F-05a-15; gap G-25).
+
+# Part 4: Expiry dates
+
+<!-- PART 4 (sections 4.14 onward) is appended in the next commit. -->
