@@ -99,3 +99,26 @@ Concierge code is **unchanged** (record-only). What SOP-01 now provides as sourc
 **Must ship with caveats:** the concierge has to repeat the SOP's known-problem warnings (F-01-3 "expected $0.00", F-01-5 "leave Reconciled by blank", F-00-3 "paper slip is the record") until those findings are fixed. Otherwise it will give advice that fails.
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, plus 3 proposed new topics. The concierge itself is still at the baseline until the integration phase.
+
+### SOP-02 Master Till / Store Safe (`docs/sop/SOP-02-master-till-safe.md`, verified at `0055f06c`)
+
+Concierge code is **unchanged** (record-only). Today the concierge and `help-content.ts` have **no** master till / safe content. The `registers` help entry (L227–262) does not mention the Store safe page, the $1,000 target, the AM/PM counts or the little safe (finding **F-02-12**). What SOP-02 now provides as source material for the integration phase:
+
+| Concierge topic | SOP-02 sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| *new* `master-till` (Store safe page) | §4.1 (where the money lives), §4.2 (the D11 $1,000 standard by denomination), §4.3–4.7 (open the page, AM/PM/Extra counts), §4.8 (Balanced/Over/Short), §4.9 (mix check), §4.16–4.18 (history, corrections, print), §8.1/8.6 forms, §9 quick card | — → ✅ |
+| *new* `little-safe` (D3 exchanges) | §4.10, form §8.2 | — → ✅ |
+| `registers` (addition) | §4.11 (register change swaps, master till side, $200 cap), §4.12 (drops are not in the master till), §4.14 (three till floats, D10 $167.50), §4.15 (safe section of the EOD report), §5.2 messages | 🔴 → ✅ (together with SOP-01) |
+| `register-messages` (addition) | §5.1 Store safe page messages, §5.2 swap messages | — → ✅ |
+| Petty cash / supply runs | §4.13, form §8.4 (no screen today, F-02-11 / G-11) | 🔴 → 🟡 (waiting on owner Q-02-4) |
+
+**Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L29). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
+
+**Must ship with caveats** until the findings are fixed:
+- F-02-2: the system's Manager Till float is $300, not the owner's $167.50 (D10).
+- F-02-3: the page does not compare the mix to the D11 standard, so use the §4.2 table.
+- F-02-5: only the newest AM/PM count shows on the EOD report, and the window defaults to AM, so pick the right one.
+- F-02-7: do **not** count drops or the little safe into the master till, whatever the page help text and placeholder say.
+- F-02-1: drops are not posted to the books (accounting only, not floor advice).
+
+**Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, plus the SOP-01 proposed topics. The concierge itself is still at the baseline until the integration phase.

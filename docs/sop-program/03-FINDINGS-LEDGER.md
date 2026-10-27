@@ -173,6 +173,83 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 
 ---
 
+## SOP-02 Master Till / Store Safe findings (audited at `0055f06c`, 2026-10-27)
+
+Owner decisions referenced: D3 (little safe), D7 ($5), D10 (three tills at $167.50), D11 (master till mix), D12 (page for the two daily counts), D13 (pin everything). See `00-OWNER-REQUEST-VERBATIM.md`.
+**D12 verdict: MET.** The twice-daily count page exists at `/admin/registers/safe` (AM / PM / Extra). Documented in SOP-02 §4.3–4.7; not a gap.
+Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni "little safe\|small safe" src supabase` → 0 hits). **F-00-8** re-confirmed for the safe page (no `PrintButton`, no export route under `src/app/admin/registers/safe/`).
+
+### F-02-1 · CONFIRMED · BUG · S1 — Cash drops are never posted; 10110 Tills keeps every dropped dollar for good
+- **Pin:** `register-cash-journal-core.ts` `buildTillCloseJournal` L235–345. With `floatStaysInDrawer: true` (passed by `drawer-posting-service.ts` L190–193), `removedMinor = counted − float` (L275–277). The till is relieved by `removedMinor − overShort` (L307–310). Drops are used only to work out *expected* (L270). They are never moved out of 10110 or into 10100.
+- **No other poster:** `grep -rn drawer_drops src/lib/accounting` returns only `factory-reset-core.ts` L426. `recordDrop` (`src/lib/registers/store.ts` L171–190) inserts a row and posts nothing. `ledger-census-data.ts` has no drop event (`grep -i drop` → 0 hits).
+- **Proof by running the real builder** (`sop02/drops.ts`, run with tsx at `0055f06c`): $167.50 float, $500.00 cash sales, a $200.00 drop, counted $467.50 → lines `10100 +30000 "Cash from Register 1 to safe"`, `10110 −30000`. Each sale debits 10110 (`sale-journal-core.ts` L106, L415–417), so 10110 got +$500.00 and lost $300.00. **$200.00 stays in 10110 with no entry**, and 10100 Vault is $200.00 low. The builder self-test (L860–872) checks only "not short" and "balances", not the 10110 net. The tests repeat the gap.
+- **Effect:** 10110 "Cash on Hand — Tills" goes up by the day's total drops, every day, forever. That is the same shape as the D-39 "drawers hold more money every day" problem the close posting was built to fix. 10100 Vault and later 10400 Undeposited Funds (bag seal) come up short by the same amount. The bank match (D-77 notes) works from a pool that never had the drop cash in it.
+- **SOP impact:** none for staff. Recorded in SOP-02 §4.12 for the owner and bookkeeper.
+
+### F-02-2 · CONFIRMED · BUG · S2 — Manager Till standard float is $300.00; the owner says $167.50
+- **Owner (D10):** *"there are three tills, two sales and one manager register. They are the ones with 167.5 in them."*
+- **Pin:** `0038_registers_drawers.sql` L177–184 seed `('Manager Till', 'manager_till', 30000, 30)`, with the comment *"Manager Till float $300 (30000)"*. `0077_drawer_counts_extra_denoms.sql` L40–46 updates `where kind = 'sales'` only: *"the shared Manager Till float is left as-is (owner has not specified a change)"*. No later migration touches `default_float_minor` (`grep -l default_float supabase/migrations` → 0038, 0077 only). No UI edits it (`grep -rn default_float_minor src` → read-only, `oversight.ts` L318, `store.ts` L18).
+- **Effect:** back-office **Open drawer** for the Manager Till says *"Standard float for this register is $300.00"*, and the grid shows a correct $167.50 count as **Short by $132.50** (`RegisterControls.tsx` L63–75).
+- **Comment also wrong:** `drawer-posting-service.ts` L190–191 says *"migration 0077 pins every register's default float at 16750"*. It pins only the two sales registers.
+- **Not verified:** the live database value (no production access in this slice). The owner can run `select name, default_float_minor from registers;`.
+
+### F-02-3 · CONFIRMED · GAP · S2 — No master till denomination standard; the mix is saved but never shown or checked
+- **Owner (D11):** the master till is *"32 tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 100 nickels, and 125 pennies"*.
+- **Pin:** `validateSafeCount` (`safe-core.ts` L64–96) compares the **total** only, against `SAFE_TARGET_MINOR` (L26). The 13 denomination columns are stored (`0135` L37–50) but the **Recent counts** table shows only Total/Target/Variance (`safe/page.tsx` L192–233). The EOD reads only `count_window, total_minor, variance_minor` (`eod-store.ts` L126–129).
+- The owner's mix **is** in the code, but only as a worked example: `SPECIMEN_MASTER_COUNTS` (`register-cash-specimen-core.ts` L43–46), which is shown in the EOD specimen panel and is not used by the safe page.
+- **Effect:** 10 × $20 + 12 × $10 + the standard rest = $1,000.00 → **"Balanced"** (script-checked, `sop02/calc2.py`). The registers can run out of change while the page says all is well.
+- The $1,000 target is a code constant, with no setting (minor; recorded here so nobody looks for a setting).
+- **Interim:** SOP-02 form 8.1 mix columns. Gap **G-08**.
+
+### F-02-4 · CONFIRMED · HARDEN · S2 — Who counted is optional and unverified; the audit row is not linked to the count
+- **Pin:** **Counted by** defaults to **— none —** (`safe/page.tsx` L165–166). The action sends `counted_by || null` (`safe/actions.ts` L31) and `recordSafeCount` inserts it as given (`safe-store.ts` L82). No PIN, no second counter. Any manager-level login can name any active employee. The audit `safe.counted` stores the login, window and variance, with `entityId: null` (`safe/actions.ts` L38–45), so the audit row cannot be tied to the `safe_counts` row except by time.
+- **Contrast:** a register swap checks a manager/lead PIN on the server (`till/route.ts` L186–211), and a drop can take a witness PIN. The master till, which the owner calls *"the one to watch"* (books-98 L64), has the weakest attribution of any cash movement.
+- **Effect:** with an open count (by design, `safe-core.ts` L7–10), a named, verified counter is the main control. Today it is optional.
+- **Interim:** SOP-02 §4.5 step 10. Always pick the counter; note who entered it.
+
+### F-02-5 · CONFIRMED · HARDEN · S2 — Several AM/PM counts per day are allowed; the EOD shows only the newest; the window defaults to AM; no double-submit guard
+- **Pin:** no unique `(business_day, count_window)`. Only plain indexes (`0135` L65–66). `safeStatus` uses `.some(...)` (`safe-store.ts` L178–179). `eod-core.ts` L182–183 takes `find(...)` on newest-first rows, so it shows the **latest** AM and PM. The select starts at `defaultValue="am"` (`safe/page.tsx` L157) at every time of day. The submit button has no pending/disabled state, and a server action re-post saves a second row.
+- **Effect:** (a) a PM count saved by mistake as AM leaves today's PM **Not yet**, while the AM card already said Done; (b) a bad count can be pushed off the EOD report by saving another one; (c) a double tap saves two counts. All earlier counts stay in **Recent counts**, so nothing is lost, but the official daily record can be chosen after the fact.
+- **Interim:** SOP-02 §4.6 (change the window), §4.17 (corrections as Extra, never overwrite).
+
+### F-02-6 · CONFIRMED · GAP · S2 — No variance threshold, no reason, and no books posting for master till variances
+- **Pin:** `safe-core.ts` has no threshold. Notes are optional (L79–82). `recordSafeCount` posts no journal (`safe-store.ts` L62–93). `grep -rn "safe_counts" src/lib/accounting` → only `factory-reset-core.ts`. Drawer over/short posts to 50920 at reconcile (`buildTillCloseJournal` L313–326); a master till short posts nothing, so 10100 Vault keeps the old figure.
+- **Owner D7** set $5 + a required reason for drawer over/short. Whether it covers the master till is **Q-02-3**.
+- **Interim:** SOP-02 §4.8 (reason for any variance; form 8.5 over $5). Extends gap **G-03**.
+
+### F-02-7 · CONFIRMED · DOC/UX · S2 — One "safe" in code, three places in the store; the page's help says to count drops with the change fund
+- **Owner:** *"three tills, one master till, and a store safe"* (quoted in `safe-bag-core.ts` L17), plus a **little safe** (original request; D3).
+- **Code:** one "safe" = *"the $1,000 master change fund"* (`safe-core.ts` L1–5); `VAULT_ACCOUNT` 10100 = *"The safe / master till"* (`register-cash-journal-core.ts` L70); close takings also post *"to safe"* into the same 10100 (L302). The page is titled **Store safe** (`safe/page.tsx` L75).
+- **Help and placeholder pin:** HelpPanel L97–100: *"Cash drops … appear on the drawer session, not here. If the safe drifts off target, drops waiting to be banked are the usual reason — note it and bank the overage."* Notes placeholder L177: *"e.g. two drops waiting to be banked"*. Both tell a counter to accept drop cash as master till "over", which is the opposite of the owner's three-place model.
+- **Effect:** confused counts (false Over), and a books account (10100) that mixes the change fund and the takings, so the PM count can never be checked against 10100.
+- **Interim:** SOP-02 §1 terms, §4.3 warning, §4.12.
+
+### F-02-8 · CONFIRMED · DOC · S3 — SOP-01 form 8.3 mixes up two different exchanges (self-finding)
+- **Pin:** `docs/sop/SOP-01-register-operations.md` L1106–1112. Form 8.3 is titled *"Change-swap denomination log (D3: master till ↔ little safe)"*, but its columns are for **register** swaps (*"Register/till … Matches register 'Record swap'?"*). A register swap is till ↔ change fund; a D3 balance is master till ↔ little safe.
+- **Fix in the SOP program:** SOP-02 splits them into form 8.2 (master till ↔ little safe) and form 8.3 (register ↔ master till). SOP-01 is to point to SOP-02 at its next revision. Not edited in this slice (one SOP per slice).
+
+### F-02-9 · CONFIRMED · DOC · S3 — Stale code comments about posting and floats
+- `register-cash-journal-core.ts` L50–52: *"nothing calls `submitJournal` with them yet: closing a shift still does not post. That is D-39"*. That is stale: `reconcileDrawerAction` → `postDrawerCloseForSession` → `submitJournal` (`src/app/admin/registers/actions.ts` L124; `drawer-posting-service.ts` L218; census `till_close_to_safe` reachable = PRESENT, `ledger-census-data.ts` L1471–1478). The same stale claim is in `docs/MICHAEL-books-93-register-cash.md` L58 (*"Nothing posts yet"*). That is a dated memo, so it stays as history.
+- `drawer-posting-service.ts` L190–191 says the float is *"16750"* for every register (see F-02-2).
+- `docs/MICHAEL-books-93` L26 says the close debits *10400*, which D-77 (books-98) changed to 10100. That is history; the code is right.
+
+### F-02-10 · CONFIRMED · UX · S3 — The Safe button is shown to staff logins, who are then denied
+- **Pin:** `registers/page.tsx` L87–89 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L90). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L164). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
+
+### F-02-11 · CONFIRMED · GAP · S3 — Supply runs from the master till cannot be recorded
+- **Pin:** `buildSupplyAdvanceJournal` / `buildSupplySettleJournal` (`register-cash-journal-core.ts` L501–646) are built and tested; the census marks them *reachable: MISSING — "No screen records a supply run yet"* (`ledger-census-data.ts` L1660–1665).
+- **Owner policy since books-99:** supplies go on the shop card, not master till cash (`card-payment-core.ts` L7–8). Severity S3 because the policy covers it. If a run ever happens, nothing in the app records it, and the next count is simply "short".
+- **Interim:** SOP-02 §4.13, form 8.4. Gap **G-11**, waiting on **Q-02-4**.
+
+### F-02-12 · CONFIRMED · DOC · S3 — The concierge and the help library know nothing about the master till
+- **Pin:** `grep -n -i "safe\|master till" src/lib/admin/concierge-kb.ts` → only unrelated uses ("safely", "am I safe?", equipment "safes"). `help-content.ts` `registers` topic (L227–262) has no safe or master till item. The page HelpPanel (F-02-7) is the only in-app help, and it contradicts the owner's model.
+- See `04-CONCIERGE-COVERAGE-LEDGER.md` SOP-02 slice log.
+
+### F-02-13 · CONFIRMED · GAP · S3 — Count and swap history is capped at 30 with no date filter
+- **Pin:** `listSafeCounts(30)` and `listSwaps(30)` (`safe/page.tsx` L61–62; `safe-store.ts` L126–150). There is no paging, date picker or per-day view. At two counts a day, the page shows about 15 days of counts. Older counts exist in the database but can be reached only through Supabase. Ties to G-09 (print/export).
+
+---
+
 ## Ledger index (updated each slice)
 
 | SOP slice | Findings | Confirmed | Suspected |

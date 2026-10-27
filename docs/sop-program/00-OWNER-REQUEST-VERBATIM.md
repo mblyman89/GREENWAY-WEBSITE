@@ -40,3 +40,18 @@ Recorded 2026-10-27 (Pacific), Slice SOP-00. Nothing below is paraphrased.
 | D7 | **Over/short threshold = $5.** Warnings only (no block). New **admin-only** screen placed in the most logical spot. Shows who, when, how much, and a **required** reason whenever there is any over/short. | "Q6- $5 … admin only screen … reason … should be required" |
 | D8 | **Keep the split:** register approvals use employee `job_role`; back-office permissions use the user `StaffRole`. All employees are users; not all users are employees. | "Q7- yes, please keep those separate" |
 | D9 | SOP-01 must explain **every** detail of ringing every kind of sale, applying discounts, every block/warning (why + how), and how to read the register and checkout screens. | "include every detail needed to fully explain how to ring sales …" |
+
+---
+
+## Owner request for SOP-02 (recorded verbatim, Slice SOP-02, after SOP-01 merged as 0055f06c)
+
+> Thank you! Please now begin the second sop, master till/ store safe. It’s probably in the code, but just in case it isn’t, there are three tills, two sales and one manager register. They are the ones with 167.5 in them. The master till has 1000. 32 tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 100 nickels, and 125 pennies. If there isn’t already, there should be a page to enter the two daily counts. Make sure to record everything, document everything, pin and anchor anything. All inclusive reporting please. Follow the standing rules. Thank you!
+
+### Facts and decisions derived (each traced to the words above)
+
+| # | Fact / decision | Source phrase |
+|---|---|---|
+| D10 | **Three tills (cash drawers):** two sales registers + one manager register. Each till's float is **$167.50**. Total floats = 3 × $167.50 = **$502.50** (computed by script, `sop02/calc.py`). | "there are three tills, two sales and one manager register. They are the ones with 167.5 in them" |
+| D11 | **Master till = $1,000.00**, standard composition: 32 × $10, 64 × $5, 318 × $1, 95 × 25¢, 120 × 10¢, 100 × 5¢, 125 × 1¢. Script-verified to total exactly $1,000.00 ($320 + $320 + $318 + $23.75 + $12 + $5 + $1.25). There are **no $20s or larger, no $2s and no $1 coins** in the standard master till. | "The master till has 1000. 32 tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 100 nickels, and 125 pennies" |
+| D12 | **Two daily counts of the master till must be enterable on a page.** If the page exists, SOP-02 documents it; if not, it is a gap (no build in the SOP program). | "If there isn’t already, there should be a page to enter the two daily counts" |
+| D13 | Reporting standard for this slice: record and pin every claim to file/line, all-inclusive. | "record everything, document everything, pin and anchor anything. All inclusive reporting please" |

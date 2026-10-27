@@ -16,5 +16,6 @@ The SOPs themselves live in `docs/sop/`.
 | SOP | Status |
 |---|---|
 | [SOP-01 Register Operations](../sop/SOP-01-register-operations.md) | v1.0 draft for owner review (slice SOP-01) |
+| [SOP-02 Master Till / Store Safe](../sop/SOP-02-master-till-safe.md) | v1.0 draft for owner review (slice SOP-02) |
 
-**Status:** SOP-00 complete (recon + roadmap). SOP-01 complete (Register Operations, docs only: 16 findings, gaps G-01…G-07). Next: **SOP-02 Master Till / Store Safe**.
+**Status:** SOP-00 complete (recon + roadmap). SOP-01 complete (Register Operations, docs only: 16 findings, gaps G-01…G-07). SOP-02 complete (Master Till / Store Safe, docs only: 13 findings, gaps G-08…G-12). Next: **SOP-03 End-of-Day Close & Deposit Bag**.
