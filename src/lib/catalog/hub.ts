@@ -101,155 +101,102 @@ export async function getWorkQueueInputs(): Promise<WorkQueueInputs> {
   if (!isSupabaseServiceConfigured) return emptyWorkQueueInputs();
   const inputs = emptyWorkQueueInputs();
 
-  try {
-    const counts = await countManifestsByStatus();
-    inputs.awaitingIntake = counts.awaitingIntake;
-  } catch {
-    /* leave 0 */
-  }
-
-  try {
-    const inTransit = await listManifests({ status: "in_transit", limit: 500 });
-    inputs.overdueInTransit = inTransit.filter(
-      (m) => classifyEta(m.eta_date) === "overdue",
-    ).length;
-  } catch {
-    /* leave 0 */
-  }
-
-  try {
-    const admin = createSupabaseAdminClient();
-    const { count } = await admin
-      .from("inventory_lots")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "quarantine")
-      .eq("disposition", "accepted");
-    inputs.heldLots = count ?? 0;
-  } catch {
-    /* leave 0 */
-  }
-
-  try {
-    inputs.onboardingDrafts = (await countCatalogDrafts()).draft;
-  } catch {
-    /* leave 0 */
-  }
-
-  try {
-    const pos = await listPurchaseOrders();
-    inputs.posToSend = pos.filter((p) => ["draft", "submitted"].includes(p.status)).length;
-  } catch {
-    /* leave 0 */
-  }
-
-  try {
-    inputs.masteringSuggestions = (await listSuggestions({ status: "pending" })).length;
-  } catch {
-    /* leave 0 */
-  }
-
+  // PERF-S8: the six counts are independent, so they now run in PARALLEL
+  // (they used to be six serial round trips on every dashboard load). Each
+  // still degrades to 0 on its own failure.
+  const zero = () => 0;
+  const [awaitingIntake, overdueInTransit, heldLots, onboardingDrafts, posToSend, masteringSuggestions] =
+    await Promise.all([
+      countManifestsByStatus().then((c) => c.awaitingIntake, zero),
+      listManifests({ status: "in_transit", limit: 500 }).then(
+        (rows) => rows.filter((m) => classifyEta(m.eta_date) === "overdue").length,
+        zero,
+      ),
+      countHeldLots().catch(zero),
+      countCatalogDrafts().then((c) => c.draft, zero),
+      listPurchaseOrders().then((pos) => pos.filter((p) => ["draft", "submitted"].includes(p.status)).length, zero),
+      listSuggestions({ status: "pending" }).then((rows) => rows.length, zero),
+    ]);
+  inputs.awaitingIntake = awaitingIntake;
+  inputs.overdueInTransit = overdueInTransit;
+  inputs.heldLots = heldLots;
+  inputs.onboardingDrafts = onboardingDrafts;
+  inputs.posToSend = posToSend;
+  inputs.masteringSuggestions = masteringSuggestions;
   return inputs;
+}
+
+/** Accepted-but-quarantined lots (Slice-107 activation gate). */
+async function countHeldLots(): Promise<number> {
+  const admin = createSupabaseAdminClient();
+  const { count } = await admin
+    .from("inventory_lots")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "quarantine")
+    .eq("disposition", "accepted");
+  return count ?? 0;
+}
+
+async function loadEnrichmentSummary(publishedId: string): Promise<CatalogHubSnapshot["enrichment"]> {
+  const items = await getVersionItems(publishedId);
+  const keys = items.map((i) => i.source_item_id);
+  const enrichments = await getEnrichmentsForKeys(keys);
+  const gaps: GapFlags[] = items.map((i) => computeGaps(i, enrichments.get(i.source_item_id) ?? null));
+  const total = gaps.length;
+  return {
+    total,
+    enrichedLive: gaps.filter((g) => g.enrichmentStatus === "published").length,
+    missingDescription: gaps.filter((g) => !g.hasDescription).length,
+    missingImage: gaps.filter((g) => !g.hasImage).length,
+    missingBrandLink: gaps.filter((g) => !g.hasBrandLink).length,
+    avgCompletenessPct: total > 0 ? Math.round(gaps.reduce((sum, g) => sum + completenessPct(g), 0) / total) : 0,
+  };
 }
 
 export async function getCatalogHub(): Promise<CatalogHubSnapshot> {
   if (!isSupabaseServiceConfigured) return emptySnapshot(false);
 
-  const published = await getPublishedVersion();
-  const hasPublishedMenu = Boolean(published);
-
-  // Onboarding drafts (always available once the drafts table exists).
-  const draftCounts = await countCatalogDrafts();
-
-  // Enrichment gaps require a published menu to measure against.
-  let enrichment = emptySnapshot(true).enrichment;
-  if (published) {
-    const items = await getVersionItems(published.id);
-    const keys = items.map((i) => i.source_item_id);
-    const enrichments = await getEnrichmentsForKeys(keys);
-    const gaps: GapFlags[] = items.map((i) =>
-      computeGaps(i, enrichments.get(i.source_item_id) ?? null),
-    );
-    const total = gaps.length;
-    const missingDescription = gaps.filter((g) => !g.hasDescription).length;
-    const missingImage = gaps.filter((g) => !g.hasImage).length;
-    const missingBrandLink = gaps.filter((g) => !g.hasBrandLink).length;
-    const enrichedLive = gaps.filter((g) => g.enrichmentStatus === "published").length;
-    const avgCompletenessPct =
-      total > 0
-        ? Math.round(gaps.reduce((sum, g) => sum + completenessPct(g), 0) / total)
-        : 0;
-    enrichment = {
-      total,
-      enrichedLive,
-      missingDescription,
-      missingImage,
-      missingBrandLink,
-      avgCompletenessPct,
-    };
-  }
-
-  // Pending mastering suggestions.
-  let pendingSuggestions = 0;
-  try {
-    const suggestions = await listSuggestions({ status: "pending" });
-    pendingSuggestions = suggestions.length;
-  } catch {
-    pendingSuggestions = 0;
-  }
-
-  // Purchasing — open POs and their value (mirrors the Purchasing page logic).
-  let purchasing = emptySnapshot(true).purchasing;
-  try {
-    const pos = await listPurchaseOrders();
-    const open = pos.filter((p) =>
-      ["draft", "submitted", "sent", "partial"].includes(p.status),
-    );
-    purchasing = {
-      openPos: open.length,
-      openValueMinor: open.reduce((s, p) => s + p.subtotal_minor_units, 0),
-      awaitingDelivery: pos.filter((p) => ["sent", "partial"].includes(p.status)).length,
-      // W2 work-queue input: the vendor hasn't received these yet.
-      toSend: pos.filter((p) => ["draft", "submitted"].includes(p.status)).length,
-    };
-  } catch {
-    purchasing = emptySnapshot(true).purchasing;
-  }
-
-  // Receiving — inbound manifests by stage (mirrors the Receiving page).
-  let receiving = emptySnapshot(true).receiving;
-  try {
-    const counts = await countManifestsByStatus();
-    // W2: overdue = in-transit manifests past ETA (same rule as the Receiving
-    // page: classifyEta(m.eta_date) === "overdue").
-    const inTransit = await listManifests({ status: "in_transit", limit: 500 });
-    const overdueInTransit = inTransit.filter(
-      (m) => classifyEta(m.eta_date) === "overdue",
-    ).length;
-    receiving = {
+  // PERF-S8: every section below is independent; they now load in PARALLEL
+  // instead of one after another. Failure handling is unchanged (each
+  // section falls back to its empty value; draft counts still throw).
+  const empty = emptySnapshot(true);
+  const enrichmentP = getPublishedVersion().then(async (published) => ({
+    hasPublishedMenu: Boolean(published),
+    enrichment: published ? await loadEnrichmentSummary(published.id) : empty.enrichment,
+  }));
+  const purchasingP = listPurchaseOrders().then(
+    (pos) => {
+      const open = pos.filter((p) => ["draft", "submitted", "sent", "partial"].includes(p.status));
+      return {
+        openPos: open.length,
+        openValueMinor: open.reduce((s, p) => s + p.subtotal_minor_units, 0),
+        awaitingDelivery: pos.filter((p) => ["sent", "partial"].includes(p.status)).length,
+        // W2 work-queue input: the vendor hasn't received these yet.
+        toSend: pos.filter((p) => ["draft", "submitted"].includes(p.status)).length,
+      };
+    },
+    () => empty.purchasing,
+  );
+  // Receiving: inbound manifests by stage; W2 overdue = in-transit past ETA.
+  const receivingP = Promise.all([countManifestsByStatus(), listManifests({ status: "in_transit", limit: 500 })]).then(
+    ([counts, inTransit]) => ({
       inTransit: counts.in_transit,
       awaitingIntake: counts.awaitingIntake, // received, awaiting verify & accept
       pending: counts.pending,
-      overdueInTransit,
-    };
-  } catch {
-    receiving = emptySnapshot(true).receiving;
-  }
+      overdueInTransit: inTransit.filter((m) => classifyEta(m.eta_date) === "overdue").length,
+    }),
+    () => empty.receiving,
+  );
 
-  // W2: held lots — accepted at intake but kept in quarantine by the Slice-107
-  // activation gate (missing CCRS id or passing COA). These are owned but not
-  // sellable, so they belong in the work queue.
-  let heldLots = 0;
-  try {
-    const admin = createSupabaseAdminClient();
-    const { count } = await admin
-      .from("inventory_lots")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "quarantine")
-      .eq("disposition", "accepted");
-    heldLots = count ?? 0;
-  } catch {
-    heldLots = 0;
-  }
+  const [{ hasPublishedMenu, enrichment }, draftCounts, pendingSuggestions, purchasing, receiving, heldLots] =
+    await Promise.all([
+      enrichmentP,
+      countCatalogDrafts(),
+      listSuggestions({ status: "pending" }).then((r) => r.length, () => 0),
+      purchasingP,
+      receivingP,
+      countHeldLots().catch(() => 0),
+    ]);
 
   return {
     configured: true,
