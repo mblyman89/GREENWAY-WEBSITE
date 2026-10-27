@@ -1204,11 +1204,11 @@ Owner reviewed: ____________________   Date: ________
 | SOP section | Code (read for this SOP) |
 |---|---|
 | 2, 4.1 unlock, PIN rules | `src/app/api/pos/unlock/route.ts`, `approve/route.ts`, `witness/route.ts`, `src/lib/staffing/handbook-ack-core.ts` |
-| 4.2 clock | `src/app/pos/RegisterShell.tsx` (onPunch) |
-| 4.3, 4.25–4.27 till | `src/app/pos/RegisterShell.tsx` (TillModal ≈L5603), `src/app/api/pos/till/route.ts`, `src/lib/pos/till-core.ts`, `src/lib/registers/store.ts`, `src/lib/registers/cash.ts`, `supabase/migrations/0038_registers_drawers.sql` |
+| 4.2 clock | `src/app/(site)/pos/RegisterShell.tsx` (onPunch) |
+| 4.3, 4.25–4.27 till | `src/app/(site)/pos/RegisterShell.tsx` (TillModal ≈L5603), `src/app/api/pos/till/route.ts`, `src/lib/pos/till-core.ts`, `src/lib/registers/store.ts`, `src/lib/registers/cash.ts`, `supabase/migrations/0038_registers_drawers.sql` |
 | 4.4 home screen, 4.34 MORE | `RegisterShell.tsx` (≈L2550–2915), `src/lib/pos/medical-testmode-core.ts` |
 | 4.5–4.6 ID / medical | `src/lib/pos/id-scan-core.ts`, `src/lib/pos/medical-pos-core.ts`, `SaleFlow.tsx` (ID gate) |
-| 4.7–4.10 cart, limits | `src/app/pos/SaleFlow.tsx`, `src/lib/pos/scan-required-core.ts`, `low-stock-core.ts`, `favorites-core.ts`, `src/lib/compliance/sales-limits-core.ts`, `sales-hours-core.ts` |
+| 4.7–4.10 cart, limits | `src/app/(site)/pos/SaleFlow.tsx`, `src/lib/pos/scan-required-core.ts`, `low-stock-core.ts`, `favorites-core.ts`, `src/lib/compliance/sales-limits-core.ts`, `sales-hours-core.ts` |
 | 4.11–4.14 discounts | `src/lib/pos/special-discount-sale-core.ts`, `src/lib/discounts/special-discount-core.ts`, `src/lib/pos/price-override-core.ts`, loyalty in `SaleFlow.tsx` + `/api/pos/loyalty` |
 | 4.15–4.17 tender, done, tab | `src/lib/pos/cash-rounding-core.ts`, `change-calc-core.ts`, `employee-loan-core.ts`, `SaleFlow.tsx` (done screen ≈L1580) |
 | 4.18–4.19, 4.31 hold/cancel/lock | `RegisterShell.tsx` (≈L1060–1340), `src/lib/pos/active-sale-resume-core.ts` |

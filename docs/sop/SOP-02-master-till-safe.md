@@ -426,7 +426,7 @@ Until it is built:
 | *"Supabase not configured"* / *"Connect the service role key to manage the safe."* | BLOCK | Server not connected to the database (L49–57) | Paper. Tell the owner. | Owner |
 | *"Database not configured."* | BLOCK | Same, at save (`safe-store.ts` L68) | Same | Owner |
 | Any other red database message | BLOCK | Unexpected database error (the raw message is shown, L90) | Do not retry more than once. Paper. Screenshot it for the owner. | Owner |
-| Sent to the admin home (`/admin?denied=1`) | BLOCK | Your login is not owner/admin/manager (`session.ts` L164) | Ask a manager to enter the count, naming you as **Counted by** | Manager |
+| Sent to the admin home (`/admin?denied=1`) | BLOCK | Your login is not owner/admin/manager (`session.ts` L184) | Ask a manager to enter the count, naming you as **Counted by** | Manager |
 | *"Safe counted — over the target by $X."* | WARN (saved) | The total is above $1,000.00 | §4.8 | Manager |
 | *"Safe counted — short of the target by $X."* | WARN (saved) | The total is below $1,000.00 | §4.8 | Manager → owner |
 | *"Safe counted — balanced on the $1,000 target."* | OK | Total is $1,000.00. **The mix is not checked.** | §4.9 | — |
@@ -646,14 +646,14 @@ Counter signature: ______________   Manager signature: ______________   → owne
 
 | SOP section | Code / document (read for this SOP) |
 |---|---|
-| 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L162–166; `src/components/admin/admin-nav-data.ts` L111; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
+| 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L111; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
 | 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L183–194; `src/lib/accounting/card-payment-core.ts` L7–8 |
 | 4.2 standard | Owner D11; `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
 | 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L87–89 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
 | 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L660–702 |
-| 4.11 swaps | `src/app/api/pos/till/route.ts` L47, L132–135, L183–234; `src/lib/pos/till-core.ts` L61–74, L210–232; `src/app/pos/RegisterShell.tsx` L5650, L5713, L5745, L5799–5832, L5900–5916 |
+| 4.11 swaps | `src/app/api/pos/till/route.ts` L47, L132–135, L183–234; `src/lib/pos/till-core.ts` L61–74, L210–232; `src/app/(site)/pos/RegisterShell.tsx` L5650, L5713, L5745, L5799–5832, L5900–5916 |
 | 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L104–118, L168–190; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
 | 4.13 supply runs | `register-cash-journal-core.ts` L495–646; `src/lib/accounting/ledger-census-data.ts` L1639–1670; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
 | 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L318 |

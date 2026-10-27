@@ -21,7 +21,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 
 ### F-00-1 · CONFIRMED · DOC · S2 — The concierge tells staff the POS "is PLANNED, not built yet"
 - **Pin:** `src/lib/admin/concierge-kb.ts` L476–489 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
-- **Reality:** the register exists. `src/app/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
+- **Reality:** the register exists. `src/app/(site)/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
 - **Effect:** an employee who asks the concierge "how do I close my till?" is told the register does not exist. This is the single biggest knowledge gap in the concierge.
 
 ### F-00-2 · CONFIRMED · DOC · S3 — The concierge KB is small and does not read the help that already exists
@@ -128,7 +128,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - Same root as F-00-3/F-00-4. Recorded here because SOP-01 now carries a workaround that depends on it.
 
 ### F-01-6 · CONFIRMED · HARDEN · S2 — Done-screen "Print receipt" opens the drawer on every tap, with no audit
-- **Pin:** `src/app/pos/SaleFlow.tsx` L1580 `{ html, openDrawer: true, jobKind: "sale" }`. The button stays live (*"Tap again to reprint"*, L1634). By contrast, MORE → Reprint last receipt and the history reprint never kick the drawer.
+- **Pin:** `src/app/(site)/pos/SaleFlow.tsx` L1580 `{ html, openDrawer: true, jobKind: "sale" }`. The button stays live (*"Tap again to reprint"*, L1634). By contrast, MORE → Reprint last receipt and the history reprint never kick the drawer.
 - **Effect:** after a sale, any number of extra drawer openings are possible without a No-sale record, a reason or a manager PIN. This bypasses the No-sale control (§4.21).
 
 ### F-01-7 · CONFIRMED · UX · S3 — The drawer opens only by printing a receipt
@@ -236,7 +236,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - `docs/MICHAEL-books-93` L26 says the close debits *10400*, which D-77 (books-98) changed to 10100. That is history; the code is right.
 
 ### F-02-10 · CONFIRMED · UX · S3 — The Safe button is shown to staff logins, who are then denied
-- **Pin:** `registers/page.tsx` L87–89 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L90). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L164). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
+- **Pin:** `registers/page.tsx` L87–89 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L90). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L184). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
 
 - **Update (D15, slice SOP-03):** the owner wants **any employee** to count *and record* the master count. So staff being refused the safe page is now against an owner decision, not just a UX issue. Gap **G-13**.
 
@@ -483,7 +483,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.20: owner or admin only for Unit cost. Owner question **Q-05a-3**.
 
 ### F-05a-12 · CONFIRMED · DOC · S4 — Inventory help panel is stale
-- **Pin:** `inventory/page.tsx` L459 *"Vendor JSON intake (next slice)…"* (intake shipped; SOP-04); L458 lists "destructions" as an adjustment (contradicts SOP-15); `SopSheetLink slug="publish"` L467 points at the pre-R31 sheet (F-04-5).
+- **Pin:** `inventory/page.tsx` L465 *"Vendor JSON intake (next slice)…"* (intake shipped; SOP-04); L464 lists "destructions" as an adjustment (contradicts SOP-15); `SopSheetLink slug="publish"` L473 points at the pre-R31 sheet (F-04-5).
 - **SOP impact:** §4.2 note: follow the SOP where they differ.
 
 ### F-05a-13 · CONFIRMED · UX · S4 — Adjustment history shows the browser's date and no name
@@ -491,7 +491,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.5; form 8.2 is the readable record.
 
 ### F-05a-14 · CONFIRMED · UX · S4 — The "Needs attention" card counts expiring-soon lots but does not turn orange for them
-- **Pin:** value includes `expiringSoon`; the accent sum omits it (`inventory/page.tsx` L518–530).
+- **Pin:** value includes `expiringSoon`; the accent sum omits it (`inventory/page.tsx` L524–536).
 - **SOP impact:** §4.2 table note.
 
 ### F-05a-15 · CONFIRMED · GAP · S2 — No recall plan, recall coordinator or recall log in the app (WAC 314-55-225(3)(d) makes the plan mandatory)
