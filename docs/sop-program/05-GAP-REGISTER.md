@@ -1,6 +1,6 @@
 # SOP Program — Gap Register
 
-Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added)
+Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added) · Updated in slice SOP-05a · 2026-10-27 (D29 → G-16 APPROVED; D32 → G-18; D33/D34 → G-20; D31 → G-21)
 
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
@@ -35,10 +35,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-13 | Any employee can record the master till count (not only manager-level logins) | **D15** | F-02-10, F-02-4 | SOP-02 §2, §4.5: a manager login enters it and picks the counter | OPEN |
 | G-14 | Cash-to-bank books wiring (seal poster → 10400, bank-deposit clearing caller, census corrected, panel text) | (original request: "for depositing to the bank") | F-03-1, F-03-3, F-03-10, F-02-1 | SOP-03 §4.13 bag log + bank receipts; §4.15 ignore the panel | OPEN |
 | G-15 | EOD deposit sheet in the app + export (deposit figure, denominations, two signatures, refunds, date picker, CSV/XLSX) | (original request: "End of day spreadsheet" … "exported and printed") | F-03-5, F-03-6, F-03-7, F-03-8, F-00-8 | SOP-03 form 8.1 night sheet; §4.8 Z report for cash; §4.9 print | OPEN |
-| G-16 | Partial-quantity receive: record "N of M received", the rest refused, per line | (owner: *"only accepting a part of the manifest"*) · Q-04-1 | F-04-1 | SOP-04 §4.11: refuse the whole short line; vendor re-sends | OPEN (awaiting Q-04-1) |
+| G-16 | Partial-quantity receive: record "N of M received", the rest refused, per line | **D29** (*"we need a way to accept less than what came in, please add this to the list of serious issues to fix"*) | F-04-1 (**S1**) | SOP-04 §4.11: refuse the whole short line; vendor re-sends | **APPROVED · SERIOUS** |
 | G-17 | Show emails that failed to stage (parse failed / no manifest) on the Receiving screen | (procedure need) | F-04-4 | SOP-04 §4.3 step 4: daily mailbox-vs-list check, form 8.1 | OPEN |
-| G-18 | Monthly CCRS public records request: reminder task, tracking # / received date / wording log, corrected request template and phone | D28 (*"include the monthly CCRS public record request"*) | F-04-19, F-04-18, F-04-13, F-04-14, F-04-17 | SOP-04 §4.26–§4.28, form 8.4 | OPEN |
+| G-18 | Monthly CCRS public records request: reminder on the 10th (admin), month drop-down (one or several months) filling the built-in text, tracking # / received log, corrected phone and stale help | D28, **D32** | F-04-19, F-04-18, F-04-13, F-04-14, F-04-17 | SOP-04 §4.26–§4.28, form 8.4 | **APPROVED** (drop-down, D32) · rest OPEN |
 | G-19 | Gated and audited lot activation from the lot page (Lifecycle status runs the go-live check and writes an audit row) | (compliance: WAC 314-55-102) | F-04-2, F-04-12 | SOP-04 §4.19: manager only, from a "now clear" Issues row, logged on form 8.1 | OPEN |
+| G-20 | Benchmark dataset lifecycle: typed delete confirmation, 18-month retention purge (notice, hold, audit), working-buttons-only on monthly cards | **D33**, **D34** | F-04-15, F-04-16 | SOP-04 §4.33–§4.34, form 8.4 part G | **APPROVED** |
+| G-21 | First-delivery-from-vendor marker on the manifest review screen (prompts the recommended second count) | **D31** | — (no finding; feature need) | SOP-04 §4.9 Vendor-filter check, form 8.1 box | OPEN |
 
 ---
 
@@ -210,12 +212,14 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 - **Owner:** *"So we need the ability to tell the system that we are only accepting a part of the manifest and the rest was rejected. There are several instances where the vendor forgot to send an item, or it broke in transit, etc."* (`docs/ccrs-rejection-and-returns.md` L15–21). Line-level refusal exists; unit-level does not.
 - **Today:** each line is accepted whole or refused whole. `received_qty` = the manifest quantity (`intake-parser.ts` L606), and the InventoryTransfer reports the received quantity (`ccrs-transfer-core.ts` L33–36) (F-04-1).
-- **Requirements (draft, only if Q-04-1 = build it):**
+- **Owner decision (D29):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* **APPROVED, serious.** In Phase C it is ranked with the S1 items.
+- **Requirements:**
   1. Per line, an optional **counted** quantity (≤ shipped) with a refusal reason for the difference.
   2. The lot is activated at the counted quantity; the inventory adjustment `receive` is at the counted quantity.
   3. The weekly InventoryTransfer reports the quantity actually received, consistent with the vendor's CCRS Update.
   4. The timeline and partial note record shipped / counted / refused.
   5. Tests for "18 of 20", overage refusal, and zero counted (= refuse).
+  6. Manager-only, like the rest of Receiving (D30).
 - **Interim:** SOP-04 §4.11.
 
 ## G-17 · Failed-email visibility in Receiving
@@ -232,11 +236,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Owner (D28):** *"Please make sure to include the monthly CCRS public record request to ingest the states data for the benchmarks."* Vision: *"Ideally, I will make the public records request once per month to get the previous months data…"* (`ROADMAP_BACKOFFICE_FIXES.md` L276–289).
 - **Today:** there is no calendar task (`compliance-calendar-core.ts` L86–136), and no place to record the tracking number for a monthly zip (`discovery/actions.ts` L857–862). The template omits tables the transformer needs (F-04-18). The phone is wrong (F-04-13). Step 1 item 5 and the help panel are stale (F-04-14). The time estimate is understated (F-04-17) (F-04-19).
 - **Requirements (draft):**
-  1. A compliance-calendar task "CCRS public records request (previous month)", monthly, owner-assigned, due on the owner's chosen day (Q-04-4).
+  1. A compliance-calendar task "CCRS public records request (previous month)", monthly, **admin-assigned, due on the 10th** (D32), moving to the next business day on a weekend or holiday. If the WSLCB accepts a standing request, the task becomes "confirm last month's request is open or delivered".
   2. A small request log on the CCRS page: month, filed date, tracking #, acknowledged date, received date, linked dataset.
-  3. The request template updated to the owner's proven wording (Q-04-4), with dates pre-filled for the previous calendar month.
+  3. **Approved (D32):** keep the built-in text (the owner's proven wording) and add a **month drop-down that selects one month or several**. The selection fills [START DATE]/[END DATE] (the 1st of the first month through the last day of the last month), so the text is copied **without editing**. Default: the previous calendar month. A note under it: "Each month is delivered as its own zip; drop them one at a time."
   4. The phone corrected to (360) 664-1753; Step 1 item 5 and the help panel rewritten for the one-zip flow; an honest time estimate.
   5. A "last month not yet dropped" nudge on the benchmarks pages.
+  6. The log in item 2 holds one row per **month**, even when one request covered several months (one tracking # → several rows), because each month arrives as its own zip (D32).
 - **Interim:** SOP-04 §4.26–§4.28, form 8.4.
 
 ## G-19 · Gated and audited lot activation from the lot page
@@ -249,4 +254,30 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. The Issues "now clear" row activates through the gated path.
   5. Fix the stale "cannot attach one yet" text (F-04-12).
 - **Interim:** SOP-04 §4.19 control. Carried into SOP-05.
+
+## G-20 · Benchmark dataset lifecycle (retention, delete confirmation, working buttons only) (APPROVED, D33/D34)
+
+- **Owner:** *"delete after 18 months, I think this is long enough right? what is the enterprise grade solution for this. I want to do what the pros do."* · *"delete should as "are you sure", I am not sure about the generate vendor leads or enrich kb… if there is an enterprise grade professional solution, just go with it."* (D33, D34)
+- **Today:** the red **Delete** submits at once (`ccrs/page.tsx` L422–425 → `discovery/actions.ts` L770–788), cascading every benchmark table (`ingest.ts` L81; FKs `on delete cascade` in migrations 0079, 0106, 0109, 0181, 0182). Any `inventory.manage` login can press it. There is no retention rule. Compute benchmarks, Generate vendor leads and Enrich KB show on monthly-zip cards even though they do nothing there (F-04-15, F-04-16).
+- **Requirements:**
+  1. **Retention schedule in code**: monthly benchmark datasets are kept **18 months from the end of the data month** (`period_end`). The schedule is shown on the CCRS page in plain words.
+  2. **Automatic purge**: a scheduled job (monthly, after the 10th) deletes datasets past the schedule. Each purge writes an audit row (`discovery.ccrs.retention_purge`, dataset id, label, period, rows removed). No one has to remember.
+  3. **Notice**: a banner 30 days before a month is purged ("CCRS monthly · 2025-05 will be removed on 2026-12-01 under the 18-month retention rule").
+  4. **Hold**: an owner-only "Keep (hold)" toggle with a required reason. Held months are skipped by the purge, and the hold is audited.
+  5. **Manual delete**: a confirmation dialog that names the month and requires typing the month (for example `2025-05`) before **Delete** is enabled. The action is moved to the admin tier (`settings.manage`: owner, admin) and stays audited.
+  6. **Working buttons only**: on `ingest_kind = monthly_zip` cards, hide **Compute benchmarks**, **Generate vendor leads** and **Enrich KB**. Show a one-line pointer: "Vendor leads for this month: Product Discovery → Market movers → Draft vendor leads from these suppliers." Legacy CSV cards keep their buttons.
+  7. **Optional (Q-04-8)**: before the detail is purged, keep the month's overall headline row (scope `overall`) in a small history table, so long-run trend lines survive.
+  8. Pure-core tests: due-date math across month lengths and leap years, hold skip, typed-confirm match, button visibility by ingest kind.
+- **Out of scope:** Greenway's own receiving and sales records (five-year rule, WAC 314-55-087(1)) are never touched by this purge.
+- **Interim:** SOP-04 §4.33–§4.34, form 8.4 part G.
+
+## G-21 · First delivery from a vendor marker
+
+- **Owner (D31):** *"no second count required, it should be highly suggested, especially for new vendors we havent received from before."*
+- **Today:** nothing on the Receiving list or the review screen says a manifest is the first from its vendor (searched `src/app/admin/inventory/intake`, `src/lib/inventory`, `src/components/admin/inventory`). The vendor filter lists vendors seen in the loaded manifests only (`intake/page.tsx` L175; `ReceivingFilterBar.tsx` L101–111). With a filter on, the list reads the newest 1,000 manifests (`intake/page.tsx` L156–160).
+- **Requirements (draft):**
+  1. A **"First delivery from this vendor"** chip on the Receiving row and the review screen, computed from all accepted manifests for that vendor (license number first, name as fallback).
+  2. On a first delivery, the review screen shows "Second count strongly recommended (owner policy)" and an optional "Second counter" name field saved on the manifest. It is not required (D31).
+  3. Pure-core test for the first-delivery rule.
+- **Interim:** SOP-04 §4.9 (Vendor-filter check), form 8.1 first-delivery box.
 
