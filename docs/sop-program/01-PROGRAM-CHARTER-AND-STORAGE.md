@@ -23,7 +23,7 @@ Phases D and E follow all standing rules: pure `*-core.ts` + `__run…Tests()`, 
 
 ## 3. The per-slice audit method (Phase B, repeated for every SOP)
 
-Every SOP slice runs the same 8 steps, so the work is repeatable and nothing is guessed:
+Every SOP slice runs the same 8 steps (plus the two standing rules 9 and 10 below), so the work is repeatable and nothing is guessed:
 
 1. **Scope from the tree, not memory.** List every route (`src/app/admin/**`, `src/app/api/**`, `src/app/(site)/pos/**`), lib module, component, migration and test that the pipeline touches. Commit that list as the SOP's *Source Map* appendix.
 2. **Read the gates.** For every page and action, record `requirePermission(...)` / `requireStaff()` / PIN-role sets (e.g. `APPROVER_ROLES = manager|lead`), and map them to *who can do this step*.
@@ -33,6 +33,9 @@ Every SOP slice runs the same 8 steps, so the work is repeatable and nothing is 
 6. **Compare to the owner's request.** Every requested behaviour is marked EXISTS / PARTIAL / MISSING. Missing items become `GAP` findings and are written into the SOP as *"Not built yet — interim paper procedure: …"* so staff still have a procedure today.
 7. **Write the SOP** to the standard template (§5).
 8. **Update the ledgers** (findings + concierge), commit, push the branch, open the PR, rebase-merge, and verify production per rule 13 (docs-only changes still go through the gate).
+
+9. **Living SOPs: update the SOP when the app changes** (owner decision D41: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."*). An SOP describes the app **as it is today**. Every gap names the SOP sections it changes (the **SOP** column in `05-GAP-REGISTER.md`). **A gap is not closed until** (a) those sections are rewritten to the new behaviour, (b) the SOP's interim paper procedure for that gap (Appendix B) is removed or reduced, (c) a revision-history row is added with the new version, (d) the finding is marked FIXED in `03-FINDINGS-LEDGER.md` with the fixing commit, and (e) the concierge entry is updated (rule 10). Every SOP carries a reminder banner under its header table saying exactly this.
+10. **The concierge grows with the program** (owner decision D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*). After the last SOP, the concierge is upgraded to answer from **every** SOP and every feature (Phase D, `04-CONCIERGE-COVERAGE-LEDGER.md` §4 point 6). From then on, **a new feature is not finished until its concierge entry exists**: it is added in the same change that ships the feature, and checked by the same compliance test that keeps the SOP data and the Markdown in step (§4.2 point 2).
 
 Where a behavior can only be proven against the live database (e.g. F-00-3's uuid failure), the SOP slice marks it `SUSPECTED`. It is proven in Phase E with a test, never against production data.
 
