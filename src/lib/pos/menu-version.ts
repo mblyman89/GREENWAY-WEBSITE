@@ -450,7 +450,9 @@ export async function getVersionItems(versionId: string): Promise<MenuItemWithVa
         return [];
       }
       return (data as unknown as MenuItemRow[] | null) ?? [];
-    });
+      // PERF2-P8: 3-5 item pages fetched in one wave instead of one by one
+      // (identical rows and order; the walk still stops at the first short page).
+    }, { concurrency: MENU_READ_CONCURRENCY });
     // A failed page must not masquerade as "the catalog ended here". Returning
     // a partial menu is exactly the silent truncation this slice exists to
     // remove, so a read error yields [] and is logged.
