@@ -38,3 +38,16 @@ Pushed often because the sandbox is unstable (owner: "commit work often out of t
 - `/api/pos/stock-flag` route.ts: device-authenticated L28-34, reasons "shelf empty" | "damaged / unsellable" | "wrong listing" (stock-flag-core.ts STOCK_FLAG_REASONS), flips published menu_items.inventory_status → "unavailable" L75-81, audited `pos.stock_flag` L84-100 (flaggedByName is client-asserted L48-51). One-way.
 - Menu download self-heals: a flagged card with live active units is restored on the next download (register-availability-core.ts reconcileRegisterAvailability L318-421; route.ts L240). So "86 it" on a product that has stock lasts only until the next menu download unless stock is zero. → finding (86 is not sticky; "damaged / unsellable" reason with stock on hand silently comes back). Need verify statusForUnits L141-145: ≤0 unavailable, ≤3 low-stock.
 - Restore button: actions.ts L1174-1206 → restore-to-sale-store; refusal codes not_flagged / recall_hold / hidden_card / no_live_stock (restore-to-sale-core.ts decideRestore). Audit `inventory.restore_to_sale` (store L169-172). UI: Issues tab RestoreToSalePanel (page.tsx L586).
+
+## Expiry
+- Rules page `/inventory/expiration-rules` (page.tsx header L1-15; gate L222). Save/Preview/Apply in actions.ts L61-128 / L130-138 / L140-175; Apply refuses if plan changed since preview (fingerprint, L146-157); audited (`inventory_expiry_rule.created|updated|deleted`, `inventory_lot.expiry_rules_applied`).
+- Engine doctrine expiry-rules-core.ts L10-34: document date (manifest/coa/pos_import) never touched; owner_entered only with override; rule date recomputed/cleared; blank filled; destroyed skipped; basis = received_on or lab test date; type beats category. L32-34: WA does not require an expiration date (WAC 314-55-105(8) "best by" optional) — code's own claim, record as code claim.
+- Expiry soon window: expiry-rules-core EXPIRY_SOON_DAYS=30 (L52); inventory page uses EXPIRING_SOON_DAYS from store.
+- **Register does not block expired lots**: no expires_on read in completion-gate.ts / api/pos/menu / sale-decrement (grep). Sale draw is FIFO by created_at among active lots with stock (sale-lot-read.ts L39-47), not FEFO. Issues-core says "Expired product may not be sold" (L388, L452-463 one row per expired active lot, cap 50 L417) and points to lifecycle/adjust. → finding: the only stop is a person reading Issues; and the app's own sentence states a rule the code says WA does not have (L32-34) → owner question (store policy: may expired/best-by-passed product be sold?).
+- FEFO ranking exists only as advice in Insights (inventory-intel-core.ts L13, L124, L532).
+
+## Low stock (register)
+- low-stock-core.ts header L1-22: warnings only, never blocks; ≤3 = low-stock (statusForUnits register-availability-core.ts L141-145). Used by RegisterShell/SaleFlow. Covered by SOP-01 for the floor; SOP-05a explains the meaning.
+
+## Oversold
+- oversold-report-core.ts header: OVERSOLD notes from sale-decrement written on order_events; read on `/inventory/cycle-counts` page (only importer). Belongs to SOP-06 for action; SOP-05a points there.
