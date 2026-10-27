@@ -81,7 +81,7 @@ and set how it is to be built when this slice began:
 - **SOP-05a (this document): the cannabis lot core.** The Inventory list and Issues tab, the lot page, quantity adjustments, lot status, recall holds, the register's 86 and restore to sale, expiry dates and expiration rules, tags, testing labs, lot labels, bulk fill and lot corrections.
 - **SOP-05b (next slice):** Other Inventory (non-cannabis) and its labels, Merch Inventory, Publish Menu, Settings → Types & Categories, and Sales-Limit Classification. It also covers the sell-price correction on the lot page (§4.21 points there).
 
-**Why it matters.** The Inventory page describes itself as *"the traceability backbone"*: *"Compliance reports are built on top of this real data, never re-entered."* (`inventory/page.tsx` L430). The weekly CCRS files (SOP-16) are built from these lot rows. A wrong quantity or a wrong status here becomes a wrong state filing there.
+**Why it matters.** The Inventory page describes itself as *"the traceability backbone"*: *"Compliance reports are built on top of this real data, never re-entered."* (`inventory/page.tsx` L436). The weekly CCRS files (SOP-16) are built from these lot rows. A wrong quantity or a wrong status here becomes a wrong state filing there.
 
 **In scope.**
 - The Inventory list, its status tabs, cards, filters and columns, and the Issues and Insights tabs.
@@ -158,27 +158,27 @@ and set how it is to be built when this slice began:
 |---|---|---|
 | **Inventory** | Top bar **Inventory → Inventory** (`/admin/inventory`) | Every cannabis lot. Three tabs: **Lots**, **Issues**, **Insights** (`page-tab-sets.ts` L77–85) |
 | **Lot page** | Click a lot on the list | One lot: quantities, dates, COA, corrections, adjustments, status |
-| **Expiration rules** | **Expiration rules** button at the top of Inventory (`inventory/page.tsx` L436) | Best-by dates for lots with no manufacturer date (§4.15) |
-| **Tags** | **Tags** button (L440) | Labels shown on menu cards (§4.17) |
-| **Testing labs** | **Testing labs** button (L444) | WA labs and the hosts COAs may be read from (§4.18) |
+| **Expiration rules** | **Expiration rules** button at the top of Inventory (`inventory/page.tsx` L442) | Best-by dates for lots with no manufacturer date (§4.15) |
+| **Tags** | **Tags** button (L446) | Labels shown on menu cards (§4.17) |
+| **Testing labs** | **Testing labs** button (L450) | WA labs and the hosts COAs may be read from (§4.18) |
 | **Print lot label** | **🏷 Print 4×6 label** on a manifest line (`intake/[id]/page.tsx` L1072–1078), or the address `/admin/inventory/lots/<id>/label` | Reprint a 4×6 lot label (§4.19) |
 | **Expiration report** | **Expiration report** button on Expiration rules (`expiration-rules/page.tsx` L284) | Aging buckets, value at risk, 12-month forecast |
 | **Returns & Destruction** | Top bar **Inventory → Returns & Destruction** | Destruction and returns (**SOP-15**). The only correct way to destroy a lot (§4.9) |
 
-The green **+ Import vendor JSON** button at the top of Inventory opens **Receiving** (L447–449). That is SOP-04 work.
+The green **+ Import vendor JSON** button at the top of Inventory opens **Receiving** (L453–455). That is SOP-04 work.
 
 ### 4.2 The Inventory list: tabs, cards, filters and columns
 
-**Page title and help.** **Inventory**, with the subtitle *"Every lot tied to its vendor, brand, COA, and manifest — the traceability backbone…"* (L429–430). The help panel **How inventory lots work** (L451–469) lists four steps. Step 4, *"Vendor JSON intake (next slice) drafts lots + COAs for you to review and accept."* (L459), is out of date: intake has been built for a long time (SOP-04). Its **SOP** link opens the old "publish" sheet (L467). See finding F-05a-12.
+**Page title and help.** **Inventory**, with the subtitle *"Every lot tied to its vendor, brand, COA, and manifest — the traceability backbone…"* (L435–436). The help panel **How inventory lots work** (L457–475) lists four steps. Step 4, *"Vendor JSON intake (next slice) drafts lots + COAs for you to review and accept."* (L465), is out of date: intake has been built for a long time (SOP-04). Its **SOP** link opens the old "publish" sheet (L473). See finding F-05a-12.
 
-**The four cards** (L487–537):
+**The four cards** (L493–543):
 
 | Card | What it counts |
 |---|---|
 | **Total lots** | Every lot in the store |
 | **Active lots** | Lots with status Active |
-| **On-hand cost** | On hand × unit cost. It turns **orange** when some lots have no cost, because those count as $0 and the total is understated (L496–503) |
-| **Needs attention** | Recalled + quarantine + expired + expiring soon + no COA + no expiry date. *"Recalls, expiry, quarantine, missing COA"*. The card turns orange for every one of these **except** expiring soon (L522–530; cosmetic, F-05a-14) |
+| **On-hand cost** | On hand × unit cost. It turns **orange** when some lots have no cost, because those count as $0 and the total is understated (L502–509) |
+| **Needs attention** | Recalled + quarantine + expired + expiring soon + no COA + no expiry date. *"Recalls, expiry, quarantine, missing COA"*. The card turns orange for every one of these **except** expiring soon (L528–536; cosmetic, F-05a-14) |
 
 **The three tabs** (`page-tab-sets.ts` L77–85):
 - **Lots**: *"Every lot, with filters, sorting and bulk edits."*
@@ -187,11 +187,11 @@ The green **+ Import vendor JSON** button at the top of Inventory opens **Receiv
 
 **The status chips** on the Lots tab: **All**, **Active**, **Quarantine**, **Recalled**, **Sold out**, **Destroyed**, **Leafly** (L92–102). A bare `/admin/inventory` opens on **Active**. To see everything, press **All**. **Leafly** is not a status; it lists lots carrying the LEAFLY badge.
 
-**Filters.** The filter panel under the chips (L661–667) holds multi-select facets, yes/no flags, number ranges and date ranges, with removable chips for whatever is switched on. Every filter lives in the address bar, so a filtered view can be bookmarked or sent to another manager. When the list is filtered to one vendor, a banner says *"Showing only lots from <vendor>."* with **Open vendor page →** and **✕ Clear filter (show all lots)** (L603–620).
+**Filters.** The filter panel under the chips (L667–673) holds multi-select facets, yes/no flags, number ranges and date ranges, with removable chips for whatever is switched on. Every filter lives in the address bar, so a filtered view can be bookmarked or sent to another manager. When the list is filtered to one vendor, a banner says *"Showing only lots from <vendor>."* with **Open vendor page →** and **✕ Clear filter (show all lots)** (L609–626).
 
-**Columns** (L800–846) include COA, potency, lab, COA expiry, received, age, on hand, sold, sell-through, velocity, days of supply, ABC class, last counted, unit cost, extended cost, price, margin, extended retail, website category, onboarded, on menu, expires, compliance, disposition, notes, updated and status.
+**Columns** (L806–852) include COA, potency, lab, COA expiry, received, age, on hand, sold, sell-through, velocity, days of supply, ABC class, last counted, unit cost, extended cost, price, margin, extended retail, website category, onboarded, on menu, expires, compliance, disposition, notes, updated and status.
 
-**Bulk fill missing fields…** appears under the filters when the list has lots (L695–700). See §4.20.
+**Bulk fill missing fields…** appears under the filters when the list has lots (L701–706). See §4.20.
 
 ### 4.3 Lot statuses: what each one means
 
@@ -211,7 +211,7 @@ A lot has exactly one of five statuses (`actions.ts` L103–109; lot page L130�
 
 **When:** every morning, before the store opens, by the opening manager. **Time:** about 10 minutes. **Record:** form 8.3.
 
-1. Open **Inventory → Issues**. If it is clean, it reads: *"Nothing needs attention. No recalls, expired or undated stock, no blocked lots, and no crossed compliance limits (expiry window: 30 days)."* (`inventory/page.tsx` L572–575; window `EXPIRING_SOON_DAYS = 30`, `store.ts` L32). Tick "clean" on form 8.3 and stop.
+1. Open **Inventory → Issues**. If it is clean, it reads: *"Nothing needs attention. No recalls, expired or undated stock, no blocked lots, and no crossed compliance limits (expiry window: 30 days)."* (`inventory/page.tsx` L578–581; window `EXPIRING_SOON_DAYS = 30`, `store.ts` L32). Tick "clean" on form 8.3 and stop.
 2. Otherwise the rows come in two groups: **Needs action** (blocking) first, then **Worth a look** (warning) (`IssuesList.tsx` L11–12; `issues-core.ts` L16–25). Work every **Needs action** row before opening.
 3. Use the row's own button. Every row names its fix. The rows you will see (`src/lib/admin/issues-core.ts`):
 
@@ -427,7 +427,7 @@ If the recall status cannot be read at all:
 
 ### 4.12 The register's "86" and Restore to sale
 
-**The 86 (register).** On a product's detail sheet at the register there is a small link **"Shelf is empty? Mark out of stock…"** (`src/app/pos/SaleFlow.tsx` L4266–4276). Pressing it asks:
+**The 86 (register).** On a product's detail sheet at the register there is a small link **"Shelf is empty? Mark out of stock…"** (`src/app/(site)/pos/SaleFlow.tsx` L4266–4276). Pressing it asks:
 
 > *"Remove <product> from every register and the website? Pick why — a manager brings it back through the back office when stock returns."* (L4279–4280)
 
@@ -446,7 +446,7 @@ The reasons are buttons: **shelf empty**, **damaged / unsellable**, **wrong list
 4. **Wrong listing:** tell the owner. Menu listings are SOP-05b.
 5. **Stock is really there** (someone 86'd it by mistake, or it was restocked): use **Restore to sale** below.
 
-**Restore to sale (back office).** On **Inventory → Issues**, the panel **Marked unavailable, but you have stock** appears only when a product is flagged unavailable while Active lot units sit behind it (`RegisterSellabilityBanner.tsx` L142–188; placed at `inventory/page.tsx` L584–586). Its text: *"Someone pressed "86" on these at a register, or they were emptied and then restocked. They are on the shelf now. Restoring recomputes each one from its live lot count, so it can only clear a stale flag — it can never invent stock."* (L154–158). Each row shows the product and **N units on hand**, with the button **Restore to sale → <status>** (L180).
+**Restore to sale (back office).** On **Inventory → Issues**, the panel **Marked unavailable, but you have stock** appears only when a product is flagged unavailable while Active lot units sit behind it (`RegisterSellabilityBanner.tsx` L142–188; placed at `inventory/page.tsx` L590–592). Its text: *"Someone pressed "86" on these at a register, or they were emptied and then restocked. They are on the shelf now. Restoring recomputes each one from its live lot count, so it can only clear a stale flag — it can never invent stock."* (L154–158). Each row shows the product and **N units on hand**, with the button **Restore to sale → <status>** (L180).
 
 **Procedure: Restore to sale** (manager):
 1. Look at the shelf. Restore only when the product is physically there and sellable.
@@ -634,7 +634,7 @@ Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_l
 
 **Procedure:**
 1. Filter the list to the lots to fill. The easiest way is from the Issues tab: **Bulk fill the Cultivera-import lots** or a gap row, which opens the list already filtered.
-2. Press **Bulk fill missing fields…** under the filters (`inventory/page.tsx` L695–700). The panel uses **every lot the current filters show**.
+2. Press **Bulk fill missing fields…** under the filters (`inventory/page.tsx` L701–706). The panel uses **every lot the current filters show**.
 3. Choose **Field**, type **Value**, press **Preview fill for N lots**.
 4. Read **Review before saving — <field> on N lots**: *"Nothing has been saved yet."* It says how many will be set and how many will be skipped (*"they already have a value, are not from the one-time Cultivera import, or are destroyed. Those are protected and will not be changed."*).
 5. **Check the value applies to every one of those lots.** One value goes to all of them. An expiry date or a cost is rarely the same across many lots; filter tighter (one vendor, one product) until it is.
@@ -742,7 +742,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 ### 5.3 Restore to sale, the 86 and the register
 
-**Restore to sale** results appear at the top of the Inventory page (`inventory/page.tsx` L535–550).
+**Restore to sale** results appear at the top of the Inventory page (`inventory/page.tsx` L541–556).
 
 | Message | Cause | Do this |
 |---|---|---|
@@ -1111,23 +1111,23 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 
 | SOP section | Code / document (read for this SOP) |
 |---|---|
-| 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L98, L114; `02-SOP-CATALOG-AND-ROADMAP.md` (Split, D35); `src/app/admin/inventory/page.tsx` L430 |
+| 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L98, L114; `02-SOP-CATALOG-AND-ROADMAP.md` (Split, D35); `src/app/admin/inventory/page.tsx` L436 |
 | 2 roles | `src/lib/auth/roles.ts` L106, L126, L142–149; `inventory/actions.ts` (every action `inventory.manage`: L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210); `expiration-rules/page.tsx` L222, `actions.ts` L62, L131, L141; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33; `reports/expiration/page.tsx` L151; `disposition/page.tsx` L97; `api/pos/stock-flag/route.ts` L28–34 |
 | 3 before you start | `src/components/admin/admin-nav-data.ts` L84–90; `completion-gate.ts` L95–119; `restore-to-sale-core.ts` L115–158; `expiration-rules/actions.ts` L146–157; `expiry-rules-core.ts` L10–34; `tags/actions.ts` L108–111 |
-| 4.1–4.2 list | `inventory/page.tsx` L92–102, L204–209, L433–469, L487–564, L597–703, L800–846; `InventoryFilterPanel.tsx` L345 |
+| 4.1–4.2 list | `inventory/page.tsx` L92–102, L204–209, L439–475, L493–570, L603–709, L806–852; `InventoryFilterPanel.tsx` L345 |
 | 4.3 statuses | `inventory/actions.ts` L103–109; `[id]/page.tsx` L130–136; `sale-lot-read.ts` L39–47; `atomic-quantity.ts` L44; `disposition.ts` L1087–1094; `ccrs-batch.ts` L1006–1010, L1118–1122, L1209–1217 |
-| 4.4 Issues | `src/lib/admin/issues-core.ts` L16–25, L281–285, L314–486; `IssuesList.tsx` L11–12; `inventory/page.tsx` L566–591; `src/lib/inventory/store.ts` L32 |
+| 4.4 Issues | `src/lib/admin/issues-core.ts` L16–25, L281–285, L314–486; `IssuesList.tsx` L11–12; `inventory/page.tsx` L572–597; `src/lib/inventory/store.ts` L32 |
 | 4.5 lot page | `[id]/page.tsx` L360–418, L439–868, L1474–1546; `LabCertificatePanels.tsx` L35–56; `store.ts` L594–600 |
 | 4.6–4.7 adjust | `inventory/actions.ts` L89–140; `store.ts` L578–616; `[id]/page.tsx` L118–128, L1474–1494; `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `trade-samples.ts` L280–300; `atomic-quantity.ts` |
 | 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L836–851; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1209–1217; `disposition.ts` L1087–1094 |
 | 4.10–4.11 recall | `src/lib/pos/recall-hold-core.ts` L17–26, L44, L53–63, L108–117; `recall-hold-store.ts` L72–121; `api/pos/menu/route.ts` L116–121, L225–240, L302–304; `orders/completion-gate.ts` L95–119, L199; `pos/sync-store.ts` L1133–1162; `register-availability-core.ts` L332–345; `live-menu.ts` L167–171, L289–292; `order-pricing.ts` L124–134; `register-sellability-store.ts` L175; `products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270; `disposition-core.ts` L226–243; WAC 314-55-225 (app.leg.wa.gov, read 2026-10-27) |
-| 4.12 86 / restore | `src/app/pos/SaleFlow.tsx` L4263–4280; `RegisterShell.tsx` L1557–1594; `stock-flag-core.ts` L31–32, L79–81; `api/pos/stock-flag/route.ts` L28–102; `register-availability-core.ts` L141–145, L318–421; `RegisterSellabilityBanner.tsx` L142–188; `inventory/actions.ts` L1174–1198; `restore-to-sale-core.ts` L115–167; `restore-to-sale-store.ts` L68–172 |
+| 4.12 86 / restore | `src/app/(site)/pos/SaleFlow.tsx` L4263–4280; `RegisterShell.tsx` L1557–1594; `stock-flag-core.ts` L31–32, L79–81; `api/pos/stock-flag/route.ts` L28–102; `register-availability-core.ts` L141–145, L318–421; `RegisterSellabilityBanner.tsx` L142–188; `inventory/actions.ts` L1174–1198; `restore-to-sale-core.ts` L115–167; `restore-to-sale-store.ts` L68–172 |
 | 4.13 recall plan | WAC 314-55-225(3)(d); `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136 |
 | 4.14–4.16 expiry | `expiry-rules-core.ts` L10–69, L209–232, L321–340, L438–447, L505, L770–777, L1116–1127; `expiration-rules/page.tsx` L57–62, L117–127, L180–216, L279–409; `expiration-rules/actions.ts` L61–180; `[id]/page.tsx` L603–628; `intake-store.ts` L1587–1612; `issues-core.ts` L388–392, L417, L452–473; `InventoryIntelPanel.tsx` L199–201; `reports/expiration/page.tsx` L151, L229–277; `ReportTabs.tsx` L22 |
 | 4.17 tags | `tags/page.tsx` L85, L130–131, L194, L246–256, L315, L375; `tags/actions.ts` L45–146; `src/lib/menu/product-tags-core.ts` L28–31, L163–176 |
 | 4.18 labs | `labs/page.tsx` L7–12, L156; `labs/actions.ts` L30–76; `testing-labs-core.ts` L141–160, L236–309 |
 | 4.19 label | `lots/[id]/label/page.tsx` L1–40, L116–124; `LabelPrintControls.tsx` L25–32; `intake/[id]/page.tsx` L1072–1078; `src/lib/pos/scan-to-cart-core.ts` L55–70 |
-| 4.20 bulk fill | `inventory/actions.ts` L903–996; `bulk-fill-core.ts` L49, L107, L164–290, L318–325; `BulkFillPanel.tsx` L62–122; `inventory/page.tsx` L678–703; `roles.ts` L143–148 |
+| 4.20 bulk fill | `inventory/actions.ts` L903–996; `bulk-fill-core.ts` L49, L107, L164–290, L318–325; `BulkFillPanel.tsx` L62–122; `inventory/page.tsx` L684–709; `roles.ts` L143–148 |
 | 4.21 corrections | `inventory/actions.ts` L174–211, L228–303, L315–371, L1247; `received-date-core.ts` L163–190; `lot-link-core.ts` L73–77, L167–173, L218–219; `LotLinkPanels.tsx` L55–220; `coa-panel-core.ts` L304–319; `[id]/page.tsx` L96, L439–475, L763, L806–868, L1022 |
 | 4.22 pointers | `src/lib/pos/low-stock-core.ts` L1–22; `oversold-report-core.ts` L45; `cycle-counts/page.tsx` L70, L96 |
 | Tests | This slice changes documentation only. The full CI gate (announcer check, compliance tests, pure self-tests) is run before merge and its result recorded in the pull request |

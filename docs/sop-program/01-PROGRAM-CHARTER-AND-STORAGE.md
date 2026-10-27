@@ -25,7 +25,7 @@ Phases D and E follow all standing rules: pure `*-core.ts` + `__run…Tests()`, 
 
 Every SOP slice runs the same 8 steps, so the work is repeatable and nothing is guessed:
 
-1. **Scope from the tree, not memory.** List every route (`src/app/admin/**`, `src/app/api/**`, `src/app/pos/**`), lib module, component, migration and test that the pipeline touches. Commit that list as the SOP's *Source Map* appendix.
+1. **Scope from the tree, not memory.** List every route (`src/app/admin/**`, `src/app/api/**`, `src/app/(site)/pos/**`), lib module, component, migration and test that the pipeline touches. Commit that list as the SOP's *Source Map* appendix.
 2. **Read the gates.** For every page and action, record `requirePermission(...)` / `requireStaff()` / PIN-role sets (e.g. `APPROVER_ROLES = manager|lead`), and map them to *who can do this step*.
 3. **Read the hard blocks.** Grep every refusal string (`error:`, `refused`, `ok: false`, `throw`) in the cores and routes of that pipeline. Each becomes a row in the SOP's **"If you see this message"** table, with the exact wording, the reason and the fix.
 4. **Trace the data.** Follow the request → validation core → store → table → ledger/CCRS side-effects. Note every non-atomic write, ignored error, read-then-act check and money conversion (ledger types BUG/HARDEN).
