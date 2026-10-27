@@ -75,3 +75,27 @@ Legend: ✅ adequate · 🟡 thin (≤3 facts or missing procedures) · 🔴 wro
 ## 5. Per-slice update rule
 
 At the end of every SOP slice, update §3 above with: (a) the facts the new SOP adds, (b) rating changes, and (c) new gaps found. The concierge code itself is **not** edited until the integration phase (owner: no fixes yet).
+
+## 6. Slice log
+
+### SOP-01 Register Operations (`docs/sop/SOP-01-register-operations.md`, verified at `d03fe15b`)
+
+Concierge code is **unchanged** (record-only). What SOP-01 now provides as source material for the integration phase:
+
+| Concierge topic | SOP-01 sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| `pos` (replace "planned") | §4.1–4.24, §4.31–4.34, §5 (every block message: why, what to do, who to call), §9 quick card | 🔴 → ✅ |
+| `registers` | §4.3, §4.25–4.30 (count-in, drop, swap, blind close, X/Z, reconcile, verify, related pages) | 🔴 → ✅ |
+| *new* `register-messages` (message lookup) | §5.1–5.9, 100+ exact messages | — → ✅. This is the highest-value concierge use: "the register says X, what do I do?" |
+| *new* `discounts-at-register` | §4.11–4.14 (six kinds, one-reward rule, best deal wins, floors, PIN matrix) | — → ✅ |
+| *new* `returns-voids-nosale` | §4.21–4.24 | 🔴 → ✅ |
+| `time-clock` | §4.2 (register clock-in, offline punches) | 🟡 → 🟡 (SOP-05 finishes it) |
+| Handbook gate | §4.1, §5.1 | 🔴 → 🟡 (SOP-05/SOP-06 finish it) |
+| `medical`, `sales-limits` | §4.6, §4.10, §7 | 🟡 → 🟡 (SOP-19 finishes them) |
+| Online orders (register handover only) | §4.20 | 🔴 → 🟡 (SOP-13 finishes it) |
+
+**Role filter needed (strategy item 3):** §4.30 (reconcile/verify) is for `inventory.manage` only. The concierge must not walk a `staff` user through it, only tell them "ask a manager to sign off" (which is what the page itself says).
+
+**Must ship with caveats:** the concierge has to repeat the SOP's known-problem warnings (F-01-3 "expected $0.00", F-01-5 "leave Reconciled by blank", F-00-3 "paper slip is the record") until those findings are fixed. Otherwise it will give advice that fails.
+
+**Running score:** topics with complete SOP source material: `pos`, `registers`, plus 3 proposed new topics. The concierge itself is still at the baseline until the integration phase.
