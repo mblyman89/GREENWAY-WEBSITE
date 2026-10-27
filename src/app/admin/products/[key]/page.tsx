@@ -85,17 +85,34 @@ export default async function ProductEditorPage({
   // (React escapes it; clamped so a crafted link cannot flood the page).
   const savedNote = typeof note === "string" ? note.trim().slice(0, 400) : "";
 
+  // PERF-S11: everything that only needs the POS key (enrichment, brands,
+  // lots, suggestions, the library picker) now starts IMMEDIATELY and runs in
+  // parallel with the published-version -> item lookup, instead of ~9 serial
+  // round trips. Each promise is awaited below at the same place as before.
+  const libraryScope = parseLibraryScope(lscope);
+  const enrichmentP = getEnrichment(key);
+  const brandsP = listAllBrands();
+  const productLotsP = listLotsForProductKey(key, 6);
+  const suggestionsP = listSuggestions("product", key, "pending");
+  const libraryP = readLibraryPickerAssets(libraryScope);
+  for (const p of [enrichmentP, brandsP, productLotsP, suggestionsP, libraryP]) p.catch(() => undefined);
+
   const published = await getPublishedVersion();
   if (!published) notFound();
   const item = await getItemBySourceKey(published.id, key);
   if (!item) notFound();
 
-  const enrichment = await getEnrichment(key);
-  const brands = await listAllBrands();
-  // SLICE 77: inventory lots that share this product's POS key — the physical
-  // stock behind the menu card, each linking to its lot detail page.
-  const productLots = await listLotsForProductKey(key, 6);
-  const allSuggestions = await listSuggestions("product", key, "pending");
+  // Command center needs the item; gallery URLs need the enrichment.
+  const centerP = getEnrichmentCommandCenter({ item });
+  centerP.catch(() => undefined);
+  const [enrichment, brands, productLots, allSuggestions] = await Promise.all([
+    enrichmentP,
+    brandsP,
+    // SLICE 77: inventory lots that share this product's POS key — the physical
+    // stock behind the menu card, each linking to its lot detail page.
+    productLotsP,
+    suggestionsP,
+  ]);
   // SLICE 74: research_images drafts are reference data (image URL lists) —
   // they get their own visual review block instead of the plain-text one.
   const researchImageDrafts = allSuggestions.filter((s) => s.field_key === RESEARCH_IMAGES_FIELD);
@@ -111,7 +128,7 @@ export default async function ProductEditorPage({
     category: item.category ?? "",
     strainName: item.strain_name ?? "",
   });
-  const center = await getEnrichmentCommandCenter({ item });
+  const center = await centerP;
   // SLICE 75 — the guidance panel is permanent; this flips it to its green
   // "fully enriched" state when every checklist row is done.
   const checklistDone = checklistComplete(center.checklist);
@@ -122,8 +139,7 @@ export default async function ProductEditorPage({
 
   // Round 21 (C): the media-library picker. Search + scope are GET params
   // (lq, lscope); the view marks photos already in this product's gallery.
-  const libraryScope = parseLibraryScope(lscope);
-  const libraryRead = await readLibraryPickerAssets(libraryScope);
+  const libraryRead = await libraryP;
   const libraryView = libraryPickerView({
     assets: libraryRead.assets,
     query: parseLibraryQuery(lq),
