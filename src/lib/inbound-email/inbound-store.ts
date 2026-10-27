@@ -456,13 +456,14 @@ export async function stageManifestsFromEmail(
     // Results are consumed in the original order, so donor ranking is unchanged.
     const donorAtts = pdfCands.filter((att) => classifyAttachmentRole(att) !== "coa"); // COAs carry no transport
     const reads = await Promise.all(
-      donorAtts.map(async (att) => ({
-        att,
-        parsed: await parsePdfManifestFromBase64(att.base64 as string, llamaParseRecoverText),
-        layer: await readPdfLayer(new Uint8Array(Buffer.from(att.base64 as string, "base64"))),
-      })),
+      donorAtts.map(async (att) => {
+        const parsed = await parsePdfManifestFromBase64(att.base64 as string, llamaParseRecoverText);
+        const layer = await readPdfLayer(new Uint8Array(Buffer.from(att.base64 as string, "base64")));
+        return { att, parsed, layer };
+      }),
     );
     for (const { att, parsed, layer } of reads) {
+      if (classifyAttachmentRole(att) === "coa") continue; // COAs never feed the miner (already filtered)
       // PR-2: text via LlamaParse (vision-OCR) - the PRIMARY reader.
       // R26: the PDF's OWN text layer (+ page-1 positions), read independently
       // of LlamaParse. It grounds vision values (a hallucinated value the

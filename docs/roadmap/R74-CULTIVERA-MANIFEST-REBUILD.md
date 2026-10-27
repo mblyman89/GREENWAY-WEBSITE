@@ -1108,3 +1108,18 @@ Sources: PostgreSQL 18 docs 8.5.1.3 ("If no time zone is stated in the input str
 - Audit stats: grade, lot + unit accuracy, shrink/overage units and cost, by category/vendor/counter, top variances, unknown barcodes, uncounted lots, published-menu comparison.
 - Readiness checklist (auto + manual ticks). Stored as JSON in pos-raw storage (no migration).
 - Pure cores: count-roster-core (25), count-audit-stats-core (12). Test: r74-s50-count-roster.
+
+## Round 32 - owner request (verbatim)
+
+> Thank you. I need your help fixing an issue I just discovered in the intake receiving auto fetch feature. It has stopped working for some emails. The ones I've noticed fail are from growflow, but there are very likely others that will fail the auto fetch. Cultivera ones make it through no problem. I am uploading an example of one that fails to be auto fetched. Please recon the code and enhance and harden it so it can take it any invoice/ manifest/ json, etc. the vendor intake email has one purpose, receiving invoices. So there will be some spam here and there, but 99.99% of the time it's invoices/jsons. Please make it so every json, every manifest, every invoice, every transportation manifest, every COA. Follow the standing rules. Minimal testing. I will test it. Save credits and money as much as possible. Commit work out of the sandbox often, it's unstable. Thank you.
+
+### S51 - Intake auto-fetch hardening (wrapped links, expired/bad-token, markdown/text-layer retry, grounded AI fallback, parallel + cached LlamaParse, .eml explode)
+
+- Example: GrowFlow "New order INV-1010497" (Legit Cannabis Co via Canna Processing). The WCIA JSON link's token wraps across 3 lines after a `%`; only the first line was fetched, so GrowFlow answered "Bad token" (HTTP 200). The full link now also answers "Link has expired", so the attached PDFs are the source.
+- `intake-harden-core.ts` (pure, 22 self-tests): link normalizing (`<wbr>`, entities, zero-width, QP), wrapped-URL rebuild, named transfer refusals (expired / bad-token / html), markdown flattening, grounded AI manifest rows, minimal `.eml` MIME walker.
+- Transfer fetch: browser-like headers, one retry on timeout/5xx, BOM + `<pre>` JSON tolerated, named errors.
+- PDF parsers retry on flattened LlamaParse markdown and the raw unpdf text layer (manifests and COAs).
+- Unknown PDF layouts (e.g. CCRS_Manifest): last-resort light-tier AI read, every row grounded to a lot ID printed in the PDFs; lines flagged "verify". Budget-guarded; no-op without an AI key.
+- PDFs read in parallel (stays inside the 300 s webhook budget); LlamaParse results cached by file hash so each PDF is billed once per email.
+- Forwarded-as-attachment emails (.eml / message/rfc822) are opened: their PDFs/JSON become attachments and their body links are harvested. JSON with an odd content type is sniffed.
+- No migration, no new env vars.
