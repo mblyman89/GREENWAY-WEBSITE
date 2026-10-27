@@ -115,6 +115,7 @@ import { VENDOR_ID_IDENTITY_ENV, vendorIdIdentityEnabled } from "@/lib/inventory
 import { loadBarcodeInputs, loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
 import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
+import { runAfterResponse } from "@/lib/after-response";
 // S32: remembered answers for products that matched 2+ live cards.
 import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
 import { loadCardAliases } from "@/lib/pos/card-alias-store";
@@ -713,15 +714,21 @@ export async function stageIntakeMenuVersionForManifest(
           priorLotProvenance.set(r.id, r.fact_provenance);
         }
       }
-      for (const [key, facts] of plan.lotFactsByKey) {
+      // PERF2-P6: one UPDATE per lot, each on its own row - they were awaited
+      // one after another (a 40-product delivery = 40 serial round trips on
+      // every approval click). Now PERSIST_CONCURRENCY at a time; every
+      // update targets a different id, so order never mattered, and each
+      // failure is still logged and still never blocks the staging.
+      const lotFactJobs: Array<() => Promise<void>> = [];
+      for (const [key, facts] of plan.lotFactsByKey) lotFactJobs.push(async () => {
         const lotId = lotIdByKey.get(key);
-        if (!lotId) continue;
+        if (!lotId) return;
         if (refreshMode) {
           const patch = refreshLotFactPatch(facts, priorLotProvenance.get(lotId));
-          if (!patch) continue;
+          if (!patch) return;
           const { error: rfErr } = await admin.from("inventory_lots").update(patch).eq("id", lotId);
           if (rfErr) console.error(`[intake-menu-staging] lot fact refresh failed for ${lotId}:`, rfErr.message);
-          continue;
+          return;
         }
         const { error: lfErr } = await admin
           .from("inventory_lots")
@@ -745,7 +752,20 @@ export async function stageIntakeMenuVersionForManifest(
         if (lfErr) {
           console.error(`[intake-menu-staging] lot fact update failed for ${lotId}:`, lfErr.message);
         }
-      }
+      });
+      let nextJob = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(PERSIST_CONCURRENCY, lotFactJobs.length) }, async () => {
+          while (nextJob < lotFactJobs.length) {
+            const job = lotFactJobs[nextJob++];
+            try {
+              await job();
+            } catch (err) {
+              console.error("[intake-menu-staging] lot fact update exception:", err);
+            }
+          }
+        }),
+      );
     }
 
     // Nothing NEW to carry (every approved draft was superseded/skipped): do not
@@ -1126,7 +1146,12 @@ async function autoPublishIntakeVersion(
 
   // R49-S5: first-seen stamp for the automatic "New" tag (best effort, never
   // throws; the first publish a product appeared in wins forever).
-  await stampFirstSeenForVersion(versionId);
+  // PERF2-P6: it re-reads every item of the new version (3-5 pages) and
+  // upserts them in 500-row batches - 10+ round trips the person clicking
+  // "Approve" was waiting on for a tag nobody sees on this screen. It reads
+  // the version's own published_at, so running after the response stamps
+  // exactly the same rows.
+  runAfterResponse("first-seen stamp", () => stampFirstSeenForVersion(versionId));
 
   // Audit trail — same action name as the manual Menu Imports publish, with
   // the intake origin recorded (recordAudit never throws).
