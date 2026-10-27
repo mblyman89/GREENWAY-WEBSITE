@@ -228,7 +228,7 @@ export const SETUP_GUIDE: Record<string, SetupGuide> = {
     how: [
       "Create a free project at supabase.com.",
       "Open Settings → API and copy the Project URL and the two keys (anon + service role).",
-      "Paste them into your hosting environment variables: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.",
+      "Paste them into your hosting environment variables: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY (the legacy NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY still work as a fallback).",
       "Set ADMIN_BOOTSTRAP_EMAILS to your email so your first login becomes the Owner.",
       "Redeploy the site.",
     ],

@@ -12,8 +12,8 @@ export function AdminSetupNotice() {
       </p>
       <ul className="mt-4 space-y-1 rounded-lg border border-white/10 bg-[#0a0a0a] p-4 font-mono text-sm text-white/80">
         <li>NEXT_PUBLIC_SUPABASE_URL</li>
-        <li>NEXT_PUBLIC_SUPABASE_ANON_KEY</li>
-        <li>SUPABASE_SERVICE_ROLE_KEY</li>
+        <li>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY)</li>
+        <li>SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY)</li>
         <li>ADMIN_BOOTSTRAP_EMAILS</li>
       </ul>
       <ol className="mt-6 list-decimal space-y-2 pl-5 text-sm text-white/70">

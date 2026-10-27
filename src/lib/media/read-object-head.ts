@@ -29,7 +29,12 @@ export async function readObjectHead(
   try {
     const res = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${supabaseServiceRoleKey}`,
+        // New-style `sb_secret_…` keys are not JWTs: the API gateway takes them
+        // ONLY in `apikey` (it swaps in a service_role JWT itself) and rejects a
+        // non-JWT Bearer token. Legacy JWT keys keep sending both headers.
+        ...(supabaseServiceRoleKey.startsWith("sb_")
+          ? {}
+          : { Authorization: `Bearer ${supabaseServiceRoleKey}` }),
         apikey: supabaseServiceRoleKey,
         Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
       },
