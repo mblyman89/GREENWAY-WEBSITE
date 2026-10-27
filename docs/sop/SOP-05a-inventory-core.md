@@ -2,12 +2,14 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (owner answers to Q-05a-1…5 applied; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after cannabis lots once they are received: the daily Issues check, quantity corrections, holds and recalls, expiry dates, tags, testing labs and lot labels. Budtenders read §4.10–§4.11 (what a recall hold and the register's "86" do) and §9. |
-| **Verified against** | `main@ac251766` (2026-10-27; the code is unchanged since `5299660b`, the SOP-04 audit point). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel disagree, this SOP follows the code and records a finding. |
-| **Program records** | Findings `F-05a-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-19`, `G-22`…`G-26` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decision D35 (the 05a / 05b split) in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Split scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` |
+| **Verified against** | `main@827facb5` (v1.1; first written at `main@ac251766`, 2026-10-27). The performance merge that came between moved the register files into `src/app/(site)/pos/` and shifted some line numbers. Every reference below was checked again; no behaviour this SOP describes changed. Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel disagree, this SOP follows the code and records a finding. |
+| **Program records** | Findings `F-05a-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-19`, `G-22`…`G-28` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D35 (the 05a / 05b split) and D36–D41 (the answers applied in v1.1) in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Split scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` |
+
+> **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap named here (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** §4.1–§4.4 are the screens and the **daily Issues check** (10 minutes, every morning). §4.5–§4.9 are the lot page: correcting a quantity and changing a lot's status, which are the two most dangerous buttons in Inventory. §4.10–§4.13 are **recalls**, the register's **86**, **restore to sale**, and the written recall plan the law requires. §4.14–§4.16 are **expiry dates**. §4.17–§4.21 are tags, testing labs, lot labels, bulk fill and lot corrections. Section 5 lists every message the screens can show. Section 8 holds the paper forms. Section 9 is a one-page card. Words in **bold** are the exact labels you will see on the screen.
 
@@ -114,10 +116,11 @@ and set how it is to be built when this slice began:
 | Count the shelf (cycle counts) | Owner, admin, manager, **staff** | `inventory.count` (`roles.ts` L126). SOP-06. |
 | Approve and post an inventory audit | **Owner only** | `inventory.audit` (`roles.ts` L142). SOP-06. |
 | Key a missing **non-cannabis** unit cost | Owner, admin | `inventory.cost.fill` (`roles.ts` L148). SOP-05b. |
-| **Place or release a recall hold** (status **Recalled**) | **Manager-level login, with a reason written on form 8.1** (this SOP's control) | The app checks only `inventory.manage`; it writes no audit row and asks for no reason (F-05a-2). The paper log is the record until gap G-22 is built. |
+| **Place** a recall hold (status **Recalled**) | **Manager-level login, with a reason written on form 8.1** (this SOP's control; confirm in Q-05a-7) | The app checks only `inventory.manage`; it writes no audit row and asks for no reason (F-05a-2). The paper log is the record until gap G-22 is built. |
+| **Release** a recall hold; notify the LCB | **The admin** (recall coordinator, D37) | Same: the app checks only `inventory.manage`. Form 8.1 and form 8.5 are the record. |
 | **Destroy** a lot | Owner, admin, manager through **Returns & Destruction** only | `disposition/page.tsx` L97 (`inventory.manage`). SOP-15. |
 
-**Recall coordinator.** WAC 314-55-225(3)(d) requires a named recall coordinator (§4.13). Until the owner names one (question **Q-05a-2**), this SOP treats **the owner** as the recall coordinator, with the on-duty manager acting in the owner's absence.
+**Recall coordinator.** WAC 314-55-225(3)(d) requires a named recall coordinator (§4.13). The owner answered Q-05a-2: *"admin. No back up. Just my manager and I."* (decision D37). So **the admin is the recall coordinator, with no back-up**, and the recall team is **the owner and the manager**. The coordinator decides recall or withdrawal, notifies the LCB, agrees any destruction with the officer and releases holds. This SOP still lets the manager **place** a hold at once, because that only protects customers; the owner is asked to confirm that in **Q-05a-7**.
 
 ---
 
@@ -294,19 +297,20 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 
 | Reason (screen) | Use it when | CCRS AdjustmentReason | Note | Rule |
 |---|---|---|---|---|
-| **Receive (add)** | Do **not** use. Stock arrives through Receiving (SOP-04) | *Not sent.* `isReportableAdjustment` skips it (L101–105) | — | **Never.** Adding units by hand puts units on our books that CCRS never hears about (F-05a-7). If units were truly missed at receiving, tell the owner |
+| **Receive (add)** | Do **not** use. **The owner has ordered it removed** (D39, G-23 APPROVED). Stock arrives through Receiving (SOP-04) | *Not sent.* `isReportableAdjustment` skips it (L101–105) | — | **Never.** Adding units by hand puts units on our books that CCRS never hears about (F-05a-7). If units were truly missed at receiving, tell the owner |
 | **Shrink** | Units missing with no known cause, found outside a cycle count | Lost | Required by this SOP | Tell the owner the same day if more than 1 unit or any amount above $50 at cost |
 | **Damage** | A package broken or unsellable in the store | Lost | Required by this SOP: what broke, how | Keep the damaged product in quarantine for SOP-15 destruction. The adjustment does not destroy it |
 | **Sample (lab/QA)** | Units pulled for a lab or QA test | ReturnedLabSample | Required by this SOP: lab and reason | |
 | **Employee sample (WAC 314-55-096)** | A vendor trade sample given to a paid employee | Other | **Required by CCRS**: the employee's name. Without it, CCRS withholds the row with error **E13** (`ccrs-inventory-adjustment-core.ts` L201–212; `ccrs-preflight-core.ts` L271) | Prefer the trade-samples screen, which writes the note for you (`trade-samples.ts` L280–300) |
-| **Destruction** | Do **not** use | Destruction | — | **Never.** Destruction is SOP-15, with its hold, method, witness and waste record (F-05a-5) |
+| **Destruction** | Do **not** use. **To be removed** (D39); the lot page will link to Returns & Destruction instead | Destruction | — | **Never.** Destruction is SOP-15, with its hold, method, witness and waste record (F-05a-5) |
 | **Cycle-count correction** | Only when the owner tells you to correct a count by hand | Reconciliation | Required by this SOP: which count | Normal count corrections come from the cycle count itself (SOP-06) |
-| **Recall removal** | Do **not** use | Destruction | — | **Never.** Recalled product may not be destroyed until the LCB is notified and the destruction is coordinated (§4.10). SOP-15 enforces that; this reason does not (F-05a-5) |
+| **Recall removal** | Do **not** use. **To be removed** (D39) | Destruction | — | **Never.** Recalled product may not be destroyed until the LCB is notified and the destruction is coordinated (§4.10). SOP-15 enforces that; this reason does not (F-05a-5) |
 | **Other** | Anything else, with owner approval | Other | **Required by CCRS**: a clear sentence. Without it the row is withheld (E13) | Ask the owner first |
 
-**Theft and seizure.** CCRS has **Theft** and **Seizure** reasons (L91–94), but the lot page has **no Theft or Seizure choice** (L118–128; finding F-05a-6). If product is stolen or seized:
+**Theft and seizure.** The owner has ordered **Theft** and **Seizure** added to the list (*"Add theft and seizure."*, D39; gap G-23 APPROVED). CCRS already has both reasons, and the app already maps them (`ccrs-inventory-adjustment-core.ts` L87–90). Only the lot page's list is missing them (L118–128; finding F-05a-6). CCRS needs a written detail for **Theft** (`ccrs-preflight-core.ts` L273; `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` §5.5). If product is stolen or seized:
 1. Do not adjust anything yet. Follow SOP-20 (incident) and call the owner.
-2. The owner decides how it is recorded. Until gap G-23 is built, the only path on this screen is **Other** with a note that begins "THEFT:" or "SEIZURE:". That reaches CCRS as **Other**, not **Theft** or **Seizure**.
+2. The owner decides how it is recorded. **Until G-23 is built**, the only path on this screen is **Other** with a note that begins "THEFT:" or "SEIZURE:", followed by the police or LCB report number. That reaches CCRS as **Other**, not **Theft** or **Seizure**. Write the report number on form 8.2 as well.
+3. **When G-23 is built**, choose **Theft** or **Seizure** and type the same note. This paragraph is then rewritten (D41).
 
 > **Control: every manual adjustment has a reason, a written note, a double count and a line on form 8.2.** The screen accepts an empty note, but CCRS withholds an Other or Employee-sample row that has none (E13). The adjustment history shows no name. The note and form 8.2 are how the owner and the state can tell what happened.
 
@@ -326,7 +330,7 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 | Quarantine → **Active** | Only from a **"Held in quarantine, now clear"** Issues row (SOP-04 §4.19) | Manager | Form 8.1 line. Never for a FAILED result |
 | Active → **Quarantine** | Yes: a product question (damage, label error, customer complaint) while you decide | Manager | Form 8.1 line with the reason. Decide within 3 business days (release, return SOP-15, or destroy SOP-15) |
 | Active or Quarantine → **Recalled** | Yes: a recall (§4.10) | Manager, then the recall coordinator | Form 8.1 **and** form 8.5 |
-| Recalled → **Active** | Only when the recall notice (or the LCB) clears this lot, in writing | **Owner** (recall coordinator) | Form 8.1 with the notice reference; the notice copy goes in the binder |
+| Recalled → **Active** | Only when the recall notice (or the LCB) clears this lot, in writing | **Admin** (recall coordinator, D37) | Form 8.1 with the notice reference; the notice copy goes in the binder |
 | Active → **Sold out** | Yes, when the lot is physically empty and **On hand** is 0 | Manager | Form 8.1 line |
 | Any → **Destroyed** | **No.** Never by hand (§4.9) | — | Use Returns & Destruction (SOP-15) |
 
@@ -337,7 +341,7 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 4. Check the **Status** card on the lot page.
 5. If you set **Recalled**, continue with §4.10. If you set **Active** from a recall, check the register by scanning the product: it should ring up.
 
-> **Control: every status change is a manager decision written on form 8.1 before the button is pressed; Active from quarantine only from a "now clear" row; Recalled → Active only by the owner with the written clearance; Destroyed never by hand.** The Lifecycle status box checks nothing and logs nothing (F-04-2, F-05a-1, F-05a-2; gaps G-19, G-22).
+> **Control: every status change is a manager decision written on form 8.1 before the button is pressed; Active from quarantine only from a "now clear" row; Recalled → Active only by the admin (recall coordinator) with the written clearance; Destroyed never by hand.** The Lifecycle status box checks nothing and logs nothing (F-04-2, F-05a-1, F-05a-2; gaps G-19, G-22).
 
 ### 4.9 Never "Destroyed" by hand
 
@@ -346,14 +350,33 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 2. The weekly CCRS Inventory file reads only lots that are **not** Destroyed (`ccrs-batch.ts` L1209–1217). Destroyed lots are added back only when the same week's file carries a destruction event for them (`readDestroyedLots`, L380–391).
 3. So the lot **silently disappears from what Greenway reports**, while the state's system still shows its last quantity on hand. No Destruction adjustment is filed, and no waste record exists. That is a traceability error in a state filing.
 
-**What to do instead.** Every destruction goes through **Inventory → Returns & Destruction** (SOP-15). That flow records the hold, the method, the waste record and, for recalls, the LCB coordination. It sets **Destroyed** itself, and **only when the destruction empties the lot** (`disposition.ts` L1087–1094).
+**What to do instead.** Every destruction goes through **Inventory → Returns & Destruction** (SOP-15). That flow records the hold, the method, the waste record and, for recalls, the LCB coordination. It sets **Destroyed** itself, and **only when the destruction empties the lot** (`disposition.ts` L1087–1095).
+
+**The owner asked: should the Destructions page mark the lot's fields automatically?** (Q-05a-4.) **Yes, and for the most part it already does.** Read in the code at `main@827facb5`:
+
+| Step on Returns & Destruction | What it does to the lot by itself | Where |
+|---|---|---|
+| **Schedule** a destruction | Sets the lot's status to **Quarantine** (unless it is a single customer-returned unit) and starts the store's hold timer | `disposition.ts` L939–997 (status L965–971; returned unit L716–723) |
+| **Complete** it after the hold | Checks the method, the waste mix and, for a recall, the LCB coordination and officer; takes the units off **On hand** in one safe step that cannot go below zero; files the CCRS **Destruction** adjustment; sets **Destroyed** when nothing is left | L999–1098 (`postReduction` L1050, L233–282; Destroyed L1087–1095) |
+| **Cancel** it | Sets the lot back to **Active** | L1100–1116 |
+| Every step | Writes an audit row | `disposition/actions.ts` L184, L225, L250 |
+
+So nobody should touch **Lifecycle status** or **Adjust quantity** to destroy anything. The owner's decision (D39) is to take **Destruction** and **Recall removal** off the lot page and put a **Schedule destruction** link there instead (gap G-23). Three defects stop the page from handling **recalled** and **quarantined** lots properly. They are recorded as findings and fixed by gap **G-28**:
+- **F-05a-17 (S2): the destruction form lists only Active lots.** The page loads `listLots({ status: "active", limit: 500 })` (`disposition/page.tsx` L103). A lot already in **Quarantine** or **Recalled** cannot be picked, which are exactly the lots most likely to be destroyed.
+- **F-05a-18 (S1): scheduling overwrites Recalled with Quarantine.** L965–971 writes `quarantine` whatever the status was. The register's recall hold reads only **Recalled** (`recall-hold-core.ts` L44), so the hold on the product is lifted, and the lot no longer shows as recalled anywhere.
+- **F-05a-19 (S2): Cancel always sets the lot to Active** (L1113–1114), even if it was Quarantine or Recalled before. Cancelling a recalled lot's destruction would put recalled product back on sale.
+
+**Interim, until G-28 is built:**
+1. **Never cancel** a scheduled destruction without the owner. If one must be cancelled, the manager sets the lot straight back to its earlier status (**Quarantine**, or **Recalled** by the admin) with a form 8.1 line, the same minute.
+2. **A lot in Quarantine** (for example damaged or expired) that has to be destroyed: the owner decides. The app cannot select it. Do **not** set it Active to make it selectable unless the owner says so, the product is in the sealed quarantine bin, and the scheduling is done in the same sitting; write every step on form 8.1.
+3. **A Recalled lot: do not use the app to destroy it.** Keep it **Recalled** and in the sealed bin. The admin (coordinator) agrees the destruction with the LCB officer, the destruction is done and witnessed as the officer directs, and it is written on form 8.5 and the SOP-15 paper waste record. The admin and the owner then decide how the app is brought into line (Q-05a-8). Setting a recalled lot to Active even for a minute lifts the hold and can put it on sale.
 
 **If you find a lot set to Destroyed by hand** (status Destroyed, On hand above 0, nothing in Returns & Destruction):
 1. Do **not** change it back yourself.
 2. Write it on form 8.1 (lot, on hand, when found) and tell the owner the same day.
 3. The owner decides, with SOP-15 and SOP-16, how to record what really happened to the product.
 
-> **Control: a lot becomes Destroyed only through Returns & Destruction.** The manual path skips the destruction record and drops the lot from the CCRS Inventory file with units still on hand (F-05a-1, S1; gap G-22).
+> **Control: a lot becomes Destroyed only through Returns & Destruction; recalled lots are never moved out of Recalled to be destroyed.** The manual path skips the destruction record and drops the lot from the CCRS Inventory file with units still on hand (F-05a-1, S1; gap G-22). The Destructions page does the lot changes itself, but cannot yet pick a held lot and overwrites Recalled (F-05a-17…19; gap G-28).
 
 # Part 3: Recalls, the 86 and restore to sale
 
@@ -367,32 +390,32 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 - **Tracking.** An affected licensee *"must track the total amount of affected product and the amount of affected product returned"*, and report progress to the LCB at least once a week ((3)(f)).
 - **Destruction** of recalled product is coordinated with, and may be overseen by, LCB enforcement ((3)(e)).
 
-**Recall or withdrawal: who decides.** The **recall coordinator** (the owner until Q-05a-2 is answered, §2) decides which one it is. A manager who is unsure treats it as a **recall** and calls the owner.
+**Recall or withdrawal: who decides.** The **recall coordinator** (the **admin**, D37, §2) decides which one it is. A manager who is unsure treats it as a **recall** and calls the admin.
 
 **Procedure: placing a recall hold** (manager, the moment a recall notice, a vendor notice, an LCB call or a failed-safety finding arrives):
 1. **Open form 8.5** (recall event worksheet). Write who told you, when, how, and the product, vendor, lot or batch numbers and recall reference exactly as given.
 2. **Find every affected lot.** Inventory → type into the search box (*"Product, lot code, POS key, vendor, brand, strain, notes…"*, `InventoryFilterPanel.tsx` L345): the product, the vendor, and each lot number. Use the **All** status tab, so sold-out and quarantined lots also show. List each lot on form 8.5 with its **On hand**.
 3. **Set each affected lot to Recalled.** For each lot: write a form 8.1 line first, then **Lifecycle status → Set status → Recalled → Update status** (§4.8). The page shows **Saved.**
-4. **Pull the product physically.** Remove every unit from the sales floor, the display cases and the vault shelf. Put it in a sealed bin or bag marked **"RECALL — DO NOT SELL — <product> — <date>"**, in the quarantine area. Count it; the count must match **On hand**. Write the count on form 8.5. Any difference is reported to the owner the same hour.
+4. **Pull the product physically.** Remove every unit from the sales floor, the display cases and the vault shelf. Put it in a sealed bin or bag marked **"RECALL — DO NOT SELL — <product> — <date>"**, in the quarantine area. Count it; the count must match **On hand**. Write the count on form 8.5. Any difference is reported to the admin and the owner the same hour.
 5. **Hide it from the website as well** (finding F-05a-16, below). Open **Product Intake → Product Enrichment** (`admin-nav-data.ts` L77), open the product, set **Visibility** to **Always hide**, type the reason (for example "RECALL 2026-10-27") in **Reason if hidden**, and press **Save enrichment** (`products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270, audited `product.visibility_changed`). The recall hold alone does not stop online reservations.
-6. **Check the register.** Scan or search the product at a register (download the menu first: a register that has not refreshed may still show it). It should not appear. If it is still listed after a refresh, stop the register from selling it by word of mouth and call the owner (§4.11 explains why the sale would still be refused at completion).
+6. **Check the register.** Scan or search the product at a register (download the menu first: a register that has not refreshed may still show it). It should not appear. If it is still listed after a refresh, stop the register from selling it by word of mouth and call the admin (§4.11 explains why the sale would still be refused at completion).
 7. **Check open orders.** Open **Online Orders** (`admin-nav-data.ts` L53) and look for pending pickup orders that hold the product. Call those customers, tell them the item is unavailable, and remove it at pickup. (The pickup cannot be completed with it in the order, §4.11.)
-8. **Notify.** The **recall coordinator** notifies the LCB: immediately for a **recall**, within **48 hours** for a **market withdrawal**. Write the officer's name, the time and the method on form 8.5. A manager acting in the owner's absence makes the call if the owner cannot be reached within 1 hour of a recall.
-9. **Do not destroy anything.** Recalled product stays in the bin until the coordinator has notified the LCB and agreed the destruction with the officer. When that is done, destruction runs through **Returns & Destruction** (SOP-15), which refuses a recall destruction until **LCB coordination** is confirmed and the **officer is named**: *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* and *"Record the LCB enforcement officer you coordinated with."* (`disposition-core.ts` L226–243). Never use the **Recall removal** adjustment reason (§4.7), and never set **Destroyed** by hand (§4.9).
+8. **Notify.** The **recall coordinator** notifies the LCB: immediately for a **recall**, within **48 hours** for a **market withdrawal**. Write the officer's name, the time and the method on form 8.5. There is no back-up coordinator (D37). If the admin cannot be reached within 1 hour of a **recall**, the manager calls the owner, and the owner decides who makes the call; write that on form 8.5.
+9. **Do not destroy anything.** Recalled product stays in the bin until the coordinator has notified the LCB and agreed the destruction with the officer. When the app is fixed (gap G-28), destruction will run through **Returns & Destruction** (SOP-15), which refuses a recall destruction until **LCB coordination** is confirmed and the **officer is named**: *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* and *"Record the LCB enforcement officer you coordinated with."* (`disposition-core.ts` L226–243). **Today that page cannot pick a Recalled lot, and scheduling would lift the hold** (F-05a-17, F-05a-18). Follow the interim in §4.9 point 3: the lot stays **Recalled**, and the destruction is recorded on form 8.5 and the SOP-15 paper waste record. Never use the **Recall removal** adjustment reason (§4.7), and never set **Destroyed** by hand (§4.9).
 10. **Track weekly.** Each week while the recall is open, write on form 8.5 the units held, returned, destroyed and sold before the hold, and the date the progress was reported to the LCB ((3)(f)).
 
-**Procedure: releasing a recall hold** (**owner** only, as recall coordinator):
+**Procedure: releasing a recall hold** (**admin** only, as recall coordinator, D37):
 1. Release only on **written** clearance: the recall notice withdrawn, the vendor's written clearance for these lots, or the LCB's release. Put the copy in the compliance binder.
 2. Write a form 8.1 line: lot, Recalled → Active, the clearance reference, your name, time.
-3. **Lifecycle status → Active → Update status** on each cleared lot. Lots that will be destroyed or returned are **not** set Active. They stay Recalled until SOP-15 completes, and SOP-15 sets **Destroyed** when the destruction empties the lot (§4.9).
+3. **Lifecycle status → Active → Update status** on each cleared lot. Lots that will be destroyed or returned are **not** set Active. They stay Recalled until they are destroyed or returned (§4.9 point 3).
 4. Set **Visibility** back to **Inherit POS** (or **Always show**) on Product Enrichment if you hid it in step 5 above.
 5. Scan the product at a register to confirm it rings up again. Close form 8.5 with the date and a one-line outcome.
 
-**What the app does not record** (findings F-05a-2, F-05a-15): placing or lifting **Recalled** writes **no audit row**, asks for **no reason**, and the release is open to any manager-level login (§4.8). The app has no recall-plan record and no recall-coordinator field (the only mention is `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136). Forms 8.1, 8.4 and 8.5 are the record until gaps **G-22** and **G-25** are built.
+**What the app does not record** (findings F-05a-2, F-05a-15): placing or lifting **Recalled** writes **no audit row**, asks for **no reason**, and the release is open to any manager-level login (§4.8), although only the admin may use it (D37). The app has no recall-plan record and no recall-coordinator field (the only mention is `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136). Forms 8.1, 8.4 and 8.5 are the record until gaps **G-22** and **G-25** are built.
 
 **Finding F-05a-16 (S2): a recall hold does not reach the website or online ordering.** The public menu filters out only **hidden** cards (`src/lib/pos/live-menu.ts` L167–171, L289–292). Online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). Neither reads lot status: `recalledProductKeys` has exactly four callers, the register menu route, the completion gate, restore to sale and the sellability report (`api/pos/menu/route.ts` L121; `completion-gate.ts` L103; `restore-to-sale-store.ts` L131; `register-sellability-store.ts` L175). A customer can still see a recalled product on the website and **reserve** it for pickup. The sale is refused only when staff try to complete the pickup (§4.11). Step 5 above (**Always hide**) is the interim control. It hides every size of the product, so if only one size of a mastered product is recalled, ask the owner before hiding.
 
-> **Control: a recall is placed by a manager, on form 8.1 and form 8.5, the same hour the notice arrives; the product is physically segregated and counted; the website card is hidden; the LCB is notified (immediately for a recall, 48 hours for a withdrawal); nothing is destroyed before LCB coordination; only the owner releases a hold, on written clearance.** The app's hold stops register sales but writes no record, and does not reach the website (F-05a-2, F-05a-15, F-05a-16; gaps G-22, G-25).
+> **Control: a recall is placed by a manager, on form 8.1 and form 8.5, the same hour the notice arrives; the product is physically segregated and counted; the website card is hidden; the LCB is notified (immediately for a recall, 48 hours for a withdrawal); nothing is destroyed before LCB coordination; only the admin (recall coordinator) releases a hold, on written clearance.** The app's hold stops register sales but writes no record, does not reach the website, and is lifted if the lot is scheduled for destruction (F-05a-2, F-05a-15, F-05a-16, F-05a-18; gaps G-22, G-25, G-28).
 
 ### 4.11 What a recall hold does at the register
 
