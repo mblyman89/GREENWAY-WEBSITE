@@ -110,15 +110,41 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 | *new* `little-safe` (D3 exchanges) | §4.10, form §8.2 | — → ✅ |
 | `registers` (addition) | §4.11 (register change swaps, master till side, $200 cap), §4.12 (drops are not in the master till), §4.14 (three till floats, D10 $167.50), §4.15 (safe section of the EOD report), §5.2 messages | 🔴 → ✅ (together with SOP-01) |
 | `register-messages` (addition) | §5.1 Store safe page messages, §5.2 swap messages | — → ✅ |
-| Petty cash / supply runs | §4.13, form §8.4 (no screen today, F-02-11 / G-11) | 🔴 → 🟡 (waiting on owner Q-02-4) |
+| Petty cash / supply runs | §4.13, form §8.4 (no screen today, F-02-11 / G-11; screen approved D17) | 🔴 → 🟡 → ✅ once G-11 is built |
 
 **Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L29). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
 
 **Must ship with caveats** until the findings are fixed:
-- F-02-2: the system's Manager Till float is $300, not the owner's $167.50 (D10).
+- ~~F-02-2~~ withdrawn in SOP-03 (D19): the Manager Till float **is** $300.00, and the system agrees. The concierge should say "sales tills $167.50, Manager Till $300.00".
 - F-02-3: the page does not compare the mix to the D11 standard, so use the §4.2 table.
 - F-02-5: only the newest AM/PM count shows on the EOD report, and the window defaults to AM, so pick the right one.
 - F-02-7: do **not** count drops or the little safe into the master till, whatever the page help text and placeholder say.
 - F-02-1: drops are not posted to the books (accounting only, not floor advice).
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, plus the SOP-01 proposed topics. The concierge itself is still at the baseline until the integration phase.
+
+### SOP-03 End-of-Day Close & Deposit Bag (`docs/sop/SOP-03-eod-close-deposit.md`, verified at `3385bfa9`)
+
+Concierge code is **unchanged** (record-only). Today neither the concierge nor `help-content.ts` has **any** end-of-day or deposit-bag content. The only "deposit" hits are payroll direct deposit (`help-content.ts` L725–742; `concierge-kb.ts` L262–280), so a question like "how do I do the deposit?" risks a payroll ACH answer (finding **F-03-11**). The Registers page help (L117–120) still says sales shown are online pickup only (F-03-4). What SOP-03 now provides as source material for the integration phase:
+
+| Concierge topic | SOP-03 sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| *new* `end-of-day` (night close and the EOD report) | §4.1 (what goes in the bag; the float stays), §4.2 timeline, §4.3–4.5 (close drawers, pull takings, night sheet), §4.7 reconcile, §4.8–4.9 (read and print the EOD report, `?day=`), §4.16 (no-sales days), §5 messages, form 8.1 part A, 8.3, 8.5, §9 quick card | 🔴 → ✅ |
+| *new* `deposit-bag` (morning recount, seal, bag log, bank run) | §4.6 (unsealed overnight), §4.10–4.11 (recount, seal, log), §4.13 bank day, §4.14 ($10,000 line), forms 8.1 parts B/C, 8.2, 8.4, 8.6 | 🔴 → 🟡 (paper only) → ✅ once G-04 is built |
+| `registers` (addition) | §4.4 floats ($167.50 sales tills, $300.00 Manager Till, D19), §4.8 EOD report columns | 🔴 → ✅ (with SOP-01/02) |
+| Disambiguation | "deposit" means the **cash deposit bag** in register/safe context and **payroll direct deposit** only in payroll context | — → ✅ |
+
+**Role filter needed (strategy item 3):**
+- The EOD report, reconcile and the Verify till are `inventory.manage` only, and the books side (`/admin/books/bank`, Undeposited Funds) is owner/bookkeeper only (`requireBooksAccess`). For staff the concierge covers only the counting steps any employee does: night sheet part A, morning recount part B and seal part C, per SOP-03 §2.
+- Banking (form 8.6) is the owner's (Q-03-5).
+
+**Must ship with caveats** until the findings are fixed:
+- F-03-1: do **not** trust the Undeposited Funds panel's green "all matched". Use the bag log and the safe.
+- F-03-6: EOD "Gross" is **not** cash. Use the Z report's net figure.
+- F-03-5: the EOD print has no deposit figure or second signature. The night sheet is the record.
+- F-03-7: "No drawer sessions" may be a failed read. Reload, then use the close slips.
+- F-03-8: to see another day, add `?day=YYYY-MM-DD`; a typo silently shows today.
+- F-00-3: the Verify till records $0. The paper slip is the record (from SOP-01/02).
+- The bag screen does not exist (F-00-6 / G-04), so never tell anyone to "seal the bag in the app".
+
+**Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, `end-of-day`, plus the SOP-01 proposed topics; `deposit-bag` is paper-only. The concierge itself is still at the baseline until the integration phase.

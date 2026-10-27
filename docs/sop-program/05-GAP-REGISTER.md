@@ -1,6 +1,6 @@
 # SOP Program — Gap Register
 
-Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27
+Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated)
 
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
@@ -10,6 +10,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 |---|---|
 | OPEN | Not built; interim procedure in force |
 | OPEN · TO AUDIT | Owner asked for it; the current code has not yet been audited in its own slice |
+| APPROVED | Owner asked for it to be built; queued for the build phase (not built in the SOP program) |
+| CLOSED | No longer needed (owner decision); kept for history |
 | BUILT | Built and verified (moved here only after a later build slice) |
 
 ---
@@ -20,16 +22,19 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 |---|---|---|---|---|---|
 | G-01 | Second-person count at till close | D2 | F-01-9, F-00-5 | SOP-01 §4.27 step 8, forms 8.2 / 8.4 | OPEN |
 | G-02 | Master till ↔ little safe denomination log (and register-swap denominations) | D3 | F-01-8, F-00-7, F-02-8 | **SOP-02 §4.10 form 8.2** (master ↔ little safe) and **§4.11 form 8.3** (register ↔ master); SOP-01 §4.26 | OPEN |
-| G-03 | $5 over/short admin warnings screen (reason required); master till scope pending Q-02-3 | D7 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
-| G-04 | Deposit bag screen (seal → morning verify → safe → bank) | (original request) | F-00-6 | SOP-03 (paper), SOP-01 §4.29 | OPEN |
+| G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
+| G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (Q-03-7) |
 | G-05 | Per-shift / per-cashier report | (original request: "shift close reports") | F-01-10 | SOP-01 §4.27 step 9 (X report), close slip 8.2 per drawer | OPEN |
 | G-06 | SOPs readable, printable and **exportable** in the Employee area; report export | (original request) | F-00-8, F-00-10 | Markdown files in `docs/sop/`; print from the browser | OPEN |
 | G-07 | Crawler PO builder: save the fetched vendor-menu data | D4 | F-00-15 | None needed yet | OPEN · TO AUDIT (SOP-09) |
 | G-08 | Master till denomination standard (D11 mix) checked and shown | D11 | F-02-3 | SOP-02 §4.9, form 8.1 mix columns | OPEN |
 | G-09 | Master till sheet printable and exportable; history beyond 30 rows | (original request: "exportable and printable") | F-00-8, F-02-13 | SOP-02 §4.18, form 8.1 binder, EOD print | OPEN |
-| G-10 | Manager Till standard float = $167.50, and a way to set register floats | D10 | F-02-2, F-01-13 | SOP-02 §4.14 (ignore the $300 hint) | OPEN |
-| G-11 | Supply-run screen (only if the owner wants supply runs at all) | Q-02-4 (pending) | F-02-11 | SOP-02 §4.13, form 8.4 (exceptions only; store rule is the shop card) | OPEN · AWAITING OWNER |
+| G-10 | ~~Manager Till standard float = $167.50~~. Owner corrected: Manager Till = $300.00, already in the code | D10 → D19 | F-02-2 (withdrawn) | None needed | **CLOSED** (D19) |
+| G-11 | Supply-run screen | **D17** ("id like the supply run screen built") | F-02-11 | SOP-02 §4.13, form 8.4 | **APPROVED** |
 | G-12 | Post cash drops to the books (10110 → 10100) | (books integrity; owner model till → safe → bank) | F-02-1 | None needed for staff; recorded for the build phase | OPEN |
+| G-13 | Any employee can record the master till count (not only manager-level logins) | **D15** | F-02-10, F-02-4 | SOP-02 §2, §4.5: a manager login enters it and picks the counter | OPEN |
+| G-14 | Cash-to-bank books wiring (seal poster → 10400, bank-deposit clearing caller, census corrected, panel text) | (original request: "for depositing to the bank") | F-03-1, F-03-3, F-03-10, F-02-1 | SOP-03 §4.13 bag log + bank receipts; §4.15 ignore the panel | OPEN |
+| G-15 | EOD deposit sheet in the app + export (deposit figure, denominations, two signatures, refunds, date picker, CSV/XLSX) | (original request: "End of day spreadsheet" … "exported and printed") | F-03-5, F-03-6, F-03-7, F-03-8, F-00-8 | SOP-03 form 8.1 night sheet; §4.8 Z report for cash; §4.9 print | OPEN |
 
 ---
 
@@ -70,7 +75,15 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 - **Owner (original request):** night count → morning recount → seal bag → safe → bank.
 - **Today:** the bag tables and core exist, but no screen reaches them (F-00-6, S1).
-- **Interim:** SOP-03 paper procedure (to be written in slice SOP-03). SOP-01 §4.29 covers what to do with the money at close.
+- **Interim:** **SOP-03** (written, v1.0 draft): night sheet form 8.1 (part A at night, part B morning recount, part C seal), bag log form 8.2, bank-run checklist 8.6. SOP-01 §4.29 covers the hand-off at close (but see F-03-4: the float stays in the till).
+- **Updated in slice SOP-03 — requirements (draft), from `0212_deposit_bags.sql` and `safe-bag-core.ts` (already designed, not wired):**
+  1. Bag record: pre-numbered bag #, business day(s) covered, sessions in the bag, night amount (who counted), morning amount (who recounted, **a different person**), sealed at/by, deposited on.
+  2. Lifecycle `available → undeclared → counted → deposited` (`safe-bag-core.ts`); a sealed bag is **append-only** and changes go through a server action with an audit row (closes F-03-9).
+  3. Night vs morning difference: show it, require a reason (D7 style), and keep both figures.
+  4. Seal posts `buildSealBagJournal` (10100 → 10400) (see G-14).
+  5. Show `checkDepositShape` (near-$10k / structuring note) at seal time (F-03-10; `CASH_DEPOSIT_POLICY_DECISION.md`).
+  6. **Q-03-7:** block a till close while a bag from that drawer is "undeclared" (`blockCloseForUndeclaredBags`, books-98 design) or only warn. Owner to decide.
+  7. Print and export the bag log (G-06/G-09 pattern).
 
 ## G-05 · Per-shift / per-cashier report
 
@@ -114,6 +127,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 ## G-10 · Manager Till float and register float setting
 
+- **CLOSED in slice SOP-03 (D19).** Owner: *"And I was wrong, it should be 300 in it."* The Manager Till is seeded at $300.00 (`0038` L184), which matches. Requirement 1 below is cancelled. Requirement 2 (an owner-only float setting) is kept as a nice-to-have idea, not an owner request. Requirement 4 (the `drawer-posting-service.ts` L190–191 comment) stays open under F-02-9. The text below is history.
+
 - **Owner (D10):** all three tills hold $167.50.
 - **Today:** Manager Till seeded at $300.00 and never corrected (`0038` L184; `0077` L40–46). No screen edits `default_float_minor`. The register app does not compare count-in to any standard (F-01-13).
 - **Requirements (draft):**
@@ -123,7 +138,9 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. Fix the `drawer-posting-service.ts` L190–191 comment.
 - **Interim:** SOP-02 §4.14.
 
-## G-11 · Supply-run screen (pending owner)
+## G-11 · Supply-run screen (APPROVED, D17)
+
+- **Owner (D17, slice SOP-03):** *"Q-02-4- id like the supply run screen built."* The decision below is answered: **build**, using the three-part design (cash-out, settle, open-advances list). Queued for the build phase per charter C5.
 
 - **Owner policy (books-99):** *"I don't want to use the master till any more for petty cash."*
 - **Today:** builders done, no screen (F-02-11).
@@ -148,3 +165,38 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **D8:** keep employee `job_role` and user `StaffRole` separate. This is the current design; SOP-01 §2 and SOP-08 explain it.
 - **D12:** a page for the two daily master till counts. **Already built** (`/admin/registers/safe`, AM / PM / Extra). SOP-02 §4.3–4.7 documents it. Its weaknesses are findings F-02-3/4/5, not a missing page.
 - **D3 (little-safe balance):** no balance or target for the little safe. Nothing to build beyond G-02's log.
+
+## G-13 · Any employee records the master till count
+
+- **Owner (D15, slice SOP-03):** *"Q02-2- anyone can count and record the master count."*
+- **Today:** the Store safe page and its action need `inventory.manage` (owner/admin/manager) (`safe/page.tsx` L47, `safe/actions.ts` L29, `roles.ts` L106). Staff logins see the **Safe** button but are refused (F-02-10).
+- **Requirements (draft):**
+  1. Let any active employee record a count. Options: (a) open the page to the `staff` role (e.g. `orders.manage`) for the count form only, keeping history and settings manager-only; or (b) a register-side "Master till count" screen that takes the counter's **employee PIN**, which also fixes F-02-4 (verified counter).
+  2. Keep D8: back-office permission uses the login's StaffRole; the counter identity uses the employee.
+  3. Keep the audit: link the audit row to the `safe_counts` row (F-02-4).
+- **Interim:** SOP-02 §4.5: a manager login enters the count and picks the counter.
+
+## G-14 · Cash-to-bank books wiring
+
+- **Owner (original request):** the bag goes *"into the safe for depositing to the bank"*. The books must follow the cash: till → safe (10100) → sealed bag (10400) → bank (10200).
+- **Today:** the till → safe leg posts (D-77). The seal leg has **no poster** and the bank-clearing leg has **no caller** (F-03-1, F-03-3, F-03-10). So 10400 is never filled, the Undeposited Funds panel shows a false all-clear, and the census marks bank clearing reachable.
+- **Requirements (draft):**
+  1. Post the seal (`buildSealBagJournal`) from the G-04 bag screen.
+  2. Give `clearDepositForBankRow` an owner-only caller on `/admin/books/bank` (match a bank deposit line to bags).
+  3. Correct the census rows `cash_deposit_to_bank` (exists/reachable evidence) and keep `seal` MISSING until wired.
+  4. Fix the stale text and comments listed in F-03-1 (panel L82–84 and file headers).
+  5. Drops posting (G-12 / F-02-1) must land first, or the 10100 pool the bags are drawn from is short by the day's drops.
+- **Interim:** SOP-03 §4.13 (bag log plus bank receipts is the trail); §4.15 (do not use the panel).
+
+## G-15 · EOD deposit sheet in the app + export
+
+- **Owner (original request):** *"End of day spreadsheet that one person completes before close"*; closing-day reports *"exported and printed"*.
+- **Today:** `/admin/registers/eod` prints a day summary with one signature line. It has no deposit (takings-to-bag) figure, no denomination grid, no refunds, no date picker and no export (F-03-5, F-03-6, F-03-8, F-00-8). Read errors render as empty (F-03-7).
+- **Requirements (draft):**
+  1. Per-till takings = closing count − float; deposit = drops + Σ takings (SOP-03 §4.2), shown and printed.
+  2. Denomination grid for the bag; night counter and morning verifier signature lines (two different people).
+  3. Refunds / voids from the Z report source (`day-report-core.ts`), so the cash figure is net.
+  4. Date picker; an invalid `?day=` shows an error, not today.
+  5. CSV / XLSX export of the sheet (with G-06 / G-09).
+  6. Surface read errors instead of "No drawer sessions".
+- **Interim:** SOP-03 form 8.1 (night sheet), §4.8 (use the Z report for cash), §4.9 (print and file).

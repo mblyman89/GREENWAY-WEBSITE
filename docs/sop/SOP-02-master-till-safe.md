@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (draft for owner review; owner answers D14–D19 applied) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The morning and night employees who count and balance the master till; the managers who record the counts and approve change swaps; the owner, who reviews variances |
 | **Verified against** | `main@0055f06c` (2026-10-27). Every label, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Arithmetic was checked by script (`sop02/calc.py`, `sop02/calc2.py`), not by hand. |
-| **Program records** | Findings `F-02-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D3, D7, D10–D13 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` |
+| **Program records** | Findings `F-02-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D3, D7, D10–D19 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` |
 
 > **How to use this document.** Section 4 is the step-by-step manual. Section 4.1 explains where the money lives, so read it first. Section 5 lists every message the safe page and the register's swap screen can show, and what to do about each. Section 8 holds the paper forms. Section 9 is a one-page card to tape inside the safe door. Words in **bold** are the exact labels you will see on the screen.
 
@@ -86,7 +86,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 | Task | Who | How the system checks |
 |---|---|---|
 | Physically count the master till (AM / PM) | The morning or night employee (owner: *"Either morning or night employee can balance the master till"*) | Not checked. The counting itself happens off-screen. |
-| **Enter** the count on the Store safe page | A back-office login with the **owner**, **admin** or **manager** role | `requirePermission("inventory.manage")` (`safe/page.tsx` L47, `safe/actions.ts` L29). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). |
+| **Enter** the count on the Store safe page | **Owner (D15): any employee.** Today the system only lets a back-office login with the **owner**, **admin** or **manager** role do it (gap G-13) | `requirePermission("inventory.manage")` (`safe/page.tsx` L47, `safe/actions.ts` L29). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). |
 | Choose who did the count (**Counted by**) | The person entering | Any **active employee** can be picked, or **— none —** (`safe/page.tsx` L163–173). There is no PIN check (finding F-02-4). |
 | Balance the master till with the little safe | Morning or night employee | Not in the app. Paper form 8.2 (gap G-02). |
 | Approve a register change swap | An employee whose job role is **manager** or **lead**, and not the person doing the swap | Approver PIN checked on the server (`src/app/api/pos/till/route.ts` L47, L186–211) |
@@ -117,12 +117,12 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 |---|---|---|---|---|
 | **Sales Register 1** till | $167.50 float (D10) | Customer sales | Count-in, blind close (SOP-01) | Yes: drawer sessions |
 | **Sales Register 2** till | $167.50 float (D10) | Customer sales | Same | Yes |
-| **Manager Till** (the manager register) | $167.50 float (D10). ⚠ The system is seeded at **$300.00** (§4.14, F-02-2). | Shared by the two manager shifts | Same | Yes |
+| **Manager Till** (the manager register, D18) | **$300.00** float (D19, correcting D10). The system is seeded at $300.00 too (§4.14). | Shared by the two manager shifts | Same | Yes |
 | **Master till** | **$1,000.00**, exact mix in §4.2 (D11) | The change fund. Gives the tills small bills and coin. | **Twice a day**, AM and PM | Yes: **Store safe** page, `safe_counts` table |
 | **Little safe** | No set balance (D3) | Spare small bills and coin used to rebuild the master till's mix | Not counted (D3) | **No** (F-00-7). Paper log, form 8.2. |
 | **Store safe** | Whatever the day's drops and takings are | Holds drops and close takings until the deposit bag is sealed | SOP-03 | Drops: yes (drawer sessions). Bag: **no screen** (F-00-6). |
 
-**Totals before a single sale** (script-checked): 3 tills × $167.50 = **$502.50**. Plus the master till, $1,000.00, that is **$1,502.50** of float in the building. The system's worked example on the end-of-day page uses these same numbers (`register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–8).
+**Totals before a single sale** (script-checked, `sop03/calc.py`): 2 sales tills × $167.50 + Manager Till $300.00 = **$635.00**. Plus the master till, $1,000.00, that is **$1,635.00** of float in the building. ⚠ The system's worked example on the end-of-day page still uses 3 × $167.50 = $1,502.50 (`src/lib/accounting/register-cash-specimen-core.ts` L49, L136; `docs/MICHAEL-books-93-register-cash.md` L6–8). That was written from D10 before the D19 correction (finding **F-03-2**, SOP-03).
 
 **How cash moves:**
 ```
@@ -133,11 +133,11 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
      ▼                                            & coin in   │   ▼ out
   STORE SAFE ──(SOP-03: count, bag, seal)──> BANK           LITTLE SAFE (no balance)
 ```
-- A till keeps its $167.50 float overnight. Only the takings leave it (owner, quoted in `safe-bag-core.ts` L17–22; the close posting assumes this, `floatStaysInDrawer: true`, `drawer-posting-service.ts` L190–193).
+- A till keeps its float ($167.50 sales, $300.00 Manager Till) overnight. Only the takings leave it (owner, quoted in `safe-bag-core.ts` L17–22; the close posting assumes this, `floatStaysInDrawer: true`, `drawer-posting-service.ts` L190–193).
 - The master till never gains or loses value. It only changes its **mix**. Swaps are equal on both sides.
 - Supplies are bought on the shop card, not with master till cash (owner: *"I don't want to use the master till any more for petty cash"*, `card-payment-core.ts` L7–8). See §4.13.
 
-> **Q-02-1 (open, Appendix C).** The register's swap screen says *"Swap big bills for change with the safe"*. The code treats that "safe" as the $1,000 change fund, which is the master till. This SOP assumes register swaps go **till ↔ master till**, and that the master till then rebuilds its mix from the little safe. The owner is asked to confirm.
+> **Q-02-1 (resolved, D14).** The register's swap screen says *"Swap big bills for change with the safe"*. That "safe" is the $1,000 master till. Register swaps go **till ↔ master till**, and the master till then rebuilds its mix from the little safe. Owner: *"Q02-1- yes you have that correct."*
 
 ### 4.2 The standard master till ($1,000.00, by denomination)
 
@@ -262,11 +262,11 @@ The page works out **variance = counted total − $1,000.00** on the server. The
 | **Over by $X** | More than $1,000.00 | 1) Recount (Extra count). 2) Check form 8.3: was a swap entered with the wrong value, or did a till give more than it took? 3) Check form 8.2: did more go into the master till from the little safe than came out? 4) Look for takings or drop cash mixed in (§4.12). Pull any that are found, put them in the store safe, and recount. |
 | **Short by $X** | Less than $1,000.00 | 1) Recount (Extra count). 2) Check forms 8.3 and 8.2 as above. 3) Ask whether any cash was taken for supplies (§4.13). 4) Check the area and the drop slot. 5) Escalate (§6). |
 
-**The $5 rule (interim, Q-02-3).** The owner set a $5 threshold for drawer over/short, with a required reason (D7). The code has **no threshold and no reason field for master till counts** (finding F-02-6). Until the owner decides whether D7 applies to the master till:
+**The $5 rule (D16).** The owner set a $5 threshold for over/short, with a required reason (D7), and confirmed it **applies to the master till as well** (*"Q02-3- yes, it applies to the master as well"*). The code has **no threshold and no reason field for master till counts** (finding F-02-6, gap G-03). Until it is built:
 - **Any** non-zero variance: write the reason in **Notes** and on form 8.1.
 - A variance **over $5.00**, or any variance that is still there after the recount: also fill in **form 8.5** and give it to the owner that day.
 
-Recording more is the safer side, the same way SOP-01 handles drawers.
+D7 says the reason *"should be required to be input for over/ under"*, so a reason is written for **every** variance. Whether the reason is needed for every variance or only those over $5 is still an open question (Q-03-1, carried). Recording more is the safer side.
 
 **Never "fix" a variance by moving cash** in from the little safe, a till or the store safe to make the total come out right. The difference must stay visible and be explained. The owner wants a genuine master till variance to be *"rare and therefore meaningful"* (books-98 L77–80).
 
@@ -337,26 +337,27 @@ Why this matters:
 
 **Store rule: no cash leaves the master till for supplies.** The owner moved supply buying to a low-limit shop card: *"I will go with the low limit credit card ... I don't want to use the master till any more for petty cash."* (`card-payment-core.ts` L7–8). In books-99 (L20–21): *"The master till stays at exactly $1,000, all day, every day."*
 
-If cash is taken anyway (emergency, card declined, owner's instruction):
+> **D17 note.** The owner has asked for the supply-run screen to be built, so supply runs from the master till are an approved, recordable event, not just an emergency. The shop-card statement above is quoted from books-99 and is kept as history. When the screen is built, this section will be rewritten around it.
+
+Until the screen exists, when cash is taken for supplies:
 1. **Form 8.4 (supply-run log)**: who took it, how much, when, why. That person signs.
 2. When they come back: the receipt amount, the change returned, both signatures.
 3. The receipt and the change go back **into the master till envelope, never into a drawer**. A receipt in a till *"is evidence, not cash"*, so the till really is short (books-98 L84–86).
 4. The next count will be **short** by the receipt amount. Write *"supply run, form 8.4"* in **Notes**, and give the form and receipt to the owner the same day.
 
-The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L501–646). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1660–1665). That is finding F-02-11 and gap G-11, which waits on owner question Q-02-4.
+The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L501–646). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1660–1665). That is finding F-02-11 and gap G-11. The owner has **approved building the screen** (D17: *"id like the supply run screen built"*). It is queued for the build phase. Until it exists, use form 8.4.
 
 ### 4.14 The three till floats
 
-**Owner (D10):** *"there are three tills, two sales and one manager register. They are the ones with 167.5 in them."*
+**Owner (D10, corrected by D19):** *"there are three tills, two sales and one manager register. They are the ones with 167.5 in them."* Then: *"And I was wrong, it should be 300 in it."* The Manager Till holds **$300.00**.
 
 | Register (system name) | Owner's float | System's standard float | Source |
 |---|---:|---:|---|
 | **Sales Register 1** | $167.50 | $167.50 | seed `0038` L182; corrected by `0077` L43–46 |
 | **Sales Register 2** | $167.50 | $167.50 | same |
-| **Manager Till** | **$167.50** | ⚠ **$300.00** | seed `0038` L178, L184. `0077` L40 left it: *"the shared Manager Till float is left as-is (owner has not specified a change)"*. |
+| **Manager Till** | **$300.00** (D19) | $300.00 ✅ | seed `0038` L178, L184. `0077` L40 left it: *"the shared Manager Till float is left as-is (owner has not specified a change)"*. |
 
-**What this means for staff** (finding F-02-2):
-- When a manager opens the Manager Till from the back office, the **Open drawer** panel says *"Standard float for this register is $300.00"*. The grid compares the count to **Standard float $300.00**, so a correct $167.50 count reads **Short by $132.50** (`RegisterControls.tsx` L63–75). **Ignore that message.** The Manager Till float is **$167.50**. Count it in and open.
+**What this means for staff:** the system and the owner agree. When a manager opens the Manager Till from the back office, the **Open drawer** panel says *"Standard float for this register is $300.00"* and compares the count to it (`RegisterControls.tsx` L63–75). That is correct. Finding F-02-2 is **withdrawn** (D19).
 - The register app itself does not compare the count-in to any standard (F-01-13). Whatever is counted is the opening float.
 - Nothing in the app edits a register's float (`default_float_minor` is only read, `oversight.ts` L318). Correcting it is a database change for the build phase.
 - These figures come from the migration files. The live database value was **not** read for this SOP (no production access in this slice). The owner can check it in Supabase: `select name, default_float_minor from registers;`.
@@ -479,12 +480,12 @@ Until it is built:
 | Who entered | The audit log records the login (`safe.counted`, `safe/actions.ts` L38–45), but no link to the count row (`entityId: null`) | Partial | F-02-4 |
 | One official AM/PM per day | Not enforced. Any number allowed; the report uses the newest. | **Weak** | F-02-5 |
 | Mix (denomination) standard | Not checked. Denominations are saved but not shown. | **Missing** | F-02-3, G-08 |
-| Variance reason / threshold | None for the master till | **Missing** | F-02-6, D7 / Q-02-3 |
+| Variance reason / threshold | None for the master till | **Missing** | F-02-6, D7 + D16 |
 | Variance in the books | Not posted | Missing | F-02-6 |
 | Open (not blind) count | By design: *"the target is known policy"* (`safe-core.ts` L7–10, help text). Drawers are blind, the master till is not. | Design choice | Because the count is open, the counter's name (F-02-4) and a second counter matter more |
 | Register swap approval | Manager/lead PIN, different person, checked on the server, `safe.swap` audit tied to the drawer session (`till/route.ts` L186–234) | Strong | Value only, no denominations (F-01-8) |
 | Little safe exchange | Not recorded | Missing | F-00-7, G-02 |
-| Supply runs | No screen. Store rule: none (shop card). | Missing (policy covers it) | F-02-11, G-11 |
+| Supply runs | No screen (approved to build, D17). Form 8.4 meanwhile. | Missing | F-02-11, G-11 |
 | Print / export | None on the page | Missing | F-00-8, G-09 |
 | Database access | RLS: managers read, no human writes | Strong | — |
 | Factory reset | Counts and swaps are wiped with test data (`factory-reset-core.ts` L429–430) | As designed | — |
@@ -612,8 +613,8 @@ Counter signature: ______________   Manager signature: ______________   → owne
 │ Register swap: manager/lead PIN + one line on form 8.3                      │
 │ NEVER: takings/drops in the master till · cash for supplies (shop card)    │
 │        · fix a variance by moving cash · overwrite a bad count (use Extra)  │
-│ Tills: all three float at $167.50 (Manager Till screen may say $300 —       │
-│        ignore; F-02-2)                                                      │
+│ Tills: Sales 1 + Sales 2 float $167.50 each; Manager Till floats $300.00    │
+│        (D19). Total with the master till: $1,635.00                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -627,7 +628,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | **Store safe** (the page) | `/admin/registers/safe`, where master till counts are entered |
 | **Store safe** (the box) | Where drops and takings wait for the deposit (SOP-03) |
 | **Little safe** | Spare small bills and coin used to rebuild the master till's mix. No balance or target (D3). |
-| **Till / drawer** | A register's cash drawer. Float $167.50 (D10). |
+| **Till / drawer** | A register's cash drawer. Float $167.50 for the sales tills (D10), $300.00 for the Manager Till (D19). |
 | **Float** | The cash a till starts with and keeps overnight |
 | **AM / PM count** | The two official daily counts of the master till |
 | **Extra count** | Any other count: recount, handover, spot check, correction |
@@ -672,23 +673,27 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | D3: master till ↔ little safe log | Nothing recorded | Form 8.2 (§4.10) | G-02 · F-00-7, F-02-8 |
 | D3: register swap denominations | Value only | Form 8.3 + Notes (§4.11) | G-02 · F-01-8 |
 | Master till sheet printable and exportable | Neither | Form 8.1 binder; EOD print (§4.18) | G-09 · F-00-8 |
-| D7 for the master till ($5 / reason) | Nothing | Reason in Notes + form 8.5 (§4.8) | G-03 (extended) · F-02-6 · Q-02-3 |
-| D10: Manager Till float $167.50 | Seeded $300; no editor | Ignore the $300 hint (§4.14) | G-10 · F-02-2 |
-| Supply runs recorded | Builders only, no screen | Store rule: shop card; exception form 8.4 (§4.13) | G-11 · F-02-11 · Q-02-4 |
+| D7 for the master till ($5 / reason), confirmed D16 | Nothing | Reason in Notes + form 8.5 (§4.8) | G-03 (extended) · F-02-6 |
+| D19: Manager Till float $300.00 | Seeded $300 ✅ | — (met) | G-10 closed · F-02-2 withdrawn |
+| Supply runs recorded (screen approved, D17) | Builders only, no screen | Store rule: shop card; form 8.4 (§4.13) | G-11 (approved) · F-02-11 |
+| D15: any employee records the master till count | Manager-level login required (`safe/actions.ts` L29) | A manager login enters it and picks the counter (§4.5) | G-13 · F-02-10 |
 | Named, verified counter | Optional picker, no PIN | Always pick the counter; note the enterer (§4.5) | F-02-4 |
 
 ## Appendix C: Open questions for the owner
 
-| # | Question | Why it matters | Interim in this SOP |
+All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-OWNER-REQUEST-VERBATIM.md`).
+
+| # | Question | Owner answer | Decision |
 |---|---|---|---|
-| Q-02-1 | When a cashier does a **change swap** at the register, do the small bills come from the **master till**? (The app's "safe" = the $1,000 change fund.) | Decides which form a register swap goes on, and what the PM count should reflect | Assumed yes: till ↔ master till (form 8.3); master till ↔ little safe (form 8.2) |
-| Q-02-2 | May **any** employee count the master till, or managers only? (Today a manager login must **enter** it; anyone can be named as the counter.) | Permission design for the build phase | Anyone may count; a manager login enters it |
-| Q-02-3 | Does the **$5** rule (D7) also apply to the **master till** counts? And (carried from SOP-01) is a reason required for **every** over/short, or only those over $5? | Threshold and reason design | Reason for any variance; form 8.5 over $5 or unresolved |
-| Q-02-4 | With the shop card in place, should a supply run **ever** happen? If yes, the supply-run screen (G-11) is needed; if no, the builders can stay unused. | Avoid building an unneeded screen | Store rule: never; form 8.4 for exceptions |
-| Q-02-5 | Is the "Manager Till" in the system the **manager register** you mean in D10? (Its system name is *Manager Till*, and SOP-01 calls the shared manager drawer that.) | Naming in all SOPs | Assumed yes |
+| Q-02-1 | When a cashier does a **change swap** at the register, do the small bills come from the **master till**? | *"yes you have that correct"* | **D14** — till ↔ master till (form 8.3); master till ↔ little safe (form 8.2) |
+| Q-02-2 | May **any** employee count the master till, or managers only? | *"anyone can count and record the master count"* | **D15** — any employee counts **and records**. Today recording needs a manager login (`safe/actions.ts` L29), so gap **G-13**. Interim: a manager login enters it and picks the counter. |
+| Q-02-3 | Does the **$5** rule (D7) also apply to the **master till** counts? | *"yes, it applies to the master as well"* | **D16**. The carried half (reason for every over/short or only over $5) remains open as **Q-03-1**. |
+| Q-02-4 | Should a supply run ever happen; is the supply-run screen needed? | *"id like the supply run screen built"* | **D17** — G-11 approved, queued for build |
+| Q-02-5 | Is the system's "Manager Till" the **manager register** of D10? | *"yes correct"* + *"it should be 300 in it"* | **D18** (yes) and **D19** (Manager Till float $300.00) |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `0055f06c`, with owner decisions D3, D7 and D10–D13. Adds findings F-02-1…F-02-13 and gaps G-08…G-11. | SOP program (for owner review) |
+| 1.1 draft | 2026-10-27 | Owner answers D14–D19 applied in slice SOP-03: Manager Till float $300.00 (D19; F-02-2 withdrawn, G-10 closed); totals now $635.00 / $1,635.00; Q-02-1…Q-02-5 resolved; D7 applies to the master till (D16); supply-run screen approved (D17); any employee may record the count (D15, G-13). No code was re-audited; pins still at `0055f06c` (no code changed since, `3385bfa9` is docs-only). | SOP program |
