@@ -72,6 +72,7 @@ import {
   readPdfLayer,
 } from "@/lib/inventory/pdf-extract";
 import { llamaParseRecoverText, makeCapturingRecovery } from "@/lib/inbound-email/llamaparse-recovery";
+import { aiReadManifest } from "@/lib/inbound-email/intake-ai-fallback";
 import { recordManifestParseStatus } from "@/lib/inbound-email/llamaparse-status-server";
 import {
   mergeInvoicePricesByLot,
@@ -128,7 +129,8 @@ export type AttachmentParseOutcome =
  * has been reviewed yet, so only verifiable manifests may create rows.
  */
 export function parseAttachmentStrict(att: NormalizedAttachment): AttachmentParseOutcome {
-  const text = att.text;
+  // R74 S51: a UTF-8 BOM makes JSON.parse throw - strip it.
+  const text = att.text ? att.text.replace(/^\ufeff/, "") : att.text;
   if (!text || !text.trim()) return { kind: "junk" };
 
   const fn = (att.filename ?? "").toLowerCase();
@@ -392,6 +394,8 @@ export type StageFromEmailResult = {
    * data the original staging missed (fill-only-empty; arrived_at never).
    */
   transportBackfills: number;
+  /** R74 S51: extra fetch-trail notes from staging (AI fallback, etc.). */
+  notes: string[];
 };
 
 /**
@@ -408,6 +412,7 @@ export async function stageManifestsFromEmail(
     parseFailures: 0,
     duplicates: 0,
     transportBackfills: 0,
+    notes: [],
   };
   const textCandidates = manifestCandidates(email);
   const pdfCands = pdfCandidates(email);
@@ -445,18 +450,24 @@ export async function stageManifestsFromEmail(
   // primary manifest would sit in the base and win the fill-only fold.
   const groundedByAtt = new Map<object, ParsedTransport | null>();
   if (pdfCands.length > 0) {
-    for (const att of pdfCands) {
-      if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
-      // PR-2: recover text via LlamaParse (vision-OCR) — the PRIMARY reader.
-      const parsed = await parsePdfManifestFromBase64(
-        att.base64 as string,
-        llamaParseRecoverText,
-      );
+    // R74 S51: read every non-COA PDF IN PARALLEL (LlamaParse polls up to 90 s
+    // per file; four PDFs read one after another could outlive the webhook's
+    // 300 s budget, the claim then goes stale and the email never stages).
+    // Results are consumed in the original order, so donor ranking is unchanged.
+    const donorAtts = pdfCands.filter((att) => classifyAttachmentRole(att) !== "coa"); // COAs carry no transport
+    const reads = await Promise.all(
+      donorAtts.map(async (att) => ({
+        att,
+        parsed: await parsePdfManifestFromBase64(att.base64 as string, llamaParseRecoverText),
+        layer: await readPdfLayer(new Uint8Array(Buffer.from(att.base64 as string, "base64"))),
+      })),
+    );
+    for (const { att, parsed, layer } of reads) {
+      // PR-2: text via LlamaParse (vision-OCR) - the PRIMARY reader.
       // R26: the PDF's OWN text layer (+ page-1 positions), read independently
       // of LlamaParse. It grounds vision values (a hallucinated value the
       // layer does not contain is dropped) and lets the Contingency Manifest
-      // — whose labels are an image — be read by cell position.
-      const layer = await readPdfLayer(new Uint8Array(Buffer.from(att.base64 as string, "base64")));
+      // - whose labels are an image - be read by cell position.
       invoiceDocs.push({
         role: invoiceDocRole(classifyAttachmentRole(att)),
         label: att.filename ?? "attachment.pdf",
@@ -668,6 +679,20 @@ export async function stageManifestsFromEmail(
       } else {
         // A second manifest-capable PDF: keep OpenTHC invoices as price donors.
         invoiceParses.push(parsed.manifest);
+      }
+    }
+
+    // R74 S51: LAST RESORT for a layout no parser recognises (new provider,
+    // new print). Once per email, only when nothing staged, grounded (every
+    // lot id must be printed in the document) and budget-guarded.
+    if (!primary) {
+      const aiDocs = invoiceDocs
+        .filter((d) => d.role !== "email-body" && d.role !== "coa")
+        .map((d) => ({ label: d.label, text: (d.layerText && d.layerText.trim().length > 40 ? d.layerText : d.text) ?? "" }));
+      const ai = aiDocs.length > 0 ? await aiReadManifest(aiDocs) : null;
+      if (ai) {
+        primary = { manifest: ai.manifest, text: aiDocs.map((d) => d.text).join("\n\n") };
+        result.notes.push(ai.note);
       }
     }
 

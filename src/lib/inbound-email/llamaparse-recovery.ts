@@ -30,6 +30,35 @@
 import "server-only";
 import { parsePdfWithFallback } from "@/lib/inbound-email/llamaparse-provider";
 import type { PdfTextRecovery } from "@/lib/inventory/pdf-extract";
+import { createHash } from "node:crypto";
+
+/**
+ * R74 S51 (save credits): the intake reads each PDF more than once per email
+ * (transport donor pass, primary-manifest pass, COA pass). Cache the outcome
+ * by content hash for a few minutes so LlamaParse is billed ONCE per file.
+ * Small, bounded, per server instance.
+ */
+type CachedOutcome = Awaited<ReturnType<typeof parsePdfWithFallback>>;
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_MAX = 40;
+const outcomeCache = new Map<string, { at: number; p: Promise<CachedOutcome> }>();
+
+function parseOnce(bytes: Uint8Array): Promise<CachedOutcome> {
+  const key = createHash("sha256").update(bytes).digest("hex");
+  const now = Date.now();
+  const hit = outcomeCache.get(key);
+  if (hit && now - hit.at < CACHE_TTL_MS) return hit.p;
+  const p = parsePdfWithFallback(bytes.slice(), { filename: "intake.pdf" }, { feature: "llamaparse-intake" });
+  outcomeCache.set(key, { at: now, p });
+  // a failed read is not cached (the next pass may succeed)
+  p.then((o) => { if (!o.ok) outcomeCache.delete(key); }, () => outcomeCache.delete(key));
+  while (outcomeCache.size > CACHE_MAX) {
+    const oldest = outcomeCache.keys().next().value;
+    if (oldest === undefined) break;
+    outcomeCache.delete(oldest);
+  }
+  return p;
+}
 
 /**
  * The recovery function injected into pdf-extract's parse* helpers. Reads the
@@ -38,11 +67,7 @@ import type { PdfTextRecovery } from "@/lib/inventory/pdf-extract";
  */
 export const llamaParseRecoverText: PdfTextRecovery = async (bytes) => {
   try {
-    const outcome = await parsePdfWithFallback(
-      bytes,
-      { filename: "intake.pdf" },
-      { feature: "llamaparse-intake" },
-    );
+    const outcome = await parseOnce(bytes);
     return outcome.ok ? outcome.text : "";
   } catch {
     return "";
@@ -77,11 +102,7 @@ export function makeCapturingRecovery(): CapturingRecovery {
   let last: RecoveryOutcome | null = null;
   const recover: PdfTextRecovery = async (bytes) => {
     try {
-      const outcome = await parsePdfWithFallback(
-        bytes,
-        { filename: "intake.pdf" },
-        { feature: "llamaparse-intake" },
-      );
+      const outcome = await parseOnce(bytes);
       last = {
         engine: outcome.via,
         ok: outcome.ok && outcome.via === "llamaparse",

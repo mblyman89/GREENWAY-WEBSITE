@@ -228,6 +228,76 @@ export function groundAiManifest(
   };
 }
 
+/** One part pulled out of a forwarded-as-attachment email (.eml). */
+export type EmlPart = { filename: string | null; contentType: string | null; base64: string };
+
+function decodeQp(s: string): string {
+  return s.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
+function headerParam(headers: string, name: string): string | null {
+  const re = new RegExp(`${name}\\*?=\\s*(?:"([^"]+)"|([^;\\r\\n]+))`, "i");
+  const m = headers.match(re);
+  const v = (m?.[1] ?? m?.[2] ?? "").trim();
+  return v ? v.replace(/^utf-8''/i, "") : null;
+}
+
+/**
+ * Minimal MIME walker for a forwarded-as-attachment email (message/rfc822):
+ * returns its file parts (base64) and its text/html bodies so the intake can
+ * read the vendor's original attachments and links. Handles nested multiparts,
+ * base64 and quoted-printable. Bounded (depth 5, 40 parts). PURE.
+ */
+export function explodeEml(raw: string): { parts: EmlPart[]; text: string; html: string } {
+  const parts: EmlPart[] = [];
+  let text = "";
+  let html = "";
+  const walk = (entity: string, depth: number) => {
+    if (depth > 5 || parts.length >= 40) return;
+    const split = entity.search(/\r?\n\r?\n/);
+    if (split < 0) return;
+    const headers = entity.slice(0, split).replace(/\r?\n[ \t]+/g, " ");
+    const body = entity.slice(split).replace(/^\r?\n\r?\n/, "");
+    const ct = (headers.match(/^content-type:\s*([^;\r\n]+)/im)?.[1] ?? "text/plain").trim().toLowerCase();
+    const enc = (headers.match(/^content-transfer-encoding:\s*([^\r\n]+)/im)?.[1] ?? "").trim().toLowerCase();
+    if (ct.startsWith("multipart/")) {
+      const boundary = headerParam(headers, "boundary");
+      if (!boundary) return;
+      const chunks = body.split(`--${boundary}`);
+      for (const c of chunks.slice(1)) {
+        if (c.startsWith("--")) break;
+        walk(c.replace(/^\r?\n/, ""), depth + 1);
+      }
+      return;
+    }
+    if (ct === "message/rfc822") {
+      walk(body, depth + 1);
+      return;
+    }
+    const filename = headerParam(headers, "filename") ?? headerParam(headers, "name");
+    const isAttachment = !!filename || /^content-disposition:\s*attachment/im.test(headers);
+    if (!isAttachment && (ct === "text/plain" || ct === "text/html")) {
+      const decoded =
+        enc === "base64"
+          ? Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8")
+          : enc === "quoted-printable"
+            ? decodeQp(body)
+            : body;
+      if (ct === "text/html") html += `\n${decoded}`;
+      else text += `\n${decoded}`;
+      return;
+    }
+    if (!isAttachment) return;
+    const b64 =
+      enc === "base64"
+        ? body.replace(/\s+/g, "")
+        : Buffer.from(enc === "quoted-printable" ? decodeQp(body) : body, "binary").toString("base64");
+    if (b64) parts.push({ filename, contentType: ct, base64: b64 });
+  };
+  walk(raw ?? "", 0);
+  return { parts, text: text.trim(), html: html.trim() };
+}
+
 // ---------------------------------------------------------------------------
 export function __runIntakeHardenTests(): { passed: number; failed: number } {
   let passed = 0;
@@ -299,6 +369,29 @@ export function __runIntakeHardenTests(): { passed: number; failed: number } {
   ok(groundAiManifest({ manifestNumber: "X", vendorName: "", vendorLicense: "", transferDate: "", rows: [{ lot: "GF00000000000001", product: "a", qty: 1, unitPrice: null }] }, [doc]) === null, "nothing printed -> null");
   const g2 = groundAiManifest({ manifestNumber: "NOT-PRINTED-1", vendorName: "Somebody", vendorLicense: "999999", transferDate: "July", rows: [{ lot: "GF41918905566980", product: "b", qty: 2, unitPrice: null }] }, [doc]);
   ok(!!g2 && g2.manifestNumber === null && g2.vendorLicense === null && g2.transferDate === null, "unprinted header facts dropped");
+
+  // 5) Forwarded-as-attachment .eml explode.
+  const eml = [
+    "From: x@y.com",
+    'Content-Type: multipart/mixed; boundary="B1"',
+    "",
+    "--B1",
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: quoted-printable",
+    "",
+    "link https://h.com/t?token=3DAB=",
+    "",
+    "--B1",
+    'Content-Type: application/pdf; name="Invoice.pdf"',
+    "Content-Disposition: attachment; filename=\"Invoice.pdf\"",
+    "Content-Transfer-Encoding: base64",
+    "",
+    Buffer.from("%PDF-1.4 hi").toString("base64"),
+    "--B1--",
+  ].join("\r\n");
+  const ex = explodeEml(eml);
+  ok(ex.parts.length === 1 && ex.parts[0].filename === "Invoice.pdf" && Buffer.from(ex.parts[0].base64, "base64").toString().startsWith("%PDF"), "eml attachment extracted");
+  ok(ex.text.includes("token=AB"), "eml QP body decoded");
 
   if (failed === 0) console.log(`intake-harden-core: all ${passed} tests passed`);
   return { passed, failed };
