@@ -15,6 +15,9 @@
 --
 -- (keep 14 days of archived history; at most 25 archived versions per call -
 -- call again until versions_pruned = 0). Each call is one short transaction.
+-- versions_pruned counts only versions that actually had rows removed, and a
+-- version is only picked while it still has something removable, so the
+-- repeat-until-0 loop always ends.
 --
 -- WHAT IT REMOVES. menu_items rows (and, by the existing ON DELETE CASCADE,
 -- their menu_variants) that belong to an ARCHIVED, non-test version created
@@ -47,6 +50,7 @@ declare
   v_max   integer := least(greatest(coalesce(p_max_versions, 25), 1), 200);
   v_ids   uuid[];
   v_rows  bigint := 0;
+  v_done  integer := 0;
 begin
   select coalesce(array_agg(id), '{}')
     into v_ids
@@ -56,7 +60,21 @@ begin
        where mv.status = 'archived'
          and coalesce(mv.is_test, false) = false
          and mv.created_at < now() - make_interval(days => v_keep)
-         and exists (select 1 from public.menu_items mi where mi.menu_version_id = mv.id)
+         -- Only versions that still hold at least one prunable row (an item
+         -- with a newer copy of the same product key). A version whose
+         -- remaining rows are each the newest copy of their key is finished
+         -- and is never picked again, so repeated calls reach 0.
+         and exists (
+           select 1
+             from public.menu_items mi
+            where mi.menu_version_id = mv.id
+              and exists (
+                select 1
+                  from public.menu_items n
+                 where n.source_item_id = mi.source_item_id
+                   and n.created_at > mi.created_at
+              )
+         )
        order by mv.created_at asc
        limit v_max
     ) oldest;
@@ -68,17 +86,22 @@ begin
     return;
   end if;
 
-  delete from public.menu_items mi
-   where mi.menu_version_id = any (v_ids)
-     and exists (
-       select 1
-         from public.menu_items newer
-        where newer.source_item_id = mi.source_item_id
-          and newer.created_at > mi.created_at
-     );
-  get diagnostics v_rows = row_count;
+  with gone as (
+    delete from public.menu_items mi
+     where mi.menu_version_id = any (v_ids)
+       and exists (
+         select 1
+           from public.menu_items newer
+          where newer.source_item_id = mi.source_item_id
+            and newer.created_at > mi.created_at
+       )
+    returning mi.menu_version_id
+  )
+  select count(distinct g.menu_version_id)::integer, count(*)::bigint
+    into v_done, v_rows
+    from gone g;
 
-  versions_pruned := array_length(v_ids, 1);
+  versions_pruned := v_done;
   item_rows_deleted := v_rows;
   return next;
 end;

@@ -337,7 +337,16 @@ describe("S19 carry-forward is the WHOLE live menu or nothing", () => {
     const out = await stage();
     expect(out.staged).toBe(true);
     const pages = net.reqs.filter((r) => table(r) === "menu_items" && r.method === "GET" && sel(r) === "*");
-    expect(pages.map((r) => r.url.searchParams.get("offset"))).toEqual(["0", "1000"]);
+    // PERF2-P8: the carry-forward pages are fetched in ONE wave of
+    // MENU_READ_CONCURRENCY (6) instead of one by one, so a 1,001-row menu
+    // reads offsets 0,1000 (the data) plus at most 4 empty pages past the end
+    // in the same wave. The rows carried are unchanged (1,001, below), the
+    // offsets are consecutive 1,000-row pages from 0, and the walk never
+    // starts a second wave once a short page has been seen.
+    const offsets = pages.map((r) => Number(r.url.searchParams.get("offset")));
+    expect(offsets.slice(0, 2)).toEqual([0, 1000]);
+    expect(offsets).toEqual(offsets.map((_, i) => i * 1000));
+    expect(offsets.length).toBeLessThanOrEqual(6);
     expect(pages[0].url.searchParams.get("order")).toBe("sort_order.asc,id.asc");
     expect(out.carried).toBe(1001);
     const head = net.reqs.find((r) => table(r) === "menu_items" && r.method === "HEAD")!;
