@@ -140,3 +140,15 @@ SOP-04 v1.1 also tells the admin to **ask the WSLCB once** whether they will acc
 - **The monthly zip writes neither table** (it writes benchmarks, competitor, supplier, producer, days-on-hand and market-signal tables; `market-rollups.ts`). So on a monthly card **both buttons run and do nothing.** That is finding F-04-15.
 - **The working equivalent:** **Draft vendor leads from these suppliers** on the Leads page (Market movers), which reads the monthly zip's supplier data (`DraftSupplierOutreachButton.tsx` L42; `discovery/actions.ts` L663–).
 - **Why the professional fix is to show only working actions:** a button that silently does nothing teaches people to distrust the screen.
+
+### Open questions raised by slice SOP-05a (awaiting the owner's words)
+
+Asked in `docs/sop/SOP-05a-inventory-core.md` Appendix C. Each has an interim rule in that SOP until the owner answers; none is decided here.
+
+| # | Question (short form) | Interim rule |
+|---|---|---|
+| Q-05a-1 | May Greenway sell product past its expiry or best-by date? Block or warn at the register? | Expired = not for sale: pull, quarantine, owner decides (SOP-05a §4.16) |
+| Q-05a-2 | Who is the recall coordinator, and the back-up? | The owner; the on-duty manager in the owner's absence |
+| Q-05a-3 | May a manager key a cannabis unit cost through Bulk fill? | Owner or admin only |
+| Q-05a-4 | Remove Receive, Destruction and Recall removal from the adjustment reasons, and add Theft and Seizure? | Never use those three reasons |
+| Q-05a-5 | Should an 86 stay until a manager restores it? | The manager checks every 86 the same shift |
