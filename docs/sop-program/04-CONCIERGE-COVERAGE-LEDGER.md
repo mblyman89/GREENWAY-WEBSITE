@@ -72,6 +72,14 @@ Legend: ✅ adequate · 🟡 thin (≤3 facts or missing procedures) · 🔴 wro
 4. **"Where do I click" links.** Every SOP step carries its `href`, so the concierge can answer with a link.
 5. **Freshness test.** A compliance test asserting every `href` in SOP/concierge data is a real `page.tsx` route, and that no topic is `planned` when its route exists. This test would have caught F-00-1.
 
+6. **Owner requirement: cover every feature, now and future** (decision D42, slice SOP-05b: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*). The concierge upgrade starts **after the last SOP is written**. Its scope:
+   - (a) points 1–5 above;
+   - (b) every SOP, every help panel, every page helper and every SOP sheet as sources;
+   - (c) a **feature registry**: one entry per back-office feature, with its route, permission, SOP section and concierge facts. The freshness test (point 5) fails the build when a route has no entry. A feature built **after** the upgrade therefore cannot ship without its concierge entry;
+   - (d) when a gap is fixed, the same change updates the SOP and the concierge entry (charter §3 rule 9, decision D41).
+
+   The concierge stays **read-only and advisory**. It explains features; it does not run them.
+
 ## 5. Per-slice update rule
 
 At the end of every SOP slice, update §3 above with: (a) the facts the new SOP adds, (b) rating changes, and (c) new gaps found. The concierge code itself is **not** edited until the integration phase (owner: no fixes yet).
