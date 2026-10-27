@@ -278,6 +278,14 @@ export default async function InventoryPage({
   // R50 S3d: which manifests are Cultivera migration manifests (fails soft to
   // the notes marker; started now, awaited before render).
   const cultiveraManifestsPromise = loadCultiveraManifestIds(allLots);
+  // PERF-S9: the live-price + menu-flag reads only need each lot's key and
+  // linked size, which are known as soon as the lots load (the onboarding and
+  // category joins below keep every lot, in order). Start them now so they
+  // overlap the onboarding/category work instead of waiting behind it.
+  const lotKeys = allLots.map((l) => l.pos_product_key);
+  const lotPriceRefs = allLots.map((l) => ({ key: l.pos_product_key, linked: l.menu_source_variant_id ?? null }));
+  const parityPromise = Promise.all([loadLotLivePrices(lotPriceRefs), getMenuClassificationFlags(lotKeys)]);
+  parityPromise.catch(() => undefined); // awaited below; avoid an unhandled-rejection warning meanwhile
   const onboardingIndex = await onboardingPromise;
   // R32: every lot carries its onboarding decision (type, strain type,
   // website category, approved price, margin, KB + draft links) so the new
@@ -293,10 +301,8 @@ export default async function InventoryPage({
   // page shows the LIVE menu price of the lot's own variant and the compliance
   // flags from the MENU row; the table now reads the same two sources (one
   // bulk read each), so Price, Margin, Ext. retail and Compliance match it.
-  const lotKeys = categorizedRaw.lots.map((l) => l.pos_product_key);
   // R74 S30: each lot's own menu size (0294) so a multi-size card prices per size.
-  const lotPriceRefs = categorizedRaw.lots.map((l) => ({ key: l.pos_product_key, linked: l.menu_source_variant_id ?? null }));
-  const [livePrices, menuFlags] = await Promise.all([loadLotLivePrices(lotPriceRefs), getMenuClassificationFlags(lotKeys)]);
+  const [livePrices, menuFlags] = await parityPromise;
   const categorized = attachLotParity(categorizedRaw, livePrices.index, menuFlags);
   // R38 S2: derived metrics (age, sell-through, velocity, days of supply,
   // extended cost/retail, ABC, on-menu) computed ONCE per lot, so the cells,
