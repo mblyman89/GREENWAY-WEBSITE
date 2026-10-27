@@ -13,6 +13,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 import type { ParsedManifest } from "@/lib/inventory/intake-parser";
 import { parsePdfManifestText } from "@/lib/inventory/pdf-manifest-dispatch-core";
 import { parseCoaSummary, looksLikeCoaSummary } from "@/lib/inventory/pdf-coa-core";
+import { markdownToPlain } from "@/lib/inbound-email/intake-harden-core";
 import type { PageLayer, PositionedText } from "@/lib/inventory/pdf-contingency-manifest-core";
 
 /** Extract the merged plain text from a PDF given its raw bytes. */
@@ -137,6 +138,26 @@ async function extractPdfTextWithRecovery(
   }
 }
 
+/**
+ * R74 S51: the alternative readings of one PDF to retry a layout parser on -
+ * the markdown flattened to plain text, and (when the primary text came from
+ * LlamaParse) the PDF's own unpdf text layer. Free; never throws.
+ */
+async function altTexts(primary: string, bytes: Uint8Array, primaryWasVision: boolean): Promise<string[]> {
+  const out: string[] = [];
+  const plain = markdownToPlain(primary);
+  if (plain && plain !== primary.trim()) out.push(plain);
+  if (primaryWasVision) {
+    try {
+      const layer = await extractPdfText(bytes.slice());
+      if (layer.trim() && layer.trim() !== primary.trim()) out.push(layer);
+    } catch {
+      /* no text layer */
+    }
+  }
+  return out;
+}
+
 export type PdfManifestResult =
   | { ok: true; manifest: ParsedManifest; text: string }
   | { ok: false; error: string; text: string | null };
@@ -151,12 +172,21 @@ export async function parsePdfManifest(
   recoverText?: PdfTextRecovery,
 ): Promise<PdfManifestResult> {
   // unpdf first (free); LlamaParse recovery only when unpdf yields nothing.
+  const keep = bytes.slice(); // R74 S51: pdf.js may detach the buffer it reads
   const text = await extractPdfTextWithRecovery(bytes, recoverText);
 
   // R74 S9: the layout dispatch lives in the pure pdf-manifest-dispatch-core (same parsers, same
   // order, same messages) so the Cultivera email reader runs exactly what intake runs.
   const r = parsePdfManifestText(text);
   if (r.ok) return { ok: true, manifest: r.manifest, text };
+  // R74 S51: LlamaParse returns MARKDOWN (bold labels, table pipes) while the
+  // layout parsers were written against plain text - retry on a flattened
+  // copy, then on the PDF's own (free) unpdf text layer. Same parsers, no
+  // guessing; only the first variant that parses is used.
+  for (const alt of await altTexts(text, keep, Boolean(recoverText))) {
+    const r2 = parsePdfManifestText(alt);
+    if (r2.ok) return { ok: true, manifest: r2.manifest, text: alt };
+  }
   return { ok: false, error: r.error, text: text.trim() ? text : "" };
 }
 
@@ -195,16 +225,21 @@ export async function parseCoaFromBase64(
     return { ok: false, error: "Attachment was not valid base64.", text: null };
   }
   // unpdf first (free); LlamaParse recovery only when a scanned COA has no text.
+  const keep = bytes.slice(); // R74 S51
   const text = await extractPdfTextWithRecovery(bytes, recoverText);
   if (!text.trim()) {
     return { ok: false, error: "The COA PDF has no extractable text.", text: "" };
   }
-  if (!looksLikeCoaSummary(text)) {
-    return { ok: false, error: "This PDF doesn't look like a COA Summary.", text };
+  // R74 S51: same markdown / text-layer retry as the manifest reader.
+  let coaText = text;
+  if (!looksLikeCoaSummary(coaText)) {
+    const alt = (await altTexts(text, keep, Boolean(recoverText))).find((t) => looksLikeCoaSummary(t));
+    if (!alt) return { ok: false, error: "This PDF doesn't look like a COA Summary.", text };
+    coaText = alt;
   }
-  const coa = parseCoaSummary(text);
+  const coa = parseCoaSummary(coaText);
   if (!coa || Object.keys(coa.byLot).length === 0) {
-    return { ok: false, error: "No COA lots could be read from the PDF.", text };
+    return { ok: false, error: "No COA lots could be read from the PDF.", text: coaText };
   }
-  return { ok: true, coa, text };
+  return { ok: true, coa, text: coaText };
 }
