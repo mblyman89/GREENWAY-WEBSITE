@@ -94,6 +94,11 @@ const nextConfig: NextConfig = {
     // PERF-S2: the app now has two root layouts ((site) and admin) and no
     // top-level layout, so unmatched URLs need app/global-not-found.tsx.
     globalNotFound: true,
+    // PERF-S4: reuse a visited dynamic page from the client Router Cache for
+    // 30 s (default 0) so back/forward and tab-hopping in the back office do
+    // not re-run every server query. Server Actions still refresh what they
+    // change (revalidatePath / router.refresh), so saves stay accurate.
+    staleTimes: { dynamic: 30, static: 180 },
     serverActions: {
       // POS exports (PRODUCTS.xlsx + INVENTORIES.xlsx) are uploaded together via
       // a Server Action. Next.js caps Server Action request bodies at 1 MB by
