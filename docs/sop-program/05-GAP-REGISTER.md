@@ -1,6 +1,6 @@
 # SOP Program — Gap Register
 
-Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added) · Updated in slice SOP-05a · 2026-10-27 (D29 → G-16 APPROVED; D32 → G-18; D33/D34 → G-20; D31 → G-21)
+Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added) · Updated in slice SOP-05a · 2026-10-27 (D29 → G-16 APPROVED; D32 → G-18; D33/D34 → G-20; D31 → G-21) · Updated in slice SOP-05b · 2026-10-27 (G-29…G-32 added)
 
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
@@ -48,6 +48,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-26 | Print-label link on the lot page, scannable fallback barcode, **the professional 86** (reason-driven clearing, one queue, audited manager restore) | **D40** | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | **APPROVED** (86 part, D40) · rest OPEN |
 | G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **APPROVED** |
 | G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status | **D39** (design: Q-05a-8) | F-05a-17, F-05a-18 (**S1**), F-05a-19 | SOP-05a §4.9, §4.10, form 8.4 | OPEN (design awaits Q-05a-8) |
+| G-29 | Other Inventory on the register: SKU / UPC scan to a priced line, sale decrements On hand, void / return restores, audited | (procedure need; D43) | F-05b-1 (**S1**) | SOP-05b §4.1–§4.5, form 8.1 | OPEN (Q-05b-1) |
+| G-30 | Edit non-cannabis price and cost by role, audited old → new; refuse a $0.00 price | (procedure need) | F-05b-6 | SOP-05b §4.3, §4.6, §4.9, form 8.2 | OPEN (Q-05b-2) |
+| G-31 | Cannabis-line guard: no lot override, Move products or type mapping may move cannabis into or out of a non-cannabis category without the owner | (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | OPEN (Q-05b-4) |
+| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, owner-only cost-unknown price, classification write warning | (procedure need; D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | OPEN (Q-05b-5) |
 
 ---
 
@@ -366,4 +370,52 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. The lot page gets a **Schedule destruction** link that opens the page with the lot chosen (pairs with G-23).
   5. Tests for all three, plus a guard that no destruction path changes a Recalled lot to anything but Destroyed.
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C).
+
+## G-29 · Other Inventory on the register (Q-05b-1)
+
+- **Owner basis:** the intake form already promises it (*"Has one? Scan it here — it becomes the register code."*, `NonCannabisIntakeForm.tsx` L122–124). D42/D43 ask for inventory management to be finished end to end.
+- **Today:** the register reads only `menu_items` and cannabis lots. Non-cannabis is rung on the Keypad as free text, and **On hand** never moves with a sale (F-05b-1, **S1**).
+- **Requirements (draft):**
+  1. Active non-cannabis items are served to the register with SKU, UPC/EAN, name, price and the category (`accessories` or `merch`), taxed at 9.3% with no limit.
+  2. A scanned SKU label or manufacturer barcode adds the priced line. An unknown code says so and never falls through to cannabis.
+  3. A completed sale decrements `on_hand` atomically, with a ledger row (`sale`) and the order id. A void or return restores it.
+  4. Offline sales queue and replay the decrement once.
+  5. The Keypad stays for genuinely un-catalogued items, and its lines are listed for the weekly count.
+  6. Tests: scan → line → tax; decrement / void / return; no cannabis path changed.
+- **Interim:** SOP-05b §4.4–§4.5, form 8.1.
+
+## G-30 · Edit a non-cannabis price and cost (Q-05b-2)
+
+- **Today:** price is set only at draft; cost only while $0.00; a $0.00 price is accepted (F-05b-6).
+- **Requirements (draft):**
+  1. **Change price** and **Change cost** on an active item, limited to the role the owner picks (Q-05b-2), with a required reason and an audit row old → new.
+  2. Refuse a $0.00 or blank price at draft, at confirm and in the invoice builder (or require an explicit "free item" flag).
+  3. Price history on the item. The SKU never changes.
+- **Interim:** SOP-05b §4.9 (archive and re-create, owner only, form 8.2).
+
+## G-31 · Cannabis-line guard for categories (Q-05b-4)
+
+- **Today:** the lot override, **Move products** and the inventory-type mapping can each cross into or out of `merch` / `accessories` / `accessory` / `paraphernalia` with no check. This changes tax, limits, scan and floor (F-05b-9, **S1**).
+- **Requirements (draft):**
+  1. One pure check, `crossesCannabisLine(fromCategory, toCategory)`, shared by `parseClassificationEdit`, `buildReassignPlan` and the inventory-type save.
+  2. A crossing is refused, or (if the owner chooses in Q-05b-4) allowed only for the owner with a typed reason, recorded as its own audit action.
+  3. A product that came from a CCRS manifest (it has a cannabis lot) can never be moved into a non-cannabis category.
+  4. A daily check lists any menu row whose product has a cannabis lot but a non-cannabis category, on Inventory → Issues.
+  5. Tests for all three entry points.
+- **Interim:** SOP-05b §4.15–§4.17, form 8.3 (never cross; owner only).
+
+## G-32 · Non-cannabis, publish and price hardening bundle (Q-05b-5)
+
+- **Today / requirements (draft), one line per finding:**
+  1. Confirm and Archive write an audit row; add **Restore** for an archived item (F-05b-2).
+  2. Adjustments use one atomic database update with a zero floor (F-05b-3).
+  3. Direction is fixed by Reason; **Count correction** and **Other** allow either (F-05b-4).
+  4. Recent adjustments shows the actor and Pacific time (F-05b-5).
+  5. A failed invoice save removes everything it wrote (one transaction) (F-05b-7).
+  6. The invoice audit write is awaited and failure is shown (F-05b-8).
+  7. Publish refuses (fails closed) when the removal diff can't be read (F-05b-10).
+  8. Category audits carry before / after (F-05b-11).
+  9. **Save sell price** on a cost-unknown lot is owner only, or blocked until the CCRS cost is in (owner's choice, Q-05b-5) (F-05b-12, D38).
+  10. A classification lot-row write failure shows a warning, not "saved" (F-05b-13).
+- **Interim:** the store rules in SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21.
 

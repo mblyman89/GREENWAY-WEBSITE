@@ -525,6 +525,80 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ---
 
+## SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price findings (audited at `main@827facb5`, 2026-10-27)
+
+Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory management sop."*) in `00-OWNER-REQUEST-VERBATIM.md`; D38 (cannabis cost only from the vendor's CCRS manifest); D41 (living SOPs); D42 (the concierge covers every feature).
+**Verdict: PARTLY MET, with two S1 gaps.** Publish Menu, the Merch page, sales-limit classification and the cannabis sell-price floor are careful and audited. Other Inventory is a good catalog, but it is **not connected to the register**. And nothing stops a category change from turning cannabis into non-cannabis for tax, limits and scan.
+
+### F-05b-1 · CONFIRMED · GAP · S1 — Other Inventory is not connected to the register
+- **Pin:** the register menu is built from `menu_items` only (`src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L179, L405–415). Scan-to-cart matches only menu barcodes and lot codes (`scan-to-cart-core.ts` L55–75, L101–144). The sale decrement touches cannabis lots only (`src/lib/inventory/sale-decrement.ts` L107–110). Yet the intake form promises the barcode *"becomes the register code"* (`NonCannabisIntakeForm.tsx` L122–124), and the label page, help panel, `help-content.ts` L470–472 and `concierge-kb.ts` L172 imply scanning works (label page L7–8; `noncannabis/page.tsx` L230–240).
+- **Effect:** non-cannabis goods are rung on the Keypad as free text. **On hand**, **Reorder now**, retail value and margin never move with sales, and shrink is invisible between counts.
+- **SOP impact:** SOP-05b header box, §4.1, §4.4, §4.5 (Monday reconciliation, form 8.1), §9. Fixed by **G-29**.
+
+### F-05b-2 · CONFIRMED · HARDEN · S2 — Confirm and Archive write no audit row, and Archive has no restore
+- **Pin:** `noncannabis/actions.ts` L86–100 → `store.ts` L422–447: status updates with no `recordAudit`. No action sets an archived item back to active.
+- **Effect:** who activated or retired an item cannot be shown; a mistaken archive needs a re-create with a new SKU.
+- **SOP impact:** §4.3 step 6, §4.9, form 8.1 catalog line. **G-32**.
+
+### F-05b-3 · CONFIRMED · HARDEN · S2 — A non-cannabis adjustment is read-then-write and not atomic
+- **Pin:** `store.ts` L307–343 reads `on_hand`, inserts the ledger row, then writes the new count as a separate step.
+- **Effect:** two adjustments at once can lose one. A failure between the steps leaves a ledger row with no count change.
+- **SOP impact:** §4.5. **G-32**.
+
+### F-05b-4 · CONFIRMED · HARDEN · S3 — Direction can contradict Reason
+- **Pin:** `MerchCatalog.tsx` L90–110 defaults the direction from the reason but lets it be changed; `noncannabis/actions.ts` L119 accepts any pair.
+- **Effect:** "Theft / loss" can be posted as **+ Add**, which hides shrink.
+- **SOP impact:** §4.5 step 2. **G-32**.
+
+### F-05b-5 · CONFIRMED · UX · S4 — Recent adjustments shows browser-local time and no actor
+- **Pin:** `noncannabis/page.tsx` L369.
+- **SOP impact:** §4.5. **G-32**.
+
+### F-05b-6 · CONFIRMED · GAP · S2 — No way to edit a non-cannabis price or a non-zero cost, and a $0.00 price is accepted
+- **Pin:** the price is set only at draft (`noncannabis/actions.ts` L51; `store.ts` L261). The invoice builder creates $0.00 drafts when retail is blank (`invoice-store.ts` L142). Cost fill works only at $0.00 (`cost-fill-core.ts` L46–47).
+- **Effect:** a typo'd price is permanent. The only workaround is archive and re-create, which changes the SKU.
+- **SOP impact:** §2, §4.3 step 5, §4.6, §4.9 (form 8.2, owner only). Fixed by **G-30**.
+
+### F-05b-7 · CONFIRMED · BUG · S2 — A failed invoice save rolls back only the header
+- **Pin:** `invoice-store.ts` L124–128 (header delete on failure), L135–158 (drafts and restock adjustments already written, not undone).
+- **Effect:** after a failed save, there are orphan drafts and extra stock on file; a retry doubles them.
+- **SOP impact:** §4.6 "If the save fails part-way". **G-32**.
+
+### F-05b-8 · CONFIRMED · HARDEN · S3 — The invoice audit row is fire-and-forget
+- **Pin:** `noncannabis/actions.ts` L296–307: `recordAudit(...).catch(() => {})`.
+- **Effect:** a saved invoice (a payable source document) can have no audit row, and nobody is told.
+- **SOP impact:** §6. **G-32**.
+
+### F-05b-9 · CONFIRMED · BUG/HARDEN · S1 — A category change can turn cannabis into non-cannabis for tax, limits and scan
+- **Pin:** the non-cannabis set `merch`, `accessories`, `accessory`, `paraphernalia` drives tax (`src/lib/orders/order-pricing-core.ts` L42–50: 9.3% only, no 37% excise), the purchase limit (`sales-limits-core.ts` L370–374: none), scan-required (`scan-required-core.ts` L55–61: off) and the price floor (`price-correction-core.ts` L35–39, L61–67: ×1.093, not ×1.463). **Move products** (`settings/types/actions.ts` L367–397 → `category-registry.ts` L125–160) rewrites `menu_items.category` on the live menu, which the register prices from. `buildReassignPlan` (`category-registry-core.ts` L149–198) has no cannabis check. The lot-page override (`[id]/page.tsx` L1176–1270; `parseClassificationEdit`, `lot-website-classification-core.ts` L61) has no cannabis check either. It changes the website listing and the lot-page price math (L1026, L1083). It was not found in `api/pos/menu` or order pricing.
+- **Effect:** one owner/admin click can stop collecting cannabis excise and stop enforcing WAC 314-55-095 limits on a cannabis product at the register. A manager can lower a cannabis lot's legal floor through the override.
+- **SOP impact:** §2, §4.15–§4.17, §4.21 step 3, §6, §7, §9, form 8.3. Fixed by **G-31**.
+
+### F-05b-10 · CONFIRMED · HARDEN · S2 — The publish removal check fails open
+- **Pin:** `menu-imports/actions.ts` L216–237: if the removal diff throws, the error is only `console.error`-ed and the publish continues.
+- **Effect:** the guard that exists because *"an old 3-item draft silently wiped an 18-item menu"* (L214–218) is skipped exactly when it cannot see.
+- **SOP impact:** §4.14, §6. **G-32**.
+
+### F-05b-11 · CONFIRMED · HARDEN · S4 — Category rename and delete audits carry no before / after
+- **Pin:** `settings/types/actions.ts` L108–114, L148–170.
+- **SOP impact:** §4.15 (form 8.3). **G-32**.
+
+### F-05b-12 · CONFIRMED · HARDEN · S2 — A cannabis sell price can be saved with no floor when the cost is unknown
+- **Pin:** `afterTaxFloorMinor` returns null without a cost (`price-correction-core.ts` L65); the help says *"Cost is unknown for this lot, so no floor can be enforced."* (`[id]/page.tsx` L1067). Any manager (`inventory.manage`) can save any price above $0.00.
+- **Effect:** a below-cost sale (RCW 69.50.357 / WAC 314-55-155) is possible on exactly the lots whose cost is missing. Tied to D38 (cost only from the CCRS manifest).
+- **SOP impact:** §2, §4.21 (owner only), form 8.2. **G-32** (Q-05b-5).
+
+### F-05b-13 · CONFIRMED · HARDEN · S3 — A classification lot-row write failure is visible only in the audit row
+- **Pin:** `inventory/actions.ts` L1105–1145: `lot_row_write_failed` goes into the audit `after`; the user is redirected `?saved=1` (L1156).
+- **Effect:** the worklist (which reads the lot row) can keep showing the product as unclassified while the register enforces the new answer.
+- **SOP impact:** §4.19 step 6. **G-32**.
+
+### F-05b-C · CONFIRMED · DOC · S3 — The concierge has one line on Other Inventory and nothing on merch, publish, categories, classification or sell price
+- **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180 (one Other Inventory line, L172, which repeats the scan promise of F-05b-1; one Types & Categories line).
+- **SOP impact:** concierge ledger SOP-05b section; grounding from SOP-05b §4–§9 in Phase D (D42).
+
+---
+
 ## Ledger index (updated each slice)
 
 | SOP slice | Findings | Confirmed | Suspected |
@@ -535,3 +609,4 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
 | SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
+| SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4) | 14 | 0 |
