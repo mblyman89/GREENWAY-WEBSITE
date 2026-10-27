@@ -1,7 +1,7 @@
 # SOP Program — Catalog of SOPs + Slice Roadmap
 
 Slice SOP-00 · 2026-10-27 · audited at `main@54445a68`
-Updated in slice SOP-04 · owner facts D21–D28 applied; SOP-04 written (earlier: slice SOP-03, D14–D20; slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
+Updated in slice SOP-05a · owner answers D29–D35 applied (SOP-04 v1.1); SOP-05 split into 05a/05b per D35 (earlier: slice SOP-04, D21–D28, SOP-04 written; slice SOP-03, D14–D20; slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
 
 Every SOP below is mapped to the **real code** it will be verified against. Code sizes come from a census of the tree (`.ts/.tsx` files and lines) and show how much audit work each slice involves. "Requested" quotes the owner. EXISTS/PARTIAL/MISSING is the recon verdict and is re-verified in depth in the SOP's own slice.
 
@@ -34,13 +34,23 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 ### SOP-04 · Receiving Intake Pipeline (truck day)
 **Audience:** receiving staff, manager · **Requested:** "a sop for the receiving intake pipeline."
 **Code (≈19.6k lines core + inventory):** `/admin/inventory/intake`, `/intake/[id]`, `/intake/[id]/match`, `/admin/inventory/drafts`, `/inventory/batch-lookups`, `src/lib/inventory/intake-*`, `brand-resolve-core.ts`, `src/lib/inbound-email/*` (forwarded manifests, .eml explode), quarantine, COA capture, samples cap; `docs/RECEIVING-IS-THE-REAL-PIPELINE.md`, `INTAKE_PIPELINE_*`. **Rule 11: the one way products enter Greenway.** This slice gets the deepest audit.
-**Status:** **WRITTEN** in slice SOP-04 as `docs/sop/SOP-04-receiving-intake.md` v1.0 (draft for owner review). Part 1 is truck day (§4.1–4.24): morning list check, email and manual import, count every line, per-line and whole-manifest refusal, interim short-count rule, samples, vendor ids, COAs, one-button Finalize, held lots, labels, onboarding. Part 2 is the **monthly CCRS public records request** (§4.25–4.34, owner decision D28): file with the WSLCB, track, store the zip untouched, update competitors, drop the zip, check and use the benchmarks. Forms 8.1–8.5 (truck-day sheet, dock refusal log, vendor follow-up log, monthly PRR log, manager Finalize checklist). 21 findings (F-04-1…F-04-20 + F-04-C), gaps G-16…G-19, open questions Q-04-1…Q-04-6.
+**Status:** **WRITTEN** in slice SOP-04 as `docs/sop/SOP-04-receiving-intake.md` v1.0 (draft for owner review), revised to **v1.1** in slice SOP-05a with owner answers D29–D34 (partial receive approved as a serious fix, managers only process manifests, second count strongly suggested and expected on a first delivery from a vendor, admin files the PRR on the 10th with the built-in wording and one zip per month, 18-month dataset retention, typed delete confirmation). Part 1 is truck day (§4.1–4.24): morning list check, email and manual import, count every line, per-line and whole-manifest refusal, interim short-count rule, samples, vendor ids, COAs, one-button Finalize, held lots, labels, onboarding. Part 2 is the **monthly CCRS public records request** (§4.25–4.34, owner decision D28): file with the WSLCB, track, store the zip untouched, update competitors, drop the zip, check and use the benchmarks. Forms 8.1–8.5 (truck-day sheet, dock refusal log, vendor follow-up log, monthly PRR log, manager Finalize checklist). 21 findings (F-04-1…F-04-20 + F-04-C), gaps G-16…G-19, open questions Q-04-1…Q-04-6.
 **SOP-04 audit verdict: MET with gaps.** Truck day works end to end: email → staged draft → count → refusal → one-button Finalize → go-live gate → books → onboarding. The monthly zip transformer works and feeds Statewide Benchmarks, Reports → Benchmarks and the Local benchmarks section. Gaps: the lot page's Lifecycle status sets Active with no go-live check and no audit (F-04-2, **S1**; G-19). No partial-quantity receive (F-04-1; G-16). Failed vendor emails are invisible (F-04-4; G-17). Dataset Delete has no confirmation (F-04-16). No PRR reminder/log (F-04-19; G-18). There is no Discovery off control (F-04-20). The in-app SOP sheets and help are stale (F-04-5, F-04-13, F-04-14). The concierge has no receiving or PRR content (F-04-C).
 **Recon verdict (SOP-00, kept for history):** EXISTS. The existing `sop-core.ts` truck-day + "receive/onboard/publish" sheets get re-audited and absorbed. (SOP-04 found them pre-R31 and stale, F-04-5. SOP-04 replaces them; they are not absorbed.)
 
 ### SOP-05 · Inventory Management (daily)
 **Audience:** manager, inventory lead · **Requested:** "sop for inventory management."
 **Code (≈116k lines across `src/lib/inventory`, the largest domain):** `/admin/inventory`, `/inventory/[id]`, lots + labels, tags, expiration rules, labs/COAs, non-cannabis, merch inventory, recall holds (`recall-hold-*`), held stock, low stock, stock flags from the register, publish menu, Types & Categories, sales-limit classification.
+
+**Split (owner decision D35, "I want you to break this one up into two slices"):** the boundary was drawn from the code in slice SOP-05a. SOP-05a is the cannabis lot itself, from the moment receiving makes it live until it is sold out, held or sent to SOP-15. SOP-05b is everything that is not a cannabis lot, plus the menu and the classification that sit on top of lots.
+
+#### SOP-05a · Inventory Core: lots, holds, labels, labs, expiry (daily)
+**Code:** `/admin/inventory` (`page.tsx` 1,297 lines, `actions.ts` 1,260), `/admin/inventory/[id]` (lot page, 1,560 lines: lifecycle status, edit, carry-over F-04-2 / G-19), `/admin/inventory/lots/[id]/label`, `/admin/inventory/tags`, `/admin/inventory/labs` (`testing-labs-*`, `coa-*`), `/admin/inventory/expiration-rules` (`expiry-rules-*`), recall holds (`src/lib/pos/recall-hold-*`), restore to sale (`restore-to-sale-*`), register sellability (`register-sellability-store.ts`), oversold report (`oversold-report-*`), low stock (`src/lib/pos/low-stock-core.ts`), register stock flags (`/api/pos/stock-flag`, `stock-flag-core.ts`).
+
+#### SOP-05b · Non-Cannabis, Merch, Menu Publishing & Classification
+**Code:** `/admin/inventory/noncannabis` (+ `[id]/label`, ≈2k lines), `/admin/inventory/merch` (Greenway Merchandising LLC, never on the cannabis POS), `/admin/publish` (`menu.import`; `src/lib/pos/publish-*`), `/admin/settings/types` (Types & Categories, `settings.manage`), `/admin/compliance/classification` (sales-limit worklist, `classification-status-*`).
+
+**Not in SOP-05 (stays where the roadmap puts it):** `/inventory/intake/**`, `/inventory/drafts`, `/inventory/batch-lookups` (SOP-04 / SOP-10), `/inventory/audits/**`, `/inventory/cycle-counts/**` (SOP-06), `/inventory/disposition` (SOP-15).
 
 ### SOP-06 · Cycle Counts & Inventory Audits + Daily Task Checklists
 **Audience:** all floor staff (counting), owner (create/approve) · **Requested:** "Checklists for daily tasks like cycle counts I initiate via the inventory audit feature."
@@ -121,8 +131,9 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-01** | Register Operations | Owner's first and most detailed request; most findings already | XL (25.6k) · **DONE** (draft v1.1) |
 | **SOP-02** | Master Till / Safe | Same cash model; finish while it is loaded in context | S · **DONE** (draft v1.2) |
 | **SOP-03** | EOD Close & Deposit Bag | Completes the cash chain till → safe → bank | M · **DONE** (draft v1.1) |
-| **SOP-04** | Receiving Intake (+ monthly CCRS PRR) | Rule 11: the business-critical pipeline | XL · **DONE** (draft v1.0) |
-| **SOP-05** | Inventory Management | Follows intake downstream | XL (largest domain; split into 05a/05b if needed) |
+| **SOP-04** | Receiving Intake (+ monthly CCRS PRR) | Rule 11: the business-critical pipeline | XL · **DONE** (draft v1.1) |
+| **SOP-05a** | Inventory Core: lots, holds, labels, labs, expiry | Follows intake downstream; split per D35 | L |
+| **SOP-05b** | Non-Cannabis, Merch, Menu Publishing & Classification | Second half of SOP-05 (D35) | L |
 | **SOP-06** | Cycle Counts, Audits & Daily Checklists | Depends on SOP-05 vocabulary | M |
 | **SOP-15** | Returns to Vendor & Destruction | Inventory exit, license-critical | M |
 | **SOP-16** | CCRS Uploads | License-critical; closes the inventory compliance loop | L |
