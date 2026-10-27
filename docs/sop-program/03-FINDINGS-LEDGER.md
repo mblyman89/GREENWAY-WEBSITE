@@ -429,6 +429,86 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 
 ---
 
+## SOP-05a Inventory Core findings (audited at `main@ac251766`, 2026-10-27; code unchanged since `5299660b`)
+
+Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop for inventory management."*) and D35 (the two-slice split, L98, L114).
+**Verdict: MET with serious gaps.** The everyday tools work: the Issues tab, the lot page, expiration rules (save → preview → fingerprinted apply, audited), tags, testing labs and bulk fill. The register's recall hold is a real hard stop, with no override and fail-closed at completion. The gaps sit around the two raw write boxes on the lot page (Lifecycle status and Adjust quantity), the recall process outside the register, and expired stock.
+
+### F-05a-1 · CONFIRMED · BUG/HARDEN · S1 — "Destroyed" set by hand leaves units on file and drops the lot from the CCRS Inventory file
+- **Pin:** Lifecycle status → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L836–851) writes the status only: no quantity change, no adjustment row, no audit. The weekly CCRS Inventory file reads lots `.neq("status","destroyed")` (`src/lib/compliance/ccrs-batch.ts` L1209–1217) and re-reads destroyed lots only when an event row in the same batch names them (`readDestroyedLots`, L380–411). The proper path sets Destroyed only when the destruction empties the lot (`src/lib/inventory/disposition.ts` L1087–1094).
+- **Effect:** a lot destroyed by hand silently leaves Greenway's state filing while CCRS still holds its last quantity. No Destruction adjustment is filed and no waste record exists.
+- **SOP impact:** SOP-05a §4.9 ("Never Destroyed by hand"), header box, §9 card. Ties to **G-22**.
+
+### F-05a-2 · CONFIRMED · HARDEN · S1 — A recall hold (status Recalled) is placed and released with no audit row, no reason and no role limit
+- **Pin:** **Recalled** is set only through the same blind Lifecycle status write (`actions.ts` L142–155 → `store.ts` L836–851). The register hold keys on it (`src/lib/pos/recall-hold-core.ts` L44, L53–63). Any `inventory.manage` login (owner, admin, manager; `roles.ts` L106) can set or clear it.
+- **Effect:** a statutory sale stop (WAC 314-55-225) can be lifted by any manager with no record of who, when or why. Rated S1 with F-04-2 because it is a control over a regulated sale stop (license integrity).
+- **SOP impact:** §4.8, §4.10: form 8.1 for every change; only the owner releases, on written clearance. Ties to **G-22** (extends G-19).
+
+### F-05a-3 · CONFIRMED · HARDEN · S2 — Manual adjustment is read-then-write, has no zero floor, never sets Sold out and writes no audit row
+- **Pin:** `createAdjustment` (`store.ts` L578–616) reads `on_hand_qty` (L587–591) and writes current + delta (L603–608). It does not use the atomic `applyLotDelta` (`atomic-quantity.ts`, GW-012) that sales, voids, counts and disposition use, and has no `next < 0` check and no `sold_out` flip (the atomic path does that, L44). The action has no `recordAudit` (`actions.ts` L111–140). The adjustment row itself carries `actor_id` (L594–600).
+- **Effect:** a sale at the same moment can be lost; on-hand can go negative; a lot at zero stays Active.
+- **SOP impact:** §4.6 (count twice, quiet times, check On hand after, form 8.2). Ties to **G-23**.
+
+### F-05a-4 · CONFIRMED · BUG/UX · S2 — "Other" and "Employee sample" adjustments with no note are withheld by CCRS (E13), and the form does not warn
+- **Pin:** both map to CCRS **Other** (`ccrs-inventory-adjustment-core.ts` L62–93), which requires a detail (`ccrs-preflight-core.ts` L271; withheld at build L201–212). The lot page note is labelled *"Optional detail for the audit trail…"* (`[id]/page.tsx` L1489).
+- **SOP impact:** §4.6 step 3, §4.7: always a note; required for these two. Ties to **G-23**.
+
+### F-05a-5 · CONFIRMED · HARDEN · S2 — "Destruction" and "Recall removal" are offered as manual adjustment reasons
+- **Pin:** lot page REASONS L118–128; both export as CCRS Destruction (`ccrs-inventory-adjustment-core.ts` L66–67, L80–81). They bypass the SOP-15 disposition flow, including its recall block (`disposition-core.ts` L226–243: no destruction until LCB coordination is confirmed and the officer named). The Issues tab's expired-lot fix text points to it (*"…or record the destruction under Adjust quantity"*, `issues-core.ts` L461).
+- **SOP impact:** §4.7 "Never"; §4.16 "do not use the row's suggestion". Ties to **G-23**; owner question **Q-05a-4**.
+
+### F-05a-6 · CONFIRMED · GAP · S3 — No Theft or Seizure adjustment reason
+- **Pin:** CCRS supports Theft and Seizure (`ccrs-inventory-adjustment-core.ts` L91–94); the form's list (lot page L118–128; `VALID_REASONS`, `actions.ts` L89–101) has neither.
+- **SOP impact:** §4.7: theft or seizure goes to the owner (SOP-20); interim **Other** with "THEFT:" / "SEIZURE:" note. Ties to **G-23**.
+
+### F-05a-7 · CONFIRMED · HARDEN · S2 — "Receive (add)" adds units that CCRS never hears about
+- **Pin:** `isReportableAdjustment` skips it (`ccrs-inventory-adjustment-core.ts` L101–105). Stock should enter only through Receiving (SOP-04; Rule 11).
+- **Effect:** units appear on Greenway's books with no CCRS adjustment and no manifest. (S2: a control bypass of the one-way-in rule; S3 if the owner treats it as a rare correction.)
+- **SOP impact:** §4.7 "Never". Ties to **G-23**; **Q-05a-4**.
+
+### F-05a-8 · CONFIRMED · GAP · S2 — Expired lots are not blocked or warned at the register; sales draw FIFO, not FEFO; the Issues text states a rule the code says WA lacks
+- **Pin:** no expiry read in `completion-gate.ts`, `api/pos/menu/route.ts` or the sale decrement (grep). Sale lot order is oldest created first (`sale-lot-read.ts` L39–47). FEFO exists only as advice (`inventory-intel-core.ts` L13, L124, L532). Issues says *"Expired product may not be sold."* (`issues-core.ts` L388, L460) while `expiry-rules-core.ts` L32–34 says WA does not require a date (WAC 314-55-105(8) "best by" optional).
+- **SOP impact:** §4.16: daily pull and quarantine until **Q-05a-1** is answered. Ties to **G-24**.
+
+### F-05a-9 · CONFIRMED · UX/HARDEN · S3 — The register "86" does not stick while the books show stock
+- **Pin:** `/api/pos/stock-flag` sets the card unavailable and audits `pos.stock_flag` (`route.ts` L28–102). On every menu download `reconcileRegisterAvailability` restores any unavailable card with Active units (`register-availability-core.ts` L318–421, message L389; called `api/pos/menu/route.ts` L240). The register prompt says *"a manager brings it back through the back office when stock returns"* (`SaleFlow.tsx` L4279–4280). The name on the audit row is client-supplied (`route.ts` L48–52).
+- **SOP impact:** §4.12: the manager investigates every 86 the same shift. Ties to **G-26**; **Q-05a-5**.
+
+### F-05a-10 · CONFIRMED · UX · S3 — The lot label is linked only from the manifest page, and its fallback barcode does not scan
+- **Pin:** the only link is on `intake/[id]/page.tsx` L1072–1078; the lot page has none (grep `/label` in `[id]/page.tsx`). The barcode is `lot_code || pos_product_key || id` (`lots/[id]/label/page.tsx` L38–40); the register indexes only lot code and CCRS id (`scan-to-cart-core.ts` L55–70).
+- **SOP impact:** §4.19: reach it through the Manifest link; scan before use. Ties to **G-26**.
+
+### F-05a-11 · CONFIRMED · HARDEN · S3 — A manager can bulk-fill a cannabis unit cost
+- **Pin:** `bulkFillAction` is `inventory.manage` (`actions.ts` L904) and accepts `unit_cost_minor_units` (`bulk-fill-core.ts` L318–325). `roles.ts` L143–148: *"Cannabis cost entry is NOT built"*; `inventory.cost.fill` is owner + admin. The fill is blank-only, migration-lot-only and audited (`inventory_lot.bulk_filled`, `actions.ts` L975–996), which limits the risk.
+- **SOP impact:** §4.20: owner or admin only for Unit cost. Owner question **Q-05a-3**.
+
+### F-05a-12 · CONFIRMED · DOC · S4 — Inventory help panel is stale
+- **Pin:** `inventory/page.tsx` L459 *"Vendor JSON intake (next slice)…"* (intake shipped; SOP-04); L458 lists "destructions" as an adjustment (contradicts SOP-15); `SopSheetLink slug="publish"` L467 points at the pre-R31 sheet (F-04-5).
+- **SOP impact:** §4.2 note: follow the SOP where they differ.
+
+### F-05a-13 · CONFIRMED · UX · S4 — Adjustment history shows the browser's date and no name
+- **Pin:** `new Date(a.created_at).toLocaleDateString()` (`[id]/page.tsx` L1539): browser time zone, not Pacific. `actor_id` is stored (`store.ts` L594–600) but not shown.
+- **SOP impact:** §4.5; form 8.2 is the readable record.
+
+### F-05a-14 · CONFIRMED · UX · S4 — The "Needs attention" card counts expiring-soon lots but does not turn orange for them
+- **Pin:** value includes `expiringSoon`; the accent sum omits it (`inventory/page.tsx` L518–530).
+- **SOP impact:** §4.2 table note.
+
+### F-05a-15 · CONFIRMED · GAP · S2 — No recall plan, recall coordinator or recall log in the app (WAC 314-55-225(3)(d) makes the plan mandatory)
+- **Pin:** grep `recall plan|recall coordinator` → only `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136. The law (read 2026-10-27, app.leg.wa.gov): (3)(d)(i)(A)–(D) coordinator, identify/isolate, retrieve/destroy, communications; (3)(f) weekly progress tracking.
+- **SOP impact:** §4.13, forms 8.4 (the plan) and 8.5 (event worksheet). Ties to **G-25**; owner question **Q-05a-2**.
+
+### F-05a-16 · CONFIRMED · GAP · S2 — A recall hold does not reach the website or online ordering
+- **Pin:** the public menu filters only hidden cards (`src/lib/pos/live-menu.ts` L167–171, L289–292); online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). `recalledProductKeys` (`recall-hold-store.ts` L72–121) has four callers only: `api/pos/menu/route.ts` L121, `completion-gate.ts` L103, `restore-to-sale-store.ts` L131, `register-sellability-store.ts` L175.
+- **Effect:** a recalled product stays visible on the website and can be reserved; the sale is refused only when staff complete the pickup (completion gate, fail-closed). WAC 314-55-225(3)(b)(i) requires preventing distribution.
+- **SOP impact:** §4.10 step 5: set **Always hide** on Product Enrichment (audited `product.visibility_changed`). Ties to **G-25** (propagation requirement).
+
+### F-05a-C · CONFIRMED · DOC · S3 — Concierge inventory topic has six one-line facts and nothing on recalls, expiry, adjustments, the 86 or labels
+- **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180: six facts (lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts, Returns & Destruction). grep `recall|expir` in the file → none. Baseline ledger row "Inventory management 🟡" (`04-CONCIERGE-COVERAGE-LEDGER.md` §3).
+- **SOP impact:** recorded in the concierge ledger (SOP-05a slice); grounding from SOP-05a §4, §5, §8, §9 in Phase D.
+
+---
+
 ## Ledger index (updated each slice)
 
 | SOP slice | Findings | Confirmed | Suspected |
@@ -438,3 +518,4 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 | SOP-02 Master Till / Store Safe | 13 new (1×S1, 6×S2, 6×S3) + re-confirmed F-00-7, F-00-8. **F-02-2 withdrawn** in SOP-03 (D19) → 12 standing | 13 (12 standing, 1 withdrawn) | 0 |
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
 | SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
+| SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status) | 17 | 0 |

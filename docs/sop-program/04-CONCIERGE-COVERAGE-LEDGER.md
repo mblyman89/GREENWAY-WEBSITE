@@ -187,3 +187,33 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
   - On monthly cards, Generate vendor leads and Enrich KB do nothing. Point people to **Draft vendor leads from these suppliers** (D34).
 - **Standing-request answer must be sourced:** WAC 44-14-04004(4) says an agency need not supply records created after the request. The concierge must not promise that the WSLCB will honor a standing request.
 
+### SOP-05a Inventory Core (`docs/sop/SOP-05a-inventory-core.md`, verified at `ac251766`)
+
+Concierge code is **unchanged** (record-only). Today the concierge's `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–180) has six one-line facts: lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts and Returns & Destruction. Nothing covers recalls, expiry, adjustments, lot status, the 86, restore to sale, tags, labs, labels or bulk fill (finding **F-05a-C**). The Inventory help panel is partly stale (F-05a-12), so it **must not** be used as grounding. What SOP-05a now provides:
+
+| Concierge topic | SOP-05a sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| `inventory` (expand) | §4.1–§4.3 screens and statuses, §4.4 daily Issues check (every row and its fix), §4.5 lot page, §4.21 corrections, §5.1 messages, form 8.3 | 🟡 → ✅ |
+| *new* `inventory-adjustments` | §4.6–§4.7 (procedure, reason → CCRS table, E13, forbidden reasons, theft/seizure), form 8.2 | 🔴 → ✅ (with caveats until G-23) |
+| *new* `recalls` | §4.10 placing and releasing a hold, §4.11 register behaviour and messages, §4.13 the written plan, §6 rows, forms 8.4–8.5, WAC 314-55-225 quotes | 🔴 → ✅ (paper plan until G-25) |
+| `pos` / `registers` (addition) | §4.11 recall messages for budtenders, §4.12 the 86, §4.22 low stock, §5.3 | 🟡 → ✅ |
+| *new* `expiry` | §4.14 sources, §4.15 Save / Preview / Apply, §4.16 expired and expiring soon, §5.2 messages incl. every skip reason | 🔴 → ✅ (expired-sale rule pending Q-05a-1) |
+| `inventory` (tags, labs, labels, bulk fill) | §4.17–§4.20, §5.4 | 🔴 → ✅ |
+
+**Role filter needed (strategy item 3):**
+- Every Inventory screen and action is `inventory.manage` (owner, admin, manager). Budtenders get §4.11 (recall messages), §4.12 (the 86) and §9 only.
+- The Expiration report is `reports.view` (includes read-only).
+- Releasing a recall hold: owner only by SOP rule (the app allows any manager; F-05a-2). Cannabis unit cost by bulk fill: owner or admin by SOP rule (F-05a-11).
+
+**Must ship with caveats** until the findings are fixed:
+- F-05a-1: never advise setting a lot to **Destroyed** on the lot page. Destruction is Returns & Destruction only.
+- F-05a-2 / F-04-2: Lifecycle status checks nothing and logs nothing. Always tell the user to write form 8.1 first, and Active only from a "now clear" Issues row.
+- F-05a-3 / F-05a-4: Adjust quantity does not stop at zero; always write a note.
+- F-05a-5 / F-05a-7: never advise **Destruction**, **Recall removal** or **Receive (add)** as adjustment reasons, even though the Issues text suggests the first.
+- F-05a-8: the register sells expired lots; the store rule (until Q-05a-1) is pull and quarantine.
+- F-05a-9: an 86 comes back on its own while units are on file.
+- F-05a-16: a recall hold does not hide the website card; advise **Always hide** on Product Enrichment.
+- Never tell anyone to destroy recalled product before the LCB is notified and the destruction is coordinated (WAC 314-55-225(3)(b)(i)(B)).
+
+**Running score:** topics with complete SOP source material add `inventory` (lot core), `inventory-adjustments`, `recalls` (paper plan), `expiry` (rule pending Q-05a-1). Baseline row touched: Inventory management 🟡 (§3), unchanged in code.
+
