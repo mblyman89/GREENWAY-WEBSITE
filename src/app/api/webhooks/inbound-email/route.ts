@@ -348,7 +348,7 @@ async function finish(
     // Append the fetch trail (what we pulled from Resend's receiving API + any
     // invoice/manifest links) so a human reviewing the inbound panel can see
     // exactly what arrived even when nothing parsed into a manifest.
-    note: fetchNote ? `${baseNote} — ${fetchNote}` : baseNote,
+    note: [baseNote, ...staged.notes, fetchNote].filter(Boolean).join(" — "),
   });
 
   return NextResponse.json(
