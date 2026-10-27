@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (draft for owner review; owner answers D29–D34 applied) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
-| **Applies to** | Everyone who handles a vendor delivery: the receiver who counts at the dock, the manager who works the Receiving screen and finalizes, the person who onboards new products onto the menu, and the owner, who files the monthly CCRS public records request and reviews the books |
+| **Applies to** | Everyone who handles a vendor delivery: the manager who processes the manifest (D30), any trained employee who helps count at the dock, the person who onboards new products onto the menu, the **admin** who files the monthly CCRS public records request on the 10th (D32), and the owner, who reviews the books |
 | **Verified against** | `main@5299660b` (2026-10-27). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel disagree, this SOP follows the code and records a finding. |
-| **Program records** | Findings `F-04-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-16`…`G-19` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D28 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner rulings on rejection in `docs/ccrs-rejection-and-returns.md` |
+| **Program records** | Findings `F-04-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-16`…`G-19` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D28–D34 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner rulings on rejection in `docs/ccrs-rejection-and-returns.md` |
 
 > **How to use this document.** Part 1 (§4.1–§4.24) is truck day, in the order the work happens: the manifest arrives, the truck arrives, you count, you refuse what is wrong, you press one Finalize button, and the new products go onto the menu. Part 2 (§4.25–§4.34) is the **monthly CCRS public records request**, which brings the state's market data in for the benchmarks. It is owner work, done once a month. Section 5 lists every message the screens can show, with what to do. Section 8 holds the paper forms. Section 9 is a one-page card for the receiving area. Words in **bold** are the exact labels you will see on the screen.
 
@@ -126,12 +126,16 @@ and set the standard for it when this slice began:
 | Menu match review, lot labels, Batch Lookups | Owner, admin, manager | `inventory.manage` (`intake/[id]/match/page.tsx` L54; `lots/[id]/label/page.tsx` L33; `batch-lookups/page.tsx` L58) |
 | Accounts Payable link on the Accounting tab | Owner, admin, manager | `payables.manage` (`roles.ts` L99) |
 | Review the books for a delivery (**Waiting to Post**) | Owner | `books.view`. Others see *"The owner reviews this in the books."* (`ManifestAccountingPanel.tsx`) |
-| File the monthly CCRS public records request; receive the files | **Owner** (until Q-04-4 is answered) | Outside the app (WSLCB portal) |
+| File the monthly CCRS public records request on the **10th**; receive the files | **Admin** only (D32). The owner may step in if the admin is away (Q-04-9) | Outside the app (WSLCB portal) |
 | Drop the monthly zip; manage the competitor roster; read Statewide Benchmarks | Owner, admin, manager | `inventory.manage` (`discovery/ccrs/page.tsx` L59; `discovery/competitors/page.tsx` L66; `discovery/benchmarks/page.tsx` L131) |
 | Read **Reports → Benchmarks** | Owner, admin, manager, readonly | `reports.view` (`reports/benchmarks/page.tsx` L81; `roles.ts` L149) |
 | Turn Product Discovery (and so the CCRS benchmarks) on or off | Owner, admin | `settings.manage` (`discovery/actions.ts` L99; `roles.ts` L248) |
 
-**Who may count?** Neither the owner's request nor the code limits the physical count to a manager. Any trained employee may count. The **screen work** needs a manager-level login, because every Receiving action needs `inventory.manage`. When a non-manager counts, they count on paper (form 8.1), and the manager enters the decisions and presses Finalize. Whether receivers without a manager login should get their own access is open question **Q-04-2**.
+**Who processes a manifest? A manager (D30).** The owner ruled: *"only managers will process manifests."* Every Receiving screen action already needs `inventory.manage` (owner, admin, manager), and no receiver-level access will be built. The manager is responsible for the whole manifest, from reading it before the truck to pressing Finalize.
+
+**Who may help count?** The manager may have another trained employee help with the **physical** count at the dock. Whoever counts signs form 8.1. The manager enters every decision on screen and presses Finalize. (That helpers may count is my reading of D30 and the owner's earlier practice; open question **Q-04-7** confirms it.)
+
+**Second count (D31).** A second person re-counting is **not required**, but it is **strongly recommended**, and it is **expected on the first delivery from a vendor Greenway has not received from before** (§4.9).
 
 ---
 
@@ -331,7 +335,11 @@ The screen's own words for the Qty column: *"Shipped quantity from the manifest.
 3. **Mark the line on form 8.1:** ✔ (count matches and condition is good), or the problem in words ("18 of 20", "2 crushed", "wrong strain").
 4. **Lines that are correct need nothing on screen.** They say **Will accept**: *"Nothing to press: Finalize accepts this line unless you reject it."* (`ManifestLotDisposition.tsx` L138–143).
 5. **Lines that are wrong are refused at the dock now** (§4.10, §4.11). Do this while the driver is still here, so the product can leave on the truck.
-6. **Every line counted? Every problem refused?** Sign form 8.1 as the counter. If a second employee checked the count, they sign too (whether that should be required is open question Q-04-3).
+6. **Second count: strongly recommended (D31).** The owner's rule: *"no second count required, it should be highly suggested, especially for new vendors we havent received from before."* So:
+   - **First delivery from this vendor?** Treat a second count as expected. A second trained employee recounts every line and signs form 8.1. If nobody else is on shift, the manager writes "single count, first delivery, nobody available" on form 8.1.
+   - **Any other delivery:** a second count is a good habit, especially for high-value lines or anything that looked short, damaged or odd on the first pass.
+   - **How to tell it is a first delivery.** The app has no "new vendor" marker (gap G-21). Before the truck arrives, the manager opens **Receiving**, clicks the **All** view, and picks the vendor in the **Vendor** filter (`ReceivingFilterBar.tsx` L101–111). No earlier manifest from that vendor means it is a first delivery. With a filter on, the list reads only the newest 1,000 manifests (`intake/page.tsx` L156–160), so an old vendor coming back after a long gap may also look new. Treat it as new. Tick the box on form 8.1.
+7. **Every line counted? Every problem refused?** Sign form 8.1 as the counter. The second counter signs too.
 
 > **No partial quantities.** The system cannot record "18 received of 20". Each line is accepted **whole** or refused **whole** (finding F-04-1; the received quantity is taken from the manifest, `intake-parser.ts` L606). Read §4.11 before you accept any line that is short.
 
@@ -357,9 +365,9 @@ The screen's own words for the Qty column: *"Shipped quantity from the manifest.
 
 ### 4.11 Short counts (interim rule)
 
-The system has no way to receive part of a line (F-04-1, gap G-16). Until the owner decides (Q-04-1), follow this. It matches the owner's own practice of *"We just tell the vendor to take it back with them"*:
+The system has no way to receive part of a line (F-04-1, gap G-16). **The owner has ruled that this must be built and is on the list of serious issues to fix** (D29: *"we need a way to accept less than what came in"*; F-04-1 is now **S1**, G-16 **APPROVED**). **Until it is built**, follow this interim rule. It matches the owner's own practice of *"We just tell the vendor to take it back with them"*:
 
-1. **Recount** with a second person. Many shorts are miscounts.
+1. **Recount** with a second person. Many shorts are miscounts. A short line is one of the times a second count matters most (D31).
 2. **Still short? Refuse the whole line** with **Short shipment — vendor forgot it / came up short**. Write the real count in form 8.2 (for example "18 of 20 — refused whole line").
 3. **The physical units go back with the driver.** Ask the vendor to Update or Delete the line in CCRS (§4.24) and re-send the correct quantity on a new manifest if you still want it.
 4. **Do not** accept the line and then "fix" the number with an inventory adjustment.
@@ -599,21 +607,22 @@ The program's records add that the owner's WSLCB enforcement officer confirmed t
 
 ### 4.26 The monthly timeline at a glance
 
-The owner's rule is *"once per month to get the previous months data"* (L276–289). The calendar below is the **recommended** rhythm. The day of the month and the person who files are open question **Q-04-4**. Until it is answered, the owner files.
+The owner's rule is *"once per month to get the previous months data"* (L276–289). The owner set the day and the person: *"only admin will file monthly requests, on the 10th of the month"* (D32). If the 10th falls on a weekend or holiday, file on the next business day (my reading; the portal accepts requests any day, but the records office works business days).
 
 | When | Step | Who | Section |
 |---|---|---|---|
-| In the first business days of the month | File the request for **the previous calendar month** | Owner | §4.27 |
-| The same day | Write the tracking number on form 8.4 | Owner | §4.28 |
+| **The 10th** (next business day if it falls on a weekend or holiday) | File the request for **the previous calendar month** | **Admin** | §4.27 |
+| The same day | Write the tracking number on form 8.4 | Admin | §4.28 |
 | Within 5 business days | The WSLCB acknowledges, with the records or a time estimate (`ccrs/page.tsx` L245–248) | WSLCB | §4.28 |
-| Every week until delivery | Check the portal and email; answer any WSLCB question the same day | Owner | §4.28 |
-| The day the files arrive | Download the zip, store it untouched, log it | Owner | §4.29 |
-| Before dropping | Check the competitor roster | Owner or manager | §4.30 |
-| The same day or next | Drop the zip on **CCRS Benchmarks**, keep the tab open until it finishes | Owner or manager | §4.31 |
-| Straight after | Check the saved dataset | Owner or manager | §4.32 |
+| Every week until delivery | Check the portal and email; answer any WSLCB question the same day | Admin | §4.28 |
+| The day the files arrive | Download each month's zip, store it untouched, log it | Admin | §4.29 |
+| Before dropping | Check the competitor roster | Admin or manager | §4.30 |
+| The same day or next | Drop the zip on **CCRS Benchmarks**, keep the tab open until it finishes. **One month's zip at a time** | Admin or manager | §4.31 |
+| Straight after | Check the saved dataset | Admin or manager | §4.32 |
+| Monthly, on the same day | Check for months older than 18 months; remove them under the retention rule | Admin (owner approves) | §4.34 |
 | Through the month | Use the benchmarks for buying and pricing | Owner, manager, purchaser | §4.33 |
 
-> **Nothing in the app reminds you.** The compliance calendar has no task for this request. Its tasks are the LIQ-1295, weekly CCRS, CCTV retention, scale calibration, badge and visitor log, and DOR excise items (`src/lib/compliance/compliance-calendar-core.ts` L86–136). This is finding **F-04-19** and gap **G-18**. Until it is built, **form 8.4 is the reminder.** Keep it at the front of the receiving binder and check it on the first business day of each month.
+> **Nothing in the app reminds you.** The compliance calendar has no task for this request. Its tasks are the LIQ-1295, weekly CCRS, CCTV retention, scale calibration, badge and visitor log, and DOR excise items (`src/lib/compliance/compliance-calendar-core.ts` L86–136). This is finding **F-04-19** and gap **G-18**. Until it is built, **form 8.4 is the reminder.** Keep it at the front of the receiving binder. The admin also puts a **recurring calendar reminder on the 10th** in their own calendar (phone or email), since the app has none yet.
 
 ### 4.27 Step A: file the request with the WSLCB
 
@@ -626,7 +635,7 @@ The app's own instructions are under **Step 1 — Request the data from the WSLC
 1. **Open the WSLCB Public Records Center:** `https://lcbwa.govqa.us/WEBAPP/_rs/` (the link on the page, L29, L222–227).
    - **First time only:** *"Create a free account (name + email) so they can deliver the files to you."* Use an email address the owner reads every day; the delivery link and any WSLCB questions come to it.
    - Write down which email the account uses on form 8.4, so the next person can find the deliveries.
-2. **Start a new request.** The app says: *"In the description box, paste the request wording from the panel on the right and fill in your date range. Ask for the CCRS (Cannabis Central Reporting System) transactional extracts."* (L231–236).
+2. **Start a new request.** (If the WSLCB has agreed to a recurring monthly request, see "Standing request" at the end of this section first.) The app says: *"In the description box, paste the request wording from the panel on the right and fill in your date range. Ask for the CCRS (Cannabis Central Reporting System) transactional extracts."* (L231–236).
 3. **The wording.** The app's **Copy-paste request wording** panel (L272–276, text at L32–36) says:
 
    ```text
@@ -637,12 +646,12 @@ The app's own instructions are under **Step 1 — Request the data from the WSLC
    via the records portal. Thank you.
    ```
 
-   > **Read this before you paste it (finding F-04-18).** The app's wording names only five extracts: Sales, Products, Inventory, Lab Results and Strain. The transformer that reads the zip also uses **Licensee**, **SaleHeader** and **SalesDetail** (the two halves of Sales), **ManifestHeader** and **TransportedItems** (`src/lib/discovery/ccrs-extract/run.ts` L68–80). It **refuses** a zip that has no SaleHeader and SalesDetail: *"The zip produced no sales rollups. It should be the full monthly CCRS delivery (with SaleHeader and SalesDetail zips inside)."* (`discovery/actions.ts` L831–836).
+   > **This is the owner's wording (D32).** The owner uses this built-in text: *"I use the built in text provided in the ccrs benchmark page."* It is the wording that produced the April and May 2026 deliveries, so **use it word for word.** The only thing to change today is the two dates:
+   > 1. **[START DATE]** = the 1st of the first month you want; **[END DATE]** = the last day of the last month you want. For last month only, for example: `October 1, 2026` through `October 31, 2026`.
+   > 2. **Several months in one request is fine.** The owner confirmed that *"each month is sent as its own zip file"* (D32). For example, a catch-up request for August 1 through October 31 comes back as three zips. Each is dropped **on its own** (§4.31).
+   > 3. **Do not add or remove tables.** The program's earlier caution (F-04-18) noted the text names five extracts, while the transformer reads nine tables (`ccrs-extract/run.ts` L68–80). The owner's deliveries using this text were the full extract (49 and 64 nested table zips, `ROADMAP_BACKOFFICE_FIXES.md` L208–212), so the text works. If a delivery ever comes back **without** sales tables, the drop says *"The zip produced no sales rollups…"* (`discovery/actions.ts` L831–836). Reply on the portal with the tracking number and ask for the full monthly extract including SaleHeader and SalesDetail (§6).
    >
-   > The April and May 2026 deliveries the back office was built on were the **full** extract, 49 and 64 nested table zips (`ROADMAP_BACKOFFICE_FIXES.md` L208–212). So:
-   > 1. **If you still have the wording you used for the April and May 2026 requests, use that wording, word for word,** and change only the dates. It is the wording proven to produce a zip the transformer reads. Copy it onto form 8.4 so it is never lost. (Q-04-4 asks the owner for it so it can go into this SOP.)
-   > 2. **If you do not have it,** use the app's wording but, after "Strain", add the other tables by name: Licensee, SaleHeader, SalesDetail, ManifestHeader and TransportedItems. Or ask for **"all CCRS tables in the monthly extract"**. The exact sentence is the owner's call; this SOP does not invent request language for the owner.
-   > 3. **Ask for one calendar month.** Fill **[START DATE]** with the 1st of last month and **[END DATE]** with its last day (for example 2026-10-01 through 2026-10-31). The app's dataset is labelled by month (§4.32), so one month per request keeps the history clean.
+   > **Coming (gap G-18, approved by the owner):** a **month drop-down** on this panel that picks one month or several and fills the dates into the text, so it can be copied and sent **without editing**. Until then, type the dates.
 
 4. **Delivery.** *"Choose electronic delivery (the default). CCRS extracts are large flat files — you'll receive them as CSVs, often zipped, via a download link."* (L238–243). In practice it is one zip of roughly 0.7–1 GB (April 2026 ~713 MB, May 2026 ~990 MB; `ROADMAP_BACKOFFICE_FIXES.md` L207–209).
 5. **Submit.** *"You'll get a confirmation with a tracking number. The WSLCB acknowledges within 5 business days and provides the records or a reasonable time estimate."* (L245–248). Go straight to §4.28.
@@ -655,7 +664,10 @@ The app's own instructions are under **Step 1 — Request the data from the WSLC
 
 The WSLCB also publishes a paper request form, **LIQ 826**, for mail, fax or email requests. The portal is faster and keeps the history in one place, so use the portal.
 
-**Is a standing (repeating) request possible?** This SOP does not know. A records request covers records that already exist on the day it is processed, so it is normal to file a new one each month. Whether the records office will accept a standing monthly request is part of **Q-04-4**. Ask them, and record the answer on form 8.4.
+**Standing request (D32).** The owner wants a standing monthly request. The legal position, from Washington's model rules: *"An agency must only provide access to public records in existence at the time of the request. An agency is not obligated to supplement responses… A requestor must make a new request to obtain subsequently created public records."* (WAC 44-14-04004(4)). So the WSLCB **may** decline a request for future months. They are not required to accept one. The procedure:
+1. **Ask once.** The next time you file, add one line in the portal message or email `lcbpublicrecords@lcb.wa.gov`: *"Would the Public Records office accept a standing request for this same CCRS extract each month, for the previous calendar month?"* Write the answer and the date on form 8.4.
+2. **If they say yes:** on the 10th, the admin **checks that last month's request is open or delivered** (form 8.4 part B) instead of filing a new one. Keep the reminder; the 10th is still the check date.
+3. **If they say no, or do not answer:** file a new request every 10th, as above. With the month drop-down (G-18) this takes about two minutes.
 
 ### 4.28 Step B: track the request until the files arrive
 
@@ -672,10 +684,10 @@ The WSLCB also publishes a paper request form, **LIQ 826**, for mail, fax or ema
 
 ### 4.29 Step C: download and store the zip, untouched
 
-1. **Download from the delivery link** to the computer you will drop it from. Use a desktop or laptop, not a phone or tablet (§4.31).
+1. **Download from the delivery link** to the computer you will drop it from. A multi-month request arrives as **one zip per month** (D32). Download each one. Use a desktop or laptop, not a phone or tablet (§4.31).
 2. **Do not unzip it. Do not rename the files inside it. Do not re-zip it.** The transformer wants *"the ONE big zip from the WSLCB delivery"* exactly as delivered, *"nested zips and all"* (`ccrs/page.tsx` L289; `CcrsZipUploader.tsx` L209–214).
    > **The app's Step 1, item 5 is out of date (finding F-04-14).** It says *"When the files arrive, unzip them and upload them in Step 2 below. File names usually look like Sale_*.csv, Product_*.csv…"* (L250–256). That described an older path. The real delivery is one outer zip holding per-table zips named like `<Table>_<n>.zip`; big tables are split into chunks of at most 1,000,000 rows (`ccrs-extract/zip.ts` L1–20). **Do not unzip.** Go to §4.31.
-3. **Keep a copy.** Save the original zip to the owner's chosen backup location (an external drive or the owner's cloud storage). Name the folder by month, for example `CCRS PRR 2026-10`. The back office **does not keep the raw file**. It is crunched in the browser and only the small rollups are saved (`ccrs/page.tsx` L306–308). If a month ever has to be re-done (§4.34), you need the original.
+3. **Keep a copy.** Save the original zip to the owner's chosen backup location (an external drive or the owner's cloud storage). Name the folder by month, for example `CCRS PRR 2026-10`, one folder per month. Keep the backup copy **on the same 18-month schedule** as the datasets (§4.34, D33), so the raw data does not outlive the retention rule. The back office **does not keep the raw file**. It is crunched in the browser and only the small rollups are saved (`ccrs/page.tsx` L306–308). If a month ever has to be re-done (§4.34), you need the original.
 4. **Write it on form 8.4:** date received, file name, file size.
 5. **The file is large and contains every licensee's data.** Keep it on Greenway equipment only. Do not email it or put it in a shared chat. The legal limit in §4.25 applies to the raw file too.
 
@@ -725,6 +737,13 @@ The zip is read against Greenway's **Competitor Roster**: the list of license nu
    - **Check the dates.** They should be the month you asked for. The period is taken from the month that most sales in the file belong to (`discovery/actions.ts` L838–841; `ccrs-extract/aggregate.ts` L2350–2371).
 6. **If it fails,** the box shows the reason and *"Nothing was saved. Fix the file (it should be the original monthly delivery zip) and drop it again."* (L258–259). See §5 for each reason. **A failed drop never removes an earlier good month** (`discovery/actions.ts` L847–852).
 
+**One month at a time (D32).** The owner: *"each month is sent as its own zip file. So I can only upload one months zip file at a time."* The drop box takes one `.zip` per run (`CcrsZipUploader.tsx` L198, L209). For a catch-up of several months:
+1. Drop the **oldest** month first and wait for its finish message.
+2. Check its card (§4.32), then drop the next month.
+3. Each zip becomes its own card, **CCRS monthly · YYYY-MM**, named from the month most of its sales fall in (`aggregate.ts` L2347–2368; `discovery/actions.ts` L842–845).
+
+Oldest-first is my recommendation, so the history table fills in order. The app lines months up by period either way (`market-rollups.ts` L933–945). If you drop the same month twice, the second run **replaces** the first (§4.34).
+
 **What the transformer reads and skips.** It reads the tables in a fixed order: Licensee, Strains, ManifestHeader, TransportedItems, Product, Inventory, LabResult, SaleHeader, SalesDetail (`run.ts` L68–80). It deliberately skips grower and lab-side tables: Areas, Contacts, Harvest, Integrator, InventoryAdjustment, InventoryPlantTransfer, Plant and PlantDestructions (`parse.ts` L173–182). You do not need to remove anything from the zip.
 
 **What gets saved.** One dataset, labelled **CCRS monthly · YYYY-MM** (`discovery/actions.ts` L842–845), with its statewide benchmarks, competitor profiles and market signals already computed. The action writes an audit row `discovery.ccrs.monthly_zip` with the file name, period, totals and any replaced dataset ids. A failure writes `discovery.ccrs.monthly_zip.error` (L875–903).
@@ -747,13 +766,13 @@ Scroll to **Step 3 — Compute benchmarks & generate leads** on the same page (L
 
 ### 4.33 Step G: read and use the benchmarks
 
-**The three buttons on the dataset card: do NOT use them on a monthly card.** The card shows **Compute benchmarks**, **Generate vendor leads** and **Enrich KB** (L404–421). They belong to the older per-file upload path:
+**The three buttons on the dataset card: do NOT use them on a monthly card.** The card shows **Compute benchmarks**, **Generate vendor leads** and **Enrich KB** (L404–421). They belong to the older per-file upload path. **The owner adopted the professional fix (D34): show only the buttons that work for each kind of dataset.** On monthly cards these three will be hidden (gap G-20). Until then:
 
 | Button | What happens on a **CCRS monthly** card |
 |---|---|
 | **Compute benchmarks** | Refused, safely: *"This dataset came from the monthly zip transformer — its benchmarks are already computed. Re-drop the zip to recompute."* (`discovery/actions.ts` L598–609). Nothing is lost. |
 | **Generate vendor leads** | Enabled, but it reads a table the monthly zip never fills, so it creates no leads (`benchmarks.ts` L410–432, L372). Finding **F-04-15**. Use **Draft vendor leads from these suppliers** on the Leads page instead (below). |
-| **Enrich KB** | Same problem. It reads the older per-file products table (`ingest.ts` L251), so a monthly card adds nothing (F-04-15). |
+| **Enrich KB** | Same problem. It copies brand and product facts into the knowledge base from the older per-file products table (`enrich-from-discovery.ts` L134; filled only by the per-file upload, `ingest.ts` L148), so a monthly card adds nothing (F-04-15). The per-file upload already runs it by itself (`discovery/actions.ts` L549–583). |
 
 **Statewide view: CCRS Benchmarks.**
 - Open **Product Intake → CCRS Benchmarks**. Title **Statewide Benchmarks**, subtitle *"Statewide prices, $/gram, brand & strain premiums, velocity and month-over-month trends — from the monthly CCRS drop."* (`discovery/benchmarks/page.tsx` L214–215).
@@ -785,11 +804,22 @@ Scroll to **Step 3 — Compute benchmarks & generate leads** on the same page (L
 - the roster changed (§4.30) and you want the new store in that month; or
 - the WSLCB sends a corrected file.
 
-**Removing a month.** The red **Delete** button on a card **deletes the month and all its benchmarks at once, with no "are you sure?" step** (`ccrs/page.tsx` L422–425; `discovery/actions.ts` L770–788). It is audited (`discovery.ccrs.delete`), but it cannot be undone except by dropping the original zip again. Finding **F-04-16**. The rule:
-- **Only the owner deletes a month.**
-- Only an **Error** card or a mistaken upload.
-- Check the label twice before pressing.
-- Whether months should ever be deleted at all is open question **Q-04-5**.
+**Removing a month: the 18-month retention rule (D33).** The owner set the rule: *"delete after 18 months."* 18 months always keeps the last full year plus six months. Every recent month can be compared with the same month last year, which is what seasonal buying needs. Until the automatic purge (gap G-20) is built:
+1. **When:** on the 10th, after filing (§4.26), the admin looks at the cards in **Step 3**.
+2. **What is due:** a card whose month **ended more than 18 months ago**. Count from the **end of the data month**, not the upload date. Example: on 2026-11-10, **CCRS monthly · 2025-04** (ended 2025-04-30) is past 18 months (2026-10-31) and is due. **2025-05** is not due until the 2026-12 check.
+3. **Hold:** if the owner wants a month kept longer (for example, a special analysis), write **HOLD** and the reason on form 8.4. Held months are not removed.
+4. **Approve:** the admin tells the owner which months are due. The owner approves by initialling form 8.4. Deleting has no "are you sure?" today (F-04-16), so the person pressing must **read the card name aloud and compare it with form 8.4** before pressing the red **Delete**. Deletion removes the month **and all its benchmarks at once** (`ccrs/page.tsx` L422–425; `discovery/actions.ts` L770–788; cascade per `ingest.ts` L81). It writes an audit row `discovery.ccrs.delete`.
+5. **The raw zip too:** delete that month's backup folder (§4.29) the same day, and note it on form 8.4.
+6. **What deleting changes:** the month leaves the History table and the month-over-month trend, and it no longer counts in supplier "first appearance" checks (`supplier-history-core.ts` L7–28). That is why the cut-off is a fixed rule, not an ad-hoc click.
+
+**Other deletes** (an **Error** card or a mistaken upload) follow the same read-aloud check, owner approval only.
+
+**This rule covers only the statewide benchmark datasets.** Greenway's **own** receiving records (manifests, lots, the truck-day sheet, refusal logs) are business records kept **five years** under WAC 314-55-087(1). They are never part of the 18-month purge.
+
+**Coming (gap G-20, approved under D33/D34):**
+- A typed "are you sure?" that names the month.
+- An automatic monthly purge at 18 months, with a 30-day notice on the page, a **hold** flag and an audit row.
+- The month-level headline numbers optionally kept longer for long-run trends (Q-04-8).
 
 **The older per-file upload.** Below Step 2 is **Advanced — upload individual CSV files**: *"The older per-file path… Use the zip drop above for the monthly extract."* (L321–323). **Do not use it for the monthly delivery.** It exists for targeted uploads and needs a manual **Compute benchmarks** afterwards. Its flash message *"Uploaded and ingested N rows… Now click Compute benchmarks"* (L170–175) applies only to that path.
 
@@ -883,7 +913,9 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **The monthly records request has had no answer in 5 business days** | Call (360) 664-1753 or email with the tracking number (§4.28) | Owner |
 | **The WSLCB delivered the wrong month or only some tables** | Do not drop it. Reply on the portal with the tracking number and ask for the full month (§4.27) | Owner |
 | **The zip drop failed** | §5.3. Never unzip "to help" | Owner; developer if it repeats |
-| **Someone deleted a month by mistake** | Drop the original zip again (§4.29 keeps a copy) | Owner |
+| **Someone deleted a month by mistake** | Drop the original zip again (§4.29 keeps a copy for 18 months) | Owner |
+| **The WSLCB declines a standing monthly request** | File a new request every 10th (§4.27) | Admin |
+| **A first delivery from a new vendor, and nobody can second-count** | Single count is allowed (D31). Write "single count, first delivery, nobody available" on form 8.1 | Manager |
 | **Someone wants a copy of the CCRS data or the benchmarks** (vendor, other store, reporter) | The answer is no (§4.25) | Owner |
 
 ---
@@ -894,7 +926,10 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 |---|---|---|
 | **Count every line before Finalize** | Finalize accepts every line not rejected (`intake-store.ts` L1416). The count is the only check a human does | R31 design; owner quote in §1 |
 | **Refuse at the dock, never "accept then fix"** | Refused product was never Greenway's, so nothing is filed with CCRS. Accepting and adjusting misstates the weekly InventoryTransfer quantity | `docs/ccrs-rejection-and-returns.md` L15–21; `ccrs-transfer-core.ts` L33–36 |
-| **No partial quantities; refuse the whole short line** | The system cannot record "18 of 20" (F-04-1, G-16) | Interim rule §4.11; Q-04-1 |
+| **No partial quantities; refuse the whole short line** | The system cannot record "18 of 20" (F-04-1, **S1**, G-16 **APPROVED**, D29) | Interim rule §4.11 until G-16 is built |
+| **Only managers process manifests** | Owner rule D30; matches `inventory.manage` | §2 |
+| **Second count strongly recommended; expected on a first delivery** | Owner rule D31 | §4.9 |
+| **Benchmark months kept 18 months, then removed on the 10th with owner approval** | Owner rule D33; a fixed schedule protects the history | §4.34 |
 | **No return manifest for driver-present refusals** | Contingency manifests are discontinued (WSLCB, Nov 2025); the vendor updates or deletes their own manifest | `[id]/page.tsx` L1341–1357 |
 | **A reason for every refusal; a note for every partial finalize** | The permanent timeline shows why stock did not arrive | `intake-disposition-core.ts` L68–84, L150–168 |
 | **The go-live check** (CCRS id, lab result, not FAILED) | WAC 314-55-102: no retail sale without a passing COA | `lot-activation-gate-core.ts` L76–107 |
@@ -909,7 +944,7 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **PRR data for internal buying and pricing only** | RCW 42.56.070(8) commercial-use limit | `ccrs/page.tsx` L278–280; roadmap L19–23 |
 | **Monthly request logged on form 8.4** | The app has no reminder and no tracking-number field (F-04-19, G-18) | §4.26, §4.28 |
 | **Original zip kept untouched** | The app keeps only rollups; re-doing a month needs the original | §4.29 |
-| **Only the owner deletes a benchmark month** | Delete has no confirmation (F-04-16) | §4.34 |
+| **A benchmark month is deleted only with owner approval and a read-aloud check** | Delete has no confirmation (F-04-16; typed confirm approved, D34) | §4.34 |
 | **Every benchmark action is audited** | `discovery.ccrs.monthly_zip`, `.error`, `discovery.ccrs.delete`, `discovery.toggle` | `discovery/actions.ts` L99–112, L770–788, L875–903 |
 
 ---
@@ -926,6 +961,7 @@ BEFORE THE TRUCK (manager, from the review screen)
   Source: [ ] email (In transit)  [ ] manual import (Pending)  [ ] CSV/PDF only — needs COA/cost
   Review flags read?  [ ] yes   Lines with no COA (—): ____   Unmapped category: [ ] none
   PO linked?  [ ] yes  PO # ________   [ ] no PO (sample / walk-in)
+  FIRST delivery from this vendor? (Receiving → All → Vendor filter, §4.9)  [ ] yes → 2nd count expected  [ ] no
   ETA ____________   Overdue calls (time · who · answer) ______________________________
 
 ARRIVAL (§4.8)
@@ -943,7 +979,9 @@ COUNT (§4.9) — one row per manifest line, in screen order
   (continue on the back)
 
   Lines refused on screen (✕ Reject) ____   → each one also on form 8.2
-  Counted by (print + sign): ____________________   Second check (if any): ________________
+  Counted by (print + sign): ____________________   Second count (strongly recommended, D31): ________________
+  [ ] Single count only — reason (first delivery + nobody available / other): ____________________
+  Manager processing this manifest (D30): ____________________
 
 FINALIZE (manager, §4.17)
   Button read: "✓ ____________________________________ & Finalize"
@@ -977,23 +1015,23 @@ Date opened | Manifest # | Vendor | What we asked for                           
 ### 8.4 Monthly CCRS records request log (the reminder until gap G-18 is built)
 
 ```
-GREENWAY — MONTHLY CCRS PUBLIC RECORDS REQUEST                Month requested: ____-____
+GREENWAY — MONTHLY CCRS PUBLIC RECORDS REQUEST       Month(s) requested: ____-____ to ____-____
 ================================================================================
-CHECK ON THE FIRST BUSINESS DAY OF EVERY MONTH.  Data use: internal buying & pricing ONLY
+ADMIN FILES ON THE 10TH OF EVERY MONTH (next business day if weekend/holiday).  Data use: internal buying & pricing ONLY
 (RCW 42.56.070(8)).  Do NOT share files or benchmarks outside Greenway.
 
-A  FILE (§4.27)      Filed by ____________   Date ____/____/______
+A  FILE (§4.27)      Filed by (admin) ____________   Date ____/____/______
+   Standing request? Asked WSLCB on ________  Answer: [ ] yes — check only  [ ] no — file monthly
    Portal: https://lcbwa.govqa.us/WEBAPP/_rs/     Account email: ______________________
-   Period asked: ____-____-01 through ____-____-____  (one calendar month)
-   Wording: [ ] same as last month  [ ] new — copy it on the back
-   Tables asked for include Licensee, SaleHeader, SalesDetail?  [ ] yes
+   Period asked: ____-____-01 through ____-____-____  (one month, or several — one zip per month)
+   Wording: [ ] built-in text from the CCRS Benchmarks page, dates only changed (D32)
    TRACKING #: ______________________
 
 B  TRACK (§4.28)     Acknowledged (date) ________  Estimate / due date ________
    WSLCB questions answered (date · what) ___________________________________________
    Chased (date · phone (360) 664-1753 / email lcbpublicrecords@lcb.wa.gov) _____________
 
-C  RECEIVE (§4.29)   Received (date) ________   File name ____________________  Size ______
+C  RECEIVE (§4.29)   Received (date) ________   Zips (one per month): ________________  Sizes ______
    Backup copy saved (where) _______________________   [ ] NOT unzipped / renamed
 
 D  ROSTER (§4.30)    Roster checked [ ]  Stores added/turned off: ______________________
@@ -1006,12 +1044,19 @@ E  DROP (§4.31)      Dropped by ____________  Computer/browser ________  Start 
 
 F  CHECK (§4.32)     Card "CCRS monthly · ____-____"  Badge [ ] Ready   Sales chip ________
    One card only for this month [ ]       Checked by ____________   Date ________
+   (several months: drop and check one at a time, oldest first — repeat E/F per month)
+
+G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
+   Months now due: ______________________   HOLD (month · reason · owner initials): ____________
+   Owner approval (initials) ______   Card name read aloud & matched [ ]   Deleted by ______  Date ______
+   Backup zip folder for the same month(s) deleted [ ]
 ```
 
 ### 8.5 Manager Finalize checklist (read before pressing the button)
 
 ```
 [ ] Every line counted and marked on form 8.1 (by me or a trained employee who signed it)
+[ ] Second count done — or the single-count reason written (expected on a FIRST delivery, D31)
 [ ] Every short / broken / wrong / overage line shows "✕ Rejected at dock" with a reason
 [ ] Refused product is back on the truck; form 8.2 filled
 [ ] Transport details saved; driver + plate checked; seal numbers in Route notes
@@ -1036,6 +1081,7 @@ F  CHECK (§4.32)     Card "CCRS monthly · ____-____"  Badge [ ] Ready   Sales 
 │ TRUCK: check driver + plate against the manifest. Mismatch → don't unload, call manager.  │
 │   Save transport details. Seal numbers → Route notes.                                     │
 │ COUNT every line: name · lot · units · condition. Mark form 8.1.                          │
+│   2nd count strongly suggested — EXPECTED on a vendor's first delivery. Manager decides.  │
 │ GOOD line → touch nothing ("Will accept").                                                │
 │ BAD line → ✕ Reject → reason → ✕ Confirm reject → product leaves WITH THE DRIVER.         │
 │   SHORT? recount → still short → refuse the WHOLE line. Never "accept then adjust".       │
@@ -1045,11 +1091,13 @@ F  CHECK (§4.32)     Card "CCRS monthly · ____-____"  Badge [ ] Ready   Sales 
 │ Refused product: we file NOTHING with CCRS. Vendor does Update/Delete. NO return manifest.│
 │ ⚠ Lot page "Lifecycle status" skips the safety check — only from a "now clear" Issues row.│
 │                                                                                           │
-│ MONTHLY (owner): file the CCRS records request for LAST month → log tracking # on 8.4 →   │
-│   download the ONE zip, DON'T unzip → check roster → drop on CCRS Benchmarks, keep the tab │
+│ MONTHLY (ADMIN, the 10th): file CCRS records request for LAST month (built-in text) →     │
+│   log tracking # on 8.4 → each month = its own zip, DON'T unzip → roster → drop ONE month │
+│   at a time on CCRS Benchmarks, keep the tab                                              │
 │   open (up to ~1.5 h) → card "CCRS monthly · YYYY-MM" = Ready. Internal use ONLY.         │
 │   Don't press Compute / Generate vendor leads / Enrich KB / Delete on a monthly card.     │
 │   Records office phone: (360) 664-1753 (the app's 664-1769 is wrong).                     │
+│   Months > 18 months old (from month end): remove on the 10th, owner approves, + backup.  │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1127,28 +1175,33 @@ F  CHECK (§4.32)     Card "CCRS monthly · ____-____"  Badge [ ] Ready   Sales 
 
 | Need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
-| Receive part of a line ("18 of 20") | Accept whole or refuse whole only | Refuse the whole short line; vendor re-sends (§4.11) | G-16 · F-04-1 · Q-04-1 |
+| Receive part of a line ("18 of 20") | Accept whole or refuse whole only | Refuse the whole short line; vendor re-sends (§4.11) | G-16 (**APPROVED**, D29) · F-04-1 (S1) |
 | See emails that failed to stage | Logged, shown nowhere | Daily email-vs-list comparison (§4.3) | G-17 · F-04-4 |
 | Monthly PRR reminder and tracking | No calendar task; no tracking # field | Form 8.4 (§4.26–§4.28) | G-18 · F-04-19 |
 | Activate a now-clear held lot safely | Lifecycle status writes any status, no gate, no audit | Manager only, from a "now clear" row, logged on 8.1 (§4.19) | G-19 · F-04-2 |
 | Key cost / COA for a CSV or PDF import | Banner says to; no field | Get the JSON or link; otherwise owner follow-up (§4.5, §4.20) | F-04-10 |
-| Record who counted | Not in the app | Form 8.1 signatures (§4.9) | Q-04-2, Q-04-3 |
-| Confirm before deleting a benchmark month | Deletes on one press | Owner only, check twice (§4.34) | F-04-16 · Q-04-6 |
+| Record who counted; mark a first delivery from a vendor | Not in the app | Form 8.1 signatures and the first-delivery box (§4.9) | G-21 · D30 · D31 |
+| Confirm before deleting a benchmark month; 18-month retention; hide dead buttons | Deletes on one press; no purge; dead buttons shown | Read-aloud check, owner approval, monthly retention check on form 8.4 (§4.33–§4.34) | G-20 (**APPROVED**, D33/D34) · F-04-15 · F-04-16 |
+| Month drop-down in the request text; reminder on the 10th; tracking-number field | Free-text dates; no reminder | Type the dates; admin's own calendar reminder; form 8.4 (§4.26–§4.28) | G-18 (**APPROVED** in part, D32) · F-04-19 |
 | Turn Discovery off from the screen | No off control | Developer (§4.34) | F-04-20 |
 
 ## Appendix C: Open questions for the owner
 
 | # | Question | Why it matters | Interim rule in this SOP |
 |---|---|---|---|
-| **Q-04-1** | When a line is **short** (for example 18 of 20), do you want to (a) keep refusing the whole line, as today, or (b) have a feature built to accept the 18 and record the 2 as refused? | The system cannot record a partial quantity (F-04-1). Option (b) is gap G-16 and also changes what the weekly InventoryTransfer reports. | Refuse the whole line (§4.11). |
-| **Q-04-2** | Should receivers **without** a manager login get their own access to count and refuse lines on screen (but not Finalize)? | Every Receiving action needs `inventory.manage` today. | Non-managers count on paper; a manager enters it (§2). |
-| **Q-04-3** | Must a **second person** check every count at the dock, or only for high-value or problem deliveries? | No second-count rule exists for receiving (SOP-01/03 use one for cash). | Optional second signature on form 8.1 (§4.9). |
-| **Q-04-4** | For the monthly CCRS request: **who** files it, on **which day** of the month, is a **standing** monthly request possible, and what **exact wording** did you use for the April and May 2026 requests? | The app's wording omits tables the transformer needs (F-04-18). The SOP will not invent request language. | Owner files in the first business days; reuse the proven wording; log on form 8.4 (§4.27). |
-| **Q-04-5** | Keep **every** monthly dataset forever (for history), or delete months after a set time? | Delete has no confirmation and cannot be undone without the original zip. | Keep all months; owner-only delete (§4.34). |
-| **Q-04-6** | (Optional) Should the dataset **Delete** button ask "are you sure?", and should **Generate vendor leads** / **Enrich KB** be hidden on monthly cards? | F-04-15, F-04-16. Recorded only; nothing is changed without your go-ahead. | Do not press them on monthly cards (§4.33). |
+| **Q-04-1** | Short lines: refuse whole, or build partial receive? | **Answered (D29):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* G-16 **APPROVED**; F-04-1 → **S1**. | Refuse the whole line until built (§4.11). |
+| **Q-04-2** | Receiver-level access without a manager login? | **Answered (D30):** *"no, only managers will process manifests."* | §2. |
+| **Q-04-3** | Second count required? | **Answered (D31):** not required; *"highly suggested, especially for new vendors we havent received from before."* | §4.9, form 8.1. |
+| **Q-04-4** | Who files, which day, standing request, wording? | **Answered (D32):** admin only, the 10th, standing request wanted, the built-in text; month drop-down approved (G-18); each month arrives as its own zip. | §4.26–§4.31. |
+| **Q-04-5** | Retention of monthly datasets? | **Answered (D33):** delete after 18 months, the professional way (G-20). | §4.34, form 8.4 part G. |
+| **Q-04-6** | Delete confirmation; Generate vendor leads / Enrich KB on monthly cards? | **Answered (D34):** "are you sure" yes; buttons: the owner delegated to the professional solution, so show only working actions (G-20). | §4.33–§4.34. |
+| **Q-04-7** | D30 says only managers process manifests. May a **non-manager trained employee still help with the physical count** (and sign form 8.1), with the manager deciding and finalizing? | My reading of D30; the SOP should not assume. | Yes, helpers may count; the manager decides and finalizes (§2). |
+| **Q-04-8** | (Optional, part of the D33 professional design) When a month passes 18 months, keep its **one-row headline summary** (median prices, totals) for long-run trends while deleting the detail? Or delete everything? | Keeps multi-year trend lines at almost no cost; the detail is still purged. | Delete everything at 18 months (§4.34). |
+| **Q-04-9** | When the admin is away on the 10th, who files? The owner, or a named manager? | D32 says "only admin". | The owner files and writes it on form 8.4. |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `5299660b`, with the owner's rejection rulings (`ccrs-rejection-and-returns.md`), the R31 one-button design, the owner's CCRS transformer vision, and D28. Part 1 truck day (§4.1–§4.24); Part 2 monthly CCRS public records request (§4.25–§4.34). Adds findings F-04-1…F-04-20, gaps G-16…G-19, questions Q-04-1…Q-04-6, forms 8.1–8.5. | SOP program (for owner review) |
+| 1.1 draft | 2026-10-27 | Slice SOP-05a. Owner answers D29–D34 applied: partial receive approved and S1 (§4.11; G-16); only managers process manifests (§2); second count strongly recommended, expected on a vendor's first delivery (§4.9, form 8.1; G-21); admin files on the 10th, standing request procedure with WAC 44-14-04004(4), built-in wording kept, one zip per month (§4.26–§4.31, form 8.4; G-18); 18-month retention with owner approval and backup purge (§4.34, form 8.4 part G; G-20); delete confirmation and working-buttons-only approved (§4.33; G-20). New questions Q-04-7…Q-04-9. No code was re-audited; pins still at `5299660b` (`ac251766` is docs-only). | SOP program |
