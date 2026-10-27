@@ -113,7 +113,7 @@ import {
 // S19: vendor-id identity for the restock match (bounded reads, flag).
 import { VENDOR_ID_IDENTITY_ENV, vendorIdIdentityEnabled } from "@/lib/inventory/vendor-identity-core";
 import { loadBarcodeInputs, loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 // S32: remembered answers for products that matched 2+ live cards.
 import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
@@ -179,6 +179,8 @@ export type IntakeStagingOptions = { batchCount?: number };
 
 const ITEM_BATCH = 250;
 const VARIANT_BATCH = 500;
+/** PERF2-P3: snapshot batches written at once (bounded so a restage never starves the register). */
+const PERSIST_CONCURRENCY = 4;
 
 /** R50 S3c: the refresh summary a refresh-mode plan carries (null otherwise). */
 function refreshOfPlan(p: object): CardRefreshPlan | null {
@@ -1385,7 +1387,9 @@ type CarryForwardRead = {
 async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRead> {
   const admin = createSupabaseAdminClient();
   let readFailed = false;
-  const items = await pagedAll<MenuItemRow>(async (from, to) => {
+  // PERF2-P3: the item pages and the independent COUNT witness do not depend
+  // on each other, so both are started together (was: count after pages).
+  const itemsPromise = pagedAll<MenuItemRow>(async (from, to) => {
     const { data: itemRows, error } = await admin
       .from("menu_items")
       .select("*")
@@ -1400,13 +1404,17 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRea
     }
     return (itemRows as MenuItemRow[] | null) ?? [];
   });
+  // `.then` starts the request now (a PostgREST builder is lazy until then'd).
+  const countPromise = admin
+    .from("menu_items")
+    .select("id", { count: "exact", head: true })
+    .eq("menu_version_id", versionId)
+    .then((r) => r);
+  const items = await itemsPromise;
 
   // The independent witness (SLICE 4A pattern, menu-version countVersionItems).
   let expectedTotal: number | null = null;
-  const { count, error: countErr } = await admin
-    .from("menu_items")
-    .select("id", { count: "exact", head: true })
-    .eq("menu_version_id", versionId);
+  const { count, error: countErr } = await countPromise;
   if (countErr) console.error("[intake-menu-staging] carry-forward count failed:", countErr.message);
   else if (typeof count === "number") expectedTotal = count;
 
@@ -1429,6 +1437,11 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRea
         }
         return (data as MenuVariantRow[] | null) ?? [];
       },
+      // PERF2-P3: ~15 serial round trips at this catalog size -> 3 waves.
+      // Chunks cover disjoint menu_item_ids and every row is filed by its own
+      // menu_item_id below, so completion order cannot misfile a variant; any
+      // failed page still sets readFailed and the staging refuses to run.
+      { chunkSize: 200, concurrency: MENU_READ_CONCURRENCY },
     );
     for (const v of variants) {
       const list = variantsByItem.get(v.menu_item_id) ?? [];
@@ -1548,7 +1561,29 @@ async function persistSnapshotItems(
   );
   logMenuKbLinkPlan("intake-menu-staging", kbPlan);
 
-  for (let start = 0; start < items.length; start += ITEM_BATCH) {
+  // PERF2-P3: the batches were written strictly one after another (~12 item
+  // inserts + ~12 variant inserts back to back for the whole catalog, on
+  // EVERY approval / fact fix / merge answer / COA re-read). Each batch is
+  // independent - its own items, then that batch's variants keyed by the ids
+  // the item insert returned - so a bounded number now run at once. Order in
+  // the table does not matter (sort_order is a column). Any failed batch
+  // still throws, exactly as before: the version stays STAGED, never
+  // published, and the caller reports the failure.
+  const batchStarts: number[] = [];
+  for (let start = 0; start < items.length; start += ITEM_BATCH) batchStarts.push(start);
+  let nextBatch = 0;
+  const writeWorker = async (): Promise<void> => {
+    for (;;) {
+      const index = nextBatch++;
+      if (index >= batchStarts.length) return;
+      await persistSnapshotBatch(batchStarts[index]!);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(PERSIST_CONCURRENCY, batchStarts.length) }, () => writeWorker()),
+  );
+
+  async function persistSnapshotBatch(start: number): Promise<void> {
     const batch = items.slice(start, start + ITEM_BATCH);
     const rows = batch.map((it) => ({
       menu_version_id: versionId,
