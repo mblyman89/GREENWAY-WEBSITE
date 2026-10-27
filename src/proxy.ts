@@ -18,8 +18,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_GLOBAL_OPTIONS } from "@/lib/supabase/fetch-floor";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+// PERF2-P5: same key order as src/lib/supabase/env.ts (new publishable key
+// first, legacy anon JWT as the fallback). Kept literal for Next inlining.
+const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
+const SUPABASE_ANON_KEY = (
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+  ""
+);
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
