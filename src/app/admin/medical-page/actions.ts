@@ -98,7 +98,7 @@ export async function publishMedicalAction(formData: FormData): Promise<void> {
   revalidatePath("/medical");
   // Publishing the hide flag changes the nav in the shared chrome, so refresh
   // the whole layout (matches Site Content / Specials).
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(backTo("published"));
 }
 

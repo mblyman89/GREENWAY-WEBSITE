@@ -217,7 +217,7 @@ describe("admin editor is wired", () => {
     expect(actions).toContain("isEditableMedicalBlock");
     // Publishing revalidates the public route + layout (nav) + admin page.
     expect(actions).toContain('revalidatePath("/medical")');
-    expect(actions).toContain('revalidatePath("/", "layout")');
+    expect(actions).toContain('revalidatePath("/(site)", "layout")');
   });
 
   it("the admin page is gated on content.edit + force-dynamic", () => {

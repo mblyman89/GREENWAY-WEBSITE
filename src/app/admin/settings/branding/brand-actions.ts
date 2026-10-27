@@ -56,7 +56,7 @@ async function kitAction(formData: FormData, publish: boolean): Promise<void> {
   });
   revalidatePath(BACK);
   // Colours + the header logo apply to every page.
-  if (publish) revalidatePath("/", "layout");
+  if (publish) revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(backWith(formData, publish ? "published=1" : "saved=1"));
 }
 

@@ -34,7 +34,7 @@ function revalidateAll(): void {
   revalidatePath(ROUTE);
   revalidatePath("/menu");
   // Safety net for shared chrome / force-dynamic pages.
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
 }
 
 /** Lazily seed the starter slide on first manager visit (idempotent). */

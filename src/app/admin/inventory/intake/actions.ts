@@ -834,7 +834,7 @@ export async function reprocessIntelligenceAction() {
   }
   // The published menu's rows may have changed — refresh the website.
   revalidatePath("/menu");
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(
     `/admin/inventory/intake?repdone=1&replots=${result.lotsPatched}&repitems=${result.itemsPatched}&reperr=${result.errors}`,
   );

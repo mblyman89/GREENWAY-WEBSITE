@@ -60,7 +60,7 @@ function revalidateForSlug(slug: string): void {
   const path = PAGE_SECTION_CONFIG[slug]?.previewPath;
   if (path) revalidatePath(path);
   // Safety net so published values reliably appear on the live (non-preview) site.
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
 }
 
 /** Parse the dynamic buttons list from the submitted JSON (up to 4). */
