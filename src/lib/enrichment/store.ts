@@ -48,11 +48,19 @@ export async function getEnrichmentsForKeys(keys: string[]): Promise<Map<string,
   if (!isSupabaseServiceConfigured || keys.length === 0) return map;
   const admin = createSupabaseAdminClient();
   const CHUNK = 300;
-  for (let i = 0; i < keys.length; i += CHUNK) {
-    const slice = keys.slice(i, i + CHUNK);
-    const { data } = await admin.from("product_enrichments").select("*").in("pos_product_key", slice);
-    for (const row of (data as ProductEnrichment[] | null) ?? []) {
-      map.set(row.pos_product_key, row);
+  // PERF-S7: chunks used to run one after another (2,800 keys = 10 serial
+  // round trips). They now run 4 at a time; results are merged in order.
+  const slices: string[][] = [];
+  for (let i = 0; i < keys.length; i += CHUNK) slices.push(keys.slice(i, i + CHUNK));
+  const PARALLEL = 4;
+  for (let i = 0; i < slices.length; i += PARALLEL) {
+    const results = await Promise.all(
+      slices.slice(i, i + PARALLEL).map((slice) => admin.from("product_enrichments").select("*").in("pos_product_key", slice)),
+    );
+    for (const { data } of results) {
+      for (const row of (data as ProductEnrichment[] | null) ?? []) {
+        map.set(row.pos_product_key, row);
+      }
     }
   }
   return map;
