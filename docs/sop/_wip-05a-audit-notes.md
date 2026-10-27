@@ -3,10 +3,10 @@
 Pushed often because the sandbox is unstable (owner: "commit work often out of the sandbox, it is unstable. protect the work.").
 
 ## Inventory list `/admin/inventory` (`src/app/admin/inventory/page.tsx`, 1,297 lines)
-- Gate `requirePermission("inventory.manage")` L203.
+- Gate `requirePermission("inventory.manage")` L205.
 - Header buttons L433-448: Expiration rules, Tags, Testing labs, "+ Import vendor JSON" (→ /inventory/intake).
-- HelpPanel L451-468: step 4 says "Vendor JSON intake (next slice) drafts lots + COAs" — stale wording (intake shipped; SOP-04). SopSheetLink slug="publish" L466 (the pre-R31 sheet SOP-04 F-04-5 called stale).
-- Status tabs L91-101: All, Active, Quarantine, Recalled, Sold out, Destroyed, Leafly. Bare URL opens on Active (withDefaultStatus, L204-209 comment R36 #3).
+- HelpPanel L451-469: step 4 (L459) says "Vendor JSON intake (next slice) drafts lots + COAs" — stale wording (intake shipped; SOP-04). SopSheetLink slug="publish" L467 (the pre-R31 sheet SOP-04 F-04-5 called stale).
+- Status tabs L92-102: All, Active, Quarantine, Recalled, Sold out, Destroyed, Leafly. Bare URL opens on Active (withDefaultStatus, L204-209 comment R36 #3).
 - KPI cards L487-537: Total lots, Active lots, On-hand cost (orange when lots lack cost), Needs attention = recalled+quarantine+expired+expiringSoon+missingCoa+missingExpiry. Accent ignores expiringSoon (L522-530) — cosmetic.
 - Restore result banners L541-554 (`restored` / `restoreError`).
 - Page tabs Lots | Issues | Insights L557-564. Issues: IssuesList + RegisterSellabilityBanner + RestoreToSalePanel L566-591. Insights: InventoryIntelPanel L597.
@@ -26,3 +26,15 @@ Pushed often because the sandbox is unstable (owner: "commit work often out of t
 - setLotStatusAction L142-155 → store.updateLotStatus L836-851: blind update, no audit, no go-live gate (F-04-2 / G-19 carry-over, S1). VALID_STATUSES L103-109.
 - Lot page Lifecycle form `[id]/page.tsx` L1496-1512; help text "Recalled / destroyed lots are excluded from sale."
 - Adjustment history L1516-1546: date only via toLocaleDateString (browser tz, not Pacific; no actor shown).
+
+## Status / recall / destroyed
+- Recall hold (AN-7): `recall-hold-core.ts` HOLD_LOT_STATUS="recalled" (L42-ish); whole product key held while any lot recalled; quarantine never holds (header L17-26). Enforced: POS menu bundle advisory `api/pos/menu/route.ts` L116-121 (fail-open, comment says so); completion gate fail-closed `orders/completion-gate.ts` L95-119 (no override; refusal text "the hold clears only when a manager releases or destroys the recalled lot in Admin → Inventory" recall-hold-core.ts recallHoldRefusal). Restore-to-sale refuses under hold (restore-to-sale-store.ts L125-140, failClosed).
+- Recalled status is set ONLY by the lot page Lifecycle form (blind update, no audit, store.ts L836-851). So the recall hold — a statutory sale stop — is placed and released with no audit row and no reason. → finding (pairs with F-04-2).
+- **Manual "Destroyed" status with stock left**: updateLotStatus writes status only (store.ts L836-851); on_hand_qty unchanged, no adjustment row. CCRS Inventory.csv reads live lots `.neq("status","destroyed")` (ccrs-batch.ts L1209-1217) and only re-reads destroyed lots NAMED by an event row in the batch (readDestroyedLots L380-411). Hand-destroyed lot with no adjustment → dropped from Inventory.csv with its last QoH still on file at CCRS, no Destruction adjustment. The proper path is SOP-15 disposition (disposition.ts L1087-1094 sets destroyed only when the lot is empty). → S1 finding.
+- CCRS: held lots (quarantine/recalled) reported in the Sales Floor area, advisory E45 (ccrs-batch.ts L1006-1010, L1121).
+- Status vocab: active | quarantine | recalled | sold_out | destroyed (actions.ts L103-109; lot page L71-77).
+
+## Register "86" + restore to sale
+- `/api/pos/stock-flag` route.ts: device-authenticated L28-34, reasons "shelf empty" | "damaged / unsellable" | "wrong listing" (stock-flag-core.ts STOCK_FLAG_REASONS), flips published menu_items.inventory_status → "unavailable" L75-81, audited `pos.stock_flag` L84-100 (flaggedByName is client-asserted L48-51). One-way.
+- Menu download self-heals: a flagged card with live active units is restored on the next download (register-availability-core.ts reconcileRegisterAvailability L318-421; route.ts L240). So "86 it" on a product that has stock lasts only until the next menu download unless stock is zero. → finding (86 is not sticky; "damaged / unsellable" reason with stock on hand silently comes back). Need verify statusForUnits L141-145: ≤0 unavailable, ≤3 low-stock.
+- Restore button: actions.ts L1174-1206 → restore-to-sale-store; refusal codes not_flagged / recall_hold / hidden_card / no_live_stock (restore-to-sale-core.ts decideRestore). Audit `inventory.restore_to_sale` (store L169-172). UI: Issues tab RestoreToSalePanel (page.tsx L586).
