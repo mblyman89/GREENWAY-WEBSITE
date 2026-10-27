@@ -193,7 +193,7 @@ describe("L-27 — every Supabase factory installs the floor", () => {
   const factories = [
     "src/lib/supabase/admin.ts",
     "src/lib/supabase/server.ts",
-    "src/middleware.ts",
+    "src/proxy.ts",
   ];
 
   for (const rel of factories) {
@@ -207,8 +207,9 @@ describe("L-27 — every Supabase factory installs the floor", () => {
   it("the middleware cannot 500 the back office when auth aborts", () => {
     // Now that the call can REJECT rather than hang, an unhandled rejection
     // here would fail every /admin/* request.
-    const src = read("src/middleware.ts");
-    expect(src).toMatch(/auth\.getUser\(\)\s*\.catch\(/);
+    // PERF-S1: middleware.ts -> proxy.ts (Next 16), getUser -> getClaims.
+    const src = read("src/proxy.ts");
+    expect(src).toMatch(/auth\.getClaims\(\)\s*\.catch\(/);
   });
 });
 
@@ -216,14 +217,14 @@ describe("L-27 — the session helper fails CLOSED and stays honest", () => {
   const src = read("src/lib/auth/session.ts");
 
   it("guards the auth call so a timeout cannot become a 500", () => {
-    expect(src).toMatch(/try\s*\{[\s\S]*auth\.getUser\(\)[\s\S]*\}\s*catch/);
+    expect(src).toMatch(/try\s*\{[\s\S]*auth\.getClaims\(\)[\s\S]*\}\s*catch/);
   });
 
   it("returns null on auth failure — never a truthy object", () => {
     // THE SECURITY INVARIANT. 26 call sites do `if (session) { ...allow... }`.
     // Any truthy failure value would turn an outage into an auth bypass.
     const signature = src.match(
-      /export async function getStaffSession\([^)]*\):\s*([^{]+)\{/,
+      /(?:export async function getStaffSession\([^)]*\)|async function loadStaffSession\([^)]*\)):\s*([^{]+)\{/,
     );
     expect(signature?.[1]).toContain("Promise<StaffSession | null>");
     expect(signature?.[1]).not.toContain("unavailable");

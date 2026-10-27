@@ -43,7 +43,19 @@ export function authCheckUnavailable(): boolean {
   return authFailureBox().failed;
 }
 
-export async function getStaffSession(): Promise<StaffSession | null> {
+/**
+ * PERF-S1 — memoised per REQUEST with React `cache()`.
+ *
+ * One admin navigation used to resolve the session 3-4 times (admin layout,
+ * section layout, page, `requireStaff`/`requirePermission`), each time with an
+ * Auth round trip plus a `staff_profiles` read, all serial. Next 16's
+ * data-security guide (Data Access Layer) wraps `verifySession`/`getUser` in
+ * `cache()` for exactly this reason. Scope is one render/action, so there is no
+ * cross-request or cross-user sharing (same reasoning as `authFailureBox`).
+ */
+export const getStaffSession: () => Promise<StaffSession | null> = cache(loadStaffSession);
+
+async function loadStaffSession(): Promise<StaffSession | null> {
   if (!isSupabaseConfigured) return null;
 
   const supabase = await createSupabaseServerClient();
@@ -86,10 +98,18 @@ export async function getStaffSession(): Promise<StaffSession | null> {
   // signed in" and "we could not check" is carried separately, by
   // `authCheckUnavailable()` above, which the login screen uses to explain
   // itself without any guard ever depending on it.
+  //
+  // PERF-S1 — `getClaims()` verifies the access token (locally against the
+  // cached JWKS with asymmetric signing keys; via the Auth server otherwise)
+  // and returns the verified claims. Supabase: "Prefer this method over
+  // getUser which always sends a request to the Auth server". `sub` is the
+  // user id and `email` is a standard Supabase access-token claim. A missing or
+  // invalid token yields no claims -> null (fail CLOSED, unchanged).
   let user: { id: string; email?: string | null } | null = null;
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims;
+    user = claims?.sub ? { id: String(claims.sub), email: typeof claims.email === "string" ? claims.email : null } : null;
   } catch {
     authFailureBox().failed = true;
     return null;
