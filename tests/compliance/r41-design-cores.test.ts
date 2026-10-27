@@ -90,7 +90,7 @@ describe("R41 S1 drift guards (copied lists must match the source)", () => {
   });
   it("every PUBLIC_PAGES route exists", () => {
     for (const p of PUBLIC_PAGES) {
-      const file = p.path === "/" ? "src/app/(site)/page.tsx" : `src/app${p.path}/page.tsx`;
+      const file = p.path === "/" ? "src/app/(site)/page.tsx" : `src/app/(site)${p.path}/page.tsx`;
       expect(() => read(file)).not.toThrow();
     }
   });

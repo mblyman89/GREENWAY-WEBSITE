@@ -56,7 +56,7 @@ describe("R42 Q3 — builder banners on the four static pages", () => {
 
   for (const slug of ["about", "faq", "locations", "price-match"]) {
     it(`/${slug} renders PageBuilderBanners with its slug, before the Footer`, () => {
-      const src = read(`src/app/${slug}/page.tsx`);
+      const src = read(`src/app/(site)/${slug}/page.tsx`);
       const strip = src.indexOf(`<PageBuilderBanners pageSlug="${slug}" />`);
       const footer = src.indexOf("<Footer");
       expect(strip).toBeGreaterThan(-1);
