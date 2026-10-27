@@ -164,7 +164,7 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 **Role filter needed (strategy item 3):**
 - Any trained employee may **count** at the dock on paper (form 8.1). All Receiving screen work, including Finalize, is `inventory.manage` (owner/admin/manager). For staff the concierge covers only the counting and refusal-noting steps, per SOP-04 §2.
 - The zip drop, competitor roster and Statewide Benchmarks are `inventory.manage`. Reports → Benchmarks is `reports.view`. The Discovery switch is `settings.manage`.
-- Filing the monthly records request is the owner's job until Q-04-4 is answered. Accounting review (Waiting to Post) is `books.view` (owner).
+- Filing the monthly records request is the **admin's** job, on the 10th (D32). Only managers process manifests (D30). Accounting review (Waiting to Post) is `books.view` (owner).
 
 **Must ship with caveats** until the findings are fixed:
 - F-04-2: the lot page's "Lifecycle status" skips the go-live check and writes no audit row. A manager may set a held lot Active **only** from an Issues row that says "now clear", logged on paper (SOP-04 §4.19). Never advise setting any other lot Active that way.
@@ -178,3 +178,12 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 - F-04-5: never quote the in-app SOP sheets or the Receiving help panel for receiving steps.
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, `end-of-day`, `receiving`, `product-intake` (receiving and onboarding portion), plus the SOP-01 proposed topics. `deposit-bag` and `ccrs-records-request` are paper-reminder only. The concierge itself is still at the baseline until the integration phase. Baseline rows touched: Receiving intake 🟡 and CCRS 🟡 (§3), both unchanged in code.
+
+**SOP-05a update to the SOP-04 row (owner answers D29–D34).**
+- **New facts for `receiving`:** a second count is strongly recommended and expected on a vendor's first delivery (D31). Short lines are still refused whole until G-16 is built (D29, now serious).
+- **New facts for `ccrs-records-request`:**
+  - The admin files on the 10th using the built-in text; each month arrives as its own zip and is dropped one at a time (D32).
+  - Months are kept 18 months from the end of the data month, then removed with owner approval (D33).
+  - On monthly cards, Generate vendor leads and Enrich KB do nothing. Point people to **Draft vendor leads from these suppliers** (D34).
+- **Standing-request answer must be sourced:** WAC 44-14-04004(4) says an agency need not supply records created after the request. The concierge must not promise that the WSLCB will honor a standing request.
+

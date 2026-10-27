@@ -322,10 +322,11 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There should be a sop for the receiving intake pipeline."*); D28 (the PRR must be included); the rejection rulings in `docs/ccrs-rejection-and-returns.md` L15–21; the R31 one-button design (*"I don't want to have to push any buttons while I walk the page unless I have to."*, `ManifestLotDisposition.tsx` L135); and the transformer vision (`docs/ROADMAP_BACKOFFICE_FIXES.md` L276–289).
 **Verdict: MET with gaps.** Truck day works end to end: email → staged draft → count → per-line or whole refusal → one-button Finalize → go-live gate → books → onboarding. The monthly zip transformer works and feeds all three surfaces. The gaps are below: partial quantities, invisible failed emails, an ungated lot-status box, no PRR reminder, and stale help.
 
-### F-04-1 · CONFIRMED · GAP · S2 — No partial-quantity receive ("18 of 20")
+### F-04-1 · CONFIRMED · GAP · S1 (was S2; owner re-rated, D29) — No partial-quantity receive ("18 of 20")
 - **Pin:** lines are accept-whole or reject-whole (`intake-disposition-core.ts` L24–44; `ManifestLotDisposition.tsx` L59–151). `received_qty` comes from the manifest (`intake-parser.ts` L606). The InventoryTransfer quantity equals the received quantity (`ccrs-transfer-core.ts` L33–36). `grep` for a counted / actual quantity field → none.
 - **Owner:** *"So we need the ability to tell the system that we are only accepting a part of the manifest and the rest was rejected. There are several instances where the vendor forgot to send an item…"* (`ccrs-rejection-and-returns.md` L15–21). Line-level partial acceptance is met; unit-level is not.
-- **SOP impact:** SOP-04 §4.11 interim rule: refuse the whole short line. Never accept and adjust. Q-04-1. Ties to G-16.
+- **SOP impact:** SOP-04 §4.11 interim rule: refuse the whole short line. Never accept and adjust. Ties to G-16.
+- **Owner decision (D29, slice SOP-05a):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* Re-rated **S1** (data integrity: the CCRS record and the shelf must agree); G-16 **APPROVED**.
 
 ### F-04-2 · CONFIRMED · HARDEN · S1 — Lot page "Lifecycle status" sets Active with no go-live check and no audit
 - **Pin:** `src/app/admin/inventory/[id]/page.tsx` L130–136 (STATUSES include `active`), form L1497–1512 → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L836–851). It writes any status. There is no `evaluateLotActivation` call and no `recordAudit`.
@@ -397,22 +398,26 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
   - The monthly transformer writes neither table.
   - Contrast: `computeBenchmarksAction` refuses monthly datasets explicitly (`discovery/actions.ts` L598–609).
 - **SOP impact:** SOP-04 §4.33: do not press them; use **Draft vendor leads from these suppliers**.
+- **Owner decision (D34):** the owner delegated the call to the professional solution, so show only the actions that work for the dataset kind. Hide Compute / Generate vendor leads / Enrich KB on monthly cards (G-20, **APPROVED**).
 
 ### F-04-16 · CONFIRMED · UX · S2 — Benchmark dataset "Delete" has no confirmation
 - **Pin:** `ccrs/page.tsx` L422–425 (a plain submit) → `deleteCcrsDatasetAction` (`discovery/actions.ts` L770–788, cascade, audit `discovery.ccrs.delete`). It is undoable only by re-dropping the original zip, which the app does not keep.
-- **SOP impact:** SOP-04 §4.34: owner-only, check twice; §4.29 keeps the original. Q-04-5 / Q-04-6.
+- **SOP impact:** SOP-04 §4.34: owner approval plus a read-aloud check; §4.29 keeps the original for 18 months.
+- **Owner decision (D33/D34):** *"delete should as \"are you sure\""*; 18-month retention. Typed confirmation, admin-tier delete and an automatic purge with notice, hold and audit (G-20, **APPROVED**).
 
 ### F-04-17 · CONFIRMED · DOC · S3 — Uploader says "a few minutes"; the program measured ~1.5 h
 - **Pin:** `CcrsZipUploader.tsx` L214 *"Takes a few minutes for a full month."* vs `ROADMAP_BACKOFFICE_FIXES.md` L558 *"~1.5h browser crunch"* (measured before the S14 Web Worker, L627). It has not been re-measured since.
 - **SOP impact:** SOP-04 §4.31: plan for up to 1.5 h, keep the tab open and stop sleep; form 8.4 records the real time.
 
-### F-04-18 · CONFIRMED · DOC · S3 — The PRR wording template does not ask for the tables the transformer needs
+### F-04-18 · CONFIRMED · DOC · S4 (was S3; narrowed by D32) — The PRR wording template does not ask for the tables the transformer needs
 - **Pin:** `REQUEST_WORDING` (`ccrs/page.tsx` L32–36) asks for *"Sales, Products, Inventory, Lab Results, and Strain"* only, and for a free date range. The transformer reads Licensee, Strains, ManifestHeader, TransportedItems, Product, Inventory, LabResult, SaleHeader and SalesDetail (`ccrs-extract/run.ts` L68–80). It refuses a zip with no SaleHeader / SalesDetail (`discovery/actions.ts` L831–836) or no table zips (`run.ts` L113–116).
 - **SOP impact:** SOP-04 §4.27: reuse the proven April/May 2026 wording; one calendar month; Q-04-4. The SOP does not invent request language.
+- **Owner decision (D32, slice SOP-05a):** *"I use the built in text provided in the ccrs benchmark page."* The built-in text **is** the proven wording; the owner's deliveries with it were the full extract. The finding is **narrowed** to a residual S4 risk (the text names five extracts, not the nine tables the transformer reads). It stays recorded; SOP-04 v1.1 §4.27 says what to do if a delivery arrives without sales tables. The month drop-down (G-18) is approved.
 
 ### F-04-19 · CONFIRMED · GAP · S3 — No monthly PRR task, reminder or tracking-number field
 - **Pin:** `compliance-calendar-core.ts` L86–136 tasks: liq1295, ccrs_weekly, cctv_retention, scale_calibration, badge_visitor_log, dor_excise. There is no PRR. The monthly dataset's source note is auto-set to *"Monthly zip: <file>"* (`discovery/actions.ts` L857–862), so there is nowhere to record the tracking number.
 - **SOP impact:** form 8.4 (SOP-04 §4.26–§4.28). Ties to G-18.
+- **Owner decision (D32):** admin files on the 10th; a standing monthly request is wanted. WAC 44-14-04004(4) means the agency need not supply future records, so a recurring task, pre-filled text and a log are needed either way (G-18, **APPROVED** in part).
 
 ### F-04-20 · CONFIRMED · GAP/UX · S3 — The Discovery kill-switch has no "off" control on any screen
 - **Pin:** `setDiscoveryEnabledAction` (`discovery/actions.ts` L99–112) accepts `enabled`. Every form that calls it sends the hidden `enabled=1` (**Turn Discovery on**: `discovery/page.tsx` L85–87; `ccrs/page.tsx` L91–93; `discovery/import/page.tsx` L59–61). `grep` for an off form → none. The legal note promises *"This feature is fully removable."* (`ccrs/page.tsx` L280).
@@ -432,4 +437,4 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 | SOP-01 Register Operations | 16 (15 new + F-01-16 re-verify of F-00-1) | 16 | 0 |
 | SOP-02 Master Till / Store Safe | 13 new (1×S1, 6×S2, 6×S3) + re-confirmed F-00-7, F-00-8. **F-02-2 withdrawn** in SOP-03 (D19) → 12 standing | 13 (12 standing, 1 withdrawn) | 0 |
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
-| SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs | 21 | 0 |
+| SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
