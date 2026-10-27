@@ -230,7 +230,7 @@ A lot has exactly one of five statuses (`actions.ts` L103–109; lot page L130�
 | **N lots active not linked to a catalog product** | Worth a look | *"…cannot be sold at the register."* (L393) | §4.21 (link the product) |
 | **N lots active but out of stock (0 on hand)** | Worth a look | *"Usually a lot that should be sold out."* (L394) | Check the shelf. If it is really empty, see §4.6 (a manual zero does not flip status; set **Sold out** under §4.8 and log it) |
 | **N lots active with no expiry date on file** | Worth a look | *"…expiry checks cannot protect these lots."* (L395) | **Date them with expiration rules** (§4.15), or **Bulk fill the Cultivera-import lots** (§4.20) |
-| **N lots active with no unit cost on file (understates on-hand value)** | Worth a look | (L396) | Tell the owner. A manager does not key cannabis cost (§4.20, Q-05a-3) |
+| **N lots active with no unit cost on file (understates on-hand value)** | Worth a look | (L396) | Tell the owner. Nobody keys cannabis cost; it comes only from the manifest (§4.20, D38) |
 | **N products are marked unavailable but you have stock** | Worth a look (L371–380) | *"Someone pressed "86" at a register, or they were emptied and restocked…"* | §4.12 (**Restore to sale**) |
 | **Over the 4-month inventory ceiling** | Needs action (L431–440) | WAC 314-55-079(10): at most four months of average inventory | Tell the owner. **Open Purchasing** (SOP-09) |
 | **No DOH-compliant (medical) product in stock** | Needs action, only if the store holds a medical endorsement (L441–450) | WAC 314-55-080 | Tell the owner. **Open Purchasing** |
@@ -843,9 +843,9 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 | Situation | What to do | Who to tell |
 |---|---|---|
-| **A recall notice arrives** (vendor, LCB, news, email) | §4.10 at once: form 8.5, set Recalled, pull, count, hide on the website, check open orders | Recall coordinator (owner) **within 1 hour** |
-| **The owner cannot be reached within 1 hour of a recall** | The on-duty manager makes the LCB call (§4.10 step 8) and writes it on form 8.5 | Owner as soon as reachable |
-| **Unsure whether it is a recall or a market withdrawal** | Treat it as a **recall** | Owner |
+| **A recall notice arrives** (vendor, LCB, news, email) | §4.10 at once: form 8.5, set Recalled, pull, count, hide on the website, check open orders | Recall coordinator (**admin**) **within 1 hour** |
+| **The admin (coordinator) cannot be reached within 1 hour of a recall** | No back-up (D37). Call the owner; the owner decides who makes the LCB call (§4.10 step 8). Write it on form 8.5 | Owner, at once; admin as soon as reachable |
+| **Unsure whether it is a recall or a market withdrawal** | Treat it as a **recall** | Admin (coordinator) |
 | **A recalled product was sold before the hold** (or synced from an offline register) | Record the units on form 8.5 ("sold before the hold"). Do not contact the customer yourself | Owner, same day; owner decides customer notice (form 8.4 part D) |
 | **A recalled product still shows at a register after a menu refresh** | Tell every budtender by word of mouth; the sale will still be refused at completion (§4.11) | Owner, same hour |
 | **A recalled product still shows on the website** | Expected (F-05a-16). Set **Always hide** (§4.10 step 5) | Owner |
@@ -855,7 +855,10 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | **On hand is below zero** | Do not add units to "fix" it. Count the lot (SOP-06) | Owner, same day (F-05a-3) |
 | **A count is short by more than 1 unit or more than $50 at cost** | Recount with a second person. **Shrink** with a full note | Owner, same day (§4.7) |
 | **Theft or seizure** | Do not adjust. SOP-20 | Owner, at once (§4.7) |
-| **An expired lot is Active** | Pull, quarantine, form 8.1 (§4.16) | Owner, same morning |
+| **An expired lot is Active** | Edible or liquid edible (and, until Q-05a-6, tincture or capsule): pull, quarantine, form 8.1, never sell. Anything else: check, form 8.1, owner decides (§4.16) | Owner, same morning |
+| **A recalled or quarantined lot has to be destroyed** | Do not set it Active to make it selectable on Returns & Destruction. Recalled: stays Recalled, admin coordinates with the LCB, paper record (§4.9) | Admin (recall) or owner (quarantine) |
+| **A destruction was cancelled and the lot went back to Active** | Set it back to its earlier status at once (Quarantine, or Recalled by the admin), form 8.1 (F-05a-19) | Owner, same day |
+| **A cannabis lot has no unit cost** | Do not type one. It is corrected from the vendor's manifest (§4.20, D38) | Owner |
 | **An 86'd product keeps coming back** | The count is wrong, or the product should be quarantined (§4.12) | Manager, same shift |
 | **A label will not scan** | The lot has no lot code (§4.19) | Owner (F-05a-10) |
 | **Bulk fill or Expiration rules wrote the wrong date** | Do not fix it by hand. The audit row holds every old date | Owner, same day |
@@ -870,7 +873,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 | Control | Why | Where it comes from |
 |---|---|---|
-| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L836–851; `ccrs-batch.ts` L1209–1217, L380–391; `disposition.ts` L1087–1094 |
+| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L836–851; `ccrs-batch.ts` L1209–1217, L380–391; `disposition.ts` L1087–1095 |
 | **A form 8.1 line before every status change** | **Lifecycle status** writes no audit row and asks no reason (F-05a-2; F-04-2) | `actions.ts` L142–155 |
 | **Active from quarantine only from a "now clear" Issues row** | No go-live check on the manual path (F-04-2, **S1**). WAC 314-55-102: no retail sale without a passing COA | SOP-04 §4.19; `lot-activation-gate-core.ts` |
 | **A recall placed the same hour; segregate, count, hide on the website, check open orders** | WAC 314-55-225(3)(b)(i): secure, isolate and prevent distribution; the hold does not reach the website (F-05a-16) | §4.10; `live-menu.ts` L167–171; `order-pricing.ts` L124–134 |
@@ -878,18 +881,19 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | **Nothing recalled is destroyed before LCB coordination** | WAC 314-55-225(3)(b)(i)(B), (3)(e) | §4.10 step 9; `disposition-core.ts` L226–243 |
 | **Weekly recall tracking** | WAC 314-55-225(3)(f) | Form 8.5 |
 | **A written, signed recall plan with a named coordinator, reviewed yearly** | WAC 314-55-225(3)(d) (mandatory) | Form 8.4; F-05a-15 |
-| **Only the owner releases a recall hold, on written clearance** | The app lets any manager release with no record | §4.10; F-05a-2 |
+| **Only the admin (recall coordinator) releases a recall hold, on written clearance** | Owner decision D37; the app lets any manager release with no record | §4.10; F-05a-2 |
+| **A recalled lot is never scheduled for destruction in the app until G-28 is built** | Scheduling overwrites Recalled with Quarantine and lifts the register hold (F-05a-18, S1); Cancel sets Active (F-05a-19) | `disposition.ts` L965–971, L1113–1114; `recall-hold-core.ts` L44 |
 | **Every manual adjustment: reason, note, double count, form 8.2** | CCRS withholds an Other / Employee-sample row with no note (E13); the history shows no name; the write is not atomic and has no floor (F-05a-3, F-05a-4, F-05a-13) | `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `store.ts` L578–616 |
 | **Never use Receive (add), Destruction or Recall removal on the lot page** | Receive is not sent to CCRS (F-05a-7); the other two bypass SOP-15 (F-05a-5) | `ccrs-inventory-adjustment-core.ts` L101–105 |
-| **Theft and seizure go to the owner, never straight to an adjustment** | No Theft / Seizure reason on the form (F-05a-6) | Lot page L118–128 |
+| **Theft and seizure go to the owner, never straight to an adjustment** | No Theft / Seizure reason on the form yet (F-05a-6); the owner approved adding them (D39, G-23) | Lot page L118–128; `ccrs-inventory-adjustment-core.ts` L87–90 |
 | **The daily Issues check, logged on form 8.3** | It is the only stop on expired stock (F-05a-8) and the place every blocked lot shows | §4.4 |
-| **Expired product pulled and quarantined until Q-05a-1 is answered** | The register sells expired lots and draws FIFO, not FEFO (F-05a-8) | `sale-lot-read.ts` L39–47 |
+| **Expired edibles and liquid edibles never sold; other expired lots on the owner's decision** | Owner decision D36. The register sells expired lots and draws FIFO, not FEFO (F-05a-8) | `sale-lot-read.ts` L39–47 |
 | **Expiration rules: owner decides, Save → Preview → Apply** | The fingerprint check stops a different plan being applied; every date is audited | `expiration-rules/actions.ts` L146–180 |
 | **Document dates are never overwritten** | A manifest, COA or POS date is the authoritative record | `expiry-rules-core.ts` L10–34, L49 |
-| **The manager investigates every 86 the same shift** | The 86 is not sticky while units are on file (F-05a-9) | `register-availability-core.ts` L318–421 |
+| **The manager investigates every 86 the same shift** | The 86 is not sticky while units are on file (F-05a-9). The owner chose the professional method (D40, G-26) | `register-availability-core.ts` L318–421 |
 | **Restore only product that is physically on the shelf** | The restore recomputes from the books; the shelf is the truth | `restore-to-sale-core.ts` L115–167 |
 | **Scan every reprinted label before use** | A label without a lot code does not scan (F-05a-10) | `lots/[id]/label/page.tsx` L38–40; `scan-to-cart-core.ts` L55–70 |
-| **Cannabis unit cost by bulk fill only by owner or admin** | The permission model says cannabis cost entry is not built (F-05a-11) | `roles.ts` L143–148; `actions.ts` L904 |
+| **Nobody types a cannabis unit cost; it comes only from the vendor's CCRS manifest** | Owner decision D38 ("That's illegal"). Bulk fill still allows it (F-05a-11, **S1**; gap G-27) | `intake-parser.ts` L415–420; `lot-edit-core.ts` L38; `bulk-fill-core.ts` L54 |
 | **New COA hosts only with owner approval** | The host list is the certificate reader's security allow-list | `labs/page.tsx` header L7–12 |
 | **Tags say nothing an advertising rule forbids** | Tags show on the public website | §4.17; SOP-11 |
 | **Every status and adjustment record kept 5 years** | WAC 314-55-087 (records retention) | Forms 8.1–8.5 in the binder |
@@ -988,9 +992,9 @@ GREENWAY MARIJUANA — WRITTEN RECALL PLAN                   WAC 314-55-225(3)(d
 Licensee: Greenway Marijuana · Port Orchard, WA   UBI / license # ____________________
 ====================================================================================
 (A) RECALL COORDINATOR
-    Coordinator: ______________________ (the owner until Q-05a-2 is answered)
-    Phone ______________   Back-up (acting in the coordinator's absence):
-    ______________________  Phone ______________
+    Coordinator (the ADMIN, owner decision D37): ______________________
+    Phone ______________   No back-up. Recall team: the owner and the manager.
+    Owner: ______________________  Phone ______________
     Local LCB enforcement officer: ______________________  Phone ______________
     Email ______________________   (update whenever it changes)
 
@@ -1007,8 +1011,9 @@ Licensee: Greenway Marijuana · Port Orchard, WA   UBI / license # _____________
        held in the store and consumer returns brought back (SOP-15 customer returns).
     2. NOTHING is destroyed before the LCB is notified and destruction is coordinated
        with the local officer (WAC 314-55-225(3)(b)(i)(B), (3)(e)).
-    3. Destruction only through Inventory → Returns & Destruction, which records the
-       LCB coordination and the officer's name.
+    3. The lot stays Recalled. Until gap G-28 is built, the destruction is NOT
+       scheduled in the app (it would lift the hold): coordinator and officer agree
+       it, it is witnessed, and it is written on form 8.5 and the SOP-15 waste record.
     4. Track affected and returned amounts; report progress to the LCB at least weekly
        ((3)(f)) on form 8.5.
 
@@ -1016,6 +1021,7 @@ Licensee: Greenway Marijuana · Port Orchard, WA   UBI / license # _____________
     LCB:        coordinator calls the local officer — IMMEDIATELY for a recall,
                 within 48 HOURS for a market withdrawal ((3)(b)(i)(A); (2)(b)).
     Vendor:     coordinator or manager, same day; ask for the written notice.
+    Owner:      the manager calls the owner if the coordinator cannot be reached in 1 hour.
     Customers with open pickup orders: manager calls, "item unavailable".
     Customers who already bought:  owner decides how they are told (in-store notice,
                 website notice, press release) when product reached consumers.
@@ -1088,7 +1094,8 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 ```
 ┌──────────────────────────── GREENWAY — INVENTORY CORE (DAILY) ────────────────────────────┐
 │ EVERY MORNING: Inventory → Issues. Work every NEEDS ACTION row before opening. Form 8.3.  │
-│   RECALLED row → product segregated + counted? · EXPIRED row → pull, Quarantine, 8.1.     │
+│   RECALLED row → product segregated + counted? · EXPIRED row → read the type (§4.16):     │
+│   edible / liquid edible = pull, Quarantine, never sell · other = check, 8.1, owner.      │
 │   "Marked unavailable, but you have stock" → check the shelf → Restore to sale.           │
 │ ADJUST QUANTITY: count twice · avoid busy times · ALWAYS write a note · form 8.2.         │
 │   NEVER: Receive (add) · Destruction · Recall removal. Theft / seizure → owner, SOP-20.   │
@@ -1097,16 +1104,18 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 │   Quarantine → Active only from a "now clear" Issues row. Never a FAILED COA.             │
 │   ⚠ NEVER "Destroyed" by hand — destruction only via Returns & Destruction (SOP-15).      │
 │ RECALL (same hour): form 8.5 → every lot Recalled (8.1) → pull, bin, count → website      │
-│   Always hide → check a register + pickup orders → OWNER tells LCB (recall: now;          │
+│   Always hide → check a register + pickup orders → ADMIN tells LCB (recall: now;          │
 │   withdrawal: 48 h) → DESTROY NOTHING until LCB coordinated → track weekly.               │
-│   Only the OWNER releases a recall, on written clearance.                                 │
+│   Only the ADMIN (coordinator, no back-up) releases a recall, on written clearance.       │
+│   Never schedule a Recalled lot for destruction in the app: it lifts the hold.            │
 │ REGISTER: "Sale blocked … RECALL hold" → remove the item. No override. Tell the manager.  │
-│   86 ("Shelf is empty? Mark out of stock…") comes back if stock is on file — manager      │
+│   86 = "we're out, take it off the menu". It comes back if stock is on file: manager      │
 │   checks the cause the same shift (count / quarantine / listing).                         │
 │ EXPIRY: rules = owner decides → Save → Preview → read orange rows → Apply.                │
 │   Manifest / COA / POS dates are never changed. Expiring in 30 days → front of shelf.     │
 │ LABELS: lot page → Manifest → 🏷 Print 4×6 label. SCAN IT before use.                      │
-│ BULK FILL: blanks only, import lots only. One value must fit every lot. Cost = owner.     │
+│ BULK FILL: blanks only, import lots only. One value must fit every lot.                   │
+│   NEVER type a cannabis unit cost. It comes only from the vendor's CCRS manifest.         │
 │ RECALL PLAN (8.4) signed, in the binder, reviewed every year. Records kept 5 years.       │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1127,10 +1136,12 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | **Recall hold** | The register block on every product with at least one **Recalled** lot (§4.11). No override. |
 | **Recall** | WAC 314-55-225: product that may pose a risk to consumers. LCB notified immediately. |
 | **Market withdrawal** | WAC 314-55-225: removal for a reason with no consumer risk (for example packaging). LCB notified within 48 hours. |
-| **Recall coordinator** | The staff member the recall plan names to run every recall (WAC 314-55-225(3)(d)(i)(A)). The owner until Q-05a-2. |
+| **Recall coordinator** | The staff member the recall plan names to run every recall (WAC 314-55-225(3)(d)(i)(A)). At Greenway, **the admin**, with no back-up (D37). |
 | **Recall plan** | The written plan every licensee must have (form 8.4). |
 | **Completion gate** | The final check when a sale completes. It refuses recalled products even if the register menu showed them. |
-| **86 / Mark out of stock** | The register link that marks a product's menu card unavailable everywhere (§4.12). It does not touch the lot. |
+| **86 / Mark out of stock** | Restaurant slang for "take it off the menu, we're out." The register link that marks a product's menu card unavailable on every register and the website (§4.12). It does not touch the lot, the count or CCRS. |
+| **Hard block** | The register refuses the sale and no one can override it. Owner decision D36 for expired edibles and liquid edibles (§4.16), once G-24 is built. |
+| **CCRS manifest cost** | The unit cost of a cannabis lot, read from the vendor's state manifest at receiving (line price ÷ quantity). The only allowed source of cannabis cost (D38). |
 | **Restore to sale** | The back-office button that recomputes an 86'd card from live lot units (§4.12). |
 | **Always hide** | The Product Enrichment visibility setting that takes a card off the website and online ordering (§4.10 step 5). |
 | **Expiry source** | Where a lot's date came from: manifest / COA / POS (protected), typed by owner, rule, unsourced, none (§4.14). |
@@ -1159,7 +1170,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | 4.4 Issues | `src/lib/admin/issues-core.ts` L16–25, L281–285, L314–486; `IssuesList.tsx` L11–12; `inventory/page.tsx` L572–597; `src/lib/inventory/store.ts` L32 |
 | 4.5 lot page | `[id]/page.tsx` L360–418, L439–868, L1474–1546; `LabCertificatePanels.tsx` L35–56; `store.ts` L594–600 |
 | 4.6–4.7 adjust | `inventory/actions.ts` L89–140; `store.ts` L578–616; `[id]/page.tsx` L118–128, L1474–1494; `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `trade-samples.ts` L280–300; `atomic-quantity.ts` |
-| 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L836–851; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1209–1217; `disposition.ts` L1087–1094 |
+| 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L836–851; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1209–1217; `disposition.ts` L1087–1095 |
 | 4.10–4.11 recall | `src/lib/pos/recall-hold-core.ts` L17–26, L44, L53–63, L108–117; `recall-hold-store.ts` L72–121; `api/pos/menu/route.ts` L116–121, L225–240, L302–304; `orders/completion-gate.ts` L95–119, L199; `pos/sync-store.ts` L1133–1162; `register-availability-core.ts` L332–345; `live-menu.ts` L167–171, L289–292; `order-pricing.ts` L124–134; `register-sellability-store.ts` L175; `products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270; `disposition-core.ts` L226–243; WAC 314-55-225 (app.leg.wa.gov, read 2026-10-27) |
 | 4.12 86 / restore | `src/app/(site)/pos/SaleFlow.tsx` L4263–4280; `RegisterShell.tsx` L1557–1594; `stock-flag-core.ts` L31–32, L79–81; `api/pos/stock-flag/route.ts` L28–102; `register-availability-core.ts` L141–145, L318–421; `RegisterSellabilityBanner.tsx` L142–188; `inventory/actions.ts` L1174–1198; `restore-to-sale-core.ts` L115–167; `restore-to-sale-store.ts` L68–172 |
 | 4.13 recall plan | WAC 314-55-225(3)(d); `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136 |
@@ -1174,28 +1185,35 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 
 ## Appendix B: Not built yet (interim procedures)
 
+> **Reminder (owner decision D41).** When any row below is built, update this SOP in the same piece of work: the sections the row names, this table, Appendix D, the finding (mark it FIXED) and the concierge entry.
+
 | Need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
-| A status change that checks the go-live rule, asks a reason and writes an audit row | **Lifecycle status** writes any status blindly, including **Destroyed** with units on hand | Form 8.1 before every change; Destroyed never by hand; Recalled → Active by the owner only (§4.8–§4.10) | G-19, **G-22** · F-04-2, F-05a-1, F-05a-2 |
-| A safe manual adjustment (atomic, no negative, Sold out at zero, Theft / Seizure, note required where CCRS needs it, no Receive / Destruction / Recall removal) | Read-then-write, no floor, optional note, unsafe reasons on the list | Count twice, quiet times, always a note, form 8.2, forbidden reasons (§4.6–§4.7) | **G-23** · F-05a-3 … F-05a-7 |
-| A register stop or warning on expired lots; FEFO lot draw; correct Issues text | Register sells expired lots, draws FIFO; Issues text points to the wrong fix | Daily pull and quarantine; one lot on the floor at a time (§4.16) | **G-24** (waits on Q-05a-1) · F-05a-8 |
+| A status change that checks the go-live rule, asks a reason and writes an audit row | **Lifecycle status** writes any status blindly, including **Destroyed** with units on hand | Form 8.1 before every change; Destroyed never by hand; Recalled → Active by the admin only (§4.8–§4.10) | G-19, **G-22** · F-04-2, F-05a-1, F-05a-2 |
+| A safe manual adjustment (atomic, no negative, Sold out at zero, **Theft / Seizure added**, note required where CCRS needs it, **Receive / Destruction / Recall removal removed**, a **Schedule destruction** link to Returns & Destruction) — **APPROVED** (D39) | Read-then-write, no floor, optional note, unsafe reasons on the list | Count twice, quiet times, always a note, form 8.2, forbidden reasons (§4.6–§4.7) | **G-23** · F-05a-3 … F-05a-7 |
+| Register **hard block** on expired Solid / Liquid Edible lots, **warning** on all other expired lots; FEFO lot draw; correct Issues text — **APPROVED** (D36) | Register sells expired lots, draws FIFO; Issues text points to the wrong fix | Daily check by type: edibles pulled and quarantined, others on the owner's decision; one lot on the floor at a time (§4.16) | **G-24** (**APPROVED**, D36; Q-05a-6) · F-05a-8 |
 | A recall plan and recall log in the app, with a named coordinator; the hold reaching the website and online orders | No plan, no coordinator, no log; the hold stops the register only | Forms 8.4 and 8.5; **Always hide** on Product Enrichment (§4.10, §4.13) | **G-25** · F-05a-15, F-05a-16 |
-| A **Print label** link on the lot page; a scannable fallback barcode; an 86 that stays until a manager restores it | Label linked from the manifest only; fallback barcode does not scan; 86 reverts on the next download | Manifest link or typed address; scan before use; manager checks every 86 (§4.12, §4.19) | **G-26** · F-05a-9, F-05a-10 |
-| Cannabis unit cost entry restricted to owner / admin | A manager can bulk-fill it | Owner or admin only (§4.20) | Q-05a-3 · F-05a-11 |
+| A **Print label** link on the lot page; a scannable fallback barcode; **the professional 86** (reason-driven clearing, one queue, audited manager restore) — 86 part **APPROVED** (D40) | Label linked from the manifest only; fallback barcode does not scan; 86 reverts on the next download | Manifest link or typed address; scan before use; manager checks every 86 (§4.12, §4.19) | **G-26** · F-05a-9, F-05a-10 |
+| **No typed cannabis unit cost anywhere**: remove **Unit cost** from Bulk fill for cannabis lots — **APPROVED** (D38) | Anyone with Inventory access can bulk-fill it | Never use Bulk fill → Unit cost; cost only from the manifest (§4.20) | **G-27** · F-05a-11 (S1) |
+| Returns & Destruction able to pick **Quarantine** and **Recalled** lots, keep **Recalled** when scheduling (hold stays on), and on Cancel put the lot back to the status it had | Lists Active lots only; scheduling writes Quarantine over Recalled; Cancel always sets Active | Recalled lots destroyed on paper with the LCB officer and stay Recalled; cancel only with the owner and restore the old status at once (§4.9) | **G-28** · F-05a-17, F-05a-18, F-05a-19 |
 | Adjustment history in store time, with the name | Browser time zone; no name shown | Form 8.2 (§4.5) | F-05a-13 |
 
 ## Appendix C: Open questions for the owner
 
 | # | Question | Why it matters | Interim rule in this SOP |
 |---|---|---|---|
-| **Q-05a-1** | **May Greenway sell product past its expiry or best-by date?** If not, should the register **block** an expired lot, or **warn** and let a manager decide? And should a **rule** (estimated) best-by date count the same as a manufacturer's expiry date? | The register does not check dates at all, and draws oldest-received first (F-05a-8). The code says WA does not require a date (`expiry-rules-core.ts` L32–34); the Issues tab says *"Expired product may not be sold."* G-24 is designed once this is answered. | Expired = not for sale: pull, quarantine, owner decides (§4.16). |
-| **Q-05a-2** | **Who is Greenway's recall coordinator**, and who is the back-up? | WAC 314-55-225(3)(d)(i)(A) requires a named coordinator in the written plan. | The owner; the on-duty manager acts in the owner's absence (§2, form 8.4). |
-| **Q-05a-3** | **May a manager key a cannabis unit cost through Bulk fill?** | The permission model says cannabis cost entry is not built and gives cost entry to owner and admin only (`roles.ts` L143–148); Bulk fill lets a manager do it (F-05a-11). | Owner or admin only (§4.20). |
-| **Q-05a-4** | **Remove Receive (add), Destruction and Recall removal from the lot page's adjustment reasons** (and add Theft and Seizure)? | Receive is invisible to CCRS; the other two bypass the SOP-15 destruction controls and the recall rule (F-05a-5, F-05a-6, F-05a-7). Part of G-23. | Never use them (§4.7). |
-| **Q-05a-5** | **Should the 86 stay put until a manager restores it**, or keep coming back on its own when the books show stock? | Today an 86 on a damaged product with units on file returns at the next menu download (F-05a-9). Part of G-26. | The manager checks every 86 the same shift (§4.12). |
+| **Q-05a-1** | ~~May Greenway sell product past its expiry or best-by date? Block or warn?~~ | **ANSWERED** (D36): *"hard block edibles and liquid edibles, warnings for everything else."* | §4.16 paper rule; G-24 APPROVED |
+| **Q-05a-2** | ~~Who is the recall coordinator, and who is the back-up?~~ | **ANSWERED** (D37): *"admin. No back up. Just my manager and I."* | §2, §4.13, form 8.4 |
+| **Q-05a-3** | ~~May a manager key a cannabis unit cost through Bulk fill?~~ | **ANSWERED** (D38): *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."* | §4.20; F-05a-11 re-rated S1; G-27 APPROVED |
+| **Q-05a-4** | ~~Remove Receive, Destruction and Recall removal; add Theft and Seizure?~~ | **ANSWERED** (D39): *"remove receive … Add theft and seizure."* The owner's question about the Destructions page is answered in §4.9 | §4.7, §4.9; G-23 APPROVED; G-28 new |
+| **Q-05a-5** | ~~Should the 86 stay put until a manager restores it?~~ | **ANSWERED** (D40): *"what is an 86? I forget. Do the enterprise grade solution, the professional method."* | §4.12; G-26 APPROVED |
+| **Q-05a-6** | **Does "edibles and liquid edibles" include Tincture and Capsule** (and any other swallowed product), for the expiry hard block? | CCRS has separate types for Solid Edible, Liquid Edible, Tincture and Capsule (`ccrs-batch-core.ts` L245–258). The sales-limit code already counts tinctures as liquid edibles (`sales-limits-core.ts` L364–366). G-24 needs the exact list. | Treated as included (hard stop) until answered (§4.16). |
+| **Q-05a-7** | **May the manager still place a recall hold** (set **Recalled**) the moment a notice arrives, with the admin releasing it? | The admin is the coordinator with no back-up (D37). A hold only protects customers; waiting for the admin could let recalled product sell. | Yes: the manager places, the admin releases (§2, §4.10). |
+| **Q-05a-8** | **Approve the design for Returns & Destruction (G-28)?** (a) list Quarantine and Recalled lots too; (b) keep a Recalled lot **Recalled** while its destruction is pending, so the register hold stays on; (c) on Cancel, put the lot back to the status it had before; (d) add the **Schedule destruction** link on the lot page. Also: until it is built, is the paper procedure in §4.9 point 3 acceptable for a recalled lot? | Today the page cannot pick a held lot, lifts a recall hold when scheduling, and puts any cancelled lot back on sale (F-05a-17, F-05a-18, F-05a-19). | §4.9 interim. |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue (slice SOP-05a, owner decision D35: inventory management in two slices). Written from the code at `main@ac251766`. Part 1 screens and the daily Issues check (§4.1–§4.4); Part 2 the lot page, adjustments and lifecycle status (§4.5–§4.9); Part 3 recalls, the 86, restore to sale and the written recall plan (§4.10–§4.13, WAC 314-55-225); Part 4 expiry dates and expiration rules (§4.14–§4.16); Part 5 tags, testing labs, labels, bulk fill and lot corrections (§4.17–§4.22). Adds findings F-05a-1…F-05a-16, gaps G-22…G-26, questions Q-05a-1…Q-05a-5, forms 8.1–8.5 (8.4 is the statutory recall plan). | SOP program (for owner review) |
+| 1.1 draft | 2026-10-27 | Owner answers to Q-05a-1…5 applied (decisions D36–D41). Re-verified at `main@827facb5` after the performance merge (register files now under `src/app/(site)/pos/`; line references updated; no described behaviour changed). Living-SOP reminder added (D41). §2, §4.10, §4.13, §6, form 8.4: the **admin** is the recall coordinator, no back-up (D37). §4.7: Receive, Destruction and Recall removal to be removed, Theft and Seizure to be added (D39, G-23 APPROVED). §4.9: how Returns & Destruction changes the lot by itself, and new findings F-05a-17…19 with an interim (gap G-28). §4.12: what an 86 is, and the professional method (D40, G-26 APPROVED). §4.16: expired edibles and liquid edibles never sold, others on the owner's decision (D36, G-24 APPROVED). §4.20: nobody types a cannabis unit cost (D38; F-05a-11 re-rated S1; gap G-27). §7, §9, glossary, Appendices B–C updated; questions Q-05a-6…8 added. | SOP program (for owner review) |
