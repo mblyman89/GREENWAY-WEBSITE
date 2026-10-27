@@ -9,7 +9,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
-import { pagedAll, chunkedIn } from "@/lib/supabase/chunked-in";
+import { pagedAll, chunkedIn, ADMIN_PAGED_CONCURRENCY, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { pacificToday, addPacificDays } from "@/lib/reports/timezone";
 import type { ReceivedDateLot } from "@/lib/inventory/received-date-core";
 import type { BulkFillLot, BulkFillField } from "@/lib/inventory/bulk-fill-core";
@@ -206,7 +206,7 @@ export async function listAllLotsForFiltering(): Promise<LotWithDetail[]> {
       .order("id", { ascending: true })
       .range(from, to);
     return (data as InventoryLot[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY }); // PERF2-P8: pages in waves, same rows
   if (lots.length === 0) return [];
   return hydrateLotsChunked(admin, lots);
 }
@@ -229,48 +229,61 @@ async function hydrateLotsChunked(
   const brandMap = new Map<string, string>();
   const labMap = new Map<string, LabResult>();
 
-  if (vendorIds.length > 0) {
-    const rows = await chunkedIn<string, { id: string; display_name: string }>(
-      vendorIds,
-      async (chunk, from, to) => {
-        const { data } = await admin
-          .from("vendors")
-          .select("id, display_name")
-          .in("id", chunk)
-          .order("id", { ascending: true })
-          .range(from, to);
-        return (data as { id: string; display_name: string }[] | null) ?? [];
-      },
-    );
-    for (const v of rows) vendorMap.set(v.id, v.display_name);
-  }
-  if (brandIds.length > 0) {
-    const rows = await chunkedIn<string, { id: string; display_name: string }>(
-      brandIds,
-      async (chunk, from, to) => {
-        const { data } = await admin
-          .from("brands")
-          .select("id, display_name")
-          .in("id", chunk)
-          .order("id", { ascending: true })
-          .range(from, to);
-        return (data as { id: string; display_name: string }[] | null) ?? [];
-      },
-    );
-    for (const b of rows) brandMap.set(b.id, b.display_name);
-  }
-  if (labIds.length > 0) {
-    const rows = await chunkedIn<string, LabResult>(labIds, async (chunk, from, to) => {
-      const { data } = await admin
-        .from("lab_results")
-        .select("*")
-        .in("id", chunk)
-        .order("id", { ascending: true })
-        .range(from, to);
-      return (data as LabResult[] | null) ?? [];
-    });
-    for (const r of rows) labMap.set(r.id, r);
-  }
+  // PERF2-P8: the three lookups are independent (different tables, disjoint
+  // maps), so they run side by side, and each one's id chunks run
+  // MENU_READ_CONCURRENCY at a time (the lab read alone was ~20 serial chunks
+  // of select("*") at 4,000 lots). chunkedIn keeps the returned order equal
+  // to the serial path, and every row is filed by its own id.
+  const [vendorRows, brandRows, labRows] = await Promise.all([
+    vendorIds.length > 0
+      ? chunkedIn<string, { id: string; display_name: string }>(
+          vendorIds,
+          async (chunk, from, to) => {
+            const { data } = await admin
+              .from("vendors")
+              .select("id, display_name")
+              .in("id", chunk)
+              .order("id", { ascending: true })
+              .range(from, to);
+            return (data as { id: string; display_name: string }[] | null) ?? [];
+          },
+          { concurrency: MENU_READ_CONCURRENCY },
+        )
+      : Promise.resolve([] as { id: string; display_name: string }[]),
+    brandIds.length > 0
+      ? chunkedIn<string, { id: string; display_name: string }>(
+          brandIds,
+          async (chunk, from, to) => {
+            const { data } = await admin
+              .from("brands")
+              .select("id, display_name")
+              .in("id", chunk)
+              .order("id", { ascending: true })
+              .range(from, to);
+            return (data as { id: string; display_name: string }[] | null) ?? [];
+          },
+          { concurrency: MENU_READ_CONCURRENCY },
+        )
+      : Promise.resolve([] as { id: string; display_name: string }[]),
+    labIds.length > 0
+      ? chunkedIn<string, LabResult>(
+          labIds,
+          async (chunk, from, to) => {
+            const { data } = await admin
+              .from("lab_results")
+              .select("*")
+              .in("id", chunk)
+              .order("id", { ascending: true })
+              .range(from, to);
+            return (data as LabResult[] | null) ?? [];
+          },
+          { concurrency: MENU_READ_CONCURRENCY },
+        )
+      : Promise.resolve([] as LabResult[]),
+  ]);
+  for (const v of vendorRows) vendorMap.set(v.id, v.display_name);
+  for (const b of brandRows) brandMap.set(b.id, b.display_name);
+  for (const r of labRows) labMap.set(r.id, r);
 
   return lots.map((l) => ({
     ...l,
@@ -471,7 +484,7 @@ export async function computeInventoryStats(): Promise<InventoryStats> {
       .order("id", { ascending: true })
       .range(from, to);
     return (data as StatsRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY }); // PERF2-P8: pages in waves, same rows
 
   const today = todayIso();
   const soon = isoDaysFromNow(EXPIRING_SOON_DAYS);

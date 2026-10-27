@@ -6,6 +6,7 @@
  * review screen to show new / price-changed / removed products before publish).
  */
 import "server-only";
+import { cache } from "react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // SLICE 3: PostgREST caps every response at `db.max_rows` (1,000) and reports
 // no error when it truncates. These helpers page with `.range()` until a short
@@ -36,7 +37,35 @@ import {
 
 export type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
 
+/**
+ * PERF2-P7: ONE published-version read per burst of parallel callers.
+ *
+ * An admin render fans out into loaders that each call getPublishedVersion()
+ * in parallel (/admin/inventory alone: live prices, menu flags, sellability,
+ * categories...). Each was its own round trip for the same one-row answer.
+ *
+ * The share is deliberately IN-FLIGHT ONLY and per REQUEST (React cache()
+ * box): callers that start while a read is pending join it; the moment it
+ * settles the slot is cleared, so any later call - e.g. after a publish
+ * inside the same Server Action - always reads the database again. Nothing
+ * is ever served from a finished, possibly stale result. Outside a request
+ * scope cache() simply returns a fresh box, i.e. no sharing (as before).
+ */
+const publishedVersionInFlight = cache((): { p: Promise<MenuVersion | null> | null } => ({ p: null }));
+
 export async function getPublishedVersion(): Promise<MenuVersion | null> {
+  const box = publishedVersionInFlight();
+  if (box.p) return box.p;
+  const p = readPublishedVersion();
+  box.p = p;
+  try {
+    return await p;
+  } finally {
+    if (box.p === p) box.p = null;
+  }
+}
+
+async function readPublishedVersion(): Promise<MenuVersion | null> {
   try {
     const admin = createSupabaseAdminClient();
     // USAGE-2: no `summary_json`. This is the most-called version read in the

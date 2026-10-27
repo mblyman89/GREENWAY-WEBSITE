@@ -9,7 +9,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { pagedAll } from "@/lib/supabase/chunked-in";
+import { pagedAll, ADMIN_PAGED_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { pacificToday } from "@/lib/reports/timezone";
 import {
   buildCommandCenter,
@@ -58,7 +58,9 @@ export async function loadIntelLots(): Promise<IntelLot[]> {
   // calling it the whole store: dead-stock, shrink and FEFO signals were all
   // computed on a quarter of the inventory. pagedAll() + a stable `.order("id")`
   // walks every page (chunked-in.ts:82).
-  const rows = await pagedAll<LotRow>(async (from, to) => {
+  // PERF2-P8: the lot walk and the counted-lines walk are independent, so
+  // they run side by side (were one after the other on every inventory load).
+  const rowsP = pagedAll<LotRow>(async (from, to) => {
     const { data } = await admin
       .from("inventory_lots")
       .select(
@@ -67,8 +69,7 @@ export async function loadIntelLots(): Promise<IntelLot[]> {
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LotRow[] | null) ?? [];
-  });
-  if (rows.length === 0) return [];
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY }); // PERF2-P8: pages in waves, same rows
 
   // Most recent time each lot was physically counted (counted_qty recorded).
   //
@@ -78,7 +79,7 @@ export async function loadIntelLots(): Promise<IntelLot[]> {
   // a tiebreaker to make the sort total (equal timestamps would otherwise be
   // ordered arbitrarily, which can duplicate or skip rows across page
   // boundaries).
-  const counted = await pagedAll<{ lot_id: string; updated_at: string }>(async (from, to) => {
+  const countedP = pagedAll<{ lot_id: string; updated_at: string }>(async (from, to) => {
     const { data } = await admin
       .from("cycle_count_lines")
       .select("lot_id, updated_at")
@@ -88,6 +89,10 @@ export async function loadIntelLots(): Promise<IntelLot[]> {
       .range(from, to);
     return (data as { lot_id: string; updated_at: string }[] | null) ?? [];
   });
+  countedP.catch(() => undefined); // awaited below
+  const rows = await rowsP;
+  if (rows.length === 0) return [];
+  const counted = await countedP;
   const lastCounted = new Map<string, string>();
   for (const c of counted) {
     if (!lastCounted.has(c.lot_id)) lastCounted.set(c.lot_id, c.updated_at);
