@@ -1,6 +1,16 @@
 import "server-only";
 
 import { cleanUrl } from "./intake-parser";
+import { readTransferBody } from "@/lib/inbound-email/intake-harden-core";
+
+/**
+ * R74 S51: some vendor servers (GrowFlow behind a CDN) refuse bare server
+ * fetches; send ordinary browser-like headers.
+ */
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (compatible; GreenwayIntake/1.0; +https://greenwaymarijuana.com)",
+  "Accept-Language": "en-US,en;q=0.9",
+};
 
 /**
  * Result of attempting to fetch a vendor Transfer Data Link.
@@ -25,6 +35,15 @@ const FETCH_TIMEOUT_MS = 15_000;
  * The caller is responsible for running the text through `parseVendorJson`.
  */
 export async function fetchTransferJson(rawUrl: string): Promise<TransferFetchResult> {
+  // R74 S51: one retry for a transient network error / timeout / 5xx; a named
+  // refusal (expired, bad token, 4xx) is final.
+  const first = await fetchTransferJsonOnce(rawUrl);
+  if (first.ok || !/timed out|Couldn't reach|HTTP 5\d\d/.test(first.error)) return first;
+  await new Promise((r) => setTimeout(r, 1500));
+  return fetchTransferJsonOnce(rawUrl);
+}
+
+async function fetchTransferJsonOnce(rawUrl: string): Promise<TransferFetchResult> {
   const cleaned = cleanUrl(rawUrl);
   if (!cleaned) {
     return { ok: false, error: "That doesn't look like a URL." };
@@ -49,7 +68,7 @@ export async function fetchTransferJson(rawUrl: string): Promise<TransferFetchRe
       method: "GET",
       redirect: "follow",
       signal: controller.signal,
-      headers: { Accept: "application/json, text/plain, */*" },
+      headers: { ...BROWSER_HEADERS, Accept: "application/json, text/plain, */*" },
       cache: "no-store",
     });
   } catch (err) {
@@ -81,17 +100,21 @@ export async function fetchTransferJson(rawUrl: string): Promise<TransferFetchRe
     return { ok: false, error: "That file is too large to import automatically." };
   }
 
-  // Validate it's JSON (the endpoint may mislabel the content type).
-  try {
-    JSON.parse(text);
-  } catch {
+  // Validate it's JSON (the endpoint may mislabel the content type). R74 S51:
+  // strip a BOM, lift JSON out of an HTML <pre>, and NAME GrowFlow's 200-OK
+  // refusals ("Link has expired" / "Bad token") instead of a vague error.
+  const body = readTransferBody(text);
+  if (body.kind !== "json") {
     return {
       ok: false,
-      error: "The link didn't return JSON — paste the JSON directly instead.",
+      error:
+        body.kind === "expired" || body.kind === "bad-token"
+          ? `${body.message}.`
+          : "The link didn't return JSON — paste the JSON directly instead.",
     };
   }
 
-  return { ok: true, jsonText: text, finalUrl: url.toString() };
+  return { ok: true, jsonText: body.text, finalUrl: url.toString() };
 }
 
 /** Result of attempting to fetch a vendor PDF (invoice / manifest / COA) link. */
@@ -133,7 +156,7 @@ export async function fetchPdfBytes(rawUrl: string): Promise<PdfFetchResult> {
       method: "GET",
       redirect: "follow",
       signal: controller.signal,
-      headers: { Accept: "application/pdf, application/octet-stream, */*" },
+      headers: { ...BROWSER_HEADERS, Accept: "application/pdf, application/octet-stream, */*" },
       cache: "no-store",
     });
   } catch (err) {

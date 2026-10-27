@@ -28,7 +28,7 @@
  * This module does the PURE parts:
  *   1) extractEmailIdFromWebhook   — pull data.email_id from the webhook payload.
  *   2) extractTransferLinksFromBody — find the WCIA "Transfer Data Link" (.json
- *      import URL) + invoice/manifest "download here" links in the html/text body.
+ *      URL) + invoice/manifest "download here" links in the html/text body.
  *   3) mapReceivingAttachments      — receiving-API attachment metadata -> a plain
  *      shape the fetcher fills with bytes.
  *   4) decodeDataUriHtml            — Resend serves inline images as data: URIs and
@@ -37,6 +37,7 @@
  * The server-only fetcher (resend-receiving-fetch.ts) does the network I/O and
  * assembles a NormalizedInboundEmail from these pieces.
  */
+import { normalizeForLinks, wrappedUrlVariants } from "@/lib/inbound-email/intake-harden-core";
 import {
   classifyAttachmentRole,
   isPdfAttachment,
@@ -240,8 +241,11 @@ export function extractAllTransferLinksFromBody(
   html: string | null | undefined,
   text: string | null | undefined,
 ): string[] {
-  const htmlStr = decodeDataUriHtml(html);
-  const textStr = typeof text === "string" ? text : "";
+  // R74 S51: strip <wbr>/&shy;/zero-width breaks + decode & first, so a
+  // long tokenized link is matched WHOLE (a truncated GrowFlow token answers
+  // "Bad token").
+  const htmlStr = normalizeForLinks(decodeDataUriHtml(html));
+  const textStr = normalizeForLinks(typeof text === "string" ? text : "");
   const combined = `${htmlStr}\n${textStr}`;
 
   const jsonMatches = (combined.match(JSON_URL_RE) ?? []).map(stripTrailingPunct);
@@ -264,15 +268,26 @@ export function extractAllTransferLinksFromBody(
   const shapeLinks = allUrls.filter(pathLooksTransferData);
   const labelLinks = labeledTransferLinks(htmlStr, textStr);
 
-  return Array.from(new Set([...vendorLinks, ...shapeLinks, ...labelLinks]));
+  const found = Array.from(new Set([...vendorLinks, ...shapeLinks, ...labelLinks]));
+
+  // R74 S51: a link wrapped across lines by the mail client (the owner's
+  // GrowFlow email: `token=EAAA%` + newline + `2Fk0Hq...`) is rebuilt and
+  // tried FIRST; the truncated half it was cut from is dropped (it can only
+  // ever answer "Bad token").
+  const rebuilt = [...wrappedUrlVariants(textStr), ...wrappedUrlVariants(htmlStr)].filter(
+    (u) => found.some((f) => u.startsWith(f) && u.length > f.length) || hostLooksVendor(u) || pathLooksTransferData(u),
+  );
+  if (rebuilt.length === 0) return found;
+  const truncated = (f: string) => rebuilt.some((u) => u.startsWith(f) && u.length > f.length);
+  return Array.from(new Set([...rebuilt, ...found.filter((f) => !truncated(f))]));
 }
 
 export function extractTransferLinksFromBody(
   html: string | null | undefined,
   text: string | null | undefined,
 ): ExtractedTransferLinks {
-  const htmlStr = decodeDataUriHtml(html);
-  const textStr = typeof text === "string" ? text : "";
+  const htmlStr = normalizeForLinks(decodeDataUriHtml(html));
+  const textStr = normalizeForLinks(typeof text === "string" ? text : "");
   const combined = `${htmlStr}\n${textStr}`;
 
   // 1) Transfer Data Link — accept BOTH `.json` URLs (Cultivera, OpenTHC) AND
@@ -311,6 +326,14 @@ export function extractTransferLinksFromBody(
     jsonMatches[0] ??
     allCandidates[0] ??
     null;
+  // R74 S51: prefer the rebuilt (unwrapped) form of a line-wrapped link.
+  if (transferJsonUrl) {
+    const cur = transferJsonUrl;
+    const longer = [...wrappedUrlVariants(textStr), ...wrappedUrlVariants(htmlStr)].find(
+      (u) => u.startsWith(cur) && u.length > cur.length,
+    );
+    if (longer) transferJsonUrl = longer;
+  }
 
   // 2) invoice / manifest DOWNLOAD links (PDFs). Prefer parsing HTML anchors so we
   //    read the real href behind the word "here"; fall back to nearby-URL
