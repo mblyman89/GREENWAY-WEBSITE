@@ -570,4 +570,99 @@ Beside the source, the lot page shows a countdown (`expiryStatus`, L770–777): 
 
 # Part 5: Tags, labs, labels and corrections
 
-<!-- PART 5 (sections 4.17 onward) is appended in the next commit. -->
+### 4.17 Tags (New, Staff Pick and your own)
+
+**Where:** **Inventory → Tags** (`/admin/inventory/tags`; owner, admin, manager, `tags/page.tsx` L85). **What it is:** *"Label products on the website menu (New, Staff Pick, Local ...). Shoppers see the tags on product cards and can filter by them. The New tag is automatic."* (L130–131). Tags are a **website** feature. They change nothing about the lot, the price or CCRS. Header buttons: **View the menu**, **Back to inventory**.
+
+**The built-in New tag.** A product shows **New** for **14 days** from the first time it appeared on a published menu, then it comes off by itself (`DEFAULT_NEW_WINDOW_DAYS = 14`, `src/lib/menu/product-tags-core.ts` L28; the window can be 1–365 days, L29). It can be renamed, recoloured or turned off, but **not deleted** (`tags/page.tsx` L252–256). Its row shows **Show "New" for (days)**. The card **Showing "New" right now (N)** lists every product inside the window with its end date.
+
+**Procedure: create a tag** (manager, with owner approval for any tag shoppers will see):
+1. Under **Create a tag**: **Name** (up to 32 characters, L30), a colour, **Order** (lower shows first) and **Show on the website** (untick it for a staff-only label). Press **Create tag**. A card shows **up to 3 tags** (`MAX_TAGS_ON_CARD = 3`, L31).
+2. The green banner says *"Created "<name>". The website menu updates on the next page load."*
+
+**Procedure: put a tag on products, or take it off:**
+1. Under **Add or remove products**: choose the **Tag**, type in **Search the live menu** (*"name, brand, strain, category"*), press **Show products**. Or press **Add / remove products** on the tag's row.
+2. Tick the products. Press **Apply "<tag>" to ticked** or **Remove from ticked**. Products already carrying the tag by hand are marked. Hand-added products under **New** keep it until removed, *"on top of the automatic window"*.
+3. Products tagged by hand are listed below with boxes; tick and press **Remove ticked** to take it off.
+
+**Procedure: change or delete a tag.** On the tag's row, edit and press **Save**, or untick **On** to turn it off everywhere. To delete: tick **Yes, delete**, then press **Delete tag**. Without the tick, nothing happens and you see *"Tick "Yes, delete" to delete a tag."* (`tags/actions.ts` L111). Deleting removes it from every product: *"Deleted "<name>" and removed it from every product."*
+
+**Rules.** Never use a tag to say anything a WA advertising rule would not allow (health claims, appeal to minors). SOP-11 covers marketing content. Every tag change is audited (`product_tag.created|updated|deleted|applied|removed`, `tags/actions.ts` L62, L98, L117, L146).
+
+### 4.18 Testing labs and certificate hosts
+
+**Where:** **Inventory → Testing labs** (`/admin/inventory/labs`; owner, admin, manager, `labs/page.tsx` L156). **What it is:** *"Every Washington cannabis testing lab, and the web hosts their certificates (COAs) are read from. The certificate reader only opens links from these hosts."* The list is copied from the WSLCB lab lists (header L7–12). The host list is a **security allow-list**: the app downloads certificates only from these hosts.
+
+**When to use it.** Only when receiving or a COA re-read fails because a vendor's COA link comes from a host the reader will not open (SOP-04), or a newly certified lab is missing.
+
+**Procedure: add a certificate host to a lab:**
+1. Check the host is the lab's own or a well-known COA host. If unsure, ask the owner. **Never** add a host just because a link "won't open".
+2. In the lab's row, paste the host or a certificate link in *"host or a certificate link"* and press **Add**. Banner: *"<host> added. Certificate links from it are read on the next COA pass (press Read COA again on the delivery)."*
+3. Return to the delivery or lot and read the COA again.
+4. Owner-added hosts must be a public https web host. The app checks every address before it downloads (**Always-allowed certificate hosts** card). To take one away, press **Remove** beside it.
+
+**Procedure: add a lab.** Press **Add a lab** (top) → **Name (required)**, **WSLCB / WSDA lab # (optional)**, **City**, **Phone**, **Website**, **Notes** → **Add lab**. Then add its host (above). Banner: *"Added <lab>. Add the host its certificate links come from so the reader will open them."*
+
+Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_lab.host_removed`; `labs/actions.ts` L49, L68).
+
+### 4.19 Printing or reprinting a lot label
+
+**What it is.** A 4×6 reprint label for one lot, for the Rollo printer: store name, product, lot code, on hand, **Expires** or **Best by** (§4.14), vendor, and a Code 128 barcode. It is a **reprint view**: *"nothing here touches CCRS or inventory counts"* (`lots/[id]/label/page.tsx` L1–11; owner, admin, manager, L33).
+
+**Where it is (finding F-05a-10).** The only link to it is **🏷 Print 4×6 label** on the **receiving manifest** page, one per lot (`intake/[id]/page.tsx` L1072–1078). The lot page has **no** print-label link. To reprint a label for a lot:
+1. Open the lot page and click its **Manifest** link, then **🏷 Print 4×6 label** on that lot's row; **or**
+2. Change the address of the lot page from `/admin/inventory/<lot id>` to `/admin/inventory/lots/<lot id>/label`.
+
+**Procedure:**
+1. On the label page (**Print lot label** — *"4×6 label for the Rollo. Press Print, choose the Rollo, confirm 4×6."*), press **🖨 Print label** (`LabelPrintControls.tsx` L25–32).
+2. In the print dialog choose the Rollo and confirm 4×6.
+3. **Scan the printed label at a register before using it.** The barcode is the **lot code**, or, if the lot has none, the **POS product key**, or else the lot's internal id (L38–40). The register finds a product only by **lot code** or **CCRS id** (`buildBarcodeIndex`, `src/lib/pos/scan-to-cart-core.ts` L55–70). So a label printed from a lot with no lot code **will not scan**; the register treats it as a search. Tell the owner (F-05a-10) and fix the lot's lot code through receiving, not by hand.
+4. Use **← Back to lot** to return.
+
+**Rules.** A reprint label is for the store's shelf and back stock. It never replaces the vendor's compliance label on a package (WAC 314-55-105). If a package's own label is damaged, quarantine it (§4.8) and tell the owner.
+
+### 4.20 Bulk fill (Cultivera-import lots only)
+
+**What it is.** A way to fill blank fields on many lots at once, **only** on lots from the one-time Cultivera / POS import, and **only** where the field is blank. Panel title: **Bulk fill — complete what the Cultivera import left blank**. *"It can only turn a blank into a value, only on lots from that one-time import, and it never overwrites a value that is already there."* (`BulkFillPanel.tsx` L113–122; migration test `isMigrationLot`, `bulk-fill-core.ts` L49, L107.)
+
+**The three fields** (`bulk-fill-core.ts` L318–325; hints `BulkFillPanel.tsx` L62–80):
+- **Expiration date**: *"Read the expiration date off the physical package or the COA."* Saved as **Typed by owner** (`actions.ts` L986).
+- **Unit cost**: *"Read the unit cost off the vendor invoice. Dollars — stored to the cent."*
+- **POS product key**: *"The catalog key that links this lot to a product."*
+
+**Who.** The button is open to managers (`actions.ts` L904, `inventory.manage`). But the permission table says *"Cannabis cost entry is NOT built"* and gives cost entry only to owner and admin, for non-cannabis (`roles.ts` L143–148). Bulk fill **Unit cost** therefore lets a manager key a **cannabis** cost (finding F-05a-11, S3; owner question **Q-05a-3**). **Until the owner answers: only the owner or an admin uses Bulk fill → Unit cost.** Managers may use **Expiration date** (from the package or COA) and **POS product key** (from Product Onboarding).
+
+**Procedure:**
+1. Filter the list to the lots to fill. The easiest way is from the Issues tab: **Bulk fill the Cultivera-import lots** or a gap row, which opens the list already filtered.
+2. Press **Bulk fill missing fields…** under the filters (`inventory/page.tsx` L695–700). The panel uses **every lot the current filters show**.
+3. Choose **Field**, type **Value**, press **Preview fill for N lots**.
+4. Read **Review before saving — <field> on N lots**: *"Nothing has been saved yet."* It says how many will be set and how many will be skipped (*"they already have a value, are not from the one-time Cultivera import, or are destroyed. Those are protected and will not be changed."*).
+5. **Check the value applies to every one of those lots.** One value goes to all of them. An expiry date or a cost is rarely the same across many lots; filter tighter (one vendor, one product) until it is.
+6. Press **Save N changes**, or **Cancel**. Result: *"Filled N lots."* plus any skipped or failed counts. Audited `inventory_lot.bulk_filled` (`actions.ts` L975–996). **Exit bulk fill** closes the panel.
+
+> **Control: bulk fill one value only across lots that truly share it, read from the package, COA or invoice; cannabis unit cost only by the owner or an admin.** The tool can only fill blanks on import lots, and it is audited (F-05a-11, Q-05a-3).
+
+### 4.21 Correcting a lot: received date, details, product link, lab result, re-reading the COA
+
+Each of these is on the lot page. All are manager-level and audited. None of them changes quantity, status, lot code or cost.
+
+| What | Where on the lot page | How | Audit |
+|---|---|---|---|
+| **Received date**: the date reported to CCRS as the inventory date | **Received date** (L439–475) | **Date received**: *"Use the date on the vendor manifest or invoice."* Not before the WA floor date and not in the future. Press **Save received date** / **Update received date**. A lot with no date says *"No received date on file… CCRS reporting falls back to the day this lot was imported…"* | `inventory_lot.received_date_set` (`actions.ts` L198) |
+| **Vendor, brand, strain, strain type** | **Correct lot details** (L806–868) | Pick from the lists; press **Save corrections**. *"Everything else on this lot (quantities, lot code, cost, LCB classification, dates, COA) is compliance data and can only change through receiving or an audited adjustment."* If the website shows a different strain type, a box offers **Send <type> to the website** | `inventory_lot.details_edited` (L371) |
+| **Product link** (the POS product key the register and menu use) | **Product link** (`LotLinkPanels.tsx` L55–140) | Only when **Not linked**. Use a suggested **Link to <key>** button, or type **POS product key** and press **Link product**. Not sure: **Find it in Product Onboarding**. A linked lot cannot be re-pointed here | `inventory_lot.product_linked` (L250) |
+| **Lab result (COA)** | **Attach a lab result** (`LotLinkPanels.tsx` L150–220; lot page L763) | Type the **Lab test ID** from the COA, press **Find lab result**, check the facts and **Result**, press **Attach this lab result**. Only fills an empty link | `inventory_lot.coa_linked` (L294) |
+| **Re-read the COA** | Lab certificate panel → **Re-read lab certificate** (`LabCertificatePanels.tsx` L54) | Reads the lot's lab JSON and COA PDF again. Can take up to about 90 seconds (`[id]/page.tsx` L96). Wait for the banner | `inventory_lot.coa_reread` (L1247) |
+
+**Rules.**
+- Use the received date from the **vendor manifest or invoice** only. Never guess it.
+- **Never attach a lab result whose result is FAILED to an Active lot.** Quarantine the lot and follow SOP-04 §4.19 / SOP-15.
+- The **sell price** (**Correct the sell price**, L1022), **Which size is this lot?** and **Website type & category** are SOP-05b.
+
+### 4.22 Low stock and oversold sales (pointers)
+
+**Low stock at the register.** A product with **3 or fewer** units shows as **low-stock** (`statusForUnits`, `register-availability-core.ts` L141–145). The register's low-stock flag is a **warning only, never a block**: *"the register informs, the human decides."* (`src/lib/pos/low-stock-core.ts` L18–21). When a budtender sees it, they tell the manager. Reordering is **SOP-09**.
+
+**Oversold sales.** When a sale takes more units than a lot had on file, the sale still completes and an **OVERSOLD** note is recorded. The list is on **Inventory → Cycle Counts** (`cycle-counts/page.tsx` L70, L96). An oversold product means the count is wrong: count it under **SOP-06**. Never "fix" it with **Receive (add)** (§4.7).
+
+<!-- SECTIONS 5-10 and appendices are appended in the next commit. -->
