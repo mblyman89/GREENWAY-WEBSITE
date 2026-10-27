@@ -103,9 +103,9 @@ describe("seed blocks are byte-identical to the hardcoded bodies", () => {
 
 describe("public pages render from the editable document", () => {
   const pages = [
-    ["src/app/privacy-policy/page.tsx", "privacy-policy"],
-    ["src/app/terms-of-use/page.tsx", "terms-of-use"],
-    ["src/app/consumer-health-data/page.tsx", "consumer-health-data"],
+    ["src/app/(site)/privacy-policy/page.tsx", "privacy-policy"],
+    ["src/app/(site)/terms-of-use/page.tsx", "terms-of-use"],
+    ["src/app/(site)/consumer-health-data/page.tsx", "consumer-health-data"],
   ] as const;
 
   it.each(pages)("%s uses getPolicyRowsForRender with fallback", (path, policyId) => {

@@ -4,7 +4,7 @@
  * src/components/cart/CartLimitMeter.tsx
  *
  * Customer-facing WAC 314-55-095 legal-limit meter for the shop cart. Mirrors
- * the FRONT-END POS register meter (src/app/pos/SaleFlow.tsx): an OK / NEAR /
+ * the FRONT-END POS register meter (src/app/(site)/pos/SaleFlow.tsx): an OK / NEAR /
  * OVER badge plus a per-bucket progress bar (green while safe, amber near the
  * line, red over it).
  *

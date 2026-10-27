@@ -45,10 +45,10 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     expect(passed).toBeGreaterThan(0);
   });
 
-  it("src/app/menu/loading.tsx exists", () => {
+  it("src/app/(site)/menu/loading.tsx exists", () => {
     // This is the whole point of the slice. Without this file the framework
     // falls back to the root home-shaped skeleton.
-    expect(existsSync(resolve(repoRoot, "src/app/menu/loading.tsx"))).toBe(true);
+    expect(existsSync(resolve(repoRoot, "src/app/(site)/menu/loading.tsx"))).toBe(true);
   });
 
   it("the shop skeleton does NOT reuse the home page's shapes", () => {
@@ -60,7 +60,7 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // explains the defect and necessarily names those shapes, and a prose
     // mention is not a rendered `<div>`. Stripping keeps the assertion aimed at
     // what actually reaches the browser.
-    const loading = stripComments(read("src/app/menu/loading.tsx"));
+    const loading = stripComments(read("src/app/(site)/menu/loading.tsx"));
     const skeleton = stripComments(read("src/components/menu/MenuSkeleton.tsx"));
     for (const source of [loading, skeleton]) {
       expect(source).not.toContain("film-strip");
@@ -80,7 +80,7 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
   it("loading.tsx renders the shared shop skeleton", () => {
     // The route file must delegate, not re-implement. A second copy of the
     // markup is exactly how the two placeholders would drift apart.
-    const loading = read("src/app/menu/loading.tsx");
+    const loading = read("src/app/(site)/menu/loading.tsx");
     expect(loading).toContain('from "@/components/menu/MenuSkeleton"');
     expect(loading).toContain("ShopBrowserSkeleton");
   });
@@ -100,7 +100,7 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // A skeleton that awaits anything is no longer a skeleton. Both the route
     // file and the shared component must be synchronous so they flush with the
     // first byte.
-    for (const path of ["src/app/menu/loading.tsx", "src/components/menu/MenuSkeleton.tsx"]) {
+    for (const path of ["src/app/(site)/menu/loading.tsx", "src/components/menu/MenuSkeleton.tsx"]) {
       const source = read(path);
       expect(source).not.toContain("await ");
       expect(source).not.toContain("async function");
@@ -162,7 +162,7 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // (measured live at 412px: banner top 37px -> 136px). The loading route
     // must reserve that space -- and must NOT render the real <Header/>, which
     // is async and would make the skeleton itself await I/O.
-    const loading = stripComments(read("src/app/menu/loading.tsx"));
+    const loading = stripComments(read("src/app/(site)/menu/loading.tsx"));
     expect(loading).not.toContain("<Header />");
     expect(loading).not.toContain("await ");
 
@@ -260,7 +260,7 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // The whole point of Slice H: `searchParams` is a request-time API, so a
     // single read of it anywhere in either route file makes the route
     // uncacheable again and undoes the slice. This is the regression guard.
-    for (const file of ["src/app/menu/page.tsx", "src/app/menu/[category]/page.tsx"]) {
+    for (const file of ["src/app/(site)/menu/page.tsx", "src/app/(site)/menu/[category]/page.tsx"]) {
       const code = stripComments(read(file));
       expect(code, `${file} reads searchParams`).not.toMatch(/\bsearchParams\b/);
       expect(code, `${file} reads cookies()`).not.toMatch(/\bcookies\s*\(/);
@@ -271,7 +271,7 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
   it("the ROOT skeleton is left untouched for every other route", () => {
     // /menu is the only route being retargeted. The home page and everything
     // else must keep the skeleton they already had.
-    const rootLoading = read("src/app/loading.tsx");
+    const rootLoading = read("src/app/(site)/loading.tsx");
     expect(rootLoading).toContain("film-strip");
     expect(rootLoading).toContain("md:grid-cols-3");
   });

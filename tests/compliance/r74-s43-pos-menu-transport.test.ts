@@ -10,7 +10,7 @@ describe("R74 S43 - register menu fits Vercel's response cap", () => {
     const route = readFileSync("src/app/api/pos/menu/route.ts", "utf8");
     expect(route).toContain('"content-encoding": "gzip"');
     expect(route).toContain("export const maxDuration = 60;");
-    const shell = readFileSync("src/app/pos/RegisterShell.tsx", "utf8");
+    const shell = readFileSync("src/app/(site)/pos/RegisterShell.tsx", "utf8");
     expect(shell).toContain("menuRefreshFailureMessage(res.status");
     expect(shell).toContain('d.endsWith("(no longer on the menu)")');
   });

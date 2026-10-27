@@ -52,7 +52,7 @@
  *     -> buildBarcodeIndex drops the lot (`!sellableKeys.has(key)`)
  *     -> resolveScan returns "none"
  *     -> the register prints: Barcode "X" matched nothing on the menu
- *        (src/app/pos/SaleFlow.tsx:2399)
+ *        (src/app/(site)/pos/SaleFlow.tsx:2399)
  *
  * Real cannabis, sitting on the shelf, present and correct in the back office,
  * that the register refuses to sell — and no message anywhere explaining why.

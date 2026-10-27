@@ -167,7 +167,7 @@ describe("SLICE D: concurrency never reorders rows", () => {
 });
 
 describe("SLICE D: the home page is cacheable again", () => {
-  const src = stripComments(repoFile("src/app/page.tsx"));
+  const src = stripComments(repoFile("src/app/(site)/page.tsx"));
 
   it("is no longer force-dynamic", () => {
     // force-dynamic meant "never reuse this render", which is what made the

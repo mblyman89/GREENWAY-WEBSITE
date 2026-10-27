@@ -91,6 +91,9 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
+    // PERF-S2: the app now has two root layouts ((site) and admin) and no
+    // top-level layout, so unmatched URLs need app/global-not-found.tsx.
+    globalNotFound: true,
     serverActions: {
       // POS exports (PRODUCTS.xlsx + INVENTORIES.xlsx) are uploaded together via
       // a Server Action. Next.js caps Server Action request bodies at 1 MB by

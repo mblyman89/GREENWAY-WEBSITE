@@ -2,7 +2,7 @@
  * Guard tests for the packaged register build (Capacitor Phase 0.3).
  *
  * WHY THIS FILE EXISTS
- * register-app/ compiles src/app/pos/RegisterShell.tsx — the SAME file Next.js
+ * register-app/ compiles src/app/(site)/pos/RegisterShell.tsx — the SAME file Next.js
  * serves at /pos — into a static bundle for the iPad app. That only works
  * because the register's entire import graph is framework-free: pure modules
  * under src/lib/**, plus React.
@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const SRC = path.join(REPO_ROOT, "src");
-const ENTRY = path.join(SRC, "app", "pos", "RegisterShell.tsx");
+const ENTRY = path.join(SRC, "app", "(site)", "pos", "RegisterShell.tsx");
 const REGISTER_APP = path.join(REPO_ROOT, "register-app");
 
 /** Resolve an import specifier the way Vite/Next would. */
@@ -135,8 +135,8 @@ describe("packaged register build guards", () => {
     // vacuously. Anchor it: the register is a large component with many pure
     // modules behind it.
     expect(graph.files.length).toBeGreaterThan(40);
-    expect(graph.files).toContain("src/app/pos/RegisterShell.tsx");
-    expect(graph.files).toContain("src/app/pos/SaleFlow.tsx");
+    expect(graph.files).toContain("src/app/(site)/pos/RegisterShell.tsx");
+    expect(graph.files).toContain("src/app/(site)/pos/SaleFlow.tsx");
     expect(graph.files).toContain("src/lib/pos/pos-fetch.ts");
   });
 
@@ -197,7 +197,7 @@ describe("packaged register app files", () => {
   });
 
   it("index.html carries the same theme colour as the /pos route", () => {
-    const posPage = readFileSync(path.join(SRC, "app", "pos", "page.tsx"), "utf8");
+    const posPage = readFileSync(path.join(SRC, "app", "(site)", "pos", "page.tsx"), "utf8");
     const themeColor = posPage.match(/themeColor:\s*["']([^"']+)["']/)?.[1];
     expect(themeColor).toBeTruthy();
     expect(read("index.html")).toContain(`content="${themeColor}"`);
@@ -205,7 +205,7 @@ describe("packaged register app files", () => {
 
   it("mounts the SAME RegisterShell the website uses — never a copy", () => {
     const main = read("src/main.tsx");
-    expect(main).toContain('from "@/app/pos/RegisterShell"');
+    expect(main).toContain('from "@/app/(site)/pos/RegisterShell"');
     expect(main).toContain("resolveRegisterHostConfig");
     // It must honour the fatal path rather than booting a dead register.
     expect(main).toContain("config.ok");
@@ -217,7 +217,7 @@ describe("packaged register app files", () => {
     // Tailwind v4 only generates classes for files it is told to scan, and the
     // register's source lives outside this folder. Without these the app would
     // build cleanly and render as unstyled HTML.
-    expect(css).toContain('@source "../../src/app/pos"');
+    expect(css).toContain('@source "../../src/app/(site)/pos"');
     expect(css).toContain('@source "../../src/lib"');
   });
 

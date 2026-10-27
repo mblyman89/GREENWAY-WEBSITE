@@ -36,7 +36,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 BROWSER = "src/components/menu/InteractiveMenuBrowser.tsx"
 SIDEBAR = "src/components/menu/FilterMobile.tsx"
-MENU_PAGE = "src/app/menu/page.tsx"
+MENU_PAGE = "src/app/(site)/menu/page.tsx"
 CORE = "src/lib/menu/menu-classification-filter-core.ts"
 SEARCH_CORE = "src/lib/pos/classification-search-core.ts"
 SALE_FLOW = "src/lib/pos/sale-flow-core.ts"

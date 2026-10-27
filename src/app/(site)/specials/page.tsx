@@ -17,7 +17,7 @@ import { withProductTags } from "@/lib/menu/product-tags-server";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 
 // USAGE-5 — WHY THIS IS NO LONGER `force-dynamic` (same reasoning as SLICE D
-// on the home page, src/app/page.tsx).
+// on the home page, src/app/(site)/page.tsx).
 //
 // Measured on the production deployment 2026-09-27: every hit to /specials was
 // `x-vercel-cache: MISS` with `cache-control: private, no-cache, no-store`,

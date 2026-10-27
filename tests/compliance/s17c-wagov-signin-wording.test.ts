@@ -153,7 +153,7 @@ describe("S-17c: no CCRS text in src or docs says SAW is the CCRS login", () => 
     .filter((r) => r !== "src/lib/compliance/ccrs-signin-core.ts");
   it("scans a real tree (guards against an empty walk)", () => {
     expect(files.length).toBeGreaterThan(500);
-    expect(files).toContain("src/app/pos/SaleFlow.tsx");
+    expect(files).toContain("src/app/(site)/pos/SaleFlow.tsx");
     expect(files).toContain("docs/audit/CUTOVER-CHECKLIST.md");
   });
   it("zero findings", () => {

@@ -111,7 +111,7 @@ describe("redirects installed by next.config.ts", () => {
 
   it("every internal legacy target is a real page in src/app", () => {
     for (const t of INTERNAL_REDIRECT_TARGETS) {
-      const page = t === "/" ? "src/app/page.tsx" : `src/app${t}/page.tsx`;
+      const page = t === "/" ? "src/app/(site)/page.tsx" : `src/app${t}/page.tsx`;
       expect(existsSync(join(ROOT, page)), `${t} -> ${page}`).toBe(true);
     }
   });

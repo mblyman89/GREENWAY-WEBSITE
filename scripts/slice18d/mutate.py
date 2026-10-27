@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 SEARCH_CORE = "src/lib/pos/classification-search-core.ts"
 GRID_CORE = "src/lib/pos/sale-grid-core.ts"
-SALE_FLOW = "src/app/pos/SaleFlow.tsx"
+SALE_FLOW = "src/app/(site)/pos/SaleFlow.tsx"
 SELFTESTS = "scripts/compliance/run-pure-selftests.ts"
 
 VITEST = [

@@ -534,14 +534,14 @@ describe("SLICE 20 — a reprint may never open the cash drawer", () => {
   });
 
   it("the register prints reprints with the drawer shut", () => {
-    const shell = read("src/app/pos/RegisterShell.tsx");
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
     expect(shell).toContain('printSlip(html, false, "reprint")');
     // And never with the drawer open.
     expect(shell).not.toContain('printSlip(html, true, "reprint")');
   });
 
   it("offers the button on every history row, including closed sales", () => {
-    const shell = read("src/app/pos/RegisterShell.tsx");
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
     expect(shell).toContain("Reprint receipt");
     expect(shell).toContain("void reprint(t.receiptNumber)");
   });

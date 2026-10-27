@@ -16,6 +16,23 @@ import { formatBadgeCount } from "@/lib/pos/exception-reminder-core";
 import { countWaitingForOwner } from "@/lib/payments/ach-requests-store";
 import { backOfficeGateForStaff } from "@/lib/staffing/handbook-ack-store";
 import { HandbookGateScreen } from "@/components/admin/HandbookGateScreen";
+import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
+import "../globals.css";
+
+// PERF-S2: /admin is its OWN root layout (the public site lives in the
+// (site) route group). The back office no longer pays for the public shell on
+// every navigation: no CMS font/brand lookup, no published-rules snapshot, no
+// store-hours schema, no age gate, cart, JSON-LD or analytics. Navigating
+// between /admin and the public site is a full page load (Next docs: multiple
+// root layouts), which is fine for staff. The 5 banner-studio routes that need
+// published promotion rules mount them in their own segment layout.
+function AdminDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={fontVariablesClassName}>
+      <body>{children}</body>
+    </html>
+  );
+}
 
 // Admin must never be indexed.
 export const metadata: Metadata = {
@@ -32,9 +49,11 @@ export default async function AdminLayout({
   // of crashing — keeps the public site deployable during the build.
   if (!isSupabaseConfigured) {
     return (
-      <div className="admin-shell min-h-screen">
-        <AdminSetupNotice />
-      </div>
+      <AdminDocument>
+        <div className="admin-shell min-h-screen">
+          <AdminSetupNotice />
+        </div>
+      </AdminDocument>
     );
   }
 
@@ -43,7 +62,11 @@ export default async function AdminLayout({
   // Unauthenticated users (e.g. the login page) render children without the
   // shell. The login route renders its own centered card.
   if (!session) {
-    return <div className="admin-shell min-h-screen">{children}</div>;
+    return (
+      <AdminDocument>
+        <div className="admin-shell min-h-screen">{children}</div>
+      </AdminDocument>
+    );
   }
 
   // SLICE 36 handbook gate: staff who have not acknowledged the CURRENT
@@ -56,9 +79,11 @@ export default async function AdminLayout({
   });
   if (!handbookGate.ok) {
     return (
-      <div className="admin-shell min-h-screen">
-        <HandbookGateScreen fullName={session.profile.full_name ?? ""} />
-      </div>
+      <AdminDocument>
+        <div className="admin-shell min-h-screen">
+          <HandbookGateScreen fullName={session.profile.full_name ?? ""} />
+        </div>
+      </AdminDocument>
     );
   }
 
@@ -91,6 +116,7 @@ export default async function AdminLayout({
   }
 
   return (
+    <AdminDocument>
     <div className="admin-shell flex min-h-screen flex-col">
       <div className="admin-chrome">
         <AdminTopNav
@@ -126,5 +152,6 @@ export default async function AdminLayout({
         <MobileLauncher />
       </div>
     </div>
+    </AdminDocument>
   );
 }

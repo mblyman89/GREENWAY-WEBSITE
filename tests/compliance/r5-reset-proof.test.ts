@@ -180,7 +180,7 @@ describe("4. summariseOpenCcrsFiles: what the kept CCRS ledger still waits for",
 describe("guard: every table the rehearsal code WRITES is wiped, or deliberately kept", () => {
   // Code paths the Clean Slate rehearsal runs: register, orders, inventory,
   // receiving/intake, disposition (returns, destructions, vendor returns).
-  const ROOTS = ["src/lib/pos", "src/lib/orders", "src/lib/inventory", "src/app/admin/inventory", "src/app/admin/orders", "src/app/pos", "src/app/api/pos"];
+  const ROOTS = ["src/lib/pos", "src/lib/orders", "src/lib/inventory", "src/app/admin/inventory", "src/app/admin/orders", "src/app/(site)/pos", "src/app/api/pos"];
   // KEEP tables those paths legitimately write: configuration and the
   // knowledge base (facts learned while receiving are kept on purpose).
   // Exact: an entry no longer written fails too, so the list cannot rot.

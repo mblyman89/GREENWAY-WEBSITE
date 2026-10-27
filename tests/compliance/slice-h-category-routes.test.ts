@@ -88,8 +88,8 @@ function guardStripped(code: string, original: string, mustContain: string) {
   expect(code.trim().length).toBeGreaterThan(120);
 }
 
-const MENU_ROUTE = "src/app/menu/page.tsx";
-const CATEGORY_ROUTE = "src/app/menu/[category]/page.tsx";
+const MENU_ROUTE = "src/app/(site)/menu/page.tsx";
+const CATEGORY_ROUTE = "src/app/(site)/menu/[category]/page.tsx";
 const SHOP_RENDERER = "src/components/menu/ShopPage.tsx";
 const SITEMAP = "src/app/sitemap.ts";
 const NAV_DATA = "src/components/site/navigation-data.ts";
@@ -190,7 +190,7 @@ describe("Slice H — the pure facet core", () => {
     // prerendered, sitemap-advertised route that can never be reached, and the
     // ambiguity is the kind of thing that gets "fixed" wrongly later. Cheap to
     // pin, expensive to debug.
-    const siblingSegments = readdirSync(join(repoRoot, "src/app/menu"), {
+    const siblingSegments = readdirSync(join(repoRoot, "src/app/(site)/menu"), {
       withFileTypes: true,
     })
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith("["))

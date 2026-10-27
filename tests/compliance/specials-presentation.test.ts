@@ -173,7 +173,7 @@ describe("field type + pure runner wiring", () => {
 
 describe("public /specials consumes the presentation (byte-identical until edited)", () => {
   it("page.tsx loads the block and passes presentation to SpecialsContent", () => {
-    const src = read("src/app/specials/page.tsx");
+    const src = read("src/app/(site)/specials/page.tsx");
     expect(src).toContain("specials.deals.presentation");
     expect(src).toContain("resolveSpecialsPresentation");
     expect(src).toContain("presentation={presentation}");

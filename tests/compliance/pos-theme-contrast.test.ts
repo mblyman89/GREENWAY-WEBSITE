@@ -178,7 +178,7 @@ describe("the brand wordmark is visible in both themes", () => {
   });
 
   it("every register wordmark is classed either .pos-wordmark or .pos-wordmark-on-chrome", () => {
-    const shell = fs.readFileSync(path.join(ROOT, "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = fs.readFileSync(path.join(ROOT, "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     const imgs = [...shell.matchAll(/<img[^>]*wordmark\.png[^>]*>/g)].map((m) => m[0]);
     expect(imgs.length, "expected the register to render the wordmark").toBeGreaterThan(0);
     for (const tag of imgs) {
@@ -190,7 +190,7 @@ describe("the brand wordmark is visible in both themes", () => {
   });
 
   it("the top-bar wordmark opts OUT (navy chrome in both themes)", () => {
-    const shell = fs.readFileSync(path.join(ROOT, "src/app/pos/RegisterShell.tsx"), "utf8");
+    const shell = fs.readFileSync(path.join(ROOT, "src/app/(site)/pos/RegisterShell.tsx"), "utf8");
     const onChrome = [...shell.matchAll(/<img[^>]*pos-wordmark-on-chrome[^>]*>/g)];
     expect(onChrome.length, "exactly one wordmark sits on the navy top bar").toBe(1);
   });
@@ -199,7 +199,7 @@ describe("the brand wordmark is visible in both themes", () => {
 describe("the register uses no dark-tuned hardcoded text colors", () => {
   // Tailwind's -300/-400 shades are tuned for a dark canvas and go illegible
   // on the light theme's white cards. Every one of them belongs on a token.
-  const FILES = ["src/app/pos/RegisterShell.tsx", "src/app/pos/SaleFlow.tsx"];
+  const FILES = ["src/app/(site)/pos/RegisterShell.tsx", "src/app/(site)/pos/SaleFlow.tsx"];
 
   for (const rel of FILES) {
     it(`${rel} has no text-<color>-300/400 utilities`, () => {

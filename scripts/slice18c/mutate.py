@@ -40,7 +40,7 @@ REPO = Path(__file__).resolve().parents[2]
 BADGE_CORE = "src/lib/menu/menu-classification-badge-core.ts"
 CARD_VISUAL = "src/components/menu/ProductCardVisual.tsx"
 PDP_PANEL = "src/components/menu/ProductDetailPurchasePanel.tsx"
-PDP_PAGE = "src/app/menu/products/[id]/page.tsx"
+PDP_PAGE = "src/app/(site)/menu/products/[id]/page.tsx"
 SELFTESTS = "scripts/compliance/run-pure-selftests.ts"
 
 VITEST = [

@@ -11,7 +11,7 @@ import { isNoTrackPath } from "@/lib/analytics/no-track-paths";
 import { isAgeGateExemptPath } from "@/lib/age-gate/age-gate-core";
 
 const read = (p: string) => readFileSync(p, "utf8");
-const PUB = "src/app/vendor-ach/[token]";
+const PUB = "src/app/(site)/vendor-ach/[token]";
 const ACTIONS = read(`${PUB}/actions.ts`);
 const PAGE = read(`${PUB}/page.tsx`);
 const FORM = read(`${PUB}/VendorSignForm.tsx`);
@@ -22,7 +22,7 @@ const CARD = read("src/app/admin/vendors/[id]/VendorEsignCard.tsx");
 const VPAGE = read("src/app/admin/vendors/[id]/page.tsx");
 const BANK = read("src/app/admin/settings/banking/page.tsx");
 const PANEL = read("src/app/admin/settings/banking/VendorParticipationPanel.tsx");
-const LAYOUT = read("src/app/layout.tsx");
+const LAYOUT = read("src/app/(site)/layout.tsx");
 const ROBOTS = read("src/app/robots.ts");
 const GATE = read("src/components/analytics/NoTrackGate.tsx");
 

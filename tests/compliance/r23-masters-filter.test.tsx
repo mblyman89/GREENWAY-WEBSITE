@@ -286,7 +286,7 @@ describe("R23 fix 8 — the pipeline bar on Master and Accounts Payable", () => 
 });
 
 describe("R23 fix 9 — home + specials resolve enrichment images like Shop", () => {
-  for (const p of ["src/app/page.tsx", "src/app/specials/page.tsx"]) {
+  for (const p of ["src/app/(site)/page.tsx", "src/app/(site)/specials/page.tsx"]) {
     it(`${p} pipes the live menu through withResolvedImages`, () => {
       const s = read(p);
       expect(s).toContain('import { withResolvedImages } from "@/lib/enrichment/image-resolver";');

@@ -33,7 +33,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 const POLICY_EDITOR = "src/components/admin/PolicyDocEditor.tsx";
 const MEDICAL = "src/components/medical/MedicalProgramContent.tsx";
 const MENU_BROWSER = "src/components/menu/InteractiveMenuBrowser.tsx";
-const MENU_PAGE = "src/app/menu/page.tsx";
+const MENU_PAGE = "src/app/(site)/menu/page.tsx";
 
 describe("SLICE 110 — Legal Policies editor is fully dark-themed", () => {
   const src = read(POLICY_EDITOR);

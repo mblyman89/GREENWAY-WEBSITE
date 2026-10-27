@@ -45,8 +45,8 @@ P=src/lib/pos/pickup-store.ts
 X=src/app/admin/orders/leafly-actions.ts
 E=src/components/admin/orders/LeaflyCartEditor.tsx
 W=src/components/admin/orders/LeaflyOrderWorkflow.tsx
-G=src/app/pos/RegisterCartEditor.tsx
-H=src/app/pos/RegisterShell.tsx
+G=src/app/(site)/pos/RegisterCartEditor.tsx
+H=src/app/(site)/pos/RegisterShell.tsx
 
 # -- the pure core (gates) --------------------------------------------------------
 mutate "core: unacknowledged order allowed"        $C '  if ((input.acknowledgedAt ?? "").trim() === "") {' '  if (false) {'

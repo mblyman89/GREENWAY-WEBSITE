@@ -99,7 +99,7 @@ describe("SLICE 114 — description fallback order", () => {
     const store = read("src/lib/vendors/store.ts");
     expect(store).toContain("product_philosophy: string | null;");
     expect(store).toContain("product_philosophy: v.product_philosophy ?? null,");
-    const page = read("src/app/vendor-delivery/page.tsx");
+    const page = read("src/app/(site)/vendor-delivery/page.tsx");
     expect(page).toContain("listPublicVendorProfiles()");
   });
 });
@@ -237,7 +237,7 @@ describe("SLICE 114 → MIG-1 MS-1.3 — vendors editor moved to its own Page wo
   });
 
   it("server page resolves channels + subject and fetches the editable keys", () => {
-    const page = read("src/app/vendor-delivery/page.tsx");
+    const page = read("src/app/(site)/vendor-delivery/page.tsx");
     expect(page).toContain("resolveVendorChannels(copy)");
     expect(page).toContain("...VENDOR_EDITABLE_CONTENT_KEYS");
     expect(page).toContain("channels,");

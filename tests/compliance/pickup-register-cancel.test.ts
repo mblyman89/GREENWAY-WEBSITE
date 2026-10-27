@@ -112,7 +112,7 @@ describe("L-36 — register cancel route", () => {
 });
 
 describe("L-36 — the register modal is wired to it", () => {
-  const shell = readFileSync(resolve(__dirname, "../../src/app/pos/RegisterShell.tsx"), "utf8");
+  const shell = readFileSync(resolve(__dirname, "../../src/app/(site)/pos/RegisterShell.tsx"), "utf8");
   it("offers search/scan, the rich breakdown and the cancel", () => {
     expect(shell).toContain("exactPickupMatch(");
     expect(shell).toContain("pickupMatchesSearch(");

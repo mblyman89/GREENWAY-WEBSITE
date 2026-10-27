@@ -14,11 +14,11 @@ import {
  * look identical or the page will visibly change shape between them:
  *
  *   1. NAVIGATION  — a shopper taps "Shop". Next.js renders the nearest
- *      `loading.tsx` (now `src/app/menu/loading.tsx`) while the route loads.
+ *      `loading.tsx` (now `src/app/(site)/menu/loading.tsx`) while the route loads.
  *
  *   2. STREAMING   — the route has begun rendering and the shell has flushed,
  *      but the product data is still being read. React shows the `<Suspense>`
- *      fallback inside `src/app/menu/page.tsx`.
+ *      fallback inside `src/app/(site)/menu/page.tsx`.
  *
  * Before Slice F2 the second case rendered the string "Loading menu filters..."
  * — and in practice never appeared at all, because every `await` in the page

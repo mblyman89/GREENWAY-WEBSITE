@@ -142,7 +142,7 @@ describe("MIG-6 Slice 2 — blog moved OUT of Site Content into its own editor",
 
 describe("SLICE 115 — public wiring (live-look-safe + preview hotspots)", () => {
   it("blog/page.tsx reads the blog content keys + preview", () => {
-    const src = read("src/app/blog/page.tsx");
+    const src = read("src/app/(site)/blog/page.tsx");
     expect(src).toContain("BLOG_CONTENT_KEYS");
     expect(src).toContain("getContentValues");
     expect(src).toContain("isPreviewActive");
@@ -164,7 +164,7 @@ describe("SLICE 115 — public wiring (live-look-safe + preview hotspots)", () =
   });
 
   it("the detail page uses the editable back label", () => {
-    const src = read("src/app/blog/[slug]/page.tsx");
+    const src = read("src/app/(site)/blog/[slug]/page.tsx");
     expect(src).toContain('resolveBlogCopy("blog.detail.backLabel"');
     expect(src).toContain("{backLabel}");
   });

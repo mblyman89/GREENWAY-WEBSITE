@@ -44,7 +44,7 @@ function guardStripped(code: string, original: string, mustContain: string) {
 
 const CARD_VISUAL = "src/components/menu/ProductCardVisual.tsx";
 const PDP_PANEL = "src/components/menu/ProductDetailPurchasePanel.tsx";
-const PDP_PAGE = "src/app/menu/products/[id]/page.tsx";
+const PDP_PAGE = "src/app/(site)/menu/products/[id]/page.tsx";
 const BADGE_CORE = "src/lib/menu/menu-classification-badge-core.ts";
 const FILTER_CORE = "src/lib/menu/menu-classification-filter-core.ts";
 const SELFTESTS = "scripts/compliance/run-pure-selftests.ts";

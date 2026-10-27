@@ -59,7 +59,7 @@ const repoFile = (rel: string) => readFileSync(path.join(process.cwd(), rel), "u
 const DISPLAY = "src/lib/menu/product-knowledge-display.ts";
 const BATCH = "src/lib/ai/kb/product-knowledge-batch.ts";
 const CORE = "src/lib/ai/kb/product-knowledge-batch-core.ts";
-const LAYOUT = "src/app/layout.tsx";
+const LAYOUT = "src/app/(site)/layout.tsx";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Fixtures

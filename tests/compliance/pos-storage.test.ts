@@ -51,8 +51,8 @@ import {
  */
 
 const REPO = path.resolve(__dirname, "../..");
-const SHELL = path.join(REPO, "src/app/pos/RegisterShell.tsx");
-const SALEFLOW = path.join(REPO, "src/app/pos/SaleFlow.tsx");
+const SHELL = path.join(REPO, "src/app/(site)/pos/RegisterShell.tsx");
+const SALEFLOW = path.join(REPO, "src/app/(site)/pos/SaleFlow.tsx");
 const CORE = path.join(REPO, "src/lib/pos/pos-storage-core.ts");
 const SEAM = path.join(REPO, "src/lib/pos/pos-storage.ts");
 

@@ -329,7 +329,7 @@ describe("L-37 — wiring", () => {
   });
 
   it("the register modal has Confirm + Mark ready and no manual picked-up button", () => {
-    const shell = read("src/app/pos/RegisterShell.tsx");
+    const shell = read("src/app/(site)/pos/RegisterShell.tsx");
     expect(shell).toContain('advanceOrder("acknowledged")');
     expect(shell).toContain('advanceOrder("ready")');
     expect(shell).toMatch(/advance:\s*\{\s*to,\s*employeeName/);
