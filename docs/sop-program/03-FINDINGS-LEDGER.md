@@ -478,9 +478,10 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **Pin:** the only link is on `intake/[id]/page.tsx` L1072–1078; the lot page has none (grep `/label` in `[id]/page.tsx`). The barcode is `lot_code || pos_product_key || id` (`lots/[id]/label/page.tsx` L38–40); the register indexes only lot code and CCRS id (`scan-to-cart-core.ts` L55–70).
 - **SOP impact:** §4.19: reach it through the Manifest link; scan before use. Ties to **G-26**.
 
-### F-05a-11 · CONFIRMED · HARDEN · S3 — A manager can bulk-fill a cannabis unit cost
+### F-05a-11 · CONFIRMED · HARDEN · **S1** (re-rated from S3 by owner decision D38) — Bulk fill lets anyone with Inventory access type a cannabis unit cost
 - **Pin:** `bulkFillAction` is `inventory.manage` (`actions.ts` L904) and accepts `unit_cost_minor_units` (`bulk-fill-core.ts` L318–325). `roles.ts` L143–148: *"Cannabis cost entry is NOT built"*; `inventory.cost.fill` is owner + admin. The fill is blank-only, migration-lot-only and audited (`inventory_lot.bulk_filled`, `actions.ts` L975–996), which limits the risk.
-- **SOP impact:** §4.20: owner or admin only for Unit cost. Owner question **Q-05a-3**.
+- **Owner decision D38** (Q-05a-3): *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."* Cannabis cost comes only from the manifest (`intake-parser.ts` L415–420) and is locked on the lot page (`lot-edit-core.ts` L38). Bulk fill is the one place it can be typed (`bulk-fill-core.ts` L54).
+- **SOP impact:** SOP-05a v1.1 §4.20: nobody uses Bulk fill → Unit cost. Fixed by **G-27** (APPROVED).
 
 ### F-05a-12 · CONFIRMED · DOC · S4 — Inventory help panel is stale
 - **Pin:** `inventory/page.tsx` L465 *"Vendor JSON intake (next slice)…"* (intake shipped; SOP-04); L464 lists "destructions" as an adjustment (contradicts SOP-15); `SopSheetLink slug="publish"` L473 points at the pre-R31 sheet (F-04-5).
@@ -496,12 +497,27 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ### F-05a-15 · CONFIRMED · GAP · S2 — No recall plan, recall coordinator or recall log in the app (WAC 314-55-225(3)(d) makes the plan mandatory)
 - **Pin:** grep `recall plan|recall coordinator` → only `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136. The law (read 2026-10-27, app.leg.wa.gov): (3)(d)(i)(A)–(D) coordinator, identify/isolate, retrieve/destroy, communications; (3)(f) weekly progress tracking.
-- **SOP impact:** §4.13, forms 8.4 (the plan) and 8.5 (event worksheet). Ties to **G-25**; owner question **Q-05a-2**.
+- **SOP impact:** §4.13, forms 8.4 (the plan) and 8.5 (event worksheet). Ties to **G-25**. Q-05a-2 answered (D37): the admin is the coordinator, no back-up.
 
 ### F-05a-16 · CONFIRMED · GAP · S2 — A recall hold does not reach the website or online ordering
 - **Pin:** the public menu filters only hidden cards (`src/lib/pos/live-menu.ts` L167–171, L289–292); online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). `recalledProductKeys` (`recall-hold-store.ts` L72–121) has four callers only: `api/pos/menu/route.ts` L121, `completion-gate.ts` L103, `restore-to-sale-store.ts` L131, `register-sellability-store.ts` L175.
 - **Effect:** a recalled product stays visible on the website and can be reserved; the sale is refused only when staff complete the pickup (completion gate, fail-closed). WAC 314-55-225(3)(b)(i) requires preventing distribution.
 - **SOP impact:** §4.10 step 5: set **Always hide** on Product Enrichment (audited `product.visibility_changed`). Ties to **G-25** (propagation requirement).
+
+### F-05a-17 · CONFIRMED · GAP · S2 — Returns & Destruction lists only Active lots
+- **Pin:** `src/app/admin/inventory/disposition/page.tsx` L103: `listLots({ status: "active", limit: 500 })` feeds the destruction form. Lots in **Quarantine** or **Recalled**, the ones most likely to be destroyed, cannot be chosen.
+- **Effect:** staff are pushed to set a held lot Active to destroy it, which puts it back on sale in the meantime (and for a Recalled lot, lifts the hold).
+- **SOP impact:** SOP-05a v1.1 §4.9 interim. Fixed by **G-28**. Found while answering the owner's Q-05a-4 question about the Destructions page.
+
+### F-05a-18 · CONFIRMED · BUG · S1 — Scheduling a destruction overwrites Recalled with Quarantine and lifts the recall hold
+- **Pin:** `scheduleDestruction` (`src/lib/inventory/disposition.ts` L939–997) writes `status: "quarantine"` at L965–971 whatever the lot's status was (unless `quarantineLot === false`, used only for a single customer-returned unit, L716–723). The register recall hold reads only `recalled` (`src/lib/pos/recall-hold-core.ts` L44); quarantine does not hold (`completion-gate.ts` L98–100).
+- **Effect:** once a recalled lot is scheduled, nothing in the app shows it was recalled, and other lots of that product stop being held if it was the only Recalled lot. WAC 314-55-225(3)(b)(i) requires isolating recalled product.
+- **SOP impact:** SOP-05a v1.1 §4.9 point 3, §4.10 step 9, form 8.4 (C): recalled lots are not scheduled in the app until **G-28**.
+
+### F-05a-19 · CONFIRMED · BUG · S2 — Cancelling a destruction always sets the lot Active
+- **Pin:** `cancelDestruction` (`disposition.ts` L1100–1116) sets `status: "active"` at L1113–1114, with the comment *"Release quarantine back to active (best effort)."*; it does not remember the earlier status.
+- **Effect:** a cancelled destruction of an expired, damaged or (if F-05a-17 is worked around) recalled lot returns it to sale with no check.
+- **SOP impact:** SOP-05a v1.1 §4.9 point 1, §6. Fixed by **G-28**.
 
 ### F-05a-C · CONFIRMED · DOC · S3 — Concierge inventory topic has six one-line facts and nothing on recalls, expiry, adjustments, the 86 or labels
 - **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180: six facts (lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts, Returns & Destruction). grep `recall|expir` in the file → none. Baseline ledger row "Inventory management 🟡" (`04-CONCIERGE-COVERAGE-LEDGER.md` §3).
@@ -518,4 +534,4 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 | SOP-02 Master Till / Store Safe | 13 new (1×S1, 6×S2, 6×S3) + re-confirmed F-00-7, F-00-8. **F-02-2 withdrawn** in SOP-03 (D19) → 12 standing | 13 (12 standing, 1 withdrawn) | 0 |
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
 | SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
-| SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status) | 17 | 0 |
+| SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |

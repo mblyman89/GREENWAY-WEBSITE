@@ -2,12 +2,14 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (draft for owner review; owner answers D29–D34 applied) |
+| **Version** | 1.2 (draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Everyone who handles a vendor delivery: the manager who processes the manifest (D30), any trained employee who helps count at the dock, the person who onboards new products onto the menu, the **admin** who files the monthly CCRS public records request on the 10th (D32), and the owner, who reviews the books |
 | **Verified against** | `main@5299660b` (2026-10-27). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel disagree, this SOP follows the code and records a finding. |
 | **Program records** | Findings `F-04-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-16`…`G-19` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D28–D34 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner rulings on rejection in `docs/ccrs-rejection-and-returns.md` |
+
+> **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap this SOP names (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** Part 1 (§4.1–§4.24) is truck day, in the order the work happens: the manifest arrives, the truck arrives, you count, you refuse what is wrong, you press one Finalize button, and the new products go onto the menu. Part 2 (§4.25–§4.34) is the **monthly CCRS public records request**, which brings the state's market data in for the benchmarks. It is owner work, done once a month. Section 5 lists every message the screens can show, with what to do. Section 8 holds the paper forms. Section 9 is a one-page card for the receiving area. Words in **bold** are the exact labels you will see on the screen.
 
@@ -1205,3 +1207,4 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `5299660b`, with the owner's rejection rulings (`ccrs-rejection-and-returns.md`), the R31 one-button design, the owner's CCRS transformer vision, and D28. Part 1 truck day (§4.1–§4.24); Part 2 monthly CCRS public records request (§4.25–§4.34). Adds findings F-04-1…F-04-20, gaps G-16…G-19, questions Q-04-1…Q-04-6, forms 8.1–8.5. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-05a. Owner answers D29–D34 applied: partial receive approved and S1 (§4.11; G-16); only managers process manifests (§2); second count strongly recommended, expected on a vendor's first delivery (§4.9, form 8.1; G-21); admin files on the 10th, standing request procedure with WAC 44-14-04004(4), built-in wording kept, one zip per month (§4.26–§4.31, form 8.4; G-18); 18-month retention with owner approval and backup purge (§4.34, form 8.4 part G; G-20); delete confirmation and working-buttons-only approved (§4.33; G-20). New questions Q-04-7…Q-04-9. No code was re-audited; pins still at `5299660b` (`ac251766` is docs-only). | SOP program |
+| 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

@@ -2,12 +2,14 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (draft for owner review; owner answers D14–D19 and D21–D22 applied) |
+| **Version** | 1.3 (draft for owner review; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The morning and night employees who count and balance the master till; the managers who record the counts and approve change swaps; the owner, who reviews variances |
 | **Verified against** | `main@0055f06c` (2026-10-27). Every label, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Arithmetic was checked by script (`sop02/calc.py`, `sop02/calc2.py`), not by hand. |
 | **Program records** | Findings `F-02-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D3, D7, D10–D19 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` |
+
+> **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap this SOP names (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** Section 4 is the step-by-step manual. Section 4.1 explains where the money lives, so read it first. Section 5 lists every message the safe page and the register's swap screen can show, and what to do about each. Section 8 holds the paper forms. Section 9 is a one-page card to tape inside the safe door. Words in **bold** are the exact labels you will see on the screen.
 
@@ -697,3 +699,4 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `0055f06c`, with owner decisions D3, D7 and D10–D13. Adds findings F-02-1…F-02-13 and gaps G-08…G-11. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Owner answers D14–D19 applied in slice SOP-03: Manager Till float $300.00 (D19; F-02-2 withdrawn, G-10 closed); totals now $635.00 / $1,635.00; Q-02-1…Q-02-5 resolved; D7 applies to the master till (D16); supply-run screen approved (D17); any employee may record the count (D15, G-13). No code was re-audited; pins still at `0055f06c` (no code changed since, `3385bfa9` is docs-only). | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-04. D21: a reason is required only for a variance over $5.00 (§4.8, checklist, quick card, Appendix C). D22 confirms floats ($167.50 sales, $300.00 Manager Till). Docs only. | SOP program |
+| 1.3 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
