@@ -55,3 +55,21 @@ Recorded 2026-10-27 (Pacific), Slice SOP-00. Nothing below is paraphrased.
 | D11 | **Master till = $1,000.00**, standard composition: 32 × $10, 64 × $5, 318 × $1, 95 × 25¢, 120 × 10¢, 100 × 5¢, 125 × 1¢. Script-verified to total exactly $1,000.00 ($320 + $320 + $318 + $23.75 + $12 + $5 + $1.25). There are **no $20s or larger, no $2s and no $1 coins** in the standard master till. | "The master till has 1000. 32 tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 100 nickels, and 125 pennies" |
 | D12 | **Two daily counts of the master till must be enterable on a page.** If the page exists, SOP-02 documents it; if not, it is a gap (no build in the SOP program). | "If there isn’t already, there should be a page to enter the two daily counts" |
 | D13 | Reporting standard for this slice: record and pin every claim to file/line, all-inclusive. | "record everything, document everything, pin and anchor anything. All inclusive reporting please" |
+
+---
+
+## Owner reply after SOP-02 + request for SOP-03 (recorded verbatim, Slice SOP-03, after SOP-02 merged as 3385bfa9)
+
+> Thank you. Q02-1- yes you have that correct. Q02-2- anyone can count and record the master count. Q02-3- yes, it applies to the master as well. Q-02-4- id like the supply run screen built. A-02-5- yes correct. And I was wrong, it should be 300 in it. Please begin sop 3. In the summary report let me know what the next sop will entail. Follow the standing rules. Thank you!
+
+### Decisions derived (each traced to the words above)
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D14 | **Register change swaps go till ↔ master till.** The app's "safe" on the register swap screen means the $1,000 master till (resolves Q-02-1; SOP-02 §4.11 assumption confirmed). | "Q02-1- yes you have that correct" |
+| D15 | **Any employee may count and record the master till count** (resolves Q-02-2). Today recording needs `inventory.manage` (`safe/actions.ts` L29), so this becomes a permission change for the build phase (finding F-02-10 / new gap G-13). | "Q02-2- anyone can count and record the master count" |
+| D16 | **The $5 threshold and required reason (D7) apply to master till counts as well** (resolves the first half of Q-02-3). **Still open:** the half carried from SOP-01, whether a reason is required for *every* over/short or only over $5. D7's words ("should be required to be input for over/ under") are read as **every** over/short until the owner says otherwise. | "Q02-3- yes, it applies to the master as well" |
+| D17 | **Build the supply-run screen** (resolves Q-02-4; gap G-11 moves from AWAITING OWNER to **APPROVED, queued for build**). Per charter C5 and the record-only rule it is not built inside the SOP slices; it is queued for the build phase. | "Q-02-4- id like the supply run screen built" |
+| D18 | **The system's "Manager Till" is the manager register** of D10 (resolves Q-02-5). | "A-02-5- yes correct" |
+| D19 | **Correction to D10: the manager register holds $300, not $167.50.** The two sales tills stay at $167.50. Floats: 2 × $167.50 + $300.00 = **$635.00**; with the $1,000 master till, $1,635.00 (computed by script). The code already sets the Manager Till to $300 (migration 0038 L177–184), so **F-02-2 is withdrawn as a defect** (code matches the owner). Gap G-10 is closed; only the misleading code comment (F-02-9) remains. *Interpretation note:* "it should be 300 in it" is read as the manager register, the only till whose amount was in question (F-02-2). Flagged in the SOP-03 report for confirmation. | "And I was wrong, it should be 300 in it" |
+| D20 | **Begin SOP-03** (End-of-Day Close & Deposit Bag). The summary report must preview the next SOP. | "Please begin sop 3. In the summary report let me know what the next sop will entail." |

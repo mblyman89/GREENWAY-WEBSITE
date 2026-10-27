@@ -1,7 +1,7 @@
 # SOP Program — Catalog of SOPs + Slice Roadmap
 
 Slice SOP-00 · 2026-10-27 · audited at `main@54445a68`
-Updated in slice SOP-02 · owner facts D10–D13 applied (earlier: slice SOP-01, D1–D9, SOP-21 SEO added per D6)
+Updated in slice SOP-03 · owner facts D14–D20 applied; SOP-03 written (earlier: slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
 
 Every SOP below is mapped to the **real code** it will be verified against. Code sizes come from a census of the tree (`.ts/.tsx` files and lines) and show how much audit work each slice involves. "Requested" quotes the owner. EXISTS/PARTIAL/MISSING is the recon verdict and is re-verified in depth in the SOP's own slice.
 
@@ -20,14 +20,16 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 ### SOP-02 · Master Till / Store Safe Routine
 **Audience:** opening + closing employees, manager · **Requested:** count twice a day (AM/PM); balance using small bills from the little safe in exchange for big bills from the master; exportable and printable.
 **Code:** `/admin/registers/safe` (`page.tsx`, `actions.ts`), `src/lib/registers/safe-core.ts` (`SAFE_TARGET_MINOR=$1,000`, windows am/pm/other, open (non-blind) counts), `safe-store.ts`, migration `0135_safe_counts_swaps.sql`, `src/lib/accounting/safe-bag-core.ts`, `register-cash-journal-core.ts` (swap = no accounting effect).
-**Status:** **WRITTEN** in slice SOP-02 as `docs/sop/SOP-02-master-till-safe.md` v1.0 (draft for owner review). Owner facts D10–D13 applied: three tills at $167.50, the $1,000 master till mix, the counts page, everything pinned. 13 findings (F-02-1…F-02-13), gaps G-08…G-12 (G-02/G-03 updated) in `05-GAP-REGISTER.md`.
-**SOP-02 audit verdict:** the AM/PM counts page **EXISTS** (D12 met; `/admin/registers/safe`). The $1,000 target **MATCHES** D11. Denomination mix is stored but never compared to a standard (F-02-3). The Manager Till float is **$300 in the system, not $167.50** (F-02-2). Drops are never posted to the books (F-02-1, **S1**). Counted-by is optional, with no PIN (F-02-4). Several AM/PM counts are allowed a day (F-02-5). No variance threshold or reason (F-02-6). Little safe is **MISSING** (F-00-7, D3 → G-02). Print/export is **MISSING** (F-00-8 → G-09). Supply runs are **UNREACHABLE** (F-02-11).
+**Status:** **WRITTEN** in slice SOP-02 as `docs/sop/SOP-02-master-till-safe.md` v1.0 (draft for owner review), revised to **v1.1** in slice SOP-03 with D14–D19 (swaps are till ↔ master till, anyone records the master count, $5 rule covers the master till, supply-run screen approved, Manager Till $300). Owner facts D10–D13 applied: three tills at $167.50, the $1,000 master till mix, the counts page, everything pinned. 13 findings (F-02-1…F-02-13), gaps G-08…G-12 (G-02/G-03 updated) in `05-GAP-REGISTER.md`.
+**SOP-02 audit verdict:** the AM/PM counts page **EXISTS** (D12 met; `/admin/registers/safe`). The $1,000 target **MATCHES** D11. Denomination mix is stored but never compared to a standard (F-02-3). The Manager Till float is $300 in the system. That was first recorded as a mismatch (F-02-2), then **withdrawn**: the owner confirmed $300 (D19). Drops are never posted to the books (F-02-1, **S1**). Counted-by is optional, with no PIN (F-02-4). Several AM/PM counts are allowed a day (F-02-5). No variance threshold or reason (F-02-6). Little safe is **MISSING** (F-00-7, D3 → G-02). Print/export is **MISSING** (F-00-8 → G-09). Supply runs are **UNREACHABLE** (F-02-11).
 **Recon verdict (SOP-00, kept for history):** twice-daily counts **EXIST**. Register↔safe swaps **EXIST**. The "little safe" store is **MISSING** (F-00-7). Print/export **MISSING** (F-00-8).
 
 ### SOP-03 · End-of-Day Close & Deposit Bag (night count → morning verify → seal → safe → bank)
 **Audience:** closing + opening leads, manager, owner · **Requested:** "end of day spreadsheet that one person completes before close, and the morning employee recounts and verifies…"
 **Code:** `/admin/registers/eod` (`page.tsx`, `UndepositedFunds.tsx`, `RegisterCashSpecimen.tsx`), `src/lib/registers/eod-core.ts`, `eod-store.ts`, `deposit_bags` (migration 0212), `safe-bag-core.ts` (bag states available→undeclared→counted→deposited; register cannot close with an undeclared bag), `docs/CASH_DEPOSIT_POLICY_DECISION.md`, `MICHAEL-books-96/98`, the structuring-mirror check.
-**Recon verdict:** EOD report (print) **EXISTS**. Bag lifecycle is core-only, **UNREACHABLE** (F-00-6). Written separately from SOP-01 because it crosses two shifts and two people, and it is the control the owner relies on most.
+**Status:** **WRITTEN** in slice SOP-03 as `docs/sop/SOP-03-eod-close-deposit.md` v1.0 (draft for owner review). Paper procedure: night sheet (form 8.1 A/B/C), bag log (8.2), night/morning/manager/bank-run checklists (8.3–8.6), the $10,000 line. 11 findings (F-03-1…F-03-11), gaps G-14 and G-15 (G-04 updated), open questions Q-03-1…Q-03-7.
+**SOP-03 audit verdict:** the EOD report **EXISTS** (print only, one signature, no deposit figure, F-03-5; no refunds, F-03-6; no date picker, F-03-8; silent read failures, F-03-7). Morning recount, seal, bag log and bank run are **MISSING** in the UI (F-00-6 re-confirmed; G-04). The books cash-to-bank chain is **BROKEN**: nothing fills 10400 since D-77, so the Undeposited Funds panel shows a false all-clear (F-03-1, **S1**). Bank-deposit clearing has **no caller**, yet the census says it is reachable (F-03-3, **S1**). The bag lifecycle and $10k shape check are built but **UNREACHABLE** (F-03-10). Help/concierge have **no** EOD/deposit content (F-03-11).
+**Recon verdict (SOP-00, kept for history):** EOD report (print) **EXISTS**. Bag lifecycle is core-only, **UNREACHABLE** (F-00-6). Written separately from SOP-01 because it crosses two shifts and two people, and it is the control the owner relies on most.
 
 ### SOP-04 · Receiving Intake Pipeline (truck day)
 **Audience:** receiving staff, manager · **Requested:** "a sop for the receiving intake pipeline."
@@ -116,7 +118,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-00** | Recon + roadmap (this) | Owner asked for it first | — |
 | **SOP-01** | Register Operations | Owner's first and most detailed request; most findings already | XL (25.6k) · **DONE** (draft v1.0) |
 | **SOP-02** | Master Till / Safe | Same cash model; finish while it is loaded in context | S · **DONE** (draft v1.0) |
-| **SOP-03** | EOD Close & Deposit Bag | Completes the cash chain till → safe → bank | M |
+| **SOP-03** | EOD Close & Deposit Bag | Completes the cash chain till → safe → bank | M · **DONE** (draft v1.0) |
 | **SOP-04** | Receiving Intake | Rule 11: the business-critical pipeline | XL |
 | **SOP-05** | Inventory Management | Follows intake downstream | XL (largest domain; split into 05a/05b if needed) |
 | **SOP-06** | Cycle Counts, Audits & Daily Checklists | Depends on SOP-05 vocabulary | M |

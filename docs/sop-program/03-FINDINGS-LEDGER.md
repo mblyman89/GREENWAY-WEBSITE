@@ -186,7 +186,8 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - **Effect:** 10110 "Cash on Hand — Tills" goes up by the day's total drops, every day, forever. That is the same shape as the D-39 "drawers hold more money every day" problem the close posting was built to fix. 10100 Vault and later 10400 Undeposited Funds (bag seal) come up short by the same amount. The bank match (D-77 notes) works from a pool that never had the drop cash in it.
 - **SOP impact:** none for staff. Recorded in SOP-02 §4.12 for the owner and bookkeeper.
 
-### F-02-2 · CONFIRMED · BUG · S2 — Manager Till standard float is $300.00; the owner says $167.50
+### F-02-2 · WITHDRAWN (D19, slice SOP-03) · was BUG · S2 — Manager Till standard float is $300.00; the owner says $167.50
+- **Withdrawn after the owner's correction (D19):** *"And I was wrong, it should be 300 in it."* The code's $300.00 Manager Till float matches the owner. The entry below is kept as history (IDs are never renumbered). The misleading code comment stays open under **F-02-9**. The EOD worked example that still uses 3 × $167.50 is a new finding in SOP-03 (**F-03-2**).
 - **Owner (D10):** *"there are three tills, two sales and one manager register. They are the ones with 167.5 in them."*
 - **Pin:** `0038_registers_drawers.sql` L177–184 seed `('Manager Till', 'manager_till', 30000, 30)`, with the comment *"Manager Till float $300 (30000)"*. `0077_drawer_counts_extra_denoms.sql` L40–46 updates `where kind = 'sales'` only: *"the shared Manager Till float is left as-is (owner has not specified a change)"*. No later migration touches `default_float_minor` (`grep -l default_float supabase/migrations` → 0038, 0077 only). No UI edits it (`grep -rn default_float_minor src` → read-only, `oversight.ts` L318, `store.ts` L18).
 - **Effect:** back-office **Open drawer** for the Manager Till says *"Standard float for this register is $300.00"*, and the grid shows a correct $167.50 count as **Short by $132.50** (`RegisterControls.tsx` L63–75).
@@ -215,6 +216,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 ### F-02-6 · CONFIRMED · GAP · S2 — No variance threshold, no reason, and no books posting for master till variances
 - **Pin:** `safe-core.ts` has no threshold. Notes are optional (L79–82). `recordSafeCount` posts no journal (`safe-store.ts` L62–93). `grep -rn "safe_counts" src/lib/accounting` → only `factory-reset-core.ts`. Drawer over/short posts to 50920 at reconcile (`buildTillCloseJournal` L313–326); a master till short posts nothing, so 10100 Vault keeps the old figure.
 - **Owner D7** set $5 + a required reason for drawer over/short. Whether it covers the master till is **Q-02-3**.
+- **Update (D16, slice SOP-03):** the owner confirmed D7 **applies to the master till as well**. This finding is now a confirmed owner requirement (gap G-03).
 - **Interim:** SOP-02 §4.8 (reason for any variance; form 8.5 over $5). Extends gap **G-03**.
 
 ### F-02-7 · CONFIRMED · DOC/UX · S2 — One "safe" in code, three places in the store; the page's help says to count drops with the change fund
@@ -236,10 +238,12 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 ### F-02-10 · CONFIRMED · UX · S3 — The Safe button is shown to staff logins, who are then denied
 - **Pin:** `registers/page.tsx` L87–89 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L90). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L164). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
 
+- **Update (D15, slice SOP-03):** the owner wants **any employee** to count *and record* the master count. So staff being refused the safe page is now against an owner decision, not just a UX issue. Gap **G-13**.
+
 ### F-02-11 · CONFIRMED · GAP · S3 — Supply runs from the master till cannot be recorded
 - **Pin:** `buildSupplyAdvanceJournal` / `buildSupplySettleJournal` (`register-cash-journal-core.ts` L501–646) are built and tested; the census marks them *reachable: MISSING — "No screen records a supply run yet"* (`ledger-census-data.ts` L1660–1665).
 - **Owner policy since books-99:** supplies go on the shop card, not master till cash (`card-payment-core.ts` L7–8). Severity S3 because the policy covers it. If a run ever happens, nothing in the app records it, and the next count is simply "short".
-- **Interim:** SOP-02 §4.13, form 8.4. Gap **G-11**, waiting on **Q-02-4**.
+- **Interim:** SOP-02 §4.13, form 8.4. Gap **G-11**. **Update (D17, slice SOP-03):** the owner wants the screen built; G-11 is approved and queued for build.
 
 ### F-02-12 · CONFIRMED · DOC · S3 — The concierge and the help library know nothing about the master till
 - **Pin:** `grep -n -i "safe\|master till" src/lib/admin/concierge-kb.ts` → only unrelated uses ("safely", "am I safe?", equipment "safes"). `help-content.ts` `registers` topic (L227–262) has no safe or master till item. The page HelpPanel (F-02-7) is the only in-app help, and it contradicts the owner's model.
@@ -250,9 +254,75 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 
 ---
 
+## SOP-03 End-of-Day Close & Deposit Bag findings (audited at `3385bfa9`, 2026-10-27)
+
+Owner decisions referenced: D2 (second person at close), D7 ($5 / reason), D10, D14–D20. The owner's request quoted in SOP-03 §1: *"End of day spreadsheet that one person completes before close, and the morning employee recounts and verifies the amount before sealing the bag and putting it into the safe for depositing to the bank."*
+**Verdict: NOT MET in the app.** The End-of-day report (`/admin/registers/eod`) prints the day. But the deposit figure, the morning recount, the bag, the seal and the bank clearing do not exist or cannot be reached. SOP-03 is a paper procedure (night sheet, bag log, bank-run checklist).
+Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "deposit_bags" src/app` → 0 hits). **F-00-8** re-confirmed for the EOD page (prints via `PrintButton`; no export route under `src/app/admin/registers/eod/`). **F-00-3** still stands (manager-till verify records $0, SOP-02).
+
+### F-03-1 · CONFIRMED · BUG · S1 — 10400 Undeposited Funds is never filled, so the books panel gives a false "all matched"
+- **Pin:** since D-77 (`docs/DEFECTS.md` L4138), the drawer close debits **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L294–303, self-test L807–813). The only builder that debits 10400 is `buildSealBagJournal` (L405–441). It has **no poster** (`ledger-census-data.ts` L1585 `poster: null`; reachable MISSING L1596–1600).
+- **Effect:** 10400 stays at $0.00 (or at any pre-D-77 residue), so the Undeposited Funds panel shows its green *"Every dollar … matched"* message while bags sit in the safe. The panel text *"A drawer close moves cash into it"* (`UndepositedFunds.tsx` L82–84) is stale.
+- **Also stale:** the header comments in `UndepositedFunds.tsx` L11–12, `deposit-clearing-service.ts` L12/L22–23, `deposit-clearing-core.ts` L9–12/L129 and `drawer-posting-service.ts` L27 all still describe the close as filling 10400.
+- **SOP impact:** SOP-03 §4.15 tells staff and the owner not to use the panel and to use the bag log plus the safe instead. Ties to G-14.
+
+### F-03-2 · CONFIRMED · DOC · S3 — EOD worked example still uses 3 × $167.50 = $1,502.50 floats
+- **Pin:** `register-cash-specimen-core.ts` L49 `SPECIMEN_TILL_COUNT = 3`; its self-test asserts `150_250` (L136). `RegisterCashSpecimen.tsx` L128 *"Each drawer (x3)"*, L132–137. Census text `ledger-census-data.ts` L1449 and the owner-quote history in `safe-bag-core.ts` L18–20 also carry the three-till figure.
+- **Owner (D19):** the Manager Till holds $300.00, so the floats total **$635.00** ($1,635.00 including the master till).
+- **SOP impact:** SOP-03 §4.9 labels the panel a teaching example with an out-of-date float total.
+
+### F-03-3 · CONFIRMED · GAP + DOC · S1 — Bank-deposit clearing has no caller; the census says it is reachable
+- **Pin:** `clearDepositForBankRow` (`deposit-clearing-service.ts` L237+) is called only by `tests/compliance/deposit-clearing.test.ts`. `grep -rn clearDepositForBankRow src` → only its definition and the census strings. The bank page's `actions.ts` exports only `recordBankExpensesAction`.
+- **Census:** `cash_deposit_to_bank` (`ledger-census-data.ts` L1519–1575) marks *exists* and *reachable* **PRESENT**. Its exists evidence (*"books-93 built the first leg - the drawer count into 10400"*) is stale after D-77.
+- **Even if wired:** it would refuse every deposit with DEPOSIT_NOTHING_UNDEPOSITED (`deposit-clearing-core.ts` L396–402), because of F-03-1.
+- **SOP impact:** SOP-03 §4.13 makes the bag log plus the bank receipts the till-to-bank trail. Ties to G-14.
+
+### F-03-4 · CONFIRMED · DOC · S3 — SOP-01 §4.29 says the float goes back to the master till / safe (self-finding)
+- **Pin:** `docs/sop/SOP-01-register-operations.md` §4.29 (≈L749–757): *"the float for tomorrow goes back to the master till / safe"*. The code keeps the float in the drawer (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L193; `register-cash-journal-core.ts` L275). SOP-03 §4.4 (the float stays in the till) follows the code and the owner.
+- **Also stale:** the Registers page help (`src/app/admin/registers/page.tsx` L117–120) says sales shown are *"online pickup order sales … the only transaction records in this back office"*. That is out of date now that the register records in-store sales (`sale-event-core.ts` L15–33).
+- **Fix later:** correct SOP-01 §4.29 at its next revision (docs only; recorded here first per the program rule).
+
+### F-03-5 · CONFIRMED · GAP · S2 — EOD print has one signature and no deposit figure, bag # or denominations
+- **Pin:** `src/app/admin/registers/eod/page.tsx` L248–258. Only *"Prepared by (signature)"* and *"Date / time"*. The table shows Opening / Drops / Closed count, but not takings-to-bag. There is no morning-verify line, no bag number and no denomination grid.
+- **Owner:** *"one person completes before close, and the morning employee recounts and verifies"*. Two people, two counts.
+- **SOP impact:** night sheet form 8.1 parts A/B/C. Ties to G-15.
+
+### F-03-6 · CONFIRMED · GAP · S2 — EOD report omits refunds; "Gross" is not cash
+- **Pin:** `src/lib/registers/eod-store.ts` does not query voids or returns. The Z report does (`day-report-core.ts` L136–175, L265–280: *"REFUNDS — STORE-WIDE CASH OUT"*).
+- **Effect:** a manager reading EOD "Gross" as the cash to expect will be over by the refunds paid out.
+- **SOP impact:** SOP-03 §4.8 says to use the Z report for cash. Ties to G-15.
+
+### F-03-7 · CONFIRMED · HARDEN · S3 — EOD store ignores read errors
+- **Pin:** `eod-store.ts`:
+  - The register/session reads (L86–89), the drop read (L100–107) and the event read (L112–120) never check `error`. A failed read renders as *"No drawer sessions on this business day."* or as zeros.
+  - The safe_counts/safe_swaps reads treat any error other than a missing table as "Not done" (L131–132, L144–145).
+- **SOP impact:** SOP-03 §6 says: if you know drawers were used, reload, then tell the owner and use the close slips.
+
+### F-03-8 · CONFIRMED · UX · S3 — No date picker; a malformed `?day=` silently shows today
+- **Pin:** `src/app/admin/registers/eod/page.tsx` L15–19 `normalizeDay`: anything not `YYYY-MM-DD` falls back to `pacificToday()` with no message. There is no date control on the page, so a past day is reachable only by editing the address.
+- **SOP impact:** SOP-03 §4.8 documents `?day=YYYY-MM-DD`. Ties to G-15.
+
+### F-03-9 · CONFIRMED · HARDEN · S2 — deposit_bags lets any staff login rewrite any bag (for when it is built)
+- **Pin:** `0212_deposit_bags.sql` L150–163. The `<t>_staff_write` policy is `for all using (is_staff()) with check (is_staff())` on `deposit_bags` and `deposit_bag_sessions`, so status and `amount_minor` can be changed directly via the API. There is no immutability trigger after `sealed`/`deposited`, and `updated_at` (L83) has no trigger. `pulled_by`/`counted_by` are deliberately not forced to differ (L68–73).
+- **Not reachable today** (no screen, F-00-6). It is recorded so the G-04 build closes it: sealed bags should be append-only, and changes should go through a server action with an audit row.
+
+### F-03-10 · CONFIRMED · GAP · S2 — Bag lifecycle, close-block and $10k shape check are built but never called
+- **Pin:** `safe-bag-core.ts`: lifecycle transitions, `blockCloseForUndeclaredBags` (L212–226), `checkDepositShape` (L305–328) and `validateBagAmount` have no callers outside the file, its tests (`safe-bag.test` 18 cases) and `buildSealBagJournal` (itself unreachable). `grep -rn "checkDepositShape\|blockCloseForUndeclaredBags" src` → `safe-bag-core.ts` only.
+- **Effect:** the cash-deposit policy's near-$10k / structuring warning (`bank-match-core.ts` L1587 CTR_THRESHOLD_CENTS, L1594 STRUCTURING_NEAR_MISS_CENTS; `CASH_DEPOSIT_POLICY_DECISION.md` L66–73) is never shown at bag time.
+- **SOP impact:** SOP-03 §4.14, the $10k rule on paper and the bag log's **Note** column. Ties to G-04 / G-14.
+
+### F-03-11 · CONFIRMED · DOC · S3 — Help and concierge have no end-of-day or deposit-bag content
+- **Pin:** `grep -n -i "deposit\|end.of.day\|eod" src/lib/admin/help-content.ts src/lib/admin/concierge-kb.ts` → only payroll **direct deposit** (`help-content.ts` L725–742; `concierge-kb.ts` L262–280).
+- **Effect:** an employee asking the concierge *"how do I do the deposit?"* gets payroll ACH content or nothing.
+- **SOP impact:** recorded in `04-CONCIERGE-COVERAGE-LEDGER.md` (SOP-03 slice); grounding comes from SOP-03 §4, §8 and §9 in Phase D.
+
+---
+
 ## Ledger index (updated each slice)
 
 | SOP slice | Findings | Confirmed | Suspected |
 |---|---|---|---|
 | SOP-00 recon | 15 | 13 → 15 (F-00-12, F-00-13 confirmed in SOP-01) | 2 → 0 |
 | SOP-01 Register Operations | 16 (15 new + F-01-16 re-verify of F-00-1) | 16 | 0 |
+| SOP-02 Master Till / Store Safe | 13 new (1×S1, 6×S2, 6×S3) + re-confirmed F-00-7, F-00-8. **F-02-2 withdrawn** in SOP-03 (D19) → 12 standing | 13 (12 standing, 1 withdrawn) | 0 |
+| SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
