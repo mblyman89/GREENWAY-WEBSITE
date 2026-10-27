@@ -20,8 +20,8 @@ Pushed often because the sandbox is unstable (owner: "commit work often out of t
   - No sold_out flip at zero (applyLotDelta autoStatus does that for sales). → finding (minor).
   - No recordAudit call (the adjustment row itself carries actor_id L595-600). OK-ish.
   - Note optional (form L1488-1490 lot page); reasons "other" and "employee_sample" map to CCRS "Other" (ccrs-inventory-adjustment-core.ts L62-93) which REQUIRES detail (ccrs-preflight-core.ts L271) → row withheld E13 at CCRS build (core L68-72). Form does not warn. → finding.
-  - "Destruction" and "Recall removal" reasons exist on the manual form (lot page L59-69) — both export as CCRS Destruction (core L66-67, L80-81). Bypasses SOP-15 disposition flow. → finding.
-  - "Theft"/"Seizure" exist in CCRS map (L91-94) but NOT in the form's reason list (lot page L59-69 / actions VALID_REASONS L89-101). Theft must go as Other+note or Shrink(→Lost). → finding.
+  - "Destruction" and "Recall removal" reasons exist on the manual form (lot page REASONS L118-128) — both export as CCRS Destruction (core L66-67, L80-81). Bypasses SOP-15 disposition flow. → finding.
+  - "Theft"/"Seizure" exist in CCRS map (L91-94) but NOT in the form's reason list (lot page REASONS L118-128 / actions VALID_REASONS L89-101). Theft must go as Other+note or Shrink(→Lost). → finding.
   - "Receive (add)" reason: not reported to CCRS (isReportableAdjustment L101-105) — adding stock by hand is invisible to CCRS adjustments. → finding.
 - setLotStatusAction L142-155 → store.updateLotStatus L836-851: blind update, no audit, no go-live gate (F-04-2 / G-19 carry-over, S1). VALID_STATUSES L103-109.
 - Lot page Lifecycle form `[id]/page.tsx` L1496-1512; help text "Recalled / destroyed lots are excluded from sale."
@@ -32,7 +32,7 @@ Pushed often because the sandbox is unstable (owner: "commit work often out of t
 - Recalled status is set ONLY by the lot page Lifecycle form (blind update, no audit, store.ts L836-851). So the recall hold — a statutory sale stop — is placed and released with no audit row and no reason. → finding (pairs with F-04-2).
 - **Manual "Destroyed" status with stock left**: updateLotStatus writes status only (store.ts L836-851); on_hand_qty unchanged, no adjustment row. CCRS Inventory.csv reads live lots `.neq("status","destroyed")` (ccrs-batch.ts L1209-1217) and only re-reads destroyed lots NAMED by an event row in the batch (readDestroyedLots L380-411). Hand-destroyed lot with no adjustment → dropped from Inventory.csv with its last QoH still on file at CCRS, no Destruction adjustment. The proper path is SOP-15 disposition (disposition.ts L1087-1094 sets destroyed only when the lot is empty). → S1 finding.
 - CCRS: held lots (quarantine/recalled) reported in the Sales Floor area, advisory E45 (ccrs-batch.ts L1006-1010, L1121).
-- Status vocab: active | quarantine | recalled | sold_out | destroyed (actions.ts L103-109; lot page L71-77).
+- Status vocab: active | quarantine | recalled | sold_out | destroyed (actions.ts L103-109; lot page STATUSES L130-136).
 
 ## Register "86" + restore to sale
 - `/api/pos/stock-flag` route.ts: device-authenticated L28-34, reasons "shelf empty" | "damaged / unsellable" | "wrong listing" (stock-flag-core.ts STOCK_FLAG_REASONS), flips published menu_items.inventory_status → "unavailable" L75-81, audited `pos.stock_flag` L84-100 (flaggedByName is client-asserted L48-51). One-way.
@@ -51,3 +51,20 @@ Pushed often because the sandbox is unstable (owner: "commit work often out of t
 
 ## Oversold
 - oversold-report-core.ts header: OVERSOLD notes from sale-decrement written on order_events; read on `/inventory/cycle-counts` page (only importer). Belongs to SOP-06 for action; SOP-05a points there.
+
+## Tags / labs / labels / bulk fill / lot edits
+- Tags `/inventory/tags` (page header L1-16; gate L85). Built-in New tag auto-applies for DEFAULT_NEW_WINDOW_DAYS=14 after first publish (product-tags-core.ts L25-26; pure time predicate header L10-14). MAX_TAGS_ON_CARD=3. Delete requires "Yes, delete" tick (tags/actions.ts L108-111; page L246-249). All audited `product_tag.*` (actions L59-62, L95-98, L114-117, L143-146).
+- Labs `/inventory/labs` (header L1-13; gate L156): WSLCB lab list + COA hosts = SSRF allow-list for the COA reader. add lab / add host / remove host audited (`testing_lab.add`, `testing_lab.host_added|host_removed`, labs/actions.ts L46-49, L58-76).
+- Lot label `/inventory/lots/[id]/label` (header L1-11; gate L33): 4x6 Rollo reprint; barcode = lot_code || pos_product_key || id (L40); "Best by" vs "Expires" by provenance. **Only linked from the receiving manifest page** (`intake/[id]/page.tsx` L1072-1078); the lot page has no Print label link (grep "/label" in [id]/page.tsx → none). → finding S3.
+- Register scan index uses lotCode and ccrsExternalId (scan-to-cart-core.ts L36-39, L64), not pos_product_key; a label printed with the pos_product_key fallback (lot without lot_code) will not scan. → note in SOP (only when lot_code is blank).
+- Bulk fill (actions.ts L903-~1000; bulk-fill-core.ts L1-40, L52-56): only blanks, only Cultivera-migration lots (MIGRATION_MARKER L49, isMigrationLot L107), fields expires_on / unit_cost_minor_units / pos_product_key; audited `inventory_lot.bulk_filled`. Gate is inventory.manage (manager) → a manager can key a cannabis unit cost on migration lots, while roles.ts L143-148 says "Cannabis cost entry is NOT built" and inventory.cost.fill is owner+admin. → finding S3 (owner question).
+- Lot details edit (actions.ts L315-~448): vendor/brand/strain/strain type only, verified ids, audited `inventory_lot.details_edited`, propagates to website/onboarding/strain.
+- Received date (actions.ts L174-211): audited `inventory_lot.received_date_set`.
+- Price correction (actions.ts L690-~830): hard floor cost+tax; writes this lot's variant on published+staged; audited. Detail belongs to SOP-05b (pricing/menu), referenced here.
+- Permissions: inventory.manage = owner, admin, manager (roles.ts L106). inventory.count = + staff (L126). inventory.audit = owner (L142).
+
+## Law checked (WAC 314-55-225, fetched 2026-10-27 from app.leg.wa.gov)
+- (3)(b)(i)(B): licensee-initiated recall → "Secure, isolate, and prevent the distribution"; "prohibited from destroying any affected product prior to notifying the LCB and coordinating with the local LCB officer".
+- (3)(d): "All licensees must develop a recall plan"; minimum (A) recall coordinator, (B) identify/isolate, (C) retrieve/destroy, (D) communications.
+- (2)(b): market withdrawal (no consumer risk) → notify local LCB officer within 48 hours.
+- App: disposition-core.ts L226-241 blocks recall destruction until LCB coordinated + officer named. No recall-plan document or coordinator field exists in the app (grep "recall plan|recall coordinator" → docs/RETURNS_DESTRUCTION_COMPLIANCE.md L136 only). → SOP-05a Appendix: written recall plan (paper) + gap.
