@@ -279,3 +279,208 @@ Set a reorder point on every **A** and **B** item, so the **Reorder now** list m
 
 **Archiving an item.** **Archive item** (or **Archive** on a draft) hides it from the catalog. **There is no restore, and archiving writes no audit row** (`noncannabis/actions.ts` L94–100; `store.ts` L436–447; finding F-05b-2). Archive only an item that is gone for good, at **On hand** zero, or as part of the price-change procedure above. Write every archive on form 8.1's catalog line.
 
+---
+
+# Part 2: Merch Inventory (greenwaymerch.com)
+
+### 4.10 What the Merch page is
+
+**Merch inventory** (`/admin/inventory/merch`) is the apparel list for greenwaymerch.com. The page's subtitle reads: *"Greenway Glass & Goods apparel on greenwaymerch.com. Publishing in Merch Studio adds products here automatically."* (`merch/page.tsx` L55). The seller is Greenway Merchandising LLC (dba Greenway Glass & Goods). It is a separate company, it sells on a separate website, and Printful makes and ships every order. **Merch is never rung on the cannabis register, and it never appears on the cannabis menu.**
+
+What you see:
+
+- **Publish a design** (opens Merch Studio) and **Download CSV** (L59–60).
+- Stat cards: **Products**, **Variants**, **Need attention**, **Units sold**, and **Revenue / gross profit** (L72–76).
+- A filter row: **Search**, and **Show** = All / Live / Hidden / Needs attention.
+- One card per product, with status **Live on greenwaymerch.com** or **Hidden**, and a variant table with these columns: **Colour**, **Size**, **Printful stock**, **Website**, **Retail**, **Printful**, **Profit**, **Margin**, **Sold**, **Revenue**.
+- **Printful stock** is one of: **In stock**, **Made to order**, **Out of stock**, **Discontinued**, **Not checked**.
+
+New products appear here only when they are published from Merch Studio. Designing and publishing a product is covered by the marketing SOPs on the roadmap, not by this SOP.
+
+### 4.11 Hide, put back, remove and copy stock
+
+**Hide a product from the website.** Press **Hide from website** on the product card (L126). The banner reads *"<name> is hidden from greenwaymerch.com (within about a minute)."* (`merch/actions.ts` L30). Use this for a product that is temporarily unavailable, or one with a problem you are looking into. It is audited (`merch.product_hidden`).
+
+**Put it back.** Press **Put back on website**. The banner reads *"<name> is live on greenwaymerch.com again (within about a minute)."* It is audited (`merch.product_shown`).
+
+**Remove a product (store rule: owner or admin only, until Q-05b-3).** The app allows any manager to do this. Prefer **Hide**, because Hide can be undone.
+
+1. Open **Remove...** on the card (L129).
+2. Type the product's web name exactly as shown in grey in the box, then press **Remove** (L132–133).
+3. If the name doesn't match, you will see *"Type the product's web name exactly to confirm removal."* (L36).
+4. On success: *"<name> was removed. Past orders in Printful are not affected."* (L47). It is audited (`merch.product_removed`). To bring the product back, it has to be published again from Merch Studio.
+
+**Copy Printful stock to the website.** Press **Copy Printful stock to the website** (`merch/page.tsx` L90). The app asks Printful for every variant's stock and updates the website: *"Checked N variants at Printful; M changed on greenwaymerch.com."*, followed by a note if Printful reported a problem (`merch/actions.ts` L62). It is audited (`merch.stock_synced`). Do this every Monday, alongside the reconciliation in §4.5, and any time a customer reports an item that looks out of stock.
+
+**Needs attention.** Set **Show** to **Needs attention** to list the products that need you. Hide any variant that is **Discontinued** or **Out of stock** at Printful until it comes back.
+
+---
+
+# Part 3: Publish Menu
+
+### 4.12 How a menu goes live
+
+**Publish Menu** (`/admin/publish`) is where the menu for the website **and the register** goes live. The subtitle reads *"Approved products go live by themselves. This page shows the few updates that need you."* (`publish/page.tsx` L228), and the **In short** line reads *"Products you approve go live by themselves. This page lists the few updates that need a human first."* (`publish-guard-core.ts` L45–46).
+
+The page's **How publishing works** panel has six steps (`publish-guard-core.ts` L59–66). Quoted in full:
+
+1. *"When you approve a received product with a price, it goes live on the website and the register by itself. No Publish click."*
+2. *"An update only waits here when a product fact needs a second look, or the automatic publish didn't finish. Each one says why and has one button."*
+3. *"Publishing makes that update your live menu. The menu it replaces is archived, never deleted."*
+4. *"When a newer menu goes live, older waiting updates are archived automatically, so you never have to pick between them."*
+5. *"If publishing would take any product off the menu, the page names them and asks you to tick a box first."*
+6. *"POS-export uploads and import history stay under Menu Imports (Settings)."*
+
+The page has three tabs: **Overview**, **Issues** and **History** (`page-tab-sets.ts` L63–65). Its stat cards are **Live menu**, **Live variants**, **Waiting for you** and **Newest draft**. After a successful publish, the banner reads *"Published. The public menu now shows this version and its products are sellable at the register."* (L258).
+
+> **"86" in plain words.** "86" is restaurant slang for *"take it off the menu, we're out."* In this store, "86-ing" a product means stopping it from selling, on the website and at the register, when it runs out or must not be sold. **The professional method is to stop the product from selling at the source, not to hand-publish a smaller menu.** For a cannabis lot, that means SOP-05a: put the lot on hold, or bring its quantity to zero through the proper adjustment, destruction, recall or return path. The menu then follows the stock. Gap G-26 (SOP-05a) builds a one-click, audited **86** with a reason and an automatic return. Until it exists, **never publish an older or smaller menu to take one product off**: the removal check in §4.14 will list everything that version would remove.
+
+### 4.13 Working the "Waiting for you" queue
+
+Open **Overview**. The **Waiting for you** section (L310–425) shows one row per update that needs a person. Each row carries a tag that says why it is waiting, and a single button (`publish-queue-core.ts` L68–82):
+
+| Tag | Button | What to do |
+|---|---|---|
+| **Fact check** | **Check the flagged facts →** | Open Fact Review and confirm or correct the flagged facts (SOP-04). The update publishes itself once the facts are settled. |
+| **Publish didn't finish** | **Try publishing again →** | Open it and publish again (§4.14). If it fails twice, stop and tell the owner (§6). |
+| **Needs a Publish click** | **Review & publish →** | Read the change list, then publish (§4.14). |
+| **POS upload** | **Review this upload →** | A Menu Imports upload. It is covered by SOP-10. Managers do not publish these without the owner. |
+| **Waiting for Cultivera** | **Open the Cultivera cutover step →** | This is a cutover hold. **Do nothing**: SOP-10 covers it. |
+
+A chip shows where each update came from: **from receiving** or **from POS upload**. A publisher may also see **Publish the ready products** (L402). Someone without publish rights sees *"A manager or admin publishes this."* (L411).
+
+Further down the page:
+
+- **Older than your live menu (n) — nothing to do** (L433). These rows really are nothing to do. They archive themselves.
+- **Kept off the menu until their facts are set (n)**, with **Set the facts** (L461). These products will not sell until their facts are entered (SOP-04).
+
+When the queue is empty, it reads *"Nothing waiting — every menu update from receiving has published automatically."* **History** lists **Recently published automatically**.
+
+**Daily check (form 8.4).** At opening, open Publish Menu and write down the **Waiting for you** count. Clear every **Fact check** and **Needs a Publish click** row before noon.
+
+### 4.14 Publishing an update by hand: the removal check
+
+You publish by hand on the version page (`menu-imports/version/[versionId]`). A row button on Publish Menu takes you there.
+
+1. Read the note above the button: *"Publishing makes this update your live menu and refreshes the public site. The menu it replaces is archived, not deleted."* (`PUBLISH_SWAP_NOTE`, version page L429).
+2. **If the page lists products that would come off the live menu,** read every name. Tick *"I understand N products will come off the live menu (listed above), and that's what I want."* (L433) **only if each removal is intended.** If even one is a surprise, do not tick the box. Stop and tell the owner.
+3. Press **Publish this menu live** (L437).
+4. If you pressed it without ticking a needed box, nothing is published. You will see *"Not published yet: N products would come off the live menu. Tick the box if that's what you want. Otherwise nothing changes and the live menu stays as it is."* (`menu-imports/actions.ts` L222–231; `publish-guard-core.ts` L108).
+5. If a Cultivera upload is waiting, an ordinary update is refused: *"Publish your one-time Cultivera menu first. …"* (L198–200; `cutover-guard-core.ts` L64). That is SOP-10's work.
+6. **Publish now and fix after** publishes even though products are still awaiting review. It is **owner or admin only** (L245–250). A manager sees *"Only the owner or an admin can publish with products still awaiting review. Decide them in Fact Review, or ask the owner."* (`publish-now-core.ts` L55–56).
+
+Every publish is audited (`menu_version.published`, L264).
+
+**Know this limit (finding F-05b-10).** If the app cannot work out what would be removed, for example because the comparison fails to read, it **publishes anyway**. It only writes an error to the server log; it does not stop and does not warn you (`menu-imports/actions.ts` L232–237, *"fail open"*). After every hand publish, compare the **Live variants** count with what you expected. If it fell by more than the listed removals, tell the owner at once (§6).
+
+---
+
+# Part 4: Types & Categories
+
+### 4.15 Website categories and inventory types
+
+**Types & Categories** (`/admin/settings/types`) is owner/admin only (`settings.manage`, L68). The subtitle reads: *"Rename labels, edit help text, reorder, and activate or hide the categories that group your menu — and catalog the POS inventory types behind them."* (L115).
+
+- **Website categories** tab: the groups shoppers browse. Stat cards: **Website categories**, **Hidden categories**, **Inventory types**, **Hidden inventory types**.
+- **Inventory types** tab: the raw POS labels that arrive with imported stock. Each one **Maps to website category**.
+- To add a category: **Add a website category**, then **Label**, **Value (optional)**, **Helper text**, **Sort order**, then **Add category**. To add a type: **Add an inventory type**, then **Label**, **Key (optional)**, **Maps to website category**, **Notes**, then **Add inventory type**.
+- **Save** on a row renames it or changes its help text. *"Editing a label here changes it everywhere instantly. Nothing in your sales history changes."* (help step, L124).
+- **Delete category** / **Delete type** hides the row instead of deleting it when it is built in or still in use. The page then says *"This is a built-in type, so it was hidden (deactivated) instead of deleted. Historical data stays intact."* or *"Still used by N live item(s), so it was hidden (deactivated) instead of deleted. …"* (L51–55). Built-in rows show **Hide category** / **Hide type** instead.
+- **Heads up — N categories on your live menu aren't in this list** (L217) means the live menu uses a category value that has no row here. Add a row with the same value, or move those products (§4.16) after checking the cannabis line.
+
+All changes are audited (`website_category.*`, `inventory_type.*`). The rename and delete audits do not record the before and after values (finding F-05b-11, S4), so **write every change on form 8.3**.
+
+> **The cannabis line.** Three category values make a product **non-cannabis** to the tax and limit engines: **Greenway Merch** (`merch`), **Accessories** (`accessories`/`accessory`) and **Paraphernalia** (`paraphernalia`) (`order-pricing-core.ts` L42–50). Mapping an inventory type to one of these, or away from one, decides how every future product of that type is taxed. **Never map a cannabis inventory type to a non-cannabis category, or the other way round** (finding F-05b-9, G-31).
+
+### 4.16 Moving products between categories
+
+**Move products between categories** (L237–270): **Move everything from**, **Into**, then **Move products**. The page explains: *"Moves everything at once: live menu, staged drafts, onboarding picks, and the inventory-type mappings (so future intake follows). Your sales history and archived menus are never touched. The change is recorded in the audit log."* (L238–241).
+
+- On success: *"Done — N records moved to the new category. The customer menu updated immediately."* (L43–48).
+- If you don't pick both: *"Pick both a source and a target category."* If you pick the same one twice: *"The source and target categories are the same — nothing to move."* If the target is hidden: *"… is hidden — products can't be moved into a hidden category. Re-activate it first."* (`category-registry-core.ts` L157–168).
+
+> **STOP (finding F-05b-9, S1).** The move changes `menu_items.category` on the **live menu** (`category-registry.ts` L125–160), which is what the register prices from. Nothing checks whether you are moving cannabis into a non-cannabis category (`buildReassignPlan`, `category-registry-core.ts` L149–198, has no such check). If cannabis lands in **Accessories**, **Greenway Merch** or **Paraphernalia**, the register immediately:
+> - charges **9.3% sales tax only, with no 37% excise** (`order-pricing-core.ts` L42–50);
+> - stops counting it against the **purchase limit** (`sales-limits-core.ts` L370–374);
+> - stops requiring a **scan** at the register (`scan-required-core.ts` L55–61);
+> - **lowers the legal price floor** (`price-correction-core.ts` L35–39, L61–67).
+>
+> **Store rule until G-31 is built:** **Move products** is used only between two cannabis categories, or between two non-cannabis categories, and only by the owner. Before pressing it, write the from, into and record count on form 8.3. If anyone ever finds cannabis filed under a non-cannabis category, **stop sales of that product** and tell the owner the same day. The excise owed has to be worked out for every sale made in the meantime.
+
+### 4.17 Re-filing one product from its lot page
+
+On a cannabis lot page, the **Website type & category (menu)** box (`[id]/page.tsx` L1176) changes how one product is filed:
+
+- **Website category**: **Keep current** (change nothing), **Auto (remove my override)**, an existing category, or a new one. If you create one, type it in **New category name**.
+- **Website type**: the same choices, with **New type name**.
+- Press **Save website type & category** (L1270). This is audited (`inventory_lot.website_classification_edited`, `inventory/actions.ts` L506).
+
+This writes a per-product override. On the website it changes where the product is listed (shop, home, specials and product page). On the lot page it changes the tax the price math uses: **Correct the sell price** folds in 9.3% instead of 37% + 9.3% when the category is non-cannabis (L1026, L1083), so the price **floor** drops. The override was **not** found in the register menu or in order pricing. Those read the live menu category, which is changed by **Move products** (§4.16) and by publishing.
+
+**Store rule (finding F-05b-9, until G-31):** in this box, **never choose Accessories, Greenway Merch or Paraphernalia for a cannabis lot.** Nothing in the box stops you (`parseClassificationEdit`, `lot-website-classification-core.ts` L61, has no cannabis check). Use the box only to move a product between cannabis categories, for example *Edibles* to *Edibles (Liquid)*, and note it on form 8.3.
+
+---
+
+# Part 5: Sales-limit classification
+
+### 4.18 Why classification decides the purchase limit
+
+Washington caps what one customer may buy in a day (WAC 314-55-095). The register works out the limit from each product's category **and** two facts the category cannot tell it:
+
+- **Taken otherwise into the body** (a suppository, for example): a **10-unit** limit, counted in **units**, so **units per package** must be recorded (WAC 314-55-095(1)(d)(i)(D)). An unanswered product is sold under the 100-unit limit instead of the 10-unit one.
+- **Low-THC beverage:** a liquid in individual units of **no more than 4 mg** delta-9 THC each (`LOW_THC_UNIT_MAX_MG = 4`, `sales-limits-core.ts` L288) moves out of the 72 oz liquid limit into its own limit ((1)(d)(i)(E)–(F)). An unanswered liquid stays under the stricter 72 oz limit, which is safe but may under-sell.
+
+The worklist explains each gap in plain words (`classification-status-core.ts` L230–239). For example: *"Nobody has said whether this is taken otherwise into the body (a suppository). Until somebody does, the register sells it under the 100-unit limit instead of the 10-unit one."*
+
+This applies only to cannabis products. Non-cannabis categories carry no purchase limit (`sales-limits-core.ts` L370–374), which is why §4.16–§4.17 matter.
+
+### 4.19 Working the classification worklist
+
+1. Open **Sales-limit classification** (`/admin/compliance/classification`; `inventory.manage`, L75). The subtitle reads *"Products whose classification decides which purchase limit the register applies"* (L87).
+2. **If you see "This list is incomplete — do not read it as an all-clear."** (L108), the app could not read everything. Reload. If it persists, tell the owner, and do not record the weekly check as clean.
+3. Read the stat cards: **Urgent**, **Unconfirmed**, **Classified**, **In scope**. Filter with **Show** (Needs attention, Urgent, Unconfirmed, Classified, All in scope) and **Source** (All products, From Cultivera import, Received through intake).
+4. For each row, read **What is missing**, then press **Classify →** (or **Review →** on a settled row) (L322). This opens the lot at its **Sales-limit classification** box (`[id]/page.tsx` L1299).
+5. With the **package label in hand**, answer:
+   - **Is this taken otherwise into the body?**: **No — ordinary product** or **Yes — taken otherwise into the body**.
+   - **Units per package**: required when the answer is Yes. Count the units on the label (for example, a box of 6 suppositories is 6).
+   - For liquids only: **Is this a low-THC beverage?** (**Not answered**, **No — ordinary liquid**, **Yes — low-THC beverage**) and **Active delta-9 THC per unit (mg)** from the label.
+6. Press **Save sales-limit classification** (L1465). This is audited (`inventory_lot.compliance_classification_edited`).
+7. If the row now shows a contradiction (low-THC marked Yes, but above 4 mg per unit, or both buckets marked), one of the answers is wrong. Re-read the label and fix it.
+
+**Rules.** Never answer **Yes — low-THC beverage** without a label that shows 4 mg or less per individual unit. If the label is unclear, answer **No — ordinary liquid**, which is the stricter limit, and tell the owner. **Weekly (form 8.4):** the **Urgent** count must be 0 by Monday close.
+
+---
+
+# Part 6: The cannabis sell price
+
+### 4.20 Reading the sell price on a lot
+
+The lot page shows **Sell price (after tax, out-the-door)** (`[id]/page.tsx` L486). This is what the customer pays at the register. The formula sits under it (L492). To the right is **Legal floor:**, either an amount or **— (cost unknown)** (L503), followed by *"Edit it in "Correct the sell price" below ↓"*.
+
+If there is no price, the page says why (L508–512):
+
+- *"This product has several sizes on its menu card. Pick this lot's size in "Which size is this lot?" below to see and set its price."*
+- *"The menu price couldn't be read right now. Reload the page in a moment."*
+- *"No published price yet. A price appears once this product's import is published to the menu."*
+
+**The floor.** Washington forbids selling below acquisition cost (RCW 69.50.357 / WAC 314-55-155). The floor is the lot's **unit cost with tax folded in**: × 1.463 for cannabis (37% excise + 9.3% sales tax), or × 1.093 for a non-cannabis category (`price-correction-core.ts` L35–39, L61–67). **The unit cost comes only from the vendor's CCRS manifest** (owner, D38: *"Cost comes from the state CCRS manifest created by the vendor."*). Nobody types it.
+
+### 4.21 Correcting the sell price (and the size link)
+
+1. **Check the size first.** In **Which size is this lot?** (L1132), choose the size this lot sells as and press **Save size**. **Clear the size link** undoes it. The panel says who set it: *"You picked this size."*, *"The Cultivera import set this size."*, or *"Not linked yet."*.
+2. In **Correct the sell price** (L1022), read the explanation. It folds in *"37% excise + 9.3% sales tax"* for cannabis, or *"9.3% sales tax"* for a non-cannabis category (L1026), and it changes *"this product only"*.
+3. **Check the line above the box.** If the category shown makes the tax read **9.3% sales tax** on a cannabis lot, **stop**: the product has been filed across the cannabis line (§4.16–§4.17). Tell the owner before changing the price.
+4. Type **New after-tax price ($)**. The help text shows the minimum: *"Minimum allowed for this lot is $X (cost + tax)."* (L1065–1066). The reverse math under the field divides by 1.463 or 1.093 (L1083).
+5. Press **Save sell price**. This is audited (`inventory_lot.after_tax_price_edited`, `inventory/actions.ts` L708–830).
+
+**What blocks a save:**
+
+- an empty, invalid or $0.00 price (`price-correction-core.ts` L105–120);
+- a price below the floor: *"Blocked: $X is below the legal minimum of $Y. Washington law (RCW 69.50.357 / WAC 314-55-155) forbids selling below acquisition cost. …"* (L128–133);
+- a lot not linked to a product key;
+- a multi-size card with no size picked;
+- a product that isn't on the menu;
+- a failed check of other lots that share this price: *"… so nothing was saved."*.
+
+> **Cost unknown: owner only (finding F-05b-12, D38).** When the lot's cost is unknown, the help reads *"Cost is unknown for this lot, so no floor can be enforced."* (L1067), and the app will save **any** price above $0.00 (`afterTaxFloorMinor` returns nothing, `price-correction-core.ts` L65). **Store rule:** only the owner sets a price on a lot whose floor shows **— (cost unknown)**. First fix the cost from the vendor's CCRS manifest (SOP-04 / SOP-05a §4.20). If that cannot be done today, the owner reads the manifest cost, works out cost × 1.463, and sets a price at or above it, recording it on form 8.2.
+
