@@ -11,8 +11,19 @@ export function FetchRunAutoRefresh({ active, everyMs = 4000 }: { active: boolea
   const router = useRouter();
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => router.refresh(), everyMs);
-    return () => clearInterval(id);
+    // PERF-S12: skip the server re-render while the tab is hidden; catch up
+    // with one refresh when the tab becomes visible again.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, everyMs);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [active, everyMs, router]);
   return null;
 }
