@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (draft for owner review; D21 and F-03-4 correction applied) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -749,7 +749,7 @@ Messages: *"Offline — the day report needs a connection to verify the PIN and 
 ### 4.29 What to do with the money
 
 At close, after the blind count:
-1. **Drawer cash**: follow the store's cash routine in **SOP-02** (master till / safe) and **SOP-03** (end-of-day sheet, deposit bag). The usual steps: the float for tomorrow goes back to the master till / safe, the rest goes in the deposit, and both counts go on the end-of-day sheet.
+1. **Drawer cash**: follow the store's cash routine in **SOP-02** (master till / safe) and **SOP-03** (end-of-day sheet, deposit bag). **The float stays in the drawer** for tomorrow (**$167.50** in each sales register, **$300.00** in the Manager Till, owner decisions D19/D22; the system closes with `floatStaysInDrawer: true`, `drawer-posting-service.ts` L193). Everything above the float is the takings and goes into the deposit (SOP-03 §4.4–4.5). *(Corrected in v1.1: v1.0 said the float "goes back to the master till / safe", which was wrong, finding F-03-4.)*
 2. **Tips**: per store tip policy. Tips never go into the drawer count or the deposit.
 3. **Close slip (form 8.2)**: hand it to the manager with the second-person signature, the void and return receipts, and the swap log (form 8.3).
 4. **Print the Z report** (4.28) when the last drawer of the day is closed, and put it with the end-of-day paperwork.
@@ -774,7 +774,7 @@ A drawer moves through four states: **open → closed → reconciled → verifie
 4. **Reconciled by**: see the warning below.
 5. Tap **Reconcile**. The system calculates **expected = opening float + cash sales − drops** and **over/short = counted − expected**. The banner shows *"Drawer reconciled · Balanced"*, *"Over by $X"* or *"Short by $X"*, plus the books outcome. Reconcile posts the drawer's cash and over/short to the books, and that posting cannot be undone from this screen.
 6. **$5 rule (owner decision D7, interim paper step):** if the result is **over or short by more than $5.00**, the manager fills in the **Over/short reason form (form 8.5)** with the cashier: who, when, how much, and the **required** reason. Give it to the owner. The admin-only warnings screen the owner asked for is not built yet (finding F-01-11).
-   - **Any** over or short, even under $5: write a one-line reason on the close slip (form 8.2, "Reason" line). The owner said the reason "should be required to be input for over/ under". Until the owner confirms whether that means every difference or only those above $5, record a reason for every non-zero difference. Recording more is the safe side (gap G-03).
+   - **$5.00 or less:** write the amount on the close slip (form 8.2). **No reason is required** (owner decision **D21**: *"Q-03-1- only over $5"*). A note is welcome if the cause is known, but it is optional (gap G-03).
 
 > ⚠ **Known problem, "Reconciled by" / "Verified by" (findings F-00-4, F-00-3, F-01-5).** These boxes are typed text, but the database column only accepts an employee ID. **Typing a name is expected to fail with a database error.** Until this is fixed: **leave the box blank** and write your name and the time on the close slip. The back-office audit log still records which login pressed the button.
 
@@ -1237,3 +1237,4 @@ Owner reviewed: ____________________   Date: ________
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
+| 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |

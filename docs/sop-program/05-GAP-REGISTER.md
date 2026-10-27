@@ -1,6 +1,6 @@
 # SOP Program — Gap Register
 
-Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated)
+Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added)
 
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
@@ -23,7 +23,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-01 | Second-person count at till close | D2 | F-01-9, F-00-5 | SOP-01 §4.27 step 8, forms 8.2 / 8.4 | OPEN |
 | G-02 | Master till ↔ little safe denomination log (and register-swap denominations) | D3 | F-01-8, F-00-7, F-02-8 | **SOP-02 §4.10 form 8.2** (master ↔ little safe) and **§4.11 form 8.3** (register ↔ master); SOP-01 §4.26 | OPEN |
 | G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
-| G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (Q-03-7) |
+| G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (D23–D27 set the rules) |
 | G-05 | Per-shift / per-cashier report | (original request: "shift close reports") | F-01-10 | SOP-01 §4.27 step 9 (X report), close slip 8.2 per drawer | OPEN |
 | G-06 | SOPs readable, printable and **exportable** in the Employee area; report export | (original request) | F-00-8, F-00-10 | Markdown files in `docs/sop/`; print from the browser | OPEN |
 | G-07 | Crawler PO builder: save the fetched vendor-menu data | D4 | F-00-15 | None needed yet | OPEN · TO AUDIT (SOP-09) |
@@ -35,6 +35,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-13 | Any employee can record the master till count (not only manager-level logins) | **D15** | F-02-10, F-02-4 | SOP-02 §2, §4.5: a manager login enters it and picks the counter | OPEN |
 | G-14 | Cash-to-bank books wiring (seal poster → 10400, bank-deposit clearing caller, census corrected, panel text) | (original request: "for depositing to the bank") | F-03-1, F-03-3, F-03-10, F-02-1 | SOP-03 §4.13 bag log + bank receipts; §4.15 ignore the panel | OPEN |
 | G-15 | EOD deposit sheet in the app + export (deposit figure, denominations, two signatures, refunds, date picker, CSV/XLSX) | (original request: "End of day spreadsheet" … "exported and printed") | F-03-5, F-03-6, F-03-7, F-03-8, F-00-8 | SOP-03 form 8.1 night sheet; §4.8 Z report for cash; §4.9 print | OPEN |
+| G-16 | Partial-quantity receive: record "N of M received", the rest refused, per line | (owner: *"only accepting a part of the manifest"*) · Q-04-1 | F-04-1 | SOP-04 §4.11: refuse the whole short line; vendor re-sends | OPEN (awaiting Q-04-1) |
+| G-17 | Show emails that failed to stage (parse failed / no manifest) on the Receiving screen | (procedure need) | F-04-4 | SOP-04 §4.3 step 4: daily mailbox-vs-list check, form 8.1 | OPEN |
+| G-18 | Monthly CCRS public records request: reminder task, tracking # / received date / wording log, corrected request template and phone | D28 (*"include the monthly CCRS public record request"*) | F-04-19, F-04-18, F-04-13, F-04-14, F-04-17 | SOP-04 §4.26–§4.28, form 8.4 | OPEN |
+| G-19 | Gated and audited lot activation from the lot page (Lifecycle status runs the go-live check and writes an audit row) | (compliance: WAC 314-55-102) | F-04-2, F-04-12 | SOP-04 §4.19: manager only, from a "now clear" Issues row, logged on form 8.1 | OPEN |
 
 ---
 
@@ -66,10 +70,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Today:** no threshold, no warnings screen and no reason field (F-01-11; `actions.ts` L109–141; no `over_short_reason` anywhere in the code). Accurate over/short also depends on F-01-3 (expected shows $0.00) and F-01-4 (hand-typed cash sales). Those must be fixed first or the warnings will be wrong.
 - **Requirements (draft):**
   1. Threshold **$5.00** (500 cents). An over or short of more than $5 raises a **warning**. Warnings only: nothing is blocked.
-  2. A **reason is required** whenever there is any over/short, as the owner wrote ("should be required to be input for over/ under"). Whether "any" means every non-zero difference or only those above $5 is to be **confirmed with the owner in Phase C**. Until then the interim form asks for a reason for any non-zero difference (the safer reading).
+  2. A **reason is required only when the over/short is more than $5.00** (owner decision **D21**, slice SOP-04: *"Q-03-1- only over $5"*). At $5.00 or less the amount is recorded, and a reason is optional.
   3. An **admin-only** screen showing who, when, how much (over or short) and the reason. Proposed location: under Registers, next to reconcile (the owner will confirm the "most logical place").
 - **Interim:** SOP-01 §4.30 and form 8.5. The manager writes who / when / how much / reason and hands it to the owner.
-- **SOP-02 update (2026-10-27):** master till counts have no threshold or reason either (F-02-6). Whether D7 covers them is **Q-02-3**. Interim: SOP-02 §4.8 and its form 8.5. If yes, the same warnings screen should list master till variances, with the count window and **Counted by**.
+- **SOP-02 update (2026-10-27):** master till counts have no threshold or reason either (F-02-6). D7 covers them (**D16**), with a reason only over $5 (**D21**). Interim: SOP-02 §4.8 and its form 8.5. The same warnings screen should list master till variances, with the count window and **Counted by**.
 
 ## G-04 · Deposit bag screen
 
@@ -82,7 +86,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   3. Night vs morning difference: show it, require a reason (D7 style), and keep both figures.
   4. Seal posts `buildSealBagJournal` (10100 → 10400) (see G-14).
   5. Show `checkDepositShape` (near-$10k / structuring note) at seal time (F-03-10; `CASH_DEPOSIT_POLICY_DECISION.md`).
-  6. **Q-03-7:** block a till close while a bag from that drawer is "undeclared" (`blockCloseForUndeclaredBags`, books-98 design) or only warn. Owner to decide.
+  6. **Undeclared bag at till close = warning only, never a block** (owner decision **D27**: *"Q-03-7- warning only please"*). This departs from the books-98 design (`blockCloseForUndeclaredBags`, `safe-bag-core.ts` L212–226, which blocks), so that function must be changed or replaced when it is wired.
+  6a. Roles (D23–D26): the night count is **one person** with no second count at night (D24). The **morning recount by any employee** is the second count and must be a different person from the night counter. **Any employee may seal** (D25). **Only the owner records a bag as taken to the bank** (D25). The bag number is the pre-printed number on a **tamper-evident** bag (D26). Unsealed counted cash sits in the safe overnight (D23).
   7. Print and export the bag log (G-06/G-09 pattern).
 
 ## G-05 · Per-shift / per-cashier report
@@ -200,3 +205,48 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   5. CSV / XLSX export of the sheet (with G-06 / G-09).
   6. Surface read errors instead of "No drawer sessions".
 - **Interim:** SOP-03 form 8.1 (night sheet), §4.8 (use the Z report for cash), §4.9 (print and file).
+
+## G-16 · Partial-quantity receive
+
+- **Owner:** *"So we need the ability to tell the system that we are only accepting a part of the manifest and the rest was rejected. There are several instances where the vendor forgot to send an item, or it broke in transit, etc."* (`docs/ccrs-rejection-and-returns.md` L15–21). Line-level refusal exists; unit-level does not.
+- **Today:** each line is accepted whole or refused whole. `received_qty` = the manifest quantity (`intake-parser.ts` L606), and the InventoryTransfer reports the received quantity (`ccrs-transfer-core.ts` L33–36) (F-04-1).
+- **Requirements (draft, only if Q-04-1 = build it):**
+  1. Per line, an optional **counted** quantity (≤ shipped) with a refusal reason for the difference.
+  2. The lot is activated at the counted quantity; the inventory adjustment `receive` is at the counted quantity.
+  3. The weekly InventoryTransfer reports the quantity actually received, consistent with the vendor's CCRS Update.
+  4. The timeline and partial note record shipped / counted / refused.
+  5. Tests for "18 of 20", overage refusal, and zero counted (= refuse).
+- **Interim:** SOP-04 §4.11.
+
+## G-17 · Failed-email visibility in Receiving
+
+- **Today:** `inbound_email_log` records `parse_failed` / `no_manifest`, but no screen shows them (`inbound-store.ts` L862–884; panel removed in 7cb4702c) (F-04-4).
+- **Requirements (draft):**
+  1. A "Needs attention" strip on the Incoming (email) tab listing failed or no-manifest emails from the last 30 days, with sender, subject, received time and the archived attachments.
+  2. A "Resolved (imported by hand / not a manifest)" action with an audit row.
+  3. A count badge on the Receiving status cards.
+- **Interim:** SOP-04 §4.3 step 4.
+
+## G-18 · Monthly CCRS public records request (reminder, log, template)
+
+- **Owner (D28):** *"Please make sure to include the monthly CCRS public record request to ingest the states data for the benchmarks."* Vision: *"Ideally, I will make the public records request once per month to get the previous months data…"* (`ROADMAP_BACKOFFICE_FIXES.md` L276–289).
+- **Today:** there is no calendar task (`compliance-calendar-core.ts` L86–136), and no place to record the tracking number for a monthly zip (`discovery/actions.ts` L857–862). The template omits tables the transformer needs (F-04-18). The phone is wrong (F-04-13). Step 1 item 5 and the help panel are stale (F-04-14). The time estimate is understated (F-04-17) (F-04-19).
+- **Requirements (draft):**
+  1. A compliance-calendar task "CCRS public records request (previous month)", monthly, owner-assigned, due on the owner's chosen day (Q-04-4).
+  2. A small request log on the CCRS page: month, filed date, tracking #, acknowledged date, received date, linked dataset.
+  3. The request template updated to the owner's proven wording (Q-04-4), with dates pre-filled for the previous calendar month.
+  4. The phone corrected to (360) 664-1753; Step 1 item 5 and the help panel rewritten for the one-zip flow; an honest time estimate.
+  5. A "last month not yet dropped" nudge on the benchmarks pages.
+- **Interim:** SOP-04 §4.26–§4.28, form 8.4.
+
+## G-19 · Gated and audited lot activation from the lot page
+
+- **Today:** **Lifecycle status** writes any status, including Active, with no `evaluateLotActivation` and no `recordAudit` (`inventory/actions.ts` L142–155; `store.ts` L836–851). The activation grep guard only matches the literal `status: "active"` (F-04-2). The Issues text points staff to this box (`issues-core.ts` L553).
+- **Requirements (draft):**
+  1. Setting **Active** runs the same go-live check as Finalize (`lot-activation-gate-core.ts` L76–107) and refuses with the reasons.
+  2. Every status change writes an audit row (who, from, to, when, reason).
+  3. `check-activation-gate.ts` also catches non-literal status writes to `active`.
+  4. The Issues "now clear" row activates through the gated path.
+  5. Fix the stale "cannot attach one yet" text (F-04-12).
+- **Interim:** SOP-04 §4.19 control. Carried into SOP-05.
+
