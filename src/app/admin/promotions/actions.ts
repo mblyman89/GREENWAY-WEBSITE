@@ -636,7 +636,7 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
   // PROMOTIONS HARMONY (Task T / PR 1): the published-rules snapshot is loaded
   // in the ROOT LAYOUT (it prices the cart + card badges everywhere), so a
   // publish/unpublish must refresh every route that renders the layout.
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(`/admin/promotions/${id}?status=${scheduledFor ? "scheduled" : effective}`);
 }
 
@@ -829,7 +829,7 @@ export async function fixPromotionBlockersAction(formData: FormData): Promise<vo
   revalidatePath(`/admin/promotions/${id}`);
   if (outcome.done.length > 0) {
     // Prices depend on exclusions and the never-discount list (cart, cards).
-    revalidatePath("/", "layout");
+    revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   }
   const msg = fixOutcomeMessage(outcome);
   back(msg.tone, msg.text);
@@ -1079,7 +1079,7 @@ export async function addNeverDiscountAction(input: {
     });
     // Prices depend on this list — revalidate the storefront + admin surfaces.
     revalidatePath("/admin/promotions");
-    revalidatePath("/", "layout");
+    revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   }
   return res;
 }
@@ -1096,6 +1096,6 @@ export async function removeNeverDiscountAction(id: string): Promise<{ ok: true 
     entityId: id,
   });
   revalidatePath("/admin/promotions");
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   return { ok: true };
 }

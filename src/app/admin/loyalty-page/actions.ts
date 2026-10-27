@@ -176,7 +176,7 @@ export async function publishLoyaltyHeroAction(formData: FormData): Promise<void
   revalidatePath("/admin/loyalty-page");
   revalidatePath("/loyalty");
   // Safety net (shared chrome / force-dynamic pages), matching Site Content.
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(backTo("published"));
 }
 

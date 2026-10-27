@@ -75,7 +75,7 @@ export async function publishSpecialsAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/specials");
   revalidatePath("/specials");
   // Safety net (shared chrome / force-dynamic pages), matching Site Content.
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(backTo("published"));
 }
 

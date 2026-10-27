@@ -93,7 +93,7 @@ export async function publishLegalAction(formData: FormData): Promise<void> {
   const path = LEGAL_PAGE_TO_PATH[block.page];
   if (path) revalidatePath(path);
   // Safety net (shared chrome / force-dynamic pages), matching Site Content.
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   redirect(backTo(blockKey, "published"));
 }
 

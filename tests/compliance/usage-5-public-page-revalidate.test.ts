@@ -112,9 +112,9 @@ describe("USAGE-5 · every writer still clears the page it changes", () => {
   it("promotion publish/unpublish and never-discount edits clear /specials or the whole layout", () => {
     const src = stripComments(read("src/app/admin/promotions/actions.ts"));
     expect(fnBody(src, "setPromotionStatusAction")).toContain('revalidatePath("/specials")');
-    expect(fnBody(src, "setPromotionStatusAction")).toContain('revalidatePath("/", "layout")');
-    expect(fnBody(src, "addNeverDiscountAction")).toContain('revalidatePath("/", "layout")');
-    expect(fnBody(src, "removeNeverDiscountAction")).toContain('revalidatePath("/", "layout")');
+    expect(fnBody(src, "setPromotionStatusAction")).toContain('revalidatePath("/(site)", "layout")');
+    expect(fnBody(src, "addNeverDiscountAction")).toContain('revalidatePath("/(site)", "layout")');
+    expect(fnBody(src, "removeNeverDiscountAction")).toContain('revalidatePath("/(site)", "layout")');
   });
 
   it("the Specials editor publish clears /specials", () => {
@@ -125,7 +125,7 @@ describe("USAGE-5 · every writer still clears the page it changes", () => {
   it("the Medical editor publish clears /medical (the hide flag lives there)", () => {
     const src = stripComments(read("src/app/admin/medical-page/actions.ts"));
     expect(src).toContain('revalidatePath("/medical")');
-    expect(src).toContain('revalidatePath("/", "layout")');
+    expect(src).toContain('revalidatePath("/(site)", "layout")');
   });
 
   it("the Loyalty-page editor clears /loyalty", () => {
@@ -148,7 +148,7 @@ describe("USAGE-5 · every writer still clears the page it changes", () => {
   it("generic content publishes still fall back to a whole-layout revalidate", () => {
     const src = stripComments(read("src/app/admin/content/actions.ts"));
     expect(fnBody(src.replace("function revalidatePublicForPage", "export async function revalidatePublicForPage"), "revalidatePublicForPage")).toContain(
-      'revalidatePath("/", "layout")',
+      'revalidatePath("/(site)", "layout")',
     );
   });
 });

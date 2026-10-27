@@ -25,7 +25,7 @@ export async function saveStoreHoursAction(formData: FormData): Promise<void> {
     entityType: "site_setting",
     entityId: "google_store_hours",
   });
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   revalidatePath("/locations");
   revalidatePath(PAGE);
   redirect(`${PAGE}?saved=1`);

@@ -291,7 +291,7 @@ export function revalidateAfterScheduledChanges(kinds: Iterable<ScheduleTargetKi
     if (set.has("carousel_slide")) revalidatePath("/");
     if (set.has("shop_slide")) revalidatePath("/menu");
     if (set.has("faq_item")) revalidatePath("/faq");
-    revalidatePath("/", "layout");
+    revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
     revalidatePath("/admin/content/schedule");
   } catch (e) {
     console.error("[content-schedule] revalidate failed:", e instanceof Error ? e.message : e);

@@ -142,7 +142,7 @@ export async function fixBadProductsAction(formData: FormData): Promise<void> {
   if (outcome.done.length > 0) {
     if (fix === "hide") revalidatePublicMenuSurfaces();
     // Prices depend on the never-discount list (cart, cards) and visibility.
-    revalidatePath("/", "layout");
+    revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
   }
   revalidatePath(BASE);
   revalidatePath("/admin/promotions");

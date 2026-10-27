@@ -51,7 +51,7 @@ function revalidatePublicForPage(page: string): void {
   // Footer (compliance) + business hours render in the shared footer on EVERY
   // page, so those must revalidate the whole root layout.
   if (page === "footer" || page === "business") {
-    revalidatePath("/", "layout");
+    revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
     return;
   }
 
@@ -63,7 +63,7 @@ function revalidatePublicForPage(page: string): void {
   // newly published value is visible on the next non-preview load even if a
   // block surfaces in more than one place. This is what makes "Publish" reliably
   // update the live site (the previously reported bug).
-  revalidatePath("/", "layout");
+  revalidatePath("/(site)", "layout") /* PERF-S6: public site only, not /admin */;
 }
 
 /**
