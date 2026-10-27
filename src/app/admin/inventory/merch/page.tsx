@@ -105,7 +105,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
                 <div className="flex flex-wrap items-start gap-3 p-4">
                   {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of an owner-picked product photo
-                    <img src={p.image} alt="" className="h-16 w-16 rounded object-cover" />
+                    <img loading="lazy" decoding="async" src={p.image} alt="" className="h-16 w-16 rounded object-cover" />
                   ) : null}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">

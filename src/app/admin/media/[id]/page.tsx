@@ -112,7 +112,7 @@ export default async function MediaDetailPage({
             <div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black p-3">
               {isImage(asset.mime_type) && url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={url} alt={asset.alt_text ?? ""} className="h-full w-full object-contain" />
+                <img loading="lazy" decoding="async" src={url} alt={asset.alt_text ?? ""} className="h-full w-full object-contain" />
               ) : asset.mime_type?.startsWith("video/") && url ? (
                 // R44: full player for staff (controls; never autoplays here).
                 <video src={url} controls muted playsInline preload="metadata" className="h-full w-full object-contain" />

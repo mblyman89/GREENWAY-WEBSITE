@@ -59,7 +59,7 @@ export function LoyaltyLogoEditor({
         <>
           <div className="flex justify-center rounded-[var(--admin-radius-sm)] bg-zinc-950 p-4">
             {/* eslint-disable-next-line @next/next/no-img-element -- tiny in-editor thumbnail */}
-            <img src={logo.src} alt="" className={`h-auto object-contain ${loyaltyLogoClass(logo.size)}`} />
+            <img loading="lazy" decoding="async" src={logo.src} alt="" className={`h-auto object-contain ${loyaltyLogoClass(logo.size)}`} />
           </div>
           <ContentImageField value={logo.src} onChange={(src) => set({ src })} mediaChoices={mediaChoices} />
           <div className="flex flex-wrap gap-2 text-xs">

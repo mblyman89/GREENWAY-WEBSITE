@@ -87,7 +87,7 @@ export function VendorCardPreview({
             <div className="flex flex-1 items-center justify-center p-3">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <img loading="lazy" decoding="async"
                   src={logoUrl}
                   alt={`${vendor.display_name} logo`}
                   className="h-full w-full object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.45)]"

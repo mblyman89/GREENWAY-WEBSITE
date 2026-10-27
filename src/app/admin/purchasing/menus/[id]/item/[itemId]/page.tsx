@@ -103,7 +103,7 @@ export default async function CultiveraItemDetailPage({
             {item.image_url ? (
               // Remote Cultivera CDN — plain <img>, matching the snapshot grid.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image_url} alt={itemLabel} className="h-full w-full object-contain" />
+              <img loading="lazy" decoding="async" src={item.image_url} alt={itemLabel} className="h-full w-full object-contain" />
             ) : (
               <span className="text-3xl opacity-40">🌿</span>
             )}
@@ -223,7 +223,7 @@ export default async function CultiveraItemDetailPage({
                                 {v.effectiveImageUrl ? (
                                   <>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                       src={v.effectiveImageUrl}
                                       alt={v.cleanName ?? ""}
                                       className="h-full w-full object-contain"

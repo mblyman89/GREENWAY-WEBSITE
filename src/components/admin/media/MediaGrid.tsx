@@ -15,6 +15,7 @@
  * skipped, never force-deleted.
  */
 
+import { AdminThumb } from "@/components/admin/perf/AdminThumb";
 import { useState } from "react";
 import Link from "next/link";
 import type { MediaAsset } from "@/lib/supabase/types";
@@ -175,8 +176,7 @@ export function MediaGrid({
             <>
               <div className="relative flex aspect-square items-center justify-center bg-black p-2">
                 {isImage(m.mime_type) && url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={url} alt={m.alt_text ?? ""} className="h-full w-full object-contain" />
+                  <AdminThumb src={url} width={360} alt={m.alt_text ?? ""} className="h-full w-full object-contain" />
                 ) : isVideo(m.mime_type) && url ? (
                   <>
                     {/* R44: first-frame thumbnail (#t= seeks; metadata only, no full download). */}

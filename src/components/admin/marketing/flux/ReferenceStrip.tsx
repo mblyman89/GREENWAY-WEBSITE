@@ -106,7 +106,7 @@ export function ReferenceStrip({
         {value.map((r, i) => (
           <figure key={r.url} className="group relative w-[92px] overflow-hidden rounded-lg border border-[var(--admin-border-strong)] bg-[var(--admin-canvas)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={r.url} alt={r.label} className="h-[72px] w-full object-cover" />
+            <img loading="lazy" decoding="async" src={r.url} alt={r.label} className="h-[72px] w-full object-cover" />
             <figcaption className="truncate px-1.5 py-1 text-[0.65rem] font-bold text-[var(--admin-accent)]" title={r.label}>
               image {i + 1}
             </figcaption>

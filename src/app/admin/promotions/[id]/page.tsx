@@ -532,7 +532,7 @@ export default async function EditPromotionPage({
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-white/10 bg-black">
                           {p.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+                            <img loading="lazy" decoding="async" src={p.imageUrl} alt="" className="h-full w-full object-cover" />
                           ) : (
                             <span className="text-[11px] text-white/30">🌿</span>
                           )}

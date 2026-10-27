@@ -96,7 +96,7 @@ export function ContentImageField({
             // Plain <img> (not next/image) so any path/URL renders without
             // remote-domain config; this is the editor preview only.
             // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <img loading="lazy" decoding="async"
               src={value}
               alt="Current banner"
               className="h-full w-full object-cover"

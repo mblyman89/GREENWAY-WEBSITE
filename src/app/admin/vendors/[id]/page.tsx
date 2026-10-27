@@ -430,7 +430,7 @@ export default async function VendorEditPage({
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
                   {vendorLogo ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={vendorLogo} alt="" className="h-full w-full object-contain" />
+                    <img loading="lazy" decoding="async" src={vendorLogo} alt="" className="h-full w-full object-contain" />
                   ) : (
                     <span className="text-2xl font-bold text-white/30">{vendor.display_name.charAt(0)}</span>
                   )}
@@ -556,7 +556,7 @@ export default async function VendorEditPage({
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
                       {brandLogos.get(b.id) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={brandLogos.get(b.id)!} alt="" className="h-full w-full object-contain" />
+                        <img loading="lazy" decoding="async" src={brandLogos.get(b.id)!} alt="" className="h-full w-full object-contain" />
                       ) : (
                         <span className="text-sm font-bold text-white/30">{b.display_name.charAt(0)}</span>
                       )}

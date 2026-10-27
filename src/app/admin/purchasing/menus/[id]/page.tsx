@@ -198,7 +198,7 @@ export default async function CultiveraSnapshotPage({
                         // Remote Cultivera CDN images — next/image needs domain allow-listing we can't
                         // pin until live creds exist, so plain <img> like the media library detail page.
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={it.image_url} alt={it.name ?? ""} className="h-full w-full object-contain" />
+                        <img loading="lazy" decoding="async" src={it.image_url} alt={it.name ?? ""} className="h-full w-full object-contain" />
                       ) : (
                         <span className="text-3xl opacity-40">🌿</span>
                       )}

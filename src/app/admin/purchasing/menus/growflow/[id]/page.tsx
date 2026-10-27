@@ -214,7 +214,7 @@ export default async function GrowflowSnapshotPage({
                         // Remote GrowFlow Azure-blob images — next/image needs domain
                         // allow-listing, so plain <img> like the Cultivera browser.
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={it.image_url} alt={displayName} className="h-full w-full object-contain" />
+                        <img loading="lazy" decoding="async" src={it.image_url} alt={displayName} className="h-full w-full object-contain" />
                       ) : (
                         <span className="text-3xl opacity-40">🌿</span>
                       )}

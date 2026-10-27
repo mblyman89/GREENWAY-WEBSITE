@@ -496,7 +496,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               <div className="relative min-h-[16rem] overflow-hidden bg-zinc-900">
                 {heroPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={heroPreview} alt={heroAlt} className="absolute inset-0 h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={heroPreview} alt={heroAlt} className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center text-white/30">
                     <span className="text-xs">No hero image yet</span>

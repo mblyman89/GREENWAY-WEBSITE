@@ -288,7 +288,7 @@ function Row({
             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-black/20">
               {url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={url} alt={p.display_name} className="h-full w-full object-contain" />
+                <img loading="lazy" decoding="async" src={url} alt={p.display_name} className="h-full w-full object-contain" />
               ) : (
                 <span className="text-base opacity-40">🌿</span>
               )}
