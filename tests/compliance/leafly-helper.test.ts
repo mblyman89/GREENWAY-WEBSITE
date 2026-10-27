@@ -181,6 +181,9 @@ describe("the handbook points at routes that exist", () => {
       const candidates = [
         path.join(REPO_ROOT, "src/app", route, "page.tsx"),
         path.join(REPO_ROOT, "src/app", route, "page.ts"),
+        // PERF-S2: public pages live in the (site) route group.
+        path.join(REPO_ROOT, "src/app/(site)", route, "page.tsx"),
+        path.join(REPO_ROOT, "src/app/(site)", route, "page.ts"),
       ];
       if (!candidates.some((c) => existsSync(c))) {
         bad.push(`${w.id}: no page for ${route}`);

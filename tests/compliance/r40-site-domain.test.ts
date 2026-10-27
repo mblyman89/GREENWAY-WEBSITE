@@ -111,14 +111,16 @@ describe("redirects installed by next.config.ts", () => {
 
   it("every internal legacy target is a real page in src/app", () => {
     for (const t of INTERNAL_REDIRECT_TARGETS) {
-      const page = t === "/" ? "src/app/(site)/page.tsx" : `src/app${t}/page.tsx`;
-      expect(existsSync(join(ROOT, page)), `${t} -> ${page}`).toBe(true);
+      // PERF-S2: public pages live in the (site) route group; /admin does not.
+      const page = t === "/" ? "src/app/(site)/page.tsx" : `src/app/(site)${t}/page.tsx`;
+      const bare = `src/app${t}/page.tsx`;
+      expect(existsSync(join(ROOT, page)) || existsSync(join(ROOT, bare)), `${t} -> ${page}`).toBe(true);
     }
   });
 
   it("no legacy source shadows a real page (that would hide the page)", () => {
     for (const r of LEGACY_WORDPRESS_REDIRECTS) {
-      expect(existsSync(join(ROOT, `src/app${r.source}/page.tsx`)), r.source).toBe(false);
+      expect(existsSync(join(ROOT, `src/app${r.source}/page.tsx`)) || existsSync(join(ROOT, `src/app/(site)${r.source}/page.tsx`)), r.source).toBe(false);
     }
   });
 
@@ -127,7 +129,7 @@ describe("redirects installed by next.config.ts", () => {
     const oldPages = ["facebook", "insta", "contact-us", "specials", "menu", "faq", "partners", "about-us"];
     const sources = new Set(LEGACY_WORDPRESS_REDIRECTS.map((r) => r.source));
     for (const p of oldPages) {
-      const exists = existsSync(join(ROOT, `src/app/${p}/page.tsx`));
+      const exists = existsSync(join(ROOT, `src/app/${p}/page.tsx`)) || existsSync(join(ROOT, `src/app/(site)/${p}/page.tsx`));
       expect(exists || sources.has(`/${p}`), `/${p}/ would 404 after go-live`).toBe(true);
     }
   });
