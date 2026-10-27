@@ -1428,7 +1428,9 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRea
       return [];
     }
     return (itemRows as MenuItemRow[] | null) ?? [];
-  });
+    // PERF2-P8: pages in one wave (same rows, same order; the count witness
+    // below still proves the read was whole).
+  }, { concurrency: MENU_READ_CONCURRENCY });
   // `.then` starts the request now (a PostgREST builder is lazy until then'd).
   const countPromise = admin
     .from("menu_items")

@@ -150,7 +150,7 @@ async function loadPublishedCards(): Promise<{ byKey: Map<string, SnapshotCard>;
       return [];
     }
     return (data as (ItemRow & { id: string })[] | null) ?? [];
-  });
+  }, { concurrency: MENU_READ_CONCURRENCY }); // PERF2-P8: pages in one wave
   // A partial card list would invent "not on the published menu" verdicts for
   // products that ARE on it. Refuse to report rather than accuse wrongly.
   if (itemsFailed) return null;
