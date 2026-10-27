@@ -82,7 +82,32 @@ function ids(v: unknown): string[] {
   return [];
 }
 
-export async function buildMediaUses(assets: MediaAsset[]): Promise<Map<string, FolderUse>> {
+/**
+ * PERF-S10: the 11 "where is this used" source reads do not depend on the
+ * asset list, so the media page starts them IN PARALLEL with listAllMedia()
+ * and countMedia() and joins afterwards (buildMediaUses(assets, sources)).
+ */
+export function loadMediaUseSources() {
+  return Promise.all([
+    readAll("media_usages", "media_asset_id,entity_type"),
+    readAll("product_enrichments", "primary_media_id,image_media_ids"),
+    readAll("kb_products", "primary_media_id,image_media_ids"),
+    readAll("vendors", "logo_media_id,hero_media_id"),
+    readAll("brands", "logo_media_id"),
+    readAll("blog_posts", "hero_media_id,og_media_id"),
+    readAll("newsletter_assets", "pdf_media_id,page_media_ids"),
+    readAll("home_carousel_slides", "*", 200),
+    readAll("shop_carousel_slides", "*", 200),
+    readAll("page_sections", "*", 1000),
+    readAll("content_blocks", "page,block_key,published_value,draft_value", 5000),
+  ]);
+}
+export type MediaUseSources = Awaited<ReturnType<typeof loadMediaUseSources>>;
+
+export async function buildMediaUses(
+  assets: MediaAsset[],
+  preloaded?: Promise<MediaUseSources> | MediaUseSources,
+): Promise<Map<string, FolderUse>> {
   const uses = new Map<string, FolderUse>();
   if (!isSupabaseServiceConfigured || assets.length === 0) return uses;
   const byKey = new Map(assets.map((a) => [a.storage_key, a.id]));
@@ -111,19 +136,7 @@ export async function buildMediaUses(assets: MediaAsset[]): Promise<Map<string, 
     }
   };
 
-  const [usages, enr, kb, vendors, brands, blog, news, home, shop, sections, blocks] = await Promise.all([
-    readAll("media_usages", "media_asset_id,entity_type"),
-    readAll("product_enrichments", "primary_media_id,image_media_ids"),
-    readAll("kb_products", "primary_media_id,image_media_ids"),
-    readAll("vendors", "logo_media_id,hero_media_id"),
-    readAll("brands", "logo_media_id"),
-    readAll("blog_posts", "hero_media_id,og_media_id"),
-    readAll("newsletter_assets", "pdf_media_id,page_media_ids"),
-    readAll("home_carousel_slides", "*", 200),
-    readAll("shop_carousel_slides", "*", 200),
-    readAll("page_sections", "*", 1000),
-    readAll("content_blocks", "page,block_key,published_value,draft_value", 5000),
-  ]);
+  const [usages, enr, kb, vendors, brands, blog, news, home, shop, sections, blocks] = await (preloaded ?? loadMediaUseSources());
 
   for (const r of usages) {
     const id = String(r.media_asset_id ?? "");
