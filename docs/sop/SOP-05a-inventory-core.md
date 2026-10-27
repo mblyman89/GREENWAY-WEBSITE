@@ -450,6 +450,8 @@ If the recall status cannot be read at all:
 
 ### 4.12 The register's "86" and Restore to sale
 
+**What is an "86"?** (the owner asked, Q-05a-5.) It is old restaurant and bar slang for **"take it off the menu, we're out of it."** When a cook says "86 the salmon," nobody can order the salmon until it is back. At Greenway, an 86 means a budtender has told every register and the website **"don't offer this product right now."** It does not change any count, any lot or anything sent to the state. It only hides the product from sale. The register calls it **"Mark out of stock"**; this SOP calls it the 86 because that is what the code and the restaurant software it copies call it (`stock-flag-core.ts` L4 names Toast's *"Quick Edit / 86 it"*).
+
 **The 86 (register).** On a product's detail sheet at the register there is a small link **"Shelf is empty? Mark out of stock…"** (`src/app/(site)/pos/SaleFlow.tsx` L4266–4276). Pressing it asks:
 
 > *"Remove <product> from every register and the website? Pick why — a manager brings it back through the back office when stock returns."* (L4279–4280)
@@ -461,6 +463,14 @@ The reasons are buttons: **shelf empty**, **damaged / unsellable**, **wrong list
 **When a budtender uses it.** Only when a product shows on the menu but there is truly none on the shelf or in the back stock, or the listing is plainly wrong. Tell the manager right after. Never use it for a recall. A recall is a lot status set by a manager (§4.10), and the 86 can come undone on its own (next paragraph).
 
 **Finding F-05a-9 (S3): the 86 does not stick while stock is on file.** Every time a register downloads the menu, the reconciler checks each unavailable card against live **Active** lots. If units are on hand, the card is put back on sale automatically: *"Restored to the register: inventory shows N units on hand in active lots, but the published menu still had it marked unavailable."* (`register-availability-core.ts` L318–421, message L389; called at `api/pos/menu/route.ts` L240). So an 86 on a product the system thinks it still has, for example **damaged / unsellable** with units still on the lot, reappears at the next menu download. The register's own prompt says a manager brings it back. The code brings it back without one.
+
+**The owner's decision: the professional method** (D40: *"Do the enterprise grade solution, the professional method."*; gap **G-26 APPROVED**). An 86 is treated as an **exception with an owner and a cause**, the same discipline as a quarantine or a recall, not as an on/off switch. When G-26 is built:
+1. **The reason decides how it comes back.** **Shelf empty** clears by itself only when **new stock is received** for that product. If the books still show units, that is a counting difference: it becomes a **count task** (SOP-06), and the item stays off until the count is done. **Damaged / unsellable** and **wrong listing** never clear on their own; a manager clears them after the product is dealt with (SOP-15) or the listing is fixed (SOP-05b).
+2. **One queue.** Every open 86 is listed on **Inventory → Issues** with who pressed it, when and why. The manager works the list every shift.
+3. **A restore needs a manager and a reason,** and is audited, as **Restore to sale** already is (`restore-to-sale-store.ts` L166–172).
+4. **It reaches the website and online ordering.** The register 86 already does this today (`api/pos/stock-flag/route.ts` L77–83).
+
+Point 1 is what is missing today (F-05a-9, below). **Until G-26 is built, the manager does points 1–3 by hand**, as follows. When it is built, this section is rewritten (D41).
 
 **What the manager does when an item is 86'd** (same shift):
 1. Find the reason. Check the shelf, the back stock and the lot's **On hand**.
@@ -477,7 +487,7 @@ The reasons are buttons: **shelf empty**, **damaged / unsellable**, **wrong list
 3. Read the banner at the top of Inventory. Success: *"<product> is back on sale (N units on hand — <status>)."* (`restore-to-sale-core.ts` L167). The restore writes an audit row `inventory.restore_to_sale` with the old and new status (`restore-to-sale-store.ts` L166–172) and refreshes the website.
 4. A refusal (§5.3) tells you what is wrong. Fix that; do not try to work around it.
 
-> **Control: the 86 is a register shortcut, not a stock record. The manager investigates every 86 the same shift, fixes the cause (count, quarantine or listing), and restores only product that is physically on the shelf.** The 86 is audited (`pos.stock_flag`) but comes back on its own while units are on file (F-05a-9; gap G-26 proposes a sticky 86 option, owner question Q-05a-5).
+> **Control: the 86 is a register shortcut, not a stock record. The manager investigates every 86 the same shift, fixes the cause (count, quarantine or listing), and restores only product that is physically on the shelf.** The 86 is audited (`pos.stock_flag`) but comes back on its own while units are on file (F-05a-9; gap G-26, APPROVED by the owner as the professional method, D40).
 
 ### 4.13 The written recall plan (WAC 314-55-225)
 
@@ -492,14 +502,14 @@ A recall *"must follow the procedures outlined in the recall plan unless otherwi
 **What the app has.** No recall plan, no coordinator field and no recall log (finding F-05a-15, **S2**; gap G-25). It has the pieces a plan points to: the **Recalled** status and its register hold (§4.10–§4.11) and the recall-destruction block in Returns & Destruction (SOP-15).
 
 **What Greenway does.** **Form 8.4** in §8 is the recall plan, written to (A)–(D) and built on this SOP:
-- (A) **Recall coordinator**: named on the form (the owner until Q-05a-2 is answered), with a back-up.
+- (A) **Recall coordinator**: **the admin**, named on the form. The owner decided there is **no back-up**; the recall team is the owner and the manager (D37).
 - (B) **Identify and isolate**: §4.10 steps 1–7.
 - (C) **Retrieve and destroy**: §4.10 steps 8–10 and SOP-15. Greenway is a retailer. It does not sell to other licensees, so "retrieve" means customer returns brought back to the store (SOP-15 customer returns) and the product held in the bin.
 - (D) **Communications**: who calls the LCB officer, the vendor, and the customers with open orders, and who approves any public notice. Only the owner speaks to the press or posts publicly.
 
 **Procedure.**
 1. The owner fills in form 8.4, signs and dates it, and files it in the compliance binder. Staff sign that they have read it.
-2. Review it **every year** and whenever the coordinator, the LCB officer's contact or this SOP changes. Write the review date on the form.
+2. Review it **every year** and whenever the coordinator (the admin), the LCB officer's contact or this SOP changes. Write the review date on the form.
 3. In a recall, follow form 8.4 and §4.10. Any departure must be agreed with the LCB and written on form 8.5.
 
 > **Control: a signed, current recall plan (form 8.4) with a named coordinator is in the binder, and every recall follows it.** WAC 314-55-225(3)(d) makes the plan mandatory. The app does not hold one (F-05a-15; gap G-25).
@@ -573,13 +583,15 @@ Beside the source, the lot page shows a countdown (`expiryStatus`, L770–777): 
 | **Register** | **Nothing.** The register menu and the completion gate do not read expiry dates (no expiry check in `completion-gate.ts` or `api/pos/menu/route.ts`) |
 | **Which lot a sale draws from** | The **oldest received lot first** (FIFO by when the lot row was created: `sale-lot-read.ts` L39–47), not the soonest-expiring (FEFO) |
 
-**Finding F-05a-8 (S2): the only stop on selling expired product is a person reading the Issues tab.** The register will sell an expired Active lot. The Issues tab says *"Expired product may not be sold."* (`issues-core.ts` L388, L460), a rule the code itself says the state does not impose (§4.14). Its fix text, *"Open the lot and change its status (or record the destruction under Adjust quantity)."* (L461), points to the manual destruction reason this SOP forbids (§4.7, §4.9). Whether Greenway sells product past its date is an owner decision (**Q-05a-1**). Gap **G-24** (a register block or warning, and FEFO lot draw) waits on that answer.
+**Finding F-05a-8 (S2): the only stop on selling expired product is a person reading the Issues tab.** The register will sell an expired Active lot. The Issues tab says *"Expired product may not be sold."* (`issues-core.ts` L388, L460), a rule the code itself says the state does not impose (§4.14). Its fix text, *"Open the lot and change its status (or record the destruction under Adjust quantity)."* (L461), points to the manual destruction reason this SOP forbids (§4.7, §4.9). **The owner's decision** (Q-05a-1, D36): *"hard block edibles and liquid edibles, warnings for everything else."* Gap **G-24** is **APPROVED**: when built, the register **refuses** an expired **Solid Edible** or **Liquid Edible** lot, with no override, and **warns** on every other expired lot. The CCRS inventory types are **Solid Edible** and **Liquid Edible** (`ccrs-batch-core.ts` L250, L253). Whether **Tincture**, **Capsule** and other ingestibles count as "edibles" is question **Q-05a-6**; the sales-limit code already treats tinctures as liquid edibles (`sales-limits-core.ts` L364–366).
 
-**Until the owner answers Q-05a-1, this SOP treats expired product as not for sale:**
-1. Every morning (§4.4), for each **Expired and still active** row: find the units and pull them from the shelf.
-2. Put them in quarantine, then set the lot to **Quarantine** with a form 8.1 line that reads "EXPIRED <date>" (§4.8). Quarantine takes the lot off the register's live count.
-3. Tell the owner. The owner decides: return to the vendor or destroy (both are **SOP-15**). **Never** use **Adjust quantity → Destruction**, whatever the Issues text says (§4.7).
-4. If the date is a **rule** date (**Best by**) and the product looks and smells fine, write that on form 8.1. The owner may choose to keep selling it once Q-05a-1 is answered.
+**Until G-24 is built, this paper rule follows the owner's decision:**
+1. Every morning (§4.4), for each **Expired and still active** row, open the lot and read its **LCB classification** (lot page, `[id]/page.tsx` L568–569).
+2. **Solid Edible, Liquid Edible, and (until Q-05a-6 is answered) Tincture and Capsule: never sell. Hard stop.** Pull every unit from the shelf, put them in quarantine, and set the lot to **Quarantine** with a form 8.1 line that reads "EXPIRED EDIBLE <date>" (§4.8). Quarantine takes the lot off the register's live count. Tell the owner. The owner decides: return to the vendor or destroy (both **SOP-15**). No one may put it back on sale.
+3. **Everything else (flower, pre-rolls, vapes, concentrates, topicals and the rest): a warning.** Check the product (sealed, looks and smells right). Write it on form 8.1 as "EXPIRED <date> — checked, on sale" or "EXPIRED <date> — pulled". Tell the owner the same morning; **the owner decides** whether it stays on sale. If in doubt, pull and quarantine it until the owner answers. Budtenders tell the customer the date before the sale.
+4. **Never** use **Adjust quantity → Destruction**, whatever the Issues text says (§4.7, §4.9).
+
+When G-24 is built, this list is replaced by the register's own block and warning (D41).
 
 **Expiring soon (30 days).** The **Worth a look** row *"N lots expiring within 30 days"* says: *"These lots expire soon. Sell them first (First-Expired, First-Out) or plan a markdown."* (`issues-core.ts` L392; window `EXPIRY_SOON_DAYS = 30`, `expiry-rules-core.ts` L52, equal to `EXPIRING_SOON_DAYS`, `store.ts` L32).
 1. Open **Inventory → Insights → Sell first (FEFO)** (`InventoryIntelPanel.tsx` L199–201) for the ranked list.
@@ -589,7 +601,7 @@ Beside the source, the lot page shows a countdown (`expiryStatus`, L770–777): 
 
 **The Expiration report** (**Reports → Expiration** tab, `ReportTabs.tsx` L22, or the **Expiration report** button; any role with `reports.view`, including read-only, `reports/expiration/page.tsx` L151). Its sections: **Aging - lots**, **Aging - value** (uncosted lots count as $0), **12-month forecast** (value reaching its date each month), **Where dates come from**, **Coverage gaps** (categories with stock and no date), **By category** and **Rule usage** (L229–277). Most sections export. The owner reviews it monthly (form 8.3, monthly line).
 
-> **Control: every expired Active lot is pulled, quarantined and logged the morning it appears; expiring-soon stock goes to the front of the shelf; the owner reviews the Expiration report monthly.** The register does not block expired lots and draws oldest-received first (F-05a-8; gap G-24 pending Q-05a-1).
+> **Control: every expired Active lot is checked and logged the morning it appears; expired edibles and liquid edibles are pulled and quarantined; expiring-soon stock goes to the front of the shelf; the owner reviews the Expiration report monthly.** Expired edibles and liquid edibles are never sold; other expired lots only with the owner's decision (D36). The register does not yet block or warn, and draws oldest-received first (F-05a-8; gap G-24 APPROVED).
 
 # Part 5: Tags, labs, labels and corrections
 
@@ -650,10 +662,15 @@ Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_l
 
 **The three fields** (`bulk-fill-core.ts` L318–325; hints `BulkFillPanel.tsx` L62–80):
 - **Expiration date**: *"Read the expiration date off the physical package or the COA."* Saved as **Typed by owner** (`actions.ts` L986).
-- **Unit cost**: *"Read the unit cost off the vendor invoice. Dollars — stored to the cent."*
+- **Unit cost**: *"Read the unit cost off the vendor invoice. Dollars — stored to the cent."* **Never used for cannabis** (owner rule D38, below).
 - **POS product key**: *"The catalog key that links this lot to a product."*
 
-**Who.** The button is open to managers (`actions.ts` L904, `inventory.manage`). But the permission table says *"Cannabis cost entry is NOT built"* and gives cost entry only to owner and admin, for non-cannabis (`roles.ts` L143–148). Bulk fill **Unit cost** therefore lets a manager key a **cannabis** cost (finding F-05a-11, S3; owner question **Q-05a-3**). **Until the owner answers: only the owner or an admin uses Bulk fill → Unit cost.** Managers may use **Expiration date** (from the package or COA) and **POS product key** (from Product Onboarding).
+**Who.** The button is open to managers (`actions.ts` L904, `inventory.manage`). But the permission table says *"Cannabis cost entry is NOT built"* and gives cost entry only to owner and admin, for non-cannabis (`roles.ts` L143–148). Bulk fill **Unit cost** therefore lets anyone with Inventory access key a **cannabis** cost.
+
+**The owner's rule** (Q-05a-3, D38): *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."* **Nobody, the owner included, ever types a cannabis unit cost.** The cost of a cannabis lot comes only from the vendor's CCRS manifest: receiving reads it from the manifest line (line price ÷ quantity, `intake-parser.ts` L415–420), and the lot page locks it (`lot-edit-core.ts` L33–45, `unit_cost_minor_units` at L38). Bulk fill is the one place it can still be typed (`bulk-fill-core.ts` L54). Finding **F-05a-11** is re-rated **S1** at the owner's direction, and gap **G-27** (APPROVED) removes **Unit cost** from Bulk fill for cannabis lots.
+- **Never** choose **Unit cost** in Bulk fill. A cannabis lot with no cost stays blank and goes to the owner, who has it corrected **from the manifest** (SOP-04), never typed.
+- Managers may use **Expiration date** (from the package or COA) and **POS product key** (from Product Onboarding).
+- Non-cannabis cost is a different screen and a different rule (owner and admin, `inventory.cost.fill`; SOP-05b).
 
 **Procedure:**
 1. Filter the list to the lots to fill. The easiest way is from the Issues tab: **Bulk fill the Cultivera-import lots** or a gap row, which opens the list already filtered.
@@ -663,7 +680,7 @@ Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_l
 5. **Check the value applies to every one of those lots.** One value goes to all of them. An expiry date or a cost is rarely the same across many lots; filter tighter (one vendor, one product) until it is.
 6. Press **Save N changes**, or **Cancel**. Result: *"Filled N lots."* plus any skipped or failed counts. Audited `inventory_lot.bulk_filled` (`actions.ts` L975–996). **Exit bulk fill** closes the panel.
 
-> **Control: bulk fill one value only across lots that truly share it, read from the package, COA or invoice; cannabis unit cost only by the owner or an admin.** The tool can only fill blanks on import lots, and it is audited (F-05a-11, Q-05a-3).
+> **Control: bulk fill one value only across lots that truly share it, read from the package, COA or invoice; never a cannabis unit cost: cannabis cost comes only from the vendor's CCRS manifest (D38).** The tool can only fill blanks on import lots, and it is audited (F-05a-11, S1; gap G-27).
 
 ### 4.21 Correcting a lot: received date, details, product link, lab result, re-reading the COA
 
