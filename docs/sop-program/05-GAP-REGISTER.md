@@ -41,6 +41,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-19 | Gated and audited lot activation from the lot page (Lifecycle status runs the go-live check and writes an audit row) | (compliance: WAC 314-55-102) | F-04-2, F-04-12 | SOP-04 §4.19: manager only, from a "now clear" Issues row, logged on form 8.1 | OPEN |
 | G-20 | Benchmark dataset lifecycle: typed delete confirmation, 18-month retention purge (notice, hold, audit), working-buttons-only on monthly cards | **D33**, **D34** | F-04-15, F-04-16 | SOP-04 §4.33–§4.34, form 8.4 part G | **APPROVED** |
 | G-21 | First-delivery-from-vendor marker on the manifest review screen (prompts the recommended second count) | **D31** | — (no finding; feature need) | SOP-04 §4.9 Vendor-filter check, form 8.1 box | OPEN |
+| G-22 | Audited, gated lot lifecycle: no manual Destroyed, a reason on every change, owner-only recall release, status history (extends G-19) | (compliance: WAC 314-55-225, CCRS traceability) | F-05a-1 (**S1**), F-05a-2 (**S1**), F-04-2 | SOP-05a §4.8–§4.10, form 8.1 | OPEN |
+| G-23 | Hardened manual adjustment: atomic, no negative, Sold out at zero, notes where CCRS needs them, no Destruction / Recall removal / Receive, add Theft / Seizure, audit + name | (procedure need; CCRS E13) | F-05a-3…F-05a-7, F-05a-13 | SOP-05a §4.6–§4.7, form 8.2 | OPEN (part waits on Q-05a-4) |
+| G-24 | Expired stock at the register (block or warn) and FEFO lot draw | (pending **Q-05a-1**) | F-05a-8 | SOP-05a §4.16, form 8.3 | OPEN (waits on Q-05a-1) |
+| G-25 | Recall plan + recall event log in the app; recall hold reaches the website and online orders | (compliance: WAC 314-55-225(3)(d), (3)(f)) | F-05a-15, F-05a-16 | SOP-05a §4.10, §4.13, forms 8.4–8.5; Always hide | OPEN |
+| G-26 | Print-label link on the lot page, scannable fallback barcode, sticky 86 for damaged / wrong listing | (procedure need; Q-05a-5) | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | OPEN |
 
 ---
 
@@ -254,6 +259,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. The Issues "now clear" row activates through the gated path.
   5. Fix the stale "cannot attach one yet" text (F-04-12).
 - **Interim:** SOP-04 §4.19 control. Carried into SOP-05.
+- **SOP-05a note:** carried into SOP-05a §4.8. The same blind write also sets **Destroyed** and **Recalled** with no record (F-05a-1, F-05a-2); those requirements are in **G-22**, which extends this gap. Build G-19 and G-22 together.
 
 ## G-20 · Benchmark dataset lifecycle (retention, delete confirmation, working buttons only) (APPROVED, D33/D34)
 
@@ -280,4 +286,59 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   2. On a first delivery, the review screen shows "Second count strongly recommended (owner policy)" and an optional "Second counter" name field saved on the manifest. It is not required (D31).
   3. Pure-core test for the first-delivery rule.
 - **Interim:** SOP-04 §4.9 (Vendor-filter check), form 8.1 first-delivery box.
+
+## G-22 · Audited, gated lot lifecycle changes (extends G-19)
+
+- **Today:** **Lifecycle status** writes any of the five statuses with no check, no reason and no audit row (`inventory/actions.ts` L142–155 → `store.ts` L836–851). **Destroyed** leaves units on file and drops the lot from the CCRS Inventory file (F-05a-1, **S1**). **Recalled** is placed and lifted by any manager-level login with no record (F-05a-2, **S1**).
+- **Requirements (draft):**
+  1. Everything in G-19 (the go-live check on Active, an audit row on every change).
+  2. **Destroyed removed** from the lot page's status choices. Destruction only through Returns & Destruction (SOP-15), which already sets it correctly (`disposition.ts` L1087–1094).
+  3. A **required reason** on every status change, saved in the audit row (who, from, to, when, reason, reference).
+  4. **Recalled → any other status** limited to the owner (or a new `inventory.recall.release` permission the owner assigns), with a required clearance reference.
+  5. A **Status history** list on the lot page (from the audit rows), shown in Pacific time with names.
+  6. A guard (compliance script or test) that no code path writes `destroyed` without a disposition record.
+- **Interim:** SOP-05a §4.8–§4.10, form 8.1.
+
+## G-23 · Hardened manual adjustment
+
+- **Today:** read-then-write, no zero floor, no Sold out flip, no audit row (F-05a-3); empty note accepted although CCRS needs one for Other / Employee sample (F-05a-4); Destruction, Recall removal and Receive (add) offered (F-05a-5, F-05a-7); no Theft / Seizure (F-05a-6).
+- **Requirements (draft):**
+  1. Use the atomic `applyLotDelta` path (GW-012), with a refusal when the result would be below zero, and the same automatic Sold out flip at zero.
+  2. A **required note** when the reason maps to CCRS Other, with the same wording CCRS needs; a warning for every reason.
+  3. Remove **Destruction** and **Recall removal** from the manual list (destruction is SOP-15 only). Remove **Receive (add)**, or limit it to the owner with a required manifest reference (pending **Q-05a-4**).
+  4. Add **Theft** and **Seizure**, owner-only, with a required incident reference (SOP-20).
+  5. An audit row per adjustment (`inventory_lot.adjusted`), and the actor's name and Pacific date on the history list (F-05a-13).
+  6. Fix the Issues expired-row fix text that points to Adjust quantity (`issues-core.ts` L461).
+- **Interim:** SOP-05a §4.6–§4.7, form 8.2.
+
+## G-24 · Expired stock at the register and FEFO lot draw (waits on Q-05a-1)
+
+- **Today:** the register never reads expiry dates; sales draw oldest-created first (`sale-lot-read.ts` L39–47); the Issues tab is the only stop (F-05a-8).
+- **Requirements (draft, final shape after Q-05a-1):**
+  1. A completion-gate check on expired lots: **block** or **warn with a manager override**, as the owner decides; a rule (**Best by**) date may be treated differently from a document date.
+  2. FEFO lot draw (soonest-expiring Active lot first, then oldest) in `sale-lot-read.ts`, with tests.
+  3. The Issues text aligned with the owner's rule (it says *"Expired product may not be sold."* today).
+  4. An optional nightly job that moves expired Active lots to Quarantine with an audit row, if the owner chooses "block".
+- **Interim:** SOP-05a §4.16 (daily pull and quarantine), form 8.3.
+
+## G-25 · Recall plan, recall log and recall reaching the website
+
+- **Owner basis:** WAC 314-55-225(3)(d) (mandatory recall plan); (3)(f) weekly tracking. No owner decision yet.
+- **Today:** no recall plan, coordinator or log in the app (F-05a-15); the hold stops the register only, not the website or online orders (F-05a-16).
+- **Requirements (draft):**
+  1. A **Recall plan** settings page holding the coordinator and back-up (**Q-05a-2**), the LCB officer contact and the four plan sections, with an annual-review date and reminder.
+  2. A **Recall event** record: notice, type (recall / market withdrawal), affected lots (sets them Recalled through the G-22 audited path), notification time and officer, weekly tracking rows (held, returned, destroyed, sold before hold), close-out.
+  3. **Propagation:** a product with any Recalled lot is left out of the public menu and refused by online order pricing (read `recalledProductKeys` in `live-menu.ts` and `order-pricing.ts`, fail-closed for ordering), and open pickup orders holding it are flagged.
+  4. A 48-hour countdown on market withdrawals and an "LCB not yet notified" warning on recalls.
+- **Interim:** SOP-05a §4.10, §4.13, forms 8.4 and 8.5; **Always hide** on Product Enrichment.
+
+## G-26 · Lot label link, scannable fallback barcode, sticky 86
+
+- **Today:** the label is linked only from the manifest page; a lot with no lot code prints a barcode the register will not scan (F-05a-10). An 86 reverts at the next menu download while units are on file (F-05a-9).
+- **Requirements (draft):**
+  1. A **Print label** link on the lot page.
+  2. The label barcode always uses a value the register's scan index knows (lot code or CCRS id), or warns on the label page when the lot has neither.
+  3. Pending **Q-05a-5**: an 86 with reason **damaged / unsellable** or **wrong listing** stays until a manager restores it; **shelf empty** may keep today's self-heal. The reconciler skips sticky flags, and the Issues tab lists them.
+  4. The 86 audit row records the signed-in employee's id from the register session, not only a client-sent name.
+- **Interim:** SOP-05a §4.12, §4.19.
 
