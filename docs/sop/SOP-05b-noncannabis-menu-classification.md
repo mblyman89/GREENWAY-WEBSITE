@@ -333,7 +333,7 @@ The page's **How publishing works** panel has six steps (`publish-guard-core.ts`
 
 The page has three tabs: **Overview**, **Issues** and **History** (`page-tab-sets.ts` L63–65). Its stat cards are **Live menu**, **Live variants**, **Waiting for you** and **Newest draft**. After a successful publish, the banner reads *"Published. The public menu now shows this version and its products are sellable at the register."* (L258).
 
-> **"86" in plain words.** "86" is restaurant slang for *"take it off the menu, we're out."* In this store, "86-ing" a product means stopping it from selling, on the website and at the register, when it runs out or must not be sold. **The professional method is to stop the product from selling at the source, not to hand-publish a smaller menu.** For a cannabis lot, that means SOP-05a: put the lot on hold, or bring its quantity to zero through the proper adjustment, destruction, recall or return path. The menu then follows the stock. Gap G-26 (SOP-05a) builds a one-click, audited **86** with a reason and an automatic return. Until it exists, **never publish an older or smaller menu to take one product off**: the removal check in §4.14 will list everything that version would remove.
+> **"86" in plain words.** "86" is old restaurant slang for *"take it off the menu, we're out of it."* At Greenway, the 86 is the register link **"Shelf is empty? Mark out of stock…"**. It hides a product from every register and the website, and it changes no count, no lot and nothing sent to the state (SOP-05a §4.12). **An 86 is never done on Publish Menu.** Never publish an older or smaller menu to take one product off: the removal check in §4.14 would list everything that version removes, and the owner would lose the menu changes since then. The professional method (owner decision D40, gap G-26 APPROVED) treats every 86 as an exception with an owner and a cause. The manager works it the same shift on **Inventory → Issues**, and fixes the cause at the source (count, quarantine, recall or listing) per SOP-05a.
 
 ### 4.13 Working the "Waiting for you" queue
 
@@ -444,7 +444,7 @@ This applies only to cannabis products. Non-cannabis categories carry no purchas
    - **Is this taken otherwise into the body?**: **No — ordinary product** or **Yes — taken otherwise into the body**.
    - **Units per package**: required when the answer is Yes. Count the units on the label (for example, a box of 6 suppositories is 6).
    - For liquids only: **Is this a low-THC beverage?** (**Not answered**, **No — ordinary liquid**, **Yes — low-THC beverage**) and **Active delta-9 THC per unit (mg)** from the label.
-6. Press **Save sales-limit classification** (L1465). This is audited (`inventory_lot.compliance_classification_edited`).
+6. Press **Save sales-limit classification** (L1465). This is audited (`inventory_lot.compliance_classification_edited`). The answer is written to the published menu (which the register enforces from) and copied onto the lot row. If the copy onto the lot row fails, the page still says it was saved, and the failure is recorded only inside the audit row (`lot_row_write_failed`, `inventory/actions.ts` L1105–1145; finding F-05b-13, S3). After saving, reload the worklist and check that the row moved.
 7. If the row now shows a contradiction (low-THC marked Yes, but above 4 mg per unit, or both buckets marked), one of the answers is wrong. Re-read the label and fix it.
 
 **Rules.** Never answer **Yes — low-THC beverage** without a label that shows 4 mg or less per individual unit. If the label is unclear, answer **No — ordinary liquid**, which is the stricter limit, and tell the owner. **Weekly (form 8.4):** the **Urgent** count must be 0 by Monday close.
@@ -484,3 +484,234 @@ If there is no price, the page says why (L508–512):
 
 > **Cost unknown: owner only (finding F-05b-12, D38).** When the lot's cost is unknown, the help reads *"Cost is unknown for this lot, so no floor can be enforced."* (L1067), and the app will save **any** price above $0.00 (`afterTaxFloorMinor` returns nothing, `price-correction-core.ts` L65). **Store rule:** only the owner sets a price on a lot whose floor shows **— (cost unknown)**. First fix the cost from the vendor's CCRS manifest (SOP-04 / SOP-05a §4.20). If that cannot be done today, the owner reads the manifest cost, works out cost × 1.463, and sets a price at or above it, recording it on form 8.2.
 
+---
+
+## 5. Messages: "If you see this message"
+
+### 5.1 Other Inventory
+
+| Message | What it means | What you do |
+|---|---|---|
+| **Staged draft PIPE-0001. Confirm it below to make it active.** | The draft was saved | Check the price, then **Confirm** (§4.3) |
+| *"That would take on-hand below zero (N on hand)."* | The adjustment would make the count negative | Recount. Post only what is really there (§4.5) |
+| *"A note is required for theft/other — say what happened."* | **Theft / loss** or **Other** needs a note | Write what happened (§4.5) |
+| *"Only the owner or an admin can key a missing cost."* | A manager tried **Save cost** | Give the invoice to the owner (§4.7) |
+| *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* | The cost is already set | Changing it is form 8.2, owner only (§4.9) |
+| *"Invoice #… from … is already entered. Each paper invoice is entered once."* | A duplicate invoice | Check **Accounts Payable**. Do not enter it again (§4.6) |
+| *"Invoice #… from … saved ($…). … It now appears on the Accounts Payable page as a payable."* | Saved | Confirm the drafts and file the paper (§4.6) |
+| **Settings saved for <SKU>.** | Barcode, reorder point or shelf saved | None (§4.8) |
+
+### 5.2 Merch
+
+| Message | What it means | What you do |
+|---|---|---|
+| *"<name> is hidden from greenwaymerch.com (within about a minute)."* | Hidden | Note why on form 8.3 (§4.11) |
+| *"<name> is live on greenwaymerch.com again (within about a minute)."* | Back on sale | None |
+| *"Type the product's web name exactly to confirm removal."* | The name didn't match | Prefer **Hide**. Removal is owner/admin only (§4.11) |
+| *"<name> was removed. Past orders in Printful are not affected."* | Removed for good | Record it on form 8.3 |
+| *"Checked N variants at Printful; M changed on greenwaymerch.com."* | Stock copied | Read any **Note:** that follows (§4.11) |
+
+### 5.3 Publish Menu
+
+| Message | What it means | What you do |
+|---|---|---|
+| *"Published. The public menu now shows this version and its products are sellable at the register."* | Live | Check **Live variants** (§4.14) |
+| *"Not published yet: N products would come off the live menu. …"* | The removal box was needed | Read the list. Tick only if every removal is intended (§4.14) |
+| *"Publish your one-time Cultivera menu first. …"* | A Cultivera cutover is waiting | Stop. That is SOP-10 |
+| *"Only the owner or an admin can publish with products still awaiting review. …"* | A manager tried **Publish now and fix after** | Decide them in Fact Review, or ask the owner |
+| *"Tick "Publish now and fix after" to publish with products still awaiting review, or decide them first in Fact Review."* | The publish-now box was left unticked | Decide the reviews first (SOP-04) |
+| *"Nothing waiting — every menu update from receiving has published automatically."* | Queue clear | Write 0 on form 8.4 |
+
+### 5.4 Types & Categories
+
+| Message | What it means | What you do |
+|---|---|---|
+| *"Done — N records moved to the new category. The customer menu updated immediately."* | The move is live | Check the cannabis line was not crossed; form 8.3 (§4.16) |
+| *"Pick both a source and a target category."* / *"The source and target categories are the same — nothing to move."* | Incomplete pick | Pick again |
+| *"… is hidden — products can't be moved into a hidden category. Re-activate it first."* | The target is hidden | Owner decides whether to re-activate it |
+| *"This is a built-in type, so it was hidden (deactivated) instead of deleted. …"* / *"Still used by N live item(s), so it was hidden …"* | It could not be deleted | Expected. History stays intact |
+| **Heads up — N categories on your live menu aren't in this list** | Menu categories with no row | Add the row with the same value (§4.15) |
+
+### 5.5 Classification and sell price
+
+| Message | What it means | What you do |
+|---|---|---|
+| *"This list is incomplete — do not read it as an all-clear."* | Not everything could be read | Reload. Tell the owner if it stays (§4.19) |
+| *"Nobody has said whether this is taken otherwise into the body (a suppository). …"* | The answer is missing | **Classify →** with the label (§4.19) |
+| *"… marked as a low-THC beverage, but the stated per-unit THC is above 4 mg …"* | Contradiction | Re-read the label. Fix the wrong answer |
+| *"Blocked: $X is below the legal minimum of $Y. Washington law (RCW 69.50.357 / WAC 314-55-155) forbids selling below acquisition cost. …"* | Below cost plus tax | Enter $Y or more (§4.21) |
+| *"Cost is unknown for this lot, so no floor can be enforced."* | No floor is checked | Owner only (§4.21) |
+| *"This product has several sizes on one menu card and this lot isn't linked to one yet. …"* | No size picked | **Which size is this lot?** first |
+| *"This product isn't on the published menu, so there is no menu price to set yet. …"* | Not on the menu | Publish or approve it first (§4.13) |
+| *"Couldn't check the other lots that share this price (…), so nothing was saved."* | The read failed | Try again in a minute |
+
+## 6. Exceptions & escalation
+
+| Situation | Do this | Tell |
+|---|---|---|
+| Cannabis found under **Accessories**, **Greenway Merch** or **Paraphernalia** (on the website, the register or the lot price box) | Stop selling it at once. Do not move it back yourself | **Owner, same day.** Excise owed on the sales since has to be worked out (F-05b-9) |
+| Weekly reconciliation is off by more than 2 units on one item, or more than $50 retail | Post the difference with its true reason (§4.5) | Owner, same day |
+| A non-cannabis item has the wrong price, or $0.00 | Keep selling at the label price on the keypad, with a correct label | Owner: form 8.2 (§4.9) |
+| An invoice save failed part-way | Clean up the partial drafts and adjustments (§4.6), then enter it again | Owner if you are unsure what was left |
+| A Save invoice succeeds, but the audit log has no `noncannabis.invoice_entered` row | Nothing to fix on the page. The audit write is not checked (`noncannabis/actions.ts` L307, `.catch(() => {})`; finding F-05b-8) | Note it on form 8.1 |
+| **Live variants** fell by more than the listed removals after a publish | Do not publish again | Owner, at once (F-05b-10) |
+| **Publish didn't finish** twice | Stop | Owner |
+| Classification: the package label is unclear | Answer the stricter way (No — ordinary liquid). Keep the item on sale | Owner |
+| A lot shows **— (cost unknown)** and needs a price | Do not set a price | Owner (§4.21) |
+| A merch product must come off greenwaymerch.com for good | **Hide** it | Owner or admin removes it (§4.11) |
+
+## 7. Controls & compliance (why the rules exist)
+
+| Rule | Why | Where in the code |
+|---|---|---|
+| Cannabis carries 37% excise plus 9.3% sales tax; non-cannabis carries 9.3% only. Every published price is out-the-door | WA cannabis excise (RCW 69.50.535) and retail sales tax. The **category** alone picks the tax | `order-pricing-core.ts` L42–50 |
+| Never move or re-file a product across the cannabis line | It removes excise, the purchase limit and the scan requirement, and it lowers the floor (F-05b-9, **S1**) | `sales-limits-core.ts` L370–374; `scan-required-core.ts` L55–61; `price-correction-core.ts` L35–39 |
+| Purchase limits follow the classification | WAC 314-55-095(1)(d)(i): the 10-unit "otherwise taken" limit and the low-THC (≤ 4 mg per unit) beverage limit | `sales-limits-core.ts` L288; `classification-status-core.ts` L230–239 |
+| No sale below cost plus tax | RCW 69.50.357 / WAC 314-55-155 | `price-correction-core.ts` L61–67, L125–133 |
+| Cannabis cost comes only from the vendor's CCRS manifest. Nobody types it | Owner D38 (*"absolutely not. That's illegal."*) | SOP-05a §4.20; G-27 |
+| A cost-unknown price is set by the owner only | The app enforces no floor there (F-05b-12) | `price-correction-core.ts` L65 |
+| Non-cannabis goods are rung on the keypad with the SKU in the note, and reconciled weekly | Other Inventory is not on the register (F-05b-1, **S1**) | §4.4–§4.5; G-29 |
+| Removing anything from the live menu needs a named list and a tick | One old draft once wiped an 18-item menu (code comment, `menu-imports/actions.ts` L214–218) | `publish-guard-core.ts` L102–108 |
+| Non-cannabis is not reported to CCRS | CCRS covers cannabis only | `admin-nav-data.ts` L84–86 |
+
+## 8. Checklists & forms
+
+### 8.1 Non-cannabis keypad sales and weekly reconciliation
+
+```
+FORM 8.1   NON-CANNABIS: KEYPAD SALES + WEEKLY RECONCILIATION    Week of: __________
+PART A - keypad lines (from register receipts / Keypad lines with SKU in note)
+ SKU          | Name                    | Units sold | Price  | Rung by
+ _____________|_________________________|____________|________|________
+PART B - Monday count (before opening)
+ SKU          | Last On hand | - Part A | = Expected | Shelf | Diff | Reason posted
+ _____________|______________|__________|____________|_______|______|______________
+CATALOG LINE - confirms / archives this week (no audit row: F-05b-2)
+ SKU          | Confirmed or Archived | On hand at archive | By | Date
+ Merch: "Copy Printful stock to the website" pressed  [ ]  changed: ____
+ Any diff > 2 units or > $50 retail reported to owner [ ]   Initials: ______
+```
+
+### 8.2 Non-cannabis price or cost change (owner only); cost-unknown cannabis price
+
+```
+FORM 8.2   PRICE / COST CHANGE                                   Date: __________
+ Item / SKU or lot: ____________________   Old price: ______   New price: ______
+ Old cost: ______   New cost: ______   Source (invoice # / CCRS manifest): ________
+ Reason: _____________________________________________________________________
+ Non-cannabis: old item archived [ ]  new SKU: __________  stock moved [ ]
+               labels replaced [ ]
+ Cannabis, cost unknown: manifest cost ______ x 1.463 = floor ______  price >= floor [ ]
+ Owner signature: ______________________
+```
+
+### 8.3 Category and menu change log
+
+```
+FORM 8.3   CATEGORY / MENU CHANGE LOG
+ Date | Who | Page (Types / Lot box / Merch / Publish) | From -> To | Records | Why
+ _____|_____|__________________________________________|____________|_________|_____
+ Cannabis line crossed?  NEVER - if yes, stop and call the owner.  Checked [ ]
+```
+
+### 8.4 Weekly menu and classification check (Monday)
+
+```
+FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: __________
+ [ ] Publish Menu: "Waiting for you" = ____ (Fact check / Needs a Publish click cleared)
+ [ ] Kept off the menu until facts are set = ____ (sent to SOP-04)
+ [ ] Classification: Urgent = 0   Unconfirmed = ____   list complete (no banner)
+ [ ] Types & Categories: no "Heads up" orphan banner
+ [ ] Spot check 5 non-cannabis items on the public menu / register: none are cannabis
+ [ ] Lots showing "Legal floor: - (cost unknown)" = ____ (to owner)
+ Initials: ______
+```
+
+## 9. Quick reference card
+
+```
+╔═════════════════════════════════════════════════════════════════════════════════╗
+║ SOP-05b QUICK CARD - NON-CANNABIS, MERCH, PUBLISH, CATEGORIES, LIMITS, PRICE    ║
+╠═════════════════════════════════════════════════════════════════════════════════╣
+║ OTHER INVENTORY IS NOT ON THE REGISTER (F-05b-1)                                ║
+║  - Ring glass/papers/devices on KEYPAD -> accessories; branded goods -> merch   ║
+║  - Note = SKU + name (e.g. "PIPE-0001 blue spoon"). Price from the label.       ║
+║  - The SKU label and the UPC do NOT scan. On hand does NOT drop on a sale.      ║
+║  - Monday: count, post keypad sales, post shrink separately (form 8.1).         ║
+║ ADDING: Stage draft -> CHECK PRICE -> Confirm -> Print SKU. No price edit later ║
+║ PRICE/COST CHANGE: owner only, form 8.2 (archive + re-create).                  ║
+║ MERCH: Hide (undoable) > Remove (owner/admin). Copy Printful stock weekly.      ║
+║ PUBLISH: tick the removal box ONLY if every listed product should come off.     ║
+║  - Never publish an old/small menu to "86" one product. 86 = SOP-05a 4.12.      ║
+║ CATEGORIES: NEVER move cannabis into Accessories / Greenway Merch /             ║
+║  Paraphernalia (or back). It drops excise, limits and scan. Owner only.         ║
+║ CLASSIFY: label in hand. Suppository = units per package. Low-THC <= 4 mg/unit  ║
+║  Unsure -> the stricter answer. Urgent = 0 by Monday close.                     ║
+║ SELL PRICE: out-the-door. Floor = cost x 1.463 (cannabis). Below = Blocked.     ║
+║  "Cost unknown" -> owner only. Cannabis cost only from the CCRS manifest.       ║
+╚═════════════════════════════════════════════════════════════════════════════════╝
+```
+
+## 10. Glossary
+
+| Term | Meaning |
+|---|---|
+| **Other Inventory** | The non-cannabis catalog sold in the store (`/admin/inventory/noncannabis`) |
+| **Merch Inventory** | Apparel sold by Greenway Merchandising LLC on greenwaymerch.com, made by Printful |
+| **Keypad** | The register tab for an open-price non-cannabis line (merch or accessories) |
+| **SKU** | The store's own code, PREFIX-0001 style, printed on the SKU label |
+| **UPC / EAN** | The manufacturer's barcode on the package |
+| **Draft** | A staged non-cannabis item that is not in the catalog until **Confirm** |
+| **Publish** | Making a menu version live on the website and the register |
+| **86** | Restaurant slang for "take it off the menu, we're out." At Greenway, it is the register's **Mark out of stock** (SOP-05a §4.12) |
+| **Website category** | The group shoppers browse. It also decides tax and limits |
+| **Inventory type** | A raw POS label that maps to a website category |
+| **Override** | A per-product category or type set on the lot page |
+| **Otherwise taken into the body** | For example, suppositories: a 10-unit daily limit |
+| **Low-THC beverage** | A liquid in individual units of ≤ 4 mg delta-9 THC each |
+| **Out-the-door price** | The price including all tax |
+| **Legal floor** | Unit cost with tax folded in. Nothing sells below it |
+| **CCRS manifest** | The state traceability transfer record created by the vendor. It is the only source of cannabis cost |
+
+---
+
+## Appendix A: Source map
+
+| Area | Files |
+|---|---|
+| Other Inventory | `src/app/admin/inventory/noncannabis/page.tsx`, `actions.ts`, `MerchCatalog.tsx`, `NonCannabisIntakeForm.tsx`, `InvoiceBuilderForm.tsx`, `[id]/label/page.tsx`; `src/lib/noncannabis/store.ts`, `invoice-store.ts`, `noncannabis-core.ts`, `cost-fill-core.ts`, `merch-intel-core.ts` |
+| Register disconnect | `src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L179, L405–415; `scan-to-cart-core.ts` L55–144; `src/lib/inventory/sale-decrement.ts` L107–110; `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2538–2586 |
+| Merch | `src/app/admin/inventory/merch/page.tsx`, `actions.ts`, `export/route.ts` |
+| Publish | `src/app/admin/publish/page.tsx`; `src/lib/pos/publish-guard-core.ts`, `publish-queue-core.ts`, `publish-now-core.ts`; `src/app/admin/menu-imports/actions.ts` L178–270; `menu-imports/version/[versionId]/page.tsx` L429–437; `src/lib/inventory/cutover-guard-core.ts` L64 |
+| Types & Categories | `src/app/admin/settings/types/page.tsx`, `actions.ts`; `category-registry-core.ts` L149–198; `category-registry.ts` L125–160 |
+| Lot re-file | `src/app/admin/inventory/[id]/page.tsx` L1176–1270; `inventory/actions.ts` L506; `lot-website-classification-core.ts` L61 |
+| Classification | `src/app/admin/compliance/classification/page.tsx`; `classification-status-core.ts` L230–239; `[id]/page.tsx` L1299–1465; `inventory/actions.ts` L1036–1157; `sales-limits-core.ts` L288, L370–374 |
+| Sell price | `[id]/page.tsx` L486–512, L1022–1163; `inventory/actions.ts` L708–830; `src/lib/inventory/price-correction-core.ts` |
+| Tax and scan | `src/lib/orders/order-pricing-core.ts` L42–50; `scan-required-core.ts` L55–61 |
+
+## Appendix B: Not built yet (interim procedures)
+
+> **Living SOP reminder (D41).** The owner: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When a gap below is built, update this SOP in the same piece of work: the named sections, this table, Appendix D, the findings ledger (FIXED) and the concierge entry (D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*).
+
+| Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
+|---|---|---|---|---|---|
+| **G-29** | Other Inventory on the register: the SKU and UPC scan to a priced non-cannabis line, the sale lowers **On hand**, a void or return restores it, and all of it is audited | F-05b-1 (**S1**) | Keypad with the SKU in the note, plus the Monday reconciliation (§4.4–§4.5, form 8.1) | §4.1–§4.5, §4.8, §9, form 8.1 | OPEN (Q-05b-1) |
+| **G-30** | Edit a non-cannabis price and cost, audited old → new, by role; refuse a $0.00 price | F-05b-6 | Owner only: archive and re-create (§4.9, form 8.2) | §2, §4.3, §4.6, §4.9, form 8.2 | OPEN (Q-05b-2) |
+| **G-31** | Cannabis-line guard: refuse, or require owner approval with a reason, for any lot override, **Move products** or inventory-type mapping that crosses into or out of a non-cannabis category | F-05b-9 (**S1**) | Never cross the line; owner only; form 8.3 (§4.15–§4.17) | §2, §4.15–§4.17, §4.21, §6, §9 | OPEN (Q-05b-4) |
+| **G-32** | Hardening bundle: audit Confirm and Archive, plus a Restore; an atomic adjustment; Direction locked to Reason; actor and Pacific time in Recent adjustments; a full invoice rollback; a checked invoice audit; publish refuses when the removal diff can't be read; owner-only save when the cost is unknown; before/after on category audits; a visible warning when the classification lot-row write fails | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | The store rules in §4.3–§4.9, §4.14, §4.15, §4.21 | Those sections, §5, §6 | OPEN (Q-05b-5) |
+
+## Appendix C: Open questions for the owner
+
+| # | Question | Why it matters |
+|---|---|---|
+| **Q-05b-1** | Approve G-29, connecting Other Inventory to the register (scan the SKU/UPC, decrement on sale, restore on void or return)? | Today the counts are only as good as Monday's reconciliation (F-05b-1, S1) |
+| **Q-05b-2** | Who may change a non-cannabis price or cost once G-30 exists: owner only, owner and admin, or managers too? | Interim: owner only |
+| **Q-05b-3** | Who may permanently **Remove** a merch product: owner and admin only (interim), or managers too? | It can't be undone |
+| **Q-05b-4** | Approve G-31: should a cannabis-line crossing be refused outright, or allowed only by the owner with a written reason? | It changes the tax and limits at the register (F-05b-9, S1) |
+| **Q-05b-5** | Approve the G-32 hardening bundle, including blocking any sell-price save on a cost-unknown lot until the CCRS cost is in? | Closes F-05b-12 and the audit gaps |
+
+## Appendix D: Revision history
+
+| Version | Date | Change | By |
+|---|---|---|---|
+| 1.0 | 2026-10-27 | First draft, verified against `main@827facb5`. Findings F-05b-1…13 and F-05b-C; gaps G-29…G-32; questions Q-05b-1…5. Owner decisions D35, D38, D40, D41, D42 and D43 applied | SOP program |
