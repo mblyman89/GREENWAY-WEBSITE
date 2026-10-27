@@ -483,4 +483,91 @@ A recall *"must follow the procedures outlined in the recall plan unless otherwi
 
 # Part 4: Expiry dates
 
-<!-- PART 4 (sections 4.14 onward) is appended in the next commit. -->
+### 4.14 Where a lot's expiry date comes from
+
+**The law, as the code states it.** The code says Washington does not *require* an expiration date: *"Washington does not require an expiration date (WAC 314-55-105(8) lists a "best by" date as optional label information)"* (`expiry-rules-core.ts` L32–34; same sentence on the **Expiration rules** page, **How this works**). This SOP records that as the code's statement. The store's own rule on selling past a date is an owner decision (question **Q-05a-1**, §4.16).
+
+**Every expiry date has a source.** The lot page shows it under **Expiry source**, next to **Expires** (`[id]/page.tsx` L603–628). The source names (`SOURCE_LABELS`, `expiry-rules-core.ts` L61–69):
+
+| Expiry source (screen) | Where the date came from | Can a rule change it? |
+|---|---|---|
+| **Vendor manifest / JSON / COA (intake)** | Read from the vendor's manifest or COA when the delivery was received (SOP-04) | **Never** (`PROTECTED_SOURCES`, L49; skipped at L505) |
+| **Certificate of analysis** | Read from the COA | **Never** |
+| **POS import** | The one-time POS / Cultivera import | **Never** |
+| **Typed by owner** | Keyed by hand, for example through **Bulk fill** (§4.20; `actions.ts` L986) | Only with **Also replace owner-typed dates** or **Override all owner-typed dates** ticked |
+| **Expiration rule** | Calculated by a rule on the **Expiration rules** page | Yes. It is recalculated when the rule changes and cleared when no rule covers it any more (L19–23) |
+| **On file (source not recorded)** | An old date with no recorded source | **Never** (*"never guess"*, L13–15) |
+| **No date** | Nothing on file | A rule fills it |
+
+Beside the source, the lot page shows a countdown (`expiryStatus`, L770–777): **No date**, **Expired Nd ago**, **Expires today**, **Expires in Nd** (30 days or less), or **Good to <date>**. An expired lot shows its date as **<date> (EXPIRED)** in red (L603–612). When the source is a rule or there is no date, an **Expiration rules** link appears (L622–626).
+
+**On the lot label.** A rule date prints as **Best by**; every other date prints as **Expires** (`labelWord`, `expiry-rules-core.ts` L1116–1127; label page L116–124). A rule date is an estimate, not a manufacturer's date.
+
+**There is no box on the lot page to type an expiry date.** The only ways a date is set after receiving are **Bulk fill** (Cultivera-import lots, blanks only, §4.20) and **Expiration rules** (§4.15). If a vendor sends a corrected date, tell the owner.
+
+### 4.15 Expiration rules: Save, Preview, Apply
+
+**Where:** **Inventory → Expiration rules** (button on the Inventory header; `/admin/inventory/expiration-rules`). **Who:** owner, admin or manager (`page.tsx` L222; `actions.ts` L62, L131, L141). **Recommended:** the owner sets the rules; a manager applies them only when the owner asks.
+
+**The page** (title **Expiration rules**; subtitle *"Give products without a manufacturer date a best-by date, by category or type. Dates from the vendor manifest / JSON, a COA or the POS are never changed."*, L279–280):
+- Header buttons: **Expiration report**, **Manage categories & types**, **Back to inventory** (L284–292).
+- Four cards: **Lots on hand**, **Have a date** (percent dated; green at 90% or more), **Rules active**, **Value at risk** (*"Expired or due in 30 days, at cost"*; opens the report) (L341–356).
+- **How this works**: five plain rules (L364–386). A type rule beats its category rule. Document dates are always kept. Owner-typed dates are kept unless you tick the override. *"Save first, then Preview… Apply writes exactly that and nothing else. New deliveries get rule dates automatically when you finalize a manifest (blank dates only)."*
+- **Preview and apply** card (*"Uses the SAVED rules. Nothing changes until you press Apply."*).
+- The rules form: one fold-out group per category, with a **category rule** row (*"Every <category> item"*) and one row per **type**. Each row has a **Research suggests** column, with a **Why** fold-out and its citations, and a **Lots** count (blank, document date, owner-typed, by rule, unsourced).
+- **Where dates come from now** (a badge per source) and **Sources behind the suggestions** (the published studies behind each suggestion).
+
+**One rule row** (L180–216):
+- **Rule**: **No rule** · **Months after** · **Days after** · **Fixed date** · **Does not expire**. Up to 120 months or 3,650 days (`MAX_RULE_MONTHS`, `MAX_RULE_DAYS`, `expiry-rules-core.ts` L55–56).
+- The number (**#**) or the date.
+- **Count from**: **from received date** or **from lab test date**. A lot with no such date is skipped (*"No date to count from (received / lab test date missing)"*).
+- **Also replace owner-typed dates** (tick box).
+- **Note (optional)**: write why you chose this rule.
+- **Suggested - not saved yet** (orange badge) marks a value filled from the research that you have not saved.
+
+**Procedure** (owner, or a manager on the owner's instruction):
+1. **Decide the rules first, on paper.** For each category, and only those types that differ, decide **Months after / from received date** or **Does not expire**. Prefer the manufacturer's stated shelf life over the research suggestion. For types you created yourself, the page says there is *"No researched default"* (L117–127).
+2. Fill in the rows, or press **Fill blanks with suggestions** to pre-fill every empty row from the research (each shows **Suggested - not saved yet**). Check every suggested row. Clear the ones you do not want back to **No rule**.
+3. Press **Save rules** (top or bottom of the form). The page shows *"Rules saved: N saved, N removed, N unchanged. Lots are not changed until you Preview and Apply."* (L329–330). Each saved, changed or deleted rule is audited (`inventory_expiry_rule.created|updated|deleted`, `actions.ts` L92–117). If a row is invalid, nothing is saved and the orange card **Nothing was saved** lists the problem rows (L316–325).
+4. Press **Preview all rules**, or **Preview this rule** on one row. Leave **Override all owner-typed dates** unticked unless the owner has said to replace them. The preview shows *"N lots would change; N are left alone"*, coloured badges per kind of change (**Fill blank date**, **Update rule date**, **Replace owner-typed date**, **Clear rule date (no rule now)**; orange for the last two, L57–62), the fold-out **Why lots are left alone** (§5.2), and a table of the first 300 lots with **From** and **To**.
+5. **Read the table.** Look hard at every orange badge. **Replace owner-typed date** overwrites a date someone keyed on purpose. **Clear rule date** blanks a date because no rule covers it any more.
+6. Press **Apply to N lots**, or **Cancel**. If anything changed since the preview (a lot, a rule or a date), nothing is written and a fresh preview appears: *"Something changed since your preview (a lot, a rule, or a date). Nothing was written. Here is the fresh preview - review it and apply again."* (L405–409; fingerprint check, `actions.ts` L146–157). Review it and apply again.
+7. Read the green banner: *"Applied to N lots: N blank dates filled, N rule dates updated, N owner-typed dates replaced, N rule dates cleared."* It may add *"N lots changed since the preview and were left alone."* or *"N writes failed - see the audit log."* (L335–342). One audit row, `inventory_lot.expiry_rules_applied`, records every lot's old and new date (`actions.ts` L161–180), so any date can be traced and undone.
+
+**At receiving.** When a manifest is finalized (SOP-04), lots with no document date get the rule date automatically. This is **fill-only**: blank dates only, never an override (`intake-store.ts` L1587–1612). A failure is written on the manifest timeline. Re-run Preview / Apply here to fix it.
+
+> **Control: rules are decided by the owner, saved, previewed and only then applied; every orange change in the preview is read before Apply; document dates are never touched.** Save and Apply are audited with every lot's before and after date. The two-step Preview/Apply with its fingerprint check means a manager cannot apply something other than what was reviewed.
+
+### 4.16 Expired and expiring-soon stock
+
+**What the app does with an expired lot**, verified in the code:
+
+| Where | What happens |
+|---|---|
+| **Issues tab** | One **Needs action** row per expired Active lot, *"Expired and still active — <product>"*, up to 50, then *"…and N more expired lots"* (`issues-core.ts` L417, L452–473) |
+| **Lot page** | The date shows **(EXPIRED)** in red; the source line shows **Expired Nd ago** |
+| **Expiration report** | The **Expired** bucket and value (§ below) |
+| **Register** | **Nothing.** The register menu and the completion gate do not read expiry dates (no expiry check in `completion-gate.ts` or `api/pos/menu/route.ts`) |
+| **Which lot a sale draws from** | The **oldest received lot first** (FIFO by when the lot row was created: `sale-lot-read.ts` L39–47), not the soonest-expiring (FEFO) |
+
+**Finding F-05a-8 (S2): the only stop on selling expired product is a person reading the Issues tab.** The register will sell an expired Active lot. The Issues tab says *"Expired product may not be sold."* (`issues-core.ts` L388, L460), a rule the code itself says the state does not impose (§4.14). Its fix text, *"Open the lot and change its status (or record the destruction under Adjust quantity)."* (L461), points to the manual destruction reason this SOP forbids (§4.7, §4.9). Whether Greenway sells product past its date is an owner decision (**Q-05a-1**). Gap **G-24** (a register block or warning, and FEFO lot draw) waits on that answer.
+
+**Until the owner answers Q-05a-1, this SOP treats expired product as not for sale:**
+1. Every morning (§4.4), for each **Expired and still active** row: find the units and pull them from the shelf.
+2. Put them in quarantine, then set the lot to **Quarantine** with a form 8.1 line that reads "EXPIRED <date>" (§4.8). Quarantine takes the lot off the register's live count.
+3. Tell the owner. The owner decides: return to the vendor or destroy (both are **SOP-15**). **Never** use **Adjust quantity → Destruction**, whatever the Issues text says (§4.7).
+4. If the date is a **rule** date (**Best by**) and the product looks and smells fine, write that on form 8.1. The owner may choose to keep selling it once Q-05a-1 is answered.
+
+**Expiring soon (30 days).** The **Worth a look** row *"N lots expiring within 30 days"* says: *"These lots expire soon. Sell them first (First-Expired, First-Out) or plan a markdown."* (`issues-core.ts` L392; window `EXPIRY_SOON_DAYS = 30`, `expiry-rules-core.ts` L52, equal to `EXPIRING_SOON_DAYS`, `store.ts` L32).
+1. Open **Inventory → Insights → Sell first (FEFO)** (`InventoryIntelPanel.tsx` L199–201) for the ranked list.
+2. Move those units to the front of the shelf and tell the budtenders.
+3. Because the register draws the **oldest received** lot first, not the soonest-expiring, two lots of one product with different dates can sell out of order. Where possible, keep only one lot of a product on the floor at a time, and put the soonest-expiring one out first.
+4. A markdown is a pricing decision for the owner (sell price: SOP-05b).
+
+**The Expiration report** (**Reports → Expiration** tab, `ReportTabs.tsx` L22, or the **Expiration report** button; any role with `reports.view`, including read-only, `reports/expiration/page.tsx` L151). Its sections: **Aging - lots**, **Aging - value** (uncosted lots count as $0), **12-month forecast** (value reaching its date each month), **Where dates come from**, **Coverage gaps** (categories with stock and no date), **By category** and **Rule usage** (L229–277). Most sections export. The owner reviews it monthly (form 8.3, monthly line).
+
+> **Control: every expired Active lot is pulled, quarantined and logged the morning it appears; expiring-soon stock goes to the front of the shelf; the owner reviews the Expiration report monthly.** The register does not block expired lots and draws oldest-received first (F-05a-8; gap G-24 pending Q-05a-1).
+
+# Part 5: Tags, labs, labels and corrections
+
+<!-- PART 5 (sections 4.17 onward) is appended in the next commit. -->
