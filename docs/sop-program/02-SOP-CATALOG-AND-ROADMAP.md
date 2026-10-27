@@ -1,7 +1,7 @@
 # SOP Program — Catalog of SOPs + Slice Roadmap
 
 Slice SOP-00 · 2026-10-27 · audited at `main@54445a68`
-Updated in slice SOP-05a · owner answers D29–D35 applied (SOP-04 v1.1); SOP-05 split into 05a/05b per D35; SOP-05a written (v1.0 draft) (earlier: slice SOP-04, D21–D28, SOP-04 written; slice SOP-03, D14–D20; slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
+Updated in slice SOP-05b · SOP-05a v1.1 (D36–D43); SOP-05b written (v1.0 draft) · Updated in slice SOP-05a · owner answers D29–D35 applied (SOP-04 v1.1); SOP-05 split into 05a/05b per D35; SOP-05a written (v1.0 draft) (earlier: slice SOP-04, D21–D28, SOP-04 written; slice SOP-03, D14–D20; slice SOP-02, D10–D13; slice SOP-01, D1–D9, SOP-21 SEO added per D6)
 
 Every SOP below is mapped to the **real code** it will be verified against. Code sizes come from a census of the tree (`.ts/.tsx` files and lines) and show how much audit work each slice involves. "Requested" quotes the owner. EXISTS/PARTIAL/MISSING is the recon verdict and is re-verified in depth in the SOP's own slice.
 
@@ -52,6 +52,9 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 
 #### SOP-05b · Non-Cannabis, Merch, Menu Publishing & Classification
 **Code:** `/admin/inventory/noncannabis` (+ `[id]/label`, ≈2k lines), `/admin/inventory/merch` (Greenway Merchandising LLC, never on the cannabis POS), `/admin/publish` (`menu.import`; `src/lib/pos/publish-*`), `/admin/settings/types` (Types & Categories, `settings.manage`), `/admin/compliance/classification` (sales-limit worklist, `classification-status-*`).
+
+**Status:** **WRITTEN** in slice SOP-05b as `docs/sop/SOP-05b-noncannabis-menu-classification.md` v1.0 (draft for owner review). Covers Other Inventory (drafts, SKU labels, Keypad selling, adjustments, Monday reconciliation, vendor paper invoices, cost fill, settings, price change, archive), Merch Inventory (hide, put back, remove, copy Printful stock), Publish Menu (the Waiting-for-you queue, the removal check, the 86 explained), Types & Categories (Move products, the cannabis line), re-filing one lot, the sales-limit classification worklist (WAC 314-55-095) and the cannabis sell price (floor RCW 69.50.357 / WAC 314-55-155). Forms 8.1–8.4. 14 findings (F-05b-1…F-05b-13 + F-05b-C), gaps G-29…G-32, open questions Q-05b-1…Q-05b-5.
+**SOP-05b audit verdict: PARTLY MET, with two S1 gaps.** Publish Menu, merch, classification and the price floor are careful and audited. **Other Inventory is not connected to the register**: its SKU and UPC don't scan and sales don't lower On hand (F-05b-1, **S1**; G-29). **A category change can turn cannabis into non-cannabis** for tax (no 37% excise), limits and scan (F-05b-9, **S1**; G-31). There is no way to edit a non-cannabis price (F-05b-6; G-30). The rest is a hardening bundle (G-32), including the publish removal check failing open (F-05b-10) and no floor on a cost-unknown price (F-05b-12).
 
 **Not in SOP-05 (stays where the roadmap puts it):** `/inventory/intake/**`, `/inventory/drafts`, `/inventory/batch-lookups` (SOP-04 / SOP-10), `/inventory/audits/**`, `/inventory/cycle-counts/**` (SOP-06), `/inventory/disposition` (SOP-15).
 
@@ -135,8 +138,8 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-02** | Master Till / Safe | Same cash model; finish while it is loaded in context | S · **DONE** (draft v1.2) |
 | **SOP-03** | EOD Close & Deposit Bag | Completes the cash chain till → safe → bank | M · **DONE** (draft v1.1) |
 | **SOP-04** | Receiving Intake (+ monthly CCRS PRR) | Rule 11: the business-critical pipeline | XL · **DONE** (draft v1.1) |
-| **SOP-05a** | Inventory Core: lots, holds, labels, labs, expiry | Follows intake downstream; split per D35 | L · **DONE** (draft v1.0) |
-| **SOP-05b** | Non-Cannabis, Merch, Menu Publishing & Classification | Second half of SOP-05 (D35) | L |
+| **SOP-05a** | Inventory Core: lots, holds, labels, labs, expiry | Follows intake downstream; split per D35 | L · **DONE** (draft v1.1) |
+| **SOP-05b** | Non-Cannabis, Merch, Menu Publishing & Classification | Second half of SOP-05 (D35) | L · **DONE** (draft v1.0) |
 | **SOP-06** | Cycle Counts, Audits & Daily Checklists | Depends on SOP-05 vocabulary | M |
 | **SOP-15** | Returns to Vendor & Destruction | Inventory exit, license-critical | M |
 | **SOP-16** | CCRS Uploads | License-critical; closes the inventory compliance loop | L |

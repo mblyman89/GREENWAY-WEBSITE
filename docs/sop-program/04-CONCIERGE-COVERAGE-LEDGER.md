@@ -225,3 +225,29 @@ Concierge code is **unchanged** (record-only). Today the concierge's `inventory`
 
 **Running score:** topics with complete SOP source material add `inventory` (lot core), `inventory-adjustments`, `recalls` (paper plan), `expiry` (rule pending Q-05a-1). Baseline row touched: Inventory management 🟡 (§3), unchanged in code.
 
+### SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price (`docs/sop/SOP-05b-noncannabis-menu-classification.md`, verified at `827facb5`)
+
+The concierge code is **unchanged** (record-only). Today the `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–180) has one line on Other Inventory (L172), which repeats the scan promise that F-05b-1 disproves, and one line on Types & Categories. There is nothing on merch, Publish Menu, the removal check, the cannabis line, classification or the sell price (finding **F-05b-C**). The owner wants the concierge to use every feature, including future ones (D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*). What SOP-05b now provides:
+
+| Concierge topic | SOP-05b sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| *new* `other-inventory` | §4.1–§4.9 (drafts, labels, Keypad selling, adjustments, Monday reconciliation, invoices, cost fill, price change), §5.1, form 8.1–8.2 | 🔴 → ✅ (Keypad rule until G-29) |
+| *new* `merch` | §4.10–§4.11, §5.2 | 🔴 → ✅ |
+| *new* `publish-menu` | §4.12–§4.14 (queue tags and buttons, removal check, publish-now, the 86 in plain words), §5.3 | 🔴 → ✅ |
+| `inventory` (Types & Categories, expand) | §4.15–§4.17 (categories, types, Move products, lot re-file, the cannabis line), §5.4, form 8.3 | 🟡 → ✅ |
+| *new* `sales-limit-classification` | §4.18–§4.19 (WAC 314-55-095 buckets, worklist, every gap text), §5.5, form 8.4 | 🔴 → ✅ |
+| *new* `sell-price` | §4.20–§4.21 (out-the-door, floor ×1.463 / ×1.093, size link, every block message, cost unknown) | 🔴 → ✅ |
+
+**Role filter needed:** Types & Categories and **Publish now and fix after** are owner/admin only. **Save cost** is owner/admin only. The rest is `inventory.manage` / `menu.publish`. Budtenders get §4.4 (Keypad) and §9 only. The SOP-only rules to enforce in answers: a non-cannabis price change is owner only; merch Remove is owner/admin only; a cost-unknown price is owner only; never cross the cannabis line.
+
+**Must ship with caveats** until the findings are fixed:
+- F-05b-1: **never** tell anyone the SKU label or the manufacturer barcode scans at the register. Ring on the Keypad with the SKU in the note.
+- F-05b-9: never suggest moving or re-filing a product into or out of Accessories / Greenway Merch / Paraphernalia. If asked, explain the tax and limit effect and send the question to the owner.
+- F-05b-6: there is no price edit. Give the form 8.2 procedure, owner only.
+- F-05b-10: after a hand publish, check **Live variants**.
+- F-05b-12: on a cost-unknown lot, the floor is not enforced. Owner only.
+- The 86 is never done on Publish Menu (SOP-05a §4.12).
+
+**Future features (D41/D42):** when G-29…G-32 are built, the topics above are updated in the same slice as the SOP (charter rules 9–10).
+
+**Running score:** topics with complete SOP source material add `other-inventory`, `merch`, `publish-menu`, `sales-limit-classification` and `sell-price`, and complete `inventory` (Types & Categories). Baseline row touched: Inventory management 🟡 (§3), unchanged in code.
