@@ -593,7 +593,7 @@ function ClassicTile({ c }: { c: TypeCard }) {
                     />
                   ) : c.image ? (
                     // eslint-disable-next-line @next/next/no-img-element -- admin preview of an arbitrary media URL
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={c.image}
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover"

@@ -215,7 +215,7 @@ function IdImage({
             disabled here for that reason and not out of convenience.
           */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <img loading="lazy" decoding="async"
             src={src}
             alt={`${MEDIA_KIND_LABEL[kind]} supplied by the customer through Leafly`}
             className="max-h-80 w-auto rounded-[var(--admin-radius-md)] border border-[var(--admin-border-strong)]"

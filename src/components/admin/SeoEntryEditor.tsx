@@ -271,7 +271,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction, imageChoices = []
             <div className="flex h-[84px] w-[160px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/15 bg-black">
               {ogChoice ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={ogChoice.url} alt="" className="h-full w-full object-cover" />
+                <img loading="lazy" decoding="async" src={ogChoice.url} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="px-2 text-center text-[0.65rem] text-white/40">
                   {ogId ? "Picture not found in Digital Assets" : "Site default picture"}

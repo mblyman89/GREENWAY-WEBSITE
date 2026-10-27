@@ -61,7 +61,7 @@ export function SaleBadgePreview({
           <div className="flex h-24 items-center justify-center overflow-hidden bg-black/40 text-2xl">
             {sampleImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={sampleImageUrl} alt="" className="h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" src={sampleImageUrl} alt="" className="h-full w-full object-cover" />
             ) : (
               "🌿"
             )}

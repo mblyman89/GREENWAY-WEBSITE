@@ -279,7 +279,7 @@ export function BrandHubEditor({
             <p className="mb-3 text-xs text-[var(--admin-text-muted)]">The wordmark at the top of the site. Leave it on the original to keep today&apos;s look.</p>
             <div className="mb-3 flex justify-center rounded-[var(--admin-radius-sm)] bg-black p-4">
               {/* eslint-disable-next-line @next/next/no-img-element -- in-editor thumbnail */}
-              <img src={kit.headerLogo || SHIPPED_HEADER_LOGO} alt="" className="h-14 w-auto object-contain" />
+              <img loading="lazy" decoding="async" src={kit.headerLogo || SHIPPED_HEADER_LOGO} alt="" className="h-14 w-auto object-contain" />
             </div>
             <ContentImageField value={kit.headerLogo || SHIPPED_HEADER_LOGO} onChange={(src) => set({ headerLogo: src === SHIPPED_HEADER_LOGO ? "" : src })} mediaChoices={mediaChoices} />
             {kit.headerLogo ? (
@@ -325,7 +325,7 @@ export function BrandHubEditor({
                 <div key={l.id} className="space-y-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] p-2">
                   <div className="flex h-24 items-center justify-center rounded bg-[repeating-conic-gradient(#333_0_25%,#222_0_50%)] bg-[length:16px_16px]">
                     {/* eslint-disable-next-line @next/next/no-img-element -- in-editor thumbnail */}
-                    <img src={l.src} alt="" className="max-h-20 max-w-full object-contain" />
+                    <img loading="lazy" decoding="async" src={l.src} alt="" className="max-h-20 max-w-full object-contain" />
                   </div>
                   <input
                     type="text"

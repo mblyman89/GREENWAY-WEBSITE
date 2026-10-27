@@ -268,7 +268,7 @@ export function MediaDropzone() {
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-[#111]">
                   {it.kind === "image" && it.url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={it.url} alt="" className="h-full w-full object-contain" />
+                    <img loading="lazy" decoding="async" src={it.url} alt="" className="h-full w-full object-contain" />
                   ) : it.kind === "video" && it.url ? (
                     <video src={it.url} muted playsInline preload="metadata" className="h-full w-full object-cover" aria-hidden="true" />
                   ) : (

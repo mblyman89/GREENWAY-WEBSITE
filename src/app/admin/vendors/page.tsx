@@ -304,7 +304,7 @@ export default async function VendorsPage({
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
                     {logo ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logo} alt="" className="h-full w-full object-contain" />
+                      <img loading="lazy" decoding="async" src={logo} alt="" className="h-full w-full object-contain" />
                     ) : (
                       <span className="text-lg font-bold text-white/30">{v.display_name.charAt(0)}</span>
                     )}

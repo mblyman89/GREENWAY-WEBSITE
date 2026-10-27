@@ -278,7 +278,7 @@ export default async function ProductEditorPage({
               <>
                 <div className="aspect-square overflow-hidden rounded-lg border border-white/10 bg-black">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={center.liveImage.url} alt="" className="h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={center.liveImage.url} alt="" className="h-full w-full object-cover" />
                 </div>
                 <p className="text-[11px] text-white/50">
                   {center.liveImage.isFallback ? (
@@ -301,7 +301,7 @@ export default async function ProductEditorPage({
               <div className="flex items-center gap-2 border-t border-white/10 pt-3">
                 <div className="h-12 w-12 shrink-0 overflow-hidden rounded border border-white/10 bg-black">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={center.substitute.url} alt="" className="h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={center.substitute.url} alt="" className="h-full w-full object-cover" />
                 </div>
                 <p className="text-[11px] text-white/50">
                   Approved fallback for <span className="text-white/75">{center.substitute.key}</span> covers this card
@@ -481,7 +481,7 @@ export default async function ProductEditorPage({
                       {m.imageUrl && (
                         <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={m.imageUrl} alt="" className="h-full w-full object-cover" />
+                          <img loading="lazy" decoding="async" src={m.imageUrl} alt="" className="h-full w-full object-cover" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -539,7 +539,7 @@ export default async function ProductEditorPage({
                       {m.url && (
                         <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={m.url} alt={m.candidate.alt_text ?? ""} className="h-full w-full object-cover" />
+                          <img loading="lazy" decoding="async" src={m.url} alt={m.candidate.alt_text ?? ""} className="h-full w-full object-cover" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -570,7 +570,7 @@ export default async function ProductEditorPage({
                       {m.savedMediaUrl && (
                         <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={m.savedMediaUrl} alt="" className="h-full w-full object-cover" />
+                          <img loading="lazy" decoding="async" src={m.savedMediaUrl} alt="" className="h-full w-full object-cover" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -959,7 +959,7 @@ export default async function ProductEditorPage({
                       <div key={id} className="overflow-hidden rounded-lg border border-white/10 bg-black">
                         <div className="relative aspect-square">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          {url && <img src={url} alt="" className="h-full w-full object-cover" />}
+                          {url && <img loading="lazy" decoding="async" src={url} alt="" className="h-full w-full object-cover" />}
                           {isCover && (
                             <span className="absolute left-1 top-1 rounded bg-[var(--admin-accent)] px-1.5 py-0.5 text-[10px] font-semibold text-black">
                               Cover

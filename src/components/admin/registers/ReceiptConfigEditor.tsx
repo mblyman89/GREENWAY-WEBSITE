@@ -644,7 +644,7 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
               {/* Shown on a white card because that is what paper is. */}
               <div className="flex items-center gap-3 rounded-md border border-[var(--admin-border)] bg-white p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <img loading="lazy" decoding="async"
                   src={bottomLogoDataUri}
                   alt="Receipt logo preview"
                   className="max-h-24 w-auto"

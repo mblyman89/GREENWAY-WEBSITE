@@ -209,7 +209,7 @@ export default async function EmailedMenuSnapshotPage({
                           // Emailed images live in our own media library or the
                           // vendor's host — plain <img> like the other browsers.
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={it.image_url} alt={displayName} className="h-full w-full object-contain" />
+                          <img loading="lazy" decoding="async" src={it.image_url} alt={displayName} className="h-full w-full object-contain" />
                         ) : (
                           <span className="text-3xl opacity-40">📬</span>
                         )}

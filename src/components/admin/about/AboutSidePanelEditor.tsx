@@ -88,7 +88,7 @@ export function AboutSidePanelEditor({
         <div className="space-y-3">
           <div className="flex justify-center rounded-[var(--admin-radius-sm)] border border-[var(--gold)]/25 bg-black p-4">
             {/* eslint-disable-next-line @next/next/no-img-element -- small in-editor thumbnail */}
-            <img
+            <img loading="lazy" decoding="async"
               src={panel.src}
               alt=""
               className={`h-56 w-full ${panel.fit === "cover" ? "object-cover" : "object-contain"}`}

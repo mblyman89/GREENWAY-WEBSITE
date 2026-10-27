@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminThumb } from "@/components/admin/perf/AdminThumb";
 
 /**
  * ProductGrid — visual, thumbnail-first product catalog for the enrichment
@@ -75,9 +76,9 @@ export function ProductGrid({
         >
           <div className="relative aspect-square overflow-hidden bg-zinc-900">
             {c.thumbnailUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <AdminThumb
                 src={c.thumbnailUrl}
+                width={360}
                 alt={c.name}
                 className="h-full w-full object-cover transition group-hover:scale-[1.03]"
               />

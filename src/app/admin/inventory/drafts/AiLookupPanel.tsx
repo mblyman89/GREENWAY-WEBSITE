@@ -701,7 +701,7 @@ export function AiLookupPanel({
                               }
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={u} alt="" className="h-full w-full object-cover" />
+                              <img loading="lazy" decoding="async" src={u} alt="" className="h-full w-full object-cover" />
                               <span
                                 className={
                                   on

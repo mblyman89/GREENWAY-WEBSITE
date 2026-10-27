@@ -900,7 +900,7 @@ export default async function LotDetailPage({
                     <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--admin-border)] bg-black">
                       {kbImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={kbImageUrl} alt="" className="h-full w-full object-cover" />
+                        <img loading="lazy" decoding="async" src={kbImageUrl} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--admin-text-faint)]">no photo saved</div>
                       )}
@@ -959,7 +959,7 @@ export default async function LotDetailPage({
                     <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--admin-border)] bg-black">
                       {enrichImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={enrichImageUrl} alt="" className="h-full w-full object-cover" />
+                        <img loading="lazy" decoding="async" src={enrichImageUrl} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--admin-text-faint)]">no photo</div>
                       )}

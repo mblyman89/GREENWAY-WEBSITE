@@ -179,7 +179,7 @@ export function SubstituteManager({
         <div className="flex items-end">
           {selectedMedia?.url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <img loading="lazy" decoding="async"
               src={selectedMedia.url}
               alt="preview"
               className="h-16 w-16 rounded-[var(--admin-radius)] border border-[var(--admin-border)] object-cover"
@@ -219,7 +219,7 @@ export function SubstituteManager({
                   <td className="py-2 pr-4">
                     {s.url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={s.url}
                         alt={s.label ?? "fallback"}
                         className="h-10 w-10 rounded border border-[var(--admin-border)] object-cover"

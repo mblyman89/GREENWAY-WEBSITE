@@ -61,7 +61,7 @@ export function FluxResults({
                 ) : (
                   <a href={j.asset.url} target="_blank" rel="noreferrer" className="block h-full w-full">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={j.asset.url} alt={j.asset.title} className="h-full w-full object-contain" />
+                    <img loading="lazy" decoding="async" src={j.asset.url} alt={j.asset.title} className="h-full w-full object-contain" />
                   </a>
                 )
               ) : j.state === "pending" ? (
