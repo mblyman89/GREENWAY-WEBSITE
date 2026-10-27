@@ -2,12 +2,14 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (draft for owner review; D21 and F-03-4 correction applied) |
+| **Version** | 1.2 (draft for owner review; D21 and F-03-4 correction applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
 | **Verified against** | `main@d03fe15b` (2026-10-27). Every label, message and rule below was read from the code. Nothing was written from memory. |
 | **Program records** | Findings `F-01-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` |
+
+> **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap this SOP names (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** Section 4 is the step-by-step manual, in the order a shift happens. Section 5 lists every message the register can show you, why it appears, and what to do. Section 9 is a one-page card to keep at the counter. Words in **bold** are the exact labels you will see on the screen.
 
@@ -1238,3 +1240,4 @@ Owner reviewed: ____________________   Date: ________
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
+| 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

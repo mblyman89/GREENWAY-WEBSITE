@@ -42,10 +42,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-20 | Benchmark dataset lifecycle: typed delete confirmation, 18-month retention purge (notice, hold, audit), working-buttons-only on monthly cards | **D33**, **D34** | F-04-15, F-04-16 | SOP-04 §4.33–§4.34, form 8.4 part G | **APPROVED** |
 | G-21 | First-delivery-from-vendor marker on the manifest review screen (prompts the recommended second count) | **D31** | — (no finding; feature need) | SOP-04 §4.9 Vendor-filter check, form 8.1 box | OPEN |
 | G-22 | Audited, gated lot lifecycle: no manual Destroyed, a reason on every change, owner-only recall release, status history (extends G-19) | (compliance: WAC 314-55-225, CCRS traceability) | F-05a-1 (**S1**), F-05a-2 (**S1**), F-04-2 | SOP-05a §4.8–§4.10, form 8.1 | OPEN |
-| G-23 | Hardened manual adjustment: atomic, no negative, Sold out at zero, notes where CCRS needs them, no Destruction / Recall removal / Receive, add Theft / Seizure, audit + name | (procedure need; CCRS E13) | F-05a-3…F-05a-7, F-05a-13 | SOP-05a §4.6–§4.7, form 8.2 | OPEN (part waits on Q-05a-4) |
-| G-24 | Expired stock at the register (block or warn) and FEFO lot draw | (pending **Q-05a-1**) | F-05a-8 | SOP-05a §4.16, form 8.3 | OPEN (waits on Q-05a-1) |
+| G-23 | Hardened manual adjustment: atomic, no negative, Sold out at zero, notes where CCRS needs them, no Destruction / Recall removal / Receive, add Theft / Seizure, audit + name | (procedure need; CCRS E13) | F-05a-3…F-05a-7, F-05a-13 | SOP-05a §4.6–§4.7, form 8.2 | **APPROVED** (D39: remove Receive, Destruction, Recall removal; add Theft, Seizure; Schedule destruction link) |
+| G-24 | Expired stock at the register: **hard block** expired Solid / Liquid Edible, **warn** on the rest; FEFO lot draw | **D36** (Q-05a-6 open: tincture, capsule) | F-05a-8 | SOP-05a §4.16, form 8.3 | **APPROVED** |
 | G-25 | Recall plan + recall event log in the app; recall hold reaches the website and online orders | (compliance: WAC 314-55-225(3)(d), (3)(f)) | F-05a-15, F-05a-16 | SOP-05a §4.10, §4.13, forms 8.4–8.5; Always hide | OPEN |
-| G-26 | Print-label link on the lot page, scannable fallback barcode, sticky 86 for damaged / wrong listing | (procedure need; Q-05a-5) | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | OPEN |
+| G-26 | Print-label link on the lot page, scannable fallback barcode, **the professional 86** (reason-driven clearing, one queue, audited manager restore) | **D40** | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | **APPROVED** (86 part, D40) · rest OPEN |
+| G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **APPROVED** |
+| G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status | **D39** (design: Q-05a-8) | F-05a-17, F-05a-18 (**S1**), F-05a-19 | SOP-05a §4.9, §4.10, form 8.4 | OPEN (design awaits Q-05a-8) |
 
 ---
 
@@ -305,28 +307,29 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements (draft):**
   1. Use the atomic `applyLotDelta` path (GW-012), with a refusal when the result would be below zero, and the same automatic Sold out flip at zero.
   2. A **required note** when the reason maps to CCRS Other, with the same wording CCRS needs; a warning for every reason.
-  3. Remove **Destruction** and **Recall removal** from the manual list (destruction is SOP-15 only). Remove **Receive (add)**, or limit it to the owner with a required manifest reference (pending **Q-05a-4**).
-  4. Add **Theft** and **Seizure**, owner-only, with a required incident reference (SOP-20).
+  3. Remove **Destruction**, **Recall removal** and **Receive (add)** from the manual list (owner decision **D39**). Add a **Schedule destruction** link on the lot page that opens Returns & Destruction with this lot chosen (needs G-28).
+  4. Add **Theft** and **Seizure** (D39: *"Add theft and seizure."*), with a required incident reference (SOP-20). The CCRS mapping exists (`ccrs-inventory-adjustment-core.ts` L87–90); CCRS needs detail for Theft (`ccrs-preflight-core.ts` L273). Whether they are owner-only is not yet decided; the SOP routes them to the owner.
   5. An audit row per adjustment (`inventory_lot.adjusted`), and the actor's name and Pacific date on the history list (F-05a-13).
   6. Fix the Issues expired-row fix text that points to Adjust quantity (`issues-core.ts` L461).
 - **Interim:** SOP-05a §4.6–§4.7, form 8.2.
 
-## G-24 · Expired stock at the register and FEFO lot draw (waits on Q-05a-1)
+## G-24 · Expired stock at the register and FEFO lot draw (APPROVED, D36)
 
 - **Today:** the register never reads expiry dates; sales draw oldest-created first (`sale-lot-read.ts` L39–47); the Issues tab is the only stop (F-05a-8).
-- **Requirements (draft, final shape after Q-05a-1):**
-  1. A completion-gate check on expired lots: **block** or **warn with a manager override**, as the owner decides; a rule (**Best by**) date may be treated differently from a document date.
+- **Owner decision D36:** *"hard block edibles and liquid edibles, warnings for everything else."*
+- **Requirements:**
+  1. A completion-gate check on expired lots: **hard block, no override** when the lot's CCRS type is **Solid Edible** or **Liquid Edible** (plus Tincture / Capsule if the owner says so in **Q-05a-6**); a **warning** the budtender must acknowledge on every other expired lot, recorded on the sale. The same rule on the menu card (an expired edible lot does not count toward sellable stock).
   2. FEFO lot draw (soonest-expiring Active lot first, then oldest) in `sale-lot-read.ts`, with tests.
   3. The Issues text aligned with the owner's rule (it says *"Expired product may not be sold."* today).
-  4. An optional nightly job that moves expired Active lots to Quarantine with an audit row, if the owner chooses "block".
-- **Interim:** SOP-05a §4.16 (daily pull and quarantine), form 8.3.
+  4. A nightly job that moves expired **edible / liquid edible** Active lots to Quarantine with an audit row.
+- **Interim:** SOP-05a §4.16 (daily check by type), form 8.3.
 
 ## G-25 · Recall plan, recall log and recall reaching the website
 
-- **Owner basis:** WAC 314-55-225(3)(d) (mandatory recall plan); (3)(f) weekly tracking. No owner decision yet.
+- **Owner basis:** WAC 314-55-225(3)(d) (mandatory recall plan); (3)(f) weekly tracking. D37 (coordinator = admin, no back-up).
 - **Today:** no recall plan, coordinator or log in the app (F-05a-15); the hold stops the register only, not the website or online orders (F-05a-16).
 - **Requirements (draft):**
-  1. A **Recall plan** settings page holding the coordinator and back-up (**Q-05a-2**), the LCB officer contact and the four plan sections, with an annual-review date and reminder.
+  1. A **Recall plan** settings page holding the coordinator (the admin, no back-up, **D37**), the LCB officer contact and the four plan sections, with an annual-review date and reminder.
   2. A **Recall event** record: notice, type (recall / market withdrawal), affected lots (sets them Recalled through the G-22 audited path), notification time and officer, weekly tracking rows (held, returned, destroyed, sold before hold), close-out.
   3. **Propagation:** a product with any Recalled lot is left out of the public menu and refused by online order pricing (read `recalledProductKeys` in `live-menu.ts` and `order-pricing.ts`, fail-closed for ordering), and open pickup orders holding it are flagged.
   4. A 48-hour countdown on market withdrawals and an "LCB not yet notified" warning on recalls.
@@ -338,7 +341,29 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements (draft):**
   1. A **Print label** link on the lot page.
   2. The label barcode always uses a value the register's scan index knows (lot code or CCRS id), or warns on the label page when the lot has neither.
-  3. Pending **Q-05a-5**: an 86 with reason **damaged / unsellable** or **wrong listing** stays until a manager restores it; **shelf empty** may keep today's self-heal. The reconciler skips sticky flags, and the Issues tab lists them.
+  3. **The professional 86 (D40, APPROVED):** (a) **shelf empty** clears by itself only when new stock is received for the product; if the books show units, a count task (SOP-06) is raised and the item stays off until it is done; (b) **damaged / unsellable** and **wrong listing** never clear on their own; (c) one **Open 86s** queue on Inventory → Issues with who, when and why; (d) every restore needs a manager and a reason and is audited, like **Restore to sale**; (e) the reconciler (`register-availability-core.ts` L318–421) honours all of this instead of auto-restoring.
   4. The 86 audit row records the signed-in employee's id from the register session, not only a client-sent name.
 - **Interim:** SOP-05a §4.12, §4.19.
+
+## G-27 · No typed cannabis unit cost (APPROVED, D38)
+
+- **Owner decision D38:** *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."*
+- **Today:** cannabis cost is read from the manifest at receiving (`intake-parser.ts` L415–420) and locked on the lot page (`lot-edit-core.ts` L33–45, L38), but **Bulk fill → Unit cost** can still type it on Cultivera-import lots (`bulk-fill-core.ts` L54; `actions.ts` L904) (F-05a-11, **S1**).
+- **Requirements:**
+  1. Remove `unit_cost_minor_units` from the Bulk fill field list for cannabis lots (non-cannabis cost keeping its own owner/admin path, `inventory.cost.fill`).
+  2. A compliance guard (test or script) that no server action writes a cannabis lot's unit cost except the manifest intake path.
+  3. A cannabis lot with no cost shows "cost missing — correct from the manifest" on Issues instead of inviting a typed value.
+- **Interim:** SOP-05a §4.20.
+
+## G-28 · Returns & Destruction handles held lots (design awaits Q-05a-8)
+
+- **Owner basis:** D39 (the owner's question: *"Should the destructions page handle marking those fields automatically?"* Answer: yes; it mostly does).
+- **Today:** the destruction form lists only Active lots (`disposition/page.tsx` L103, F-05a-17); scheduling writes Quarantine over Recalled, lifting the register hold (`disposition.ts` L965–971, F-05a-18, **S1**); Cancel always sets Active (L1113–1114, F-05a-19).
+- **Requirements (draft):**
+  1. The lot picker lists **Active, Quarantine and Recalled** lots with their status shown.
+  2. Scheduling a **Recalled** lot leaves it **Recalled** (the register hold stays on); only Active lots move to Quarantine.
+  3. The destruction event stores the lot's status before scheduling; **Cancel** restores that status, with an audit row.
+  4. The lot page gets a **Schedule destruction** link that opens the page with the lot chosen (pairs with G-23).
+  5. Tests for all three, plus a guard that no destruction path changes a Recalled lot to anything but Destroyed.
+- **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C).
 

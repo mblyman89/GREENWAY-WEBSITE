@@ -2,12 +2,14 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (draft for owner review; owner answers D21–D27 applied) |
+| **Version** | 1.2 (draft for owner review; owner answers D21–D27 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
 | **Verified against** | `main@3385bfa9` (2026-10-27). No application code changed between `0055f06c` (SOP-02 audit) and `3385bfa9`; both merges were docs only. Every label, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Arithmetic was checked by script (`sop03/calc.py`, `sop03/calc2.py`), not by hand. |
 | **Program records** | Findings `F-03-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D2, D7, D10, D14–D27 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` |
+
+> **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap this SOP names (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** Section 4 is the step-by-step manual, in the order the work happens: night, morning, bank day. Section 4.1 explains what goes in the bag and what stays behind, so read it first. Section 5 lists every message the end-of-day report can show. Section 8 holds the paper forms; the night sheet (form 8.1) **is** the owner's "end of day spreadsheet" until the app has one. Section 9 is a one-page card to tape inside the safe door. Words in **bold** are the exact labels you will see on the screen.
 
@@ -597,3 +599,4 @@ All seven questions were answered by the owner after v1.0 (recorded verbatim in 
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `3385bfa9` (no code change since `0055f06c`), with owner decisions D2, D7, D10, D14–D20 and the cash deposit policy decision. Adds findings F-03-1…F-03-11 and gaps G-14, G-15 (G-04 updated). | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04. Owner answers D21–D27 applied: reason only over $5 (D21); floats confirmed (D22); unsealed overnight in the safe (D23); no second night count (D24); anyone seals, owner-only banking (D25); tamper-evident pre-numbered bags (D26); undeclared bag = warning only (D27). Appendix C now records the answers. Docs only; pins still at `3385bfa9`. | SOP program |
+| 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). No procedure changed. | SOP program (for owner review) |
