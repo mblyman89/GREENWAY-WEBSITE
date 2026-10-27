@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (draft for owner review; owner answers D21–D27 applied) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
 | **Verified against** | `main@3385bfa9` (2026-10-27). No application code changed between `0055f06c` (SOP-02 audit) and `3385bfa9`; both merges were docs only. Every label, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Arithmetic was checked by script (`sop03/calc.py`, `sop03/calc2.py`), not by hand. |
-| **Program records** | Findings `F-03-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D2, D7, D10, D14–D20 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` |
+| **Program records** | Findings `F-03-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D2, D7, D10, D14–D27 in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` |
 
 > **How to use this document.** Section 4 is the step-by-step manual, in the order the work happens: night, morning, bank day. Section 4.1 explains what goes in the bag and what stays behind, so read it first. Section 5 lists every message the end-of-day report can show. Section 8 holds the paper forms; the night sheet (form 8.1) **is** the owner's "end of day spreadsheet" until the app has one. Section 9 is a one-page card to tape inside the safe door. Words in **bold** are the exact labels you will see on the screen.
 
@@ -93,12 +93,12 @@ This SOP makes sure that:
 | Reconcile each drawer | Owner, admin or manager login | `requirePermission("inventory.manage")` on Register Activity (SOP-01 §4.30) |
 | Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L96–98) is sent to `/admin?denied=1` (F-02-10). |
 | **Morning recount** and verify the night sheet | The morning employee ("the morning employee recounts and verifies") | Not in the app. Paper (form 8.1, part B). |
-| Seal the bag, write the bag number, log it | The morning employee, after the recount | Not in the app (F-00-6). Paper (form 8.2). |
+| Seal the bag, write the bag number, log it | **Any employee** (D25: *"anyone can seal the bag"*), after the morning recount | Not in the app (F-00-6). Paper (form 8.2). |
 | **Verify till** in the back office | Owner, admin, manager | `inventory.manage`. Records no recount (F-00-3); paper is the record. |
-| Take bags to the bank | The owner (books-96: *"Even if I don't make it to the bank…"*) | Not in the app. Paper bag log + bank receipt. |
+| Take bags to the bank | **The owner only** (D25: *"I am the only one to take cash to the bank"*) | Not in the app. Paper bag log + bank receipt. |
 | Match the deposit in the books | Owner only | `requireBooksAccess()` (`src/app/admin/books/bank/page.tsx` L175). **No screen clears a deposit today** (F-03-3). |
 
-**Who may count the deposit?** The owner's request names *"one person"* at night and *"the morning employee"* in the morning. It does not restrict either to a manager. This SOP therefore lets **any employee** do either count, but they must be **two different people** (the whole point of the morning recount). Whether the night sheet also needs a second signature is open question **Q-03-4**.
+**Who may count the deposit?** The owner's request names *"one person"* at night and *"the morning employee"* in the morning. It does not restrict either to a manager. This SOP therefore lets **any employee** do either count, but they must be **two different people** (the whole point of the morning recount). **There is no second count at night** (D24: *"no second count at night, just the recount in the morning by any employee"*). The morning recount is the second count. *(This is only about the deposit count. The second-person sign-off at till close, SOP-01 / D2, is separate and still applies.)*
 
 ---
 
@@ -161,7 +161,7 @@ After the bag is made, the building holds the $635.00 of floats plus the $1,000.
  manager: reconcile drawers, print EOD
 ```
 
-The owner's words fix steps 4 (*"one person completes before close"*) and 7–9 (*"the morning employee recounts and verifies the amount before sealing the bag and putting it into the safe"*). Where the unsealed cash sits overnight is this SOP's reading (in the store safe); it is open question **Q-03-3**.
+The owner's words fix steps 4 (*"one person completes before close"*) and 7–9 (*"the morning employee recounts and verifies the amount before sealing the bag and putting it into the safe"*). The owner confirmed that the counted cash sits **unsealed in the store safe** overnight until the morning recount (D23: *"Q-03-3- yes, that is correct"*).
 
 ### 4.3 Night: close every drawer first (SOP-01)
 
@@ -204,7 +204,7 @@ Before the deposit can be counted, **every** drawer that was open today must be 
 
 ### 4.7 Night or morning: manager reconciles every drawer
 
-A manager reconciles each closed drawer on **Register Activity** exactly as in **SOP-01 §4.30** (cash sales worked out on paper from the Z/X report, net of this drawer's voids/returns, never blank; leave **Reconciled by** blank because of F-00-4/F-01-5; any over/short over $5.00 → SOP-01 form 8.5; a one-line reason for any non-zero difference, Q-03-1).
+A manager reconciles each closed drawer on **Register Activity** exactly as in **SOP-01 §4.30** (cash sales worked out on paper from the Z/X report, net of this drawer's voids/returns, never blank; leave **Reconciled by** blank because of F-00-4/F-01-5; any over/short **over $5.00** → a written reason is required, on SOP-01 form 8.5; $5.00 or less needs no reason, D21).
 
 What reconcile does to the books (owner and bookkeeper only): it posts the drawer's takings into **10100 Cash on Hand — Vault** (*"Cash from <register> to safe"*, `register-cash-journal-core.ts` L294–303) and the over/short to Cash Over/(Short). It does **not** touch **10400 Undeposited Funds**. That account was designed to fill only when a bag is sealed (L296–301, self-test L807–813), and the seal is not wired (§4.15, F-03-1).
 
@@ -296,7 +296,9 @@ The policy decision (`docs/CASH_DEPOSIT_POLICY_DECISION.md` L109–121) sets the
 - Currency transaction reports (CTRs) are expected and unremarkable. Nothing is done to avoid one.
 - Cash stays on the **licensed premises** until banked, not at a residence.
 
-Steps:
+**Only the owner takes cash to the bank** (D25). Nobody else removes sealed bags from the safe for banking.
+
+Steps (owner):
 1. Open the safe. Take **every** sealed bag in the "SEALED — TO BANK" slot. Check each bag number against the bag log (form 8.2). A bag on the log but not in the safe, or in the safe but not on the log, is an exception: stop and call the owner (§6).
 2. Check each seal is intact. A broken or re-taped seal: do not bank it; open it with a second person, recount, write it up (§6).
 3. Write **"to bank, <date>, <name>"** against each bag on the log.
@@ -368,7 +370,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Panel | Green *"Every dollar counted out of a drawer has been matched…"* | **Not reliable today** (F-03-1) | Use the bag log and the safe. |
 | Panel | Rose *"More was banked than was counted, on …"* | The books say a day was cleared for more than it held (L128–151) | Owner/bookkeeper only. |
 | Books (when built) | *"This bag has no id…"* | A seal without a bag number would be refused (`register-cash-journal-core.ts` L413–418) | Not reachable today. Always write the bag # on paper. |
-| Books (when built) | *"Bag GW-7 was taken out of the drawer but never counted into the safe…"* | Close blocked while a bag is undeclared (`safe-bag-core.ts` L212–226; books-98 L29–35) | Not reachable today (F-03-10). |
+| Books (when built) | *"Bag GW-7 was taken out of the drawer but never counted into the safe…"* | The code was designed to block the close while a bag is undeclared (`safe-bag-core.ts` L212–226; books-98 L29–35). **Owner decision D27: warning only, never block.** | Not reachable today (F-03-10). When built, it must warn, not block (G-04). |
 
 ---
 
@@ -384,6 +386,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Broken / re-taped seal on bank day | Do not bank. Open with a second person, recount, write it up, re-seal in a new bag (new #). | Owner immediately |
 | Bag on the log not in the safe | Stop the bank run. Check every slot and the binder. | Owner immediately |
 | End-of-day page will not load | Paper steps continue. | Owner |
+| Out of tamper-evident numbered bags (or they have not arrived yet, D26) | Do not seal in a plain envelope. Keep the verified cash with its night sheet in the safe "TO VERIFY" slot and write "no bag" on the bag log. | Owner the same day (only the owner banks, D25) |
 | A day's cash will not fit in one bag | Two consecutive-numbered bags, logged as one deposit (§4.11). | — |
 | Someone suggests splitting or holding back cash because of $10,000 | Do not. Bank the whole day (§4.14). | Owner |
 
@@ -574,20 +577,23 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | $10,000 shape check | Built, no caller | Bag log **Note** column (§4.14) | G-14 · F-03-10 |
 | Refunds on the EOD | Not shown (Z report has them) | Use the Z report for cash (§4.8) | G-15 · F-03-6 |
 
-## Appendix C: Open questions for the owner
+## Appendix C: Owner answers (were open questions)
 
-| # | Question | Why it matters | Interim reading in this SOP |
+All seven questions were answered by the owner after v1.0 (recorded verbatim in `00-OWNER-REQUEST-VERBATIM.md`, D21–D27).
+
+| # | Question | Owner's answer (verbatim) | Decision / effect in this SOP |
 |---|---|---|---|
-| **Q-03-1** (carried from Q-02-3 / G-03) | Is a written reason required for **every** over/short, or only those **over $5**? | D7 says the reason *"should be required to be input for over/ under"*; the $5 is the warning line | A reason for every non-zero difference (SOP-01 §4.30, SOP-02 §4.8) |
-| **Q-03-2** | Please confirm: **"it should be 300 in it"** (D19) means the **Manager Till** float is $300.00 and the two sales tills stay at $167.50. | Every deposit calculation subtracts the floats | Yes, as recorded in D19 |
-| **Q-03-3** | Overnight, does last night's counted cash sit **unsealed in the store safe** until the morning recount? | Where the cash sits is the custody gap | Yes, unsealed, in a "TO VERIFY" slot (§4.6) |
-| **Q-03-4** | Does the **night sheet** also need a second person (like D2 at till close), or is the morning recount the second count? | The request says *"one person completes"* | One person at night; the morning recount is the second count |
-| **Q-03-5** | Who may **seal** the bag and who takes it to the **bank**: any employee, or managers / you only? | Custody of sealed cash | Any morning employee seals; the owner banks |
-| **Q-03-6** | Do you already use **pre-numbered tamper-evident** deposit bags? If not, may we specify them? | The bag number is the whole link to the bank (0212 L14–19) | Assumed yes (§3) |
-| **Q-03-7** | When the deposit-bag screen is built (G-04), should it **block a till close** while a bag from that drawer is "undeclared", as books-98 designed (Oracle-style), or only warn? | Changes how the night close works | Not applicable until built |
+| **Q-03-1** | Reason for **every** over/short, or only **over $5**? | *"only over $5"* | **D21.** Reason required only over $5.00 (§4.7; SOP-01 §4.30 and SOP-02 §4.8 updated). |
+| **Q-03-2** | Does "300" mean the Manager Till, with sales tills at $167.50? | *"the manage float should be 300. The sales registers float should be 167.5"* | **D22** (confirms D19). Floats $635.00 in total (§3, §4.1). |
+| **Q-03-3** | Does counted cash sit **unsealed in the safe** overnight? | *"yes, that is correct"* | **D23.** §4.6 confirmed. |
+| **Q-03-4** | Second person at night, or is the morning recount the second count? | *"no second count at night, just the recount in the morning by any employee"* | **D24.** §2, §4.5 and §4.10 confirmed. |
+| **Q-03-5** | Who seals, who banks? | *"anyone can seal the bag, I am the only one to take cash to the bank"* | **D25.** §2, §4.11, §4.13. |
+| **Q-03-6** | Pre-numbered tamper-evident bags? | *"yes I plan on using tamper evident pre-numbered bags"* | **D26.** §3 confirmed. Until the bags arrive, see the §6 row "Out of tamper-evident numbered bags". |
+| **Q-03-7** | Block a till close for an undeclared bag, or only warn? | *"warning only please"* | **D27.** G-04 requirement: warn, never block (§5). |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `3385bfa9` (no code change since `0055f06c`), with owner decisions D2, D7, D10, D14–D20 and the cash deposit policy decision. Adds findings F-03-1…F-03-11 and gaps G-14, G-15 (G-04 updated). | SOP program (for owner review) |
+| 1.1 draft | 2026-10-27 | Slice SOP-04. Owner answers D21–D27 applied: reason only over $5 (D21); floats confirmed (D22); unsealed overnight in the safe (D23); no second night count (D24); anyone seals, owner-only banking (D25); tamper-evident pre-numbered bags (D26); undeclared bag = warning only (D27). Appendix C now records the answers. Docs only; pins still at `3385bfa9`. | SOP program |

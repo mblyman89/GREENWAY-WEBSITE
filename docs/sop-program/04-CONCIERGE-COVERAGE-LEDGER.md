@@ -148,3 +148,33 @@ Concierge code is **unchanged** (record-only). Today neither the concierge nor `
 - The bag screen does not exist (F-00-6 / G-04), so never tell anyone to "seal the bag in the app".
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, `end-of-day`, plus the SOP-01 proposed topics; `deposit-bag` is paper-only. The concierge itself is still at the baseline until the integration phase.
+
+### SOP-04 Receiving Intake & Monthly CCRS Public Records Request (`docs/sop/SOP-04-receiving-intake.md`, verified at `5299660b`)
+
+Concierge code is **unchanged** (record-only). Today the concierge's `product-intake` topic (`src/lib/admin/concierge-kb.ts` L132–148) is journey-level only. Its one Receiving fact is the transport-manifest details. The `ccrs` topic (L349–360) covers the weekly upload and the LIQ-1295 only. Nothing covers dock counting, refusing lines, Finalize, held lots, the monthly public records request or the zip drop (finding **F-04-C**). The in-app SOP sheets in `src/lib/catalog/sop-core.ts` and the Receiving help panel describe the pre-R31 flow (F-04-5), so they **must not** be used as grounding. What SOP-04 now provides as source material for the integration phase:
+
+| Concierge topic | SOP-04 sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| `product-intake` → split out *new* `receiving` (truck day) | §4.1 pipeline, §4.3 morning list check, §4.4–4.5 email and manual import, §4.6 staged manifest, §4.7 duplicates/overdue, §4.8 transport details, §4.9 count every line, §4.10–4.12 refusals, §4.11 short counts (interim rule), §4.17–4.18 Finalize and result banner, §5.1–5.2 messages, forms 8.1, 8.2, 8.5, §9 quick card | 🟡 → ✅ (🟡 for short counts until G-16 is built) |
+| `receiving` (after the truck) | §4.13 trade samples and quarterly cap, §4.14 vendor inventory ids, §4.15 COAs, §4.16 PO link, §4.19 Issues tab and held lots, §4.20 Accounting tab, §4.21 lot labels, §4.24 vendor follow-up, form 8.3 | 🔴 → ✅ |
+| `product-intake` (Onboarding addition) | §4.22 Product Onboarding, §4.23 "looks like more than one card" | 🟡 → ✅ |
+| *new* `ccrs-records-request` (monthly PRR → benchmarks) | §4.25 why, §4.26 timeline, §4.27 file the request (wording, phone **664-1753**), §4.28 track, §4.29 store the zip untouched, §4.30 competitor roster first, §4.31 zip drop (up to ~1.5 h, keep the tab open), §4.32 check the dataset, §4.33 read the benchmarks, §4.34 redo/remove/off, §5.3 messages, form 8.4 | 🔴 → 🟡 (paper reminder only) → ✅ once G-18 is built |
+| `ccrs` (addition) | Disambiguation: the **weekly CCRS upload** (outbound report) vs the **monthly public records request** (inbound state data for benchmarks); §4.14 vendor inventory ids feed the weekly report | 🟡 → ✅ |
+
+**Role filter needed (strategy item 3):**
+- Any trained employee may **count** at the dock on paper (form 8.1). All Receiving screen work, including Finalize, is `inventory.manage` (owner/admin/manager). For staff the concierge covers only the counting and refusal-noting steps, per SOP-04 §2.
+- The zip drop, competitor roster and Statewide Benchmarks are `inventory.manage`. Reports → Benchmarks is `reports.view`. The Discovery switch is `settings.manage`.
+- Filing the monthly records request is the owner's job until Q-04-4 is answered. Accounting review (Waiting to Post) is `books.view` (owner).
+
+**Must ship with caveats** until the findings are fixed:
+- F-04-2: the lot page's "Lifecycle status" skips the go-live check and writes no audit row. A manager may set a held lot Active **only** from an Issues row that says "now clear", logged on paper (SOP-04 §4.19). Never advise setting any other lot Active that way.
+- F-04-1: there is no partial-quantity receive. Follow the interim short-count rule (§4.11) and log it on form 8.2.
+- F-04-3: an undecided line is **accepted** on Finalize. Decide every line first (form 8.5).
+- F-04-4: a vendor email that failed to stage does not appear on the Receiving list. If a truck is expected and no manifest is staged, use the manual import (§4.5).
+- F-04-13: the WSLCB public records phone on the CCRS page (…664-1769) is wrong. Use **(360) 664-1753**.
+- F-04-14 / F-04-17: ignore the page's per-file CSV steps and "a few minutes". Drop the single monthly zip and allow up to ~1.5 h.
+- F-04-15 / F-04-16: on monthly-zip datasets do **not** press Generate vendor leads, Enrich KB, Compute or Delete. Delete has no confirmation.
+- F-04-20: there is no "turn Discovery off" control on any screen. Never tell anyone to switch it off in the app.
+- F-04-5: never quote the in-app SOP sheets or the Receiving help panel for receiving steps.
+
+**Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, `end-of-day`, `receiving`, `product-intake` (receiving and onboarding portion), plus the SOP-01 proposed topics. `deposit-bag` and `ccrs-records-request` are paper-reminder only. The concierge itself is still at the baseline until the integration phase. Baseline rows touched: Receiving intake 🟡 and CCRS 🟡 (§3), both unchanged in code.

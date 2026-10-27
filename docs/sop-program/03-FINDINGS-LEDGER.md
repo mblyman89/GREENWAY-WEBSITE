@@ -281,6 +281,7 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 - **Pin:** `docs/sop/SOP-01-register-operations.md` §4.29 (≈L749–757): *"the float for tomorrow goes back to the master till / safe"*. The code keeps the float in the drawer (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L193; `register-cash-journal-core.ts` L275). SOP-03 §4.4 (the float stays in the till) follows the code and the owner.
 - **Also stale:** the Registers page help (`src/app/admin/registers/page.tsx` L117–120) says sales shown are *"online pickup order sales … the only transaction records in this back office"*. That is out of date now that the register records in-store sales (`sale-event-core.ts` L15–33).
 - **Fix later:** correct SOP-01 §4.29 at its next revision (docs only; recorded here first per the program rule).
+- **Status (slice SOP-04):** the SOP-01 half is **FIXED IN DOCS** (SOP-01 v1.1 §4.29: the float stays in the drawer). It is a documentation correction of the program's own SOP, not a code change. The Registers page help text (`page.tsx` L117–120) is code and stays **OPEN**.
 
 ### F-03-5 · CONFIRMED · GAP · S2 — EOD print has one signature and no deposit figure, bag # or denominations
 - **Pin:** `src/app/admin/registers/eod/page.tsx` L248–258. Only *"Prepared by (signature)"* and *"Date / time"*. The table shows Opening / Drops / Closed count, but not takings-to-bag. There is no morning-verify line, no bag number and no denomination grid.
@@ -316,6 +317,111 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 - **Effect:** an employee asking the concierge *"how do I do the deposit?"* gets payroll ACH content or nothing.
 - **SOP impact:** recorded in `04-CONCIERGE-COVERAGE-LEDGER.md` (SOP-03 slice); grounding comes from SOP-03 §4, §8 and §9 in Phase D.
 
+## SOP-04 Receiving Intake & Monthly CCRS Public Records Request findings (audited at `5299660b`, 2026-10-27)
+
+Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There should be a sop for the receiving intake pipeline."*); D28 (the PRR must be included); the rejection rulings in `docs/ccrs-rejection-and-returns.md` L15–21; the R31 one-button design (*"I don't want to have to push any buttons while I walk the page unless I have to."*, `ManifestLotDisposition.tsx` L135); and the transformer vision (`docs/ROADMAP_BACKOFFICE_FIXES.md` L276–289).
+**Verdict: MET with gaps.** Truck day works end to end: email → staged draft → count → per-line or whole refusal → one-button Finalize → go-live gate → books → onboarding. The monthly zip transformer works and feeds all three surfaces. The gaps are below: partial quantities, invisible failed emails, an ungated lot-status box, no PRR reminder, and stale help.
+
+### F-04-1 · CONFIRMED · GAP · S2 — No partial-quantity receive ("18 of 20")
+- **Pin:** lines are accept-whole or reject-whole (`intake-disposition-core.ts` L24–44; `ManifestLotDisposition.tsx` L59–151). `received_qty` comes from the manifest (`intake-parser.ts` L606). The InventoryTransfer quantity equals the received quantity (`ccrs-transfer-core.ts` L33–36). `grep` for a counted / actual quantity field → none.
+- **Owner:** *"So we need the ability to tell the system that we are only accepting a part of the manifest and the rest was rejected. There are several instances where the vendor forgot to send an item…"* (`ccrs-rejection-and-returns.md` L15–21). Line-level partial acceptance is met; unit-level is not.
+- **SOP impact:** SOP-04 §4.11 interim rule: refuse the whole short line. Never accept and adjust. Q-04-1. Ties to G-16.
+
+### F-04-2 · CONFIRMED · HARDEN · S1 — Lot page "Lifecycle status" sets Active with no go-live check and no audit
+- **Pin:** `src/app/admin/inventory/[id]/page.tsx` L130–136 (STATUSES include `active`), form L1497–1512 → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L836–851). It writes any status. There is no `evaluateLotActivation` call and no `recordAudit`.
+- **Guard miss:** `scripts/compliance/check-activation-gate.ts` L60–100 greps only for the literal `status: "active"`, so a status passed in a variable escapes it. The intake comment (`intake/actions.ts` L195–198) says Finalize is the only activation path.
+- **Effect:** a manager can make a lot with no COA, or a FAILED result, sellable, and nothing records who did it. `issues-core.ts` L553 directs staff to this box for now-clear held lots.
+- **SOP impact:** SOP-04 §4.19 control: manager only, only from a "now clear" Issues row, logged on form 8.1. Carried into SOP-05. Ties to G-19.
+
+### F-04-3 · CONFIRMED · HARDEN (control note) · S3 — Undecided lines are accepted on Finalize
+- **Pin:** `intake-store.ts` L1416, L1440, L1475 (`disposition !== "rejected_at_dock"` → accepted).
+- **By design** (R31, owner quote above). Recorded because the count is then the only human control.
+- **SOP impact:** "Count first, decide at the dock, then press Finalize once" (SOP-04 header, §4.9, §4.17; form 8.5).
+
+### F-04-4 · CONFIRMED · GAP/UX · S2 — Emails that fail to stage (parse_failed / no_manifest) are invisible
+- **Pin:** `inbound-store.ts` L862–884. `listInboundEmails` is documented as surfacing *"the parse_failed / no_manifest rows a human should chase down"*, but its only caller (`intake/page.tsx` L164, L213–220) builds download links only. The panel was removed in commit 7cb4702c (H16a #319). The webhook records the outcomes (`route.ts` L316–320).
+- **Effect:** a vendor manifest the reader cannot parse leaves no row, so a truck can arrive with nothing staged.
+- **SOP impact:** SOP-04 §4.3 step 4: a daily mailbox-vs-list comparison, logged on form 8.1. Ties to G-17.
+
+### F-04-5 · CONFIRMED · DOC · S3 — In-app SOP sheets and the Receiving help panel describe the pre-R31 flow
+- **Pin:** `src/lib/catalog/sop-core.ts`:
+  - L79 / L158: *"…or enter it by hand"*. No hand-entry form exists.
+  - L81: *"Move the record along the pipeline (in transit → received)…"*. The buttons were removed; Finalize does it (`intake/actions.ts` L949, L1075–1097).
+  - L83 / L162: *"…reject it to discard"*. Rejection is refuse-at-dock; nothing is discarded (`intake-disposition-core.ts` L1–13).
+  - L137: *"the PO moves to Partial then Received"*. A linked PO is auto-received at Finalize.
+  - The Receiving HelpPanel `intake/page.tsx` L279–282 repeats the same three stale lines.
+- **SOP impact:** SOP-04 §4.1 note tells staff to follow the SOP where they disagree. Concierge grounding must not use these sheets until fixed.
+
+### F-04-6 · CONFIRMED · UX · S4 — No "Partially Accepted" status card on the Receiving list
+- **Pin:** `intake/page.tsx` L304–322: Pending, In transit, Awaiting intake, Accepted, Rejected. Yet `partially_accepted` is a real stage (`manifest-pipeline-core.ts` L28–40, L58–97).
+- **SOP impact:** SOP-04 §4.2 says partials appear in the table only.
+
+### F-04-7 · CONFIRMED · UX · S3 — One generic error banner covers five different failures on the review screen
+- **Pin:** `intake/[id]/page.tsx` L730–734: *"Something went wrong with that action."* for `error=reason`, reject, finalize, lifecycle and transport.
+- **SOP impact:** SOP-04 §5.2 gives a checklist of likely causes; §6 says stop after two tries.
+
+### F-04-8 · CONFIRMED · DOC · S4 — Naming drift: "Vendor intake" breadcrumb vs "Receiving"
+- **Pin:** `intake/[id]/page.tsx` L444–452 breadcrumb **Vendor intake**. The list title is **Receiving** (`intake/page.tsx` L136, L264), and the nav label is Receiving. The in-app sheet says *"Inventory → Intake"* (`sop-core.ts` L79).
+- **SOP impact:** SOP-04 §4.2 says they are the same screen.
+
+### F-04-9 · CONFIRMED · DOC · S4 — `INTAKE_PIPELINE_BIBLE.md` is cited but not in the repo
+- **Pin:** `docs/INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L4 cites *"bible `INTAKE_PIPELINE_BIBLE.md` §18.5 / §18.6"*. `git ls-files | grep -i INTAKE_PIPELINE_BIBLE` → none.
+- **Effect:** the owner decisions file points at a source nobody can open.
+
+### F-04-10 · CONFIRMED · UX/GAP · S3 — "Fill in cost and COA" with no field; a vendor bill refusal says "finalize again" with no path
+- **Pin:** the CSV/PDF banner `intake/[id]/page.tsx` L588–596 *"…Fill in cost and COA before accepting."* There is no cost or COA input on the review screen. The vendor bill refusal `vendor-bill-service.ts` L262–287 says *"Key the unit costs, then finalize again."*, but Finalize renders only while in progress (`[id]/page.tsx` L298), and there is no cost screen for a finalized cannabis lot.
+- **Owner decision:** no cost screen, because *"CCRS and Cultivera always carry cost"*, and reopen if the refusal ever appears (`INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L34–46).
+- **SOP impact:** SOP-04 §4.5 and §4.20: prefer the JSON or link; report a refusal to the owner the same day.
+
+### F-04-11 · CONFIRMED · HARDEN · S3 — A failed lot insert at staging is logged to the console only
+- **Pin:** `intake-store.ts` L930–936 (`console.error("[intake-store] lot insert failed:" …)`). It is non-blocking, so the manifest stages with one line missing its lot and no on-screen warning.
+- **SOP impact:** SOP-04 §4.6: the count of lines on screen goes on form 8.1 and is compared with the paper manifest.
+
+### F-04-12 · CONFIRMED · DOC · S3 — Held-lot fix text says "the lot page cannot attach one yet"
+- **Pin:** `src/lib/admin/issues-core.ts` L570. The lot page has **Attach a lab result** (S37 LotCoaAttach; `inventory/[id]/page.tsx` L763; `inventory/actions.ts` L268–303, audit `inventory_lot.coa_linked`).
+- **SOP impact:** SOP-04 §4.19 tells the manager to use the attach panel when the lab result is already imported.
+
+### F-04-13 · CONFIRMED · DOC · S3 — Wrong WSLCB public records phone number on the CCRS page
+- **Pin:** `discovery/ccrs/page.tsx` L265 *"Phone: (360) 664-1769"*. The WSLCB public records page (2026) lists **(360) 664-1753**. The fax, email and mailing address match.
+- **SOP impact:** SOP-04 §4.27, §4.28, form 8.4 and the quick card use 664-1753.
+
+### F-04-14 · CONFIRMED · DOC · S3 — CCRS page Step 1 item 5 and the help panel describe the old per-file CSV path
+- **Pin:** `ccrs/page.tsx` L250–256 *"…unzip them and upload them in Step 2 below. File names usually look like Sale_*.csv…"*. HelpPanel *"How CCRS benchmarking works"* L147–163 (upload files → Compute benchmarks). The real delivery is one zip of nested `<Table>_<n>.zip` (`ccrs-extract/zip.ts` L1–20), and Step 2 says *not* to unzip (L289). The legacy flash *"…Now click Compute benchmarks"* (L170–175) belongs to the Advanced path only.
+- **SOP impact:** SOP-04 §4.29 says do not unzip; §4.34 explains the Advanced path.
+
+### F-04-15 · CONFIRMED · BUG/UX · S3 — "Generate vendor leads" and "Enrich KB" are enabled on monthly-zip datasets but do nothing
+- **Pin:**
+  - Buttons enabled on `sales_rows` / `product_rows` > 0 (`ccrs/page.tsx` L404–421). Monthly datasets set both (`market-rollups.ts` L864–906).
+  - `generateVendorLeadsFromCcrs` → `listTopLicensees` reads `discovery_ccrs_licensees` (`benchmarks.ts` L365–432).
+  - Enrich reads `discovery_ccrs_products` (`ingest.ts` L251).
+  - The monthly transformer writes neither table.
+  - Contrast: `computeBenchmarksAction` refuses monthly datasets explicitly (`discovery/actions.ts` L598–609).
+- **SOP impact:** SOP-04 §4.33: do not press them; use **Draft vendor leads from these suppliers**.
+
+### F-04-16 · CONFIRMED · UX · S2 — Benchmark dataset "Delete" has no confirmation
+- **Pin:** `ccrs/page.tsx` L422–425 (a plain submit) → `deleteCcrsDatasetAction` (`discovery/actions.ts` L770–788, cascade, audit `discovery.ccrs.delete`). It is undoable only by re-dropping the original zip, which the app does not keep.
+- **SOP impact:** SOP-04 §4.34: owner-only, check twice; §4.29 keeps the original. Q-04-5 / Q-04-6.
+
+### F-04-17 · CONFIRMED · DOC · S3 — Uploader says "a few minutes"; the program measured ~1.5 h
+- **Pin:** `CcrsZipUploader.tsx` L214 *"Takes a few minutes for a full month."* vs `ROADMAP_BACKOFFICE_FIXES.md` L558 *"~1.5h browser crunch"* (measured before the S14 Web Worker, L627). It has not been re-measured since.
+- **SOP impact:** SOP-04 §4.31: plan for up to 1.5 h, keep the tab open and stop sleep; form 8.4 records the real time.
+
+### F-04-18 · CONFIRMED · DOC · S3 — The PRR wording template does not ask for the tables the transformer needs
+- **Pin:** `REQUEST_WORDING` (`ccrs/page.tsx` L32–36) asks for *"Sales, Products, Inventory, Lab Results, and Strain"* only, and for a free date range. The transformer reads Licensee, Strains, ManifestHeader, TransportedItems, Product, Inventory, LabResult, SaleHeader and SalesDetail (`ccrs-extract/run.ts` L68–80). It refuses a zip with no SaleHeader / SalesDetail (`discovery/actions.ts` L831–836) or no table zips (`run.ts` L113–116).
+- **SOP impact:** SOP-04 §4.27: reuse the proven April/May 2026 wording; one calendar month; Q-04-4. The SOP does not invent request language.
+
+### F-04-19 · CONFIRMED · GAP · S3 — No monthly PRR task, reminder or tracking-number field
+- **Pin:** `compliance-calendar-core.ts` L86–136 tasks: liq1295, ccrs_weekly, cctv_retention, scale_calibration, badge_visitor_log, dor_excise. There is no PRR. The monthly dataset's source note is auto-set to *"Monthly zip: <file>"* (`discovery/actions.ts` L857–862), so there is nowhere to record the tracking number.
+- **SOP impact:** form 8.4 (SOP-04 §4.26–§4.28). Ties to G-18.
+
+### F-04-20 · CONFIRMED · GAP/UX · S3 — The Discovery kill-switch has no "off" control on any screen
+- **Pin:** `setDiscoveryEnabledAction` (`discovery/actions.ts` L99–112) accepts `enabled`. Every form that calls it sends the hidden `enabled=1` (**Turn Discovery on**: `discovery/page.tsx` L85–87; `ccrs/page.tsx` L91–93; `discovery/import/page.tsx` L59–61). `grep` for an off form → none. The legal note promises *"This feature is fully removable."* (`ccrs/page.tsx` L280).
+- **SOP impact:** SOP-04 §4.34: turning it off needs a developer today.
+
+### F-04-C · CONFIRMED · DOC · S3 — Concierge has no receiving procedure and no PRR / benchmark-intake content
+- **Pin:** `concierge-kb.ts` `product-intake` (L132–148) is journey-level only: one Receiving fact (transport details). `ccrs` (L349–360) covers the weekly upload and the LIQ-1295 only. There is nothing on dock refusal, Finalize, held lots, the monthly records request or the zip drop. `help-content.ts` L1009–1011 points to the benchmarks pages only.
+- **SOP impact:** recorded in `04-CONCIERGE-COVERAGE-LEDGER.md` (SOP-04 slice); grounding comes from SOP-04 §4, §8 and §9 in Phase D. It must not be grounded on the stale `sop-core.ts` sheets (F-04-5).
+
 ---
 
 ## Ledger index (updated each slice)
@@ -326,3 +432,4 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 | SOP-01 Register Operations | 16 (15 new + F-01-16 re-verify of F-00-1) | 16 | 0 |
 | SOP-02 Master Till / Store Safe | 13 new (1×S1, 6×S2, 6×S3) + re-confirmed F-00-7, F-00-8. **F-02-2 withdrawn** in SOP-03 (D19) → 12 standing | 13 (12 standing, 1 withdrawn) | 0 |
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
+| SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs | 21 | 0 |

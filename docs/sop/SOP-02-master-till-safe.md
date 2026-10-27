@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (draft for owner review; owner answers D14–D19 applied) |
+| **Version** | 1.2 (draft for owner review; owner answers D14–D19 and D21–D22 applied) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The morning and night employees who count and balance the master till; the managers who record the counts and approve change swaps; the owner, who reviews variances |
@@ -263,10 +263,9 @@ The page works out **variance = counted total − $1,000.00** on the server. The
 | **Short by $X** | Less than $1,000.00 | 1) Recount (Extra count). 2) Check forms 8.3 and 8.2 as above. 3) Ask whether any cash was taken for supplies (§4.13). 4) Check the area and the drop slot. 5) Escalate (§6). |
 
 **The $5 rule (D16).** The owner set a $5 threshold for over/short, with a required reason (D7), and confirmed it **applies to the master till as well** (*"Q02-3- yes, it applies to the master as well"*). The code has **no threshold and no reason field for master till counts** (finding F-02-6, gap G-03). Until it is built:
-- **Any** non-zero variance: write the reason in **Notes** and on form 8.1.
-- A variance **over $5.00**, or any variance that is still there after the recount: also fill in **form 8.5** and give it to the owner that day.
-
-D7 says the reason *"should be required to be input for over/ under"*, so a reason is written for **every** variance. Whether the reason is needed for every variance or only those over $5 is still an open question (Q-03-1, carried). Recording more is the safer side.
+- **Any** non-zero variance: write the amount on form 8.1. Recount first (Extra count, §4.7).
+- A variance **over $5.00** after the recount: a reason is **required**. Write it in **Notes**, fill in **form 8.5** and give it to the owner that day.
+- **$5.00 or less:** no reason is required (owner decision **D21**: *"Q-03-1- only over $5"*). A note is optional.
 
 **Never "fix" a variance by moving cash** in from the little safe, a till or the store safe to make the total come out right. The difference must stay visible and be explained. The owner wants a genuine master till variance to be *"rare and therefore meaningful"* (books-98 L77–80).
 
@@ -581,7 +580,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 - [ ] Enter it on **Store safe**, window **AM (before open)**, **Counted by** = the counter
 - [ ] **Today's AM count: Done**
 - [ ] Mix checked; little-safe balance done if needed (form 8.2)
-- [ ] Any variance: reason written; form 8.5 if over $5 or not resolved
+- [ ] Any variance: amount written; over $5 → reason + form 8.5 (D21)
 
 **During the day**
 - [ ] Every register swap: manager/lead PIN + one line on form 8.3
@@ -608,7 +607,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 │   Register Activity → Safe → type HOW MANY of each → window → Counted by    │
 │   → Record safe count (ONCE). PM: CHANGE THE WINDOW TO PM.                  │
 │ "Balanced" = total only. Check the MIX on the paper sheet.                  │
-│ Over/short: recount (Extra count) → reason in Notes → form 8.5 if > $5      │
+│ Over/short: recount (Extra count) → if > $5: reason in Notes + form 8.5     │
 │ Big bills out → little safe; small bills/coin in → log BOTH SIDES (form 8.2)│
 │ Register swap: manager/lead PIN + one line on form 8.3                      │
 │ NEVER: takings/drops in the master till · cash for supplies (shop card)    │
@@ -687,7 +686,7 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 |---|---|---|---|
 | Q-02-1 | When a cashier does a **change swap** at the register, do the small bills come from the **master till**? | *"yes you have that correct"* | **D14** — till ↔ master till (form 8.3); master till ↔ little safe (form 8.2) |
 | Q-02-2 | May **any** employee count the master till, or managers only? | *"anyone can count and record the master count"* | **D15** — any employee counts **and records**. Today recording needs a manager login (`safe/actions.ts` L29), so gap **G-13**. Interim: a manager login enters it and picks the counter. |
-| Q-02-3 | Does the **$5** rule (D7) also apply to the **master till** counts? | *"yes, it applies to the master as well"* | **D16**. The carried half (reason for every over/short or only over $5) remains open as **Q-03-1**. |
+| Q-02-3 | Does the **$5** rule (D7) also apply to the **master till** counts? | *"yes, it applies to the master as well"* | **D16**. The carried half was answered in SOP-04 as **D21**: a reason is required **only over $5**. |
 | Q-02-4 | Should a supply run ever happen; is the supply-run screen needed? | *"id like the supply run screen built"* | **D17** — G-11 approved, queued for build |
 | Q-02-5 | Is the system's "Manager Till" the **manager register** of D10? | *"yes correct"* + *"it should be 300 in it"* | **D18** (yes) and **D19** (Manager Till float $300.00) |
 
@@ -697,3 +696,4 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `0055f06c`, with owner decisions D3, D7 and D10–D13. Adds findings F-02-1…F-02-13 and gaps G-08…G-11. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Owner answers D14–D19 applied in slice SOP-03: Manager Till float $300.00 (D19; F-02-2 withdrawn, G-10 closed); totals now $635.00 / $1,635.00; Q-02-1…Q-02-5 resolved; D7 applies to the master till (D16); supply-run screen approved (D17); any employee may record the count (D15, G-13). No code was re-audited; pins still at `0055f06c` (no code changed since, `3385bfa9` is docs-only). | SOP program |
+| 1.2 draft | 2026-10-27 | Slice SOP-04. D21: a reason is required only for a variance over $5.00 (§4.8, checklist, quick card, Appendix C). D22 confirms floats ($167.50 sales, $300.00 Manager Till). Docs only. | SOP program |
