@@ -46,6 +46,7 @@ import {
 } from "@/lib/inbound-email/resend-receiving-core";
 import { fetchTransferJson, fetchPdfBytes } from "@/lib/inventory/transfer-fetch";
 import { cleanUrl } from "@/lib/inventory/intake-parser";
+import { explodeEml, looksLikeJsonText } from "@/lib/inbound-email/intake-harden-core";
 import {
   harvestDocLinks,
   assessEmailDocs,
@@ -147,7 +148,12 @@ async function downloadAttachment(
       return null;
     }
     const base64 = buf.toString("base64");
-    const text = looksTextualCt(meta.contentType, meta.filename) ? buf.toString("utf8") : null;
+    // Sniff JSON / CSV that arrives with an odd content type (octet-stream).
+    const asText = buf.byteLength <= 5 * 1024 * 1024 ? buf.toString("utf8") : "";
+    const text =
+      looksTextualCt(meta.contentType, meta.filename) || looksLikeJsonText(asText.slice(0, 200))
+        ? asText || buf.toString("utf8")
+        : null;
     return { filename: meta.filename, contentType: meta.contentType, text, base64 };
   } catch (err) {
     console.error(`[inbound-email] attachment ${meta.id} download failed:`, err);
@@ -205,20 +211,44 @@ export async function enrichResendInbound(
   const from = full && typeof full.from === "string" ? full.from : baseFrom;
   const to = full ? parseRecipients(full.to) : baseTo;
   const subject = full && typeof full.subject === "string" ? full.subject : baseSubject;
-  const html = full ? decodeDataUriHtml((full.html as string) ?? null) : "";
-  const text = full && typeof full.text === "string" ? full.text : "";
+  let html = full ? decodeDataUriHtml((full.html as string) ?? null) : "";
+  let text = full && typeof full.text === "string" ? full.text : "";
 
   const attachments: NormalizedAttachment[] = [];
 
   // 2) MIME attachments the email actually carried (direct sends usually have these).
   const attMetas = await listReceivedAttachments(emailId, apiKey);
   let fetched = 0;
-  for (const meta of attMetas) {
-    const att = await downloadAttachment(meta);
-    if (att) {
-      attachments.push(att);
-      fetched += 1;
+  const downloaded = await Promise.all(attMetas.map((m) => downloadAttachment(m)));
+  for (const att of downloaded) {
+    if (!att) continue;
+    fetched += 1;
+    // A vendor email forwarded "as attachment" (.eml / message/rfc822): pull
+    // its own files and body out so its PDFs / JSON / links are read too.
+    const isEml =
+      (att.contentType ?? "").toLowerCase().includes("rfc822") || /\.eml$/i.test(att.filename ?? "");
+    if (isEml) {
+      try {
+        const ex = explodeEml(Buffer.from(att.base64 ?? "", "base64").toString("binary"));
+        for (const p of ex.parts) {
+          const buf = Buffer.from(p.base64, "base64");
+          const t = buf.byteLength <= 5 * 1024 * 1024 ? buf.toString("utf8") : "";
+          attachments.push({
+            filename: p.filename,
+            contentType: p.contentType,
+            text: looksTextualCt(p.contentType, p.filename) || looksLikeJsonText(t.slice(0, 200)) ? t : null,
+            base64: p.base64,
+          });
+        }
+        if (ex.text) text = `${text}\n${ex.text}`;
+        if (ex.html) html = `${html}\n${ex.html}`;
+        notes.push(`opened forwarded email attachment (${ex.parts.length} file(s))`);
+        continue;
+      } catch (err) {
+        console.error("[inbound-email] .eml explode failed:", err);
+      }
     }
+    attachments.push(att);
   }
   if (attMetas.length > 0) {
     notes.push(`downloaded ${fetched}/${attMetas.length} attachment(s)`);

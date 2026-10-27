@@ -1183,6 +1183,7 @@ import { __runCcrsScoreboardTests } from "../../src/lib/compliance/ccrs-scoreboa
 import { __runBatchUnstickTests } from "../../src/lib/ai/batch-unstick-core";
 import { __runCountRosterTests } from "../../src/lib/pos/count-roster-core";
 import { __runCountAuditStatsTests } from "../../src/lib/pos/count-audit-stats-core";
+import { __runIntakeHardenTests } from "../../src/lib/inbound-email/intake-harden-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2363,6 +2364,7 @@ __runLiquidVolumeTests();
   assertRan("batch-unstick-core", __runBatchUnstickTests(), 9); // R74 S49: Unstick & re-ask (stuck / failed lookups)
   assertRan("count-roster-core", __runCountRosterTests(), 25); // R74 S50: count workbook roster
   assertRan("count-audit-stats-core", __runCountAuditStatsTests(), 12); // R74 S50: audit stats
+  assertRan("intake-harden-core", __runIntakeHardenTests(), 22); // R74 S51: intake auto-fetch hardening
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }
