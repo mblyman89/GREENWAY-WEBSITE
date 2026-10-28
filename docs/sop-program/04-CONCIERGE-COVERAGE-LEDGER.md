@@ -117,6 +117,17 @@ Concierge code is **unchanged** (record-only). What SOP-01 now provides as sourc
 | Do I still need an X report when a register has two drawers? | No; each sale carries its drawer, so each drawer's figure is exact (SOP-01 §4.27 step 9) |
 | At the Returns desk, what is "Cash paid from"? | The open register drawer you take the refund out of, or **Store safe**; required, never defaulted (SOP-15 §4.5 step 7) |
 
+**Phase 2.2 (G-01 second-person count) answers, every register user:**
+
+| Question | Answer (built, Phase 2.2) |
+|---|---|
+| Who does the second count at close? | **Any** other employee (owner D2: *"close only, and it can be any second employee"*), never the closer; not needed at count-in (SOP-01 §4.27 step 9) |
+| How do I close now? | Count, enter tips and your PIN, tap **Next: second count**, hand over the iPad; the second person counts blind, types their PIN, taps **Record blind count & close** (§4.27 steps 8–11) |
+| It says the second count must be a different employee | You typed the closer's PIN in the second box; hand it to someone else (§4.27 step 9) |
+| The two counts differ | Warning only: the drawer is closed, both counts are saved, over / short uses the closer's count; tell a manager, who sees both on the Reconcile card (§4.27 step 12, §4.30) |
+| The iPad will not close and asks for a second employee but shows no second step | That iPad runs an older app build; close from the browser register or the back office and tell the owner (§4.27, "The iPad app must be updated") |
+| Closing the Manager Till from the back office | Pick **Counted by**, then the second person fills **Second count (required)** and their PIN (§4.27 "Closing from the back office") |
+
 **Running score:** topics with complete SOP source material: `pos`, `registers`, plus 3 proposed new topics. The concierge itself is still at the baseline until the integration phase.
 
 ### SOP-02 Master Till / Store Safe (`docs/sop/SOP-02-master-till-safe.md`, verified at `0055f06c`)

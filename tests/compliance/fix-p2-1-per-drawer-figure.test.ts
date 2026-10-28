@@ -151,7 +151,7 @@ describe("Phase 2.1 refunds say which drawer paid", () => {
 
 describe("Phase 2.1 SOP-01", () => {
   it("SOP-01 describes the system figure and drops the typed formula", () => {
-    expect(SOP).toMatch(/\*\*Version\*\* \| 1\.5 /);
+    expect(SOP).toMatch(/\*\*Version\*\* \| 1\.([5-9]|\d\d) /);
     expect(SOP).toMatch(/system figure/i);
     expect(SOP).toMatch(/Tie refund/);
   });
