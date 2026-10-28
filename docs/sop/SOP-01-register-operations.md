@@ -1271,7 +1271,7 @@ Owner reviewed: ____________________   Date: ________
 | 4.20 pickup | `RegisterShell.tsx` (PickupQueueModal ≈L4350), `src/app/api/pos/pickup/route.ts`, `src/lib/pos/pickup-progress-core.ts`, `pickup-detail-core.ts` |
 | 4.21–4.24 no sale, void, return, reprint | `RegisterShell.tsx` (NoSaleModal ≈L3176, VoidSaleModal ≈L3319, ReturnsModal ≈L3574), `src/lib/pos/void-sale-core.ts`, `returns-core.ts`, `/api/pos/void`, `/api/pos/returns`, `/api/pos/reprint` |
 | 4.28 X/Z | `RegisterShell.tsx` (DayReportModal ≈L5149), `src/lib/pos/day-report-core.ts`, `/api/pos/day-report` |
-| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L495), `actions.ts` (reconcileDrawerAction L130, assignRefundAction L230), `src/lib/registers/store.ts` (reconcileDrawer L273), `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
+| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L525), `actions.ts` (reconcileDrawerAction L169, assignRefundAction L269), `src/lib/registers/store.ts` (reconcileDrawer L314), `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
 | 4.32 sync/exceptions | `src/lib/pos/sync-store.ts`, `sync-core.ts`, `src/lib/orders/completion-gate.ts`, `src/app/admin/registers/exceptions/page.tsx` |
 | 4.33 86 | `SaleFlow.tsx` (ProductInfoModal ≈L4274), `src/lib/pos/stock-flag-core.ts`, `src/components/admin/inventory/RegisterSellabilityBanner.tsx` |
 
