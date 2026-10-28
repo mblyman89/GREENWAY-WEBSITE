@@ -133,7 +133,7 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 
 ### SOP-03 End-of-Day Close & Deposit Bag (`docs/sop/SOP-03-eod-close-deposit.md`, verified at `3385bfa9`)
 
-Concierge code is **unchanged** (record-only). Today neither the concierge nor `help-content.ts` has **any** end-of-day or deposit-bag content. The only "deposit" hits are payroll direct deposit (`help-content.ts` L725–742; `concierge-kb.ts` L264–282), so a question like "how do I do the deposit?" risks a payroll ACH answer (finding **F-03-11**). The Registers page help (L117–120) still says sales shown are online pickup only (F-03-4). What SOP-03 now provides as source material for the integration phase:
+Concierge code is **unchanged** (record-only). Today neither the concierge nor `help-content.ts` has **any** end-of-day or deposit-bag content. The only "deposit" hits are payroll direct deposit (`help-content.ts` L725–742; `concierge-kb.ts` L265–283), so a question like "how do I do the deposit?" risks a payroll ACH answer (finding **F-03-11**). The Registers page help (L117–120) still says sales shown are online pickup only (F-03-4). What SOP-03 now provides as source material for the integration phase:
 
 | Concierge topic | SOP-03 sections that ground it | Rating today → after integration (target) |
 |---|---|---|
@@ -360,6 +360,7 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | Does a destruction have to be on camera? | **Yes** (D64; WAC 314-55-083(3)(a)). Check the camera records before starting (§4.17) | Built (Phase 1.6a, G-43): **Camera** with start and end time (Pacific) is required to complete and shows on the printable **Destruction log** (§4.18) |
 | What goes on the destruction record? | Form 8.3 plus the screen fields; both facility and destination; camera (§4.18) | Same, plus required witness, camera reference, approval reference, printable destruction log, optional photo (G-43) |
 | Can I add a photo or video of the destruction? | Built (Phase 1.7a, G-43 req 7): **Add photo or video (optional)** on the event; photo up to 50 MB, video up to 200 MB, kept privately five years, never editable (§4.18 step 8) | Same; **View / print this record** prints one event with its photos (§4.18) |
+| Is there a printable vendor-return packet? | Built (Phase 1.7b, G-42 req 7): **Print packet (form 8.2)** on each vendor-return row; form 8.2 filled in from the app, blanks for what only paper holds (§4.13) | Same; staple the RMA, LCB email and manifest PDF and file five years (§4.13 step 3) |
 | Can we use a waste contractor? | Only with **prior written LCB approval** filed with form 8.3 (§4.17) | The app asks for the approval reference and date (G-43) |
 | Can I sell an expired gummy / tincture / capsule / RSO? | Built (Phase 1.6b, G-24; D36, D44): **No.** The register refuses it with no override and it is left off the register menu. Set the expired lot to **Quarantine**; the nightly job does this at 4:20 AM; then the fresh stock sells (SOP-05a §4.16) | Same |
 | Can I sell expired flower / pre-rolls / vapes / other concentrates? | Built (Phase 1.6b, G-24; D36): only after telling the customer and ticking **I told the customer** (register payment screen or the order page); the sale is noted on the order (SOP-05a §4.16) | Same |

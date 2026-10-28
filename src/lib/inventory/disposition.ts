@@ -972,6 +972,64 @@ export const RELEASE_VENDOR_RETURN_RPC = "release_vendor_return";
 export const VENDOR_RETURN_PENDING_MIGRATION =
   "Apply migration 0309 first: until then a vendor return cannot be logged in the app (it would take the units off on-hand before they leave). Follow SOP-15 §4.11 on paper.";
 
+/**
+ * Fix Phase 1.7b (G-42 req 7): everything the printable vendor-return packet
+ * (form 8.2 in the app) shows: the return, its lot, its vendor, the store's
+ * license settings and the names of who did each step (staff_profiles: full
+ * name, else email). Nothing is filled in that the app does not hold.
+ */
+export async function getVendorReturnPacket(id: string): Promise<{
+  ret: VendorReturn;
+  lot: { lot_code: string | null; product_name: string | null; unit: string | null } | null;
+  vendor: { display_name: string | null; legal_name: string | null; phone: string | null; email: string | null } | null;
+  origin: { license_number: string | null; trade_name: string | null; location_address: string | null; city: string | null; contact_phone: string | null; contact_email: string | null } | null;
+  names: Record<"created_by" | "requested_by" | "submitted_by" | "confirmed_by" | "departed_by" | "cancelled_by", string | null>;
+} | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("vendor_returns").select("*").eq("id", id).maybeSingle();
+  const ret = (data as VendorReturn | null) ?? null;
+  if (!ret) return null;
+  const [{ data: lot }, { data: vendor }, { data: origin }] = await Promise.all([
+    admin.from("inventory_lots").select("lot_code, product_name, unit").eq("id", ret.lot_id).maybeSingle(),
+    ret.vendor_id
+      ? admin.from("vendors").select("display_name, legal_name, phone, email").eq("id", ret.vendor_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    admin.from("license_settings").select("license_number, trade_name, location_address, city, contact_phone, contact_email").eq("id", true).maybeSingle(),
+  ]);
+  const who = {
+    created_by: ret.created_by,
+    requested_by: ret.requested_by ?? null,
+    submitted_by: ret.submitted_by ?? null,
+    confirmed_by: ret.confirmed_by ?? null,
+    departed_by: ret.departed_by ?? null,
+    cancelled_by: ret.cancelled_by ?? null,
+  };
+  const ids = [...new Set(Object.values(who).filter((v): v is string => !!v))];
+  const map = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: people } = await admin.from("staff_profiles").select("id, full_name, email").in("id", ids);
+    for (const p of (people as { id: string; full_name: string | null; email: string | null }[] | null) ?? []) {
+      map.set(p.id, p.full_name || p.email || p.id);
+    }
+  }
+  const nameOf = (v: string | null) => (v ? (map.get(v) ?? null) : null);
+  return {
+    ret,
+    lot: (lot as { lot_code: string | null; product_name: string | null; unit: string | null } | null) ?? null,
+    vendor: (vendor as { display_name: string | null; legal_name: string | null; phone: string | null; email: string | null } | null) ?? null,
+    origin: (origin as { license_number: string | null; trade_name: string | null; location_address: string | null; city: string | null; contact_phone: string | null; contact_email: string | null } | null) ?? null,
+    names: {
+      created_by: nameOf(who.created_by),
+      requested_by: nameOf(who.requested_by),
+      submitted_by: nameOf(who.submitted_by),
+      confirmed_by: nameOf(who.confirmed_by),
+      departed_by: nameOf(who.departed_by),
+      cancelled_by: nameOf(who.cancelled_by),
+    },
+  };
+}
+
 export async function getVendorReturn(id: string): Promise<VendorReturn | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
