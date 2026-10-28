@@ -49,7 +49,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-25 | Recall plan + recall event log in the app; recall hold reaches the website and online orders | (compliance: WAC 314-55-225(3)(d), (3)(f)) | F-05a-15, F-05a-16 | SOP-05a §4.10, §4.13, forms 8.4–8.5; Always hide | OPEN |
 | G-26 | Print-label link on the lot page, scannable fallback barcode, **the professional 86** (reason-driven clearing, one queue, audited manager restore) | **D40** | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | **APPROVED** (86 part, D40) · rest OPEN |
 | G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **APPROVED** |
-| G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status | **D39** (design: Q-05a-8) | F-05a-17, F-05a-18 (**S1**), F-05a-19 | SOP-05a §4.9, §4.10, form 8.4 | OPEN (design awaits Q-05a-8) |
+| G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status **with a reason (owner only)**; a partial destruction restores the earlier status (SOP-15 extension) | **D39** (design: Q-05a-8, Q-15-3) | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | SOP-05a §4.9, §4.10, form 8.4; SOP-15 §4.19–§4.22, form 8.5 | OPEN (design awaits Q-05a-8) |
 | G-29 | Non-cannabis goods fully used everywhere: register scan to a priced line, sale decrements On hand, void / return restores, cost of goods posted, menu presence, reports; audited | **D45** | F-05b-1 (**S1**), F-05b-15 | SOP-05b §4.1–§4.5, §4.8, form 8.1 | **APPROVED** |
 | G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** |
 | G-30A | Merch **Remove** limited to owner and admin (a new permission) | **D47** | F-05b-14 | SOP-05b §2, §4.11, §6, §9 | **APPROVED** |
@@ -64,6 +64,14 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-39 | Counting housekeeping: one schedule, legacy sessions cancelled, Pacific times | **D58, D59** | F-06-8…F-06-11 | SOP-06 §4.20, §4.22 | **APPROVED** |
 | G-40 | Intelligent cycle counts: vendor of the day with chunking, ABC, exceptions, expiring, Cultivera, overdue | **D58** | F-06-8 | SOP-06 §4.24 | **APPROVED** |
 | G-41 | Annual year-end full count (no cap, sections, one review) | **D58** | — | SOP-06 §4.24 | **APPROVED** |
+| G-42 | Staged vendor return: reserve at logging, reduce and post CCRS Other at pickup; RMA, manifest, license, detail required; vendor linked; server-checked steps with actor; Pacific pickup time; recall reason routed to the coordinator | (compliance: WAC 314-55-079(11), -085, -087; Q-15-1) | F-15-1 (**S1**), F-15-2, F-15-3 | SOP-15 §4.11 (log on pickup day), form 8.2 | PROPOSED |
+| G-43 | Hardened destruction record: witness required (two people), recall contact date required, approval reference for Other method, on-hand checked at scheduling, Pacific times, printable destruction log | (compliance: WAC 314-55-097, -225; Q-15-2) | F-15-4, F-15-5, F-15-12 | SOP-15 §4.17–§4.18, form 8.3 | PROPOSED |
+| G-44 | Customer-return segregation: destroy-return units never sellable (returned / quarantine bucket); return, add-back and destruction event saved atomically | (procedure need; D62) | F-15-6 (**S1**), F-15-7 | SOP-15 §4.7, form 8.1 | PROPOSED |
+| G-45 | One customer-return path: wizard gets the policy, automatic refund and lot picker (owner override with reason); CSV download checks the ledger or is removed | (owner policy SOP-01 §4.23; Q-15-4) | F-15-8, F-15-10 | SOP-15 §4.4–§4.8 | PROPOSED |
+| G-46 | Readable errors on Returns & Destruction (no bare "qty" / "reason") | (procedure need) | F-15-13 | SOP-15 §4.15 | PROPOSED |
+| G-47 | Sample-pricing rules enforced at the register and online, or the panel removed | (Q-15-6) | F-15-16 | SOP-15 §4.26 | PROPOSED |
+| G-48 | Returns in the books and taxes: refund journal to 50910 for owner approval; excise Box 1 net of returned sales | (books-23; RCW 69.50.535) | F-15-14, F-15-15 | SOP-15 §4.24, form 8.6 | PROPOSED |
+| G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file | (procedure need) | F-15-17 | SOP-15 §4.1, §4.27 | PROPOSED |
 
 ---
 
@@ -382,7 +390,9 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   3. The destruction event stores the lot's status before scheduling; **Cancel** restores that status, with an audit row.
   4. The lot page gets a **Schedule destruction** link that opens the page with the lot chosen (pairs with G-23).
   5. Tests for all three, plus a guard that no destruction path changes a Recalled lot to anything but Destroyed.
-- **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C).
+  6. **(SOP-15 extension)** **Cancel** requires a written reason and the owner (or a permission the owner holds); a customer-return destruction cancel never touches the lot status (F-15-9).
+  7. **(SOP-15 extension)** After a partial destruction the lot returns to its status before scheduling, not left in Quarantine (F-15-11).
+- **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C); SOP-15 §4.19–§4.22, form 8.5.
 
 ## G-29 · Non-cannabis goods fully used: register, menu, books (APPROVED, D45)
 
@@ -519,3 +529,65 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** a full-count audit type with no cap; split into counter-sized sections each claimed by one employee (D56); one release, one combined review, one work paper; per-lot capture at first count (G-35) so the store can stay open; the work paper suitable for the accountant (PCAOB AS 2510.11 note on the hub).
 - **Interim:** SOP-06 §4.24 (several audits the same day, outside selling hours).
 
+## G-42 · Staged vendor return with the CCRS manifest workflow enforced (PROPOSED, SOP-15)
+- **Owner basis:** D62 (*"We will rarely use these features, but they are necessary for our industry so we must have them and do them properly and accurately."*); compliance doc §3 (manifest in the CCRS portal, 48–72 h, LCB confirms Mon/Wed/Fri, do not release before confirmation). Question Q-15-1.
+- **Today:** logging reduces on-hand and posts CCRS **Other** at once (`disposition.ts` L828–837, F-15-1 **S1**); RMA, manifest, license and detail optional; vendor never linked (F-15-2); no server step check, no actor, pickup without a zone (F-15-3).
+- **Requirements:**
+  1. **Log a vendor return** creates the return in status *awaiting pickup* and moves the units to a held quantity (or a quarantine split lot) that the register and website cannot sell; on-hand is **not** reduced and nothing goes to CCRS yet.
+  2. RMA number and processor license required at logging; vendor chosen from Vendors & Brands (pre-filled from the lot); detail required.
+  3. Steps enforced on the server in order (`nextManifestStatuses`), each stamped with who and when; manifest number required from **Manifest submitted in CCRS**; LCB confirmation date required at **Manifest confirmed by LCB**.
+  4. **Picked up / in transit** (pickup time in Pacific, driver name) posts the reduction and the CCRS **Other** adjustment with a detail naming processor, manifest and RMA.
+  5. **Cancel return** (owner) releases the held units with a reason.
+  6. Reason **Recall** is refused unless the lot's recall event (G-25) records the coordinator's LCB contact.
+  7. Printable vendor-return packet (form 8.2 in the app); tests for every step.
+- **Interim:** SOP-15 §4.9–§4.13 (log only on pickup day), form 8.2.
+
+## G-43 · Hardened destruction record and printable log (PROPOSED, SOP-15)
+- **Owner basis:** D62; WAC 314-55-097 records (compliance doc §5.3); WAC 314-55-225. Question Q-15-2.
+- **Today:** witness optional, recall contact date optional, no approval reference for **Other method** (F-15-4); server-locale hold message (F-15-5); no on-hand check at scheduling (F-15-12).
+- **Requirements:**
+  1. **Witnessed by** required: a second named staff member chosen from the roster (manager, admin or owner per Q-15-2), not the person completing.
+  2. Recall: officer and **Contact date** required, stored in the audit row.
+  3. **Other method** requires an LCB approval reference and date.
+  4. Scheduling refuses a quantity larger than on-hand (less units already scheduled).
+  5. All times shown and messaged in Pacific (`America/Los_Angeles`).
+  6. A printable **Destruction log** per event and per month (what, when, method, mix, destination, facility, witness, who), kept five years.
+  7. Optional photo upload of the rendered mixture.
+- **Interim:** SOP-15 §4.17–§4.18, form 8.3 (two signatures).
+
+## G-44 · Customer-return segregation and atomic return (PROPOSED, SOP-15)
+- **Owner basis:** D62; SOP-01 §4.23 (*"Product goes to the quarantine bin."*).
+- **Today:** a Destroy return adds the unit to an Active lot (`disposition.ts` L710, L715–723), which the register can draw (`sale-lot-read.ts` L44–47) (F-15-6, **S1**); add-back, destruction event and return insert are separate writes (F-15-7).
+- **Requirements:**
+  1. A Destroy return lands in a non-sellable bucket (a held quantity on the lot, or a quarantine split lot carrying the same CCRS inventory identifier); the register, website and menu never count it.
+  2. The CCRS **Other** add-back and the later **Destruction** both still post, so CCRS nets to zero for the unit.
+  3. Return insert, add-back and destruction event in one database transaction (RPC), or none.
+  4. Tests: a destroy return never raises sellable stock; a failed insert leaves no add-back.
+- **Interim:** SOP-15 §4.7 (sealed destroy bin, form 8.1).
+
+## G-45 · One customer-return path; CSV download behind the ledger (PROPOSED, SOP-15)
+- **Owner basis:** store policy SOP-01 §4.23; Question Q-15-4.
+- **Today:** the wizard skips the 15-day and loyalty checks, takes a typed refund, defaults to Destroy and has no lot picker (F-15-8); the CSV download marks returns exported without the ledger check (F-15-10).
+- **Requirements:** the wizard runs `returns-core` policy checks and the automatic refund; an owner-only override with a required reason; a lot picker; default disposition unset (must choose); the CSV download either runs the weekly batch's ledger check and writes to the outbox, or is removed in favour of SOP-16's weekly file; the success message stops telling staff to download.
+- **Interim:** SOP-15 §4.4, §4.6, §4.8.
+
+## G-46 · Readable errors on Returns & Destruction (PROPOSED, SOP-15)
+- **Today:** `?error=qty` / `?error=reason` print as single words (F-15-13).
+- **Requirements:** map each code to a sentence (for example "Choose a lot and enter a quantity greater than zero.").
+- **Interim:** SOP-15 §4.15.
+
+## G-47 · Sample-pricing rules enforced, or removed (PROPOSED, SOP-15)
+- **Today:** `sample_settings` saved but `checkSampleSale` / `effectiveSamplePrice` have no callers (F-15-16).
+- **Requirements:** the register and online checkout call the guardrail for any line flagged as a sample (nominal price forced; public sale blocked when set), with tests; or the panel is removed and the concierge line corrected. Owner choice Q-15-6.
+- **Interim:** SOP-15 §4.26 (never sell samples).
+
+## G-48 · Returns in the books and the excise return (PROPOSED, SOP-15)
+- **Owner basis:** books-23 (*"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*); postings Q1 (drafts await approval).
+- **Today:** no refund journal; 50910 unused (F-15-14); excise Box 1 from completed orders only (F-15-15).
+- **Requirements:** a daily draft journal for customer refunds (debit 50910 Returns & Refunds and the tax liabilities as applicable, credit cash) awaiting owner approval; LIQ-1295 Box 1 net of returns in the month (by return date), shown as its own line; tests.
+- **Interim:** SOP-15 §4.24, form 8.6.
+
+## G-49 · Disposition housekeeping (PROPOSED, SOP-15)
+- **Today:** F-15-17 (stale migration comment and reasons header); help panel step 5 implies the Sale correction goes in the InventoryAdjustment file.
+- **Requirements:** correct the comments in a new migration's `COMMENT ON` (or a doc note) and the reasons header; help step 5 names both files.
+- **Interim:** SOP-15 §4.1, §4.27.
