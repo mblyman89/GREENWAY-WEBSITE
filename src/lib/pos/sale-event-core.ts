@@ -248,6 +248,14 @@ export type PosSalePayload = {
    * website order untouched. Omitted for ordinary walk-in sales.
    */
   sourceOrderId?: string;
+  /**
+   * Fix Phase 1.6b (G-24, D36): true when the budtender acknowledged that an
+   * item in the cart is past its expiry date (warning kind only; expired
+   * edibles, tinctures, capsules and RSO cannot be sold). Optional so queues
+   * built before 1.6b still parse; absent = not acknowledged, and the server
+   * records that on the order for review.
+   */
+  expiredWarningAck?: boolean;
   /** How the customer's ID was verified before the cart was started. */
   idVerification: { method: "scan" | "manual"; manualEventUuid?: string };
   /**
@@ -533,6 +541,10 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
   // Optional: when a sale was started from a loaded website order, its source
   // order id must be a real UUID (omitted for walk-ins so pre-existing payload
   // shapes stay byte-identical).
+  // Fix Phase 1.6b (G-24): the expiry acknowledgement, when present, is a boolean.
+  if (p.expiredWarningAck !== undefined && typeof p.expiredWarningAck !== "boolean") {
+    errors.push("expiredWarningAck, when present, must be true or false.");
+  }
   if (p.sourceOrderId !== undefined && !isUuid(p.sourceOrderId)) {
     errors.push("sourceOrderId, when present, must be the source website order's UUID.");
   }
@@ -834,6 +846,9 @@ export function __runPosSaleEventTests(): void {
   // garbage refused, absent stays fine.
   ok(validateSalePayload({ ...goodSale, sourceOrderId: U1 }).ok, "sale with valid sourceOrderId passes");
   ok(!validateSalePayload({ ...goodSale, sourceOrderId: "not-a-uuid" }).ok, "sale with bad sourceOrderId refused");
+  // Fix Phase 1.6b (G-24): the expiry acknowledgement is optional and boolean.
+  ok(validateSalePayload({ ...goodSale, expiredWarningAck: true }).ok, "sale with expiry acknowledgement passes");
+  ok(!validateSalePayload({ ...goodSale, expiredWarningAck: "yes" as unknown as boolean }).ok, "non-boolean expiry acknowledgement refused");
   ok(!validateSalePayload({ ...goodSale, lines: [] }).ok, "empty lines refused");
   ok(!validateSalePayload({ ...goodSale, paymentMethod: "debit" as PosPaymentMethod }).ok, "debit sale blocked at launch");
   ok(!validateSalePayload({ ...goodSale, tenderedMinor: 2000 }).ok, "short cash refused");

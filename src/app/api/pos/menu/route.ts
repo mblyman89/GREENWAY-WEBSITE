@@ -73,6 +73,9 @@ const BARCODE_SCAN_MAX_ROWS = 100_000;
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 import { costForLine } from "@/lib/promotions/size-cost-core";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
+// Fix Phase 1.6b (G-24): expired stock (owner decisions D36, D44).
+import { expiredKeyIndexForMenu } from "@/lib/inventory/expired-stock-store";
+import { pacificToday } from "@/lib/reports/timezone";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -122,6 +125,12 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   // menu, never a blank register); the completion gate is the fail-closed
   // statutory stop that re-checks at sync.
   const recalled = await recalledProductKeys();
+  // Fix Phase 1.6b (G-24): an expired edible / liquid edible / tincture /
+  // capsule / RSO lot with stock keeps its product off the register (the
+  // completion gate is the fail-closed stop); other expired stock ships with
+  // its date so the register asks the budtender to acknowledge it. Advisory:
+  // a read failure ships the menu without this filter.
+  const expiredIdx = await expiredKeyIndexForMenu(pacificToday());
 
   // POS B8 — the medical-sale config the device prices with OFFLINE. The
   // registry is the durable DOH 246-70 table keyed by the stable POS product
@@ -316,6 +325,10 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       // AN-7 — a recalled lot excludes ITS size, not just cards whose item
       // key matches (mastered cards would otherwise sell a recalled size).
       if (variantLotKey && recalled.has(variantLotKey)) continue;
+      // Fix Phase 1.6b (G-24, D36/D44): hard-blocked expired stock never ships.
+      if (expiredIdx.blocked.has(item.id) || (variantLotKey && expiredIdx.blocked.has(variantLotKey))) continue;
+      const expiredWarn =
+        (variantLotKey ? expiredIdx.warned.get(variantLotKey) : undefined) ?? expiredIdx.warned.get(item.id);
       products.push({
         productId: item.id,
         variantId: variant.id,
@@ -356,6 +369,8 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         // the device can enforce the ten-unit limit offline.
         otherwiseTaken: item.otherwiseTaken ?? null,
         unitsPerPackage: item.unitsPerPackage ?? null,
+        // Fix Phase 1.6b (G-24): the register asks for an acknowledgement.
+        ...(expiredWarn ? { expiredSince: expiredWarn.expiresOn } : {}),
         inventoryStatus: effectiveStatus,
         // B32 — variant-level count for low-stock badges. Synthetic default
         // variants carry no real count (null = unknown, falls back to the

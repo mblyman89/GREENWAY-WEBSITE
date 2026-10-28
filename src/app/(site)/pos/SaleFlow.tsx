@@ -32,6 +32,7 @@ import {
 } from "@/lib/pos/id-scan-core";
 import {
   addToCart,
+  expiredCartItems,
   setCartQuantity,
   priceCart,
   judgeLimits,
@@ -1092,7 +1093,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           trackCancel();
           onCancel();
         }}
-        onPaid={(tenderedMinor, payLater) => {
+        onPaid={(tenderedMinor, payLater, expiredAck) => {
           // Register S5 — employee pay-later only rides an employee-discount
           // sale (the payload gate re-checks the beneficiary match).
           const tabEmployeeId =
@@ -1147,6 +1148,8 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             // Carry the source website order id (when this sale was loaded from
             // one) so the sync supersedes it ONLY on completion — never on load.
             ...(initialSourceOrderId ? { sourceOrderId: initialSourceOrderId } : {}),
+            // Fix Phase 1.6b (G-24): the budtender's expiry acknowledgement.
+            ...(expiredAck ? { expiredWarningAck: true } : {}),
             ...(medicalCard && cardEventUuid
               ? {
                   medical: {
@@ -5804,8 +5807,13 @@ function TenderScreen({
   onBack: () => void;
   onCancel: () => void;
   /** Returns an error string, or null when the sale was enqueued. */
-  onPaid: (tenderedMinor: number, payLater?: boolean) => string | null;
+  onPaid: (tenderedMinor: number, payLater?: boolean, expiredAck?: boolean) => string | null;
 }) {
+  // Fix Phase 1.6b (G-24, D36): items past their expiry date (warning kinds
+  // only; expired edibles, tinctures, capsules and RSO never reach the cart).
+  const expiredItems = useMemo(() => expiredCartItems(cart), [cart]);
+  const [expiredAck, setExpiredAck] = useState(false);
+  const expiredBlocked = expiredItems.length > 0 && !expiredAck;
   const priced = useMemo(() => {
     const base = priceForBuyer(cart, bundle, medicalCard !== null, overrides);
     if (appliedLoyalty) {
@@ -5864,7 +5872,7 @@ function TenderScreen({
   const change = tendered - due;
 
   const pay = () => {
-    const err = onPaid(tendered);
+    const err = onPaid(tendered, false, expiredItems.length > 0 && expiredAck);
     if (err) setError(err);
   };
   // Register S5 — employee pay-later (product loan). Offered only on an
@@ -5872,7 +5880,7 @@ function TenderScreen({
   const canTab = appliedSpecial?.kind === "employee" && !!appliedSpecial.beneficiaryEmployeeId;
   const [tabAck, setTabAck] = useState(false);
   const payLater = () => {
-    const err = onPaid(0, true);
+    const err = onPaid(0, true, expiredItems.length > 0 && expiredAck);
     if (err) setError(err);
   };
 
@@ -5975,11 +5983,24 @@ function TenderScreen({
           </span>
         </label>
       ) : null}
+      {expiredItems.length > 0 ? (
+        <label
+          data-testid="expired-ack"
+          className="mt-5 flex max-w-md items-start gap-2 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-left text-xs text-[var(--pos-warn)]"
+        >
+          <input type="checkbox" className="mt-0.5" checked={expiredAck} onChange={(e) => setExpiredAck(e.target.checked)} />
+          <span>
+            <span className="font-bold">Past the expiry date:</span>{" "}
+            {expiredItems.map((i) => `${i.name} (expired ${i.date})`).join(", ")}. I told the customer. (Owner rule D36: expired
+            edibles, tinctures, capsules and RSO are never sold; other expired items need this check.)
+          </span>
+        </label>
+      ) : null}
       <div className="mt-6 flex gap-3">
         <button
           type="button"
           onClick={pay}
-          disabled={tendered < due}
+          disabled={tendered < due || expiredBlocked}
           className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-10 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
         >
           Complete sale
@@ -5988,7 +6009,7 @@ function TenderScreen({
           <button
             type="button"
             onClick={payLater}
-            disabled={!tabAck}
+            disabled={!tabAck || expiredBlocked}
             className="pos-tile rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-6 py-4 text-lg font-bold text-[var(--pos-warn)] disabled:opacity-40"
           >
             Pay later (employee tab)

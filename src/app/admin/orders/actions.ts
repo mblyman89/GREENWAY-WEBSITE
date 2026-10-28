@@ -111,11 +111,16 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
       !!fullSession &&
       can(fullSession.profile.role, "sales_limit.override");
 
+    // Fix Phase 1.6b (G-24, D36): staff tick this after telling the customer
+    // that a (non-edible) item is past its expiry date.
+    const expiredWarningAcknowledged = String(formData.get("expiredAck") ?? "") === "1";
     const refusal = await runCompletionGate({
       orderId: id,
       actorId: session.profile.id,
       overridePermitted,
       overrideReason,
+      expiredWarningMode: "require_ack",
+      expiredWarningAcknowledged,
     });
 
     if (refusal) {

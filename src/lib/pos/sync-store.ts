@@ -1160,6 +1160,11 @@ async function processSale(
     // check upstream already excepted any future-stamped envelope, so this
     // instant cannot be gamed forward.
     hoursAt: envelope.occurredAt,
+    // Fix Phase 1.6b (G-24, D36): the register asked the budtender to
+    // acknowledge any expired (non-edible) item; the gate records it on the
+    // order. Expired edibles, tinctures, capsules and RSO are still refused.
+    expiredWarningMode: "record",
+    expiredWarningAcknowledged: sale.expiredWarningAck === true,
   });
   if (refusal) {
     await recordAudit({
