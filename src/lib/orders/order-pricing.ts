@@ -28,6 +28,10 @@ import { loadLiveMenuAll } from "@/lib/pos/live-menu";
 import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 // Mastering Slice 1: intake variants encode their own lot key.
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+// Fix Phase 1.6c (G-25 req 3; F-05a-16): online ordering refuses recalled
+// products, fail-closed (a recall read that fails refuses the order).
+import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
+import { onlineRecallProblems, RECALL_ONLINE_UNVERIFIED } from "@/lib/inventory/recall-event-core";
 import { costForLine } from "@/lib/promotions/size-cost-core";
 import {
   computePromotions,
@@ -189,6 +193,34 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       status: 409,
       error: "Some items changed while you were shopping. Please review your cart.",
       problems,
+    };
+  }
+
+  // Fix Phase 1.6c (G-25 req 3; F-05a-16): a product with any Recalled lot
+  // (or a size whose own lot is Recalled) cannot be reserved online. This is
+  // the fail-closed read: if the recall status cannot be read, the order is
+  // refused rather than letting a possibly-recalled product through. The
+  // customer is not told "recall" (SOP-05a §4.11, communications plan).
+  let held: Set<string>;
+  try {
+    held = await recalledProductKeys({ failClosed: true });
+  } catch {
+    return { ok: false, status: 409, error: RECALL_ONLINE_UNVERIFIED, problems: [RECALL_ONLINE_UNVERIFIED] };
+  }
+  const recallProblems = onlineRecallProblems(
+    work.map((w) => ({
+      productId: w.resolved.item.id,
+      variantId: w.resolved.variant.id,
+      label: `${w.resolved.item.name}${w.resolved.variant.label ? ` (${w.resolved.variant.label})` : ""}`,
+    })),
+    held,
+  );
+  if (recallProblems.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Some items changed while you were shopping. Please review your cart.",
+      problems: recallProblems,
     };
   }
 

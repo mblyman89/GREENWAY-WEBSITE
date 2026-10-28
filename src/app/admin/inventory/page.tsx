@@ -79,6 +79,11 @@ import { attachLotParity, lotAcidFigures, shelfPriceSourceLabel } from "@/lib/in
 import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
 // Phase 0.4 (G-31): cannabis lots filed under a non-cannabis category.
 import { buildCannabisLineIssue } from "@/lib/compliance/cannabis-line-core";
+// Fix Phase 1.6c (G-25 req 1, 3, 4): recall plan review, LCB deadlines, weekly
+// report, and open pickup orders holding a recalled product.
+import { recallPlanIssues, recallEventIssues, ordersHoldingRecalled, openOrdersIssue } from "@/lib/inventory/recall-event-core";
+import { getRecallPlan, listOpenRecallEventFacts, listOpenOrderLines } from "@/lib/inventory/recall-event-store";
+import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 
 export const dynamic = "force-dynamic";
 
@@ -270,6 +275,8 @@ export default async function InventoryPage({
   // with the other reads (like taxSettingsPromise) so it costs no extra
   // round-trip. Never throws; `complete: false` puts a notice above the table.
   const onboardingPromise = loadLotOnboardingIndex();
+  // Fix Phase 1.6c (G-25): recall reads, started with the others; each never throws.
+  const recallPromise = Promise.all([getRecallPlan(), listOpenRecallEventFacts(), listOpenOrderLines(), recalledProductKeys()]);
   const [allLots, stats, intel, sellability, leafly] = await Promise.all([
     listAllLotsForFiltering(),
     computeInventoryStats(),
@@ -414,8 +421,13 @@ export default async function InventoryPage({
   // Phase 0.4 (G-31 req. 4): any cannabis lot whose effective website category
   // is non-cannabis is a blocking Issue (it changes tax and purchase limits).
   const cannabisLineIssue = buildCannabisLineIssue(categorized.lots);
+  const [recallPlan, openRecallEvents, openOrders, recalledKeys] = await recallPromise;
+  const recallOrdersIssue = openOrdersIssue(ordersHoldingRecalled(openOrders, recalledKeys));
   const issues = sortIssues([
     ...(cannabisLineIssue ? [cannabisLineIssue] : []),
+    ...recallEventIssues(openRecallEvents, new Date().toISOString(), today),
+    ...(recallOrdersIssue ? [recallOrdersIssue] : []),
+    ...recallPlanIssues(recallPlan, today),
     ...intelIssues,
     ...buildInventoryIssues({
       receivedDateFlag,

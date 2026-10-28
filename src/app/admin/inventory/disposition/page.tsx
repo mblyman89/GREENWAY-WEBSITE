@@ -318,14 +318,11 @@ export default async function DispositionPage({
               <Field label="Detail" required help="Who agreed, the condition, the agreement. It becomes the CCRS 'Other' detail.">
                 <Textarea name="detail" rows={2} required placeholder="Contact, condition, agreement reference…" />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Recall: LCB officer told" help="Reason Recall only (WAC 314-55-225)">
-                  <Input name="recall_officer" />
-                </Field>
-                <Field label="Recall: date the officer was told" help="Reason Recall only">
-                  <Input name="recall_contact_date" type="date" />
-                </Field>
-              </div>
+              {/* Fix Phase 1.6c (G-42 req 6 with G-25): the LCB officer and date come from the lot's recall event. */}
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Reason Recall: the LCB officer and the date they were told are taken from the lot&apos;s open recall event
+                (Inventory &rarr; Recalls). The return is refused until that event records the LCB notification (WAC 314-55-225).
+              </p>
               <Button type="submit">Log return (reserves the units)</Button>
             </form>
           )}
