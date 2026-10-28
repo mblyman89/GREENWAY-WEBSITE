@@ -255,5 +255,18 @@ The owner asked twice for *"what the pros would do"* and *"something along those
 ### Applied in slice SOP-15
 
 - **D54–D61 applied** in `docs/sop/SOP-06-cycle-counts-audits-daily-checklists.md` **v1.1**: §2 rule 3, §3, §4.7, §4.8 step 5, §4.10 step 4, §4.11, §4.12, §4.20, §4.22, §4.23, new §4.24, forms 8.5–8.7 rewritten and new form 8.8, §9, Appendices B–D. Gaps G-33, G-34, G-35, G-36, G-38, G-39 **APPROVED**; new **G-40** (intelligent cycle counts) and **G-41** (annual full count). New findings F-06-15 (one counter not enforced), F-06-16 (no cockpit item), F-06-17 (no clearance-markdown screen). Concierge ledger: SOP-06 v1.1 teaching table.
-- **D62 applied** in `docs/sop/SOP-15-returns-vendor-destruction.md` v1.0 (this slice).
+- **D62 applied** in `docs/sop/SOP-15-returns-vendor-destruction.md` v1.0 (this slice), verified at `main@b8101abb`. It covers customer-return disposition, vendor returns, scheduled destruction, recall coordination and cancel/status restore. Findings F-15-1…F-15-17 and F-15-C are in `03-FINDINGS-LEDGER.md`; there are two S1: F-15-1 (a vendor return reduces on-hand before any manifest) and F-15-6 (a Destroy return goes into an Active, sellable lot). Gaps G-42…G-49 are PROPOSED and G-28 is extended in `05-GAP-REGISTER.md`. The concierge is taught today's behaviour and the behaviour once built (D41/D42/D62) in the SOP-15 section of `04-CONCIERGE-COVERAGE-LEDGER.md`. Paper interim: forms 8.1–8.6.
+
+### Open questions raised by slice SOP-15 (awaiting the owner's words)
+
+Asked in `docs/sop/SOP-15-returns-vendor-destruction.md` Appendix C. Each has an interim rule in that SOP until the owner answers; none is decided here.
+
+| # | Question (short form) | Interim rule |
+|---|---|---|
+| Q-15-1 | Vendor returns: should logging only reserve the units, with stock coming off at pickup? (G-42) | Log the return only on pickup day, after the manifest exists (SOP-15 §4.12) |
+| Q-15-2 | Who may witness a destruction? Is a budtender acceptable? | Manager, admin or owner only; never the person doing it |
+| Q-15-3 | After G-28 is built, should recall destruction be allowed in the app only once the officer, the contact date and the direction are recorded? | Keep recalled lots out of the app (SOP-15 §4.21) |
+| Q-15-4 | Remove the back-office Customer return wizard, or keep it as an owner-only exception tool? (G-45) | Owner only, with a written exception reason |
+| Q-15-5 | Keep the destruction hold at 72 hours? | Keep 72 hours |
+| Q-15-6 | Sample-pricing rules: enforce at the register and online, or remove the panel? (G-47) | Never sell samples |
 

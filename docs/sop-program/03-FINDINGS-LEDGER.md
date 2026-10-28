@@ -702,6 +702,99 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Effect:** the owner's *"making sure products get heavily discounted before expiring"* (D57) cannot be done as a locked clearance markdown from the back office; staff can only list the items for the owner.
 - **SOP impact:** SOP-06 §4.23, forms 8.5–8.8. **G-38** (expiring-soon list) and a clearance screen (to be audited in the promotions SOP).
 
+## SOP-15 · Returns to Vendor, Customer-Return Disposition & Product Destruction (verified at `main@b8101abb`)
+
+### F-15-1 · CONFIRMED · BUG · S1 — Logging a vendor return reduces on-hand and posts the CCRS adjustment before the manifest is confirmed or the product leaves
+- **Pin:** `createVendorReturn` posts `postReduction(…, "other", …)` first (`src/lib/inventory/disposition.ts` L828–837), at the moment **Log return (reduces on-hand)** is pressed (`disposition/page.tsx` L195, L240). The screen's own checklist says *"Do not release product until the manifest is confirmed."* (`disposition-core.ts` L348). The manifest status is tracked afterwards (L855; `updateVendorReturnManifest` L879–904) but never moves stock.
+- **Effect:** if the return is logged when the RMA arrives, the app and that week's CCRS InventoryAdjustment file report the product gone while it is still in the vault for 48–72 hours or more. A cancelled or rescheduled pickup leaves a false CCRS record (S1: state filing).
+- **SOP impact:** SOP-15 §4.11 (log on pickup day only), form 8.2. Gap **G-42**.
+
+### F-15-2 · CONFIRMED · GAP · S2 — RMA, manifest number, processor license and detail are optional on a vendor return; the vendor is never linked; a Recall reason has no guard
+- **Pin:** `createVendorReturnAction` reads all four with `|| null` (`disposition/actions.ts` L121–124) and passes no `vendorId` (L129–131; the store accepts one, `disposition.ts` L812, L841). The reasons-file header says vendor returns *"always require detail"* (`disposition-reasons.ts` L9–10). Reason **Recall (coordinate with LCB first)** (L29) posts like any other.
+- **Effect:** a vendor return can be recorded with nothing tying it to the processor's acceptance or the CCRS manifest, the record WAC 314-55-087 asks us to keep; a recalled lot can be sent back without the coordinator.
+- **SOP impact:** SOP-15 §4.11 steps 5–6, §4.21. **G-42**.
+
+### F-15-3 · CONFIRMED · GAP · S3 — Manifest steps are not checked on the server, the return records no actor per step, and pickup time has no time zone
+- **Pin:** `updateManifestAction` checks only that the status is one of the five (`actions.ts` L152); `nextManifestStatuses` (`disposition-core.ts` L322–335) is used only to fill the dropdown. `updateVendorReturnManifest` discards the actor (`void actorId`, `disposition.ts` L888). **Pickup (optional)** is a `datetime-local` field stored as typed (`page.tsx` L460; `disposition.ts` L895) and displayed with the browser's `toLocaleString` (L435).
+- **Effect:** a crafted post can jump to **Picked up**; the vendor-return row cannot say who confirmed the manifest (the audit row can); the pickup time may be read in the wrong zone.
+- **SOP impact:** SOP-15 §4.12 (paper time is the record). **G-42**.
+
+### F-15-4 · CONFIRMED · GAP · S2 — The destruction record does not require a witness, a recall contact date, or a prior-approval reference for "Other method"; there is no printable destruction log
+- **Pin:** `validateDestructionCompletion` (`disposition-core.ts` L226–271) never checks `witnessedBy`; for recalls it checks the tick and the officer name only (L233–244), not `lcbContactDate`; `lcb_approved_other` skips the mix and 50% checks (L248) with no approval field. The audit row omits `lcb_contact_date` (`actions.ts` L228–240). No export or print page exists under `disposition/` other than the Sale correction CSV.
+- **Effect:** a destruction can be completed by one person, with no witness and, for a recall, no date of the officer contact; the WAC 314-55-097 record exists only as database fields nobody can print.
+- **SOP impact:** SOP-15 §2 rule 2, §4.17–§4.18, form 8.3. **G-43**.
+
+### F-15-5 · CONFIRMED · UX · S4 — "Hold policy not elapsed" prints the time in the server's locale and zone
+- **Pin:** `new Date(d.earliestDestroyAt).toLocaleString()` on the server (`disposition-core.ts` L228); the page shows the same time with the browser's clock (`page.tsx` L321).
+- **Effect:** the two times can disagree (UTC on the server).
+- **SOP impact:** SOP-15 §4.16, §5.3. **G-43**.
+
+### F-15-6 · CONFIRMED · BUG · S1 — A customer-returned unit marked Destroy is added back to an Active lot and can be sold at the register until the destruction is completed
+- **Pin:** `postAddition(lotId, qty, "return", …, { sellable: false })` adds the units to on-hand (`disposition.ts` L710; L289–333); `sellable:false` only skips the menu sync (L330). The destruction is scheduled with `quarantineLot: false` (L715–723), so the lot stays **Active**. The register draws from Active lots with stock, oldest first (`sale-lot-read.ts` L44–47).
+- **Effect:** the app counts the returned (often opened) unit as sellable stock; a sale of that product can draw it, and the later destruction then removes a sellable unit instead. On-hand is overstated until completion (S1: product that must not be sold).
+- **SOP impact:** SOP-15 "one thing to know" 2, §4.7 (sealed destroy bin, form 8.1). **G-44**.
+
+### F-15-7 · CONFIRMED · BUG · S2 — A customer return is not atomic: the add-back is posted before the return is saved, and a failed destruction event is ignored
+- **Pin:** add-back L710; schedule result used only when `ok` (L727); the `customer_returns` insert follows (L731–762). On an insert error the function returns *"Apply migration 0115 first … The inventory add-back was posted — reverse it manually if you abort."* (L768) or the raw error (L770), with the add-back left in place.
+- **Effect:** stock can rise with no return record and no Sale correction; a Destroy return can save with no destruction event, so the unit is never scheduled.
+- **SOP impact:** SOP-15 §4.7 steps 3–4 and last paragraph. **G-44**.
+
+### F-15-8 · CONFIRMED · GAP · S2 — The back-office Customer return wizard skips the store return policy, takes a typed refund, defaults to Destroy and has no lot picker
+- **Pin:** `createCustomerReturnAction` (`actions.ts` L68–105) calls `createCustomerReturn` directly; the 15-day window and loyalty checks live only in `returns-core.ts` (L153, L192) used by the Returns desk and register (`returns-store.ts` L252–360). **Refund ($)** defaults to `0.00` and is typed (`CustomerReturnWizard.tsx` L173–174; capped at what was paid, `disposition-core.ts` L139–140); **What happens to it** lists Destroy first (L185–188). The store falls back to the newest non-quarantine lot (`disposition.ts` L610) and otherwise says *"…pick the lot manually…"* (L617), but the wizard has no lot field.
+- **Effect:** a manager can refund outside the owner's policy, with a mistyped amount counted in the day's refunds (`refunds-store.ts` L48); the add-back may land on the wrong lot.
+- **SOP impact:** SOP-15 §2 rule 1, §4.4, §4.6. **G-45**.
+
+### F-15-9 · CONFIRMED · GAP · S2 — Cancelling a customer-return destruction sets the lot Active even though it was never quarantined, and no cancel records a reason
+- **Pin:** `cancelDestruction` sets `status: "active"` on the lot unconditionally (`disposition.ts` L1112–1114); `cancelDestructionAction` records no reason (`actions.ts` L246–253). Extends F-05a-19 to the customer-return case and to the missing reason.
+- **Effect:** the destroy-return unit silently becomes ordinary stock; any lot status set by hand after scheduling is overwritten; nobody can tell why a destruction was stopped.
+- **SOP impact:** SOP-15 §2 rule 3, §4.19, form 8.5. **G-28** (extended).
+
+### F-15-10 · CONFIRMED · HARDEN · S2 — "Download Sale correction CSV" marks returns exported without the ledger check the weekly batch performs
+- **Pin:** route header: *"Prefer the weekly batch once the ledger is loaded: it checks each line is held by CCRS and records the file in the outbox. This download does not."* (`sale-correction-export/route.ts` L18–19); limit 500 (L62); marks exported and audits (L104). The page's banner and the success message tell staff to download it (`page.tsx` L151–166, L62–63).
+- **Effect:** a download nobody uploads leaves the returns marked exported, so the weekly batch's pending filter (`ccrs-batch.ts` L445) relies only on its date window to pick them up; a stray file can be uploaded twice.
+- **SOP impact:** SOP-15 §4.8 (do not download unless uploading by hand that day), form 8.6. **G-45**.
+
+### F-15-11 · CONFIRMED · GAP · S3 — A partial destruction leaves the rest of the lot in Quarantine
+- **Pin:** scheduling quarantines the whole lot (`disposition.ts` L965–971); completion sets **Destroyed** only at zero (L1087–1095) and otherwise leaves the status alone.
+- **Effect:** sellable units stay off sale until someone sets the lot Active by hand.
+- **SOP impact:** SOP-15 §4.20. **G-28** (extended).
+
+### F-15-12 · CONFIRMED · GAP · S3 — Scheduling does not check the quantity against on-hand
+- **Pin:** `scheduleDestruction` checks only `quantity > 0` (`disposition.ts` L958); the comment says *"Quantity is validated against on-hand at completion time."* (L936–937); completion refuses with *"Quantity (x) exceeds on-hand (y)."* (L250).
+- **Effect:** an over-scheduled event waits out the whole hold and then fails on destruction day.
+- **SOP impact:** SOP-15 §4.15 step 4, §4.18. **G-43**.
+
+### F-15-13 · CONFIRMED · UX · S4 — Missing fields show the bare words "qty" or "reason"
+- **Pin:** `redirect(\`${BASE}?error=qty\`)` and `?error=reason` (`actions.ts` L83–84, L126–127, L179–180); the page prints `decodeURIComponent(sp.error)` as is (`page.tsx` L124–127).
+- **Effect:** staff see a single word with no instruction.
+- **SOP impact:** SOP-15 §4.15, §5.3. **G-46**.
+
+### F-15-14 · CONFIRMED · GAP · S2 — No journal is drafted for customer refunds; 50910 Returns & Refunds is unused
+- **Pin:** `ledger-census-data.ts` L252–268 marks `revenue_and_tax_collected.refund_or_return` missing: *"50910 Returns & Refunds is seeded and unused."*
+- **Effect:** refunds reduce the drawer (`refunds-store.ts` L48) but not revenue in the books until someone posts them by hand.
+- **SOP impact:** SOP-15 §4.24, form 8.6. **G-48**.
+
+### F-15-15 · CONFIRMED (code read; not exercised on a live return) · GAP · S2 — The excise return's Box 1 does not subtract returned sales
+- **Pin:** Box 1 is built from completed orders and their lines (`excise-return.ts` L140–158); the file has no read of `customer_returns`. A manual override exists (`cannabisSalesMinorOverride`, L111).
+- **Effect:** a sale returned in the same month is likely still counted in cannabis sales on LIQ-1295, overstating excise. Not verified against a filed return.
+- **SOP impact:** SOP-15 §4.24, form 8.6. **G-48**.
+
+### F-15-16 · CONFIRMED · GAP · S2 — The Sample-pricing rules saved on this page are not enforced anywhere
+- **Pin:** `checkSampleSale` and `effectiveSamplePrice` (`src/lib/inventory/sample-guardrails.ts`) have no caller outside that file and its self-test (`scripts/compliance/run-pure-selftests.ts` L948). The panel saves `sample_settings` (`actions.ts` L283–301; `page.tsx` L538).
+- **Effect:** **Force samples to the nominal price** and **Block selling samples to the public** do nothing at the register or online; the concierge line *"…plus sample-pricing rules"* (`concierge-kb.ts` L176) implies protection that does not exist.
+- **SOP impact:** SOP-15 §4.26. **G-47**.
+
+### F-15-17 · CONFIRMED · DOC · S4 — Stale comments: the migration still calls the 72-hour hold a WSLCB rule; the reasons header says detail is always required
+- **Pin:** `supabase/migrations/0042_*.sql` L44 (*"WSLCB requires a quarantine + notice period before destruction."*) and L55 (*"WSLCB notice/quarantine: 72h hold before destruction is permitted."*), contradicted by the compliance doc §5.1 and the page (L511–531); `disposition-reasons.ts` L9–10.
+- **Effect:** a future developer may re-assert a removed rule.
+- **SOP impact:** SOP-15 §4.27. **G-49**.
+
+### F-15-C · CONFIRMED · DOC · S3 — The concierge has two generic lines on Returns & Destruction and none of the procedures, guards or interim rules
+- **Pin:** `concierge-kb.ts` L66 (menu list), L176 (*"Returns & Destruction handles vendor returns and compliant destruction with a quarantine hold, plus sample-pricing rules."*); `help-content.ts` L465–467 (*"Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires."*). Nothing on the manifest workflow, pickup-day logging, the destroy bin, the recall prohibition, rendering unusable, the witness, cancel, the CSV, or the not-enforced sample rules.
+- **Effect:** a rarely-used, legally sensitive procedure (D62) cannot be answered by the concierge.
+- **SOP impact:** concierge ledger SOP-15 section (today-vs-once-built table, D42).
+
+
 ---
 
 ## Ledger index (updated each slice)
@@ -715,4 +808,5 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 | SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
 | SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
-| SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12) | 16 | 0 |
+| SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
+| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19) | 18 | 0 |
