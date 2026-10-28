@@ -100,6 +100,15 @@ export type SaveSuccess = {
 
 export type SaveResult = SaveSuccess | SaveRefusal;
 
+/**
+ * Phase 0.3 (G-52): who belongs on the payroll paperwork roster - anyone
+ * active, plus people being hired (candidate / onboarding), because new hires
+ * now start as Candidate and their W-4 / I-9 is done during onboarding. The
+ * caller also excludes terminated. Same rule as public.employees_on_payroll
+ * (migration 0306).
+ */
+export const PAYROLL_PEOPLE_OR = "active.eq.true,employment_status.in.(candidate,onboarding)";
+
 const NOT_CONFIGURED: SaveRefusal = {
   ok: false,
   refusalCode: "not_configured",
@@ -185,10 +194,12 @@ export async function listEmployeeSetup(): Promise<{
   const { data: emps, error } = await admin
     .from("employees")
     .select("id, full_name, ssn_last_four, soc_code")
-    // Currently employed, and not somebody who has left. Matches
-    // public.employees_on_payroll (migration 0210 §3) exactly.
-    .eq("active", true)
+    // Currently employed OR being hired (candidate / onboarding - payroll
+    // paperwork is done during onboarding), and never somebody who has left.
+    // Matches public.employees_on_payroll (migration 0306, which redefines
+    // 0210 §3 for Phase 0.3 / G-52) exactly.
     .neq("employment_status", "terminated")
+    .or(PAYROLL_PEOPLE_OR)
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -1103,8 +1114,8 @@ export async function addPersonToPayroll(input: {
   const { data: existing } = await admin
     .from("employees")
     .select("id, full_name")
-    .eq("active", true)
     .neq("employment_status", "terminated")
+    .or(PAYROLL_PEOPLE_OR)
     .ilike("full_name", fullName);
 
   if (((existing as { id: string }[]) ?? []).length > 0) {
@@ -1119,12 +1130,15 @@ export async function addPersonToPayroll(input: {
   }
 
   // staff_id is ABSENT on purpose. See the header above.
+  // Phase 0.3 (G-52, F-08-1): the person starts as a CANDIDATE, not active,
+  // so they cannot clock in or unlock the register until an owner or admin
+  // Activates them on Staffing (which runs the 21+/background/training gates).
   const { data, error } = await admin
     .from("employees")
     .insert({
       full_name: fullName,
-      active: true,
-      employment_status: "active",
+      active: false,
+      employment_status: "candidate",
       job_role: "sales",
     })
     .select("id")

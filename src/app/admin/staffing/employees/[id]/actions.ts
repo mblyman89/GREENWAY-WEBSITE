@@ -188,7 +188,8 @@ export async function updateHireInfoAction(formData: FormData): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function setStatusAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("staffing.manage");
+  // Phase 0.3 (G-59, D74): owner and admin only - "No manager access."
+  const session = await requirePermission("staffing.lifecycle");
   const employeeId = str(formData, "employee_id");
   const to = str(formData, "to") as EmploymentStatus;
   if (!employeeId) redirect("/admin/staffing/employees");

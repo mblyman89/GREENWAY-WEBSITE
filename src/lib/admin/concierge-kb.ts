@@ -254,6 +254,8 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     facts: [
       "Employee → Time Clock lets staff clock in and out and tracks shifts.",
       "Related staffing tools cover employees, a schedule builder, and hour adjustments.",
+      "New hires: Employee \u2192 Employees \u2192 Add a person creates them as a Candidate with no clock PIN, so they cannot clock in or unlock the register yet. Open their file and work the onboarding checklist (offer, background check, 21+ ID check, I-9, W-4, handbook, training, badge).",
+      "Only the owner or an admin can press Activate, Terminate or Rehire on an employee file (managers see \"owner or admin only\"). Activate unlocks only when the required steps are done. The clock PIN can be set only after the person is Active.",
     ],
   },
   {

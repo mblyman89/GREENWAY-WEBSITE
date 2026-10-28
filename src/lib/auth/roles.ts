@@ -71,6 +71,7 @@ export type Permission =
   | "ach.act"
   | "ach.request"
   | "staffing.manage"
+  | "staffing.lifecycle"
   | "timeclock.use"
   | "medical.manage"
   | "sales_limit.override";
@@ -258,6 +259,10 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "ach.act": ["owner"],
   "ach.request": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
+  // Phase 0.3 (G-59, D74): Activate, Terminate and Rehire are owner and admin
+  // only. Michael: "I would like to modify this to be owner admin only. No
+  // manager access." Managers keep everything else on the file.
+  "staffing.lifecycle": ["owner", "admin"],
   // Task S-b: the time clock previously piggybacked on "loyalty.view" as a
   // proxy for "any active floor staff". A scoped permission keeps the matrix
   // honest (same roles — no behavior change, clearer intent).
@@ -306,6 +311,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "ach.act": "Change live ACH banking alone (owner only)",
   "ach.request": "Ask for ACH banking changes (owner approves)",
   "staffing.manage": "Manage employees, shifts & time clock",
+  "staffing.lifecycle": "Activate, terminate & rehire employees (owner & admin)",
   "timeclock.use": "Clock in & out (time clock)",
   "medical.manage": "Issue & manage medical recognition cards (consultant)",
   "sales_limit.override": "Authorize an over-limit sale (logged override)",
@@ -340,6 +346,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "finances.view",
   "compliance.calendar",
   "staffing.manage",
+  "staffing.lifecycle",
   "timeclock.use",
   "sales_limit.override",
   "users.manage",
