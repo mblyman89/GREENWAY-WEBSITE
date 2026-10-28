@@ -89,7 +89,7 @@ function manifestTone(status: string): "neutral" | "green" | "gold" | "orange" |
 export default async function DispositionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; lot?: string }>;
 }) {
   const session = await requirePermission("inventory.manage");
   const canSettings = can(session.profile.role, "settings.manage");
@@ -106,6 +106,7 @@ export default async function DispositionPage({
     ]);
 
   const holdHours = dispositionSettings.holdHours;
+  const preselectLot = typeof sp.lot === "string" && lots.some((l) => l.id === sp.lot) ? sp.lot : "";
 
   return (
     <div className="space-y-5">
@@ -246,7 +247,7 @@ export default async function DispositionPage({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+        <section id="schedule-destruction" className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
           <h2 className="mb-1 text-sm font-black uppercase tracking-[0.14em] text-white/80">Schedule a destruction</h2>
           <p className="mb-4 text-xs text-white/40">
             Opens a {holdHours}h hold and quarantines the lot. Complete it below once the hold elapses.
@@ -256,7 +257,9 @@ export default async function DispositionPage({
           ) : (
             <form action={scheduleDestructionAction} className="space-y-3">
               <Field label="Lot" required>
-                <Select name="lot_id" required>
+                {/* Fix Phase 1.2 (G-23 req 3): the lot page's Schedule destruction link
+                    opens this form with that lot chosen (?lot=<id>). */}
+                <Select name="lot_id" required defaultValue={preselectLot}>
                   <option value="">Select a lot…</option>
                   {lots.map((l) => (
                     <option key={l.id} value={l.id}>

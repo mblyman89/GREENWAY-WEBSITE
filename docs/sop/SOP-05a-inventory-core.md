@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (Phase 1.1 fix G-19 + G-22 built: gated, audited lot lifecycle; Phase 0.5 fix G-27 built: no typed cannabis cost; owner answer to Q-05a-6 applied; draft for owner review) |
+| **Version** | 1.5 (Phase 1.2 fix G-23 built: hardened manual adjustment; Phase 1.1 fix G-19 + G-22 built: gated, audited lot lifecycle; Phase 0.5 fix G-27 built: no typed cannabis cost; owner answer to Q-05a-6 applied; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after cannabis lots once they are received: the daily Issues check, quantity corrections, holds and recalls, expiry dates, tags, testing labs and lot labels. Budtenders read §4.10–§4.11 (what a recall hold and the register's "86" do) and §9. |
@@ -13,7 +13,7 @@
 
 > **How to use this document.** §4.1–§4.4 are the screens and the **daily Issues check** (10 minutes, every morning). §4.5–§4.9 are the lot page: correcting a quantity and changing a lot's status, which are the two most dangerous buttons in Inventory. §4.10–§4.13 are **recalls**, the register's **86**, **restore to sale**, and the written recall plan the law requires. §4.14–§4.16 are **expiry dates**. §4.17–§4.21 are tags, testing labs, lot labels, bulk fill and lot corrections. Section 5 lists every message the screens can show. Section 8 holds the paper forms. Section 9 is a one-page card. Words in **bold** are the exact labels you will see on the screen.
 
-> **The one thing to know before anything else.** On the lot page, the **Adjust quantity** box writes straight to the lot (§4.6). The **Lifecycle status** box is gated since Phase 1.1 (G-19, G-22): it asks for a reason, runs the go-live check before **Active**, lets only the owner or admin release a recall, writes an audit row and shows a **Status history** (`inventory/actions.ts` L158–217; `lot-lifecycle-core.ts`). **Destroyed is no longer on its list.** Destruction always goes through **Inventory → Returns & Destruction** (SOP-15). A recall is placed by a manager and released only by the admin or owner, with the clearance reference (§4.10).
+> **The one thing to know before anything else.** On the lot page, the **Adjust quantity** box is hardened since Phase 1.2 (G-23): it cannot go below zero, offers no Receive, Destruction or Recall removal, and records who and when (§4.6). The **Lifecycle status** box is gated since Phase 1.1 (G-19, G-22): it asks for a reason, runs the go-live check before **Active**, lets only the owner or admin release a recall, writes an audit row and shows a **Status history** (`inventory/actions.ts` L158–217; `lot-lifecycle-core.ts`). **Destroyed is no longer on its list.** Destruction always goes through **Inventory → Returns & Destruction** (SOP-15). A recall is placed by a manager and released only by the admin or owner, with the clearance reference (§4.10).
 
 ---
 
@@ -145,9 +145,9 @@ and set how it is to be built when this slice began:
    |---|---|
    | Selling any product that has a **Recalled** lot. There is no override (`completion-gate.ts` L95–119) | Selling an **expired** lot (§4.16, F-05a-8) |
    | Restoring an 86'd product that is under a recall hold, hidden, or has no live stock (`restore-to-sale-core.ts` L115–158) | *(since Phase 1.1 the app also refuses a manual **Destroyed**, an **Active** that fails the go-live check, a status change with no reason, and a recall release by a manager; §4.8)* |
-   | Applying expiration rules after something changed since the preview (`expiration-rules/actions.ts` L146–157) | Taking a lot's quantity **below zero** with a manual adjustment (§4.6, F-05a-3) |
-   | Overwriting an expiry date that came from a manifest, COA or the POS (`expiry-rules-core.ts` L10–34) | Sending a manual "Other" or "Employee sample" adjustment with no note. CCRS will withhold it (§4.7, F-05a-4) |
-   | Deleting a tag without the **Yes, delete** tick (`tags/actions.ts` L108–111) | Recording a destruction outside the SOP-15 flow (§4.7, F-05a-5) |
+   | Applying expiration rules after something changed since the preview (`expiration-rules/actions.ts` L146–157) | *(since Phase 1.2 the app refuses an adjustment below zero, §4.6)* |
+   | Overwriting an expiry date that came from a manifest, COA or the POS (`expiry-rules-core.ts` L10–34) | *(since Phase 1.2 the app refuses an Other, Employee sample or Theft adjustment with no note, §4.7)* |
+   | Deleting a tag without the **Yes, delete** tick (`tags/actions.ts` L108–111) | Recording a destruction outside the SOP-15 flow (the lot page no longer offers it since Phase 1.2; §4.7) |
 
 ---
 
@@ -260,59 +260,63 @@ Open a lot from the list. From top to bottom (`src/app/admin/inventory/[id]/page
 | **Correct lot details** (L806–868) | Vendor, brand, strain and strain type only. **Save corrections** | §4.21 |
 | **Saved to Knowledge Base**, **On the menu (enrichment)** | Product Enrichment links | SOP-10 |
 | **Correct the sell price**, **Which size is this lot?**, **Website type & category (menu)**, **Sales-limit classification** | Menu and price corrections | SOP-05b |
-| **Adjust quantity** (L1474–1494) | Quantity change, reason, note. **Record adjustment** | §4.6–§4.7 |
+| **Adjust quantity** (L1489–1531) | Quantity change, reason, note, incident reference, **Schedule destruction** link. **Record adjustment** | §4.6–§4.7 |
 | **Lifecycle status** (L1498–1512) | **Set status**. **Update status** | §4.8–§4.9 |
-| **Adjustment history** (L1518–1546) | Every manual adjustment: +/- quantity, reason, note, date | below |
+| **Adjustment history** (L1610–1640) | Every manual adjustment: +/- quantity, reason, note, Pacific date and time, who | below |
 
-**Reading the Adjustment history.** Each line shows the change (green +, red -), the reason code (for example `shrink`), the note, and a date. Two limits (finding F-05a-13):
-- The date is formatted by **your browser's clock and time zone** (`toLocaleDateString()`, L1539), not the store's Pacific day. A computer set to another time zone can show a different day.
-- The line does **not** show **who** made the adjustment, although the system stores it (`actor_id`, `store.ts` L607–613). Form 8.2 is the readable record.
+**Reading the Adjustment history.** Each line shows the change (green +, red -), the reason, the note, and on the right the **Pacific** date and time and **who** made it (since Phase 1.2; `formatPacificDateTime`, `adjustmentActorName`; F-05a-13 FIXED). A name the system cannot find shows as **Unknown**; a line written by the system shows **System**. Older lines with a retired reason show it as *retired*.
 
 The history lists **manual** adjustments only. Sales, voids, cycle counts and destructions move quantity through their own records (SOP-01, SOP-06, SOP-15).
 
 ### 4.6 Adjust quantity: the procedure
 
-**What it does.** **Record adjustment** adds the number you type (negative to remove) to the lot's on-hand quantity, writes one line to the Adjustment history, and moves the menu stock for the size this lot sells as by the same amount (`actions.ts` L111–140 → `store.ts` L591–629; menu sync L611–615). Except for reason **Receive (add)**, the line is also sent to CCRS in the next weekly InventoryAdjustment file (§4.7).
+**What it does (since Phase 1.2, G-23).** **Record adjustment** (`inventory/actions.ts` L110 → `store.ts` L618) first runs `evaluateManualAdjustment` (`manual-adjustment-core.ts` L105), which refuses, with every reason at once:
+- a reason that is not on the list; **Receive (add)**, **Destruction** and **Recall removal** are refused with a sentence saying where they now live (D39);
+- a zero or blank quantity;
+- a change that would take the lot **below zero**: *"An adjustment can never take a lot below zero. Count again."*;
+- **Theft** or **Seizure** without the **Incident reference**;
+- an **Other**, **Employee sample** or **Theft** adjustment with no note (CCRS withholds those, E13);
+- a note over 250 characters (the CCRS detail limit), or a **Destroyed** lot.
 
-**What it does not do** (findings F-05a-3, F-05a-7):
-- **It does not stop at zero.** The new quantity is the old quantity plus your number, with no floor (`store.ts` L616–621). Type -10 on a lot with 6 and the lot shows -4.
-- **It does not flip the lot to Sold out** at zero. Sales, voids and counts do (`atomic-quantity.ts` L44). An adjustment does not.
-- **It is not protected against a sale at the same moment.** It reads the quantity, then writes old + change (`store.ts` L600–604, L616–621). If a register sells from the same lot in between, that sale's decrement can be lost. Sales, counts and destructions use the protected database write (`applyLotDelta`, GW-012); this button does not.
-- **It writes no audit-log row.** The adjustment line itself (with the user id) is the only record.
+Then the store writes the adjustment line and moves **On hand** with the protected database write (`applyLotDelta`, GW-012, strict). If a sale used the stock a moment earlier and the change would now go below zero, the database refuses it and the adjustment line is removed, so the history never shows a change that did not happen. Removing stock from an **Active** lot that reaches zero sets it to **Sold out**. Adding units to a **Sold out** lot does **not** put it back on sale: set **Active** under Lifecycle status, which runs the go-live check (§4.8). Every adjustment writes an audit row `inventory_lot.adjusted` (before and after quantity, reason, note, incident reference). The menu stock for the size this lot sells as moves by the same amount. Every reason except a retired **Receive** line is sent to CCRS in the next weekly InventoryAdjustment file (§4.7).
+
+If you save with no note on a reason CCRS does not force, the page saves and says: *"No note was written. SOP-05a §4.6 asks for a note on every adjustment…"*
 
 **Procedure.**
 1. **Count first.** Count the physical units of this lot twice. Know the exact difference before you touch the screen. If the difference came from a full shelf count, use a cycle count instead (SOP-06): it uses the protected write and has a review step.
 2. **Avoid busy times.** Make adjustments when no register is selling this product. Before opening or after close is best.
 3. Fill in **Adjust quantity**:
-   - **Quantity change**: the difference. *"Use a negative number to remove stock."* (L1477). Never more negative than **On hand**.
-   - **Reason**: pick from the table in §4.7. Never **Destruction** or **Recall removal** (§4.7).
-   - **Note**: **always** write one, even though the screen says *"Optional detail for the audit trail…"* (L1489). Say what happened, who found it, and where the product is now. For **Employee sample** and **Other** the note is **required by CCRS** (§4.7).
-4. Press **Record adjustment**. The page shows **Saved.** If the menu stock could not follow, the banner adds a sentence after *"Saved."* (`actions.ts` L135–138). Read it and tell the owner if it says the menu did not move.
-5. Check **On hand**. If it is below zero, or exactly zero on an Active lot, see §4.8 (set **Sold out**) and tell the owner.
+   - **Quantity change**: the difference. *"Use a negative number to remove stock. An adjustment can never take the lot below zero."*
+   - **Reason**: pick from the table in §4.7.
+   - **Note**: **always** write one. Say what happened, who found it, and where the product is now. For **Employee sample**, **Theft** and **Other** the app refuses to save without it.
+   - **Incident reference**: only for **Theft** and **Seizure**, and then required (§4.7).
+4. Press **Record adjustment**. The page shows **Saved.**, or a red message naming every reason it was refused. If the menu stock could not follow, the banner adds a sentence after *"Saved."*. Read it and tell the owner if it says the menu did not move.
+5. Check **On hand** and the new line in **Adjustment history** (your name, Pacific time). An Active lot at zero is now **Sold out** by itself.
 6. Write the adjustment on **form 8.2** (lot, change, reason, note, who, time, second person who saw the count).
 
 ### 4.7 Which reason to choose (and what CCRS receives)
 
-The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs-inventory-adjustment-core.ts` L62–105):
+The **Reason** list (`MANUAL_ADJUSTMENT_REASONS`, `manual-adjustment-core.ts` L27) and what each one sends to CCRS (`ccrs-inventory-adjustment-core.ts` L62–105):
 
 | Reason (screen) | Use it when | CCRS AdjustmentReason | Note | Rule |
 |---|---|---|---|---|
-| **Receive (add)** | Do **not** use. **The owner has ordered it removed** (D39, G-23 APPROVED). Stock arrives through Receiving (SOP-04) | *Not sent.* `isReportableAdjustment` skips it (L101–105) | — | **Never.** Adding units by hand puts units on our books that CCRS never hears about (F-05a-7). If units were truly missed at receiving, tell the owner |
+| ~~Receive (add)~~ | **Removed in Phase 1.2** (D39); the server refuses it. Stock arrives through Receiving (SOP-04) | *Not sent.* `isReportableAdjustment` skips it (L101–105) | — | **Never.** Adding units by hand puts units on our books that CCRS never hears about (F-05a-7). If units were truly missed at receiving, tell the owner |
 | **Shrink** | Units missing with no known cause, found outside a cycle count | Lost | Required by this SOP | Tell the owner the same day if more than 1 unit or any amount above $50 at cost |
 | **Damage** | A package broken or unsellable in the store | Lost | Required by this SOP: what broke, how | Keep the damaged product in quarantine for SOP-15 destruction. The adjustment does not destroy it |
 | **Sample (lab/QA)** | Units pulled for a lab or QA test | ReturnedLabSample | Required by this SOP: lab and reason | |
 | **Employee sample (WAC 314-55-096)** | A vendor trade sample given to a paid employee | Other | **Required by CCRS**: the employee's name. Without it, CCRS withholds the row with error **E13** (`ccrs-inventory-adjustment-core.ts` L201–212; `ccrs-preflight-core.ts` L271) | Prefer the trade-samples screen, which writes the note for you (`trade-samples.ts` L280–300) |
-| **Destruction** | Do **not** use. **To be removed** (D39); the lot page will link to Returns & Destruction instead | Destruction | — | **Never.** Destruction is SOP-15, with its hold, method, witness and waste record (F-05a-5) |
+| ~~Destruction~~ | **Removed in Phase 1.2** (D39); use the **Schedule destruction** link under Adjust quantity | Destruction | — | **Never.** Destruction is SOP-15, with its hold, method, witness and waste record (F-05a-5) |
 | **Cycle-count correction** | Only when the owner tells you to correct a count by hand | Reconciliation | Required by this SOP: which count | Normal count corrections come from the cycle count itself (SOP-06) |
-| **Recall removal** | Do **not** use. **To be removed** (D39) | Destruction | — | **Never.** Recalled product may not be destroyed until the LCB is notified and the destruction is coordinated (§4.10). SOP-15 enforces that; this reason does not (F-05a-5) |
-| **Other** | Anything else, with owner approval | Other | **Required by CCRS**: a clear sentence. Without it the row is withheld (E13) | Ask the owner first |
+| ~~Recall removal~~ | **Removed in Phase 1.2** (D39) | Destruction | — | **Never.** Recalled product may not be destroyed until the LCB is notified and the destruction is coordinated (§4.10). SOP-15 enforces that; this reason does not (F-05a-5) |
+| **Theft** | Product stolen (SOP-20), after the owner decides | Theft | **Required by CCRS**; the app also requires the **Incident reference** and puts it at the start of the note (*"Incident <ref>: …"*) | Call the owner first |
+| **Seizure** | Product seized by police or the LCB (SOP-20), after the owner decides | Seizure | Required by this SOP; the app requires the **Incident reference** and puts it at the start of the note | Call the owner first |
+| **Other** | Anything else, with owner approval | Other | **Required by CCRS**: a clear sentence. The app refuses to save without it | Ask the owner first |
 
-**Theft and seizure.** The owner has ordered **Theft** and **Seizure** added to the list (*"Add theft and seizure."*, D39; gap G-23 APPROVED). CCRS already has both reasons, and the app already maps them (`ccrs-inventory-adjustment-core.ts` L87–90). Only the lot page's list is missing them (L118–128; finding F-05a-6). CCRS needs a written detail for **Theft** (`ccrs-preflight-core.ts` L273; `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` §5.5). If product is stolen or seized:
+**Theft and seizure (since Phase 1.2).** The owner ordered **Theft** and **Seizure** added (*"Add theft and seizure."*, D39). They are on the list, map to CCRS **Theft** and **Seizure** (`ccrs-inventory-adjustment-core.ts` L87–90), and need the **Incident reference** (F-05a-6 FIXED). If product is stolen or seized:
 1. Do not adjust anything yet. Follow SOP-20 (incident) and call the owner.
-2. The owner decides how it is recorded. **Until G-23 is built**, the only path on this screen is **Other** with a note that begins "THEFT:" or "SEIZURE:", followed by the police or LCB report number. That reaches CCRS as **Other**, not **Theft** or **Seizure**. Write the report number on form 8.2 as well.
-3. **When G-23 is built**, choose **Theft** or **Seizure** and type the same note. This paragraph is then rewritten (D41).
+2. When the owner says so, choose **Theft** or **Seizure**, type the police or LCB report number in **Incident reference**, write what was taken in the note, and **Record adjustment**. Write the report number on form 8.2 as well.
 
-> **Control: every manual adjustment has a reason, a written note, a double count and a line on form 8.2.** The screen accepts an empty note, but CCRS withholds an Other or Employee-sample row that has none (E13). The adjustment history shows no name. The note and form 8.2 are how the owner and the state can tell what happened.
+> **Control: every manual adjustment has a reason, a written note, a double count and a line on form 8.2.** Since Phase 1.2 the app refuses a below-zero change, a retired reason, a Theft or Seizure without an incident reference, and an empty note where CCRS needs one; it writes an audit row and shows who and when (F-05a-3, F-05a-4, F-05a-5, F-05a-6, F-05a-7, F-05a-13 FIXED). The double count and form 8.2 stay: the app cannot see the shelf.
 
 ### 4.8 Lifecycle status: the procedure
 
@@ -365,7 +369,7 @@ Every refused try writes an audit row `inventory_lot.status_change_refused`. Eve
 | **Cancel** it | Sets the lot back to **Active** | L1100–1116 |
 | Every step | Writes an audit row | `disposition/actions.ts` L184, L225, L250 |
 
-So nobody should touch **Lifecycle status** or **Adjust quantity** to destroy anything. The owner's decision (D39) is to take **Destruction** and **Recall removal** off the lot page and put a **Schedule destruction** link there instead (gap G-23). Three defects stop the page from handling **recalled** and **quarantined** lots properly. They are recorded as findings and fixed by gap **G-28**:
+So nobody should touch **Lifecycle status** or **Adjust quantity** to destroy anything. Since Phase 1.2 (G-23, D39) **Destruction** and **Recall removal** are off the lot page and a **Schedule destruction** link under **Adjust quantity** opens Returns & Destruction with the lot already chosen (`disposition/page.tsx` `?lot=`; only Active lots can be chosen there until G-28). Three defects stop the page from handling **recalled** and **quarantined** lots properly. They are recorded as findings and fixed by gap **G-28**:
 - **F-05a-17 (S2): the destruction form lists only Active lots.** The page loads `listLots({ status: "active", limit: 500 })` (`disposition/page.tsx` L103). A lot already in **Quarantine** or **Recalled** cannot be picked, which are exactly the lots most likely to be destroyed.
 - **F-05a-18 (S1): scheduling overwrites Recalled with Quarantine.** L965–971 writes `quarantine` whatever the status was. The register's recall hold reads only **Recalled** (`recall-hold-core.ts` L44), so the hold on the product is lifted, and the lot no longer shows as recalled anywhere.
 - **F-05a-19 (S2): Cancel always sets the lot to Active** (L1113–1114), even if it was Quarantine or Recalled before. Cancelling a recalled lot's destruction would put recalled product back on sale.
@@ -886,9 +890,9 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | **A written, signed recall plan with a named coordinator, reviewed yearly** | WAC 314-55-225(3)(d) (mandatory) | Form 8.4; F-05a-15 |
 | **Only the admin (recall coordinator) releases a recall hold, on written clearance** | Owner decision D37; the app lets any manager release with no record | §4.10; F-05a-2 |
 | **A recalled lot is never scheduled for destruction in the app until G-28 is built** | Scheduling overwrites Recalled with Quarantine and lifts the register hold (F-05a-18, S1); Cancel sets Active (F-05a-19) | `disposition.ts` L965–971, L1113–1114; `recall-hold-core.ts` L44 |
-| **Every manual adjustment: reason, note, double count, form 8.2** | CCRS withholds an Other / Employee-sample row with no note (E13); the history shows no name; the write is not atomic and has no floor (F-05a-3, F-05a-4, F-05a-13) | `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `store.ts` L591–629 |
-| **Never use Receive (add), Destruction or Recall removal on the lot page** | Receive is not sent to CCRS (F-05a-7); the other two bypass SOP-15 (F-05a-5) | `ccrs-inventory-adjustment-core.ts` L101–105 |
-| **Theft and seizure go to the owner, never straight to an adjustment** | No Theft / Seizure reason on the form yet (F-05a-6); the owner approved adding them (D39, G-23) | Lot page L118–128; `ccrs-inventory-adjustment-core.ts` L87–90 |
+| **Every manual adjustment: reason, note, double count, form 8.2** | The app enforces the reason, the CCRS notes and the zero floor and records who (Phase 1.2); the double count is the person's job | `manual-adjustment-core.ts` L105; `store.ts` L618 |
+| **Destruction only through Returns & Destruction** | Receive, Destruction and Recall removal removed from the lot page in Phase 1.2 (F-05a-5, F-05a-7 FIXED) | `manual-adjustment-core.ts` `RETIRED_ADJUSTMENT_REASONS` |
+| **Theft and seizure go to the owner first** | Theft and Seizure on the form since Phase 1.2, with a required incident reference (F-05a-6 FIXED) | `manual-adjustment-core.ts`; `ccrs-inventory-adjustment-core.ts` L87–90 |
 | **The daily Issues check, logged on form 8.3** | It is the only stop on expired stock (F-05a-8) and the place every blocked lot shows | §4.4 |
 | **Expired edibles, liquid edibles, tinctures, capsules and RSO never sold; other expired lots on the owner's decision** | Owner decisions D36, D44. The register sells expired lots and draws FIFO, not FEFO (F-05a-8) | `sale-lot-read.ts` L39–47 |
 | **Expiration rules: owner decides, Save → Preview → Apply** | The fingerprint check stops a different plan being applied; every date is audited | `expiration-rules/actions.ts` L146–180 |
@@ -905,7 +909,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 ## 8. Checklists & forms
 
-Print these. Keep the filled forms in the compliance binder, by month, for **five years** (WAC 314-55-087). Since Phase 1.1 the app records who changed a lot's status (Status history). Until gaps G-23 and G-25 are built, these forms are the only record of who adjusted a lot and how a recall was handled.
+Print these. Keep the filled forms in the compliance binder, by month, for **five years** (WAC 314-55-087). Since Phase 1.1 the app records who changed a lot's status (Status history), and since Phase 1.2 who adjusted a lot (Adjustment history). Until gap G-25 is built, these forms are the only record of how a recall was handled; form 8.2 keeps the second person who saw the count.
 
 ### 8.1 Lot status and recall log (one line per status change)
 
@@ -1193,13 +1197,13 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | Need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
 | A status change that checks the go-live rule, asks a reason and writes an audit row — **BUILT** (Phase 1.1) | Built: reason required, go-live check on Active, no manual Destroyed, recall release owner/admin with clearance reference, Status history | None needed (§4.8–§4.10) | G-19, **G-22** · F-04-2, F-05a-1, F-05a-2 FIXED |
-| A safe manual adjustment (atomic, no negative, Sold out at zero, **Theft / Seizure added**, note required where CCRS needs it, **Receive / Destruction / Recall removal removed**, a **Schedule destruction** link to Returns & Destruction) — **APPROVED** (D39) | Read-then-write, no floor, optional note, unsafe reasons on the list | Count twice, quiet times, always a note, form 8.2, forbidden reasons (§4.6–§4.7) | **G-23** · F-05a-3 … F-05a-7 |
+| A safe manual adjustment (atomic, no negative, Sold out at zero, **Theft / Seizure added**, note required where CCRS needs it, **Receive / Destruction / Recall removal removed**, a **Schedule destruction** link to Returns & Destruction) — **BUILT** (Phase 1.2) | Built: atomic strict write, no negative, Sold out at zero, Theft / Seizure with incident reference, CCRS notes required, retired reasons refused, Schedule destruction link, audit row, name and Pacific time | Count twice, always a note, form 8.2 (§4.6–§4.7) | **G-23** · F-05a-3 … F-05a-7 FIXED |
 | Register **hard block** on expired Solid Edible, Liquid Edible, Tincture, Capsule and RSO lots (RSO by store category, F-05a-20), **warning** on all other expired lots; FEFO lot draw; correct Issues text — **APPROVED** (D36) | Register sells expired lots, draws FIFO; Issues text points to the wrong fix | Daily check by type: edibles pulled and quarantined, others on the owner's decision; one lot on the floor at a time (§4.16) | **G-24** (**APPROVED**, D36, D44) · F-05a-8, F-05a-20 |
 | A recall plan and recall log in the app, with a named coordinator; the hold reaching the website and online orders | No plan, no coordinator, no log; the hold stops the register only | Forms 8.4 and 8.5; **Always hide** on Product Enrichment (§4.10, §4.13) | **G-25** · F-05a-15, F-05a-16 |
 | A **Print label** link on the lot page; a scannable fallback barcode; **the professional 86** (reason-driven clearing, one queue, audited manager restore) — 86 part **APPROVED** (D40) | Label linked from the manifest only; fallback barcode does not scan; 86 reverts on the next download | Manifest link or typed address; scan before use; manager checks every 86 (§4.12, §4.19) | **G-26** · F-05a-9, F-05a-10 |
 | **No typed cannabis unit cost anywhere**: remove **Unit cost** from Bulk fill for cannabis lots — **BUILT** (Phase 0.5) | Anyone with Inventory access can bulk-fill it | Never use Bulk fill → Unit cost; cost only from the manifest (§4.20) | **G-27** · F-05a-11 (S1) |
 | Returns & Destruction able to pick **Quarantine** and **Recalled** lots, keep **Recalled** when scheduling (hold stays on), and on Cancel put the lot back to the status it had | Lists Active lots only; scheduling writes Quarantine over Recalled; Cancel always sets Active | Recalled lots destroyed on paper with the LCB officer and stay Recalled; cancel only with the owner and restore the old status at once (§4.9) | **G-28** · F-05a-17, F-05a-18, F-05a-19 |
-| Adjustment history in store time, with the name | Browser time zone; no name shown | Form 8.2 (§4.5) | F-05a-13 |
+| Adjustment history in store time, with the name — **BUILT** (Phase 1.2) | Built | None needed (§4.5) | F-05a-13 FIXED |
 
 ## Appendix C: Open questions for the owner
 
@@ -1220,6 +1224,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue (slice SOP-05a, owner decision D35: inventory management in two slices). Written from the code at `main@ac251766`. Part 1 screens and the daily Issues check (§4.1–§4.4); Part 2 the lot page, adjustments and lifecycle status (§4.5–§4.9); Part 3 recalls, the 86, restore to sale and the written recall plan (§4.10–§4.13, WAC 314-55-225); Part 4 expiry dates and expiration rules (§4.14–§4.16); Part 5 tags, testing labs, labels, bulk fill and lot corrections (§4.17–§4.22). Adds findings F-05a-1…F-05a-16, gaps G-22…G-26, questions Q-05a-1…Q-05a-5, forms 8.1–8.5 (8.4 is the statutory recall plan). | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Owner answers to Q-05a-1…5 applied (decisions D36–D41). Re-verified at `main@827facb5` after the performance merge (register files now under `src/app/(site)/pos/`; line references updated; no described behaviour changed). Living-SOP reminder added (D41). §2, §4.10, §4.13, §6, form 8.4: the **admin** is the recall coordinator, no back-up (D37). §4.7: Receive, Destruction and Recall removal to be removed, Theft and Seizure to be added (D39, G-23 APPROVED). §4.9: how Returns & Destruction changes the lot by itself, and new findings F-05a-17…19 with an interim (gap G-28). §4.12: what an 86 is, and the professional method (D40, G-26 APPROVED). §4.16: expired edibles and liquid edibles never sold, others on the owner's decision (D36, G-24 APPROVED). §4.20: nobody types a cannabis unit cost (D38; F-05a-11 re-rated S1; gap G-27). §7, §9, glossary, Appendices B–C updated; questions Q-05a-6…8 added. | SOP program (for owner review) |
+| 1.5 draft | Fix phase | Phase 1.2 (owner D76). G-23 BUILT: **Adjust quantity** runs `evaluateManualAdjustment`; Receive (add), Destruction and Recall removal removed and refused (D39); **Theft** and **Seizure** added with a required **Incident reference**; a note is required where CCRS reports Other or Theft (E13) and asked for every time; the write is the strict atomic `applyLotDelta` (never below zero; the adjustment line is removed on refusal), an Active lot at zero becomes Sold out, a Sold out lot is never restocked to Active without the go-live check; audit row `inventory_lot.adjusted`; history shows Pacific time and the name; **Schedule destruction** link with the lot preselected; Issues expired-lot text fixed. Summary, §3, §4.5–§4.7, §4.9, §7, §8 intro and Appendix B updated. F-05a-3…F-05a-7, F-05a-13 FIXED. | Fix program |
 | 1.4 draft | Fix phase | Phase 1.1 (owner D76). G-19 + G-22 BUILT: **Lifecycle status** asks a required reason and a reference, runs the go-live check before Active, refuses Destroyed (removed from the list), lets only the owner or admin release a recall (new permission `inventory.recall.release`, D37) with a clearance reference, writes `inventory_lot.status_changed` / `inventory_lot.status_change_refused` audit rows, and shows **Status history** (Pacific time, names). The activation guard now also catches non-literal and Destroyed writes and runs in the test suite. Summary, §2, §3, §4.7 status table, §4.8–§4.10, §8 intro and Appendix B updated. F-04-2, F-05a-1, F-05a-2 FIXED. | Fix program |
 | 1.3 draft | Fix phase | Phase 0.5 (owner D76). G-27 BUILT: **Unit cost** removed from Bulk fill (field list, planner, server action, store, panel); the unknown-cost Issues row says *"Cost missing — correct from the manifest"* and offers no Bulk fill; the lot-page Cultivera callout names a missing cost with no fill link; the POS-import diagnostic no longer says to type costs. Compliance guard test: only manifest intake, the manifest receipt and the one-time import write a lot's cost. §4.2 Issues table, §4.3, §4.20, §5, §7 and Appendix B updated. F-05a-11 FIXED. | Fix program |
 | 1.2 draft | 2026-10-28 | Owner answer to Q-05a-6 applied (decision D44): the expiry hard block covers Solid Edible, Liquid Edible, Tincture, Capsule **and RSO**. New finding F-05a-20: RSO is filed in CCRS as Concentrate for Inhalation, so G-24 must key on the store category. §4.16, §6, §7, §9, glossary, Appendices B–C updated. Line references re-pinned to `main@e1fe84eb` after the second performance merge (`inventory/store.ts`, `ccrs-batch.ts`, `register-sellability-store.ts`); no described behaviour changed. | SOP program (for owner review) |

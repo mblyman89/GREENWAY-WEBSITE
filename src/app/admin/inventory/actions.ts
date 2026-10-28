@@ -11,6 +11,7 @@ import {
   LOT_STATUS_AUDIT_ACTION,
   LOT_STATUS_REFUSED_AUDIT_ACTION,
 } from "@/lib/inventory/lot-lifecycle-core";
+import { evaluateManualAdjustment } from "@/lib/inventory/manual-adjustment-core";
 import {
   createAdjustment,
   updateLotStatus,
@@ -95,49 +96,65 @@ import {
   linkLotLabResult,
 } from "@/lib/inventory/lot-link-store";
 
-const VALID_REASONS = new Set([
-  "receive",
-  "shrink",
-  "damage",
-  "sample",
-  // Task K: trade sample provided to a paid employee (WAC 314-55-096) \u2014 exports
-  // to CCRS as AdjustmentReason "Other" with a detail naming the employee.
-  "employee_sample",
-  "destruction",
-  "count",
-  "recall",
-  "other",
-]);
-
+/**
+ * Fix Phase 1.2 (G-23): the lot page's Adjust quantity box.
+ *
+ * The reason list, the note rules (required where CCRS reports Other or
+ * Theft, E13), the incident reference for Theft / Seizure and the no-below-
+ * zero pre-check are decided by evaluateManualAdjustment
+ * (manual-adjustment-core.ts). Receive (add), Destruction and Recall removal
+ * are refused (owner decision D39). The write is atomic and strict
+ * (createAdjustment -> applyLotDelta) and writes an inventory_lot.adjusted
+ * audit row.
+ */
 export async function adjustLotAction(lotId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
 
   const rawQty = formData.get("qty_delta");
   const reason = (formData.get("reason") as string | null)?.trim() ?? "";
-  const note = (formData.get("note") as string | null)?.trim() || null;
+  const note = (formData.get("note") as string | null) ?? null;
+  const incidentReference = (formData.get("incident_reference") as string | null) ?? null;
+  const qtyDelta = typeof rawQty === "string" && rawQty.trim() !== "" ? Number(rawQty) : NaN;
 
-  const qtyDelta = typeof rawQty === "string" ? Number(rawQty) : NaN;
-  if (!Number.isFinite(qtyDelta) || qtyDelta === 0) {
-    redirect(`/admin/inventory/${lotId}?error=qty`);
-  }
-  if (!VALID_REASONS.has(reason)) {
-    redirect(`/admin/inventory/${lotId}?error=reason`);
+  const lot = await getLotById(lotId);
+  if (!lot) redirect("/admin/inventory");
+
+  const decision = evaluateManualAdjustment({
+    reason,
+    qtyDelta,
+    note,
+    incidentReference,
+    onHand: lot.on_hand_qty,
+    lotStatus: lot.status,
+  });
+  if (!decision.ok) {
+    const msg = decision.refusals.map((r) => r.message).join(" ");
+    redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(msg.slice(0, 900))}#adjust`);
   }
 
   const result = await createAdjustment(
-    { lotId, qtyDelta, reason, note },
+    {
+      lotId,
+      qtyDelta: decision.qtyDelta,
+      reason: decision.reason,
+      note: decision.note,
+      incidentReference: decision.incidentReference,
+    },
     session.userId,
+    session.email,
   );
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
   if (!result.ok) {
-    redirect(`/admin/inventory/${lotId}?error=save`);
+    redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(result.error.slice(0, 900))}#adjust`);
   }
+  await revalidatePublicMenuSurfaces();
   // R74 S32: the menu size moved with the lot; say so when it could not.
-  if (result.menuStock) {
-    redirect(`/admin/inventory/${lotId}?saved=1&lot_msg=${encodeURIComponent(result.menuStock.slice(0, 600))}`);
+  const extra = [decision.noteWarning, result.menuStock].filter((x): x is string => Boolean(x)).join(" ");
+  if (extra) {
+    redirect(`/admin/inventory/${lotId}?saved=1&lot_msg=${encodeURIComponent(extra.slice(0, 600))}#adjust`);
   }
-  redirect(`/admin/inventory/${lotId}?saved=1`);
+  redirect(`/admin/inventory/${lotId}?saved=1#adjust`);
 }
 
 /**

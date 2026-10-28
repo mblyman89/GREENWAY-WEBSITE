@@ -460,7 +460,8 @@ export function buildIntelIssues(
       code: "intel_expired_lot",
       title: `Expired and still active \u2014 ${l.productName?.trim() || "unnamed lot"}`,
       meaning: `Expired on ${l.expiresOn}. Expired product may not be sold.`,
-      fixText: "Open the lot and change its status (or record the destruction under Adjust quantity).",
+      fixText:
+        "Open the lot and set it to Quarantine under Lifecycle status (with a reason). To destroy it, use Schedule destruction on the lot page (Returns & Destruction, SOP-15); never Adjust quantity.",
       fix: { href: lotPageHref(l.id, "lifecycle"), label: "Open lot to pull it" },
     });
   }
