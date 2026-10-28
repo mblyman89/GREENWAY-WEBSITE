@@ -254,3 +254,30 @@ The concierge code is **unchanged** (record-only). Today the `inventory` topic (
 **Future features (D41/D42):** when G-29…G-32 and G-30A are built (all **APPROVED**, D45–D49; G-29 widened to menu, books and reports), the topics above are updated in the same slice as the SOP (charter rules 9–10).
 
 **Running score:** topics with complete SOP source material add `other-inventory`, `merch`, `publish-menu`, `sales-limit-classification` and `sell-price`, and complete `inventory` (Types & Categories). Baseline row touched: Inventory management 🟡 (§3), unchanged in code.
+
+### SOP-06 Inventory Audits, Cycle Counts & Daily Checklists (`docs/sop/SOP-06-cycle-counts-audits-daily-checklists.md`, verified at `c976c7e4`)
+
+The concierge code is **unchanged** (record-only). Today `src/lib/admin/concierge-kb.ts` mentions Cycle Counts in one line (L66, L73, L175) and the help centre has *"How do I do a cycle count?"* (`help-content.ts` L450–451). Nothing covers planning an audit, the scope reason, approving and pushing the scope, the blind count rules, second counts, reasons, approval, posting, the journal draft, the work paper, the cutoff rule or daily checklists (finding **F-06-C**). D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*
+
+| Concierge topic | SOP-06 sections that ground it | Rating today → after integration (target) |
+|---|---|---|
+| *new* `inventory-audits` (owner only) | §4.1–§4.7, §4.13–§4.19, §5.1, §5.3, forms 8.1, 8.3, §9.1 | 🔴 → ✅ |
+| `cycle-counts` (expand; every employee) | §4.8–§4.12, §4.20–§4.22, §5.2, forms 8.2, 8.4, §9.2 | 🟡 → ✅ |
+| *new* `daily-checklists` | §4.23, forms 8.5–8.7 | 🔴 → ✅ (paper until G-38) |
+
+**Role filter needed:** audit planning, review, reasons, approval, posting, journal draft and the work paper are **owner only** (D50); never explain the expected quantity, costs or differences to a non-owner during an open count (blind count). Counting and the checklists are for every employee (D51).
+
+**Must ship with caveats** until the findings are fixed:
+- F-06-1: there is **no button** to push an audit to Cycle Counts; give the §4.7 paper interim; never suggest a database edit.
+- F-06-3: a finished count does **not** leave the page by itself; tell the owner.
+- F-06-4: hub and queue counted/difference figures read 0 until posting.
+- F-06-5b: never scan a lot again once recorded; scans do not add up.
+- F-06-7: create the audit right before counting, outside selling hours; never post if anything in scope sold. Do not repeat the explainer's "warns you" claim.
+- F-06-13: never approve while a line says *"Do not average them."*
+- F-06-14: type reason and note together; a saved reason cannot be changed.
+- F-06-8: two schedules exist; don't quote one as the rule until Q-06-5.
+- F-06-9: never use the old sessions' buttons.
+
+**Future features (D41/D42):** when G-33…G-39 are built, the topics above are updated in the same slice as the SOP (charter rules 9–10).
+
+**Running score:** topics with complete SOP source material add `inventory-audits`, `daily-checklists`, and complete `cycle-counts`.

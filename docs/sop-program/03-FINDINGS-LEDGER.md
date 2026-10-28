@@ -62,6 +62,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 - `grep -i "cleaning|dusting|sanitiz"` over `src` finds only unrelated text (data "cleaning", promotions). Checklists exist only for HR onboarding/offboarding (`employee-lifecycle-core.ts`) and payroll mentors.
 - Cycle counts **do** exist as an owner-initiated queue (`/admin/inventory/cycle-counts`, books-23: owner creates the audit, staff do the blind count). A *daily task checklist* that surfaces them does not.
 - The SOP can ship as paper first (a printable checklist). A digital sign-off checklist is a build decision.
+- **Re-verified in SOP-06 (`main@c976c7e4`):** still no feature. Recorded as F-06-12; paper forms in SOP-06 §8.5–§8.7; gap **G-38**.
 
 ### F-00-10 · CONFIRMED · UX · S2 — Staff cannot open the SOP or Handbook pages they are meant to read
 - `/admin/staffing/handbook` → `requirePermission("staffing.manage")` = owner/admin/manager only (`roles.ts`). A budtender (`staff`) cannot open the handbook page they must sign (the acknowledgment gate screen is a separate path, `HandbookGateScreen.tsx`).
@@ -612,6 +613,80 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180 (one Other Inventory line, L172, which repeats the scan promise of F-05b-1; one Types & Categories line).
 - **SOP impact:** concierge ledger SOP-05b section; grounding from SOP-05b §4–§9 in Phase D (D42).
 
+### F-06-1 · CONFIRMED · GAP · S1 — No screen moves a new audit out of "being planned", so it never reaches Cycle Counts
+- **Pin:** `createAuditSession` inserts `status: "draft"` (`audit-hub-store.ts` L586). Cycle Counts lists only `COUNT_QUEUE_STATUSES = ["scope_approved","counting"]` (L379–382; `cycle-counts/page.tsx` L90). The only stage buttons are `to=review` while counting and `to=approved` in review (`audits/[id]/page.tsx` L209–238); draft and scope_approved fall to the "kept as a permanent record" text (L270–279). `grep "scope_approved"` under `src/app/admin/inventory` finds only a colour (`audits/page.tsx` L63). The count sheet accepts numbers only while `counting` (`audits/[id]/count/page.tsx` L100).
+- **Effect:** the owner's design (*"I approve the scope and push it to the cycle counts page"*, `cycle-counts/page.tsx` L17–20; *"approving it is what pushes the count out to the floor"*, `MICHAEL-books-23.md` L55–59) cannot be done. Every new audit stays invisible to the floor. There is also no button back from review to counting (allowed by `LEGAL_STATUS_MOVES`, `inventory-audit-post-core.ts` L113–119).
+- **SOP impact:** SOP-06 "one thing to know", §4.2, §4.7 (paper interim, form 8.2). **G-33**.
+
+### F-06-2 · CONFIRMED · GAP · S2 — No Cancel control for an audit
+- **Pin:** `cancelled` is a legal move from draft, scope_approved, counting and review (`inventory-audit-post-core.ts` L113–119), but no form posts `to=cancelled` (`audits/[id]/page.tsx`).
+- **Effect:** stale or compromised audits (cutoff broken, F-06-7) can't be closed; the hub's "in progress" count grows.
+- **SOP impact:** §4.2, §4.7 step 5, §4.11. **G-33**.
+
+### F-06-3 · CONFIRMED · UX/DOC · S2 — Staff cannot finish a count; the help says they can; staff links lead to denied pages
+- **Pin:** Cycle Counts help step 4 (`cycle-counts/page.tsx` L138): *"When every lot has a number, the count leaves this page and goes to the owner to review. You are done at that point…"*. No code moves the stage on the last entry (`saveCountLine`, `audit-hub-store.ts` L877–950); only the owner's **Finish counting and review the differences** does (`audits/[id]/page.tsx` L216–222). The count sheet's **Review and finish** button (`count/page.tsx` L84) and **Auditing** breadcrumb (L67) go to owner-only pages.
+- **Effect:** contradicts the owner letter *"When they finish, it leaves their screen."* (`MICHAEL-books-23.md` L72–76). Staff are told they are done; the owner is never told.
+- **SOP impact:** §4.8 step 4, §4.9, §4.13. **G-34**. Q-06-2.
+
+### F-06-4 · CONFIRMED · GAP · S3 — Hub "Counted"/"Difference" and the queue progress show 0 / $0.00 until posting
+- **Pin:** session totals read `counted_lot_count` / `gross_variance_cents` (`audit-hub-store.ts` L203–205, L291–293); default 0 (migration 0191 L154); written only at posting (0192 L394–400).
+- **Effect:** the owner's "Waiting for you" table and the floor's done/remaining figures are wrong for every live audit.
+- **SOP impact:** §4.4 caution, §4.8 step 3. **G-34**.
+
+### F-06-5 · CONFIRMED · UX · S2 — Second counts can only be entered by scan; no third count; the "pick it from the list" message has no list for counted lots
+- **Pin:** **enter by hand** shows only for outstanding lines (`AuditCountSheet.tsx` L364–375). A counted line's next entry writes `recount_qty` and each further one overwrites it (`audit-hub-store.ts` L920–928). The ambiguous-scan text says *"Pick it from the list below instead"*.
+- **Effect:** a lot with an unreadable label can't get its second count; a disagreeing second count can't get a third.
+- **SOP impact:** §4.10 step 5, §4.12 steps 3–4. **G-36**.
+
+### F-06-5b · CONFIRMED · GAP · S1/S2 — Re-scanning a counted lot silently becomes its "second count"; scans do not add up
+- **Pin:** `saveCountLine` writes `recount_qty` whenever `counted_qty` is already set, with no check that a recount was requested (`audit-hub-store.ts` L920–928). Posting uses `coalesce(recount_qty, counted_qty)` (0192 L292). The built-in checklist says each scan will *"add one to that batch's count"* (`inventory-audit-core.ts` buildCountChecklist, L1416–1493), which the sheet does not do.
+- **Effect:** a counter scanning the second package of a lot and typing "1" replaces the lot's whole count at posting. No warning.
+- **SOP impact:** §4.10 step 4, §9.2 card, form 8.4. **G-36**. Q-06-7.
+
+### F-06-6 · CONFIRMED · GAP · S2 — Line writes have no stage check, in code or in the database
+- **Pin:** `saveCountLine` (`audit-hub-store.ts` L877–950) and `saveLineReason` (L953–970) never read the session status; RLS `inventory_audit_lines_staff_all` is `for all using (public.is_staff())` (0191 L388–390); no status trigger on lines. Only the UI makes the sheet read-only outside counting (`count/page.tsx` L100).
+- **Effect:** counts can be changed after **Finish counting**, after **Approve this result** and before posting, by any `is_staff` login with a direct request, so the signed result can differ from the posted one.
+- **SOP impact:** §2 store rule 4, §4.13 step 4. **G-36**.
+
+### F-06-7 · CONFIRMED · GAP · S1 — Cutoff: a sale between creating the audit and counting it is subtracted twice at posting; the promised warning does not exist
+- **Pin:** quantities freeze at creation (`audit-hub-store.ts` L596–602); posting computes `v_delta := v_effective - r.system_qty` (0192 L318) and applies it to the live shelf (L350–353). Example: frozen 100, 5 sold (shelf 95), count 95 → delta −5 → shelf 90. The ISA 501.A5 explainer claims the hub *"warns you when sales landed in the middle of it"* (`audit-hub-authorities.ts` L215–235); no such feature exists (grep). The work paper says *"a sale rung up mid-count cannot change the figure being measured"* (`audits/[id]/export/page.tsx` L194–196).
+- **Effect:** phantom shrink written to the shelf, CCRS (Reconciliation) and the books; possible excise exposure under WAC 314-55-089(4)(c); possible INVENTORY_AUDIT_NEGATIVE refusals.
+- **SOP impact:** §4.3, §4.11 (timing rule), §4.17 step 1, §4.19, §7. **G-35**. Q-06-8.
+
+### F-06-8 · CONFIRMED · GAP · S3 — Two different count schedules; the Issues fix links to a page that cannot start a count
+- **Pin:** `CADENCE_DAYS` A30/B60/C90/U14 (`inventory-audit-core.ts` L324–329) vs `COUNT_CADENCE_DAYS` A30/B90/C180 (`inventory-intel-core.ts` L301). Issues row *"Start a cycle count."* → **Open cycle counts** (`issues-core.ts` L478–485), which has no create button by design.
+- **SOP impact:** §4.5 step 3, §4.22. **G-39**. Q-06-5.
+
+### F-06-9 · CONFIRMED · GAP · S2 — "Read only" legacy cycle counts still write through the service role
+- **Pin:** `cycle-counts/actions.ts` (record L92, scan bump L113, apply L147, cancel L183, sheet preview/apply L227/L270, `inventory.manage`); `cycle-counts.ts` `bumpLineCount` L278–320, `recordLineCount` L382–415 (no open-status check), `cancelCycleCount` L526–545; open sessions render Cancel, scanner and **Enter count** (`cycle-counts/[id]/page.tsx` L161–172, L222, L317, L389). Migration 0194 admits the service role bypasses its read-only grant.
+- **SOP impact:** §4.20 store rule. **G-39**. Q-06-6.
+
+### F-06-10 · CONFIRMED · DOC · S3 — The built-in counting checklist is never shown; the method text says it is
+- **Pin:** `buildCountChecklist` (`inventory-audit-core.ts` L1416–1493) has no caller in `src/app`. `AUDIT_METHOD` step 2 systemDoes *"Generates the count sheet with a step-by-step checklist"* (`audit-hub-guidance-core.ts` L80–180).
+- **SOP impact:** §4.10 (the SOP carries the steps). **G-39**.
+
+### F-06-11 · CONFIRMED · UX · S4 — Cosmetic: approved colour differs; browser times; server-time default name
+- **Pin:** approved = gold on the audit page (`audits/[id]/page.tsx` L71–75) vs green on the hub (`audits/page.tsx` L60–65); `toLocaleString` in the browser on the oversold and older lists (`cycle-counts/page.tsx` L186, L206, L282–305); `defaultLabel` uses server `new Date()` (`audits/new/page.tsx`).
+- **SOP impact:** §4.6, §4.21. **G-39**.
+
+### F-06-12 · CONFIRMED · GAP · S3 — No daily checklist feature (re-verifies F-00-9)
+- **Pin:** no checklist model, page or nav entry outside HR lifecycle (`employee-lifecycle-core.ts`); re-checked at `c976c7e4`.
+- **Effect:** the owner's *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature"* and D51 (all employees) are paper only.
+- **SOP impact:** §4.23, forms 8.5–8.7. **G-38**. Q-06-4.
+
+### F-06-13 · CONFIRMED · GAP · S1 — A second count that disagrees with the first does not block approval, and posting uses the second count
+- **Pin:** `assessLine` sets `blocksPosting: true` for `recount_disagrees` (`inventory-audit-core.ts` L800–980), but `readinessOf` (L1109–1210) adds blockers only for uncounted, needs-recount, merge pattern and undocumented material/unvalued lines; `gateSessionForPosting` (`inventory-audit-post-core.ts` L256–316) does not check per-line `blocksPosting`. **Proved by probe** (sys 10, count 5, recount 7, cost $20): `blocksPosting=true`, `canPost=true`, `blockers=[]`. 0192 L292 posts `coalesce(recount, counted)`.
+- **Effect:** **Approve this result** appears and the unresolved second count is posted, despite the line saying *"Do not average them. Go and look again."*
+- **SOP impact:** §4.12 step 5, §4.14 owner rule, §6. **G-36**.
+
+### F-06-14 · CONFIRMED · GAP · S2 — A saved reason cannot be changed or completed; a reason without a note deadlocks the audit; reasons are not validated
+- **Pin:** the reason form shows only when `requiresDocumentation && reasonCode === null` (`AuditVarianceReview.tsx` L255–297), so after any save it disappears; a material shrink needs reason **and** note (`assessLine`) and stays blocked. `saveReasonAction` does not check `reasonCode` against `VARIANCE_REASONS` (`audits/actions.ts` L221–263; DB `reason_code` free text, 0191 L254). `buildPostPlan`'s `needsOwnerDecision` / `readyToPost` is computed (`inventory-audit-store.ts` L290–355) but not enforced at posting.
+- **SOP impact:** §4.15 warning, form 8.3, §6. **G-37**.
+
+### F-06-C · CONFIRMED · DOC · S3 — The concierge has one line on Cycle Counts and nothing on audits, the push, recounts, reasons, posting, the journal draft or checklists
+- **Pin:** `src/lib/admin/concierge-kb.ts` L66, L73, L175; help `help-content.ts` L450–451 (*"How do I do a cycle count?"*).
+- **SOP impact:** concierge ledger SOP-06 section.
+
 ---
 
 ## Ledger index (updated each slice)
@@ -625,3 +700,4 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 | SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
 | SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
+| SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12) | 16 | 0 |

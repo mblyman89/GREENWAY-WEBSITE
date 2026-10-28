@@ -437,3 +437,52 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   10. A classification lot-row write failure shows a warning, not "saved" (F-05b-13).
 - **Interim:** the store rules in SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21.
 
+
+## G-33 · Owner stage controls for an audit: approve scope and push to Cycle Counts, start, send back, cancel (PROPOSED, SOP-06)
+- **Today:** a new audit is saved as `draft` and no screen moves it on (F-06-1); there is no Cancel (F-06-2) and no way back from review to counting.
+- **Owner requirement:** *"I approve the scope and push it to the cycle counts page."* (`cycle-counts/page.tsx` L17–20); *"You approve the scope, and approving it is what pushes the count out to the floor."* (`MICHAEL-books-23.md` L55–59). Audits are owner only (D50).
+- **Requirements:**
+  1. On a `draft` audit, owner button **Approve scope and send to Cycle Counts** → `scope_approved`, signed (scope_approved_by/at, already in `moveSessionStatus`).
+  2. `scope_approved` → `counting` automatically on the first saved count, or by owner button (Q-06-1).
+  3. **Send back to counting** from review (already legal).
+  4. **Cancel** with a required reason from draft, scope_approved, counting and review; audited.
+  5. Hub "Audits" table links each stage to its next action.
+- **Interim:** SOP-06 §4.7 (paper blind count, form 8.2; hand adjustments with reason **Cycle-count correction**).
+
+## G-34 · Counter "I'm done", owner notification, staff-safe links, live progress (PROPOSED, SOP-06)
+- **Today:** the help says a finished count leaves the page; it doesn't. Staff links on the sheet go to owner-only pages. Progress figures read posting-time totals (F-06-3, F-06-4).
+- **Owner requirement:** *"When they finish, it leaves their screen."* (`MICHAEL-books-23.md` L72–76); *"When they finish the count, it should disappear from the cycle counts page and be redirected back to the inventory audit page"* (`audits/page.tsx` L98–101).
+- **Requirements:** a counter **I'm done** (enabled only when nothing is blank) that moves the audit to review or flags it for the owner (Q-06-2) and notifies the owner; correct help step 4; hide **Review and finish** and the **Auditing** breadcrumb for non-owners; counted / blank / gross computed live from the lines.
+- **Interim:** SOP-06 §4.8 step 4 (tell the owner in person).
+
+## G-35 · Count cutoff: no double-subtraction of sales; warn when sales landed (PROPOSED, SOP-06)
+- **Today:** the books quantity freezes at creation and posting applies (count − frozen) to the live shelf, so any sale in between is subtracted twice; the promised warning doesn't exist (F-06-7, **S1**).
+- **Requirements:** compute the delta against the books quantity **at the moment each lot is counted** (store it on the line when counted), or add back sales and receipts between freeze and count; show the owner, per lot, any movement between freeze and count; refuse posting while unexplained movement exists; correct the ISA 501.A5 explainer and the work paper line.
+- **Interim:** SOP-06 §4.11 (create right before counting, outside selling hours; never post if anything in scope sold).
+
+## G-36 · Count-sheet integrity (PROPOSED, SOP-06)
+- **Today:** re-scans silently become second counts (F-06-5b), second counts are scan-only with no third count (F-06-5), a disagreeing second count does not block approval or posting (F-06-13, **S1**), and line writes have no stage check in code or RLS (F-06-6).
+- **Requirements:**
+  1. A disagreeing second count is a **blocker** in `readinessOf` and is re-checked in `gateSessionForPosting` (refuse any line with `blocksPosting`).
+  2. A scan of an already-counted lot asks "add to this lot / replace / cancel"; it never becomes a second count unless the line was asked for one.
+  3. Optional per-package counting (+1 per scan), per Q-06-7.
+  4. Hand entry for second counts; a third count when the second disagrees.
+  5. `saveCountLine` / `saveLineReason` refuse unless the stage is `counting` / `review`; matching RLS or trigger on `inventory_audit_lines`; read-only and content_editor cannot write lines.
+  6. Optional: second count by a different person (Q-06-3).
+- **Interim:** SOP-06 §2 store rule 4, §4.10 step 4, §4.12, §4.14 owner rule.
+
+## G-37 · Reasons can be completed and corrected before approval; validated; owner decisions enforced (PROPOSED, SOP-06)
+- **Today:** the reason form vanishes once saved, so a missing note deadlocks the audit; reasons are free text in the DB; `readyToPost` isn't enforced (F-06-14).
+- **Requirements:** edit reason and note until approval, audited old → new; validate against `VARIANCE_REASONS` in the action and with a DB check; posting refuses when `needsOwnerDecision` is not empty.
+- **Interim:** SOP-06 §4.15 (form 8.3 first; new audit if saved wrong).
+
+## G-38 · Daily checklists in the app, for every employee (PROPOSED, SOP-06)
+- **Today:** none (F-06-12, F-00-9).
+- **Owner requirement:** *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature."* (catalog SOP-06); *"the cycle counts and daily checklists are for all employees, admin, manger, sales."* (D51).
+- **Requirements:** opening / mid-shift / closing checklists, owner-editable task lists (Q-06-4), each task linking to its SOP section; initials and time per task; a live "counts waiting on Cycle Counts" line; manager sign-off; history kept five years (WAC 314-55-087); visible to `inventory.count` roles.
+- **Interim:** SOP-06 forms 8.5–8.7.
+
+## G-39 · Counting housekeeping (PROPOSED, SOP-06)
+- **Today:** F-06-8, F-06-9, F-06-10, F-06-11.
+- **Requirements:** one count schedule (Q-06-5) used by the planner and the Issues row; the Issues fix opens **Plan a count** for the owner and tells others to tell the owner; legacy cycle-count write actions removed or refused (true read-only; Q-06-6); render `buildCountChecklist` on the count sheet (and fix its "add one" step to match G-36); Pacific time on the oversold and older lists and the default audit name; one colour for approved.
+- **Interim:** SOP-06 §4.20, §4.22.
