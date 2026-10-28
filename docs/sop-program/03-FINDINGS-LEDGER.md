@@ -815,6 +815,64 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Effect:** the owner requires every destruction on camera (D64), and WAC 314-55-083(3)(a) requires cameras where waste is destroyed. Without a camera and time on the record, the footage (kept 45 days) is hard to find for an inspector.
 - **SOP impact:** SOP-15 v1.1 §4.17–§4.18, form 8.3. **G-43**.
 
+## SOP-08 · New Hire Onboarding, System Access & Offboarding (verified at `main@bad718b4`)
+
+State texts read 2026-10-28: RCW 69.50.357(2)–(3), WAC 314-55-083(1), WAC 314-55-087(1)(e). Owner basis: books-87 (users are separate from employees, quoted verbatim in migration 0210 L4–12) and D69.
+
+### F-08-1 · CONFIRMED · BUG · S1 — Every new person is created Active, so the Activate gate never runs for a new hire
+- **Pin:** `src/app/admin/staffing/actions.ts` `createEmployeeAction` L119–151 inserts `{full_name, clock_pin, job_role, active: true}` with no `employment_status` (L132–137), and migration 0117 L38 defaults it to `'active'`. Payroll Setup `addPersonToPayroll` does the same (`payroll-onboarding-store.ts` L1121–1130). `canTransition` (`employee-lifecycle-core.ts` L441–451) and `activationBlockers` (L422–424) only run on the Activate button (`employee-lifecycle-store.ts` L500–514), which a new hire never needs. The roster help text says *"Add them below as a CANDIDATE"* (`employees/page.tsx` L93), and the optional PIN field (L205) works at once.
+- **Effect:** a new hire can clock in and unlock the register before the 21+ check, I-9, W-4, handbook or training is done. RCW 69.50.357(2) forbids anyone under 21 working in the store, and (3) requires training. The checklist is advisory only.
+- **SOP impact:** SOP-08 "One thing to know", §4.3, §4.6, §4.13, §5, card 9.1; interim rule: **no PIN until form 8.1 is signed**. **G-52**.
+
+### F-08-2 · CONFIRMED · GAP · S2 — No screen links a user (sign-in) to an employee file
+- **Pin:** `employees.staff_id` is set only by the 2023 seed (migration 0037 L125–132); `payroll-onboarding-store.ts` L1046 says it must never set it; no action in `/admin/users` or `/admin/staffing/employees/**` writes it. The register handbook gate (`handbook-ack-store.ts` `registerGateForEmployee` L99–155) reads the linked login's acknowledgment or owner role. Without a link it falls back to the paper Document tracker row.
+- **Effect:** the digital handbook acknowledgment does not unlock the register for anyone added since 2023, and offboarding cannot find the person's sign-in from the employee file (or the reverse). The separation follows the owner's books-87 rule, but the missing link breaks two features.
+- **SOP impact:** SOP-08 §4.1, §4.10, §4.14, §4.21. **G-53** (Q-08-1).
+
+### F-08-3 · CONFIRMED · GAP · S2 — Terminate and Deactivate are not connected
+- **Pin:** `employee-lifecycle-store.ts` `setEmploymentStatus` L516–527 (Terminated sets `active=false`, `clock_pin=null`) never touches `staff_profiles`, shifts or punches. `users/actions.ts` `setUserActive` L100–179 (ban L143–153) never touches `employees`. The page text *"Letting someone go? Do both halves."* (`users/page.tsx` L251–268) is the only guard.
+- **Effect:** a terminated employee keeps back-office access until someone deactivates the sign-in on a different page. Future shifts stay on the schedule, and an open punch stays open.
+- **SOP impact:** SOP-08 §4.21–§4.22, form 8.3, card 9.2 (both halves the same day; for a dismissal, deactivate first). **G-54** (Q-08-2).
+
+### F-08-4 · CONFIRMED · BUG · S2 — The handbook checklist box does not set the Document tracker row the register reads
+- **Pin:** `setTaskDone` (`employee-lifecycle-store.ts` L365–409) upserts only the task row. The register reads the document row `handbook` status `signed` (`handbook-ack-store.ts` L107–118). The comment at `employee-lifecycle-core.ts` L62 says a docKey "nudges" the tracker, but nothing does. The paper route has no version, so a HANDBOOK_VERSION bump (`handbook-content.ts` L24, now "2.0") does not re-gate the register for paper signers.
+- **Effect:** a manager checks "Employee read and signed the handbook" and the register still says the handbook must be signed. Paper signers of an old version keep passing after a new version.
+- **SOP impact:** SOP-08 §4.10 step 4, §4.18 (check the box **and** set the tracker row to Read & signed; re-sign by hand on a version change). **G-55**.
+
+### F-08-5 · CONFIRMED · GAP · S3 — Training checkmarks need no training-log entry; Activate needs no hire date or badge number
+- **Pin:** `toggleTask` (`[id]/actions.ts` L41–66) accepts any task. `activationBlockers` (`employee-lifecycle-core.ts` L422–424) checks only the critical task flags, not the training log (`addTraining` L110–134) or hire info (`updateHireInfo` L140–184).
+- **Effect:** the 5-year training record (WAC 314-55-087(1)(e), RCW 69.50.357(3)) can be missing while the checklist shows trained.
+- **SOP impact:** SOP-08 §4.11 step 3 (no log line, no checkmark), form 8.1. **G-55**.
+
+### F-08-6 · CONFIRMED · BUG · S3 — Rehire erases the earlier termination date and reason and keeps the old checkmarks
+- **Pin:** `employee-lifecycle-store.ts` L532–538 clears `termination_date` and `termination_reason` on Terminated → Onboarding and leaves every old task row checked.
+- **Effect:** the file loses its employment history (only the audit log keeps it), and a rehire can be activated on old I-9 and training checkmarks.
+- **SOP impact:** SOP-08 §4.24 (print the status card first, uncheck everything). **G-56**.
+
+### F-08-7 · CONFIRMED · WEAKNESS · S4 — The station time clock has no handbook gate
+- **Pin:** `clockByPinAction` (`src/app/admin/staffing/actions.ts` L55–80) checks only `timeclock.use`, the PIN throttle and `getEmployeeByPin`; it does not call `registerGateForEmployee` (the register does, `pos/unlock/route.ts` L79–96).
+- **Effect:** small. Clocking in is not selling, and the back office is gated for sign-ins (`admin/layout.tsx` L67–83). It is recorded for completeness; the SOP-08 interim rule (no PIN until form 8.1) covers it. Not cited in the SOP text.
+- **SOP impact:** none beyond §4.13. No gap of its own (folded into G-52 if the PIN is locked until Activate).
+
+### F-08-8 · CONFIRMED · GAP · S2 — No visitor log or visitor badges
+- **Pin:** no table, page or action for visitors anywhere in `src/` or `supabase/migrations/`; only a monthly calendar reminder exists. WAC 314-55-083(1)(a)–(d) requires a visitor badge for non-employee visitors in non-public areas and a log (name, badge number, arrival and departure time, purpose) kept three years.
+- **Effect:** a WAC record the store must keep has no home in the app.
+- **SOP impact:** SOP-08 §4.12, §4.19, forms 8.2 and 8.5 (paper log at the back door). **G-57** (Q-08-3).
+
+### F-08-9 · CONFIRMED · WEAKNESS · S4 — Invite default role differs between screen and server; role descriptions are incomplete
+- **Pin:** `users/page.tsx` L134 selects **staff** by default; `users/actions.ts` `inviteUser` L181–250 falls back to **readonly** (L185) if the field is missing. Role descriptions (`roles.ts` L14–19) do not list every permission (for example Budtender / Staff also has `timeclock.use` and Cycle Counts).
+- **Effect:** small; the screen always sends a role. The descriptions under-describe access, so least-privilege choices are made on partial information.
+- **SOP impact:** SOP-08 §4.16 (role table), form 8.4. **G-58**.
+
+### F-08-10 · CONFIRMED · WEAKNESS · S4 — Job-role changes are audited without the old and new values
+- **Pin:** `src/app/admin/staffing/actions.ts` L193–199 records `employee.updated` with no before/after; job role decides safe-swap approval (`till/route.ts` L48, L197: manager/lead).
+- **Effect:** who was made a lead (and so a safe-swap approver), and when, cannot be read from the audit log.
+- **SOP impact:** SOP-08 §4.17, form 8.4. **G-58**.
+
+### F-08-C · CONFIRMED · STRENGTH — What already works well
+- **Pin:** role guard rails for change and invite (self, rank, ceiling, last owner) in `user-guards-core.ts` L43–115; deactivation locks the back office on the next request (`session.ts` L169) **and** bans the sign-in (`users/actions.ts` L143–153); access changes audited and shown on the Users page (L270–285); PINs stored as scrypt hashes, active employees only (`store.ts` L117–146), with a 5-tries/60-s lockout (`pin-throttle-core.ts` L29–31); Terminate requires a date and reason and clears the PIN (`employee-lifecycle-store.ts` L516–527); sensitive document numbers scrubbed (L127–139); the back-office handbook gate re-prompts on a version change (`admin/layout.tsx` L67–83); the I-9 Section 2 / background-check order rules (`employee-lifecycle-core.ts` L85, L108, L407–416).
+- **SOP impact:** SOP-08 §7 "What the app already does well".
+
 ---
 
 ## Ledger index (updated each slice)
@@ -830,3 +888,4 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 | SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
 | SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
 | SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4 | 22 | 0 |
+| SOP-08 New Hire Onboarding, System Access & Offboarding | 11 new (F-08-1…F-08-10 + F-08-C; 1×S1 (F-08-1 new hires created Active, gate bypassed), 4×S2 (F-08-2, F-08-3, F-08-4, F-08-8), 2×S3, 3×S4) | 11 | 0 |

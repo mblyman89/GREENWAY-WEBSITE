@@ -315,3 +315,14 @@ The owner asked for *"the states requirements"* and to *"look it up in CCRS"*. E
 
 - **D63–D68 applied** in `docs/sop/SOP-15-returns-vendor-destruction.md` **v1.1**. New findings F-15-18…F-15-21; gaps G-42, G-43, G-45 and G-47 **APPROVED**; new **G-50** (hold default 0) and **G-51** (samples kept off the menu and register, **S1**). No code changed.
 - **D69 applied** in the roadmap (`02-SOP-CATALOG-AND-ROADMAP.md`) and `README.md`. SOP-08 is written in this slice.
+- **SOP-08 written** as `docs/sop/SOP-08-onboarding-system-access-offboarding.md` **v1.0** (verified at `bad718b4`), per the request *"The next major sop I want to work on is new hire onboarding, system management and off boarding employees."* Findings F-08-1…F-08-10 and F-08-C (one **S1**: F-08-1, every new person is created Active so the Activate gate never runs); gaps G-52…G-58 PROPOSED; open questions below. The owner's books-87 rule (users separate from employees) is kept in every interim rule.
+
+### Open questions raised by slice SOP-08
+
+| # | Question (short form) | Interim rule |
+|---|---|---|
+| Q-08-1 | May we add an owner-set link between a user and an employee file (never creating an employee, books-87)? (G-53) | Keep them separate; paper handbook route; both halves of offboarding by hand |
+| Q-08-2 | When an employee with a sign-in is terminated, should the app deactivate the sign-in in the same step (with a confirmation)? (G-54) | Same-day Half 2 by the owner or admin (form 8.3) |
+| Q-08-3 | Visitor log: paper, or build it in the app? (G-57) | Paper form 8.5 at the back door |
+| Q-08-4 | Does every budtender get a back-office sign-in, or are some PIN-only? | Every budtender gets a sign-in (SOP-08 §4.4) |
+| Q-08-5 | May managers press Activate and Terminate, or only the owner and admins? | Managers may; they tell the owner the same day |

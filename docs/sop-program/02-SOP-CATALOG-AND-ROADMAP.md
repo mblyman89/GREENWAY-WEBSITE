@@ -72,6 +72,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 **Audience:** manager/admin/owner · **Requested:** "new hires and setting them up with access to the system."
 **Code (≈13.3k lines):** `/admin/staffing/employees/**` (onboarding/offboarding checklists in `employee-lifecycle-core.ts`: I-9, W-4, DSHS, handbook, PIN, badge, schedule, payroll, direct deposit), e-sign, `/admin/users` (invite, role, deactivate; `roles.ts` permission matrix), `/admin/staffing` time clock, PIN hashing (`security/pin-hash`), PIN throttle, handbook-ack gate (back office + register), WebAuthn/security settings, `job_role` sales/lead/manager vs `StaffRole`.
 **Note:** two identity systems (employee PIN record vs staff login) must be explained clearly. This slice audits how they link.
+**WRITTEN (slice SOP-08, v1.0, verified at `bad718b4`):** `docs/sop/SOP-08-onboarding-system-access-offboarding.md`. Owner request (D69): *"new hire onboarding, system management and off boarding employees."* 11 findings (F-08-1…F-08-10 + F-08-C; one S1: new hires are created Active, so the Activate gate never runs), gaps G-52…G-58, questions Q-08-1…Q-08-5. Paper forms 8.1–8.6 (onboarding sign-off, badge register, offboarding record, role-change log, visitor log, quarterly access review).
 
 ### SOP-09 · Purchasing & Purchase Orders (incl. vendor menus: Cultivera / GrowFlow / LeafLink / emailed)
 **Audience:** purchase manager · **Requested:** "purchase orders and how to fetch the menu from Cultivera marketplace and growflow marketplace."
@@ -146,10 +147,10 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-05b** | Non-Cannabis, Merch, Menu Publishing & Classification | Second half of SOP-05 (D35) | L · **DONE** (draft v1.0) |
 | **SOP-06** | Cycle Counts, Audits & Daily Checklists | Depends on SOP-05 vocabulary | M · **DONE** (draft v1.1) |
 | **SOP-15** | Returns to Vendor & Destruction | Inventory exit, license-critical | M · **DONE** (draft v1.1; D63–D68 applied in slice SOP-08) |
-| **SOP-16** | CCRS Uploads | License-critical; closes the inventory compliance loop | L |
+| **SOP-08** | New Hire Onboarding, System Access & Offboarding | Owner moved it next (D69) | M · **DONE** (draft v1.0) |
+| **SOP-16** | CCRS Uploads | License-critical; closes the inventory compliance loop | L · **DEFERRED (D69)** |
 | **SOP-13** | Online Orders | Daily floor operation | L |
-| **SOP-14** | Leafly Integration | Pairs with online orders | XL (79k) |
-| **SOP-08** | New Hire & Access | Needed before rollout of the SOP library | M |
+| **SOP-14** | Leafly Integration | Pairs with online orders | XL (79k) · **DEFERRED (D69)** |
 | **SOP-19** | Customers, ID, Limits, Medical | Floor compliance | M |
 | **SOP-17** | Hardware | Self-contained | M |
 | **SOP-09** | Purchasing, Vendor Menus & Crawler PO Builder | Q4 answered (D4): crawler PO builder approved; own procedure + saved data | L |
@@ -160,6 +161,8 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-07** | Cleaning Schedule | Paper-first; no code to audit | S |
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |
+
+**Deferred by the owner (D69):** SOP-16 (CCRS reporting and uploads: *"We haven't fully finished it, and soon, it will be completely automated"*), SOP-14 (Leafly: *"it works automatically, I have tested each feature"*), everything in the accounting branch, and the Lyman menu. They are left out of SOPs and audits until the owner asks for them.
 | **SOP-INT** | Phase C strategy session | Walk the findings ledger + gap register with the owner | — |
 
 Each slice ends the same way: commit `docs/sop/SOP-XX-*.md` + ledger updates → push → PR → rebase-merge → sync main. That is 21 PRs, each small and independently reviewable.

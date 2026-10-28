@@ -4,7 +4,7 @@ Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 �
 
 Updated in slice SOP-15 · 2026-10-28 (D54–D61 → G-33…G-39 APPROVED, new G-40, G-41; SOP-15 gaps G-42…).
 
-Updated in slice SOP-08 · 2026-10-28 (D63–D68 → G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51; SOP-08 gaps G-52…).
+Updated in slice SOP-08 · 2026-10-28 (D63–D68 → G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51; SOP-08 gaps G-52…G-58 PROPOSED).
 
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
@@ -76,6 +76,13 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file; compliance doc's "Returned to seller" citation corrected | (procedure need) | F-15-17, F-15-18 | SOP-15 §4.1, §4.13, §4.27 | PROPOSED |
 | G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
 | G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **APPROVED** |
+| G-52 | New people start as **Candidate** (Add to roster and Payroll Setup); PIN locked until **Activate**; Activate runs the gate; help text matches | (procedure need; RCW 69.50.357(2)–(3)) | F-08-1 (**S1**), F-08-7 | SOP-08 §4.6, §4.13 (no PIN until form 8.1 is signed) | PROPOSED |
+| G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | PROPOSED |
+| G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | PROPOSED |
+| G-55 | Checklist ↔ Document tracker kept in step; Activate also needs hire date, badge number and a training-log line per required topic; paper handbook row carries the version | (procedure need; WAC 314-55-087(1)(e)) | F-08-4, F-08-5 | SOP-08 §4.10 step 4, §4.11 step 3, §4.18 | PROPOSED |
+| G-56 | **Rehire** keeps the earlier termination (employment periods) and starts a fresh checklist | (procedure need) | F-08-6 | SOP-08 §4.24 (print status card first; uncheck everything) | PROPOSED |
+| G-57 | **Visitor log and badges** in the app; employee badge printing | Q-08-3 (WAC 314-55-083(1)) | F-08-8 | SOP-08 forms 8.2, 8.5 (§4.12, §4.19) | PROPOSED |
+| G-58 | Housekeeping: invite default role the same on screen and server; full role descriptions; job-role changes audited with old and new values | (procedure need) | F-08-9, F-08-10 | SOP-08 form 8.4 (§4.16–§4.17) | PROPOSED |
 
 ---
 
@@ -616,3 +623,64 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. Tests: a sample lot sharing a SKU with a sellable lot is never drawn by a sale and never counted as menu stock; no draft is seeded.
   5. The Employee Samples hub stays the only way a sample lot goes down (besides destruction or a count).
 - **Interim:** SOP-15 v1.1 §4.26 (dismiss sample drafts; weekly Samples-only check).
+
+## G-52 · New hires start as Candidate; PIN locked until Activate (PROPOSED, SOP-08) — S1
+- **Owner basis:** the roster help text already promises it (*"Add them below as a CANDIDATE"*, `employees/page.tsx` L93); RCW 69.50.357(2) (no one under 21) and (3) (training).
+- **Today:** F-08-1 (**S1**): Add to roster and Payroll Setup create the person **Active**; the gate runs only on Activate.
+- **Requirements:**
+  1. `createEmployeeAction` and `addPersonToPayroll` insert `employment_status = 'candidate'` and `active = false`.
+  2. The PIN field is hidden or disabled until the status is Active; `getEmployeeByPin` already ignores inactive rows.
+  3. Activate keeps running `activationBlockers`; the roster shows status badges.
+  4. Tests: a new employee cannot clock in or unlock the register until activated; Payroll Setup still never sets `staff_id` (books-87).
+- **Interim:** SOP-08 §4.6, §4.13: no PIN until form 8.1 is signed.
+
+## G-53 · Owner-set user ↔ employee link (PROPOSED, Q-08-1, SOP-08) — S2
+- **Owner basis:** books-87 (*"I want to create the employee in payroll/ W-4 setup, then I will give them access to the back office if they need access to it."*). A link set by the owner keeps that order; it never creates an employee.
+- **Today:** F-08-2: only the 2023 seed set `staff_id`.
+- **Requirements:**
+  1. On the employee file (or Users), the owner or admin picks an existing sign-in to link; one sign-in per employee; unlink allowed; audited with before/after.
+  2. Linking never creates or edits an employee record or a sign-in.
+  3. The register gate then accepts the linked sign-in's acknowledgment (existing code path).
+  4. The Users page shows the linked employee and the file shows the linked sign-in.
+- **Interim:** SOP-08 §4.10 paper handbook route for everyone.
+
+## G-54 · One-step offboarding (PROPOSED, Q-08-2, SOP-08) — S2
+- **Today:** F-08-3: two separate pages, nothing connected.
+- **Requirements:**
+  1. Terminate shows the linked sign-in (needs G-53) and offers "Deactivate their sign-in too" (default on, with a confirmation).
+  2. Terminate lists future shifts and deletes them on confirm; flags an open punch for a manager to close with a reason.
+  3. Deactivate on Users shows the linked employee and a link to Terminate.
+  4. Every step audited.
+- **Interim:** SOP-08 §4.21–§4.22, form 8.3, card 9.2 (both halves the same day; for a dismissal, deactivate first).
+
+## G-55 · Checklist and Document tracker in step; stronger Activate gate (PROPOSED, SOP-08) — S2
+- **Today:** F-08-4 (box does not set the tracker row; paper row has no version), F-08-5 (no log line or hire info needed).
+- **Requirements:**
+  1. Checking a task with a `docKey` sets the matching document row (handbook → Read & signed with today's date), and the reverse; the core L62 comment becomes true.
+  2. The paper handbook row stores the handbook version; the register gate treats an old version as unsigned.
+  3. Activate also needs hire date, badge number and one training-log line per required topic (`training_rules`, `training_id_check`).
+- **Interim:** SOP-08 §4.10 step 4, §4.11 step 3, §4.18.
+
+## G-56 · Rehire keeps history and starts fresh (PROPOSED, SOP-08) — S3
+- **Today:** F-08-6.
+- **Requirements:**
+  1. Store employment periods (hire date, termination date, reason) instead of clearing them; the file shows the history.
+  2. Rehire resets every onboarding task to unchecked (old rows kept as history).
+- **Interim:** SOP-08 §4.24.
+
+## G-57 · Visitor log and badges (PROPOSED, Q-08-3, SOP-08) — S2
+- **Owner basis:** WAC 314-55-083(1)(a)–(d) (visitor badge; log with full name, badge number, arrival and departure times, purpose; kept three years).
+- **Today:** F-08-8: nothing in the app.
+- **Requirements:**
+  1. A visitor sign-in screen (manager tablet) with the WAC fields; numbered visitor badges; sign-out.
+  2. Records kept at least three years; printable for an inspector.
+  3. Employee badge printing (name or number, WAC 314-55-083(1)) from the file's badge number.
+- **Interim:** SOP-08 forms 8.2 and 8.5.
+
+## G-58 · Users and job-role housekeeping (PROPOSED, SOP-08) — S4
+- **Today:** F-08-9, F-08-10.
+- **Requirements:**
+  1. `inviteUser` default matches the screen (staff) or the screen defaults to readonly; one value.
+  2. Role descriptions list every permission (generated from `roles.ts`).
+  3. Job-role changes audited with old and new values.
+- **Interim:** SOP-08 form 8.4.
