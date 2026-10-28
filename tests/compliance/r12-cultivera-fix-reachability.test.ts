@@ -127,7 +127,7 @@ describe("R12 — pure cores (pinned counts, registered in the runner)", () => {
     expect(__runProductVisibilityCoreTests()).toEqual({ passed: 37, failed: 0 });
   });
   it("migration-lot-fix-core", () => {
-    expect(__runMigrationLotFixCoreTests()).toEqual({ passed: 25, failed: 0 });
+    expect(__runMigrationLotFixCoreTests()).toEqual({ passed: 26, failed: 0 });
   });
   it("both are registered", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
@@ -281,7 +281,6 @@ describe("R12 — gap rows open Bulk fill, and Bulk fill accepts Cultivera lots"
 
   it.each([
     ["missingExpiry", "expires_on", "2027-06-01"],
-    ["unknownCost", "unit_cost_minor_units", "4.50"],
     ["missingProductLink", "pos_product_key", "pos-abc"],
   ] as const)("%s → Bulk fill %s, and a Cultivera lot is fillable", (gap, field, raw) => {
     const extra = issues.find((i) => i.code === `gap_${gap}`)?.extra?.[0];
@@ -290,6 +289,12 @@ describe("R12 — gap rows open Bulk fill, and Bulk fill accepts Cultivera lots"
     expect(url.searchParams.get("bulkField")).toBe(field);
     const plan = planBulkFill({ field, rawValue: raw, lots: [lot], todayPacific: "2026-09-10" });
     expect(plan.ok && plan.apply.map((a) => a.lotId)).toEqual(["l1"]);
+  });
+
+  it("G-27 (D38): unknown cost offers NO Bulk fill - correct from the manifest", () => {
+    const row = issues.find((i) => i.code === "gap_unknownCost");
+    expect(row?.extra).toBeUndefined();
+    expect(row?.meaning).toMatch(/correct from the manifest/);
   });
 
   it("missing COA stays honest (no bulk link; roadmap named)", () => {
@@ -316,7 +321,7 @@ describe("R12 — the lot page points a Cultivera lot at its fixes", () => {
     expect(src).toContain("href={lotManifestHref(lot.manifest_id)!}");
   });
 
-  it("a typical Cultivera lot gets expiry + cost links that Bulk fill accepts", () => {
+  it("a typical Cultivera lot gets an expiry link Bulk fill accepts; cost has none (G-27)", () => {
     const c = migrationLotCallout({
       id: "l1",
       notes: `${MIGRATION_MARKER} x`,
@@ -328,7 +333,8 @@ describe("R12 — the lot page points a Cultivera lot at its fixes", () => {
       lab_result_id: null,
       product_name: "P",
     })!;
-    expect(c.links.map((l) => l.field)).toEqual(["expires_on", "unit_cost_minor_units"]);
+    expect(c.links.map((l) => l.field)).toEqual(["expires_on"]);
+    expect(c.costMissing).toBe(true);
     for (const l of c.links) {
       const u = new URL(l.href, "http://x");
       expect(u.pathname).toBe("/admin/inventory");

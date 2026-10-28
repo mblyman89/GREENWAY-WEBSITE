@@ -287,16 +287,17 @@ const BLOCKED_CAUSE_COPY: Record<"no_product_link" | "no_menu_card" | "hidden_ca
 
 /**
  * Round 12 (owner: "make sure that the products from the Cultivera upload
- * specifically can reach the fix pages"). Three lot gaps are exactly the
+ * specifically can reach the fix pages"). Two lot gaps (expiry, product link; G-27 removed cost) are the
  * fields the one-time Cultivera import leaves blank and Bulk fill can fill
  * (bulk-fill-core BULK_FILLABLE_FIELDS; eligibility = migration lots only).
  * The gap row used to offer only "Show these lots"; it now ALSO offers the
  * same filtered list opened straight into Bulk fill with the field chosen.
  * Keys are the lot-gap params (lot-gap-core LOT_GAP_DEFINITIONS).
  */
-export const GAP_BULK_FILL_FIELD: Readonly<Record<string, "expires_on" | "unit_cost_minor_units" | "pos_product_key">> = {
+// Phase 0.5 (G-27, D38): unknownCost is NOT here - cannabis cost is never
+// typed; the Issues row says to correct it from the manifest instead.
+export const GAP_BULK_FILL_FIELD: Readonly<Record<string, "expires_on" | "pos_product_key">> = {
   missingExpiry: "expires_on",
-  unknownCost: "unit_cost_minor_units",
   missingProductLink: "pos_product_key",
 };
 
@@ -393,7 +394,8 @@ const GAP_MEANING: Record<string, string> = {
   missingProductLink: "These lots are not tied to a product, so they cannot be sold at the register.",
   emptyActive: "Marked active with nothing on hand \u2014 usually a lot that should be sold out.",
   missingExpiry: "No expiry date on file, so expiry checks cannot protect these lots.",
-  unknownCost: "No unit cost on file, so the on-hand value on this page is understated.",
+  unknownCost:
+    "Cost missing \u2014 correct from the manifest. No unit cost on file, so the on-hand value is understated and the legal price floor cannot be checked. Cannabis cost is never typed (owner rule D38); it comes from the state CCRS manifest created by the vendor.",
 };
 
 // ---------------------------------------------------------------------------
@@ -757,7 +759,7 @@ export function __runIssuesCoreTests(): { passed: number; failed: number } {
   ok(gaps.find((i) => i.code === "gap_recalled")?.title === "2 lots flagged RECALLED", "gap title count + label");
   ok(gaps.find((i) => i.code === "gap_missingCoa")?.title === "1 lot active without COA", "gap title singular");
   ok(gaps.find((i) => i.code === "gap_nohref")?.fix === null, "no href → no invented fix");
-  // Round 12: Cultivera bulk-fill extras on exactly the three fillable gaps.
+  // Round 12: Cultivera bulk-fill extras on exactly the two fillable gaps (G-27: cost is not one).
   ok(gaps.every((i) => i.extra === undefined), "non-fillable gaps get no bulk extra");
   const fillable = buildInventoryIssues({
     ...empty,
@@ -769,12 +771,13 @@ export function __runIssuesCoreTests(): { passed: number; failed: number } {
     ],
   });
   ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[0]?.href === "/admin/inventory?status=active&missingExpiry=1&bulk=1&bulkField=expires_on", "expiry bulk href");
-  ok(fillable.find((i) => i.code === "gap_unknownCost")?.extra?.[0]?.href === "/admin/inventory?status=active&unknownCost=1&bulk=1&bulkField=unit_cost_minor_units", "cost bulk href");
+  ok(fillable.find((i) => i.code === "gap_unknownCost")?.extra === undefined, "G-27: no Bulk fill offered for cost");
+  ok((fillable.find((i) => i.code === "gap_unknownCost")?.meaning ?? "").startsWith("Cost missing \u2014 correct from the manifest"), "G-27: cost row says correct from the manifest");
   ok(fillable.find((i) => i.code === "gap_missingProductLink")?.extra?.[0]?.href === "/admin/inventory?status=active&missingProductLink=1&bulk=1&bulkField=pos_product_key", "link bulk href");
   ok(fillable.find((i) => i.code === "gap_emptyActive")?.extra === undefined, "empty-active gets no bulk extra");
   ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[0]?.label === "Bulk fill the Cultivera-import lots", "bulk label");
   ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[1]?.href === EXPIRATION_RULES_HREF, "R34: expiry gap also links the expiration rules");
-  ok(fillable.find((i) => i.code === "gap_unknownCost")?.extra?.length === 1, "R34: rules link only on the expiry gap");
+  ok(fillable.find((i) => i.code === "gap_missingProductLink")?.extra?.length === 1, "R34: rules link only on the expiry gap");
   ok(gapBulkFillHref("missingExpiry", null) === null, "no href, no bulk link");
   ok(gapBulkFillHref("missingExpiry", "/x") === "/x?bulk=1&bulkField=expires_on", "bulk href without query");
   ok(gapBulkFillHref("expired", "/x?a=1") === null, "expired is not bulk-fillable");

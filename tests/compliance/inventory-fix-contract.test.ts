@@ -280,7 +280,8 @@ describe("S37 inventory fix contract — every fix button opens a page that can 
   it("collects the whole inventory link surface (a shrinking set would hide a gap)", () => {
     // Exact (measured): a new link must be classified here deliberately.
     // R34: +1 - the missing-expiry gap also links Expiration rules.
-    expect(hrefs.size).toBe(26);
+    // Phase 0.5 (G-27, D38): -1 - the unknown-cost gap no longer opens Bulk fill.
+    expect(hrefs.size).toBe(25);
     const all = [...hrefs.keys()];
     for (const must of [
       `/admin/inventory/${LOT}#product-link`,

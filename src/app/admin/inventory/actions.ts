@@ -19,6 +19,7 @@ import {
   planBulkFill,
   formatFillValue,
   BULK_FILLABLE_FIELDS,
+  CANNABIS_COST_FROM_MANIFEST,
   type BulkFillField,
 } from "@/lib/inventory/bulk-fill-core";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -950,6 +951,12 @@ export async function bulkFillLotsAction(formData: FormData) {
     redirect(`/admin/inventory?${q.toString()}`);
   };
 
+  // Phase 0.5 (G-27, D38): "absolutely not. That's illegal. Cost comes from
+  // the state CCRS manifest created by the vendor." Unit cost is not a Bulk
+  // fill field; a hand-crafted post asking for it is refused by name.
+  if ((field as string) === "unit_cost_minor_units") {
+    back({ bulkError: CANNABIS_COST_FROM_MANIFEST });
+  }
   if (!(BULK_FILLABLE_FIELDS as readonly string[]).includes(field)) {
     back({ bulkError: "Pick a field to fill." });
   }

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (owner answer to Q-05a-6 applied: tincture, capsule and RSO are in the expiry hard block; draft for owner review) |
+| **Version** | 1.3 (owner answer to Q-05a-6 applied: tincture, capsule and RSO are in the expiry hard block; Phase 0.5 fix G-27 built: no typed cannabis cost; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after cannabis lots once they are received: the daily Issues check, quantity corrections, holds and recalls, expiry dates, tags, testing labs and lot labels. Budtenders read §4.10–§4.11 (what a recall hold and the register's "86" do) and §9. |
@@ -230,7 +230,7 @@ A lot has exactly one of five statuses (`actions.ts` L103–109; lot page L130�
 | **N lots active not linked to a catalog product** | Worth a look | *"…cannot be sold at the register."* (L393) | §4.21 (link the product) |
 | **N lots active but out of stock (0 on hand)** | Worth a look | *"Usually a lot that should be sold out."* (L394) | Check the shelf. If it is really empty, see §4.6 (a manual zero does not flip status; set **Sold out** under §4.8 and log it) |
 | **N lots active with no expiry date on file** | Worth a look | *"…expiry checks cannot protect these lots."* (L395) | **Date them with expiration rules** (§4.15), or **Bulk fill the Cultivera-import lots** (§4.20) |
-| **N lots active with no unit cost on file (understates on-hand value)** | Worth a look | (L396) | Tell the owner. Nobody keys cannabis cost; it comes only from the manifest (§4.20, D38) |
+| **N lots active with no unit cost on file (understates on-hand value)** | Worth a look | *"Cost missing — correct from the manifest. ..."* (`issues-core.ts` L397). Since Phase 0.5 (G-27) the row offers **no** Bulk fill | Tell the owner. Nobody keys cannabis cost; it comes only from the manifest (§4.20, D38) |
 | **N products are marked unavailable but you have stock** | Worth a look (L371–380) | *"Someone pressed "86" at a register, or they were emptied and restocked…"* | §4.12 (**Restore to sale**) |
 | **Over the 4-month inventory ceiling** | Needs action (L431–440) | WAC 314-55-079(10): at most four months of average inventory | Tell the owner. **Open Purchasing** (SOP-09) |
 | **No DOH-compliant (medical) product in stock** | Needs action, only if the store holds a medical endorsement (L441–450) | WAC 314-55-080 | Tell the owner. **Open Purchasing** |
@@ -254,7 +254,7 @@ Open a lot from the list. From top to bottom (`src/app/admin/inventory/[id]/page
 | Sell price (L479–517) | The out-the-door price and its legal floor | SOP-05b |
 | Product link (L521) | Which menu product this lot sells as | §4.21 |
 | **Lot details** (L534–) | Vendor, brand, strain, weight, sample, medical, **Expires** and **Expiry source** (L614–628), manifest link | §4.14 |
-| *"From the one-time Cultivera import"* callout (L655–678) | Only on Cultivera-import lots, with links to Bulk fill | §4.20 |
+| *"From the one-time Cultivera import"* callout (L655–690) | Only on Cultivera-import lots, with links to Bulk fill for expiry and product key. A blank cost shows *"Cost missing — correct from the manifest."* with no fill link (G-27, L677) | §4.20 |
 | **COA / lab result** (L689–) | The linked lab result, or *"No COA linked to this lot…"*; the **Attach a lab result** search (`LotCoaAttach`, L763) | §4.21 |
 | **Lab certificate (read by the system)** with **Re-read lab certificate** (`LabCertificatePanels.tsx` L35–56) | What the system read from the COA | §4.21 |
 | **Correct lot details** (L806–868) | Vendor, brand, strain and strain type only. **Save corrections** | §4.21 |
@@ -660,15 +660,14 @@ Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_l
 
 **What it is.** A way to fill blank fields on many lots at once, **only** on lots from the one-time Cultivera / POS import, and **only** where the field is blank. Panel title: **Bulk fill — complete what the Cultivera import left blank**. *"It can only turn a blank into a value, only on lots from that one-time import, and it never overwrites a value that is already there."* (`BulkFillPanel.tsx` L113–122; migration test `isMigrationLot`, `bulk-fill-core.ts` L49, L107.)
 
-**The three fields** (`bulk-fill-core.ts` L318–325; hints `BulkFillPanel.tsx` L62–80):
+**The two fields** (`bulk-fill-core.ts` L61–64; hints `BulkFillPanel.tsx` L60–75). **Unit cost was removed in Phase 0.5 (G-27).**
 - **Expiration date**: *"Read the expiration date off the physical package or the COA."* Saved as **Typed by owner** (`actions.ts` L986).
-- **Unit cost**: *"Read the unit cost off the vendor invoice. Dollars — stored to the cent."* **Never used for cannabis** (owner rule D38, below).
 - **POS product key**: *"The catalog key that links this lot to a product."*
 
-**Who.** The button is open to managers (`actions.ts` L904, `inventory.manage`). But the permission table says *"Cannabis cost entry is NOT built"* and gives cost entry only to owner and admin, for non-cannabis (`roles.ts` L143–148). Bulk fill **Unit cost** therefore lets anyone with Inventory access key a **cannabis** cost.
+**Who.** The button is open to managers (`actions.ts`, `bulkFillLotsAction`, `inventory.manage`). It cannot write a cost: **Unit cost** is not in the field list, the planner refuses it (`bulk-fill-core.ts` L67–70, L288), the server action refuses a hand-made request for it (`actions.ts` L957) and the store has no cost branch (`store.ts`, `applyBulkFill`). The message is *"Cannabis unit cost is never typed. It comes from the state CCRS manifest created by the vendor (owner rule D38). Correct it from the manifest on Receiving."*
 
-**The owner's rule** (Q-05a-3, D38): *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."* **Nobody, the owner included, ever types a cannabis unit cost.** The cost of a cannabis lot comes only from the vendor's CCRS manifest: receiving reads it from the manifest line (line price ÷ quantity, `intake-parser.ts` L415–420), and the lot page locks it (`lot-edit-core.ts` L33–45, `unit_cost_minor_units` at L38). Bulk fill is the one place it can still be typed (`bulk-fill-core.ts` L54). Finding **F-05a-11** is re-rated **S1** at the owner's direction, and gap **G-27** (APPROVED) removes **Unit cost** from Bulk fill for cannabis lots.
-- **Never** choose **Unit cost** in Bulk fill. A cannabis lot with no cost stays blank and goes to the owner, who has it corrected **from the manifest** (SOP-04), never typed.
+**The owner's rule** (Q-05a-3, D38): *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."* **Nobody, the owner included, ever types a cannabis unit cost.** The cost of a cannabis lot comes only from the vendor's CCRS manifest: receiving reads it from the manifest line (line price ÷ quantity, `intake-parser.ts` L415–420), and the lot page locks it (`lot-edit-core.ts` L33–45, `unit_cost_minor_units` at L38). Finding **F-05a-11** (re-rated **S1** at the owner's direction) is **FIXED**: gap **G-27** is **BUILT** (Phase 0.5). Bulk fill no longer offers **Unit cost**, and a compliance test (`tests/compliance/fix-p0-5-no-typed-cannabis-cost.test.ts`) fails the build if any code other than manifest intake (`intake-store.ts`), the manifest receipt (`receipt-service.ts`) or the one-time Cultivera import (`import-service.ts`) writes a lot's cost.
+- A cannabis lot with no cost stays blank and goes to the owner, who has it corrected **from the manifest** (SOP-04), never typed. Issues and the lot page say *"Cost missing — correct from the manifest"*.
 - Managers may use **Expiration date** (from the package or COA) and **POS product key** (from Product Onboarding).
 - Non-cannabis cost is a different screen and a different rule (owner and admin, `inventory.cost.fill`; SOP-05b).
 
@@ -677,10 +676,10 @@ Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_l
 2. Press **Bulk fill missing fields…** under the filters (`inventory/page.tsx` L701–706). The panel uses **every lot the current filters show**.
 3. Choose **Field**, type **Value**, press **Preview fill for N lots**.
 4. Read **Review before saving — <field> on N lots**: *"Nothing has been saved yet."* It says how many will be set and how many will be skipped (*"they already have a value, are not from the one-time Cultivera import, or are destroyed. Those are protected and will not be changed."*).
-5. **Check the value applies to every one of those lots.** One value goes to all of them. An expiry date or a cost is rarely the same across many lots; filter tighter (one vendor, one product) until it is.
+5. **Check the value applies to every one of those lots.** One value goes to all of them. An expiry date is rarely the same across many lots; filter tighter (one vendor, one product) until it is.
 6. Press **Save N changes**, or **Cancel**. Result: *"Filled N lots."* plus any skipped or failed counts. Audited `inventory_lot.bulk_filled` (`actions.ts` L975–996). **Exit bulk fill** closes the panel.
 
-> **Control: bulk fill one value only across lots that truly share it, read from the package, COA or invoice; never a cannabis unit cost: cannabis cost comes only from the vendor's CCRS manifest (D38).** The tool can only fill blanks on import lots, and it is audited (F-05a-11, S1; gap G-27).
+> **Control: bulk fill one value only across lots that truly share it, read from the package or COA. A cannabis unit cost cannot be bulk filled at all: it comes only from the vendor's CCRS manifest (D38; G-27 built).** The tool can only fill blanks on import lots, and it is audited.
 
 ### 4.21 Correcting a lot: received date, details, product link, lab result, re-reading the COA
 
@@ -832,9 +831,9 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | Testing labs | *"IP addresses are not allowed - only named hosts."* | (L160) | Same. Owner |
 | Testing labs | *"<host> is already built in - certificates from it are always read."* | (L300) | The fault is elsewhere; owner |
 | Testing labs | *"A lab can have at most N hosts."* | (L302) | Owner |
-| Bulk fill | *"Enter an expiration date."* / *"Enter a unit cost."* / *"Enter a POS product key."* | Blank value (`bulk-fill-core.ts` L164, L197, L218) | Type the value |
+| Bulk fill | *"Enter an expiration date."* / *"Enter a POS product key."* | Blank value | Type the value |
+| Bulk fill | *"Cannabis unit cost is never typed. It comes from the state CCRS manifest created by the vendor (owner rule D38). Correct it from the manifest on Receiving."* | Someone tried to bulk fill a cost (G-27) | Nothing was saved. Tell the owner the lot has no cost |
 | Bulk fill | *"That expiration date is more than 10 years away — check for a typo."* (or *"…past…"*) | | Check the package |
-| Bulk fill | *"Enter a dollar amount like 12.50 (no negative costs)."* / *"That cost is too large."* | | Check the invoice |
 | Bulk fill | *"Select at least one lot first."* | The filters show no lots (L290) | Change the filters |
 
 ---
@@ -893,7 +892,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | **The manager investigates every 86 the same shift** | The 86 is not sticky while units are on file (F-05a-9). The owner chose the professional method (D40, G-26) | `register-availability-core.ts` L318–421 |
 | **Restore only product that is physically on the shelf** | The restore recomputes from the books; the shelf is the truth | `restore-to-sale-core.ts` L115–167 |
 | **Scan every reprinted label before use** | A label without a lot code does not scan (F-05a-10) | `lots/[id]/label/page.tsx` L38–40; `scan-to-cart-core.ts` L55–70 |
-| **Nobody types a cannabis unit cost; it comes only from the vendor's CCRS manifest** | Owner decision D38 ("That's illegal"). Bulk fill still allows it (F-05a-11, **S1**; gap G-27) | `intake-parser.ts` L415–420; `lot-edit-core.ts` L38; `bulk-fill-core.ts` L54 |
+| **Nobody types a cannabis unit cost; it comes only from the vendor's CCRS manifest** | Owner decision D38 ("That's illegal"). Enforced since Phase 0.5 (G-27; F-05a-11 FIXED) | `intake-parser.ts` L415–420; `lot-edit-core.ts` L38; `bulk-fill-core.ts` L61–70; guard test `fix-p0-5-no-typed-cannabis-cost.test.ts` |
 | **New COA hosts only with owner approval** | The host list is the certificate reader's security allow-list | `labs/page.tsx` header L7–12 |
 | **Tags say nothing an advertising rule forbids** | Tags show on the public website | §4.17; SOP-11 |
 | **Every status and adjustment record kept 5 years** | WAC 314-55-087 (records retention) | Forms 8.1–8.5 in the binder |
@@ -1194,7 +1193,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | Register **hard block** on expired Solid Edible, Liquid Edible, Tincture, Capsule and RSO lots (RSO by store category, F-05a-20), **warning** on all other expired lots; FEFO lot draw; correct Issues text — **APPROVED** (D36) | Register sells expired lots, draws FIFO; Issues text points to the wrong fix | Daily check by type: edibles pulled and quarantined, others on the owner's decision; one lot on the floor at a time (§4.16) | **G-24** (**APPROVED**, D36, D44) · F-05a-8, F-05a-20 |
 | A recall plan and recall log in the app, with a named coordinator; the hold reaching the website and online orders | No plan, no coordinator, no log; the hold stops the register only | Forms 8.4 and 8.5; **Always hide** on Product Enrichment (§4.10, §4.13) | **G-25** · F-05a-15, F-05a-16 |
 | A **Print label** link on the lot page; a scannable fallback barcode; **the professional 86** (reason-driven clearing, one queue, audited manager restore) — 86 part **APPROVED** (D40) | Label linked from the manifest only; fallback barcode does not scan; 86 reverts on the next download | Manifest link or typed address; scan before use; manager checks every 86 (§4.12, §4.19) | **G-26** · F-05a-9, F-05a-10 |
-| **No typed cannabis unit cost anywhere**: remove **Unit cost** from Bulk fill for cannabis lots — **APPROVED** (D38) | Anyone with Inventory access can bulk-fill it | Never use Bulk fill → Unit cost; cost only from the manifest (§4.20) | **G-27** · F-05a-11 (S1) |
+| **No typed cannabis unit cost anywhere**: remove **Unit cost** from Bulk fill for cannabis lots — **BUILT** (Phase 0.5) | Anyone with Inventory access can bulk-fill it | Never use Bulk fill → Unit cost; cost only from the manifest (§4.20) | **G-27** · F-05a-11 (S1) |
 | Returns & Destruction able to pick **Quarantine** and **Recalled** lots, keep **Recalled** when scheduling (hold stays on), and on Cancel put the lot back to the status it had | Lists Active lots only; scheduling writes Quarantine over Recalled; Cancel always sets Active | Recalled lots destroyed on paper with the LCB officer and stay Recalled; cancel only with the owner and restore the old status at once (§4.9) | **G-28** · F-05a-17, F-05a-18, F-05a-19 |
 | Adjustment history in store time, with the name | Browser time zone; no name shown | Form 8.2 (§4.5) | F-05a-13 |
 
@@ -1217,4 +1216,5 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue (slice SOP-05a, owner decision D35: inventory management in two slices). Written from the code at `main@ac251766`. Part 1 screens and the daily Issues check (§4.1–§4.4); Part 2 the lot page, adjustments and lifecycle status (§4.5–§4.9); Part 3 recalls, the 86, restore to sale and the written recall plan (§4.10–§4.13, WAC 314-55-225); Part 4 expiry dates and expiration rules (§4.14–§4.16); Part 5 tags, testing labs, labels, bulk fill and lot corrections (§4.17–§4.22). Adds findings F-05a-1…F-05a-16, gaps G-22…G-26, questions Q-05a-1…Q-05a-5, forms 8.1–8.5 (8.4 is the statutory recall plan). | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Owner answers to Q-05a-1…5 applied (decisions D36–D41). Re-verified at `main@827facb5` after the performance merge (register files now under `src/app/(site)/pos/`; line references updated; no described behaviour changed). Living-SOP reminder added (D41). §2, §4.10, §4.13, §6, form 8.4: the **admin** is the recall coordinator, no back-up (D37). §4.7: Receive, Destruction and Recall removal to be removed, Theft and Seizure to be added (D39, G-23 APPROVED). §4.9: how Returns & Destruction changes the lot by itself, and new findings F-05a-17…19 with an interim (gap G-28). §4.12: what an 86 is, and the professional method (D40, G-26 APPROVED). §4.16: expired edibles and liquid edibles never sold, others on the owner's decision (D36, G-24 APPROVED). §4.20: nobody types a cannabis unit cost (D38; F-05a-11 re-rated S1; gap G-27). §7, §9, glossary, Appendices B–C updated; questions Q-05a-6…8 added. | SOP program (for owner review) |
+| 1.3 draft | Fix phase | Phase 0.5 (owner D76). G-27 BUILT: **Unit cost** removed from Bulk fill (field list, planner, server action, store, panel); the unknown-cost Issues row says *"Cost missing — correct from the manifest"* and offers no Bulk fill; the lot-page Cultivera callout names a missing cost with no fill link; the POS-import diagnostic no longer says to type costs. Compliance guard test: only manifest intake, the manifest receipt and the one-time import write a lot's cost. §4.2 Issues table, §4.3, §4.20, §5, §7 and Appendix B updated. F-05a-11 FIXED. | Fix program |
 | 1.2 draft | 2026-10-28 | Owner answer to Q-05a-6 applied (decision D44): the expiry hard block covers Solid Edible, Liquid Edible, Tincture, Capsule **and RSO**. New finding F-05a-20: RSO is filed in CCRS as Concentrate for Inhalation, so G-24 must key on the store category. §4.16, §6, §7, §9, glossary, Appendices B–C updated. Line references re-pinned to `main@e1fe84eb` after the second performance merge (`inventory/store.ts`, `ccrs-batch.ts`, `register-sellability-store.ts`); no described behaviour changed. | SOP program (for owner review) |

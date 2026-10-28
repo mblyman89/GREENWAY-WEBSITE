@@ -764,16 +764,15 @@ export async function applyBulkFill(
     patch.expires_on_source = "owner_entered";
     patch.expires_on_set_by = actorId;
     patch.expires_on_set_at = nowIso;
-  } else if (field === "unit_cost_minor_units") {
-    patch.unit_cost_minor_units = value;
-    patch.unit_cost_source = "owner_entered";
-    patch.unit_cost_set_by = actorId;
-    patch.unit_cost_set_at = nowIso;
-  } else {
+  } else if (field === "pos_product_key") {
     patch.pos_product_key = value;
     patch.pos_product_key_source = "owner_entered";
     patch.pos_product_key_set_by = actorId;
     patch.pos_product_key_set_at = nowIso;
+  } else {
+    // Phase 0.5 (G-27, D38): a cannabis lot's unit cost is never typed; it
+    // comes only from the CCRS manifest at intake. Refuse anything else.
+    return { ok: false, error: "That field cannot be bulk filled." };
   }
 
   let q = admin.from("inventory_lots").update(patch).eq("id", lotId).neq("status", "destroyed");

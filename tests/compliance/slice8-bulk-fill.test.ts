@@ -108,10 +108,10 @@ describe("SLICE 8 — the locks that must never move", () => {
     }
   });
 
-  it("fills exactly the three fields the import dropped", () => {
-    expect([...BULK_FILLABLE_FIELDS].sort()).toEqual(
-      ["expires_on", "pos_product_key", "unit_cost_minor_units"].sort(),
-    );
+  // Phase 0.5 (G-27, D38): unit cost was removed - "absolutely not. That's
+  // illegal. Cost comes from the state CCRS manifest created by the vendor."
+  it("fills exactly the two fields the import dropped (never a cannabis cost)", () => {
+    expect([...BULK_FILLABLE_FIELDS].sort()).toEqual(["expires_on", "pos_product_key"].sort());
   });
 
   it("refuses a field that is not on the list", () => {
@@ -165,25 +165,14 @@ describe("SLICE 8 — the two blankness traps", () => {
     expect(eligibility(lot({ pos_product_key: "" }), "pos_product_key").eligible).toBe(true);
   });
 
-  it("treats a DELIBERATE ZERO cost as a KNOWN cost, never a blank", () => {
-    expect(isBlank(lot({ unit_cost_minor_units: 0 }), "unit_cost_minor_units")).toBe(false);
-    const e = eligibility(lot({ unit_cost_minor_units: 0 }), "unit_cost_minor_units");
-    expect(e.eligible).toBe(false);
-    if (!e.eligible) expect(e.reason).toBe("already_set");
-  });
-
-  it("a zero-cost lot is skipped by a cost fill, not overwritten", () => {
+  it("G-27: a cost fill is refused outright, whatever the lot", () => {
     const plan = planBulkFill({
-      field: "unit_cost_minor_units",
+      field: "unit_cost_minor_units" as unknown as BulkFillField,
       rawValue: "9.99",
       lots: [lot({ id: "z", unit_cost_minor_units: 0 })],
       todayPacific: TODAY,
     });
-    expect(plan.ok).toBe(true);
-    if (plan.ok) {
-      expect(plan.apply).toHaveLength(0);
-      expect(plan.skip[0].reason).toBe("already_set");
-    }
+    expect(plan.ok).toBe(false);
   });
 });
 
@@ -226,8 +215,7 @@ describe("SLICE 8 — value validation is never bypassed by bulk", () => {
   it("dispatches to the right validator per field", () => {
     expect(parseFieldValue("expires_on", "2027-01-01", TODAY).ok).toBe(true);
     expect(parseFieldValue("expires_on", "12.50", TODAY).ok).toBe(false);
-    expect(parseFieldValue("unit_cost_minor_units", "12.50", TODAY).ok).toBe(true);
-    expect(parseFieldValue("unit_cost_minor_units", "2027-01-01", TODAY).ok).toBe(false);
+    expect(parseFieldValue("pos_product_key", "SKU-1", TODAY).ok).toBe(true);
   });
 
   it("an invalid value refuses the ENTIRE plan — no partial writes", () => {
@@ -286,22 +274,21 @@ describe("SLICE 8 — the plan is a drafts-only preview (standing rule 3)", () =
 
   it("produces a contextual headline and a two-sided summary", () => {
     const plan = planBulkFill({
-      field: "unit_cost_minor_units",
-      rawValue: "8.25",
-      lots: [lot({ id: "a" }), lot({ id: "b", unit_cost_minor_units: 500 })],
+      field: "pos_product_key",
+      rawValue: "SKU-9",
+      lots: [lot({ id: "a" }), lot({ id: "b", pos_product_key: "SKU-1" })],
       todayPacific: TODAY,
     });
     expect(plan.ok).toBe(true);
     if (plan.ok) {
-      expect(planHeadline(plan)).toBe("Set Unit cost to $8.25 on 1 lot");
+      expect(planHeadline(plan)).toBe("Set POS product key to SKU-9 on 1 lot");
       expect(summarizePlan(plan)).toBe("1 will be filled, 1 skipped.");
     }
   });
 
-  it("renders money back as dollars for the preview", () => {
-    expect(formatFillValue("unit_cost_minor_units", 825)).toBe("$8.25");
-    expect(formatFillValue("unit_cost_minor_units", 0)).toBe("$0.00");
+  it("renders the planned value as typed for the preview", () => {
     expect(formatFillValue("expires_on", "2027-01-01")).toBe("2027-01-01");
+    expect(formatFillValue("pos_product_key", "SKU-1")).toBe("SKU-1");
   });
 
   it("gives every field a distinct human label", () => {
@@ -340,7 +327,7 @@ describe("SLICE 8 — generated corpus: the safety property under volume", () =>
 
   for (const field of BULK_FILLABLE_FIELDS) {
     const raw =
-      field === "expires_on" ? "2027-06-01" : field === "unit_cost_minor_units" ? "10.00" : "SKU-NEW";
+      field === "expires_on" ? "2027-06-01" : "SKU-NEW";
 
     it(`${field}: never applies to a populated field`, () => {
       const plan = planBulkFill({ field, rawValue: raw, lots: rows, todayPacific: TODAY });
@@ -469,7 +456,8 @@ describe("SLICE 8 — the write path is actually WIRED, not merely available", (
     const body = functionBody(store, "applyBulkFill");
     expect(body).toContain("owner_entered");
     expect(body).toContain("expires_on_set_by");
-    expect(body).toContain("unit_cost_set_by");
+    // G-27: the store never writes a unit cost.
+    expect(body).not.toContain("unit_cost_set_by");
     expect(body).toContain("pos_product_key_set_by");
   });
 

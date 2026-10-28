@@ -109,8 +109,9 @@ export const POS_ERROR_CODES: readonly string[] = [
   "missing_display_fields",
 ];
 
-export const UNKNOWN_COST_BULK_HREF =
-  "/admin/inventory?status=active&unknownCost=1&bulk=1&bulkField=unit_cost_minor_units";
+// Phase 0.5 (G-27, D38): cannabis cost is never typed, so this opens the
+// unknown-cost worklist WITHOUT Bulk fill; each lot is corrected from its manifest.
+export const UNKNOWN_COST_BULK_HREF = "/admin/inventory?status=active&unknownCost=1";
 export const MISSING_EXPIRY_BULK_HREF =
   "/admin/inventory?status=active&missingExpiry=1&bulk=1&bulkField=expires_on";
 export const MISSING_COA_HREF = "/admin/inventory?status=active&coa=no";
@@ -292,8 +293,8 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
     case "no_variants":
       return { what: "A card was built with no sellable sizes.", how: "Nothing here can sell it; check the product's sizes and stock in Cultivera and re-export.", links: [] };
     case "import_lot_cost_unparseable": {
-      const l = lotLinks(ctx, [{ href: UNKNOWN_COST_BULK_HREF, label: "Fill unit costs with Bulk fill" }]);
-      return { what: "The cost cell could not be read, so the lot has no unit cost and margin reports skip it.", how: `Type the costs in Bulk fill; it previews every lot before saving.${l.note}`, links: l.links };
+      const l = lotLinks(ctx, [{ href: UNKNOWN_COST_BULK_HREF, label: "Show lots with no cost" }]);
+      return { what: "The cost cell could not be read, so the lot has no unit cost and margin reports skip it.", how: `Cost missing \u2014 correct it from the manifest. Cannabis cost is never typed (owner rule D38); it comes from the state CCRS manifest created by the vendor.${l.note}`, links: l.links };
     }
     case "import_lots_expiration_missing_summary": {
       const l = lotLinks(ctx, [{ href: MISSING_EXPIRY_BULK_HREF, label: "Set expiry dates with Bulk fill" }]);
@@ -375,7 +376,7 @@ export function posDiagnosticRowLink(
       : null;
   }
   if (ctx.lotsCreated) {
-    if (code === "import_lot_cost_unparseable" && barcode) return { href: lotSearchHref(barcode, "unit_cost_minor_units"), label: "Fill this cost" };
+    if (code === "import_lot_cost_unparseable" && barcode) return { href: lotSearchHref(barcode), label: "Open this lot (correct the cost from its manifest)" };
     if ((code === "import_lot_barcode_conflict" || code === "import_lot_barcode_merged" || code === "import_lot_coa_missing" || code === "import_lot_received_date_missing") && barcode) {
       return { href: lotSearchHref(barcode), label: "Open this lot" };
     }
@@ -491,7 +492,7 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
 
   // Lot codes: exact bulk-fill hrefs when lots exist.
   ok(posImportFixFor("import_lot_cost_unparseable", live)?.links[0].href === UNKNOWN_COST_BULK_HREF, "cost bulk href");
-  ok(UNKNOWN_COST_BULK_HREF === "/admin/inventory?status=active&unknownCost=1&bulk=1&bulkField=unit_cost_minor_units", "cost bulk literal");
+  ok(UNKNOWN_COST_BULK_HREF === "/admin/inventory?status=active&unknownCost=1", "cost worklist literal (G-27: no bulk fill)");
   ok(posImportFixFor("import_lots_expiration_missing_summary", live)?.links[0].href === MISSING_EXPIRY_BULK_HREF, "expiry bulk href");
   ok(MISSING_EXPIRY_BULK_HREF === "/admin/inventory?status=active&missingExpiry=1&bulk=1&bulkField=expires_on", "expiry bulk literal");
   ok(posImportFixFor("import_lots_coa_missing_summary", live)?.links[0].href === "/admin/inventory?status=active&coa=no", "coa list");
@@ -519,7 +520,7 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(posImportFixFor("import_lot_cost_unparseable", live)?.how.includes("created when") === false, "no note when lots exist");
 
   // Row links.
-  ok(posDiagnosticRowLink("import_lot_cost_unparseable", { barcode: "GF1 2" }, live)?.href === "/admin/inventory?q=GF1+2&bulk=1&bulkField=unit_cost_minor_units", "row cost");
+  ok(posDiagnosticRowLink("import_lot_cost_unparseable", { barcode: "GF1 2" }, live)?.href === "/admin/inventory?q=GF1+2", "row cost (G-27: no typed cost)");
   ok(posDiagnosticRowLink("import_lot_barcode_conflict", { barcode: "B1" }, live)?.href === "/admin/inventory?q=B1", "row conflict");
   ok(posDiagnosticRowLink("import_lot_barcode_merged", { barcode: "B1" }, live)?.label === "Open this lot", "row merged");
   ok(posDiagnosticRowLink("import_lot_coa_missing", { barcode: "B1" }, live)?.href === "/admin/inventory?q=B1", "row coa");

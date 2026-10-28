@@ -65,12 +65,6 @@ function inputProps(field: BulkFillField): { type: string; placeholder: string; 
         placeholder: "YYYY-MM-DD",
         hint: "Read the expiration date off the physical package or the COA.",
       };
-    case "unit_cost_minor_units":
-      return {
-        type: "text",
-        placeholder: "12.50",
-        hint: "Read the unit cost off the vendor invoice. Dollars — stored to the cent.",
-      };
     case "pos_product_key":
       return {
         type: "text",

@@ -171,10 +171,11 @@ describe("R13a Cultivera import — every diagnostic code has a fix", () => {
   });
   it("per-row links target the exact lot by barcode", () => {
     expect(posDiagnosticRowLink("import_lot_cost_unparseable", { barcode: "123" }, live)).toEqual({
-      href: lotSearchHref("123", "unit_cost_minor_units"),
-      label: "Fill this cost",
+      // G-27 (D38): cannabis cost is never typed - open the lot, correct from its manifest.
+      href: lotSearchHref("123"),
+      label: "Open this lot (correct the cost from its manifest)",
     });
-    expect(lotSearchHref("123", "unit_cost_minor_units")).toBe("/admin/inventory?q=123&bulk=1&bulkField=unit_cost_minor_units");
+    expect(lotSearchHref("123", "expires_on")).toBe("/admin/inventory?q=123&bulk=1&bulkField=expires_on");
     expect(posDiagnosticRowLink("import_lot_cost_unparseable", { barcode: "123" }, staged)).toBeNull();
     expect(posDiagnosticRowLink("product_without_inventory", { product: "x" }, live)).toBeNull();
   });

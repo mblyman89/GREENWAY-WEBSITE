@@ -64,7 +64,7 @@ describe("S28 issues-core pure self-tests", () => {
     const r = __runIssuesCoreTests();
     expect(r.failed).toBe(0);
     // R34: +2 (expiry gap links the expiration rules; only the expiry gap does).
-    expect(r.passed).toBe(101);
+    expect(r.passed).toBe(102);
   });
   it("is registered in run-pure-selftests", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");

@@ -48,12 +48,26 @@ import { isRealCalendarDate, RECEIVED_DATE_FLOOR } from "@/lib/inventory/receive
  */
 export const MIGRATION_MARKER = "Cultivera migration (one-time POS import).";
 
-/** The ONLY fields a bulk fill may write. */
+/**
+ * The ONLY fields a bulk fill may write.
+ *
+ * Phase 0.5 (G-27, F-05a-11): `unit_cost_minor_units` was REMOVED. Owner
+ * decision D38, verbatim: "absolutely not. That's illegal. Cost comes from the
+ * state CCRS manifest created by the vendor." Every inventory lot is cannabis,
+ * so its unit cost is written only by manifest intake (intake-store /
+ * receipt-service), never typed. Non-cannabis cost keeps its own owner/admin
+ * path (`inventory.cost.fill`, noncannabis/cost-fill-core).
+ */
 export const BULK_FILLABLE_FIELDS = [
   "expires_on",
-  "unit_cost_minor_units",
   "pos_product_key",
 ] as const;
+
+/** Fields a bulk fill must NEVER offer or write (G-27, D38). */
+export const BULK_FORBIDDEN_FIELDS = ["unit_cost_minor_units"] as const;
+
+export const CANNABIS_COST_FROM_MANIFEST =
+  "Cannabis unit cost is never typed. It comes from the state CCRS manifest created by the vendor (owner rule D38). Correct it from the manifest on Receiving.";
 
 export type BulkFillField = (typeof BULK_FILLABLE_FIELDS)[number];
 
@@ -122,8 +136,6 @@ export function isBlank(lot: BulkFillLot, field: BulkFillField): boolean {
   switch (field) {
     case "expires_on":
       return !lot.expires_on;
-    case "unit_cost_minor_units":
-      return lot.unit_cost_minor_units == null;
     case "pos_product_key":
       return !lot.pos_product_key;
   }
@@ -231,8 +243,6 @@ export function parseFieldValue(
   switch (field) {
     case "expires_on":
       return parseExpiryInput(raw, todayPacific);
-    case "unit_cost_minor_units":
-      return parseCostInput(raw);
     case "pos_product_key":
       return parseProductKeyInput(raw);
   }
@@ -283,6 +293,9 @@ export function planBulkFill(opts: {
 }): BulkFillPlan {
   const { field, rawValue, lots, todayPacific } = opts;
 
+  if ((BULK_FORBIDDEN_FIELDS as readonly string[]).includes(field)) {
+    return { ok: false, error: CANNABIS_COST_FROM_MANIFEST };
+  }
   if (!(BULK_FILLABLE_FIELDS as readonly string[]).includes(field)) {
     return { ok: false, error: "That field cannot be bulk filled." };
   }
@@ -318,18 +331,13 @@ export function fieldLabel(field: BulkFillField): string {
   switch (field) {
     case "expires_on":
       return "Expiration date";
-    case "unit_cost_minor_units":
-      return "Unit cost";
     case "pos_product_key":
       return "POS product key";
   }
 }
 
 /** Render a planned value the way the owner typed/reads it (money in dollars). */
-export function formatFillValue(field: BulkFillField, value: string | number): string {
-  if (field === "unit_cost_minor_units" && typeof value === "number") {
-    return `$${(value / 100).toFixed(2)}`;
-  }
+export function formatFillValue(_field: BulkFillField, value: string | number): string {
   return String(value);
 }
 
@@ -376,7 +384,11 @@ export function __runBulkFillCoreTests(): { passed: number } {
   });
 
   // ---- the field lists are disjoint and minimal -------------------------
-  ok(BULK_FILLABLE_FIELDS.length === 3, "exactly 3 fillable fields");
+  ok(BULK_FILLABLE_FIELDS.length === 2, "exactly 2 fillable fields (G-27: no cost)");
+  ok(
+    !(BULK_FILLABLE_FIELDS as readonly string[]).includes("unit_cost_minor_units"),
+    "G-27 / D38: cannabis unit cost is NEVER bulk fillable",
+  );
   ok(
     BULK_FILLABLE_FIELDS.every((f) => !(BULK_LOCKED_FIELDS as readonly string[]).includes(f)),
     "fillable and locked lists never overlap",
@@ -403,12 +415,6 @@ export function __runBulkFillCoreTests(): { passed: number } {
   ok(isBlank(lot(), "pos_product_key"), "null product key is blank");
   ok(isBlank(lot({ pos_product_key: "" }), "pos_product_key"), "EMPTY STRING product key is blank");
   ok(!isBlank(lot({ pos_product_key: "SKU-1" }), "pos_product_key"), "set product key is not blank");
-  ok(isBlank(lot(), "unit_cost_minor_units"), "null cost is blank");
-  // THE TRAP: a deliberate zero cost is a KNOWN cost and must never be filled over.
-  ok(
-    !isBlank(lot({ unit_cost_minor_units: 0 }), "unit_cost_minor_units"),
-    "ZERO cost is a KNOWN cost, not a blank",
-  );
 
   // ---- eligibility ------------------------------------------------------
   ok(eligibility(lot(), "expires_on").eligible, "blank migration lot is eligible");
@@ -519,32 +525,10 @@ export function __runBulkFillCoreTests(): { passed: number } {
     ok(nonePlan.skip.length === 1, "all-ineligible plan explains the skip");
   }
 
-  // Cost plan formats money back to dollars for the preview.
-  const costPlan = planBulkFill({
-    field: "unit_cost_minor_units",
-    rawValue: "8.25",
-    lots: [lot({ id: "m" })],
-    todayPacific: TODAY,
-  });
-  ok(costPlan.ok, "cost plan builds");
-  if (costPlan.ok) {
-    ok(costPlan.apply[0].value === 825, "cost stored in MINOR UNITS");
-    ok(formatFillValue("unit_cost_minor_units", 825) === "$8.25", "cost renders as dollars");
-    ok(planHeadline(costPlan) === "Set Unit cost to $8.25 on 1 lot", "singular 'lot' for one row");
-  }
-
-  // A zero-cost lot must be SKIPPED by a cost fill, not overwritten.
-  const zeroCostPlan = planBulkFill({
-    field: "unit_cost_minor_units",
-    rawValue: "8.25",
-    lots: [lot({ id: "zero", unit_cost_minor_units: 0 })],
-    todayPacific: TODAY,
-  });
-  ok(zeroCostPlan.ok, "zero-cost plan builds");
-  if (zeroCostPlan.ok) {
-    ok(zeroCostPlan.apply.length === 0, "a KNOWN zero cost is never overwritten by bulk fill");
-    ok(zeroCostPlan.skip[0].reason === "already_set", "zero cost skipped as already_set");
-  }
+  // G-27: a cost field is refused by the planner (not a fillable field).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const costPlan = planBulkFill({ field: "unit_cost_minor_units" as any, rawValue: "8.25", lots: [lot({ id: "m" })], todayPacific: TODAY });
+  ok(!costPlan.ok, "G-27: a unit-cost bulk fill is refused");
 
   // Every field has a label and every label is distinct.
   const labels = BULK_FILLABLE_FIELDS.map(fieldLabel);
