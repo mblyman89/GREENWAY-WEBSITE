@@ -47,6 +47,18 @@ import {
   OPEN_DESTRUCTION_STATUSES,
   type LotCloseAction,
 } from "@/lib/inventory/destruction-lot-status-core";
+// Fix Phase 1.4 (G-44): held units (customer-return Destroy) are never sellable.
+import {
+  evaluateReductionAgainstHold,
+  isMissingHeldQtyColumnError,
+  heldReleaseMessage,
+  toHeldNumber,
+  HOLD_PENDING_MIGRATION_NOTE,
+  RECORD_CUSTOMER_RETURN_RPC,
+  CONSUME_LOT_HOLD_RPC,
+  RELEASE_LOT_HOLD_RPC,
+} from "@/lib/inventory/held-stock-core";
+import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
 
 /**
  * LEGACY default pre-destruction hold (hours). The old 72-hour WSLCB notice
@@ -149,6 +161,8 @@ export type DestructionEvent = {
   cancel_reason?: string | null;
   cancelled_by?: string | null;
   cancelled_at?: string | null;
+  /** Fix Phase 1.4 (G-44, migration 0308): held units this event destroys. */
+  held_qty_reserved?: number | null;
 };
 
 type WithLot = { lot_code: string | null; product_name: string | null; unit: string | null };
@@ -212,17 +226,18 @@ async function postReduction(
   actorId: string | null,
 ): Promise<{ ok: true; adjustmentId: string } | { ok: false; error: string }> {
   const admin = createSupabaseAdminClient();
-  const { data: lot } = await admin
-    .from("inventory_lots")
-    .select("id, on_hand_qty")
-    .eq("id", lotId)
-    .maybeSingle();
+  // Fix Phase 1.4 (G-44): read the held units too (pre-0308: none are held).
+  let lotRead = await admin.from("inventory_lots").select("id, on_hand_qty, held_qty").eq("id", lotId).maybeSingle();
+  if (lotRead.error && isMissingHeldQtyColumnError(lotRead.error)) {
+    lotRead = (await admin.from("inventory_lots").select("id, on_hand_qty").eq("id", lotId).maybeSingle()) as typeof lotRead;
+  }
+  const lot = lotRead.data as { on_hand_qty: number; held_qty?: number | null } | null;
   if (!lot) return { ok: false, error: "Lot not found." };
 
-  const onHand = Number((lot as { on_hand_qty: number }).on_hand_qty) || 0;
-  if (qtyMagnitude > onHand) {
-    return { ok: false, error: `Quantity (${qtyMagnitude}) exceeds on-hand (${onHand}).` };
-  }
+  const onHand = Number(lot.on_hand_qty) || 0;
+  // A disposition never takes units held for a customer-return destruction.
+  const holdCheck = evaluateReductionAgainstHold({ qty: qtyMagnitude, onHand, held: lot.held_qty });
+  if (!holdCheck.ok) return holdCheck;
 
   const { data: adj, error: insErr } = await admin
     .from("inventory_adjustments")
@@ -253,6 +268,41 @@ async function postReduction(
   // a problem is logged loudly (the lot write is the legal record).
   await syncLotMenuStock(admin, lotId, -Math.abs(qtyMagnitude));
 
+  return { ok: true, adjustmentId: (adj as { id: string }).id };
+}
+
+/**
+ * Fix Phase 1.4 (G-44): complete the destruction of HELD units (a customer
+ * return marked Destroy). On hand and held come down together in one
+ * statement (consume_lot_hold, migration 0308), so the destruction can only
+ * ever take the units that were held for it. The menu never had these units,
+ * so no menu stock moves. On refusal the adjustment row is removed.
+ */
+async function postHeldReduction(
+  lotId: string,
+  qtyMagnitude: number,
+  reason: string,
+  note: string | null,
+  actorId: string | null,
+): Promise<{ ok: true; adjustmentId: string } | { ok: false; error: string }> {
+  const admin = createSupabaseAdminClient();
+  const qty = Math.abs(qtyMagnitude);
+  const { data: adj, error: insErr } = await admin
+    .from("inventory_adjustments")
+    .insert({ lot_id: lotId, qty_delta: -qty, reason, note, actor_id: actorId })
+    .select("id")
+    .single();
+  if (insErr || !adj) return { ok: false, error: insErr?.message ?? "Could not post adjustment." };
+  const { data, error } = await admin.rpc(CONSUME_LOT_HOLD_RPC, { p_lot_id: lotId, p_qty: qty, p_actor: actorId });
+  if (error || data === null || data === undefined) {
+    await admin.from("inventory_adjustments").delete().eq("id", (adj as { id: string }).id);
+    return {
+      ok: false,
+      error: error
+        ? error.message
+        : "The lot no longer holds these returned units (someone changed it). Nothing was destroyed; refresh and check the lot.",
+    };
+  }
   return { ok: true, adjustmentId: (adj as { id: string }).id };
 }
 
@@ -447,6 +497,12 @@ export async function listCustomerReturns(limit = 50): Promise<CustomerReturn[]>
  *     with a mandatory detail stating the ADD direction),
  *  4. if disposition = destroy, opens a destruction event for the returned
  *     quantity (LCB coordination/waste record enforced at completion).
+ *
+ * Fix Phase 1.4 (G-44; F-15-6, F-15-7): steps 3-4 and the return row are ONE
+ * database transaction (record_customer_return, migration 0308). A Destroy
+ * return's units are HELD on the lot (inventory_lots.held_qty): still on hand
+ * and in CCRS, never sellable (sale-lot-read, POS menu, sellability report).
+ * Before 0308 the old writes run and any failure undoes the add-back.
  */
 export async function createCustomerReturn(
   input: {
@@ -462,7 +518,7 @@ export async function createCustomerReturn(
     lotIdLegible: boolean;
   },
   actorId: string | null,
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string; held: boolean; notice?: string } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
@@ -681,53 +737,98 @@ export async function createCustomerReturn(
     saleExternalId,
     detail: input.detail,
   });
-  const posted = await postAddition(lotId, input.quantity, "return", note, actorId, { sellable: input.disposition !== "destroy" });
+  const returnRow = {
+    order_id: o.id,
+    order_line_id: l.id,
+    sale_external_id: saleExternalId,
+    sale_detail_external_id: saleDetailExternalId,
+    product_name: l.product_name,
+    inventory_external_id: inventoryExternalId || null,
+    sale_type: isMedical ? "RecreationalMedical" : "RecreationalRetail",
+    sale_date: saleDate,
+    unit_price_minor: preTaxRegularUnit,
+    discount_minor: discountCents,
+    sales_tax_minor: salesTaxCents,
+    excise_minor: exciseCents,
+    original_quantity: qty,
+    original_packaging: input.originalPackaging,
+    lot_id_legible: input.lotIdLegible,
+    disposition: input.disposition,
+    reason: input.reason,
+    detail: input.detail ?? null,
+    refund_minor_units: input.refundMinor,
+    correction_operation: correctionOperation,
+    correction_status: "pending",
+  };
+  const isDestroy = input.disposition === "destroy";
+  const destructionDetail = `Customer return (${input.reason.replace(/_/g, " ")}) — sale ${saleExternalId}`;
+
+  // ── Fix Phase 1.4 (G-44; F-15-6, F-15-7): ONE transaction ─────────────────
+  // record_customer_return (migration 0308) writes the CCRS Other add-back,
+  // raises on hand, HOLDS the units for a Destroy return (never sellable),
+  // opens the destruction event and saves the return row, or none of them.
+  const settings = isDestroy ? await getDispositionSettings() : null;
+  const destruction = isDestroy
+    ? {
+        quantity: input.quantity,
+        reason: "other",
+        detail: destructionDetail,
+        earliest_destroy_at: computeEarliestDestroyAt(new Date().toISOString(), settings!.holdHours),
+      }
+    : null;
+  const { data: rpcData, error: rpcErr } = await admin.rpc(RECORD_CUSTOMER_RETURN_RPC, {
+    p_lot_id: lotId,
+    p_qty: input.quantity,
+    p_note: note,
+    p_actor: actorId,
+    p_hold: isDestroy,
+    p_destruction: destruction,
+    p_return: returnRow,
+  });
+  if (!rpcErr) {
+    const r = (rpcData ?? {}) as { return_id?: string | null };
+    if (!r.return_id) return { ok: false, error: "The return could not be saved (no id came back). Nothing was changed." };
+    // A Restock unit goes back on the menu; a held Destroy unit never does.
+    if (!isDestroy) await syncLotMenuStock(admin, lotId, Math.abs(input.quantity));
+    return { ok: true, id: r.return_id, held: isDestroy };
+  }
+  if (!isMissingDbFunctionError(rpcErr)) {
+    // The transaction rolled back: no add-back, no event, no return row.
+    return { ok: false, error: `The return was not saved and nothing was changed: ${rpcErr.message}` };
+  }
+
+  // ── Before migration 0308: the old writes, made all-or-nothing by undoing ─
+  // (F-15-7). The unit cannot be held by the app yet, so the caller is told
+  // to keep it in the sealed destroy bin (SOP-15 §4.7).
+  const posted = await postAddition(lotId, input.quantity, "return", note, actorId, { sellable: !isDestroy });
   if (!posted.ok) return posted;
 
-  // ── If destroying, open the destruction event for the returned quantity ───
   let destructionEventId: string | null = null;
-  if (input.disposition === "destroy") {
+  if (isDestroy) {
     const scheduled = await scheduleDestruction(
       {
         lotId,
         quantity: input.quantity,
         reason: "other",
-        detail: `Customer return (${input.reason.replace(/_/g, " ")}) — sale ${saleExternalId}`,
-        // Only the returned unit is segregated — the rest of the lot stays sellable.
+        detail: destructionDetail,
+        // Only the returned unit is segregated; the rest of the lot stays sellable.
         quarantineLot: false,
       },
       actorId,
     );
-    if (scheduled.ok) destructionEventId = scheduled.id;
+    if (!scheduled.ok) {
+      await undoAddition(admin, lotId, input.quantity, posted.adjustmentId, actorId, false);
+      return { ok: false, error: `The destruction event could not be opened, so the return was not saved and the add-back was undone: ${scheduled.error}` };
+    }
+    destructionEventId = scheduled.id;
   }
 
-  // ── Record the return ──────────────────────────────────────────────────────
   const { data: created, error: insErr } = await admin
     .from("customer_returns")
     .insert({
-      order_id: o.id,
-      order_line_id: l.id,
-      sale_external_id: saleExternalId,
-      sale_detail_external_id: saleDetailExternalId,
-      product_name: l.product_name,
-      inventory_external_id: inventoryExternalId || null,
-      sale_type: isMedical ? "RecreationalMedical" : "RecreationalRetail",
-      sale_date: saleDate,
-      unit_price_minor: preTaxRegularUnit,
-      discount_minor: discountCents,
-      sales_tax_minor: salesTaxCents,
-      excise_minor: exciseCents,
+      ...returnRow,
       lot_id: lotId,
       quantity: input.quantity,
-      original_quantity: qty,
-      original_packaging: input.originalPackaging,
-      lot_id_legible: input.lotIdLegible,
-      disposition: input.disposition,
-      reason: input.reason,
-      detail: input.detail ?? null,
-      refund_minor_units: input.refundMinor,
-      correction_operation: correctionOperation,
-      correction_status: "pending",
       adjustment_id: posted.adjustmentId,
       destruction_event_id: destructionEventId,
       created_by: actorId,
@@ -735,16 +836,51 @@ export async function createCustomerReturn(
     .select("id")
     .single();
   if (insErr || !created) {
+    if (destructionEventId) await admin.from("destruction_events").delete().eq("id", destructionEventId);
+    await undoAddition(admin, lotId, input.quantity, posted.adjustmentId, actorId, !isDestroy);
     if (isMissingSchemaError(insErr?.message)) {
-      return {
-        ok: false,
-        error:
-          "Apply migration 0115 first (customer_returns table missing). The inventory add-back was posted — reverse it manually if you abort.",
-      };
+      return { ok: false, error: "Apply migration 0115 first (customer_returns table missing). Nothing was changed (the add-back was undone)." };
     }
-    return { ok: false, error: insErr?.message ?? "Could not save the return." };
+    return { ok: false, error: `The return was not saved and the add-back was undone: ${insErr?.message ?? "unknown error"}` };
   }
-  return { ok: true, id: (created as { id: string }).id };
+  return {
+    ok: true,
+    id: (created as { id: string }).id,
+    held: false,
+    notice: isDestroy ? HOLD_PENDING_MIGRATION_NOTE : undefined,
+  };
+}
+
+/**
+ * Pre-0308 compensation (F-15-7): take back an add-back whose return could
+ * not be saved. Strict delta; the adjustment row is removed so the ledger
+ * never describes an add-back that did not stand. Menu stock is reversed
+ * only when the add-back had moved it (a Restock return).
+ */
+async function undoAddition(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  lotId: string,
+  qty: number,
+  adjustmentId: string,
+  actorId: string | null,
+  menuMoved: boolean,
+): Promise<void> {
+  const { data: lotRow } = await admin.from("inventory_lots").select("on_hand_qty").eq("id", lotId).maybeSingle();
+  const onHand = Number((lotRow as { on_hand_qty: number } | null)?.on_hand_qty) || 0;
+  const undone = await applyLotDelta(admin, {
+    lotId,
+    delta: -Math.abs(qty),
+    clamp: false,
+    actorId,
+    autoStatus: false,
+    fallbackAbsolute: { onHandQty: Math.max(0, onHand - Math.abs(qty)), updatedBy: actorId },
+  });
+  if (undone.ok) {
+    await admin.from("inventory_adjustments").delete().eq("id", adjustmentId);
+    if (menuMoved) await syncLotMenuStock(admin, lotId, -Math.abs(qty));
+  } else {
+    console.error(`[disposition] could not undo customer-return add-back on lot ${lotId}: ${undone.error}`);
+  }
 }
 
 /** Mark returns' CCRS Sale corrections as exported (after CSV download). */
@@ -1126,7 +1262,13 @@ export async function completeDestruction(
     disposalFacility: input.disposalFacility ?? null,
   });
 
-  const posted = await postReduction(event.lot_id, event.quantity, "destruction", note, actorId);
+  // Fix Phase 1.4 (G-44): a customer-return Destroy event destroys exactly the
+  // units held for it (on hand and held come down together).
+  const heldReserved = toHeldNumber(event.held_qty_reserved);
+  const posted =
+    heldReserved > 0
+      ? await postHeldReduction(event.lot_id, event.quantity, "destruction", note, actorId)
+      : await postReduction(event.lot_id, event.quantity, "destruction", note, actorId);
   if (!posted.ok) return posted;
 
   const basePatch = {
@@ -1195,7 +1337,17 @@ export async function cancelDestruction(
   actorId: string | null,
   reason: string,
 ): Promise<
-  | { ok: true; lotId: string; lotBefore: string | null; lotAfter: string | null; previousLotStatus: string | null; lotMessage: string; lotAction: LotCloseAction }
+  | {
+      ok: true;
+      lotId: string;
+      lotBefore: string | null;
+      lotAfter: string | null;
+      previousLotStatus: string | null;
+      lotMessage: string;
+      lotAction: LotCloseAction;
+      heldReleased: number;
+      heldMessage: string | null;
+    }
   | { ok: false; error: string }
 > {
   if (!isSupabaseServiceConfigured) {
@@ -1228,8 +1380,23 @@ export async function cancelDestruction(
   }
 
   const restored = await restoreLotAfterEventCloses(admin, event, actorId);
+  // Fix Phase 1.4 (G-44): a cancelled customer-return destruction releases the
+  // units it held (on hand unchanged); the page tells the owner what to do.
+  const heldReserved = toHeldNumber(event.held_qty_reserved);
+  let heldReleased = 0;
+  if (heldReserved > 0) {
+    const { error: relErr } = await admin.rpc(RELEASE_LOT_HOLD_RPC, { p_lot_id: event.lot_id, p_qty: heldReserved, p_actor: actorId });
+    if (!relErr) {
+      heldReleased = heldReserved;
+      // The released units are sellable again, so they go back on the menu.
+      await syncLotMenuStock(admin, event.lot_id, heldReserved);
+    }
+    else console.error(`[disposition] could not release ${heldReserved} held unit(s) on lot ${event.lot_id}: ${relErr.message}`);
+  }
   return {
     ok: true,
+    heldReleased,
+    heldMessage: heldReleased > 0 ? heldReleaseMessage(heldReleased) : null,
     lotId: event.lot_id,
     lotBefore: restored.lotBefore,
     lotAfter: restored.lotAfter,

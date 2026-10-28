@@ -158,6 +158,11 @@ export type InventoryLot = {
   is_medical: boolean;
   received_qty: number;
   on_hand_qty: number;
+  /**
+   * Fix Phase 1.4 (G-44, migration 0308): units on hand held for a
+   * customer-return destruction; never sellable. Absent before 0308.
+   */
+  held_qty?: number | null;
   unit: string;
   unit_cost_minor_units: number | null;
   expires_on: string | null;

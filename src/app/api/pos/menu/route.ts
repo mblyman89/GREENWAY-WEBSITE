@@ -19,6 +19,8 @@
  * device bundle can never make an illegal sale stick.
  */
 import { withoutSampleLots } from "@/lib/inventory/sample-lot-core";
+// Fix Phase 1.4 (G-44): units held for a customer-return destruction are not register stock.
+import { isMissingHeldQtyColumnError, sellableQty } from "@/lib/inventory/held-stock-core";
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
@@ -174,19 +176,26 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         on_hand_qty: number | string | null;
         product_name: string | null;
         is_sample: boolean | null;
+        held_qty?: number | string | null;
       };
+      const LOT_COLS = "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, is_sample";
+      // Before migration 0308 there is no held_qty column: retry without it
+      // (nothing is held then, so on hand is the register stock as before).
+      let withHeld = true;
+      const readPage = (from: number, to: number) =>
+        admin
+          .from("inventory_lots")
+          .select(withHeld ? `${LOT_COLS}, held_qty` : LOT_COLS)
+          // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+          .order("id", { ascending: true })
+          .range(from, to);
+      const probe = await readPage(0, 0);
+      if (probe.error && isMissingHeldQtyColumnError(probe.error)) withHeld = false;
       const { rows, verdict } = await pagedAllChecked<LotRow>(
         async (from, to) => {
-          const { data, error } = await admin
-            .from("inventory_lots")
-            .select(
-              "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, is_sample",
-            )
-            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
-            .order("id", { ascending: true })
-            .range(from, to);
+          const { data, error } = await readPage(from, to);
           if (error) return { rows: [], ok: false };
-          return { rows: (data as LotRow[] | null) ?? [], ok: true };
+          return { rows: (data as unknown as LotRow[] | null) ?? [], ok: true };
         },
         { maxRows: BARCODE_SCAN_MAX_ROWS },
       );
@@ -200,7 +209,8 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         id: l.id,
         posProductKey: l.pos_product_key,
         status: l.status,
-        onHandQty: l.on_hand_qty,
+        // Fix Phase 1.4 (G-44): register stock is what may be sold.
+        onHandQty: sellableQty(l.on_hand_qty, l.held_qty),
         productName: l.product_name,
         lotCode: l.lot_code,
         // Carried for the barcode index below (not part of LiveLotFact).

@@ -379,6 +379,7 @@ async function gatherCosts(
   // Same lines + same lots + same planner = the same draw, so the cost booked
   // here is the cost of the units the decrement removes.
   const { readSaleLots } = await import("@/lib/inventory/sale-lot-read");
+  const { sellableQty } = await import("@/lib/inventory/held-stock-core");
   const read = await readSaleLots(admin, keys);
   if (!read.ok) {
     return { kind: "failed", message: `Lot costs could not be read: ${read.error}` };
@@ -410,7 +411,8 @@ async function gatherCosts(
     .map((r) => ({
       id: r.id,
       posProductKey: r.pos_product_key as string,
-      onHandQty: r.on_hand_qty,
+      // Fix Phase 1.4 (G-44): the same sellable figure the decrement plans on.
+      onHandQty: sellableQty(r.on_hand_qty, r.held_qty),
       sizeId: r.menu_source_variant_id,
     }));
 

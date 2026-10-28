@@ -51,6 +51,7 @@ import {
   type LotCloseAction,
 } from "@/lib/inventory/destruction-lot-status-core";
 import { isAiConfigured } from "@/lib/inventory/disposition-advisor";
+import { heldReleaseMessage } from "@/lib/inventory/held-stock-core";
 import { CustomerReturnWizard } from "@/components/admin/inventory/CustomerReturnWizard";
 import { DispositionAdvisorPanel } from "@/components/admin/inventory/DispositionAdvisorPanel";
 import {
@@ -97,7 +98,7 @@ function manifestTone(status: string): "neutral" | "green" | "gold" | "orange" |
 export default async function DispositionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string; lot?: string; lotmsg?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; lot?: string; lotmsg?: string; held?: string }>;
 }) {
   const session = await requirePermission("inventory.manage");
   const canSettings = can(session.profile.role, "settings.manage");
@@ -132,6 +133,9 @@ export default async function DispositionPage({
             : { action: "leave", why: sp.lotmsg as Exclude<LotCloseAction["why"], "restored"> },
         )
       : null;
+  // Fix Phase 1.4 (G-44): a cancelled customer-return destruction released its held units.
+  const heldReleasedCount = sp.ok === "cancelled" ? Number(sp.held ?? "") : NaN;
+  const heldReleaseNote = Number.isFinite(heldReleasedCount) && heldReleasedCount > 0 ? heldReleaseMessage(heldReleasedCount) : null;
 
   return (
     <div className="space-y-5">
@@ -152,6 +156,7 @@ export default async function DispositionPage({
         <div className="rounded-xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
           {OK_MESSAGES[sp.ok] ?? "Saved."}
           {cancelLotMessage ? <span data-testid="cancel-lot-message"> {cancelLotMessage}</span> : null}
+          {heldReleaseNote ? <span data-testid="held-release-message"> {heldReleaseNote}</span> : null}
         </div>
       ) : null}
 

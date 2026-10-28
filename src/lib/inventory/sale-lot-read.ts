@@ -11,9 +11,16 @@ import "server-only";
  * oldest first. S31 adds each lot's menu SIZE link (0294,
  * menu_source_variant_id). Before 0294 is applied the read retries without
  * it and reports `sizeLinkPending` (the draw is then exactly the pre-S31 FIFO).
+ *
+ * Fix Phase 1.4 (G-44): each row also carries `held_qty` (migration 0308),
+ * the units held for a customer-return destruction. Callers plan the draw on
+ * sellableQty(on_hand_qty, held_qty), so a sale never takes a held unit.
+ * Before 0308 the read retries without it (held_qty = 0, the old behaviour).
  */
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
+// Fix Phase 1.4 (G-44): held units (customer-return Destroy) are never drawn.
+import { isMissingHeldQtyColumnError, toHeldNumber } from "@/lib/inventory/held-stock-core";
 
 export type SaleLotRow = {
   id: string;
@@ -23,6 +30,8 @@ export type SaleLotRow = {
   lot_code: string | null;
   unit_cost_minor_units: number | null;
   menu_source_variant_id: string | null;
+  /** Fix Phase 1.4 (G-44): units held for destruction (0 before migration 0308). */
+  held_qty: number;
 };
 
 export type SaleLotRead =
@@ -48,16 +57,30 @@ export async function readSaleLots(
       .gt("on_hand_qty", 0)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
-  const first = await run(`${BASE}, menu_source_variant_id`);
-  if (!first.error) {
-    return { ok: true, rows: (first.data as unknown as SaleLotRow[] | null) ?? [], sizeLinkPending: false };
+  // Try the fullest column set first; drop a column only when the error says
+  // that exact column is missing (0294 size link, 0308 held quantity).
+  let withHeld = true;
+  let withSize = true;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cols = `${BASE}${withHeld ? ", held_qty" : ""}${withSize ? ", menu_source_variant_id" : ""}`;
+    const res = await run(cols);
+    if (!res.error) {
+      const rows = ((res.data as unknown as Partial<SaleLotRow>[] | null) ?? []).map((r) => ({
+        ...(r as SaleLotRow),
+        menu_source_variant_id: withSize ? (r.menu_source_variant_id ?? null) : null,
+        held_qty: withHeld ? toHeldNumber(r.held_qty) : 0,
+      }));
+      return { ok: true, rows, sizeLinkPending: !withSize };
+    }
+    if (withHeld && isMissingHeldQtyColumnError(res.error)) {
+      withHeld = false;
+      continue;
+    }
+    if (withSize && isMissingSizeLinkColumnError(res.error)) {
+      withSize = false;
+      continue;
+    }
+    return { ok: false, error: res.error.message };
   }
-  if (!isMissingSizeLinkColumnError(first.error)) return { ok: false, error: first.error.message };
-  const second = await run(BASE);
-  if (second.error) return { ok: false, error: second.error.message };
-  const rows = ((second.data as unknown as Omit<SaleLotRow, "menu_source_variant_id">[] | null) ?? []).map((r) => ({
-    ...r,
-    menu_source_variant_id: null,
-  }));
-  return { ok: true, rows, sizeLinkPending: true };
+  return { ok: false, error: "Could not read the lots to draw from." };
 }

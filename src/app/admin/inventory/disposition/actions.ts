@@ -111,7 +111,7 @@ export async function createCustomerReturnAction(formData: FormData) {
     action: "customer_return.create",
     entityType: "customer_returns",
     entityId: result.id,
-    after: { order_id: orderId, order_line_id: orderLineId, quantity: qty, disposition, reason, refund_minor: refundMinor },
+    after: { order_id: orderId, order_line_id: orderLineId, quantity: qty, disposition, reason, refund_minor: refundMinor, held: result.held },
   });
   revalidatePath(BASE);
   revalidatePath("/admin/inventory");
@@ -298,13 +298,15 @@ export async function cancelDestructionAction(id: string, formData: FormData) {
       lot_id: result.lotId,
       lot_status: result.lotAfter,
       lot_outcome: result.lotAction.why,
+      held_released: result.heldReleased,
     },
   });
   revalidatePath(BASE);
   revalidatePath("/admin/inventory");
   revalidatePath(`/admin/inventory/${result.lotId}`);
-  if (result.lotAfter !== result.lotBefore) await revalidatePublicMenuSurfaces();
-  redirect(`${BASE}?ok=cancelled&lotmsg=${encodeURIComponent(result.lotAction.why)}`);
+  if (result.lotAfter !== result.lotBefore || result.heldReleased > 0) await revalidatePublicMenuSurfaces();
+  const heldPart = result.heldReleased > 0 ? `&held=${encodeURIComponent(String(result.heldReleased))}` : "";
+  redirect(`${BASE}?ok=cancelled&lotmsg=${encodeURIComponent(result.lotAction.why)}${heldPart}`);
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
