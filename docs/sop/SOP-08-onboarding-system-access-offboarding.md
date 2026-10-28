@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Employees** (`/admin/staffing/employees` and each employee file): owner, admin and manager (`staffing.manage`). **Users** (`/admin/users`): owner and admin (`users.manage`). **Time Clock** (`/admin/staffing`, `/admin/staffing/clock`): every role with `timeclock.use` (owner, admin, manager, budtender). The new hire takes part in onboarding (I-9 Section 1, handbook, training, badge photo). |
@@ -96,14 +96,14 @@ The employment-law references in the app (WA Fair Chance Act RCW 49.94.010, USCI
 |---|---|---|
 | **Owner** | Owner | Everything. The only role that can grant Owner. Exempt from the handbook gate (`handbook-ack-core.ts` L47, L68) |
 | **Admin** | Admin | Employees (`staffing.manage`, L260) and Users (`users.manage`, L221): invite, change roles up to Admin, deactivate |
-| **Manager** | Manager | Employees only (`staffing.manage`): add people, run the checklists, documents, training, hire info, PINs, Activate, Terminate, Rehire. **Cannot open Users** |
+| **Manager** | Manager | Employees only (`staffing.manage`): add people, run the checklists, documents, training, hire info, PINs. **Not Activate, Terminate or Rehire** (owner decision D74; the app still shows those buttons to managers until G-59 is built). **Cannot open Users** |
 | **Budtender** | Budtender / Staff | Time clock (`timeclock.use`, L264), Cycle Counts (`inventory.count`), loyalty and customers. No Employees, no Users |
 | **Content editor**, **Read-only** | Content Editor, Read-only / Analyst | No Employees, no Users, no time clock |
 
 **Rules for this SOP:**
 
-1. **Onboarding and offboarding are run by the owner, an admin or a manager.** The person running it signs form 8.1 or 8.3.
-2. **Only the owner or an admin issues or removes a back-office sign-in** (Users). A manager who terminates someone must tell the owner or an admin the **same day** so the sign-in is deactivated (§4.21).
+1. **Onboarding is prepared by the owner, an admin or a manager, but only the owner or an admin presses Activate, Terminate or Rehire** (D74: *"I would like to modify this to be owner admin only. No manager access."*). The person who presses the button signs form 8.1 or 8.3. Until G-59 is built the app still lets a manager press them: **a manager never does**.
+2. **Only the owner or an admin issues or removes a back-office sign-in** (Users). A manager who must send someone home (for example a dismissal on the spot) **removes nothing**: they call the owner or an admin, who terminates and deactivates the same day (§4.21).
 3. **Nobody changes their own access.** The app enforces this: you cannot change your own role or deactivate yourself (`user-guards-core.ts` L65–67, L96–98).
 4. **Nobody grants a role above their own.** The app enforces this for invites and changes (L43–50), and the last active owner cannot be demoted or deactivated (L73–80, L108–110).
 5. **Payroll set-up and direct deposit are the owner's**, in Accounting (D69). Managers do not enter pay rates or bank details.
@@ -174,7 +174,7 @@ Source: `employee-lifecycle-core.ts` L22–36, L441–451; `employee-lifecycle-s
 | Bookkeeper, outside accountant, consultant | **No** (books-87) | No | Yes, if needed | Read-only / Analyst (or as the owner decides) |
 | Vendor rep, contractor, inspector | No | No | No | Visitor log and visitor badge (§4.19) |
 
-Whether every budtender gets a sign-in is **open question Q-08-4**. Interim rule: yes, as above.
+**Every employee gets a back-office sign-in** (owner decision D73: *"yes, everyone will get back office access."*), at the lowest role that does the job.
 
 # Part 2: Onboarding (in the legal order)
 
@@ -416,7 +416,7 @@ The app never deletes an employee. Terminated people move to **Former employees*
 | Background check raises a concern | Owner only; consider the record individually; follow the timing in the step's help (§4.7) |
 | Someone worked a shift before the checklist was done | Owner the same day; finish the missing steps; write it on form 8.1 |
 | Someone's PIN may be known to others | Change it now (§4.15) |
-| A manager terminated someone and no owner or admin is reachable | Remove the PIN (already done by Terminate), tell the owner by text with the time; the owner deactivates the sign-in remotely |
+| Someone must leave now and no owner or admin is on site | The manager sends them home and calls or texts the owner or an admin with the time. The manager does **not** press Terminate (D74); the owner or admin terminates and deactivates remotely the same day |
 | Dismissal for theft or diversion | Half 2 first, then Half 1; collect badge and keys before they leave; owner handles LCB reporting (SOP-20) |
 | Repeated *"Too many wrong PINs"* | Owner; check which device in the audit log |
 | A sign-in exists for someone who never worked here | Owner or admin deactivates it; do not create an employee file for them (books-87) |
@@ -598,11 +598,12 @@ Print these. File the completed forms in the employee's paper file (five years).
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
 | **G-52** | New people start as **Candidate** (Add to roster and Payroll Setup); the PIN field is locked until **Activate**; Activate runs the gate; the help text matches | F-08-1 (**S1**) | No PIN until form 8.1 is signed (§4.6, §4.13) | One thing to know, §4.3, §4.6, §4.13, §5, §9.1 | PROPOSED |
-| **G-53** | An owner-set **link** between a user and an employee file (on Users or the file); never creates an employee (books-87); the register then accepts the digital acknowledgment | F-08-2 | Paper handbook route for everyone (§4.10) | §4.1, §4.10, §4.14, §4.21 | PROPOSED (Q-08-1) |
-| **G-54** | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | F-08-3 | Both halves by hand, form 8.3 (§4.21–§4.22) | §4.21, §4.22, §9.2 | PROPOSED (Q-08-2) |
+| **G-53** | An owner-set **link** between a user and an employee file (on Users or the file); never creates an employee (books-87); the register then accepts the digital acknowledgment | F-08-2 | Paper handbook route for everyone (§4.10) | §4.1, §4.10, §4.14, §4.21 | APPROVED (D70) |
+| **G-54** | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | F-08-3 | Both halves by hand, form 8.3 (§4.21–§4.22) | §4.21, §4.22, §9.2 | APPROVED (D71) |
 | **G-55** | Checklist ↔ Document tracker kept in step (checking the handbook step sets Read & signed, and so on); Activate also needs the hire date, badge number and a training-log line per required topic; the paper handbook row carries the version | F-08-4, F-08-5 | §4.10 step 4, §4.11 step 3, §4.18 | §4.9–§4.11, §4.18 | PROPOSED |
 | **G-56** | **Rehire** keeps the earlier termination (a history of employment periods) and starts a fresh checklist | F-08-6 | Print the status card first; uncheck everything (§4.24) | §4.24 | PROPOSED |
-| **G-57** | **Visitor log and badges** in the app (WAC 314-55-083(1)(a)–(c)); badge printing for employees | F-08-8 | Forms 8.2, 8.5 (§4.12, §4.19) | §4.12, §4.19 | PROPOSED (Q-08-3) |
+| **G-57** | **Visitor log and badges** in the app (WAC 314-55-083(1)(a)–(c)); badge printing for employees | F-08-8 | Forms 8.2, 8.5 (§4.12, §4.19) | §4.12, §4.19 | DEFERRED (D72: paper for now) |
+| **G-59** | **Activate, Terminate and Rehire are owner and admin only** (a new permission, e.g. `staffing.lifecycle`, [owner, admin]); managers keep the rest of the employee file; buttons hidden for managers; server action refuses | (owner decision D74) | §2 rules 1-2 (managers never press them) | §2, §4.13, §4.21, §4.24, card 9.2 | APPROVED (D74) |
 | **G-58** | Housekeeping: invite default role the same on screen and server; role descriptions list every permission; job-role changes audited with old and new values | F-08-9, F-08-10 | Form 8.4 (§4.16–§4.17) | §4.16, §4.17 | PROPOSED |
 
 ## Appendix C: Open questions for the owner
@@ -611,14 +612,15 @@ Each has an interim rule in this SOP until the owner answers.
 
 | # | Question | Why it matters | Interim rule / recommendation |
 |---|---|---|---|
-| Q-08-1 | **May we add an owner-set link between a user and an employee file?** It would never create an employee (your books-87 rule). It would let the register accept the digital handbook acknowledgment and let offboarding find the sign-in. (G-53) | Today the two records are unconnected for everyone added since 2023 | Keep them separate; paper handbook route; both halves by hand. Recommendation: add the link, set by the owner or admin |
-| Q-08-2 | **When an employee who has a sign-in is terminated, should the app deactivate the sign-in in the same step (with a confirmation)?** (G-54) | A forgotten Half 2 leaves back-office access open | Same-day Half 2 by the owner or admin (form 8.3). Recommendation: yes, one step |
-| Q-08-3 | **Visitor log: paper, or build it in the app?** (G-57) | WAC 314-55-083 requires a visitor log kept three years; the app has none | Paper form 8.5 at the back door |
-| Q-08-4 | **Does every budtender get a back-office sign-in (Budtender / Staff), or are some PIN-only?** | The phone clock and Cycle Counts need a sign-in | Every budtender gets a sign-in (§4.4) |
-| Q-08-5 | **May managers press Activate and Terminate, or only the owner and admins?** The app lets managers do both (`staffing.manage`) | Hiring and firing authority | Managers may; they tell the owner the same day |
+| Q-08-1 | **May we add an owner-set link between a user and an employee file?** (G-53) | Today the two records are unconnected | **ANSWERED (D70):** *"yes, built right, professionally and of enterprise grade standards."* G-53 APPROVED. Interim rules stay until it ships |
+| Q-08-2 | **Deactivate the sign-in in the same step as Terminate?** (G-54) | A forgotten Half 2 leaves back-office access open | **ANSWERED (D71):** *"yes."* G-54 APPROVED. Until it ships: both halves by hand, same day (form 8.3) |
+| Q-08-3 | **Visitor log: paper, or build it in the app?** (G-57) | WAC 314-55-083 requires a visitor log kept three years | **ANSWERED (D72):** *"paper is fine for now."* Form 8.5 is the procedure; G-57 DEFERRED |
+| Q-08-4 | **Does every budtender get a back-office sign-in?** | The phone clock, Cycle Counts and the SOP Library need a sign-in | **ANSWERED (D73):** *"yes, everyone will get back office access."* (§4.4) |
+| Q-08-5 | **May managers press Activate and Terminate?** The app lets managers do both (`staffing.manage`) | Hiring and firing authority | **ANSWERED (D74):** *"owner admin only. No manager access."* §2 rules 1-2; new **G-59** (owner/admin-only permission for Activate, Terminate, Rehire) |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-28 | First draft, verified against `main@bad718b4`, after the owner asked for this SOP (D69). State texts read: RCW 69.50.357, WAC 314-55-083, WAC 314-55-087. Findings F-08-1…F-08-10 and F-08-C; gaps G-52…G-58 proposed; questions Q-08-1…Q-08-5. Forms 8.1–8.6, cards 9.1–9.3. Payroll, direct deposit and the Lyman menu are pointers only (D69). No code changed | SOP program |
+| 1.1 | 2026-10-28 | Owner answers Q-08-1...Q-08-5 applied (D70-D74): G-53 and G-54 APPROVED; visitor log stays on paper (G-57 DEFERRED); every employee gets a sign-in; Activate, Terminate and Rehire are owner and admin only (§2, §6; new G-59). The SOP Library page (Employee -> SOP Library) now shows every SOP. | SOP program |

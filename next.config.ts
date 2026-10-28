@@ -67,6 +67,9 @@ const nextConfig: NextConfig = {
     "/admin/reports/compliance/excise-export/route": [
       "./src/lib/compliance/templates/LIQ-1295-template.xlsx",
     ],
+    // SOP Library reads docs/sop/*.md at request time (single source of truth).
+    "/admin/staffing/sop-library": ["./docs/sop/*.md"],
+    "/admin/staffing/sop-library/[slug]": ["./docs/sop/*.md"],
   },
   images: {
     // R45-S2: serve AVIF to browsers that accept it, WebP to the rest, and

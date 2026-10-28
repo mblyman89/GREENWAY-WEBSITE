@@ -162,6 +162,8 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-18** | Opening & Closing Checklist | Composed from the others, so it goes last | S |
 | **SOP-20** | Incident & Emergency | Composed from the others | S |
 
+**SOP writing paused (D75).** The owner: *"I would like to take a break from the sop and audit work, we have covered the majority of what I want to have on hand as far as sops."* Every written SOP is in the **SOP Library** (Employee → SOP Library). The fix phase starts next (`06-FIX-PHASE-PLAN.md`). Customers, loyalty and online orders are to be audited later, probably without SOPs; digital content is audited and fixed with the remaining budget.
+
 **Deferred by the owner (D69):** SOP-16 (CCRS reporting and uploads: *"We haven't fully finished it, and soon, it will be completely automated"*), SOP-14 (Leafly: *"it works automatically, I have tested each feature"*), everything in the accounting branch, and the Lyman menu. They are left out of SOPs and audits until the owner asks for them.
 | **SOP-INT** | Phase C strategy session | Walk the findings ledger + gap register with the owner | — |
 

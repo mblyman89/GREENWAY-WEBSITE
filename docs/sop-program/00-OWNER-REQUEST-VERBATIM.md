@@ -326,3 +326,25 @@ The owner asked for *"the states requirements"* and to *"look it up in CCRS"*. E
 | Q-08-3 | Visitor log: paper, or build it in the app? (G-57) | Paper form 8.5 at the back door |
 | Q-08-4 | Does every budtender get a back-office sign-in, or are some PIN-only? | Every budtender gets a sign-in (SOP-08 §4.4) |
 | Q-08-5 | May managers press Activate and Terminate, or only the owner and admins? | Managers may; they tell the owner the same day |
+
+---
+
+## Owner reply after SOP-08 + request for the SOP Library and a fix plan (recorded verbatim, after SOP-08 merged via PR #1527)
+
+> Thank you! Q-08-1- yes, built right, professionally and of enterprise grade standards. Q-08-2- yes. Q-08-3- paper is fine for now. Q08-4- yes, everyone will get back office access. Q-08-5- I would like to modify this to be owner admin only. No manager access. I would like to take a break from the sop and audit work, we have covered the majority of what I want to have on hand as far as sops. I want you to now build for me a new page in the employee drop down menu, that has all of the current sop you have written, organized professionally. Everything about this new page should follow the apps styles fonts colors themes etc. it should be easy to find the sop I need to read. The page should be of enterprise grade quality. A professional ui and user experience. Build the page and load all the sop into it. Then stop, report back with a summary report of what was done. I want to start going through all of the audits gaps and issues it’s found. The main branches of the system have been audited now and I think it makes the most sense to stop and fix now, then use what money is left over to audit and fix things like digital content and such. Customers, loyalty, online orders are all solid right now. Worth doing the audit on them still, but probably won’t need an sop for them. Please proceed with the new page and loading all sop into it professionally. Then report back with your professional expert opinion on how we should proceed with the fixes. Should we go in the same order as we did for the sop creation? It was good ordering, priority wise in my opinion. I want your opinion too though. Maybe another area struggles more and needs more attention. Or maybe the fix we want to work on first requires fixing this other thing first. I don’t know, I’m relying on you to guide me on what’s right and professional. Follow the standing rules. Thank you. Minimal testing. I will test and inspect the new page. Thank you.
+
+### Decisions derived (each traced to the words above)
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D70 | **Link a user to an employee file** (resolves Q-08-1; G-53 **APPROVED**). Built to enterprise standard: set only by the owner or an admin, audited, never creates an employee (books-87 stays). | "Q-08-1- yes, built right, professionally and of enterprise grade standards." |
+| D71 | **Terminate deactivates the linked sign-in in the same step, with a confirmation** (resolves Q-08-2; G-54 **APPROVED**). | "Q-08-2- yes." |
+| D72 | **The visitor log stays on paper for now** (resolves Q-08-3; SOP-08 form 8.5 is the procedure; G-57 **DEFERRED**). | "Q-08-3- paper is fine for now." |
+| D73 | **Every employee gets a back-office sign-in** (resolves Q-08-4). | "Q08-4- yes, everyone will get back office access." |
+| D74 | **Activate, Terminate and Rehire are owner and admin only; managers do not have them** (resolves Q-08-5; new **G-59 APPROVED**). Until built, managers never press them (SOP-08 v1.1 §2). | "Q-08-5- I would like to modify this to be owner admin only. No manager access." |
+| D75 | **Pause SOP and audit writing. Build the SOP Library page in the Employee menu (all SOPs, app styles, easy to find). Then the fix phase starts; customers, loyalty and online orders are audited later but probably need no SOP; digital content is audited and fixed with the remaining budget.** | "I would like to take a break from the sop and audit work … build for me a new page in the employee drop down menu, that has all of the current sop you have written … I want to start going through all of the audits gaps and issues it's found." |
+
+### Applied
+
+- **D70-D74** in `docs/sop/SOP-08-onboarding-system-access-offboarding.md` **v1.1** and in `05-GAP-REGISTER.md` (G-53, G-54 APPROVED; G-57 DEFERRED; new G-59).
+- **D75**: the SOP Library is built at **Employee → SOP Library** (`/admin/staffing/sop-library`); it reads `docs/sop/*.md` directly, so every SOP update appears there automatically. This delivers the reading and printing parts of **G-06**. The fix-phase recommendation is in `06-FIX-PHASE-PLAN.md`.
