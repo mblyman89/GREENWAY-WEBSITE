@@ -16,10 +16,11 @@
  *   • src/lib/inventory/intake-store.ts — finalizeManifestDispositions: the
  *     ONLY intake activation path; every accepted lot is evaluated against
  *     evaluateLotBatchActivation and dirty lots are HELD in quarantine.
- *   • src/lib/inventory/disposition.ts — cancelDestruction: releases a lot
- *     from destruction-quarantine back to active. The lot was already active
- *     (gate-passed) before destruction was staged; this is an un-quarantine,
- *     not an intake activation.
+ *   • src/lib/inventory/disposition.ts — restoreLotAfterEventCloses (an owner
+ *     cancel or a partial destruction, Phase 1.3 G-28): puts a lot back from
+ *     destruction-quarantine to active ONLY when the event recorded that it
+ *     was Active (gate-passed) before scheduling, compare-and-set on
+ *     quarantine; this is an un-quarantine, not an intake activation.
  *
  * Run: npx tsx scripts/compliance/check-activation-gate.ts
  */
@@ -198,6 +199,34 @@ if (!storeSrc.includes("isManualLotStatus(status)")) {
 const actionsSrc = readFileSync(resolve(root, "src/app/admin/inventory/actions.ts"), "utf-8");
 if (!actionsSrc.includes("evaluateLotLifecycleChange(")) {
   fail("setLotStatusAction no longer runs evaluateLotLifecycleChange — the lot-page gate is gone");
+}
+
+// 5. Fix Phase 1.3 (G-28 req 5; F-05a-18, F-05a-19): no destruction path may
+//    change a Recalled lot to anything but Destroyed (recalled product goes
+//    back to the vendor, D65). So every Active / Quarantine lot-status write in
+//    disposition.ts must be compare-and-set on the status it replaces
+//    (`.eq("status", "active")` or `.eq("status", "quarantine")`), never a
+//    blind write, and the scheduler must run evaluateDestructionSchedule.
+{
+  const dispoWrites = statusWrites.filter((w) => w.file === "src/lib/inventory/disposition.ts");
+  const lines = disposition.split("\n");
+  for (const w of dispoWrites) {
+    if (w.value === "destroyed") continue;
+    if (w.value !== "active" && w.value !== "quarantine") {
+      fail(`disposition.ts:${w.line} writes lot status ${JSON.stringify(w.value)}; only active/quarantine (compare-and-set) or destroyed are allowed`);
+    }
+    const chain = lines.slice(w.line - 1, w.line + 6).join("\n");
+    const stmt = chain.slice(0, chain.indexOf(";") >= 0 ? chain.indexOf(";") : chain.length);
+    if (!/\.eq\(\s*"status"\s*,\s*"(active|quarantine)"\s*\)/.test(stmt)) {
+      fail(`disposition.ts:${w.line} writes lot status "${w.value}" without a compare-and-set on the status it replaces (a Recalled lot could be overwritten)`);
+    }
+  }
+  if (!disposition.includes("evaluateDestructionSchedule(")) {
+    fail("disposition.ts scheduleDestruction no longer runs evaluateDestructionSchedule (Recalled lots could be scheduled)");
+  }
+  if (!disposition.includes("completionLotRefusal(")) {
+    fail("disposition.ts completeDestruction no longer refuses a Recalled lot (D65)");
+  }
 }
 
 console.log(

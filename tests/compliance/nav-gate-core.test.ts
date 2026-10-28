@@ -994,7 +994,7 @@ describe("N6 the top nav can actually render the new tabs", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("N7 owner-only is derived, not copied", () => {
-  it("names exactly the seven owner-only permissions in use today", () => {
+  it("names exactly the eight owner-only permissions in use today", () => {
     // R41 S0 added `ach.act`. Michael's D-6 answer (Option B): only the owner
     // acts alone on vendor bank / ACH; Stephen (admin) holds `ach.request`
     // instead, so his live changes become requests Michael approves.
@@ -1009,6 +1009,9 @@ describe("N7 owner-only is derived, not copied", () => {
     // accounts (bank feed, ATM vault, crypto, loans)", and a CCTV retention
     // spot-check is not a money account. Keeping them separate is what lets a
     // compliance manager be hired one day without handing over the bank feed.
+    //
+    // Fix Phase 1.3 (G-28 req 6, F-15-9) added `inventory.destruction.cancel`:
+    // SOP-15 §2 store rule 3, "Only the owner cancels a scheduled destruction".
     expect(ownerOnlyPermissions().sort()).toEqual(
       [
         "ach.act",
@@ -1018,6 +1021,7 @@ describe("N7 owner-only is derived, not copied", () => {
         "finances.view",
         "financials.view",
         "inventory.audit",
+        "inventory.destruction.cancel",
       ].sort(),
     );
   });

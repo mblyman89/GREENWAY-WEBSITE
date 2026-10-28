@@ -362,10 +362,10 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | Can we use a waste contractor? | Only with **prior written LCB approval** filed with form 8.3 (§4.17) | The app asks for the approval reference and date (G-43) |
 | How long is the hold? Is it the law? | The law has **no** hold; the store setting is **0 h** (D67, §4.27) | Default 0 in the code and the panel says so (G-50 APPROVED) |
 | Why does the hold-not-elapsed time look wrong? | It is in the server's clock; use the event's time (F-15-5) | All times in Pacific (G-43) |
-| The lot I need is not in the list | Recalled → §4.21 (admin, paper); Quarantine → §4.22 (owner) | Active, Quarantine and Recalled lots listed; Recalled stays Recalled (G-28) |
+| The lot I need is not in the list | Active and Quarantine lots are listed; Recalled lots never (§4.21, vendor return) | Built (Phase 1.3, G-28) |
 | Can I destroy recalled product? | **No, never** (D65). It goes back to the vendor (§4.21) | Same; the app offers recalled lots only for a vendor return (G-28) |
-| Can I cancel a destruction? | Owner only; then restore the earlier status the same minute (form 8.5) (§4.19) | Owner only with a reason; the earlier status is restored automatically (G-28) |
-| I destroyed part of a lot; why is the rest not for sale? | It stays Quarantine; set Active by hand if sellable (§4.20) | The lot returns to its earlier status automatically (G-28) |
+| Can I cancel a destruction? | Owner only, with a reason; the app restores the earlier status and says what it did (§4.19) | Built (Phase 1.3, G-28) |
+| I destroyed part of a lot; why is the rest not for sale? | Since Phase 1.3 the lot returns to its earlier status by itself, unless another destruction holds it or it was in Quarantine before (§4.20) | Built (Phase 1.3, G-28) |
 | I scheduled more than we have | Caught only on completion; owner (§4.18) | Refused at scheduling (G-43) |
 | The page just says "qty" | A field was missing; fill it again (§4.15) | A full sentence (G-46) |
 | Do the sample-pricing rules stop sales? | **No**, it is dead legacy code (§4.26) | Removed (G-47 APPROVED) |
