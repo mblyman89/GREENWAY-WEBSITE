@@ -45,6 +45,12 @@ import {
   DESTRUCTION_CANCEL_REFUSED_AUDIT_ACTION,
 } from "@/lib/inventory/destruction-lot-status-core";
 import {
+  evaluateDestructionRecord,
+  witnessLine,
+  DESTRUCTION_COMPLETE_AUDIT_ACTION,
+} from "@/lib/inventory/destruction-record-core";
+import { listEmployees } from "@/lib/staffing/store";
+import {
   generateDispositionAdvice,
   isAiConfigured,
   type DispositionAdvice,
@@ -335,8 +341,51 @@ export async function scheduleDestructionAction(formData: FormData) {
 
 export async function completeDestructionAction(id: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
-  const witnessedBy = str(formData, "witnessed_by") || null;
   const renderingMethod = str(formData, "rendering_method") || null;
+  // Fix Phase 1.6a (G-43; D64: "anyone may witness the destruction. It has to
+  // be done on camera as well."): a second person from the roster, not the
+  // one completing, and a camera reference, checked here on the server.
+  const witnessEmployeeId = str(formData, "witness_employee_id") || null;
+  const cameraName = str(formData, "camera_name") || null;
+  const cameraDate = str(formData, "camera_date");
+  const cameraStartAt = pacificInputToIso(cameraDate, str(formData, "camera_start"));
+  const cameraEndAt = pacificInputToIso(cameraDate, str(formData, "camera_end"));
+  const otherApprovalRef = str(formData, "other_approval_ref") || null;
+  const otherApprovalDate = str(formData, "other_approval_date") || null;
+  const roster = await listEmployees();
+  const actorName = session.profile.full_name ?? session.email ?? null;
+  const record = evaluateDestructionRecord({
+    witnessEmployeeId,
+    roster,
+    actorUserId: session.userId,
+    actorName,
+    cameraName,
+    cameraStartIso: cameraStartAt,
+    cameraEndIso: cameraEndAt,
+    renderingMethod: renderingMethod ?? "",
+    otherApprovalRef,
+    otherApprovalDate,
+    nowMs: Date.now(),
+  });
+  if (!record.ok) {
+    const msg = record.refusals.map((r) => r.message).join(" ");
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: `${DESTRUCTION_COMPLETE_AUDIT_ACTION}_refused`,
+      entityType: "destruction_events",
+      entityId: id,
+      after: { codes: record.refusals.map((r) => r.code), message: msg.slice(0, 500) },
+    });
+    redirect(`${BASE}?error=${encodeURIComponent(msg.slice(0, 900))}`);
+  }
+  const witnessedBy = witnessLine({
+    witnessName: record.witness.full_name,
+    actorName,
+    cameraName: cameraName as string,
+    cameraStartIso: cameraStartAt as string,
+    cameraEndIso: cameraEndAt as string,
+  });
   const mixMaterial = str(formData, "mix_material") || null;
   const fiftyPercentAttested = formData.get("fifty_percent") === "on";
   const finalDestination = str(formData, "final_destination") || null;
@@ -357,6 +406,15 @@ export async function completeDestructionAction(id: string, formData: FormData) 
       lcbCoordinated,
       lcbOfficer,
       lcbContactDate,
+      record: {
+        witnessEmployeeId: record.witness.id,
+        witnessName: record.witness.full_name,
+        cameraName: cameraName as string,
+        cameraStartAt: cameraStartAt as string,
+        cameraEndAt: cameraEndAt as string,
+        otherApprovalRef,
+        otherApprovalDate,
+      },
     },
     session.userId,
   );
@@ -364,7 +422,7 @@ export async function completeDestructionAction(id: string, formData: FormData) 
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: "destruction.complete",
+    action: DESTRUCTION_COMPLETE_AUDIT_ACTION,
     entityType: "destruction_events",
     entityId: id,
     after: {
@@ -373,8 +431,15 @@ export async function completeDestructionAction(id: string, formData: FormData) 
       final_destination: finalDestination,
       disposal_facility: disposalFacility,
       witnessed_by: witnessedBy,
+      witness_employee_id: record.witness.id,
+      camera_name: cameraName,
+      camera_start_at: cameraStartAt,
+      camera_end_at: cameraEndAt,
+      other_method_approval_ref: otherApprovalRef,
+      other_method_approval_date: otherApprovalDate,
       lcb_coordinated: lcbCoordinated,
       lcb_officer: lcbOfficer,
+      lcb_contact_date: lcbContactDate,
     },
   });
   revalidatePath(BASE);

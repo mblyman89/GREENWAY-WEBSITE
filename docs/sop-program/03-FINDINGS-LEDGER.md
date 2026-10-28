@@ -739,11 +739,13 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.12 (paper time is the record). **G-42**.
 
 ### F-15-4 · CONFIRMED · GAP · S2 — The destruction record does not require a witness, a recall contact date, or a prior-approval reference for "Other method"; there is no printable destruction log
+- **Status: FIXED (Phase 1.6a, G-43; D64). `completeDestructionAction` (`actions.ts` L342) runs `evaluateDestructionRecord` (`destruction-record-core.ts` L116) before completing: a witness from the staff roster, never the person signed in; a camera and start/end time; for Other method, the LCB approval reference and date. Refusals are audited (`destruction.complete_refused`). The recall contact-date part is moot (recalls are never destroyed, D65). Printable monthly Destruction log (`/admin/inventory/disposition/destruction-log`). Record columns: migration 0310. Guard step 8; `tests/compliance/fix-p1-6a-destruction-record.test.ts`.**
 - **Pin:** `validateDestructionCompletion` (`disposition-core.ts` L226–271) never checks `witnessedBy`; for recalls it checks the tick and the officer name only (L233–244), not `lcbContactDate`; `lcb_approved_other` skips the mix and 50% checks (L248) with no approval field. The audit row omits `lcb_contact_date` (`actions.ts` L228–240). No export or print page exists under `disposition/` other than the Sale correction CSV.
 - **Effect:** a destruction can be completed by one person, with no witness and, for a recall, no date of the officer contact; the WAC 314-55-097 record exists only as database fields nobody can print.
 - **SOP impact:** SOP-15 §2 rule 2, §4.17–§4.18, form 8.3. **G-43**.
 
 ### F-15-5 · CONFIRMED · UX · S4 — "Hold policy not elapsed" prints the time in the server's locale and zone
+- **Status: FIXED (Phase 1.6a, G-43). The hold refusal uses `holdNotElapsedMessage` (`disposition-core.ts` L231), always Pacific; the page shows hold, completed and cancelled times with `formatDestructionPacific`.**
 - **Pin:** `new Date(d.earliestDestroyAt).toLocaleString()` on the server (`disposition-core.ts` L228); the page shows the same time with the browser's clock (`page.tsx` L321).
 - **Effect:** the two times can disagree (UTC on the server).
 - **SOP impact:** SOP-15 §4.16, §5.3. **G-43**.
@@ -783,6 +785,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.20. **G-28** (extended).
 
 ### F-15-12 · CONFIRMED · GAP · S3 — Scheduling does not check the quantity against on-hand
+- **Status: FIXED (Phase 1.6a, G-43). `scheduleDestruction` (`disposition.ts` L1421–1430) refuses a quantity above on hand less held units less open destructions not backed by held units (`evaluateScheduleQuantity`), with the figures in the message.**
 - **Pin:** `scheduleDestruction` checks only `quantity > 0` (`disposition.ts` L958); the comment says *"Quantity is validated against on-hand at completion time."* (L936–937); completion refuses with *"Quantity (x) exceeds on-hand (y)."* (L250).
 - **Effect:** an over-scheduled event waits out the whole hold and then fails on destruction day.
 - **SOP impact:** SOP-15 §4.15 step 4, §4.18. **G-43**.
@@ -837,6 +840,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 v1.1 §4.26 interim check, §6, §7, form 8.6. **G-51**.
 
 ### F-15-21 · CONFIRMED · GAP · S3 — The destruction record has no camera reference
+- **Status: FIXED (Phase 1.6a, G-43; D64). Camera name and start/end time (Pacific) are required to complete and are stored (migration 0310; before it, in the witness line) and shown on the Destruction log.**
 - **Pin:** `src/app/admin/inventory/disposition/page.tsx` L363 (the only person field is free-text **Witnessed by**, *"Names"*); there is no camera field in the page, `actions.ts` L197–245 or `disposition-core.ts` `validateDestructionCompletion`.
 - **Effect:** the owner requires every destruction on camera (D64), and WAC 314-55-083(3)(a) requires cameras where waste is destroyed. Without a camera and time on the record, the footage (kept 45 days) is hard to find for an inspector.
 - **SOP impact:** SOP-15 v1.1 §4.17–§4.18, form 8.3. **G-43**.
