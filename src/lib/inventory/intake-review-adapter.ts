@@ -253,7 +253,8 @@ export function __runIntakeReviewAdapterTests(): { passed: number; failed: numbe
     new Map([["lab-1", lab()]]),
   );
   ok(sample.sampleCount === 1, "sample counted");
-  ok(sample.flags.some((f) => f.severity === "warning" && /SAMPLE/i.test(f.message)), "sample warning present");
+  // Fix Phase 0.2 (G-51): the sample line is now information (the system keeps it off the menu).
+  ok(sample.flags.some((f) => f.severity === "info" && /SAMPLE/i.test(f.message)), "sample info present");
   ok(sample.flags.some((f) => /quantity is zero/i.test(f.message)), "zero qty warning present");
 
   // Unknown source format coerces to generic; NaN qty treated as 0.

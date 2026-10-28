@@ -781,6 +781,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.24, form 8.6. **G-48**.
 
 ### F-15-16 · CONFIRMED · GAP · S2 — The Sample-pricing rules saved on this page are not enforced anywhere
+- **Status: FIXED (Phase 0.2, G-47).** Panel, `updateSampleSettingsAction`, `get/updateSampleSettings` (disposition.ts) and `sample-guardrails.ts` removed; concierge line corrected. The `sample_settings` table is left in place (no destructive migration).
 - **Pin:** `checkSampleSale` and `effectiveSamplePrice` (`src/lib/inventory/sample-guardrails.ts`) have no caller outside that file and its self-test (`scripts/compliance/run-pure-selftests.ts` L948). The panel saves `sample_settings` (`actions.ts` L283–301; `page.tsx` L538).
 - **Effect:** **Force samples to the nominal price** and **Block selling samples to the public** do nothing at the register or online; the concierge line *"…plus sample-pricing rules"* (`concierge-kb.ts` L176) implies protection that does not exist.
 - **SOP impact:** SOP-15 §4.26. **G-47**.
@@ -807,6 +808,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 v1.1 §4.9–§4.10, form 8.2, card 9.2. **G-42**.
 
 ### F-15-20 · CONFIRMED · GAP · S1 — Trade samples are not kept off the menu or the register
+- **Status: FIXED (Phase 0.2, G-51).** `sample-lot-core.ts`; filters in `catalog-drafts.ts` (seed + approve refuses), `intake-menu-staging.ts`, `draft-injection.ts`, `sale-lot-read.ts`, `api/pos/menu/route.ts`, `register-sellability-store.ts`, `lot-menu-stock.ts`, `void-store.ts`. Test `tests/compliance/fix-p0-2-samples.test.ts`.
 - **Pin:** no register, menu or product-onboarding code reads `is_sample`. (a) `src/lib/inventory/catalog-drafts.ts` L370–373: `seedDraftsForManifest` reads every non-destroyed lot on the manifest, and `SEED_LOT_COLUMNS` (L239) has no `is_sample`, so a sample lot gets a Product Onboarding draft. (b) `src/lib/inventory/sale-lot-read.ts` L41–47: the register's lot draw takes any Active lot with stock for the product key, oldest first. (c) `src/app/api/pos/menu/route.ts` L179–181 and L405–409: the menu's lot read and barcode index check only status and quantity. A sample lot carries the product's SKU as its key (`intake-parser.ts` L438). The only guard is an advisory review warning (`intake-review-core.ts` L120–124).
 - **Effect:** a sample can be approved onto the menu, or used up by an ordinary sale of the same product. WAC 314-55-096(1)(i): *"Trade samples may not be sold"*. The owner: *"They can not be sold at the register, they cannot be found on the menu."* The rest of the samples branch is correct: receiving, the 120 intake cap, the 30 give-out cap, the $0.01 cost, and the decrement at distribution on the hub.
 - **SOP impact:** SOP-15 v1.1 §4.26 interim check, §6, §7, form 8.6. **G-51**.

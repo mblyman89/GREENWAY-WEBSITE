@@ -17,6 +17,7 @@
  * menu-stock problem comes back as a plain sentence the caller shows.
  */
 import "server-only";
+import { isSampleLot } from "@/lib/inventory/sample-lot-core";
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 import { findLotVariantOnVersion } from "@/lib/inventory/price-write-store";
@@ -44,7 +45,7 @@ export async function loadMenuVersionsForStock(): Promise<MenuVersionsForStock> 
 
 export type LotMenuStockResult = { outcomes: MenuStockVersionOutcome[]; sentence: string | null };
 
-type LotRow = { id: string; pos_product_key: string | null; lot_code: string | null; product_name: string | null; menu_source_variant_id?: string | null };
+type LotRow = { id: string; pos_product_key: string | null; lot_code: string | null; product_name: string | null; menu_source_variant_id?: string | null; is_sample?: boolean | null };
 
 export async function syncLotMenuStock(
   admin: Admin,
@@ -57,12 +58,16 @@ export async function syncLotMenuStock(
   let label = "This lot";
   try {
     const read = (cols: string) => admin.from("inventory_lots").select(cols).eq("id", lotId).maybeSingle();
-    let res = await read("id, pos_product_key, lot_code, product_name, menu_source_variant_id");
-    if (res.error && isMissingSizeLinkColumnError(res.error)) res = await read("id, pos_product_key, lot_code, product_name");
+    let res = await read("id, pos_product_key, lot_code, product_name, menu_source_variant_id, is_sample");
+    if (res.error && isMissingSizeLinkColumnError(res.error)) res = await read("id, pos_product_key, lot_code, product_name, is_sample");
     if (res.error) throw new Error(`read the lot: ${res.error.message}`);
     const lot = res.data as unknown as LotRow | null;
     if (!lot) throw new Error("the lot was not found");
     label = (lot.product_name ?? "").trim() || (lot.lot_code ?? "").trim() || label;
+    // Fix Phase 0.2 (G-51): a trade sample has no menu stock to move.
+    if (isSampleLot(lot)) {
+      return { outcomes: [], sentence: `${label}: trade sample lot; samples are never on the menu, so no menu stock changed.` };
+    }
     const key = (lot.pos_product_key ?? "").trim();
     if (!key) {
       return { outcomes: [], sentence: `${label}: the lot changed by ${d}; it has no POS product key, so it has no menu stock to change.` };

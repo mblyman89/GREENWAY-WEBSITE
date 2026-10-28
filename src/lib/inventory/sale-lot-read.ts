@@ -42,6 +42,9 @@ export async function readSaleLots(
       .select(cols)
       .in("pos_product_key", [...keys])
       .eq("status", "active")
+      // Fix Phase 0.2 (G-51): a sale never draws a trade sample lot, even
+      // when it shares the product key (WAC 314-55-096(1)(i)).
+      .eq("is_sample", false)
       .gt("on_hand_qty", 0)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });

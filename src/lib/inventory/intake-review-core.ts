@@ -16,6 +16,7 @@
  * It computes NOTHING destructive and rewrites NO source values — it only reports.
  */
 
+import { SAMPLE_INTAKE_REVIEW_MESSAGE } from "./sample-lot-core";
 import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
 import { suspectsOtherwiseTaken } from "@/lib/compliance/sales-limits-core";
 
@@ -119,10 +120,9 @@ export function summarizeIntakeForReview(manifest: ParsedManifest): IntakeReview
 
     if (line.is_sample) {
       sampleCount += 1;
-      add(
-        "warning",
-        "Marked as a vendor SAMPLE — samples must not be sold to customers; confirm disposition before accepting.",
-      );
+      // Fix Phase 0.2 (G-51): the system now keeps samples off the menu and
+      // register by itself, so this is information, not a warning to act on.
+      add("info", SAMPLE_INTAKE_REVIEW_MESSAGE);
     }
 
     if (!line.lot_code || !line.lot_code.trim()) {
