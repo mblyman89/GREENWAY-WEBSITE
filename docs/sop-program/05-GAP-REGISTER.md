@@ -26,7 +26,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 | Gap | What | Owner decision | Findings | Interim procedure | Status |
 |---|---|---|---|---|---|
-| G-01 | Second-person count at till close | D2 | F-01-9, F-00-5 | SOP-01 §4.27 step 8, forms 8.2 / 8.4 | OPEN |
+| G-01 | Second-person count at till close | D2 | F-01-9, F-00-5 | SOP-01 §4.27 steps 8–12, forms 8.2 / 8.4 | **BUILT** (Phase 2.2) |
 | G-02 | Master till ↔ little safe denomination log (and register-swap denominations) | D3 | F-01-8, F-00-7, F-02-8 | **SOP-02 §4.10 form 8.2** (master ↔ little safe) and **§4.11 form 8.3** (register ↔ master); SOP-01 §4.26 | OPEN |
 | G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
 | G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (D23–D27 set the rules) |
@@ -98,6 +98,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   2. Both counts are stored against the drawer session. If they differ, the system shows the difference. The owner has not said whether a mismatch should block; a warning only is the default until the owner decides.
   3. **Not** required at count-in (D2 says close only).
   4. Same-person check is enforced on the server, not only in the UI.
+- **Status: BUILT (Phase 2.2, #P22).** Requirement 1: the register close is two steps and the back-office close form has a **Second count (required)** block; any active employee, not the closer. Requirement 2: both counts are stored (migration 0314, `drawer_sessions.second_counted_by / second_count_minor / second_counted_at`, plus `drawer_counts` rows `close` and `second`); a difference is a **warning only**, shown on the register, the back-office banner, the Reconcile card and the till history; over / short still uses the closer's count. Requirement 3: count-in is unchanged. Requirement 4: `checkSecondCounter` on the server in both paths, plus the DB check `drawer_sessions_second_not_closer`. Owner action: rebuild and reinstall the iPad register app (it bundles the same register screen); until then an old build cannot close and the browser register or back office must be used. SOP-01 v1.6, SOP-03 v1.3.
 - **Interim:** SOP-01 §4.27 step 8. The second employee counts the drawer on paper and both sign close slip 8.2 / sign-off 8.4. The slip goes in the drawer bag.
 
 ## G-02 · Master till ↔ little safe denomination log

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (draft for owner review; owner answers D21–D27 applied; D41 living-SOP reminder) |
+| **Version** | 1.3 (draft for owner review; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
@@ -90,7 +90,7 @@ This SOP makes sure that:
 
 | Task | Who | How the system checks |
 |---|---|---|
-| Close a drawer (blind count, second count) | The cashier, plus **any second employee** (D2) | Register PIN; second count is paper only (SOP-01 §4.27, F-01-9) |
+| Close a drawer (blind count, second count) | The cashier, plus **any second employee** (D2) | Register PIN, then the second employee's PIN and their own blind count in the app (SOP-01 §4.27 steps 8–12; built in Phase 2.2, G-01) |
 | Pull takings, count the deposit, complete the **night sheet** (form 8.1) | The night closer ("one person completes before close") | Not in the app. Paper. |
 | Reconcile each drawer | Owner, admin or manager login | `requirePermission("inventory.manage")` on Register Activity (SOP-01 §4.30) |
 | Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L126–128) is sent to `/admin?denied=1` (F-02-10). |
@@ -170,7 +170,7 @@ The owner's words fix steps 4 (*"one person completes before close"*) and 7–9 
 Before the deposit can be counted, **every** drawer that was open today must be closed:
 
 1. Each cashier makes any last drop, takes out the tip jar, and does the **blind close** (SOP-01 §4.27 steps 1–12).
-2. **Any second employee** recounts that drawer and both sign the **close slip** (SOP-01 form 8.2; owner rule D2).
+2. **Any second employee** recounts that drawer in the app: the closer taps **Next: second count**, the second person counts blind and enters their own PIN (SOP-01 §4.27 steps 8–12; owner rule D2; built in Phase 2.2). Both still sign the **close slip** (SOP-01 form 8.2) for the paper trail. If the app warned that the two counts differ, write both totals on the slip and tell a manager.
 3. If a register had two drawers today, the X report was printed before the first drawer closed (SOP-01 §4.27 step 9).
 4. A manager or lead prints the **Z report** when the last drawer of the day is closed (SOP-01 §4.28). Put it with tonight's paper.
 
@@ -411,7 +411,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Paper filed five years | WAC 314-55-087 records retention | Footer L260; policy L116–121 |
 | End-of-day report is manager-only | It shows closed counts and over/short, which the blind close hides from cashiers | `eod-core.ts` L14–16 |
 
-**Known weaknesses this SOP works around** (all recorded, none fixed): no bag screen (F-00-6), the panel's false all-clear (F-03-1), unwired cash-to-bank books (F-03-3), the verify that records $0 (F-00-3), no second count in the app (F-00-5/F-01-9), a single-signature EOD print without the deposit figure (F-03-5), refunds missing from the EOD (F-03-6), silent read failures (F-03-7), no export (F-00-8).
+**Known weaknesses this SOP works around** (all recorded, none fixed): no bag screen (F-00-6), the panel's false all-clear (F-03-1), unwired cash-to-bank books (F-03-3), the verify that records $0 (F-00-3), ~~no second count in the app (F-00-5/F-01-9)~~ (fixed in Phase 2.2: the app records the second count at close), a single-signature EOD print without the deposit figure (F-03-5), refunds missing from the EOD (F-03-6), silent read failures (F-03-7), no export (F-00-8).
 
 ---
 
@@ -575,7 +575,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | "Before sealing the bag and putting it into the safe" | No bag screen; table + rules unreachable | §4.11, bag log form 8.2 | G-04 · F-00-6 |
 | "For depositing to the bank" | No bank-run record; bank clearing unreachable; 10400 never filled | §4.13, form 8.2, bank receipts | G-14 · F-03-1, F-03-3 |
 | Closing-day report "exported and printed" | Print only | §4.9, §4.17 | G-15 / G-09 · F-00-8 |
-| Second-person count at till close (D2) | Paper only | SOP-01 form 8.2 | G-01 · F-01-9 |
+| Second-person count at till close (D2) | ~~Paper only~~ **Built (Phase 2.2):** second PIN and blind count at close, both stored | SOP-01 §4.27 steps 8–12, form 8.2 | G-01 · F-01-9 (FIXED) |
 | $10,000 shape check | Built, no caller | Bag log **Note** column (§4.14) | G-14 · F-03-10 |
 | Refunds on the EOD | Not shown (Z report has them) | Use the Z report for cash (§4.8) | G-15 · F-03-6 |
 
@@ -600,3 +600,4 @@ All seven questions were answered by the owner after v1.0 (recorded verbatim in 
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `3385bfa9` (no code change since `0055f06c`), with owner decisions D2, D7, D10, D14–D20 and the cash deposit policy decision. Adds findings F-03-1…F-03-11 and gaps G-14, G-15 (G-04 updated). | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04. Owner answers D21–D27 applied: reason only over $5 (D21); floats confirmed (D22); unsealed overnight in the safe (D23); no second night count (D24); anyone seals, owner-only banking (D25); tamper-evident pre-numbered bags (D26); undeclared bag = warning only (D27). Appendix C now records the answers. Docs only; pins still at `3385bfa9`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). No procedure changed. | SOP program (for owner review) |
+| 1.3 draft | Fix phase | Phase 2.2 (G-01, owner D2). §2 roles table, §4.3 step 2, the known-weaknesses line and the Appendix B row now say the second count at till close is recorded in the app (SOP-01 §4.27 steps 8–12); the paper close slip is still signed. | Fix phase |
