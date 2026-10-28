@@ -436,6 +436,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "recall_events", disposition: "KEEP", because: "The recall and market-withdrawal log (notice, LCB notification, close-out) \u2014 a compliance record kept like the audit log." },
   { table: "recall_event_lots", disposition: "KEEP", because: "Which lots each recall event covered. Kept with the recall log; the lot id is a plain id (no link), so after a wipe it simply shows as an id." },
   { table: "recall_event_weekly", disposition: "KEEP", because: "The weekly recall tracking rows reported to the LCB \u2014 kept with the recall log." },
+  { table: "destruction_evidence", disposition: "KEEP", because: "Photos and videos of destructions (Fix Phase 1.7a, G-43) \u2014 part of the five-year destruction record (WAC 314-55-097); append-only, and the files stay in the private bucket." },
   { table: "pos_cart_adjustments", disposition: "KEEP", because: "The register minus / remove / cancel trail (who reduced which cart, when) — an anti-abuse audit record kept like the audit log." },
   { table: "registers", disposition: "KEEP", because: "Your physical registers. Hardware you own; deleting them would stop the POS from opening." },
   { table: "pos_devices", disposition: "KEEP", because: "The tablets and terminals you have paired." },

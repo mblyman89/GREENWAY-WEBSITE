@@ -24,10 +24,12 @@ const CACHE_SECONDS = "31536000"; // keys are never reused, so a year is safe
 export type Progress = (sent: number, total: number) => void;
 
 /** Single signed PUT with progress. Mirrors storage-js uploadToSignedUrl. */
-export function putSigned(key: string, token: string, file: Blob, contentType: string, onProgress?: Progress): Promise<void> {
+// Fix Phase 1.7a (G-43 req 7): `bucket` lets the private destruction-evidence
+// uploader reuse this; every existing caller keeps the public media bucket.
+export function putSigned(key: string, token: string, file: Blob, contentType: string, onProgress?: Progress, bucket: string = BUCKET): Promise<void> {
   return new Promise((resolve, reject) => {
     const encoded = key.split("/").map(encodeURIComponent).join("/");
-    const url = `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/upload/sign/${BUCKET}/${encoded}?token=${encodeURIComponent(token)}`;
+    const url = `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${encoded}?token=${encodeURIComponent(token)}`;
     const body = new FormData();
     body.append("cacheControl", CACHE_SECONDS);
     // A typed Blob so Storage records the right content type.
@@ -59,6 +61,8 @@ export function tusSigned(opts: {
   contentType: string;
   onProgress?: Progress;
   signal?: AbortSignal;
+  /** Fix Phase 1.7a: defaults to the public media bucket. */
+  bucket?: string;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const upload = new tus.Upload(opts.file, {
@@ -71,7 +75,7 @@ export function tusSigned(opts: {
       storeFingerprintForResuming: false,
       removeFingerprintOnSuccess: true,
       metadata: {
-        bucketName: BUCKET,
+        bucketName: opts.bucket ?? BUCKET,
         objectName: opts.key,
         contentType: opts.contentType,
         cacheControl: CACHE_SECONDS,

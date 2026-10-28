@@ -20,7 +20,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 ## SOP-00 recon findings (found while walking the tree for the roadmap)
 
 ### F-00-1 · CONFIRMED · DOC · S2 — The concierge tells staff the POS "is PLANNED, not built yet"
-- **Pin:** `src/lib/admin/concierge-kb.ts` L477–490 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
+- **Pin:** `src/lib/admin/concierge-kb.ts` L478–491 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
 - **Reality:** the register exists. `src/app/(site)/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
 - **Effect:** an employee who asks the concierge "how do I close my till?" is told the register does not exist. This is the single biggest knowledge gap in the concierge.
 
@@ -171,7 +171,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `till-core.ts` L195 (`witnessPin` optional), UI *"Witness PIN (optional, second person)"* (`RegisterShell.tsx` L5779). Drops are the highest-value cash movement during a shift. The SOP sets "always get a witness when someone else is on the floor" as store practice.
 
 ### F-01-16 · CONFIRMED · DOC · S2 — The concierge still says the POS is planned (re-confirmed)
-- `src/lib/admin/concierge-kb.ts` L480 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
+- `src/lib/admin/concierge-kb.ts` L481 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
 
 ---
 
@@ -315,7 +315,7 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 - **SOP impact:** SOP-03 §4.14, the $10k rule on paper and the bag log's **Note** column. Ties to G-04 / G-14.
 
 ### F-03-11 · CONFIRMED · DOC · S3 — Help and concierge have no end-of-day or deposit-bag content
-- **Pin:** `grep -n -i "deposit\|end.of.day\|eod" src/lib/admin/help-content.ts src/lib/admin/concierge-kb.ts` → only payroll **direct deposit** (`help-content.ts` L725–742; `concierge-kb.ts` L263–281).
+- **Pin:** `grep -n -i "deposit\|end.of.day\|eod" src/lib/admin/help-content.ts src/lib/admin/concierge-kb.ts` → only payroll **direct deposit** (`help-content.ts` L725–742; `concierge-kb.ts` L264–282).
 - **Effect:** an employee asking the concierge *"how do I do the deposit?"* gets payroll ACH content or nothing.
 - **SOP impact:** recorded in `04-CONCIERGE-COVERAGE-LEDGER.md` (SOP-03 slice); grounding comes from SOP-03 §4, §8 and §9 in Phase D.
 
@@ -521,8 +521,8 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **Status: FIXED (Phase 1.6c, G-25).** `loadLiveMenuItems` and `loadLiveMenuItemsCached` drop held products and held sizes (`withoutRecalled`, `recall-event-core.ts` L545; `live-menu.ts` L182, L315, outside the cache; advisory). `repriceOrderLines` reads `recalledProductKeys({ failClosed: true })` and refuses a held line or an unreadable status with 409 (`order-pricing.ts` L231–257). Open pickup orders holding a recalled product are a blocking Issue (`openOrdersIssue`, L598). Tested in `tests/compliance/fix-p1-6c-recall.test.ts`. SOP-05a v1.9 §4.10 step 5, §4.11.
 
 ### F-05a-17 · CONFIRMED · GAP · S2 — Returns & Destruction lists only Active lots
-- **Status: FIXED (Phase 1.3, G-28). `disposition/page.tsx` L114 also loads Quarantine lots; the picker shows each lot's status; Recalled lots are never listed (D65)).**
-- **Pin:** `src/app/admin/inventory/disposition/page.tsx` L103: `listLots({ status: "active", limit: 500 })` feeds the destruction form. Lots in **Quarantine** or **Recalled**, the ones most likely to be destroyed, cannot be chosen.
+- **Status: FIXED (Phase 1.3, G-28). `disposition/page.tsx` L148 also loads Quarantine lots; the picker shows each lot's status; Recalled lots are never listed (D65)).**
+- **Pin:** `src/app/admin/inventory/disposition/page.tsx` L107: `listLots({ status: "active", limit: 500 })` feeds the destruction form. Lots in **Quarantine** or **Recalled**, the ones most likely to be destroyed, cannot be chosen.
 - **Effect:** staff are pushed to set a held lot Active to destroy it, which puts it back on sale in the meantime (and for a Recalled lot, lifts the hold).
 - **SOP impact:** SOP-05a v1.1 §4.9 interim. Fixed by **G-28**. Found while answering the owner's Q-05a-4 question about the Destructions page.
 
@@ -726,7 +726,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 
 ### F-15-1 · CONFIRMED · BUG · S1 — Logging a vendor return reduces on-hand and posts the CCRS adjustment before the manifest is confirmed or the product leaves
 - **Status: FIXED (Phase 1.5, G-42). `createVendorReturn` now only reserves the units (`reserve_vendor_return`, migration 0309; `disposition.ts` L979–1061; no `postReduction`); the reduction and the CCRS Other adjustment post at **Record departure**, after the LCB success email step (`depart_vendor_return`, `disposition.ts` L1188). Before 0309 the app refuses to log rather than reduce. Guard step 7; `tests/compliance/fix-p1-5-vendor-return.test.ts`).**
-- **Pin:** `createVendorReturn` posts `postReduction(…, "other", …)` first (`src/lib/inventory/disposition.ts` L831–840), at the moment **Log return (reduces on-hand)** is pressed (`disposition/page.tsx` L195, L240). The screen's own checklist says *"Do not release product until the manifest is confirmed."* (`disposition-core.ts` L348). The manifest status is tracked afterwards (L855; `updateVendorReturnManifest` L879–904) but never moves stock.
+- **Pin:** `createVendorReturn` posts `postReduction(…, "other", …)` first (`src/lib/inventory/disposition.ts` L831–840), at the moment **Log return (reduces on-hand)** is pressed (`disposition/page.tsx` L201, L246). The screen's own checklist says *"Do not release product until the manifest is confirmed."* (`disposition-core.ts` L348). The manifest status is tracked afterwards (L855; `updateVendorReturnManifest` L879–904) but never moves stock.
 - **Effect:** if the return is logged when the RMA arrives, the app and that week's CCRS InventoryAdjustment file report the product gone while it is still in the vault for 48–72 hours or more. A cancelled or rescheduled pickup leaves a false CCRS record (S1: state filing).
 - **SOP impact:** SOP-15 §4.11 (log on pickup day only), form 8.2. Gap **G-42**.
 
@@ -789,7 +789,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.20. **G-28** (extended).
 
 ### F-15-12 · CONFIRMED · GAP · S3 — Scheduling does not check the quantity against on-hand
-- **Status: FIXED (Phase 1.6a, G-43). `scheduleDestruction` (`disposition.ts` L1439–1448) refuses a quantity above on hand less held units less open destructions not backed by held units (`evaluateScheduleQuantity`), with the figures in the message.**
+- **Status: FIXED (Phase 1.6a, G-43). `scheduleDestruction` (`disposition.ts` L1475–1484) refuses a quantity above on hand less held units less open destructions not backed by held units (`evaluateScheduleQuantity`), with the figures in the message.**
 - **Pin:** `scheduleDestruction` checks only `quantity > 0` (`disposition.ts` L961); the comment says *"Quantity is validated against on-hand at completion time."* (L936–937); completion refuses with *"Quantity (x) exceeds on-hand (y)."* (L250).
 - **Effect:** an over-scheduled event waits out the whole hold and then fails on destruction day.
 - **SOP impact:** SOP-15 §4.15 step 4, §4.18. **G-43**.
@@ -845,7 +845,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 
 ### F-15-21 · CONFIRMED · GAP · S3 — The destruction record has no camera reference
 - **Status: FIXED (Phase 1.6a, G-43; D64). Camera name and start/end time (Pacific) are required to complete and are stored (migration 0310; before it, in the witness line) and shown on the Destruction log.**
-- **Pin:** `src/app/admin/inventory/disposition/page.tsx` L360 (the only person field is free-text **Witnessed by**, *"Names"*); there is no camera field in the page, `actions.ts` L197–245 or `disposition-core.ts` `validateDestructionCompletion`.
+- **Pin:** `src/app/admin/inventory/disposition/page.tsx` L366 (the only person field is free-text **Witnessed by**, *"Names"*); there is no camera field in the page, `actions.ts` L197–245 or `disposition-core.ts` `validateDestructionCompletion`.
 - **Effect:** the owner requires every destruction on camera (D64), and WAC 314-55-083(3)(a) requires cameras where waste is destroyed. Without a camera and time on the record, the footage (kept 45 days) is hard to find for an inspector.
 - **SOP impact:** SOP-15 v1.1 §4.17–§4.18, form 8.3. **G-43**.
 
