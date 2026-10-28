@@ -503,7 +503,7 @@ The **Issues** tab lists what still needs attention. When clean, it says *"Nothi
 | **N lines have no COA / lab result** (before Finalize) | COAs missing | **Review the lines** |
 | **N lines have an unmapped category** | Product type not mapped | **Open Types & Categories** |
 
-> **Control: only set a held lot to Active when the Issues row says "now clear".** The lot page's **Lifecycle status** box does **not** run the go-live check, and it writes **no audit row** (`inventory/actions.ts` L142–155 → `store.ts` L836–851). It will set any lot to **Active**, even one with no COA or a FAILED result (finding F-04-2, **S1**; gap G-19). Until that is fixed:
+> **Control: only set a held lot to Active when the Issues row says "now clear".** The lot page's **Lifecycle status** box does **not** run the go-live check, and it writes **no audit row** (`inventory/actions.ts` L142–155 → `store.ts` L849–864). It will set any lot to **Active**, even one with no COA or a FAILED result (finding F-04-2, **S1**; gap G-19). Until that is fixed:
 > - Only a manager does this.
 > - Only from a "now clear" Issues row.
 > - Write it on form 8.1 (lot, time, who).
@@ -1156,7 +1156,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 4.15 COAs | `lot-activation-gate-core.ts` L76–107; `[id]/page.tsx` L1104+ |
 | 4.16 PO | `ManifestPoLinkPanel.tsx`; `intake/actions.ts` L267 |
 | 4.17–4.18 finalize | `intake/actions.ts` L937–1133; `intake-store.ts` L1301–1840 (L1416 default-accept); `finalize-label-core.ts` L80–116; `finalize-banner-core.ts` L60–125; `[id]/page.tsx` L609–734, L1366–1391 |
-| 4.19 held lots | `[id]/page.tsx` L383–397, L770–790; `issues-core.ts` L545–569; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L836–851; `scripts/compliance/check-activation-gate.ts` L60–100 |
+| 4.19 held lots | `[id]/page.tsx` L383–397, L770–790; `issues-core.ts` L545–569; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L849–864; `scripts/compliance/check-activation-gate.ts` L60–100 |
 | 4.20 accounting | `ManifestAccountingPanel.tsx`; `manifest-event-labels-core.ts` L217–230; `vendor-bill-service.ts` L262–287; `INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L34–46 |
 | 4.21 labels | `lots/[id]/label/page.tsx` L1–63 |
 | 4.22–4.23 onboarding | `drafts/page.tsx` L263, L775, L797–815, L1984–2026; `src/lib/inventory/catalog-drafts.ts` L1218+, L1348–1356; `receiving-classification-core.ts` L178–245; `merge-review-core.ts` L30–50 |
