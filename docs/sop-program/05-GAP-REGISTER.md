@@ -1,6 +1,6 @@
 # SOP Program — Gap Register
 
-Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added) · Updated in slice SOP-05a · 2026-10-27 (D29 → G-16 APPROVED; D32 → G-18; D33/D34 → G-20; D31 → G-21) · Updated in slice SOP-05b · 2026-10-27 (G-29…G-32 added)
+Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 · Updated in slice SOP-03 · 2026-10-27 (owner answers D14–D19; SOP-03 gaps G-14, G-15; G-04 updated) · Updated in slice SOP-04 · 2026-10-27 (D21 → G-03; D23–D27 → G-04; SOP-04 gaps added) · Updated in slice SOP-05a · 2026-10-27 (D29 → G-16 APPROVED; D32 → G-18; D33/D34 → G-20; D31 → G-21) · Updated in slice SOP-05b · 2026-10-27 (G-29…G-32 added) · Updated in fix slice after SOP-05b · 2026-10-28 (D44 → G-24; D45–D49 → G-29, G-30, G-30A new, G-31, G-32 all APPROVED)
 
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
@@ -43,15 +43,16 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-21 | First-delivery-from-vendor marker on the manifest review screen (prompts the recommended second count) | **D31** | — (no finding; feature need) | SOP-04 §4.9 Vendor-filter check, form 8.1 box | OPEN |
 | G-22 | Audited, gated lot lifecycle: no manual Destroyed, a reason on every change, owner-only recall release, status history (extends G-19) | (compliance: WAC 314-55-225, CCRS traceability) | F-05a-1 (**S1**), F-05a-2 (**S1**), F-04-2 | SOP-05a §4.8–§4.10, form 8.1 | OPEN |
 | G-23 | Hardened manual adjustment: atomic, no negative, Sold out at zero, notes where CCRS needs them, no Destruction / Recall removal / Receive, add Theft / Seizure, audit + name | (procedure need; CCRS E13) | F-05a-3…F-05a-7, F-05a-13 | SOP-05a §4.6–§4.7, form 8.2 | **APPROVED** (D39: remove Receive, Destruction, Recall removal; add Theft, Seizure; Schedule destruction link) |
-| G-24 | Expired stock at the register: **hard block** expired Solid / Liquid Edible, **warn** on the rest; FEFO lot draw | **D36** (Q-05a-6 open: tincture, capsule) | F-05a-8 | SOP-05a §4.16, form 8.3 | **APPROVED** |
+| G-24 | Expired stock at the register: **hard block** expired Solid Edible, Liquid Edible, Tincture, Capsule and RSO (RSO by store category), **warn** on the rest; FEFO lot draw | **D36, D44** | F-05a-8, F-05a-20 | SOP-05a §4.16, form 8.3 | **APPROVED** |
 | G-25 | Recall plan + recall event log in the app; recall hold reaches the website and online orders | (compliance: WAC 314-55-225(3)(d), (3)(f)) | F-05a-15, F-05a-16 | SOP-05a §4.10, §4.13, forms 8.4–8.5; Always hide | OPEN |
 | G-26 | Print-label link on the lot page, scannable fallback barcode, **the professional 86** (reason-driven clearing, one queue, audited manager restore) | **D40** | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | **APPROVED** (86 part, D40) · rest OPEN |
 | G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **APPROVED** |
 | G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status | **D39** (design: Q-05a-8) | F-05a-17, F-05a-18 (**S1**), F-05a-19 | SOP-05a §4.9, §4.10, form 8.4 | OPEN (design awaits Q-05a-8) |
-| G-29 | Other Inventory on the register: SKU / UPC scan to a priced line, sale decrements On hand, void / return restores, audited | (procedure need; D43) | F-05b-1 (**S1**) | SOP-05b §4.1–§4.5, form 8.1 | OPEN (Q-05b-1) |
-| G-30 | Edit non-cannabis price and cost by role, audited old → new; refuse a $0.00 price | (procedure need) | F-05b-6 | SOP-05b §4.3, §4.6, §4.9, form 8.2 | OPEN (Q-05b-2) |
-| G-31 | Cannabis-line guard: no lot override, Move products or type mapping may move cannabis into or out of a non-cannabis category without the owner | (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | OPEN (Q-05b-4) |
-| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, owner-only cost-unknown price, classification write warning | (procedure need; D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | OPEN (Q-05b-5) |
+| G-29 | Non-cannabis goods fully used everywhere: register scan to a priced line, sale decrements On hand, void / return restores, cost of goods posted, menu presence, reports; audited | **D45** | F-05b-1 (**S1**), F-05b-15 | SOP-05b §4.1–§4.5, §4.8, form 8.1 | **APPROVED** |
+| G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** |
+| G-30A | Merch **Remove** limited to owner and admin (a new permission) | **D47** | F-05b-14 | SOP-05b §2, §4.11, §6, §9 | **APPROVED** |
+| G-31 | Cannabis-line guard: **refused outright, both directions, no override**, for any lot override, Move products or type mapping | **D48** (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | **APPROVED** |
+| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, **no price save on a cost-unknown lot**, classification write warning | **D45, D49** (D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | **APPROVED** |
 
 ---
 
@@ -317,15 +318,16 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. Fix the Issues expired-row fix text that points to Adjust quantity (`issues-core.ts` L461).
 - **Interim:** SOP-05a §4.6–§4.7, form 8.2.
 
-## G-24 · Expired stock at the register and FEFO lot draw (APPROVED, D36)
+## G-24 · Expired stock at the register and FEFO lot draw (APPROVED, D36, D44)
 
 - **Today:** the register never reads expiry dates; sales draw oldest-created first (`sale-lot-read.ts` L39–47); the Issues tab is the only stop (F-05a-8).
-- **Owner decision D36:** *"hard block edibles and liquid edibles, warnings for everything else."*
+- **Owner decision D36:** *"hard block edibles and liquid edibles, warnings for everything else."* **Owner decision D44:** *"Q-05a-6- yes, same with rso too."*
 - **Requirements:**
-  1. A completion-gate check on expired lots: **hard block, no override** when the lot's CCRS type is **Solid Edible** or **Liquid Edible** (plus Tincture / Capsule if the owner says so in **Q-05a-6**); a **warning** the budtender must acknowledge on every other expired lot, recorded on the sale. The same rule on the menu card (an expired edible lot does not count toward sellable stock).
+  1. A completion-gate check on expired lots: **hard block, no override** when the lot's CCRS type is **Solid Edible**, **Liquid Edible**, **Tincture** or **Capsule**, **or** the product's store category is `rso` (or `edible-solid`, `edible-liquid`, `tincture`). RSO is filed in CCRS as *Concentrate for Inhalation* (`fact-extraction-core.ts` L890–894), so the CCRS type alone would miss it (F-05a-20); a **warning** the budtender must acknowledge on every other expired lot, recorded on the sale. The same rule on the menu card (an expired edible lot does not count toward sellable stock).
   2. FEFO lot draw (soonest-expiring Active lot first, then oldest) in `sale-lot-read.ts`, with tests.
   3. The Issues text aligned with the owner's rule (it says *"Expired product may not be sold."* today).
-  4. A nightly job that moves expired **edible / liquid edible** Active lots to Quarantine with an audit row.
+  4. A nightly job that moves expired **edible, liquid edible, tincture, capsule and RSO** Active lots to Quarantine with an audit row.
+  5. Tests: one per hard-blocked kind, including an RSO lot whose CCRS type is Concentrate for Inhalation; a warning case for a non-RSO concentrate.
 - **Interim:** SOP-05a §4.16 (daily check by type), form 8.3.
 
 ## G-25 · Recall plan, recall log and recall reaching the website
@@ -371,42 +373,58 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   5. Tests for all three, plus a guard that no destruction path changes a Recalled lot to anything but Destroyed.
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C).
 
-## G-29 · Other Inventory on the register (Q-05b-1)
+## G-29 · Non-cannabis goods fully used: register, menu, books (APPROVED, D45)
 
 - **Owner basis:** the intake form already promises it (*"Has one? Scan it here — it becomes the register code."*, `NonCannabisIntakeForm.tsx` L122–124). D42/D43 ask for inventory management to be finished end to end.
 - **Today:** the register reads only `menu_items` and cannabis lots. Non-cannabis is rung on the Keypad as free text, and **On hand** never moves with a sale (F-05b-1, **S1**).
-- **Requirements (draft):**
+- **Owner decision D45:** *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."*
+- **Requirements:**
   1. Active non-cannabis items are served to the register with SKU, UPC/EAN, name, price and the category (`accessories` or `merch`), taxed at 9.3% with no limit.
   2. A scanned SKU label or manufacturer barcode adds the priced line. An unknown code says so and never falls through to cannabis.
   3. A completed sale decrements `on_hand` atomically, with a ledger row (`sale`) and the order id. A void or return restores it.
   4. Offline sales queue and replay the decrement once.
   5. The Keypad stays for genuinely un-catalogued items, and its lines are listed for the weekly count.
-  6. Tests: scan → line → tax; decrement / void / return; no cannabis path changed.
+  6. **Cost of goods:** a non-cannabis sale line carries the item's unit cost, and the daily accounting post books it as cost of goods sold. Today keypad lines carry `costMinorUnits: null` (`custom-sale-core.ts` L144) and are skipped when costs are gathered (`sale-posting-service.ts` L360, L369–371), so no COGS posts (F-05b-15).
+  7. **Menu:** active non-cannabis items with stock can be listed on the website and register menu under Accessories (and in-store Greenway goods), with price and availability from the catalog, not a separate menu entry. The shop already groups accessories and merch at the bottom of the grid (`InteractiveMenuBrowser.tsx` L1143–1146). On hand reaching zero takes the item off as out of stock.
+  8. **Reports:** non-cannabis sales, margin and turns by item in the sales and COGS reports, from the catalog line, not the typed keypad note.
+  9. **Reorder:** the **Reorder now** list uses live On hand (after item 3), and can draft a purchase order to the item's vendor.
+  10. **Concierge:** the concierge can answer "do we have X, where is it, what does it cost" from the catalog (D42).
+  11. Tests: scan → line → tax; decrement / void / return; COGS posted; menu listing follows stock; no cannabis path changed.
 - **Interim:** SOP-05b §4.4–§4.5, form 8.1.
 
-## G-30 · Edit a non-cannabis price and cost (Q-05b-2)
+## G-30 · Edit a non-cannabis price and cost (APPROVED, D46, D48)
 
 - **Today:** price is set only at draft; cost only while $0.00; a $0.00 price is accepted (F-05b-6).
-- **Requirements (draft):**
-  1. **Change price** and **Change cost** on an active item, limited to the role the owner picks (Q-05b-2), with a required reason and an audit row old → new.
+- **Owner decisions:** D46 *"Q-05b-2- owner, admin, manager."* · D48 *"non cannabis should be allowed to have their cost modified."*
+- **Requirements:**
+  1. **Change price** and **Change cost** on an active item for **owner, admin and manager**, with a required reason and an audit row old → new. Cost changes are allowed at any value, not only from $0.00. **Open: Q-05b-6**, whether managers may also use the existing **Save cost** (today owner and admin, earlier decision D-R3-1, `roles.ts` L143–148).
   2. Refuse a $0.00 or blank price at draft, at confirm and in the invoice builder (or require an explicit "free item" flag).
   3. Price history on the item. The SKU never changes.
-- **Interim:** SOP-05b §4.9 (archive and re-create, owner only, form 8.2).
+- **Interim:** SOP-05b §4.9 (archive and re-create; owner, admin or manager; form 8.2).
 
-## G-31 · Cannabis-line guard for categories (Q-05b-4)
+## G-30A · Merch Remove for owner and admin only (APPROVED, D47)
+
+- **Owner decision D47:** *"Q05b-3- owner and admin."*
+- **Today:** `removeMerchAction` checks only `inventory.manage`, which includes manager (`merch/actions.ts` L33–34; F-05b-14).
+- **Requirements:** a permission such as `merch.remove` = owner, admin; the **Remove...** control hidden for others; the action refuses others; a test.
+- **Interim:** SOP-05b §4.11 (managers Hide, never Remove).
+
+## G-31 · Cannabis-line guard for categories (APPROVED, D48)
 
 - **Today:** the lot override, **Move products** and the inventory-type mapping can each cross into or out of `merch` / `accessories` / `accessory` / `paraphernalia` with no check. This changes tax, limits, scan and floor (F-05b-9, **S1**).
-- **Requirements (draft):**
+- **Owner decision D48:** *"Q05b-4- refused outright, non cannabis should also be refused outright moving them into a cannabis type."*
+- **Requirements:**
   1. One pure check, `crossesCannabisLine(fromCategory, toCategory)`, shared by `parseClassificationEdit`, `buildReassignPlan` and the inventory-type save.
-  2. A crossing is refused, or (if the owner chooses in Q-05b-4) allowed only for the owner with a typed reason, recorded as its own audit action.
-  3. A product that came from a CCRS manifest (it has a cannabis lot) can never be moved into a non-cannabis category.
+  2. A crossing is **refused outright, in both directions, with no override for anyone.** The refusal message names the rule. A refused attempt is written to the audit log.
+  3. A product that came from a CCRS manifest (it has a cannabis lot) can never be moved into a non-cannabis category, and a non-cannabis catalog item can never be given a cannabis category or inventory type.
   4. A daily check lists any menu row whose product has a cannabis lot but a non-cannabis category, on Inventory → Issues.
   5. Tests for all three entry points.
 - **Interim:** SOP-05b §4.15–§4.17, form 8.3 (never cross; owner only).
 
-## G-32 · Non-cannabis, publish and price hardening bundle (Q-05b-5)
+## G-32 · Non-cannabis, publish and price hardening bundle (APPROVED, D45, D49)
 
-- **Today / requirements (draft), one line per finding:**
+- **Owner decision:** *"Q-05b-5- yes, plan on the group of smaller fixes. blocked until the manifest cost is entered."*
+- **Today / requirements, one line per finding:**
   1. Confirm and Archive write an audit row; add **Restore** for an archived item (F-05b-2).
   2. Adjustments use one atomic database update with a zero floor (F-05b-3).
   3. Direction is fixed by Reason; **Count correction** and **Other** allow either (F-05b-4).
@@ -415,7 +433,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. The invoice audit write is awaited and failure is shown (F-05b-8).
   7. Publish refuses (fails closed) when the removal diff can't be read (F-05b-10).
   8. Category audits carry before / after (F-05b-11).
-  9. **Save sell price** on a cost-unknown lot is owner only, or blocked until the CCRS cost is in (owner's choice, Q-05b-5) (F-05b-12, D38).
+  9. **Save sell price** on a cost-unknown lot is **refused for everyone until the manifest cost is entered** (D49; F-05b-12, D38). The message says to enter the cost from the CCRS manifest first.
   10. A classification lot-row write failure shows a warning, not "saved" (F-05b-13).
 - **Interim:** the store rules in SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21.
 
