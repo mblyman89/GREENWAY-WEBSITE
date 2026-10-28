@@ -132,7 +132,7 @@ The page header reads **Non-cannabis inventory** with the line *"Glass, accessor
 
 **What it does not do (finding F-05b-1, S1):**
 
-- **It is not on the register.** The register's product list comes only from the published menu (`live-menu.ts` L155–157). The register's barcode list holds only cannabis lot codes and CCRS identifiers (`api/pos/menu/route.ts` L179, L405–415; `scan-to-cart-core.ts` L55–75), and a scan matches only those (`scan-to-cart-core.ts` L101–144). No register or sale code reads the non-cannabis catalog at all; the only readers are this page, its store, the knowledge base and system tools.
+- **It is not on the register.** The register's product list comes only from the published menu (`live-menu.ts` L155–157). The register's barcode list holds only cannabis lot codes and CCRS identifiers (`api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–75), and a scan matches only those (`scan-to-cart-core.ts` L101–144). No register or sale code reads the non-cannabis catalog at all; the only readers are this page, its store, the knowledge base and system tools.
 - **So the SKU label and the UPC do not ring up,** although the label page's own design note says it exists *"so staff can scan them at the register"* (`[id]/label/page.tsx` L7–8), and the page's help panel says *"staff scan the package itself"* (`noncannabis/page.tsx` L230–240).
 - **A register sale does not lower On hand.** Keypad lines are skipped by the sale decrement on purpose (`sale-decrement.ts` L107–110), and there is no other link.
 
@@ -196,7 +196,7 @@ Every new item is a **draft** first. A draft does not appear in the catalog unti
 Until gap G-29 is built, every non-cannabis item in the store is rung on the **Keypad** (SOP-01 §4.8):
 
 1. On the register, open the **Keypad** tab.
-2. Pick the category. The keypad offers only **merch** and **accessories** (`custom-sale-core.ts` L48), with the line *"Non-cannabis only (merch & accessories) — cannabis must be rung from the menu so inventory, excise, and limits stay exact."* (`SaleFlow.tsx` L2538–2539). Glass, papers, lighters and devices are **accessories**; Greenway-branded goods sold in the store are **merch**.
+2. Pick the category. The keypad offers only **merch** and **accessories** (`custom-sale-core.ts` L48), with the line *"Non-cannabis only (merch & accessories) — cannabis must be rung from the menu so inventory, excise, and limits stay exact."* (`SaleFlow.tsx` L2541–2542). Glass, papers, lighters and devices are **accessories**; Greenway-branded goods sold in the store are **merch**.
 3. In *"What is it? (optional — prints on the receipt)"* (L2564), type **the SKU and a short name** (for example `PIPE-0001 blue spoon`). Store rule: always fill it in. It is up to 60 characters (`custom-sale-core.ts` L55), and it is the only record of what was sold.
 4. Key the price from the label and press **Add to check** (L2586). The keypad stops at $999.99 (`custom-sale-core.ts` L51–52).
 5. Never ring a cannabis product on the keypad, and never ring a non-cannabis item as cannabis. The keypad line is taxed at 9.3% only, with no excise and no purchase limit (§7).
@@ -697,7 +697,7 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 | Area | Files |
 |---|---|
 | Other Inventory | `src/app/admin/inventory/noncannabis/page.tsx`, `actions.ts`, `MerchCatalog.tsx`, `NonCannabisIntakeForm.tsx`, `InvoiceBuilderForm.tsx`, `[id]/label/page.tsx`; `src/lib/noncannabis/store.ts`, `invoice-store.ts`, `noncannabis-core.ts`, `cost-fill-core.ts`, `merch-intel-core.ts` |
-| Register disconnect | `src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L179, L405–415; `scan-to-cart-core.ts` L55–144; `src/lib/inventory/sale-decrement.ts` L107–110; `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2538–2586 |
+| Register disconnect | `src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–144; `src/lib/inventory/sale-decrement.ts` L107–110; `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2541–2589 |
 | Merch | `src/app/admin/inventory/merch/page.tsx`, `actions.ts`, `export/route.ts` |
 | Publish | `src/app/admin/publish/page.tsx`; `src/lib/pos/publish-guard-core.ts`, `publish-queue-core.ts`, `publish-now-core.ts`; `src/app/admin/menu-imports/actions.ts` L178–270; `menu-imports/version/[versionId]/page.tsx` L429–437; `src/lib/inventory/cutover-guard-core.ts` L64 |
 | Types & Categories | `src/app/admin/settings/types/page.tsx`, `actions.ts`; `category-registry-core.ts` L149–198; `category-registry.ts` L125–160 |

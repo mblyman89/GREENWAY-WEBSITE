@@ -498,8 +498,8 @@ The **Issues** tab lists what still needs attention. When clean, it says *"Nothi
 
 | Issues row | Meaning | Do this |
 |---|---|---|
-| **Held in quarantine — <lot>** · *"Missing: … It cannot go live until that is resolved."* | The lot was accepted but failed the go-live check (no CCRS id, no COA, or FAILED) | **Failed:** it can never be sold. Return to vendor or destroy (SOP-15). **No COA:** get the COA from the vendor. If the lab result is already imported, attach it on the lot page under **Attach a lab result** (`LotLinkPanels.tsx`; `inventory/actions.ts` L268–303). The row now says *"If the lab result is already imported, use Attach a lab result on the lot page."* (`issues-core.ts` L577; F-04-12 FIXED in Phase 1.1). **No CCRS id:** ask the vendor for a corrected manifest. |
-| **Held in quarantine, now clear — <lot>** · *"Its identifier and lab result now pass the go-live check."* | The missing paper is now on file | **Manager:** **Open lot to activate it** → **Lifecycle status** → **Set status** = **Active**, write the **Reason** → **Update status**. The page runs the go-live check again and records who activated it (`issues-core.ts` L550–558; `inventory/actions.ts` L158–217). |
+| **Held in quarantine — <lot>** · *"Missing: … It cannot go live until that is resolved."* | The lot was accepted but failed the go-live check (no CCRS id, no COA, or FAILED) | **Failed:** it can never be sold. Return to vendor or destroy (SOP-15). **No COA:** get the COA from the vendor. If the lab result is already imported, attach it on the lot page under **Attach a lab result** (`LotLinkPanels.tsx`; `inventory/actions.ts` L268–303). The row now says *"If the lab result is already imported, use Attach a lab result on the lot page."* (`issues-core.ts` L580; F-04-12 FIXED in Phase 1.1). **No CCRS id:** ask the vendor for a corrected manifest. |
+| **Held in quarantine, now clear — <lot>** · *"Its identifier and lab result now pass the go-live check."* | The missing paper is now on file | **Manager:** **Open lot to activate it** → **Lifecycle status** → **Set status** = **Active**, write the **Reason** → **Update status**. The page runs the go-live check again and records who activated it (`issues-core.ts` L553–561; `inventory/actions.ts` L158–217). |
 | **N lines have no COA / lab result** (before Finalize) | COAs missing | **Review the lines** |
 | **N lines have an unmapped category** | Product type not mapped | **Open Types & Categories** |
 
@@ -1153,7 +1153,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 4.15 COAs | `lot-activation-gate-core.ts` L76–107; `[id]/page.tsx` L1104+ |
 | 4.16 PO | `ManifestPoLinkPanel.tsx`; `intake/actions.ts` L267 |
 | 4.17–4.18 finalize | `intake/actions.ts` L937–1133; `intake-store.ts` L1301–1840 (L1416 default-accept); `finalize-label-core.ts` L80–116; `finalize-banner-core.ts` L60–125; `[id]/page.tsx` L609–734, L1366–1391 |
-| 4.19 held lots | `[id]/page.tsx` L383–397, L770–790; `issues-core.ts` L545–569; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L849–864; `scripts/compliance/check-activation-gate.ts` L60–100 |
+| 4.19 held lots | `[id]/page.tsx` L383–397, L770–790; `issues-core.ts` L548–572; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L849–864; `scripts/compliance/check-activation-gate.ts` L60–100 |
 | 4.20 accounting | `ManifestAccountingPanel.tsx`; `manifest-event-labels-core.ts` L217–230; `vendor-bill-service.ts` L262–287; `INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L34–46 |
 | 4.21 labels | `lots/[id]/label/page.tsx` L1–63 |
 | 4.22–4.23 onboarding | `drafts/page.tsx` L263, L775, L797–815, L1984–2026; `src/lib/inventory/catalog-drafts.ts` L1218+, L1348–1356; `receiving-classification-core.ts` L178–245; `merge-review-core.ts` L30–50 |

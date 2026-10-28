@@ -129,7 +129,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - Same root as F-00-3/F-00-4. Recorded here because SOP-01 now carries a workaround that depends on it.
 
 ### F-01-6 · CONFIRMED · HARDEN · S2 — Done-screen "Print receipt" opens the drawer on every tap, with no audit
-- **Pin:** `src/app/(site)/pos/SaleFlow.tsx` L1580 `{ html, openDrawer: true, jobKind: "sale" }`. The button stays live (*"Tap again to reprint"*, L1634). By contrast, MORE → Reprint last receipt and the history reprint never kick the drawer.
+- **Pin:** `src/app/(site)/pos/SaleFlow.tsx` L1583 `{ html, openDrawer: true, jobKind: "sale" }`. The button stays live (*"Tap again to reprint"*, L1634). By contrast, MORE → Reprint last receipt and the history reprint never kick the drawer.
 - **Effect:** after a sale, any number of extra drawer openings are possible without a No-sale record, a reason or a manager PIN. This bypasses the No-sale control (§4.21).
 
 ### F-01-7 · CONFIRMED · UX · S3 — The drawer opens only by printing a receipt
@@ -163,7 +163,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 
 ### F-01-14 · CONFIRMED · BUG · S1 — Medical test mode can complete a real sale with tax removed and no exemption record
 - **Status: FIXED (Phase 0.1, owner D76).** Device: `medicalTestModeSaleBlock` refuses payment when the simulated endorsement (`medical.simulated`) removed tax. Server: `sync-store.ts` refuses (exception) a medical sale with `medicalSavingsMinor > 0` when `getMedTaxSettings().medicallyEndorsed` is false. SOP-01 v1.3.
-- **Pin:** `src/lib/pos/medical-testmode-core.ts` flips `bundle.medical.endorsed = true` on the device only. The register then prices medical lines tax-exempt. At sync, `src/lib/orders/completion-gate.ts` L166–182 builds the exemption plan with the **real** `medSettings.medicallyEndorsed`. With the store unendorsed, `claimedLineCount = 0`, so **no** WAC 314-55-090(2) exempt-sale rows are written (L214), and the gate does **not** refuse. `sync-store.ts` stores the device's `sale.taxMinor` (L866) and does not recompute tax.
+- **Pin:** `src/lib/pos/medical-testmode-core.ts` flips `bundle.medical.endorsed = true` on the device only. The register then prices medical lines tax-exempt. At sync, `src/lib/orders/completion-gate.ts` L235–251 builds the exemption plan with the **real** `medSettings.medicallyEndorsed`. With the store unendorsed, `claimedLineCount = 0`, so **no** WAC 314-55-090(2) exempt-sale rows are written (L214), and the gate does **not** refuse. `sync-store.ts` stores the device's `sale.taxMinor` (L866) and does not recompute tax.
 - **Effect:** a carded sale rung with test mode left on completes with tax under-collected and no exemption ledger. This is a tax liability (WAC 314-55-090(3): unrecorded exemptions are presumed incorrect). The banner is the only guard.
 - Upgraded from SUSPECTED during the slice after tracing the full path.
 
@@ -334,7 +334,7 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 - **Status: FIXED (Phase 1.1, G-19). `setLotStatusAction` (`inventory/actions.ts` L158) runs `evaluateLotLifecycleChange` (`lot-lifecycle-core.ts`), which runs `evaluateLotActivation` before Active; every change and refusal is audited; `check-activation-gate.ts` now also catches non-literal status writes and runs in `tests/compliance/fix-p1-1-gated-lot-lifecycle.test.ts`).**
 - **Pin:** `src/app/admin/inventory/[id]/page.tsx` L130–136 (STATUSES include `active`), form L1497–1512 → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864). It writes any status. There is no `evaluateLotActivation` call and no `recordAudit`.
 - **Guard miss:** `scripts/compliance/check-activation-gate.ts` L60–100 greps only for the literal `status: "active"`, so a status passed in a variable escapes it. The intake comment (`intake/actions.ts` L195–198) says Finalize is the only activation path.
-- **Effect:** a manager can make a lot with no COA, or a FAILED result, sellable, and nothing records who did it. `issues-core.ts` L553 directs staff to this box for now-clear held lots.
+- **Effect:** a manager can make a lot with no COA, or a FAILED result, sellable, and nothing records who did it. `issues-core.ts` L556 directs staff to this box for now-clear held lots.
 - **SOP impact:** SOP-04 §4.19 control: manager only, only from a "now clear" Issues row, logged on form 8.1. Carried into SOP-05. Ties to G-19.
 
 ### F-04-3 · CONFIRMED · HARDEN (control note) · S3 — Undecided lines are accepted on Finalize
@@ -382,8 +382,8 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 - **SOP impact:** SOP-04 §4.6: the count of lines on screen goes on form 8.1 and is compared with the paper manifest.
 
 ### F-04-12 · CONFIRMED · DOC · S3 — Held-lot fix text says "the lot page cannot attach one yet"
-- **Status: FIXED (Phase 1.1, G-19). The held-lot fix text now says "If the lab result is already imported, use Attach a lab result on the lot page." (`issues-core.ts` L577)).**
-- **Pin:** `src/lib/admin/issues-core.ts` L570. The lot page has **Attach a lab result** (S37 LotCoaAttach; `inventory/[id]/page.tsx` L763; `inventory/actions.ts` L268–303, audit `inventory_lot.coa_linked`).
+- **Status: FIXED (Phase 1.1, G-19). The held-lot fix text now says "If the lab result is already imported, use Attach a lab result on the lot page." (`issues-core.ts` L580)).**
+- **Pin:** `src/lib/admin/issues-core.ts` L573. The lot page has **Attach a lab result** (S37 LotCoaAttach; `inventory/[id]/page.tsx` L763; `inventory/actions.ts` L268–303, audit `inventory_lot.coa_linked`).
 - **SOP impact:** SOP-04 §4.19 tells the manager to use the attach panel when the lab result is already imported.
 
 ### F-04-13 · CONFIRMED · DOC · S3 — Wrong WSLCB public records phone number on the CCRS page
@@ -463,7 +463,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ### F-05a-5 · CONFIRMED · HARDEN · S2 — "Destruction" and "Recall removal" are offered as manual adjustment reasons
 - **Status: FIXED (Phase 1.2, G-23). Destruction and Recall removal removed from the list and refused in the core and the store; a Schedule destruction link opens Returns & Destruction with the lot chosen).**
-- **Pin:** lot page REASONS L118–128; both export as CCRS Destruction (`ccrs-inventory-adjustment-core.ts` L66–67, L80–81). They bypass the SOP-15 disposition flow, including its recall block (`disposition-core.ts` L226–243: no destruction until LCB coordination is confirmed and the officer named). The Issues tab's expired-lot fix text points to it (*"…or record the destruction under Adjust quantity"*, `issues-core.ts` L461).
+- **Pin:** lot page REASONS L118–128; both export as CCRS Destruction (`ccrs-inventory-adjustment-core.ts` L66–67, L80–81). They bypass the SOP-15 disposition flow, including its recall block (`disposition-core.ts` L226–243: no destruction until LCB coordination is confirmed and the officer named). The Issues tab's expired-lot fix text points to it (*"…or record the destruction under Adjust quantity"*, `issues-core.ts` L463).
 - **SOP impact:** §4.7 "Never"; §4.16 "do not use the row's suggestion". Ties to **G-23**; owner question **Q-05a-4**.
 
 ### F-05a-6 · CONFIRMED · GAP · S3 — No Theft or Seizure adjustment reason
@@ -478,11 +478,12 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.7 "Never". Ties to **G-23**; **Q-05a-4**.
 
 ### F-05a-8 · CONFIRMED · GAP · S2 — Expired lots are not blocked or warned at the register; sales draw FIFO, not FEFO; the Issues text states a rule the code says WA lacks
-- **Pin:** no expiry read in `completion-gate.ts`, `api/pos/menu/route.ts` or the sale decrement (grep). Sale lot order is oldest created first (`sale-lot-read.ts` L39–47). FEFO exists only as advice (`inventory-intel-core.ts` L13, L124, L532). Issues says *"Expired product may not be sold."* (`issues-core.ts` L388, L460) while `expiry-rules-core.ts` L32–34 says WA does not require a date (WAC 314-55-105(8) "best by" optional).
+- **Pin:** no expiry read in `completion-gate.ts`, `api/pos/menu/route.ts` or the sale decrement (grep). Sale lot order is oldest created first (`sale-lot-read.ts` L45–53). FEFO exists only as advice (`inventory-intel-core.ts` L13, L124, L532). Issues says *"Expired product may not be sold."* (`issues-core.ts` L388, L462) while `expiry-rules-core.ts` L32–34 says WA does not require a date (WAC 314-55-105(8) "best by" optional).
 - **SOP impact:** §4.16: daily pull and quarantine until **Q-05a-1** is answered. Ties to **G-24**.
+- **Status: FIXED (Phase 1.6b, G-24; owner D36, D44).** The completion gate reads expiry dates fail-closed and refuses an expired Solid Edible, Liquid Edible, Tincture, Capsule or RSO with no override; every other expired lot needs **I told the customer** (back office) or is noted on the order (register sync) (`completion-gate.ts` L151–188, L301–313). The register menu leaves out hard-blocked products (`api/pos/menu/route.ts` L329). The sale draws FEFO (`sale-lot-read.ts` L65). A nightly job quarantines expired hard-block lots, compare-and-set on Active (`api/cron/expired-quarantine/route.ts`, `vercel.json` `20 11 * * *` UTC). The Issues text states the owner's rule (`issues-core.ts` L390–391, L465–467). Guard step 9 in `check-activation-gate.ts`; test `tests/compliance/fix-p1-6b-expired-stock.test.ts`. SOP-05a v1.8.
 
 ### F-05a-9 · CONFIRMED · UX/HARDEN · S3 — The register "86" does not stick while the books show stock
-- **Pin:** `/api/pos/stock-flag` sets the card unavailable and audits `pos.stock_flag` (`route.ts` L28–102). On every menu download `reconcileRegisterAvailability` restores any unavailable card with Active units (`register-availability-core.ts` L318–421, message L389; called `api/pos/menu/route.ts` L240). The register prompt says *"a manager brings it back through the back office when stock returns"* (`SaleFlow.tsx` L4279–4280). The name on the audit row is client-supplied (`route.ts` L48–52).
+- **Pin:** `/api/pos/stock-flag` sets the card unavailable and audits `pos.stock_flag` (`route.ts` L28–102). On every menu download `reconcileRegisterAvailability` restores any unavailable card with Active units (`register-availability-core.ts` L318–421, message L389; called `api/pos/menu/route.ts` L249). The register prompt says *"a manager brings it back through the back office when stock returns"* (`SaleFlow.tsx` L4282–4283). The name on the audit row is client-supplied (`route.ts` L48–52).
 - **SOP impact:** §4.12: the manager investigates every 86 the same shift. Ties to **G-26**; **Q-05a-5**.
 
 ### F-05a-10 · CONFIRMED · UX · S3 — The lot label is linked only from the manifest page, and its fallback barcode does not scan
@@ -513,7 +514,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.13, forms 8.4 (the plan) and 8.5 (event worksheet). Ties to **G-25**. Q-05a-2 answered (D37): the admin is the coordinator, no back-up.
 
 ### F-05a-16 · CONFIRMED · GAP · S2 — A recall hold does not reach the website or online ordering
-- **Pin:** the public menu filters only hidden cards (`src/lib/pos/live-menu.ts` L167–171, L289–292); online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). `recalledProductKeys` (`recall-hold-store.ts` L72–121) has four callers only: `api/pos/menu/route.ts` L121, `completion-gate.ts` L103, `restore-to-sale-store.ts` L131, `register-sellability-store.ts` L188.
+- **Pin:** the public menu filters only hidden cards (`src/lib/pos/live-menu.ts` L167–171, L289–292); online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). `recalledProductKeys` (`recall-hold-store.ts` L72–121) has four callers only: `api/pos/menu/route.ts` L124, `completion-gate.ts` L132, `restore-to-sale-store.ts` L131, `register-sellability-store.ts` L188.
 - **Effect:** a recalled product stays visible on the website and can be reserved; the sale is refused only when staff complete the pickup (completion gate, fail-closed). WAC 314-55-225(3)(b)(i) requires preventing distribution.
 - **SOP impact:** §4.10 step 5: set **Always hide** on Product Enrichment (audited `product.visibility_changed`). Ties to **G-25** (propagation requirement).
 
@@ -525,7 +526,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ### F-05a-18 · CONFIRMED · BUG · S1 — Scheduling a destruction overwrites Recalled with Quarantine and lifts the recall hold
 - **Status: FIXED (Phase 1.3, G-28). `evaluateDestructionSchedule` (`destruction-lot-status-core.ts` L85) refuses a Recalled lot and the Recall reason; the Quarantine write is compare-and-set on Active (`disposition.ts` L975); completion refuses a Recalled lot (L1117); guard step 5 fails any lot-status write in disposition.ts that is not compare-and-set).**
-- **Pin:** `scheduleDestruction` (`src/lib/inventory/disposition.ts` L939–997) writes `status: "quarantine"` at L965–971 whatever the lot's status was (unless `quarantineLot === false`, used only for a single customer-returned unit, L716–723). The register recall hold reads only `recalled` (`src/lib/pos/recall-hold-core.ts` L44); quarantine does not hold (`completion-gate.ts` L98–100).
+- **Pin:** `scheduleDestruction` (`src/lib/inventory/disposition.ts` L939–997) writes `status: "quarantine"` at L965–971 whatever the lot's status was (unless `quarantineLot === false`, used only for a single customer-returned unit, L716–723). The register recall hold reads only `recalled` (`src/lib/pos/recall-hold-core.ts` L44); quarantine does not hold (`completion-gate.ts` L127–129).
 - **Effect:** once a recalled lot is scheduled, nothing in the app shows it was recalled, and other lots of that product stop being held if it was the only Recalled lot. WAC 314-55-225(3)(b)(i) requires isolating recalled product.
 - **SOP impact:** SOP-05a v1.1 §4.9 point 3, §4.10 step 9, form 8.4 (C): recalled lots are not scheduled in the app until **G-28**.
 
@@ -539,6 +540,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **Pin:** the code's own RSO test case files RSO as *Concentrate for Inhalation* (`fact-extraction-core.ts` L890–894). The CCRS EndProduct list has no RSO type (`ccrs-batch-core.ts` L242–260). The store category is `rso` (migration `0035_inventory_category_types.sql` L103), counted in the concentrate limit bucket (`sales-limits-core.ts` L358).
 - **Effect:** the owner put RSO in the expiry hard block (D44: *"Q-05a-6- yes, same with rso too."*). A G-24 build that reads only the CCRS type would hard-block edibles, tinctures and capsules but only warn on expired RSO.
 - **SOP impact:** SOP-05a v1.2 §4.16 point 2 (read the name and category, not only the LCB classification). Fixed by **G-24** (key on the store category too).
+- **Status: FIXED (Phase 1.6b, G-24).** The hard block reads the CCRS type, the store category (direct slug, or through the ledger category map, where *RSO* is `rso`: `ledger-category-map-core.ts` L148), the order line category, and the product name (*RSO* as a word, or *Rick Simpson*) (`expired-stock-core.ts` L112–135). An expired RSO filed as Concentrate for Inhalation is refused; a non-RSO concentrate gets the warning (test `fix-p1-6b-expired-stock.test.ts`).
 
 ### F-05a-C · CONFIRMED · DOC · S3 — Concierge inventory topic has six one-line facts and nothing on recalls, expiry, adjustments, the 86 or labels
 - **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180: six facts (lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts, Returns & Destruction). grep `recall|expir` in the file → none. Baseline ledger row "Inventory management 🟡" (`04-CONCIERGE-COVERAGE-LEDGER.md` §3).
@@ -552,7 +554,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 **Verdict: PARTLY MET, with two S1 gaps.** Publish Menu, the Merch page, sales-limit classification and the cannabis sell-price floor are careful and audited. Other Inventory is a good catalog, but it is **not connected to the register**. And nothing stops a category change from turning cannabis into non-cannabis for tax, limits and scan.
 
 ### F-05b-1 · CONFIRMED · GAP · S1 — Other Inventory is not connected to the register
-- **Pin:** the register menu is built from `menu_items` only (`src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L179, L405–415). Scan-to-cart matches only menu barcodes and lot codes (`scan-to-cart-core.ts` L55–75, L101–144). The sale decrement touches cannabis lots only (`src/lib/inventory/sale-decrement.ts` L107–110). Yet the intake form promises the barcode *"becomes the register code"* (`NonCannabisIntakeForm.tsx` L122–124), and the label page, help panel, `help-content.ts` L470–472 and `concierge-kb.ts` L172 imply scanning works (label page L7–8; `noncannabis/page.tsx` L230–240).
+- **Pin:** the register menu is built from `menu_items` only (`src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L188, L420–430). Scan-to-cart matches only menu barcodes and lot codes (`scan-to-cart-core.ts` L55–75, L101–144). The sale decrement touches cannabis lots only (`src/lib/inventory/sale-decrement.ts` L107–110). Yet the intake form promises the barcode *"becomes the register code"* (`NonCannabisIntakeForm.tsx` L122–124), and the label page, help panel, `help-content.ts` L470–472 and `concierge-kb.ts` L172 imply scanning works (label page L7–8; `noncannabis/page.tsx` L230–240).
 - **Effect:** non-cannabis goods are rung on the Keypad as free text. **On hand**, **Reorder now**, retail value and margin never move with sales, and shrink is invisible between counts.
 - **SOP impact:** SOP-05b header box, §4.1, §4.4, §4.5 (Monday reconciliation, form 8.1), §9. Fixed by **G-29**.
 
@@ -670,7 +672,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** §4.3, §4.11 (timing rule), §4.17 step 1, §4.19, §7. **G-35**. Q-06-8.
 
 ### F-06-8 · CONFIRMED · GAP · S3 — Two different count schedules; the Issues fix links to a page that cannot start a count
-- **Pin:** `CADENCE_DAYS` A30/B60/C90/U14 (`inventory-audit-core.ts` L324–329) vs `COUNT_CADENCE_DAYS` A30/B90/C180 (`inventory-intel-core.ts` L301). Issues row *"Start a cycle count."* → **Open cycle counts** (`issues-core.ts` L478–485), which has no create button by design.
+- **Pin:** `CADENCE_DAYS` A30/B60/C90/U14 (`inventory-audit-core.ts` L324–329) vs `COUNT_CADENCE_DAYS` A30/B90/C180 (`inventory-intel-core.ts` L301). Issues row *"Start a cycle count."* → **Open cycle counts** (`issues-core.ts` L481–488), which has no create button by design.
 - **SOP impact:** §4.5 step 3, §4.22. **G-39**. Q-06-5.
 
 ### F-06-9 · CONFIRMED · GAP · S2 — "Read only" legacy cycle counts still write through the service role
@@ -752,7 +754,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 
 ### F-15-6 · CONFIRMED · BUG · S1 — A customer-returned unit marked Destroy is added back to an Active lot and can be sold at the register until the destruction is completed
 - **Status: FIXED (Phase 1.4, G-44). `record_customer_return` (migration 0308) adds the unit and holds it (`inventory_lots.held_qty`); every sale and stock reader uses `sellableQty` (`held-stock-core.ts` L43): `sale-lot-read.ts`, `sale-decrement.ts`, `sale-posting-service.ts`, `api/pos/menu/route.ts`, `register-sellability-store.ts`; manual adjustments and other disposition reductions refuse held units; guard step 6).**
-- **Pin:** `postAddition(lotId, qty, "return", …, { sellable: false })` adds the units to on-hand (`disposition.ts` L710; L289–333); `sellable:false` only skips the menu sync (L330). The destruction is scheduled with `quarantineLot: false` (L715–723), so the lot stays **Active**. The register draws from Active lots with stock, oldest first (`sale-lot-read.ts` L44–47).
+- **Pin:** `postAddition(lotId, qty, "return", …, { sellable: false })` adds the units to on-hand (`disposition.ts` L710; L289–333); `sellable:false` only skips the menu sync (L330). The destruction is scheduled with `quarantineLot: false` (L715–723), so the lot stays **Active**. The register draws from Active lots with stock, oldest first (`sale-lot-read.ts` L50–53).
 - **Effect:** the app counts the returned (often opened) unit as sellable stock; a sale of that product can draw it, and the later destruction then removes a sellable unit instead. On-hand is overstated until completion (S1: product that must not be sold).
 - **SOP impact:** SOP-15 "one thing to know" 2, §4.7 (sealed destroy bin, form 8.1). **G-44**.
 
@@ -835,7 +837,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 
 ### F-15-20 · CONFIRMED · GAP · S1 — Trade samples are not kept off the menu or the register
 - **Status: FIXED (Phase 0.2, G-51).** `sample-lot-core.ts`; filters in `catalog-drafts.ts` (seed + approve refuses), `intake-menu-staging.ts`, `draft-injection.ts`, `sale-lot-read.ts`, `api/pos/menu/route.ts`, `register-sellability-store.ts`, `lot-menu-stock.ts`, `void-store.ts`. Test `tests/compliance/fix-p0-2-samples.test.ts`.
-- **Pin:** no register, menu or product-onboarding code reads `is_sample`. (a) `src/lib/inventory/catalog-drafts.ts` L370–373: `seedDraftsForManifest` reads every non-destroyed lot on the manifest, and `SEED_LOT_COLUMNS` (L239) has no `is_sample`, so a sample lot gets a Product Onboarding draft. (b) `src/lib/inventory/sale-lot-read.ts` L41–47: the register's lot draw takes any Active lot with stock for the product key, oldest first. (c) `src/app/api/pos/menu/route.ts` L179–181 and L405–409: the menu's lot read and barcode index check only status and quantity. A sample lot carries the product's SKU as its key (`intake-parser.ts` L438). The only guard is an advisory review warning (`intake-review-core.ts` L120–124).
+- **Pin:** no register, menu or product-onboarding code reads `is_sample`. (a) `src/lib/inventory/catalog-drafts.ts` L370–373: `seedDraftsForManifest` reads every non-destroyed lot on the manifest, and `SEED_LOT_COLUMNS` (L239) has no `is_sample`, so a sample lot gets a Product Onboarding draft. (b) `src/lib/inventory/sale-lot-read.ts` L47–53: the register's lot draw takes any Active lot with stock for the product key, oldest first. (c) `src/app/api/pos/menu/route.ts` L188–190 and L420–424: the menu's lot read and barcode index check only status and quantity. A sample lot carries the product's SKU as its key (`intake-parser.ts` L438). The only guard is an advisory review warning (`intake-review-core.ts` L120–124).
 - **Effect:** a sample can be approved onto the menu, or used up by an ordinary sale of the same product. WAC 314-55-096(1)(i): *"Trade samples may not be sold"*. The owner: *"They can not be sold at the register, they cannot be found on the menu."* The rest of the samples branch is correct: receiving, the 120 intake cap, the 30 give-out cap, the $0.01 cost, and the decrement at distribution on the hub.
 - **SOP impact:** SOP-15 v1.1 §4.26 interim check, §6, §7, form 8.6. **G-51**.
 

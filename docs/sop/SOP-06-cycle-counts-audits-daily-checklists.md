@@ -382,7 +382,7 @@ The Cycle Counts page lists products the register sold past their tracked count,
 
 ### 4.22 The "overdue for a cycle count" Issues row
 
-Inventory → Issues may show *"{n} lots are overdue for a cycle count"*, meaning *"Past their count cadence (A monthly, B quarterly, C twice a year)…"*, fix text *"Start a cycle count."*, button **Open cycle counts** (`issues-core.ts` L478–485).
+Inventory → Issues may show *"{n} lots are overdue for a cycle count"*, meaning *"Past their count cadence (A monthly, B quarterly, C twice a year)…"*, fix text *"Start a cycle count."*, button **Open cycle counts** (`issues-core.ts` L481–488).
 
 - That schedule (A 30 / B 90 / C 180 days, `inventory-intel-core.ts` L301) **differs** from the audit planner's (A 30 / B 60 / C 90 / U 14) (F-06-8). **Owner decision D58** replaces both with the daily programme in §4.24 (about one vendor a day, plus a full count at year end); the A/B/C schedule stays as the risk ranking that the intelligent counts use (G-39, G-40).
 - **Open cycle counts** goes to a page that cannot start a count. **Counter or manager:** tell the owner. **Owner:** plan the count on **Plan a count** (§4.5).
@@ -745,7 +745,7 @@ YEAR END
 | CCRS | `src/lib/compliance/ccrs-inventory-adjustment-core.ts` L66–67 |
 | Cycle Counts page | `src/app/admin/inventory/cycle-counts/page.tsx` L17–20, L86–90, L131–139, L186, L206, L238–305 |
 | Legacy | `cycle-counts/actions.ts`; `src/lib/inventory/cycle-counts.ts` L278–320, L382–415, L526–545; `cycle-counts/[id]/page.tsx` L74, L161–222, L317, L389; `cycle-counts/[id]/export/route.ts` L37 |
-| Issues reminder | `src/lib/admin/issues-core.ts` L478–485; `src/lib/inventory/inventory-intel-core.ts` L301 |
+| Issues reminder | `src/lib/admin/issues-core.ts` L481–488; `src/lib/inventory/inventory-intel-core.ts` L301 |
 | Concierge / help | `src/lib/admin/concierge-kb.ts` L66, L73, L175; `src/lib/admin/help-content.ts` L450–451 |
 | Owner letter | `docs/MICHAEL-books-23.md` L55–59, L72–76 |
 

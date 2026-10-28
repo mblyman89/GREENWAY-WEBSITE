@@ -205,7 +205,7 @@ Concierge code is **unchanged** (record-only). Today the concierge's `inventory`
 | *new* `inventory-adjustments` | §4.6–§4.7 (procedure, reason → CCRS table, E13, forbidden reasons, theft/seizure), form 8.2 | 🔴 → ✅ (with caveats until G-23) |
 | *new* `recalls` | §4.10 placing and releasing a hold, §4.11 register behaviour and messages, §4.13 the written plan, §6 rows, forms 8.4–8.5, WAC 314-55-225 quotes | 🔴 → ✅ (paper plan until G-25) |
 | `pos` / `registers` (addition) | §4.11 recall messages for budtenders, §4.12 the 86, §4.22 low stock, §5.3 | 🟡 → ✅ |
-| *new* `expiry` | §4.14 sources, §4.15 Save / Preview / Apply, §4.16 expired and expiring soon, §5.2 messages incl. every skip reason | 🔴 → ✅ (expired-sale rule pending Q-05a-1) |
+| *new* `expiry` | §4.14 sources, §4.15 Save / Preview / Apply, §4.16 expired and expiring soon, §5.2 messages incl. every skip reason | 🔴 → ✅ (expired-sale rule built, Phase 1.6b, G-24) |
 | `inventory` (tags, labs, labels, bulk fill) | §4.17–§4.20, §5.4 | 🔴 → ✅ |
 
 **Role filter needed (strategy item 3):**
@@ -218,7 +218,7 @@ Concierge code is **unchanged** (record-only). Today the concierge's `inventory`
 - F-05a-2 / F-04-2: Lifecycle status checks nothing and logs nothing. Always tell the user to write form 8.1 first, and Active only from a "now clear" Issues row.
 - F-05a-3 / F-05a-4: Adjust quantity does not stop at zero; always write a note.
 - F-05a-5 / F-05a-7: never advise **Destruction**, **Recall removal** or **Receive (add)** as adjustment reasons, even though the Issues text suggests the first.
-- F-05a-8: the register sells expired lots; the store rule (until Q-05a-1) is pull and quarantine.
+- F-05a-8: ~~the register sells expired lots~~ FIXED (Phase 1.6b, G-24): expired edibles, liquid edibles, tinctures, capsules and RSO are refused with no override; other expired items need **I told the customer**; the draw is FEFO; a nightly job quarantines the hard-block lots.
 - F-05a-9: an 86 comes back on its own while units are on file.
 - F-05a-16: a recall hold does not hide the website card; advise **Always hide** on Product Enrichment.
 - Never tell anyone to destroy recalled product before the LCB is notified and the destruction is coordinated (WAC 314-55-225(3)(b)(i)(B)).
@@ -248,7 +248,7 @@ The concierge code is **unchanged** (record-only). Today the `inventory` topic (
 - F-05b-12: on a cost-unknown lot, the floor is not enforced. **Nobody saves a price until the manifest cost is entered** (D49).
 - F-05b-14: a manager can press merch **Remove**, but must not. Owner and admin only (D47). Suggest **Hide**.
 - F-05b-15: non-cannabis keypad sales post no cost of goods; do not quote a non-cannabis margin from the books as true.
-- Expiry (SOP-05a v1.2, D44): expired edibles, liquid edibles, tinctures, capsules **and RSO** are never sold. RSO shows as *Concentrate for Inhalation* in CCRS, so answer by product name and category too (F-05a-20).
+- Expiry (SOP-05a v1.8, D36, D44): expired edibles, liquid edibles, tinctures, capsules **and RSO** are never sold; the register refuses them (G-24 BUILT). RSO shows as *Concentrate for Inhalation* in CCRS; the app catches it by category and name (F-05a-20 FIXED).
 - The 86 is never done on Publish Menu (SOP-05a §4.12).
 
 **Future features (D41/D42):** when G-29…G-32 and G-30A are built (all **APPROVED**, D45–D49; G-29 widened to menu, books and reports), the topics above are updated in the same slice as the SOP (charter rules 9–10).
@@ -360,6 +360,9 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | Does a destruction have to be on camera? | **Yes** (D64; WAC 314-55-083(3)(a)). Check the camera records before starting (§4.17) | Built (Phase 1.6a, G-43): **Camera** with start and end time (Pacific) is required to complete and shows on the printable **Destruction log** (§4.18) |
 | What goes on the destruction record? | Form 8.3 plus the screen fields; both facility and destination; camera (§4.18) | Same, plus required witness, camera reference, approval reference, printable destruction log, optional photo (G-43) |
 | Can we use a waste contractor? | Only with **prior written LCB approval** filed with form 8.3 (§4.17) | The app asks for the approval reference and date (G-43) |
+| Can I sell an expired gummy / tincture / capsule / RSO? | Built (Phase 1.6b, G-24; D36, D44): **No.** The register refuses it with no override and it is left off the register menu. Set the expired lot to **Quarantine**; the nightly job does this at 4:20 AM; then the fresh stock sells (SOP-05a §4.16) | Same |
+| Can I sell expired flower / pre-rolls / vapes / other concentrates? | Built (Phase 1.6b, G-24; D36): only after telling the customer and ticking **I told the customer** (register payment screen or the order page); the sale is noted on the order (SOP-05a §4.16) | Same |
+| Which lot does a sale draw from? | Built (Phase 1.6b, G-24): soonest-expiring first (FEFO), then oldest received (SOP-05a §4.16) | Same |
 | How long is the hold? Is it the law? | The law has **no** hold; the store setting is **0 h** (D67, §4.27) | Default 0 in the code and the panel says so (G-50 APPROVED) |
 | Why does the hold-not-elapsed time look wrong? | It is in the server's clock; use the event's time (F-15-5) | All times in Pacific (G-43) |
 | The lot I need is not in the list | Active and Quarantine lots are listed; Recalled lots never (§4.21, vendor return) | Built (Phase 1.3, G-28) |
