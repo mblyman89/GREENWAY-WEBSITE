@@ -103,6 +103,8 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 **Code:** `/admin/inventory/disposition` (return-to-vendor, scheduled destruction with hold timer + quarantine, CCRS "Destruction" adjustment, sale-correction export), `docs/RETURNS_DESTRUCTION_COMPLIANCE.md`, WAC 314-55-097, CCRS adjustment/transfer files (CCRS bible required reading).
 **WRITTEN (slice SOP-15, v1.0, verified at `b8101abb`):** `docs/sop/SOP-15-returns-vendor-destruction.md`. Covers customer-return disposition (quarantine bin → Destroy / Restock / Return to vendor), vendor returns, scheduled destruction with the 72-hour hold, recall coordination and cancel/status restore, per owner D62 ("We will rarely use these features, but they are necessary for our industry so we must have them and do them properly and accurately."). **Verdict after audit:** the disposition screens exist, but a vendor return reduces on-hand when logged, before any manifest (F-15-1, S1), and a Destroy return is put into an Active, sellable lot (F-15-6, S1). 18 findings (F-15-1…F-15-17, F-15-C); gaps G-42…G-49 proposed, G-28 extended; open questions Q-15-1…Q-15-6. Paper interim: forms 8.1–8.6.
 
+**v1.1 (slice SOP-08, owner answers D63–D68):** vendor returns follow the state's CCRS manifest method (Greenway files Manifest.CSV as origin; logged at departure); anyone may witness, always on camera; recalls are returned to the vendor, never destroyed by us; the back-office wizard is to be removed; the hold is set to 0 h (no legal hold); samples audited end to end: everything matches the owner's rules except the register and menu exclusion (F-15-20 **S1**, G-51); the legacy Sample-pricing panel is dead and approved for removal (G-47). New findings F-15-18…F-15-21; gaps G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51.
+
 ### SOP-16 · CCRS Reporting & Uploads
 **Audience:** owner/manager · **Requested:** "Sop for CCRS uploads."
 **Code (≈38k lines):** `/admin/compliance/ccrs` (+ records, file), `/compliance/health`, `/compliance/regulatory`, `src/lib/compliance/ccrs-*`. **Mandatory:** read `docs/ccrs-bible/00,01,05,04,09` first. Every CCRS statement in the SOP is pinned `[G L####]`, per the binding CCRS rules.
@@ -143,7 +145,7 @@ Order principle: **highest owner priority + highest money/license risk first**, 
 | **SOP-05a** | Inventory Core: lots, holds, labels, labs, expiry | Follows intake downstream; split per D35 | L · **DONE** (draft v1.1) |
 | **SOP-05b** | Non-Cannabis, Merch, Menu Publishing & Classification | Second half of SOP-05 (D35) | L · **DONE** (draft v1.0) |
 | **SOP-06** | Cycle Counts, Audits & Daily Checklists | Depends on SOP-05 vocabulary | M · **DONE** (draft v1.1) |
-| **SOP-15** | Returns to Vendor & Destruction | Inventory exit, license-critical | M · **DONE** (draft v1.0) |
+| **SOP-15** | Returns to Vendor & Destruction | Inventory exit, license-critical | M · **DONE** (draft v1.1; D63–D68 applied in slice SOP-08) |
 | **SOP-16** | CCRS Uploads | License-critical; closes the inventory compliance loop | L |
 | **SOP-13** | Online Orders | Daily floor operation | L |
 | **SOP-14** | Leafly Integration | Pairs with online orders | XL (79k) |
