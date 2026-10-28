@@ -88,7 +88,7 @@ export async function loadIntelLots(): Promise<IntelLot[]> {
       .order("lot_id", { ascending: true })
       .range(from, to);
     return (data as { lot_id: string; updated_at: string }[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   countedP.catch(() => undefined); // awaited below
   const rows = await rowsP;
   if (rows.length === 0) return [];
@@ -137,7 +137,7 @@ export async function loadIntelAdjustments(days = 30): Promise<IntelAdjustment[]
       .order("id", { ascending: true })
       .range(from, to);
     return (data as AdjRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   return rows.map((a) => ({
     lotId: a.lot_id,
     qtyDelta: Number(a.qty_delta) || 0,

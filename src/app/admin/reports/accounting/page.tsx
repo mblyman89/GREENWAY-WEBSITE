@@ -83,11 +83,14 @@ export default async function AccountingPage({
   const range = resolveRange(sp);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
 
-  const settings = await getAccountingSettings();
-  const built = isSupabaseServiceConfigured ? await buildSage50Journal(range.fromISO, range.toISO) : null;
-  const uploads = await listSageUploads(25);
-  const chatHistory = await getSageChatHistory(40);
-  const [sageAccounts, sageExportSettings, categoryMapEntries, unmappedCategories] = await Promise.all([
+  // PERF2 round 4: the settings, journal, uploads and chat history used to be
+  // read one after another before this wave even started; all independent,
+  // so they now join it.
+  const [settings, built, uploads, chatHistory, sageAccounts, sageExportSettings, categoryMapEntries, unmappedCategories] = await Promise.all([
+    getAccountingSettings(),
+    isSupabaseServiceConfigured ? buildSage50Journal(range.fromISO, range.toISO) : Promise.resolve(null),
+    listSageUploads(25),
+    getSageChatHistory(40),
     getSageCategoryAccounts(),
     getSageExportSettings(),
     listSageCategoryMapEntries(),

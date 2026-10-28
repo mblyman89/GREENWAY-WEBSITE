@@ -25,7 +25,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
@@ -95,17 +96,10 @@ export async function getAccountingSettings(): Promise<AccountingSettings> {
 async function buildCategoryAndCostLookup(admin: ReturnType<typeof createSupabaseAdminClient>) {
   // category lookup
   const catLookup = new Map<string, string>();
-  // S-7: page past the PostgREST per-response row cap.
-  type MenuRow = { source_item_id: string; category: string | null };
-  const menuRows = await pagedAll<MenuRow>(async (from, to) => {
-    const { data } = await admin
-      .from("menu_items")
-      .select("source_item_id, category, created_at")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as MenuRow[] | null) ?? [];
-  });
+  // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
+  // per product instead of every snapshot ever written; same "newest wins"
+  // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
+  const menuRows = [...(await loadLatestMenuFacts(admin)).values()];
   for (const r of menuRows) {
     if (!r.source_item_id || catLookup.has(r.source_item_id)) continue;
     catLookup.set(r.source_item_id, r.category?.trim() || "");
@@ -119,7 +113,7 @@ async function buildCategoryAndCostLookup(admin: ReturnType<typeof createSupabas
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LotCostRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   const num = new Map<string, number>();
   const den = new Map<string, number>();
   const simpleSum = new Map<string, number>();
@@ -200,7 +194,7 @@ export async function buildSage50Journal(fromISO: string, toISO: string): Promis
       .order("id", { ascending: true })
       .range(from, to);
     return (data as Sage50OrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   const completed = orders.filter((o) => o.status === "completed");
   if (completed.length === 0) {
     warnings.push("No completed orders in the selected range.");
@@ -225,7 +219,7 @@ export async function buildSage50Journal(fromISO: string, toISO: string): Promis
       .order("id", { ascending: true })
       .range(from, to);
     return (data as Sage50LineRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   // Accumulate per day.
   const byDay = new Map<string, DayJournalSummary>();

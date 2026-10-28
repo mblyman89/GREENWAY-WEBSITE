@@ -107,10 +107,13 @@ export default async function ExcisePage({
   const month = Number(sp.month) >= 1 && Number(sp.month) <= 12 ? Number(sp.month) : defMonth;
   const year = Number(sp.year) >= 2014 ? Number(sp.year) : defYear;
 
-  const resolved = isSupabaseServiceConfigured ? await resolveExciseReturn(month, year) : null;
+  // PERF2 round 4: the return and the batch history are read together.
+  const [resolved, batches] = await Promise.all([
+    isSupabaseServiceConfigured ? resolveExciseReturn(month, year) : Promise.resolve(null),
+    listExciseReturnBatches(12),
+  ]);
   const data = resolved?.data ?? null;
   const draft = resolved?.draft ?? null;
-  const batches = await listExciseReturnBatches(12);
 
   const years = [defYear + 1, defYear, defYear - 1, defYear - 2];
   const qs = `month=${month}&year=${year}`;

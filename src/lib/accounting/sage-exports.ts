@@ -18,7 +18,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll, pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll, pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
@@ -185,17 +186,10 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 /** menu source_item_id → category (newest wins), same pattern as sage50.ts. */
 async function buildCategoryLookup(admin: Admin): Promise<Map<string, string>> {
   const catLookup = new Map<string, string>();
-  // S-7: page past the PostgREST per-response row cap.
-  type MenuRow = { source_item_id: string; category: string | null };
-  const rows = await pagedAll<MenuRow>(async (from, to) => {
-    const { data } = await admin
-      .from("menu_items")
-      .select("source_item_id, category, created_at")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as MenuRow[] | null) ?? [];
-  });
+  // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
+  // per product instead of every snapshot ever written; same "newest wins"
+  // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
+  const rows = [...(await loadLatestMenuFacts(admin)).values()];
   for (const r of rows) {
     if (!r.source_item_id || catLookup.has(r.source_item_id)) continue;
     catLookup.set(r.source_item_id, r.category?.trim() || "");
@@ -214,7 +208,7 @@ async function buildCostLookup(admin: Admin): Promise<Map<string, number>> {
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LotCostRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   const num = new Map<string, number>();
   const den = new Map<string, number>();
   const simpleSum = new Map<string, number>();
@@ -321,7 +315,7 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
       .order("id", { ascending: true })
       .range(from, to);
     return (data as SageOrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   const completed = ordersAll.filter((o) => o.status === "completed");
   if (completed.length === 0) {
     empty.warnings.push("No completed orders in the selected range.");
@@ -348,7 +342,7 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
         .order("id", { ascending: true })
         .range(from, to);
       return (data as SageLineRow[] | null) ?? [];
-    },
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY },
   );
 
   const unmapped = new Set<string>();
@@ -462,7 +456,7 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
       .order("id", { ascending: true })
       .range(from, to);
     return (data as ManifestRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   // R50 S2a (§1.4): Cultivera migration stock is opening inventory, never a
   // purchase. Filtered in code (the export is fully paged) so the count of
   // what was left out can be printed: never a silent skip (rule 48).
@@ -487,7 +481,7 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
         .order("id", { ascending: true })
         .range(from, to);
       return (data as ManifestLotRow[] | null) ?? [];
-    },
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY },
   );
   const lotsByManifest = new Map<string, { product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]>();
   for (const l of lotsData) {
@@ -584,7 +578,7 @@ export async function buildSagePaymentsExport(fromISO: string, toISO: string): P
       .order("id", { ascending: true })
       .range(from, to);
     return (data as PaymentRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   if (rows.length === 0) {
     empty.warnings.push("No vendor payments in the selected range.");
     return empty;
@@ -656,7 +650,7 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
       .order("id", { ascending: true })
       .range(from, to);
     return (data as AdjRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   // R50 S11: the Oct 30 count's adjustments on migration stock are opening inventory (§1.4), left out
   // in code (the read is fully paged) and counted in a warning line.
   const countSkipped = adjustmentsAll.filter(isMigrationCountAdjustment).length;
@@ -679,7 +673,7 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
       .order("id", { ascending: true })
       .range(from, to);
     return (data as AdjLotRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   const lotById = new Map(lotsData.map((l) => [l.id, l]));
 
   const unmapped = new Set<string>();

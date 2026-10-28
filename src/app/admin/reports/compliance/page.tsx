@@ -50,14 +50,40 @@ export default async function CompliancePage({
   const range = resolveRange(sp);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
 
-  const license = await getCcrsLicenseSettings();
-  const preview = isSupabaseServiceConfigured
-    ? await buildCcrsSaleCsv(range.fromISO, range.toISO)
-    : null;
-  const adjPreview = isSupabaseServiceConfigured
-    ? await buildCcrsInventoryAdjustmentCsv(range.fromISO, range.toISO)
-    : null;
-  const batch = isSupabaseServiceConfigured ? await buildCcrsBatch(range.fromISO, range.toISO) : null;
+  // PERF2 round 4: these five reads used to run one after another (the sale
+  // and adjustment previews, the full batch, the recent exports and the
+  // monthly strip), so the tab took the SUM of them. They are independent, so
+  // they now run together; each answer is exactly what it was before.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [license, preview, adjPreview, batch, recentBatches, filing] = await Promise.all([
+    getCcrsLicenseSettings(),
+    isSupabaseServiceConfigured ? buildCcrsSaleCsv(range.fromISO, range.toISO) : Promise.resolve(null),
+    isSupabaseServiceConfigured
+      ? buildCcrsInventoryAdjustmentCsv(range.fromISO, range.toISO)
+      : Promise.resolve(null),
+    isSupabaseServiceConfigured ? buildCcrsBatch(range.fromISO, range.toISO) : Promise.resolve(null),
+    // Recent export batches.
+    (async () => {
+      let rows: { file_name: string; record_count: number; created_at: string }[] = [];
+      if (isSupabaseServiceConfigured) {
+        try {
+          const admin = createSupabaseAdminClient();
+          const { data } = await admin
+            .from("ccrs_export_batches")
+            .select("file_name, record_count, created_at")
+            .order("created_at", { ascending: false })
+            .limit(8);
+          rows = (data as typeof rows | null) ?? [];
+        } catch {
+          /* ignore */
+        }
+      }
+      return rows;
+    })(),
+    // Slice 106: monthly LIQ-1295 reporting-deadline overview (due the 20th of the
+    // following month). "Filed" is inferred from a full-month export on record.
+    getCcrsFilingOverview(todayIso, { lookbackMonths: 3 }),
+  ]);
   // Slice 95: fold the structural dry-run (verifyCcrsBatch) into the on-screen
   // report so the UI is as trustworthy as the downloaded README — a structural
   // problem (bad header, NumberRecords mismatch, invalid enum) shows as a
@@ -87,26 +113,6 @@ export default async function CompliancePage({
   // R74 S39: held-back records are left out of the files and never block the upload.
   const batchHeld = verdict?.held ?? [];
 
-  // Recent export batches.
-  let recentBatches: { file_name: string; record_count: number; created_at: string }[] = [];
-  if (isSupabaseServiceConfigured) {
-    try {
-      const admin = createSupabaseAdminClient();
-      const { data } = await admin
-        .from("ccrs_export_batches")
-        .select("file_name, record_count, created_at")
-        .order("created_at", { ascending: false })
-        .limit(8);
-      recentBatches = (data as typeof recentBatches | null) ?? [];
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // Slice 106: monthly LIQ-1295 reporting-deadline overview (due the 20th of the
-  // following month). "Filed" is inferred from a full-month export on record.
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3 });
   const deadlineTone =
     filing.mostUrgent?.status === "overdue"
       ? "red"

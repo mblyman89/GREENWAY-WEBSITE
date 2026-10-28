@@ -114,8 +114,11 @@ export async function getWorkQueueInputs(): Promise<WorkQueueInputs> {
       ),
       countHeldLots().catch(zero),
       countCatalogDrafts().then((c) => c.draft, zero),
-      listPurchaseOrders().then((pos) => pos.filter((p) => ["draft", "submitted"].includes(p.status)).length, zero),
-      listSuggestions({ status: "pending" }).then((rows) => rows.length, zero),
+      // PERF2 round 4: these two used to pull EVERY purchase order / pending
+      // suggestion (select *) only to count them. Head counts return the same
+      // numbers without shipping any rows.
+      countRows("purchase_orders", (q) => q.in("status", ["draft", "submitted"])).catch(zero),
+      countRows("product_master_suggestions", (q) => q.eq("status", "pending")).catch(zero),
     ]);
   inputs.awaitingIntake = awaitingIntake;
   inputs.overdueInTransit = overdueInTransit;
@@ -124,6 +127,18 @@ export async function getWorkQueueInputs(): Promise<WorkQueueInputs> {
   inputs.posToSend = posToSend;
   inputs.masteringSuggestions = masteringSuggestions;
   return inputs;
+}
+
+/** Head-only count with a filter; throws on error so the caller's `zero` applies. */
+async function countRows(
+  table: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  filter: (q: any) => any,
+): Promise<number> {
+  const admin = createSupabaseAdminClient();
+  const { count, error } = await filter(admin.from(table).select("id", { count: "exact", head: true }));
+  if (error) throw error;
+  return count ?? 0;
 }
 
 /** Accepted-but-quarantined lots (Slice-107 activation gate). */

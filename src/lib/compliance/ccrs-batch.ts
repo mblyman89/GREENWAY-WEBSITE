@@ -56,7 +56,7 @@ import {
   type CcrsIssueRow,
 } from "@/lib/compliance/ccrs-preflight-core";
 import { ccrsInventoryCreatedDate } from "@/lib/inventory/received-date-core";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import {
   enrichLotWithholdReason,
   keysNeedingMenuLookup,
@@ -1170,6 +1170,43 @@ export async function buildCcrsBatch(
 
   const admin = createSupabaseAdminClient();
 
+  // PERF2 round 4: the reads below used to run strictly one after another
+  // (~15 round trips in series on every CCRS page load). The ones that do not
+  // depend on each other now START here, together; each is still awaited at
+  // the exact point its answer was used before, so the plan, the files and
+  // every error/warning are unchanged. `.catch(() => {})` only marks them
+  // observed (a failure still throws where it is awaited, as before).
+  const early = <T,>(p: Promise<T>): Promise<T> => {
+    p.catch(() => {});
+    return p;
+  };
+  const eventFilesP = early(
+    Promise.all([buildCcrsInventoryAdjustmentCsv(fromISO, toISO), buildCcrsSaleCsv(fromISO, toISO)]),
+  );
+  const returnsReadP = early(readReturnsForCorrections(admin, fromISO, toISO));
+  const cleanupP = early(readCleanupList(admin));
+  const transferReadP = early(readTransferLots(admin, pacificDayKey(toISO)));
+  const liveLotsP = early(
+    // SLICE 2: paged. `.limit(5000)` did NOT raise the PostgREST 1,000-row cap,
+    // so with 4,179 lots the Inventory.csv filed with the WA LCB contained the
+    // first 1,000 lots and silently omitted the rest. That is an incomplete
+    // state traceability filing, which is why this is fixed in the same slice
+    // as the received date. (Selecting `received_on` for CreatedDate.)
+    // PERF2 round 4: pages in waves (same rows, same order, fewer round trips).
+    pagedAll<LotRow>(
+      async (from, to) => {
+        const { data } = await admin
+          .from("inventory_lots")
+          .select(LOT_COLUMNS)
+          .neq("status", "destroyed")
+          .order("id", { ascending: true })
+          .range(from, to);
+        return (data as LotRow[] | null) ?? [];
+      },
+      { concurrency: ADMIN_PAGED_CONCURRENCY },
+    ),
+  );
+
   // --- Master data (published menu + inventory lots) ------------------------
   const versionId = await getPublishedVersionId(admin);
   let items: MenuItemRow[] = [];
@@ -1191,7 +1228,7 @@ export async function buildCcrsBatch(
         .range(from, to);
       if (error) throw new Error(`R74 S39: reading the published menu for CCRS failed: ${error.message}`);
       return (data as MenuItemRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   } else {
     syncIssues.push({
       severity: "warning",
@@ -1201,20 +1238,8 @@ export async function buildCcrsBatch(
   }
   const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
 
-  // SLICE 2: paged. `.limit(5000)` did NOT raise the PostgREST 1,000-row cap,
-  // so with 4,179 lots the Inventory.csv filed with the WA LCB contained the
-  // first 1,000 lots and silently omitted the rest. That is an incomplete
-  // state traceability filing, which is why this is fixed in the same slice
-  // as the received date. (Selecting `received_on` for CreatedDate.)
-  const liveLots = await pagedAll<LotRow>(async (from, to) => {
-    const { data } = await admin
-      .from("inventory_lots")
-      .select(LOT_COLUMNS)
-      .neq("status", "destroyed")
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as LotRow[] | null) ?? [];
-  });
+  // SLICE 2 (paged live lots): started above, in parallel with the menu read.
+  const liveLots = await liveLotsP;
 
   // --- Event files first (R5-1) ---------------------------------------------
   // Adjustment + Sale are built BEFORE the ledger slice so the lots their rows
@@ -1225,13 +1250,10 @@ export async function buildCcrsBatch(
   // reported the inventory in an inventory.CSV" [G L1302-L1304]. The examiner's
   // own method is an Inventory Update to zero plus the adjustment [EXAM L0430].
   // So every destroyed lot an event row of THIS batch names is reported too.
-  const [adj, sale] = await Promise.all([
-    buildCcrsInventoryAdjustmentCsv(fromISO, toISO),
-    buildCcrsSaleCsv(fromISO, toISO),
-  ]);
+  const [adj, sale] = await eventFilesP;
   // R5-1: the customer returns whose Sale corrections this batch may carry.
   // Read BEFORE the destroyed-lot lookup: a correction row names its lot too.
-  const returnsRead = await readReturnsForCorrections(admin, fromISO, toISO);
+  const returnsRead = await returnsReadP;
   const liveIds = new Set(liveLots.map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x));
   const destroyedRefs = [
     ...new Set([
@@ -1350,7 +1372,7 @@ export async function buildCcrsBatch(
   // and products on the owner's clean-up list (E58) are withheld with every
   // lot that would name them; a reserved strain (E11) or a duplicated ledger
   // id (E59) holds only its own lots. Nothing here blocks the batch.
-  const cleanup = await readCleanupList(admin);
+  const cleanup = await cleanupP;
   const cleanupKeys = new Map(cleanup.items.map((c) => [c.key, c]));
   const productHolds = new Map<string, ProductHold>(productBuild.holds);
   for (const c of cleanup.items) productHolds.set(c.key, { reason: "on the CCRS clean-up list (removed from CCRS reporting by the owner)", cleanup: true });
@@ -1540,7 +1562,8 @@ export async function buildCcrsBatch(
   // InventoryTransfer for Licensee" [G L1190]).
   const fromDay = pacificDayKey(fromISO);
   const toDay = pacificDayKey(toISO);
-  const transferRead = await readTransferLots(admin, toDay);
+  // PERF2 round 4: started at the top (see `transferReadP`), same arguments.
+  const transferRead = await transferReadP;
   let transferRows: string[][] = [];
   const transferWarnings: string[] = [];
   if (transferRead.kind === "absent") {

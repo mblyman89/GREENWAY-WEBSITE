@@ -31,7 +31,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
@@ -153,26 +154,10 @@ async function buildProductLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Map<string, ProductMeta>> {
   const lookup = new Map<string, ProductMeta>();
-  // S-7: page past the PostgREST per-response row cap.
-  type MenuRow = {
-    source_item_id: string;
-    category: string | null;
-    pos_inventory_type: string | null;
-    pos_inventory_category: string | null;
-    vendor_name: string | null;
-    brand_name: string | null;
-  };
-  const rows = await pagedAll<MenuRow>(async (from, to) => {
-    const { data } = await admin
-      .from("menu_items")
-      .select(
-        "source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as MenuRow[] | null) ?? [];
-  });
+  // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
+  // per product instead of every snapshot ever written; same "newest wins"
+  // rule, original full walk as the automatic fallback.
+  const rows = [...(await loadLatestMenuFacts(admin)).values()];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     // Detailed POS type mirrors the Sales report: prefer pos_inventory_type, then
@@ -310,27 +295,26 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   if (!isSupabaseServiceConfigured) return { ...EMPTY_COGS_REPORT };
   const admin = createSupabaseAdminClient();
 
+  // PERF2 round 4: the three reads below do not depend on each other, so they
+  // now run side by side instead of one after another (lots, then the menu
+  // lookup, then orders). Each read is unchanged.
+  //
   // Lots (active inventory for valuation + cost map across all statuses for
   // COGS). S-7: paged — the old .limit(50000) was still capped at the
   // PostgREST per-response max (default 1000), silently dropping lot costs.
-  const lots = await pagedAll<LotRow>(async (from, to) => {
+  const lotsP = pagedAll<LotRow>(async (from, to) => {
     const { data } = await admin
       .from("inventory_lots")
       .select("pos_product_key, product_name, received_qty, on_hand_qty, unit_cost_minor_units, expires_on, status, id")
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LotRow[] | null) ?? [];
-  });
-
-  const costMap = buildCostMap(lots);
-  const lookup = await buildProductLookup(admin);
-
-  // Diagnostics for $0-COGS lines.
-  const missingMap = new Map<string, { name: string; units: number; revenue: number; reason: string }>();
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
+  const lookupP = buildProductLookup(admin);
 
   // Orders in range (completed only — revenue-basis). S-7: paged for complete busy ranges.
   type CogsOrderRow = { id: string; status: string; placed_at: string };
-  const orders = await pagedAll<CogsOrderRow>(async (from, to) => {
+  const ordersP = pagedAll<CogsOrderRow>(async (from, to) => {
     const { data } = await admin
       .from("orders")
       .select("id, status, placed_at")
@@ -339,7 +323,13 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
       .order("id", { ascending: true })
       .range(from, to);
     return (data as CogsOrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
+  const [lots, lookup, orders] = await Promise.all([lotsP, lookupP, ordersP]);
+
+  const costMap = buildCostMap(lots);
+
+  // Diagnostics for $0-COGS lines.
+  const missingMap = new Map<string, { name: string; units: number; revenue: number; reason: string }>();
   const validOrderIds = orders.filter((o) => isRevenueOrder(o.status)).map((o) => o.id);
 
   const byCategory = new Map<string, Acc>();
@@ -369,7 +359,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
         .order("id", { ascending: true })
         .range(from, to);
       return (data as CogsLineRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
     for (const l of lines) {
       const qty = l.quantity ?? 0;

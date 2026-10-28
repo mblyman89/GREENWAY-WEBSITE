@@ -24,8 +24,8 @@ export type SetupCheck = {
 };
 
 /**
- * Probe whether a table exists & is reachable by attempting a tiny count.
- * Returns the row count, or null if the table is missing / unreachable.
+ * Probe whether a table exists & is reachable by reading at most one row.
+ * Returns 0/1 ("has at least one row"), or null if missing / unreachable.
  */
 async function probeCount(
   table: string,
@@ -33,14 +33,18 @@ async function probeCount(
   if (!isSupabaseServiceConfigured) return { exists: false, count: null };
   try {
     const admin = createSupabaseAdminClient();
-    const { count, error } = await admin
-      .from(table)
-      .select("*", { count: "exact", head: true });
+    // PERF2 round 4: this used to be `count: "exact"` over the WHOLE table on
+    // every /admin load — and menu_items keeps every published snapshot, so
+    // the cockpit paid for a full scan just to learn "is it there / is it
+    // non-empty". Both callers only ever need exists + (count > 0), so a
+    // one-row read answers the same question in constant time. `count` is
+    // therefore 0 or 1 (an "at least" figure), never a total.
+    const { data, error } = await admin.from(table).select("id").limit(1);
     if (error) {
       // Table missing (42P01) or RLS/permission issue — treat as "not set up".
       return { exists: false, count: null };
     }
-    return { exists: true, count: count ?? 0 };
+    return { exists: true, count: data?.length ?? 0 };
   } catch {
     return { exists: false, count: null };
   }

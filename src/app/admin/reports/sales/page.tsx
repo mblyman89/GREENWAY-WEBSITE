@@ -91,9 +91,11 @@ export default async function SalesReportPage({
     );
   }
 
+  // PERF2 round 4: the report and the category labels are read together.
+  const categoryLabelP = getCategoryLabeler();
   const report = await getSalesReport(range.fromISO, range.toISO);
   // SLICE 78: owner's live category labels (renames at Settings → Types show here).
-  const categoryLabel = await getCategoryLabeler();
+  const categoryLabel = await categoryLabelP;
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
 
   if (!report.hasData) {

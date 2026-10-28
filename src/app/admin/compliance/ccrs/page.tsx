@@ -206,14 +206,54 @@ export default async function CcrsCommandCenterPage({
   const envQ = env === "preprod" ? "&env=preprod" : "";
 
   // ── Weekly deadline picture ────────────────────────────────────────────────
-  const overview = await getWeeklyOverview({ lookbackWeeks: 6 });
+  // PERF2 round 4: this page used to make ~15 reads ONE AFTER ANOTHER, so its
+  // load time was the SUM of all of them. Every read that does not depend on
+  // the selected week now starts at once (one wave); the week-dependent batch
+  // build and the medical evidence scan then run side by side. Same reads, same
+  // answers, same failure behaviour (any throw still fails the page as before).
   // S-12d: first day of sales + dismissals (fails safe: empty = nags as before).
-  const obligationCtx = await getObligationContext();
-  // S-17d: the integrator hand-over plan (first upload date, overlap and lateness warnings).
-  const handoverFacts = await getHandoverFacts();
+  const obligationCtxP = getObligationContext();
+  const admin0 = isSupabaseServiceConfigured ? createSupabaseAdminClient() : null;
+  const [
+    overview,
+    obligationCtx,
+    handoverFacts,
+    waiverHistory,
+    ledger,
+    license,
+    ccrsFiles,
+    owed,
+    ccrsMail,
+    scoreboard,
+    migrationGarbage,
+    endorsement,
+    filing,
+  ] = await Promise.all([
+    getWeeklyOverview({ lookbackWeeks: 6 }),
+    obligationCtxP,
+    // S-17d: the integrator hand-over plan (first upload date, overlap and lateness warnings).
+    getHandoverFacts(),
+    isSupabaseServiceConfigured ? listRecentWaivers(20) : Promise.resolve([]),
+    isSupabaseServiceConfigured ? listWeekSubmissions(12) : Promise.resolve([]),
+    getCcrsLicenseSettings(),
+    admin0
+      ? listCcrsFiles(admin0, env)
+      : Promise.resolve({ available: false, files: [], issues: [], error: null }),
+    // R74 S39: every record an earlier upload held back and still owes CCRS.
+    admin0 ? readOwed(admin0, env) : Promise.resolve({ available: false, rows: [], error: null }),
+    // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
+    listRecentCcrsMail(25),
+    // R74 S48: the PREprod test scoreboard (what was tested, what passed, what remains).
+    admin0
+      ? readCcrsScoreboard(admin0, "preprod")
+      : Promise.resolve({ available: false as const, message: "database not configured" }),
+    // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
+    (async () => (isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null))(),
+    getEndorsementConfig(),
+    // Monthly LIQ-1295 strip.
+    obligationCtxP.then((ctx) => getCcrsFilingOverview(todayIso, { lookbackMonths: 2, ctx })),
+  ]);
   const handoverPlan = planHandover({ greenwayFirstSaleDate: obligationCtx.startDate, facts: handoverFacts, todayIso });
-  const waiverHistory = isSupabaseServiceConfigured ? await listRecentWaivers(20) : [];
-  const ledger = isSupabaseServiceConfigured ? await listWeekSubmissions(12) : [];
 
   // Selected week: explicit ?week= → most urgent unresolved → last completed.
   const requested = sp.week ? weekFromKey(sp.week) : null;
@@ -229,75 +269,13 @@ export default async function CcrsCommandCenterPage({
   const ledgerRow = ledger.find((r) => r.week_key === week.key) ?? null;
 
   // ── Batch + authoritative gate for the selected week ──────────────────────
-  const license = await getCcrsLicenseSettings();
   const range = resolveRange({ from: week.start, to: week.end });
-  const batch = isSupabaseServiceConfigured
-    ? await buildCcrsBatch(range.fromISO, range.toISO, { env })
-    : null;
-  const verification = batch
-    ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
-    : null;
-  const verdict = batch
-    ? assertCcrsBatchSubmittable({
-        syncIssues: batch.syncIssues.map(toGateInput),
-        verifierProblems: (verification?.problems ?? []).map((p) => ({
-          severity: p.severity,
-          file: String(p.file),
-          message: p.message,
-        })),
-        files: batch.files.map((f) => ({ type: f.type, warnings: f.warnings, empty: f.empty })),
-        classifyWarning,
-      })
-    : null;
-  const submittable = verdict?.submittable ?? false;
-  const errors = verdict?.errors ?? [];
-  const warnings = verdict?.warnings ?? [];
-  // R74 S39: records left out of the files (still owed) never block the good rows.
-  const held = verdict?.held ?? [];
-  const totalRecords = batch?.totalRecords ?? 0;
-  const nothingToReport = totalRecords === 0 && errors.length === 0;
-  const qs = `from=${week.start}&to=${week.end}${envQ}`;
-  const ccrsFiles = isSupabaseServiceConfigured
-    ? await listCcrsFiles(createSupabaseAdminClient(), env)
-    : { available: false, files: [], issues: [], error: null };
-  // R74 S39: every record an earlier upload held back and still owes CCRS.
-  const owed = isSupabaseServiceConfigured
-    ? await readOwed(createSupabaseAdminClient(), env)
-    : { available: false, rows: [], error: null };
-  const owedWeeks = owedByWeek(owed.rows);
-  // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
-  const ccrsMail = await listRecentCcrsMail(25);
-  // R74 S48: the PREprod test scoreboard (what was tested, what passed, what remains).
-  const scoreboard = isSupabaseServiceConfigured
-    ? await readCcrsScoreboard(createSupabaseAdminClient(), "preprod")
-    : { available: false as const, message: "database not configured" };
-  const mailCfg = mailConfigFromEnv(process.env);
-  const mailSetup = mailCfg.configured
-    ? { configured: true as const, mode: mailCfg.mode, mailbox: mailCfg.mailbox }
-    : { configured: false as const, mailbox: mailCfg.mailbox, missing: mailCfg.missing, problem: mailCfg.problem };
-  // S-18b: a strategy report for every open error email, from the CSVs CCRS attached.
-  // The week stays a placeholder in the examiner draft: an error file does not say which week it answers.
-  const ccrsMailRows = ccrsMail.rows.map((r) => ({
-    ...r,
-    // R74 S47: a body-only "has not been processed" email (whole file refused, no CSV).
-    notProcessed: r.kind === "unknown" && r.state === "new" ? parseNotProcessed(r.body_text ?? "") : [],
-    strategy:
-      r.kind === "error" && r.state === "new"
-        ? buildCcrsStrategy(errorsFromStored(r.csvs ?? []), {
-            licenseNumber: license.licenseNumber || "(license not set)",
-            licenseeName: license.submittedBy || "Greenway Marijuana",
-            contactEmail: mailCfg.mailbox,
-          })
-        : null,
-  }));
-  // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
-  const migrationGarbage = isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null;
+  const batchP = isSupabaseServiceConfigured
+    ? buildCcrsBatch(range.fromISO, range.toISO, { env })
+    : Promise.resolve(null);
 
-  // ── DOH / medical evidence for the week ────────────────────────────────────
+  // ── DOH / medical evidence for the week (runs alongside the batch build) ──
   const EXEMPT_SCAN_MAX_ROWS = 100_000;
-  const endorsement = await getEndorsementConfig();
-  let medicalExemptCount = 0;
-  let medicalExemptMinor = 0;
   // SLICE 5B: this is the WAC 314-55-090(2) excise-exemption evidence (5-year
   // retention duty), and it sat EXACTLY on PostgREST's 1,000-row cap — the one
   // value where `.limit(1000)` looks deliberate but silently becomes a ceiling
@@ -305,8 +283,9 @@ export default async function CcrsCommandCenterPage({
   // excise with no visible sign. Paged completely, and when the read cannot be
   // proven complete the panel says so instead of showing a confident wrong
   // total.
-  let medicalExemptComplete = true;
-  if (isSupabaseServiceConfigured) {
+  const medicalP = (async (): Promise<{ count: number; minor: number; complete: boolean }> => {
+    let medicalExemptComplete = true;
+    if (!isSupabaseServiceConfigured) return { count: 0, minor: 0, complete: medicalExemptComplete };
     try {
       const admin = createSupabaseAdminClient();
       type ExemptRow = {
@@ -330,13 +309,65 @@ export default async function CcrsCommandCenterPage({
         { maxRows: EXEMPT_SCAN_MAX_ROWS },
       );
       medicalExemptComplete = verdict.complete;
-      medicalExemptCount = rows.length;
-      medicalExemptMinor = rows.reduce((a, r) => a + (r.excise_amount_exempt_minor ?? 0), 0);
+      return {
+        count: rows.length,
+        minor: rows.reduce((a, r) => a + (r.excise_amount_exempt_minor ?? 0), 0),
+        complete: medicalExemptComplete,
+      };
     } catch {
       /* evidence panel is best-effort */
       medicalExemptComplete = false;
+      return { count: 0, minor: 0, complete: medicalExemptComplete };
     }
-  }
+  })();
+  const [batch, medical] = await Promise.all([batchP, medicalP]);
+  const medicalExemptCount = medical.count;
+  const medicalExemptMinor = medical.minor;
+  const medicalExemptComplete = medical.complete;
+  const verification = batch
+    ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
+    : null;
+  const verdict = batch
+    ? assertCcrsBatchSubmittable({
+        syncIssues: batch.syncIssues.map(toGateInput),
+        verifierProblems: (verification?.problems ?? []).map((p) => ({
+          severity: p.severity,
+          file: String(p.file),
+          message: p.message,
+        })),
+        files: batch.files.map((f) => ({ type: f.type, warnings: f.warnings, empty: f.empty })),
+        classifyWarning,
+      })
+    : null;
+  const submittable = verdict?.submittable ?? false;
+  const errors = verdict?.errors ?? [];
+  const warnings = verdict?.warnings ?? [];
+  // R74 S39: records left out of the files (still owed) never block the good rows.
+  const held = verdict?.held ?? [];
+  const totalRecords = batch?.totalRecords ?? 0;
+  const nothingToReport = totalRecords === 0 && errors.length === 0;
+  const qs = `from=${week.start}&to=${week.end}${envQ}`;
+  const owedWeeks = owedByWeek(owed.rows);
+  const mailCfg = mailConfigFromEnv(process.env);
+  const mailSetup = mailCfg.configured
+    ? { configured: true as const, mode: mailCfg.mode, mailbox: mailCfg.mailbox }
+    : { configured: false as const, mailbox: mailCfg.mailbox, missing: mailCfg.missing, problem: mailCfg.problem };
+  // S-18b: a strategy report for every open error email, from the CSVs CCRS attached.
+  // The week stays a placeholder in the examiner draft: an error file does not say which week it answers.
+  const ccrsMailRows = ccrsMail.rows.map((r) => ({
+    ...r,
+    // R74 S47: a body-only "has not been processed" email (whole file refused, no CSV).
+    notProcessed: r.kind === "unknown" && r.state === "new" ? parseNotProcessed(r.body_text ?? "") : [],
+    strategy:
+      r.kind === "error" && r.state === "new"
+        ? buildCcrsStrategy(errorsFromStored(r.csvs ?? []), {
+            licenseNumber: license.licenseNumber || "(license not set)",
+            licenseeName: license.submittedBy || "Greenway Marijuana",
+            contactEmail: mailCfg.mailbox,
+          })
+        : null,
+  }));
+
   const medicalSaleRows = batch
     ? (() => {
         const sale = batch.files.find((f) => f.type === "Sale");
@@ -346,9 +377,6 @@ export default async function CcrsCommandCenterPage({
         return (sale.csv.match(/RecreationalMedical/g) ?? []).length;
       })()
     : 0;
-
-  // ── Monthly LIQ-1295 strip ─────────────────────────────────────────────────
-  const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 2, ctx: obligationCtx });
 
   // ── Banner tone ────────────────────────────────────────────────────────────
   const urgent = overview.mostUrgent;

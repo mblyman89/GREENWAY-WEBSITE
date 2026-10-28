@@ -36,7 +36,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 // SLICE 3 doctrine: PostgREST silently truncates at db.max_rows (1,000), so
 // every multi-key read goes through the chunked+paged helper.
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 
 /** The four enforcement flags as stored on a menu row. */
@@ -142,7 +142,11 @@ export async function getMenuClassificationFlags(
         }
         return (data as MenuFlagRow[] | null) ?? [];
       },
-      { chunkSize: 300 },
+      // PERF2 round 4: /admin/inventory hands this every lot key (~4,000), so
+      // these chunks were ~14 strictly-serial round trips. Disjoint keys and a
+      // Map-folded result (chunkedIn keeps chunk order anyway), so overlapping
+      // them is safe and bounded - the same choice SLICE D made for overrides.
+      { chunkSize: 300, concurrency: MENU_READ_CONCURRENCY },
     );
     if (failed) return out;
 

@@ -282,7 +282,9 @@ describe("wiring", () => {
   it("the batch builds the file instead of emitting it empty", () => {
     expect(batch).not.toContain("This file is intentionally empty.");
     expect(batch).toContain('push("InventoryTransfer", transferRows, transferWarnings);');
-    expect(batch).toContain("const transferRead = await readTransferLots(admin, toDay);");
+    // PERF2 round 4: the read starts early (in parallel) with the same toDay.
+    expect(batch).toContain("const transferReadP = early(readTransferLots(admin, pacificDayKey(toISO)));");
+    expect(batch).toContain("const transferRead = await transferReadP;");
     expect(batch).toContain('.eq("disposition", "accepted")');
     expect(batch).toContain("isCultivera: lotFlaggedCultivera(r, migration),");
     expect(batch).toContain('catchUp: env === "prod" && held !== null && notBefore !== null,');

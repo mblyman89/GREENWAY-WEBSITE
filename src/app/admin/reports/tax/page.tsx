@@ -101,9 +101,11 @@ export default async function TaxReportPage({
     );
   }
 
+  // PERF2 round 4: the report and the category labels are read together.
+  const categoryLabelP = getCategoryLabeler();
   const report = await getWaTaxReport(range.fromISO, range.toISO);
   // SLICE 78: owner's live category labels (renames at Settings → Types show here).
-  const categoryLabel = await getCategoryLabeler();
+  const categoryLabel = await categoryLabelP;
   const catColumns = catColumnsFor(categoryLabel);
   const nonCannabisCatColumns = nonCannabisCatColumnsFor(categoryLabel);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
