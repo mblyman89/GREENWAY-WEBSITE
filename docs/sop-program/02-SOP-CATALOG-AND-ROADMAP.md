@@ -62,6 +62,7 @@ Every SOP below is mapped to the **real code** it will be verified against. Code
 **Audience:** all floor staff (counting), owner (create/approve) · **Requested:** "Checklists for daily tasks like cycle counts I initiate via the inventory audit feature."
 **Code (≈13.5k lines):** `/admin/inventory/audits/**` (owner: `inventory.audit`), `/admin/inventory/cycle-counts/**` (staff: `inventory.count`, a blind sheet with no cost/variance), export route, migrations 0191/0192. Owner decisions books-23 (verbatim in `roles.ts`).
 **Recon verdict:** audits + blind counts **EXIST**. A daily-task checklist **MISSING** (F-00-9).
+**WRITTEN (slice SOP-06, v1.0, verified at `c976c7e4`):** `docs/sop/SOP-06-cycle-counts-audits-daily-checklists.md`. Audience per owner D50–D51: Inventory Audits **owner only**; Cycle Counts and daily checklists **every employee** (admin, manager, budtender). **Verdict after audit:** the planner, blind sheet, review, approval and posting exist, but **no screen pushes an audit to Cycle Counts** (F-06-1, S1), sales between creation and count are subtracted twice (F-06-7, S1), re-scans become second counts (F-06-5b) and a disagreeing second count does not block (F-06-13, S1). Paper interim and paper daily checklists shipped. 16 findings, gaps G-33…G-39, questions Q-06-1…Q-06-8.
 
 ### SOP-07 · Store Cleaning & Facility Schedule
 **Audience:** all staff · **Requested:** "cleaning schedules, including dusting products and such."
