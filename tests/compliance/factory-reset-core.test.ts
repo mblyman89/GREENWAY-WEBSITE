@@ -1343,7 +1343,9 @@ describe("D-65 — the connections survive the reset", () => {
     // R74 S41: +1 KEEP ai_batch_events (0299).
     // Register S3: +1 KEEP pos_cart_adjustments (0301).
     // Register S5: +1 KEEP employee_product_loans (0302).
-    expect(plan.keep.length).toBe(178);
+    // Fix Phase 1.6c (G-25): +3 KEEP recall_events, recall_event_lots,
+    // recall_event_weekly (0311; the recall log).
+    expect(plan.keep.length).toBe(181);
     expect(plan.wipe.length).toBe(139);
   });
 

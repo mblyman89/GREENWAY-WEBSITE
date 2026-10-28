@@ -429,6 +429,13 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "safe_counts", disposition: "WIPE", because: "Safe counts recorded while testing cash handling." },
   { table: "safe_swaps", disposition: "WIPE", because: "Test till/safe swaps." },
   { table: "employee_product_loans", disposition: "KEEP", because: "Employee pay-later product loans (who owes what, and the signed payroll-deduction acknowledgement) — a wage-deduction record kept like payroll." },
+  // Fix Phase 1.6c (G-25): the recall log (0311). KEEP like the audit log:
+  // WAC 314-55-225(3)(f) tracking and the LCB contact are compliance
+  // records. recall_event_lots.lot_id carries no FK to inventory_lots
+  // (WIPE), so no kept row points at a wiped one.
+  { table: "recall_events", disposition: "KEEP", because: "The recall and market-withdrawal log (notice, LCB notification, close-out) \u2014 a compliance record kept like the audit log." },
+  { table: "recall_event_lots", disposition: "KEEP", because: "Which lots each recall event covered. Kept with the recall log; the lot id is a plain id (no link), so after a wipe it simply shows as an id." },
+  { table: "recall_event_weekly", disposition: "KEEP", because: "The weekly recall tracking rows reported to the LCB \u2014 kept with the recall log." },
   { table: "pos_cart_adjustments", disposition: "KEEP", because: "The register minus / remove / cancel trail (who reduced which cart, when) — an anti-abuse audit record kept like the audit log." },
   { table: "registers", disposition: "KEEP", because: "Your physical registers. Hardware you own; deleting them would stop the POS from opening." },
   { table: "pos_devices", disposition: "KEEP", because: "The tablets and terminals you have paired." },

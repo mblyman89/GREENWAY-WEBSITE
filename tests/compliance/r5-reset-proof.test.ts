@@ -191,8 +191,10 @@ describe("guard: every table the rehearsal code WRITES is wiped, or deliberately
     // Register S3: pos_cart_adjustments (0301) is KEEP, written by sync-store.
     // Register S5: employee_product_loans (0302) is KEEP (wage-deduction record).
     // Fix Phase 0.2 (G-47): sample_settings is no longer written (legacy panel removed).
+    // Fix Phase 1.6c (G-25): recall_events / recall_event_lots / recall_event_weekly
+    // (0311) are KEEP (the recall log), written by recall-event-store.
     "audit_logs", "brands", "disposition_settings", "employee_product_loans", "intake_merge_decisions", "inventory_expiry_rules", "inventory_types",
-    "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_cart_adjustments", "pos_devices", "product_classification_overrides", "site_settings",
+    "kb_products", "kb_strains", "lookup_job_items", "lookup_jobs", "pos_cart_adjustments", "pos_devices", "product_classification_overrides", "recall_event_lots", "recall_event_weekly", "recall_events", "site_settings",
     "testing_labs", "vendor_aliases", "vendors", "website_category_types",
   ];
   function written(): Map<string, string> {

@@ -14,6 +14,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/orders/types";
 import {
   normalizeRecallPlan,
@@ -126,7 +127,7 @@ export async function getRecallEvent(
   const [lotsRes, weeklyRes] = await Promise.all([
     admin
       .from("recall_event_lots")
-      .select("id, lot_id, on_hand_at_add, previous_status, added_at, lot:inventory_lots ( id, product_name, lot_code, status, on_hand_qty, pos_product_key )")
+      .select("id, lot_id, on_hand_at_add, previous_status, added_at")
       .eq("event_id", id)
       .order("added_at", { ascending: true }),
     admin
@@ -135,9 +136,24 @@ export async function getRecallEvent(
       .eq("event_id", id)
       .order("week_of", { ascending: true }),
   ]);
-  const lots = ((lotsRes.data as unknown as (Omit<RecallEventLotRow, "lot"> & { lot: RecallEventLotRow["lot"] | RecallEventLotRow["lot"][] })[] | null) ?? []).map(
-    (r) => ({ ...r, lot: Array.isArray(r.lot) ? (r.lot[0] ?? null) : r.lot }),
-  );
+  // recall_event_lots.lot_id has no foreign key (the log is kept by the
+  // factory reset, inventory_lots is not), so the lots are read by id.
+  const links = (lotsRes.data as Omit<RecallEventLotRow, "lot">[] | null) ?? [];
+  type LotInfo = NonNullable<RecallEventLotRow["lot"]>;
+  const lotRows = links.length
+    ? await chunkedIn(links.map((l) => l.lot_id), async (chunk, from, to) => {
+        const { data: d, error: e } = await admin
+          .from("inventory_lots")
+          .select("id, product_name, lot_code, status, on_hand_qty, pos_product_key")
+          .in("id", chunk)
+          .order("id")
+          .range(from, to);
+        if (e) throw new Error(e.message);
+        return (d as LotInfo[] | null) ?? [];
+      }).catch(() => [] as LotInfo[])
+    : [];
+  const byId = new Map(lotRows.map((l) => [l.id, l]));
+  const lots: RecallEventLotRow[] = links.map((r) => ({ ...r, lot: byId.get(r.lot_id) ?? null }));
   return { event: data as RecallEventRow, lots, weekly: (weeklyRes.data as RecallWeeklyRow[] | null) ?? [] };
 }
 
@@ -348,13 +364,19 @@ export async function listOpenOrderLines(): Promise<OpenOrderFacts[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("orders")
-      .select("id, order_number, customer_first_name, lines:order_lines ( product_id, variant_id, product_name )")
-      .in("status", ACTIVE_ORDER_STATUSES as string[])
-      .order("placed_at", { ascending: true })
-      .limit(1000);
-    if (error || !data) return [];
+    // Every open order, paged (PostgREST caps a single read at 1000 rows).
+    // A failed page throws and the catch below returns [] (best-effort).
+    const data = await pagedAll(async (from, to) => {
+      const { data: page, error } = await admin
+        .from("orders")
+        .select("id, order_number, customer_first_name, lines:order_lines ( product_id, variant_id, product_name )")
+        .in("status", ACTIVE_ORDER_STATUSES as string[])
+        .order("placed_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) throw new Error(error.message);
+      return (page ?? []) as unknown[];
+    });
     return (
       data as unknown as {
         id: string;
