@@ -40,6 +40,7 @@ import {
   updateHireInfoAction,
   setStatusAction,
 } from "./actions";
+import { pinAllowedForStatus } from "@/lib/staffing/candidate-start-core";
 import { updateEmployeeAction } from "../../actions";
 import { backHref } from "@/lib/admin/back-link-core";
 
@@ -65,6 +66,9 @@ export default async function EmployeeFilePage({
   // SLICE 94: only owner/admin (settings.manage) may see the banking badge —
   // managers who run staffing never learn whether/where an employee is paid.
   const canSeeVault = can(session.profile.role, "settings.manage");
+  // Phase 0.3 (G-59, D74): Activate, Terminate and Rehire are owner and admin
+  // only ("No manager access."). Managers keep everything else on the file.
+  const canLifecycle = can(session.profile.role, "staffing.lifecycle");
   const { id } = await params;
   const sp = await searchParams;
 
@@ -211,7 +215,7 @@ export default async function EmployeeFilePage({
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {status === "candidate" && migrationApplied && (
+              {status === "candidate" && migrationApplied && canLifecycle && (
                 <form action={setStatusAction}>
                   <input type="hidden" name="employee_id" value={employee.id} />
                   <input type="hidden" name="to" value="onboarding" />
@@ -220,7 +224,7 @@ export default async function EmployeeFilePage({
                   </Button>
                 </form>
               )}
-              {status === "onboarding" && migrationApplied && (
+              {status === "onboarding" && migrationApplied && canLifecycle && (
                 <form action={setStatusAction}>
                   <input type="hidden" name="employee_id" value={employee.id} />
                   <input type="hidden" name="to" value="active" />
@@ -229,7 +233,7 @@ export default async function EmployeeFilePage({
                   </Button>
                 </form>
               )}
-              {status === "terminated" && migrationApplied && (
+              {status === "terminated" && migrationApplied && canLifecycle && (
                 <form action={setStatusAction}>
                   <input type="hidden" name="employee_id" value={employee.id} />
                   <input type="hidden" name="to" value="onboarding" />
@@ -237,6 +241,11 @@ export default async function EmployeeFilePage({
                     Rehire (restart onboarding)
                   </Button>
                 </form>
+              )}
+              {migrationApplied && !canLifecycle && (
+                <span className="text-xs text-white/50">
+                  Activate, Terminate and Rehire: owner or admin only.
+                </span>
               )}
             </div>
           </div>
@@ -282,7 +291,7 @@ export default async function EmployeeFilePage({
           {/* Left 2/3: checklist + documents + training */}
           <div className="space-y-6 lg:col-span-2">
             {/* Onboarding checklist */}
-            {migrationApplied && status !== "terminated" && (
+            {migrationApplied && status !== "terminated" && canLifecycle && (
               <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
                 <h3 className="text-sm font-semibold text-white">Onboarding checklist</h3>
                 <p className="mt-1 text-xs text-white/50">
@@ -556,13 +565,22 @@ export default async function EmployeeFilePage({
                 </Field>
                 <Field
                   label="New clock PIN"
-                  help="4–6 digits. Leave blank to keep the current PIN."
+                  help={
+                    pinAllowedForStatus(employee.employment_status ?? null, employee.active === true)
+                      ? "4–6 digits. Leave blank to keep the current PIN."
+                      : "Locked until this person is Active (owner or admin activates them)."
+                  }
                 >
                   <Input
                     name="clock_pin"
                     inputMode="numeric"
                     pattern="\d{4,6}"
-                    placeholder="unchanged"
+                    placeholder={
+                      pinAllowedForStatus(employee.employment_status ?? null, employee.active === true)
+                        ? "unchanged"
+                        : "locked until Active"
+                    }
+                    disabled={!pinAllowedForStatus(employee.employment_status ?? null, employee.active === true)}
                     autoComplete="off"
                   />
                 </Field>

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; draft for owner review) |
+| **Version** | 1.2 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; Phase 0.3 fix G-52 + G-59 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Employees** (`/admin/staffing/employees` and each employee file): owner, admin and manager (`staffing.manage`). **Users** (`/admin/users`): owner and admin (`users.manage`). **Time Clock** (`/admin/staffing`, `/admin/staffing/clock`): every role with `timeclock.use` (owner, admin, manager, budtender). The new hire takes part in onboarding (I-9 Section 1, handbook, training, badge photo). |
@@ -15,8 +15,8 @@
 
 > **How to use this document.** Part 1 (§4.1–§4.4) explains the two identity systems: the **employee file** (a person who works here, with a time-clock PIN) and the **user** (a back-office sign-in). Part 2 (§4.5–§4.14) is **onboarding**, in the legal order. Part 3 (§4.15–§4.19) is **system management**: PINs, roles, the handbook gate, changes while employed. Part 4 (§4.20–§4.24) is **offboarding** and rehire. Section 8 has the paper forms and Section 9 the quick cards.
 
-> **The one thing to know before anything else.** Three things do **not** work the way the screens suggest, and each has an interim rule in this SOP:
-> 1. **"Add to roster" creates the person as ACTIVE, not as a candidate** (`staffing/actions.ts` L132–137; database default `'active'`, migration 0117 L38). The help panel says *"Add them below as a CANDIDATE"* (`employees/page.tsx` L93), but there is no way to do that, and an Active person cannot be moved back to Onboarding (`employee-lifecycle-core.ts` L441–451). **The Activate gate therefore never runs for a new hire.** Interim rule: **never type a PIN when adding a person**. Set the PIN only after every required onboarding step is checked and form 8.1 is signed (§4.6, §4.13). Without a PIN they cannot clock in or unlock a register.
+> **The one thing to know before anything else.** Item 1 below is now fixed; items 2 and 3 still do **not** work the way the screens suggest, and each has an interim rule in this SOP:
+> 1. **Fixed in Phase 0.3 (G-52, G-59):** new people now start as a **Candidate** with **no clock PIN** (`staffing/actions.ts` L119–143; Payroll Setup `payroll-onboarding-store.ts` L1132–1144), so they cannot clock in or unlock a register. The PIN can only be set once the person is **Active** (`staffing/actions.ts` L170–178). Only the **owner or an admin** can press Start onboarding, Activate, Terminate or Rehire (`roles.ts` L265, `[id]/actions.ts` L192). Activate unlocks only when the required steps are done.
 > 2. **The employee file and the user are not connected by the app** (F-08-2). Terminating an employee does **not** deactivate their sign-in, and deactivating a user does **not** clear their PIN. **Offboarding is always both halves** (§4.21, form 8.3).
 > 3. **Checking "Employee read and signed the handbook" does not unlock the register.** The register looks at the **Document tracker** row **Employee handbook acknowledgment = Read & signed** (`handbook-ack-store.ts` L107–118), not at the checklist box (F-08-4). Set both (§4.10).
 
@@ -96,13 +96,13 @@ The employment-law references in the app (WA Fair Chance Act RCW 49.94.010, USCI
 |---|---|---|
 | **Owner** | Owner | Everything. The only role that can grant Owner. Exempt from the handbook gate (`handbook-ack-core.ts` L47, L68) |
 | **Admin** | Admin | Employees (`staffing.manage`, L260) and Users (`users.manage`, L221): invite, change roles up to Admin, deactivate |
-| **Manager** | Manager | Employees only (`staffing.manage`): add people, run the checklists, documents, training, hire info, PINs. **Not Activate, Terminate or Rehire** (owner decision D74; the app still shows those buttons to managers until G-59 is built). **Cannot open Users** |
+| **Manager** | Manager | Employees only (`staffing.manage`): add people, run the checklists, documents, training, hire info, PINs. **Not Start onboarding, Activate, Terminate or Rehire** (owner decision D74; built in Phase 0.3, G-59: the buttons are hidden for managers, who see *"Activate, Terminate and Rehire: owner or admin only."*, and the server refuses them, `[id]/page.tsx` L71, L247; `[id]/actions.ts` L192). PINs only once the person is Active. **Cannot open Users** |
 | **Budtender** | Budtender / Staff | Time clock (`timeclock.use`, L264), Cycle Counts (`inventory.count`), loyalty and customers. No Employees, no Users |
 | **Content editor**, **Read-only** | Content Editor, Read-only / Analyst | No Employees, no Users, no time clock |
 
 **Rules for this SOP:**
 
-1. **Onboarding is prepared by the owner, an admin or a manager, but only the owner or an admin presses Activate, Terminate or Rehire** (D74: *"I would like to modify this to be owner admin only. No manager access."*). The person who presses the button signs form 8.1 or 8.3. Until G-59 is built the app still lets a manager press them: **a manager never does**.
+1. **Onboarding is prepared by the owner, an admin or a manager, but only the owner or an admin presses Activate, Terminate or Rehire** (D74: *"I would like to modify this to be owner admin only. No manager access."*). The person who presses the button signs form 8.1 or 8.3. The app enforces this (permission `staffing.lifecycle` = owner, admin; `roles.ts` L265).
 2. **Only the owner or an admin issues or removes a back-office sign-in** (Users). A manager who must send someone home (for example a dismissal on the spot) **removes nothing**: they call the owner or an admin, who terminates and deactivates the same day (§4.21).
 3. **Nobody changes their own access.** The app enforces this: you cannot change your own role or deactivate yourself (`user-guards-core.ts` L65–67, L96–98).
 4. **Nobody grants a role above their own.** The app enforces this for invites and changes (L43–50), and the last active owner cannot be demoted or deactivated (L73–80, L108–110).
@@ -161,7 +161,7 @@ Greenway's system keeps **two separate records** for people, and the owner decid
 
 Source: `employee-lifecycle-core.ts` L22–36, L441–451; `employee-lifecycle-store.ts` L516–539. Only **Active** sets the file's active flag to true, and the PIN lookup only searches active files (`store.ts` L117–124).
 
-> **Today every new person starts as Active** (F-08-1, **S1**). Candidate and Onboarding are reached only by a rehire (Terminated → Onboarding). Part 2 is written so that the result is the same as the intended gate: **no PIN until the checklist is done**.
+> **Every new person starts as Candidate** (Phase 0.3, G-52; F-08-1 FIXED). Add a person and Payroll Setup both create a Candidate with `active = false` and no PIN. The owner or an admin presses **Start onboarding** (Candidate → Onboarding) and later **Activate employee**, which unlocks only when the required steps are done.
 
 ### 4.4 Which people need which
 
@@ -187,12 +187,12 @@ The employee file's **Onboarding checklist** has 16 steps in four phases (`emplo
 
 ### 4.6 Adding the person (no PIN)
 
-1. Employees → **Employees** → **Add a person**.
+1. Employees → **Employees** → **Add a person**. The card says new hires start as a **Candidate** with no clock PIN (`employees/page.tsx` L189–191).
 2. **Full name**: their full legal name, as on their ID (the badge needs it, WAC 314-55-083(1)).
 3. **Job role**: **sales** for a budtender, **lead**, **manager** or **other** (`employees/page.tsx` L23). The job role decides who may approve register actions (§4.16).
-4. **Clock PIN: leave it blank.** The field says *"4–6 digits (optional)"* (L205). The card above it already says *"Set the PIN later, once they're cleared to work."* (L189–190). Because the person is created Active (F-08-1), a PIN typed here would let them clock in and unlock a register before any check is done.
-5. Press **Add to roster**. The roster shows *"Saved."* and the person appears with the badge **Active**.
-6. Open their file (click the name) and write today's date on **form 8.1**, line "File created".
+4. **Status** shows *"Candidate (no PIN yet)"*. There is no PIN field here any more (`employees/page.tsx` L205–207): the app refuses a PIN on this form (*"New hires start as a Candidate. Set their clock PIN on their file after they are Activated."*, `staffing/actions.ts` L132).
+5. Press **Add to roster**. The roster shows *"Saved."* and the person appears with the badge **Candidate**.
+6. Open their file (click the name) and write today's date on **form 8.1**, line "File created". The **owner or an admin** presses **Start onboarding** (`[id]/page.tsx` L223); a manager sees *"owner or admin only"* instead.
 
 ### 4.7 Hiring steps: offer, background check, age 21
 
@@ -268,12 +268,12 @@ The app records the number only. It does not print badges (Appendix B, G-57).
 Phase **4 · Ready to work**. Do this only when **every required step in phases 1–3 is checked** and the Document tracker shows I-9, W-4 and handbook correctly.
 
 1. The person running onboarding and the new hire sign **form 8.1**.
-2. **Basics → New clock PIN**: let the new hire type a 4–6 digit PIN that **nobody else knows** (§4.15). Press **Save basics**. The roster now shows **PIN set**. Check **Time-clock PIN set**.
+2. The **owner or an admin** presses **Activate employee** (it unlocks only when the required steps are done, `[id]/page.tsx` L228–235; the server re-checks, `employee-lifecycle-store.ts` L500–515). Then **Basics → New clock PIN**: let the new hire type a 4–6 digit PIN that **nobody else knows** (§4.15). Before Activate the field says *"locked until Active"* (`[id]/page.tsx` L581). Press **Save basics**. The roster now shows **PIN set**. Check **Time-clock PIN set**.
 3. **Added to the schedule**: build their first week in Employees → **Schedule**, then check the step.
 4. **Payroll set up** and **Direct deposit offered (or paper check chosen)**: give the paper W-4 and any direct-deposit form to the **owner** (Accounting, D69). Check these steps only when the owner confirms. Direct deposit never blocks starting work; it is the employee's choice (L175–184).
 5. Ask the new hire to unlock a register with their PIN while you watch. If they get the handbook message, recheck §4.10 step 4.
 
-> **When G-52 is built** (new people start as Candidate and the PIN field is locked until Activate), steps 1–2 become: press **Activate employee** (it unlocks only when the required steps are done, `[id]/page.tsx` L223–231), then set the PIN.
+> **Built in Phase 0.3 (G-52).** A PIN typed for someone who is not Active is refused: *"A clock PIN can only be set once this person is Active. An owner or admin activates them after the required steps (21+, background check, training) are done."* (`candidate-start-core.ts`).
 
 ### 4.14 The back-office sign-in (Users), when needed
 
@@ -382,7 +382,9 @@ The app never deletes an employee. Terminated people move to **Former employees*
 
 | Message | Meaning | What to do |
 |---|---|---|
-| *"Saved."* (roster) | The person was added **as Active** | Continue at §4.7; do not set a PIN yet |
+| *"Saved."* (roster) | The person was added **as a Candidate** | Owner or admin presses Start onboarding; continue at §4.7 |
+| *"New hires start as a Candidate. Set their clock PIN on their file after they are Activated."* | A PIN was sent with Add a person | Add them without a PIN |
+| *"A clock PIN can only be set once this person is Active. …"* | PIN typed before Activate | Finish the steps; owner or admin activates; then set the PIN |
 | *"Name is required."* | Full name was blank | Type the full legal name |
 | *"PIN must be 4–6 digits."* | Wrong PIN format | Use 4–6 digits |
 | *"That PIN is already in use."* | Someone else has that PIN | Choose another; if the new hire guessed someone's PIN, that person changes theirs |
@@ -426,7 +428,8 @@ The app never deletes an employee. Terminated people move to **Former employees*
 
 | Control | Why | Source |
 |---|---|---|
-| No PIN until the checklist is signed | A PIN is the key to the clock and the register; the Activate gate does not run for new hires (F-08-1) | `staffing/actions.ts` L132–137; 0117 L38 |
+| No PIN until Active | A PIN is the key to the clock and the register; new hires start as Candidate and the PIN is locked until Activate (Phase 0.3, G-52) | `staffing/actions.ts` L119–178; `candidate-start-core.ts` |
+| Only owner or admin activates, terminates or rehires | Owner decision D74 | `roles.ts` L265; `[id]/actions.ts` L192 |
 | 21+ check by the manager, with the ID in hand | No employees under 21; $1,000 per violation per the app's step text | RCW 69.50.357(2); `employee-lifecycle-core.ts` L91 |
 | Offer before background check | WA Fair Chance Act, as stated in the app | `employee-lifecycle-core.ts` L74–87 |
 | Training logged with date and trainer | All employees trained on rules and under-21 ID; training records kept five years | RCW 69.50.357(3); WAC 314-55-087(1)(e) |
@@ -523,14 +526,14 @@ Print these. File the completed forms in the employee's paper file (five years).
 ### 9.1 Card: new hire (manager)
 
 1. Interview, no criminal-history questions. Then a written offer.
-2. **Add a person**: full legal name and job role. **No PIN.**
+2. **Add a person**: full legal name and job role (they start as Candidate, no PIN). Owner or admin presses **Start onboarding**.
 3. Checklist in order: offer → background check → **21+ ID check**.
 4. I-9 Section 1 (day 1), Section 2 (3 business days), W-4, DSHS report (20 days).
 5. Hire info: hire date, badge number. Save.
 6. Handbook signed → check the box **and** set the Document tracker to **Read & signed**.
 7. Train, **log each topic**, then check both training steps.
 8. Badge with trade name, legal name and photo.
-9. Form 8.1 signed → **then** the employee sets their PIN.
+9. Form 8.1 signed → owner or admin presses **Activate** → **then** the employee sets their PIN.
 10. Schedule. W-4 and direct deposit to the owner. Test the register unlock.
 
 ### 9.2 Card: someone is leaving (manager / admin / owner)
@@ -597,13 +600,13 @@ Print these. File the completed forms in the employee's paper file (five years).
 
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
-| **G-52** | New people start as **Candidate** (Add to roster and Payroll Setup); the PIN field is locked until **Activate**; Activate runs the gate; the help text matches | F-08-1 (**S1**) | No PIN until form 8.1 is signed (§4.6, §4.13) | One thing to know, §4.3, §4.6, §4.13, §5, §9.1 | PROPOSED |
+| **G-52** | New people start as **Candidate** (Add to roster and Payroll Setup); the PIN field is locked until **Activate**; Activate runs the gate; the help text matches | F-08-1 (**S1**) | No PIN until form 8.1 is signed (§4.6, §4.13) | One thing to know, §4.3, §4.6, §4.13, §5, §9.1 | **BUILT** (Phase 0.3) |
 | **G-53** | An owner-set **link** between a user and an employee file (on Users or the file); never creates an employee (books-87); the register then accepts the digital acknowledgment | F-08-2 | Paper handbook route for everyone (§4.10) | §4.1, §4.10, §4.14, §4.21 | APPROVED (D70) |
 | **G-54** | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | F-08-3 | Both halves by hand, form 8.3 (§4.21–§4.22) | §4.21, §4.22, §9.2 | APPROVED (D71) |
 | **G-55** | Checklist ↔ Document tracker kept in step (checking the handbook step sets Read & signed, and so on); Activate also needs the hire date, badge number and a training-log line per required topic; the paper handbook row carries the version | F-08-4, F-08-5 | §4.10 step 4, §4.11 step 3, §4.18 | §4.9–§4.11, §4.18 | PROPOSED |
 | **G-56** | **Rehire** keeps the earlier termination (a history of employment periods) and starts a fresh checklist | F-08-6 | Print the status card first; uncheck everything (§4.24) | §4.24 | PROPOSED |
 | **G-57** | **Visitor log and badges** in the app (WAC 314-55-083(1)(a)–(c)); badge printing for employees | F-08-8 | Forms 8.2, 8.5 (§4.12, §4.19) | §4.12, §4.19 | DEFERRED (D72: paper for now) |
-| **G-59** | **Activate, Terminate and Rehire are owner and admin only** (a new permission, e.g. `staffing.lifecycle`, [owner, admin]); managers keep the rest of the employee file; buttons hidden for managers; server action refuses | (owner decision D74) | §2 rules 1-2 (managers never press them) | §2, §4.13, §4.21, §4.24, card 9.2 | APPROVED (D74) |
+| **G-59** | **Activate, Terminate and Rehire are owner and admin only** (a new permission, e.g. `staffing.lifecycle`, [owner, admin]); managers keep the rest of the employee file; buttons hidden for managers; server action refuses | (owner decision D74) | §2 rules 1-2 (managers never press them) | §2, §4.13, §4.21, §4.24, card 9.2 | **BUILT** (Phase 0.3) |
 | **G-58** | Housekeeping: invite default role the same on screen and server; role descriptions list every permission; job-role changes audited with old and new values | F-08-9, F-08-10 | Form 8.4 (§4.16–§4.17) | §4.16, §4.17 | PROPOSED |
 
 ## Appendix C: Open questions for the owner
@@ -623,4 +626,5 @@ Each has an interim rule in this SOP until the owner answers.
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-28 | First draft, verified against `main@bad718b4`, after the owner asked for this SOP (D69). State texts read: RCW 69.50.357, WAC 314-55-083, WAC 314-55-087. Findings F-08-1…F-08-10 and F-08-C; gaps G-52…G-58 proposed; questions Q-08-1…Q-08-5. Forms 8.1–8.6, cards 9.1–9.3. Payroll, direct deposit and the Lyman menu are pointers only (D69). No code changed | SOP program |
+| 1.2 | Fix phase | Phase 0.3 (owner D76). G-52 BUILT: Add a person and Payroll Setup create a **Candidate** (`active = false`, no PIN); a PIN can be set only once Active (server check); roster PIN field removed. G-59 BUILT: new permission `staffing.lifecycle` (owner, admin) on Start onboarding, Activate, Terminate and Rehire; buttons hidden for managers. Payroll roster still lists candidates and onboarding people (migration 0306). "One thing to know", §2, §4.3, §4.6, §4.13, §5, §7, card 9.1 and Appendix B updated. F-08-1 FIXED. | Fix program |
 | 1.1 | 2026-10-28 | Owner answers Q-08-1...Q-08-5 applied (D70-D74): G-53 and G-54 APPROVED; visitor log stays on paper (G-57 DEFERRED); every employee gets a sign-in; Activate, Terminate and Rehire are owner and admin only (§2, §6; new G-59). The SOP Library page (Employee -> SOP Library) now shows every SOP. | SOP program |

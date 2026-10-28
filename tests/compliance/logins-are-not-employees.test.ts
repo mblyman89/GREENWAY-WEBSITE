@@ -132,9 +132,10 @@ describe("addPersonToPayroll creates a person, and only a person", () => {
     expect(FN).not.toContain("staff_id");
   });
 
-  it("inserts an active, non-terminated person so they appear on the roster it just filtered", () => {
-    expect(FN).toContain("active: true");
-    expect(FN).toContain('employment_status: "active"');
+  it("inserts a CANDIDATE (Phase 0.3, G-52) who still appears on the payroll roster it just filtered", () => {
+    expect(FN).toContain("active: false");
+    expect(FN).toContain('employment_status: "candidate"');
+    expect(FN).not.toContain("active: true");
   });
 
   it("refuses a blank name, a duplicate, an unconfigured database and a failed write", () => {
@@ -196,7 +197,7 @@ describe("addPersonToPayroll creates a person, and only a person", () => {
     // Otherwise re-hiring someone who left is impossible, and a quarantined
     // 0037 row would block a real person with the same name.
     const dup = FN.slice(0, FN.indexOf('code: "duplicate"'));
-    expect(dup).toContain('.eq("active", true)');
+    expect(dup).toContain(".or(PAYROLL_PEOPLE_OR)");
     expect(dup).toContain('.neq("employment_status", "terminated")');
   });
 });
@@ -215,13 +216,21 @@ describe("the payroll roster and the SQL view state the same rule", () => {
     expect(view).toContain("coalesce(e.employment_status, 'active') <> 'terminated'");
   });
 
+  it("migration 0306 (Phase 0.3, G-52) widens the view to people being hired, never terminated", () => {
+    const m = read("supabase/migrations/0306_payroll_roster_includes_new_hires.sql");
+    expect(m).toContain("create or replace view public.employees_on_payroll");
+    expect(m).toContain("(e.active = true or e.employment_status in ('candidate', 'onboarding'))");
+    expect(m).toContain("coalesce(e.employment_status, 'active') <> 'terminated'");
+    expect(STORE_CODE).toContain('export const PAYROLL_PEOPLE_OR = "active.eq.true,employment_status.in.(candidate,onboarding)"');
+  });
+
   it("listEmployeeSetup applies exactly that filter, in the same two clauses", () => {
     const fn = STORE_CODE.slice(
       STORE_CODE.indexOf("export async function listEmployeeSetup"),
       STORE_CODE.indexOf("export async function", STORE_CODE.indexOf("export async function listEmployeeSetup") + 10),
     );
     expect(fn.length).toBeGreaterThan(200);
-    expect(fn).toContain('.eq("active", true)');
+    expect(fn).toContain(".or(PAYROLL_PEOPLE_OR)");
     expect(fn).toContain('.neq("employment_status", "terminated")');
   });
 });

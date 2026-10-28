@@ -16,6 +16,7 @@ import { isValidPin } from "@/lib/staffing/time";
 import { parsePunchEdit, composeEditNote } from "@/lib/staffing/timeclock-core";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { hashPin } from "@/lib/security/pin-hash";
+import { pinAllowedForStatus, PIN_LOCKED_MESSAGE } from "@/lib/staffing/candidate-start-core";
 import {
   pinPadBlocked,
   notePinFailure,
@@ -120,20 +121,24 @@ export async function createEmployeeAction(formData: FormData): Promise<void> {
   const session = await requirePermission("staffing.manage");
   const fullName = str(formData, "full_name");
   if (!fullName) redirect(`${BASE}/employees?error=` + encodeURIComponent("Name is required."));
-  const pin = str(formData, "clock_pin");
-  if (pin && !isValidPin(pin)) redirect(`${BASE}/employees?error=` + encodeURIComponent("PIN must be 4–6 digits."));
-  // S-10: PINs are stored as salted scrypt hashes, so the old unique index
-  // cannot catch duplicates — check by verification before saving.
-  if (pin) {
-    const holder = await getEmployeeByPin(pin);
-    if (holder) redirect(`${BASE}/employees?error=` + encodeURIComponent("That PIN is already in use."));
+  // Phase 0.3 (G-52, F-08-1): every new hire starts as a CANDIDATE with no
+  // clock PIN and active = false, so nobody can clock in or unlock the
+  // register until an owner or admin clicks Activate (which runs the legal
+  // gates: 21+, background check, training - RCW 69.50.357). The PIN is set
+  // on the employee file once the status is Active.
+  if (str(formData, "clock_pin")) {
+    redirect(
+      `${BASE}/employees?error=` +
+        encodeURIComponent("New hires start as a Candidate. Set their clock PIN on their file after they are Activated."),
+    );
   }
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("employees").insert({
     full_name: fullName,
-    clock_pin: pin ? hashPin(pin) : null,
+    clock_pin: null,
     job_role: str(formData, "job_role") || "sales",
-    active: true,
+    employment_status: "candidate",
+    active: false,
   });
   if (error) {
     const msg = error.code === "23505" ? "That PIN is already in use." : error.message;
@@ -164,6 +169,13 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
   const clearPin = formData.get("clear_pin") === "on";
   if (pin && !isValidPin(pin)) redirect(`${back}?error=` + encodeURIComponent("PIN must be 4–6 digits."));
   if (pin) {
+    // Phase 0.3 (G-52): a PIN can only be set once the person is Active.
+    const adminRead = createSupabaseAdminClient();
+    const { data: cur } = await adminRead.from("employees").select("employment_status, active").eq("id", id).maybeSingle();
+    const curRow = cur as { employment_status?: string | null; active?: boolean } | null;
+    if (!curRow || !pinAllowedForStatus(curRow.employment_status ?? null, curRow.active === true)) {
+      redirect(`${back}?error=` + encodeURIComponent(PIN_LOCKED_MESSAGE));
+    }
     const holder = await getEmployeeByPin(pin);
     if (holder && holder.id !== id) {
       redirect(`${back}?error=` + encodeURIComponent("That PIN is already in use."));
@@ -179,9 +191,8 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
   // Task S-b: `active` is driven by the lifecycle (activate/terminate) on the
   // employee file page. Only legacy forms that still render the checkbox may
   // set it — the file-page basics form omits it entirely.
-  if (formData.has("active")) {
-    update.active = formData.get("active") === "on" || formData.get("active") === "true";
-  }
+  // Phase 0.3 (G-52/G-59): the legacy "active" checkbox is gone. Only the
+  // lifecycle (owner/admin, staffing.lifecycle) may turn someone on or off.
   if (clearPin) update.clock_pin = null;
   else if (pin) update.clock_pin = hashPin(pin);
   const admin = createSupabaseAdminClient();

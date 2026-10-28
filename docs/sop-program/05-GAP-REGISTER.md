@@ -78,14 +78,14 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file; compliance doc's "Returned to seller" citation corrected | (procedure need) | F-15-17, F-15-18 | SOP-15 §4.1, §4.13, §4.27 | PROPOSED |
 | G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
 | G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **BUILT** (Phase 0.2) |
-| G-52 | New people start as **Candidate** (Add to roster and Payroll Setup); PIN locked until **Activate**; Activate runs the gate; help text matches | (procedure need; RCW 69.50.357(2)–(3)) | F-08-1 (**S1**), F-08-7 | SOP-08 §4.6, §4.13 (no PIN until form 8.1 is signed) | PROPOSED |
+| G-52 | New people start as **Candidate** (Add to roster and Payroll Setup); PIN locked until **Activate**; Activate runs the gate; help text matches | (procedure need; RCW 69.50.357(2)–(3)) | F-08-1 (**S1**), F-08-7 | SOP-08 §4.6, §4.13 (no PIN until form 8.1 is signed) | **BUILT** (Phase 0.3) |
 | G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | **APPROVED** (D70) |
 | G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | **APPROVED** (D71) |
 | G-55 | Checklist ↔ Document tracker kept in step; Activate also needs hire date, badge number and a training-log line per required topic; paper handbook row carries the version | (procedure need; WAC 314-55-087(1)(e)) | F-08-4, F-08-5 | SOP-08 §4.10 step 4, §4.11 step 3, §4.18 | PROPOSED |
 | G-56 | **Rehire** keeps the earlier termination (employment periods) and starts a fresh checklist | (procedure need) | F-08-6 | SOP-08 §4.24 (print status card first; uncheck everything) | PROPOSED |
 | G-57 | **Visitor log and badges** in the app; employee badge printing | Q-08-3 (WAC 314-55-083(1)) | F-08-8 | SOP-08 forms 8.2, 8.5 (§4.12, §4.19) | DEFERRED (D72: paper for now) |
 | G-58 | Housekeeping: invite default role the same on screen and server; full role descriptions; job-role changes audited with old and new values | (procedure need) | F-08-9, F-08-10 | SOP-08 form 8.4 (§4.16–§4.17) | PROPOSED |
-| G-59 | **Activate, Terminate and Rehire owner and admin only**: new permission (e.g. `staffing.lifecycle` = [owner, admin]); buttons hidden for managers; server actions refuse | D74 | F-08-1, F-08-3 (context) | SOP-08 v1.1 §2 rules 1–2 (managers never press them) | **APPROVED** |
+| G-59 | **Activate, Terminate and Rehire owner and admin only**: new permission (e.g. `staffing.lifecycle` = [owner, admin]); buttons hidden for managers; server actions refuse | D74 | F-08-1, F-08-3 (context) | SOP-08 v1.1 §2 rules 1–2 (managers never press them) | **BUILT** (Phase 0.3) |
 
 ---
 
@@ -629,7 +629,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   5. The Employee Samples hub stays the only way a sample lot goes down (besides destruction or a count).
 - **Interim:** SOP-15 v1.1 §4.26 (dismiss sample drafts; weekly Samples-only check).
 
-## G-52 · New hires start as Candidate; PIN locked until Activate (PROPOSED, SOP-08) — S1
+## G-52 · New hires start as Candidate; PIN locked until Activate (BUILT, Phase 0.3, SOP-08) — S1
+- **Built (Phase 0.3, D76):** requirements 1–4 met. Both create paths insert Candidate / inactive / no PIN; the roster PIN field is gone; the file's PIN field is disabled and the server refuses a PIN until Active (`src/lib/staffing/candidate-start-core.ts`); Activate still runs `activationBlockers`; the roster shows status badges; Payroll Setup still never sets `staff_id`. The payroll roster (and the `employees_on_payroll` view, migration 0306) now include candidate / onboarding people so W-4 and I-9 can be done during onboarding. Test `tests/compliance/fix-p0-3-candidate-lifecycle.test.ts`.
 - **Owner basis:** the roster help text already promises it (*"Add them below as a CANDIDATE"*, `employees/page.tsx` L93); RCW 69.50.357(2) (no one under 21) and (3) (training).
 - **Today:** F-08-1 (**S1**): Add to roster and Payroll Setup create the person **Active**; the gate runs only on Activate.
 - **Requirements:**
@@ -690,7 +691,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   3. Job-role changes audited with old and new values.
 - **Interim:** SOP-08 form 8.4.
 
-## G-59 · Activate, Terminate and Rehire are owner and admin only (APPROVED, D74, SOP-08) — S2
+## G-59 · Activate, Terminate and Rehire are owner and admin only (BUILT, Phase 0.3, SOP-08) — S2
+- **Built (Phase 0.3, D76):** `staffing.lifecycle` = [owner, admin] in `roles.ts` (labelled, listed); `setStatusAction` requires it for every transition (Start onboarding, Activate, Terminate, Rehire); the file page hides all four controls for managers and shows "owner or admin only". The legacy `active` checkbox path in `updateEmployeeAction` was removed so nobody can bypass the lifecycle. Managers keep the rest of the file.
 - **Owner basis:** D74 (*"I would like to modify this to be owner admin only. No manager access."*).
 - **Today:** the status buttons on the employee file and `setStatus` (`[id]/actions.ts` L190–229) need only `staffing.manage` (owner, admin, manager; `roles.ts` L260).
 - **Requirements:**

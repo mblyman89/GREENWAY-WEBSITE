@@ -186,8 +186,9 @@ export default async function EmployeesPage({
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <h3 className="mb-1 text-sm font-semibold text-white">Add a person</h3>
           <p className="mb-4 text-xs text-white/50">
-            New hires start as a roster row — open their file afterwards to run onboarding. Set the
-            PIN later, once they&apos;re cleared to work.
+            New hires start as a <strong>Candidate</strong> with no clock PIN — they can&apos;t clock in or
+            unlock the register yet. Open their file to run onboarding; an owner or admin clicks Activate
+            once the required steps are done, and then you set their PIN on the file.
           </p>
           <form action={createEmployeeAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Full name" required className="lg:col-span-2">
@@ -202,8 +203,8 @@ export default async function EmployeesPage({
                 ))}
               </Select>
             </Field>
-            <Field label="Clock PIN" help="4–6 digits (optional).">
-              <Input name="clock_pin" inputMode="numeric" pattern="\d{4,6}" placeholder="e.g. 1234" autoComplete="off" />
+            <Field label="Status" help="Clock PIN is set on their file after they are Activated.">
+              <Input value="Candidate (no PIN yet)" disabled readOnly aria-readonly />
             </Field>
             <div className="flex items-end lg:col-span-4">
               <Button type="submit">Add to roster</Button>
