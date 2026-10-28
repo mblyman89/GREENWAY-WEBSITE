@@ -303,7 +303,7 @@ The owner, again: *"make sure the ai concierge is taught all the things we will 
 
 **Additional caveats (v1.1):** never tell anyone that counting in open hours is safe until G-35 ships; never say a second person must recount (D56 withdrew it); a count item on the cockpit does not exist yet (F-06-16).
 
-### SOP-15 Returns to Vendor, Customer-Return Disposition & Product Destruction (`docs/sop/SOP-15-returns-vendor-destruction.md`, verified at `b8101abb`)
+### SOP-15 Returns to Vendor, Customer-Return Disposition & Product Destruction (`docs/sop/SOP-15-returns-vendor-destruction.md`, verified at `b8101abb`; v1.1 in slice SOP-08 at `bad718b4`)
 
 The concierge code is **unchanged** (record-only). Today it has two generic lines: `concierge-kb.ts` L66 (menu list) and L176 (*"Returns & Destruction handles vendor returns and compliant destruction with a quarantine hold, plus sample-pricing rules."*), and the help centre answer at `help-content.ts` L465–467 (*"Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires."*). Neither covers a single step, guard or interim rule (F-15-C). The L176 phrase "plus sample-pricing rules" implies protection that does not exist (F-15-16) and must be reworded at integration.
 
@@ -314,58 +314,66 @@ The owner (D62): *"make sure the ai concierge is taught all the things we will b
 | *new* `customer-return-disposition` (restock / destroy, destroy bin, Sale correction) | §4.4–§4.8, §5.1, forms 8.1, 8.6, §9.1 (register steps stay with SOP-01 §4.23) | 🔴 → ✅ |
 | *new* `vendor-returns` (RMA, CCRS manifest, pickup-day logging, packet) | §4.9–§4.13, §5.2, form 8.2, §9.2 | 🔴 → ✅ |
 | *new* `product-destruction` (schedule, hold, render unusable, record, cancel, partial) | §4.14–§4.20, §4.22, §5.3, forms 8.3, 8.5, §9.3 | 🟡 (one line) → ✅ |
-| *new* `recall-destruction` (WAC 314-55-225 prohibition, admin coordinates) | §4.21, form 8.4; SOP-05a §4.9–§4.13 | 🔴 → ✅ |
+| *new* `recall-return` (v1.1, D65: recalls go back to the vendor, never destroyed by us; officer told at once, WAC 314-55-225) | §4.21, form 8.4; SOP-05a §4.9–§4.13 | 🔴 → ✅ |
+| *new* `trade-samples-off-menu` (v1.1, D68: samples never sold or on the menu; interim weekly check) | §4.26; owner's samples rules | 🔴 → ✅ |
 | *new* `disposition-money-and-tax` (refunds, 50910, excise, write-off) | §4.24, form 8.6 | 🔴 → ✅ (owner only) |
-| `disposition-settings` (hold policy, sample rules) | §4.26–§4.27, §5.4 | 🟡 (misleading) → ✅ |
+| `disposition-settings` (hold policy 0 h; legacy sample panel to be removed) | §4.26–§4.27, §5.4 | 🟡 (misleading) → ✅ |
 | `disposition-advisor` | §4.25 | 🔴 → ✅ |
 
 **Role filter needed:** the Returns & Destruction page and the Returns desk are **owner, admin, manager** (`inventory.manage`); a budtender asking how to destroy or return product to a vendor gets "tell the manager" plus the bin rule, never the screen steps. The hold policy and sample rules are **owner and admin** (`settings.manage`). Recall destruction is the **admin** (coordinator, D37) with the owner. Money, excise and books answers (§4.24, form 8.6) are **owner only** (books-23). Register returns remain open to budtenders with a manager or lead PIN (SOP-01 §4.23).
 
 **Must ship with caveats** until the findings are fixed:
-- F-15-1 (**S1**): **Log a vendor return** removes the stock at once. Always answer "log it only on pickup day, after the LCB confirmed the manifest". Never tell anyone to log it when the RMA arrives.
+- F-15-1 (**S1**): **Log a vendor return** removes the stock at once. Always answer "log it only at departure, when the driver has the printed CCRS manifest PDF" (v1.1, D63). Never tell anyone to log it when the RMA arrives.
 - F-15-2: say that RMA #, Manifest # and Processor license # and Detail are **required by the SOP** although the screen lets them be blank. A recall reason on a vendor return goes to the admin first.
 - F-15-3: the pickup time on form 8.2 is the record; the screen's time has no zone.
-- F-15-4: a destruction needs **two people**; **Witnessed by** must hold both names; **Other method** needs prior written LCB approval; the recall contact date goes on form 8.4.
+- F-15-4, F-15-21: a destruction needs **two people**, and the **witness may be anyone** on staff except the person doing it (D64). It is done **on camera**: note the camera and times. **Witnessed by** holds both names and the camera; **Other method** needs prior written LCB approval.
 - F-15-6 (**S1**): a Destroy return is **counted as sellable** by the app until completed; the unit goes into the sealed destroy bin immediately. Never say "the app quarantines it".
 - F-15-7: any error after pressing a return button means **stop, do not retry, call the owner**.
-- F-15-8: customer returns go through the register or the Returns desk; the back-office wizard is for owner-approved exceptions only.
+- F-15-8: customer returns go through the register or the Returns desk only. The back-office wizard is **not used**: the owner decided to remove it (D66).
 - F-15-10: do not press **Download Sale correction CSV** unless the owner is uploading by hand that day, despite the success message telling you to.
 - F-05a-17/18/19, F-15-9, F-15-11: Recalled or Quarantine lots cannot be picked; **never schedule a recalled lot**; only the owner cancels; after a cancel or a partial destruction restore the earlier status by hand (form 8.5).
 - F-15-12: check the quantity against on-hand before scheduling.
-- F-15-16: the sample-pricing rules do **nothing** at a sale; never say they protect anything.
+- F-15-16: the sample-pricing panel is dead legacy code; never say it protects anything (to be removed, G-47).
+- F-15-20 (**S1**): the app does **not** yet keep samples off the menu or the register. Never say "the system blocks samples". Answer with the owner's rules (D68) and the §4.26 interim check: dismiss sample drafts, and run the weekly Samples-only check.
+- F-15-18, F-15-19: never say the LCB "confirmed" Other for vendor returns (open question U-72), and never cite a 48–72 h lead time or Mon/Wed/Fri confirmation as LCB rules.
 - F-15-15: never say returns reduce the excise return automatically.
-- Law vs policy: the **72-hour hold is store policy, not law** (WSR 22-14-111); never claim a 72-hour LCB notice. The **48–72 h manifest lead time** and **Mon/Wed/Fri confirmation** are LCB practice from the compliance doc; the **recall prohibition** (WAC 314-55-225) and **render unusable ≥50%** (WAC 314-55-097) are law.
+- Law vs policy (v1.1, read from the state texts 2026-10-28): **no legal hold, notice or witness for destruction** (WAC 314-55-097); the store hold is **0 h** (D67); the witness and the camera are store rules (D64), and cameras are also required by WAC 314-55-083(3)(a). **Greenway files the CCRS manifest as origin** and the LCB replies with an automatic email and PDF that travels with the product (WAC 314-55-085; CCRS Manifest User Guide). There is **no LCB lead time**. The **recall prohibition** (WAC 314-55-225), **render unusable ≥50%** (WAC 314-55-097) and **samples may not be sold** (WAC 314-55-096(1)(i)) are law.
 
 #### SOP-15: today vs once built (teach both now, D42 and D62)
 
-The concierge must answer **both** "how does it work today" (interim) and "how will it work" (proposed design, pending owner answers Q-15-1…Q-15-6). When a gap ships, the "today" column is deleted in the same slice (charter rules 9–10).
+The concierge must answer **both** "how does it work today" (interim) and "how will it work" (design; owner answers Q-15-1…Q-15-6 received in slice SOP-08 as D63–D68, so the gaps below are APPROVED). When a gap ships, the "today" column is deleted in the same slice (charter rules 9–10).
 
 | Question staff or the owner will ask | Answer today (interim) | Answer once built (G-nn) |
 |---|---|---|
-| When do I log a vendor return? | **Pickup day only**, after the LCB confirmation email; it takes the stock off at once (§4.11) | Log as soon as the RMA arrives: the units are **held** (not sellable) and come off on-hand, with the CCRS Other, only at **Picked up / in transit** (G-42) |
+| When do I log a vendor return? | **At departure only**, when the driver has the printed CCRS manifest PDF; it takes the stock off at once (§4.11, D63) | Log as soon as the RMA arrives: the units are **held** (not sellable) and come off on-hand, with the CCRS Other, only at **departure** (G-42 APPROVED) |
+| Who files the transport manifest, and how far ahead? | **Greenway**, as the origin: the owner/admin uploads Manifest.CSV to CCRS (driver, vehicle, departure/arrival, lots) and waits for the LCB success email with the PDF. The LCB sets **no** lead time (§4.10) | The app builds the Manifest.CSV from the return for the owner to upload (G-42) |
+| Does the manifest PDF have to go with the product? | **Yes**, printed, with an employee 21+ or a transport licensee; sealed, locked, direct route (WAC 314-55-085; §4.13) | Same |
 | Which fields are required for a vendor return? | All of them by SOP: RMA #, Manifest #, Processor license #, Detail (§4.11) | The app requires RMA and license at logging, manifest number at submit, LCB confirmation date at confirm; vendor pre-filled (G-42) |
 | How do I move the manifest status? | **Advance to** one step at a time; the paper time on form 8.2 is the record (§4.12) | Same buttons, checked in order on the server, each stamped with who and when; pickup in Pacific with driver name (G-42) |
-| Can we send recalled product back to the processor? | Admin first; SOP-05a §4.10; form 8.4 (§4.9 step 5) | The Recall reason is refused until the recall event records the LCB contact (G-42 with G-25) |
+| What do we do with a recall? | It is a **transfer back to the vendor** (D65): admin tells the LCB officer at once, form 8.4, then a vendor return with reason Recall; never destroy it (§4.21) | Recalled lots listed for a vendor return and kept Recalled until departure; Recall needs the officer contact recorded (G-42, G-28) |
 | A customer returned an opened item: what do I do with it? | **Destroy** → sealed destroy bin now → form 8.1 → check the event appeared (§4.7) | **Destroy** → the unit goes to a non-sellable returned bucket automatically; the bin is still used physically (G-44) |
 | Is the destroy-return unit counted as stock? | **Yes**, until the destruction is completed; the bin is the control (F-15-6) | No: never sellable, never on the menu (G-44) |
 | The return showed an error. Did it save? | Stop, do not retry; the stock may have been added; owner (§4.7) | Saves all or nothing; an error means nothing changed, try again (G-44) |
-| Can I use the back-office Customer return? | Owner-approved exceptions only; type the approved refund; no lot picker (§4.6) | It runs the same policy checks and automatic refund; owner override with a written reason; lot picker (G-45) |
+| Can I use the back-office Customer return? | **No.** The owner decided to remove it (D66); use the register or the Returns desk (§4.6) | It is gone (G-45 APPROVED) |
 | Should I download the Sale correction CSV? | **No**, unless the owner uploads by hand that day (§4.8) | The weekly CCRS file sends it; the download checks the ledger (or is gone) (G-45) |
-| Who must be present at a destruction? | Two people; the witness is manager, admin or owner (§2 rule 2, Q-15-2) | The app requires a second named witness from the roster (G-43) |
-| What goes on the destruction record? | Form 8.3 plus the screen fields; both facility and destination (§4.18) | Same, plus required witness, recall contact date, approval reference, printable destruction log, optional photo (G-43) |
+| Who must be present at a destruction? | Two people: the one doing it and a witness, who may be **anyone** on staff (D64) | The app requires a second named witness from the roster (G-43 APPROVED) |
+| Does a destruction have to be on camera? | **Yes** (D64; WAC 314-55-083(3)(a)). Check the camera records; write the camera and times on form 8.3 and in Witnessed by (§4.17–§4.18) | The app requires a camera reference to complete (G-43) |
+| What goes on the destruction record? | Form 8.3 plus the screen fields; both facility and destination; camera (§4.18) | Same, plus required witness, camera reference, approval reference, printable destruction log, optional photo (G-43) |
 | Can we use a waste contractor? | Only with **prior written LCB approval** filed with form 8.3 (§4.17) | The app asks for the approval reference and date (G-43) |
-| How long is the hold? Is it the law? | 72 h store policy, owner/admin setting; **not law** (§4.27) | Same (Q-15-5) |
+| How long is the hold? Is it the law? | The law has **no** hold; the store setting is **0 h** (D67, §4.27) | Default 0 in the code and the panel says so (G-50 APPROVED) |
 | Why does the hold-not-elapsed time look wrong? | It is in the server's clock; use the event's time (F-15-5) | All times in Pacific (G-43) |
 | The lot I need is not in the list | Recalled → §4.21 (admin, paper); Quarantine → §4.22 (owner) | Active, Quarantine and Recalled lots listed; Recalled stays Recalled (G-28) |
-| Can I destroy recalled product in the app? | **No.** Admin coordinates with the LCB officer; form 8.4; done as the officer directs (§4.21) | Yes, only after the admin records officer, contact date and direction; lot stays Recalled until completion (G-28, Q-15-3) |
+| Can I destroy recalled product? | **No, never** (D65). It goes back to the vendor (§4.21) | Same; the app offers recalled lots only for a vendor return (G-28) |
 | Can I cancel a destruction? | Owner only; then restore the earlier status the same minute (form 8.5) (§4.19) | Owner only with a reason; the earlier status is restored automatically (G-28) |
 | I destroyed part of a lot; why is the rest not for sale? | It stays Quarantine; set Active by hand if sellable (§4.20) | The lot returns to its earlier status automatically (G-28) |
 | I scheduled more than we have | Caught only on completion; owner (§4.18) | Refused at scheduling (G-43) |
 | The page just says "qty" | A field was missing; fill it again (§4.15) | A full sentence (G-46) |
-| Do the sample-pricing rules stop sales? | **No**, nothing reads them (§4.26) | Enforced at the register and online, or the panel is removed (G-47, Q-15-6) |
+| Do the sample-pricing rules stop sales? | **No**, it is dead legacy code (§4.26) | Removed (G-47 APPROVED) |
+| Can a sample be sold or show on the menu? | **Never** (law and owner, D68). The app does not block it yet: dismiss any sample draft on Product Onboarding; weekly **Samples only** check on Inventory; tell the owner if a sample lot went down at the register (§4.26) | Sample lots get no draft and are invisible to the register, barcodes and website (G-51 APPROVED) |
+| How are samples given out? | Only on the **Employee Samples** hub (owner/admin), max 30 per employee per quarter; that is when inventory goes down (§4.26) | Same |
 | Do refunds hit the books / excise? (owner) | No journal; excise Box 1 likely not reduced; form 8.6 and the excise override (§4.24) | Daily refund journal to 50910 for approval; Box 1 net of returns (G-48) |
 | Stolen or seized product? | Not a destruction; SOP-20; lot page Other "THEFT:"/"SEIZURE:" (§4.23) | **Theft** / **Seizure** reasons on the lot page (G-23) |
 
-**Future features (D41/D42):** when G-42…G-49, G-28, G-25 or G-23 is built, the topics above and this table are updated in the same slice as SOP-15 (charter rules 9–10), and `concierge-kb.ts` L176 and `help-content.ts` L465–467 are rewritten to match.
+**Future features (D41/D42):** when G-42…G-51, G-28, G-25 or G-23 is built, the topics above and this table are updated in the same slice as SOP-15 (charter rules 9–10), and `concierge-kb.ts` L176 and `help-content.ts` L465–467 are rewritten to match.
 
-**Running score:** topics with complete SOP source material add `customer-return-disposition`, `vendor-returns`, `product-destruction`, `recall-destruction`, `disposition-money-and-tax`, `disposition-advisor`, and complete `disposition-settings`.
+**Running score:** topics with complete SOP source material add `customer-return-disposition`, `vendor-returns`, `product-destruction`, `recall-return`, `trade-samples-off-menu`, `disposition-money-and-tax`, `disposition-advisor`, and complete `disposition-settings`.

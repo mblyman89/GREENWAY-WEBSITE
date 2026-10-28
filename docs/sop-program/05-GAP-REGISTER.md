@@ -4,6 +4,8 @@ Created in slice SOP-01 · 2026-10-27 · Updated in slice SOP-02 · 2026-10-27 �
 
 Updated in slice SOP-15 · 2026-10-28 (D54–D61 → G-33…G-39 APPROVED, new G-40, G-41; SOP-15 gaps G-42…).
 
+Updated in slice SOP-08 · 2026-10-28 (D63–D68 → G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51; SOP-08 gaps G-52…).
+
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
 Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findings that prove them.
@@ -64,14 +66,16 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-39 | Counting housekeeping: one schedule, legacy sessions cancelled, Pacific times | **D58, D59** | F-06-8…F-06-11 | SOP-06 §4.20, §4.22 | **APPROVED** |
 | G-40 | Intelligent cycle counts: vendor of the day with chunking, ABC, exceptions, expiring, Cultivera, overdue | **D58** | F-06-8 | SOP-06 §4.24 | **APPROVED** |
 | G-41 | Annual year-end full count (no cap, sections, one review) | **D58** | — | SOP-06 §4.24 | **APPROVED** |
-| G-42 | Staged vendor return: reserve at logging, reduce and post CCRS Other at pickup; RMA, manifest, license, detail required; vendor linked; server-checked steps with actor; Pacific pickup time; recall reason routed to the coordinator | (compliance: WAC 314-55-079(11), -085, -087; Q-15-1) | F-15-1 (**S1**), F-15-2, F-15-3 | SOP-15 §4.11 (log on pickup day), form 8.2 | PROPOSED |
-| G-43 | Hardened destruction record: witness required (two people), recall contact date required, approval reference for Other method, on-hand checked at scheduling, Pacific times, printable destruction log | (compliance: WAC 314-55-097, -225; Q-15-2) | F-15-4, F-15-5, F-15-12 | SOP-15 §4.17–§4.18, form 8.3 | PROPOSED |
+| G-42 | State-exact vendor return: Greenway files the CCRS manifest as origin (outgoing Manifest.CSV builder); reserve at logging, reduce and post CCRS Other at departure; RMA, manifest, license, detail required; no 48–72 h / Mon-Wed-Fri text; server-checked steps with actor; Pacific times | D63 (compliance: WAC 314-55-079(11), -085; CCRS Manifest User Guide) | F-15-1 (**S1**), F-15-2, F-15-3, F-15-19 | SOP-15 §4.9–§4.13, form 8.2 | **APPROVED** |
+| G-43 | Hardened destruction record: witness required (anyone, not the performer), camera reference, approval reference for Other method, on-hand checked at scheduling, Pacific times, printable destruction log | D64 (WAC 314-55-097, -083(3)(a)) | F-15-4, F-15-5, F-15-12, F-15-21 | SOP-15 §4.17–§4.18, form 8.3 | **APPROVED** |
 | G-44 | Customer-return segregation: destroy-return units never sellable (returned / quarantine bucket); return, add-back and destruction event saved atomically | (procedure need; D62) | F-15-6 (**S1**), F-15-7 | SOP-15 §4.7, form 8.1 | PROPOSED |
-| G-45 | One customer-return path: wizard gets the policy, automatic refund and lot picker (owner override with reason); CSV download checks the ledger or is removed | (owner policy SOP-01 §4.23; Q-15-4) | F-15-8, F-15-10 | SOP-15 §4.4–§4.8 | PROPOSED |
+| G-45 | Remove the back-office Customer return wizard; CSV download checks the ledger or is removed | D66 | F-15-8, F-15-10 | SOP-15 §4.4–§4.8 | **APPROVED** |
 | G-46 | Readable errors on Returns & Destruction (no bare "qty" / "reason") | (procedure need) | F-15-13 | SOP-15 §4.15 | PROPOSED |
-| G-47 | Sample-pricing rules enforced at the register and online, or the panel removed | (Q-15-6) | F-15-16 | SOP-15 §4.26 | PROPOSED |
+| G-47 | Remove the dead legacy Sample-pricing panel (`sample_settings`, `sample-guardrails.ts`), with G-51 | D68 | F-15-16 | SOP-15 §4.26 | **APPROVED** |
 | G-48 | Returns in the books and taxes: refund journal to 50910 for owner approval; excise Box 1 net of returned sales | (books-23; RCW 69.50.535) | F-15-14, F-15-15 | SOP-15 §4.24, form 8.6 | PROPOSED |
-| G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file | (procedure need) | F-15-17 | SOP-15 §4.1, §4.27 | PROPOSED |
+| G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file; compliance doc's "Returned to seller" citation corrected | (procedure need) | F-15-17, F-15-18 | SOP-15 §4.1, §4.13, §4.27 | PROPOSED |
+| G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
+| G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **APPROVED** |
 
 ---
 
@@ -529,7 +533,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** a full-count audit type with no cap; split into counter-sized sections each claimed by one employee (D56); one release, one combined review, one work paper; per-lot capture at first count (G-35) so the store can stay open; the work paper suitable for the accountant (PCAOB AS 2510.11 note on the hub).
 - **Interim:** SOP-06 §4.24 (several audits the same day, outside selling hours).
 
-## G-42 · Staged vendor return with the CCRS manifest workflow enforced (PROPOSED, SOP-15)
+## G-42 · Staged vendor return with the CCRS manifest workflow enforced (APPROVED, D63, SOP-15)
 - **Owner basis:** D62 (*"We will rarely use these features, but they are necessary for our industry so we must have them and do them properly and accurately."*); compliance doc §3 (manifest in the CCRS portal, 48–72 h, LCB confirms Mon/Wed/Fri, do not release before confirmation). Question Q-15-1.
 - **Today:** logging reduces on-hand and posts CCRS **Other** at once (`disposition.ts` L828–837, F-15-1 **S1**); RMA, manifest, license and detail optional; vendor never linked (F-15-2); no server step check, no actor, pickup without a zone (F-15-3).
 - **Requirements:**
@@ -541,8 +545,9 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. Reason **Recall** is refused unless the lot's recall event (G-25) records the coordinator's LCB contact.
   7. Printable vendor-return packet (form 8.2 in the app); tests for every step.
 - **Interim:** SOP-15 §4.9–§4.13 (log only on pickup day), form 8.2.
+- **v1.1 update (D63, owner: *"I want to follow the states requirements."*):** the state's method replaces the compliance-doc checklist. (8) **Greenway is the origin** and files Manifest.CSV (file name `manifest_413541_…`, OriginLicenseNumber 413541; driver, vehicle, TransportationType, estimated departure and arrival, one row per lot with its CCRS InventoryExternalIdentifier). The app **builds the file** from the return for the owner to upload. (9) The steps are renamed **Manifest uploaded** and **LCB success email and PDF received**. (10) The 48–72 h and Mon/Wed/Fri lines are removed (F-15-19). (11) The reduction posts at **departure**, and the CCRS **Other** detail names the processor, manifest and RMA. (12) Reason **Recall** lists Recalled lots and keeps them Recalled until departure (D65). (13) The encoding stays **Other** until the examiner answers U-72. Interim: SOP-15 v1.1 §4.10–§4.11 (log at departure).
 
-## G-43 · Hardened destruction record and printable log (PROPOSED, SOP-15)
+## G-43 · Hardened destruction record and printable log (APPROVED, D64, SOP-15)
 - **Owner basis:** D62; WAC 314-55-097 records (compliance doc §5.3); WAC 314-55-225. Question Q-15-2.
 - **Today:** witness optional, recall contact date optional, no approval reference for **Other method** (F-15-4); server-locale hold message (F-15-5); no on-hand check at scheduling (F-15-12).
 - **Requirements:**
@@ -554,6 +559,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. A printable **Destruction log** per event and per month (what, when, method, mix, destination, facility, witness, who), kept five years.
   7. Optional photo upload of the rendered mixture.
 - **Interim:** SOP-15 §4.17–§4.18, form 8.3 (two signatures).
+- **v1.1 update (D64, owner: *"anyone may witness the destruction. It has to be done on camera as well."*):** requirement 1 becomes "any second staff member from the roster, not the person completing". Requirement 2 is dropped (recalls are not destroyed by us, D65). New (8): a **camera reference** (camera name, start and end time) required to complete, shown on the log (F-15-21; WAC 314-55-083(3)(a)). Interim: SOP-15 v1.1 §4.17–§4.18, form 8.3.
 
 ## G-44 · Customer-return segregation and atomic return (PROPOSED, SOP-15)
 - **Owner basis:** D62; SOP-01 §4.23 (*"Product goes to the quarantine bin."*).
@@ -565,21 +571,23 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. Tests: a destroy return never raises sellable stock; a failed insert leaves no add-back.
 - **Interim:** SOP-15 §4.7 (sealed destroy bin, form 8.1).
 
-## G-45 · One customer-return path; CSV download behind the ledger (PROPOSED, SOP-15)
+## G-45 · One customer-return path; CSV download behind the ledger (APPROVED, D66, SOP-15)
 - **Owner basis:** store policy SOP-01 §4.23; Question Q-15-4.
 - **Today:** the wizard skips the 15-day and loyalty checks, takes a typed refund, defaults to Destroy and has no lot picker (F-15-8); the CSV download marks returns exported without the ledger check (F-15-10).
 - **Requirements:** the wizard runs `returns-core` policy checks and the automatic refund; an owner-only override with a required reason; a lot picker; default disposition unset (must choose); the CSV download either runs the weekly batch's ledger check and writes to the outbox, or is removed in favour of SOP-16's weekly file; the success message stops telling staff to download.
 - **Interim:** SOP-15 §4.4, §4.6, §4.8.
+- **v1.1 update (D66, owner: *"Q4- remove it."*):** the wizard is **removed** (component, action and section). The register and Returns desk remain the only customer-return paths. The CSV requirement is unchanged.
 
 ## G-46 · Readable errors on Returns & Destruction (PROPOSED, SOP-15)
 - **Today:** `?error=qty` / `?error=reason` print as single words (F-15-13).
 - **Requirements:** map each code to a sentence (for example "Choose a lot and enter a quantity greater than zero.").
 - **Interim:** SOP-15 §4.15.
 
-## G-47 · Sample-pricing rules enforced, or removed (PROPOSED, SOP-15)
+## G-47 · Legacy Sample-pricing panel removed (APPROVED, D68, SOP-15)
 - **Today:** `sample_settings` saved but `checkSampleSale` / `effectiveSamplePrice` have no callers (F-15-16).
 - **Requirements:** the register and online checkout call the guardrail for any line flagged as a sample (nominal price forced; public sale blocked when set), with tests; or the panel is removed and the concierge line corrected. Owner choice Q-15-6.
 - **Interim:** SOP-15 §4.26 (never sell samples).
+- **v1.1 update (D68):** the audit showed the panel is legacy (migration 0042) and unrelated to the samples branch (`trade_sample_settings`, migration 0054). Decision: **remove** the panel, `updateSampleSettingsAction`, `get/updateSampleSettings` and `sample-guardrails.ts` (with its self-test), and correct the concierge line, **in the same build as G-51** so the screen never implies protection. The owner: *"If the panel truly does nothing because our system is properly set up to handle samples, then you may turn it off."*
 
 ## G-48 · Returns in the books and the excise return (PROPOSED, SOP-15)
 - **Owner basis:** books-23 (*"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*); postings Q1 (drafts await approval).
@@ -591,3 +599,20 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Today:** F-15-17 (stale migration comment and reasons header); help panel step 5 implies the Sale correction goes in the InventoryAdjustment file.
 - **Requirements:** correct the comments in a new migration's `COMMENT ON` (or a doc note) and the reasons header; help step 5 names both files.
 - **Interim:** SOP-15 §4.1, §4.27.
+
+## G-50 · Destruction hold at the legal minimum (APPROVED, D67, SOP-15)
+- **Owner basis:** D67 (*"Q5- reduce it to the minimum required by law. Look it up in CCRS please."*). Current WAC 314-55-097 has no waiting period or notice; CCRS needs the Destruction adjustment in that week's file (WAC 314-55-083(4)).
+- **Today:** `HOLD_HOURS_DEFAULT = 72` (`disposition-core.ts` L32); min 0 already allowed (L33); the panel says *"72h remains a sensible default."*
+- **Requirements:** default 0; panel text "The law sets no waiting period; 0 is the legal minimum"; button text when 0 reads "Schedule" (no "0h hold"); the stale migration comment corrected (with G-49).
+- **Interim:** SOP-15 v1.1 §4.27 (the owner or admin sets Hold (hours) to 0).
+
+## G-51 · Trade samples never reach the menu or the register (APPROVED, D68, SOP-15) — S1
+- **Owner basis:** D68 (*"They can not be sold at the register, they cannot be found on the menu. They go directly to the employee samples hub where they are distributed there."*); WAC 314-55-096(1)(i) (*"Trade samples may not be sold"*).
+- **Today:** F-15-20 (**S1**): no draft, menu, barcode or lot-draw code reads `is_sample`.
+- **Requirements:**
+  1. `seedDraftsForManifest` skips lots with `is_sample = true` (and an existing draft for a sample lot is shown as "Sample, not for sale" and cannot be approved).
+  2. The register lot draw (`readSaleLots`), the POS menu lot read and barcode index, and every website stock count exclude `is_sample` lots.
+  3. Intake review shows the line as "Sample → Employee Samples hub" instead of the advisory warning.
+  4. Tests: a sample lot sharing a SKU with a sellable lot is never drawn by a sale and never counted as menu stock; no draft is seeded.
+  5. The Employee Samples hub stays the only way a sample lot goes down (besides destruction or a count).
+- **Interim:** SOP-15 v1.1 §4.26 (dismiss sample drafts; weekly Samples-only check).

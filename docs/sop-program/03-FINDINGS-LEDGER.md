@@ -795,6 +795,26 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** concierge ledger SOP-15 section (today-vs-once-built table, D42).
 
 
+### F-15-18 · CONFIRMED · DOC · S3 — The "Returned to seller → Other" CCRS mapping is cited from the wrong table
+- **Pin:** `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L120–124 (*"The Upload User Guide's own mapping table for destruction reasons lists "Returned to seller → Other", confirming `Other` + detail is the LCB-expected encoding"*) and SOP-15 v1.0 §7. In the CCRS Upload User Guide (2-26) that row is in **Table 4, DestructionReason**, under the **PlantDestruction** file (producers' plants). The InventoryAdjustment reasons (Destruction, Reconciliation, Lost, Seizure, Theft, Other) and **Table 5** have **no** return-to-vendor row.
+- **Effect:** the encoding (**Other** + detail) is still the best fit, but the document claims an LCB confirmation that does not exist. The open examiner question is U-72 (`docs/ccrs-bible/12-unverified-register.md` L74).
+- **SOP impact:** SOP-15 v1.1 §4.13, §7. Correct the compliance doc when G-42 is built (docs only).
+
+### F-15-19 · CONFIRMED · DOC · S2 — The vendor-return checklist states a lead time and an LCB review schedule that are not LCB text
+- **Pin:** `src/lib/inventory/disposition-core.ts` L340–349 (comment and `VENDOR_RETURN_MANIFEST_STEPS`: *"Submit the manifest 48–72 hours before pickup; LCB confirms manifests Mon/Wed/Fri by email (info@lcb.wa.gov)."*) and the compliance doc §3. The LCB's Manifest User Guide (10-27-2025) and WAC 314-55-085 set no lead time and describe an **automatic** success email with the manifest PDF on upload. The 48–72 h figure is a POS vendor's practice (POSaBIT). The checklist also never says that **Greenway, as the origin**, uploads the manifest (the file name must carry the origin license).
+- **Effect:** staff could delay a return for a wait the state does not require, or treat the lack of a Mon/Wed/Fri email as "not confirmed" when the success email has already arrived.
+- **SOP impact:** SOP-15 v1.1 §4.9–§4.10, form 8.2, card 9.2. **G-42**.
+
+### F-15-20 · CONFIRMED · GAP · S1 — Trade samples are not kept off the menu or the register
+- **Pin:** no register, menu or product-onboarding code reads `is_sample`. (a) `src/lib/inventory/catalog-drafts.ts` L370–373: `seedDraftsForManifest` reads every non-destroyed lot on the manifest, and `SEED_LOT_COLUMNS` (L239) has no `is_sample`, so a sample lot gets a Product Onboarding draft. (b) `src/lib/inventory/sale-lot-read.ts` L41–47: the register's lot draw takes any Active lot with stock for the product key, oldest first. (c) `src/app/api/pos/menu/route.ts` L179–181 and L405–409: the menu's lot read and barcode index check only status and quantity. A sample lot carries the product's SKU as its key (`intake-parser.ts` L438). The only guard is an advisory review warning (`intake-review-core.ts` L120–124).
+- **Effect:** a sample can be approved onto the menu, or used up by an ordinary sale of the same product. WAC 314-55-096(1)(i): *"Trade samples may not be sold"*. The owner: *"They can not be sold at the register, they cannot be found on the menu."* The rest of the samples branch is correct: receiving, the 120 intake cap, the 30 give-out cap, the $0.01 cost, and the decrement at distribution on the hub.
+- **SOP impact:** SOP-15 v1.1 §4.26 interim check, §6, §7, form 8.6. **G-51**.
+
+### F-15-21 · CONFIRMED · GAP · S3 — The destruction record has no camera reference
+- **Pin:** `src/app/admin/inventory/disposition/page.tsx` L363 (the only person field is free-text **Witnessed by**, *"Names"*); there is no camera field in the page, `actions.ts` L197–245 or `disposition-core.ts` `validateDestructionCompletion`.
+- **Effect:** the owner requires every destruction on camera (D64), and WAC 314-55-083(3)(a) requires cameras where waste is destroyed. Without a camera and time on the record, the footage (kept 45 days) is hard to find for an inspector.
+- **SOP impact:** SOP-15 v1.1 §4.17–§4.18, form 8.3. **G-43**.
+
 ---
 
 ## Ledger index (updated each slice)
@@ -809,4 +829,4 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
 | SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
 | SOP-06 Inventory Audits, Cycle Counts & Daily Checklists | 16 new (F-06-1…F-06-14, F-06-5b, F-06-C; 4×S1 (F-06-1, F-06-5b, F-06-7, F-06-13), 6×S2, 5×S3, 1×S4). F-00-9 re-verified (F-06-12). **v1.1 (D54–D61):** 3 new F-06-15 (S2), F-06-16 (S3), F-06-17 (S2) → 19 | 19 | 0 |
-| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19) | 18 | 0 |
+| SOP-15 Returns to Vendor, Customer-Return Disposition & Destruction | 18 new (F-15-1…F-15-17 + F-15-C; 2×S1 (F-15-1, F-15-6), 9×S2, 4×S3, 3×S4). F-05a-17…19 carried (F-15-9 extends F-05a-19). **v1.1 (D63–D68):** 4 new F-15-18 (S3), F-15-19 (S2), F-15-20 (**S1**), F-15-21 (S3) → 22: 3×S1, 10×S2, 6×S3, 3×S4 | 22 | 0 |
