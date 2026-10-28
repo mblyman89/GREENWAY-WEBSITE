@@ -15,6 +15,7 @@
  * failure here logs and returns zeros — it must never fail the import itself.
  */
 import "server-only";
+import { sampleLotIds } from "@/lib/inventory/sample-lot-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { strainSlug } from "@/lib/catalog/slug-core";
@@ -135,7 +136,7 @@ export async function injectApprovedDraftsIntoVersion(
       chosen_net_volume_ml?: number | null;
       chosen_unit_thc_mg?: number | string | null;
     };
-    const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
+    const draftsAll = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
       thc_pct: r.thc_pct != null ? Number(r.thc_pct) : null,
       cbd_pct: r.cbd_pct != null ? Number(r.cbd_pct) : null,
@@ -149,6 +150,26 @@ export async function injectApprovedDraftsIntoVersion(
         r.chosen_units_per_package != null ? Number(r.chosen_units_per_package) : null,
       chosen_unit_thc_mg: r.chosen_unit_thc_mg != null ? Number(r.chosen_unit_thc_mg) : null,
     }));
+    // Fix Phase 0.2 (G-51): an approved draft whose lot is a trade SAMPLE is
+    // never staged onto a menu (WAC 314-55-096(1)(i); owner D68). Fails
+    // closed: if the sample check cannot be read, nothing is staged.
+    const draftLotIds = Array.from(
+      new Set(draftsAll.map((d) => d.lot_id).filter((v): v is string => Boolean(v))),
+    );
+    let sampleIds = new Set<string>();
+    if (draftLotIds.length) {
+      const { data: sampleRows, error: sampleErr } = await admin
+        .from("inventory_lots")
+        .select("id, is_sample")
+        .in("id", draftLotIds)
+        .eq("is_sample", true);
+      if (sampleErr) {
+        console.error("[draft-injection] sample check failed:", sampleErr.message);
+        return none;
+      }
+      sampleIds = sampleLotIds((sampleRows as { id: string; is_sample: boolean | null }[] | null) ?? []);
+    }
+    const drafts = draftsAll.filter((d) => !(d.lot_id && sampleIds.has(d.lot_id)));
     if (drafts.length === 0) return none;
 
     // 2) What the POS export already staged (source_item_ids = POS truth).

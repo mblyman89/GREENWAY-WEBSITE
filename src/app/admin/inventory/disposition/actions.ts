@@ -11,7 +11,6 @@ import {
   scheduleDestruction,
   completeDestruction,
   cancelDestruction,
-  updateSampleSettings,
   updateDispositionSettings,
   updateVendorReturnManifest,
   findReturnableOrderLines,
@@ -278,33 +277,6 @@ export async function updateDispositionSettingsAction(formData: FormData) {
   });
   revalidatePath(BASE);
   redirect(`${BASE}?ok=settings`);
-}
-
-export async function updateSampleSettingsAction(formData: FormData) {
-  const session = await requirePermission("inventory.manage");
-  if (!can(session.profile.role, "settings.manage")) {
-    redirect(`${BASE}?error=${encodeURIComponent("Changing sample settings requires admin.")}`);
-  }
-  const dollars = Number(formData.get("nominal_price_dollars"));
-  const nominalPriceMinor = Number.isFinite(dollars) ? Math.max(0, Math.round(dollars * 100)) : 1;
-  const requireNominalPrice = formData.get("require_nominal_price") === "on";
-  const blockPublicSale = formData.get("block_public_sale") === "on";
-
-  const result = await updateSampleSettings(
-    { nominalPriceMinor, requireNominalPrice, blockPublicSale },
-    session.userId,
-  );
-  if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
-  await recordAudit({
-    actorId: session.profile.id,
-    actorEmail: session.email,
-    action: "sample_settings.update",
-    entityType: "sample_settings",
-    entityId: "singleton",
-    after: { nominalPriceMinor, requireNominalPrice, blockPublicSale },
-  });
-  revalidatePath(BASE);
-  redirect(`${BASE}?ok=samples`);
 }
 
 // ── AI advisor (drafts-only) ─────────────────────────────────────────────────

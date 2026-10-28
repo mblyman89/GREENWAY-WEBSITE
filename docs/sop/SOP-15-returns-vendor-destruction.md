@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (owner answers Q-15-1…Q-15-6 applied; draft for owner review) |
+| **Version** | 1.2 (owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory → Returns & Destruction** (`/admin/inventory/disposition`) and the **Returns desk** (`/admin/registers/returns`): owner, admin and manager (`inventory.manage`). The register's **Return an item** (SOP-01 §4.23): any budtender starts it, a manager or lead approves with a PIN. Destruction day: the person who renders the product unusable **and** a witness. Recalled product: the **admin** (recall coordinator, D37) and the owner. |
@@ -65,7 +65,7 @@
    - 4.23 Theft, loss and seizure (pointers)
    - 4.24 Money, excise and the books
    - 4.25 The AI advisor
-   - 4.26 Samples: never on the menu or at the register; the legacy Sample-pricing panel
+   - 4.26 Samples: never on the menu or at the register
    - 4.27 The destruction hold policy setting
 
 5. Messages: "If you see this message"
@@ -91,7 +91,7 @@ Appendix A: Source map · Appendix B: Not built yet · Appendix C: Open question
 - Destruction: scheduling, the store's hold, quarantine, rendering unusable, the waste record, cancelling, partial destruction.
 - Recalled and quarantined lots, at the level needed here (the recall itself is SOP-05a §4.10 and §4.13).
 - The money, excise and books effects of returns.
-- The AI advisor and the (legacy, to be removed) sample-pricing panel on this page, and the check that samples never reach the menu (§4.26).
+- The AI advisor on this page, and how the app keeps samples off the menu (§4.26).
 
 **Out of scope (pointers).**
 - Ringing up the return at the register, the store's return policy and the cash refund: **SOP-01 §4.23**.
@@ -434,30 +434,29 @@ These are not destructions. CCRS has its own reasons: **Theft** (a detail is req
 
 Rules: the advisor is **advisory only** (*"Advisory only…"*); this SOP and the owner decide. Its count of vendor returns "awaiting manifest" includes every return that is not **Picked up / in transit** (`actions.ts` L330–333), so a return logged at departure (§4.11) appears there until you set **Picked up / in transit**.
 
-### 4.26 Samples: never on the menu or at the register; the legacy Sample-pricing panel
-
-The **Sample-pricing rules** panel (*"Product flagged as a vendor/QA sample is forced to a nominal price and (optionally) blocked from public sale."*) has **Nominal price ($)**, **Force samples to the nominal price**, **Block selling samples to the public** and **Save sample rules** (*"Sample rules saved."*). Owner and admin only.
-
-**This panel is legacy and does nothing.** It saves an old settings table (migration 0042), and the functions that would apply it (`checkSampleSale`, `effectiveSamplePrice` in `sample-guardrails.ts`) are called only by a self-test (`run-pure-selftests.ts` L948; F-15-16). It plays no part in the samples branch. The owner approved turning it off once the real protection exists (D68; G-47 **APPROVED**, built with G-51). Do not change it and do not rely on it.
+### 4.26 Samples: never on the menu or at the register
 
 **The owner's samples rules (D68):** *"Samples go through receiving, are for employees only, have maximum amounts we can take in and give out. They have a .01 cost. They can not be sold at the register, they cannot be found on the menu. They go directly to the employee samples hub where they are distributed there. At that time they are reduced from inventory."* The law agrees: *"Trade samples may not be sold"* (WAC 314-55-096(1)(i)).
 
-**What the app does today (audit, D68):**
+**Built in Fix Phase 0.2 (G-51 and G-47, owner D76).** The app now enforces the rule by itself:
 
-| Rule | App today |
+| Rule | How the app enforces it |
 |---|---|
-| Through receiving | A sample line becomes a lot marked **Sample** (`intake-parser.ts` L448; a $0 line counts as a sample) |
-| Intake cap (120 per processor per quarter) | Finalize is refused if passed (`intake-store.ts` L1100, L1368–1388) |
+| Through receiving | A sample line becomes a lot marked **Sample** (`intake-parser.ts`; a $0 line counts as a sample). The manifest review shows *"Trade SAMPLE → Employee Samples hub…"* as information (`intake-review-core.ts`) |
+| No menu draft | Product Onboarding never seeds a draft for a sample lot (`catalog-drafts.ts` `seedDraftsForManifest`, `.eq("is_sample", false)`) |
+| Never approved onto the menu | An older draft made from a sample lot is refused at **Approve**: *"This product comes from a trade SAMPLE lot. Trade samples may not be sold…"* (`approveDraftWithPrice`) |
+| Never staged on a menu version | Intake staging and draft injection drop any approved draft whose lot is a sample (`intake-menu-staging.ts`, `draft-injection.ts`) |
+| Never drawn by a sale | The register's lot draw skips sample lots, even when they share the product's SKU (`sale-lot-read.ts`) |
+| Not register stock, no barcode | The POS menu's lot read and barcode index skip sample lots (`api/pos/menu/route.ts`); the register-sellability report does too |
+| Never moves website stock | A change to a sample lot never changes menu stock (`lot-menu-stock.ts`); a void never restocks onto a sample lot (`void-store.ts`) |
+| Intake cap (120 per processor per quarter) | Finalize is refused if passed (`intake-store.ts`) |
 | Give-out cap (30 per employee per quarter) | Enforced on the Employee Samples hub (`trade-samples.ts`) |
-| $0.01 cost | CCRS TotalCost for samples (`ccrs-preflight-core.ts` L182) |
-| Hub reduces inventory at distribution | Yes: a negative **employee_sample** adjustment, CCRS **Other** (`trade-samples.ts` L335–340) |
-| **Not sold, not on the menu** | **Not enforced** (F-15-20, **S1**; G-51). Product Onboarding makes a draft for every lot on the manifest, samples included (`catalog-drafts.ts` L370–373). The register picks any Active lot of the product, oldest first, without looking at the Sample mark (`sale-lot-read.ts` L41–47). A sample lot keeps the product's SKU (`intake-parser.ts` L438), so selling that product can use up the sample lot |
+| $0.01 cost | CCRS TotalCost for samples (`ccrs-preflight-core.ts`) |
+| Hub reduces inventory at distribution | A negative **employee_sample** adjustment, CCRS **Other** (`trade-samples.ts`) |
 
-**Interim rule until G-51 is built (whoever runs receiving and Product Onboarding):**
-1. On the manifest review, note every line marked **Sample**.
-2. On **Product Onboarding**, **Dismiss** any draft that was created for a sample lot. Never approve or price one.
-3. If the same product is also bought for sale on that manifest, its draft is fine, but the register may still draw the sample lot first. Tell the owner the same day. The sample lot must go to the Employee Samples hub and be given out (or counted) before that product is sold, so the register cannot draw it.
-4. Once a week, open **Inventory**, set the **Sample** filter to **Samples only** and check that no sample lot has gone down except through the Employee Samples hub (Sample History). Any other decrease is a sold sample: tell the owner at once.
+The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-pricing rules** panel was legacy and did nothing (F-15-16). It has been **removed** from this page, together with its save action and `sample-guardrails.ts` (G-47, D68).
+
+**What staff still do:** nothing special. Give samples out only on the Employee Samples hub. As a spot check, once a month open **Inventory**, set the **Sample** filter to **Samples only**, and confirm that sample lots went down only through the hub (Sample History). Report anything else to the owner.
 
 ### 4.27 The destruction hold policy setting
 
@@ -529,7 +528,7 @@ The **Sample-pricing rules** panel (*"Product flagged as a vendor/QA sample is f
 | Message | What it means | Do this |
 |---|---|---|
 | *"Hold policy saved."* / *"Sample rules saved."* | Saved | Note the change on form 8.6 |
-| *"Changing the hold policy requires admin."* / *"Changing sample settings requires admin."* | A manager tried | Ask the owner |
+| *"Changing the hold policy requires admin."* | A manager tried | Ask the owner |
 | *"AI is not configured (set AI_API_KEY)."* | No AI key | Use this SOP |
 | *"Supabase service role not configured."* | Database not connected | Owner; paper forms only |
 
@@ -552,7 +551,7 @@ The **Sample-pricing rules** panel (*"Product flagged as a vendor/QA sample is f
 | A destruction was cancelled | Form 8.5; restore the earlier status the same minute (§4.19) | Owner |
 | Part of a lot destroyed; rest sellable | §4.20 | Manager |
 | No second person available, or the camera is not recording | Do not destroy; wait until both are in place (D64) | Manager |
-| A sample lot has a product draft, or a sample lot went down at the register | Dismiss the draft; tell the owner at once (§4.26) | Anyone → owner |
+| A sample lot went down other than on the Employee Samples hub, or Approve refuses a draft as a trade sample | Dismiss the draft; tell the owner the same day (§4.26) | Anyone → owner |
 | Contractor or other method proposed | Prior written LCB approval first (§4.17) | Owner |
 | Product missing (theft, loss) | SOP-20; not a destruction (§4.23) | Owner |
 
@@ -572,7 +571,7 @@ The **Sample-pricing rules** panel (*"Product flagged as a vendor/QA sample is f
 | Reductions documented, or they count as sales | WAC 314-55-089(4)(c) | Every action posts a noted adjustment; cancel has no reason (F-05a-19) |
 | No legal hold; store hold set to 0 | WAC 314-55-097 (current); WSR 22-14-111; owner D67 | Setting allows 0; code default and panel text still 72 (G-50); stale migration comment (F-15-17) |
 | Destruction area on camera | WAC 314-55-083(3)(a); owner D64 | No camera field (F-15-21) |
-| Samples never sold, never on the menu | WAC 314-55-096(1)(i); owner D68 | **Not enforced** (F-15-20, **S1**; G-51); legacy panel dead (F-15-16) |
+| Samples never sold, never on the menu | WAC 314-55-096(1)(i); owner D68 | **Enforced** (Phase 0.2: F-15-20 FIXED, G-51 BUILT; legacy panel removed, G-47 BUILT) |
 | Owner approves anything financial | books-23 (*"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*) | Refund journal missing (F-15-14); excise not reduced by returns (F-15-15) |
 | Two-person destruction; the witness may be anyone | Store control (owner D64) | Not enforced (F-15-4) |
 
@@ -706,7 +705,7 @@ MONTHLY RETURNS & DISPOSITION REVIEW               Month reviewed: ________
 [ ] Vendor returns: every one has a complete packet (8.2) and status Picked up / in transit
 [ ] Destructions: every completed event has a waste record (8.3) with two signatures and a camera reference
 [ ] Cancels and status restores (8.5) reviewed
-[ ] Hold policy is 0 h (D67)  [ ] Samples: weekly checks done; no sample draft, no sample sold (§4.26)
+[ ] Hold policy is 0 h (D67)  [ ] Samples: monthly spot check done (§4.26)
 [ ] Books: customer refunds total $ ________ given to bookkeeping help (no journal, F-15-14)
 [ ] Excise (LIQ-1295): returned sales checked against Box 1 before filing; override used? [ ] Y [ ] N
 Owner signature ______________   Date ________
@@ -810,7 +809,7 @@ DESTRUCTION — CARD
 | CSV | `src/app/admin/inventory/disposition/sale-correction-export/route.ts` L18–19, L46, L62, L80, L91–93, L104 |
 | CCRS | `src/lib/compliance/ccrs-inventory-adjustment-core.ts` L62–90, L201–212; `src/lib/compliance/ccrs-batch.ts` L387, L415, L440–470 |
 | Advisor | `src/lib/inventory/disposition-advisor.ts` L19–31; `src/components/admin/inventory/DispositionAdvisorPanel.tsx` L81, L97, L105, L117 |
-| Samples | Legacy panel: `src/lib/inventory/sample-guardrails.ts`; `scripts/compliance/run-pure-selftests.ts` L948. Samples branch: `src/lib/inventory/intake-parser.ts` L438, L448; `src/lib/inventory/intake-store.ts` L876, L1100, L1368–1388, L1843; `src/lib/compliance/trade-samples.ts` L335–340, L391–395; `src/app/admin/compliance/samples/actions.ts` L37–38; `src/lib/compliance/ccrs-preflight-core.ts` L182. Not filtered: `src/lib/inventory/catalog-drafts.ts` L239, L370–373; `src/lib/inventory/sale-lot-read.ts` L41–47; `src/app/api/pos/menu/route.ts` L179–181, L405–409. Filter: `src/components/admin/inventory/InventoryFilterPanel.tsx` L369–376 |
+| Samples | Rule: `src/lib/inventory/sample-lot-core.ts` (Phase 0.2). Samples branch: `src/lib/inventory/intake-parser.ts` L438, L448; `src/lib/inventory/intake-store.ts` L876, L1100, L1368–1388, L1843; `src/lib/compliance/trade-samples.ts` L335–340, L391–395; `src/app/admin/compliance/samples/actions.ts` L37–38; `src/lib/compliance/ccrs-preflight-core.ts` L182. Not filtered: `src/lib/inventory/catalog-drafts.ts` L239, L370–373; `src/lib/inventory/sale-lot-read.ts` L41–47; `src/app/api/pos/menu/route.ts` L179–181, L405–409. Filter: `src/components/admin/inventory/InventoryFilterPanel.tsx` L369–376 |
 | Money and books | `src/lib/pos/refunds-store.ts` L11, L48; `src/lib/accounting/ledger-census-data.ts` L252–268; `src/lib/compliance/excise-return.ts` L111, L140–158; `src/lib/accounting/sage-exports.ts` L644–698 |
 | Database | `supabase/migrations/0042_*.sql` L22–36, L44, L47–66, L100–120; `0115_*.sql` L38, L94–101, L104–109 |
 | Compliance basis | `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` §3 (L99–127; L120–124 miscites the plant table, F-15-18), §4 (L131–142), §5 (L146–216). State texts read 2026-10-28 (v1.1): WAC 314-55-079, -083, -085, -087, -096, -097, -225 (app.leg.wa.gov); CCRS Upload User Guide 2-26 (Tables 4 and 5); CCRS Manifest User Guide 10-27-2025; LCB CCRS FAQ. CCRS register U-72, U-73 (`docs/ccrs-bible/12-unverified-register.md` L74–75) |
@@ -832,9 +831,9 @@ DESTRUCTION — CARD
 | **G-23** | Theft and Seizure as adjustment reasons | F-05a-6 | SOP-05a §4.7 "THEFT:" / "SEIZURE:" note | §4.23 | **APPROVED** (D39) |
 | **G-22** | No manual **Destroyed** on the lot page | F-05a-1 (**S1**) | SOP-05a §4.9 | §4.3 | OPEN |
 | **G-46** | Error codes shown as words: the page shows *"qty"* / *"reason"* instead of a sentence | F-15-13 | §4.15 last paragraph | §5.3 | PROPOSED |
-| **G-47** | Remove the legacy **Sample-pricing rules** panel and its `sample_settings` code (dead; D68), in the same piece of work as G-51 | F-15-16 | Do not rely on it (§4.26) | §2, §4.26 | **APPROVED** (D68) |
+| **G-47** | Remove the legacy **Sample-pricing rules** panel and its `sample_settings` code (dead; D68), in the same piece of work as G-51 | F-15-16 | Do not rely on it (§4.26) | §2, §4.26 | **BUILT** (Phase 0.2) |
 | **G-50** | Destruction hold default 0 (D67): `HOLD_HOURS_DEFAULT` 0, the panel text says the law has no hold, the stale migration comment corrected (with G-49) | F-15-17 | Owner/admin sets **Hold (hours)** to 0 (§4.27) | §4.3, §4.16, §4.27, §9.3 | **APPROVED** (D67) |
-| **G-51** | **Samples never reach the menu or the register** (D68): no product draft is seeded for a lot marked Sample; the register menu, barcode index and lot draw skip sample lots; the website never lists them; a test for each; the intake review shows "Sample — goes to the Employee Samples hub" | F-15-20 (**S1**) | Dismiss sample drafts; weekly Sample check (§4.26) | §4.26, §6, §7, §8.6 | **APPROVED** (D68) |
+| **G-51** | **Samples never reach the menu or the register** (D68): no product draft is seeded for a lot marked Sample; the register menu, barcode index and lot draw skip sample lots; the website never lists them; a test for each; the intake review shows "Sample — goes to the Employee Samples hub" | F-15-20 (**S1**) | Dismiss sample drafts; weekly Sample check (§4.26) | §4.26, §6, §7, §8.6 | **BUILT** (Phase 0.2) |
 | **G-48** | Returns in the books and taxes: draft a journal for each refund day to 50910 Returns & Refunds for owner approval; excise Box 1 reduced by returned sales in the month | F-15-14, F-15-15 | Form 8.6; excise override (§4.24) | §4.24, §8.6 | PROPOSED |
 | **G-49** | Housekeeping: correct the migration comment and the reasons-file header; the help panel says which file carries the Sale correction | F-15-17 | Read this SOP | §4.1, §4.27 | PROPOSED |
 
@@ -855,5 +854,6 @@ DESTRUCTION — CARD
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.2 | Fix phase | Phase 0.2 (owner D76). G-51 BUILT: samples never get a draft, cannot be approved or staged, are never drawn by a sale, never count as register stock or barcodes, never move menu stock, and a void never restocks onto them (`sample-lot-core.ts` and callers). G-47 BUILT: the legacy Sample-pricing panel, its action, `get/updateSampleSettings` in `disposition.ts` and `sample-guardrails.ts` removed; concierge line corrected. §4.26 rewritten; §6, §7 and checklist updated. F-15-16 and F-15-20 FIXED. | Fix program |
 | 1.1 | 2026-10-28 | Owner answers D63–D68 applied after the state texts were read (WAC 314-55-079, -083, -085, -096, -097, -225; CCRS Upload and Manifest User Guides) and the samples branch was audited end to end: vendor returns follow the CCRS manifest method with Greenway as origin, logged at departure (§3, §4.9–§4.13, form 8.2, card 9.2); witness anyone, on camera (§2, §4.17–§4.18, form 8.3, card 9.3); recalls returned to the vendor, never destroyed by us (§4.21, form 8.4); wizard not used, to be removed (§4.6); hold 0 h (§4.3, §4.27); samples section rewritten with the audit and an interim check (§4.26). New findings F-15-18…F-15-21; G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51 | SOP program |
 | 1.0 | 2026-10-28 | First draft, verified against `main@b8101abb`. Owner decision D62 applied (with D37, D39, D41, D42). Findings F-15-1…F-15-17 and F-15-C; gaps G-42…G-49 proposed and G-28 extended; questions Q-15-1…Q-15-6. Paper forms 8.1–8.6 | SOP program |

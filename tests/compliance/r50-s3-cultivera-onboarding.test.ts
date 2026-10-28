@@ -137,6 +137,9 @@ function lot(n: number, key: string | null, extra: Row = {}): Row {
   return {
     id: lotId(n),
     manifest_id: M,
+    // inventory_lots.is_sample is NOT NULL DEFAULT false (migration 0024);
+    // Fix Phase 0.2 (G-51) filters on it, so the fake row carries it too.
+    is_sample: false,
     pos_product_key: key,
     product_name: `Blue Dream 3.5g #${n}`,
     strain_name: "Blue Dream",

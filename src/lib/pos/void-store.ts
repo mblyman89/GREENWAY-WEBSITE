@@ -284,6 +284,8 @@ async function restockInventoryForVoid(
         .select(cols)
         .eq("pos_product_key", restockKey)
         .neq("status", "quarantine")
+        // Fix Phase 0.2 (G-51): a voided sale never restocks onto a sample lot.
+        .eq("is_sample", false)
         .order("created_at", { ascending: false })
         .limit(50);
     let lotRead = await readLots("id, on_hand_qty, status, menu_source_variant_id");

@@ -32,6 +32,7 @@
  * manifest has no APPROVED drafts to carry.
  */
 import "server-only";
+import { sampleLotIds } from "@/lib/inventory/sample-lot-core";
 import { revalidatePath } from "next/cache";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -360,7 +361,7 @@ export async function stageIntakeMenuVersionForManifest(
       chosen_net_volume_ml?: number | string | null;
       chosen_classification_provenance?: unknown;
     };
-    const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
+    const draftsAll = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
       thc_pct: r.thc_pct != null ? Number(r.thc_pct) : null,
       cbd_pct: r.cbd_pct != null ? Number(r.cbd_pct) : null,
@@ -373,6 +374,26 @@ export async function stageIntakeMenuVersionForManifest(
       chosen_unit_thc_mg: r.chosen_unit_thc_mg != null ? Number(r.chosen_unit_thc_mg) : null,
       chosen_net_volume_ml: r.chosen_net_volume_ml != null ? Number(r.chosen_net_volume_ml) : null,
     }));
+    // Fix Phase 0.2 (G-51): an approved draft whose lot is a trade SAMPLE is
+    // never staged onto a menu (WAC 314-55-096(1)(i); owner D68). Fails
+    // closed: if the sample check cannot be read, nothing is staged.
+    const draftLotIds = Array.from(
+      new Set(draftsAll.map((d) => d.lot_id).filter((v): v is string => Boolean(v))),
+    );
+    let sampleIds = new Set<string>();
+    if (draftLotIds.length) {
+      const { data: sampleRows, error: sampleErr } = await admin
+        .from("inventory_lots")
+        .select("id, is_sample")
+        .in("id", draftLotIds)
+        .eq("is_sample", true);
+      if (sampleErr) {
+        console.error("[intake-menu-staging] sample check failed:", sampleErr.message);
+        return skip("no-approved-drafts");
+      }
+      sampleIds = sampleLotIds((sampleRows as { id: string; is_sample: boolean | null }[] | null) ?? []);
+    }
+    const drafts = draftsAll.filter((d) => !(d.lot_id && sampleIds.has(d.lot_id)));
     if (drafts.length === 0) return skip("no-approved-drafts");
 
     // 2) Currently-published version + its items (carry-forward snapshot). When

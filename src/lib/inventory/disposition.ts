@@ -2,7 +2,7 @@
  * src/lib/inventory/disposition.ts  (Run 6 / Slice 31 → Task Q command center)
  *
  * Server-side helpers for customer returns, vendor returns, destruction
- * events, and disposition/sample settings. Every quantity change posts a
+ * events, and disposition settings. Every quantity change posts a
  * signed inventory_adjustments row (the single auditable ledger that feeds
  * the CCRS InventoryAdjustment.csv); the business detail lives in the
  * customer_returns / vendor_returns / destruction_events tables.
@@ -19,10 +19,6 @@ import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 // GW-012: atomic lot quantity writes (strict for reductions).
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
-import {
-  DEFAULT_SAMPLE_SETTINGS,
-  type SampleSettings,
-} from "@/lib/inventory/sample-guardrails";
 import {
   HOLD_HOURS_DEFAULT,
   clampHoldHours,
@@ -184,45 +180,6 @@ export async function updateDispositionSettings(
     }
     return { ok: false, error: error.message };
   }
-  return { ok: true };
-}
-
-// ---------------------------------------------------------------------------
-// Sample settings
-// ---------------------------------------------------------------------------
-
-export async function getSampleSettings(): Promise<SampleSettings> {
-  if (!isSupabaseServiceConfigured) return DEFAULT_SAMPLE_SETTINGS;
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("sample_settings")
-    .select("nominal_price_minor, require_nominal_price, block_public_sale")
-    .eq("id", true)
-    .maybeSingle();
-  if (!data) return DEFAULT_SAMPLE_SETTINGS;
-  return {
-    nominalPriceMinor: (data as { nominal_price_minor: number }).nominal_price_minor ?? 1,
-    requireNominalPrice: (data as { require_nominal_price: boolean }).require_nominal_price ?? true,
-    blockPublicSale: (data as { block_public_sale: boolean }).block_public_sale ?? true,
-  };
-}
-
-export async function updateSampleSettings(
-  input: SampleSettings,
-  actorId: string | null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("sample_settings").upsert({
-    id: true,
-    nominal_price_minor: Math.max(0, Math.round(input.nominalPriceMinor)),
-    require_nominal_price: input.requireNominalPrice,
-    block_public_sale: input.blockPublicSale,
-    updated_by: actorId,
-  });
-  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

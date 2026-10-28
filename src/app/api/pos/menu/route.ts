@@ -18,6 +18,7 @@
  * synced sale is ALWAYS re-priced and re-gated server-side (B4), so a stale
  * device bundle can never make an illegal sale stick.
  */
+import { withoutSampleLots } from "@/lib/inventory/sample-lot-core";
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
@@ -172,13 +173,14 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         status: string | null;
         on_hand_qty: number | string | null;
         product_name: string | null;
+        is_sample: boolean | null;
       };
       const { rows, verdict } = await pagedAllChecked<LotRow>(
         async (from, to) => {
           const { data, error } = await admin
             .from("inventory_lots")
             .select(
-              "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name",
+              "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name, is_sample",
             )
             // Stable UNIQUE ordering — REQUIRED for deterministic paging.
             .order("id", { ascending: true })
@@ -192,7 +194,9 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       if (!verdict.complete) {
         console.warn(`[pos/menu] inventory lot read may be incomplete — ${verdict.message}`);
       }
-      liveLots = rows.map((l) => ({
+      // Fix Phase 0.2 (G-51): trade samples never count as register stock
+      // and never enter the barcode index (WAC 314-55-096(1)(i)).
+      liveLots = withoutSampleLots(rows).map((l) => ({
         id: l.id,
         posProductKey: l.pos_product_key,
         status: l.status,

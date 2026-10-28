@@ -23,7 +23,6 @@ import {
   listDestructionEvents,
   listCustomerReturns,
   dispositionSummary,
-  getSampleSettings,
   getDispositionSettings,
   type DestructionEventWithLot,
   type VendorReturnWithLot,
@@ -53,7 +52,6 @@ import {
   completeDestructionAction,
   cancelDestructionAction,
   updateDispositionSettingsAction,
-  updateSampleSettingsAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +65,6 @@ const OK_MESSAGES: Record<string, string> = {
   destroyed: "Destruction completed and the CCRS 'Destruction' adjustment posted.",
   cancelled: "Destruction cancelled and the lot released from quarantine.",
   settings: "Hold policy saved.",
-  samples: "Sample rules saved.",
 };
 
 function fmtQty(q: number, unit: string | null): string {
@@ -98,14 +95,13 @@ export default async function DispositionPage({
   const canSettings = can(session.profile.role, "settings.manage");
   const sp = await searchParams;
 
-  const [lots, returns, destructions, customerReturns, summary, sampleSettings, dispositionSettings] =
+  const [lots, returns, destructions, customerReturns, summary, dispositionSettings] =
     await Promise.all([
       listLots({ status: "active", limit: 500 }),
       listVendorReturns(50),
       listDestructionEvents(50),
       listCustomerReturns(20),
       dispositionSummary(),
-      getSampleSettings(),
       getDispositionSettings(),
     ]);
 
@@ -533,52 +529,6 @@ export default async function DispositionPage({
         </form>
       </section>
 
-      {/* Sample pricing settings */}
-      <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-1 text-sm font-black uppercase tracking-[0.14em] text-white/80">Sample-pricing rules</h2>
-        <p className="mb-4 text-xs text-white/40">
-          Product flagged as a vendor/QA sample is forced to a nominal price and (optionally) blocked from public sale.
-        </p>
-        <form action={updateSampleSettingsAction} className="grid gap-3 sm:grid-cols-[180px_1fr] sm:items-end">
-          <Field label="Nominal price ($)" help="WSLCB nominal value">
-            <Input
-              name="nominal_price_dollars"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={(sampleSettings.nominalPriceMinor / 100).toFixed(2)}
-              disabled={!canSettings}
-            />
-          </Field>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm text-white/70">
-              <input
-                type="checkbox"
-                name="require_nominal_price"
-                defaultChecked={sampleSettings.requireNominalPrice}
-                disabled={!canSettings}
-              />
-              Force samples to the nominal price
-            </label>
-            <label className="flex items-center gap-2 text-sm text-white/70">
-              <input
-                type="checkbox"
-                name="block_public_sale"
-                defaultChecked={sampleSettings.blockPublicSale}
-                disabled={!canSettings}
-              />
-              Block selling samples to the public
-            </label>
-          </div>
-          <div className="sm:col-span-2">
-            {canSettings ? (
-              <Button type="submit">Save sample rules</Button>
-            ) : (
-              <p className="text-xs text-white/40">Changing sample rules requires the “Change settings” permission.</p>
-            )}
-          </div>
-        </form>
-      </section>
     </div>
   );
 }

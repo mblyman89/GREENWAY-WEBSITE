@@ -7,6 +7,7 @@
  * never auto-live — drafts must be approved by a human.
  */
 import "server-only";
+import { SAMPLE_NOT_FOR_SALE_MESSAGE, isSampleLot } from "@/lib/inventory/sample-lot-core";
 import { unitWeightGrams } from "@/lib/catalog/serving-facts-view-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -370,7 +371,10 @@ export async function seedDraftsForManifest(
     .from("inventory_lots")
     .select(SEED_LOT_COLUMNS)
     .eq("manifest_id", manifestId)
-    .neq("status", "destroyed");
+    .neq("status", "destroyed")
+    // Fix Phase 0.2 (G-51): a trade sample never gets a menu draft
+    // (WAC 314-55-096(1)(i); owner D68). is_sample is NOT NULL (0024).
+    .eq("is_sample", false);
   if (lotsError) {
     console.error("[catalog-drafts] lots read failed:", lotsError.message);
     return { ...empty, hasPublishedMenu, firstError: lotsError.message };
@@ -1277,6 +1281,23 @@ export async function approveDraftWithPrice(
     lot_id: string | null;
   } | null;
   const cost = row?.unit_cost_minor_units ?? null;
+
+  // Fix Phase 0.2 (G-51): a draft made from a trade SAMPLE lot (for example
+  // one seeded before this fix) can never be approved onto the menu. Fails
+  // closed: if the lot cannot be read, the approval is refused.
+  if (row?.lot_id) {
+    const { data: lotRow, error: lotErr } = await admin
+      .from("inventory_lots")
+      .select("id, is_sample")
+      .eq("id", row.lot_id)
+      .maybeSingle();
+    if (lotErr) {
+      return { ok: false, error: "Could not check whether this product is a trade sample, so it was not approved. Try again." };
+    }
+    if (isSampleLot(lotRow as { is_sample?: boolean | null } | null)) {
+      return { ok: false, error: SAMPLE_NOT_FOR_SALE_MESSAGE };
+    }
+  }
 
   // R50 S3: a draft on a manifest REBUILT from the Cultivera export is a card
   // that is already selling. Approving it catalogues the product (KB, facts,

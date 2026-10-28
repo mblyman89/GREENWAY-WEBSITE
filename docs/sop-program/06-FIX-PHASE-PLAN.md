@@ -124,4 +124,5 @@ Each phase is a set of slices. Each slice follows the standing rules: commit →
 
 | Step | Gap / finding | Status | PR |
 |---|---|---|---|
-| 0.1 | F-01-14 medical test mode tax | **FIXED** | (this slice) |
+| 0.1 | F-01-14 medical test mode tax | **FIXED** | #1529 |
+| 0.2 | G-51 + G-47 samples off menu, register and website; legacy panel removed | **BUILT** | (this slice) |

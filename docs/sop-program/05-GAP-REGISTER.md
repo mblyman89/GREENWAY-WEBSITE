@@ -73,11 +73,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-44 | Customer-return segregation: destroy-return units never sellable (returned / quarantine bucket); return, add-back and destruction event saved atomically | (procedure need; D62) | F-15-6 (**S1**), F-15-7 | SOP-15 §4.7, form 8.1 | PROPOSED |
 | G-45 | Remove the back-office Customer return wizard; CSV download checks the ledger or is removed | D66 | F-15-8, F-15-10 | SOP-15 §4.4–§4.8 | **APPROVED** |
 | G-46 | Readable errors on Returns & Destruction (no bare "qty" / "reason") | (procedure need) | F-15-13 | SOP-15 §4.15 | PROPOSED |
-| G-47 | Remove the dead legacy Sample-pricing panel (`sample_settings`, `sample-guardrails.ts`), with G-51 | D68 | F-15-16 | SOP-15 §4.26 | **APPROVED** |
+| G-47 | Remove the dead legacy Sample-pricing panel (`sample_settings`, `sample-guardrails.ts`), with G-51 | D68 | F-15-16 | SOP-15 §4.26 | **BUILT** (Phase 0.2) |
 | G-48 | Returns in the books and taxes: refund journal to 50910 for owner approval; excise Box 1 net of returned sales | (books-23; RCW 69.50.535) | F-15-14, F-15-15 | SOP-15 §4.24, form 8.6 | PROPOSED |
 | G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file; compliance doc's "Returned to seller" citation corrected | (procedure need) | F-15-17, F-15-18 | SOP-15 §4.1, §4.13, §4.27 | PROPOSED |
 | G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
-| G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **APPROVED** |
+| G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **BUILT** (Phase 0.2) |
 | G-52 | New people start as **Candidate** (Add to roster and Payroll Setup); PIN locked until **Activate**; Activate runs the gate; help text matches | (procedure need; RCW 69.50.357(2)–(3)) | F-08-1 (**S1**), F-08-7 | SOP-08 §4.6, §4.13 (no PIN until form 8.1 is signed) | PROPOSED |
 | G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | **APPROVED** (D70) |
 | G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | **APPROVED** (D71) |
@@ -593,7 +593,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** map each code to a sentence (for example "Choose a lot and enter a quantity greater than zero.").
 - **Interim:** SOP-15 §4.15.
 
-## G-47 · Legacy Sample-pricing panel removed (APPROVED, D68, SOP-15)
+## G-47 · Legacy Sample-pricing panel removed (BUILT, Phase 0.2, SOP-15)
+- **Built (Phase 0.2, D76):** panel, action, store functions and `sample-guardrails.ts` removed; concierge corrected. SOP-15 v1.2 §4.26.
 - **Today:** `sample_settings` saved but `checkSampleSale` / `effectiveSamplePrice` have no callers (F-15-16).
 - **Requirements:** the register and online checkout call the guardrail for any line flagged as a sample (nominal price forced; public sale blocked when set), with tests; or the panel is removed and the concierge line corrected. Owner choice Q-15-6.
 - **Interim:** SOP-15 §4.26 (never sell samples).
@@ -616,7 +617,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** default 0; panel text "The law sets no waiting period; 0 is the legal minimum"; button text when 0 reads "Schedule" (no "0h hold"); the stale migration comment corrected (with G-49).
 - **Interim:** SOP-15 v1.1 §4.27 (the owner or admin sets Hold (hours) to 0).
 
-## G-51 · Trade samples never reach the menu or the register (APPROVED, D68, SOP-15) — S1
+## G-51 · Trade samples never reach the menu or the register (BUILT, Phase 0.2, SOP-15) — S1
+- **Built (Phase 0.2, D76):** requirements 1–5 met. One rule in `src/lib/inventory/sample-lot-core.ts`; enforced in draft seeding, draft approval (refused), menu staging and injection, the register lot draw, the POS menu lot read and barcode index, the sellability report, menu-stock sync and void restock. Intake review now shows the line as information. Test `tests/compliance/fix-p0-2-samples.test.ts`.
 - **Owner basis:** D68 (*"They can not be sold at the register, they cannot be found on the menu. They go directly to the employee samples hub where they are distributed there."*); WAC 314-55-096(1)(i) (*"Trade samples may not be sold"*).
 - **Today:** F-15-20 (**S1**): no draft, menu, barcode or lot-draw code reads `is_sample`.
 - **Requirements:**

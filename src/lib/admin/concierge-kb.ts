@@ -173,7 +173,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Vendors & Brands manages vendor profiles (logo, mission, contact) and their brands; save a vendor's WA license number so it auto-fills on Receiving manifests, and you can publish vendor profiles to the public Vendors page.",
       "Types & Categories renames/reorders the website categories and catalogs the POS inventory types behind them (also reachable from Settings).",
       "Cycle Counts is where staff record blind physical counts. It records what was counted and posts nothing; a difference only changes inventory once the owner approves it in Inventory Auditing, which writes the shelf correction and the journal entry together.",
-      "Returns & Destruction handles vendor returns and compliant destruction with a quarantine hold, plus sample-pricing rules.",
+      "Returns & Destruction handles vendor returns and compliant destruction with a quarantine hold. Trade samples are never sold: sample lots are kept off the menu, the register and the website, and are given out only from the Employee Samples hub (WAC 314-55-096(1)(i)).",
     ],
   },
 

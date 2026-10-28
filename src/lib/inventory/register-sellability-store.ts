@@ -239,6 +239,8 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
       const { data, error } = await admin
         .from("inventory_lots")
         .select("id, pos_product_key, status, on_hand_qty, product_name, lot_code")
+        // Fix Phase 0.2 (G-51): trade samples are never live register stock.
+        .eq("is_sample", false)
         // Stable UNIQUE ordering — REQUIRED for deterministic paging.
         .order("id", { ascending: true })
         .range(from, to);

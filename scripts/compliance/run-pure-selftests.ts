@@ -945,7 +945,7 @@ import { __runIntakeReviewTests } from "../../src/lib/inventory/intake-review-co
 import { __runIntakeReviewAdapterTests } from "../../src/lib/inventory/intake-review-adapter";
 import { __runLotActivationGateTests } from "../../src/lib/inventory/lot-activation-gate-core";
 import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pipeline-core";
-import { __runSampleGuardrailTests } from "../../src/lib/inventory/sample-guardrails";
+import { __runSampleLotCoreTests } from "../../src/lib/inventory/sample-lot-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
 import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
@@ -1880,7 +1880,7 @@ __runLiquidVolumeTests();
   assertNoFailures("intake-review-adapter", __runIntakeReviewAdapterTests());
   assertNoFailures("lot-activation-gate-core", __runLotActivationGateTests());
   assertNoFailures("manifest-pipeline-core", __runManifestPipelineTests());
-  __runSampleGuardrailTests();
+  __runSampleLotCoreTests();
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);
