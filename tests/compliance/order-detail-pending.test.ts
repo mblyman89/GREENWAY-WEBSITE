@@ -104,9 +104,9 @@ describe("L-39 · every in-place submit on the order page manages its own pendin
     expect(tail).toMatch(/redirect\(`\$\{ORDERS_BASE\}\/\$\{orderId\}\?ok=/);
   });
 
-  it("each status form (step, override, cancel, no-show, reopen) uses SaveButton", () => {
+  it("each status form (step, override, cancel, no-show, reopen, expired-ack) uses SaveButton", () => {
     const forms = formsFor("setOrderStatusAction");
-    expect(forms.length).toBe(5);
+    expect(forms.length).toBe(6); // Fix Phase 1.6b (G-24) added the expired-warning acknowledgement form
     for (const f of forms) expect(f).toMatch(/<SaveButton[\s\n]/);
   });
 
@@ -118,7 +118,7 @@ describe("L-39 · every in-place submit on the order page manages its own pendin
 
   it("each SaveButton says what it is doing while busy", () => {
     const buttons = PAGE.match(/<SaveButton[\s\S]*?\/>/g) ?? [];
-    expect(buttons.length).toBe(6);
+    expect(buttons.length).toBe(7); // + Fix Phase 1.6b (G-24) "I told the customer — complete the sale"
     for (const b of buttons) expect(b).toMatch(/busyLabel="[^"]+…"/);
   });
 
