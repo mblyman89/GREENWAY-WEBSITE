@@ -329,7 +329,7 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 - **Owner decision (D29, slice SOP-05a):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* Re-rated **S1** (data integrity: the CCRS record and the shelf must agree); G-16 **APPROVED**.
 
 ### F-04-2 · CONFIRMED · HARDEN · S1 — Lot page "Lifecycle status" sets Active with no go-live check and no audit
-- **Pin:** `src/app/admin/inventory/[id]/page.tsx` L130–136 (STATUSES include `active`), form L1497–1512 → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L836–851). It writes any status. There is no `evaluateLotActivation` call and no `recordAudit`.
+- **Pin:** `src/app/admin/inventory/[id]/page.tsx` L130–136 (STATUSES include `active`), form L1497–1512 → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864). It writes any status. There is no `evaluateLotActivation` call and no `recordAudit`.
 - **Guard miss:** `scripts/compliance/check-activation-gate.ts` L60–100 greps only for the literal `status: "active"`, so a status passed in a variable escapes it. The intake comment (`intake/actions.ts` L195–198) says Finalize is the only activation path.
 - **Effect:** a manager can make a lot with no COA, or a FAILED result, sellable, and nothing records who did it. `issues-core.ts` L553 directs staff to this box for now-clear held lots.
 - **SOP impact:** SOP-04 §4.19 control: manager only, only from a "now clear" Issues row, logged on form 8.1. Carried into SOP-05. Ties to G-19.
@@ -435,17 +435,17 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 **Verdict: MET with serious gaps.** The everyday tools work: the Issues tab, the lot page, expiration rules (save → preview → fingerprinted apply, audited), tags, testing labs and bulk fill. The register's recall hold is a real hard stop, with no override and fail-closed at completion. The gaps sit around the two raw write boxes on the lot page (Lifecycle status and Adjust quantity), the recall process outside the register, and expired stock.
 
 ### F-05a-1 · CONFIRMED · BUG/HARDEN · S1 — "Destroyed" set by hand leaves units on file and drops the lot from the CCRS Inventory file
-- **Pin:** Lifecycle status → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L836–851) writes the status only: no quantity change, no adjustment row, no audit. The weekly CCRS Inventory file reads lots `.neq("status","destroyed")` (`src/lib/compliance/ccrs-batch.ts` L1209–1217) and re-reads destroyed lots only when an event row in the same batch names them (`readDestroyedLots`, L380–411). The proper path sets Destroyed only when the destruction empties the lot (`src/lib/inventory/disposition.ts` L1087–1094).
+- **Pin:** Lifecycle status → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864) writes the status only: no quantity change, no adjustment row, no audit. The weekly CCRS Inventory file reads lots `.neq("status","destroyed")` (`src/lib/compliance/ccrs-batch.ts` L1196–1207) and re-reads destroyed lots only when an event row in the same batch names them (`readDestroyedLots`, L380–411). The proper path sets Destroyed only when the destruction empties the lot (`src/lib/inventory/disposition.ts` L1087–1094).
 - **Effect:** a lot destroyed by hand silently leaves Greenway's state filing while CCRS still holds its last quantity. No Destruction adjustment is filed and no waste record exists.
 - **SOP impact:** SOP-05a §4.9 ("Never Destroyed by hand"), header box, §9 card. Ties to **G-22**.
 
 ### F-05a-2 · CONFIRMED · HARDEN · S1 — A recall hold (status Recalled) is placed and released with no audit row, no reason and no role limit
-- **Pin:** **Recalled** is set only through the same blind Lifecycle status write (`actions.ts` L142–155 → `store.ts` L836–851). The register hold keys on it (`src/lib/pos/recall-hold-core.ts` L44, L53–63). Any `inventory.manage` login (owner, admin, manager; `roles.ts` L106) can set or clear it.
+- **Pin:** **Recalled** is set only through the same blind Lifecycle status write (`actions.ts` L142–155 → `store.ts` L849–864). The register hold keys on it (`src/lib/pos/recall-hold-core.ts` L44, L53–63). Any `inventory.manage` login (owner, admin, manager; `roles.ts` L106) can set or clear it.
 - **Effect:** a statutory sale stop (WAC 314-55-225) can be lifted by any manager with no record of who, when or why. Rated S1 with F-04-2 because it is a control over a regulated sale stop (license integrity).
 - **SOP impact:** §4.8, §4.10: form 8.1 for every change; only the owner releases, on written clearance. Ties to **G-22** (extends G-19).
 
 ### F-05a-3 · CONFIRMED · HARDEN · S2 — Manual adjustment is read-then-write, has no zero floor, never sets Sold out and writes no audit row
-- **Pin:** `createAdjustment` (`store.ts` L578–616) reads `on_hand_qty` (L587–591) and writes current + delta (L603–608). It does not use the atomic `applyLotDelta` (`atomic-quantity.ts`, GW-012) that sales, voids, counts and disposition use, and has no `next < 0` check and no `sold_out` flip (the atomic path does that, L44). The action has no `recordAudit` (`actions.ts` L111–140). The adjustment row itself carries `actor_id` (L594–600).
+- **Pin:** `createAdjustment` (`store.ts` L591–629) reads `on_hand_qty` (L600–604) and writes current + delta (L616–621). It does not use the atomic `applyLotDelta` (`atomic-quantity.ts`, GW-012) that sales, voids, counts and disposition use, and has no `next < 0` check and no `sold_out` flip (the atomic path does that, L44). The action has no `recordAudit` (`actions.ts` L111–140). The adjustment row itself carries `actor_id` (L607–613).
 - **Effect:** a sale at the same moment can be lost; on-hand can go negative; a lot at zero stays Active.
 - **SOP impact:** §4.6 (count twice, quiet times, check On hand after, form 8.2). Ties to **G-23**.
 
@@ -488,7 +488,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.2 note: follow the SOP where they differ.
 
 ### F-05a-13 · CONFIRMED · UX · S4 — Adjustment history shows the browser's date and no name
-- **Pin:** `new Date(a.created_at).toLocaleDateString()` (`[id]/page.tsx` L1539): browser time zone, not Pacific. `actor_id` is stored (`store.ts` L594–600) but not shown.
+- **Pin:** `new Date(a.created_at).toLocaleDateString()` (`[id]/page.tsx` L1539): browser time zone, not Pacific. `actor_id` is stored (`store.ts` L607–613) but not shown.
 - **SOP impact:** §4.5; form 8.2 is the readable record.
 
 ### F-05a-14 · CONFIRMED · UX · S4 — The "Needs attention" card counts expiring-soon lots but does not turn orange for them
@@ -500,7 +500,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.13, forms 8.4 (the plan) and 8.5 (event worksheet). Ties to **G-25**. Q-05a-2 answered (D37): the admin is the coordinator, no back-up.
 
 ### F-05a-16 · CONFIRMED · GAP · S2 — A recall hold does not reach the website or online ordering
-- **Pin:** the public menu filters only hidden cards (`src/lib/pos/live-menu.ts` L167–171, L289–292); online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). `recalledProductKeys` (`recall-hold-store.ts` L72–121) has four callers only: `api/pos/menu/route.ts` L121, `completion-gate.ts` L103, `restore-to-sale-store.ts` L131, `register-sellability-store.ts` L175.
+- **Pin:** the public menu filters only hidden cards (`src/lib/pos/live-menu.ts` L167–171, L289–292); online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). `recalledProductKeys` (`recall-hold-store.ts` L72–121) has four callers only: `api/pos/menu/route.ts` L121, `completion-gate.ts` L103, `restore-to-sale-store.ts` L131, `register-sellability-store.ts` L188.
 - **Effect:** a recalled product stays visible on the website and can be reserved; the sale is refused only when staff complete the pickup (completion gate, fail-closed). WAC 314-55-225(3)(b)(i) requires preventing distribution.
 - **SOP impact:** §4.10 step 5: set **Always hide** on Product Enrichment (audited `product.visibility_changed`). Ties to **G-25** (propagation requirement).
 

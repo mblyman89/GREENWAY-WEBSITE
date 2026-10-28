@@ -257,7 +257,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 ## G-19 · Gated and audited lot activation from the lot page
 
-- **Today:** **Lifecycle status** writes any status, including Active, with no `evaluateLotActivation` and no `recordAudit` (`inventory/actions.ts` L142–155; `store.ts` L836–851). The activation grep guard only matches the literal `status: "active"` (F-04-2). The Issues text points staff to this box (`issues-core.ts` L553).
+- **Today:** **Lifecycle status** writes any status, including Active, with no `evaluateLotActivation` and no `recordAudit` (`inventory/actions.ts` L142–155; `store.ts` L849–864). The activation grep guard only matches the literal `status: "active"` (F-04-2). The Issues text points staff to this box (`issues-core.ts` L553).
 - **Requirements (draft):**
   1. Setting **Active** runs the same go-live check as Finalize (`lot-activation-gate-core.ts` L76–107) and refuses with the reasons.
   2. Every status change writes an audit row (who, from, to, when, reason).
@@ -295,7 +295,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 ## G-22 · Audited, gated lot lifecycle changes (extends G-19)
 
-- **Today:** **Lifecycle status** writes any of the five statuses with no check, no reason and no audit row (`inventory/actions.ts` L142–155 → `store.ts` L836–851). **Destroyed** leaves units on file and drops the lot from the CCRS Inventory file (F-05a-1, **S1**). **Recalled** is placed and lifted by any manager-level login with no record (F-05a-2, **S1**).
+- **Today:** **Lifecycle status** writes any of the five statuses with no check, no reason and no audit row (`inventory/actions.ts` L142–155 → `store.ts` L849–864). **Destroyed** leaves units on file and drops the lot from the CCRS Inventory file (F-05a-1, **S1**). **Recalled** is placed and lifted by any manager-level login with no record (F-05a-2, **S1**).
 - **Requirements (draft):**
   1. Everything in G-19 (the go-live check on Active, an audit row on every change).
   2. **Destroyed removed** from the lot page's status choices. Destruction only through Returns & Destruction (SOP-15), which already sets it correctly (`disposition.ts` L1087–1094).

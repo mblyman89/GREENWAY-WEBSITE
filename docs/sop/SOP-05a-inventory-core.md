@@ -13,7 +13,7 @@
 
 > **How to use this document.** §4.1–§4.4 are the screens and the **daily Issues check** (10 minutes, every morning). §4.5–§4.9 are the lot page: correcting a quantity and changing a lot's status, which are the two most dangerous buttons in Inventory. §4.10–§4.13 are **recalls**, the register's **86**, **restore to sale**, and the written recall plan the law requires. §4.14–§4.16 are **expiry dates**. §4.17–§4.21 are tags, testing labs, lot labels, bulk fill and lot corrections. Section 5 lists every message the screens can show. Section 8 holds the paper forms. Section 9 is a one-page card. Words in **bold** are the exact labels you will see on the screen.
 
-> **The one thing to know before anything else.** On the lot page, the **Lifecycle status** box and the **Adjust quantity** box write straight to the lot. **Lifecycle status** checks nothing and writes **no audit row** (`inventory/actions.ts` L142–155 → `store.ts` L836–851). **Never set a lot to "Destroyed" there**: the units stay on file, no destruction is recorded, and the lot silently drops out of the weekly CCRS inventory file (§4.9, finding F-05a-1, **S1**). Destruction always goes through **Inventory → Returns & Destruction** (SOP-15). A recall is placed and released only by a manager, with a written reason on form 8.1, every time (§4.10).
+> **The one thing to know before anything else.** On the lot page, the **Lifecycle status** box and the **Adjust quantity** box write straight to the lot. **Lifecycle status** checks nothing and writes **no audit row** (`inventory/actions.ts` L142–155 → `store.ts` L849–864). **Never set a lot to "Destroyed" there**: the units stay on file, no destruction is recorded, and the lot silently drops out of the weekly CCRS inventory file (§4.9, finding F-05a-1, **S1**). Destruction always goes through **Inventory → Returns & Destruction** (SOP-15). A recall is placed and released only by a manager, with a written reason on form 8.1, every time (§4.10).
 
 ---
 
@@ -208,7 +208,7 @@ A lot has exactly one of five statuses (`actions.ts` L103–109; lot page L130�
 | **Sold out** | Empty | No | The database flips it automatically when a **sale**, void or count takes it to zero (`atomic-quantity.ts` L44). A manual adjustment does **not** (§4.6) |
 | **Destroyed** | Gone: destroyed and recorded | No | **Only** Returns & Destruction, which sets it after the destruction empties the lot (`disposition.ts` L1087–1094). **Never by hand** (§4.9) |
 
-**How CCRS sees these statuses.** The weekly Inventory file lists every lot that is **not** Destroyed (`ccrs-batch.ts` L1209–1217). A Quarantine or Recalled lot is still listed in the Sales Floor area; the CCRS screen shows advisory note E45 for it. That is expected and needs no action (`ccrs-batch.ts` L1006–1010, L1118–1122).
+**How CCRS sees these statuses.** The weekly Inventory file lists every lot that is **not** Destroyed (`ccrs-batch.ts` L1196–1207). A Quarantine or Recalled lot is still listed in the Sales Floor area; the CCRS screen shows advisory note E45 for it. That is expected and needs no action (`ccrs-batch.ts` L1006–1010, L1118–1122).
 
 ### 4.4 Every morning: the Issues tab
 
@@ -266,18 +266,18 @@ Open a lot from the list. From top to bottom (`src/app/admin/inventory/[id]/page
 
 **Reading the Adjustment history.** Each line shows the change (green +, red -), the reason code (for example `shrink`), the note, and a date. Two limits (finding F-05a-13):
 - The date is formatted by **your browser's clock and time zone** (`toLocaleDateString()`, L1539), not the store's Pacific day. A computer set to another time zone can show a different day.
-- The line does **not** show **who** made the adjustment, although the system stores it (`actor_id`, `store.ts` L594–600). Form 8.2 is the readable record.
+- The line does **not** show **who** made the adjustment, although the system stores it (`actor_id`, `store.ts` L607–613). Form 8.2 is the readable record.
 
 The history lists **manual** adjustments only. Sales, voids, cycle counts and destructions move quantity through their own records (SOP-01, SOP-06, SOP-15).
 
 ### 4.6 Adjust quantity: the procedure
 
-**What it does.** **Record adjustment** adds the number you type (negative to remove) to the lot's on-hand quantity, writes one line to the Adjustment history, and moves the menu stock for the size this lot sells as by the same amount (`actions.ts` L111–140 → `store.ts` L578–616; menu sync L611–615). Except for reason **Receive (add)**, the line is also sent to CCRS in the next weekly InventoryAdjustment file (§4.7).
+**What it does.** **Record adjustment** adds the number you type (negative to remove) to the lot's on-hand quantity, writes one line to the Adjustment history, and moves the menu stock for the size this lot sells as by the same amount (`actions.ts` L111–140 → `store.ts` L591–629; menu sync L611–615). Except for reason **Receive (add)**, the line is also sent to CCRS in the next weekly InventoryAdjustment file (§4.7).
 
 **What it does not do** (findings F-05a-3, F-05a-7):
-- **It does not stop at zero.** The new quantity is the old quantity plus your number, with no floor (`store.ts` L603–608). Type -10 on a lot with 6 and the lot shows -4.
+- **It does not stop at zero.** The new quantity is the old quantity plus your number, with no floor (`store.ts` L616–621). Type -10 on a lot with 6 and the lot shows -4.
 - **It does not flip the lot to Sold out** at zero. Sales, voids and counts do (`atomic-quantity.ts` L44). An adjustment does not.
-- **It is not protected against a sale at the same moment.** It reads the quantity, then writes old + change (`store.ts` L587–591, L603–608). If a register sells from the same lot in between, that sale's decrement can be lost. Sales, counts and destructions use the protected database write (`applyLotDelta`, GW-012); this button does not.
+- **It is not protected against a sale at the same moment.** It reads the quantity, then writes old + change (`store.ts` L600–604, L616–621). If a register sells from the same lot in between, that sale's decrement can be lost. Sales, counts and destructions use the protected database write (`applyLotDelta`, GW-012); this button does not.
 - **It writes no audit-log row.** The adjustment line itself (with the user id) is the only record.
 
 **Procedure.**
@@ -316,7 +316,7 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 
 ### 4.8 Lifecycle status: the procedure
 
-**What it does.** **Lifecycle status → Set status → Update status** writes the status you pick to the lot, and nothing else (`actions.ts` L142–155 → `store.ts` L836–851). The help text says *"Recalled / destroyed lots are excluded from sale."* (L1500).
+**What it does.** **Lifecycle status → Set status → Update status** writes the status you pick to the lot, and nothing else (`actions.ts` L142–155 → `store.ts` L849–864). The help text says *"Recalled / destroyed lots are excluded from sale."* (L1500).
 
 **What it does not do** (findings F-04-2, F-05a-1, F-05a-2):
 - It runs **no go-live check**. It will set **Active** on a lot with no COA, no CCRS id, or a FAILED lab result (F-04-2, **S1**).
@@ -346,8 +346,8 @@ The **Reason** list (lot page L118–128) and what each one sends to CCRS (`ccrs
 ### 4.9 Never "Destroyed" by hand
 
 **What happens if someone does it** (finding F-05a-1, **S1**):
-1. The status becomes **Destroyed**, but **On hand stays the same** and **no destruction is recorded** (`store.ts` L836–851).
-2. The weekly CCRS Inventory file reads only lots that are **not** Destroyed (`ccrs-batch.ts` L1209–1217). Destroyed lots are added back only when the same week's file carries a destruction event for them (`readDestroyedLots`, L380–391).
+1. The status becomes **Destroyed**, but **On hand stays the same** and **no destruction is recorded** (`store.ts` L849–864).
+2. The weekly CCRS Inventory file reads only lots that are **not** Destroyed (`ccrs-batch.ts` L1196–1207). Destroyed lots are added back only when the same week's file carries a destruction event for them (`readDestroyedLots`, L380–391).
 3. So the lot **silently disappears from what Greenway reports**, while the state's system still shows its last quantity on hand. No Destruction adjustment is filed, and no waste record exists. That is a traceability error in a state filing.
 
 **What to do instead.** Every destruction goes through **Inventory → Returns & Destruction** (SOP-15). That flow records the hold, the method, the waste record and, for recalls, the LCB coordination. It sets **Destroyed** itself, and **only when the destruction empties the lot** (`disposition.ts` L1087–1095).
@@ -413,7 +413,7 @@ So nobody should touch **Lifecycle status** or **Adjust quantity** to destroy an
 
 **What the app does not record** (findings F-05a-2, F-05a-15): placing or lifting **Recalled** writes **no audit row**, asks for **no reason**, and the release is open to any manager-level login (§4.8), although only the admin may use it (D37). The app has no recall-plan record and no recall-coordinator field (the only mention is `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136). Forms 8.1, 8.4 and 8.5 are the record until gaps **G-22** and **G-25** are built.
 
-**Finding F-05a-16 (S2): a recall hold does not reach the website or online ordering.** The public menu filters out only **hidden** cards (`src/lib/pos/live-menu.ts` L167–171, L289–292). Online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). Neither reads lot status: `recalledProductKeys` has exactly four callers, the register menu route, the completion gate, restore to sale and the sellability report (`api/pos/menu/route.ts` L121; `completion-gate.ts` L103; `restore-to-sale-store.ts` L131; `register-sellability-store.ts` L175). A customer can still see a recalled product on the website and **reserve** it for pickup. The sale is refused only when staff try to complete the pickup (§4.11). Step 5 above (**Always hide**) is the interim control. It hides every size of the product, so if only one size of a mastered product is recalled, ask the owner before hiding.
+**Finding F-05a-16 (S2): a recall hold does not reach the website or online ordering.** The public menu filters out only **hidden** cards (`src/lib/pos/live-menu.ts` L167–171, L289–292). Online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). Neither reads lot status: `recalledProductKeys` has exactly four callers, the register menu route, the completion gate, restore to sale and the sellability report (`api/pos/menu/route.ts` L121; `completion-gate.ts` L103; `restore-to-sale-store.ts` L131; `register-sellability-store.ts` L188). A customer can still see a recalled product on the website and **reserve** it for pickup. The sale is refused only when staff try to complete the pickup (§4.11). Step 5 above (**Always hide**) is the interim control. It hides every size of the product, so if only one size of a mastered product is recalled, ask the owner before hiding.
 
 > **Control: a recall is placed by a manager, on form 8.1 and form 8.5, the same hour the notice arrives; the product is physically segregated and counted; the website card is hidden; the LCB is notified (immediately for a recall, 48 hours for a withdrawal); nothing is destroyed before LCB coordination; only the admin (recall coordinator) releases a hold, on written clearance.** The app's hold stops register sales but writes no record, does not reach the website, and is lifted if the lot is scheduled for destruction (F-05a-2, F-05a-15, F-05a-16, F-05a-18; gaps G-22, G-25, G-28).
 
@@ -718,7 +718,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | Message | Cause | Do this |
 |---|---|---|
 | *"Saved."* | The last button worked | Check the card or section you changed |
-| *"Saved."* followed by a sentence about the menu | **Record adjustment** worked, but the menu stock for this lot's size could not follow (`actions.ts` L135–138; `src/lib/inventory/store.ts` L615) | Read the sentence. If it says the menu did not move, tell the owner (§4.6 step 4) |
+| *"Saved."* followed by a sentence about the menu | **Record adjustment** worked, but the menu stock for this lot's size could not follow (`actions.ts` L135–138; `src/lib/inventory/store.ts` L628) | Read the sentence. If it says the menu did not move, tell the owner (§4.6 step 4) |
 | *"Enter a non-zero quantity."* | **Quantity change** was blank or 0 (`actions.ts` L120) | Type the difference, negative to remove |
 | *"Choose a valid reason."* | No reason picked (L123) | Pick a reason from §4.7 |
 | *"Choose a valid status."* | No status picked (L146) | Pick one allowed by the §4.8 table |
@@ -873,7 +873,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 | Control | Why | Where it comes from |
 |---|---|---|
-| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L836–851; `ccrs-batch.ts` L1209–1217, L380–391; `disposition.ts` L1087–1095 |
+| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L849–864; `ccrs-batch.ts` L1196–1207, L380–391; `disposition.ts` L1087–1095 |
 | **A form 8.1 line before every status change** | **Lifecycle status** writes no audit row and asks no reason (F-05a-2; F-04-2) | `actions.ts` L142–155 |
 | **Active from quarantine only from a "now clear" Issues row** | No go-live check on the manual path (F-04-2, **S1**). WAC 314-55-102: no retail sale without a passing COA | SOP-04 §4.19; `lot-activation-gate-core.ts` |
 | **A recall placed the same hour; segregate, count, hide on the website, check open orders** | WAC 314-55-225(3)(b)(i): secure, isolate and prevent distribution; the hold does not reach the website (F-05a-16) | §4.10; `live-menu.ts` L167–171; `order-pricing.ts` L124–134 |
@@ -883,7 +883,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 | **A written, signed recall plan with a named coordinator, reviewed yearly** | WAC 314-55-225(3)(d) (mandatory) | Form 8.4; F-05a-15 |
 | **Only the admin (recall coordinator) releases a recall hold, on written clearance** | Owner decision D37; the app lets any manager release with no record | §4.10; F-05a-2 |
 | **A recalled lot is never scheduled for destruction in the app until G-28 is built** | Scheduling overwrites Recalled with Quarantine and lifts the register hold (F-05a-18, S1); Cancel sets Active (F-05a-19) | `disposition.ts` L965–971, L1113–1114; `recall-hold-core.ts` L44 |
-| **Every manual adjustment: reason, note, double count, form 8.2** | CCRS withholds an Other / Employee-sample row with no note (E13); the history shows no name; the write is not atomic and has no floor (F-05a-3, F-05a-4, F-05a-13) | `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `store.ts` L578–616 |
+| **Every manual adjustment: reason, note, double count, form 8.2** | CCRS withholds an Other / Employee-sample row with no note (E13); the history shows no name; the write is not atomic and has no floor (F-05a-3, F-05a-4, F-05a-13) | `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `store.ts` L591–629 |
 | **Never use Receive (add), Destruction or Recall removal on the lot page** | Receive is not sent to CCRS (F-05a-7); the other two bypass SOP-15 (F-05a-5) | `ccrs-inventory-adjustment-core.ts` L101–105 |
 | **Theft and seizure go to the owner, never straight to an adjustment** | No Theft / Seizure reason on the form yet (F-05a-6); the owner approved adding them (D39, G-23) | Lot page L118–128; `ccrs-inventory-adjustment-core.ts` L87–90 |
 | **The daily Issues check, logged on form 8.3** | It is the only stop on expired stock (F-05a-8) and the place every blocked lot shows | §4.4 |
@@ -1166,12 +1166,12 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | 2 roles | `src/lib/auth/roles.ts` L106, L126, L142–149; `inventory/actions.ts` (every action `inventory.manage`: L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210); `expiration-rules/page.tsx` L222, `actions.ts` L62, L131, L141; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33; `reports/expiration/page.tsx` L151; `disposition/page.tsx` L97; `api/pos/stock-flag/route.ts` L28–34 |
 | 3 before you start | `src/components/admin/admin-nav-data.ts` L84–90; `completion-gate.ts` L95–119; `restore-to-sale-core.ts` L115–158; `expiration-rules/actions.ts` L146–157; `expiry-rules-core.ts` L10–34; `tags/actions.ts` L108–111 |
 | 4.1–4.2 list | `inventory/page.tsx` L92–102, L204–209, L439–475, L493–570, L603–709, L806–852; `InventoryFilterPanel.tsx` L345 |
-| 4.3 statuses | `inventory/actions.ts` L103–109; `[id]/page.tsx` L130–136; `sale-lot-read.ts` L39–47; `atomic-quantity.ts` L44; `disposition.ts` L1087–1094; `ccrs-batch.ts` L1006–1010, L1118–1122, L1209–1217 |
+| 4.3 statuses | `inventory/actions.ts` L103–109; `[id]/page.tsx` L130–136; `sale-lot-read.ts` L39–47; `atomic-quantity.ts` L44; `disposition.ts` L1087–1094; `ccrs-batch.ts` L1006–1010, L1118–1122, L1196–1207 |
 | 4.4 Issues | `src/lib/admin/issues-core.ts` L16–25, L281–285, L314–486; `IssuesList.tsx` L11–12; `inventory/page.tsx` L572–597; `src/lib/inventory/store.ts` L32 |
-| 4.5 lot page | `[id]/page.tsx` L360–418, L439–868, L1474–1546; `LabCertificatePanels.tsx` L35–56; `store.ts` L594–600 |
-| 4.6–4.7 adjust | `inventory/actions.ts` L89–140; `store.ts` L578–616; `[id]/page.tsx` L118–128, L1474–1494; `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `trade-samples.ts` L280–300; `atomic-quantity.ts` |
-| 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L836–851; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1209–1217; `disposition.ts` L1087–1095 |
-| 4.10–4.11 recall | `src/lib/pos/recall-hold-core.ts` L17–26, L44, L53–63, L108–117; `recall-hold-store.ts` L72–121; `api/pos/menu/route.ts` L116–121, L225–240, L302–304; `orders/completion-gate.ts` L95–119, L199; `pos/sync-store.ts` L1133–1162; `register-availability-core.ts` L332–345; `live-menu.ts` L167–171, L289–292; `order-pricing.ts` L124–134; `register-sellability-store.ts` L175; `products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270; `disposition-core.ts` L226–243; WAC 314-55-225 (app.leg.wa.gov, read 2026-10-27) |
+| 4.5 lot page | `[id]/page.tsx` L360–418, L439–868, L1474–1546; `LabCertificatePanels.tsx` L35–56; `store.ts` L607–613 |
+| 4.6–4.7 adjust | `inventory/actions.ts` L89–140; `store.ts` L591–629; `[id]/page.tsx` L118–128, L1474–1494; `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `trade-samples.ts` L280–300; `atomic-quantity.ts` |
+| 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L849–864; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1196–1207; `disposition.ts` L1087–1095 |
+| 4.10–4.11 recall | `src/lib/pos/recall-hold-core.ts` L17–26, L44, L53–63, L108–117; `recall-hold-store.ts` L72–121; `api/pos/menu/route.ts` L116–121, L225–240, L302–304; `orders/completion-gate.ts` L95–119, L199; `pos/sync-store.ts` L1133–1162; `register-availability-core.ts` L332–345; `live-menu.ts` L167–171, L289–292; `order-pricing.ts` L124–134; `register-sellability-store.ts` L188; `products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270; `disposition-core.ts` L226–243; WAC 314-55-225 (app.leg.wa.gov, read 2026-10-27) |
 | 4.12 86 / restore | `src/app/(site)/pos/SaleFlow.tsx` L4263–4280; `RegisterShell.tsx` L1557–1594; `stock-flag-core.ts` L31–32, L79–81; `api/pos/stock-flag/route.ts` L28–102; `register-availability-core.ts` L141–145, L318–421; `RegisterSellabilityBanner.tsx` L142–188; `inventory/actions.ts` L1174–1198; `restore-to-sale-core.ts` L115–167; `restore-to-sale-store.ts` L68–172 |
 | 4.13 recall plan | WAC 314-55-225(3)(d); `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136 |
 | 4.14–4.16 expiry | `expiry-rules-core.ts` L10–69, L209–232, L321–340, L438–447, L505, L770–777, L1116–1127; `expiration-rules/page.tsx` L57–62, L117–127, L180–216, L279–409; `expiration-rules/actions.ts` L61–180; `[id]/page.tsx` L603–628; `intake-store.ts` L1587–1612; `issues-core.ts` L388–392, L417, L452–473; `InventoryIntelPanel.tsx` L199–201; `reports/expiration/page.tsx` L151, L229–277; `ReportTabs.tsx` L22 |
