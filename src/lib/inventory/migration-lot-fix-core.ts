@@ -49,7 +49,6 @@ export type MigrationLotInput = {
 /** Lot-gap knob for each bulk-fillable field (lot-gap-core LOT_GAP_DEFINITIONS params). */
 export const FIELD_GAP_PARAM: Readonly<Record<BulkFillField, string>> = {
   expires_on: "missingExpiry",
-  unit_cost_minor_units: "unknownCost",
   pos_product_key: "missingProductLink",
 };
 
@@ -59,6 +58,11 @@ export type MigrationLotCallout = {
   links: MigrationFixLink[];
   /** True when no lab result is linked (the COA CSV import is a roadmap item). */
   coaMissing: boolean;
+  /**
+   * Phase 0.5 (G-27, D38): true when the unit cost is blank. There is NO fill
+   * link for it: cannabis cost is never typed, it is corrected from the manifest.
+   */
+  costMissing: boolean;
   /** Plain-English summary line. */
   summary: string;
 };
@@ -85,13 +89,15 @@ export function migrationLotCallout(lot: MigrationLotInput): MigrationLotCallout
     links.push({ field, label: `Fill ${fieldLabel(field)} with Bulk fill`, href: `/admin/inventory?${params.toString()}` });
   }
   const coaMissing = !lot.lab_result_id;
+  const costMissing = lot.unit_cost_minor_units == null;
   const blanks = links.map((l) => fieldLabel(l.field).toLowerCase());
+  if (costMissing) blanks.push("unit cost (correct it from the manifest; it is never typed)");
   if (coaMissing) blanks.push("lab result (COA)");
   const summary =
     blanks.length === 0
       ? "This lot came from the one-time Cultivera import. Its import-blank fields are all filled."
       : `This lot came from the one-time Cultivera import, which did not supply: ${blanks.join(", ")}.`;
-  return { links, coaMissing, summary };
+  return { links, coaMissing, costMissing, summary };
 }
 
 /** Manifest link for a lot (intake page), or null when the lot has no manifest. */
@@ -124,13 +130,14 @@ export function __runMigrationLotFixCoreTests(): { passed: number; failed: numbe
 
   const c = migrationLotCallout(base)!;
   ok(c !== null, "migration lot gets a callout");
-  ok(c.links.length === 2, "expiry + cost blank -> 2 links");
-  ok(c.links[0].field === "expires_on" && c.links[1].field === "unit_cost_minor_units", "field order follows BULK_FILLABLE_FIELDS");
+  ok(c.links.length === 1, "expiry blank -> 1 link; cost blank -> NO link (G-27)");
+  ok(c.links[0].field === "expires_on", "expiry link");
+  ok(!c.links.some((l) => l.href.includes("unit_cost")), "G-27: never a typed-cost link");
+  ok(c.costMissing === true, "cost missing flagged");
   ok(c.links[0].href === "/admin/inventory?status=active&missingExpiry=1&q=WA123&bulk=1&bulkField=expires_on", "active expiry href");
-  ok(c.links[1].href === "/admin/inventory?status=active&unknownCost=1&q=WA123&bulk=1&bulkField=unit_cost_minor_units", "active cost href");
   ok(c.links[0].label === "Fill Expiration date with Bulk fill", "label");
   ok(c.coaMissing === true, "coa missing flagged");
-  ok(c.summary === "This lot came from the one-time Cultivera import, which did not supply: expiration date, unit cost, lab result (COA).", "summary lists blanks");
+  ok(c.summary === "This lot came from the one-time Cultivera import, which did not supply: expiration date, unit cost (correct it from the manifest; it is never typed), lab result (COA).", "summary lists blanks");
 
   // Not a migration lot -> nothing (intake lots are perfect before allowed in).
   ok(migrationLotCallout({ ...base, notes: "Received via intake" }) === null, "intake lot -> null");
@@ -152,7 +159,7 @@ export function __runMigrationLotFixCoreTests(): { passed: number; failed: numbe
   ok(!none.links[0].href.includes("q="), "no needle -> no q");
 
   // Zero cost is a KNOWN cost (bulk-fill-core isBlank) -> no cost link.
-  ok(!migrationLotCallout({ ...base, unit_cost_minor_units: 0 })!.links.some((l) => l.field === "unit_cost_minor_units"), "zero cost not blank");
+  ok(migrationLotCallout({ ...base, unit_cost_minor_units: 0 })!.costMissing === false, "zero cost not blank");
 
   // All filled + COA linked.
   const full = migrationLotCallout({ ...base, expires_on: "2027-01-01", unit_cost_minor_units: 1, lab_result_id: "lr-1" })!;

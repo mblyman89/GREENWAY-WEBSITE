@@ -52,7 +52,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-24 | Expired stock at the register: **hard block** expired Solid Edible, Liquid Edible, Tincture, Capsule and RSO (RSO by store category), **warn** on the rest; FEFO lot draw | **D36, D44** | F-05a-8, F-05a-20 | SOP-05a §4.16, form 8.3 | **APPROVED** |
 | G-25 | Recall plan + recall event log in the app; recall hold reaches the website and online orders | (compliance: WAC 314-55-225(3)(d), (3)(f)) | F-05a-15, F-05a-16 | SOP-05a §4.10, §4.13, forms 8.4–8.5; Always hide | OPEN |
 | G-26 | Print-label link on the lot page, scannable fallback barcode, **the professional 86** (reason-driven clearing, one queue, audited manager restore) | **D40** | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | **APPROVED** (86 part, D40) · rest OPEN |
-| G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **APPROVED** |
+| G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **BUILT** (Phase 0.5) |
 | G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status **with a reason (owner only)**; a partial destruction restores the earlier status (SOP-15 extension) | **D39** (design: Q-05a-8, Q-15-3) | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | SOP-05a §4.9, §4.10, form 8.4; SOP-15 §4.19–§4.22, form 8.5 | OPEN (design awaits Q-05a-8) |
 | G-29 | Non-cannabis goods fully used everywhere: register scan to a priced line, sale decrements On hand, void / return restores, cost of goods posted, menu presence, reports; audited | **D45** | F-05b-1 (**S1**), F-05b-15 | SOP-05b §4.1–§4.5, §4.8, form 8.1 | **APPROVED** |
 | G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** |
@@ -384,7 +384,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. The 86 audit row records the signed-in employee's id from the register session, not only a client-sent name.
 - **Interim:** SOP-05a §4.12, §4.19.
 
-## G-27 · No typed cannabis unit cost (APPROVED, D38)
+## G-27 · No typed cannabis unit cost (BUILT, Phase 0.5, D38)
+- **Built (Phase 0.5, D76):** requirements 1–3 met. Bulk fill offers Expiration date and POS product key only; the planner, the server action and the store each refuse a cost. A source-scanning compliance test fails if any `inventory_lots` write carrying a unit cost appears outside manifest intake (`intake-store.ts`), the manifest receipt (`receipt-service.ts`) or the one-time Cultivera import (`import-service.ts`), and none may be in `src/app/`. The unknown-cost Issues row reads "Cost missing — correct from the manifest" with no Bulk fill link. Non-cannabis cost keeps its own owner/admin path (`inventory.cost.fill`).
 
 - **Owner decision D38:** *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."*
 - **Today:** cannabis cost is read from the manifest at receiving (`intake-parser.ts` L415–420) and locked on the lot page (`lot-edit-core.ts` L33–45, L38), but **Bulk fill → Unit cost** can still type it on Cultivera-import lots (`bulk-fill-core.ts` L54; `actions.ts` L904) (F-05a-11, **S1**).

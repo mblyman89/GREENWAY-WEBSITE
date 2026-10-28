@@ -674,6 +674,13 @@ export default async function LotDetailPage({
                     ))}
                   </ul>
                 ) : null}
+                {migrationCallout.costMissing ? (
+                  // Phase 0.5 (G-27, D38): cannabis cost is never typed.
+                  <p data-testid="migration-lot-cost-missing" className="mt-2">
+                    Cost missing {"\u2014"} correct from the manifest. Cannabis cost is never typed; it comes from
+                    the state CCRS manifest created by the vendor (owner rule D38).
+                  </p>
+                ) : null}
                 {migrationCallout.coaMissing ? (
                   <p className="mt-2">
                     The import brought no lab results. A COA spreadsheet import for these lots is on the
