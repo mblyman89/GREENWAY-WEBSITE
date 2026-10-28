@@ -348,3 +348,22 @@ The owner asked for *"the states requirements"* and to *"look it up in CCRS"*. E
 
 - **D70-D74** in `docs/sop/SOP-08-onboarding-system-access-offboarding.md` **v1.1** and in `05-GAP-REGISTER.md` (G-53, G-54 APPROVED; G-57 DEFERRED; new G-59).
 - **D75**: the SOP Library is built at **Employee → SOP Library** (`/admin/staffing/sop-library`); it reads `docs/sop/*.md` directly, so every SOP update appears there automatically. This delivers the reading and printing parts of **G-06**. The fix-phase recommendation is in `06-FIX-PHASE-PLAN.md`.
+
+
+---
+
+## Owner reply to the fix-phase plan (recorded verbatim, after PR #1528)
+
+> Thank you! I agree with the order. I want to add context about the bookkeeping and accounting branch. It’s nearly built out entirely. It has not been connected to anything business related yet. I will finish it at some point, but getting the pos system built and working is far more important right now. So with that said, books accuracy does not worry me. I have other bookkeeping services I use still so we have time to finish building it. We need to protect the cannabis license first. Please complete phase 0 and phase 1 before reporting back to me with a summary report of what has been done. Follow the standing rules. Thank you!
+
+### Decisions derived (each traced to the words above)
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D76 | **The fix order in `06-FIX-PHASE-PLAN.md` is approved as written.** Phase 1 (lot lifecycle, license) stays ahead of Phase 2 (cash/books). **Phase 0 and Phase 1 are done before the next report.** | "I agree with the order." · "We need to protect the cannabis license first. Please complete phase 0 and phase 1 before reporting back to me" |
+| D77 | **Books accuracy is not a current worry.** The bookkeeping branch is nearly built but not yet connected to business events, and outside bookkeeping services are still in use. Fixes that only post to the books (for example G-12, G-14, G-48) stay in their planned phase and do not jump the queue. A license-protecting fix never waits on a books posting. | "books accuracy does not worry me. I have other bookkeeping services I use still so we have time to finish building it." |
+
+### Applied
+
+- **D76** in `06-FIX-PHASE-PLAN.md` (status → approved; progress table).
+- **D77** in `06-FIX-PHASE-PLAN.md` §2 note.

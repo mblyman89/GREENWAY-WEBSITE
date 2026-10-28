@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (draft for owner review; D21 and F-03-4 correction applied; D41 living-SOP reminder) |
+| **Version** | 1.3 (draft for owner review; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -201,7 +201,7 @@ Rules:
 - **MENU**: when the menu was last downloaded, plus how many items are low on stock.
 - **QUEUE**: **all clear**, or *"N rejected — kept on this register; back office has been notified"* (4.32).
 
-**Amber banner "🧪 Medical TEST MODE — endorsement is SIMULATED…"**: someone turned on the medical rehearsal switch on this iPad. **Turn it off before real sales** (MORE ▾ → the medical test mode item). See finding F-01-14.
+**Amber banner "🧪 Medical TEST MODE — endorsement is SIMULATED…"**: someone turned on the medical rehearsal switch on this iPad. **Turn it off before real sales** (MORE ▾ → the medical test mode item). Since the Phase 0.1 fix (F-01-14 FIXED), the register refuses to take payment on a sale that took tax off while test mode is on. The message reads *"Medical TEST MODE is on, so the tax taken off this sale is only a simulation. A real sale cannot be paid this way."* Turn test mode off and ring the sale again at full tax.
 
 ### 4.5 Starting a sale: the ID check
 
@@ -873,7 +873,7 @@ Do **not** 86 an item just because you cannot find it. Ask someone first, becaus
 | **🔄 Refresh menu** | Downloads the latest menu, prices, promotions and discount settings. Do this after the back office changes prices or programs, after an exception tells you to, or if an item is missing. Between customers only. |
 | **🖨 Receipt printer** | Printer setup and status (SOP-17). |
 | **☀️ Light mode / 🌙 Dark mode** | Changes the colour theme on this iPad only. |
-| **⚕️ Turn ON medical test mode (simulate endorsement)** / **🧪 Turn OFF medical test mode** | **Training only.** It pretends the store is medically endorsed so staff can rehearse a tax-free medical sale. *"TEST ONLY … Turn OFF for real sales until the store is actually endorsed."* While it is on, an amber banner shows on every screen. **Never ring a real sale with it on.** The server checks the store's real endorsement, not this switch, and does not recalculate tax. A real sale rung in test mode can therefore be recorded with tax taken off but with no exemption record behind it (finding F-01-14). |
+| **⚕️ Turn ON medical test mode (simulate endorsement)** / **🧪 Turn OFF medical test mode** | **Training only.** It pretends the store is medically endorsed so staff can rehearse a tax-free medical sale. *"TEST ONLY … Turn OFF for real sales until the store is actually endorsed."* While it is on, an amber banner shows on every screen. **Never ring a real sale with it on.** Two locks now stop a mistake (Phase 0.1, F-01-14 FIXED). (1) The register refuses payment when test mode took any tax off. (2) If such a sale still reaches the server, the sync checks the store's **real** endorsement and turns the sale into an exception instead of recording it. You can still rehearse the medical flow up to the payment screen. |
 | **⏱️ Clock in / Clock out** | Punches the signed-in employee (4.2). |
 | **🔒 Lock register** | Locks now (4.31). |
 
@@ -1241,3 +1241,4 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.3 draft | Fix phase | Phase 0.1 (owner D76). F-01-14 FIXED: the register refuses payment when the simulated endorsement took tax off (`medicalTestModeSaleBlock`, `src/lib/pos/medical-testmode-core.ts`; called in `SaleFlow.tsx` onPaid). The server sync refuses a medical sale with tax removed when `medical_endorsement_config` says not endorsed (`src/lib/pos/sync-store.ts`). §4.4 banner note and the MORE-menu row updated. | Fix program |

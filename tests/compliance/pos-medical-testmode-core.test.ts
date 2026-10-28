@@ -17,6 +17,7 @@ import {
   serializeMedicalTestMode,
   applyMedicalTestMode,
   medicalTestModeBannerActive,
+  medicalTestModeSaleBlock,
 } from "@/lib/pos/medical-testmode-core";
 
 describe("medical-testmode-core self-tests", () => {
@@ -63,5 +64,27 @@ describe("medical test-mode override", () => {
 
   it("exposes a stable per-device localStorage key", () => {
     expect(MEDICAL_TESTMODE_KEY).toBe("gw-pos-medical-testmode");
+  });
+});
+
+describe("Phase 0.1 (F-01-14): no real payment on simulated tax removal", () => {
+  const real = {
+    products: [],
+    medical: { endorsed: false, exciseExemptionUntil: "2029-06-30", registry: {} },
+  } as unknown as PosMenuBundle;
+  it("test mode marks the bundle as simulated", () => {
+    expect(applyMedicalTestMode(real, true).medical?.simulated).toBe(true);
+  });
+  it("refuses payment when the simulation removed tax", () => {
+    expect(medicalTestModeSaleBlock(applyMedicalTestMode(real, true), 1)).toMatch(/TEST MODE/);
+  });
+  it("allows a full-tax sale in test mode and any sale with test mode off", () => {
+    expect(medicalTestModeSaleBlock(applyMedicalTestMode(real, true), 0)).toBeNull();
+    expect(medicalTestModeSaleBlock(real, 999)).toBeNull();
+  });
+  it("the server sync re-checks the real endorsement", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/pos/sync-store.ts", "utf8");
+    expect(src).toMatch(/medicalSavingsMinor > 0[\s\S]{0,200}getMedTaxSettings\(\)/);
   });
 });

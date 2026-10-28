@@ -62,6 +62,12 @@ export type PosMedicalConfig = {
   exciseExemptionUntil: string;
   /** productId → verified DOH 246-70 category (durable medical_product_registry). */
   registry: Record<string, DohCategory>;
+  /**
+   * Phase 0.1 (F-01-14): set ONLY by the per-device medical TEST MODE when it
+   * simulated the endorsement. Never sent by the server. A sale priced with a
+   * simulated endorsement must never complete (see medicalTestModeSaleBlock).
+   */
+  simulated?: boolean;
 };
 
 // ---------------------------------------------------------------------------

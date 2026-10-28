@@ -162,6 +162,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Effect:** a short float at open is invisible until reconcile, and then it reads as a drawer shortage that belongs to the wrong person. SOP-01 §4.3 says "tell a manager before ringing".
 
 ### F-01-14 · CONFIRMED · BUG · S1 — Medical test mode can complete a real sale with tax removed and no exemption record
+- **Status: FIXED (Phase 0.1, owner D76).** Device: `medicalTestModeSaleBlock` refuses payment when the simulated endorsement (`medical.simulated`) removed tax. Server: `sync-store.ts` refuses (exception) a medical sale with `medicalSavingsMinor > 0` when `getMedTaxSettings().medicallyEndorsed` is false. SOP-01 v1.3.
 - **Pin:** `src/lib/pos/medical-testmode-core.ts` flips `bundle.medical.endorsed = true` on the device only. The register then prices medical lines tax-exempt. At sync, `src/lib/orders/completion-gate.ts` L166–182 builds the exemption plan with the **real** `medSettings.medicallyEndorsed`. With the store unendorsed, `claimedLineCount = 0`, so **no** WAC 314-55-090(2) exempt-sale rows are written (L214), and the gate does **not** refuse. `sync-store.ts` stores the device's `sale.taxMinor` (L866) and does not recompute tax.
 - **Effect:** a carded sale rung with test mode left on completes with tax under-collected and no exemption ledger. This is a tax liability (WAC 314-55-090(3): unrecorded exemptions are presumed incorrect). The banner is the only guard.
 - Upgraded from SUSPECTED during the slice after tracing the full path.

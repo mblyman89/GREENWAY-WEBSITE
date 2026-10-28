@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Recommendation, waiting for the owner to agree to it (D75 pauses SOP writing) |
+| **Status** | **Approved by the owner (D76).** Phase 0 and Phase 1 are in progress; see §7 |
 | **Written** | After SOP-08 v1.1 and the SOP Library build |
 | **Sources** | [03 Findings Ledger](03-FINDINGS-LEDGER.md) (165 findings: 23 × S1, 67 × S2, 57 × S3, 16 × S4) · [05 Gap Register](05-GAP-REGISTER.md) |
 
@@ -15,6 +15,8 @@ The owner's words are in [00](00-OWNER-REQUEST-VERBATIM.md), in the section "Own
 ## 2. Recommendation in one paragraph
 
 Keep the SOP order as the **tie-breaker**, but do not use it as the main order. The main order should be **risk first, then dependencies**. Some fixes protect the license and the excise return, and are small: they go first. One shared foundation, the **lot lifecycle** (who can change a lot's status, with what checks, and with what audit trail), sits underneath Receiving (SOP-04), Inventory (SOP-05a), Counts (SOP-06) and Returns & Destruction (SOP-15). Three S1 findings cannot be fixed properly until that foundation exists, so it comes next. The cash chain (SOP-01 → 02 → 03) follows in its own order. Each step depends on the one before it, and the paper forms in the SOPs already cover the gap in the meantime. Customers, loyalty, online orders and digital content come last, as the owner said.
+
+> **Owner note (D77):** the bookkeeping branch is not connected to business events yet and outside bookkeeping services are still in use, so books accuracy is not a current worry. Books-only fixes stay in their phase.
 
 ## 3. Why not just follow the SOP order
 
@@ -117,3 +119,9 @@ Each phase is a set of slices. Each slice follows the standing rules: commit →
 
 1. Agree to this order, or move a phase. Phase 2 (cash) can swap with Phase 1 if the owner sees books integrity as the bigger worry. The only hard rules are the dependencies inside each phase.
 2. Q-05b-6 (managers saving cost) is still open, and it matters for G-30 in Phase 5. It does not block anything before Phase 5.
+
+## 7. Progress
+
+| Step | Gap / finding | Status | PR |
+|---|---|---|---|
+| 0.1 | F-01-14 medical test mode tax | **FIXED** | (this slice) |
