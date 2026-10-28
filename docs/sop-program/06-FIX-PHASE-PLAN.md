@@ -128,4 +128,5 @@ Each phase is a set of slices. Each slice follows the standing rules: commit →
 | 0.2 | G-51 + G-47 samples off menu, register and website; legacy panel removed | **BUILT** | #1530 |
 | 0.3 | G-52 + G-59 new hires start as Candidate (PIN locked until Active); lifecycle owner and admin only (F-08-1) | **BUILT** | #1531 |
 | 0.4 | G-31 cannabis-line guard, refused both directions at all three entry points, audited, Issues row (F-05b-9) | **BUILT** | #1532 |
-| 0.5 | G-27 no typed cannabis unit cost: Bulk fill cost removed, guard test, "correct from the manifest" (F-05a-11) | **BUILT** | (this slice) |
+| 0.5 | G-27 no typed cannabis unit cost: Bulk fill cost removed, guard test, "correct from the manifest" (F-05a-11) | **BUILT** | #1533 |
+| 1.1 | G-19 + G-22 gated, audited lot lifecycle: go-live check on Active, reason required, no manual Destroyed, recall release owner/admin with clearance reference, Status history; guard extended (F-04-2, F-04-12, F-05a-1, F-05a-2) | **BUILT** | (this slice) |

@@ -44,10 +44,10 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-16 | Partial-quantity receive: record "N of M received", the rest refused, per line | **D29** (*"we need a way to accept less than what came in, please add this to the list of serious issues to fix"*) | F-04-1 (**S1**) | SOP-04 §4.11: refuse the whole short line; vendor re-sends | **APPROVED · SERIOUS** |
 | G-17 | Show emails that failed to stage (parse failed / no manifest) on the Receiving screen | (procedure need) | F-04-4 | SOP-04 §4.3 step 4: daily mailbox-vs-list check, form 8.1 | OPEN |
 | G-18 | Monthly CCRS public records request: reminder on the 10th (admin), month drop-down (one or several months) filling the built-in text, tracking # / received log, corrected phone and stale help | D28, **D32** | F-04-19, F-04-18, F-04-13, F-04-14, F-04-17 | SOP-04 §4.26–§4.28, form 8.4 | **APPROVED** (drop-down, D32) · rest OPEN |
-| G-19 | Gated and audited lot activation from the lot page (Lifecycle status runs the go-live check and writes an audit row) | (compliance: WAC 314-55-102) | F-04-2, F-04-12 | SOP-04 §4.19: manager only, from a "now clear" Issues row, logged on form 8.1 | OPEN |
+| G-19 | Gated and audited lot activation from the lot page (Lifecycle status runs the go-live check and writes an audit row) | (compliance: WAC 314-55-102) | F-04-2, F-04-12 | SOP-04 §4.19: manager only, from a "now clear" Issues row, logged on form 8.1 | **BUILT** (Phase 1.1) |
 | G-20 | Benchmark dataset lifecycle: typed delete confirmation, 18-month retention purge (notice, hold, audit), working-buttons-only on monthly cards | **D33**, **D34** | F-04-15, F-04-16 | SOP-04 §4.33–§4.34, form 8.4 part G | **APPROVED** |
 | G-21 | First-delivery-from-vendor marker on the manifest review screen (prompts the recommended second count) | **D31** | — (no finding; feature need) | SOP-04 §4.9 Vendor-filter check, form 8.1 box | OPEN |
-| G-22 | Audited, gated lot lifecycle: no manual Destroyed, a reason on every change, owner-only recall release, status history (extends G-19) | (compliance: WAC 314-55-225, CCRS traceability) | F-05a-1 (**S1**), F-05a-2 (**S1**), F-04-2 | SOP-05a §4.8–§4.10, form 8.1 | OPEN |
+| G-22 | Audited, gated lot lifecycle: no manual Destroyed, a reason on every change, owner-only recall release, status history (extends G-19) | (compliance: WAC 314-55-225, CCRS traceability) | F-05a-1 (**S1**), F-05a-2 (**S1**), F-04-2 | SOP-05a §4.8–§4.10, form 8.1 | **BUILT** (Phase 1.1) |
 | G-23 | Hardened manual adjustment: atomic, no negative, Sold out at zero, notes where CCRS needs them, no Destruction / Recall removal / Receive, add Theft / Seizure, audit + name | (procedure need; CCRS E13) | F-05a-3…F-05a-7, F-05a-13 | SOP-05a §4.6–§4.7, form 8.2 | **APPROVED** (D39: remove Receive, Destruction, Recall removal; add Theft, Seizure; Schedule destruction link) |
 | G-24 | Expired stock at the register: **hard block** expired Solid Edible, Liquid Edible, Tincture, Capsule and RSO (RSO by store category), **warn** on the rest; FEFO lot draw | **D36, D44** | F-05a-8, F-05a-20 | SOP-05a §4.16, form 8.3 | **APPROVED** |
 | G-25 | Recall plan + recall event log in the app; recall hold reaches the website and online orders | (compliance: WAC 314-55-225(3)(d), (3)(f)) | F-05a-15, F-05a-16 | SOP-05a §4.10, §4.13, forms 8.4–8.5; Always hide | OPEN |
@@ -289,7 +289,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. The log in item 2 holds one row per **month**, even when one request covered several months (one tracking # → several rows), because each month arrives as its own zip (D32).
 - **Interim:** SOP-04 §4.26–§4.28, form 8.4.
 
-## G-19 · Gated and audited lot activation from the lot page
+## G-19 · Gated and audited lot activation from the lot page (BUILT, Phase 1.1)
+- **Built (Phase 1.1, D76):** requirements 1–5 met. Active runs `evaluateLotActivation` through `evaluateLotLifecycleChange` (`lot-lifecycle-core.ts`) in `setLotStatusAction`; every change writes `inventory_lot.status_changed` (who, from, to, when, reason, reference) and every refusal `inventory_lot.status_change_refused`; `check-activation-gate.ts` also catches non-literal and `destroyed` lot status writes and is run by `tests/compliance/fix-p1-1-gated-lot-lifecycle.test.ts` (it had been red on main with three unreviewed `status: "active"` hits, each now reviewed in the script); the Issues "now clear" row points at the gated path; the stale attach text is replaced (F-04-12).
 
 - **Today:** **Lifecycle status** writes any status, including Active, with no `evaluateLotActivation` and no `recordAudit` (`inventory/actions.ts` L142–155; `store.ts` L849–864). The activation grep guard only matches the literal `status: "active"` (F-04-2). The Issues text points staff to this box (`issues-core.ts` L553).
 - **Requirements (draft):**
@@ -327,7 +328,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   3. Pure-core test for the first-delivery rule.
 - **Interim:** SOP-04 §4.9 (Vendor-filter check), form 8.1 first-delivery box.
 
-## G-22 · Audited, gated lot lifecycle changes (extends G-19)
+## G-22 · Audited, gated lot lifecycle changes (extends G-19) (BUILT, Phase 1.1)
+- **Built (Phase 1.1, D76):** requirements 1–6 met. Destroyed removed from the lot page and refused by the core and the store; reason required; Recalled → other limited to the new `inventory.recall.release` permission (owner, admin; D37) with a required clearance reference; **Status history** on the lot page from the audit rows (Pacific time, names; `listLotStatusHistory`); the write is compare-and-set on the checked status; the guard fails the build if `destroyed` is written outside `disposition.ts` completeDestruction. Placing a hold stays open to `inventory.manage` (Q-05a-7 still open).
 
 - **Today:** **Lifecycle status** writes any of the five statuses with no check, no reason and no audit row (`inventory/actions.ts` L142–155 → `store.ts` L849–864). **Destroyed** leaves units on file and drops the lot from the CCRS Inventory file (F-05a-1, **S1**). **Recalled** is placed and lifted by any manager-level login with no record (F-05a-2, **S1**).
 - **Requirements (draft):**

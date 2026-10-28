@@ -948,6 +948,7 @@ import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pip
 import { __runSampleLotCoreTests } from "../../src/lib/inventory/sample-lot-core";
 import { __runCandidateStartCoreTests } from "../../src/lib/staffing/candidate-start-core";
 import { __runCannabisLineCoreTests } from "../../src/lib/compliance/cannabis-line-core";
+import { __runLotLifecycleCoreTests } from "../../src/lib/inventory/lot-lifecycle-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
 import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
@@ -1885,6 +1886,7 @@ __runLiquidVolumeTests();
   __runSampleLotCoreTests();
   __runCandidateStartCoreTests();
   __runCannabisLineCoreTests();
+  assertRan("lot-lifecycle-core", __runLotLifecycleCoreTests(), 20); // Fix Phase 1.1: G-19 + G-22 gated, audited lot lifecycle
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);

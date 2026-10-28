@@ -27,6 +27,14 @@ import type {
   LotWithDetail,
 } from "@/lib/inventory/types";
 import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
+import type { LotGateFacts } from "@/lib/inventory/lot-activation-gate-core";
+import {
+  isManualLotStatus,
+  buildStatusHistory,
+  LOT_STATUS_AUDIT_ACTION,
+  type ManualLotStatus,
+  type StatusHistoryRow,
+} from "@/lib/inventory/lot-lifecycle-core";
 
 /** Number of days within which an expiry counts as "expiring soon". */
 export const EXPIRING_SOON_DAYS = 30;
@@ -844,20 +852,111 @@ export async function listLotsForProductKey(posProductKey: string, limit = 20): 
   return hydrateLots(admin, lots);
 }
 
-/** Update lifecycle status of a lot (e.g. recall, quarantine, destroy). */
+/**
+ * Fix Phase 1.1 (G-19, G-22): the ONE manual lot status write. The caller
+ * (setLotStatusAction) has already run evaluateLotLifecycleChange
+ * (lot-lifecycle-core.ts): the go-live check for Active, a reason, recall
+ * release limited to inventory.recall.release, and never Destroyed.
+ *
+ * Compare-and-set on the status the rules were evaluated against
+ * (`.eq("status", fromStatus)`), so a lot that changed in between (a sale
+ * emptied it, a destruction completed) is not overwritten: zero rows updated
+ * is reported as a refusal, never as success.
+ */
 export async function updateLotStatus(
   id: string,
-  status: string,
+  fromStatus: string,
+  status: ManualLotStatus,
   actorId: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
+  // Belt and braces: the pure core already refuses these.
+  if (!isManualLotStatus(status)) return { ok: false, error: "That status cannot be set by hand." };
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
+  const { data, error } = await admin
     .from("inventory_lots")
     .update({ status, updated_by: actorId })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", fromStatus)
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return { ok: false, error: "The lot changed while you were editing it. Reload the page and try again." };
+  }
   return { ok: true };
+}
+
+/**
+ * Fix Phase 1.1: the go-live facts for ONE lot, read the same way Finalize
+ * reads them (intake-store.ts: ccrs_inventory_external_id, lab_result_id and
+ * the joined lab_results.passed). Null when the lot is not found.
+ */
+export async function getLotGateFacts(id: string): Promise<{ status: string; facts: LotGateFacts } | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inventory_lots")
+    .select("id, product_name, status, ccrs_inventory_external_id, lab_result_id, lab_results ( passed )")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  const r = data as unknown as {
+    id: string;
+    product_name: string | null;
+    status: string;
+    ccrs_inventory_external_id: string | null;
+    lab_result_id: string | null;
+    lab_results: { passed: boolean | null } | { passed: boolean | null }[] | null;
+  };
+  const lab = Array.isArray(r.lab_results) ? r.lab_results[0] : r.lab_results;
+  return {
+    status: r.status,
+    facts: {
+      id: r.id,
+      label: r.product_name,
+      ccrsExternalId: r.ccrs_inventory_external_id,
+      hasLabResult: r.lab_result_id != null,
+      labPassed: lab ? lab.passed : null,
+    },
+  };
+}
+
+/**
+ * Fix Phase 1.1 (G-22 req 5): the lot's Status history, from the
+ * `inventory_lot.status_changed` audit rows, with staff names. `complete` is
+ * false when the read failed, so the page says so instead of "no history".
+ */
+export async function listLotStatusHistory(
+  lotId: string,
+): Promise<{ complete: boolean; rows: StatusHistoryRow[] }> {
+  if (!isSupabaseServiceConfigured) return { complete: true, rows: [] };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("audit_logs")
+    .select("id, created_at, actor_id, actor_email, before_json, after_json")
+    .eq("entity_type", "inventory_lot")
+    .eq("entity_id", lotId)
+    .eq("action", LOT_STATUS_AUDIT_ACTION)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) return { complete: false, rows: [] };
+  const rows = (data ?? []) as {
+    id: string | number;
+    created_at: string;
+    actor_id: string | null;
+    actor_email: string | null;
+    before_json: unknown;
+    after_json: unknown;
+  }[];
+  const ids = [...new Set(rows.map((r) => r.actor_id).filter((x): x is string => Boolean(x)))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: staff } = await admin.from("staff_profiles").select("id, full_name").in("id", ids);
+    for (const s of (staff ?? []) as { id: string; full_name: string | null }[]) {
+      if (s.full_name && s.full_name.trim()) names.set(s.id, s.full_name.trim());
+    }
+  }
+  return { complete: true, rows: buildStatusHistory(rows, names) };
 }

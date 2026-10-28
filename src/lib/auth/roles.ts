@@ -60,6 +60,7 @@ export type Permission =
   | "inventory.count"
   | "inventory.audit"
   | "inventory.cost.fill"
+  | "inventory.recall.release"
   | "compliance.calendar"
   | "reports.view"
   | "books.view"
@@ -147,6 +148,12 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // Separate from inventory.manage on purpose: that one also grants manager,
   // and the owner named only owner and admin. Cannabis cost entry is NOT built.
   "inventory.cost.fill": ["owner", "admin"],
+  // Fix Phase 1.1 (G-22 req 4): lifting a recall hold (Recalled -> anything
+  // else). D37, Michael verbatim: "Q-05a-2- admin. No back up. Just my manager
+  // and I." The admin is the recall coordinator, and releasing a hold is the
+  // coordinator's job; the owner keeps it too. Managers may still PLACE a hold
+  // (inventory.manage), because a hold only protects customers.
+  "inventory.recall.release": ["owner", "admin"],
   "reports.view": ["owner", "admin", "manager", "readonly"],
   // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
   // permission from "reports.view", which also grants manager and readonly.
@@ -300,6 +307,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.count": "Count the shelf (blind physical counts)",
   "inventory.audit": "Approve & post inventory audits (owner only)",
   "inventory.cost.fill": "Key a missing non-cannabis unit cost (owner & admin)",
+  "inventory.recall.release": "Release a recall hold on a lot (owner & admin, recall coordinator)",
   "reports.view": "View reports & exports",
   "books.view": "View the accounting books (general ledger)",
   "financials.view": "View financial reports & accounting exports",
@@ -330,6 +338,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.count",
   "inventory.audit",
   "inventory.cost.fill",
+  "inventory.recall.release",
   "menu.import",
   "menu.publish",
   "menu.publish.open_reviews",

@@ -331,6 +331,7 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 - **Owner decision (D29, slice SOP-05a):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* Re-rated **S1** (data integrity: the CCRS record and the shelf must agree); G-16 **APPROVED**.
 
 ### F-04-2 · CONFIRMED · HARDEN · S1 — Lot page "Lifecycle status" sets Active with no go-live check and no audit
+- **Status: FIXED (Phase 1.1, G-19). `setLotStatusAction` (`inventory/actions.ts` L158) runs `evaluateLotLifecycleChange` (`lot-lifecycle-core.ts`), which runs `evaluateLotActivation` before Active; every change and refusal is audited; `check-activation-gate.ts` now also catches non-literal status writes and runs in `tests/compliance/fix-p1-1-gated-lot-lifecycle.test.ts`).**
 - **Pin:** `src/app/admin/inventory/[id]/page.tsx` L130–136 (STATUSES include `active`), form L1497–1512 → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864). It writes any status. There is no `evaluateLotActivation` call and no `recordAudit`.
 - **Guard miss:** `scripts/compliance/check-activation-gate.ts` L60–100 greps only for the literal `status: "active"`, so a status passed in a variable escapes it. The intake comment (`intake/actions.ts` L195–198) says Finalize is the only activation path.
 - **Effect:** a manager can make a lot with no COA, or a FAILED result, sellable, and nothing records who did it. `issues-core.ts` L553 directs staff to this box for now-clear held lots.
@@ -381,6 +382,7 @@ Owner sources quoted in SOP-04 §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"There s
 - **SOP impact:** SOP-04 §4.6: the count of lines on screen goes on form 8.1 and is compared with the paper manifest.
 
 ### F-04-12 · CONFIRMED · DOC · S3 — Held-lot fix text says "the lot page cannot attach one yet"
+- **Status: FIXED (Phase 1.1, G-19). The held-lot fix text now says "If the lab result is already imported, use Attach a lab result on the lot page." (`issues-core.ts` L577)).**
 - **Pin:** `src/lib/admin/issues-core.ts` L570. The lot page has **Attach a lab result** (S37 LotCoaAttach; `inventory/[id]/page.tsx` L763; `inventory/actions.ts` L268–303, audit `inventory_lot.coa_linked`).
 - **SOP impact:** SOP-04 §4.19 tells the manager to use the attach panel when the lab result is already imported.
 
@@ -437,11 +439,13 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 **Verdict: MET with serious gaps.** The everyday tools work: the Issues tab, the lot page, expiration rules (save → preview → fingerprinted apply, audited), tags, testing labs and bulk fill. The register's recall hold is a real hard stop, with no override and fail-closed at completion. The gaps sit around the two raw write boxes on the lot page (Lifecycle status and Adjust quantity), the recall process outside the register, and expired stock.
 
 ### F-05a-1 · CONFIRMED · BUG/HARDEN · S1 — "Destroyed" set by hand leaves units on file and drops the lot from the CCRS Inventory file
+- **Status: FIXED (Phase 1.1, G-22). Destroyed is not in `MANUAL_LOT_STATUSES`; the core and `updateLotStatus` refuse it; the guard fails the build if `destroyed` is written outside `disposition.ts` completeDestruction).**
 - **Pin:** Lifecycle status → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864) writes the status only: no quantity change, no adjustment row, no audit. The weekly CCRS Inventory file reads lots `.neq("status","destroyed")` (`src/lib/compliance/ccrs-batch.ts` L1196–1207) and re-reads destroyed lots only when an event row in the same batch names them (`readDestroyedLots`, L380–411). The proper path sets Destroyed only when the destruction empties the lot (`src/lib/inventory/disposition.ts` L1087–1094).
 - **Effect:** a lot destroyed by hand silently leaves Greenway's state filing while CCRS still holds its last quantity. No Destruction adjustment is filed and no waste record exists.
 - **SOP impact:** SOP-05a §4.9 ("Never Destroyed by hand"), header box, §9 card. Ties to **G-22**.
 
 ### F-05a-2 · CONFIRMED · HARDEN · S1 — A recall hold (status Recalled) is placed and released with no audit row, no reason and no role limit
+- **Status: FIXED (Phase 1.1, G-22). A reason is required on every change; Recalled → other needs `inventory.recall.release` (owner, admin; D37) and a clearance reference; audit rows `inventory_lot.status_changed` / `inventory_lot.status_change_refused`; Status history on the lot page).**
 - **Pin:** **Recalled** is set only through the same blind Lifecycle status write (`actions.ts` L142–155 → `store.ts` L849–864). The register hold keys on it (`src/lib/pos/recall-hold-core.ts` L44, L53–63). Any `inventory.manage` login (owner, admin, manager; `roles.ts` L106) can set or clear it.
 - **Effect:** a statutory sale stop (WAC 314-55-225) can be lifted by any manager with no record of who, when or why. Rated S1 with F-04-2 because it is a control over a regulated sale stop (license integrity).
 - **SOP impact:** §4.8, §4.10: form 8.1 for every change; only the owner releases, on written clearance. Ties to **G-22** (extends G-19).

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
+| **Version** | 1.3 (Phase 1.1 fix G-19 built: gated, audited activation from the lot page; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Everyone who handles a vendor delivery: the manager who processes the manifest (D30), any trained employee who helps count at the dock, the person who onboards new products onto the menu, the **admin** who files the monthly CCRS public records request on the 10th (D32), and the owner, who reviews the books |
@@ -498,15 +498,12 @@ The **Issues** tab lists what still needs attention. When clean, it says *"Nothi
 
 | Issues row | Meaning | Do this |
 |---|---|---|
-| **Held in quarantine — <lot>** · *"Missing: … It cannot go live until that is resolved."* | The lot was accepted but failed the go-live check (no CCRS id, no COA, or FAILED) | **Failed:** it can never be sold. Return to vendor or destroy (SOP-15). **No COA:** get the COA from the vendor. If the lab result is already imported, attach it on the lot page under **Attach a lab result** (`LotLinkPanels.tsx`; `inventory/actions.ts` L268–303). The row's own text says *"the lot page cannot attach one yet"*; that text is out of date (F-04-12). **No CCRS id:** ask the vendor for a corrected manifest. |
-| **Held in quarantine, now clear — <lot>** · *"Its identifier and lab result now pass the go-live check."* | The missing paper is now on file | **Manager:** **Open lot to activate it** → **Lifecycle status** → **Set status** = **Active** → **Update status** (`issues-core.ts` L545–555). |
+| **Held in quarantine — <lot>** · *"Missing: … It cannot go live until that is resolved."* | The lot was accepted but failed the go-live check (no CCRS id, no COA, or FAILED) | **Failed:** it can never be sold. Return to vendor or destroy (SOP-15). **No COA:** get the COA from the vendor. If the lab result is already imported, attach it on the lot page under **Attach a lab result** (`LotLinkPanels.tsx`; `inventory/actions.ts` L268–303). The row now says *"If the lab result is already imported, use Attach a lab result on the lot page."* (`issues-core.ts` L577; F-04-12 FIXED in Phase 1.1). **No CCRS id:** ask the vendor for a corrected manifest. |
+| **Held in quarantine, now clear — <lot>** · *"Its identifier and lab result now pass the go-live check."* | The missing paper is now on file | **Manager:** **Open lot to activate it** → **Lifecycle status** → **Set status** = **Active**, write the **Reason** → **Update status**. The page runs the go-live check again and records who activated it (`issues-core.ts` L550–558; `inventory/actions.ts` L158–217). |
 | **N lines have no COA / lab result** (before Finalize) | COAs missing | **Review the lines** |
 | **N lines have an unmapped category** | Product type not mapped | **Open Types & Categories** |
 
-> **Control: only set a held lot to Active when the Issues row says "now clear".** The lot page's **Lifecycle status** box does **not** run the go-live check, and it writes **no audit row** (`inventory/actions.ts` L142–155 → `store.ts` L849–864). It will set any lot to **Active**, even one with no COA or a FAILED result (finding F-04-2, **S1**; gap G-19). Until that is fixed:
-> - Only a manager does this.
-> - Only from a "now clear" Issues row.
-> - Write it on form 8.1 (lot, time, who).
+> **Control: only set a held lot to Active when the Issues row says "now clear".** Since Phase 1.1 (G-19 built, F-04-2 FIXED) the lot page's **Lifecycle status** box runs the same go-live check as Finalize (`lot-activation-gate-core.ts`) and refuses a lot with no CCRS identifier, no COA or a FAILED result, with every reason. It asks for a reason and writes an audit row (`inventory_lot.status_changed`), shown in the lot's **Status history** (SOP-05a §4.8).
 
 ### 4.20 The Accounting tab
 
@@ -935,7 +932,7 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **No return manifest for driver-present refusals** | Contingency manifests are discontinued (WSLCB, Nov 2025); the vendor updates or deletes their own manifest | `[id]/page.tsx` L1341–1357 |
 | **A reason for every refusal; a note for every partial finalize** | The permanent timeline shows why stock did not arrive | `intake-disposition-core.ts` L68–84, L150–168 |
 | **The go-live check** (CCRS id, lab result, not FAILED) | WAC 314-55-102: no retail sale without a passing COA | `lot-activation-gate-core.ts` L76–107 |
-| **Only set a held lot Active from a "now clear" Issues row, manager only, logged on paper** | The lot page's Lifecycle status skips the go-live check and the audit log (F-04-2, S1; G-19) | §4.19 |
+| **Only set a held lot Active from a "now clear" Issues row, with a reason** | The lot page's Lifecycle status runs the go-live check and writes an audit row since Phase 1.1 (F-04-2 FIXED; G-19 BUILT) | §4.19 |
 | **Quarterly sample cap: 120 units per processor** | WAC 314-55-096(1)(f)(ii) | `intake-store.ts` L1070–1099 |
 | **Transport details checked against the driver and vehicle** | WAC 314-55-085 transport manifest requirements | `concierge-kb.ts` L142; §4.8 |
 | **Vendor inventory ids confirmed** | The weekly InventoryTransfer "from" id must match the vendor exactly | `ccrs-transfer-core.ts` L1–43 |
@@ -1180,7 +1177,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | Receive part of a line ("18 of 20") | Accept whole or refuse whole only | Refuse the whole short line; vendor re-sends (§4.11) | G-16 (**APPROVED**, D29) · F-04-1 (S1) |
 | See emails that failed to stage | Logged, shown nowhere | Daily email-vs-list comparison (§4.3) | G-17 · F-04-4 |
 | Monthly PRR reminder and tracking | No calendar task; no tracking # field | Form 8.4 (§4.26–§4.28) | G-18 · F-04-19 |
-| Activate a now-clear held lot safely | Lifecycle status writes any status, no gate, no audit | Manager only, from a "now clear" row, logged on 8.1 (§4.19) | G-19 · F-04-2 |
+| Activate a now-clear held lot safely — **BUILT** (Phase 1.1) | Built: go-live check, reason, audit row, Status history | None needed (§4.19) | G-19 · F-04-2, F-04-12 FIXED |
 | Key cost / COA for a CSV or PDF import | Banner says to; no field | Get the JSON or link; otherwise owner follow-up (§4.5, §4.20) | F-04-10 |
 | Record who counted; mark a first delivery from a vendor | Not in the app | Form 8.1 signatures and the first-delivery box (§4.9) | G-21 · D30 · D31 |
 | Confirm before deleting a benchmark month; 18-month retention; hide dead buttons | Deletes on one press; no purge; dead buttons shown | Read-aloud check, owner approval, monthly retention check on form 8.4 (§4.33–§4.34) | G-20 (**APPROVED**, D33/D34) · F-04-15 · F-04-16 |
@@ -1207,4 +1204,5 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `5299660b`, with the owner's rejection rulings (`ccrs-rejection-and-returns.md`), the R31 one-button design, the owner's CCRS transformer vision, and D28. Part 1 truck day (§4.1–§4.24); Part 2 monthly CCRS public records request (§4.25–§4.34). Adds findings F-04-1…F-04-20, gaps G-16…G-19, questions Q-04-1…Q-04-6, forms 8.1–8.5. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-05a. Owner answers D29–D34 applied: partial receive approved and S1 (§4.11; G-16); only managers process manifests (§2); second count strongly recommended, expected on a vendor's first delivery (§4.9, form 8.1; G-21); admin files on the 10th, standing request procedure with WAC 44-14-04004(4), built-in wording kept, one zip per month (§4.26–§4.31, form 8.4; G-18); 18-month retention with owner approval and backup purge (§4.34, form 8.4 part G; G-20); delete confirmation and working-buttons-only approved (§4.33; G-20). New questions Q-04-7…Q-04-9. No code was re-audited; pins still at `5299660b` (`ac251766` is docs-only). | SOP program |
+| 1.3 draft | Fix phase | Phase 1.1 (owner D76). G-19 BUILT: Lifecycle status runs the go-live check before Active, asks a reason, writes an audit row and shows Status history; the "now clear" Issues row points at that gated path; the held-lot row's stale "cannot attach one yet" text replaced (F-04-12). §4.19, §7 and Appendix B updated. F-04-2, F-04-12 FIXED. | Fix program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
