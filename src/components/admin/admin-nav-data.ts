@@ -88,6 +88,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.count", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard — books-23: the counting FLOOR, staff included, so inventory.count not inventory.manage
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" }, // ♻️ disposition
+  { label: "Recalls", href: "/admin/inventory/recalls", permission: "inventory.manage", icon: "\ud83d\udea8", group: "Inventory" }, // Fix Phase 1.6c (G-25): recall and market-withdrawal log
 
   // MKTG & ADV: promos, content, email, creative
   { label: "Digital Assets", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc\ufe0f", group: "MKTG & ADV" }, // 🖼️ R69: the Media Library, renamed and moved from Website to the first MKTG & ADV slot (same /admin/media route, so no links break)

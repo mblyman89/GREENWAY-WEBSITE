@@ -59,6 +59,9 @@ import {
   RELEASE_LOT_HOLD_RPC,
 } from "@/lib/inventory/held-stock-core";
 import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+// Fix Phase 1.6c (G-42 req 6 with G-25): a Recall return takes the LCB contact from the lot's recall event.
+import { recallReturnContact } from "@/lib/inventory/recall-event-core";
+import { listRecallEventsForLot } from "@/lib/inventory/recall-event-store";
 import {
   evaluateScheduleQuantity,
   holdNotElapsedMessage,
@@ -998,7 +1001,10 @@ export async function createVendorReturn(
     recallContactDate?: string | null;
   },
   actorId: string | null,
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; id: string; recallOfficer: string | null; recallContactDate: string | null }
+  | { ok: false; error: string }
+> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
@@ -1016,6 +1022,18 @@ export async function createVendorReturn(
     processorLicense = (vrow as { license_number: string | null } | null)?.license_number?.trim() || null;
   }
   const free = Math.max(0, toHeldNumber(lot.on_hand_qty) - toHeldNumber(lot.held_qty));
+  // Fix Phase 1.6c (G-42 req 6): "Reason Recall is refused unless the lot's
+  // recall event (G-25) records the coordinator's LCB contact." The officer
+  // and the contact date come from that event (form fields are ignored), so
+  // the return and the recall log can never disagree.
+  let recallOfficer: string | null = null;
+  let recallContactDate: string | null = null;
+  if (input.reason === "recall") {
+    const contact = recallReturnContact(await listRecallEventsForLot(input.lotId), (iso) => pacificDayKey(iso));
+    if (!contact.ok) return { ok: false, error: contact.message };
+    recallOfficer = contact.officer;
+    recallContactDate = contact.contactDate;
+  }
   const decision = evaluateVendorReturnLog({
     lotStatus: lot.status,
     reason: input.reason,
@@ -1025,8 +1043,8 @@ export async function createVendorReturn(
     rmaNumber: input.rmaNumber,
     processorLicense,
     detail: input.detail,
-    recallOfficer: input.recallOfficer ?? null,
-    recallContactDate: input.recallContactDate ?? null,
+    recallOfficer,
+    recallContactDate,
     todayPacific: pacificDayKey(new Date()),
   });
   if (!decision.ok) return { ok: false, error: decision.refusals.map((r) => r.message).join(" ") };
@@ -1041,8 +1059,8 @@ export async function createVendorReturn(
       detail: input.detail?.trim() || null,
       rma_number: input.rmaNumber?.trim() || null,
       processor_license: processorLicense,
-      recall_officer: input.reason === "recall" ? input.recallOfficer?.trim() || null : null,
-      recall_contact_date: input.reason === "recall" ? input.recallContactDate?.trim() || null : null,
+      recall_officer: recallOfficer,
+      recall_contact_date: recallContactDate,
     },
   });
   if (error) {
@@ -1052,7 +1070,7 @@ export async function createVendorReturn(
   if (!data) return { ok: false, error: "Could not save return." };
   // The reserved units leave the menu now (they are no longer sellable).
   await syncLotMenuStock(admin, input.lotId, -Math.abs(input.quantity));
-  return { ok: true, id: String(data) };
+  return { ok: true, id: String(data), recallOfficer, recallContactDate };
 }
 
 /**

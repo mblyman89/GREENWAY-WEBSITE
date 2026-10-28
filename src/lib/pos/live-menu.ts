@@ -41,6 +41,9 @@ import { enrichmentIdentityForItem } from "@/lib/enrichment/enrichment-identity-
 // src/lib/site/public-surfaces.ts — they cannot drift apart.
 import { unstable_cache } from "next/cache";
 import { MENU_CACHE_KEY, menuCacheOptions } from "@/lib/menu/menu-cache-policy-core";
+// Fix Phase 1.6c (G-25 req 3; F-05a-16): a recalled product leaves the public menu.
+import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
+import { withoutRecalled } from "@/lib/inventory/recall-event-core";
 // SLICE E: the published menu is ~5.94 MB and Vercel's Data Cache drops items
 // over 2 MB silently, so the entry is stored compressed. See the codec module.
 import {
@@ -167,7 +170,10 @@ export async function loadLiveMenuAll(): Promise<GreenwayMenuItem[]> {
 /** Visible items only (hidden excluded) — the standard site menu. */
 export async function loadLiveMenuItems(): Promise<GreenwayMenuItem[]> {
   const all = await loadLiveMenuAll();
-  return all.filter((item) => !item.hidden);
+  // Fix Phase 1.6c (G-25 req 3): recalled products (and recalled sizes) are
+  // left out, the same rule as the register bundle. Advisory read: a failed
+  // recall read shows the menu (online order pricing is the fail-closed stop).
+  return withoutRecalled(all.filter((item) => !item.hidden), await recalledProductKeys());
 }
 
 /** Look up a single visible item by its stable source_item_id. */
@@ -288,7 +294,13 @@ export async function loadLiveMenuAllCached(): Promise<GreenwayMenuItem[]> {
  */
 export async function loadLiveMenuItemsCached(): Promise<GreenwayMenuItem[]> {
   const all = await loadLiveMenuAllCached();
-  return all.filter((item) => !item.hidden);
+  // Fix Phase 1.6c (G-25 req 3; F-05a-16): the recall filter runs OUTSIDE the
+  // cache, on every render, so a recall reaches the website at once (the lot
+  // status change also calls revalidatePublicMenuSurfaces). Advisory read: a
+  // failed recall read shows the menu; online order pricing re-checks with
+  // failClosed and refuses the order.
+  const visible = all.filter((item) => !item.hidden);
+  return withoutRecalled(visible, await recalledProductKeys());
 }
 
 /**

@@ -116,6 +116,13 @@ export default async function SettingsHomePage() {
           icon: "🕗",
         },
         {
+          href: "/admin/settings/recall-plan",
+          title: "Recall plan",
+          description:
+            "The store's written recall and market-withdrawal plan (WAC 314-55-225) — approval and yearly review.",
+          icon: "🚨",
+        },
+        {
           href: "/admin/compliance/health",
           title: "Compliance health",
           description:

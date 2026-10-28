@@ -179,8 +179,9 @@ export async function createVendorReturnAction(formData: FormData) {
       rma_number: rma,
       processor_license: processorLicense,
       reserved: qty,
-      recall_officer: reason === "recall" ? recallOfficer : null,
-      recall_contact_date: reason === "recall" ? recallContactDate : null,
+      // Fix Phase 1.6c (G-42 req 6): the values the server took from the recall event.
+      recall_officer: result.recallOfficer,
+      recall_contact_date: result.recallContactDate,
     },
   });
   revalidatePath(BASE);
