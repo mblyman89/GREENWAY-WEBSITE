@@ -281,3 +281,24 @@ The concierge code is **unchanged** (record-only). Today `src/lib/admin/concierg
 **Future features (D41/D42):** when G-33…G-39 are built, the topics above are updated in the same slice as the SOP (charter rules 9–10).
 
 **Running score:** topics with complete SOP source material add `inventory-audits`, `daily-checklists`, and complete `cycle-counts`.
+
+#### SOP-06 v1.1 (slice SOP-15): owner answers D54–D61, and what the concierge must know before it is built
+
+The owner, again: *"make sure the ai concierge is taught all the things we will build and fix in the future, so it's preemptively prepared."* (D62). The concierge must answer **both** "how does it work today" (interim) and "how will it work" (approved design), and must say which is which. Teaching content, grounded in SOP-06 v1.1:
+
+| Question staff or the owner will ask | Answer today (interim) | Answer once built (approved) |
+|---|---|---|
+| How do I send an audit to Cycle Counts? (owner) | No button yet; paper count form 8.2 (§4.7) | Create → **Release to Cycle Counts** (separate button, signed) (G-33, D54) |
+| Why isn't it automatic? | — | The enterprise pattern (NetSuite, Lightspeed): planning and releasing are separate so the owner can check the scope (D54) |
+| Who can count? | Any employee with Cycle Counts; one per count is a store rule (§2 rule 3) | One employee claims a released count; only they can enter numbers (G-36, D56) |
+| I finished, now what? | Tell the owner in person (§4.8) | Press **I'm done** → it leaves Cycle Counts, returns to the audit, and the owner sees it on the /admin cockpit (G-34, D55) |
+| Do I scan every package? | No: scan one, type the total; never re-scan (§4.10) | Yes: each scan adds one (G-36, D60) |
+| What is "Count again"? | The app's own recount at $50+ off; same counter (§4.12, D56) | Same; a recount that still disagrees blocks approval until the owner decides (G-36) |
+| Can we count while open? | **No** until G-35: create and count outside selling hours (§4.11) | Yes, any time during open hours: each lot's quantity is captured when it is first counted, so sales are reconciled (G-35, D58, D61). Count each lot in one go; don't sell uncounted units of a lot mid-count |
+| What should I count today? | The owner's vendor-of-the-day count (§4.24) | Generators propose: vendor of the day (chunked), ABC, exceptions, expiring, Cultivera, overdue (G-40) |
+| Do we do a full count? | Year end; several audits the same day, outside hours (§4.24) | One annual full-count audit, sections, one review (G-41) |
+| What's on today's checklist? | Forms 8.5–8.8 (§4.23) | In-app checklists seeded from 8.5–8.8 (G-38) |
+| How do I mark down expiring stock? | List it for the owner; the owner sets the markdown (§4.23, F-06-17) | Expiring-soon list on the checklist with a markdown link (G-38) |
+| Old cycle counts? | Read only; never use their buttons (§4.20) | All cancelled (D59) |
+
+**Additional caveats (v1.1):** never tell anyone that counting in open hours is safe until G-35 ships; never say a second person must recount (D56 withdrew it); a count item on the cockpit does not exist yet (F-06-16).

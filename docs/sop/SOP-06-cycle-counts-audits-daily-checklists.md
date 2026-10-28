@@ -2,18 +2,20 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (draft for owner review; owner answers Q-06-1…Q-06-8 applied) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory Audits** (planning a count, approving its scope and pushing it to the floor, reviewing, approving, posting, the work paper): **the owner only** (D50). **Cycle Counts** (the blind count) and the **daily checklists** (§8): **every employee**: admin, manager and budtender ("sales") (D51). |
-| **Verified against** | `main@c976c7e4` (2026-10-28). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
-| **Program records** | Findings `F-06-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-33`…`G-39` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D41 (living SOPs), D42 (concierge covers every feature), D50–D52 (this SOP) in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner source letter `docs/MICHAEL-books-23.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-06) |
+| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
+| **Program records** | Findings `F-06-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-33`…`G-41` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D41 (living SOPs), D42 (concierge covers every feature), D50–D52 (this SOP), **D54–D61 (owner answers to Q-06-1…Q-06-8)** in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner source letter `docs/MICHAEL-books-23.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-06) |
 
 > **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap named here (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** Part 1 (§4.1–§4.3) explains the two screens and the life of one count. Part 2 (§4.4–§4.7) is the **owner's set-up**: planning the count and pushing it to the Cycle Counts page. Part 3 (§4.8–§4.12) is the **blind count** that every employee does. Part 4 (§4.13–§4.18) is the **owner's review, approval, posting and journal approval**. Part 5 (§4.19–§4.22) covers the work paper, the old cycle-count sessions, the "Stock needing recount" list and the Issues reminder. Part 6 (§4.23) is the **daily checklists**. Section 5 lists every message. Section 8 holds the paper forms. Section 9 is two one-page cards (owner and counter). Words in **bold** are the exact labels you will see on the screen.
 
 > **The one thing to know before anything else.** **Today there is no button that pushes a new audit to the Cycle Counts page.** Pressing **Create this count** saves the audit as **being planned** (status `draft`, `audit-hub-store.ts` L586). The Cycle Counts page lists only audits that are **ready to count** or **being counted** (`COUNT_QUEUE_STATUSES`, `audit-hub-store.ts` L379–382). The audit page offers a status button only while counting (**Finish counting and review the differences**) and while in review (**Approve this result**) (`audits/[id]/page.tsx` L209–238). Nothing on any screen moves an audit from **being planned** to **ready to count** to **being counted** (finding **F-06-1, S1**; gap **G-33**). So the owner's workflow (*"I approve the scope and push it to the cycle counts page"*) cannot be completed in the app today. **Do not try to work around it with database edits.** §4.7 gives the interim: count on paper (form 8.2) and hold the result until G-33 is built. Two other faults matter just as much once G-33 is built, and §4.11 and §4.15 give the rules: a sale between creating the audit and counting it is **subtracted twice** when the audit is posted (F-06-7, **S1**), and a recount that **disagrees** with the first count does **not** stop the approval (F-06-13, **S1**).
+
+> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). All of these are **approved for the build** (G-33…G-41) and **none is built yet**: until each one is, the interim rules in this SOP stay in force, above all the timing rule in §4.11.
 
 ---
 
@@ -58,6 +60,7 @@
 
    **Part 6: Daily checklists (every employee)**
    - 4.23 The daily checklists (paper, until built)
+   - 4.24 The counting programme: one full count a year, a small count every day, intelligent counts
 
 5. Messages: "If you see this message"
 6. Exceptions & escalation
@@ -104,7 +107,7 @@ A login without the permission is sent back to the back-office home with a "deni
 **Store rules on top of the app.**
 1. **The owner alone plans, approves, reviews, signs and posts** (D50; books-23 *"I am the only one that can approve an audit and create an audit"*). Nobody asks the owner for his login to "help".
 2. **Counters never look up the expected number** on the lot page, the Inventory list, a report or a receipt while a count is open. A count that knows the answer is not a count (`cycle-counts/page.tsx` L136).
-3. **A second count is done by a different person when one is available** (the count sheet asks for it, `AuditCountSheet.tsx` L203–209; the app does not enforce it, Q-06-3).
+3. **One employee per count** (D56: *"Only one employee per scoped count."*). The owner names the counter on form 8.1 or the first employee to open the count takes it; nobody else enters numbers on that count. The sheet's text *"Ideally a different person does it"* (`AuditCountSheet.tsx` L203–209) is **withdrawn** by D56: the recount is done by the same counter (§4.12). The app does not yet stop a second person from entering numbers (F-06-15; gap G-36).
 4. **Until F-06-6 is fixed, nobody enters numbers on a count sheet unless the audit says "being counted"**, and nobody re-opens a count sheet after the owner pressed **Finish counting** (§4.13).
 
 ## 3. Before you start
@@ -112,7 +115,7 @@ A login without the permission is sent back to the back-office home with a "deni
 **Owner, before planning a count:**
 - Pick a time when **nothing in the scope will sell between creating the audit and counting it** (§4.11): before opening or after closing. The quantities are frozen when you press **Create this count**.
 - Check that the lots you want counted have a unit cost. A lot with no cost and a difference **cannot post** until the cost is entered (§4.15). Use Plan a count's stat cards and the lot page.
-- Know who will count, and who will do any second count (a different person).
+- Know who will count: **one employee per count** (D56). Write the name on form 8.1.
 - Have printed copies of form 8.1 (audit planning record) and, until G-33 is built, form 8.2 (paper count sheet).
 
 **Counter, before counting:**
@@ -209,7 +212,14 @@ Under **Name it and say why**:
 4. Compare the paper result with the books yourself. For any lot that is off, follow SOP-05a §4.6–§4.7 (**Record adjustment**, reason **Cycle-count correction**, note naming this audit and form 8.2). File forms 8.1, 8.2 and 8.3 together.
 5. Leave the on-screen audit in **being planned**. Write "Counted on paper, form 8.2, {date}" on form 8.1. When G-33 adds **Cancel**, cancel these held audits with that note (Q-06-6).
 
-**When G-33 is built** this section becomes: press **Approve scope and send to Cycle Counts** (records your name and time; the audit appears on Cycle Counts as **ready to count**), and counting starts on the first entry or with the owner's button (Q-06-1).
+**When G-33 is built (APPROVED, D54)** this section becomes the enterprise pattern the owner chose (*"Please do what the pros would do."*):
+1. **Create** the audit (§4.5–§4.6). It stays **being planned**, visible only to you. Nothing is frozen yet.
+2. Review the scope. When it is right, press **Release to Cycle Counts**. The app records your name and the time. The audit appears on the Cycle Counts page as **ready to count**.
+3. The first employee to open it **claims** it (one counter, D56). Their name shows on the queue. The audit becomes **being counted** when they record the first lot.
+4. The shelf quantity for each lot is captured **when that lot is first counted**, not when you created or released the audit (D58; Lightspeed: *"Once at least one unit of an item has been counted, the QOH for the item will be recorded."*).
+5. The counter presses **I'm done** (§4.8). The audit returns to you in **in review**, with a notice on the /admin cockpit (D55).
+
+Why two steps and not automatic: in NetSuite a count is created first and **started** by a separate action (Oracle NetSuite Help, Inventory Count). A separate release lets you check the scope, and a released count can still be **Cancelled** with a reason (G-33).
 
 ### Part 3: The blind count (every employee)
 
@@ -219,6 +229,7 @@ Under **Name it and say why**:
 2. Under **Counts waiting for you**, each count shows its name, **{n} lots to count**, the owner's reason and its stage badge.
 3. **Ignore the done / remaining figures for now:** they stay at 0 until the audit is posted (F-06-4). The sheet itself shows the real progress.
 4. **Help-panel correction (F-06-3).** Step 4 of **How counting works** says: *"When every lot has a number, the count leaves this page and goes to the owner to review. You are done at that point…"* That is **not** what happens. The count stays on the page until the owner presses **Finish counting** (§4.13). **When every lot has a number, tell the owner (or the manager on duty, who tells the owner) in person or by message, and write the finish time on form 8.2 / 8.4.**
+5. **When G-34 is built (APPROVED, D55):** the sheet gets an **I'm done** button, live only when no lot is blank. Pressing it locks the counts, takes the count off Cycle Counts, returns it to the audit that started it (**in review**), and puts a **Needs your attention** item on the /admin cockpit that links to that audit's review page. The cockpit's attention list already exists (`src/app/admin/page.tsx` L249–251, built by `buildAttentionFlags`, `src/lib/admin/cockpit-core.ts` L138); a count item is not in it yet (F-06-16).
 
 ### 4.9 Opening the count sheet
 
@@ -233,7 +244,7 @@ Press the count's name. The page title is the count's name, with: *"{stage} — 
 1. **Gather every package** of each product in scope: shelf, back stock, display case, anywhere a package could be.
 2. **Count the packages of one lot, then enter the total for that lot once.** Under **Scan a package**, scan one package of the lot (the box reads *"Scan or type a lot code, then press Enter"* and re-focuses itself). The screen answers with the match, for example *"{product} — {lot}. Enter what you counted."*
 3. In **How many did you count**, type the **total** for that lot and press **Record this count**. The screen says *"Recorded. Scan the next package."*
-4. **Do not scan a second package of a lot you have already recorded** (F-06-5b). The sheet does **not** add one per scan. A scan of an already-counted lot opens the entry again, and whatever you type is saved as the lot's **second count**, silently replacing nothing in the first count but overriding it at posting. (The built-in checklist says *"add one to that batch's count"*, `inventory-audit-core.ts` L1416+; the sheet does not do that.) If you made a mistake on a lot already recorded, **stop and tell the owner**; write it on form 8.4.
+4. **Do not scan a second package of a lot you have already recorded** (F-06-5b). The sheet does **not** add one per scan. A scan of an already-counted lot opens the entry again, and whatever you type is saved as the lot's **second count**, silently replacing nothing in the first count but overriding it at posting. (The built-in checklist says *"add one to that batch's count"*, `inventory-audit-core.ts` L1416+; the sheet does not do that.) If you made a mistake on a lot already recorded, **stop and tell the owner**; write it on form 8.4. **When G-36 is built (APPROVED, D60: *"A-06-7- yes."*)**, each scan adds one package to the lot's count, the way Lightspeed works (*"Scan the same item multiple times to increase the counted quantity."*): you scan every package and the sheet counts them. Typing a total stays available for a label that will not scan. Until then, follow steps 2–4 as written.
 5. **If the scanner will not read** a label, press **enter by hand** on that lot's row in **The count sheet** table (it is offered only for lots not yet counted). The record notes *"Recorded as a hand-typed count — the label was not read by the scanner."* Tell a manager so the label can be fixed.
 6. **Found none? Type 0.** Zero is a real count. **Blank means nobody looked**, and the sheet will not let the count finish while anything is blank.
 7. **Several open lots of one product** (orange badge in planning; the sheet may answer *"…so the system will not guess which one you are holding. Pick it from the list below instead…"*): read the lot code on each package, sort the packages into a pile per lot, count each pile, and enter each total on its own row using **enter by hand**.
@@ -252,19 +263,27 @@ Press the count's name. The page title is the count's name, with: *"{stage} — 
 3. If anything in scope sells after the audit was created and before its lot was counted, **do not approve or post that audit.** Note it on form 8.1, leave it unposted (cancel when G-33 adds Cancel) and plan a new one.
 4. The hub's ISA 501.A5 explainer says the hub *"warns you when sales landed in the middle of it"* (`audit-hub-authorities.ts` L215–235). **There is no such warning** (F-06-7). Do not rely on it.
 
+**What the owner decided, and why the rule above still applies today.** The owner wants counting *"anytime during open hours"* (D61) and wants the system to be *"smart enough to know that when they start the count and finish it, the sales in between should be reconciled"* (D58). The approved design (G-35) does what Lightspeed does: each lot's books quantity is captured **when that lot is first counted**, and the difference is *count − that captured quantity*. A sale after that moment lowers both the shelf and the books, so it does not change the difference (Lightspeed: *"Sales or added inventory don't change a discrepancy."*). The review page will list, per lot, every sale and receipt between the capture and **I'm done**, so the owner can see them. Two counter rules come with it, from the same source: **count each lot in one go** once you start it, and *"If an item is partially counted, don't sell any uncounted units."*
+
+**Until G-35 is built, counting during open hours is not safe** and the four rules above stay in force: today the quantity freezes at **Create this count** and a mid-count sale is subtracted twice (F-06-7, S1).
+
 ### 4.12 A second count ("Count again")
 
-When a difference is large (at least **$50** at cost by default, `DEFAULT_MATERIALITY` recountAtCents 5000, `inventory-audit-core.ts` L767–771) the sheet asks for a second blind count:
+**What it is.** The owner asked: *"what second count? I am not sure I understand."* The "second count" is the app's own check, not a second employee. When a lot's first count is off from the books by **$50 or more at cost** (`DEFAULT_MATERIALITY` recountAtCents 5000, `inventory-audit-core.ts` L767–771), the sheet asks for the lot to be **counted again from scratch**, without being told the expected number. Counting twice catches the most common error: a package missed in a second location.
 
-- The notice reads: *"N lots need a second count. You are told THAT they disagreed, never by how much — … Ideally a different person does it."*
+**What the owner decided (D56).** *"I am the only one who will initiate a cycle count. Any employee may count inventory. Only one employee per scoped count."* So the recount is done by **the same counter**, before they finish. The sheet's *"Ideally a different person does it"* no longer applies. If the owner wants a different person to count, the owner sends the lot back or plans a new audit (an **owner-initiated re-count**).
+
+What you see:
+- The notice reads: *"N lots need a second count. You are told THAT they disagreed, never by how much — … Ideally a different person does it."* (Ignore the last sentence, D56.)
 - The lot's row shows the badge **Count again**.
 
-**Procedure:**
-1. A **different person** if available (store rule 3). They do not ask what the first count was.
-2. Count the lot fresh, from scratch, all locations.
-3. **Scan** one package of the lot. The entry opens; type the total; **Record this count**. There is **no "enter by hand" for a lot already counted** (F-06-5). If the label will not scan, stop and tell the owner; write the count on form 8.4.
-4. Enter the second count **once**. Each further entry replaces the second count; there is no third count (F-06-5).
-5. If the second count does not match the first, say so to the owner. The review page will call it out, but **the app does not stop the approval** (§4.16, F-06-13).
+**Procedure (the counter, today):**
+1. Recount the lot fresh, from scratch, all locations. Do not look up the first number.
+2. **Scan** one package of the lot. The entry opens; type the total; **Record this count**. There is **no "enter by hand" for a lot already counted** (F-06-5). If the label will not scan, stop and tell the owner; write the count on form 8.4.
+3. Enter the second count **once**. Each further entry replaces the second count; there is no third count (F-06-5).
+4. If the second count does not match the first, say so to the owner. The review page will call it out, but **the app does not stop the approval** (§4.16, F-06-13).
+
+**When G-36 is built (APPROVED):** a scan of an already-counted lot asks whether to add, replace or cancel; recounts can be typed by hand; a recount that still disagrees **blocks** approval until the owner decides (accept one count, send the lot back, or cancel); only the employee who claimed the count can enter numbers.
 
 ### Part 4: Review, approve, post (owner)
 
@@ -352,7 +371,7 @@ When nothing blocks and you have checked §4.14 by eye (no "Do not average them"
 
 Cycle Counts ends with **Older counts (read only)**: the sessions from the old cycle-count tool, before audits replaced it. Opening one needs owner, admin or manager. Its help says *"Corrections are made in Inventory Auditing…"*.
 
-> **Caution (F-06-9).** "Read only" is only partly true. An old session still **open** still shows **Cancel**, a scanner and an **Enter count** column, and the server actions behind them still write (`cycle-counts/[id]/page.tsx` L161–172, L222, L317, L389; `cycle-counts.ts` L278–320, L382–415, L526–545). **Store rule:** never enter, scan, import or cancel on an old session. Read and export only. Which open sessions remain, and what to do with them, is Q-06-6.
+> **Caution (F-06-9).** "Read only" is only partly true. An old session still **open** still shows **Cancel**, a scanner and an **Enter count** column, and the server actions behind them still write (`cycle-counts/[id]/page.tsx` L161–172, L222, L317, L389; `cycle-counts.ts` L278–320, L382–415, L526–545). **Store rule:** never enter, scan, import or cancel on an old session. Read and export only. **Owner decision D59:** *"be canceled, we are not live yet. It's all test data."* Every old session is cancelled in the build (G-39), not posted.
 
 ### 4.21 "Stock needing recount" (oversold products)
 
@@ -365,18 +384,57 @@ The Cycle Counts page lists products the register sold past their tracked count,
 
 Inventory → Issues may show *"{n} lots are overdue for a cycle count"*, meaning *"Past their count cadence (A monthly, B quarterly, C twice a year)…"*, fix text *"Start a cycle count."*, button **Open cycle counts** (`issues-core.ts` L478–485).
 
-- That schedule (A 30 / B 90 / C 180 days, `inventory-intel-core.ts` L301) **differs** from the audit planner's (A 30 / B 60 / C 90 / U 14) (F-06-8; which one is right is Q-06-5).
+- That schedule (A 30 / B 90 / C 180 days, `inventory-intel-core.ts` L301) **differs** from the audit planner's (A 30 / B 60 / C 90 / U 14) (F-06-8). **Owner decision D58** replaces both with the daily programme in §4.24 (about one vendor a day, plus a full count at year end); the A/B/C schedule stays as the risk ranking that the intelligent counts use (G-39, G-40).
 - **Open cycle counts** goes to a page that cannot start a count. **Counter or manager:** tell the owner. **Owner:** plan the count on **Plan a count** (§4.5).
 
 ### Part 6: Daily checklists (every employee)
 
 ### 4.23 The daily checklists (paper, until built)
 
-The owner asked for *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature"* and said they are *"for all employees, admin, manger, sales"* (D51). **The app has no daily checklist feature** (F-06-12, re-verifying F-00-9). Until gap G-38 is built, the checklists are **paper**: form 8.5 (opening), form 8.6 (during the shift) and form 8.7 (closing), one set per day, on the clipboard by the back-office door, initialled task by task and filed by month.
+The owner asked for *"Checklists for daily tasks like cycle counts I initiate via the inventory audit feature"* and said they are *"for all employees, admin, manger, sales"* (D51). **The app has no daily checklist feature** (F-06-12, re-verifying F-00-9). Until gap G-38 (**APPROVED**, D57) is built, the checklists are **paper**: form 8.5 (opening), form 8.6 (during the shift), form 8.7 (closing) and form 8.8 (weekly and monthly), one set per day, on the clipboard by the back-office door, initialled task by task and filed by month. Keep them five years with the store's other records (WAC 314-55-087).
 
-**What is on them, and what is not.** Every task on forms 8.5–8.7 comes from an approved SOP and names its section. Tasks the owner has not yet set (for example cleaning, which is SOP-07) are left as blank lines for him to fill in (Q-06-4). This SOP does not invent store tasks.
+**What the owner asked to be on them (D57).** *"Tasks should include cleaning, organizing, stocking, marketing content like website banners, flyers, newsletters, blog posts, social media posts, in store content, yard banners, inventory management like product enrichment, making sure products get heavily discounted before expiring. Plus any other small retail business daily duties that you think ought to be included as well. Use your professional expert judgement when adding value there."*
 
-**The cycle-count line.** Each checklist has the line *"Cycle Counts page checked; any count waiting is done or handed over"*. The opener and closer open Cycle Counts, and if a count is **being counted**, either do it (§4.10) or write who will.
+**How the forms are built.** Every line names where its procedure lives:
+- **An SOP section** (for example *SOP-01 §4.x*) when a written SOP covers it.
+- **The screen** (for example *Marketing & Advertising*, *Blog & Newsletter*, *Shop Banner*, *Product Enrichment*) when the app has the tool but its SOP is not written yet (SOP-10, SOP-11, SOP-12, SOP-13 on the roadmap).
+- **owner-directed (D57)** when it is a store task no SOP covers yet (cleaning is SOP-07; opening and closing is SOP-18; security is SOP-20). The detailed method for those comes with that SOP; the checklist line only makes sure the task is done and initialled.
+
+**The professional additions, and why each is there** (expert judgement, as the owner asked):
+- **Security and cameras** (cameras recording, alarm armed and disarmed, doors and safe): Washington retailers must keep surveillance running and secure the premises (WAC 314-55-083). It is the first thing an LCB officer checks.
+- **ID scanner and age signage**: every sale needs a valid ID check (SOP-19 on the roadmap). A dead scanner discovered at 4 pm is a lost afternoon.
+- **Compliance signage and display rules** (no product visible from outside, required warnings posted): an officer can cite the store for a missing or covered sign.
+- **Online orders queue**: an unseen pickup order is a lost customer (**Online Orders**, SOP-13 on the roadmap).
+- **Expired and expiring stock**: the Issues tab and the Sell-first list, so nothing expired is sold and soon-to-expire stock is discounted in time (SOP-05a §4.16).
+- **Safety walk** (trip hazards, exits clear, first-aid kit stocked): basic employer duty and cheap to check.
+- **Customer-facing readiness** (menus and price tags match the register, display cases clean and lit, music and lights on): the standard small-retail opening walk.
+
+**Heavy discounts before expiry (the owner's rule).** The owner's markdown rule is recorded in the code: *"a 50% off products we have been sitting on for too long and things about to expire"*, excluded from every other deal (`src/lib/promotions/markdown-lock-core.ts` L8–11). The pricing engine has the lock that keeps a clearance item out of other deals (`markdownOnly`, `discount-engine-core.ts` L169), but **no admin screen sets it** (no use in `src/app` or `src/components`; finding F-06-17). So the daily line is: read **Inventory → Issues** (*"N lots expiring within 30 days"*) and **Inventory → Insights → Sell first (FEFO)** (SOP-05a §4.16), move those units to the front, and **list them for the owner**; the owner sets the markdown. G-38 adds an expiring-soon list to the checklist with a link to mark items down when the clearance screen exists.
+
+**The cycle-count line.** Each checklist has the line *"Cycle Counts page checked; today's count claimed and done, or handed over"*. Under D58 there is a small count to do **every day** (§4.24).
+
+### 4.24 The counting programme: one full count a year, a small count every day, intelligent counts
+
+**What the owner decided (D58).** *"we do a full inventory audit once per year at the end of the year. My plan for cycle counts is to issue small counts the employees can do everyday to keep inventory accurate. Something like a vendor per day, broken into chunks if a large vendor, or if small enough, to do on their own."* And: *"I also want options for initiating intelligent cycle counts."*
+
+**1. The annual full count (year end).** One wall-to-wall count of every lot, once a year at the end of the year. Today it is done as one audit using **Show every active lot instead** on Plan a count (§4.5), which stops at **400 lots** (§4.5 step 4). A store with more open lots than that needs several audits, split by vendor or category, planned the same day (write all of them on form 8.1). Gap **G-41** adds a proper annual count: every lot with no cap, split into counter-sized sections, one release, one combined review and one work paper for the accountant. Until G-41 and G-35 are built, the annual count is done **outside selling hours** (§4.11).
+
+**2. The daily count (about one vendor a day).**
+- **Today (interim):** Plan a count proposes lots by risk and due date, not by vendor (§4.5). The vendor name shows on each product group (`audits/new/page.tsx` L388) but the planner cannot filter by vendor. So: open **Show every active lot instead**, pick today's vendor from your rotation list (form 8.1), and plan a count containing only that vendor's products. If a vendor has more products than one employee can count in about an hour, split it into chunks (for example by category) and plan one count per chunk across the week. Remember the timing rule: until G-35 is built, create and count **before opening or after closing** (§4.11).
+- **When G-40 is built (APPROVED):** the planner offers **Vendor of the day**. It rotates through every vendor with open lots, splits a large vendor into chunks of a size you set (lots or estimated minutes), and proposes the next chunk each day. You release it (§4.7) and any employee claims it.
+
+**3. Intelligent counts (G-40, APPROVED).** Options the owner can choose to propose a count, each explaining why it chose each lot:
+
+| Generator | What it picks | Why professionals use it |
+|---|---|---|
+| **Vendor of the day** | The next vendor (or chunk) in the rotation | Small daily counts cover the whole store over a cycle (the owner's plan) |
+| **High value / ABC** | A-class lots more often than C | Most of the money sits in a few products (the A/B/C ranking already in the planner, `CADENCE_DAYS`, `inventory-audit-core.ts` L324–329) |
+| **Exceptions** | Oversold products (**Stock needing recount**, §4.21), lots adjusted recently, open 86s, zero on hand with recent sales | A count is cheapest where the books are already known to be doubtful |
+| **Expiring soon** | Lots expiring within 30 days | Confirms what is on the shelf before the markdown (§4.23) |
+| **Cultivera-import flags** | Products the import flagged | Already exists (§4.5 step 4) |
+| **Never counted / overdue** | Lots never counted or past their date | The hub's own stat cards (§4.4) |
+
+Each generator only **proposes**. The owner still names it, writes why, creates it and releases it (D50, D54). Only one open count per lot at a time (NetSuite: *"Until an inventory count is completed, you cannot start a new inventory count for that item."*).
 
 ## 5. Messages: "If you see this message"
 
@@ -458,7 +516,7 @@ The owner asked for *"Checklists for daily tasks like cycle counts I initiate vi
 | Lost or destroyed product reported monthly | WAC 314-55-089(4)(a) (*"…lost and/or destroyed product in a manner prescribed by the LCB."*) | Posting writes a **count** adjustment → CCRS **Reconciliation**; destruction is SOP-15 |
 | Every sale and adjustment traceable | CCRS reporting (WAC 314-55-083(4)) | Adjustment note names the audit and both quantities |
 | Records kept five years | WAC 314-55-087 | Work paper + forms 8.1–8.4 in the binder |
-| Blind count; second count by another person; collect the unused count records | ISA 501.A4 (*"…count and re-count procedures…"*) | Sheet hides expected quantities; second count requested at $50 — but a disagreement does not block (F-06-13), and "another person" is not enforced (Q-06-3) |
+| Blind count; second count by another person; collect the unused count records | ISA 501.A4 (*"…count and re-count procedures…"*) | Sheet hides expected quantities; second count requested at $50, done by the same counter (D56) — a disagreement does not block (F-06-13); one counter per count is not enforced (F-06-15) |
 | Count with no movement before, during and after | ISA 501.A5 (cutoff) | **Not enforced**; the claimed warning does not exist (F-06-7). §4.11 is the control |
 | Counting slices must add up to a full annual count | PCAOB AS 2510.11 | Hub's programme panel; count schedule |
 | Records alone are not enough; existence must be observed | PCAOB AS 2510.12, AS 1105.11 | The physical count itself |
@@ -524,38 +582,98 @@ Given to: ______________ (manager/owner)
 ### 8.5 Opening checklist (every employee on the opening shift)
 
 ```
-Date: ________  Opener(s): ______________
+Date: ________  Opener(s): ______________          Initials / time
+SECURITY & SAFETY
+[ ] Alarm disarmed; doors, back door and safe checked (owner-directed D57; SOP-20) ____
+[ ] Cameras recording, every view live, date/time right (owner-directed D57; WAC 314-55-083) ____
+[ ] Safety walk: exits clear, no trip hazards, first-aid kit stocked (owner-directed D57) ____
+CASH & REGISTERS
 [ ] SOP-01 form 8.1 shift-open checklist done (each register)            ____
 [ ] SOP-02 AM master till count done                                       ____
 [ ] SOP-03 §4.10-4.12 morning bag recount and log (manager)                ____
+[ ] ID scanner, label printer, card terminal, scales powered and tested (SOP-17) ____
+INVENTORY
 [ ] SOP-05a §4.4 Inventory -> Issues worked, form 8.3 (manager)            ____
-[ ] Cycle Counts page checked; any count waiting is done or handed over    ____
-    Count name: __________  Done by / handed to: __________
-[ ] If an audit count is planned before opening: finished before doors open ____
-[ ] _______________________________________ (owner to set, Q-06-4)          ____
-[ ] _______________________________________ (owner to set, Q-06-4)          ____
+[ ] Expired lots checked; expired edibles/liquids/tinctures/capsules/RSO pulled (SOP-05a §4.16) ____
+[ ] Expiring-within-30-days list read; units fronted; list given to owner for markdown (§4.23) ____
+[ ] Cycle Counts page checked; today's count claimed and done, or handed over ____
+    Count name: __________  Counter (one person, D56): __________
+[ ] If an audit count is planned before opening: finished before doors open (§4.11) ____
+SALES FLOOR (cleaning, organizing, stocking)
+[ ] Display cases and counters wiped, glass cleaned (owner-directed D57; SOP-07) ____
+[ ] Shelves faced and stocked from back stock; gaps filled or 86'd (SOP-05a §4.12) ____
+[ ] Menu boards / screens match the register; price tags correct (SOP-05b) ____
+[ ] Required warning and age signs posted and visible; no product visible from outside (owner-directed D57) ____
+[ ] Restroom and entry clean and stocked (owner-directed D57; SOP-07)     ____
+[ ] Lights, music, OPEN sign on at opening time                            ____
+ORDERS
+[ ] Online Orders checked; pickups for today pulled and bagged (Online Orders; SOP-13) ____
 ```
 
 ### 8.6 During-the-shift checklist
 
 ```
+Date: ________  Shift lead: ______________            Initials / time
 [ ] Cycle Counts page checked at mid-shift                                 ____
-[ ] Any product on "Stock needing recount" told to the manager             ____
-[ ] No count is being done on products that are selling right now (§4.11)  ____
-[ ] _______________________________________ (owner to set, Q-06-4)          ____
+[ ] Any product on "Stock needing recount" told to the manager (§4.21)     ____
+[ ] Until G-35: no count on products selling right now (§4.11)             ____
+[ ] Online Orders checked (every hour)                                     ____
+[ ] Shelves re-faced and restocked after the lunch rush                    ____
+[ ] Counters, scale and door handles wiped (owner-directed D57; SOP-07)    ____
+[ ] Trash and recycling emptied if over half full (owner-directed D57)     ____
+[ ] Cash drops made per SOP-01 when a drawer is over its limit             ____
+MARKETING (one block per day; the owner assigns which)
+[ ] Social media post published (Marketing & Advertising / Creative Studio; SOP-11) ____
+[ ] Website banner checked: current, not expired (Shop Banner; Schedule & Releases) ____
+[ ] In-store content: specials board, shelf talkers, screens updated (owner-directed D57) ____
+[ ] Flyer or handout stock checked and reprinted if low (owner-directed D57) ____
+[ ] Yard banners / street signs out, straight and undamaged (owner-directed D57) ____
+INVENTORY MANAGEMENT
+[ ] Product enrichment: ____ products finished (photos, description, effects) (Product Enrichment; SOP-10) ____
+[ ] Expiring-soon units fronted; markdown labels match the register        ____
 ```
 
 ### 8.7 Closing checklist
 
 ```
-Date: ________  Closer(s): ______________
+Date: ________  Closer(s): ______________             Initials / time
 [ ] SOP-01 drawers closed (blind count), SOP-03 night sheet and bag        ____
 [ ] SOP-02 PM master till count                                            ____
-[ ] Cycle Counts page checked; any count waiting is done or handed over    ____
-[ ] If an audit count is planned after closing: no sales after the audit was created ____
+[ ] Cycle Counts page checked; today's count done, or handed over          ____
+[ ] If an audit count is planned after closing: no sales after the audit was created (§4.11) ____
 [ ] All count sheets / slips (forms 8.2, 8.4) handed to the owner          ____
-[ ] _______________________________________ (owner to set, Q-06-4)          ____
+[ ] Online Orders: no unfulfilled pickups left without a note              ____
+[ ] Shelves faced and restocked for the morning (owner-directed D57)       ____
+[ ] Floors swept/mopped; cases and counters wiped; trash out (owner-directed D57; SOP-07) ____
+[ ] Product returned to the vault / secure storage as store policy requires (owner-directed D57) ____
+[ ] Lights, screens and music off; OPEN sign off                           ____
+[ ] Doors locked, alarm armed, cameras still recording (owner-directed D57; SOP-20) ____
 Manager sign-off: ______________
+```
+
+### 8.8 Weekly and monthly checklist (manager, owner)
+
+```
+Week of: ________                                        Initials / date
+WEEKLY
+[ ] Newsletter drafted or sent (Email Newsletter / Blog & Newsletter; SOP-11) ____
+[ ] Blog post published (Blog & Newsletter; SOP-11; SEO SOP-21)           ____
+[ ] Flyers and in-store content refreshed for next week's deals (owner-directed D57) ____
+[ ] Website banners and specials match next week's promotions (Shop Banner, Specials) ____
+[ ] Expiration report read; markdown list agreed with the owner (SOP-05a §4.16) ____
+[ ] Product enrichment backlog reviewed (Catalog Hub; SOP-10)             ____
+[ ] Deep clean: back stock room, shelves under displays, glass (owner-directed D57; SOP-07) ____
+[ ] Supplies ordered: bags, labels, receipt paper, cleaning (owner-directed D57) ____
+[ ] Vendor-of-the-day rotation on track; next week's vendors listed (§4.24) ____
+[ ] CCRS weekly upload done (SOP-16)                                       ____
+MONTHLY
+[ ] Camera footage retention checked; recorder storage healthy (owner-directed D57; SOP-20) ____
+[ ] Fire extinguisher and first-aid kit checked (owner-directed D57)       ____
+[ ] Recall plan and contact list still current (SOP-05a §4.13)             ____
+[ ] Compliance signage re-checked against current rules (Regulatory Watch) ____
+[ ] Every vendor counted at least once this month (§4.24)                  ____
+YEAR END
+[ ] Annual full count planned, done and posted (§4.24; G-41)               ____
 ```
 
 ## 9. Quick reference cards
@@ -564,7 +682,8 @@ Manager sign-off: ______________
 
 1. **Plan:** Inventory Auditing → **Plan a new audit** → read the proposal → name it → write why → **Create this count**. Do it **right before** counting, outside selling hours.
 2. **Push to floor:** no button yet (G-33). Print form 8.2 and count on paper (§4.7).
-3. **When G-33 exists:** approve scope → counters count → you press **Finish counting and review the differences**.
+3. **When G-33 / G-34 exist (D54, D55):** create → **Release to Cycle Counts** → one employee claims and counts → they press **I'm done** → the cockpit tells you → review.
+3a. **Daily:** about one vendor a day, chunked if large; **year end:** one full count (§4.24).
 4. **Review:** read **Total error found**, not net. No "Do not average them" lines. Reason **and** note together (form 8.3 first).
 5. **Approve this result** (final) → **Post this audit** (once) → **Books → Journal**: approve the draft.
 6. Anything sold in scope after creation? **Do not post.**
@@ -577,7 +696,8 @@ Manager sign-off: ______________
 3. **Never scan a lot again once recorded.** Mistake? Stop, form 8.4, tell the owner.
 4. Label will not scan → **enter by hand** (uncounted lots only).
 5. **None on the shelf = type 0. Never leave blank.**
-6. **Count again** badge → fresh count, different person if possible, scan, enter once.
+6. **Count again** badge → fresh count by you (same counter, D56), scan, enter once.
+6a. **One counter per count.** If someone else already started it, leave it.
 7. Never look up expected numbers. Never press **Review and finish**.
 8. Done → **tell the owner** (the count does not leave the page by itself).
 9. Product in scope needs to be sold mid-count → stop, tell the manager.
@@ -635,29 +755,36 @@ Manager sign-off: ______________
 
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
-| **G-33** | Owner controls for every stage: **Approve scope and send to Cycle Counts** (signed), start counting, **Send back to counting**, **Cancel** (with a reason) | F-06-1 (**S1**), F-06-2 | Paper count, form 8.2 (§4.7) | §2, §4.2, §4.7, §4.13, §6, §9 | PROPOSED |
-| **G-34** | Counter's **I'm done** on the sheet that notifies the owner; correct help step 4; staff-safe links on the count sheet; live counted/difference figures on the hub and queue | F-06-3, F-06-4 | Tell the owner in person (§4.8) | §4.4, §4.8, §4.9, §4.13 | PROPOSED |
-| **G-35** | Cutoff: post the difference against the **live** quantity at count time (or freeze at count, not at creation) and warn when sales landed between freeze and count; correct the work paper and explainer | F-06-7 (**S1**) | Create right before counting, outside selling hours; never post if anything sold (§4.11) | §4.3, §4.11, §4.17, §4.19, §7 | PROPOSED |
-| **G-36** | Count-sheet integrity: per-package scans add up; a scan of a counted lot warns instead of becoming the second count; hand entry for second counts; a disagreeing second count **blocks** approval and posting; status check on every line write (code and database) | F-06-5, F-06-5b, F-06-6, F-06-13 (**S1**) | §4.10 step 4, §4.12, §4.14 owner rule, store rule 4 | §4.10, §4.12, §4.14, §4.16, §5.2 | PROPOSED |
-| **G-37** | Reasons: edit reason and note until approval (audited); validate the reason against the list; enforce `readyToPost` at posting | F-06-14 | Form 8.3 first; new audit if saved wrong (§4.15) | §4.15, §5.3 | PROPOSED |
-| **G-38** | Daily checklists in the app, for every employee (D51), with sign-off and a Cycle Counts line | F-06-12 (F-00-9) | Paper forms 8.5–8.7 (§4.23) | §4.23, §8, §9 | PROPOSED (owner requested the checklists; the build is a decision) |
-| **G-39** | Housekeeping: one count schedule everywhere; Issues fix links to the planner (owner) or tells staff to tell the owner; legacy sessions truly read-only; render the built-in counting checklist on the sheet; Pacific times; one approved colour | F-06-8, F-06-9, F-06-10, F-06-11 | §4.20, §4.22 store rules | §4.5, §4.20, §4.22 | PROPOSED |
+| **G-33** | Owner controls for every stage: **Approve scope and send to Cycle Counts** (signed), start counting, **Send back to counting**, **Cancel** (with a reason) | F-06-1 (**S1**), F-06-2 | Paper count, form 8.2 (§4.7) | §2, §4.2, §4.7, §4.13, §6, §9 | **APPROVED** (D54: separate **Release to Cycle Counts**) |
+| **G-34** | Counter's **I'm done** on the sheet that notifies the owner; correct help step 4; staff-safe links on the count sheet; live counted/difference figures on the hub and queue | F-06-3, F-06-4 | Tell the owner in person (§4.8) | §4.4, §4.8, §4.9, §4.13 | **APPROVED** (D55: back to the audit + cockpit notice; F-06-16) |
+| **G-35** | Cutoff: post the difference against the **live** quantity at count time (or freeze at count, not at creation) and warn when sales landed between freeze and count; correct the work paper and explainer | F-06-7 (**S1**) | Create right before counting, outside selling hours; never post if anything sold (§4.11) | §4.3, §4.11, §4.17, §4.19, §7 | **APPROVED** (D58, D61: per-lot capture at first count; counting in open hours) |
+| **G-36** | Count-sheet integrity: per-package scans add up; a scan of a counted lot warns instead of becoming the second count; hand entry for second counts; a disagreeing second count **blocks** approval and posting; status check on every line write (code and database) | F-06-5, F-06-5b, F-06-6, F-06-13 (**S1**) | §4.10 step 4, §4.12, §4.14 owner rule, store rule 4 | §2, §4.10, §4.12, §4.14, §4.16, §5.2 | **APPROVED** (D56 one counter + claim, F-06-15; D60 +1 per scan) |
+| **G-37** | Reasons: edit reason and note until approval (audited); validate the reason against the list; enforce `readyToPost` at posting | F-06-14 | Form 8.3 first; new audit if saved wrong (§4.15) | §4.15, §5.3 | PROPOSED (no owner question; part of building G-33…G-36) |
+| **G-38** | Daily checklists in the app, for every employee (D51), with sign-off and a Cycle Counts line | F-06-12 (F-00-9) | Paper forms 8.5–8.8 (§4.23) | §4.23, §8, §9 | **APPROVED** (D57: task catalog) |
+| **G-40** | Intelligent cycle counts: **Vendor of the day** with chunking, ABC, exceptions, expiring soon, Cultivera flags, never counted; one open count per lot | F-06-8 | Plan by hand from **Show every active lot** (§4.24) | §4.5, §4.22, §4.24, §9 | **APPROVED** (D58) |
+| **G-41** | Annual year-end full count: every lot, no 400 cap, sections, one release, one review, one work paper | — | Several audits the same day, outside selling hours (§4.24) | §4.5, §4.24, §8.8 | **APPROVED** (D58) |
+| **G-39** | Housekeeping: one count schedule everywhere; Issues fix links to the planner (owner) or tells staff to tell the owner; legacy sessions truly read-only; render the built-in counting checklist on the sheet; Pacific times; one approved colour | F-06-8, F-06-9, F-06-10, F-06-11 | §4.20, §4.22 store rules | §4.5, §4.20, §4.22 | **APPROVED** (D59 cancel all legacy sessions; D58 schedule) |
 
 ## Appendix C: Open questions for the owner
 
-| # | Question | Why it matters / until answered |
-|---|---|---|
-| **Q-06-1** | When G-33 is built, should an audit move from **ready to count** to **being counted** automatically on the first entry, or by your button? | The design of G-33. Until answered: G-33 proposes automatic on first entry |
-| **Q-06-2** | Should a counter be able to press **I'm done** (which notifies you), or should finishing stay yours alone? | Your letter says *"When they finish, it leaves their screen."* The app does not do that (F-06-3). Until answered: counters tell you in person |
-| **Q-06-3** | Must a second count be done by a **different person**, enforced by the app? | ISA 501.A4. Until answered: store rule 3 ("when one is available") |
-| **Q-06-4** | What tasks go on the daily checklists (opening, mid-shift, closing) beyond the SOP tasks already listed? | Forms 8.5–8.7 have blank lines for you |
-| **Q-06-5** | Which count schedule is right: A 30 / B 60 / C 90 days (planner) or A monthly / B quarterly / C twice a year (Issues)? | F-06-8 |
-| **Q-06-6** | Should the old open cycle-count sessions be cancelled, and the held paper-interim audits cancelled once **Cancel** exists? | F-06-9, §4.7 step 5 |
-| **Q-06-7** | Should each scan add one package to the lot's count (as the built-in checklist says), or should counters keep typing a total? | F-06-5b; G-36 |
-| **Q-06-8** | What are the standard counting hours (before opening, after closing)? | The timing rule, §4.11 |
+All eight v1.0 questions were answered by the owner after SOP-06 merged (recorded verbatim in `00-OWNER-REQUEST-VERBATIM.md`).
+
+| # | Question | Owner's answer | Decision |
+|---|---|---|---|
+| Q-06-1 | Auto-start counting, or by button? | *"…what is the enterprise grade approach? Please do what the pros would do."* | **D54**: separate **Release to Cycle Counts** button; per-lot capture at first count |
+| Q-06-2 | May a counter press **I'm done**? | *"yes, pressing I'm done should sent the cycle count back to the inventory audit page linking back to the one that initiated the count. It should notify me in the main /admin cockpit command center."* | **D55** |
+| Q-06-3 | A different person for the second count? | *"…I am the only one who will initiate a cycle count. Any employee may count inventory. Only one employee per scoped count."* | **D56**: one counter; recount by the same counter |
+| Q-06-4 | Daily checklist tasks | Cleaning, organizing, stocking, marketing content, product enrichment, discounts before expiry, plus expert additions | **D57**: forms 8.5–8.8 |
+| Q-06-5 | Which count schedule? | *"…a full inventory audit once per year at the end of the year … a vendor per day, broken into chunks if a large vendor … I also want options for initiating intelligent cycle counts."* | **D58**: §4.24, G-40, G-41 |
+| Q-06-6 | Cancel old sessions? | *"be canceled, we are not live yet. It's all test data."* | **D59** |
+| Q-06-7 | +1 per scan? | *"yes."* | **D60** |
+| Q-06-8 | Counting hours? | *"anytime during open hours."* | **D61** (safe once G-35 is built) |
+
+No new questions in v1.1.
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.1 | 2026-10-28 | Owner answers Q-06-1…Q-06-8 applied as D54–D61: release button (§4.7), I'm done + cockpit notice (§4.8), one counter and the same-counter recount (§2, §4.12), +1 per scan (§4.10), counting in open hours once G-35 is built (§4.11), the counting programme (new §4.24), the full daily task catalog (§4.23, forms 8.5–8.8 including new 8.8), legacy sessions cancelled (§4.20). Gaps G-33…G-36, G-38, G-39 APPROVED; new G-40, G-41; new findings F-06-15…F-06-17. Research: Oracle NetSuite Inventory Count and Lightspeed R-Series inventory counts, quoted | SOP program |
 | 1.0 | 2026-10-28 | First draft, verified against `main@c976c7e4`. Owner decisions D41, D42, D50–D52 applied. Findings F-06-1…F-06-14 (with F-06-5b) and F-06-C; gaps G-33…G-39; questions Q-06-1…Q-06-8. Paper daily checklists (forms 8.5–8.7) | SOP program |

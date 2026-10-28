@@ -687,6 +687,21 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **Pin:** `src/lib/admin/concierge-kb.ts` L66, L73, L175; help `help-content.ts` L450–451 (*"How do I do a cycle count?"*).
 - **SOP impact:** concierge ledger SOP-06 section.
 
+### F-06-15 · CONFIRMED · GAP · S2 — Any employee can enter numbers on any open count; nothing enforces one counter per count
+- **Pin:** `saveCountAction` checks only `inventory.count` (`audits/actions.ts` L148–157) and passes the caller as `countedBy` (L189); `saveCountLine` stores `counted_by` / `recount_by` per line (`audit-hub-store.ts` L924–927). There is no claim, assignee or lock on the audit.
+- **Effect:** the owner's rule *"Only one employee per scoped count."* (D56) is not enforced; two people can enter numbers on one count, and a second person's entry on a counted lot silently becomes the recount.
+- **SOP impact:** SOP-06 §2 store rule 3, §4.12, §9.2. **G-36** (claim).
+
+### F-06-16 · CONFIRMED · GAP · S3 — The /admin cockpit has no item for a count waiting for the owner
+- **Pin:** the cockpit's **Needs your attention** list (`src/app/admin/page.tsx` L249–251) is built from `buildAttentionFlags` (`src/lib/admin/cockpit-core.ts` L138–178: drawers, open orders, low stock, refunds) plus `workQueueAttentionFlags` (`page.tsx` L121). No audit or count input exists.
+- **Effect:** the owner's *"It should notify me in the main /admin cockpit command center."* (D55) has nowhere to appear yet.
+- **SOP impact:** SOP-06 §4.8 step 5. **G-34**.
+
+### F-06-17 · CONFIRMED · GAP · S2 — The clearance markdown lock has no admin screen
+- **Pin:** the owner's rule is recorded at `src/lib/promotions/markdown-lock-core.ts` L8–11 (*"a 50% off products we have been sitting on for too long and things about to expire"*); the engine honours `markdownOnly` (`discount-engine-core.ts` L169; `published-rules-core.ts` L134). No file under `src/app` or `src/components` sets it.
+- **Effect:** the owner's *"making sure products get heavily discounted before expiring"* (D57) cannot be done as a locked clearance markdown from the back office; staff can only list the items for the owner.
+- **SOP impact:** SOP-06 §4.23, forms 8.5–8.8. **G-38** (expiring-soon list) and a clearance screen (to be audited in the promotions SOP).
+
 ---
 
 ## Ledger index (updated each slice)
