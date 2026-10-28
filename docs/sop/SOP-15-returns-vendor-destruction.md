@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (Phase 1.4 fix G-44 built: a Destroy return is held, never sellable, and saved in one step; Phase 1.3 fix G-28 built: destruction keeps held lots held; owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
+| **Version** | 1.5 (Phase 1.5 fix G-42 built: a vendor return reserves its units, the app builds Manifest.CSV, and on-hand comes off only at departure; Phase 1.4 fix G-44 built: a Destroy return is held, never sellable, and saved in one step; Phase 1.3 fix G-28 built: destruction keeps held lots held; owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory → Returns & Destruction** (`/admin/inventory/disposition`) and the **Returns desk** (`/admin/registers/returns`): owner, admin and manager (`inventory.manage`). The register's **Return an item** (SOP-01 §4.23): any budtender starts it, a manager or lead approves with a PIN. Destruction day: the person who renders the product unusable **and** a witness. Recalled product: the **admin** (recall coordinator, D37) and the owner. |
@@ -18,7 +18,7 @@
 > **v1.1 owner answers (D63–D68).** Vendor returns follow the state's CCRS manifest method (D63). **Anyone** may witness a destruction, and every destruction is done **on camera** (D64). A recall is handled as a **transfer back to the vendor** (D65). The back-office **Customer return wizard is to be removed** and is not used (D66). The destruction hold is set to the **legal minimum, 0 hours** (D67). **Samples are never sold or put on the menu**; the app does not yet stop it, so §4.26 has an interim check (D68; F-15-20, **S1**).
 
 > **The one thing to know before anything else.** Three things on this screen do **not** work the way their labels suggest, and each has an interim rule in this SOP:
-> 1. **Log a vendor return takes the product off on-hand the moment you press the button** (`disposition.ts` L828–837). The state's method (D63) is that Greenway files the CCRS manifest as the origin, and the product leaves only with the LCB's manifest PDF. So **log the vendor return in the app only at departure**, when the driver has the printed manifest PDF and the units are being handed over (§4.11; finding F-15-1, **S1**; G-42 **APPROVED**).
+> 1. **A vendor return now follows the state's steps (since Phase 1.5, G-42).** **Log return (reserves the units)** holds the units on the lot: out of sale, still on hand and in CCRS (`disposition.ts` L976–1043, migration 0309 `reserve_vendor_return`). The app builds **Manifest.CSV** with Greenway as the origin; the owner uploads it and records the LCB's success email. On-hand comes off, and the CCRS **Other** adjustment posts, only when **Record departure** is pressed (`depart_vendor_return`, `disposition.ts` L1170). Steps go in order and the server refuses a skip (F-15-1, F-15-2, F-15-3 and F-15-19 FIXED). **Until the owner applies migration 0309** the app refuses to log a vendor return and says so; follow §4.11 on paper.
 > 2. **A customer return marked "Destroy" is held by the app (since Phase 1.4, G-44).** The unit is added back to the lot as **Held for destruction**: it counts on hand and in CCRS, but the register, the website and the menu never sell it (`held-stock-core.ts` L43; `sale-lot-read.ts` L65–71; `sale-decrement.ts` L194). The return, the add-back and the destruction event are saved in one database step, or not at all (migration 0308, `disposition.ts` L779). The unit still goes straight into the **sealed destroy bin** (§4.7; F-15-6 and F-15-7 FIXED). **Until the owner applies migration 0308** the app says so and the bin is the only control.
 > 3. **Recalled product is never destroyed by us; it goes back to the vendor (D65).** When the state has the vendor ask for it back, the admin tells the LCB officer and Greenway starts a vendor return with reason **Recall** (§4.21). Since Phase 1.3 (G-28) the app refuses it: a Recalled lot is not in the destruction list, the **Recall** reason is gone from **Schedule a destruction**, and **Complete destruction** is refused while the lot is Recalled (F-05a-18 FIXED).
 
@@ -46,8 +46,8 @@
    **Part 3: Returning product to a vendor**
    - 4.9 Before anything moves: the processor's RMA
    - 4.10 The CCRS transport manifest (Greenway files it as the origin)
-   - 4.11 Logging the vendor return in the app (at departure only)
-   - 4.12 Advancing the manifest status
+   - 4.11 Logging the vendor return in the app (reserves the units)
+   - 4.12 The steps: upload, LCB email, departure
    - 4.13 Pickup and the vendor-return packet
 
    **Part 4: Destruction**
@@ -119,7 +119,7 @@ A login without the permission is sent back to the back-office home with a "deni
 2. **A manager may schedule a destruction. Completing one needs two people**: the person who grinds and mixes, and a **witness, who may be anyone** on staff (D64: *"anyone may witness the destruction."*), never the person doing it. The destruction is done **in view of a security camera** (D64: *"It has to be done on camera as well."*; WAC 314-55-083(3)(a)). Both names go in **Witnessed by** and on form 8.3 with the camera and time. The app does not require a witness or a camera reference (F-15-4, F-15-21); this SOP does.
 3. **Only the owner cancels a scheduled destruction** (§4.19). Since Phase 1.3 the app enforces it (`inventory.destruction.cancel`, owner only, `roles.ts` L161), asks a written reason, and puts the lot back to the status it had before scheduling (F-05a-19, F-15-9 FIXED).
 4. **Recalled product is handled by the admin, the recall coordinator (D37), with the owner, and goes back to the vendor as a vendor return (D65).** Nobody schedules a destruction for a recalled lot (§4.21).
-5. **A vendor return is logged in the app only at departure**, after Greenway's CCRS manifest was accepted and the LCB's manifest PDF is printed (§4.11, D63).
+5. **A vendor return is logged when the RMA is in hand; the product leaves only with the LCB's manifest PDF**, and **Record departure** is pressed at that moment (§4.11–§4.12, D63). **Only the owner cancels a vendor return** (`inventory.vendor_return.cancel`, `roles.ts` L166).
 6. **The owner alone approves anything in the books** (books-23: *"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*). Refunds and write-offs are reviewed by the owner monthly (form 8.6).
 
 ## 3. Before you start
@@ -128,7 +128,7 @@ A login without the permission is sent back to the back-office home with a "deni
 - Know where the **sealed destroy bin** is (in the vault, labelled "DESTROY — NOT FOR SALE", lid taped and initialled), and where the **vendor-return tote** is (same, labelled "VENDOR RETURN — HOLD").
 - Have printed copies of forms 8.1 (destroy-bin log), 8.2 (vendor-return packet), 8.3 (destruction waste record), 8.4 (recall destruction coordination) and 8.5 (cancel and status-restore log).
 
-**Before a vendor return:** the processor's name, license number and contact; their written acceptance (RMA); the owner or admin CCRS login (Greenway uploads the manifest as the origin); the CCRS **Manifest.CSV** template from the LCB's CCRS Resources page; who will drive (our employee 21+, the processor's driver, or a transport licensee) with the vehicle's plate, VIN, make, model and colour; the agreed departure and arrival times. The LCB sets no minimum lead time (D63); allow enough time to fix a rejected upload.
+**Before a vendor return:** the processor's name, license number and contact; their written acceptance (RMA); the owner or admin CCRS login (Greenway uploads the manifest as the origin); the store's contact phone and email in license settings and the processor's phone and email in Vendors & Brands (the app's **Download Manifest.CSV** needs them); who will drive (our employee 21+, the processor's driver, or a transport licensee) with the vehicle's plate, VIN, make, model and colour; the agreed departure and arrival times. The LCB sets no minimum lead time (D63); allow enough time to fix a rejected upload.
 
 **Before a destruction:** the grinder or other tool, the mixing material (compostable: food waste, yard waste, vegetable grease; non-compostable: paper, cardboard, plastic), enough of it to make the result at least half non-cannabis by volume, a container, and a second person to witness. Know the final destination (for example the dumpster serviced by the hauler, or a compost facility) and the hauler's or facility's name.
 
@@ -156,8 +156,10 @@ A login without the permission is sent back to the back-office home with a "deni
 |---|---|---|---|---|---|
 | Customer return, **Restock** | **+qty** on the lot (`disposition.ts` L710); the online menu stock goes up too (L330) | Unchanged | Inventory adjustment **Other** (internal reason `return`, `ccrs-inventory-adjustment-core.ts` L62–90) with a note *"Customer return — ADD … back to inventory (WAC 314-55-079(12))"* (`disposition-core.ts` L167); a **Sale correction** (Delete for the whole line, Update for part) queued as **pending** | Refund recorded on the return (`refund_minor_units`); counted in the day's refunds (`refunds-store.ts` L11, L48) | `customer_return.create` (wizard, `actions.ts` L105) or `customer_return.counter` (Returns desk, `registers/returns/actions.ts` L78) |
 | Customer return, **Destroy** | **+qty** on the lot, and the same units are **held** (`held_qty`, migration 0308): on hand but never sellable; the menu stock is **not** raised. Saved with the return and the destruction event in one step (`record_customer_return`, `disposition.ts` L779) | **Unchanged (stays Active)**; only the held units are out of sale | As above, plus a destruction event is opened (reason **Other**, detail *"Customer return (…) — sale …"*) that carries the held units | As above | As above, with `held` (true once 0308 is applied) |
-| **Log a vendor return** | **−qty at once** (L828–837) | Unchanged | Inventory adjustment **Other**, note *"Vendor return (reason) RMA … manifest …: detail"* (L831–833) | None in the app (any credit from the processor is outside the app) | `vendor_return.create` (`actions.ts` L137) |
-| **Update manifest** | None | None | None (the manifest lives in the CCRS portal) | None | `vendor_return.manifest` (L162) |
+| **Log a vendor return** | None; the units are **reserved** (`held_qty`, migration 0309): on hand but out of sale; the menu stock goes down (`disposition.ts` L976–1043) | Unchanged (a Recalled lot stays Recalled) | Nothing yet | None in the app (any credit from the processor is outside the app) | `vendor_return.create` (`actions.ts` L162) |
+| **Save step** (upload, LCB email) | None | None | None | None | `vendor_return.manifest` (`actions.ts` L240) |
+| **Record departure** | **−reserved qty** and the reserve released, in one step (`depart_vendor_return`, `disposition.ts` L1170) | Unchanged | Inventory adjustment **Other**, note *"Vendor return to (processor) license …, manifest …, RMA …, reason …: detail"* (`vendor-return-core.ts` L208) | None | `vendor_return.depart` (`actions.ts` L240) |
+| **Cancel return** (owner) | None; the reserve is released and the menu stock goes back up (`release_vendor_return`, `disposition.ts` L1215) | Unchanged | Nothing | None | `vendor_return.cancel` (`actions.ts` L290) |
 | **Schedule** a destruction | None yet | **Active** → **Quarantine**; a lot already in **Quarantine** stays; **Recalled**, Sold out and Destroyed lots are refused (`disposition.ts` L975, rules `destruction-lot-status-core.ts` L85). The status before is kept on the event | None yet | None | `destruction.schedule` |
 | **Complete destruction** | **−qty** in one safe step that refuses to go below zero (L1050; L233–282). A customer-return event removes exactly its held units (`postHeldReduction` L281, `consume_lot_hold`); any other reduction (vendor return, ordinary destruction, manual adjustment) can never take held units (`evaluateReductionAgainstHold`, `held-stock-core.ts` L68) | **Destroyed** only if the lot is now at zero (L1087–1095); otherwise it **stays Quarantine** | Inventory adjustment **Destruction** with the method and destination in the note (`disposition-core.ts` L274–298) | Cost written off through the inventory adjustments export (`sage-exports.ts` L644–698: debit cost of goods, credit inventory) | `destruction.complete` (L228) |
 | **Cancel destruction (owner)** | None | Put back to the status before scheduling: **Quarantine → Active** only if it was Active, nothing else holds it and nobody changed it since; otherwise left alone and the page says why. A customer-return event never touches the lot status; it **releases the held units**, which become sellable again, and the page says so (`disposition.ts` L1380–1399) | None | None | `destruction.cancel` with the reason, the lot status before and after, and `held_released`; a refused try writes `destruction.cancel_refused` |
@@ -252,11 +254,15 @@ A retailer may return product to the processor that made it (WAC 314-55-079(11):
 - **The printed PDF travels with the product** (WAC 314-55-085(3)). Only Greenway, our employee or a transport licensee carries it; the driver is 21 or older; the product is sealed, unopened, in a locked compartment, on a direct route (085(5)); it stays tagged (085(7)). Contingency manifests are discontinued.
 - **Records**: transport records three years (085(4)); all records five years (WAC 314-55-087).
 
-The screen's **Manifest checklist** (`disposition-core.ts` L344–349) says:
-1. *"Get the processor's written acceptance (RMA number) BEFORE anything moves."*
-2. *"Create the transport manifest in the CCRS portal — POS-generated manifests are not valid and contingency manifests were discontinued (Nov 2025)."*
-3. *"Submit the manifest 48–72 hours before pickup; LCB confirms manifests Mon/Wed/Fri by email (info@lcb.wa.gov)."* **This line is not LCB text** (F-15-19). The LCB states no lead time; the confirmation is the automatic email with the PDF. Follow the steps below instead.
-4. *"Do not release product until the manifest is confirmed. Keep the manifest + RMA with this record for 5 years (WAC 314-55-087)."*
+The screen's **The state's steps** list under **Log a vendor return** (`vendor-return-core.ts` L77–84, shown at `page.tsx` L330) says:
+1. *"Get the processor's written acceptance (RMA number or an email naming the product, lot and quantity) before anything moves."*
+2. *"Log the return here: the units are reserved (out of sale) but stay on hand and in CCRS until they leave."*
+3. *"Fill in the transport details and download Manifest.CSV (Greenway is the origin). Upload it at cannabisreporting.lcb.wa.gov."*
+4. *"Wait for the LCB's automatic email. A success email has the manifest PDF attached; an error email means fix the file and upload again."*
+5. *"Print the PDF. It travels with the product (WAC 314-55-085(3)). At departure, record the pickup time and driver: on-hand comes off and the CCRS Other adjustment posts then."*
+6. *"Keep the RMA, the LCB email and PDF, and the printed packet for five years (WAC 314-55-087)."*
+
+The old checklist line *"Submit the manifest 48–72 hours before pickup; LCB confirms manifests Mon/Wed/Fri"* was not LCB text and is gone (F-15-19 FIXED; the activation guard keeps it out).
 
 ### 4.9 Before anything moves: the processor's RMA
 
@@ -268,37 +274,48 @@ The screen's **Manifest checklist** (`disposition-core.ts` L344–349) says:
 
 ### 4.10 The CCRS transport manifest (Greenway files it as the origin)
 
-The manifest is made **in CCRS, not in this app**: the app cannot build an outgoing Manifest.CSV (it only reads incoming ones, `ccrs-manifest-csv-core.ts`; G-42). The owner or admin:
-1. Fills in the LCB's **Manifest.CSV** template: Greenway's license as **OriginLicenseNumber** (and in the file name), the processor as **Destination**, the **TransportationType** (*Regular*: our employee drives; *Pick-up*: the processor collects; *Transporter Licensee*: a licensed transporter, with its license number), the driver, the vehicle (plate, VIN, make, model, colour), the estimated **DepartureDateTime** and **ArrivalDateTime**, and one item row per lot (the lot's CCRS InventoryExternalIdentifier, quantity, weight and servings per unit). Only lots already reported to CCRS can be listed.
-2. Uploads it at cannabisreporting.lcb.wa.gov, file name `manifest_413541_YYYYMMDDHHMMSS.csv`.
-3. Waits for the LCB's email. An error email means the upload was refused: fix it and upload again. A success email has the **manifest PDF** attached; the processor gets the same email.
-4. Prints the PDF (it travels with the product), writes the manifest number and the email date on form 8.2, and files the email with it.
-5. If the departure time, driver or vehicle changes, upload a corrected manifest before the product moves. The PDF must match what actually happens.
+Since Phase 1.5 the app builds the outgoing **Manifest.CSV** (G-42). Log the return first (§4.11); then, on the return's row in **Vendor returns & manifests**, open **Transport details and Manifest.CSV (Greenway is the origin)** (`page.tsx` L560–627). The owner or admin:
+1. Fills in **Transportation type** (*Regular*: our employee drives; *Pick-up*: the processor collects; *Transporter Licensee*: a licensed transporter, whose number goes in **Transporter license #**; the app refuses a transporter number for Regular or Pick-up, as the state's guide does), **Driver name**, **VIN #**, **Plate**, **Make**, **Model**, **Color**, **Estimated departure (Pacific)** and **Estimated arrival (Pacific)**. **Weight per unit (g)** and **Servings per unit** are asked only when the lot itself has no unit weight or servings per pack; the app never guesses them. Press **Save transport details** (*"Transport details saved. Download Manifest.CSV and upload it to CCRS."*).
+2. Presses **Download Manifest.CSV** (`vendor-return-manifest/route.ts`). The file is the LCB template's shape: 21 header rows, the 13 item columns, one item row for the lot's CCRS **InventoryExternalIdentifier**, Greenway's license as **OriginLicenseNumber**, the processor as **Destination**, named `manifest_413541_YYYYMMDDHHMMSS.csv` (Pacific time; `vendor-return-core.ts` L447–504). If anything is missing the download is refused with a list (*"Manifest.CSV was not built. Fix these, then download again:"*), for example the store's contact phone or email (Settings → license settings), the vendor's phone or email (Vendors & Brands), or a lot never reported to CCRS. Each download is in the Security Log (`vendor_return.manifest_csv`).
+3. Uploads it at cannabisreporting.lcb.wa.gov without changing the name.
+4. Waits for the LCB's email. An error email means the upload was refused: fix it and upload again. A success email has the **manifest PDF** attached; the processor gets the same email.
+5. Prints the PDF (it travels with the product), and files the email with form 8.2.
+6. If the departure time, driver or vehicle changes, edit the transport details, download again (after the upload the file says **Update** instead of **Insert**) and upload the corrected manifest before the product moves. The PDF must match what actually happens.
 
-### 4.11 Logging the vendor return in the app (at departure only)
+### 4.11 Logging the vendor return in the app (reserves the units)
 
-**Why at departure.** **Log return (reduces on-hand)** takes the units off the lot and posts the CCRS adjustment at once (`page.tsx` L195, L240; `disposition.ts` L828–837). If you log it when the RMA arrives, the app and the next weekly CCRS file say the product has gone while it is still in our vault (F-15-1, **S1**). Once G-42 is built, logging only **reserves** the units and the reduction posts at departure (D63). Until then:
-1. At departure, with the printed manifest PDF in hand and the driver present, open **Log a vendor return**.
-2. **Lot**: pick the lot. The list shows only **Active** lots (`page.tsx` L103; F-05a-17). If the lot is not listed, stop and call the owner.
-3. **Quantity**: the number on form 8.2.
-4. **Reason**: Defective product, Recall (coordinate with LCB first), Overstock, Mislabeled, Expired, or Other (describe in detail).
-5. **RMA #**, **Manifest #** (from the LCB's PDF), **Processor license #**: fill **all three**. The app does not require any of them (F-15-2); this SOP does.
-6. **Detail**: always write a sentence naming the processor, the manifest number and the RMA (this becomes the CCRS **Other** adjustment detail; D63). The app's own header says vendor returns *"always require detail"* (`disposition-reasons.ts` L9–10), but the box is optional (F-15-2).
-7. Press **Log return (reduces on-hand)**. You see *"Vendor return logged and on-hand reduced."*
-8. If you see *"Quantity (x) exceeds on-hand (y)."*, stop. The lot holds fewer units than the tote. Do not hand over the product. Recount, and tell the owner (a cycle count difference, SOP-06).
+Log the return as soon as the processor's written acceptance (RMA) is in hand and the units are in the vendor-return tote. Logging **reserves** the units: they leave the register, the website and the menu at once, but stay on hand and in CCRS until they depart (`disposition.ts` L976–1043; F-15-1 FIXED).
+1. Open **Log a vendor return**.
+2. **Lot**: pick the lot. The list shows **Active**, **Quarantine** and **Recalled** lots with their status (`page.tsx` L145, L156, L268; D65). A Recalled lot stays Recalled until it departs.
+3. **Quantity**: the number on form 8.2. Units already held (for example a customer return waiting for destruction) cannot be returned.
+4. **Reason**: Defective product, Recall (coordinate with LCB first), Overstock, Mislabeled, Expired, or Other (describe in detail). A Recalled lot must use **Recall**.
+5. **Vendor (processor)**: leave it on the lot's vendor, or choose another. **RMA #** is required. **Processor license #**: leave blank to use the vendor's license from Vendors & Brands; it must be numbers only.
+6. **Detail** (required): who agreed, the condition, the agreement. It becomes the CCRS **Other** adjustment detail at departure, with the processor, the manifest number and the RMA (`vendorReturnAdjustmentNote`, `vendor-return-core.ts` L208; F-15-2 FIXED).
+7. **Recall only**: **Recall: LCB officer told** and **Recall: date the officer was told** (not in the future) are required (WAC 314-55-225; D65).
+8. Press **Log return (reserves the units)**. You see *"Vendor return logged. The units are reserved (out of sale) and still on hand; nothing goes to CCRS until they depart."* The row shows how many units are reserved.
+9. If the app says *"Quantity (x) exceeds what is free on this lot (y). Held units cannot be returned."*, stop. Recount, and tell the owner (a cycle count difference, SOP-06).
 
-### 4.12 Advancing the manifest status
+**Before migration 0309 is applied** the button is refused with *"Apply migration 0309 first: until then a vendor return cannot be logged in the app (it would take the units off on-hand before they leave). Follow SOP-15 §4.11 on paper."* Then keep everything on form 8.2, keep the units in the tote, and log the return the day 0309 is applied. The app never falls back to the old reduce-at-logging method.
 
-Each vendor return shows in **Vendor returns & manifests** with a status badge (`disposition-core.ts` L311–317): **No manifest yet**, **Processor agreed (RMA)**, **Manifest submitted in CCRS**, **Manifest confirmed by LCB**, **Picked up / in transit**. A return logged with an RMA starts at **Processor agreed (RMA)** (`disposition.ts` L855).
+### 4.12 The steps: upload, LCB email, departure
 
-To move it forward: choose the next step in **Advance to**, check **Manifest #**, and press **Update manifest** (*"Manifest status updated."*). The list offers only the next step (L322–335), so a return logged at departure needs three presses: **Manifest submitted in CCRS** (the upload), then **Manifest confirmed by LCB** (read it as "the LCB's success email and PDF received"), then **Picked up / in transit** with **Pickup (optional)** filled. The server does not check the order of steps, does not record who pressed each step on the return itself (`disposition.ts` L888; the audit row does record it), and saves **Pickup** without a time zone (F-15-3). Write the real pickup time on form 8.2; that is the record.
+Each vendor return shows in **Vendor returns & manifests** with a status badge (`vendor-return-core.ts` L36–43): **Processor agreed (RMA); units reserved**, **Manifest uploaded**, **LCB success email and PDF received**, **Departed (on-hand reduced, CCRS Other posted)**, or **Cancelled (units released)**. The row offers only the **Next step**, and the server refuses any other (`evaluateVendorReturnStep`, `vendor-return-core.ts` L159; F-15-3 FIXED):
+1. **Manifest uploaded**: enter **Manifest # uploaded** and press **Save step** (*"Manifest step saved."*).
+2. **LCB success email and PDF received**: enter **Date of the LCB success email** (not in the future, not before the upload) and press **Save step**.
+3. **Departed**: at the moment the product leaves, enter **Pickup date (Pacific)**, **Pickup time (Pacific)** and **Driver name**, and press **Record departure (reduces on-hand)**. You see *"Departure recorded: on-hand reduced and the CCRS Other adjustment posted."* The reduction, the release of the reserve and the CCRS adjustment are one database step (`depart_vendor_return`, migration 0309). A pickup time more than 15 minutes in the future is refused.
+
+Each step stamps who and when on the return itself (`*_by` / `*_at`, migration 0309) and in the Security Log (`vendor_return.manifest`, `vendor_return.depart`). All times are shown and entered in Pacific time.
+
+**Cancelling (owner only).** If the processor withdraws or the return will not happen, the owner writes a **Cancel reason (owner)** and presses **Cancel return (release units)** (`inventory.vendor_return.cancel`, `roles.ts` L166). The reserved units go back to sale (*"Vendor return cancelled."*), and the cancel is in the Security Log (`vendor_return.cancel`; a refused try is logged as `vendor_return.cancel_refused`). A departed return cannot be cancelled.
+
+**Returns logged before Phase 1.5** already took the units off on-hand at logging; their row says *"Logged before Phase 1.5: on-hand already came off at logging."* Their steps can still be recorded (departure then posts nothing more), but they cannot be cancelled here: the owner corrects one with a manual adjustment (SOP-05a).
 
 ### 4.13 Pickup and the vendor-return packet
 
 1. Check the driver's identity (21 or older), the vehicle and the printed manifest PDF against form 8.2. Count the units out with the driver. The product is sealed and goes in a locked compartment (WAC 314-55-085(5)).
-2. The driver signs form 8.2. Set the status to **Picked up / in transit**.
+2. The driver signs form 8.2. Press **Record departure (reduces on-hand)** with the real pickup time and the driver (§4.12 step 3).
 3. Hand the driver the **printed manifest PDF**; it stays with the product (WAC 314-55-085(3)). Keep a copy. File the **vendor-return packet** (form 8.2, the RMA email, the LCB email and PDF) by month for **five years** (WAC 314-55-087).
-4. The processor reports the receipt on their side in CCRS. Greenway's side is the **Other** adjustment with the detail (§4.11), sent in that week's file. Whether the LCB wants exactly this encoding for a retailer is still an open examiner question (U-72 in `docs/ccrs-bible/12-unverified-register.md`; the "Returned to seller → Other" line the compliance doc cites is from the producers' plant file, F-15-18). Any credit is settled with the processor outside the app; give the credit memo to the owner for the books.
+4. The processor reports the receipt on their side in CCRS. Greenway's side is the **Other** adjustment posted at departure with the detail (§4.11 step 6), sent in that week's file. Whether the LCB wants exactly this encoding for a retailer is still an open examiner question (U-72 in `docs/ccrs-bible/12-unverified-register.md`; the "Returned to seller → Other" line the compliance doc cites is from the producers' plant file, F-15-18). Any credit is settled with the processor outside the app; give the credit memo to the owner for the books.
 
 # Part 4: Destruction
 
@@ -408,13 +425,13 @@ The law (WAC 314-55-225; compliance doc §4): the licensee is **prohibited from 
 The app has a guard: a **Recall** event shows the badge **recall — coordinate with LCB** and the gold box *"Recall destruction — LCB coordination is REQUIRED first (WAC 314-55-225)."* Completion is refused without the tick box *"The LCB has been notified and destruction was coordinated with our officer."* (*"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."*) and without the officer's name (*"Record the LCB enforcement officer you coordinated with."*). But:
 - Since Phase 1.3 a **Recalled** lot cannot be scheduled or completed, and **Recall** is not offered as a destruction reason (F-05a-18 FIXED). The old recall box remains only for an event scheduled before the fix.
 - The **Contact date** is not required (F-15-4).
-- A vendor return with reason **Recall (coordinate with LCB first)** has no guard at all (F-15-2).
+- Since Phase 1.5 a vendor return with reason **Recall** needs the LCB officer and the contact date, and a Recalled lot can only go back with reason Recall (F-15-2 FIXED).
 
 **The owner's rule (D65):** *"Let's treat recalls like a transfer back to the vendor for now."* In practice the state has the vendor contact us and ask for the product back. So:
 1. Keep the lot **Recalled** (SOP-05a §4.10) and the product in the **vendor-return tote**, out of sale.
 2. The **admin** (recall coordinator, D37) records the vendor's request and tells the LCB enforcement officer at once (WAC 314-55-225 still applies: *"Immediately notify the local LCB enforcement officer"*). Record every contact on **form 8.4** and SOP-05a form 8.5.
 3. Return it to the vendor under Part 3 (§4.9–§4.13), reason **Recall (coordinate with LCB first)**. **Never schedule a destruction** for it, and never destroy it ourselves: the law prohibits destruction before the officer has coordinated it, and the owner has chosen the return route.
-4. Because **Log a vendor return** still lists only Active lots (until G-42, Phase 1.5), at departure the admin sets the lot from Recalled to **Active** on the lot page and logs the return **in the same minute**, with a line on SOP-05a form 8.1 and form 8.5 here. Do nothing else in between.
+4. **Log a vendor return** lists Recalled lots (since Phase 1.5, G-42). Log the return straight from the Recalled lot with reason **Recall**, the officer and the contact date (§4.11 step 7). The lot stays **Recalled** until **Record departure**; do not set it to Active first. Note the return on form 8.4 and SOP-05a form 8.5.
 5. If the officer directs something other than a return (for example destruction under LCB oversight), stop and call the owner; that is outside this SOP until the owner decides.
 
 ### 4.22 Lots already in Quarantine
@@ -509,13 +526,25 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 
 | Message | What it means | Do this |
 |---|---|---|
-| *"Vendor return logged and on-hand reduced."* | Units taken off the lot; CCRS Other posted | Continue with §4.12; the product must leave now with the printed manifest PDF |
-| *"Quantity (x) exceeds on-hand (y)."* | The lot holds fewer units | Stop; recount; owner |
-| *"Quantity must be greater than zero."* | Zero or blank | Enter the count |
-| *"Manifest status updated."* | Saved | Next step |
-| *"Invalid manifest status."* | A status not on the list | Pick from **Advance to** |
-| *"Apply migration 0115 first (manifest columns missing)."* | Database not up to date | Owner; keep form 8.2 |
-| **No active lots** / *"Receive inventory first."* | No Active lot exists | Nothing to return from the app |
+| *"Vendor return logged. The units are reserved (out of sale) and still on hand; nothing goes to CCRS until they depart."* | Units held on the lot | Fill in transport details, download Manifest.CSV (§4.10) |
+| *"Transport details saved. Download Manifest.CSV and upload it to CCRS."* | Saved | Download and upload |
+| *"Manifest.CSV was not built. Fix these, then download again:"* (with a list) | Something the state requires is missing | Fix each line (license settings, Vendors & Brands, the transport details), then download again |
+| *"Manifest step saved."* | Upload or LCB email recorded | Next step |
+| *"Departure recorded: on-hand reduced and the CCRS Other adjustment posted."* | The product has left; the reduction is in this week's file | File the packet (§4.13) |
+| *"Vendor return cancelled."* | Owner cancel; reserved units are back in sale | Put the units back on the shelf |
+| *"Quantity (x) exceeds what is free on this lot (y). Held units cannot be returned."* | Fewer free units than the tote | Stop; recount; owner |
+| *"Enter the processor's RMA number (their written acceptance comes first, D63)."* | No RMA | Get the RMA first (§4.9) |
+| *"Enter the processor's license number (numbers only, up to 10 digits)."* | Missing or not a number | Fix it, or fix the vendor in Vendors & Brands |
+| *"Write a detail sentence (who agreed, the condition, the agreement); it goes into the CCRS Other detail."* | Detail too short | Write the sentence |
+| *"This lot is Recalled: it goes back to the vendor with reason Recall (D65; SOP-15 §4.21)."* | Wrong reason for a Recalled lot | Choose **Recall** |
+| *"Recall: record the LCB enforcement officer the admin told (WAC 314-55-225; D65)."* | Recall without the officer | Admin tells the officer first (form 8.4) |
+| *"Steps go in order: the next step is \"…\"."* | A step was skipped | Do the named step |
+| *"Enter the date of the LCB's success email (with the manifest PDF)."* | No date | Enter it; no success email = no release |
+| *"Record departure when the product actually leaves; the pickup time is in the future."* | Departure pressed early | Press it when the driver leaves |
+| *"Only the owner cancels a vendor return."* | Not the owner | Ask the owner |
+| *"This return was logged before Phase 1.5 and already took the units off on-hand; it cannot be cancelled here. The owner corrects it with a manual adjustment (SOP-05a)."* | Old return | Owner: SOP-05a manual adjustment |
+| *"Someone changed this return a moment ago. Refresh and check its step."* | Two people at once | Refresh |
+| *"Apply migration 0309 first: until then a vendor return cannot be logged in the app (it would take the units off on-hand before they leave). Follow SOP-15 §4.11 on paper."* | Database not up to date | Owner applies 0309; keep form 8.2 |
 
 ### 5.3 Destruction
 
@@ -563,7 +592,8 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 | Processor will not give an RMA | No return; consider destruction (owner) | Manager → owner |
 | No LCB success email and PDF by the departure time, or an error email | Do not release; fix and upload again; move the departure (§4.10) | Owner / admin |
 | Driver, vehicle or time differs from the manifest | Do not release; upload a corrected manifest first (§4.10 step 5) | Owner / admin |
-| Vendor return logged too early | Tell the owner; the owner decides whether to add the units back (SOP-05a §4.6) and log again at departure | Manager → owner |
+| Vendor return will not happen after all | Owner presses **Cancel return (release units)** with a reason (§4.12) | Manager → owner |
+| Departure recorded by mistake before the product left | Tell the owner at once; the owner adds the units back with a manual adjustment (SOP-05a §4.6) and notes it on form 8.2 | Manager → owner |
 | Vendor asks for recalled product back | §4.21: admin tells the officer, then a vendor return (D65); never destroy it | Admin + owner |
 | Recalled lot not in the destruction list | Correct: §4.21 (vendor return) | Admin + owner |
 | Destruction quantity larger than on-hand | Stop; owner; count the lot | Manager → owner |
@@ -581,12 +611,12 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 | Returns only in original packaging with a legible lot ID | WAC 314-55-079(12) | Attestations on every path (`disposition-core.ts` L102–150) |
 | Returned sale corrected in CCRS (Delete or Update) | LCB CCRS FAQ (help panel `page.tsx` L172) | Queued on every return; the CSV download skips the ledger check (F-15-10) |
 | Store return policy (loyalty, receipt, 15 days) | Owner policy, SOP-01 §4.23 | Register and Returns desk only; the wizard skips it (F-15-8) and is to be removed (D66) |
-| Product returned to a processor only with Greenway's CCRS manifest (origin), the LCB's success email and PDF, the printed PDF with the product, an employee 21+ / transport licensee, sealed and locked | WAC 314-55-079(11), WAC 314-55-085(1), (3), (5); CCRS Manifest User Guide 10-27-2025 (D63) | Checklist text only, with a lead time the LCB does not set (F-15-19); the reduction happens at logging (F-15-1); RMA, manifest and detail optional (F-15-2); no step order on the server (F-15-3); no outgoing Manifest.CSV builder (G-42) |
-| Vendor return reported as InventoryAdjustment **Other** with a detail | Best-supported encoding: Other is the only InventoryAdjustment reason that fits (CCRS Upload User Guide Table 5); not confirmed by the LCB (U-72). The "Returned to seller → Other" line cited in the compliance doc is from the plant file's Table 4 (F-15-18) | Note always starts *"Vendor return (…)"* (`disposition.ts` L831) |
+| Product returned to a processor only with Greenway's CCRS manifest (origin), the LCB's success email and PDF, the printed PDF with the product, an employee 21+ / transport licensee, sealed and locked | WAC 314-55-079(11), WAC 314-55-085(1), (3), (5); CCRS Manifest User Guide 10-27-2025 (D63) | **Enforced** (Phase 1.5, G-42 BUILT): units reserved at logging, reduction at departure; RMA, numeric license and detail required; steps in order on the server; Manifest.CSV built with Greenway as origin; Pacific times (F-15-1, F-15-2, F-15-3, F-15-19 FIXED) |
+| Vendor return reported as InventoryAdjustment **Other** with a detail | Best-supported encoding: Other is the only InventoryAdjustment reason that fits (CCRS Upload User Guide Table 5); not confirmed by the LCB (U-72). The "Returned to seller → Other" line cited in the compliance doc is from the plant file's Table 4 (F-15-18) | Note always starts *"Vendor return to …"* and names the processor, license, manifest and RMA (`vendor-return-core.ts` L208) |
 | Waste rendered unusable on premises, ≥50% non-cannabis, other methods with prior LCB approval | WAC 314-55-097 | Method, mix and 50% tick required (`disposition-core.ts` L245–255); no approval reference for Other (F-15-4) |
 | Waste records (what, when, method, destination) kept five years | WAC 314-55-097(7)(e), WAC 314-55-087 | Stored on the event; witness optional, no printable log (F-15-4) |
 | Destruction reported in that week's CCRS file | WAC 314-55-083(4); LCB PS21-10 (weekly) | **Destruction** adjustment on completion |
-| Recalled product: officer told at once; never destroyed by us; returned to the vendor | WAC 314-55-225; owner D65 | Recall destruction has a tick box and officer field; scheduling lifts the recall status (F-05a-18); the vendor-return Recall reason has no guard (F-15-2) |
+| Recalled product: officer told at once; never destroyed by us; returned to the vendor | WAC 314-55-225; owner D65 | Recall destruction has a tick box and officer field; scheduling lifts the recall status (F-05a-18); a vendor return with reason Recall needs the officer and contact date (Phase 1.5, F-15-2 FIXED) |
 | Reductions documented, or they count as sales | WAC 314-55-089(4)(c) | Every action posts a noted adjustment; cancel has no reason (F-05a-19) |
 | No legal hold; store hold set to 0 | WAC 314-55-097 (current); WSR 22-14-111; owner D67 | Setting allows 0; code default and panel text still 72 (G-50); stale migration comment (F-15-17) |
 | Destruction area on camera | WAC 314-55-083(3)(a); owner D64 | No camera field (F-15-21) |
@@ -627,7 +657,7 @@ Reason:  [ ] Defective  [ ] Recall (admin told LCB officer first, form 8.4)  [ ]
 Owner approval (initials / date) ________
 
 STEP 1  Processor's written acceptance   RMA # ____________  Date received ________
-STEP 2  Units pulled to the vendor-return tote
+STEP 2  Units pulled to the vendor-return tote; logged in the app (units reserved, §4.11)
         Product ______________________  Lot __________  Qty counted ____ / recount ____
         Product ______________________  Lot __________  Qty counted ____ / recount ____
         Pulled by ______  Second count by ______   Whole product 86'd? [ ] Yes [ ] N/A
@@ -637,9 +667,8 @@ STEP 3  Manifest.CSV uploaded to CCRS by Greenway (origin 413541)  Manifest # __
         Driver ______________ (21+)  Plate ________  VIN ________________  Make/model/colour ________
 STEP 4  LCB SUCCESS email with manifest PDF received  Date/time ________  PDF printed [ ]  filed [ ]
         (error email? fix + re-upload; no success email = no release)
-STEP 5  Departure — logged in app NOW, not before (§4.11)
-        App: Log a vendor return  [ ] RMA #  [ ] Manifest #  [ ] Processor license #  [ ] Detail
-        Manifest status advanced: [ ] Submitted  [ ] Confirmed  [ ] Picked up / in transit
+STEP 5  Departure — press Record departure NOW, not before (§4.12)
+        App: logged (reserved) [ ]  Manifest uploaded [ ]  LCB email recorded [ ]  Departure recorded [ ]
         Driver matches manifest [ ]  Vehicle matches [ ]  ID checked (21+) [ ]  Sealed + locked [ ]
         Printed manifest PDF handed to driver [ ]
         Units counted out with driver: ____     Time ________ (Pacific)
@@ -755,14 +784,15 @@ VENDOR RETURN — CARD
 1. Owner approves. Processor's written RMA FIRST.
 2. Pull units → vendor-return tote → form 8.2 (count twice).
 3. Recall? → admin tells the LCB officer first (form 8.4). Never destroy it.
-4. WE are the origin: upload Manifest.CSV to CCRS (driver, vehicle,
-   departure/arrival times, lots). No fixed lead time.
-5. Wait for the LCB SUCCESS email + manifest PDF. No PDF = no release.
+4. App: "Log a vendor return" (RMA #, Detail; Recall: officer + date).
+   Units are RESERVED: out of sale, still on hand.
+5. Transport details → Download Manifest.CSV → upload to CCRS.
+   WE are the origin. No fixed lead time.
+6. LCB SUCCESS email + PDF? → Save step. No PDF = no release.
    Print it; it rides with the product.
-6. AT DEPARTURE ONLY: "Log a vendor return" with RMA #, Manifest #,
-   Processor license #, Detail. (It takes the units off on-hand at once.)
-7. Advance to Submitted → Confirmed → Picked up / in transit.
-8. Driver signs 8.2. File the packet 5 years.
+7. AT DEPARTURE: Record departure (pickup time + driver).
+   On-hand comes off and CCRS Other posts NOW.
+8. Driver signs 8.2. File the packet 5 years. Cancel = owner only.
 ```
 
 ### 9.3 Card: destruction (two people, on camera)
@@ -840,11 +870,11 @@ DESTRUCTION — CARD
 
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
-| **G-42** | State-exact vendor return (D63): **Log** reserves the units (status *awaiting departure*, out of sale) without reducing on-hand; the reduction and the CCRS **Other** adjustment (detail: processor, manifest, RMA) post only at **departure**; RMA, manifest number, processor license and detail required; vendor linked; an **outgoing Manifest.CSV builder** (Greenway as origin: driver, vehicle, departure/arrival, lot rows) for the owner to upload; step labels "Manifest uploaded" and "LCB success email and PDF received"; checklist without the 48–72 h and Mon/Wed/Fri lines; server-checked step order with who and when; Pacific times; reason Recall needs the officer contact recorded | F-15-1 (**S1**), F-15-2, F-15-3, F-15-19 | Log only at departure (§4.10–§4.11), form 8.2 | §2, §3, §4.2, §4.9–§4.13, §4.21, §8.2, §9.2 | **APPROVED** (D63) |
+| **G-42** | State-exact vendor return (D63): **Log** reserves the units (status *awaiting departure*, out of sale) without reducing on-hand; the reduction and the CCRS **Other** adjustment (detail: processor, manifest, RMA) post only at **departure**; RMA, manifest number, processor license and detail required; vendor linked; an **outgoing Manifest.CSV builder** (Greenway as origin: driver, vehicle, departure/arrival, lot rows) for the owner to upload; step labels "Manifest uploaded" and "LCB success email and PDF received"; checklist without the 48–72 h and Mon/Wed/Fri lines; server-checked step order with who and when; Pacific times; reason Recall needs the officer contact recorded | F-15-1 (**S1**), F-15-2, F-15-3, F-15-19 | Log only at departure (§4.10–§4.11), form 8.2 | §2, §3, §4.2, §4.9–§4.13, §4.21, §8.2, §9.2 | **BUILT** (Phase 1.5; migration 0309 to apply) |
 | **G-43** | Hardened destruction record: witness required (any second person, not the one completing; D64), a **camera reference** (camera name and start/end time; D64), approval reference for **Other method**, on-hand checked at scheduling, Pacific times in messages, printable destruction log (form 8.3 in the app). The recall contact-date part is dropped (recalls are not destroyed, D65) | F-15-4, F-15-5, F-15-12, F-15-21 | Form 8.3 with two signatures and the camera (§4.17–§4.18) | §2, §4.15–§4.18, §5.3, §8.3, §9.3 | **APPROVED** (D64) |
 | **G-44** | Customer-return segregation: a destroy-return unit goes to a **returned / quarantine** bucket that is never sellable (a separate quarantine lot or a held quantity); the return, the add-back and the destruction event saved together or not at all | F-15-6 (**S1**), F-15-7 | Sealed destroy bin, form 8.1 (§4.7) | §1 box, §4.2, §4.3, §4.7, §5.1 | **BUILT** (Phase 1.4; migration 0308 to apply) |
 | **G-45** | **Remove** the back-office Customer return wizard (D66); the CSV download checks the ledger like the weekly batch or is removed | F-15-8, F-15-10 | Register / Returns desk only (§4.4–§4.6); no CSV (§4.8) | §1, §2, §4.1, §4.4–§4.8, §5.1, §8.6, §9.1 | **APPROVED** (D66) |
-| **G-28** (extended) | Returns & Destruction handles held lots: lists Quarantine lots for destruction; lists **Recalled** lots for a **vendor return** (not destruction, D65) and keeps them Recalled until departure; **Cancel** restores the earlier status and requires a reason (owner only); a partial destruction restores the lot's earlier status | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | §4.19–§4.22, form 8.5 | §2, §4.15, §4.19–§4.22, §5.3 | **BUILT** (Phase 1.3); listing Recalled lots for a vendor return comes with G-42 (Phase 1.5) |
+| **G-28** (extended) | Returns & Destruction handles held lots: lists Quarantine lots for destruction; lists **Recalled** lots for a **vendor return** (not destruction, D65) and keeps them Recalled until departure; **Cancel** restores the earlier status and requires a reason (owner only); a partial destruction restores the lot's earlier status | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | §4.19–§4.22, form 8.5 | §2, §4.15, §4.19–§4.22, §5.3 | **BUILT** (Phase 1.3); Recalled lots listed for a vendor return in Phase 1.5 (G-42) |
 | **G-25** | Recall plan and event log in the app, linked to the destruction or vendor return of the recalled lots | F-05a-15, F-05a-16 | Form 8.4 + SOP-05a form 8.5 | §4.21, §8.4 | OPEN |
 | **G-23** | Theft and Seizure as adjustment reasons | F-05a-6 | SOP-05a §4.7 "THEFT:" / "SEIZURE:" note | §4.23 | **APPROVED** (D39) |
 | **G-22** | No manual **Destroyed** on the lot page | F-05a-1 (**S1**) | SOP-05a §4.9 | §4.3 | OPEN |
@@ -872,6 +902,7 @@ DESTRUCTION — CARD
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.5 | Fix phase | Phase 1.5 (owner D76, D63, D65). G-42 BUILT: **Log a vendor return** reserves the units (`held_qty`, migration 0309 `reserve_vendor_return`) instead of reducing on-hand; RMA, vendor, numeric processor license and detail are required; Recalled lots are listed and need reason Recall with the LCB officer and contact date. The app builds **Manifest.CSV** (Greenway as origin, the LCB template's 21 header rows and 13 item columns, `manifest_413541_YYYYMMDDHHMMSS.csv`). Steps go one at a time on the server (Manifest uploaded → LCB success email and PDF received → Departed), each stamped with who and when, Pacific times; **Record departure** reduces on-hand, releases the reserve and posts the CCRS Other adjustment (processor, license, manifest, RMA) in one step (`depart_vendor_return`). Owner-only **Cancel return** (`inventory.vendor_return.cancel`) releases the units. The 48–72 h / Mon-Wed-Fri checklist line is removed (activation guard step 7). F-15-1, F-15-2, F-15-3, F-15-19 FIXED. One thing to know item 1, Part 3, §2, §3, §4.2, §4.10–§4.13, §4.21, §5.2, §6, §7, form 8.2, card 9.2 and Appendix B updated. | Fix program |
 | 1.4 | Fix phase | Phase 1.4 (owner D76, D62). G-44 BUILT: a customer return marked Destroy holds its units on the lot (`inventory_lots.held_qty`, migration 0308): on hand and in CCRS, never sellable (register draw, register menu, register stock, manual adjustment, vendor return and other destructions all respect the hold). The return, the add-back, the hold and the destruction event are one database step (`record_customer_return`); before 0308 the old writes are undone on any failure. Completion consumes the held units; an owner cancel releases them and says so. F-15-6 and F-15-7 FIXED. §1 item 2, §4.2, §4.3, §4.7, §5, §6, card 9.1 and Appendix B updated. | Fix program |
 | 1.3 | Fix phase | Phase 1.3 (owner D76). G-28 BUILT with D65: **Schedule a destruction** lists Active and Quarantine lots with their status and never Recalled; the Recall reason is gone; scheduling refuses Recalled, Sold out and Destroyed lots, moves only Active to Quarantine (compare-and-set) and keeps the earlier status on the event (migration 0307); **Complete destruction** is refused while the lot is Recalled; a partial destruction puts the lot back to its earlier status; **Cancel** is owner-only (`inventory.destruction.cancel`), needs a reason, restores the earlier status only Quarantine → Active and only if it was Active, never touches a customer-return lot, and is audited with before/after; the activation guard checks every lot-status write on this page is compare-and-set. Summary, §2, §4.2, §4.3, §4.15, §4.19–§4.22, §5.3, §6, card 9.3 and Appendix B updated. F-05a-17, F-05a-18, F-05a-19, F-15-9, F-15-11 FIXED. | Fix program |
 | 1.2 | Fix phase | Phase 0.2 (owner D76). G-51 BUILT: samples never get a draft, cannot be approved or staged, are never drawn by a sale, never count as register stock or barcodes, never move menu stock, and a void never restocks onto them (`sample-lot-core.ts` and callers). G-47 BUILT: the legacy Sample-pricing panel, its action, `get/updateSampleSettings` in `disposition.ts` and `sample-guardrails.ts` removed; concierge line corrected. §4.26 rewritten; §6, §7 and checklist updated. F-15-16 and F-15-20 FIXED. | Fix program |

@@ -143,7 +143,11 @@ describe("cancel action", () => {
 describe("page", () => {
   it("picker lists Active and Quarantine lots with status, never Recalled", () => {
     expect(PAGE).toContain('listLots({ status: "quarantine", limit: 500 })');
-    expect(PAGE).not.toContain('listLots({ status: "recalled"');
+    // Phase 1.5 (G-42, D65) now loads Recalled lots for the VENDOR RETURN
+    // picker. The destruction picker must still never offer them: it is built
+    // from Active + Quarantine only and filtered by isDestroyableLotStatus.
+    expect(PAGE).toContain("const destroyableLots = [...lots, ...quarantineLots].filter((l) => isDestroyableLotStatus(l.status));");
+    expect(PAGE).not.toMatch(/destroyableLots = \[[^\]]*recalledLots/);
     expect(PAGE).toContain("destroyableLots.map((l) =>");
     expect(PAGE).toContain("DESTROYABLE_LOT_STATUS_LABELS[l.status]");
   });

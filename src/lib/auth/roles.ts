@@ -62,6 +62,7 @@ export type Permission =
   | "inventory.cost.fill"
   | "inventory.recall.release"
   | "inventory.destruction.cancel"
+  | "inventory.vendor_return.cancel"
   | "compliance.calendar"
   | "reports.view"
   | "books.view"
@@ -159,6 +160,10 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // SOP-15 §2 store rule 3: "Only the owner cancels a scheduled destruction".
   // Scheduling and completing stay on inventory.manage.
   "inventory.destruction.cancel": ["owner"],
+  // Fix Phase 1.5 (G-42 req 5): cancelling a vendor return releases its
+  // reserved units back into sale. SOP-15 §4.12: owner only. Logging and the
+  // manifest steps stay on inventory.manage.
+  "inventory.vendor_return.cancel": ["owner"],
   "reports.view": ["owner", "admin", "manager", "readonly"],
   // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
   // permission from "reports.view", which also grants manager and readonly.
@@ -314,6 +319,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.cost.fill": "Key a missing non-cannabis unit cost (owner & admin)",
   "inventory.recall.release": "Release a recall hold on a lot (owner & admin, recall coordinator)",
   "inventory.destruction.cancel": "Cancel a scheduled destruction (owner only)",
+  "inventory.vendor_return.cancel": "Cancel a vendor return and release its reserved units (owner only)",
   "reports.view": "View reports & exports",
   "books.view": "View the accounting books (general ledger)",
   "financials.view": "View financial reports & accounting exports",
@@ -346,6 +352,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.cost.fill",
   "inventory.recall.release",
   "inventory.destruction.cancel",
+  "inventory.vendor_return.cancel",
   "menu.import",
   "menu.publish",
   "menu.publish.open_reviews",

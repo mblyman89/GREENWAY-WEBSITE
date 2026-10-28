@@ -254,6 +254,34 @@ if (!actionsSrc.includes("evaluateLotLifecycleChange(")) {
   }
 }
 
+// 7. Fix Phase 1.5 (G-42; F-15-1, F-15-2, F-15-3, F-15-19): a vendor return
+//    RESERVES its units at logging (held_qty) and on-hand only comes off at
+//    departure, after the LCB success email. Steps go one at a time, cancel
+//    is owner-only, Recalled lots can be returned, and the unsupported
+//    "48-72 hours / Mon-Wed-Fri" guidance stays gone.
+{
+  const need: [string, string, string][] = [
+    ["src/lib/inventory/disposition.ts", "RESERVE_VENDOR_RETURN_RPC", "createVendorReturn no longer reserves the units in one transaction (on-hand would drop at logging again)"],
+    ["src/lib/inventory/disposition.ts", "DEPART_VENDOR_RETURN_RPC", "departure no longer posts the reduction and releases the hold together"],
+    ["src/lib/inventory/disposition.ts", "evaluateVendorReturnStep(", "manifest steps are no longer checked in order (a return could depart before the LCB email)"],
+    ["src/app/admin/inventory/disposition/actions.ts", "inventory.vendor_return.cancel", "cancelling a vendor return is no longer owner-only"],
+    ["src/app/admin/inventory/disposition/page.tsx", "status: \"recalled\"", "Recalled lots are no longer offered for a vendor return (D65)"],
+    ["src/app/admin/inventory/disposition/vendor-return-manifest/route.ts", "buildManifestCsv(", "the Manifest.CSV download no longer uses the checked builder"],
+  ];
+  for (const [file, token, why] of need) {
+    if (!readFileSync(resolve(root, file), "utf8").includes(token)) fail(`${file}: ${why} (G-42)`);
+  }
+  for (const file of ["src/lib/inventory/disposition-core.ts", "src/lib/inventory/disposition-advisor.ts", "src/lib/inventory/vendor-return-core.ts"]) {
+    const body = readFileSync(resolve(root, file), "utf8")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("//") && !l.trim().startsWith("*"))
+      .join("\n");
+    if (/48[-\u2013]72 hours|Mon\/Wed\/Fri/.test(body)) {
+      fail(`${file}: the unsupported "48-72 hours before pickup / LCB confirms Mon/Wed/Fri" guidance is back (F-15-19)`);
+    }
+  }
+}
+
 console.log(
   `ACTIVATION-GATE GUARD OK — no acceptManifest, ${activeWrites.length} activation write(s) all in reviewed files, gate present; ${statusWrites.length} lot status write(s) reviewed (non-literal and destroyed included).`,
 );

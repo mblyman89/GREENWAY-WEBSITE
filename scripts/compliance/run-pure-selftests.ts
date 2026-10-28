@@ -951,7 +951,8 @@ import { __runCannabisLineCoreTests } from "../../src/lib/compliance/cannabis-li
 import { __runLotLifecycleCoreTests } from "../../src/lib/inventory/lot-lifecycle-core";
 import { __runManualAdjustmentCoreTests } from "../../src/lib/inventory/manual-adjustment-core";
 import { __runDestructionLotStatusCoreTests } from "../../src/lib/inventory/destruction-lot-status-core";
-import { __runHeldStockCoreTests } from "../../src/lib/inventory/held-stock-core";
+import { __runHeldStockCoreTests as __runInventoryHeldStockCoreTests } from "../../src/lib/inventory/held-stock-core";
+import { __runVendorReturnCoreTests } from "../../src/lib/inventory/vendor-return-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
 import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
@@ -1892,7 +1893,8 @@ __runLiquidVolumeTests();
   assertRan("lot-lifecycle-core", __runLotLifecycleCoreTests(), 20); // Fix Phase 1.1: G-19 + G-22 gated, audited lot lifecycle
   assertRan("manual-adjustment-core", __runManualAdjustmentCoreTests(), 25); // Fix Phase 1.2: G-23 hardened manual adjustment
   assertRan("destruction-lot-status-core", __runDestructionLotStatusCoreTests(), 31); // Fix Phase 1.3: G-28 destruction keeps held lots held
-  assertRan("held-stock-core", __runHeldStockCoreTests(), 24); // Fix Phase 1.4: G-44 customer-return Destroy units are held, never sellable
+  assertRan("inventory held-stock-core", __runInventoryHeldStockCoreTests(), 24); // Fix Phase 1.4: G-44 customer-return Destroy units are held, never sellable
+  assertRan("vendor-return-core", __runVendorReturnCoreTests(), 59); // Fix Phase 1.5: G-42 vendor return reserves at logging, Manifest.CSV, on-hand off at departure
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);

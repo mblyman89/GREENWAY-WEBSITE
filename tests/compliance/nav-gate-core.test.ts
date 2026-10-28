@@ -1012,6 +1012,7 @@ describe("N7 owner-only is derived, not copied", () => {
     //
     // Fix Phase 1.3 (G-28 req 6, F-15-9) added `inventory.destruction.cancel`:
     // SOP-15 §2 store rule 3, "Only the owner cancels a scheduled destruction".
+    // Fix Phase 1.5 (G-42 req 5) added `inventory.vendor_return.cancel`.
     expect(ownerOnlyPermissions().sort()).toEqual(
       [
         "ach.act",
@@ -1022,6 +1023,7 @@ describe("N7 owner-only is derived, not copied", () => {
         "financials.view",
         "inventory.audit",
         "inventory.destruction.cancel",
+        "inventory.vendor_return.cancel",
       ].sort(),
     );
   });
