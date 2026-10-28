@@ -6,6 +6,8 @@ Updated in slice SOP-15 · 2026-10-28 (D54–D61 → G-33…G-39 APPROVED, new G
 
 Updated in slice SOP-08 · 2026-10-28 (D63–D68 → G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51; SOP-08 gaps G-52…G-58 PROPOSED).
 
+Updated after SOP-08 · 2026-10-28 (D70–D74 → G-53, G-54 APPROVED; G-57 DEFERRED; new G-59 APPROVED; D75 → G-06 PARTLY BUILT by the SOP Library).
+
 A **gap** is something the owner wants, or a procedure needs, that the system does not do today. Each gap is a list of requirements only. **Nothing here is built in the SOP program.** Builds are chosen with the owner in the Phase C strategy session (`SOP-INT`). Until a gap is built, staff follow the **interim procedure** named for it. That procedure is printed in the SOP so the control exists on paper from day one.
 
 Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findings that prove them.
@@ -29,7 +31,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
 | G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (D23–D27 set the rules) |
 | G-05 | Per-shift / per-cashier report | (original request: "shift close reports") | F-01-10 | SOP-01 §4.27 step 9 (X report), close slip 8.2 per drawer | OPEN |
-| G-06 | SOPs readable, printable and **exportable** in the Employee area; report export | (original request) | F-00-8, F-00-10 | Markdown files in `docs/sop/`; print from the browser | OPEN |
+| G-06 | SOPs readable, printable and **exportable** in the Employee area; report export | (original request) | F-00-8, F-00-10 | Markdown files in `docs/sop/`; print from the browser | **PARTLY BUILT** (D75: SOP Library at Employee → SOP Library reads and prints every SOP); report export still OPEN |
 | G-07 | Crawler PO builder: save the fetched vendor-menu data | D4 | F-00-15 | None needed yet | OPEN · TO AUDIT (SOP-09) |
 | G-08 | Master till denomination standard (D11 mix) checked and shown | D11 | F-02-3 | SOP-02 §4.9, form 8.1 mix columns | OPEN |
 | G-09 | Master till sheet printable and exportable; history beyond 30 rows | (original request: "exportable and printable") | F-00-8, F-02-13 | SOP-02 §4.18, form 8.1 binder, EOD print | OPEN |
@@ -77,12 +79,13 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
 | G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **APPROVED** |
 | G-52 | New people start as **Candidate** (Add to roster and Payroll Setup); PIN locked until **Activate**; Activate runs the gate; help text matches | (procedure need; RCW 69.50.357(2)–(3)) | F-08-1 (**S1**), F-08-7 | SOP-08 §4.6, §4.13 (no PIN until form 8.1 is signed) | PROPOSED |
-| G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | PROPOSED |
-| G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | PROPOSED |
+| G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | **APPROVED** (D70) |
+| G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | **APPROVED** (D71) |
 | G-55 | Checklist ↔ Document tracker kept in step; Activate also needs hire date, badge number and a training-log line per required topic; paper handbook row carries the version | (procedure need; WAC 314-55-087(1)(e)) | F-08-4, F-08-5 | SOP-08 §4.10 step 4, §4.11 step 3, §4.18 | PROPOSED |
 | G-56 | **Rehire** keeps the earlier termination (employment periods) and starts a fresh checklist | (procedure need) | F-08-6 | SOP-08 §4.24 (print status card first; uncheck everything) | PROPOSED |
-| G-57 | **Visitor log and badges** in the app; employee badge printing | Q-08-3 (WAC 314-55-083(1)) | F-08-8 | SOP-08 forms 8.2, 8.5 (§4.12, §4.19) | PROPOSED |
+| G-57 | **Visitor log and badges** in the app; employee badge printing | Q-08-3 (WAC 314-55-083(1)) | F-08-8 | SOP-08 forms 8.2, 8.5 (§4.12, §4.19) | DEFERRED (D72: paper for now) |
 | G-58 | Housekeeping: invite default role the same on screen and server; full role descriptions; job-role changes audited with old and new values | (procedure need) | F-08-9, F-08-10 | SOP-08 form 8.4 (§4.16–§4.17) | PROPOSED |
+| G-59 | **Activate, Terminate and Rehire owner and admin only**: new permission (e.g. `staffing.lifecycle` = [owner, admin]); buttons hidden for managers; server actions refuse | D74 | F-08-1, F-08-3 (context) | SOP-08 v1.1 §2 rules 1–2 (managers never press them) | **APPROVED** |
 
 ---
 
@@ -634,7 +637,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. Tests: a new employee cannot clock in or unlock the register until activated; Payroll Setup still never sets `staff_id` (books-87).
 - **Interim:** SOP-08 §4.6, §4.13: no PIN until form 8.1 is signed.
 
-## G-53 · Owner-set user ↔ employee link (PROPOSED, Q-08-1, SOP-08) — S2
+## G-53 · Owner-set user ↔ employee link (APPROVED, D70, SOP-08) — S2
 - **Owner basis:** books-87 (*"I want to create the employee in payroll/ W-4 setup, then I will give them access to the back office if they need access to it."*). A link set by the owner keeps that order; it never creates an employee.
 - **Today:** F-08-2: only the 2023 seed set `staff_id`.
 - **Requirements:**
@@ -644,7 +647,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. The Users page shows the linked employee and the file shows the linked sign-in.
 - **Interim:** SOP-08 §4.10 paper handbook route for everyone.
 
-## G-54 · One-step offboarding (PROPOSED, Q-08-2, SOP-08) — S2
+## G-54 · One-step offboarding (APPROVED, D71, SOP-08) — S2
 - **Today:** F-08-3: two separate pages, nothing connected.
 - **Requirements:**
   1. Terminate shows the linked sign-in (needs G-53) and offers "Deactivate their sign-in too" (default on, with a confirmation).
@@ -668,7 +671,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   2. Rehire resets every onboarding task to unchecked (old rows kept as history).
 - **Interim:** SOP-08 §4.24.
 
-## G-57 · Visitor log and badges (PROPOSED, Q-08-3, SOP-08) — S2
+## G-57 · Visitor log and badges (DEFERRED, D72: paper for now, SOP-08) — S2
 - **Owner basis:** WAC 314-55-083(1)(a)–(d) (visitor badge; log with full name, badge number, arrival and departure times, purpose; kept three years).
 - **Today:** F-08-8: nothing in the app.
 - **Requirements:**
@@ -684,3 +687,13 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   2. Role descriptions list every permission (generated from `roles.ts`).
   3. Job-role changes audited with old and new values.
 - **Interim:** SOP-08 form 8.4.
+
+## G-59 · Activate, Terminate and Rehire are owner and admin only (APPROVED, D74, SOP-08) — S2
+- **Owner basis:** D74 (*"I would like to modify this to be owner admin only. No manager access."*).
+- **Today:** the status buttons on the employee file and `setStatus` (`[id]/actions.ts` L190–229) need only `staffing.manage` (owner, admin, manager; `roles.ts` L260).
+- **Requirements:**
+  1. New permission (e.g. `staffing.lifecycle`) = [owner, admin], labelled in the permission matrix.
+  2. `setStatus` (Activate, Terminate, Rehire) requires it on the server; the buttons are hidden for managers, with a line saying "Owner or admin only".
+  3. Managers keep everything else on the file (checklist, documents, training, hire info, PIN once Active).
+  4. Tests: a manager's setStatus is refused for every transition; owner and admin succeed; the nav gate stays in step.
+- **Interim:** SOP-08 v1.1 §2 rules 1–2.

@@ -103,6 +103,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Employees", href: "/admin/staffing/employees", permission: "staffing.manage", icon: "\ud83e\uddd1\u200d\ud83e\udd1d\u200d\ud83e\uddd1", group: "Employee" }, // 🧑‍🤝‍🧑 command center
   { label: "Schedule", href: "/admin/staffing/schedule", permission: "staffing.manage", icon: "\ud83d\udcc6", group: "Employee" }, // 📆 week builder
   { label: "Handbook & Policies", href: "/admin/staffing/handbook", permission: "staffing.manage", icon: "\ud83d\udcd6", group: "Employee" }, // 📖 handbook
+  { label: "SOP Library", href: "/admin/staffing/sop-library", permission: "timeclock.use", icon: "\ud83d\udcda", group: "Employee" }, // 📚 every SOP (docs/sop), readable by every sign-in
   { label: "Time Clock", href: "/admin/staffing", permission: "timeclock.use", icon: "\ud83d\udd50", group: "Employee" }, // 🕐 clock
   { label: "Payroll", href: "/admin/payroll", permission: "settings.manage", icon: "\ud83d\udcb0", group: "Employee" }, // 💰 pay
   { label: "Employee Tabs", href: "/admin/staffing/employee-tabs", permission: "settings.manage", icon: "\ud83e\uddfe", group: "Employee" }, // 🧾 pay-later product loans
