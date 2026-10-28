@@ -129,6 +129,13 @@ export type PosMenuProduct = {
    */
   otherwiseTaken?: boolean | null;
   /**
+   * Fix Phase 1.6b (G-24, D36): the earliest expiry date (YYYY-MM-DD) of an
+   * Active lot of this product that is past its date and still has stock.
+   * Only for the WARNING kinds; expired edibles, liquid edibles, tinctures,
+   * capsules and RSO are left out of the bundle entirely. Absent = none.
+   */
+  expiredSince?: string | null;
+  /**
    * SLICE 17 — individual consumable items in one package (RCW 69.50.101).
    * A box of six suppositories is 6 and rings as six units.
    */
@@ -574,6 +581,8 @@ export type BuildSaleArgs = {
    * completes (no supersede-on-load data loss). Omitted for walk-in sales.
    */
   sourceOrderId?: string;
+  /** Fix Phase 1.6b (G-24): the budtender acknowledged an expired (warning) item. */
+  expiredWarningAck?: boolean;
   idVerification: { method: "scan" | "manual"; manualEventUuid?: string };
   /**
    * Present on MEDICAL sales (B9): the captured recognition card, the client
@@ -692,6 +701,7 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     // Carry the source website order id only when this sale was loaded from
     // one (omitted for walk-ins so pre-existing payload shapes are unchanged).
     ...(args.sourceOrderId ? { sourceOrderId: args.sourceOrderId } : {}),
+    ...(args.expiredWarningAck ? { expiredWarningAck: true } : {}),
     ...(args.medical ? { medical: args.medical } : {}),
     ...(args.loyalty ? { loyalty: args.loyalty } : {}),
     ...(args.loyaltyRedemption ? { loyaltyRedemption: args.loyaltyRedemption } : {}),
@@ -740,6 +750,25 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
 // ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
+
+/**
+ * Fix Phase 1.6b (G-24, D36): the cart's items that are past their expiry
+ * date (warning kinds; the menu never ships the hard-blocked kinds), one per
+ * product, with the date as MM/DD/YYYY. Empty when none.
+ */
+export function expiredCartItems(cart: readonly PosCartEntry[]): { name: string; date: string }[] {
+  const out: { name: string; date: string }[] = [];
+  const seen = new Set<string>();
+  for (const e of cart) {
+    const d = e?.product?.expiredSince;
+    if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(d) || !(e.quantity > 0)) continue;
+    const name = e.product.variantLabel ? `${e.product.name} (${e.product.variantLabel})` : e.product.name;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, date: `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}` });
+  }
+  return out;
+}
 
 export function __runSaleFlowCoreTests(): void {
   let pass = 0;
@@ -1112,6 +1141,14 @@ export function __runSaleFlowCoreTests(): void {
   });
   ok(!medNoMcr.ok, "medical sale without MCR attestation refused before enqueue");
 
+  // Fix Phase 1.6b (G-24): expired cart items (warning kinds).
+  {
+    const old = { ...flower, expiredSince: "2026-07-01" };
+    const items = expiredCartItems([{ product: old, quantity: 2 }, { product: conc, quantity: 1 }, { product: old, quantity: 1 }]);
+    ok(items.length === 1 && items[0].date === "07/01/2026" && items[0].name === "Blue Dream (3.5g)", "expired item listed once with US date");
+    ok(expiredCartItems([{ product: flower, quantity: 1 }]).length === 0, "no expiry date, nothing listed");
+    ok(expiredCartItems([{ product: { ...flower, expiredSince: "junk" }, quantity: 1 }]).length === 0, "bad date ignored");
+  }
   console.log(`pos/sale-flow-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`sale-flow-core self-tests failed: ${fail}`);
 }

@@ -40,6 +40,8 @@ import {
   LeaflyOutcomeBanners,
 } from "@/components/admin/orders/LeaflyOrderWorkflow";
 import { LeaflyCallHistory } from "@/components/admin/orders/LeaflyCallHistory";
+// Fix Phase 1.6b (G-24, D36): the expiry warning is acknowledged, not overridden.
+import { EXPIRED_WARNING_REFUSAL_PREFIX } from "@/lib/inventory/expired-stock-core";
 import {
   setOrderStatusAction,
   updateOrderNoteAction,
@@ -191,6 +193,14 @@ export default async function OrderDetailPage({
                 : "Completion blocked — compliance gate"}
             </p>
             <p className="mt-2 text-sm leading-6 text-red-200">{blockedMessage}</p>
+            {blockedMessage.startsWith(EXPIRED_WARNING_REFUSAL_PREFIX) && !isClosed ? (
+              <form action={setOrderStatusAction} className="mt-3" data-testid="expired-ack-form">
+                <input type="hidden" name="id" value={order.id} />
+                <input type="hidden" name="status" value="completed" />
+                <input type="hidden" name="expiredAck" value="1" />
+                <SaveButton label="I told the customer — complete the sale" busyLabel="Completing…" variant="save" size="md" />
+              </form>
+            ) : null}
           </div>
         ) : null}
         <LeaflyOutcomeBanners

@@ -954,6 +954,7 @@ import { __runDestructionLotStatusCoreTests } from "../../src/lib/inventory/dest
 import { __runHeldStockCoreTests as __runInventoryHeldStockCoreTests } from "../../src/lib/inventory/held-stock-core";
 import { __runVendorReturnCoreTests } from "../../src/lib/inventory/vendor-return-core";
 import { __runDestructionRecordCoreTests } from "../../src/lib/inventory/destruction-record-core";
+import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
 import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
@@ -1896,6 +1897,7 @@ __runLiquidVolumeTests();
   assertRan("destruction-lot-status-core", __runDestructionLotStatusCoreTests(), 31); // Fix Phase 1.3: G-28 destruction keeps held lots held
   assertRan("inventory held-stock-core", __runInventoryHeldStockCoreTests(), 24); // Fix Phase 1.4: G-44 customer-return Destroy units are held, never sellable
   assertRan("vendor-return-core", __runVendorReturnCoreTests(), 59); // Fix Phase 1.5: G-42 vendor return reserves at logging, Manifest.CSV, on-hand off at departure
+  assertRan("expired-stock-core", __runExpiredStockCoreTests(), 37); // Fix Phase 1.6b: G-24 expired stock (D36, D44)
   assertRan("destruction-record-core", __runDestructionRecordCoreTests(), 28); // Fix Phase 1.6a: G-43 witness from roster, camera, Other approval, schedule qty, Pacific
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();

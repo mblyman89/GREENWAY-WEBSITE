@@ -16,6 +16,12 @@ import "server-only";
  * the units held for a customer-return destruction. Callers plan the draw on
  * sellableQty(on_hand_qty, held_qty), so a sale never takes a held unit.
  * Before 0308 the read retries without it (held_qty = 0, the old behaviour).
+ *
+ * Fix Phase 1.6b (G-24 req 2): the draw is FEFO, First-Expired First-Out:
+ * the soonest-expiring Active lot first, lots with no expiry date after every
+ * dated lot, then oldest created first (the old FIFO) as the tie-break. The
+ * planner (sale-decrement-core buildLotDecrementPlan) consumes lots in the
+ * order this read returns them, so both callers draw FEFO.
  */
 import type { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
@@ -55,6 +61,8 @@ export async function readSaleLots(
       // when it shares the product key (WAC 314-55-096(1)(i)).
       .eq("is_sample", false)
       .gt("on_hand_qty", 0)
+      // Fix Phase 1.6b (G-24): FEFO, then the old FIFO as the tie-break.
+      .order("expires_on", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
   // Try the fullest column set first; drop a column only when the error says

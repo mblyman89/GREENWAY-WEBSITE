@@ -14,6 +14,11 @@
  *   3. AN-7 recall-hold HARD gate — a line whose product has ANY lot in
  *      `recalled` status may not sell; NO override. Fail-CLOSED: if recall
  *      status cannot be read, the sale is refused rather than guessed safe.
+ *   3b. Fix Phase 1.6b (G-24) expired-stock gate: an expired edible, liquid
+ *      edible, tincture, capsule or RSO lot HARD-blocks, NO override (owner
+ *      decisions D36, D44); every other expired lot needs the warning
+ *      acknowledged (back office) or is recorded on the sale (register).
+ *      Fail-CLOSED like the recall hold.
  *   4. S-2b money recompute gate (verifyStoredOrderForCompletion)
  *   5. Task S-a loyalty-code consistency gate
  *   6. Task O attached-card re-validation (invalid card BLOCKS)
@@ -49,6 +54,18 @@ import {
 import { findHeldLines, recallHoldRefusal } from "@/lib/pos/recall-hold-core";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { pacificToday } from "@/lib/reports/timezone";
+// Fix Phase 1.6b (G-24): expired stock (owner decisions D36, D44).
+import {
+  buildExpiredKeyIndex,
+  evaluateExpiredLines,
+  expiredBlockRefusal,
+  expiredWarningRefusal,
+  expiredWarningNote,
+} from "@/lib/inventory/expired-stock-core";
+import { readExpiredActiveLots } from "@/lib/inventory/expired-stock-store";
+import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 export type CompletionGateOptions = {
   orderId: string;
@@ -70,6 +87,18 @@ export type CompletionGateOptions = {
    * noon. The statute governs when the SALE happened, not when it synced.
    */
   hoursAt?: Date | string;
+  /**
+   * Fix Phase 1.6b (G-24, D36): how an expired NON-edible lot is handled.
+   *   "require_ack" (back office): refused until staff tick the
+   *     acknowledgement (`expiredWarningAcknowledged`).
+   *   "record" (POS sync): the sale already happened at the register, which
+   *     asked the budtender; the gate records the warning on the order and
+   *     says whether the register's acknowledgement came with the sale.
+   * Hard-blocked kinds (edible, liquid edible, tincture, capsule, RSO) are
+   * refused in both modes. Default "require_ack".
+   */
+  expiredWarningMode?: "require_ack" | "record";
+  expiredWarningAcknowledged?: boolean;
 };
 
 /**
@@ -117,6 +146,46 @@ export async function runCompletionGate(opts: CompletionGateOptions): Promise<st
     }
   } catch {
     return "Sale blocked: the recall-hold status of this order's products could not be verified (inventory read failed). Try again; if it persists, contact the administrator. Selling cannot proceed while recall status is unknown.";
+  }
+
+  // ── Fix Phase 1.6b (G-24): expired-stock gate ───────────────────────────
+  // Owner decisions D36 ("hard block edibles and liquid edibles, warnings for
+  // everything else.") and D44 ("Q-05a-6- yes, same with rso too."). Read
+  // fail-CLOSED: if the expiry dates cannot be read, the sale is refused.
+  let expiredNote: string | null = null;
+  {
+    const today = pacificToday();
+    const read = await readExpiredActiveLots(today);
+    if (!read.ok) {
+      return "Sale blocked: the expiry dates of this order's products could not be verified (inventory read failed). Try again; if it persists, contact the administrator.";
+    }
+    if (read.lots.length > 0) {
+      const index = buildExpiredKeyIndex(
+        read.lots,
+        today,
+        new Map(order.lines.map((l) => [l.product_id, l.category ?? null] as [string, string | null])),
+      );
+      const verdict = evaluateExpiredLines(
+        order.lines.map((l) => ({
+          productId: l.product_id,
+          variantLotKey: l.variant_id ? lotKeyFromVariantId(l.variant_id) : null,
+          productName: l.product_name,
+          category: l.category ?? null,
+        })),
+        index,
+      );
+      const blocked = expiredBlockRefusal(verdict);
+      if (blocked) return blocked;
+      const mode = opts.expiredWarningMode ?? "require_ack";
+      const acked = opts.expiredWarningAcknowledged === true;
+      if (mode === "require_ack") {
+        const warn = expiredWarningRefusal(verdict, acked);
+        if (warn) return warn;
+        expiredNote = expiredWarningNote(verdict, "back_office");
+      } else {
+        expiredNote = expiredWarningNote(verdict, acked ? "register" : "not_acknowledged");
+      }
+    }
   }
 
   // ── S-2b: money recompute gate ───────────────────────────────────────────────
@@ -227,6 +296,20 @@ export async function runCompletionGate(opts: CompletionGateOptions): Promise<st
     });
     if (!written.ok) {
       return `Sale blocked — the WAC 314-55-090(2) exempt-sale records could not be written (${written.error}). Without these records the exemption is presumed invalid and the store owes the tax, so completion is refused.`;
+    }
+  }
+  // Fix Phase 1.6b (G-24): every check passed. A sale of expired (warning
+  // kind) stock is recorded on the order, with how it was acknowledged.
+  if (expiredNote && isSupabaseServiceConfigured) {
+    try {
+      await createSupabaseAdminClient().from("order_events").insert({
+        order_id: opts.orderId,
+        event_type: "note",
+        note: expiredNote,
+        actor_label: "system · expiry check",
+      });
+    } catch (e) {
+      console.error("[completion-gate] could not record the expiry warning note:", e);
     }
   }
   return null;

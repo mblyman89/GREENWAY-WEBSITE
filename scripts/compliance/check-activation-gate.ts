@@ -303,6 +303,33 @@ if (!actionsSrc.includes("evaluateLotLifecycleChange(")) {
   }
 }
 
+// 9. Fix Phase 1.6b (G-24; D36, D44; F-05a-8, F-05a-20): expired edibles,
+//    liquid edibles, tinctures, capsules and RSO are refused at completion
+//    with no override; other expired stock needs the warning; the draw is
+//    FEFO; the nightly quarantine is compare-and-set on "active" only.
+{
+  const need: [string, string, string][] = [
+    ["src/lib/orders/completion-gate.ts", "expiredBlockRefusal(", "the completion gate no longer refuses expired edibles / tinctures / capsules / RSO (D36, D44)"],
+    ["src/lib/orders/completion-gate.ts", "readExpiredActiveLots(", "the completion gate no longer reads expiry dates"],
+    ["src/lib/inventory/sale-lot-read.ts", '.order("expires_on", { ascending: true, nullsFirst: false })', "the sale draw is no longer First-Expired First-Out"],
+    ["src/lib/inventory/expired-stock-core.ts", "resolveLedgerCategory(", "the hard block no longer reads the store category (RSO is CCRS Concentrate for Inhalation, F-05a-20)"],
+    ["src/app/api/pos/menu/route.ts", "expiredIdx.blocked.has(", "the register menu no longer leaves out hard-blocked expired stock"],
+    ["vercel.json", "/api/cron/expired-quarantine", "the nightly expired-stock quarantine is no longer scheduled"],
+  ];
+  for (const [file, token, why] of need) {
+    if (!readFileSync(resolve(root, file), "utf8").includes(token)) fail(`${file}: ${why} (G-24)`);
+  }
+  const ws = statusWrites.filter((w) => w.file === "src/lib/inventory/expired-stock-store.ts");
+  const storeLines = readFileSync(resolve(root, "src/lib/inventory/expired-stock-store.ts"), "utf8").split("\n");
+  for (const w of ws) {
+    const chain = storeLines.slice(w.line - 1, w.line + 6).join("\n");
+    if (w.value !== "quarantine" || !/\.eq\(\s*"status"\s*,\s*"active"\s*\)/.test(chain)) {
+      fail(`expired-stock-store.ts:${w.line} must only write "quarantine" with a compare-and-set on "active" (a Recalled lot could be overwritten)`);
+    }
+  }
+  if (ws.length !== 1) fail(`expired-stock-store.ts should hold exactly one lot status write (found ${ws.length})`);
+}
+
 console.log(
   `ACTIVATION-GATE GUARD OK — no acceptManifest, ${activeWrites.length} activation write(s) all in reviewed files, gate present; ${statusWrites.length} lot status write(s) reviewed (non-literal and destroyed included).`,
 );

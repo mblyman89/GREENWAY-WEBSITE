@@ -386,7 +386,9 @@ export function buildInventoryIssues(input: InventoryIssueInput): Issue[] {
 
 const GAP_MEANING: Record<string, string> = {
   recalled: "A recall is on these lots. They must be pulled from sale and handled as the recall notice says.",
-  expired: "These active lots are past their expiry date. Expired product may not be sold; pull it and record the destruction.",
+  // Fix Phase 1.6b (G-24): the owner's rule (D36, D44), not a blanket ban.
+  expired:
+    "These active lots are past their expiry date. Expired edibles, liquid edibles, tinctures, capsules and RSO cannot be sold (the register refuses them and the nightly job moves them to Quarantine). Other expired product sells only after the budtender tells the customer. Pull what you will not sell and destroy it through Returns & Destruction.",
   quarantine: "Held out of sale, waiting for a decision (release, return or destroy).",
   missingCoa:
     "No lab result is linked to these lots in the system. The COA may exist on paper; the link is what CCRS reporting reads. Lots from the one-time Cultivera import never had one linked \u2014 a COA spreadsheet import for them is on the roadmap.",
@@ -459,7 +461,8 @@ export function buildIntelIssues(
       severity: "blocking",
       code: "intel_expired_lot",
       title: `Expired and still active \u2014 ${l.productName?.trim() || "unnamed lot"}`,
-      meaning: `Expired on ${l.expiresOn}. Expired product may not be sold.`,
+      // Fix Phase 1.6b (G-24): the owner's rule (D36, D44).
+      meaning: `Expired on ${l.expiresOn}. If it is an edible, liquid edible, tincture, capsule or RSO the register will not sell it and the nightly job moves it to Quarantine; anything else sells only with a warning the budtender acknowledges.`,
       fixText:
         "Open the lot and set it to Quarantine under Lifecycle status (with a reason). To destroy it, use Schedule destruction on the lot page (Returns & Destruction, SOP-15); never Adjust quantity.",
       fix: { href: lotPageHref(l.id, "lifecycle"), label: "Open lot to pull it" },
