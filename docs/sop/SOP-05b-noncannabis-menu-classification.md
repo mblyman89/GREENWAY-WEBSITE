@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (owner answers to Q-05b-1…5 applied; draft for owner review) |
+| **Version** | 1.2 (owner answers to Q-05b-1…5 applied; Phase 0.4 fix G-31 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after non-cannabis goods (glass, papers, devices), the greenwaymerch.com apparel list, the menu that goes live on the website and the register, website categories and inventory types, the sales-limit classification worklist, and cannabis sell prices. Budtenders read §4.4 (ringing non-cannabis items) and §9. |
@@ -101,7 +101,7 @@ The owner asked for SOPs that cover how the back office is really used (`00-OWNE
 **Store rules on top of the app (this SOP).**
 
 - **Non-cannabis sell price and cost changes:** **owner, admin or manager** (owner decision D46: *"Q-05b-2- owner, admin, manager."*), on form 8.2 (§4.9). The app has no way to change either after an item is created (finding F-05b-6), so until gap G-30 is built the change is made by archive and re-create. **The cost of a non-cannabis item may be changed** (D48: *"non cannabis should be allowed to have their cost modified."*). This is the opposite of cannabis, whose cost is never typed (D38).
-- **Moving or re-filing a product across the cannabis / non-cannabis line** (into or out of **Accessories**, **Greenway Merch** or **Paraphernalia**): **never, by anyone, in either direction. This is permanent** (owner decision D48: *"refused outright, non cannabis should also be refused outright moving them into a cannabis type."*). Gap G-31 (**APPROVED**) makes the app refuse it with no override (§4.16–§4.17, finding F-05b-9, **S1**).
+- **Moving or re-filing a product across the cannabis / non-cannabis line** (into or out of **Accessories**, **Greenway Merch** or **Paraphernalia**): **never, by anyone, in either direction. This is permanent** (owner decision D48: *"refused outright, non cannabis should also be refused outright moving them into a cannabis type."*). **The app now refuses it with no override** (Phase 0.4, G-31 **BUILT**; `cannabis-line-core.ts`; §4.15–§4.17; finding F-05b-9 FIXED).
 - **Removing a product from greenwaymerch.com:** **owner or admin only** (owner decision D47: *"Q05b-3- owner and admin."*). The app still lets a manager press **Remove** (finding F-05b-14), so this is a store rule until gap G-30A is built (§4.11).
 - **Cannabis sell price where the lot page says "Cost is unknown for this lot":** **nobody saves a price until the manifest cost is entered** (owner decision D49: *"blocked until the manifest cost is entered."*; §4.21, D38).
 
@@ -403,7 +403,7 @@ Every publish is audited (`menu_version.published`, L264).
 
 All changes are audited (`website_category.*`, `inventory_type.*`). The rename and delete audits do not record the before and after values (finding F-05b-11, S4), so **write every change on form 8.3**.
 
-> **The cannabis line.** Three category values make a product **non-cannabis** to the tax and limit engines: **Greenway Merch** (`merch`), **Accessories** (`accessories`/`accessory`) and **Paraphernalia** (`paraphernalia`) (`order-pricing-core.ts` L42–50). Mapping an inventory type to one of these, or away from one, decides how every future product of that type is taxed. **Never map a cannabis inventory type to a non-cannabis category, or the other way round** (finding F-05b-9, G-31).
+> **The cannabis line.** Three category values make a product **non-cannabis** to the tax and limit engines: **Greenway Merch** (`merch`), **Accessories** (`accessories`/`accessory`) and **Paraphernalia** (`paraphernalia`) (`order-pricing-core.ts` L42–50). Mapping an inventory type to one of these, or away from one, decides how every future product of that type is taxed. **Never map a cannabis inventory type to a non-cannabis category, or the other way round.** Since Phase 0.4 (G-31) the app refuses it on **Add type**, **Adopt** and **Save** (`settings/types/actions.ts` L53, L223, L266, L301): a type that any inventory lot carries, or that is mapped to a cannabis category, cannot be mapped to a non-cannabis one, and a non-cannabis type cannot be mapped to a cannabis one. The message starts *"Refused: ..."* and names the rule. A brand-new type with no lots may be mapped to a non-cannabis category.
 
 ### 4.16 Moving products between categories
 
@@ -412,13 +412,13 @@ All changes are audited (`website_category.*`, `inventory_type.*`). The rename a
 - On success: *"Done — N records moved to the new category. The customer menu updated immediately."* (L43–48).
 - If you don't pick both: *"Pick both a source and a target category."* If you pick the same one twice: *"The source and target categories are the same — nothing to move."* If the target is hidden: *"… is hidden — products can't be moved into a hidden category. Re-activate it first."* (`category-registry-core.ts` L157–168).
 
-> **STOP (finding F-05b-9, S1).** The move changes `menu_items.category` on the **live menu** (`category-registry.ts` L125–160), which is what the register prices from. Nothing checks whether you are moving cannabis into a non-cannabis category (`buildReassignPlan`, `category-registry-core.ts` L149–198, has no such check). If cannabis lands in **Accessories**, **Greenway Merch** or **Paraphernalia**, the register immediately:
-> - charges **9.3% sales tax only, with no 37% excise** (`order-pricing-core.ts` L42–50);
-> - stops counting it against the **purchase limit** (`sales-limits-core.ts` L370–374);
-> - stops requiring a **scan** at the register (`scan-required-core.ts` L55–61);
-> - **lowers the legal price floor** (`price-correction-core.ts` L35–39, L61–67).
+> **Why this matters.** The move changes `menu_items.category` on the **live menu** (`category-registry.ts` L125–160), which is what the register prices from. If cannabis landed in **Accessories**, **Greenway Merch** or **Paraphernalia**, the register would:
+> - charge **9.3% sales tax only, with no 37% excise** (`order-pricing-core.ts` L42–50);
+> - stop counting it against the **purchase limit** (`sales-limits-core.ts` L370–374);
+> - stop requiring a **scan** at the register (`scan-required-core.ts` L55–61);
+> - **lower the legal price floor** (`price-correction-core.ts` L35–39, L61–67).
 >
-> **The owner's rule (D48, permanent):** a crossing is **refused outright, both ways**: cannabis never into a non-cannabis category, and non-cannabis never into a cannabis category or type. G-31 (**APPROVED**) builds that refusal into the app. **Until it is built:** **Move products** is used only between two cannabis categories, or between two non-cannabis categories, and only by the owner. Before pressing it, write the from, into and record count on form 8.3. If anyone ever finds cannabis filed under a non-cannabis category, **stop sales of that product** and tell the owner the same day. The excise owed has to be worked out for every sale made in the meantime.
+> **The owner's rule (D48, permanent):** a crossing is **refused outright, both ways**. **Built in Phase 0.4 (G-31):** `buildReassignPlan` refuses any move from a cannabis category into a non-cannabis one, or the other way round (`category-registry-core.ts` L174), with *"Refused: "<from>" to "<into>" crosses the cannabis line. ..."*. Nothing is moved, and the refused attempt is written to the audit log as `cannabis_line.refused` (`settings/types/actions.ts` L428–435). Moves between two cannabis categories, or between two non-cannabis categories, work as before; still note them on form 8.3. If anyone ever finds cannabis filed under a non-cannabis category (it will show on **Inventory → Issues**, see §4.17), **stop sales of that product** and tell the owner the same day.
 
 ### 4.17 Re-filing one product from its lot page
 
@@ -430,7 +430,9 @@ On a cannabis lot page, the **Website type & category (menu)** box (`[id]/page.t
 
 This writes a per-product override. On the website it changes where the product is listed (shop, home, specials and product page). On the lot page it changes the tax the price math uses: **Correct the sell price** folds in 9.3% instead of 37% + 9.3% when the category is non-cannabis (L1026, L1083), so the price **floor** drops. The override was **not** found in the register menu or in order pricing. Those read the live menu category, which is changed by **Move products** (§4.16) and by publishing.
 
-**Store rule (finding F-05b-9; owner decision D48, permanent):** in this box, **never choose Accessories, Greenway Merch or Paraphernalia for a cannabis lot.** Nothing in the box stops you (`parseClassificationEdit`, `lot-website-classification-core.ts` L61, has no cannabis check). Use the box only to move a product between cannabis categories, for example *Edibles* to *Edibles (Liquid)*, and note it on form 8.3.
+**Store rule (owner decision D48, permanent), enforced since Phase 0.4 (G-31):** this box refuses **Accessories**, **Greenway Merch** or **Paraphernalia** (or a new category with one of those names) for a cannabis lot, and refuses a **Website type** whose mapping is non-cannabis (`lot-website-classification-core.ts` L93; `inventory/actions.ts` L544–557, L634). The page shows *"Refused: this lot came from a CCRS manifest, so it is cannabis and cannot be filed under ..."* and the attempt is audited as `cannabis_line.refused`. Use the box to move a product between cannabis categories, for example *Edibles* to *Edibles (Liquid)*, and note it on form 8.3.
+
+**Daily check (G-31 requirement 4).** **Inventory → Issues** shows a **blocking** row, *"N cannabis lot(s) filed under a non-cannabis category"*, whenever any lot's website category is non-cannabis (data from before the guard, for example). The fix button opens the first lot's Website category box (`cannabis-line-core.ts` L110; `inventory/page.tsx` L416).
 
 ---
 
@@ -539,7 +541,8 @@ If there is no price, the page says why (L508–512):
 
 | Message | What it means | What you do |
 |---|---|---|
-| *"Done — N records moved to the new category. The customer menu updated immediately."* | The move is live | Check the cannabis line was not crossed; form 8.3 (§4.16) |
+| *"Done — N records moved to the new category. The customer menu updated immediately."* | The move is live | Form 8.3 (§4.16) |
+| *"Refused: ... crosses the cannabis line. ..."* / *"Refused: this lot came from a CCRS manifest, so it is cannabis ..."* / *"Refused: the type ... is cannabis ..."* | A crossing of the cannabis line was refused (G-31) and audited | Nothing changed. Pick a category on the same side. Tell the owner if you think the product is filed wrongly |
 | *"Pick both a source and a target category."* / *"The source and target categories are the same — nothing to move."* | Incomplete pick | Pick again |
 | *"… is hidden — products can't be moved into a hidden category. Re-activate it first."* | The target is hidden | Owner decides whether to re-activate it |
 | *"This is a built-in type, so it was hidden (deactivated) instead of deleted. …"* / *"Still used by N live item(s), so it was hidden …"* | It could not be deleted | Expected. History stays intact |
@@ -562,7 +565,7 @@ If there is no price, the page says why (L508–512):
 
 | Situation | Do this | Tell |
 |---|---|---|
-| Cannabis found under **Accessories**, **Greenway Merch** or **Paraphernalia** (on the website, the register or the lot price box) | Stop selling it at once. Do not move it back yourself | **Owner, same day.** Excise owed on the sales since has to be worked out (F-05b-9) |
+| Cannabis found under **Accessories**, **Greenway Merch** or **Paraphernalia** (Inventory → Issues blocking row, the website, the register or the lot price box) | Stop selling it at once. Do not move it back yourself | **Owner, same day.** Excise owed on the sales since has to be worked out (F-05b-9) |
 | Weekly reconciliation is off by more than 2 units on one item, or more than $50 retail | Post the difference with its true reason (§4.5) | Owner, same day |
 | A non-cannabis item has the wrong price or cost, or $0.00 | Keep selling at the label price on the keypad, with a correct label. Owner, admin or manager corrects it (§4.9) | Form 8.2; owner reviews weekly |
 | An invoice save failed part-way | Clean up the partial drafts and adjustments (§4.6), then enter it again | Owner if you are unsure what was left |
@@ -578,7 +581,7 @@ If there is no price, the page says why (L508–512):
 | Rule | Why | Where in the code |
 |---|---|---|
 | Cannabis carries 37% excise plus 9.3% sales tax; non-cannabis carries 9.3% only. Every published price is out-the-door | WA cannabis excise (RCW 69.50.535) and retail sales tax. The **category** alone picks the tax | `order-pricing-core.ts` L42–50 |
-| Never move or re-file a product across the cannabis line, in either direction (D48) | It removes excise, the purchase limit and the scan requirement, and it lowers the floor (F-05b-9, **S1**) | `sales-limits-core.ts` L370–374; `scan-required-core.ts` L55–61; `price-correction-core.ts` L35–39 |
+| Never move or re-file a product across the cannabis line, in either direction (D48) | It removes excise, the purchase limit and the scan requirement, and it lowers the floor (F-05b-9, FIXED by G-31) | Enforced: `cannabis-line-core.ts`; `category-registry-core.ts` L174; `lot-website-classification-core.ts` L93; `settings/types/actions.ts` L53 |
 | Purchase limits follow the classification | WAC 314-55-095(1)(d)(i): the 10-unit "otherwise taken" limit and the low-THC (≤ 4 mg per unit) beverage limit | `sales-limits-core.ts` L288; `classification-status-core.ts` L230–239 |
 | No sale below cost plus tax | RCW 69.50.357 / WAC 314-55-155 | `price-correction-core.ts` L61–67, L125–133 |
 | Cannabis cost comes only from the vendor's CCRS manifest. Nobody types it | Owner D38 (*"absolutely not. That's illegal."*) | SOP-05a §4.20; G-27 |
@@ -625,7 +628,7 @@ FORM 8.2   PRICE / COST CHANGE                                   Date: _________
 FORM 8.3   CATEGORY / MENU CHANGE LOG
  Date | Who | Page (Types / Lot box / Merch / Publish) | From -> To | Records | Why
  _____|_____|__________________________________________|____________|_________|_____
- Cannabis line crossed?  NEVER - if yes, stop and call the owner.  Checked [ ]
+ Cannabis line crossed?  The app refuses it (G-31). If Issues shows one, stop and call the owner. [ ]
 ```
 
 ### 8.4 Weekly menu and classification check (Monday)
@@ -712,7 +715,7 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 | **G-29** | Other Inventory on the register: the SKU and UPC scan to a priced non-cannabis line, the sale lowers **On hand**, a void or return restores it, and all of it is audited | F-05b-1 (**S1**) | Keypad with the SKU in the note, plus the Monday reconciliation (§4.4–§4.5, form 8.1) | §4.1–§4.5, §4.8, §9, form 8.1; reports and the books (F-05b-15) | **APPROVED** (D45), widened to every place non-cannabis goods should be used: register, menu, cost of goods, returns and reports |
 | **G-30** | Edit a non-cannabis price and cost, audited old → new, by **owner, admin or manager**; refuse a $0.00 price | F-05b-6 | Owner, admin or manager: archive and re-create (§4.9, form 8.2) | §2, §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** (D45, D46, D48) |
 | **G-30A** | Merch **Remove** limited to owner and admin (new permission), audited as today | F-05b-14 | Store rule: managers Hide, never Remove (§4.11) | §2, §4.11, §6, §9 | **APPROVED** (D47) |
-| **G-31** | Cannabis-line guard: **refuse outright, with no override, in both directions**, any lot override, **Move products** or inventory-type mapping that crosses into or out of a non-cannabis category | F-05b-9 (**S1**) | Never cross the line; owner only; form 8.3 (§4.15–§4.17) | §2, §4.15–§4.17, §4.21, §6, §9 | **APPROVED** (D48) |
+| **G-31** | Cannabis-line guard: **refuse outright, with no override, in both directions**, any lot override, **Move products** or inventory-type mapping that crosses into or out of a non-cannabis category | F-05b-9 (**S1**) | Never cross the line; owner only; form 8.3 (§4.15–§4.17) | §2, §4.15–§4.17, §4.21, §6, §9 | **BUILT** (Phase 0.4) |
 | **G-32** | Hardening bundle: audit Confirm and Archive, plus a Restore; an atomic adjustment; Direction locked to Reason; actor and Pacific time in Recent adjustments; a full invoice rollback; a checked invoice audit; publish refuses when the removal diff can't be read; **no price save at all while the cost is unknown (D49)**; before/after on category audits; a visible warning when the classification lot-row write fails | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | The store rules in §4.3–§4.9, §4.14, §4.15, §4.21 | Those sections, §5, §6 | **APPROVED** (D45, D49) |
 
 ## Appendix C: Open questions for the owner
@@ -731,4 +734,5 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-27 | First draft, verified against `main@827facb5`. Findings F-05b-1…13 and F-05b-C; gaps G-29…G-32; questions Q-05b-1…5. Owner decisions D35, D38, D40, D41, D42 and D43 applied | SOP program |
-| 1.1 | 2026-10-28 | Owner answers to Q-05b-1…5 applied (decisions D45–D49). G-29 APPROVED and widened to every place non-cannabis goods should be used (register, menu, cost of goods, returns, reports); new finding F-05b-15 (keypad sales post no cost of goods). G-30 APPROVED: owner, admin or manager change price and cost; non-cannabis cost is changeable. New G-30A and finding F-05b-14: merch Remove is owner and admin only. G-31 APPROVED: crossings refused outright in both directions. G-32 APPROVED: no price save on a cost-unknown lot until the manifest cost is entered. §2, §4.1, §4.9, §4.11, §4.16, §4.17, §4.21, §6, §7, form 8.2, §9, Appendices B–C updated; new question Q-05b-6 (does D46 widen **Save cost** to managers; earlier decision D-R3-1 says owner and admin). Re-verified at `main@e1fe84eb`. | SOP program |
+| 1.2 | Fix phase | Phase 0.4 (owner D76). G-31 BUILT: one pure check (`src/lib/compliance/cannabis-line-core.ts`) refuses, in both directions and with no override, any crossing of the cannabis line from the lot-page Website category box, **Move products** and the inventory-type mapping (add, adopt, save). Every refusal is audited (`cannabis_line.refused`). Inventory → Issues lists any cannabis lot filed under a non-cannabis category as blocking. §2, §4.15–§4.17, §5, §6, §7, form 8.3 and Appendix B updated. F-05b-9 FIXED. | Fix program |
+| 1.1 | 2026-10-28 | Owner answers to Q-05b-1–5 applied (decisions D45–D49). G-29 APPROVED and widened to every place non-cannabis goods should be used (register, menu, cost of goods, returns, reports); new finding F-05b-15 (keypad sales post no cost of goods). G-30 APPROVED: owner, admin or manager change price and cost; non-cannabis cost is changeable. New G-30A and finding F-05b-14: merch Remove is owner and admin only. G-31 APPROVED: crossings refused outright in both directions. G-32 APPROVED: no price save on a cost-unknown lot until the manifest cost is entered. §2, §4.1, §4.9, §4.11, §4.16, §4.17, §4.21, §6, §7, form 8.2, §9, Appendices B–C updated; new question Q-05b-6 (does D46 widen **Save cost** to managers; earlier decision D-R3-1 says owner and admin). Re-verified at `main@e1fe84eb`. | SOP program |

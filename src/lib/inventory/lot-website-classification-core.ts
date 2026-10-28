@@ -18,6 +18,8 @@
  * page manages) and the DB upsert; the form is never trusted.
  */
 
+import { cannabisLotTargetRefusal, CANNABIS_LINE_RULE } from "@/lib/compliance/cannabis-line-core";
+
 /** Sentinels shared with the corrections UI. */
 export const NEW_CATEGORY_SENTINEL = "__new__";
 export const NEW_TYPE_SENTINEL = "__new_type__";
@@ -61,6 +63,13 @@ export type ClassificationEditParse =
 export function parseClassificationEdit(
   raw: ClassificationEditRaw,
   vocab: { validCategoryValues: readonly string[]; validTypeLabels: readonly string[] },
+  /**
+   * Phase 0.4 (G-31, D48): the product is a cannabis lot (every inventory lot
+   * is), so a non-cannabis category - or a product type mapped to one - is
+   * refused outright. `nonCannabisTypeLabels` = type labels whose mapping is
+   * on the non-cannabis side.
+   */
+  cannabisLine?: { cannabisLot: boolean; nonCannabisTypeLabels?: readonly string[] },
 ): ClassificationEditParse {
   const catValues = new Set(vocab.validCategoryValues.map((v) => v.trim()).filter(Boolean));
   const typeLabels = new Set(vocab.validTypeLabels.map((v) => v.trim()).filter(Boolean));
@@ -80,6 +89,26 @@ export function parseClassificationEdit(
     "type",
   );
   if (!type.ok) return { ok: false, error: type.error };
+
+  if (cannabisLine?.cannabisLot) {
+    const target =
+      category.decision.kind === "set"
+        ? category.decision.value
+        : category.decision.kind === "create"
+          ? category.decision.newLabel
+          : null;
+    const refusal = cannabisLotTargetRefusal(target);
+    if (refusal) return { ok: false, error: refusal };
+    if (type.decision.kind === "set") {
+      const nonCannabisTypes = new Set((cannabisLine.nonCannabisTypeLabels ?? []).map((l) => l.trim()));
+      if (nonCannabisTypes.has(type.decision.value)) {
+        return {
+          ok: false,
+          error: `Refused: the type "${type.decision.value}" is filed under a non-cannabis category, and this lot is cannabis. ${CANNABIS_LINE_RULE}`,
+        };
+      }
+    }
+  }
 
   return { ok: true, category: category.decision, type: type.decision };
 }

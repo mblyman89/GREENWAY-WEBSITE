@@ -1,5 +1,6 @@
 "use server";
 
+import { isNonCannabisSide, cannabisLotTargetRefusal, CANNABIS_LINE_RULE } from "@/lib/compliance/cannabis-line-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -536,8 +537,31 @@ export async function updateLotWebsiteClassificationAction(lotId: string, formDa
       validCategoryValues: categoryRegistry.map((c) => c.value),
       validTypeLabels: typeRegistry.map((t) => t.label),
     },
+    // Phase 0.4 (G-31, D48): every inventory lot is cannabis (it came from a
+    // CCRS manifest), so it can never be filed under a non-cannabis category
+    // or type. Refused outright; no override for anyone.
+    {
+      cannabisLot: true,
+      nonCannabisTypeLabels: typeRegistry.filter((t) => isNonCannabisSide(t.website_category)).map((t) => t.label),
+    },
   );
   if (!parsed.ok) {
+    if (parsed.error.includes("crosses the cannabis line") || parsed.error.includes(CANNABIS_LINE_RULE)) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "cannabis_line.refused",
+        entityType: "inventory_lot",
+        entityId: lotId,
+        after: {
+          entry_point: "lot_classification_override",
+          pos_product_key: key,
+          website_category: formData.get("website_category"),
+          new_category_label: formData.get("new_category_label"),
+          house_type: formData.get("house_type"),
+        },
+      });
+    }
     redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(parsed.error));
   }
 
@@ -606,6 +630,11 @@ export async function updateLotWebsiteClassificationAction(lotId: string, formDa
       (parsed.category.kind === "set" ? parsed.category.value : null) ??
       beforeCategory ??
       null;
+    // Phase 0.4 (G-31): a type created from a cannabis lot is cannabis.
+    const typeRefusal = cannabisLotTargetRefusal(mappedCategory);
+    if (typeRefusal) {
+      redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(typeRefusal));
+    }
     const { error } = await admin.from("inventory_types").insert({
       key: v.key,
       label: v.label,

@@ -16,6 +16,9 @@ import { INVENTORY_TYPE_CATALOG, inventoryTypeKey } from "@/lib/pos/inventory-ty
 import { buildReassignPlan, validateCategoryDraft } from "@/lib/pos/category-registry-core";
 import { countCategoryUsage, executeReassign } from "@/lib/pos/category-registry";
 import { listWebsiteCategoryTypes } from "@/lib/pos/types-store";
+// Phase 0.4 (G-31, D48): the cannabis line - refused outright, both directions.
+import { inventoryTypeMappingRefusal } from "@/lib/compliance/cannabis-line-core";
+import type { StaffSession } from "@/lib/auth/session";
 
 const BASE = "/admin/settings/types";
 
@@ -39,6 +42,35 @@ function str(formData: FormData, key: string): string {
 function orNull(formData: FormData, key: string): string | null {
   const v = str(formData, key);
   return v === "" ? null : v;
+}
+
+/**
+ * Phase 0.4 (G-31, D48): refuse an inventory-type mapping that crosses the
+ * cannabis line ("refused outright, non cannabis should also be refused
+ * outright moving them into a cannabis type."). The refused attempt is
+ * written to the audit log, then the owner sees the rule. No override.
+ */
+async function refuseTypeCrossing(
+  session: StaffSession,
+  input: { key: string; label: string; currentMapping: string | null; nextMapping: string | null },
+): Promise<void> {
+  const lots = input.key ? await countInventoryTypeUsage(input.key) : 0;
+  const refusal = inventoryTypeMappingRefusal({
+    typeLabel: input.label || input.key,
+    currentMapping: input.currentMapping,
+    nextMapping: input.nextMapping,
+    cannabisLotCount: lots,
+  });
+  if (!refusal) return;
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cannabis_line.refused",
+    entityType: "inventory_type",
+    entityId: input.key,
+    after: { entry_point: "inventory_type_mapping", from: input.currentMapping, to: input.nextMapping, cannabis_lots: lots },
+  });
+  redirect(`${BASE}?error=` + encodeURIComponent(refusal) + "&tab=inventory");
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +220,8 @@ export async function createInventoryType(formData: FormData): Promise<void> {
   const key = normalizeInventoryTypeKey(rawKey);
   if (!key) redirect(`${BASE}?error=` + encodeURIComponent("Could not derive a key.") + "&tab=inventory");
 
+  await refuseTypeCrossing(session, { key, label, currentMapping: null, nextMapping: orNull(formData, "website_category") });
+
   const { error } = await admin.from("inventory_types").insert({
     key,
     label,
@@ -229,6 +263,13 @@ export async function updateInventoryType(formData: FormData): Promise<void> {
     const preset = catalogPresetById(id);
     if (!preset) redirect(`${BASE}?error=` + encodeURIComponent("Unknown built-in type.") + "&tab=inventory");
 
+    await refuseTypeCrossing(session, {
+      key: preset.key,
+      label: preset.label,
+      currentMapping: preset.website_category,
+      nextMapping: orNull(formData, "website_category"),
+    });
+
     const { error } = await admin
       .from("inventory_types")
       .upsert(
@@ -254,6 +295,15 @@ export async function updateInventoryType(formData: FormData): Promise<void> {
     revalidatePath(BASE);
     redirect(`${BASE}?saved=inventory&tab=inventory`);
   }
+
+  const current = await getInventoryType(id);
+  if (!current) redirect(`${BASE}?error=` + encodeURIComponent("Inventory type not found.") + "&tab=inventory");
+  await refuseTypeCrossing(session, {
+    key: current.key,
+    label: current.label,
+    currentMapping: current.website_category,
+    nextMapping: orNull(formData, "website_category"),
+  });
 
   const update: Record<string, unknown> = {
     label: str(formData, "label"),
@@ -373,7 +423,20 @@ export async function reassignCategoryAction(formData: FormData): Promise<void> 
   const registry = await listWebsiteCategoryTypes({ includeInactive: true });
   const counts = await countCategoryUsage(from);
   const plan = buildReassignPlan({ from, to, registry, counts });
-  if (!plan.ok) redirect(`${BASE}?error=` + encodeURIComponent(plan.error) + "&tab=website");
+  if (!plan.ok) {
+    // Phase 0.4 (G-31): a refused cannabis-line crossing is audited.
+    if (plan.crossesCannabisLine) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "cannabis_line.refused",
+        entityType: "website_category_type",
+        entityId: from,
+        after: { entry_point: "move_products", from, to, counts },
+      });
+    }
+    redirect(`${BASE}?error=` + encodeURIComponent(plan.error) + "&tab=website");
+  }
 
   const result = await executeReassign(from, to);
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error) + "&tab=website");

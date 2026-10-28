@@ -126,4 +126,5 @@ Each phase is a set of slices. Each slice follows the standing rules: commit →
 |---|---|---|---|
 | 0.1 | F-01-14 medical test mode tax | **FIXED** | #1529 |
 | 0.2 | G-51 + G-47 samples off menu, register and website; legacy panel removed | **BUILT** | #1530 |
-| 0.3 | G-52 + G-59 new hires start as Candidate (PIN locked until Active); lifecycle owner and admin only (F-08-1) | **BUILT** | (this slice) |
+| 0.3 | G-52 + G-59 new hires start as Candidate (PIN locked until Active); lifecycle owner and admin only (F-08-1) | **BUILT** | #1531 |
+| 0.4 | G-31 cannabis-line guard, refused both directions at all three entry points, audited, Issues row (F-05b-9) | **BUILT** | (this slice) |
