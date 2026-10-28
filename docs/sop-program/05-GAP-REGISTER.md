@@ -37,7 +37,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-09 | Master till sheet printable and exportable; history beyond 30 rows | (original request: "exportable and printable") | F-00-8, F-02-13 | SOP-02 §4.18, form 8.1 binder, EOD print | OPEN |
 | G-10 | ~~Manager Till standard float = $167.50~~. Owner corrected: Manager Till = $300.00, already in the code | D10 → D19 | F-02-2 (withdrawn) | None needed | **CLOSED** (D19) |
 | G-11 | Supply-run screen | **D17** ("id like the supply run screen built") | F-02-11 | SOP-02 §4.13, form 8.4 | **APPROVED** |
-| G-12 | Post cash drops to the books (10110 → 10100) | (books integrity; owner model till → safe → bank) | F-02-1 | None needed for staff; recorded for the build phase | OPEN |
+| G-12 | Post cash drops to the books (10110 → 10100) | (books integrity; owner model till → safe → bank) | F-02-1 | None needed for staff; recorded for the build phase | **BUILT** (Phase 2.4) |
 | G-13 | Any employee can record the master till count (not only manager-level logins) | **D15** | F-02-10, F-02-4 | SOP-02 §2, §4.5: a manager login enters it and picks the counter | OPEN |
 | G-14 | Cash-to-bank books wiring (seal poster → 10400, bank-deposit clearing caller, census corrected, panel text) | (original request: "for depositing to the bank") | F-03-1, F-03-3, F-03-10, F-02-1 | SOP-03 §4.13 bag log + bank receipts; §4.15 ignore the panel | OPEN |
 | G-15 | EOD deposit sheet in the app + export (deposit figure, denominations, two signatures, refunds, date picker, CSV/XLSX) | (original request: "End of day spreadsheet" … "exported and printed") | F-03-5, F-03-6, F-03-7, F-03-8, F-00-8 | SOP-03 form 8.1 night sheet; §4.8 Z report for cash; §4.9 print | OPEN |
@@ -210,6 +210,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   2. Add a census row for the drop event.
   3. Add a self-test asserting the **net 10110 movement** for a dropped shift equals −(cash sales − over/short). That is the assertion missing today.
 - **Interim:** none needed for staff (SOP-02 §4.12 note).
+- **Status: BUILT (Phase 2.4, #P24).** Requirement 1 built as the second option: the close relieves 10110 by `counted − float + drops` (less over/short) and debits 10100 the same (`register-cash-journal-core.ts` L301, L314–321, L329). Requirement 2: no separate drop event exists to add, because drops are booked on the existing close row; the census row `cash_and_banking.till_close_to_safe` (`ledger-census-data.ts`) now names the drops in its event and evidence. Requirement 3 built: the self-test asserts net 10110 for a dropped shift is zero (the sales debited it by the cash sales, the close credits the same), with the shortage on 50920 (L898–939; `register-cash.test.ts`). Entries posted before the fix are not re-posted.
 
 ---
 

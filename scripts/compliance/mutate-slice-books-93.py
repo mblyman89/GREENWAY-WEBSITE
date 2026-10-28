@@ -65,18 +65,32 @@ MUTATIONS = [
 
     ("7  the till is relieved of the takings only, so the entry stops balancing",
      CORE,
-     "  const tillCredit = removedMinor - overShortMinor;",
-     "  const tillCredit = removedMinor;"),
+     "  const tillCredit = toSafeMinor - overShortMinor;",
+     "  const tillCredit = toSafeMinor;"),
 
     ("8  the till relief absorbs the shortage twice",
      CORE,
-     "  const tillCredit = removedMinor - overShortMinor;",
-     "  const tillCredit = removedMinor + overShortMinor;"),
+     "  const tillCredit = toSafeMinor - overShortMinor;",
+     "  const tillCredit = toSafeMinor + overShortMinor;"),
 
-    ("9  the close debits the vault instead of Undeposited Funds",
+    # Fix Phase 2.4 (G-12 / F-02-1): the drops must reach the safe.
+    ("7b the drops stop reaching the safe (F-02-1 comes back)",
      CORE,
-     "      line(n++, UNDEPOSITED_ACCOUNT, removedMinor,",
-     "      line(n++, VAULT_ACCOUNT, removedMinor,"),
+     "  const toSafeMinor = removedMinor + input.dropsMinor;",
+     "  const toSafeMinor = removedMinor;"),
+
+    ("7c the drops are booked twice",
+     CORE,
+     "  const toSafeMinor = removedMinor + input.dropsMinor;",
+     "  const toSafeMinor = removedMinor + 2 * input.dropsMinor;"),
+
+    # Re-anchored in Fix Phase 2.4: books-98 (D-77) moved this line to the
+    # SAFE, so the old probe (UNDEPOSITED -> VAULT) no longer had an anchor.
+    # The live risk is the reverse: the close drifting back to 10400.
+    ("9  the close debits Undeposited Funds instead of the safe (D-77 comes back)",
+     CORE,
+     "        VAULT_ACCOUNT,\n        toSafeMinor,",
+     "        UNDEPOSITED_ACCOUNT,\n        toSafeMinor,"),
 
     ("10 the close credits the vault instead of the till",
      CORE,

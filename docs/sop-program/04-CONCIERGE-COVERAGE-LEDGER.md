@@ -160,7 +160,16 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 - F-02-3: the page does not compare the mix to the D11 standard, so use the §4.2 table.
 - F-02-5: only the newest AM/PM count shows on the EOD report, and the window defaults to AM, so pick the right one.
 - F-02-7: do **not** count drops or the little safe into the master till, whatever the page help text and placeholder say.
-- F-02-1: drops are not posted to the books (accounting only, not floor advice).
+- ~~F-02-1: drops are not posted to the books~~ **FIXED (Phase 2.4):** the close entry books drops to the safe (accounting only, not floor advice).
+
+**Phase 2.4 (G-12 post drops) answers, owner and bookkeeper:**
+
+| Question | Answer (built, Phase 2.4) |
+|---|---|
+| Are cash drops in the books? | Yes, from Phase 2.4. When the drawer is reconciled, the close entry moves the takings **and** the drops to 10100 (the safe) and relieves 10110 Tills by the same (SOP-02 §4.12) |
+| Why does 10110 Tills look high for older days? | Drawers reconciled before Phase 2.4 posted without their drops; those entries are not re-posted. New reconciles include drops |
+| Do staff do anything differently? | No. Drop as before (SOP-01); the books change only at reconcile |
+| What does the close line say? | *"Cash from Register 1 to safe (incl. $200.00 dropped during the shift)"* when there were drops |
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, plus the SOP-01 proposed topics. The concierge itself is still at the baseline until the integration phase.
 

@@ -1453,7 +1453,9 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
   {
     key: "cash_and_banking.till_close_to_safe",
     family: "cash_and_banking",
-    event: "A shift ends: the drawer is counted and its takings go to the safe.",
+    event:
+      "A shift ends: the drawer is counted and its takings, and the drops made " +
+      "during the shift, are booked to the safe.",
     sourceKind: "bank",
     entityCode: "greenway",
     accountCodes: ["10100", "10110", "50920"],
@@ -1484,7 +1486,10 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "The close does NOT re-book cash sales - sale-journal-core already " +
           "debits 10110 once per sale - so the two cannot double-count. A drawer " +
           "counted below its own float is refused and escalated to a manager " +
-          "instead of posted. 43 of 43 mutations caught.",
+          "instead of posted. 43 of 43 mutations caught. Fix Phase 2.4 (G-12, " +
+          "F-02-1): mid-shift drops are booked to 10100 on this same entry - the " +
+          "close relieves 10110 by counted - float + drops - so a dropped shift " +
+          "nets 10110 to zero instead of leaving the dropped cash stranded in Tills.",
       },
       accepted: {
         status: "NOT_APPLICABLE",

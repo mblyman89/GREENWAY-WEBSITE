@@ -146,7 +146,7 @@ After the bag is made, the building holds the $635.00 of floats plus the $1,000.
 
 > **The over/short is not "fixed" from the bag.** If a drawer is short, the bag is short by the same amount. Do **not** top the bag up from the master till, the little safe or your pocket, and do not take an "over" out. The owner: *"Any over under is dealt with on the spot once the total till is reconciled"*: the manager records it at reconcile (SOP-01 §4.30, form 8.5) and the bag carries what was really there.
 
-> **If a closing count is less than the float** (the drawer cannot leave its full float behind), stop. Do not bag anything from that drawer. The books refuse this case too (`TILL_CLOSE_BELOW_FLOAT`, `register-cash-journal-core.ts` L279–289). Call the manager (§6).
+> **If a closing count is less than the float** (the drawer cannot leave its full float behind), stop. Do not bag anything from that drawer. The books refuse this case too (`TILL_CLOSE_BELOW_FLOAT`, `register-cash-journal-core.ts` L285–295). Call the manager (§6).
 
 ### 4.2 The end-of-day timeline at a glance
 
@@ -208,7 +208,7 @@ Before the deposit can be counted, **every** drawer that was open today must be 
 
 A manager reconciles each closed drawer on **Register Activity** exactly as in **SOP-01 §4.30**. Since Phase 2.1 the cash sales are the system's figure for the drawer (nothing typed) and the reconciler is the signed-in manager. Since Phase 2.3 (G-03) any over/short **more than $5.00** needs a written reason in the Reconcile card (the server refuses a blank one) and shows on the owner's **Over / short warnings** screen; $5.00 or less needs no reason (D21). SOP-01 form 8.5 is used only if migration 0315 is not applied.
 
-What reconcile does to the books (owner and bookkeeper only): it posts the drawer's takings into **10100 Cash on Hand — Vault** (*"Cash from <register> to safe"*, `register-cash-journal-core.ts` L294–303) and the over/short to Cash Over/(Short). It does **not** touch **10400 Undeposited Funds**. That account was designed to fill only when a bag is sealed (L296–301, self-test L807–813), and the seal is not wired (§4.15, F-03-1).
+What reconcile does to the books (owner and bookkeeper only): it posts the drawer's takings into **10100 Cash on Hand — Vault** (*"Cash from <register> to safe"*, `register-cash-journal-core.ts` L306–323) and the over/short to Cash Over/(Short). It does **not** touch **10400 Undeposited Funds**. That account was designed to fill only when a bag is sealed (L308–313, self-test L832–838), and the seal is not wired (§4.15, F-03-1).
 
 Reconcile can happen tonight or first thing in the morning. The End-of-day report shows over/short only for reconciled drawers (§4.8). **Print the report after reconcile** if you can.
 
@@ -279,7 +279,7 @@ Done by the **morning employee**, who must **not** be the person who signed part
 
 **One bag per business day, whole** (§4.14). If one day's cash will not fit in one bag, use two bags with **consecutive numbers**, write both on the sheet and the log as one deposit ("Bag 1041 + 1042, one day"), and bank them together. Never split a day across two bank trips.
 
-> **What the system would do here, once built:** the bag table records the bag number, the business day, the status (*available → undeclared → counted → deposited*), who pulled the cash, who counted it, when it was sealed and when the bank confirmed it (`0212_deposit_bags.sql` L48–84). Sealing would post *Undeposited Funds ← Vault* with the bag number on both lines (`buildSealBagJournal`, `register-cash-journal-core.ts` L405–441), and would refuse a bag with no number: *"This bag has no id. The id is the only thing that ties a sealed bag to the deposit the bank confirms days later…"* (L413–418). None of this is reachable from any screen today (`grep deposit_bags src/app` → 0 hits; census `seal_deposit_bag` reachable **MISSING**, `ledger-census-data.ts` L1577–1600). The paper bag log is the record.
+> **What the system would do here, once built:** the bag table records the bag number, the business day, the status (*available → undeclared → counted → deposited*), who pulled the cash, who counted it, when it was sealed and when the bank confirmed it (`0212_deposit_bags.sql` L48–84). Sealing would post *Undeposited Funds ← Vault* with the bag number on both lines (`buildSealBagJournal`, `register-cash-journal-core.ts` L430–466), and would refuse a bag with no number: *"This bag has no id. The id is the only thing that ties a sealed bag to the deposit the bank confirms days later…"* (L413–418). None of this is reachable from any screen today (`grep deposit_bags src/app` → 0 hits; census `seal_deposit_bag` reachable **MISSING**, `ledger-census-data.ts` L1582–1605). The paper bag log is the record.
 
 ### 4.12 Morning: Verify till in the back office
 
@@ -338,7 +338,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Rose box | *"More was banked than was counted, on …"* | L128–151 |
 | Footer | *"Showing this figure does not clear it…"* | L153–158 |
 
-> ⚠ **Do not use this panel to check the safe today (finding F-03-1, S1).** Since the D-77 fix, a drawer close posts to **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L294–303), and only sealing a bag would move cash into 10400. Sealing has no screen. So 10400 stays at **$0.00** and the panel shows the **green "Every dollar … matched" message even while several days of bags sit in the safe**. Its sentence *"A drawer close moves cash into it"* (L82–84) is out of date. **Use the bag log (form 8.2) and the safe itself.** The owner may see a non-zero figure only if entries were posted before D-77 (books-94 to books-97).
+> ⚠ **Do not use this panel to check the safe today (finding F-03-1, S1).** Since the D-77 fix, a drawer close posts to **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L306–323), and only sealing a bag would move cash into 10400. Sealing has no screen. So 10400 stays at **$0.00** and the panel shows the **green "Every dollar … matched" message even while several days of bags sit in the safe**. Its sentence *"A drawer close moves cash into it"* (L82–84) is out of date. **Use the bag log (form 8.2) and the safe itself.** The owner may see a non-zero figure only if entries were posted before D-77 (books-94 to books-97).
 
 ### 4.16 Days with no sales, a missed bank run, a bag held over
 
@@ -371,7 +371,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Panel | Amber *"This figure could not be read…"* | The books could not be read (`UndepositedFunds.tsx` L39–49) | Ignore the panel; use the bag log. |
 | Panel | Green *"Every dollar counted out of a drawer has been matched…"* | **Not reliable today** (F-03-1) | Use the bag log and the safe. |
 | Panel | Rose *"More was banked than was counted, on …"* | The books say a day was cleared for more than it held (L128–151) | Owner/bookkeeper only. |
-| Books (when built) | *"This bag has no id…"* | A seal without a bag number would be refused (`register-cash-journal-core.ts` L413–418) | Not reachable today. Always write the bag # on paper. |
+| Books (when built) | *"This bag has no id…"* | A seal without a bag number would be refused (`register-cash-journal-core.ts` L438–443) | Not reachable today. Always write the bag # on paper. |
 | Books (when built) | *"Bag GW-7 was taken out of the drawer but never counted into the safe…"* | The code was designed to block the close while a bag is undeclared (`safe-bag-core.ts` L212–226; books-98 L29–35). **Owner decision D27: warning only, never block.** | Not reachable today (F-03-10). When built, it must warn, not block (G-04). |
 
 ---
@@ -403,7 +403,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Night count by one person, morning recount by another | The owner's own design; a second, independent count is what turns a number into a fact. A shortage is caught in hours, not at the bank. | Owner request (L7); D2 (second count at close) |
 | Both counts by denomination | Lets the two counts say *where* they disagree | This SOP; owner asked for a "spreadsheet" |
 | Bag unsealed overnight, sealed only after the recount | You cannot recount a sealed bag without breaking the seal | Owner: recount *"before sealing the bag"* |
-| Numbered bag, number on sheet, slip and log | The number is the only link between a sealed bag and the bank credit days later | `0212_deposit_bags.sql` L14–19, L52–55; `register-cash-journal-core.ts` L413–418 |
+| Numbered bag, number on sheet, slip and log | The number is the only link between a sealed bag and the bank credit days later | `0212_deposit_bags.sql` L14–19, L52–55; `register-cash-journal-core.ts` L438–443 |
 | One business day per bag, banked whole | Bank row = deposit slip = Z-report day: a one-to-one audit trail; and the $10,000 line never decides a split | `CASH_DEPOSIT_POLICY_DECISION.md` L66–92, L109–114 |
 | Floats stay in drawers; master till never bagged | Keeps the $635.00 floats and $1,000.00 change fund fixed, so every bag is pure takings | D10, D19; SOP-02 §4.1 |
 | Over/short is recorded, never "fixed" from the bag | A topped-up bag hides a shortage | Owner quote (`safe-bag-core.ts` L21–22); SOP-01 §4.30 |
@@ -553,14 +553,14 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7; `src/lib/accounting/safe-bag-core.ts` L15–25; `docs/MICHAEL-books-96-one-bag-one-day.md` L1–20 |
 | 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L107; `src/app/admin/registers/page.tsx` L139–141; `src/app/admin/books/bank/page.tsx` L175 |
-| 4.1 money | `drawer-posting-service.ts` L20–29, L170–194; `register-cash-journal-core.ts` L265–303; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
+| 4.1 money | `drawer-posting-service.ts` L20–29, L170–194; `register-cash-journal-core.ts` L271–322; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
 | 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L245–278 |
 | 4.8 report | `eod/page.tsx` (268 lines) L15–19, L48–264; `src/lib/registers/eod-core.ts` (295) L80–201; `src/lib/registers/eod-store.ts` (234) L65–173; `src/lib/pos/day-report-core.ts` L40–70, L136–175 |
 | 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L50, L81, L234–247 |
-| 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L364–441; `ledger-census-data.ts` L1577–1636; `factory-reset-core.ts` L427–428 |
-| 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–60, L160–260; `deposit-clearing-core.ts` L4–14, L128–130, L390–490; `ledger-census-data.ts` L1519–1575; `books/bank/BankMatchExplainer.tsx` L719–722 |
+| 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L389–466; `ledger-census-data.ts` L1582–1641; `factory-reset-core.ts` L427–428 |
+| 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–60, L160–260; `deposit-clearing-core.ts` L4–14, L128–130, L390–490; `ledger-census-data.ts` L1524–1580; `books/bank/BankMatchExplainer.tsx` L719–722 |
 | 4.14 $10,000 | `CASH_DEPOSIT_POLICY_DECISION.md` L9–73; `safe-bag-core.ts` L262–328; `books/bank/page.tsx` L495–515; `bank-match-core.ts` L1587, L1594; `docs/MICHAEL-books-98-the-store-safe.md` L43–60 |
-| 4.15 panel | `src/app/admin/registers/eod/UndepositedFunds.tsx` (161) L1–161; `deposit-clearing-service.ts` L166–228; `register-cash-journal-core.ts` L294–303, L805–813 |
+| 4.15 panel | `src/app/admin/registers/eod/UndepositedFunds.tsx` (161) L1–161; `deposit-clearing-service.ts` L166–228; `register-cash-journal-core.ts` L306–323, L830–838 |
 | 4.8 worked example | `src/app/admin/registers/eod/RegisterCashSpecimen.tsx` (190) L110–137; `src/lib/accounting/register-cash-specimen-core.ts` L30–60, L128–140 |
 | Payment methods | `src/lib/pos/sale-event-core.ts` L15–33 (cash-only launch) |
 | Help / concierge | `src/lib/admin/help-content.ts`, `src/lib/admin/concierge-kb.ts` (grep "eod\|end-of-day\|deposit" → payroll direct deposit only) |

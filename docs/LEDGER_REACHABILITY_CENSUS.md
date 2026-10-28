@@ -481,7 +481,7 @@ A shift starts: the float moves from the vault into a drawer.
 
 ### `cash_and_banking.till_close_to_safe`
 
-A shift ends: the drawer is counted and its takings go to the safe.
+A shift ends: the drawer is counted and its takings, and the drops made during the shift, are booked to the safe.
 
 - Accounts: `10100`, `10110`, `50920`
 - Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
@@ -489,7 +489,7 @@ A shift ends: the drawer is counted and its takings go to the safe.
 
 - **exists: PRESENT** -- books-98 fixed D-77: the close debits 10100 Vault - the SAFE - not 10400. Its own line always said "to safe"; the account did not agree until now. 10400 is reached only by sealing a numbered bag. books-93 built buildTillCloseJournal: the safe debited what physically left the drawer, 10110 relieved, the difference to 50920.
 - **reachable: PRESENT** -- books-94: reconcileDrawerAction in actions.ts calls postDrawerCloseForSession, which submits with autoPost. grep submitJournal under src/lib/registers/ now finds it. The post is placed AFTER the reconcile succeeded and its outcome is written to the audit log and shown on /admin/registers.
-- **correct: PRESENT** -- The close does NOT re-book cash sales - sale-journal-core already debits 10110 once per sale - so the two cannot double-count. A drawer counted below its own float is refused and escalated to a manager instead of posted. 43 of 43 mutations caught.
+- **correct: PRESENT** -- The close does NOT re-book cash sales - sale-journal-core already debits 10110 once per sale - so the two cannot double-count. A drawer counted below its own float is refused and escalated to a manager instead of posted. 43 of 43 mutations caught. Fix Phase 2.4 (G-12, F-02-1): mid-shift drops are booked to 10100 on this same entry - the close relieves 10110 by counted - float + drops - so a dropped shift nets 10110 to zero instead of leaving the dropped cash stranded in Tills.
 - **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash._
 - **idempotent: PRESENT** -- sourceRef is till-close:<sessionId>, keyed on the SHIFT and not on the register-plus-date, because two shifts on one register in one day is normal and a date key would silently merge them. A replay returns outcome duplicate and writes nothing twice.
 - **married: MISSING** -- The safe is where the deposit is built from. books-98 added the numbered bag that will carry a day's cash to the bank, but the bank-side match on bag id is not wired yet.
