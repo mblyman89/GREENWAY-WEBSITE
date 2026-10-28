@@ -11,7 +11,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import type { OrderStatus } from "@/lib/orders/types";
 import { pacificDayKey, pacificToday, addPacificDays, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -113,7 +113,7 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
       .order("id", { ascending: true })
       .range(from, to);
     return (data as AnalyticsOrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   const ordersByDay = emptyDaySeries(days);
   const revenueByDay = emptyDaySeries(days);
@@ -169,7 +169,7 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
         .order("id", { ascending: true })
         .range(from, to);
       return (data as AnalyticsLineRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
     const productMap = new Map<string, number>();
     const brandMap = new Map<string, number>();
@@ -231,7 +231,7 @@ export async function getLoyaltyReport(days = 30): Promise<LoyaltyReport> {
       .order("id", { ascending: true })
       .range(from, to);
     return (data as SignupReportRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   const byDay = emptyDaySeries(days);
   const idx = new Map(byDay.map((p, i) => [p.date, i]));

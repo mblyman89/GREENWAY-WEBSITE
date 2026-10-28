@@ -12,7 +12,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { pagedAll } from "@/lib/supabase/chunked-in";
+import { ADMIN_PAGED_CONCURRENCY, pagedAll } from "@/lib/supabase/chunked-in";
 import { getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import {
   buildAdjustmentFile,
@@ -97,7 +97,7 @@ export async function buildCcrsInventoryAdjustmentCsv(
       .range(from, to);
     if (r.error) error = r.error;
     return (r.data as unknown[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   const loadErr = error as { message: string } | null; // assigned inside the pager
   if (loadErr) {

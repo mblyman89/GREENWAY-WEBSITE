@@ -40,7 +40,9 @@ import {
 } from "@/lib/admin/comparison-basis-core";
 import {
   buildComparison,
+  comparisonSpan,
   emptyComparisonBundle,
+  fetchComparisonBaseline,
   type ComparisonBundle,
 } from "@/lib/admin/comparison-data";
 import { returnsVoidsForDay, emptyReturnsVoidsRange, type ReturnsVoidsRange } from "@/lib/admin/returns-metrics-store";
@@ -135,6 +137,18 @@ export async function getCockpitSnapshot(
   const yestStart = pacificWallTimeToUtcISO(yestYmd, "start");
   const yestEnd = pacificWallTimeToUtcISO(yestYmd, "end");
 
+  // PERF2 round 4: the comparison baseline used to be read only AFTER every
+  // read below had finished (a second full round of waiting on every
+  // dashboard load). It now starts here, side by side with the rest. When
+  // the basis IS yesterday (the default) its span is exactly yesterday's, so
+  // the yesterday report is simply reused instead of being read twice.
+  const yesterdayP = safeData(() => getSalesReport(yestStart, yestEnd), EMPTY_SALES_REPORT).then((r) => r.data);
+  const span = comparisonSpan(basis, todayYmd);
+  const baselineP =
+    span && span.fromISO === yestStart && span.toISO === yestEnd
+      ? yesterdayP
+      : fetchComparisonBaseline(basis, todayYmd);
+
   const [
     today,
     yesterday,
@@ -147,7 +161,7 @@ export async function getCockpitSnapshot(
     refundsToday,
   ] = await Promise.all([
     safeData(() => getSalesReport(todayStart, nowISO), EMPTY_SALES_REPORT).then((r) => r.data),
-    safeData(() => getSalesReport(yestStart, yestEnd), EMPTY_SALES_REPORT).then((r) => r.data),
+    yesterdayP,
     // USAGE-3: one grouped RPC (0233) instead of seven exact counts.
     safeData(
       () => getOrdersBoardSnapshot({ arrivalsLimit: 0 }).then((s) => s.counts),
@@ -193,7 +207,7 @@ export async function getCockpitSnapshot(
 
   // SLICE 21 — the chosen comparison. When basis is "yesterday" this resolves
   // to the same day the legacy `deltas` block uses, so the two never disagree.
-  const comparison = await buildComparison(basis, todayYmd, today);
+  const comparison = await buildComparison(basis, todayYmd, today, baselineP);
 
   // Today's gross is what was rung up; net subtracts what went back out.
   const netToday = computeNetSales(today.totalRevenueMinorUnits, refundsToday.totals);

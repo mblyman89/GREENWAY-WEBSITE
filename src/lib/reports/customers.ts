@@ -36,7 +36,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 
@@ -184,7 +184,7 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
       .order("id", { ascending: true })
       .range(from, to);
     return (data as OrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   const windowOrders = windowRows.filter((o) => isRevenueOrder(o.status));
   if (windowOrders.length === 0) return { ...EMPTY_CUSTOMERS_REPORT };
@@ -208,7 +208,7 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
         .order("id", { ascending: true })
         .range(from, to);
       return (data as HistRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
     for (const h of hist) {
       if (!isRevenueOrder(h.status)) continue;
       const k = emailKey(h.customer_email);

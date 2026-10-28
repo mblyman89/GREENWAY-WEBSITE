@@ -726,7 +726,7 @@ export async function listLotsForBulkFill(ids: readonly string[]): Promise<BulkF
       .order("id", { ascending: true })
       .range(from, to);
     return (data as BulkFillLot[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 }
 
 /**
@@ -805,7 +805,7 @@ export async function listLotsMissingReceivedDate(): Promise<ReceivedDateLot[]> 
       .order("id", { ascending: true })
       .range(from, to);
     return (data as ReceivedDateLot[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   return rows;
 }
 

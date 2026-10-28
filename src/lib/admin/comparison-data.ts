@@ -166,24 +166,54 @@ function measure(
  * `today` is passed in (not read from a clock) so the caller owns the notion
  * of the current business day and the whole thing stays testable.
  */
+/**
+ * PERF2 round 4: the ONE query span a basis needs (oldest .. newest baseline
+ * day), or null when the basis has no baseline days. Exposed so the cockpit
+ * can start the baseline read at the same time as today's report instead of
+ * after it, and can tell when the span is exactly yesterday's.
+ */
+export function comparisonSpan(
+  basis: ComparisonBasis,
+  todayYmd: string,
+): { fromISO: string; toISO: string } | null {
+  const window = comparisonWindowFor(basis, todayYmd);
+  if (window.days.length === 0) return null;
+  // `days` is built most-recent-first by the core, so sort for oldest..newest.
+  const sorted = [...window.days].sort();
+  return {
+    fromISO: pacificWallTimeToUtcISO(sorted[0], "start"),
+    toISO: pacificWallTimeToUtcISO(sorted[sorted.length - 1], "end"),
+  };
+}
+
+/** Start (do not await) the baseline read for a basis. Never rejects. */
+export function fetchComparisonBaseline(
+  basis: ComparisonBasis,
+  todayYmd: string,
+): Promise<SalesReport> {
+  const span = comparisonSpan(basis, todayYmd);
+  if (!span) return Promise.resolve(EMPTY_SALES_REPORT);
+  return safeData(
+    () => getSalesReport(span.fromISO, span.toISO),
+    EMPTY_SALES_REPORT,
+  ).then((r) => r.data);
+}
+
 export async function buildComparison(
   basis: ComparisonBasis,
   todayYmd: string,
   todayReport: SalesReport,
+  /**
+   * PERF2 round 4: an already-started baseline read (see
+   * fetchComparisonBaseline). Omitted = read it now, exactly as before.
+   */
+  baseline?: Promise<SalesReport>,
 ): Promise<ComparisonBundle> {
   const window = comparisonWindowFor(basis, todayYmd);
   if (window.days.length === 0) return emptyComparisonBundle(basis, todayYmd);
 
-  // One span covering every baseline day: oldest .. newest. `days` is built
-  // most-recent-first by the core, so the oldest is last.
-  const sorted = [...window.days].sort();
-  const fromISO = pacificWallTimeToUtcISO(sorted[0], "start");
-  const toISO = pacificWallTimeToUtcISO(sorted[sorted.length - 1], "end");
-
-  const baselineReport = await safeData(
-    () => getSalesReport(fromISO, toISO),
-    EMPTY_SALES_REPORT,
-  ).then((r) => r.data);
+  // One span covering every baseline day: oldest .. newest.
+  const baselineReport = await (baseline ?? fetchComparisonBaseline(basis, todayYmd));
 
   const days = indexDays(baselineReport);
 

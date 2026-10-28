@@ -157,29 +157,60 @@ export async function buildReorderSuggestions(opts: {
 }): Promise<ReorderSuggestion[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
-  const settings = await getReorderSettings();
-
-  // 1) On-hand + cost + vendor by product, from active lots.
-  const { data: lots } = await admin
-    .from("inventory_lots")
-    .select("pos_product_key, product_name, vendor_id, brand_id, on_hand_qty, unit, unit_cost_minor_units, status")
-    .eq("status", "active");
+  // PERF2 round 4: settings and lots do not depend on each other - read side by side.
+  const [settings, lotsRes] = await Promise.all([
+    getReorderSettings(),
+    // 1) On-hand + cost + vendor by product, from active lots.
+    admin
+      .from("inventory_lots")
+      .select("pos_product_key, product_name, vendor_id, brand_id, on_hand_qty, unit, unit_cost_minor_units, status")
+      .eq("status", "active"),
+  ]);
+  const lots = lotsRes.data;
 
   if (!lots || lots.length === 0) return [];
 
-  // Resolve vendor + brand names.
+  // 2) Sales velocity per product over the window (started now; it only needs
+  //    the settings, so it overlaps the vendor/brand name reads below).
+  //    Mastering Slice 1: the variant's own encoded lot key wins over
+  //    product_id (each size on a mastered card credits ITS lot's velocity;
+  //    single-lot cards resolve the identical key either way).
+  const since = new Date(Date.now() - settings.velocity_window_days * 24 * 60 * 60 * 1000).toISOString();
+  const soldP = (async () => {
+    const { data: recentOrders } = await admin
+      .from("orders")
+      .select("id")
+      .gte("placed_at", since);
+    const orderIds = (recentOrders ?? []).map((o) => o.id as string);
+    const soldByKey = new Map<string, number>();
+    if (orderIds.length) {
+      const { data: ols } = await admin
+        .from("order_lines")
+        .select("product_id, variant_id, quantity")
+        .in("order_id", orderIds);
+      for (const ol of ols ?? []) {
+        const k = lotKeyForSaleLine({
+          productId: (ol.product_id as string | null) ?? null,
+          variantId: (ol.variant_id as string | null) ?? null,
+        });
+        if (!k) continue;
+        soldByKey.set(k, (soldByKey.get(k) ?? 0) + Number(ol.quantity ?? 0));
+      }
+    }
+    return soldByKey;
+  })();
+
+  // Resolve vendor + brand names (side by side).
   const vendorIds = Array.from(new Set(lots.map((l) => l.vendor_id).filter(Boolean))) as string[];
   const brandIds = Array.from(new Set(lots.map((l) => l.brand_id).filter(Boolean))) as string[];
   const vendorNames = new Map<string, string>();
   const brandNames = new Map<string, string>();
-  if (vendorIds.length) {
-    const { data: vs } = await admin.from("vendors").select("id, display_name").in("id", vendorIds);
-    (vs ?? []).forEach((v) => vendorNames.set(v.id as string, v.display_name as string));
-  }
-  if (brandIds.length) {
-    const { data: bs } = await admin.from("brands").select("id, display_name").in("id", brandIds);
-    (bs ?? []).forEach((b) => brandNames.set(b.id as string, b.display_name as string));
-  }
+  const [vsRes, bsRes] = await Promise.all([
+    vendorIds.length ? admin.from("vendors").select("id, display_name").in("id", vendorIds) : Promise.resolve({ data: null }),
+    brandIds.length ? admin.from("brands").select("id, display_name").in("id", brandIds) : Promise.resolve({ data: null }),
+  ]);
+  (vsRes.data ?? []).forEach((v) => vendorNames.set(v.id as string, v.display_name as string));
+  (bsRes.data ?? []).forEach((b) => brandNames.set(b.id as string, b.display_name as string));
 
   type Agg = {
     key: string | null;
@@ -211,31 +242,7 @@ export async function buildReorderSuggestions(opts: {
     }
   }
 
-  // 2) Sales velocity per product over the window. Mastering Slice 1: the
-  //    variant's own encoded lot key wins over product_id (each size on a
-  //    mastered card credits ITS lot's velocity; single-lot cards resolve
-  //    the identical key either way).
-  const since = new Date(Date.now() - settings.velocity_window_days * 24 * 60 * 60 * 1000).toISOString();
-  const { data: recentOrders } = await admin
-    .from("orders")
-    .select("id")
-    .gte("placed_at", since);
-  const orderIds = (recentOrders ?? []).map((o) => o.id as string);
-  const soldByKey = new Map<string, number>();
-  if (orderIds.length) {
-    const { data: ols } = await admin
-      .from("order_lines")
-      .select("product_id, variant_id, quantity")
-      .in("order_id", orderIds);
-    for (const ol of ols ?? []) {
-      const k = lotKeyForSaleLine({
-        productId: (ol.product_id as string | null) ?? null,
-        variantId: (ol.variant_id as string | null) ?? null,
-      });
-      if (!k) continue;
-      soldByKey.set(k, (soldByKey.get(k) ?? 0) + Number(ol.quantity ?? 0));
-    }
-  }
+  const soldByKey = await soldP;
 
   // 3) Compute reorder math + apply filter.
   const filter = opts.filter ?? {};

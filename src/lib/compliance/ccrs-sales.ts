@@ -26,7 +26,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-core";
 import {
@@ -120,16 +121,10 @@ async function buildCategoryLookup(
   const lookup = new Map<string, string>();
   // S-7: page past the PostgREST per-response row cap (a dropped catalog row
   // misclassifies its lines as non-cannabis → OtherTax under-reported).
-  type MenuRow = { source_item_id: string; category: string | null };
-  const rows = await pagedAll<MenuRow>(async (from, to) => {
-    const { data } = await admin
-      .from("menu_items")
-      .select("source_item_id, category, created_at")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as MenuRow[] | null) ?? [];
-  });
+  // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
+  // per product instead of every snapshot ever written; same "newest wins"
+  // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
+  const rows = [...(await loadLatestMenuFacts(admin)).values()];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     lookup.set(r.source_item_id, r.category?.trim() || "");
@@ -165,7 +160,7 @@ async function buildLotIndex(
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LotRowRaw[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   for (const r of rows) {
     const key = r.pos_product_key;
     if (!key) continue;
@@ -243,7 +238,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
       .order("id", { ascending: true })
       .range(from, to);
     return (data as CcrsOrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   // B1: an order is a MEDICAL sale (SaleType = RecreationalMedical) when it has
   // WAC 314-55-090(2) exempt-sale records tied to it — the authoritative,
@@ -273,7 +268,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
         .order("id", { ascending: true })
         .range(from, to);
       return (data as ExemptRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
     for (const r of exemptRows) {
       if (!r.order_id) continue;
       medicalOrderIds.add(r.order_id);
@@ -320,7 +315,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
       .order("id", { ascending: true })
       .range(from, to);
     return (data as CcrsLineRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   const rows: string[][] = [];
   let missingInvIds = 0;

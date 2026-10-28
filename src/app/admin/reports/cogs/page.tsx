@@ -130,10 +130,12 @@ export default async function CogsReportPage({
     );
   }
 
+  // PERF2 round 4: the report and the category labels are read together.
+  const categoryLabelP = getCategoryLabeler();
   const report = await getCogsReport(range.fromISO, range.toISO);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
   // SLICE 78: owner's live category labels (renames at Settings → Types show here).
-  const categoryLabel = await getCategoryLabeler();
+  const categoryLabel = await categoryLabelP;
   const valuationColumns = valuationColumnsFor("Category", categoryLabel);
 
   return (

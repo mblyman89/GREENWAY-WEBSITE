@@ -28,7 +28,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificDayKey, pacificHour, addPacificDays, formatHourLabel } from "@/lib/reports/timezone";
 import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 
@@ -181,27 +182,13 @@ type ProductMeta = { category: string; type: string; vendor: string; brand: stri
  */
 async function buildProductLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
+  keys?: Iterable<string | null | undefined> | null,
 ): Promise<Map<string, ProductMeta>> {
   const lookup = new Map<string, ProductMeta>();
-  // S-7: page past the PostgREST per-response row cap (a dropped catalog row
-  // silently miscategorizes its sold lines).
-  type MenuRow = {
-    source_item_id: string;
-    category: string | null;
-    pos_inventory_type: string | null;
-    pos_inventory_category: string | null;
-    vendor_name: string | null;
-    brand_name: string | null;
-  };
-  const rows = await pagedAll<MenuRow>(async (from, to) => {
-    const { data } = await admin
-      .from("menu_items")
-      .select("source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as MenuRow[] | null) ?? [];
-  });
+  // PERF2 round 4: the newest row per key comes from latest_menu_facts (0305)
+  // for exactly the keys asked for; same "newest wins" rule, and the original
+  // full walk is the automatic fallback (latest-menu-facts.ts).
+  const rows = [...(await loadLatestMenuFacts(admin, keys)).values()];
 
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
@@ -241,7 +228,7 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
       .order("id", { ascending: true })
       .range(from, to);
     return (data as ReportOrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   const validOrders = orders.filter((o) => isRevenueOrder(o.status));
   if (validOrders.length === 0) return { ...EMPTY_SALES_REPORT };
@@ -267,10 +254,10 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LineRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
-  // 3) Product → category/vendor lookup.
-  const lookup = await buildProductLookup(admin);
+  // 3) Product → category/vendor lookup, for the products these lines sold.
+  const lookup = await buildProductLookup(admin, lines.map((l) => l.product_id));
 
   // 4) Accumulators.
   const byCategory = new Map<string, Acc>();

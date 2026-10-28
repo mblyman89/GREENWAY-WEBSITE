@@ -30,7 +30,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { loadLatestMenuFacts } from "@/lib/menu/latest-menu-facts";
+import { ADMIN_PAGED_CONCURRENCY, chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificMonthKey } from "@/lib/reports/timezone";
 import {
   getTaxSettings,
@@ -163,21 +164,10 @@ export async function buildCategoryLookup(
   // S-7: page past the PostgREST per-response row cap so no product's
   // category snapshot is silently dropped (a dropped row misclassifies its
   // lines as non-cannabis and understates excise).
-  type MenuRow = {
-    source_item_id: string;
-    category: string | null;
-    pos_inventory_type: string | null;
-    pos_inventory_category: string | null;
-  };
-  const rows = await pagedAll<MenuRow>(async (from, to) => {
-    const { data } = await admin
-      .from("menu_items")
-      .select("source_item_id, category, pos_inventory_type, pos_inventory_category, created_at")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return (data as MenuRow[] | null) ?? [];
-  });
+  // PERF2 round 4: newest row per key from latest_menu_facts (0305), one row
+  // per product instead of every snapshot ever written; same "newest wins"
+  // rule, original full walk as the automatic fallback (latest-menu-facts.ts).
+  const rows = [...(await loadLatestMenuFacts(admin)).values()];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     const category = r.category?.trim() || "";
@@ -271,7 +261,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
       .order("id", { ascending: true })
       .range(from, to);
     return (data as OrderRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
   // Base query already filters to completed orders (canonical period basis).
   const valid = orders;
   if (valid.length === 0) return empty;
@@ -294,7 +284,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
       .order("id", { ascending: true })
       .range(from, to);
     return (data as LineRow[] | null) ?? [];
-  });
+  }, { concurrency: ADMIN_PAGED_CONCURRENCY });
 
   // S-8: medical exemptions — join medical_exempt_sales (WAC 314-55-090(2))
   // by (order_id, product_sku=product_id) so exempt lines contribute ZERO to
@@ -317,7 +307,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
         .order("id", { ascending: true })
         .range(from, to);
       return (data as ExemptRow[] | null) ?? [];
-    });
+    }, { concurrency: ADMIN_PAGED_CONCURRENCY });
     for (const r of exemptRows) {
       if (!r.order_id || !r.product_sku) continue;
       const key = `${r.order_id}|${r.product_sku}`;

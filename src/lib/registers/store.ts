@@ -346,13 +346,17 @@ export type RegisterLive = {
 /** Live view: every register with its current open session + drops total. */
 export async function liveRegisters(): Promise<RegisterLive[]> {
   const registers = await listRegisters();
-  const out: RegisterLive[] = [];
-  for (const register of registers) {
-    const openSession = await openSessionForRegister(register.id);
-    const dropsMinor = openSession ? await totalDropsMinor(openSession.id) : 0;
-    out.push({ register, openSession, dropsMinor });
-  }
-  return out;
+  // PERF2 round 4: each register's open session + drops are independent of
+  // every other register's, so the registers are read side by side instead of
+  // one after another (was 2 round trips PER register, in series, on every
+  // /admin load). Promise.all keeps the original register order.
+  return Promise.all(
+    registers.map(async (register) => {
+      const openSession = await openSessionForRegister(register.id);
+      const dropsMinor = openSession ? await totalDropsMinor(openSession.id) : 0;
+      return { register, openSession, dropsMinor };
+    }),
+  );
 }
 
 /**
