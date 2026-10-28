@@ -27,6 +27,14 @@ import type {
   LotWithDetail,
 } from "@/lib/inventory/types";
 import { syncLotMenuStock } from "@/lib/inventory/lot-menu-stock";
+import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
+import { recordAudit } from "@/lib/auth/audit";
+import {
+  RETIRED_ADJUSTMENT_REASONS,
+  LOT_ADJUSTED_AUDIT_ACTION,
+  wantsAutoSoldOut,
+  fallbackStatusAfter,
+} from "@/lib/inventory/manual-adjustment-core";
 import type { LotGateFacts } from "@/lib/inventory/lot-activation-gate-core";
 import {
   isManualLotStatus,
@@ -593,47 +601,128 @@ export async function getManifestById(id: string): Promise<InboundManifest | nul
 }
 
 /**
- * Record a manual inventory adjustment and update the lot's on-hand quantity.
- * Reasons: receive | shrink | damage | sample | destruction | count | recall | other.
+ * Record a manual inventory adjustment and move the lot's on-hand quantity.
+ *
+ * Fix Phase 1.2 (G-23, F-05a-3, F-05a-13): the write is the atomic, STRICT
+ * `applyLotDelta` (GW-012, migration 0129): the database refuses a change
+ * that would take the lot below zero, even if a sale landed a moment
+ * earlier. On a refusal the adjustment row is deleted, so the ledger never
+ * describes a change that did not happen (same pattern as disposition.ts
+ * postReduction). Removing stock from an Active lot flips it to Sold out at
+ * zero; a Sold out lot that gains units stays Sold out (Active runs the
+ * go-live check under Lifecycle status, G-19). Every adjustment writes an
+ * `inventory_lot.adjusted` audit row. The reason rules (no Receive,
+ * Destruction or Recall removal; Theft / Seizure; notes) live in
+ * manual-adjustment-core.ts and run in the action before this is called.
  */
 export async function createAdjustment(
-  input: { lotId: string; qtyDelta: number; reason: string; note?: string | null },
+  input: { lotId: string; qtyDelta: number; reason: string; note?: string | null; incidentReference?: string | null },
   actorId: string | null,
-): Promise<{ ok: true; menuStock?: string | null } | { ok: false; error: string }> {
+  actorEmail: string | null = null,
+): Promise<
+  | { ok: true; adjustmentId: string; previousQty: number; newQty: number | null; menuStock?: string | null }
+  | { ok: false; error: string }
+> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
+  if (RETIRED_ADJUSTMENT_REASONS[input.reason]) {
+    return { ok: false, error: RETIRED_ADJUSTMENT_REASONS[input.reason] };
+  }
+  const delta = Number(input.qtyDelta);
+  if (!Number.isFinite(delta) || delta === 0) return { ok: false, error: "Enter a non-zero quantity." };
   const admin = createSupabaseAdminClient();
 
   const { data: lot } = await admin
     .from("inventory_lots")
-    .select("id, on_hand_qty")
+    .select("id, on_hand_qty, status")
     .eq("id", input.lotId)
     .maybeSingle();
   if (!lot) return { ok: false, error: "Lot not found." };
+  const current = Number((lot as { on_hand_qty: number }).on_hand_qty) || 0;
+  const status = String((lot as { status: string | null }).status ?? "");
+  if (status === "destroyed") {
+    return { ok: false, error: "This lot is Destroyed. Its quantity cannot be adjusted." };
+  }
+  // Pre-check (the database check below is the real floor; this one also
+  // protects the pre-0129 fallback, which cannot refuse on its own).
+  if (current + delta < 0) {
+    return {
+      ok: false,
+      error: `This removes ${Math.abs(delta)} but the lot has ${current} on hand. An adjustment can never take a lot below zero.`,
+    };
+  }
 
-  const { error: insErr } = await admin.from("inventory_adjustments").insert({
-    lot_id: input.lotId,
-    qty_delta: input.qtyDelta,
-    reason: input.reason,
-    note: input.note ?? null,
-    actor_id: actorId,
+  const { data: adj, error: insErr } = await admin.from("inventory_adjustments").insert({
+      lot_id: input.lotId,
+      qty_delta: input.qtyDelta,
+      reason: input.reason,
+      note: input.note ?? null,
+      actor_id: actorId,
+    })
+    .select("id")
+    .single();
+  if (insErr || !adj) return { ok: false, error: insErr?.message ?? "Could not record the adjustment." };
+  const adjustmentId = (adj as { id: string }).id;
+
+  const autoSoldOut = wantsAutoSoldOut(status, delta);
+  const written = await applyLotDelta(admin, {
+    lotId: input.lotId,
+    delta,
+    clamp: false,
+    actorId,
+    autoStatus: autoSoldOut,
+    fallbackAbsolute: {
+      onHandQty: current + delta,
+      status: autoSoldOut ? fallbackStatusAfter(status, current + delta, true) : undefined,
+      updatedBy: actorId,
+    },
   });
-  if (insErr) return { ok: false, error: insErr.message };
+  if (!written.ok) {
+    await admin.from("inventory_adjustments").delete().eq("id", adjustmentId);
+    return { ok: false, error: written.error ?? "Could not update the lot." };
+  }
 
-  const current = (lot as { on_hand_qty: number }).on_hand_qty ?? 0;
-  const next = current + input.qtyDelta;
-  const { error: updErr } = await admin
-    .from("inventory_lots")
-    .update({ on_hand_qty: next, updated_by: actorId })
-    .eq("id", input.lotId);
-  if (updErr) return { ok: false, error: updErr.message };
+  await recordAudit({
+    actorId,
+    actorEmail,
+    action: LOT_ADJUSTED_AUDIT_ACTION,
+    entityType: "inventory_lot",
+    entityId: input.lotId,
+    before: { on_hand_qty: current, status },
+    after: {
+      adjustment_id: adjustmentId,
+      qty_delta: delta,
+      on_hand_qty: written.newQty ?? current + delta,
+      reason: input.reason,
+      note: input.note ?? null,
+      incident_reference: input.incidentReference ?? null,
+      auto_sold_out: autoSoldOut,
+      used_fallback: written.usedFallback,
+    },
+  });
 
   // R74 S32: move the menu size this lot sells as by the same amount
   // (published + staged), so Leafly and the website match the shelf. Never
   // throws; a sentence comes back when the menu could not follow.
   const synced = await syncLotMenuStock(admin, input.lotId, input.qtyDelta);
-  return { ok: true, menuStock: synced.sentence };
+  return { ok: true, adjustmentId, previousQty: current, newQty: written.newQty, menuStock: synced.sentence };
+}
+
+/**
+ * Fix Phase 1.2 (F-05a-13): staff names for the Adjustment history. A name
+ * that cannot be found shows as Unknown (never a guess).
+ */
+export async function getStaffNames(ids: readonly (string | null)[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const unique = [...new Set(ids.filter((x): x is string => Boolean(x)))];
+  if (!isSupabaseServiceConfigured || unique.length === 0) return names;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("staff_profiles").select("id, full_name").in("id", unique);
+  for (const s of (data ?? []) as { id: string; full_name: string | null }[]) {
+    if (s.full_name && s.full_name.trim()) names.set(s.id, s.full_name.trim());
+  }
+  return names;
 }
 
 /**

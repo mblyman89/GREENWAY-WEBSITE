@@ -3,6 +3,12 @@ import { safeAdminPath } from "@/lib/media/return-state-core";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import {
+  MANUAL_ADJUSTMENT_REASONS,
+  MANUAL_ADJUSTMENT_REASON_LABELS,
+  adjustmentReasonLabel,
+  adjustmentActorName,
+} from "@/lib/inventory/manual-adjustment-core";
+import {
   MANUAL_LOT_STATUSES,
   MANUAL_LOT_STATUS_LABELS,
   formatPacificDateTime,
@@ -15,6 +21,7 @@ import Link from "next/link";
 import {
   getLotById,
   listLotAdjustments,
+  getStaffNames,
   listLotStatusHistory,
   getManifestById,
 } from "@/lib/inventory/store";
@@ -122,17 +129,9 @@ function formatKbSaved(iso: string | null | undefined): string {
   return t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const REASONS = [
-  { value: "receive", label: "Receive (add)" },
-  { value: "shrink", label: "Shrink" },
-  { value: "damage", label: "Damage" },
-  { value: "sample", label: "Sample (lab/QA)" },
-  { value: "employee_sample", label: "Employee sample (WAC 314-55-096)" },
-  { value: "destruction", label: "Destruction" },
-  { value: "count", label: "Cycle-count correction" },
-  { value: "recall", label: "Recall removal" },
-  { value: "other", label: "Other" },
-];
+// Fix Phase 1.2 (G-23, D39): no Receive (add), Destruction or Recall removal;
+// Theft and Seizure added. The list comes from manual-adjustment-core.
+const REASONS = MANUAL_ADJUSTMENT_REASONS.map((value) => ({ value, label: MANUAL_ADJUSTMENT_REASON_LABELS[value] }));
 
 // Fix Phase 1.1 (G-22 req 2): Destroyed is NOT a manual choice. Destruction
 // only goes through Inventory -> Returns & Destruction (SOP-15).
@@ -277,6 +276,8 @@ export default async function LotDetailPage({
 
   // Fix Phase 1.1 (G-22 req 5): Status history from the audit rows.
   const statusHistory = await listLotStatusHistory(id);
+  // Fix Phase 1.2 (F-05a-13): who made each adjustment.
+  const adjustmentNames = await getStaffNames(adjustments.map((a) => a.actor_id));
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
   const detailsAction = updateLotDetailsAction.bind(null, id);
@@ -1487,8 +1488,8 @@ export default async function LotDetailPage({
         <div className="grid gap-6 lg:grid-cols-2">
           <div id="adjust" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Adjust quantity</h2>
-            <form action={adjustAction} className="space-y-4">
-              <Field label="Quantity change" help="Use a negative number to remove stock." htmlFor="qty_delta" required>
+            <form action={adjustAction} className="space-y-4" data-testid="adjust-form">
+              <Field label="Quantity change" help="Use a negative number to remove stock. An adjustment can never take the lot below zero." htmlFor="qty_delta" required>
                 <Input id="qty_delta" name="qty_delta" type="number" step="any" placeholder="-1" />
               </Field>
               <Field label="Reason" htmlFor="reason" required>
@@ -1500,9 +1501,29 @@ export default async function LotDetailPage({
                   ))}
                 </Select>
               </Field>
-              <Field label="Note" htmlFor="note">
-                <Textarea id="note" name="note" rows={2} placeholder="Optional detail for the audit trail…" />
+              <Field
+                label="Note"
+                htmlFor="note"
+                help="Write one every time: what happened, who found it, where the product is now. Required for Employee sample, Theft and Other (CCRS withholds the row without it, E13). Sent to CCRS as the adjustment detail (250 characters)."
+              >
+                <Textarea id="note" name="note" rows={2} maxLength={250} placeholder="What happened, who found it, where the product is now" />
               </Field>
+              <Field
+                label="Incident reference (Theft and Seizure)"
+                htmlFor="incident_reference"
+                help="Required for Theft and Seizure: the police or LCB report number (SOP-20). Call the owner before recording either."
+              >
+                <Input id="incident_reference" name="incident_reference" maxLength={100} placeholder="e.g. police case number" />
+              </Field>
+              <p className="text-xs text-[var(--admin-text-faint)]" data-testid="adjust-destruction-link">
+                Destroying product, or removing recalled product, is never an adjustment.{" "}
+                {lot.status === "destroyed" ? null : (
+                  <Link href={`/admin/inventory/disposition?lot=${lot.id}#schedule-destruction`} className="font-semibold text-[var(--admin-accent)] underline">
+                    Schedule destruction
+                  </Link>
+                )}{" "}
+                (Returns & Destruction, SOP-15).
+              </p>
               <Button type="submit" variant="save" size="sm">
                 Record adjustment
               </Button>
@@ -1605,11 +1626,11 @@ export default async function LotDetailPage({
                       {a.qty_delta >= 0 ? "+" : ""}
                       {a.qty_delta}
                     </span>{" "}
-                    · {a.reason}
+                    · {adjustmentReasonLabel(a.reason)}
                     {a.note && <span className="text-[var(--admin-text-faint)]"> — {a.note}</span>}
                   </span>
-                  <span className="text-xs text-[var(--admin-text-faint)]">
-                    {new Date(a.created_at).toLocaleDateString()}
+                  <span className="text-right text-xs text-[var(--admin-text-faint)]" data-testid="adjustment-who-when">
+                    {formatPacificDateTime(a.created_at)} {"\u00b7"} {adjustmentActorName(a.actor_id, adjustmentNames)}
                   </span>
                 </li>
               ))}

@@ -451,23 +451,28 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.8, §4.10: form 8.1 for every change; only the owner releases, on written clearance. Ties to **G-22** (extends G-19).
 
 ### F-05a-3 · CONFIRMED · HARDEN · S2 — Manual adjustment is read-then-write, has no zero floor, never sets Sold out and writes no audit row
+- **Status: FIXED (Phase 1.2, G-23). `createAdjustment` (`store.ts` L618) uses the strict `applyLotDelta` (no floor breach; adjustment row deleted on refusal), asks for the Sold out flip when removing from an Active lot, and writes `inventory_lot.adjusted`).**
 - **Pin:** `createAdjustment` (`store.ts` L591–629) reads `on_hand_qty` (L600–604) and writes current + delta (L616–621). It does not use the atomic `applyLotDelta` (`atomic-quantity.ts`, GW-012) that sales, voids, counts and disposition use, and has no `next < 0` check and no `sold_out` flip (the atomic path does that, L44). The action has no `recordAudit` (`actions.ts` L111–140). The adjustment row itself carries `actor_id` (L607–613).
 - **Effect:** a sale at the same moment can be lost; on-hand can go negative; a lot at zero stays Active.
 - **SOP impact:** §4.6 (count twice, quiet times, check On hand after, form 8.2). Ties to **G-23**.
 
 ### F-05a-4 · CONFIRMED · BUG/UX · S2 — "Other" and "Employee sample" adjustments with no note are withheld by CCRS (E13), and the form does not warn
+- **Status: FIXED (Phase 1.2, G-23). `evaluateManualAdjustment` refuses an Other / Employee sample / Theft adjustment with no note (via `adjustmentDetailRequired`) and warns on every other empty note).**
 - **Pin:** both map to CCRS **Other** (`ccrs-inventory-adjustment-core.ts` L62–93), which requires a detail (`ccrs-preflight-core.ts` L271; withheld at build L201–212). The lot page note is labelled *"Optional detail for the audit trail…"* (`[id]/page.tsx` L1489).
 - **SOP impact:** §4.6 step 3, §4.7: always a note; required for these two. Ties to **G-23**.
 
 ### F-05a-5 · CONFIRMED · HARDEN · S2 — "Destruction" and "Recall removal" are offered as manual adjustment reasons
+- **Status: FIXED (Phase 1.2, G-23). Destruction and Recall removal removed from the list and refused in the core and the store; a Schedule destruction link opens Returns & Destruction with the lot chosen).**
 - **Pin:** lot page REASONS L118–128; both export as CCRS Destruction (`ccrs-inventory-adjustment-core.ts` L66–67, L80–81). They bypass the SOP-15 disposition flow, including its recall block (`disposition-core.ts` L226–243: no destruction until LCB coordination is confirmed and the officer named). The Issues tab's expired-lot fix text points to it (*"…or record the destruction under Adjust quantity"*, `issues-core.ts` L461).
 - **SOP impact:** §4.7 "Never"; §4.16 "do not use the row's suggestion". Ties to **G-23**; owner question **Q-05a-4**.
 
 ### F-05a-6 · CONFIRMED · GAP · S3 — No Theft or Seizure adjustment reason
+- **Status: FIXED (Phase 1.2, G-23). Theft and Seizure on the list, mapped to CCRS Theft / Seizure, with a required incident reference).**
 - **Pin:** CCRS supports Theft and Seizure (`ccrs-inventory-adjustment-core.ts` L91–94); the form's list (lot page L118–128; `VALID_REASONS`, `actions.ts` L89–101) has neither.
 - **SOP impact:** §4.7: theft or seizure goes to the owner (SOP-20); interim **Other** with "THEFT:" / "SEIZURE:" note. Ties to **G-23**.
 
 ### F-05a-7 · CONFIRMED · HARDEN · S2 — "Receive (add)" adds units that CCRS never hears about
+- **Status: FIXED (Phase 1.2, G-23). Receive (add) removed and refused).**
 - **Pin:** `isReportableAdjustment` skips it (`ccrs-inventory-adjustment-core.ts` L101–105). Stock should enter only through Receiving (SOP-04; Rule 11).
 - **Effect:** units appear on Greenway's books with no CCRS adjustment and no manifest. (S2: a control bypass of the one-way-in rule; S3 if the owner treats it as a rare correction.)
 - **SOP impact:** §4.7 "Never". Ties to **G-23**; **Q-05a-4**.
@@ -495,6 +500,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.2 note: follow the SOP where they differ.
 
 ### F-05a-13 · CONFIRMED · UX · S4 — Adjustment history shows the browser's date and no name
+- **Status: FIXED (Phase 1.2, G-23). The history shows `formatPacificDateTime` and the staff name (`getStaffNames`; Unknown when not found, never a guess)).**
 - **Pin:** `new Date(a.created_at).toLocaleDateString()` (`[id]/page.tsx` L1539): browser time zone, not Pacific. `actor_id` is stored (`store.ts` L607–613) but not shown.
 - **SOP impact:** §4.5; form 8.2 is the readable record.
 

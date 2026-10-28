@@ -372,7 +372,7 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | Can a sample be sold or show on the menu? | **Never** (law and owner, D68). The app does not block it yet: dismiss any sample draft on Product Onboarding; weekly **Samples only** check on Inventory; tell the owner if a sample lot went down at the register (§4.26) | Sample lots get no draft and are invisible to the register, barcodes and website (G-51 APPROVED) |
 | How are samples given out? | Only on the **Employee Samples** hub (owner/admin), max 30 per employee per quarter; that is when inventory goes down (§4.26) | Same |
 | Do refunds hit the books / excise? (owner) | No journal; excise Box 1 likely not reduced; form 8.6 and the excise override (§4.24) | Daily refund journal to 50910 for approval; Box 1 net of returns (G-48) |
-| Stolen or seized product? | Not a destruction; SOP-20; lot page Other "THEFT:"/"SEIZURE:" (§4.23) | **Theft** / **Seizure** reasons on the lot page (G-23) |
+| Stolen or seized product? | Not a destruction; SOP-20; call the owner, then lot page **Theft** / **Seizure** with the incident reference (SOP-05a §4.7) | Built (Phase 1.2, G-23) |
 
 **Future features (D41/D42):** when G-42…G-51, G-28, G-25 or G-23 is built, the topics above and this table are updated in the same slice as SOP-15 (charter rules 9–10), and `concierge-kb.ts` L176 and `help-content.ts` L465–467 are rewritten to match.
 
