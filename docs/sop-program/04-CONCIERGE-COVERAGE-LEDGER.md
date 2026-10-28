@@ -377,3 +377,52 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 **Future features (D41/D42):** when G-42…G-51, G-28, G-25 or G-23 is built, the topics above and this table are updated in the same slice as SOP-15 (charter rules 9–10), and `concierge-kb.ts` L176 and `help-content.ts` L465–467 are rewritten to match.
 
 **Running score:** topics with complete SOP source material add `customer-return-disposition`, `vendor-returns`, `product-destruction`, `recall-return`, `trade-samples-off-menu`, `disposition-money-and-tax`, `disposition-advisor`, and complete `disposition-settings`.
+
+### SOP-08 New Hire Onboarding, System Access & Offboarding (`docs/sop/SOP-08-onboarding-system-access-offboarding.md`, verified at `bad718b4`)
+
+The concierge code is **unchanged** (record-only). Today it has two thin entries: `concierge-kb.ts` `time-clock` (L248–258, *"Employee -> Time Clock lets staff clock in and out and tracks shifts."*) and `users` (L415–425). The `users` entry is **wrong in two places**: it lists the roles as *"Owner/Manager (most things), Content/Editor (content only), or Read-only (view)"*, but the app has six roles (owner, admin, manager, content_editor, staff, readonly; `roles.ts` L5–29), and it never mentions the employee file, the onboarding checklist, PINs, the handbook gate or offboarding. The baseline rows above (`users` 3, handbook gate 0, time clock 2) are confirmed.
+
+| Concierge topic | SOP-08 sections that ground it | Rating today -> after integration (target) |
+|---|---|---|
+| `users` (roles, invite, change role, deactivate; six roles and what each can do) | §2, §4.4, §4.14–§4.17, §5, forms 8.4, 8.6 | 3 (wrong role list) -> 9 |
+| *new* `two-identity-systems` (employee file vs sign-in; books-87; how they link) | §4.1–§4.2, §4.4 | 0 -> 9 |
+| *new* `employee-onboarding` (Add to roster, the 16-step checklist, I-9/W-4/21+, document tracker, Activate) | §4.2–§4.13, form 8.1, card 9.1 | 0 -> 9 |
+| *new* `clock-pin` (when a PIN is set, lockout after 5 tries, clearing a PIN) | §4.6, §4.13, §4.15, §5, card 9.3 | 0 -> 9 |
+| `handbook-gate` (back office vs register; paper route; version change) | §4.10, §4.18, §5 | 0 -> 9 |
+| *new* `employee-training-records` (training log, 5-year retention, required topics) | §4.11, §6 | 0 -> 9 |
+| *new* `badges-and-visitors` (employee badge text, visitor badge and log, 3 years) | §4.12, §4.19, forms 8.2, 8.5 | 0 -> 9 |
+| *new* `employee-offboarding` (both halves, dismissal order, offboarding checklist, final pay hand-off) | §4.20–§4.23, form 8.3, card 9.2 | 0 -> 9 |
+| *new* `employee-rehire` | §4.24, form 8.1 (new sign-off) | 0 -> 9 |
+
+**Role filter needed:** the employee files and Terminate are **owner, admin, manager** (`staffing.manage`, `roles.ts` L260); Users is **owner, admin** (`users.manage`, L221). A budtender who asks how to add someone or remove access gets "ask the manager / owner", never the steps. Anyone may be told what they must bring on day one (form 8.1 list) and why the register says the handbook must be signed. Document numbers (SSN, I-9 document numbers) are **never** repeated by the concierge.
+
+**Must ship with caveats** until the findings are fixed:
+- F-08-1 (**S1**): new people are created **Active**. Never say "the app won't let them work until the checklist is done". Answer: **no PIN until form 8.1 is signed**, and the PIN is the only thing that lets them clock in or open a register.
+- F-08-2: never say "link their login to their employee file": no screen does it. The employee file and the sign-in are separate on purpose (books-87).
+- F-08-3: "Letting someone go" is always **both halves the same day**: Terminate on the employee file **and** Deactivate on Users; delete future shifts; close an open punch. For a dismissal, deactivate the sign-in first.
+- F-08-4: when the register says the handbook must be signed, the fix is the **Document tracker** row *Employee handbook acknowledgment = Read & signed*, not the checklist box. After a handbook version change, paper signers re-sign by hand.
+- F-08-5: no training-log line, no training checkmark.
+- F-08-6: before Rehire, print the status card (Rehire erases the old termination date and reason), then uncheck every onboarding step.
+- F-08-8: the visitor log is **paper** (form 8.5) until the owner answers Q-08-3; kept three years.
+- F-08-9: say which role to pick; don't rely on the default.
+- Law vs policy: under 21 never works (RCW 69.50.357(2)); training is required (RCW 69.50.357(3)); badge and visitor log (WAC 314-55-083(1)); training, payroll and hire records kept 5 years (WAC 314-55-087(1)(e)). "No PIN before form 8.1" and "both halves the same day" are store rules.
+
+#### SOP-08: today vs once built (teach both now, D42)
+
+The concierge must answer **both** "how does it work today" (interim) and "how will it work" (design; gaps PROPOSED, Q-08-1…Q-08-5 open). When a gap ships, the "today" column is deleted in the same slice as the SOP update.
+
+| Question | Answer today (interim) | Answer once built (G-nn) |
+|---|---|---|
+| How do I add a new hire? | Employees -> Add to roster with **no PIN**; work the checklist and form 8.1 (§4.3–§4.13) | Same, and the person starts as **Candidate**; the PIN field unlocks on Activate (G-52) |
+| When can they clock in? | Only after form 8.1 is signed and a manager sets the PIN (§4.13) | Only after Activate, which checks the critical steps, hire date, badge and training log (G-52, G-55) |
+| Why does the register say the handbook must be signed? | Set the Document tracker row to **Read & signed** (§4.10 step 4) | Checking the handbook step sets it; a linked sign-in's digital acknowledgment counts too (G-55, G-53) |
+| How do I give them back-office access? | Users -> Invite with the lowest role that does the job (§4.14–§4.16) | Same, then link the sign-in to the file (G-53, if Q-08-1 is yes) |
+| How do I record training? | Training log line first, then the checkmark (§4.11) | Activate requires a log line per required topic (G-55) |
+| Where is the visitor log? | Paper form 8.5 at the back door, kept 3 years (§4.19) | Visitor sign-in screen and badges in the app (G-57, if Q-08-3 is "build it") |
+| How do I let someone go? | Both halves the same day: Terminate, then Deactivate on Users; delete future shifts; close an open punch (§4.21–§4.22, form 8.3) | Terminate offers to deactivate the linked sign-in and clears future shifts (G-54) |
+| How do I rehire someone? | Print the status card, Rehire, uncheck every step, start Part 2 again (§4.24) | Rehire keeps the history and starts a fresh checklist (G-56) |
+| Who changed this person's job role? | Form 8.4 (the audit has no old/new values) | Audit shows old and new values (G-58) |
+
+**Future features (D41/D42):** when G-52…G-58 is built, the topics above and this table are updated in the same slice as SOP-08, and `concierge-kb.ts` `users` (L415–425) and `time-clock` (L248–258) are rewritten from SOP-08.
+
+**Running score:** topics with complete SOP source material add `users` (fix), `two-identity-systems`, `employee-onboarding`, `clock-pin`, `handbook-gate`, `employee-training-records`, `badges-and-visitors`, `employee-offboarding`, `employee-rehire`.
