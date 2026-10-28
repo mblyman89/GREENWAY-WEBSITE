@@ -65,6 +65,10 @@ import { heldReleaseMessage } from "@/lib/inventory/held-stock-core";
 import { formatDestructionPacific } from "@/lib/inventory/destruction-record-core";
 import { listEmployees } from "@/lib/staffing/store";
 import { CustomerReturnWizard } from "@/components/admin/inventory/CustomerReturnWizard";
+// Fix Phase 1.7a (G-43 req 7): optional photo / video evidence, private bucket.
+import { DestructionEvidenceUploader } from "@/components/admin/inventory/DestructionEvidenceUploader";
+import { listEvidenceForEvents } from "@/lib/inventory/destruction-evidence-store";
+import { evidenceSummary, EVIDENCE_PENDING_MIGRATION } from "@/lib/inventory/destruction-evidence-core";
 import { DispositionAdvisorPanel } from "@/components/admin/inventory/DispositionAdvisorPanel";
 import {
   createVendorReturnAction,
@@ -155,6 +159,8 @@ export default async function DispositionPage({
       listEmployees(),
     ]);
   const pacificToday = pacificInputs(new Date().toISOString()).date;
+  // Fix Phase 1.7a (G-43 req 7): the evidence already kept for each event.
+  const evidence = await listEvidenceForEvents(destructions.map((d) => d.id));
 
   const holdHours = dispositionSettings.holdHours;
   const destroyableLots = [...lots, ...quarantineLots].filter((l) => isDestroyableLotStatus(l.status));
@@ -548,6 +554,36 @@ export default async function DispositionPage({
                       {d.disposal_facility ? ` (${d.disposal_facility})` : ""}
                     </p>
                   ) : null}
+
+                  {/* Fix Phase 1.7a (G-43 req 6 per event + req 7): evidence and the one-event print. */}
+                  {d.status !== "cancelled" ? (
+                    <div className="mt-3 space-y-2" data-testid="destruction-evidence">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-white/55">
+                        <span>
+                          Photo / video evidence:{" "}
+                          {evidence.pending ? "needs migration 0312" : evidence.error ? "could not be read" : evidenceSummary(evidence.byEvent.get(d.id) ?? [])}
+                        </span>
+                        <Link
+                          href={`/admin/inventory/disposition/destruction-record?id=${d.id}`}
+                          className="font-semibold text-[var(--admin-accent)] underline"
+                          data-testid="destruction-record-link"
+                        >
+                          View / print this record
+                        </Link>
+                      </div>
+                      {evidence.pending ? (
+                        <p className="text-[11px] text-[var(--admin-gold)]/80">{EVIDENCE_PENDING_MIGRATION}</p>
+                      ) : (
+                        <DestructionEvidenceUploader eventId={d.id} />
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs">
+                      <Link href={`/admin/inventory/disposition/destruction-record?id=${d.id}`} className="text-[var(--admin-accent)] underline">
+                        View / print this record
+                      </Link>
+                    </p>
+                  )}
                 </li>
               );
             })}

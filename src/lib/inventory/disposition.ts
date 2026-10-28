@@ -1316,6 +1316,42 @@ export async function listCompletedDestructionsForMonth(
   }));
 }
 
+/**
+ * Fix Phase 1.7a (G-43 req 6 per event + req 7): one destruction event with
+ * its lot and the names of who scheduled, completed and cancelled it, for
+ * the per-event printable record (destruction-record page).
+ */
+export async function getDestructionRecordForPrint(id: string): Promise<
+  | (DestructionEventWithLot & { created_by_name: string | null; completed_by_name: string | null; cancelled_by_name: string | null })
+  | null
+> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("destruction_events")
+    .select("*, lot:inventory_lots(lot_code, product_name, unit)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  const r = normaliseLot([data])[0] as unknown as DestructionEvent & WithLot;
+  const ids = [r.created_by, r.completed_by, r.cancelled_by].filter((v): v is string => !!v);
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: people } = await admin.from("staff_profiles").select("id, full_name, email").in("id", [...new Set(ids)]);
+    for (const p of (people as { id: string; full_name: string | null; email: string | null }[] | null) ?? []) {
+      names.set(p.id, p.full_name || p.email || p.id);
+    }
+  }
+  const nameOf = (v: string | null | undefined) => (v ? (names.get(v) ?? null) : null);
+  return {
+    ...r,
+    hold_elapsed: !r.earliest_destroy_at || new Date(r.earliest_destroy_at).getTime() <= Date.now(),
+    created_by_name: nameOf(r.created_by),
+    completed_by_name: nameOf(r.completed_by),
+    cancelled_by_name: nameOf(r.cancelled_by),
+  };
+}
+
 export async function getDestructionEvent(id: string): Promise<DestructionEvent | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();

@@ -17,6 +17,9 @@ import {
 } from "@/lib/inventory/destruction-record-core";
 import { pacificParts } from "@/lib/reports/timezone";
 import { PrintButton } from "@/components/admin/orders/PrintButton";
+// Fix Phase 1.7a (G-43 req 7): the evidence count per event, and the one-event record.
+import { listEvidenceForEvents } from "@/lib/inventory/destruction-evidence-store";
+import { evidenceSummary } from "@/lib/inventory/destruction-evidence-core";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,7 @@ export default async function DestructionLogPage({ searchParams }: { searchParam
   const sp = await searchParams;
   const month = parseLogMonth(sp.month) ?? currentMonth();
   const rows = await listCompletedDestructionsForMonth(month);
+  const evidence = await listEvidenceForEvents(rows.map((r) => r.id));
 
   return (
     <div className="min-h-screen bg-white p-6 text-black print:p-0">
@@ -76,6 +80,7 @@ export default async function DestructionLogPage({ searchParams }: { searchParam
               <th className="p-1">Witness</th>
               <th className="p-1">Camera</th>
               <th className="p-1">Completed by</th>
+              <th className="p-1">Photo / video</th>
             </tr>
           </thead>
           <tbody>
@@ -104,6 +109,12 @@ export default async function DestructionLogPage({ searchParams }: { searchParam
                   <td className="p-1">{r.witness_name ?? r.witnessed_by ?? "not recorded"}</td>
                   <td className="p-1">{cameraCell(r)}</td>
                   <td className="p-1">{r.completed_by_name ?? ""}</td>
+                  <td className="p-1">
+                    {evidence.pending ? "migration 0312 pending" : evidence.error ? "not read" : evidenceSummary(evidence.byEvent.get(r.id) ?? [])}{" "}
+                    <Link href={`/admin/inventory/disposition/destruction-record?id=${r.id}`} className="underline print:hidden">
+                      record
+                    </Link>
+                  </td>
                 </tr>
               );
             })}
