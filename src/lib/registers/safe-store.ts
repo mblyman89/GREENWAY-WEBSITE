@@ -21,6 +21,7 @@ import {
   SAFE_TARGET_MINOR,
   validateSafeCount,
 } from "@/lib/registers/safe-core";
+import { checkOverShortReason, isMissingReasonColumn, isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 
 const MIGRATION_HINT =
   "The safe tables aren't set up yet — run migration 0135_safe_counts_swaps.sql in the Supabase SQL editor.";
@@ -41,6 +42,8 @@ export type SafeCountRow = {
   expected_minor: number;
   variance_minor: number;
   notes: string | null;
+  /** Fix Phase 2.3 (0315, G-03): why it was over or short. */
+  variance_reason?: string | null;
   counted_at: string;
 } & DenomCounts;
 
@@ -58,13 +61,23 @@ export type SafeSwapRow = {
 /**
  * Record a manager count of the safe. Totals/variance are derived by the
  * pure validator — never trusted from the caller.
+ *
+ * Fix Phase 2.3 (G-03, owner D7 / D16 / D21): a master till count more than
+ * $5.00 over or short needs a written reason, checked here against the
+ * variance this function works out (never a number the page sent). The
+ * caller must name who counted (D7: "Who"); the action checks the person is
+ * an active employee.
  */
 export async function recordSafeCount(opts: {
   window: SafeCountWindow | string;
   denoms: DenomCounts;
   countedBy: string | null;
   notes?: string | null;
-}): Promise<{ ok: true; varianceMinor: number } | { ok: false; error: string }> {
+  varianceReason?: string | null;
+}): Promise<
+  | { ok: true; varianceMinor: number; id: string | null; reason: string | null; reasonSaved: boolean; warning: boolean }
+  | { ok: false; error: string; varianceMinor?: number }
+> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
 
   const validated = validateSafeCount({
@@ -74,9 +87,15 @@ export async function recordSafeCount(opts: {
   });
   if (!validated.ok) return { ok: false, error: validated.error };
   const c = validated.count;
+  if (!opts.countedBy) {
+    return { ok: false, error: "Pick who counted the master till (Counted by). Nothing was saved." };
+  }
+  const reasonCheck = checkOverShortReason(c.varianceMinor, opts.varianceReason ?? "", "The master till");
+  if (!reasonCheck.ok) return { ok: false, error: reasonCheck.error, varianceMinor: c.varianceMinor };
+  const reason = reasonCheck.reason;
 
   const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("safe_counts").insert({
+  const row = {
     business_day: businessDayFor(new Date().toISOString()),
     count_window: c.window,
     counted_by: opts.countedBy,
@@ -85,11 +104,30 @@ export async function recordSafeCount(opts: {
     expected_minor: c.expectedMinor,
     variance_minor: c.varianceMinor,
     notes: c.notes ?? null,
-  });
+  };
+  let reasonSaved = true;
+  let { data, error } = await admin
+    .from("safe_counts")
+    .insert({ ...row, variance_reason: reason })
+    .select("id")
+    .single();
+  // Before migration 0315 there is no reason column: the count still lands
+  // (a count must never be lost) and the reason is kept in the audit entry.
+  if (error && isMissingReasonColumn(error)) {
+    reasonSaved = false;
+    ({ data, error } = await admin.from("safe_counts").insert(row).select("id").single());
+  }
   if (error) {
     return { ok: false, error: isMissingTable(error) ? MIGRATION_HINT : error.message };
   }
-  return { ok: true, varianceMinor: c.varianceMinor };
+  return {
+    ok: true,
+    varianceMinor: c.varianceMinor,
+    id: (data as { id: string } | null)?.id ?? null,
+    reason,
+    reasonSaved: reason ? reasonSaved : true,
+    warning: isOverShortWarning(c.varianceMinor),
+  };
 }
 
 /**

@@ -123,15 +123,15 @@ and set the standard for it when this slice began:
 | Task | Who | How the system checks |
 |---|---|---|
 | Physically count a delivery at the dock | **Any employee** trained on this SOP | Not in the app. The paper truck-day sheet (form 8.1) is the record of who counted. |
-| Open **Receiving**, import a manifest, save transport details, reject lines, **Finalize** | Owner, admin or manager login | Every Receiving action calls `requirePermission("inventory.manage")` (`src/app/admin/inventory/intake/actions.ts` L65, L80, L103, L153, L201 … L1292; page L99). `inventory.manage` = owner, admin, manager (`src/lib/auth/roles.ts` L106). |
+| Open **Receiving**, import a manifest, save transport details, reject lines, **Finalize** | Owner, admin or manager login | Every Receiving action calls `requirePermission("inventory.manage")` (`src/app/admin/inventory/intake/actions.ts` L65, L80, L103, L153, L201 … L1292; page L99). `inventory.manage` = owner, admin, manager (`src/lib/auth/roles.ts` L107). |
 | **Product Onboarding** (approve new products with a price) | Owner, admin, manager | `requirePermission("inventory.manage")` (`drafts/page.tsx` L252) |
 | Menu match review, lot labels, Batch Lookups | Owner, admin, manager | `inventory.manage` (`intake/[id]/match/page.tsx` L54; `lots/[id]/label/page.tsx` L33; `batch-lookups/page.tsx` L58) |
-| Accounts Payable link on the Accounting tab | Owner, admin, manager | `payables.manage` (`roles.ts` L99) |
+| Accounts Payable link on the Accounting tab | Owner, admin, manager | `payables.manage` (`roles.ts` L100) |
 | Review the books for a delivery (**Waiting to Post**) | Owner | `books.view`. Others see *"The owner reviews this in the books."* (`ManifestAccountingPanel.tsx`) |
 | File the monthly CCRS public records request on the **10th**; receive the files | **Admin** only (D32). The owner may step in if the admin is away (Q-04-9) | Outside the app (WSLCB portal) |
 | Drop the monthly zip; manage the competitor roster; read Statewide Benchmarks | Owner, admin, manager | `inventory.manage` (`discovery/ccrs/page.tsx` L59; `discovery/competitors/page.tsx` L66; `discovery/benchmarks/page.tsx` L131) |
-| Read **Reports → Benchmarks** | Owner, admin, manager, readonly | `reports.view` (`reports/benchmarks/page.tsx` L81; `roles.ts` L149) |
-| Turn Product Discovery (and so the CCRS benchmarks) on or off | Owner, admin | `settings.manage` (`discovery/actions.ts` L99; `roles.ts` L248) |
+| Read **Reports → Benchmarks** | Owner, admin, manager, readonly | `reports.view` (`reports/benchmarks/page.tsx` L81; `roles.ts` L150) |
+| Turn Product Discovery (and so the CCRS benchmarks) on or off | Owner, admin | `settings.manage` (`discovery/actions.ts` L99; `roles.ts` L249) |
 
 **Who processes a manifest? A manager (D30).** The owner ruled: *"only managers will process manifests."* Every Receiving screen action already needs `inventory.manage` (owner, admin, manager), and no receiver-level access will be built. The manager is responsible for the whole manifest, from reading it before the truck to pressing Finalize.
 
@@ -936,7 +936,7 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **Quarterly sample cap: 120 units per processor** | WAC 314-55-096(1)(f)(ii) | `intake-store.ts` L1070–1099 |
 | **Transport details checked against the driver and vehicle** | WAC 314-55-085 transport manifest requirements | `concierge-kb.ts` L142; §4.8 |
 | **Vendor inventory ids confirmed** | The weekly InventoryTransfer "from" id must match the vendor exactly | `ccrs-transfer-core.ts` L1–43 |
-| **Manager login for every Receiving action** | `inventory.manage` on every action; staff cannot finalize | `intake/actions.ts`; `roles.ts` L106 |
+| **Manager login for every Receiving action** | `inventory.manage` on every action; staff cannot finalize | `intake/actions.ts`; `roles.ts` L107 |
 | **Every manifest email has a row** (daily comparison) | Failed or empty emails are logged but not shown (F-04-4, G-17) | §4.3 |
 | **Duplicate dismissal is audited and is not a rejection** | One transaction and an audit row; nothing is filed | `intake/actions.ts` L546–583 |
 | **Paper record of the count** (form 8.1, 8.2, 8.3) | The app does not record who physically counted | §2 |
@@ -1139,7 +1139,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L81, L94; `docs/ccrs-rejection-and-returns.md` L13–21; `ManifestLotDisposition.tsx` L133–136; `docs/ROADMAP_BACKOFFICE_FIXES.md` L276–300; `docs/INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L157 |
-| 2 roles | `src/app/admin/inventory/intake/actions.ts` (all actions `inventory.manage`); `intake/page.tsx` L99; `src/lib/auth/roles.ts` L99, L106, L149, L248; `drafts/page.tsx` L252; `discovery/ccrs/page.tsx` L59; `discovery/competitors/page.tsx` L66; `discovery/benchmarks/page.tsx` L131; `reports/benchmarks/page.tsx` L81; `discovery/actions.ts` L99 |
+| 2 roles | `src/app/admin/inventory/intake/actions.ts` (all actions `inventory.manage`); `intake/page.tsx` L99; `src/lib/auth/roles.ts` L100, L107, L150, L249; `drafts/page.tsx` L252; `discovery/ccrs/page.tsx` L59; `discovery/competitors/page.tsx` L66; `discovery/benchmarks/page.tsx` L131; `reports/benchmarks/page.tsx` L81; `discovery/actions.ts` L99 |
 | 3 / 4.2 screens | `src/components/admin/admin-nav-data.ts` L71–81; `intake/page.tsx` L264–357, L430–681; `EmailIntakeTable.tsx` L133–294; `receiving-tabs-core.ts` |
 | 4.1 pipeline | `src/lib/inventory/manifest-pipeline-core.ts` L28–104, L190–206; `inbound-store.ts` L803–814; `intake-store.ts` L899; `guided-accept-core.ts` L65, L84 |
 | 4.3 / 4.4 email | `src/app/api/webhooks/inbound-email/route.ts` L1–81, L135–160, L314–320; `inbound-store.ts` L862–884; `intake/page.tsx` L164, L213–220 (commit 7cb4702c removed the panel) |

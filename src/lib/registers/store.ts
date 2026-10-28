@@ -11,6 +11,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { businessDayFor } from "@/lib/staffing/time";
 import { type DenomCounts, denomTotalMinor, expectedClose, overShort } from "@/lib/registers/cash";
 import { checkSecondCounter, closeErrorMessage } from "@/lib/registers/second-count-core";
+import { checkOverShortReason, isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 
 export type Register = {
   id: string;
@@ -50,6 +51,12 @@ export type DrawerSession = {
   second_count_minor?: number | null;
   /** Fix Phase 2.2 (0314): when the second count was recorded. */
   second_counted_at?: string | null;
+  /** Fix Phase 2.3 (0315, G-03): the over/short reason written at reconcile. */
+  over_short_reason?: string | null;
+  /** Fix Phase 2.3 (0315): the manager (employee record) who wrote it. */
+  over_short_reason_by?: string | null;
+  /** The manager (employee record) who reconciled. */
+  reconciled_by?: string | null;
   opened_at: string | null;
   closed_at: string | null;
   reconciled_at: string | null;
@@ -310,13 +317,30 @@ export async function closeDrawerBlind(opts: {
  * Compare-and-set (F-01-2): the update only lands while the drawer is still
  * "closed", so a double click or a second manager cannot overwrite the first
  * reconcile's figures (the books keep the first post).
+ *
+ * Fix Phase 2.3 (G-03, owner D7 / D21): the reason is checked HERE, against
+ * the over/short this function works out, so a page that showed an older
+ * figure cannot slip past the $5 rule. More than $5.00 over or short with no
+ * reason -> refused, nothing saved. $5.00 or less -> the reason is optional.
  */
 export async function reconcileDrawer(opts: {
   sessionId: string;
   cashSalesMinor: number;
   refundsPaidMinor: number;
   reconciledBy: string | null;
-}): Promise<{ ok: boolean; error?: string; overShortMinor?: number; expectedMinor?: number }> {
+  overShortReason?: string | null;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  overShortMinor?: number;
+  expectedMinor?: number;
+  /** The reason as saved (trimmed), or null. */
+  reason?: string | null;
+  /** False when migration 0315 is missing and the reason is only in the audit entry. */
+  reasonSaved?: boolean;
+  /** True when the over/short is more than $5.00 (a warning, D7). */
+  warning?: boolean;
+}> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
   const session = await getSession(opts.sessionId);
@@ -333,6 +357,9 @@ export async function reconcileDrawer(opts: {
     dropsMinor,
   });
   const os = overShort(session.closing_count_minor ?? 0, expected);
+  const reasonCheck = checkOverShortReason(os, opts.overShortReason ?? "", "This drawer");
+  if (!reasonCheck.ok) return { ok: false, error: reasonCheck.error, overShortMinor: os, expectedMinor: expected };
+  const reason = reasonCheck.reason;
 
   const base = {
     status: "reconciled",
@@ -341,22 +368,31 @@ export async function reconcileDrawer(opts: {
     reconciled_at: new Date().toISOString(),
     reconciled_by: opts.reconciledBy,
   };
-  const write = (withFigure: boolean) =>
+  const figureCols = { cash_sales_minor: opts.cashSalesMinor, refunds_paid_minor: opts.refundsPaidMinor };
+  const reasonCols = { over_short_reason: reason, over_short_reason_by: reason ? opts.reconciledBy : null };
+  const write = (withFigure: boolean, withReason: boolean) =>
     admin
       .from("drawer_sessions")
-      .update(withFigure ? { ...base, cash_sales_minor: opts.cashSalesMinor, refunds_paid_minor: opts.refundsPaidMinor } : base)
+      .update({ ...base, ...(withFigure ? figureCols : {}), ...(withReason ? reasonCols : {}) })
       .eq("id", opts.sessionId)
       .eq("status", "closed")
       .select("id");
-  let { data, error } = await write(true);
-  // Before migration 0313 the two figure columns do not exist yet; the
-  // reconcile itself still lands (the figure is in the audit entry).
-  if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await write(false));
+  const missingCol = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
+  let reasonSaved = true;
+  let { data, error } = await write(true, true);
+  // Before migration 0315 the reason columns do not exist yet: the reconcile
+  // still lands and the reason is kept in the audit entry (the caller says so
+  // on the banner). Before 0313 the two figure columns are missing as well.
+  if (missingCol(error)) {
+    reasonSaved = false;
+    ({ data, error } = await write(true, false));
+    if (missingCol(error)) ({ data, error } = await write(false, false));
+  }
   if (error) return { ok: false, error: error.message };
   if (!data || (data as unknown[]).length === 0) {
     return { ok: false, error: "This drawer was reconciled by someone else a moment ago. Nothing was changed. Reload the page." };
   }
-  return { ok: true, overShortMinor: os, expectedMinor: expected };
+  return { ok: true, overShortMinor: os, expectedMinor: expected, reason, reasonSaved: reason ? reasonSaved : true, warning: isOverShortWarning(os) };
 }
 
 /**

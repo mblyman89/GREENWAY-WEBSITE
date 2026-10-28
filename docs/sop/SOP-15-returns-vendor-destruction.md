@@ -105,21 +105,21 @@ Appendix A: Source map · Appendix B: Not built yet · Appendix C: Open question
 
 | Action | Who the app allows | Where the rule lives |
 |---|---|---|
-| See **Returns & Destruction** in the Inventory menu, open the page, log a customer return in the wizard, log a vendor return, update a manifest, schedule, complete or cancel a destruction, download the Sale correction CSV, ask the advisor | **Owner, admin, manager** (`inventory.manage`) | `roles.ts` L106; nav `admin-nav-data.ts` L90; page gate `disposition/page.tsx` L134; every action in `disposition/actions.ts` (L68, L117, L147, L173, L197, L246, L316); CSV route `sale-correction-export/route.ts` L46 |
+| See **Returns & Destruction** in the Inventory menu, open the page, log a customer return in the wizard, log a vendor return, update a manifest, schedule, complete or cancel a destruction, download the Sale correction CSV, ask the advisor | **Owner, admin, manager** (`inventory.manage`) | `roles.ts` L107; nav `admin-nav-data.ts` L90; page gate `disposition/page.tsx` L134; every action in `disposition/actions.ts` (L68, L117, L147, L173, L197, L246, L316); CSV route `sale-correction-export/route.ts` L46 |
 | Change the **Destruction hold policy** and the (legacy) **Sample-pricing rules** | **Owner, admin** (`settings.manage`) | `disposition/page.tsx` L135, L824–827; `actions.ts` L263–266, L283–286 |
 | Open the **Returns desk** and process a counter return there | Owner, admin, manager (`inventory.manage`) | `registers/returns/page.tsx` L29; actions L38, L69 |
-| Start **Return an item** at the register | Any signed-in budtender (`orders.manage` includes staff, `roles.ts` L90) | SOP-01 §4.23 |
+| Start **Return an item** at the register | Any signed-in budtender (`orders.manage` includes staff, `roles.ts` L91) | SOP-01 §4.23 |
 | Approve a register return (PIN) | **Manager or lead** | `/api/pos/returns/route.ts` L49 (`APPROVER_ROLES`) |
-| Read-only, content-editor and budtender logins | Cannot open Returns & Destruction or the Returns desk | `roles.ts` L106 (not listed) |
+| Read-only, content-editor and budtender logins | Cannot open Returns & Destruction or the Returns desk | `roles.ts` L107 (not listed) |
 
 A login without the permission is sent back to the back-office home with a "denied" notice.
 
 **Store rules on top of the app.**
 1. **Customer returns go through the register or the Returns desk only** (§4.4). The back-office **Customer return** wizard is **not used**: the owner decided to remove it (D66: *"Q4- remove it."*; G-45 **APPROVED**).
 2. **A manager may schedule a destruction. Completing one needs two people**: the person who grinds and mixes, and a **witness, who may be anyone** on staff (D64: *"anyone may witness the destruction."*), never the person doing it. The destruction is done **in view of a security camera** (D64: *"It has to be done on camera as well."*; WAC 314-55-083(3)(a)). Since Phase 1.6a (G-43) the app enforces both: **Complete destruction** requires **Witness (from the roster)**, anyone on staff except the person signed in, and the **Camera** with its start and end time in Pacific (`completeDestructionAction`, `actions.ts` L342, checked by `evaluateDestructionRecord` at L357; a refusal is audited as `destruction.complete_refused`, L375). F-15-4 and F-15-21 FIXED. Form 8.3 carries both signatures.
-3. **Only the owner cancels a scheduled destruction** (§4.19). Since Phase 1.3 the app enforces it (`inventory.destruction.cancel`, owner only, `roles.ts` L161), asks a written reason, and puts the lot back to the status it had before scheduling (F-05a-19, F-15-9 FIXED).
+3. **Only the owner cancels a scheduled destruction** (§4.19). Since Phase 1.3 the app enforces it (`inventory.destruction.cancel`, owner only, `roles.ts` L162), asks a written reason, and puts the lot back to the status it had before scheduling (F-05a-19, F-15-9 FIXED).
 4. **Recalled product is handled by the admin, the recall coordinator (D37), with the owner, and goes back to the vendor as a vendor return (D65).** Nobody schedules a destruction for a recalled lot (§4.21).
-5. **A vendor return is logged when the RMA is in hand; the product leaves only with the LCB's manifest PDF**, and **Record departure** is pressed at that moment (§4.11–§4.12, D63). **Only the owner cancels a vendor return** (`inventory.vendor_return.cancel`, `roles.ts` L166).
+5. **A vendor return is logged when the RMA is in hand; the product leaves only with the LCB's manifest PDF**, and **Record departure** is pressed at that moment (§4.11–§4.12, D63). **Only the owner cancels a vendor return** (`inventory.vendor_return.cancel`, `roles.ts` L167).
 6. **The owner alone approves anything in the books** (books-23: *"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*). Refunds and write-offs are reviewed by the owner monthly (form 8.6).
 
 ## 3. Before you start
@@ -143,7 +143,7 @@ A login without the permission is sent back to the back-office home with a "deni
 | Screen | Where | What it is for |
 |---|---|---|
 | **Returns & Destruction** | Inventory menu → **Returns & Destruction** (`/admin/inventory/disposition`) | The command center: stat cards, the Sale correction banner, the **Customer return** wizard, **Log a vendor return**, **Schedule a destruction**, **Destruction events**, **Vendor returns & manifests**, **Recent customer returns**, the AI advisor, **Destruction hold policy**, **Sample-pricing rules** |
-| **Returns desk** | Register Activity → **Returns desk** (`/admin/registers/returns`; button on `registers/page.tsx` L117–119) | Receipt-first counter returns in the back office, with the store policy checks and the refund worked out for you |
+| **Returns desk** | Register Activity → **Returns desk** (`/admin/registers/returns`; button on `registers/page.tsx` L122–124) | Receipt-first counter returns in the back office, with the store policy checks and the refund worked out for you |
 | **Return an item** | Register → **MORE ▾ → Return an item** | The same receipt-first return on the register, approved by a manager or lead PIN (SOP-01 §4.23) |
 
 **The top of the Returns & Destruction page** shows five stat cards (`disposition/page.tsx` L211–225): **Customer returns (30d)**, **Vendor returns (30d)**, **CCRS corrections pending**, **Destructions pending**, **Destroyed (30d)**. When corrections are pending, a gold banner appears with **Download Sale correction CSV** (L151–166; §4.8). Below it, the help panel **How disposition works (the compliant way)** gives five steps (L168–178). Two of them need a note:
@@ -307,7 +307,7 @@ Each vendor return shows in **Vendor returns & manifests** with a status badge (
 
 Each step stamps who and when on the return itself (`*_by` / `*_at`, migration 0309) and in the Security Log (`vendor_return.manifest`, `vendor_return.depart`). All times are shown and entered in Pacific time.
 
-**Cancelling (owner only).** If the processor withdraws or the return will not happen, the owner writes a **Cancel reason (owner)** and presses **Cancel return (release units)** (`inventory.vendor_return.cancel`, `roles.ts` L166). The reserved units go back to sale (*"Vendor return cancelled."*), and the cancel is in the Security Log (`vendor_return.cancel`; a refused try is logged as `vendor_return.cancel_refused`). A departed return cannot be cancelled.
+**Cancelling (owner only).** If the processor withdraws or the return will not happen, the owner writes a **Cancel reason (owner)** and presses **Cancel return (release units)** (`inventory.vendor_return.cancel`, `roles.ts` L167). The reserved units go back to sale (*"Vendor return cancelled."*), and the cancel is in the Security Log (`vendor_return.cancel`; a refused try is logged as `vendor_return.cancel_refused`). A departed return cannot be cancelled.
 
 **Returns logged before Phase 1.5** already took the units off on-hand at logging; their row says *"Logged before Phase 1.5: on-hand already came off at logging."* Their steps can still be recorded (departure then posts nothing more), but they cannot be cancelled here: the owner corrects one with a manual adjustment (SOP-05a).
 
@@ -871,14 +871,14 @@ DESTRUCTION — CARD
 
 | Topic | Source (verified at `main@b8101abb`) |
 |---|---|
-| Roles | `src/lib/auth/roles.ts` L90, L106, L248; nav `src/components/admin/admin-nav-data.ts` L90 |
+| Roles | `src/lib/auth/roles.ts` L91, L107, L249; nav `src/components/admin/admin-nav-data.ts` L90 |
 | Page | `src/app/admin/inventory/disposition/page.tsx` L86–99 (messages), L134–151 (gates; Active, Quarantine and Recalled lots), L195–209 (error and ok boxes), L211–225 (stat cards), L227–242 (correction banner), L244–254 (help), L257–264 (wizard), L268–343 (vendor return), L345–393 (schedule), L397–592 (events, evidence), L595–760 (vendor returns and manifests), L763–792 (recent returns), L795 (advisor), L798–822 (hold) |
 | Actions | `src/app/admin/inventory/disposition/actions.ts` L56–59, L68–105, L117–140, L147–162, L173–188, L198–243, L247–254, L264–275, L284–302, L317–347 |
 | Rules | `src/lib/inventory/disposition-core.ts` L32–34, L102–150, L157–174, L180–191, L226–271, L274–298, L304–349 |
 | Reasons | `src/lib/inventory/disposition-reasons.ts` L9–10, L16–54 |
 | Store | `src/lib/inventory/disposition.ts` L236–285, L292–336, L363, L517, L540–560, L613–620, L703–773, L780, L812–879, L882–907, L942–1050, L1060–1174, L1176–1192, L1202 |
 | Wizard | `src/components/admin/inventory/CustomerReturnWizard.tsx` L24–31, L48, L60, L148–158, L173–174, L185–188, L203 |
-| Returns desk | `src/app/admin/registers/returns/page.tsx` L29, L57–72; `registers/returns/actions.ts` L38, L69, L117; `src/components/admin/registers/CounterReturnDesk.tsx` L88, L114, L144, L344, L356–394; `src/app/admin/registers/page.tsx` L117–119 |
+| Returns desk | `src/app/admin/registers/returns/page.tsx` L29, L57–72; `registers/returns/actions.ts` L38, L69, L117; `src/components/admin/registers/CounterReturnDesk.tsx` L88, L114, L144, L344, L356–394; `src/app/admin/registers/page.tsx` L122–124 |
 | Register | `src/app/(site)/pos/RegisterShell.tsx` L3793, L4210; `src/app/api/pos/returns/route.ts` L50 |
 | Return policy | `src/lib/pos/returns-core.ts` L49, L68–71, L146–196, L231–250; `src/lib/pos/returns-store.ts` L252–360 |
 | Register lot draw | `src/lib/inventory/sale-lot-read.ts` L50–53 |

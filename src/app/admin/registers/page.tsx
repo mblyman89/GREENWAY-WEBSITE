@@ -15,6 +15,7 @@ import { loadDrawerFigure, drawersForDay, type LoadedDrawerFigure } from "@/lib/
 import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-core";
 import { businessDayFor } from "@/lib/staffing/time";
 import { compareCounts, secondCountSentence } from "@/lib/registers/second-count-core";
+import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +32,14 @@ export default async function RegisterActivityPage({
     assigned?: string;
     closed?: string;
     count_diff?: string;
+    warn?: string;
+    reason_unsaved?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
   const canManage = can(session.profile.role, "inventory.manage");
+  // Fix Phase 2.3 (G-03, owner D7): the over/short warnings screen is admin only.
+  const canSeeWarnings = can(session.profile.role, "registers.warnings");
   const sp = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
@@ -126,6 +131,11 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/history`} variant="neutral" size="sm">
               Cash drawer reports
             </Button>
+            {canSeeWarnings ? (
+              <Button href={`${BASE}/over-short`} variant="neutral" size="sm">
+                Over / short warnings
+              </Button>
+            ) : null}
             <Button href={`${BASE}/eod`} variant="neutral" size="sm">
               End-of-day report
             </Button>
@@ -454,6 +464,8 @@ function Flash({
     assigned?: string;
     closed?: string;
     count_diff?: string;
+    warn?: string;
+    reason_unsaved?: string;
   };
 }) {
   if (sp.error) {
@@ -467,6 +479,17 @@ function Flash({
     return (
       <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
         Drawer reconciled · {overShortLabel(Number(sp.reconciled) || 0)}
+        {/* Fix Phase 2.3 (G-03, owner D7): more than $5.00 is a warning only. */}
+        {sp.warn ? (
+          <span className="mt-1 block text-xs text-[var(--admin-gold)]">
+            Warning: more than $5.00 over or short. The reason is saved and the owner sees it on Over / short warnings.
+          </span>
+        ) : null}
+        {sp.reason_unsaved ? (
+          <span className="mt-1 block text-xs text-[var(--admin-gold)]">
+            The reason is in the Security Log only: migration 0315 is not applied yet, so it could not be saved on the drawer.
+          </span>
+        ) : null}
         {/* What the LEDGER did. Without this the manager sees a friendly
             green banner whether the entry posted or was silently refused,
             which is the D-71 failure shape exactly. */}
@@ -677,14 +700,41 @@ function ReconcileCard({
               })}
             </div>
           )}
-          <form action={reconcileDrawerAction} className="flex flex-wrap items-center gap-2">
+          <form action={reconcileDrawerAction} className="space-y-2">
             <input type="hidden" name="session_id" value={item.sessionId} />
-            <Button type="submit" variant="confirm" size="sm" disabled={!ready}>
-              Reconcile
-            </Button>
-            <span className="text-xs text-[var(--admin-text-faint)]">
-              Signed as you. The server re-checks this figure when you click.
-            </span>
+            {/* Fix Phase 2.3 (G-03, owner D7 / D21): a reason is required only
+                when the drawer is more than $5.00 over or short. The server
+                checks again against its own figure when you click. */}
+            {(() => {
+              const warn = isOverShortWarning(f.overShortMinor);
+              return (
+                <label className="block text-xs text-[var(--admin-text-muted)]">
+                  {warn ? (
+                    <span className="mb-1 block font-semibold text-[var(--admin-gold)]">
+                      Warning: more than $5.00 {(f.overShortMinor ?? 0) > 0 ? "over" : "short"}. Reason (required)
+                    </span>
+                  ) : (
+                    <span className="mb-1 block">Reason for over / short (optional at $5.00 or less)</span>
+                  )}
+                  <textarea
+                    name="over_short_reason"
+                    required={warn}
+                    maxLength={OVER_SHORT_REASON_MAX_LEN}
+                    rows={2}
+                    placeholder={warn ? "Why is it over or short? Ask the cashier and the second counter." : "Optional"}
+                    className="w-full rounded border border-[var(--admin-border)] bg-transparent px-2 py-1 text-[var(--admin-text)]"
+                  />
+                </label>
+              );
+            })()}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit" variant="confirm" size="sm" disabled={!ready}>
+                Reconcile
+              </Button>
+              <span className="text-xs text-[var(--admin-text-faint)]">
+                Signed as you. The server re-checks this figure when you click.
+              </span>
+            </div>
           </form>
         </>
       )}

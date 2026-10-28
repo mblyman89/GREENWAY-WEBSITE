@@ -16,7 +16,7 @@
 > **How to use this document.** Part 1 (§4.1–§4.4) explains the two identity systems: the **employee file** (a person who works here, with a time-clock PIN) and the **user** (a back-office sign-in). Part 2 (§4.5–§4.14) is **onboarding**, in the legal order. Part 3 (§4.15–§4.19) is **system management**: PINs, roles, the handbook gate, changes while employed. Part 4 (§4.20–§4.24) is **offboarding** and rehire. Section 8 has the paper forms and Section 9 the quick cards.
 
 > **The one thing to know before anything else.** Item 1 below is now fixed; items 2 and 3 still do **not** work the way the screens suggest, and each has an interim rule in this SOP:
-> 1. **Fixed in Phase 0.3 (G-52, G-59):** new people now start as a **Candidate** with **no clock PIN** (`staffing/actions.ts` L119–143; Payroll Setup `payroll-onboarding-store.ts` L1132–1144), so they cannot clock in or unlock a register. The PIN can only be set once the person is **Active** (`staffing/actions.ts` L170–178). Only the **owner or an admin** can press Start onboarding, Activate, Terminate or Rehire (`roles.ts` L265, `[id]/actions.ts` L192). Activate unlocks only when the required steps are done.
+> 1. **Fixed in Phase 0.3 (G-52, G-59):** new people now start as a **Candidate** with **no clock PIN** (`staffing/actions.ts` L119–143; Payroll Setup `payroll-onboarding-store.ts` L1132–1144), so they cannot clock in or unlock a register. The PIN can only be set once the person is **Active** (`staffing/actions.ts` L170–178). Only the **owner or an admin** can press Start onboarding, Activate, Terminate or Rehire (`roles.ts` L266, `[id]/actions.ts` L192). Activate unlocks only when the required steps are done.
 > 2. **The employee file and the user are not connected by the app** (F-08-2). Terminating an employee does **not** deactivate their sign-in, and deactivating a user does **not** clear their PIN. **Offboarding is always both halves** (§4.21, form 8.3).
 > 3. **Checking "Employee read and signed the handbook" does not unlock the register.** The register looks at the **Document tracker** row **Employee handbook acknowledgment = Read & signed** (`handbook-ack-store.ts` L107–118), not at the checklist box (F-08-4). Set both (§4.10).
 
@@ -102,7 +102,7 @@ The employment-law references in the app (WA Fair Chance Act RCW 49.94.010, USCI
 
 **Rules for this SOP:**
 
-1. **Onboarding is prepared by the owner, an admin or a manager, but only the owner or an admin presses Activate, Terminate or Rehire** (D74: *"I would like to modify this to be owner admin only. No manager access."*). The person who presses the button signs form 8.1 or 8.3. The app enforces this (permission `staffing.lifecycle` = owner, admin; `roles.ts` L265).
+1. **Onboarding is prepared by the owner, an admin or a manager, but only the owner or an admin presses Activate, Terminate or Rehire** (D74: *"I would like to modify this to be owner admin only. No manager access."*). The person who presses the button signs form 8.1 or 8.3. The app enforces this (permission `staffing.lifecycle` = owner, admin; `roles.ts` L266).
 2. **Only the owner or an admin issues or removes a back-office sign-in** (Users). A manager who must send someone home (for example a dismissal on the spot) **removes nothing**: they call the owner or an admin, who terminates and deactivates the same day (§4.21).
 3. **Nobody changes their own access.** The app enforces this: you cannot change your own role or deactivate yourself (`user-guards-core.ts` L65–67, L96–98).
 4. **Nobody grants a role above their own.** The app enforces this for invites and changes (L43–50), and the last active owner cannot be demoted or deactivated (L73–80, L108–110).
@@ -429,7 +429,7 @@ The app never deletes an employee. Terminated people move to **Former employees*
 | Control | Why | Source |
 |---|---|---|
 | No PIN until Active | A PIN is the key to the clock and the register; new hires start as Candidate and the PIN is locked until Activate (Phase 0.3, G-52) | `staffing/actions.ts` L119–178; `candidate-start-core.ts` |
-| Only owner or admin activates, terminates or rehires | Owner decision D74 | `roles.ts` L265; `[id]/actions.ts` L192 |
+| Only owner or admin activates, terminates or rehires | Owner decision D74 | `roles.ts` L266; `[id]/actions.ts` L192 |
 | 21+ check by the manager, with the ID in hand | No employees under 21; $1,000 per violation per the app's step text | RCW 69.50.357(2); `employee-lifecycle-core.ts` L91 |
 | Offer before background check | WA Fair Chance Act, as stated in the app | `employee-lifecycle-core.ts` L74–87 |
 | Training logged with date and trainer | All employees trained on rules and under-21 ID; training records kept five years | RCW 69.50.357(3); WAC 314-55-087(1)(e) |

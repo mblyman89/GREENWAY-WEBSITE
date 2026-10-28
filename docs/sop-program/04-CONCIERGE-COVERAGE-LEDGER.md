@@ -128,6 +128,17 @@ Concierge code is **unchanged** (record-only). What SOP-01 now provides as sourc
 | The iPad will not close and asks for a second employee but shows no second step | That iPad runs an older app build; close from the browser register or the back office and tell the owner (§4.27, "The iPad app must be updated") |
 | Closing the Manager Till from the back office | Pick **Counted by**, then the second person fills **Second count (required)** and their PIN (§4.27 "Closing from the back office") |
 
+**Phase 2.3 (G-03 over/short warnings) answers, managers (reconcile, safe) and owner/admin (warnings screen):**
+
+| Question | Answer (built, Phase 2.3) |
+|---|---|
+| When do I have to write a reason? | Only when the drawer or the master till is **more than $5.00** over or short (owner D7, D21); at $5.00 or less it is optional (SOP-01 §4.30 step 6, SOP-02 §4.8) |
+| Reconcile says the drawer is short by more than $5.00 and nothing was saved | Write why it is over or short in the reason box and tap Reconcile again; the server checks its own figure, so the box is needed even if the page looked fine (SOP-01 §4.30 step 6) |
+| Does a warning stop anything? | No. Warnings only: the drawer reconciles and the count saves; the owner sees it on the warnings screen |
+| Where are the warnings? | **Employee → Over / Short Warnings** (owner and admin only), or the **Over / short warnings** button on Register Activity: who counted, who signed off, when, how much, the reason, with a link to the record (SOP-01 §4.30, SOP-02 §2) |
+| The master till count says pick who counted | **Counted by** is required now; pick the employee who actually counted (SOP-02 §4.5 step 10) |
+| The warnings screen says the reason column is missing | Migration 0315 is not applied yet; reasons are still required and kept in the audit log. Tell the owner |
+
 **Running score:** topics with complete SOP source material: `pos`, `registers`, plus 3 proposed new topics. The concierge itself is still at the baseline until the integration phase.
 
 ### SOP-02 Master Till / Store Safe (`docs/sop/SOP-02-master-till-safe.md`, verified at `0055f06c`)
@@ -142,7 +153,7 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 | `register-messages` (addition) | §5.1 Store safe page messages, §5.2 swap messages | — → ✅ |
 | Petty cash / supply runs | §4.13, form §8.4 (no screen today, F-02-11 / G-11; screen approved D17) | 🔴 → 🟡 → ✅ once G-11 is built |
 
-**Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L29). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
+**Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L31). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
 
 **Must ship with caveats** until the findings are fixed:
 - ~~F-02-2~~ withdrawn in SOP-03 (D19): the Manager Till float **is** $300.00, and the system agrees. The concierge should say "sales tills $167.50, Manager Till $300.00".
@@ -421,7 +432,7 @@ The concierge code is **unchanged** (record-only). Today it has two thin entries
 | *new* `employee-offboarding` (both halves, dismissal order, offboarding checklist, final pay hand-off) | §4.20–§4.23, form 8.3, card 9.2 | 0 -> 9 |
 | *new* `employee-rehire` | §4.24, form 8.1 (new sign-off) | 0 -> 9 |
 
-**Role filter needed:** the employee files and Terminate are **owner, admin, manager** (`staffing.manage`, `roles.ts` L260); Users is **owner, admin** (`users.manage`, L221). A budtender who asks how to add someone or remove access gets "ask the manager / owner", never the steps. Anyone may be told what they must bring on day one (form 8.1 list) and why the register says the handbook must be signed. Document numbers (SSN, I-9 document numbers) are **never** repeated by the concierge.
+**Role filter needed:** the employee files and Terminate are **owner, admin, manager** (`staffing.manage`, `roles.ts` L261); Users is **owner, admin** (`users.manage`, L221). A budtender who asks how to add someone or remove access gets "ask the manager / owner", never the steps. Anyone may be told what they must bring on day one (form 8.1 list) and why the register says the handbook must be signed. Document numbers (SSN, I-9 document numbers) are **never** repeated by the concierge.
 
 **Must ship with caveats** until the findings are fixed:
 - F-08-1 (**S1**): new people are created **Active**. Never say "the app won't let them work until the checklist is done". Answer: **no PIN until form 8.1 is signed**, and the PIN is the only thing that lets them clock in or open a register.
