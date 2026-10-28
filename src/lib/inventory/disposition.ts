@@ -29,7 +29,7 @@ import {
   buildDestructionAdjustmentNote,
   type CustomerReturnDisposition,
 } from "@/lib/inventory/disposition-core";
-import { pacificDayKey } from "@/lib/reports/timezone";
+import { pacificDayKey, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-core";
 import {
@@ -59,6 +59,10 @@ import {
   RELEASE_LOT_HOLD_RPC,
 } from "@/lib/inventory/held-stock-core";
 import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import {
+  evaluateScheduleQuantity,
+  holdNotElapsedMessage,
+} from "@/lib/inventory/destruction-record-core";
 // Fix Phase 1.5 (G-42): the state's vendor-return method (D63, D65).
 import {
   evaluateVendorReturnLog,
@@ -199,6 +203,14 @@ export type DestructionEvent = {
   cancelled_at?: string | null;
   /** Fix Phase 1.4 (G-44, migration 0308): held units this event destroys. */
   held_qty_reserved?: number | null;
+  // Fix Phase 1.6a (G-43) record columns (migration 0310; undefined pre-migration).
+  witness_employee_id?: string | null;
+  witness_name?: string | null;
+  camera_name?: string | null;
+  camera_start_at?: string | null;
+  camera_end_at?: string | null;
+  other_method_approval_ref?: string | null;
+  other_method_approval_date?: string | null;
 };
 
 type WithLot = { lot_code: string | null; product_name: string | null; unit: string | null };
@@ -1250,6 +1262,42 @@ export async function listDestructionEvents(limit = 100): Promise<DestructionEve
   }));
 }
 
+/**
+ * Fix Phase 1.6a (G-43 req 6): the completed destructions of one Pacific
+ * month, for the printable Destruction log (form 8.3 in the app, kept five
+ * years, WAC 314-55-097). month = "YYYY-MM".
+ */
+export async function listCompletedDestructionsForMonth(
+  month: string,
+): Promise<(DestructionEventWithLot & { completed_by_name: string | null })[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const [y, m] = month.split("-").map(Number);
+  const startYmd = `${y}-${String(m).padStart(2, "0")}-01`;
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("destruction_events")
+    .select("*, lot:inventory_lots(lot_code, product_name, unit)")
+    .eq("status", "completed")
+    .gte("completed_at", pacificWallTimeToUtcISO(startYmd, "start"))
+    .lt("completed_at", pacificWallTimeToUtcISO(next, "start"))
+    .order("completed_at", { ascending: true });
+  const rows = normaliseLot(data) as (DestructionEvent & WithLot)[];
+  const ids = [...new Set(rows.map((r) => r.completed_by).filter((v): v is string => !!v))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: people } = await admin.from("staff_profiles").select("id, full_name, email").in("id", ids);
+    for (const p of (people as { id: string; full_name: string | null; email: string | null }[] | null) ?? []) {
+      names.set(p.id, p.full_name || p.email || p.id);
+    }
+  }
+  return rows.map((r) => ({
+    ...r,
+    hold_elapsed: true,
+    completed_by_name: r.completed_by ? (names.get(r.completed_by) ?? null) : null,
+  }));
+}
+
 export async function getDestructionEvent(id: string): Promise<DestructionEvent | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
@@ -1352,16 +1400,34 @@ export async function scheduleDestruction(
 
   let lotStatus: string | null = null;
   let openEventPrevious: string | null = null;
+  let qtyCheck: ReturnType<typeof evaluateScheduleQuantity> = { ok: true };
   if (touchesLot) {
-    const { data: lotRow } = await admin.from("inventory_lots").select("status").eq("id", input.lotId).maybeSingle();
-    lotStatus = (lotRow as { status: string } | null)?.status ?? null;
-    const earlier = (await openEventsForLot(admin, input.lotId, null)).find(
-      (e) => eventTouchedLot(e) && e.previous_lot_status != null,
-    );
+    let lotRead = await admin
+      .from("inventory_lots")
+      .select("status, on_hand_qty, held_qty")
+      .eq("id", input.lotId)
+      .maybeSingle();
+    if (lotRead.error && isMissingHeldQtyColumnError(lotRead.error)) {
+      // Before migration 0308 nothing is held: on hand is the free figure.
+      lotRead = await admin.from("inventory_lots").select("status, on_hand_qty").eq("id", input.lotId).maybeSingle();
+    }
+    const lotRow = lotRead.data as { status: string; on_hand_qty: number; held_qty?: number } | null;
+    lotStatus = lotRow?.status ?? null;
+    const open = await openEventsForLot(admin, input.lotId, null);
+    const earlier = open.find((e) => eventTouchedLot(e) && e.previous_lot_status != null);
     openEventPrevious = earlier?.previous_lot_status ?? null;
+    // Fix Phase 1.6a (G-43 req 4, F-15-12): refuse more than the lot has free
+    // (on hand less held units less what open destructions already claim).
+    qtyCheck = evaluateScheduleQuantity({
+      quantity: input.quantity,
+      onHand: lotRow?.on_hand_qty ?? 0,
+      held: lotRow?.held_qty ?? 0,
+      openEvents: open,
+    });
   }
   const decision = evaluateDestructionSchedule({ reason: input.reason, touchesLot, lotStatus, openEventPrevious });
   if (!decision.ok) return { ok: false, error: decision.message };
+  if (!qtyCheck.ok) return { ok: false, error: qtyCheck.message };
 
   const settings = await getDispositionSettings();
   const now = new Date();
@@ -1437,6 +1503,20 @@ export async function completeDestruction(
     lcbCoordinated?: boolean;
     lcbOfficer?: string | null;
     lcbContactDate?: string | null;
+    /**
+     * Fix Phase 1.6a (G-43; D64): the hardened record, already checked by
+     * evaluateDestructionRecord in completeDestructionAction. Kept in the
+     * migration 0310 columns; before 0310 the witness line carries them.
+     */
+    record?: {
+      witnessEmployeeId: string;
+      witnessName: string;
+      cameraName: string;
+      cameraStartAt: string;
+      cameraEndAt: string;
+      otherApprovalRef: string | null;
+      otherApprovalDate: string | null;
+    };
   },
   actorId: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -1498,19 +1578,36 @@ export async function completeDestruction(
     adjustment_id: posted.adjustmentId,
   };
   // Waste-record columns exist after migration 0115; degrade gracefully before.
-  const { error } = await admin
+  const wastePatch = {
+    ...basePatch,
+    rendering_method: input.renderingMethod ?? null,
+    mix_material: input.mixMaterial ?? null,
+    final_destination: input.finalDestination ?? null,
+    disposal_facility: input.disposalFacility ?? null,
+    lcb_coordinated: input.lcbCoordinated === true,
+    lcb_officer: input.lcbOfficer ?? null,
+    lcb_contact_date: input.lcbContactDate ?? null,
+  };
+  // Fix Phase 1.6a (G-43): the record columns (migration 0310). Before 0310
+  // the witness line (witnessed_by) still names the witness and the camera.
+  const recordPatch = input.record
+    ? {
+        witness_employee_id: input.record.witnessEmployeeId,
+        witness_name: input.record.witnessName,
+        camera_name: input.record.cameraName,
+        camera_start_at: input.record.cameraStartAt,
+        camera_end_at: input.record.cameraEndAt,
+        other_method_approval_ref: input.record.otherApprovalRef,
+        other_method_approval_date: input.record.otherApprovalDate,
+      }
+    : {};
+  let { error } = await admin
     .from("destruction_events")
-    .update({
-      ...basePatch,
-      rendering_method: input.renderingMethod ?? null,
-      mix_material: input.mixMaterial ?? null,
-      final_destination: input.finalDestination ?? null,
-      disposal_facility: input.disposalFacility ?? null,
-      lcb_coordinated: input.lcbCoordinated === true,
-      lcb_officer: input.lcbOfficer ?? null,
-      lcb_contact_date: input.lcbContactDate ?? null,
-    })
+    .update({ ...wastePatch, ...recordPatch })
     .eq("id", input.id);
+  if (error && input.record && isMissingSchemaError(error.message)) {
+    ({ error } = await admin.from("destruction_events").update(wastePatch).eq("id", input.id));
+  }
   if (error) {
     if (isMissingSchemaError(error.message)) {
       const { error: legacyErr } = await admin

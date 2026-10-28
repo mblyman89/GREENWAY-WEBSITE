@@ -25,6 +25,8 @@
  * Money is MINOR UNITS (cents) everywhere.
  */
 
+import { holdNotElapsedMessage } from "@/lib/inventory/destruction-record-core";
+
 // ---------------------------------------------------------------------------
 // Hold policy (store policy — see header; NOT a current-rule mandate)
 // ---------------------------------------------------------------------------
@@ -225,8 +227,8 @@ export type DestructionValidation = { ok: true } | { ok: false; error: string };
  */
 export function validateDestructionCompletion(d: DestructionCompletionDraft): DestructionValidation {
   if (!holdElapsed(d.earliestDestroyAt, d.nowMs)) {
-    const when = new Date(d.earliestDestroyAt as string).toLocaleString();
-    return { ok: false, error: `Hold policy not elapsed — earliest destroy at ${when}.` };
+    // Fix Phase 1.6a (G-43 req 5, F-15-5): Pacific, never the server's zone.
+    return { ok: false, error: holdNotElapsedMessage(d.earliestDestroyAt as string) };
   }
   if (d.reason === "recall") {
     // WAC 314-55-225: PROHIBITED from destroying before notifying LCB and

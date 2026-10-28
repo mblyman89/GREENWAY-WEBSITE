@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.5 (Phase 1.5 fix G-42 built: a vendor return reserves its units, the app builds Manifest.CSV, and on-hand comes off only at departure; Phase 1.4 fix G-44 built: a Destroy return is held, never sellable, and saved in one step; Phase 1.3 fix G-28 built: destruction keeps held lots held; owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
+| **Version** | 1.6 (Phase 1.6a fix G-43 built: a destruction is completed only with a witness from the roster and a camera reference, Other method needs the LCB approval, scheduling cannot exceed the free units, times are Pacific, printable Destruction log; Phase 1.5 fix G-42 built: a vendor return reserves its units, the app builds Manifest.CSV, and on-hand comes off only at departure; Phase 1.4 fix G-44 built: a Destroy return is held, never sellable, and saved in one step; Phase 1.3 fix G-28 built: destruction keeps held lots held; owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory → Returns & Destruction** (`/admin/inventory/disposition`) and the **Returns desk** (`/admin/registers/returns`): owner, admin and manager (`inventory.manage`). The register's **Return an item** (SOP-01 §4.23): any budtender starts it, a manager or lead approves with a PIN. Destruction day: the person who renders the product unusable **and** a witness. Recalled product: the **admin** (recall coordinator, D37) and the owner. |
@@ -116,7 +116,7 @@ A login without the permission is sent back to the back-office home with a "deni
 
 **Store rules on top of the app.**
 1. **Customer returns go through the register or the Returns desk only** (§4.4). The back-office **Customer return** wizard is **not used**: the owner decided to remove it (D66: *"Q4- remove it."*; G-45 **APPROVED**).
-2. **A manager may schedule a destruction. Completing one needs two people**: the person who grinds and mixes, and a **witness, who may be anyone** on staff (D64: *"anyone may witness the destruction."*), never the person doing it. The destruction is done **in view of a security camera** (D64: *"It has to be done on camera as well."*; WAC 314-55-083(3)(a)). Both names go in **Witnessed by** and on form 8.3 with the camera and time. The app does not require a witness or a camera reference (F-15-4, F-15-21); this SOP does.
+2. **A manager may schedule a destruction. Completing one needs two people**: the person who grinds and mixes, and a **witness, who may be anyone** on staff (D64: *"anyone may witness the destruction."*), never the person doing it. The destruction is done **in view of a security camera** (D64: *"It has to be done on camera as well."*; WAC 314-55-083(3)(a)). Since Phase 1.6a (G-43) the app enforces both: **Complete destruction** requires **Witness (from the roster)**, anyone on staff except the person signed in, and the **Camera** with its start and end time in Pacific (`completeDestructionAction`, `actions.ts` L342, checked by `evaluateDestructionRecord` at L357; a refusal is audited as `destruction.complete_refused`, L375). F-15-4 and F-15-21 FIXED. Form 8.3 carries both signatures.
 3. **Only the owner cancels a scheduled destruction** (§4.19). Since Phase 1.3 the app enforces it (`inventory.destruction.cancel`, owner only, `roles.ts` L161), asks a written reason, and puts the lot back to the status it had before scheduling (F-05a-19, F-15-9 FIXED).
 4. **Recalled product is handled by the admin, the recall coordinator (D37), with the owner, and goes back to the vendor as a vendor return (D65).** Nobody schedules a destruction for a recalled lot (§4.21).
 5. **A vendor return is logged when the RMA is in hand; the product leaves only with the LCB's manifest PDF**, and **Record departure** is pressed at that moment (§4.11–§4.12, D63). **Only the owner cancels a vendor return** (`inventory.vendor_return.cancel`, `roles.ts` L166).
@@ -323,7 +323,7 @@ Destruction is governed by the current WAC 314-55-097 (compliance doc §5). Cann
 
 **What the law does not require** (checked 2026-10-28, D64, D67): no waiting period, no notice to the LCB before destroying (the old 72-hour notice was removed by WSR 22-14-111), and no witness. **What it does require besides the method**: the destruction area is covered by the security cameras (WAC 314-55-083(3)(a): areas where cannabis waste is *"moved within, processed, stored, or destroyed"*; recorded 24 hours, kept 45 days). The owner adds two store controls: a witness (anyone) and the camera (D64).
 
-**Does the app match the state's rule?** Yes for the method and record: **Complete destruction** refuses to finish without a rendering method, what it was mixed with, the 50% attestation (unless the method is **Other method (requires PRIOR LCB approval)**) and a final destination or facility (`disposition-core.ts` `validateDestructionCompletion`). It does not ask for a camera reference or require the witness (F-15-21, G-43), so form 8.3 carries both.
+**Does the app match the state's rule?** Yes for the method and record: **Complete destruction** refuses to finish without a rendering method, what it was mixed with, the 50% attestation (unless the method is **Other method (requires PRIOR LCB approval)**) and a final destination or facility (`disposition-core.ts` `validateDestructionCompletion`). Since Phase 1.6a (G-43) it also requires the witness from the roster, the camera reference and, for **Other method**, the LCB approval reference and date (`destruction-record-core.ts` `evaluateDestructionRecord`, L116).
 
 ### 4.14 When product is destroyed (reasons)
 
@@ -346,7 +346,7 @@ Destruction is governed by the current WAC 314-55-097 (compliance doc §5). Cann
 1. Pull the units and count them twice. Put them in the **sealed destroy bin**.
 2. Open **Schedule a destruction** (*"Opens a {hours}h hold and quarantines the lot. Complete it below once the hold elapses."*).
 3. **Lot**: pick the lot. **Active** and **Quarantine** lots are listed, each with its status (since Phase 1.3, F-05a-17 FIXED). **Recalled** lots are never listed: they go back to the vendor (§4.21). The **Recall** reason is no longer offered.
-4. **Quantity**: the counted number. The app does **not** check it against on-hand now; a wrong number is caught only at completion (F-15-12). Look at the on-hand shown in the lot list and make sure your number is not larger.
+4. **Quantity**: the counted number. Since Phase 1.6a (G-43, F-15-12 FIXED) the server refuses a quantity larger than the lot has free: on hand, less units held for a customer-return destruction or a vendor return, less units already in open destructions (`scheduleDestruction`, `disposition.ts` L1421–1430). The message gives the figures and ends *"Count the units again; nothing was scheduled."*
 5. **Reason** (default **Expired**) and **Detail** (*"What & why…"*): always write a sentence, including the owner's approval.
 6. Press **Schedule (opens {hours}h hold)** (with the store setting at 0 it reads *"opens 0h hold"*, D67). You see *"Destruction scheduled — the hold timer is running and the lot is quarantined."*
 7. An Active lot is now in Quarantine as a whole, not just the units you scheduled (a Quarantine lot simply stays there). The app keeps the status it had, so a cancel or a partial destruction can put it back. If you are destroying only part of a lot and the rest is sellable, see §4.20.
@@ -356,14 +356,14 @@ If you see the bare word *"qty"* or *"reason"* in a red box, the Lot, Quantity o
 
 ### 4.16 The hold and the quarantine
 
-The event appears under **Destruction events** with the product, lot, quantity, reason, *"hold ends …"* and a status badge (**pending quarantine** while the hold runs). The hold end is shown in the browser's own clock (`page.tsx` L321); on a store computer that is Pacific time.
+The event appears under **Destruction events** with the product, lot, quantity, reason, *"hold ends …"* and a status badge (**pending quarantine** while the hold runs). The hold end is shown in Pacific time (since Phase 1.6a, `formatDestructionPacific`).
 
 During the hold (with the hold at 0, there is none: complete the destruction as soon as it is done, the same day):
 - The units stay in the sealed bin. Nobody opens it except to add more product for destruction (with a form 8.1 line) or on destruction day.
 - The owner may stop the destruction (§4.19).
 - Arrange the witness (anyone, D64), the camera-covered spot and the mixing material for destruction day.
 
-**Complete destruction** stays greyed out as **Hold not elapsed** until the hold ends. If the server is asked to complete early, it refuses with *"Hold policy not elapsed — earliest destroy at …"* (`disposition-core.ts` L229). That time is written in the **server's** clock and format, which may not be Pacific (F-15-5).
+**Complete destruction** stays greyed out as **Hold not elapsed** until the hold ends. If the server is asked to complete early, it refuses with *"Hold policy not elapsed — earliest destroy at …"* (`disposition-core.ts` L229). Since Phase 1.6a that time is in Pacific, for example *"… earliest destroy at 07/04/2026 2:05 PM Pacific."* (`disposition-core.ts` L231; F-15-5 FIXED).
 
 ### 4.17 Rendering the product unusable (WAC 314-55-097)
 
@@ -374,7 +374,7 @@ Do this on the licensed premises, **in view of a security camera** (D64; WAC 314
 4. Mix it with **at least an equal volume** of other ground material, so the result is **at least 50% non-cannabis waste by volume**:
    - **Compostable**: food waste, yard waste, vegetable-based grease or oils (for example coffee grounds). Goes to a compost facility or the compost stream.
    - **Non-compostable**: paper, cardboard, plastic waste (for example shredded cardboard). Goes to a permitted solid waste facility (the dumpster serviced by the hauler).
-5. Any other method (for example a licensed waste contractor): **only with prior LCB approval in writing**, filed with form 8.3. The app accepts **Other method (requires PRIOR LCB approval)** without asking for that approval (F-15-4); this SOP requires it.
+5. Any other method (for example a licensed waste contractor): **only with prior LCB approval in writing**, filed with form 8.3. Since Phase 1.6a the app requires the **LCB approval reference** and **LCB approval date** for **Other method (requires PRIOR LCB approval)** (F-15-4 FIXED).
 6. Put the mixture in the final destination (the dumpster or compost bin). Photograph the mixture before it goes. The witness watches it go. Note the end time for the camera reference.
 
 ### 4.18 Completing the destruction record
@@ -384,14 +384,14 @@ Right after §4.17, on the event under **Destruction events**:
 2. **Mixed with**: what you used (for example "coffee grounds" or "shredded cardboard").
 3. Tick **The mixture is at least 50% non-cannabis waste by volume** only if it is true.
 4. **Final destination** (*"Where the waste goes"*) and **Disposal facility** (*"Hauler or facility name"*): fill **both** (the app needs only one).
-5. **Witnessed by**: both names, the person who did it and the witness (anyone, D64), then the camera, for example "J. Smith (did) / A. Lee (witness) · cam 4 vault 14:05–14:20". The app accepts it blank and has no camera field (F-15-4, F-15-21); this SOP requires both.
+5. **Witness (from the roster)** (*"Anyone on staff except you (D64)"*): choose the second person. You cannot choose yourself. Then **Camera** (*"The camera that recorded it (WAC 314-55-083(3)(a))"*), **Camera date (Pacific)** (today by default), **Start time (Pacific)** and **End time (Pacific)**. For **Other method** also fill **LCB approval reference** and **LCB approval date**. The app writes the witness line for you, for example *"J. Smith (did) / A. Lee (witness) · camera Cam 4 vault 07/04/2026 2:05 PM Pacific – 07/04/2026 2:20 PM Pacific"* (since Phase 1.6a, G-43).
 6. The gold recall box appears only for a **Recall** event. There should be none: recalled product goes back to the vendor (D65, §4.21). If you see it, stop and call the admin.
 7. Press **Complete destruction**. You see *"Destruction completed and the CCRS 'Destruction' adjustment posted."* The row then reads *"Destroyed … · witnessed by …"*.
 8. Finish **form 8.3**: time rendered unusable, method, mix, 50% check, final destination, facility, both signatures, camera and times, photo reference. File it by month for five years.
 
-**If it refuses**, see §5. The common ones: *"Record what the ground cannabis waste was mixed with (WAC 314-55-097)."*, *"Confirm the mixed result is at least 50% non-cannabis waste by volume (WAC 314-55-097)."*, *"Record the final destination / disposal facility for the waste — WAC 314-55-097 requires it in your records (kept 5 years)."*, and *"Quantity (x) exceeds on-hand (y)."* The last one means the lot holds less than the event says, often because some of it sold before scheduling (F-15-12). Stop and call the owner; do not destroy more than the app will record without the owner.
+**If it refuses**, see §5. Since Phase 1.6a: *"Choose the witness from the staff roster (anyone on staff, not you; D64)."*, *"The witness must be a second person, not the one completing the destruction (D64)."*, *"Record the camera that covered the destruction (D64; WAC 314-55-083(3)(a))."*, *"Record the camera start and end time (Pacific) so the footage can be found."*, *"The camera end time must be after the start time."*, *"Other method needs the LCB's prior written approval: enter its reference and date (WAC 314-55-097)."* Every one is shown at once. The older ones: *"Record what the ground cannabis waste was mixed with (WAC 314-55-097)."*, *"Confirm the mixed result is at least 50% non-cannabis waste by volume (WAC 314-55-097)."*, *"Record the final destination / disposal facility for the waste — WAC 314-55-097 requires it in your records (kept 5 years)."*, and *"Quantity (x) exceeds on-hand (y)."* The last one means the lot holds less than the event says, often because some of it sold before scheduling (F-15-12). Stop and call the owner; do not destroy more than the app will record without the owner.
 
-**What the app keeps.** The method, mix, destination, facility, witness, LCB fields, the time and the person who completed it, and the adjustment (`disposition.ts` L1053–1080). The audit row does not include the witness's contact date or the LCB contact date, and the app has no printable destruction log (F-15-4; G-43). Form 8.3 is the record the LCB will read.
+**What the app keeps.** The method, mix, destination, facility, the witness (roster id and name), the camera and its times, the Other-method approval, the LCB fields, the time and the person who completed it, and the adjustment (`completeDestruction`, `disposition.ts` L1492; the record columns come with migration 0310, and before it is applied the witness line carries the witness and camera). The audit row keeps all of them, with the LCB contact date. **Destruction log (print)** above the event list opens the month's log (`/admin/inventory/disposition/destruction-log`): what, when (Pacific), method and mix, destination and facility, witness, camera, who completed it, with a line for the owner's review. Print it each month and file it with the forms 8.3 for five years (WAC 314-55-097).
 
 ### 4.19 Cancelling a scheduled destruction
 
@@ -556,7 +556,11 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 | *"This lot is Sold out; there is nothing on hand to destroy."* / *"This lot is already Destroyed…"* | Nothing to destroy | Nothing |
 | *"Only the owner can cancel a scheduled destruction (SOP-15 §2 rule 3)."* / *"Write why the destruction is being cancelled."* | Cancel refused | Owner, with a reason |
 | **Hold not elapsed** (greyed button) | The hold is running | Wait |
-| *"Hold policy not elapsed — earliest destroy at …"* | Too early; the time is in the server's clock (F-15-5) | Wait until the time shown on the event |
+| *"Hold policy not elapsed — earliest destroy at … Pacific."* | Too early (Pacific time since Phase 1.6a) | Wait until the time shown on the event |
+| *"Choose the witness from the staff roster …"* / *"The witness must be a second person …"* / *"The witness must be an active person on the staff roster."* | Witness missing, yourself, or not on the active roster (G-43) | A second person watches; choose them |
+| *"Record the camera …"* / *"Record the camera start and end time (Pacific) …"* / *"The camera end time must be after the start time."* / *"The camera end time is in the future …"* | Camera reference missing or wrong (G-43, D64) | Check the recording; enter the camera and times |
+| *"Other method needs the LCB's prior written approval …"* | Other method without the approval (G-43) | Enter the approval reference and date, or use grind and mix |
+| *"Quantity (x) is more than the lot has free to schedule (y) … nothing was scheduled."* | More than on hand less held and already-scheduled units (G-43, F-15-12) | Count again; check open destructions and vendor returns |
 | *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* | Recall guard | Stop; admin; §4.21 |
 | *"Record the LCB enforcement officer you coordinated with."* | Officer name missing | Admin enters it |
 | *"Choose how the product was rendered unusable (WAC 314-55-097)."* | Method missing | Pick the method |
@@ -613,16 +617,16 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 | Store return policy (loyalty, receipt, 15 days) | Owner policy, SOP-01 §4.23 | Register and Returns desk only; the wizard skips it (F-15-8) and is to be removed (D66) |
 | Product returned to a processor only with Greenway's CCRS manifest (origin), the LCB's success email and PDF, the printed PDF with the product, an employee 21+ / transport licensee, sealed and locked | WAC 314-55-079(11), WAC 314-55-085(1), (3), (5); CCRS Manifest User Guide 10-27-2025 (D63) | **Enforced** (Phase 1.5, G-42 BUILT): units reserved at logging, reduction at departure; RMA, numeric license and detail required; steps in order on the server; Manifest.CSV built with Greenway as origin; Pacific times (F-15-1, F-15-2, F-15-3, F-15-19 FIXED) |
 | Vendor return reported as InventoryAdjustment **Other** with a detail | Best-supported encoding: Other is the only InventoryAdjustment reason that fits (CCRS Upload User Guide Table 5); not confirmed by the LCB (U-72). The "Returned to seller → Other" line cited in the compliance doc is from the plant file's Table 4 (F-15-18) | Note always starts *"Vendor return to …"* and names the processor, license, manifest and RMA (`vendor-return-core.ts` L208) |
-| Waste rendered unusable on premises, ≥50% non-cannabis, other methods with prior LCB approval | WAC 314-55-097 | Method, mix and 50% tick required (`disposition-core.ts` L245–255); no approval reference for Other (F-15-4) |
-| Waste records (what, when, method, destination) kept five years | WAC 314-55-097(7)(e), WAC 314-55-087 | Stored on the event; witness optional, no printable log (F-15-4) |
+| Waste rendered unusable on premises, ≥50% non-cannabis, other methods with prior LCB approval | WAC 314-55-097 | Method, mix and 50% tick required (`disposition-core.ts` `validateDestructionCompletion`); Other needs the LCB approval reference and date (Phase 1.6a, F-15-4 FIXED) |
+| Waste records (what, when, method, destination) kept five years | WAC 314-55-097(7)(e), WAC 314-55-087 | **Enforced** (Phase 1.6a, G-43 BUILT): witness and camera required, stored on the event; printable monthly **Destruction log** |
 | Destruction reported in that week's CCRS file | WAC 314-55-083(4); LCB PS21-10 (weekly) | **Destruction** adjustment on completion |
 | Recalled product: officer told at once; never destroyed by us; returned to the vendor | WAC 314-55-225; owner D65 | Recall destruction has a tick box and officer field; scheduling lifts the recall status (F-05a-18); a vendor return with reason Recall needs the officer and contact date (Phase 1.5, F-15-2 FIXED) |
 | Reductions documented, or they count as sales | WAC 314-55-089(4)(c) | Every action posts a noted adjustment; cancel has no reason (F-05a-19) |
 | No legal hold; store hold set to 0 | WAC 314-55-097 (current); WSR 22-14-111; owner D67 | Setting allows 0; code default and panel text still 72 (G-50); stale migration comment (F-15-17) |
-| Destruction area on camera | WAC 314-55-083(3)(a); owner D64 | No camera field (F-15-21) |
+| Destruction area on camera | WAC 314-55-083(3)(a); owner D64 | **Enforced** (Phase 1.6a): camera and start/end time required (F-15-21 FIXED) |
 | Samples never sold, never on the menu | WAC 314-55-096(1)(i); owner D68 | **Enforced** (Phase 0.2: F-15-20 FIXED, G-51 BUILT; legacy panel removed, G-47 BUILT) |
 | Owner approves anything financial | books-23 (*"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*) | Refund journal missing (F-15-14); excise not reduced by returns (F-15-15) |
-| Two-person destruction; the witness may be anyone | Store control (owner D64) | Not enforced (F-15-4) |
+| Two-person destruction; the witness may be anyone | Store control (owner D64) | **Enforced** (Phase 1.6a): witness from the roster, never the person completing (F-15-4 FIXED) |
 
 ## 8. Checklists & forms
 
@@ -698,7 +702,7 @@ Result at least 50% non-cannabis by volume  [ ] Yes (both initial) ____ ____
 Final destination ______________________  Disposal facility / hauler ______________
 Photo taken [ ]  photo reference ________
 Hardware (vape / battery) to: ______________________
-App: Complete destruction pressed [ ]  "Witnessed by" filled with both names + camera [ ]
+App: witness chosen [ ]  camera + start/end (Pacific) entered [ ]  Complete destruction pressed [ ]
 Remaining units in lot? ____  → if sellable, lot set back to Active (§4.20) [ ] form 8.5 line [ ]
 
 Performed by (print / sign) ______________________
@@ -809,7 +813,8 @@ DESTRUCTION — CARD
    Other method only with PRIOR written LCB approval.
 5. Into the final destination. Photo. Witness watches.
 6. Complete destruction: method · mixed with · 50% tick · final destination
-   AND facility · BOTH names + camera in Witnessed by.
+   AND facility · Witness (from the roster, not you) · Camera + start/end.
+   Monthly: print Destruction log, file with the forms 8.3 (5 years).
 7. Units left? The app puts the lot back to its earlier status → form 8.5.
 8. Only the owner cancels, with a reason; the app restores the status.
 ```
@@ -871,7 +876,7 @@ DESTRUCTION — CARD
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
 | **G-42** | State-exact vendor return (D63): **Log** reserves the units (status *awaiting departure*, out of sale) without reducing on-hand; the reduction and the CCRS **Other** adjustment (detail: processor, manifest, RMA) post only at **departure**; RMA, manifest number, processor license and detail required; vendor linked; an **outgoing Manifest.CSV builder** (Greenway as origin: driver, vehicle, departure/arrival, lot rows) for the owner to upload; step labels "Manifest uploaded" and "LCB success email and PDF received"; checklist without the 48–72 h and Mon/Wed/Fri lines; server-checked step order with who and when; Pacific times; reason Recall needs the officer contact recorded | F-15-1 (**S1**), F-15-2, F-15-3, F-15-19 | Log only at departure (§4.10–§4.11), form 8.2 | §2, §3, §4.2, §4.9–§4.13, §4.21, §8.2, §9.2 | **BUILT** (Phase 1.5; migration 0309 to apply) |
-| **G-43** | Hardened destruction record: witness required (any second person, not the one completing; D64), a **camera reference** (camera name and start/end time; D64), approval reference for **Other method**, on-hand checked at scheduling, Pacific times in messages, printable destruction log (form 8.3 in the app). The recall contact-date part is dropped (recalls are not destroyed, D65) | F-15-4, F-15-5, F-15-12, F-15-21 | Form 8.3 with two signatures and the camera (§4.17–§4.18) | §2, §4.15–§4.18, §5.3, §8.3, §9.3 | **APPROVED** (D64) |
+| **G-43** | Hardened destruction record: witness required (any second person, not the one completing; D64), a **camera reference** (camera name and start/end time; D64), | approval reference for **Other method**, on-hand checked at scheduling, Pacific times in messages, printable destruction log (form 8.3 in the app). The recall contact-date part is dropped (recalls are not destroyed, D65) | F-15-4, F-15-5, F-15-12, F-15-21 | Form 8.3 with two signatures and the camera (§4.17–§4.18) | §2, §4.15–§4.18, §5.3, §8.3, §9.3 | **BUILT** (Phase 1.6a; migration 0310 to apply). Optional photo upload (req 7) not built |
 | **G-44** | Customer-return segregation: a destroy-return unit goes to a **returned / quarantine** bucket that is never sellable (a separate quarantine lot or a held quantity); the return, the add-back and the destruction event saved together or not at all | F-15-6 (**S1**), F-15-7 | Sealed destroy bin, form 8.1 (§4.7) | §1 box, §4.2, §4.3, §4.7, §5.1 | **BUILT** (Phase 1.4; migration 0308 to apply) |
 | **G-45** | **Remove** the back-office Customer return wizard (D66); the CSV download checks the ledger like the weekly batch or is removed | F-15-8, F-15-10 | Register / Returns desk only (§4.4–§4.6); no CSV (§4.8) | §1, §2, §4.1, §4.4–§4.8, §5.1, §8.6, §9.1 | **APPROVED** (D66) |
 | **G-28** (extended) | Returns & Destruction handles held lots: lists Quarantine lots for destruction; lists **Recalled** lots for a **vendor return** (not destruction, D65) and keeps them Recalled until departure; **Cancel** restores the earlier status and requires a reason (owner only); a partial destruction restores the lot's earlier status | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | §4.19–§4.22, form 8.5 | §2, §4.15, §4.19–§4.22, §5.3 | **BUILT** (Phase 1.3); Recalled lots listed for a vendor return in Phase 1.5 (G-42) |
@@ -902,6 +907,7 @@ DESTRUCTION — CARD
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.6 | Fix phase | Phase 1.6a (owner D76, D64). G-43 BUILT: **Complete destruction** requires **Witness (from the roster)**, never the person completing, and the **Camera** with start and end time (Pacific), checked on the server and audited when refused; **Other method** requires the LCB approval reference and date; **Schedule** refuses more than on hand less held and already-scheduled units; hold and event times in Pacific; printable monthly **Destruction log**; record columns in migration 0310; activation guard step 8. F-15-4, F-15-5, F-15-12, F-15-21 FIXED. §2, §4.15–§4.18, §5, §7, form 8.3, card 9.3 and Appendix B updated. | Fix program |
 | 1.5 | Fix phase | Phase 1.5 (owner D76, D63, D65). G-42 BUILT: **Log a vendor return** reserves the units (`held_qty`, migration 0309 `reserve_vendor_return`) instead of reducing on-hand; RMA, vendor, numeric processor license and detail are required; Recalled lots are listed and need reason Recall with the LCB officer and contact date. The app builds **Manifest.CSV** (Greenway as origin, the LCB template's 21 header rows and 13 item columns, `manifest_413541_YYYYMMDDHHMMSS.csv`). Steps go one at a time on the server (Manifest uploaded → LCB success email and PDF received → Departed), each stamped with who and when, Pacific times; **Record departure** reduces on-hand, releases the reserve and posts the CCRS Other adjustment (processor, license, manifest, RMA) in one step (`depart_vendor_return`). Owner-only **Cancel return** (`inventory.vendor_return.cancel`) releases the units. The 48–72 h / Mon-Wed-Fri checklist line is removed (activation guard step 7). F-15-1, F-15-2, F-15-3, F-15-19 FIXED. One thing to know item 1, Part 3, §2, §3, §4.2, §4.10–§4.13, §4.21, §5.2, §6, §7, form 8.2, card 9.2 and Appendix B updated. | Fix program |
 | 1.4 | Fix phase | Phase 1.4 (owner D76, D62). G-44 BUILT: a customer return marked Destroy holds its units on the lot (`inventory_lots.held_qty`, migration 0308): on hand and in CCRS, never sellable (register draw, register menu, register stock, manual adjustment, vendor return and other destructions all respect the hold). The return, the add-back, the hold and the destruction event are one database step (`record_customer_return`); before 0308 the old writes are undone on any failure. Completion consumes the held units; an owner cancel releases them and says so. F-15-6 and F-15-7 FIXED. §1 item 2, §4.2, §4.3, §4.7, §5, §6, card 9.1 and Appendix B updated. | Fix program |
 | 1.3 | Fix phase | Phase 1.3 (owner D76). G-28 BUILT with D65: **Schedule a destruction** lists Active and Quarantine lots with their status and never Recalled; the Recall reason is gone; scheduling refuses Recalled, Sold out and Destroyed lots, moves only Active to Quarantine (compare-and-set) and keeps the earlier status on the event (migration 0307); **Complete destruction** is refused while the lot is Recalled; a partial destruction puts the lot back to its earlier status; **Cancel** is owner-only (`inventory.destruction.cancel`), needs a reason, restores the earlier status only Quarantine → Active and only if it was Active, never touches a customer-return lot, and is audited with before/after; the activation guard checks every lot-status write on this page is compare-and-set. Summary, §2, §4.2, §4.3, §4.15, §4.19–§4.22, §5.3, §6, card 9.3 and Appendix B updated. F-05a-17, F-05a-18, F-05a-19, F-15-9, F-15-11 FIXED. | Fix program |

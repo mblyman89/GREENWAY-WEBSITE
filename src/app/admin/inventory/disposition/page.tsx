@@ -62,6 +62,8 @@ import {
 import { listVendors } from "@/lib/vendors/store";
 import { pacificParts } from "@/lib/reports/timezone";
 import { heldReleaseMessage } from "@/lib/inventory/held-stock-core";
+import { formatDestructionPacific } from "@/lib/inventory/destruction-record-core";
+import { listEmployees } from "@/lib/staffing/store";
 import { CustomerReturnWizard } from "@/components/admin/inventory/CustomerReturnWizard";
 import { DispositionAdvisorPanel } from "@/components/admin/inventory/DispositionAdvisorPanel";
 import {
@@ -133,7 +135,7 @@ export default async function DispositionPage({
   const canCancelVendorReturn = can(session.profile.role, "inventory.vendor_return.cancel");
   const sp = await searchParams;
 
-  const [lots, quarantineLots, recalledLots, vendors, returns, destructions, customerReturns, summary, dispositionSettings] =
+  const [lots, quarantineLots, recalledLots, vendors, returns, destructions, customerReturns, summary, dispositionSettings, roster] =
     await Promise.all([
       listLots({ status: "active", limit: 500 }),
       // Fix Phase 1.3 (G-28 req 1, F-05a-17): the destruction picker also lists
@@ -149,7 +151,10 @@ export default async function DispositionPage({
       listCustomerReturns(20),
       dispositionSummary(),
       getDispositionSettings(),
+      // Fix Phase 1.6a (G-43; D64): the witness is chosen from the staff roster.
+      listEmployees(),
     ]);
+  const pacificToday = pacificInputs(new Date().toISOString()).date;
 
   const holdHours = dispositionSettings.holdHours;
   const destroyableLots = [...lots, ...quarantineLots].filter((l) => isDestroyableLotStatus(l.status));
@@ -359,7 +364,7 @@ export default async function DispositionPage({
                 </Select>
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Quantity" required>
+                <Field label="Quantity" required help="Checked against on hand less held units and open destructions">
                   <Input name="quantity" type="number" step="any" min="0" required />
                 </Field>
                 <Field label="Reason" required>
@@ -387,7 +392,17 @@ export default async function DispositionPage({
 
       {/* Destruction events + completion */}
       <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-white/80">Destruction events</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/80">Destruction events</h2>
+          {/* Fix Phase 1.6a (G-43 req 6): printable monthly log, kept five years. */}
+          <Link
+            href={`${"/admin/inventory/disposition/destruction-log"}?month=${pacificToday.slice(0, 7)}`}
+            className="text-xs font-semibold text-[var(--admin-accent)] underline"
+            data-testid="destruction-log-link"
+          >
+            Destruction log (print)
+          </Link>
+        </div>
         {destructions.length === 0 ? (
           <EmptyState title="No destruction events" description="Scheduled destructions appear here." />
         ) : (
@@ -407,7 +422,7 @@ export default async function DispositionPage({
                       <p className="mt-0.5 text-xs text-white/40">
                         {fmtQty(d.quantity, d.unit)} · {d.reason.replace("_", " ")}
                         {d.earliest_destroy_at
-                          ? ` · hold ends ${new Date(d.earliest_destroy_at).toLocaleString()}`
+                          ? ` · hold ends ${formatDestructionPacific(d.earliest_destroy_at)}`
                           : ""}
                       </p>
                     </div>
@@ -448,8 +463,40 @@ export default async function DispositionPage({
                           <Field label="Disposal facility" help="Hauler or facility name">
                             <Input name="disposal_facility" placeholder="Waste Management…" />
                           </Field>
-                          <Field label="Witnessed by">
-                            <Input name="witnessed_by" placeholder="Names" />
+                        </div>
+                        {/* Fix Phase 1.6a (G-43; D64): witness from the roster, not you; on camera. */}
+                        <div className="grid gap-3 sm:grid-cols-2" data-testid="destruction-record-fields">
+                          <Field label="Witness (from the roster)" help="Anyone on staff except you (D64)" required>
+                            <Select name="witness_employee_id" required defaultValue="">
+                              <option value="">Choose the witness…</option>
+                              {roster.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.full_name}
+                                </option>
+                              ))}
+                            </Select>
+                          </Field>
+                          <Field label="Camera" help="The camera that recorded it (WAC 314-55-083(3)(a))" required>
+                            <Input name="camera_name" required placeholder="e.g. Cam 4 vault" />
+                          </Field>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <Field label="Camera date (Pacific)" required>
+                            <Input name="camera_date" type="date" required defaultValue={pacificToday} />
+                          </Field>
+                          <Field label="Start time (Pacific)" required>
+                            <Input name="camera_start" type="time" required />
+                          </Field>
+                          <Field label="End time (Pacific)" required>
+                            <Input name="camera_end" type="time" required />
+                          </Field>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Field label="LCB approval reference" help="Only for Other method: the LCB's prior written approval">
+                            <Input name="other_approval_ref" placeholder="Email subject or letter number" />
+                          </Field>
+                          <Field label="LCB approval date" help="Only for Other method">
+                            <Input name="other_approval_date" type="date" />
                           </Field>
                         </div>
                         {isRecall ? (
@@ -492,12 +539,12 @@ export default async function DispositionPage({
                     </div>
                   ) : d.status === "cancelled" ? (
                     <p className="mt-2 text-xs text-white/40">
-                      Cancelled {d.cancelled_at ? new Date(d.cancelled_at).toLocaleString() : ""}
+                      Cancelled {formatDestructionPacific(d.cancelled_at)}
                       {d.cancel_reason ? ` · why: ${d.cancel_reason}` : ""}
                     </p>
                   ) : d.status === "completed" ? (
                     <p className="mt-2 text-xs text-white/40">
-                      Destroyed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ""}
+                      Destroyed {formatDestructionPacific(d.completed_at)}
                       {d.witnessed_by ? ` · witnessed by ${d.witnessed_by}` : ""}
                       {d.rendering_method ? ` · ${d.rendering_method.replace(/_/g, " ")}` : d.method ? ` · ${d.method}` : ""}
                       {d.final_destination ? ` · to ${d.final_destination}` : ""}

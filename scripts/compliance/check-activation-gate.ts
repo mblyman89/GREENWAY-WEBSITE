@@ -282,6 +282,27 @@ if (!actionsSrc.includes("evaluateLotLifecycleChange(")) {
   }
 }
 
+// 8. Fix Phase 1.6a (G-43; D64; F-15-4, F-15-5, F-15-12, F-15-21): a
+//    destruction is completed only with a second person from the roster as
+//    witness and a camera reference, checked on the server; "Other method"
+//    needs the LCB approval; scheduling cannot exceed the free units; the
+//    hold message is in Pacific.
+{
+  const need: [string, string, string][] = [
+    ["src/app/admin/inventory/disposition/actions.ts", "evaluateDestructionRecord(", "completing a destruction no longer checks the witness and camera on the server (D64)"],
+    ["src/lib/inventory/disposition.ts", "evaluateScheduleQuantity(", "scheduling a destruction no longer checks the quantity against free units (F-15-12)"],
+    ["src/lib/inventory/disposition-core.ts", "holdNotElapsedMessage(", "the hold refusal is no longer in Pacific time (F-15-5)"],
+    ["src/app/admin/inventory/disposition/page.tsx", "witness_employee_id", "the destruction form no longer asks for the witness from the roster"],
+    ["src/app/admin/inventory/disposition/page.tsx", "camera_name", "the destruction form no longer asks for the camera (D64)"],
+  ];
+  for (const [file, token, why] of need) {
+    if (!readFileSync(resolve(root, file), "utf8").includes(token)) fail(`${file}: ${why} (G-43)`);
+  }
+  if (/name="witnessed_by"/.test(readFileSync(resolve(root, "src/app/admin/inventory/disposition/page.tsx"), "utf8"))) {
+    fail("disposition page: the free-text Witnessed by box is back (the witness must come from the roster, G-43)");
+  }
+}
+
 console.log(
   `ACTIVATION-GATE GUARD OK — no acceptManifest, ${activeWrites.length} activation write(s) all in reviewed files, gate present; ${statusWrites.length} lot status write(s) reviewed (non-literal and destroyed included).`,
 );
