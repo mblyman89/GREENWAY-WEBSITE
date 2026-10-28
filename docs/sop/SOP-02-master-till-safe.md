@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (draft for owner review; Phase 2.3 fix G-03: $5 reason rule on master till counts, Counted by required, owner's warnings screen; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
+| **Version** | 1.5 (draft for owner review; Phase 2.4 fix G-12: cash drops booked to the safe on the close entry; Phase 2.3 fix G-03: $5 reason rule on master till counts, Counted by required, owner's warnings screen; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The morning and night employees who count and balance the master till; the managers who record the counts and approve change swaps; the owner, who reviews variances |
@@ -295,7 +295,7 @@ The app records **none** of this (F-00-7, gap G-02). Use **form 8.2** for every 
 1. **Work out what to swap** from form 8.1 (§4.9). Normally: big bills ($20, $50, $100) out of the master till, and the small bills and coin the master till is short of in from the little safe.
 2. **Count the big bills out** of the master till. Write them on form 8.2 under **OUT of master till → little safe**, by denomination (for example *"5 × $20 = $100.00"*).
 3. **Count the small bills and coin out** of the little safe. Write them under **IN from little safe → master till**, by denomination (for example *"10 × $5, 40 × $1, 1 roll 25¢ = $100.00"*).
-4. **The two sides must be equal.** If they are not, stop. This is not a swap. (The system's swap rule says the same: an unequal exchange *"is a cash movement wearing a swap's clothes"* and is refused, `register-cash-journal-core.ts` L667–688.)
+4. **The two sides must be equal.** If they are not, stop. This is not a swap. (The system's swap rule says the same: an unequal exchange *"is a cash movement wearing a swap's clothes"* and is refused, `register-cash-journal-core.ts` L692–713.)
 5. Put the big bills in the little safe and the small bills and coin in the master till.
 6. **Sign and time the line.** If a second person is present, have them initial it.
 7. If you just counted (AM or PM), you can record an **Extra count** after the exchange, with *"after little-safe balance"* in Notes, so the page shows the rebuilt state. The total should still be $1,000.00.
@@ -323,7 +323,7 @@ At the register, a cashier trades big bills for the same value in small bills an
 - The till must have an open drawer: *"No open drawer on this register."* (`till/route.ts` L139–142).
 - A swap needs a connection (the PIN is checked on the server).
 - A single swap over $2,000.00 is refused as a typo (`MAX_SWAP_MINOR`, `safe-core.ts` L32, L113–114).
-- A swap creates **no journal entry**, by design (`buildBillSwapJournal`, `register-cash-journal-core.ts` L667–702).
+- A swap creates **no journal entry**, by design (`buildBillSwapJournal`, `register-cash-journal-core.ts` L692–727).
 - Do **not** use **No sale → Change fund swap with the safe** for a real swap. That only opens the drawer and records no amount or approver (SOP-01 §4.26).
 
 ### 4.12 Drops and takings are NOT part of the master till
@@ -336,7 +336,7 @@ Why this matters:
 1. The page's target is $1,000.00. Any takings in the count show as a false **Over**.
 2. The page's own help text and placeholder suggest the opposite (*"drops waiting to be banked are the usual reason"*; *"e.g. two drops waiting to be banked"*). That is finding **F-02-7**. Greenway's rule is the one in this section.
 
-> **For the owner and bookkeeper (finding F-02-1, S1).** In the books, account 10100 "Cash on Hand — Vault" means *"the safe / master till"* (`register-cash-journal-core.ts` L70). Close takings are posted **into** 10100 at reconcile (L302). Mid-shift **drops are never posted anywhere**. `buildTillCloseJournal` relieves 10110 Tills only by *counted − float*, so every dollar dropped stays in 10110 for good. This was proven by running the real builder: for a shift with $500 cash sales and a $200 drop, it posted 10100 +$300.00 and 10110 −$300.00, and **$200.00 stayed in 10110**. No drop journal exists (`grep drawer_drops src/lib/accounting` returns only the factory-reset list). Staff need do nothing differently. This is recorded for the build phase.
+> **For the owner and bookkeeper (finding F-02-1, S1) · FIXED in Phase 2.4 (G-12).** In the books, account 10100 "Cash on Hand — Vault" means *"the safe / master till"* (`register-cash-journal-core.ts` L71). Until Phase 2.4, mid-shift drops were never posted: the close relieved 10110 Tills only by *counted − float*, so every dollar dropped stayed in 10110 and 10100 was short by it. **Now the close entry books the drops too.** At Reconcile, the same entry (source ref `till-close:<session>`) debits 10100 with *takings at close + drops during the shift* (`toSafeMinor`, L301, L314–321) and relieves 10110 by that amount less any over/short (L329). The line reads *"Cash from Register 1 to safe (incl. $200.00 dropped during the shift)"* (L319). Worked example, checked by the builder self-test (L886–907): $167.50 float, $500.00 cash sales, a $200.00 drop, counted $467.50 → 10100 +$500.00, 10110 −$500.00, so 10110 nets to zero for the shift. A short dropped shift (counted $461.50) posts 10100 +$494.00, 50920 +$6.00, 10110 −$500.00 (L911–925). A shift whose takings were all dropped still posts the drops (L929–939). The poster already passes the drop total (`drawer-posting-service.ts` L173–193). **Back data:** drawers reconciled before this fix posted without their drops, and those entries are not changed (the source ref is idempotent, so they are never re-posted). Only drawers reconciled after this fix include drops. Staff need do nothing differently.
 
 ### 4.13 Supply runs and petty cash
 
@@ -350,7 +350,7 @@ Until the screen exists, when cash is taken for supplies:
 3. The receipt and the change go back **into the master till envelope, never into a drawer**. A receipt in a till *"is evidence, not cash"*, so the till really is short (books-98 L84–86).
 4. The next count will be **short** by the receipt amount. Write *"supply run, form 8.4"* in **Notes**, and give the form and receipt to the owner the same day.
 
-The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L501–646). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1660–1665). That is finding F-02-11 and gap G-11. The owner has **approved building the screen** (D17: *"id like the supply run screen built"*). It is queued for the build phase. Until it exists, use form 8.4.
+The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L526–671). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1665–1670). That is finding F-02-11 and gap G-11. The owner has **approved building the screen** (D17: *"id like the supply run screen built"*). It is queued for the build phase. Until it exists, use form 8.4.
 
 ### 4.14 The three till floats
 
@@ -662,10 +662,10 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L125–127 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
 | 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
-| 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L660–702 |
+| 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L685–727 |
 | 4.11 swaps | `src/app/api/pos/till/route.ts` L54, L139–142, L190–241; `src/lib/pos/till-core.ts` L75–88, L233–255; `src/app/(site)/pos/RegisterShell.tsx` L5666, L5752, L5790, L5846–5879, L6015–6030 |
-| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L122–136, L186–208; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
-| 4.13 supply runs | `register-cash-journal-core.ts` L495–646; `src/lib/accounting/ledger-census-data.ts` L1639–1670; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
+| 4.12 drops / books | `register-cash-journal-core.ts` L71, L221–228, L241–386 (drops booked: L297–321, L329, L369–372), self-test L886–939; `src/lib/registers/store.ts` L189 (`recordDrop`); `drawer-posting-service.ts` L173–194; finding F-02-1 FIXED (Phase 2.4) |
+| 4.13 supply runs | `register-cash-journal-core.ts` L520–671; `src/lib/accounting/ledger-census-data.ts` L1644–1675; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
 | 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L316 |
 | 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L45, L74, L208–247; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L122–151 |
 | 4.17 immutability | `0135` L95–108; `grep safe_counts src` (insert and select only) |
@@ -686,6 +686,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | D19: Manager Till float $300.00 | Seeded $300 ✅ | — (met) | G-10 closed · F-02-2 withdrawn |
 | Supply runs recorded (screen approved, D17) | Builders only, no screen | Store rule: shop card; form 8.4 (§4.13) | G-11 (approved) · F-02-11 |
 | D15: any employee records the master till count | Manager-level login required (`safe/actions.ts` L31) | A manager login enters it and picks the counter (§4.5) | G-13 · F-02-10 |
+| ~~Drops posted to the books (10110 → 10100)~~ | **BUILT, Phase 2.4**: the close entry books takings + drops to 10100 and relieves 10110 by the same (§4.12 note) | — (none needed for staff) | G-12 built · F-02-1 FIXED |
 | Named, verified counter | **Counted by required** (Phase 2.3); no PIN yet | Pick the counter; note the enterer (§4.5) | F-02-4 (required picker and audit link FIXED; PIN open, G-13) |
 
 ## Appendix C: Open questions for the owner
@@ -708,4 +709,5 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 | 1.1 draft | 2026-10-27 | Owner answers D14–D19 applied in slice SOP-03: Manager Till float $300.00 (D19; F-02-2 withdrawn, G-10 closed); totals now $635.00 / $1,635.00; Q-02-1…Q-02-5 resolved; D7 applies to the master till (D16); supply-run screen approved (D17); any employee may record the count (D15, G-13). No code was re-audited; pins still at `0055f06c` (no code changed since, `3385bfa9` is docs-only). | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-04. D21: a reason is required only for a variance over $5.00 (§4.8, checklist, quick card, Appendix C). D22 confirms floats ($167.50 sales, $300.00 Manager Till). Docs only. | SOP program |
 | 1.4 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT for the master till: reason box under the variance, required (server-checked) when more than $5.00 off, optional at $5.00 or less; reason saved on the count (migration 0315) and shown in **Recent counts**; warnings audited and listed on the owner/admin **Over / short warnings** screen. **Counted by** is now required and must be active; the audit entry names the count row (F-02-4 partly FIXED). §2, §4.4, §4.5 steps 10–11, §4.8, §5.1, §7, Appendix B updated. | Fix program |
+| 1.5 draft | Fix phase | Phase 2.4 (owner message 4: *"post drops"*). G-12 BUILT: the till-close entry now books mid-shift drops to 10100 Vault together with the takings, and relieves 10110 Tills by takings + drops less over/short, so a dropped shift nets 10110 to zero (F-02-1 FIXED). No new screen, no migration, no staff change. Entries posted before the fix are not re-posted. §4.12 owner note, Appendix A pin row, Appendix B updated. | Fix program |
 | 1.3 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

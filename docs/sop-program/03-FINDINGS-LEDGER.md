@@ -20,7 +20,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 ## SOP-00 recon findings (found while walking the tree for the roadmap)
 
 ### F-00-1 · CONFIRMED · DOC · S2 — The concierge tells staff the POS "is PLANNED, not built yet"
-- **Pin:** `src/lib/admin/concierge-kb.ts` L486–499 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
+- **Pin:** `src/lib/admin/concierge-kb.ts` L487–500 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
 - **Reality:** the register exists. `src/app/(site)/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
 - **Effect:** an employee who asks the concierge "how do I close my till?" is told the register does not exist. This is the single biggest knowledge gap in the concierge.
 
@@ -179,7 +179,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `till-core.ts` L218 (`witnessPin` optional), UI *"Witness PIN (optional, second person)"* (`RegisterShell.tsx` L5826). Drops are the highest-value cash movement during a shift. The SOP sets "always get a witness when someone else is on the floor" as store practice.
 
 ### F-01-16 · CONFIRMED · DOC · S2 — The concierge still says the POS is planned (re-confirmed)
-- `src/lib/admin/concierge-kb.ts` L489 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
+- `src/lib/admin/concierge-kb.ts` L490 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
 
 ---
 
@@ -189,12 +189,13 @@ Owner decisions referenced: D3 (little safe), D7 ($5), D10 (three tills at $167.
 **D12 verdict: MET.** The twice-daily count page exists at `/admin/registers/safe` (AM / PM / Extra). Documented in SOP-02 §4.3–4.7; not a gap.
 Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni "little safe\|small safe" src supabase` → 0 hits). **F-00-8** re-confirmed for the safe page (no `PrintButton`, no export route under `src/app/admin/registers/safe/`).
 
-### F-02-1 · CONFIRMED · BUG · S1 — Cash drops are never posted; 10110 Tills keeps every dropped dollar for good
+### F-02-1 · CONFIRMED · BUG · S1 — Cash drops are never posted; 10110 Tills keeps every dropped dollar for good · **FIXED (Phase 2.4)**
 - **Pin:** `register-cash-journal-core.ts` `buildTillCloseJournal` L235–345. With `floatStaysInDrawer: true` (passed by `drawer-posting-service.ts` L190–193), `removedMinor = counted − float` (L275–277). The till is relieved by `removedMinor − overShort` (L307–310). Drops are used only to work out *expected* (L270). They are never moved out of 10110 or into 10100.
 - **No other poster:** `grep -rn drawer_drops src/lib/accounting` returns only `factory-reset-core.ts` L426. `recordDrop` (`src/lib/registers/store.ts` L189–208) inserts a row and posts nothing. `ledger-census-data.ts` has no drop event (`grep -i drop` → 0 hits).
 - **Proof by running the real builder** (`sop02/drops.ts`, run with tsx at `0055f06c`): $167.50 float, $500.00 cash sales, a $200.00 drop, counted $467.50 → lines `10100 +30000 "Cash from Register 1 to safe"`, `10110 −30000`. Each sale debits 10110 (`sale-journal-core.ts` L106, L415–417), so 10110 got +$500.00 and lost $300.00. **$200.00 stays in 10110 with no entry**, and 10100 Vault is $200.00 low. The builder self-test (L860–872) checks only "not short" and "balances", not the 10110 net. The tests repeat the gap.
 - **Effect:** 10110 "Cash on Hand — Tills" goes up by the day's total drops, every day, forever. That is the same shape as the D-39 "drawers hold more money every day" problem the close posting was built to fix. 10100 Vault and later 10400 Undeposited Funds (bag seal) come up short by the same amount. The bank match (D-77 notes) works from a pool that never had the drop cash in it.
 - **SOP impact:** none for staff. Recorded in SOP-02 §4.12 for the owner and bookkeeper.
+- **Status: FIXED (Phase 2.4, G-12, #P24).** Option 1b of G-12: the close entry books the drops. `buildTillCloseJournal` now debits 10100 with `toSafeMinor = removedMinor + dropsMinor` (`register-cash-journal-core.ts` L301, L314–321) and credits 10110 by `toSafeMinor − overShortMinor` (L329); the line text names the drops (L319). Same source ref `till-close:<sessionId>`, same poster (`drawer-posting-service.ts` L173–194), so no new poster and no census reachability change (census row `cash_and_banking.till_close_to_safe` evidence updated). The missing assertion is added: the builder self-test checks 10110 is relieved of exactly the cash sales for a dropped shift, right, short and all-dropped (L898–939), and `register-cash.test.ts` checks net 10110 = 0 and 50920 = −over/short across cases. Mutations 7b (drops stop reaching the safe) and 7c (drops booked twice) are caught; `mutate-slice-books-93.py` 45/45. Re-running the proof case: 10100 +$500.00, 10110 −$500.00. **Back data:** entries posted before the fix are not changed or re-posted (idempotent source ref); they still lack their drops.
 
 ### F-02-2 · WITHDRAWN (D19, slice SOP-03) · was BUG · S2 — Manager Till standard float is $300.00; the owner says $167.50
 - **Withdrawn after the owner's correction (D19):** *"And I was wrong, it should be 300 in it."* The code's $300.00 Manager Till float matches the owner. The entry below is kept as history (IDs are never renumbered). The misleading code comment stays open under **F-02-9**. The EOD worked example that still uses 3 × $167.50 is a new finding in SOP-03 (**F-03-2**).
@@ -243,7 +244,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - **Fix in the SOP program:** SOP-02 splits them into form 8.2 (master till ↔ little safe) and form 8.3 (register ↔ master till). SOP-01 is to point to SOP-02 at its next revision. Not edited in this slice (one SOP per slice).
 
 ### F-02-9 · CONFIRMED · DOC · S3 — Stale code comments about posting and floats
-- `register-cash-journal-core.ts` L50–52: *"nothing calls `submitJournal` with them yet: closing a shift still does not post. That is D-39"*. That is stale: `reconcileDrawerAction` → `postDrawerCloseForSession` → `submitJournal` (`src/app/admin/registers/actions.ts` L218; `drawer-posting-service.ts` L218; census `till_close_to_safe` reachable = PRESENT, `ledger-census-data.ts` L1471–1478). The same stale claim is in `docs/MICHAEL-books-93-register-cash.md` L58 (*"Nothing posts yet"*). That is a dated memo, so it stays as history.
+- `register-cash-journal-core.ts` L50–52: *"nothing calls `submitJournal` with them yet: closing a shift still does not post. That is D-39"*. That is stale: `reconcileDrawerAction` → `postDrawerCloseForSession` → `submitJournal` (`src/app/admin/registers/actions.ts` L218; `drawer-posting-service.ts` L218; census `till_close_to_safe` reachable = PRESENT, `ledger-census-data.ts` L1473–1480). The same stale claim is in `docs/MICHAEL-books-93-register-cash.md` L58 (*"Nothing posts yet"*). That is a dated memo, so it stays as history.
 - `drawer-posting-service.ts` L190–191 says the float is *"16750"* for every register (see F-02-2).
 - `docs/MICHAEL-books-93` L26 says the close debits *10400*, which D-77 (books-98) changed to 10100. That is history; the code is right.
 
@@ -253,7 +254,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - **Update (D15, slice SOP-03):** the owner wants **any employee** to count *and record* the master count. So staff being refused the safe page is now against an owner decision, not just a UX issue. Gap **G-13**.
 
 ### F-02-11 · CONFIRMED · GAP · S3 — Supply runs from the master till cannot be recorded
-- **Pin:** `buildSupplyAdvanceJournal` / `buildSupplySettleJournal` (`register-cash-journal-core.ts` L501–646) are built and tested; the census marks them *reachable: MISSING — "No screen records a supply run yet"* (`ledger-census-data.ts` L1660–1665).
+- **Pin:** `buildSupplyAdvanceJournal` / `buildSupplySettleJournal` (`register-cash-journal-core.ts` L526–671) are built and tested; the census marks them *reachable: MISSING — "No screen records a supply run yet"* (`ledger-census-data.ts` L1665–1670).
 - **Owner policy since books-99:** supplies go on the shop card, not master till cash (`card-payment-core.ts` L7–8). Severity S3 because the policy covers it. If a run ever happens, nothing in the app records it, and the next count is simply "short".
 - **Interim:** SOP-02 §4.13, form 8.4. Gap **G-11**. **Update (D17, slice SOP-03):** the owner wants the screen built; G-11 is approved and queued for build.
 
@@ -273,7 +274,7 @@ Owner decisions referenced: D2 (second person at close), D7 ($5 / reason), D10, 
 Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "deposit_bags" src/app` → 0 hits). **F-00-8** re-confirmed for the EOD page (prints via `PrintButton`; no export route under `src/app/admin/registers/eod/`). **F-00-3** still stands (manager-till verify records $0, SOP-02).
 
 ### F-03-1 · CONFIRMED · BUG · S1 — 10400 Undeposited Funds is never filled, so the books panel gives a false "all matched"
-- **Pin:** since D-77 (`docs/DEFECTS.md` L4138), the drawer close debits **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L294–303, self-test L807–813). The only builder that debits 10400 is `buildSealBagJournal` (L405–441). It has **no poster** (`ledger-census-data.ts` L1585 `poster: null`; reachable MISSING L1596–1600).
+- **Pin:** since D-77 (`docs/DEFECTS.md` L4138), the drawer close debits **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L306–323, self-test L832–838). The only builder that debits 10400 is `buildSealBagJournal` (L405–441). It has **no poster** (`ledger-census-data.ts` L1590 `poster: null`; reachable MISSING L1596–1600).
 - **Effect:** 10400 stays at $0.00 (or at any pre-D-77 residue), so the Undeposited Funds panel shows its green *"Every dollar … matched"* message while bags sit in the safe. The panel text *"A drawer close moves cash into it"* (`UndepositedFunds.tsx` L82–84) is stale.
 - **Also stale:** the header comments in `UndepositedFunds.tsx` L11–12, `deposit-clearing-service.ts` L12/L22–23, `deposit-clearing-core.ts` L9–12/L129 and `drawer-posting-service.ts` L27 all still describe the close as filling 10400.
 - **SOP impact:** SOP-03 §4.15 tells staff and the owner not to use the panel and to use the bag log plus the safe instead. Ties to G-14.
@@ -285,12 +286,12 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 
 ### F-03-3 · CONFIRMED · GAP + DOC · S1 — Bank-deposit clearing has no caller; the census says it is reachable
 - **Pin:** `clearDepositForBankRow` (`deposit-clearing-service.ts` L237+) is called only by `tests/compliance/deposit-clearing.test.ts`. `grep -rn clearDepositForBankRow src` → only its definition and the census strings. The bank page's `actions.ts` exports only `recordBankExpensesAction`.
-- **Census:** `cash_deposit_to_bank` (`ledger-census-data.ts` L1519–1575) marks *exists* and *reachable* **PRESENT**. Its exists evidence (*"books-93 built the first leg - the drawer count into 10400"*) is stale after D-77.
+- **Census:** `cash_deposit_to_bank` (`ledger-census-data.ts` L1524–1580) marks *exists* and *reachable* **PRESENT**. Its exists evidence (*"books-93 built the first leg - the drawer count into 10400"*) is stale after D-77.
 - **Even if wired:** it would refuse every deposit with DEPOSIT_NOTHING_UNDEPOSITED (`deposit-clearing-core.ts` L396–402), because of F-03-1.
 - **SOP impact:** SOP-03 §4.13 makes the bag log plus the bank receipts the till-to-bank trail. Ties to G-14.
 
 ### F-03-4 · CONFIRMED · DOC · S3 — SOP-01 §4.29 says the float goes back to the master till / safe (self-finding)
-- **Pin:** `docs/sop/SOP-01-register-operations.md` §4.29 (≈L749–757): *"the float for tomorrow goes back to the master till / safe"*. The code keeps the float in the drawer (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L193; `register-cash-journal-core.ts` L275). SOP-03 §4.4 (the float stays in the till) follows the code and the owner.
+- **Pin:** `docs/sop/SOP-01-register-operations.md` §4.29 (≈L749–757): *"the float for tomorrow goes back to the master till / safe"*. The code keeps the float in the drawer (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L193; `register-cash-journal-core.ts` L281). SOP-03 §4.4 (the float stays in the till) follows the code and the owner.
 - **Also stale:** the Registers page help (`src/app/admin/registers/page.tsx` L160–163) says sales shown are *"online pickup order sales … the only transaction records in this back office"*. That is out of date now that the register records in-store sales (`sale-event-core.ts` L15–33).
 - **Fix later:** correct SOP-01 §4.29 at its next revision (docs only; recorded here first per the program rule).
 - **Status (slice SOP-04):** the SOP-01 half is **FIXED IN DOCS** (SOP-01 v1.1 §4.29: the float stays in the drawer). It is a documentation correction of the program's own SOP, not a code change. The Registers page help text (`page.tsx` L117–120) is code and stays **OPEN**.

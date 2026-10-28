@@ -179,7 +179,12 @@ describe("books-94 · a reconciled drawer posts", () => {
       }),
     );
     await postDrawerCloseForSession("s-1");
-    expect(sentAmount(VAULT_ACCOUNT)).toBe(SALES - 20_000);
+    // Fix Phase 2.4 (G-12 / F-02-1): the $200 drop is booked to the safe on
+    // this same entry, so the safe receives all the cash sales and 10110 is
+    // relieved of all of them. Before, the safe got SALES - 20_000 and the
+    // drop stayed in 10110 for good.
+    expect(sentAmount(VAULT_ACCOUNT)).toBe(SALES);
+    expect(sentAmount(TILLS_ACCOUNT)).toBe(-SALES);
     expect(sentAmount(OVER_SHORT_ACCOUNT)).toBeUndefined();
   });
 });

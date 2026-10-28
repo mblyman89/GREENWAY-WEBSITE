@@ -350,12 +350,38 @@ describe("books-93 · Q2 closing a till", () => {
     expect(sum(j)).toBe(0);
   });
 
-  it("mid-shift drops already out of the drawer are not removed a second time", () => {
+  it("mid-shift drops already out of the drawer are not counted short", () => {
     const j = mustPost(
       close({ dropsMinor: 20_000, countedMinor: FLOAT_MINOR + 50_000 - 20_000 }),
     );
     expect(amountOn(j, OVER_SHORT_ACCOUNT)).toBeUndefined();
-    expect(amountOn(j, VAULT_ACCOUNT)).toBe(30_000);
+    // Fix Phase 2.4 (G-12 / F-02-1): the drops are booked to the safe on the
+    // close entry. Before, this asserted 30_000 and so pinned the bug: $200.00
+    // stayed in 10110 for good and 10100 was $200.00 low.
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(50_000);
+    expect(amountOn(j, TILLS_ACCOUNT)).toBe(-50_000);
+    expect(sum(j)).toBe(0);
+  });
+
+  it("Fix Phase 2.4: net 10110 for a dropped shift (sales + close) is zero, over or short", () => {
+    // G-12 requirement 3, the assertion that was missing. The sales debit
+    // 10110 by the cash sales, one entry each. The close credits 10110 by
+    // (takings + drops) - over/short, which is always exactly the cash sales:
+    // a shortage is relieved from the till to 50920, an overage is not cash
+    // the till ever recorded. So the till ends the shift where it started.
+    // The safe (10100) gets what physically reached it: takings + drops.
+    for (const [drops, counted, os] of [
+      [20_000, FLOAT_MINOR + 30_000, 0],
+      [20_000, FLOAT_MINOR + 29_400, -600],
+      [45_000, FLOAT_MINOR + 5_500, 500],
+      [50_000, FLOAT_MINOR, 0],
+    ] as const) {
+      const j = mustPost(close({ dropsMinor: drops, countedMinor: counted }));
+      expect(50_000 + (amountOn(j, TILLS_ACCOUNT) ?? 0)).toBe(0);
+      expect(amountOn(j, VAULT_ACCOUNT)).toBe(counted - FLOAT_MINOR + drops);
+      expect((amountOn(j, OVER_SHORT_ACCOUNT) ?? 0) + os).toBe(0);
+      expect(sum(j)).toBe(0);
+    }
   });
 
   it("the close does NOT re-book the cash sales — that would count them twice", () => {

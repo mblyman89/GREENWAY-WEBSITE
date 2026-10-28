@@ -218,7 +218,13 @@ export type CloseTillInput = {
    * this close does not re-book them: it only moves what is physically there.
    */
   readonly cashSalesMinor: number;
-  /** Mid-shift drops to the safe, already removed from the drawer. */
+  /**
+   * Mid-shift drops to the safe, already removed from the drawer. Fix Phase
+   * 2.4 (G-12 / F-02-1): they are booked HERE, on the close entry. Every cash
+   * sale debited 10110 as it was rung, so the dropped dollars sit in 10110
+   * until something credits them; this entry moves them to 10100 (the safe)
+   * together with the takings, under the same till-close:<sessionId> ref.
+   */
   readonly dropsMinor: number;
   /** What was actually counted at close, in cents. */
   readonly countedMinor: number;
@@ -288,10 +294,16 @@ export function buildTillCloseJournal(input: CloseTillInput): RegisterCashResult
     };
   }
 
+  // Fix Phase 2.4 (G-12 / F-02-1). Until now only `removedMinor` (what was in
+  // the drawer at close) reached the safe in the books, so every dollar
+  // dropped mid-shift stayed in 10110 for good and 10100 was short by it. The
+  // drops are physically in the safe already; book them there now.
+  const toSafeMinor = removedMinor + input.dropsMinor;
+
   const lines: JournalLineDraft[] = [];
   let n = 1;
 
-  if (removedMinor > 0) {
+  if (toSafeMinor > 0) {
     // THE SAFE, NOT THE DEPOSIT (D-77). Until books-98 this line debited
     // 10400 Undeposited Funds while its own description said "to safe" - the
     // text and the account disagreed, and the account was the wrong one. Cash
@@ -299,13 +311,22 @@ export function buildTillCloseJournal(input: CloseTillInput): RegisterCashResult
     // to the bank until it has been counted into a sealed bag. 10400 now means
     // exactly one thing: money in a sealed bag, committed to a deposit.
     lines.push(
-      line(n++, VAULT_ACCOUNT, removedMinor, `Cash from ${input.registerName} to safe`),
+      line(
+        n++,
+        VAULT_ACCOUNT,
+        toSafeMinor,
+        input.dropsMinor > 0
+          ? `Cash from ${input.registerName} to safe (incl. ${fmt(input.dropsMinor)} dropped during the shift)`
+          : `Cash from ${input.registerName} to safe`,
+      ),
     );
   }
 
   // The till is relieved of everything that left it: the takings that went to
-  // the safe, AND the shortage that never existed in the first place.
-  const tillCredit = removedMinor - overShortMinor;
+  // the safe at close, the drops that went to the safe during the shift, AND
+  // the shortage that never existed in the first place. Over a shift this is
+  // exactly the cash sales, so 10110 ends where it started (the float).
+  const tillCredit = toSafeMinor - overShortMinor;
   if (tillCredit !== 0) {
     lines.push(line(n++, TILLS_ACCOUNT, -tillCredit, `Relieve ${input.registerName}`));
   }
@@ -345,7 +366,11 @@ export function buildTillCloseJournal(input: CloseTillInput): RegisterCashResult
   return {
     kind: "journal",
     explanation:
-      `${fmt(removedMinor)} went from ${input.registerName} to the safe, and ` +
+      `${fmt(toSafeMinor)} went from ${input.registerName} to the safe` +
+      (input.dropsMinor > 0
+        ? ` (${fmt(removedMinor)} at close and ${fmt(input.dropsMinor)} in drops during the shift)`
+        : "") +
+      `, and ` +
       `${overShortText}. The cash sales themselves were already recorded one ` +
       `entry per sale as they were rung; this entry only moves the money that ` +
       `is physically in the drawer.`,
@@ -863,12 +888,54 @@ export function __runRegisterCashJournalTests(): void {
     openingFloatMinor: 16_750, cashSalesMinor: 50_000, dropsMinor: 20_000,
     countedMinor: 46_750, floatStaysInDrawer: true,
   });
+  ok(dropped.kind === "journal", "a dropped shift still posts");
   if (dropped.kind === "journal") {
     ok(
       !dropped.journal.lines.some((l) => l.accountCode === OVER_SHORT_ACCOUNT),
       "a drawer that dropped $200 mid-shift and counts right is not short",
     );
     ok(sum(dropped.journal) === 0, "the dropped-shift close balances");
+    // Fix Phase 2.4 (G-12 / F-02-1): the missing assertion. The sales debited
+    // 10110 by $500.00; the close must credit it by the same $500.00 (takings
+    // $300.00 + drops $200.00), so the till's net for the shift is zero, and
+    // the safe receives all $500.00.
+    const tl = dropped.journal.lines.find((l) => l.accountCode === TILLS_ACCOUNT);
+    ok(!!tl && tl.amountCents === -50_000, "10110 is relieved of the cash sales, drops included");
+    ok(50_000 + (tl?.amountCents ?? 0) === 0, "net 10110 for a dropped shift (sales + close) is zero");
+    const v = dropped.journal.lines.find((l) => l.accountCode === VAULT_ACCOUNT);
+    ok(!!v && v.amountCents === 50_000, "10100 receives the takings AND the drops");
+  }
+
+  /* Fix Phase 2.4 - a dropped shift that is SHORT: the shortage goes to 50920,
+     the till is still relieved of exactly the cash sales. */
+  const droppedShort = buildTillCloseJournal({
+    journalDate: "2026-11-02", registerName: "Register 1",
+    openingFloatMinor: 16_750, cashSalesMinor: 50_000, dropsMinor: 20_000,
+    countedMinor: 46_150, floatStaysInDrawer: true,
+  });
+  ok(droppedShort.kind === "journal", "a short dropped shift posts");
+  if (droppedShort.kind === "journal") {
+    const tl = droppedShort.journal.lines.find((l) => l.accountCode === TILLS_ACCOUNT);
+    const v = droppedShort.journal.lines.find((l) => l.accountCode === VAULT_ACCOUNT);
+    const os = droppedShort.journal.lines.find((l) => l.accountCode === OVER_SHORT_ACCOUNT);
+    ok(!!tl && tl.amountCents === -50_000, "short dropped shift: 10110 relieved of the cash sales");
+    ok(!!v && v.amountCents === 49_400, "short dropped shift: 10100 gets takings + drops less the shortage");
+    ok(!!os && os.amountCents === 600, "short dropped shift: $6.00 short DEBITS 50920");
+    ok(sum(droppedShort.journal) === 0, "short dropped shift balances");
+  }
+
+  /* Fix Phase 2.4 - everything dropped, drawer counted exactly its float:
+     the drops alone still reach the safe (no silent no_entry). */
+  const allDropped = buildTillCloseJournal({
+    journalDate: "2026-11-02", registerName: "Register 1",
+    openingFloatMinor: 16_750, cashSalesMinor: 30_000, dropsMinor: 30_000,
+    countedMinor: 16_750, floatStaysInDrawer: true,
+  });
+  ok(allDropped.kind === "journal", "a shift whose takings were all dropped still posts the drops");
+  if (allDropped.kind === "journal") {
+    const v = allDropped.journal.lines.find((l) => l.accountCode === VAULT_ACCOUNT);
+    ok(!!v && v.amountCents === 30_000, "all-dropped shift: 10100 gets the drops");
+    ok(allDropped.explanation.includes("$300.00 in drops"), "all-dropped shift: the explanation names the drops");
   }
 
   /* Q3 — a swap posts nothing, and explains itself. */
