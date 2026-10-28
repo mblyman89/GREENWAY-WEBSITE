@@ -43,9 +43,11 @@ type DoneState = {
   receiptHtml: string;
   /** Fix Phase 1.4 (G-44): where a Destroy unit stands (null for Restock). */
   stockNote: string | null;
+  /** Fix slice 2.1: set when the refund could not be tied to the picked drawer / safe. */
+  refundTieNote: string | null;
 };
 
-export function CounterReturnDesk() {
+export function CounterReturnDesk({ openDrawers = [] }: { openDrawers?: { id: string; label: string }[] }) {
   const { toast } = useToast();
   const [receipt, setReceipt] = useState("");
   const [errors, setErrors] = useState<string[] | null>(null);
@@ -57,6 +59,9 @@ export function CounterReturnDesk() {
   const [disposition, setDisposition] = useState<"restock" | "destroy">("destroy");
   const [originalPackaging, setOriginalPackaging] = useState(false);
   const [lotIdLegible, setLotIdLegible] = useState(false);
+  // Fix slice 2.1 (G-05): where the refund cash comes from. Starts empty on
+  // purpose — the manager must pick, it is never defaulted.
+  const [paidFrom, setPaidFrom] = useState("");
   const [done, setDone] = useState<DoneState | null>(null);
   const [pending, startTransition] = useTransition();
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
@@ -75,6 +80,7 @@ export function CounterReturnDesk() {
     setDisposition("destroy");
     setOriginalPackaging(false);
     setLotIdLegible(false);
+    setPaidFrom("");
     setDone(null);
   }
 
@@ -111,6 +117,10 @@ export function CounterReturnDesk() {
       });
       return;
     }
+    if (!paidFrom) {
+      toast({ tone: "error", message: "Pick where the refund cash comes from — the open drawer you take it out of, or the store safe." });
+      return;
+    }
     startTransition(async () => {
       const res = await processReturnAction({
         receiptNumber: sale.receiptNumber,
@@ -121,6 +131,7 @@ export function CounterReturnDesk() {
         disposition,
         originalPackaging,
         lotIdLegible,
+        paidFrom,
       });
       if (!res.ok) {
         toast({ tone: "error", message: res.error });
@@ -132,6 +143,7 @@ export function CounterReturnDesk() {
         correctionOperation: res.correctionOperation,
         receiptHtml: res.receiptHtml,
         stockNote: res.stockNote ?? null,
+        refundTieNote: res.refundTieNote ?? null,
       });
       toast({ tone: "success", message: `Return logged. Refund ${money(res.refundMinor)} in cash.` });
     });
@@ -154,6 +166,11 @@ export function CounterReturnDesk() {
             <li>
               Cash to refund: <strong>{money(done.refundMinor)}</strong>
             </li>
+            {done.refundTieNote ? (
+              <li>
+                <strong>{done.refundTieNote}</strong>
+              </li>
+            ) : null}
             {done.stockNote ? (
               <li>
                 Returned unit: <strong>{done.stockNote}</strong> Put it in the sealed destroy bin now (SOP-15 §4.7).
@@ -351,6 +368,17 @@ export function CounterReturnDesk() {
                   >
                     <option value="destroy">Destroy (opens hold)</option>
                     <option value="restock">Restock (sellable)</option>
+                  </Select>
+                </Field>
+                <Field label="Cash paid from" required help="The drawer you take the refund out of, or the safe">
+                  <Select value={paidFrom} onChange={(e) => setPaidFrom(e.target.value)}>
+                    <option value="">Pick one…</option>
+                    {openDrawers.map((d) => (
+                      <option key={d.id} value={`drawer:${d.id}`}>
+                        {d.label}
+                      </option>
+                    ))}
+                    <option value="safe">Store safe</option>
                   </Select>
                 </Field>
               </div>

@@ -97,7 +97,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 
 **Two kinds of role.** A back-office login has a *staff role* (owner, admin, manager, staff). An employee has a *job role* (sales, manager, lead, other). They are kept separate on purpose (D8). The Store safe page checks the **login's staff role**. The register swap checks the **approver's job role**.
 
-> **Staff logins see a Safe button they cannot use.** On Register Activity, the **Safe** button shows for every login that can open the page (`registers/page.tsx` L87–89). A login with the *staff* role who taps it is sent back to the admin home (`/admin?denied=1`, `src/lib/auth/session.ts` L164). This is expected today (finding F-02-10). A non-manager who counts the master till asks a manager to enter the count, and the manager picks them under **Counted by**.
+> **Staff logins see a Safe button they cannot use.** On Register Activity, the **Safe** button shows for every login that can open the page (`registers/page.tsx` L117–119). A login with the *staff* role who taps it is sent back to the admin home (`/admin?denied=1`, `src/lib/auth/session.ts` L164). This is expected today (finding F-02-10). A non-manager who counts the master till asks a manager to enter the count, and the manager picks them under **Counted by**.
 
 ---
 
@@ -178,7 +178,7 @@ A $20, $50 or $100 in the master till means a register swap brought in big bills
 
 1. Sign in to the back office with a manager-level login (§2).
 2. Go to **Register Activity** (Employee group in the menu, `/admin/registers`). Register Activity itself needs the `orders.manage` permission (`admin-nav-data.ts` L112).
-3. In the header buttons, tap **Safe** (`registers/page.tsx` L87–89).
+3. In the header buttons, tap **Safe** (`registers/page.tsx` L117–119).
 4. The page opens with the breadcrumb **Sell › Register Activity › Safe** and the title **Store safe**. **← Register Activity** takes you back.
 
 Direct address: `/admin/registers/safe`.
@@ -360,7 +360,7 @@ The system can book a supply run correctly (12100 Employee Advances Receivable, 
 
 **What this means for staff:** the system and the owner agree. When a manager opens the Manager Till from the back office, the **Open drawer** panel says *"Standard float for this register is $300.00"* and compares the count to it (`RegisterControls.tsx` L63–75). That is correct. Finding F-02-2 is **withdrawn** (D19).
 - The register app itself does not compare the count-in to any standard (F-01-13). Whatever is counted is the opening float.
-- Nothing in the app edits a register's float (`default_float_minor` is only read, `oversight.ts` L318). Correcting it is a database change for the build phase.
+- Nothing in the app edits a register's float (`default_float_minor` is only read, `oversight.ts` L310). Correcting it is a database change for the build phase.
 - These figures come from the migration files. The live database value was **not** read for this SOP (no production access in this slice). The owner can check it in Supabase: `select name, default_float_minor from registers;`.
 
 A till's float never comes from the master till on an ordinary day. It stays in the drawer overnight (§4.1). If a till's float is short at count-in, **do not top it up from the master till**. Report it (SOP-01 §4.3).
@@ -651,14 +651,14 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L112; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
 | 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L183–194; `src/lib/accounting/card-payment-core.ts` L7–8 |
 | 4.2 standard | Owner D11; `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
-| 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L87–89 |
+| 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L117–119 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
 | 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L660–702 |
 | 4.11 swaps | `src/app/api/pos/till/route.ts` L47, L132–135, L183–234; `src/lib/pos/till-core.ts` L61–74, L210–232; `src/app/(site)/pos/RegisterShell.tsx` L5650, L5713, L5745, L5799–5832, L5900–5916 |
-| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L104–118, L168–190; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
+| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L108–122, L172–194; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
 | 4.13 supply runs | `register-cash-journal-core.ts` L495–646; `src/lib/accounting/ledger-census-data.ts` L1639–1670; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
-| 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L318 |
+| 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L310 |
 | 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L45, L74, L208–247; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L122–151 |
 | 4.17 immutability | `0135` L95–108; `grep safe_counts src` (insert and select only) |
 | 4.18 print/export | `safe/page.tsx` (no `PrintButton`); finding F-00-8 |

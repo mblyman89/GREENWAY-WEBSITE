@@ -41,6 +41,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import { lookupSaleByReceipt, processCounterReturn } from "@/lib/pos/returns-store";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+import { openDrawerIdForRegister, assignReturnRefund } from "@/lib/registers/drawer-figure-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -160,6 +161,24 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   );
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 422 });
 
+  // Fix slice 2.1 (G-05 / F-01-4): the cash for a register return leaves
+  // THIS register's open drawer, so tie the refund to that drawer. If no
+  // drawer is open on this register (or migration 0313 is not applied) the
+  // return stays untied, and reconcile will ask a manager to say which
+  // drawer or the safe paid it. Nothing is guessed.
+  const refundDrawerSessionId = await openDrawerIdForRegister(auth.device.register_id);
+  let refundTie: string;
+  if (refundDrawerSessionId) {
+    const tie = await assignReturnRefund({
+      returnId: result.returnId,
+      paidFrom: "drawer",
+      drawerSessionId: refundDrawerSessionId,
+    });
+    refundTie = tie.ok ? "drawer" : `untied: ${tie.error}`;
+  } else {
+    refundTie = "untied: no open drawer on this register";
+  }
+
   // Same audit action as the back-office path, tagged as register-originated.
   await recordAudit({
     actorId: employee.staff_id,
@@ -180,6 +199,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       correction_operation: result.correctionOperation,
       approved_by: employee.full_name,
       processed_by_name: processedByName,
+      refund_drawer_session_id: refundDrawerSessionId,
+      refund_tie: refundTie,
     },
   });
 

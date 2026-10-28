@@ -30,7 +30,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-02 | Master till ↔ little safe denomination log (and register-swap denominations) | D3 | F-01-8, F-00-7, F-02-8 | **SOP-02 §4.10 form 8.2** (master ↔ little safe) and **§4.11 form 8.3** (register ↔ master); SOP-01 §4.26 | OPEN |
 | G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
 | G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (D23–D27 set the rules) |
-| G-05 | Per-shift / per-cashier report | (original request: "shift close reports") | F-01-10 | SOP-01 §4.27 step 9 (X report), close slip 8.2 per drawer | OPEN |
+| G-05 | Per-shift / per-cashier report | (original request: "shift close reports") | F-01-10 | Close slip 8.2 per drawer; the till summary prints the drawer's figure | **PARTLY BUILT** (Phase 2.1: per-drawer cash figure at reconcile, F-01-4 FIXED); printable per-cashier shift report still OPEN |
 | G-06 | SOPs readable, printable and **exportable** in the Employee area; report export | (original request) | F-00-8, F-00-10 | Markdown files in `docs/sop/`; print from the browser | **PARTLY BUILT** (D75: SOP Library at Employee → SOP Library reads and prints every SOP); report export still OPEN |
 | G-07 | Crawler PO builder: save the fetched vendor-menu data | D4 | F-00-15 | None needed yet | OPEN · TO AUDIT (SOP-09) |
 | G-08 | Master till denomination standard (D11 mix) checked and shown | D11 | F-02-3 | SOP-02 §4.9, form 8.1 mix columns | OPEN |
@@ -142,6 +142,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Owner (original request):** "shift close reports" and day close.
 - **Today:** the day report is per register, not per shift or cashier (F-01-10; day-report L58/104/119).
 - **Interim:** SOP-01 §4.27 step 9. Print an X report before a close when the register has more than one drawer that day, and keep close slip 8.2 per drawer.
+- **Status: PARTLY BUILT (Phase 2.1; owner message 4: *"per-drawer figure"*).** Built: each drawer's cash figure (sales count, gross, rounding, employee tab, cash sales, refunds paid from the drawer, drops, expected, over/short) is built by the server from the sales that carry the drawer's id and the refunds tied to it (migration 0313), shown on the Reconcile card and used by reconcile (no typed figure). The till summary prints the stored cash sales and refunds. Untied refunds block reconcile until a manager ties them. The X report split (SOP-01 §4.27 step 9) is no longer needed. **Still OPEN:** a printable per-cashier shift summary (sales, voids, no-sales, discounts, adjustments by employee); the X/Z day report stays per register.
 
 ## G-06 · SOPs in the Employee area + export
 

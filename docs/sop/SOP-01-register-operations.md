@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (draft for owner review; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.5 (draft for owner review; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -616,7 +616,7 @@ Use this when a sale was rung wrong and the customer is still here (or it was a 
 
 Limits: whole sales only; completed sales only; only once; not after any part was returned; same day only. For older sales, use **Return an item** (4.23).
 
-> **Drawer effect:** the void pays cash out of **your** drawer. The manager must subtract it from cash sales at reconcile (4.30, finding F-01-4). Write the receipt number and the amount on your close slip.
+> **Drawer effect:** the void pays cash out of **your** drawer. Since Phase 2.1 (G-05) the register records which drawer paid it: the drawer that is open on this register when the void is processed (`src/app/api/pos/void/route.ts` L101). Reconcile subtracts it automatically (4.30). If no drawer was open on the register, the void is left **not tied to a drawer**, and the manager says where its cash came from before reconciling. Still write the receipt number and the amount on your close slip.
 
 ### 4.23 Customer returns
 
@@ -640,7 +640,9 @@ Steps:
 8. A manager or lead enters their PIN and taps **Process return & refund $X**.
 9. *"Return processed — hand back $X cash; N points reversed."* (plus *"Product goes to the quarantine bin."* when destroying). Hand back the cash from the drawer.
 
-The refund is the exact price the customer paid. The server also queues the state-reporting (CCRS) correction and claws back loyalty points in proportion to the refund.
+The refund is the exact price the customer paid.
+
+> **Drawer effect (Phase 2.1, G-05):** a return processed on the register is tied to the drawer that is open on this register at that moment (`src/app/api/pos/returns/route.ts` L169). Reconcile subtracts it automatically (4.30). If no drawer was open, the return is left **not tied to a drawer** and a manager ties it before reconcile. A return processed at the back-office **Returns desk** asks **Cash paid from** (an open drawer, or **Store safe**) and will not process until one is picked (SOP-15). The server also queues the state-reporting (CCRS) correction and claws back loyalty points in proportion to the refund.
 
 ### 4.24 Reprinting a receipt
 
@@ -708,7 +710,7 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
 6. Count **every** bill and coin in the drawer by denomination and type **how many** of each. Count twice.
 7. **Tips (counted separately)**: enter the tip-jar total, or leave it blank if there is no tip jar. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."* Blank means "not recorded". **0** means "counted, and there were none".
 8. **Second-person count (owner rule D2, interim paper step).** Before you tap the button, **any second employee** recounts the drawer by themselves and writes their total on the **Close slip (form 8.2)**. If the two counts differ, recount together until they agree. Both sign the slip. The register does not record the second count yet (findings F-01-9 and F-00-5).
-9. **More than one drawer on this register today?** If someone else will count in on this register after you, ask a manager or lead to print an **X report** (4.28) **right before** you tap the button below. The day report covers the whole register for the day. The manager needs your X report to split the day's sales between drawers (4.30).
+9. **More than one drawer on this register today?** You no longer need an X report to split the day. Since Phase 2.1 (G-05) every sale carries the drawer it was rung on, and reconcile adds up only this drawer's sales (4.30). An X report is still useful for the paperwork, but it is optional.
 10. Tap **Record blind count & close**.
 11. Success: *"Blind count recorded — a manager reconciles it in the back office."* (or *"Blind count recorded with $X in tips — …"*).
 12. Handle the cash as in 4.29.
@@ -744,7 +746,7 @@ Messages: *"No open drawer on this register."* (already closed, or never opened)
 | **Drawer sessions**, **Opening float**, **Safe drops (N)** | Drawer activity for the day |
 | **Over / short (reconciled)** or **Over / short: pending manager reconcile** | The over/short appears only after a manager reconciles (4.30) |
 
-**Cash the register took today** = **Gross + Cash rounding − Employee tab − refunds paid from this drawer**. The manager uses this figure at reconcile (4.30).
+**Cash the register took today** = **Gross + Cash rounding − Employee tab − refunds paid from this drawer**. Since Phase 2.1 (G-05) the manager does **not** work this out at reconcile: the reconcile card shows the same figure **per drawer**, built by the system (4.30). The day report stays per register, and its refund section stays store-wide.
 
 Messages: *"Offline — the day report needs a connection to verify the PIN and read the day's ledger."* · *"Day report failed — try again."* · *"Could not reach the server — try again."*
 
@@ -769,16 +771,36 @@ A drawer moves through four states: **open → closed → reconciled → verifie
 - a gold **Verify till** card for a reconciled drawer.
 
 **Reconcile (reveal over/short)**
-1. The card reads *"<business day> · counted $X vs expected $Y"*, plus tips if recorded (*"(employee money, not drawer cash)"*).
-   - ⚠ **Before reconcile, "expected" always shows $0.00.** The expected figure is calculated **only when you reconcile** (finding F-01-3). Ignore it.
-2. If there were refunds that day: *"$X refunded store-wide this day (voids + returns) — enter cash sales NET of refunds paid from this drawer."*
-3. Work out **Cash sales ($)** from the Z (or X) report for this register: **Gross + Cash rounding − Employee tab − voids/returns paid from this drawer** (use the close slip to see which voids/returns this drawer paid). If the register had **two or more drawers** that day, the first drawer's sales come from the X report printed at its close, and each later drawer's sales = the next report's figure − the previous report's figure. Do it on paper. Check it twice. **Never leave it blank.** A blank counts as $0, which shows a huge false "over" (findings F-01-4 and F-00-13).
-4. **Reconciled by**: see the warning below.
-5. Tap **Reconcile**. The system calculates **expected = opening float + cash sales − drops** and **over/short = counted − expected**. The banner shows *"Drawer reconciled · Balanced"*, *"Over by $X"* or *"Short by $X"*, plus the books outcome. Reconcile posts the drawer's cash and over/short to the books, and that posting cannot be undone from this screen.
+
+Since Phase 2.1 (G-05, findings F-01-4 and F-01-3) **you do not type cash sales**. The card shows the drawer's **system figure**, built from the server's own records (`src/lib/registers/drawer-figure-core.ts` `buildDrawerFigure` L129):
+
+| Row on the card | Where it comes from |
+|---|---|
+| **Opening float** | The count-in of this drawer |
+| **Sales on this drawer (N)** | Every processed register sale that carries this drawer's ID (the register stamps the open drawer on each sale, and the server checks it) |
+| **Cash rounding** | Net nickel rounding on those sales (shown only when not $0.00) |
+| **Employee tab, no cash (N)** | Tab sales: sales, but no cash came in (taken off) |
+| **Other tender, not cash (N)** | Only if a non-cash tender is ever switched on (the store is cash-only today) |
+| **= Cash sales** | Gross + Cash rounding − Employee tab − Other tender |
+| **Refunds paid from this drawer (N)** | Voids and returns tied to this drawer, listed one per line |
+| **Drops to the safe** | This drawer's recorded drops |
+| **= Expected in drawer** | Opening float + Cash sales − Refunds − Drops |
+| **Counted at close** / **Over / short** | The blind count, and counted − expected |
+
+1. Read the figure. The expected amount is now the real one (the old "$0.00 before reconcile" problem is gone).
+2. If a sale from this drawer was **refused by the server** (an exception), the card says so. It is **not** counted, so if the customer paid, the drawer will show over by that amount. Clear it in **Register exceptions** (4.32).
+3. **Reconcile waits until:** a red box lists anything the system cannot know. The **Reconcile** button stays off until the list is empty:
+   - *"N sale(s) from this drawer is/are still processing. Wait for the register to finish syncing, then reload."*
+   - *"N cash refund(s) ($X) on this day is/are not tied to a drawer or the safe. Say where each one was paid from first."*
+   - *"The records behind this drawer's figure could not all be read … Nothing is guessed: try again in a minute."*
+   - *"This drawer has no opening count, so its expected cash cannot be worked out."*
+4. **Tying a refund.** Under *"Say where each refund's cash came from:"* each untied void or return is listed with its amount and time. Pick the drawer it was paid from (or **Store safe**) under **Paid from…**, then tap **Tie refund**. Use the close slips and the void/return receipts to decide. **Do not guess**: if you are not sure, ask the cashiers first. A refund can be tied only once, and never to a drawer that is already reconciled. The banner reads *"Refund tied. The drawer figures below now include it."*
+5. Tap **Reconcile**. You are signed in, so the system records **you** as the reconciler (your employee record). There is no name box any more (finding F-01-5). The server builds the figure again at the moment you click, and refuses if anything changed. Expected and over/short are worked out as in the table. The banner shows *"Drawer reconciled · Balanced"*, *"Over by $X"* or *"Short by $X"*, plus the books outcome. Reconcile posts the drawer's cash and over/short to the books, and that posting cannot be undone from this screen.
+   - If two managers click at once, only the first counts. The second sees *"This drawer was reconciled by someone else a moment ago. Nothing was changed. Reload the page."* (finding F-01-2, reconcile part).
 6. **$5 rule (owner decision D7, interim paper step):** if the result is **over or short by more than $5.00**, the manager fills in the **Over/short reason form (form 8.5)** with the cashier: who, when, how much, and the **required** reason. Give it to the owner. The admin-only warnings screen the owner asked for is not built yet (finding F-01-11).
    - **$5.00 or less:** write the amount on the close slip (form 8.2). **No reason is required** (owner decision **D21**: *"Q-03-1- only over $5"*). A note is welcome if the cause is known, but it is optional (gap G-03).
 
-> ⚠ **Known problem, "Reconciled by" / "Verified by" (findings F-00-4, F-00-3, F-01-5).** These boxes are typed text, but the database column only accepts an employee ID. **Typing a name is expected to fail with a database error.** Until this is fixed: **leave the box blank** and write your name and the time on the close slip. The back-office audit log still records which login pressed the button.
+> ⚠ **Known problem, "Verified by" (findings F-00-4, F-00-3).** This box is typed text, but the database column only accepts an employee ID. **Typing a name is expected to fail with a database error.** Until this is fixed: **leave the box blank** and write your name and the time on the close slip. The back-office audit log still records which login pressed the button. (Reconcile no longer has a name box: Phase 2.1 records the signed-in manager, F-01-5 reconcile part.)
 
 **Verify till (next morning)**
 1. The gold card reads *"<business day> · reconciled, awaiting manager verify"*.
@@ -786,12 +808,12 @@ A drawer moves through four states: **open → closed → reconciled → verifie
 3. Tick or untick **Count agrees**. Leave **Verified by** blank (see the warning above). Tap **Verify**.
 4. ⚠ **The screen has no denomination boxes**, so the system records the recount as $0 and the variance as minus the closing count, whatever you tick (finding F-00-3). **The paper close slip, signed by the morning verifier, is the real record until this is fixed.**
 
-> ⚠ **Double-clicks.** Reconcile and verify do not guard against being run twice (finding F-01-2). Click **once** and wait for the green banner.
+> ⚠ **Double-clicks.** Since Phase 2.1 reconcile is safe against a double click (it only changes a drawer that is still **closed**). **Verify** still does not guard against being run twice (finding F-01-2). Click **once** and wait for the green banner.
 
 > ⚠ **Always reconcile before you verify.** The system will accept **Verify** on a drawer that was never reconciled (finding F-01-12). If that happens, the drawer can never be reconciled afterwards, so its over/short is never calculated and never posted to the books. The screen shows the **Verify till** card only after reconcile. Do not try to get around that order.
 
 **Related back-office pages** (Registers menu):
-- **Cash drawer reports** (`/admin/registers/history`): closed, reconciled and verified sessions, each with a printable summary.
+- **Cash drawer reports** (`/admin/registers/history`): closed, reconciled and verified sessions, each with a printable summary. After a Phase 2.1 reconcile the summary also prints **Cash sales on this drawer (system figure)** and **Refunds paid from this drawer**. Drawers reconciled before Phase 2.1 were typed, so those rows are left off.
 - **End of day** (`/admin/registers/eod`): the whole-store day, marked *"Preliminary — a drawer is still open"* or *"Final — all drawers closed"*. Printable.
 - **Store safe** (`/admin/registers/safe`): *"The $1,000 change fund behind the registers."* AM/PM counts → SOP-02.
 - **Register exceptions** (`/admin/registers/exceptions`) → 4.32.
@@ -1217,7 +1239,7 @@ Owner reviewed: ____________________   Date: ________
 | 4.20 pickup | `RegisterShell.tsx` (PickupQueueModal ≈L4350), `src/app/api/pos/pickup/route.ts`, `src/lib/pos/pickup-progress-core.ts`, `pickup-detail-core.ts` |
 | 4.21–4.24 no sale, void, return, reprint | `RegisterShell.tsx` (NoSaleModal ≈L3176, VoidSaleModal ≈L3319, ReturnsModal ≈L3574), `src/lib/pos/void-sale-core.ts`, `returns-core.ts`, `/api/pos/void`, `/api/pos/returns`, `/api/pos/reprint` |
 | 4.28 X/Z | `RegisterShell.tsx` (DayReportModal ≈L5149), `src/lib/pos/day-report-core.ts`, `/api/pos/day-report` |
-| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx`, `actions.ts`, `src/lib/registers/store.ts`, `oversight.ts`, `eod/`, `history/`, `safe/` |
+| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L495), `actions.ts` (reconcileDrawerAction L130, assignRefundAction L230), `src/lib/registers/store.ts` (reconcileDrawer L273), `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
 | 4.32 sync/exceptions | `src/lib/pos/sync-store.ts`, `sync-core.ts`, `src/lib/orders/completion-gate.ts`, `src/app/admin/registers/exceptions/page.tsx` |
 | 4.33 86 | `SaleFlow.tsx` (ProductInfoModal ≈L4274), `src/lib/pos/stock-flag-core.ts`, `src/components/admin/inventory/RegisterSellabilityBanner.tsx` |
 
@@ -1229,10 +1251,10 @@ Owner reviewed: ____________________   Date: ________
 | D3: log big bills master till → little safe, and which small bills/coin came back | Swap records value only | Swap log 8.3 and Notes | G-02 · F-01-8, F-00-7 |
 | D7: $5 over/short warning screen (admin only: who, when, how much, required reason) | Not built | Form 8.5 to the owner | G-03 · F-01-11 |
 | Deposit bag (seal → morning verify → safe → bank) | Tables exist, no screen | SOP-03 paper | G-04 · F-00-6 |
-| Per-shift / per-cashier report | Day report is per register | Close slip per drawer | G-05 · F-01-10 |
+| Per-shift / per-cashier report | **Reconcile figure is per drawer (BUILT, Phase 2.1).** The printed X/Z day report is still per register | Close slip per drawer; the till summary prints the drawer's figure | G-05 (drawer figure BUILT; printable per-cashier shift report open) · F-01-10 |
 | Morning verify with recount and verifier identity | No denominations; name box broken | Paper slip is the record | F-00-3 |
-| Reconcile name box | Free text into an ID column | Leave blank, sign the slip | F-00-4, F-01-5 |
-| Computed cash sales per drawer | Typed by hand | Paper formula in 4.30 | F-01-4, F-00-13 |
+| Verify name box | Free text into an ID column | Leave blank, sign the slip | F-00-4 (reconcile part of F-01-5 FIXED, Phase 2.1) |
+| ~~Computed cash sales per drawer~~ | **BUILT, Phase 2.1**: the system figure (4.30) | None needed | F-01-4, F-00-13, F-01-3 FIXED |
 
 ## Appendix C: Revision history
 
@@ -1241,5 +1263,6 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.5 draft | Fix phase | Phase 2.1 (owner message 4: *"per-drawer figure"*). G-05 drawer figure BUILT: reconcile shows and uses the system figure per drawer (no typed cash sales, F-01-4 / F-00-13 FIXED; real expected before reconcile, F-01-3 FIXED); refunds say which drawer or the safe paid (migration 0313); untied refunds block reconcile until a manager ties them; reconcile is compare-and-swap (F-01-2 reconcile part) and records the signed-in manager (F-01-5 reconcile part). §4.22, §4.23, §4.27 step 9, §4.28, §4.30, Appendix A and B updated. | Fix program |
 | 1.4 draft | Fix phase | Phase 1.4 (owner D76). G-44 BUILT (SOP-15 v1.4): a **Destroy** return's units are held on the lot, counted on hand but never sellable, and the return is saved in one step. §4.23 step 6 updated. | Fix program |
 | 1.3 draft | Fix phase | Phase 0.1 (owner D76). F-01-14 FIXED: the register refuses payment when the simulated endorsement took tax off (`medicalTestModeSaleBlock`, `src/lib/pos/medical-testmode-core.ts`; called in `SaleFlow.tsx` onPaid). The server sync refuses a medical sale with tax removed when `medical_endorsement_config` says not endorsed (`src/lib/pos/sync-store.ts`). §4.4 banner note and the MORE-menu row updated. | Fix program |

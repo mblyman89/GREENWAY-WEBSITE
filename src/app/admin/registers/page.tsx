@@ -10,7 +10,10 @@ import { getRegisterActivity, type ActivityKind } from "@/lib/registers/oversigh
 import { listPosExceptions } from "@/lib/pos/sync-store";
 import { listPosDevices } from "@/lib/pos/device-store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
-import { reconcileDrawerAction, verifyTillAction } from "./actions";
+import { reconcileDrawerAction, verifyTillAction, assignRefundAction } from "./actions";
+import { loadDrawerFigure, drawersForDay, type LoadedDrawerFigure } from "@/lib/registers/drawer-figure-store";
+import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-core";
+import { businessDayFor } from "@/lib/staffing/time";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +27,7 @@ export default async function RegisterActivityPage({
     reconciled?: string;
     verified?: string;
     posted?: string;
+    assigned?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
@@ -58,6 +62,32 @@ export default async function RegisterActivityPage({
   const rejectedDevices = devicesResult.ok
     ? devicesResult.devices.filter((d) => d.status === "active" && d.rejected_count > 0)
     : [];
+
+  // Fix Phase 2.1 (G-05 / F-01-4): each closed drawer's own cash figure,
+  // built by the server from the drawer's sales, the refunds tied to it and
+  // its drops. Managers only (it reveals expected cash).
+  const reconcileItems = canManage ? attention.filter((a) => a.kind === "reconcile") : [];
+  const figures = new Map<string, LoadedDrawerFigure | null>();
+  await Promise.all(
+    reconcileItems.map(async (a) => {
+      figures.set(a.sessionId, await loadDrawerFigure(a.sessionId));
+    }),
+  );
+  // Drawers a refund can still be tied to (not yet reconciled), per day.
+  const refundDays = new Set<string>();
+  for (const f of figures.values()) {
+    for (const r of f?.figure.unattributed ?? []) refundDays.add(refundDay(r, f!.session.business_day));
+  }
+  const drawerChoices = new Map<string, { id: string; label: string }[]>();
+  await Promise.all(
+    [...refundDays].map(async (day) => {
+      const list = await drawersForDay(day);
+      drawerChoices.set(
+        day,
+        list.filter((d) => d.status === "open" || d.status === "closed").map((d) => ({ id: d.id, label: d.label })),
+      );
+    }),
+  );
 
   return (
     <div>
@@ -200,47 +230,12 @@ export default async function RegisterActivityPage({
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {attention.map((a) =>
                   a.kind === "reconcile" ? (
-                    <Card key={a.sessionId} padding="md" accent="orange">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-semibold text-[var(--admin-text)]">
-                          {a.registerName}
-                        </span>
-                        <Badge tone="orange">Reconcile</Badge>
-                      </div>
-                      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-                        {a.businessDay} · counted {formatCents(a.closingCountMinor)} vs expected{" "}
-                        {formatCents(a.expectedCloseMinor)}
-                        {a.tipsMinor != null
-                          ? ` · ${formatCents(a.tipsMinor)} tips at close (employee money, not drawer cash)`
-                          : ""}
-                      </p>
-                      {a.dayRefundTotalMinor > 0 && (
-                        <p className="mb-3 text-xs font-medium text-[var(--admin-text)]">
-                          {formatCents(a.dayRefundTotalMinor)} refunded store-wide this day (voids +
-                          returns) — enter cash sales NET of refunds paid from this drawer.
-                        </p>
-                      )}
-                      <form action={reconcileDrawerAction} className="flex flex-wrap items-end gap-2">
-                        <input type="hidden" name="session_id" value={a.sessionId} />
-                        <label className="flex-1 text-xs text-[var(--admin-text-muted)]">
-                          Cash sales ($)
-                          <Input
-                            name="cash_sales"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0.00"
-                          />
-                        </label>
-                        <label className="flex-1 text-xs text-[var(--admin-text-muted)]">
-                          Reconciled by
-                          <Input name="reconciled_by" placeholder="Manager name" />
-                        </label>
-                        <Button type="submit" variant="confirm" size="sm">
-                          Reconcile
-                        </Button>
-                      </form>
-                    </Card>
+                    <ReconcileCard
+                      key={a.sessionId}
+                      item={a}
+                      loaded={figures.get(a.sessionId) ?? null}
+                      drawerChoices={drawerChoices}
+                    />
                   ) : (
                     <Card key={a.sessionId} padding="md" accent="gold">
                       <div className="mb-2 flex items-center justify-between">
@@ -448,7 +443,7 @@ export default async function RegisterActivityPage({
 function Flash({
   sp,
 }: {
-  sp: { error?: string; reconciled?: string; verified?: string; posted?: string };
+  sp: { error?: string; reconciled?: string; verified?: string; posted?: string; assigned?: string };
 }) {
   if (sp.error) {
     return (
@@ -470,6 +465,13 @@ function Flash({
       </div>
     );
   }
+  if (sp.assigned != null) {
+    return (
+      <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
+        Refund tied. The drawer figures below now include it.
+      </div>
+    );
+  }
   if (sp.verified != null) {
     return (
       <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
@@ -478,6 +480,157 @@ function Flash({
     );
   }
   return null;
+}
+
+/** The Pacific business day a refund belongs to (its own time, else the drawer's day). */
+function refundDay(r: FigureRefund, fallback: string): string {
+  return r.atIso ? businessDayFor(r.atIso) : fallback;
+}
+
+/**
+ * Fix Phase 2.1 (G-05 / F-01-3 / F-01-4): the reconcile card. Nothing is
+ * typed: the figure is the server's, the reconciler is the signed-in
+ * manager. Anything the figure cannot know is listed and blocks the button.
+ */
+function ReconcileCard({
+  item,
+  loaded,
+  drawerChoices,
+}: {
+  item: { sessionId: string; registerName: string; businessDay: string; closingCountMinor: number | null; tipsMinor: number | null };
+  loaded: LoadedDrawerFigure | null;
+  drawerChoices: Map<string, { id: string; label: string }[]>;
+}) {
+  const f = loaded?.figure ?? null;
+  const ready = f ? figureReady(f) : false;
+  return (
+    <Card padding="md" accent="orange">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-[var(--admin-text)]">{item.registerName}</span>
+        <Badge tone="orange">Reconcile</Badge>
+      </div>
+      <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
+        {item.businessDay}
+        {item.tipsMinor != null
+          ? ` · ${formatCents(item.tipsMinor)} tips at close (employee money, not drawer cash)`
+          : ""}
+      </p>
+      {!f ? (
+        <p className="text-xs text-[var(--admin-danger)]">This drawer could not be loaded. Reload the page.</p>
+      ) : (
+        <>
+          <dl className="mb-3 space-y-1 text-xs">
+            <Row label="Opening float" value={f.openingMinor == null ? "Not counted" : formatCents(f.openingMinor)} />
+            <Row
+              label={`Sales on this drawer (${f.saleCount})`}
+              value={formatCents(f.grossMinor)}
+            />
+            {f.roundingMinor !== 0 && <Row label="Cash rounding" value={formatCents(f.roundingMinor)} />}
+            {f.employeeTabMinor > 0 && (
+              <Row label={`Employee tab, no cash (${f.employeeTabCount})`} value={`− ${formatCents(f.employeeTabMinor)}`} />
+            )}
+            {f.otherTenderMinor > 0 && (
+              <Row label={`Other tender, not cash (${f.otherTenderCount})`} value={`− ${formatCents(f.otherTenderMinor)}`} />
+            )}
+            <Row label="= Cash sales" value={formatCents(f.cashSalesMinor)} />
+            <Row
+              label={`Refunds paid from this drawer (${f.refundsPaid.length})`}
+              value={`− ${formatCents(f.refundsPaidMinor)}`}
+            />
+            <Row label="Drops to the safe" value={`− ${formatCents(f.dropsMinor)}`} />
+            <Row label="= Expected in drawer" value={f.expectedMinor == null ? "Unknown" : formatCents(f.expectedMinor)} />
+            <Row
+              label="Counted at close"
+              value={item.closingCountMinor == null ? "Not counted" : formatCents(item.closingCountMinor)}
+            />
+            {f.overShortMinor != null && <Row label="Over / short" value={overShortLabel(f.overShortMinor)} />}
+          </dl>
+          {f.refundsPaid.length > 0 && (
+            <ul className="mb-3 list-disc pl-5 text-xs text-[var(--admin-text-muted)]">
+              {f.refundsPaid.map((r) => (
+                <li key={`${r.source}:${r.sourceId}`}>
+                  {r.label ?? (r.source === "void" ? "Void" : "Counter return")} · {formatCents(r.refundMinor)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {f.exceptionCount > 0 && (
+            <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+              {f.exceptionCount} sale{f.exceptionCount === 1 ? "" : "s"} ({formatCents(f.exceptionMinor)}) from this
+              drawer {f.exceptionCount === 1 ? "was" : "were"} refused by the server and {f.exceptionCount === 1 ? "is" : "are"} not
+              counted. If the customer paid, the drawer will be over by that amount. See Exceptions.
+            </p>
+          )}
+          {f.blockers.length > 0 && (
+            <div className="mb-3 rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger)]/10 p-2 text-xs text-[var(--admin-danger)]">
+              <p className="font-semibold">Reconcile waits until:</p>
+              <ul className="list-disc pl-5">
+                {f.blockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {f.unattributed.length > 0 && (
+            <div className="mb-3 space-y-2">
+              <p className="text-xs font-medium text-[var(--admin-text)]">
+                Say where each refund&apos;s cash came from:
+              </p>
+              {f.unattributed.map((r) => {
+                const day = refundDay(r, item.businessDay);
+                const choices = drawerChoices.get(day) ?? [];
+                return (
+                  <form
+                    key={`${r.source}:${r.sourceId}`}
+                    action={assignRefundAction}
+                    className="flex flex-wrap items-end gap-2 text-xs"
+                  >
+                    <input type="hidden" name="source" value={r.source} />
+                    <input type="hidden" name="source_id" value={r.sourceId} />
+                    <input type="hidden" name="business_day" value={day} />
+                    <span className="flex-1 text-[var(--admin-text-muted)]">
+                      {r.label ?? (r.source === "void" ? "Void" : "Counter return")} · {formatCents(r.refundMinor)}
+                      {r.atIso
+                        ? ` · ${new Date(r.atIso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+                        : ""}
+                    </span>
+                    <select
+                      name="paid_from"
+                      required
+                      defaultValue=""
+                      className="rounded border border-[var(--admin-border)] bg-transparent px-2 py-1"
+                    >
+                      <option value="" disabled>
+                        Paid from…
+                      </option>
+                      {choices.map((d) => (
+                        <option key={d.id} value={`drawer:${d.id}`}>
+                          {d.label}
+                        </option>
+                      ))}
+                      <option value="safe">Store safe</option>
+                    </select>
+                    <Button type="submit" variant="neutral" size="sm">
+                      Tie refund
+                    </Button>
+                  </form>
+                );
+              })}
+            </div>
+          )}
+          <form action={reconcileDrawerAction} className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="session_id" value={item.sessionId} />
+            <Button type="submit" variant="confirm" size="sm" disabled={!ready}>
+              Reconcile
+            </Button>
+            <span className="text-xs text-[var(--admin-text-faint)]">
+              Signed as you. The server re-checks this figure when you click.
+            </span>
+          </form>
+        </>
+      )}
+    </Card>
+  );
 }
 
 function Row({ label, value }: { label: string; value: string }) {

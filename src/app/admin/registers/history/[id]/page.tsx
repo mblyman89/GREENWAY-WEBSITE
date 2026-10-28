@@ -109,6 +109,18 @@ export default async function TillSummaryPage({
             />
             {revealed ? (
               <>
+                {/* Fix Phase 2.1 (G-05): the system figure the reconcile used
+                    (migration 0313). Older drawers, reconciled from a typed
+                    figure, have no stored split, so the rows are left out. */}
+                {session.cash_sales_minor != null ? (
+                  <Row label="Cash sales on this drawer (system figure)" value={formatCents(session.cash_sales_minor)} />
+                ) : null}
+                {session.refunds_paid_minor != null ? (
+                  <Row
+                    label="Refunds paid from this drawer"
+                    value={session.refunds_paid_minor > 0 ? `−${formatCents(session.refunds_paid_minor)}` : "—"}
+                  />
+                ) : null}
                 <Row
                   label="Expected close (manager-revealed)"
                   value={session.expected_close_minor == null ? "—" : formatCents(session.expected_close_minor)}

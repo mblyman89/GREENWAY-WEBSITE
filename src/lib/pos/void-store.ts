@@ -336,6 +336,12 @@ export type ProcessVoidInput = {
   /** Register employee performing the void (display only on the slip). */
   processedByName: string;
   deviceId: string;
+  /**
+   * Fix Phase 2.1 (G-05): the open drawer of the register this iPad is bound
+   * to, when there is one. The cash is handed back from that drawer, so the
+   * drawer's figure subtracts it. Null = not tied (a manager ties it).
+   */
+  drawerSessionId?: string | null;
 };
 
 export type ProcessVoidResult =
@@ -459,6 +465,8 @@ export async function processVoidSale(input: ProcessVoidInput): Promise<ProcessV
       reason: request.reason,
       approvedByEmployeeId: input.approver.id,
       refundMinor: refund.refundMinor,
+      // Fix Phase 2.1: which drawer paid the cash out (null = not tied yet).
+      drawerSessionId: input.drawerSessionId ?? null,
       pointsClawed,
       restock: restockNote,
     },

@@ -104,7 +104,18 @@ Concierge code is **unchanged** (record-only). What SOP-01 now provides as sourc
 
 **Role filter needed (strategy item 3):** §4.30 (reconcile/verify) is for `inventory.manage` only. The concierge must not walk a `staff` user through it, only tell them "ask a manager to sign off" (which is what the page itself says).
 
-**Must ship with caveats:** the concierge has to repeat the SOP's known-problem warnings (F-01-3 "expected $0.00", F-01-5 "leave Reconciled by blank", F-00-3 "paper slip is the record") until those findings are fixed. Otherwise it will give advice that fails.
+**Must ship with caveats:** the concierge has to repeat the SOP's known-problem warnings (F-01-3 "expected $0.00", F-01-5 "leave Reconciled by blank", F-00-3 "paper slip is the record") until those findings are fixed. Otherwise it will give advice that fails. *(Phase 2.1: F-01-3 FIXED and the reconcile part of F-01-5 FIXED, so those two caveats are retired; the `registers` entry in `concierge-kb.ts` now explains the system figure. F-00-3 and "leave Verified by blank" still apply.)*
+
+**Phase 2.1 (G-05 per-drawer figure) answers, managers only (`inventory.manage`):**
+
+| Question | Answer (built, Phase 2.1) |
+|---|---|
+| How do I work out cash sales at reconcile? | You don't. The Reconcile card shows the drawer's system figure: sales on this drawer, rounding, employee tab, cash sales, refunds paid from this drawer, drops, expected, counted, over/short (SOP-01 §4.30) |
+| Why is the Reconcile button greyed out? | The red box **Reconcile waits until:** lists what the system cannot know yet: a sale still processing, a refund not tied to a drawer or the safe, a read that did not finish, or no opening count (§4.30 step 3) |
+| A refund says "not tied to a drawer" | Pick the drawer it was paid from (or **Store safe**) under **Paid from…** and tap **Tie refund**; check the close slips and receipts first, never guess (§4.30 step 4) |
+| Who is recorded as the reconciler? | You, the signed-in manager (no name box any more) (§4.30 step 5) |
+| Do I still need an X report when a register has two drawers? | No; each sale carries its drawer, so each drawer's figure is exact (SOP-01 §4.27 step 9) |
+| At the Returns desk, what is "Cash paid from"? | The open register drawer you take the refund out of, or **Store safe**; required, never defaulted (SOP-15 §4.5 step 7) |
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, plus 3 proposed new topics. The concierge itself is still at the baseline until the integration phase.
 

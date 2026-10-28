@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { parseDenoms } from "@/lib/registers/cash";
 import { tipsToMinor } from "@/lib/pos/till-core";
 import {
@@ -13,6 +15,9 @@ import {
   reconcileDrawer,
   verifyTill,
 } from "@/lib/registers/store";
+import { loadDrawerFigure, assignReturnRefund, VOID_REFUND_ASSIGNED_ACTION, voidRefundState } from "@/lib/registers/drawer-figure-store";
+import { figureReady, parsePaidFrom } from "@/lib/registers/drawer-figure-core";
+import { getSession } from "@/lib/registers/store";
 import {
   postDrawerCloseForSession,
   describeDrawerPostOutcome,
@@ -27,6 +32,16 @@ function dollarsToMinor(raw: string): number {
   const n = Number(raw.replace(/[^0-9.\-]/g, ""));
   if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100);
+}
+
+/** The employees.id linked to a back-office login (employees.staff_id), or null. */
+async function employeeIdForStaff(staffId: string | null | undefined): Promise<string | null> {
+  if (!staffId || !isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.from("employees").select("id").eq("staff_id", staffId).limit(2);
+  if (error) return null;
+  const rows = (data as { id: string }[] | null) ?? [];
+  return rows.length === 1 ? rows[0].id : null; // two linked rows = ambiguous, never guessed
 }
 
 /** Open a drawer (count-in). Any active staff can count their own drawer. */
@@ -105,15 +120,39 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
   redirect(`${BASE}?closed=1`);
 }
 
-/** Reconcile (manager): reveal over/short. */
+/**
+ * Reconcile (manager): reveal over/short.
+ *
+ * Fix Phase 2.1 (G-05, F-01-4): no typed cash sales. The server builds this
+ * drawer's figure from its own records at the moment of the click (never
+ * from a number the page sent) and refuses while anything is unknown.
+ */
 export async function reconcileDrawerAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const sessionId = str(formData, "session_id");
   if (!sessionId) redirect(`${BASE}?error=` + encodeURIComponent("Missing session."));
+  const loaded = await loadDrawerFigure(sessionId);
+  if (!loaded) redirect(`${BASE}?error=` + encodeURIComponent("Session not found."));
+  const { figure } = loaded!;
+  if (!figureReady(figure)) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.reconcile_refused",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: { blockers: figure.blockers },
+    });
+    redirect(`${BASE}?error=` + encodeURIComponent(`Not reconciled: ${figure.blockers.join(" ")}`));
+  }
   const result = await reconcileDrawer({
     sessionId,
-    cashSalesMinor: dollarsToMinor(str(formData, "cash_sales")),
-    reconciledBy: str(formData, "reconciled_by") || null,
+    cashSalesMinor: figure.cashSalesMinor,
+    refundsPaidMinor: figure.refundsPaidMinor,
+    // F-01-5: the column takes an employee id, so it is filled from the
+    // signed-in manager's own employee record (never typed text). No linked
+    // employee record -> left blank; the audit entry still names the login.
+    reconciledBy: await employeeIdForStaff(session.profile.id),
   });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
 
@@ -132,7 +171,23 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
     // Rule 134: an outcome that is not written down did not happen. Whatever
     // the ledger did — posted, duplicate, skipped, refused or failed — lands
     // in the audit trail, not only in a redirect that the next click erases.
-    after: { ledger_kind: posted.kind, ledger_code: posted.code },
+    after: {
+      ledger_kind: posted.kind,
+      ledger_code: posted.code,
+      // Fix Phase 2.1: the figure the reconcile used, so it can be checked later.
+      cash_sales_minor: figure.cashSalesMinor,
+      sale_count: figure.saleCount,
+      employee_tab_minor: figure.employeeTabMinor,
+      other_tender_minor: figure.otherTenderMinor,
+      rounding_minor: figure.roundingMinor,
+      refunds_paid_minor: figure.refundsPaidMinor,
+      refunds_paid: figure.refundsPaid.map((r) => ({ source: r.source, id: r.sourceId, minor: r.refundMinor })),
+      drops_minor: figure.dropsMinor,
+      opening_minor: figure.openingMinor,
+      expected_minor: result.expectedMinor ?? null,
+      over_short_minor: result.overShortMinor ?? null,
+      exceptions_not_counted: figure.exceptionCount,
+    },
   });
   revalidatePath(BASE);
   redirect(
@@ -164,4 +219,65 @@ export async function verifyTillAction(formData: FormData): Promise<void> {
   });
   revalidatePath(BASE);
   redirect(`${BASE}?verified=${result.varianceMinor ?? 0}`);
+}
+
+/**
+ * Fix Phase 2.1 (G-05): say where an untied cash refund was paid from (a
+ * drawer of that day, or the store safe). Manager only. A return is tied by
+ * a compare-and-set on the row; a void (whose only record is its audit
+ * entry) is tied by an audit entry of its own, and only while it is untied.
+ */
+export async function assignRefundAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const source = str(formData, "source");
+  const sourceId = str(formData, "source_id");
+  const businessDay = str(formData, "business_day");
+  const choice = parsePaidFrom(str(formData, "paid_from"));
+  const back = str(formData, "back") === "drawer" && str(formData, "session_id")
+    ? `${BASE}/history/${encodeURIComponent(str(formData, "session_id"))}`
+    : BASE;
+  if (!sourceId || (source !== "void" && source !== "return") || !/^\d{4}-\d{2}-\d{2}$/.test(businessDay)) {
+    redirect(`${back}?error=` + encodeURIComponent("Missing refund."));
+  }
+  if (!choice) redirect(`${back}?error=` + encodeURIComponent("Pick the drawer or the safe the cash came from."));
+  if (choice!.paidFrom === "drawer") {
+    const s = await getSession(choice!.drawerSessionId!);
+    if (!s) redirect(`${back}?error=` + encodeURIComponent("That drawer was not found."));
+    if (s!.status === "reconciled" || s!.status === "verified") {
+      redirect(`${back}?error=` + encodeURIComponent("That drawer is already reconciled, so a refund can no longer be added to it."));
+    }
+  }
+  if (source === "return") {
+    const r = await assignReturnRefund({ returnId: sourceId, paidFrom: choice!.paidFrom, drawerSessionId: choice!.drawerSessionId });
+    if (!r.ok) redirect(`${back}?error=` + encodeURIComponent(r.error));
+  } else {
+    const state = await voidRefundState(sourceId, businessDay);
+    if (!state) redirect(`${back}?error=` + encodeURIComponent("That void was not found on that day."));
+    if (state!.paidFrom !== null) {
+      redirect(`${back}?error=` + encodeURIComponent("That void is already tied to a drawer or the safe. Reload the page."));
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: VOID_REFUND_ASSIGNED_ACTION,
+      entityType: "order",
+      entityId: sourceId,
+      after: {
+        refundPaidFrom: choice!.paidFrom,
+        drawerSessionId: choice!.drawerSessionId,
+        refundMinor: state!.refundMinor,
+        businessDay,
+      },
+    });
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "drawer.refund_assigned",
+    entityType: source === "void" ? "order" : "customer_returns",
+    entityId: sourceId,
+    after: { source, paid_from: choice!.paidFrom, drawer_session_id: choice!.drawerSessionId, business_day: businessDay },
+  });
+  revalidatePath(BASE);
+  redirect(`${back}?assigned=1`);
 }

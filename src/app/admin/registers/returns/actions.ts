@@ -27,6 +27,9 @@ import {
   type CounterReturnLookup,
   type ProcessCounterReturnResult,
 } from "@/lib/pos/returns-store";
+import { parsePaidFrom } from "@/lib/registers/drawer-figure-core";
+import { assignReturnRefund } from "@/lib/registers/drawer-figure-store";
+import { getSession as getDrawerSession } from "@/lib/registers/store";
 
 const BASE = "/admin/registers/returns";
 const REASONS = new Set<string>(CUSTOMER_RETURN_REASONS);
@@ -45,9 +48,24 @@ export type ProcessReturnInput = {
   disposition: "restock" | "destroy";
   originalPackaging: boolean;
   lotIdLegible: boolean;
+  /**
+   * Fix slice 2.1 (G-05 / F-01-4): where the refund cash comes from —
+   * "drawer:<drawer session id>" for an open register drawer, or "safe".
+   * Required: the drawer's reconcile figure subtracts it, so it is never
+   * guessed.
+   */
+  paidFrom: string;
 };
 
-export async function processReturnAction(input: ProcessReturnInput): Promise<ProcessCounterReturnResult> {
+/**
+ * Fix slice 2.1: the result also says when the refund could not be tied to
+ * the drawer or safe the manager picked (null when it was tied).
+ */
+export type ProcessReturnActionResult =
+  | (Extract<ProcessCounterReturnResult, { ok: true }> & { refundTieNote: string | null })
+  | Extract<ProcessCounterReturnResult, { ok: false }>;
+
+export async function processReturnAction(input: ProcessReturnInput): Promise<ProcessReturnActionResult> {
   const session = await requirePermission("inventory.manage");
 
   if (!REASONS.has(input.reason)) return { ok: false, error: "Pick a valid return reason." };
@@ -55,6 +73,18 @@ export async function processReturnAction(input: ProcessReturnInput): Promise<Pr
     return { ok: false, error: "Quantity must be a positive whole number." };
   }
   const disposition = input.disposition === "restock" ? "restock" : "destroy";
+
+  // Fix slice 2.1: check the cash source BEFORE anything moves.
+  const paid = parsePaidFrom(input.paidFrom);
+  if (!paid) {
+    return { ok: false, error: "Pick where the refund cash comes from — an open register drawer or the store safe." };
+  }
+  if (paid.paidFrom === "drawer") {
+    const drawer = paid.drawerSessionId ? await getDrawerSession(paid.drawerSessionId) : null;
+    if (!drawer || drawer.status !== "open") {
+      return { ok: false, error: "That drawer is not open any more. Reload the page and pick an open drawer or the store safe." };
+    }
+  }
 
   const result = await processCounterReturn(
     {
@@ -72,6 +102,15 @@ export async function processReturnAction(input: ProcessReturnInput): Promise<Pr
   );
   if (!result.ok) return result;
 
+  // The return is logged; now tie its cash. If this fails (for example
+  // migration 0313 is not applied) the return stays untied and the drawer's
+  // reconcile will ask a manager to tie it — it is never counted silently.
+  const tie = await assignReturnRefund({
+    returnId: result.returnId,
+    paidFrom: paid.paidFrom,
+    drawerSessionId: paid.drawerSessionId,
+  });
+
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
@@ -87,9 +126,18 @@ export async function processReturnAction(input: ProcessReturnInput): Promise<Pr
       refund_minor: result.refundMinor,
       points_clawed: result.pointsClawed,
       correction_operation: result.correctionOperation,
+      refund_paid_from: paid.paidFrom,
+      refund_drawer_session_id: paid.drawerSessionId,
+      refund_tie: tie.ok ? "tied" : `untied: ${tie.error}`,
     },
   });
   revalidatePath(BASE);
+  revalidatePath("/admin/registers");
   revalidatePath("/admin/inventory/disposition");
-  return result;
+  return {
+    ...result,
+    refundTieNote: tie.ok
+      ? null
+      : `Refund cash is NOT tied to a drawer or the safe yet (${tie.error}). Tie it on the Registers page before that drawer is reconciled.`,
+  };
 }
