@@ -91,13 +91,13 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 | **Enter** the count on the Store safe page | **Owner (D15): any employee.** Today the system only lets a back-office login with the **owner**, **admin** or **manager** role do it (gap G-13) | `requirePermission("inventory.manage")` (`safe/page.tsx` L47, `safe/actions.ts` L29). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). |
 | Choose who did the count (**Counted by**) | The person entering | Any **active employee** can be picked, or **— none —** (`safe/page.tsx` L163–173). There is no PIN check (finding F-02-4). |
 | Balance the master till with the little safe | Morning or night employee | Not in the app. Paper form 8.2 (gap G-02). |
-| Approve a register change swap | An employee whose job role is **manager** or **lead**, and not the person doing the swap | Approver PIN checked on the server (`src/app/api/pos/till/route.ts` L47, L186–211) |
+| Approve a register change swap | An employee whose job role is **manager** or **lead**, and not the person doing the swap | Approver PIN checked on the server (`src/app/api/pos/till/route.ts` L54, L193–218) |
 | See the end-of-day report | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45) |
 | Read the counts straight from the database | Owner/admin/manager logins only | RLS `safe_counts_mgr_read` / `safe_swaps_mgr_read` → `public.is_manager()` (`0135_safe_counts_swaps.sql` L99–108, `0130` L55–61). No one can write through RLS. Every write goes through the app's server code. |
 
 **Two kinds of role.** A back-office login has a *staff role* (owner, admin, manager, staff). An employee has a *job role* (sales, manager, lead, other). They are kept separate on purpose (D8). The Store safe page checks the **login's staff role**. The register swap checks the **approver's job role**.
 
-> **Staff logins see a Safe button they cannot use.** On Register Activity, the **Safe** button shows for every login that can open the page (`registers/page.tsx` L117–119). A login with the *staff* role who taps it is sent back to the admin home (`/admin?denied=1`, `src/lib/auth/session.ts` L164). This is expected today (finding F-02-10). A non-manager who counts the master till asks a manager to enter the count, and the manager picks them under **Counted by**.
+> **Staff logins see a Safe button they cannot use.** On Register Activity, the **Safe** button shows for every login that can open the page (`registers/page.tsx` L120–122). A login with the *staff* role who taps it is sent back to the admin home (`/admin?denied=1`, `src/lib/auth/session.ts` L164). This is expected today (finding F-02-10). A non-manager who counts the master till asks a manager to enter the count, and the manager picks them under **Counted by**.
 
 ---
 
@@ -178,7 +178,7 @@ A $20, $50 or $100 in the master till means a register swap brought in big bills
 
 1. Sign in to the back office with a manager-level login (§2).
 2. Go to **Register Activity** (Employee group in the menu, `/admin/registers`). Register Activity itself needs the `orders.manage` permission (`admin-nav-data.ts` L112).
-3. In the header buttons, tap **Safe** (`registers/page.tsx` L117–119).
+3. In the header buttons, tap **Safe** (`registers/page.tsx` L120–122).
 4. The page opens with the breadcrumb **Sell › Register Activity › Safe** and the title **Store safe**. **← Register Activity** takes you back.
 
 Direct address: `/admin/registers/safe`.
@@ -203,8 +203,8 @@ From top to bottom (`safe/page.tsx` L106–272):
 | **Today's PM count** | **Done** / **Not yet**, hint *"Evening"* | Same, for PM (L179) |
 
 **Count the safe** form: *"Count every denomination in the safe. The variance against the $1,000.00 target updates live as you type."*
-- A grid of 13 boxes: **$100, $50, $20, $10, $5, $2, $1, $1 coin, 50¢, 25¢, 10¢, 5¢, 1¢** (`cash.ts` L36–50). Each box takes digits only. Anything else is removed as you type (`CountGrid.tsx` L51–56).
-- **Safe total** (live sum), **Target: $1,000.00**, and a live **Balanced** / **Over by $X** / **Short by $X** (`CountGrid.tsx` L64–92).
+- A grid of 13 boxes: **$100, $50, $20, $10, $5, $2, $1, $1 coin, 50¢, 25¢, 10¢, 5¢, 1¢** (`cash.ts` L36–50). Each box takes digits only. Anything else is removed as you type (`CountGrid.tsx` L57–62).
+- **Safe total** (live sum), **Target: $1,000.00**, and a live **Balanced** / **Over by $X** / **Short by $X** (`CountGrid.tsx` L70–98).
 - **Count window**: **AM (before open)** / **PM (evening)** / **Extra count**. ⚠ The default is always **AM**, even at night (`safe/page.tsx` L157, finding F-02-5).
 - **Counted by**: **— none —** or any active employee. Non-sales job roles show in brackets, for example *"Jane (manager)"*.
 - **Notes (optional)**: up to 500 characters. The placeholder is *"e.g. two drops waiting to be banked"*. Ignore that example (§4.12).
@@ -302,7 +302,7 @@ The little safe has **no balance and no target** (D3). Do not count it into the 
 
 At the register, a cashier trades big bills for the same value in small bills and coin. That is SOP-01 §4.26. From the master till side:
 
-1. The cashier opens **MORE ▾ → Change swap**. The screen is titled **Change swap with the safe** and says *"Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under <name>'s PIN and approved by a manager or lead with theirs."* (`RegisterShell.tsx` L5650, L5745).
+1. The cashier opens **MORE ▾ → Change swap**. The screen is titled **Change swap with the safe** and says *"Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under <name>'s PIN and approved by a manager or lead with theirs."* (`RegisterShell.tsx` L5666, L5790).
 2. **Amount swapped**: the value of **one side** only (*"Example: $100 in twenties goes to the safe, $100 in fives, ones and coins comes back. Enter the value of one side."*, L5801–5812).
 3. **Manager or lead PIN (approval)** (L5815). The approver must be a different person (§5).
 4. **Notes (optional)…**: write the bills both ways here.
@@ -316,7 +316,7 @@ At the register, a cashier trades big bills for the same value in small bills an
 - The master till's **value** does not change. Its **mix** now has big bills, which go to the little safe at the next balance (§4.10).
 
 **Rules from the code:**
-- The till must have an open drawer: *"No open drawer on this register."* (`till/route.ts` L132–135).
+- The till must have an open drawer: *"No open drawer on this register."* (`till/route.ts` L139–142).
 - A swap needs a connection (the PIN is checked on the server).
 - A single swap over $2,000.00 is refused as a typo (`MAX_SWAP_MINOR`, `safe-core.ts` L32, L113–114).
 - A swap creates **no journal entry**, by design (`buildBillSwapJournal`, `register-cash-journal-core.ts` L667–702).
@@ -360,7 +360,7 @@ The system can book a supply run correctly (12100 Employee Advances Receivable, 
 
 **What this means for staff:** the system and the owner agree. When a manager opens the Manager Till from the back office, the **Open drawer** panel says *"Standard float for this register is $300.00"* and compares the count to it (`RegisterControls.tsx` L63–75). That is correct. Finding F-02-2 is **withdrawn** (D19).
 - The register app itself does not compare the count-in to any standard (F-01-13). Whatever is counted is the opening float.
-- Nothing in the app edits a register's float (`default_float_minor` is only read, `oversight.ts` L310). Correcting it is a database change for the build phase.
+- Nothing in the app edits a register's float (`default_float_minor` is only read, `oversight.ts` L316). Correcting it is a database change for the build phase.
 - These figures come from the migration files. The live database value was **not** read for this SOP (no production access in this slice). The owner can check it in Supabase: `select name, default_float_minor from registers;`.
 
 A till's float never comes from the master till on an ordinary day. It stays in the drawer overnight (§4.1). If a till's float is short at count-in, **do not top it up from the master till**. Report it (SOP-01 §4.3).
@@ -437,14 +437,14 @@ Until it is built:
 
 | Message (exact) | Type | Why | What to do |
 |---|---|---|---|
-| *"A manager or lead must approve the swap with their PIN."* | BLOCK | No approver PIN entered (`till-core.ts` L218) | Get a manager or lead |
-| *"Approver PIN must be 4–6 digits."* | BLOCK | PIN format (`till/route.ts` L189) | Re-enter |
+| *"A manager or lead must approve the swap with their PIN."* | BLOCK | No approver PIN entered (`till-core.ts` L241) | Get a manager or lead |
+| *"Approver PIN must be 4–6 digits."* | BLOCK | PIN format (`till/route.ts` L196) | Re-enter |
 | *"No active employee for the approver PIN."* | BLOCK | Wrong PIN, or the employee is inactive. Counts toward PIN lockout (L193–194). | Re-enter carefully |
 | *"<name> is not a manager or lead — safe swaps need a manager PIN."* | BLOCK | The approver's job role is sales/other (L197–201) | Get a manager or lead |
 | *"A swap cannot approve itself — a manager or lead must enter their PIN."* | BLOCK | Approver = cashier (L203–207) | A different person approves |
 | *"Swap amount must be a positive whole number of cents."* | BLOCK | Amount 0, negative or not whole cents (`safe-core.ts` L110) | Enter one side's value |
 | *"Swap amount is implausibly large — check the number."* | BLOCK | Over $2,000.00 (L113) | Check. Very large swaps are not normal. |
-| *"No open drawer on this register."* | BLOCK | No drawer counted in (`till/route.ts` L132–135) | Count in first (SOP-01 §4.3) |
+| *"No open drawer on this register."* | BLOCK | No drawer counted in (`till/route.ts` L139–142) | Count in first (SOP-01 §4.3) |
 | *"Offline — drawer actions need a connection to verify your PIN and record the cash."* | BLOCK | No connection | Wait for the connection. Do not swap off the record. |
 | The migration message above (as the swap error) | BLOCK | Safe tables missing. The swap is refused, not skipped (`safe-store.ts` L119–121). | Tell the owner. No swaps until fixed. |
 | *"$X change swap with the safe recorded."* | OK | Saved | Fill in form 8.3 |
@@ -484,7 +484,7 @@ Until it is built:
 | Variance reason / threshold | None for the master till | **Missing** | F-02-6, D7 + D16 |
 | Variance in the books | Not posted | Missing | F-02-6 |
 | Open (not blind) count | By design: *"the target is known policy"* (`safe-core.ts` L7–10, help text). Drawers are blind, the master till is not. | Design choice | Because the count is open, the counter's name (F-02-4) and a second counter matter more |
-| Register swap approval | Manager/lead PIN, different person, checked on the server, `safe.swap` audit tied to the drawer session (`till/route.ts` L186–234) | Strong | Value only, no denominations (F-01-8) |
+| Register swap approval | Manager/lead PIN, different person, checked on the server, `safe.swap` audit tied to the drawer session (`till/route.ts` L193–241) | Strong | Value only, no denominations (F-01-8) |
 | Little safe exchange | Not recorded | Missing | F-00-7, G-02 |
 | Supply runs | No screen (approved to build, D17). Form 8.4 meanwhile. | Missing | F-02-11, G-11 |
 | Print / export | None on the page | Missing | F-00-8, G-09 |
@@ -651,14 +651,14 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L112; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
 | 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L183–194; `src/lib/accounting/card-payment-core.ts` L7–8 |
 | 4.2 standard | Owner D11; `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
-| 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L117–119 |
+| 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L120–122 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
 | 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L660–702 |
-| 4.11 swaps | `src/app/api/pos/till/route.ts` L47, L132–135, L183–234; `src/lib/pos/till-core.ts` L61–74, L210–232; `src/app/(site)/pos/RegisterShell.tsx` L5650, L5713, L5745, L5799–5832, L5900–5916 |
-| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L108–122, L172–194; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
+| 4.11 swaps | `src/app/api/pos/till/route.ts` L54, L139–142, L190–241; `src/lib/pos/till-core.ts` L75–88, L233–255; `src/app/(site)/pos/RegisterShell.tsx` L5666, L5752, L5790, L5846–5879, L6015–6030 |
+| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L115–129, L179–201; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
 | 4.13 supply runs | `register-cash-journal-core.ts` L495–646; `src/lib/accounting/ledger-census-data.ts` L1639–1670; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
-| 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L310 |
+| 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L316 |
 | 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L45, L74, L208–247; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L122–151 |
 | 4.17 immutability | `0135` L95–108; `grep safe_counts src` (insert and select only) |
 | 4.18 print/export | `safe/page.tsx` (no `PrintButton`); finding F-00-8 |
