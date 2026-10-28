@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
 import { safeAdminPath } from "@/lib/media/return-state-core";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
+import {
+  MANUAL_LOT_STATUSES,
+  MANUAL_LOT_STATUS_LABELS,
+  formatPacificDateTime,
+} from "@/lib/inventory/lot-lifecycle-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
@@ -9,6 +15,7 @@ import Link from "next/link";
 import {
   getLotById,
   listLotAdjustments,
+  listLotStatusHistory,
   getManifestById,
 } from "@/lib/inventory/store";
 import { loadMenuCategoriesForKeys, resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
@@ -127,13 +134,9 @@ const REASONS = [
   { value: "other", label: "Other" },
 ];
 
-const STATUSES = [
-  { value: "active", label: "Active" },
-  { value: "quarantine", label: "Quarantine" },
-  { value: "recalled", label: "Recalled" },
-  { value: "sold_out", label: "Sold out" },
-  { value: "destroyed", label: "Destroyed" },
-];
+// Fix Phase 1.1 (G-22 req 2): Destroyed is NOT a manual choice. Destruction
+// only goes through Inventory -> Returns & Destruction (SOP-15).
+const STATUSES = MANUAL_LOT_STATUSES.map((value) => ({ value, label: MANUAL_LOT_STATUS_LABELS[value] }));
 
 export default async function LotDetailPage({
   params,
@@ -142,7 +145,10 @@ export default async function LotDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; fact_warn?: string; lot_msg?: string }>;
 }) {
-  await requirePermission("inventory.manage");
+  const session = await requirePermission("inventory.manage");
+  // Fix Phase 1.1 (G-22 req 4): only the owner / admin (recall coordinator,
+  // D37) may lift a recall hold. The server action enforces it; the page says it.
+  const canReleaseRecall = can(session.profile.role, "inventory.recall.release");
   const { id } = await params;
   const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, fact_warn, lot_msg } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
@@ -269,6 +275,8 @@ export default async function LotDetailPage({
     },
   });
 
+  // Fix Phase 1.1 (G-22 req 5): Status history from the audit rows.
+  const statusHistory = await listLotStatusHistory(id);
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
   const detailsAction = updateLotDetailsAction.bind(null, id);
@@ -1503,8 +1511,17 @@ export default async function LotDetailPage({
 
           <div id="lifecycle" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Lifecycle status</h2>
-            <form action={statusAction} className="space-y-4">
-              <Field label="Set status" help="Recalled / destroyed lots are excluded from sale." htmlFor="status">
+            {lot.status === "destroyed" ? (
+              <p className="text-sm text-[var(--admin-text-muted)]" data-testid="lifecycle-destroyed">
+                This lot is Destroyed. A destruction is final and has been reported to CCRS; its status cannot be changed.
+              </p>
+            ) : (
+            <form action={statusAction} className="space-y-4" data-testid="lifecycle-form">
+              <Field
+                label="Set status"
+                help="Active runs the go-live check (CCRS identifier, a COA on file, not FAILED). Recalled lots are blocked at the register. Destroyed is never set here: use Returns & Destruction."
+                htmlFor="status"
+              >
                 <Select id="status" name="status" defaultValue={lot.status}>
                   {STATUSES.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -1513,11 +1530,60 @@ export default async function LotDetailPage({
                   ))}
                 </Select>
               </Field>
+              <Field label="Reason (required)" htmlFor="status_reason" help="Saved in the status history with your name and the time.">
+                <Textarea id="status_reason" name="status_reason" rows={2} required maxLength={500} placeholder="Why is the status changing?" />
+              </Field>
+              <Field
+                label={lot.status === "recalled" ? "Clearance reference (required to release the recall)" : "Reference (recall notice, Issues row, COA)"}
+                htmlFor="status_reference"
+              >
+                <Input id="status_reference" name="status_reference" maxLength={200} required={lot.status === "recalled"} />
+              </Field>
+              {lot.status === "recalled" && !canReleaseRecall && (
+                <p className="text-xs text-[var(--admin-orange)]" data-testid="recall-release-note">
+                  Only the owner or the admin (recall coordinator) can release this recall hold.
+                </p>
+              )}
               <Button type="submit" variant="neutral" size="sm">
                 Update status
               </Button>
+              <p className="text-xs text-[var(--admin-text-faint)]">
+                To destroy product, use{" "}
+                <Link href="/admin/inventory/disposition" className="underline">
+                  Returns & Destruction
+                </Link>
+                .
+              </p>
             </form>
+            )}
           </div>
+        </div>
+
+        {/* Fix Phase 1.1 (G-22 req 5): Status history, from the audit rows, Pacific time, with names. */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5" data-testid="status-history">
+          <h2 className="mb-3 text-sm font-bold text-[var(--admin-text)]">Status history</h2>
+          {!statusHistory.complete ? (
+            <p className="text-sm text-[var(--admin-danger)]">The status history could not be read just now. Reload to try again.</p>
+          ) : statusHistory.rows.length === 0 ? (
+            <p className="text-sm text-[var(--admin-text-faint)]">No status changes recorded yet.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {statusHistory.rows.map((h) => (
+                <li key={h.id} className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-[var(--admin-text)]">
+                      {(h.from ?? "?").replace("_", " ")} {"\u2192"} {(h.to ?? "?").replace("_", " ")}
+                    </span>
+                    <span className="text-xs text-[var(--admin-text-faint)]">
+                      {formatPacificDateTime(h.at)} {"\u00b7"} {h.who}
+                    </span>
+                  </div>
+                  {h.reason && <div className="text-[var(--admin-text-muted)]">{h.reason}</div>}
+                  {h.reference && <div className="text-xs text-[var(--admin-text-faint)]">Reference: {h.reference}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Adjustment history */}

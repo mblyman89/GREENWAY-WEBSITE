@@ -5,9 +5,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
+import { can } from "@/lib/auth/roles";
+import {
+  evaluateLotLifecycleChange,
+  LOT_STATUS_AUDIT_ACTION,
+  LOT_STATUS_REFUSED_AUDIT_ACTION,
+} from "@/lib/inventory/lot-lifecycle-core";
 import {
   createAdjustment,
   updateLotStatus,
+  getLotGateFacts,
   updateLotDetails,
   updateLotReceivedDate,
   getLotById,
@@ -102,14 +109,6 @@ const VALID_REASONS = new Set([
   "other",
 ]);
 
-const VALID_STATUSES = new Set([
-  "active",
-  "quarantine",
-  "recalled",
-  "sold_out",
-  "destroyed",
-]);
-
 export async function adjustLotAction(lotId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
 
@@ -141,19 +140,81 @@ export async function adjustLotAction(lotId: string, formData: FormData) {
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
 
+/**
+ * Fix Phase 1.1 (G-19 + G-22): the lot page's Lifecycle status box.
+ *
+ * Before: any inventory.manage login could write any of five statuses,
+ * including Active (no go-live check) and Destroyed (no destruction record),
+ * with no reason and no audit row (F-04-2, F-05a-1, F-05a-2).
+ *
+ * Now every change goes through evaluateLotLifecycleChange
+ * (lot-lifecycle-core.ts): Active runs the go-live check Finalize runs;
+ * Destroyed is refused (SOP-15 only); a reason is required; Recalled -> other
+ * needs inventory.recall.release (owner + admin, D37) and a clearance
+ * reference. The write is compare-and-set on the status the rules saw, and
+ * every change (and every refusal) writes an audit row: who, from, to, when,
+ * reason, reference.
+ */
 export async function setLotStatusAction(lotId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
-  const status = (formData.get("status") as string | null)?.trim() ?? "";
-  if (!VALID_STATUSES.has(status)) {
-    redirect(`/admin/inventory/${lotId}?error=status`);
+  const toStatus = (formData.get("status") as string | null)?.trim() ?? "";
+  const reason = (formData.get("status_reason") as string | null) ?? "";
+  const reference = (formData.get("status_reference") as string | null) ?? "";
+
+  const current = await getLotGateFacts(lotId);
+  if (!current) redirect(`/admin/inventory/${lotId}?error=save`);
+
+  const decision = evaluateLotLifecycleChange({
+    fromStatus: current.status,
+    toStatus,
+    reason,
+    reference,
+    canReleaseRecall: can(session.profile.role, "inventory.recall.release"),
+    gateFacts: current.facts,
+  });
+  if (!decision.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: LOT_STATUS_REFUSED_AUDIT_ACTION,
+      entityType: "inventory_lot",
+      entityId: lotId,
+      before: { status: current.status },
+      after: {
+        requested: toStatus,
+        reason: reason.trim().slice(0, 500) || null,
+        reference: reference.trim().slice(0, 200) || null,
+        refusals: decision.refusals.map((r) => r.code),
+      },
+    });
+    const msg = decision.refusals.map((r) => r.message).join(" ");
+    redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(msg.slice(0, 900))}#lifecycle`);
   }
-  const result = await updateLotStatus(lotId, status, session.userId);
+
+  const result = await updateLotStatus(lotId, decision.from, decision.to, session.userId);
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
   if (!result.ok) {
-    redirect(`/admin/inventory/${lotId}?error=save`);
+    redirect(`/admin/inventory/${lotId}?error=${encodeURIComponent(result.error.slice(0, 600))}#lifecycle`);
   }
-  redirect(`/admin/inventory/${lotId}?saved=1`);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: LOT_STATUS_AUDIT_ACTION,
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { status: decision.from },
+    after: {
+      status: decision.to,
+      reason: decision.reason,
+      reference: decision.reference,
+      releases_recall: decision.releasesRecall,
+      go_live_checked: decision.to === "active",
+    },
+  });
+  // A status change moves what the register and the website may sell.
+  revalidatePublicMenuSurfaces();
+  redirect(`/admin/inventory/${lotId}?saved=1#lifecycle`);
 }
 
 /**

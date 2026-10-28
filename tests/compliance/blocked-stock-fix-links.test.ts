@@ -165,7 +165,8 @@ describe("Round 11 — every inventory fix button lands on the control that fixe
   it("inactive lots open the Lifecycle status form (#lifecycle anchor exists)", () => {
     const link = fixLinkForLot("lot_not_active", "lot-9", "K");
     expect(link.href).toBe("/admin/inventory/lot-9#lifecycle");
-    expect(lotPage()).toMatch(/id="lifecycle"[\s\S]{0,400}Lifecycle status[\s\S]{0,200}action=\{statusAction\}/);
+    // Fix 1.1: a destroyed-lot message sits between the heading and the form.
+    expect(lotPage()).toMatch(/id="lifecycle"[\s\S]{0,400}Lifecycle status[\s\S]{0,600}action=\{statusAction\}/);
   });
 
   it("empty lots open the Adjust quantity form (#adjust anchor exists)", () => {

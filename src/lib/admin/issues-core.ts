@@ -552,7 +552,10 @@ export function buildManifestIssues(input: ManifestIssueInput): Issue[] {
           title: `Held in quarantine, now clear \u2014 ${lot.label}`,
           meaning:
             "This accepted lot was held when the intake was finalized. Its identifier and lab result now pass the go-live check.",
-          fixText: "Open the lot and set its status to Active under Lifecycle status.",
+          // Fix Phase 1.1 (G-19 req 4): Lifecycle status now runs the same
+          // go-live check and writes an audit row, so this is the gated path.
+          fixText:
+            "Open the lot and set its status to Active under Lifecycle status, with a reason. The page runs the go-live check again and records who activated it.",
           fix: { href: lotPageHref(lot.id, "lifecycle"), label: "Open lot to activate it" },
         });
         continue;
@@ -569,7 +572,9 @@ export function buildManifestIssues(input: ManifestIssueInput): Issue[] {
         detail: lot.reasons.map((r) => r.message).join(" "),
         fixText: failed
           ? "A FAILED result can never go live. Open the lot to see the result, then return it to the vendor or record the destruction."
-          : "Open the lot to see what is on file. A COA or CCRS identifier arrives with the manifest at receiving; the lot page cannot attach one yet, so ask the vendor for a corrected manifest if it is missing.",
+          // Fix Phase 1.1 (F-04-12): the lot page DOES attach a lab result
+          // (S37 LotCoaAttach, linkLotCoaAction, audit inventory_lot.coa_linked).
+          : "Open the lot to see what is on file. If the lab result is already imported, use Attach a lab result on the lot page. A missing CCRS identifier comes with the manifest, so ask the vendor for a corrected manifest.",
         fix: { href: lotPageHref(lot.id, labIssue ? "coa" : undefined), label: "Open lot" },
       });
     }

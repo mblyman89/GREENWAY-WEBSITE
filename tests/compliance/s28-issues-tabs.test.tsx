@@ -311,9 +311,13 @@ describe("S28 every fix button lands somewhere real", () => {
   });
   it("the lot page's Lifecycle form really can set Active (activate / pull rows are honest)", () => {
     const lot = read(LOT);
-    expect(lot).toContain('{ value: "active", label: "Active" }');
+    // Fix 1.1 (G-19): the option list comes from MANUAL_LOT_STATUSES, and
+    // Active is accepted only after the go-live check in the lifecycle core.
+    expect(lot).toContain("MANUAL_LOT_STATUSES.map(");
     expect(lot).toContain("<form action={statusAction}");
+    const core = read("src/lib/inventory/lot-lifecycle-core.ts");
+    expect(core).toMatch(/MANUAL_LOT_STATUSES = \[\s*"active",/);
     const actions = read("src/app/admin/inventory/actions.ts");
-    expect(actions).toMatch(/const VALID_STATUSES = new Set\(\[\s*"active",/);
+    expect(actions).toContain("evaluateLotLifecycleChange(");
   });
 });
