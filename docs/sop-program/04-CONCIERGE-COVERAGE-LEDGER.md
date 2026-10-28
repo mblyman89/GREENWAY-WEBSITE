@@ -243,11 +243,14 @@ The concierge code is **unchanged** (record-only). Today the `inventory` topic (
 **Must ship with caveats** until the findings are fixed:
 - F-05b-1: **never** tell anyone the SKU label or the manufacturer barcode scans at the register. Ring on the Keypad with the SKU in the note.
 - F-05b-9: never suggest moving or re-filing a product into or out of Accessories / Greenway Merch / Paraphernalia. If asked, explain the tax and limit effect and send the question to the owner.
-- F-05b-6: there is no price edit. Give the form 8.2 procedure, owner only.
+- F-05b-6: there is no price edit. Give the form 8.2 procedure (owner, admin or manager, D46; non-cannabis cost may be changed, D48). Never offer the re-create route for a cannabis cost (D38).
 - F-05b-10: after a hand publish, check **Live variants**.
-- F-05b-12: on a cost-unknown lot, the floor is not enforced. Owner only.
+- F-05b-12: on a cost-unknown lot, the floor is not enforced. **Nobody saves a price until the manifest cost is entered** (D49).
+- F-05b-14: a manager can press merch **Remove**, but must not. Owner and admin only (D47). Suggest **Hide**.
+- F-05b-15: non-cannabis keypad sales post no cost of goods; do not quote a non-cannabis margin from the books as true.
+- Expiry (SOP-05a v1.2, D44): expired edibles, liquid edibles, tinctures, capsules **and RSO** are never sold. RSO shows as *Concentrate for Inhalation* in CCRS, so answer by product name and category too (F-05a-20).
 - The 86 is never done on Publish Menu (SOP-05a §4.12).
 
-**Future features (D41/D42):** when G-29…G-32 are built, the topics above are updated in the same slice as the SOP (charter rules 9–10).
+**Future features (D41/D42):** when G-29…G-32 and G-30A are built (all **APPROVED**, D45–D49; G-29 widened to menu, books and reports), the topics above are updated in the same slice as the SOP (charter rules 9–10).
 
 **Running score:** topics with complete SOP source material add `other-inventory`, `merch`, `publish-menu`, `sales-limit-classification` and `sell-price`, and complete `inventory` (Types & Categories). Baseline row touched: Inventory management 🟡 (§3), unchanged in code.

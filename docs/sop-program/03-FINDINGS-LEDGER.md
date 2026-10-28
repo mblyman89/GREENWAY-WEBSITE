@@ -519,6 +519,11 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **Effect:** a cancelled destruction of an expired, damaged or (if F-05a-17 is worked around) recalled lot returns it to sale with no check.
 - **SOP impact:** SOP-05a v1.1 §4.9 point 1, §6. Fixed by **G-28**.
 
+### F-05a-20 · CONFIRMED · GAP · S2 — RSO has no CCRS type of its own, so an expiry block keyed on the CCRS type would miss it (fix slice, D44)
+- **Pin:** the code's own RSO test case files RSO as *Concentrate for Inhalation* (`fact-extraction-core.ts` L890–894). The CCRS EndProduct list has no RSO type (`ccrs-batch-core.ts` L242–260). The store category is `rso` (migration `0035_inventory_category_types.sql` L103), counted in the concentrate limit bucket (`sales-limits-core.ts` L358).
+- **Effect:** the owner put RSO in the expiry hard block (D44: *"Q-05a-6- yes, same with rso too."*). A G-24 build that reads only the CCRS type would hard-block edibles, tinctures and capsules but only warn on expired RSO.
+- **SOP impact:** SOP-05a v1.2 §4.16 point 2 (read the name and category, not only the LCB classification). Fixed by **G-24** (key on the store category too).
+
 ### F-05a-C · CONFIRMED · DOC · S3 — Concierge inventory topic has six one-line facts and nothing on recalls, expiry, adjustments, the 86 or labels
 - **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180: six facts (lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts, Returns & Destruction). grep `recall|expir` in the file → none. Baseline ledger row "Inventory management 🟡" (`04-CONCIERGE-COVERAGE-LEDGER.md` §3).
 - **SOP impact:** recorded in the concierge ledger (SOP-05a slice); grounding from SOP-05a §4, §5, §8, §9 in Phase D.
@@ -557,7 +562,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 ### F-05b-6 · CONFIRMED · GAP · S2 — No way to edit a non-cannabis price or a non-zero cost, and a $0.00 price is accepted
 - **Pin:** the price is set only at draft (`noncannabis/actions.ts` L51; `store.ts` L261). The invoice builder creates $0.00 drafts when retail is blank (`invoice-store.ts` L142). Cost fill works only at $0.00 (`cost-fill-core.ts` L46–47).
 - **Effect:** a typo'd price is permanent. The only workaround is archive and re-create, which changes the SKU.
-- **SOP impact:** §2, §4.3 step 5, §4.6, §4.9 (form 8.2, owner only). Fixed by **G-30**.
+- **SOP impact:** §2, §4.3 step 5, §4.6, §4.9 (form 8.2; owner, admin or manager per D46). Fixed by **G-30** (APPROVED, D46, D48).
 
 ### F-05b-7 · CONFIRMED · BUG · S2 — A failed invoice save rolls back only the header
 - **Pin:** `invoice-store.ts` L124–128 (header delete on failure), L135–158 (drafts and restock adjustments already written, not undone).
@@ -586,12 +591,22 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 ### F-05b-12 · CONFIRMED · HARDEN · S2 — A cannabis sell price can be saved with no floor when the cost is unknown
 - **Pin:** `afterTaxFloorMinor` returns null without a cost (`price-correction-core.ts` L65); the help says *"Cost is unknown for this lot, so no floor can be enforced."* (`[id]/page.tsx` L1067). Any manager (`inventory.manage`) can save any price above $0.00.
 - **Effect:** a below-cost sale (RCW 69.50.357 / WAC 314-55-155) is possible on exactly the lots whose cost is missing. Tied to D38 (cost only from the CCRS manifest).
-- **SOP impact:** §2, §4.21 (owner only), form 8.2. **G-32** (Q-05b-5).
+- **SOP impact:** §2, §4.21, form 8.2: **no price save until the manifest cost is entered** (D49). **G-32** (APPROVED, D49).
 
 ### F-05b-13 · CONFIRMED · HARDEN · S3 — A classification lot-row write failure is visible only in the audit row
 - **Pin:** `inventory/actions.ts` L1105–1145: `lot_row_write_failed` goes into the audit `after`; the user is redirected `?saved=1` (L1156).
 - **Effect:** the worklist (which reads the lot row) can keep showing the product as unclassified while the register enforces the new answer.
 - **SOP impact:** §4.19 step 6. **G-32**.
+
+### F-05b-14 · CONFIRMED · GAP · S3 — A manager can permanently Remove a merch product; the owner limited it to owner and admin (fix slice, D47)
+- **Pin:** `removeMerchAction` checks only `requirePermission("inventory.manage")` (`merch/actions.ts` L33–34), and `inventory.manage` includes manager (`roles.ts` L106).
+- **Effect:** the owner said *"Q05b-3- owner and admin."* The removal can't be undone except by republishing from Merch Studio.
+- **SOP impact:** SOP-05b v1.1 §2, §4.11, §6 (store rule). **G-30A**.
+
+### F-05b-15 · CONFIRMED · GAP · S2 — Non-cannabis keypad sales post no cost of goods sold (fix slice, D45)
+- **Pin:** a keypad line is built with `costMinorUnits: null` (`custom-sale-core.ts` L144). The daily accounting post drops keypad lines before gathering costs (`sale-posting-service.ts` L360) and, with no other lines, sets every line's cost to null (L369–371).
+- **Effect:** non-cannabis revenue posts with no matching cost, so the books overstate margin on glass, papers and devices. The Other Inventory catalog holds the unit cost, but nothing links the sale to it (F-05b-1).
+- **SOP impact:** SOP-05b v1.1 §4.1 (the widened G-29 list). **G-29** item 6 (owner D45: *"any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system"*).
 
 ### F-05b-C · CONFIRMED · DOC · S3 — The concierge has one line on Other Inventory and nothing on merch, publish, categories, classification or sell price
 - **Pin:** `src/lib/admin/concierge-kb.ts` `inventory` topic L163–180 (one Other Inventory line, L172, which repeats the scan promise of F-05b-1; one Types & Categories line).
@@ -609,4 +624,4 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 | SOP-03 End-of-Day Close & Deposit Bag | 11 new (2×S1, 4×S2, 5×S3) + re-confirmed F-00-3, F-00-6, F-00-8 | 11 | 0 |
 | SOP-04 Receiving Intake & Monthly CCRS PRR | 21 new (F-04-1…F-04-20 + F-04-C; 1×S1, 3×S2, 14×S3, 3×S4). F-03-4 SOP-01 half fixed in docs. **SOP-05a update (D29–D34):** F-04-1 S2 → **S1**; F-04-18 narrowed (S3 → S4); owner decisions noted on F-04-15/16/19 → now 2×S1, 2×S2, 13×S3, 4×S4 | 21 | 0 |
 | SOP-05a Inventory Core | 17 new (F-05a-1…F-05a-16 + F-05a-C; 2×S1, 7×S2, 5×S3, 3×S4). F-04-2 carried (lot page Lifecycle status). **v1.1 (D36–D40):** F-05a-11 S3 → **S1** (D38); 3 new F-05a-17 (S2), F-05a-18 (**S1**), F-05a-19 (S2) → 20 findings: 4×S1, 9×S2, 4×S3, 3×S4 | 20 | 0 |
-| SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4) | 14 | 0 |
+| SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price | 14 new (F-05b-1…F-05b-13 + F-05b-C; 2×S1, 6×S2, 4×S3, 2×S4). **Fix slice (D44–D49):** 3 new: F-05a-20 (S2), F-05b-14 (S3), F-05b-15 (S2) | 17 | 0 |
