@@ -93,7 +93,7 @@ This SOP makes sure that:
 | Close a drawer (blind count, second count) | The cashier, plus **any second employee** (D2) | Register PIN; second count is paper only (SOP-01 §4.27, F-01-9) |
 | Pull takings, count the deposit, complete the **night sheet** (form 8.1) | The night closer ("one person completes before close") | Not in the app. Paper. |
 | Reconcile each drawer | Owner, admin or manager login | `requirePermission("inventory.manage")` on Register Activity (SOP-01 §4.30) |
-| Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L96–98) is sent to `/admin?denied=1` (F-02-10). |
+| Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L126–128) is sent to `/admin?denied=1` (F-02-10). |
 | **Morning recount** and verify the night sheet | The morning employee ("the morning employee recounts and verifies") | Not in the app. Paper (form 8.1, part B). |
 | Seal the bag, write the bag number, log it | **Any employee** (D25: *"anyone can seal the bag"*), after the morning recount | Not in the app (F-00-6). Paper (form 8.2). |
 | **Verify till** in the back office | Owner, admin, manager | `inventory.manage`. Records no recount (F-00-3); paper is the record. |
@@ -287,7 +287,7 @@ After the recount, a manager does **Verify till** for each drawer on Register Ac
 
 Remember the known problems, which are not fixed yet:
 - **Verified by** is typed text going into an employee-ID column. **Leave it blank** (F-00-4, F-01-5).
-- The screen has **no denomination boxes**, and **Count agrees** is ticked by default (`registers/page.tsx` L263–264). The system records the recount as **$0** whatever you tick (F-00-3). **Part B of the night sheet, signed, is the real morning verify.**
+- The screen has **no denomination boxes**, and **Count agrees** is ticked by default (`registers/page.tsx` L258–259). The system records the recount as **$0** whatever you tick (F-00-3). **Part B of the night sheet, signed, is the real morning verify.**
 - Always reconcile before verify (F-01-12). Click once (F-01-2).
 
 ### 4.13 Bank day: taking the bags to the bank
@@ -352,7 +352,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 
 - The End-of-day report **prints** (§4.9). It has **no export** (no CSV or spreadsheet route under `src/app/admin/registers/eod/`; finding F-00-8, gap G-09/G-15).
 - The owner asked that the closing-day reports *"can be exported and printed"*. Until export is built, the printed report plus the paper night sheet are the record. The owner can query `drawer_sessions`, `drawer_drops` and `pos_sale_events` in Supabase for a CSV.
-- The per-drawer **Till summary** (Register Activity → **Cash drawer reports** → a session) also prints, with one **Manager (signature)** line (`registers/history/[id]/page.tsx` L80, L207). Use it when a single drawer needs a record (an exception, a disputed shortage).
+- The per-drawer **Till summary** (Register Activity → **Cash drawer reports** → a session) also prints, with one **Manager (signature)** line (`registers/history/[id]/page.tsx` L80, L219). Use it when a single drawer needs a record (an exception, a disputed shortage).
 
 ---
 
@@ -552,11 +552,11 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7; `src/lib/accounting/safe-bag-core.ts` L15–25; `docs/MICHAEL-books-96-one-bag-one-day.md` L1–20 |
-| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L106; `src/app/admin/registers/page.tsx` L96–98; `src/app/admin/books/bank/page.tsx` L175 |
+| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L106; `src/app/admin/registers/page.tsx` L126–128; `src/app/admin/books/bank/page.tsx` L175 |
 | 4.1 money | `drawer-posting-service.ts` L20–29, L170–194; `register-cash-journal-core.ts` L265–303; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
-| 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L202–270 |
+| 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L232–265 |
 | 4.8 report | `eod/page.tsx` (268 lines) L15–19, L48–264; `src/lib/registers/eod-core.ts` (295) L80–201; `src/lib/registers/eod-store.ts` (234) L65–173; `src/lib/pos/day-report-core.ts` L40–70, L136–175 |
-| 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L49, L80, L205–215 |
+| 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L49, L80, L217–227 |
 | 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L364–441; `ledger-census-data.ts` L1577–1636; `factory-reset-core.ts` L427–428 |
 | 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–60, L160–260; `deposit-clearing-core.ts` L4–14, L128–130, L390–490; `ledger-census-data.ts` L1519–1575; `books/bank/BankMatchExplainer.tsx` L719–722 |
 | 4.14 $10,000 | `CASH_DEPOSIT_POLICY_DECISION.md` L9–73; `safe-bag-core.ts` L262–328; `books/bank/page.tsx` L495–515; `bank-match-core.ts` L1587, L1594; `docs/MICHAEL-books-98-the-store-safe.md` L43–60 |

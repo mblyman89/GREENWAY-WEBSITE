@@ -39,6 +39,10 @@ export type DrawerSession = {
    * Optional so the type stays truthful before 0134 is applied.
    */
   tips_minor?: number | null;
+  /** Fix Phase 2.1 (0313): system cash sales at reconcile. NULL = typed era. */
+  cash_sales_minor?: number | null;
+  /** Fix Phase 2.1 (0313): cash refunds this drawer paid. NULL = typed era. */
+  refunds_paid_minor?: number | null;
   opened_at: string | null;
   closed_at: string | null;
   reconciled_at: string | null;
@@ -253,40 +257,65 @@ export async function closeDrawerBlind(opts: {
 }
 
 /**
- * Reconcile a closed drawer (manager): enter the cash sales the register took,
- * which (with opening float + drops) yields expected; reveal over/short.
+ * Reconcile a closed drawer (manager): reveal over/short.
+ *
+ * Fix Phase 2.1 (G-05, F-01-4): the cash sales are no longer typed. The
+ * caller passes the figure the server built from this drawer's own records
+ * (drawer-figure-store.ts loadDrawerFigure): cash sales from processed
+ * register sales carrying this drawer's id, minus the cash refunds tied to
+ * this drawer. The action refuses before calling this when the figure has a
+ * blocker, so an unknown is never turned into a number.
+ *
+ * Compare-and-set (F-01-2): the update only lands while the drawer is still
+ * "closed", so a double click or a second manager cannot overwrite the first
+ * reconcile's figures (the books keep the first post).
  */
 export async function reconcileDrawer(opts: {
   sessionId: string;
   cashSalesMinor: number;
+  refundsPaidMinor: number;
   reconciledBy: string | null;
-}): Promise<{ ok: boolean; error?: string; overShortMinor?: number }> {
+}): Promise<{ ok: boolean; error?: string; overShortMinor?: number; expectedMinor?: number }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
   const session = await getSession(opts.sessionId);
   if (!session) return { ok: false, error: "Session not found." };
   if (session.status !== "closed") return { ok: false, error: "Drawer must be closed before reconciling." };
+  if (!Number.isInteger(opts.cashSalesMinor) || !Number.isInteger(opts.refundsPaidMinor) || opts.refundsPaidMinor < 0) {
+    return { ok: false, error: "The drawer figure is not a whole number of cents. Nothing was saved." };
+  }
 
   const dropsMinor = await totalDropsMinor(opts.sessionId);
   const expected = expectedClose({
     openingMinor: session.opening_count_minor ?? 0,
-    cashSalesMinor: opts.cashSalesMinor,
+    cashSalesMinor: opts.cashSalesMinor - opts.refundsPaidMinor,
     dropsMinor,
   });
   const os = overShort(session.closing_count_minor ?? 0, expected);
 
-  const { error } = await admin
-    .from("drawer_sessions")
-    .update({
-      status: "reconciled",
-      expected_close_minor: expected,
-      over_short_minor: os,
-      reconciled_at: new Date().toISOString(),
-      reconciled_by: opts.reconciledBy,
-    })
-    .eq("id", opts.sessionId);
+  const base = {
+    status: "reconciled",
+    expected_close_minor: expected,
+    over_short_minor: os,
+    reconciled_at: new Date().toISOString(),
+    reconciled_by: opts.reconciledBy,
+  };
+  const write = (withFigure: boolean) =>
+    admin
+      .from("drawer_sessions")
+      .update(withFigure ? { ...base, cash_sales_minor: opts.cashSalesMinor, refunds_paid_minor: opts.refundsPaidMinor } : base)
+      .eq("id", opts.sessionId)
+      .eq("status", "closed")
+      .select("id");
+  let { data, error } = await write(true);
+  // Before migration 0313 the two figure columns do not exist yet; the
+  // reconcile itself still lands (the figure is in the audit entry).
+  if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await write(false));
   if (error) return { ok: false, error: error.message };
-  return { ok: true, overShortMinor: os };
+  if (!data || (data as unknown[]).length === 0) {
+    return { ok: false, error: "This drawer was reconciled by someone else a moment ago. Nothing was changed. Reload the page." };
+  }
+  return { ok: true, overShortMinor: os, expectedMinor: expected };
 }
 
 /**

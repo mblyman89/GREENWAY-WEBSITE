@@ -51,7 +51,6 @@ import {
   type Shift,
 } from "@/lib/staffing/store";
 import { listOrders } from "@/lib/orders/orders-store";
-import { refundsForBusinessDay } from "@/lib/pos/refunds-store";
 import type { OrderRow, OrderStatus } from "@/lib/orders/types";
 import { getCockpitSnapshot, type CockpitSnapshot } from "@/lib/admin/cockpit-data";
 import { businessDayFor } from "@/lib/staffing/time";
@@ -117,13 +116,6 @@ export type AttentionItem = {
   businessDay: string;
   expectedCloseMinor: number | null;
   closingCountMinor: number | null;
-  /**
-   * AN-4: STORE-WIDE cash refunded out on this business day (voids +
-   * counter returns, cents). Refund records carry no register attribution,
-   * so this prints as a day total — the manager enters cash sales NET of
-   * refunds paid from this drawer, or blind counts show false shortages.
-   */
-  dayRefundTotalMinor: number;
   /**
    * Tips counted at close (cents, migration 0134). null = not recorded.
    * Employee money — shown for context only; NEVER part of expected/over-short.
@@ -339,19 +331,9 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
 
   // --- Needs attention (manager-only oversight actions) ---------------------
   // Closed drawers awaiting reconcile, and reconciled tills awaiting verify.
-  // AN-4: each reconcile card carries the day's STORE-WIDE refund total so
-  // the manager enters cash sales net of refunds (queried once per distinct
-  // business day, not per session).
-  const daysNeedingRefunds = [
-    ...new Set(sessions.filter((s) => s.status === "closed").map((s) => s.business_day)),
-  ];
-  const refundsByDay = new Map<string, number>();
-  await Promise.all(
-    daysNeedingRefunds.map(async (day) => {
-      const r = await refundsForBusinessDay(day);
-      refundsByDay.set(day, r.refundTotalMinor);
-    }),
-  );
+  // Fix Phase 2.1 (G-05): the store-wide refund total that used to ride on
+  // each card (AN-4) is gone. The registers page builds each closed drawer's
+  // own figure (drawer-figure-store.ts loadDrawerFigure), refunds included.
   const attention: AttentionItem[] = [];
   for (const s of sessions) {
     if (s.status === "closed") {
@@ -362,7 +344,6 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         businessDay: s.business_day,
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,
-        dayRefundTotalMinor: refundsByDay.get(s.business_day) ?? 0,
         tipsMinor: s.tips_minor ?? null,
       });
     } else if (s.status === "reconciled") {
@@ -373,7 +354,6 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         businessDay: s.business_day,
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,
-        dayRefundTotalMinor: refundsByDay.get(s.business_day) ?? 0,
         tipsMinor: s.tips_minor ?? null,
       });
     }

@@ -2,17 +2,18 @@
  * src/lib/pos/refunds-store.ts  (POS AN-4)
  *
  * One query for "how much cash was refunded OUT of drawers on a Pacific
- * business day" — shared by the X/Z day-report route and the back-office
- * reconcile screen so both print the same number.
+ * business day", used by the X/Z day-report route. (Fix Phase 2.1: the
+ * reconcile screen no longer uses this store-wide total. It builds each
+ * drawer's own figure in src/lib/registers/drawer-figure-store.ts.)
  *
  * Two flows pay cash out, and neither writes to pos_sale_events:
  *   - same-day VOIDS   -> audit_logs action "register.sale_voided"
  *                         (refundMinor in after_json)
  *   - counter RETURNS  -> customer_returns.refund_minor_units
  *
- * Neither record carries register attribution (void audits only name the
- * device in actor_email; customer_returns has no register column), so this
- * is a STORE-WIDE total — callers must present it as such, never as one
+ * This summary does not split refunds by drawer (since migration 0313 the
+ * records can say which drawer paid; drawer-figure-store.ts reads that), so
+ * this is a STORE-WIDE total — callers must present it as such, never as one
  * register's number. Money is MINOR UNITS (cents).
  *
  * Best-effort: a read failure returns the all-zeros summary rather than

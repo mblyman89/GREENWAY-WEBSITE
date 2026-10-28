@@ -20,6 +20,8 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, EmptyState, HelpPanel } from "@/components/admin/ux";
 import { Card } from "@/components/admin/ui";
 import { CounterReturnDesk } from "@/components/admin/registers/CounterReturnDesk";
+import { drawersForDay } from "@/lib/registers/drawer-figure-store";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,11 @@ export default async function CounterReturnsPage() {
       </div>
     );
   }
+
+  // Fix slice 2.1 (G-05): the drawers a refund can be paid from — only
+  // drawers that are OPEN right now (a closed drawer's cash is already
+  // counted). The store safe is always offered too.
+  const openDrawers = (await drawersForDay(pacificToday())).filter((d) => d.status === "open");
 
   return (
     <div>
@@ -59,11 +66,12 @@ export default async function CounterReturnsPage() {
             "Pick the exact item and quantity. The refund is computed from what they actually paid (tax included; medical prices already reflect their exemptions) — you never type an amount.",
             "Inspect the physical product: WAC 314-55-079(12) requires the ORIGINAL packaging and a FULLY LEGIBLE lot/batch ID. If either fails, refuse the return.",
             "Choose restock (sellable) or destroy (opens the destruction hold), then log it. Inventory is added back, the CCRS Sale correction (Delete or Update) is queued for your next upload, and loyalty points are clawed back proportionally.",
+            "Pick where the refund cash comes from: the open register drawer you take it out of, or the store safe. That drawer's reconcile subtracts it automatically.",
             "Print the refund receipt and hand over the cash. Export queued corrections from Inventory → Returns & Destruction.",
           ]}
         />
         <Card>
-          <CounterReturnDesk />
+          <CounterReturnDesk openDrawers={openDrawers.map((d) => ({ id: d.id, label: d.label }))} />
         </Card>
       </div>
     </div>

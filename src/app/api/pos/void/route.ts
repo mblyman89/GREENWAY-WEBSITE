@@ -26,6 +26,7 @@ import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { lookupVoidableSale, processVoidSale } from "@/lib/pos/void-store";
+import { openDrawerIdForRegister } from "@/lib/registers/drawer-figure-store";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
@@ -96,6 +97,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     approver: { id: employee.id, fullName: employee.full_name },
     processedByName: String(body.processedByName ?? "").trim() || "Register",
     deviceId: auth.device.id,
+    // Fix Phase 2.1 (G-05): the cash comes out of this register's open drawer.
+    drawerSessionId: await openDrawerIdForRegister(auth.device.register_id),
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 422 });
 
