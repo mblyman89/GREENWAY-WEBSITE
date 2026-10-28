@@ -133,7 +133,7 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 
 ### SOP-03 End-of-Day Close & Deposit Bag (`docs/sop/SOP-03-eod-close-deposit.md`, verified at `3385bfa9`)
 
-Concierge code is **unchanged** (record-only). Today neither the concierge nor `help-content.ts` has **any** end-of-day or deposit-bag content. The only "deposit" hits are payroll direct deposit (`help-content.ts` L725–742; `concierge-kb.ts` L262–280), so a question like "how do I do the deposit?" risks a payroll ACH answer (finding **F-03-11**). The Registers page help (L117–120) still says sales shown are online pickup only (F-03-4). What SOP-03 now provides as source material for the integration phase:
+Concierge code is **unchanged** (record-only). Today neither the concierge nor `help-content.ts` has **any** end-of-day or deposit-bag content. The only "deposit" hits are payroll direct deposit (`help-content.ts` L725–742; `concierge-kb.ts` L263–281), so a question like "how do I do the deposit?" risks a payroll ACH answer (finding **F-03-11**). The Registers page help (L117–120) still says sales shown are online pickup only (F-03-4). What SOP-03 now provides as source material for the integration phase:
 
 | Concierge topic | SOP-03 sections that ground it | Rating today → after integration (target) |
 |---|---|---|
@@ -197,13 +197,13 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 
 ### SOP-05a Inventory Core (`docs/sop/SOP-05a-inventory-core.md`, verified at `ac251766`)
 
-Concierge code is **unchanged** (record-only). Today the concierge's `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–180) has six one-line facts: lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts and Returns & Destruction. Nothing covers recalls, expiry, adjustments, lot status, the 86, restore to sale, tags, labs, labels or bulk fill (finding **F-05a-C**). The Inventory help panel is partly stale (F-05a-12), so it **must not** be used as grounding. What SOP-05a now provides:
+Concierge code is **unchanged** (record-only). Today the concierge's `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–181) has six one-line facts: lots and COAs, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts and Returns & Destruction. Nothing covers recalls, expiry, adjustments, lot status, the 86, restore to sale, tags, labs, labels or bulk fill (finding **F-05a-C**). The Inventory help panel is partly stale (F-05a-12), so it **must not** be used as grounding. What SOP-05a now provides:
 
 | Concierge topic | SOP-05a sections that ground it | Rating today → after integration (target) |
 |---|---|---|
 | `inventory` (expand) | §4.1–§4.3 screens and statuses, §4.4 daily Issues check (every row and its fix), §4.5 lot page, §4.21 corrections, §5.1 messages, form 8.3 | 🟡 → ✅ |
 | *new* `inventory-adjustments` | §4.6–§4.7 (procedure, reason → CCRS table, E13, forbidden reasons, theft/seizure), form 8.2 | 🔴 → ✅ (with caveats until G-23) |
-| *new* `recalls` | §4.10 placing and releasing a hold, §4.11 register behaviour and messages, §4.13 the written plan, §6 rows, forms 8.4–8.5, WAC 314-55-225 quotes | 🔴 → ✅ (paper plan until G-25) |
+| *new* `recalls` | §4.10 placing and releasing a hold, §4.11 register behaviour and messages, §4.13 the written plan, §6 rows, forms 8.4–8.5, WAC 314-55-225 quotes | 🔴 → ✅ (G-25 built, Phase 1.6c: Settings → Recall plan, Inventory → Recalls; concierge fact added) |
 | `pos` / `registers` (addition) | §4.11 recall messages for budtenders, §4.12 the 86, §4.22 low stock, §5.3 | 🟡 → ✅ |
 | *new* `expiry` | §4.14 sources, §4.15 Save / Preview / Apply, §4.16 expired and expiring soon, §5.2 messages incl. every skip reason | 🔴 → ✅ (expired-sale rule built, Phase 1.6b, G-24) |
 | `inventory` (tags, labs, labels, bulk fill) | §4.17–§4.20, §5.4 | 🔴 → ✅ |
@@ -220,14 +220,14 @@ Concierge code is **unchanged** (record-only). Today the concierge's `inventory`
 - F-05a-5 / F-05a-7: never advise **Destruction**, **Recall removal** or **Receive (add)** as adjustment reasons, even though the Issues text suggests the first.
 - F-05a-8: ~~the register sells expired lots~~ FIXED (Phase 1.6b, G-24): expired edibles, liquid edibles, tinctures, capsules and RSO are refused with no override; other expired items need **I told the customer**; the draw is FEFO; a nightly job quarantines the hard-block lots.
 - F-05a-9: an 86 comes back on its own while units are on file.
-- F-05a-16: a recall hold does not hide the website card; advise **Always hide** on Product Enrichment.
+- F-05a-16: ~~a recall hold does not hide the website card; advise **Always hide**~~ FIXED (Phase 1.6c, G-25): the website and online orders drop a recalled product by themselves; do not advise Always hide for a recall.
 - Never tell anyone to destroy recalled product before the LCB is notified and the destruction is coordinated (WAC 314-55-225(3)(b)(i)(B)).
 
 **Running score:** topics with complete SOP source material add `inventory` (lot core), `inventory-adjustments`, `recalls` (paper plan), `expiry` (rule pending Q-05a-1). Baseline row touched: Inventory management 🟡 (§3), unchanged in code.
 
 ### SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price (`docs/sop/SOP-05b-noncannabis-menu-classification.md`, verified at `827facb5`)
 
-The concierge code is **unchanged** (record-only). Today the `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–180) has one line on Other Inventory (L172), which repeats the scan promise that F-05b-1 disproves, and one line on Types & Categories. There is nothing on merch, Publish Menu, the removal check, the cannabis line, classification or the sell price (finding **F-05b-C**). The owner wants the concierge to use every feature, including future ones (D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*). What SOP-05b now provides:
+The concierge code is **unchanged** (record-only). Today the `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–181) has one line on Other Inventory (L172), which repeats the scan promise that F-05b-1 disproves, and one line on Types & Categories. There is nothing on merch, Publish Menu, the removal check, the cannabis line, classification or the sell price (finding **F-05b-C**). The owner wants the concierge to use every feature, including future ones (D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*). What SOP-05b now provides:
 
 | Concierge topic | SOP-05b sections that ground it | Rating today → after integration (target) |
 |---|---|---|
@@ -350,7 +350,7 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | Does the manifest PDF have to go with the product? | **Yes**, printed, with an employee 21+ or a transport licensee; sealed, locked, direct route (WAC 314-55-085; §4.13) | Same |
 | Which fields are required for a vendor return? | Retired (Phase 1.5): see the built answer | Built (Phase 1.5, G-42): the server checks each state step in order before it is recorded (§4.11–§4.12) |
 | How do I move the manifest status? | Retired (Phase 1.5): see the built answer | Built (Phase 1.5, G-42): steps upload → LCB success email → departure, checked in order on the server, each audited with who and when (§4.12) |
-| What do we do with a recall? | It is a **transfer back to the vendor** (D65): admin tells the LCB officer at once, form 8.4, then a vendor return with reason Recall; never destroy it (§4.21) | Built (Phase 1.5, G-42; Phase 1.3, G-28): Recalled lots are listed for a vendor return and stay Recalled; they are never offered for destruction (§4.21) |
+| What do we do with a recall? | It is a **transfer back to the vendor** (D65): open the event in Inventory → Recalls, add the lots, the admin tells the LCB officer at once and records it on the event, then a vendor return with reason Recall (the officer and date come from the event, Phase 1.6c); never destroy it (§4.21) | Built (Phase 1.5, G-42; Phase 1.3, G-28): Recalled lots are listed for a vendor return and stay Recalled; they are never offered for destruction (§4.21) |
 | A customer returned an opened item: what do I do with it? | **Destroy** → sealed destroy bin now → form 8.1 → check the event appeared; the app holds the unit (§4.7) | Built (Phase 1.4, G-44; migration 0308) |
 | Is the destroy-return unit counted as stock? | On hand and in CCRS yes, but **held**: never sellable, never on the menu, until destroyed (§4.3; before 0308 the bin is the only control) | Built (Phase 1.4, G-44) |
 | The return showed an error. Did it save? | No: it saves all or nothing, so nothing changed; keep the unit and cash aside and tell the owner before retrying (§4.7) | Built (Phase 1.4, G-44) |

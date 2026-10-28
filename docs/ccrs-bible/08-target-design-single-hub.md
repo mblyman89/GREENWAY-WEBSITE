@@ -4,7 +4,7 @@ Owner decision D-05 (Part 05), verbatim: "one central command center/ HUB that a
 
 This part is the design the slices in Part 09 build toward. Every element below names (a) the LCB rule it serves, pinned to Part 02, (b) the code that exists today, pinned to Part 03 at commit `c1ca753`, and (c) the slice that ships it. Nothing here is built yet unless its row says DONE.
 
-Route: `/admin/compliance/ccrs` (`src/app/admin/compliance/ccrs/page.tsx`, 674 L today; nav entry `admin-nav-data.ts` L105 label "CCRS Command Center", permission `reports.view`, group "CCRS"). The hub stays at this route. Nothing CCRS-weekly is added anywhere else.
+Route: `/admin/compliance/ccrs` (`src/app/admin/compliance/ccrs/page.tsx`, 674 L today; nav entry `admin-nav-data.ts` L106 label "CCRS Command Center", permission `reports.view`, group "CCRS"). The hub stays at this route. Nothing CCRS-weekly is added anywhere else.
 
 ## A. What exists today on the two pages (verified anchors)
 

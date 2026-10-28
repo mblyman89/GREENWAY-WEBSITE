@@ -26,7 +26,7 @@ Owner (Part 05, Q4): leave `IsMedical=FALSE` until he flips it. The store is bui
 | Endorsement config | `src/lib/medical/store.ts` L83-L100 `getEndorsementConfig()` → `isMedicallyEndorsed`, `endorsementNumber`, `exciseExemptionUntil` from `medical_endorsement_config` | read by the hub DOH block (`page.tsx` L143) |
 | DOH-compliant registry | `medical_product_registry` (0113 L22-…) keyed by `pos_product_key`, categories general_use / high_thc / … | not read by any CCRS builder today |
 | Exempt-sale ledger | `medical_exempt_sales` 0040 L84-L104 (`sales_tax_exempt`, `excise_tax_exempt`, `excise_amount_exempt_minor`) | source of `RecreationalMedical` |
-| Customer return medical path | `disposition.ts` L612-L625 | snapshots medical flags on return |
+| Customer return medical path | `disposition.ts` L615-L625 | snapshots medical flags on return |
 
 Gap between text and code: the FAQ's condition 4 (`[FAQ L0119]` — product marked medically compliant *in the inventory upload*) is `IsMedical=TRUE` on the Inventory row. Today every row is FALSE, so **a `RecreationalMedical` sale with $0.00 tax would today reference inventory the LCB sees as non-medical**. That is consistent with the owner's "not endorsed yet" state — as long as no `medical_exempt_sales` rows exist. Guardrail needed now (S-02 or S-03, not S-10): if `getEndorsementConfig().isMedicallyEndorsed === false` **and** any Sale row would be `RecreationalMedical`, raise a blocking error `E_MEDICAL_SALE_WHILE_UNENDORSED` `[FAQ L0118]`. This protects the owner from a stray exempt record producing a $0 tax row before he flips.
 

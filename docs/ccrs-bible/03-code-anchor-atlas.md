@@ -2305,7 +2305,7 @@ Generated 2026-10-21 15:33Z at commit `52cacbbf23778b8a13d0368a8113f45894a4a504`
 
 ## G. Returns / disposition — `src/lib/inventory/disposition.ts`
 
-`src/lib/inventory/disposition.ts` L455-L480 — createCustomerReturn contract (FAQ: 'sale identifier should be deleted … inventory identifier reported on an Inventory Adjustment as a return')
+`src/lib/inventory/disposition.ts` L458-L480 — createCustomerReturn contract (FAQ: 'sale identifier should be deleted … inventory identifier reported on an Inventory Adjustment as a return')
 
 ```ts
  455| 
@@ -2336,7 +2336,7 @@ Generated 2026-10-21 15:33Z at commit `52cacbbf23778b8a13d0368a8113f45894a4a504`
  480| ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
 ```
 
-`src/lib/inventory/disposition.ts` L595-L630 — CCRS Sale-row snapshot + medical mirror
+`src/lib/inventory/disposition.ts` L598-L630 — CCRS Sale-row snapshot + medical mirror
 
 ```ts
  595|             ccrs_inventory_external_id: string | null;
@@ -2377,7 +2377,7 @@ Generated 2026-10-21 15:33Z at commit `52cacbbf23778b8a13d0368a8113f45894a4a504`
  630|   let exciseExempt = false;
 ```
 
-`src/lib/inventory/disposition.ts` L675-L705 — postAddition 'return' + destroy branch
+`src/lib/inventory/disposition.ts` L678-L705 — postAddition 'return' + destroy branch
 
 ```ts
  675|     quantity: qty,
@@ -2413,7 +2413,7 @@ Generated 2026-10-21 15:33Z at commit `52cacbbf23778b8a13d0368a8113f45894a4a504`
  705|     const scheduled = await scheduleDestruction(
 ```
 
-`src/lib/inventory/disposition.ts` L780-L800 — createVendorReturn (reducing 'other' adjustment)
+`src/lib/inventory/disposition.ts` L783-L800 — createVendorReturn (reducing 'other' adjustment)
 
 ```ts
  780| // Vendor returns
@@ -2439,7 +2439,7 @@ Generated 2026-10-21 15:33Z at commit `52cacbbf23778b8a13d0368a8113f45894a4a504`
  800|     lotId: string;
 ```
 
-`src/lib/inventory/disposition.ts` L968-L985 — completeDestruction head ('destruction')
+`src/lib/inventory/disposition.ts` L971-L985 — completeDestruction head ('destruction')
 
 ```ts
  968|       detail: input.detail ?? null,

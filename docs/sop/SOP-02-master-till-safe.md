@@ -177,7 +177,7 @@ A $20, $50 or $100 in the master till means a register swap brought in big bills
 ### 4.3 Opening the Store safe page
 
 1. Sign in to the back office with a manager-level login (§2).
-2. Go to **Register Activity** (Employee group in the menu, `/admin/registers`). Register Activity itself needs the `orders.manage` permission (`admin-nav-data.ts` L111).
+2. Go to **Register Activity** (Employee group in the menu, `/admin/registers`). Register Activity itself needs the `orders.manage` permission (`admin-nav-data.ts` L112).
 3. In the header buttons, tap **Safe** (`registers/page.tsx` L87–89).
 4. The page opens with the breadcrumb **Sell › Register Activity › Safe** and the title **Store safe**. **← Register Activity** takes you back.
 
@@ -648,7 +648,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 
 | SOP section | Code / document (read for this SOP) |
 |---|---|
-| 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L111; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
+| 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L112; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
 | 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L183–194; `src/lib/accounting/card-payment-core.ts` L7–8 |
 | 4.2 standard | Owner D11; `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
 | 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L87–89 |

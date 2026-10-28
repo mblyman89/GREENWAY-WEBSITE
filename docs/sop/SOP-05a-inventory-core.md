@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.8 (Phase 1.6b fix G-24 built: expired edibles, liquid edibles, tinctures, capsules and RSO refused at the sale, warning on other expired stock, FEFO draw, nightly quarantine; Phase 1.4 fix G-44 built: held units for a customer-return destruction; Phase 1.3 fix G-28 built: destruction keeps held lots held; Phase 1.2 fix G-23 built: hardened manual adjustment; Phase 1.1 fix G-19 + G-22 built: gated, audited lot lifecycle; Phase 0.5 fix G-27 built: no typed cannabis cost; owner answer to Q-05a-6 applied; draft for owner review) |
+| **Version** | 1.9 (Phase 1.6c fix G-25 built: recall plan in Settings, recall and market-withdrawal log in Inventory → Recalls with the LCB deadlines on Issues, a recall now leaves the website and refuses online orders; Phase 1.6b fix G-24 built: expired edibles, liquid edibles, tinctures, capsules and RSO refused at the sale, warning on other expired stock, FEFO draw, nightly quarantine; Phase 1.4 fix G-44 built: held units for a customer-return destruction; Phase 1.3 fix G-28 built: destruction keeps held lots held; Phase 1.2 fix G-23 built: hardened manual adjustment; Phase 1.1 fix G-19 + G-22 built: gated, audited lot lifecycle; Phase 0.5 fix G-27 built: no typed cannabis cost; owner answer to Q-05a-6 applied; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after cannabis lots once they are received: the daily Issues check, quantity corrections, holds and recalls, expiry dates, tags, testing labs and lot labels. Budtenders read §4.10–§4.11 (what a recall hold and the register's "86" do) and §9. |
@@ -83,7 +83,7 @@ and set how it is to be built when this slice began:
 - **SOP-05a (this document): the cannabis lot core.** The Inventory list and Issues tab, the lot page, quantity adjustments, lot status, recall holds, the register's 86 and restore to sale, expiry dates and expiration rules, tags, testing labs, lot labels, bulk fill and lot corrections.
 - **SOP-05b (next slice):** Other Inventory (non-cannabis) and its labels, Merch Inventory, Publish Menu, Settings → Types & Categories, and Sales-Limit Classification. It also covers the sell-price correction on the lot page (§4.21 points there).
 
-**Why it matters.** The Inventory page describes itself as *"the traceability backbone"*: *"Compliance reports are built on top of this real data, never re-entered."* (`inventory/page.tsx` L436). The weekly CCRS files (SOP-16) are built from these lot rows. A wrong quantity or a wrong status here becomes a wrong state filing there.
+**Why it matters.** The Inventory page describes itself as *"the traceability backbone"*: *"Compliance reports are built on top of this real data, never re-entered."* (`inventory/page.tsx` L448). The weekly CCRS files (SOP-16) are built from these lot rows. A wrong quantity or a wrong status here becomes a wrong state filing there.
 
 **In scope.**
 - The Inventory list, its status tabs, cards, filters and columns, and the Issues and Insights tabs.
@@ -108,7 +108,7 @@ and set how it is to be built when this slice began:
 
 | Task | Who | How the system checks |
 |---|---|---|
-| Open **Inventory**, the lot page, **Expiration rules**, **Tags**, **Testing labs**, a lot label | Owner, admin, manager | Page gates `requirePermission("inventory.manage")`: list `inventory/page.tsx` L205; lot page; `expiration-rules/page.tsx` L222; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33. `inventory.manage` = owner, admin, manager (`src/lib/auth/roles.ts` L106). |
+| Open **Inventory**, the lot page, **Expiration rules**, **Tags**, **Testing labs**, a lot label | Owner, admin, manager | Page gates `requirePermission("inventory.manage")`: list `inventory/page.tsx` L210; lot page; `expiration-rules/page.tsx` L222; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33. `inventory.manage` = owner, admin, manager (`src/lib/auth/roles.ts` L106). |
 | **Record adjustment**, **Update status**, received date, lot details, product link, lab result, website classification, size, bulk fill, compliance classification, **Restore to sale**, **Re-read lab certificate** | Owner, admin, manager | Every action in `src/app/admin/inventory/actions.ts` calls `requirePermission("inventory.manage")` (L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210). |
 | Save, preview and apply **Expiration rules** | Owner, admin, manager | `expiration-rules/actions.ts` L62, L131, L141 (`inventory.manage`) |
 | Read the **Expiration report** | Owner, admin, manager, readonly | `reports/expiration/page.tsx` L151 (`reports.view`; `roles.ts` L149) |
@@ -117,7 +117,9 @@ and set how it is to be built when this slice began:
 | Approve and post an inventory audit | **Owner only** | `inventory.audit` (`roles.ts` L142). SOP-06. |
 | Key a missing **non-cannabis** unit cost | Owner, admin | `inventory.cost.fill` (`roles.ts` L148). SOP-05b. |
 | **Place** a recall hold (status **Recalled**) | **Manager-level login, with a reason** (confirm in Q-05a-7) | `inventory.manage`; the reason is required and saved in the audit row `inventory_lot.status_changed` (Phase 1.1, G-22). |
-| **Release** a recall hold; notify the LCB | **The admin** (recall coordinator, D37), and the owner | `inventory.recall.release` = owner, admin (`roles.ts` L156), checked in `setLotStatusAction` with a required clearance reference. Form 8.5 stays the recall record until G-25. |
+| **Release** a recall hold; notify the LCB | **The admin** (recall coordinator, D37), and the owner | `inventory.recall.release` = owner, admin (`roles.ts` L156), checked in `setLotStatusAction` with a required clearance reference. On a recall event, **Record the LCB notification** and **Close the event** need the same permission (`recalls/actions.ts` L158, L230). |
+| Open a recall event, **Add and set Recalled**, **Add weekly row** (Inventory → Recalls) | Owner, admin, manager | `inventory.manage` (`recalls/actions.ts` L53, L88, L193). Phase 1.6c, G-25. |
+| Edit **Settings → Recall plan** | Owner, admin | `settings.manage` (`roles.ts` L266; `settings/recall-plan/actions.ts` L17). Phase 1.6c, G-25. |
 | **Destroy** a lot | Owner, admin, manager through **Returns & Destruction** only | `disposition/page.tsx` L97 (`inventory.manage`). SOP-15. |
 
 **Recall coordinator.** WAC 314-55-225(3)(d) requires a named recall coordinator (§4.13). The owner answered Q-05a-2: *"admin. No back up. Just my manager and I."* (decision D37). So **the admin is the recall coordinator, with no back-up**, and the recall team is **the owner and the manager**. The coordinator decides recall or withdrawal, notifies the LCB, agrees any destruction with the officer and releases holds. This SOP still lets the manager **place** a hold at once, because that only protects customers; the owner is asked to confirm that in **Q-05a-7**.
@@ -161,7 +163,7 @@ and set how it is to be built when this slice began:
 |---|---|---|
 | **Inventory** | Top bar **Inventory → Inventory** (`/admin/inventory`) | Every cannabis lot. Three tabs: **Lots**, **Issues**, **Insights** (`page-tab-sets.ts` L77–85) |
 | **Lot page** | Click a lot on the list | One lot: quantities, dates, COA, corrections, adjustments, status |
-| **Expiration rules** | **Expiration rules** button at the top of Inventory (`inventory/page.tsx` L442) | Best-by dates for lots with no manufacturer date (§4.15) |
+| **Expiration rules** | **Expiration rules** button at the top of Inventory (`inventory/page.tsx` L454) | Best-by dates for lots with no manufacturer date (§4.15) |
 | **Tags** | **Tags** button (L446) | Labels shown on menu cards (§4.17) |
 | **Testing labs** | **Testing labs** button (L450) | WA labs and the hosts COAs may be read from (§4.18) |
 | **Print lot label** | **🏷 Print 4×6 label** on a manifest line (`intake/[id]/page.tsx` L1072–1078), or the address `/admin/inventory/lots/<id>/label` | Reprint a 4×6 lot label (§4.19) |
@@ -206,7 +208,7 @@ A lot has exactly one of five statuses. Four can be picked on the lot page (`MAN
 | **Quarantine** | Held out of sale while a decision is pending: release, return or destroy | No. Sales draw only from Active lots (`sale-lot-read.ts` L45–53). A quarantined lot does **not** hold the rest of the product (§4.11) | Finalize holds a lot that fails the go-live check (no CCRS id, no COA, or a FAILED result); SOP-15 holds before destruction |
 | **Recalled** | Under a recall. The whole product is blocked at the register while **any** of its lots is Recalled (§4.11) | **No, and nothing else under the same product either.** No override | A manager, by hand, on the lot page (§4.10) |
 | **Sold out** | Empty | No | The database flips it automatically when a **sale**, void or count takes it to zero (`atomic-quantity.ts` L44). A manual adjustment does **not** (§4.6) |
-| **Destroyed** | Gone: destroyed and recorded | No | **Only** Returns & Destruction, which sets it after the destruction empties the lot (`disposition.ts` L1087–1094). **Never by hand** (§4.9) |
+| **Destroyed** | Gone: destroyed and recorded | No | **Only** Returns & Destruction, which sets it after the destruction empties the lot (`disposition.ts` L1105–1112). **Never by hand** (§4.9) |
 
 **How CCRS sees these statuses.** The weekly Inventory file lists every lot that is **not** Destroyed (`ccrs-batch.ts` L1196–1207). A Quarantine or Recalled lot is still listed in the Sales Floor area; the CCRS screen shows advisory note E45 for it. That is expected and needs no action (`ccrs-batch.ts` L1006–1010, L1118–1122).
 
@@ -214,7 +216,7 @@ A lot has exactly one of five statuses. Four can be picked on the lot page (`MAN
 
 **When:** every morning, before the store opens, by the opening manager. **Time:** about 10 minutes. **Record:** form 8.3.
 
-1. Open **Inventory → Issues**. If it is clean, it reads: *"Nothing needs attention. No recalls, expired or undated stock, no blocked lots, and no crossed compliance limits (expiry window: 30 days)."* (`inventory/page.tsx` L578–581; window `EXPIRING_SOON_DAYS = 30`, `store.ts` L32). Tick "clean" on form 8.3 and stop.
+1. Open **Inventory → Issues**. If it is clean, it reads: *"Nothing needs attention. No recalls, expired or undated stock, no blocked lots, and no crossed compliance limits (expiry window: 30 days)."* (`inventory/page.tsx` L590–593; window `EXPIRING_SOON_DAYS = 30`, `store.ts` L32). Tick "clean" on form 8.3 and stop.
 2. Otherwise the rows come in two groups: **Needs action** (blocking) first, then **Worth a look** (warning) (`IssuesList.tsx` L11–12; `issues-core.ts` L16–25). Work every **Needs action** row before opening.
 3. Use the row's own button. Every row names its fix. The rows you will see (`src/lib/admin/issues-core.ts`):
 
@@ -359,16 +361,16 @@ Every refused try writes an audit row `inventory_lot.status_change_refused`. Eve
 2. The weekly CCRS Inventory file reads only lots that are **not** Destroyed (`ccrs-batch.ts` L1196–1207). Destroyed lots are added back only when the same week's file carries a destruction event for them (`readDestroyedLots`, L380–391).
 3. So the lot **silently disappears from what Greenway reports**, while the state's system still shows its last quantity on hand. No Destruction adjustment is filed, and no waste record exists. That is a traceability error in a state filing.
 
-**What to do instead.** Every destruction goes through **Inventory → Returns & Destruction** (SOP-15). That flow records the hold, the method, the waste record and, for recalls, the LCB coordination. It sets **Destroyed** itself, and **only when the destruction empties the lot** (`disposition.ts` L1087–1095).
+**What to do instead.** Every destruction goes through **Inventory → Returns & Destruction** (SOP-15). That flow records the hold, the method, the waste record and, for recalls, the LCB coordination. It sets **Destroyed** itself, and **only when the destruction empties the lot** (`disposition.ts` L1105–1113).
 
 **The owner asked: should the Destructions page mark the lot's fields automatically?** (Q-05a-4.) **Yes, and for the most part it already does.** Read in the code at `main@827facb5`:
 
 | Step on Returns & Destruction | What it does to the lot by itself | Where |
 |---|---|---|
-| **Schedule** a destruction | Moves an **Active** lot to **Quarantine** (a Quarantine lot stays; a single customer-returned unit never moves the lot), refuses a **Recalled** lot (D65), keeps the earlier status, and starts the store's hold timer | `disposition.ts` L975 (rules `destruction-lot-status-core.ts` L85) |
+| **Schedule** a destruction | Moves an **Active** lot to **Quarantine** (a Quarantine lot stays; a single customer-returned unit never moves the lot), refuses a **Recalled** lot (D65), keeps the earlier status, and starts the store's hold timer | `disposition.ts` L978 (rules `destruction-lot-status-core.ts` L85) |
 | **Complete** it after the hold | Checks the method, the waste mix and, for a recall, the LCB coordination and officer; takes the units off **On hand** in one safe step that cannot go below zero; files the CCRS **Destruction** adjustment; sets **Destroyed** when nothing is left | L999–1098 (`postReduction` L1050, L233–282; Destroyed L1087–1095) |
 | **Cancel** it | **Owner only**, with a reason; puts the lot back to the status it had before (only Quarantine → Active, only if it was Active) | L1193, L934; `actions.ts` L265 |
-| Every step | Writes an audit row | `disposition/actions.ts` L184, L225, L250 |
+| Every step | Writes an audit row | `disposition/actions.ts` L185, L226, L251 |
 
 So nobody should touch **Lifecycle status** or **Adjust quantity** to destroy anything. Since Phase 1.2 (G-23, D39) **Destruction** and **Recall removal** are off the lot page and a **Schedule destruction** link under **Adjust quantity** opens Returns & Destruction with the lot already chosen (`disposition/page.tsx` `?lot=`). Since Phase 1.3 (G-28) the page handles held lots. The three findings below are **FIXED**:
 - **F-05a-17 (S2, FIXED Phase 1.3): the destruction form listed only Active lots.** Now Active and Quarantine lots are listed with their status; Recalled lots never (D65). The page loads `listLots({ status: "active", limit: 500 })` (`disposition/page.tsx` L103). A lot already in **Quarantine** or **Recalled** cannot be picked, which are exactly the lots most likely to be destroyed.
@@ -402,40 +404,45 @@ So nobody should touch **Lifecycle status** or **Adjust quantity** to destroy an
 **Recall or withdrawal: who decides.** The **recall coordinator** (the **admin**, D37, §2) decides which one it is. A manager who is unsure treats it as a **recall** and calls the admin.
 
 **Procedure: placing a recall hold** (manager, the moment a recall notice, a vendor notice, an LCB call or a failed-safety finding arrives):
-1. **Open form 8.5** (recall event worksheet). Write who told you, when, how, and the product, vendor, lot or batch numbers and recall reference exactly as given.
-2. **Find every affected lot.** Inventory → type into the search box (*"Product, lot code, POS key, vendor, brand, strain, notes…"*, `InventoryFilterPanel.tsx` L345): the product, the vendor, and each lot number. Use the **All** status tab, so sold-out and quarantined lots also show. List each lot on form 8.5 with its **On hand**.
-3. **Set each affected lot to Recalled.** For each lot: **Lifecycle status → Set status → Recalled**, write the reason and the recall reference, **Update status** (§4.8). The page shows **Saved.** and the change is in **Status history**.
-4. **Pull the product physically.** Remove every unit from the sales floor, the display cases and the vault shelf. Put it in a sealed bin or bag marked **"RECALL — DO NOT SELL — <product> — <date>"**, in the quarantine area. Count it; the count must match **On hand**. Write the count on form 8.5. Any difference is reported to the admin and the owner the same hour.
-5. **Hide it from the website as well** (finding F-05a-16, below). Open **Product Intake → Product Enrichment** (`admin-nav-data.ts` L77), open the product, set **Visibility** to **Always hide**, type the reason (for example "RECALL 2026-10-27") in **Reason if hidden**, and press **Save enrichment** (`products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270, audited `product.visibility_changed`). The recall hold alone does not stop online reservations.
+1. **Open the recall event** in **Inventory → Recalls** (`admin-nav-data.ts` L92; page `src/app/admin/inventory/recalls/page.tsx`). Under **Open a recall event (form 8.5 §1)** fill in **Type** (*"Unsure? Recall."*), **Product(s), as the notice names them**, **Vendor**, **Lot / batch numbers as given**, **Reason given**, **Recall reference #**, **Notice from**, **How it arrived**, **Received on (store date)** and **Received at (store time, 24-hour)**, exactly as given, and press **Open the recall event** (L107–164; `createRecallEventAction`, `recalls/actions.ts` L52; audited `recall_event.create`). The event gets a number. Paper form 8.5 is the back-up if the app is down.
+2. **Find every affected lot.** On the event page, section **2. Affected lots**, type the product, a lot code or a POS key into the search box (*"Product, lot code or POS key"*) and press **Find lots** (`recalls/[id]/page.tsx` L103–141). Destroyed lots are not listed; sold-out and quarantined lots are. Search again for each lot number and the vendor's other names.
+3. **Set each affected lot to Recalled.** Press **Add and set Recalled** beside each affected lot (L157). The app runs the same gated status change as the lot page (`evaluateLotLifecycleChange` then `updateLotStatus`, `recalls/actions.ts` L87–150), with the event as the reason and reference, writes the **Status history** row, records the lot's **On hand** at that moment on the event, and refreshes the website. A lot already on the event shows **On this event**. (The lot page's **Lifecycle status → Recalled**, §4.8, still works, but the lot is then not on the event: add it here too.)
+4. **Pull the product physically.** Remove every unit from the sales floor, the display cases and the vault shelf. Put it in a sealed bin or bag marked **"RECALL — DO NOT SELL — <product> — <date>"**, in the quarantine area. Count it; the count must match **On hand**. Write the count in the event's weekly row (step 10) or on form 8.5. Any difference is reported to the admin and the owner the same hour.
+5. **Check the website.** Since Phase 1.6c (G-25) the hold reaches the website by itself: a product with any Recalled lot (or, on a mastered card, the recalled size) is left off the public menu, and online ordering refuses it (§4.11). Open the shop page and search the product: it should not be listed. You no longer set **Always hide** on Product Enrichment for a recall (F-05a-16 FIXED). If it is still listed, call the admin.
 6. **Check the register.** Scan or search the product at a register (download the menu first: a register that has not refreshed may still show it). It should not appear. If it is still listed after a refresh, stop the register from selling it by word of mouth and call the admin (§4.11 explains why the sale would still be refused at completion).
-7. **Check open orders.** Open **Online Orders** (`admin-nav-data.ts` L53) and look for pending pickup orders that hold the product. Call those customers, tell them the item is unavailable, and remove it at pickup. (The pickup cannot be completed with it in the order, §4.11.)
-8. **Notify.** The **recall coordinator** notifies the LCB: immediately for a **recall**, within **48 hours** for a **market withdrawal**. Write the officer's name, the time and the method on form 8.5. There is no back-up coordinator (D37). If the admin cannot be reached within 1 hour of a **recall**, the manager calls the owner, and the owner decides who makes the call; write that on form 8.5.
-9. **Do not destroy anything.** Recalled product stays in the bin until the coordinator has notified the LCB and agreed the destruction with the officer. Recalled product is **never destroyed by us**: it goes back to the vendor (D65, SOP-15 §4.21). Since Phase 1.3 (G-28) **Returns & Destruction** does not list a Recalled lot and refuses to schedule or complete one. The old recall guard remains for any event scheduled before the fix: *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* and *"Record the LCB enforcement officer you coordinated with."* (`disposition-core.ts` L226–243). The lot stays **Recalled** until it leaves with the vendor return; record it on form 8.5. Never use the **Recall removal** adjustment reason (§4.7), and never set **Destroyed** by hand (§4.9).
-10. **Track weekly.** Each week while the recall is open, write on form 8.5 the units held, returned, destroyed and sold before the hold, and the date the progress was reported to the LCB ((3)(f)).
+7. **Check open orders.** **Inventory → Issues** now lists **N open pickup order(s) hold(s) a recalled product**, blocking, with each order number, the customer's first name and the held items, and a link to each order (`openOrdersIssue`, `recall-event-core.ts` L598). Call those customers, tell them the item is unavailable, and remove it at pickup. (The pickup cannot be completed with it in the order, §4.11.)
+8. **Notify.** The **recall coordinator** notifies the LCB: immediately for a **recall**, within **48 hours** for a **market withdrawal**. Then, on the event page, section **4. LCB notification**, the coordinator (owner or admin, `inventory.recall.release`) fills **Officer told**, **Method**, **Date (store)**, **Time (store, 24-hour)** and **Reference / notes**, and presses **Record the LCB notification** (L174–208; `recordLcbNotificationAction`, `recalls/actions.ts` L157). It is recorded once; a future time or a time before the notice is refused (`evaluateLcbNotification`, `recall-event-core.ts` L157). Until it is recorded, **Issues** shows **Recall: LCB not yet notified** (blocking) or, for a withdrawal, **Market withdrawal: LCB notice due in N h (48-hour limit)** (a warning, blocking at 12 hours or less) and then **OVERDUE** (blocking) (`recallEventIssues`, L479; `recallDeadline`, L188). There is no back-up coordinator (D37). If the admin cannot be reached within 1 hour of a **recall**, the manager calls the owner, and the owner decides who makes the call; write that on form 8.5.
+9. **Do not destroy anything.** Recalled product stays in the bin until the coordinator has notified the LCB and agreed the destruction with the officer. Recalled product is **never destroyed by us**: it goes back to the vendor (D65, SOP-15 §4.21). Since Phase 1.3 (G-28) **Returns & Destruction** does not list a Recalled lot and refuses to schedule or complete one. The old recall guard remains for any event scheduled before the fix: *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* and *"Record the LCB enforcement officer you coordinated with."* (`disposition-core.ts` L226–243). The lot stays **Recalled** until it leaves with the vendor return. A **Recall** vendor return now takes the officer and the contact date from this event; it is refused until the event records the LCB notification (G-42 req 6; SOP-15 §4.21). Never use the **Recall removal** adjustment reason (§4.7), and never set **Destroyed** by hand (§4.9).
+10. **Track weekly.** Each week while the event is open, on section **5. Weekly tracking**, enter **Week of**, **Held**, **Returned by customers**, **Returned to vendor**, **Destroyed (SOP-15)**, **Sold before the hold**, **Reported to LCB on** and **Notes**, and press **Add weekly row** (L219–277; `addRecallWeeklyRowAction`, `recalls/actions.ts` L192). **Issues** warns **Weekly recall progress report to the LCB is due** when 7 days have passed since the last report or the notification ((3)(f)).
 
 **Procedure: releasing a recall hold** (**admin** only, as recall coordinator, D37):
 1. Release only on **written** clearance: the recall notice withdrawn, the vendor's written clearance for these lots, or the LCB's release. Put the copy in the compliance binder.
 2. On each cleared lot: **Lifecycle status → Active**, write the reason and the **clearance reference** (required), **Update status**. Only the admin or owner can do this; the app refuses a manager. Active also runs the go-live check.
 3. The release is saved in **Status history** with your name and the time. Lots that will be destroyed or returned are **not** set Active. They stay Recalled until they are destroyed or returned (§4.9 point 3).
-4. Set **Visibility** back to **Inherit POS** (or **Always show**) on Product Enrichment if you hid it in step 5 above.
-5. Scan the product at a register to confirm it rings up again. Close form 8.5 with the date and a one-line outcome.
+4. If the product was hidden on Product Enrichment under the old (pre-1.6c) procedure, set **Visibility** back to **Inherit POS**. A recall placed since Phase 1.6c needs nothing here: the card returns to the website when no lot is Recalled.
+5. Scan the product at a register to confirm it rings up again.
+6. **Close the event** (owner or admin): section **6. Close**, choose the **Outcome** (*"Released (written clearance, owner/admin set Active)"*, *"Returned to vendor (SOP-15 §4.21)"* or *"Destroyed via Returns & Destruction"*), the **Written clearance reference** (*"Required for Released"*) and any **Departures from the recall plan agreed with the LCB**, then **Close the event** (`recalls/[id]/page.tsx` L286–314; `closeRecallEventAction`, `recalls/actions.ts` L229). The app refuses to close before the LCB notification is recorded, refuses **Released** while any lot on the event is still Recalled, and refuses the other outcomes while a lot on the event is still Recalled with units on hand (`evaluateRecallClose`, `recall-event-core.ts` L265).
 
-**What the app records and does not record** (findings F-05a-2 FIXED, F-05a-15): since Phase 1.1, placing or lifting **Recalled** needs a reason, the release is limited to the owner and admin (`inventory.recall.release`) with a clearance reference, and each change is an audit row in **Status history**. The app still has no recall-plan record and no recall-coordinator field (the only mention is `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136). Forms 8.4 and 8.5 are the recall record until gap **G-25** is built.
+**What the app records** (findings F-05a-2 FIXED, F-05a-15 FIXED): since Phase 1.1, placing or lifting **Recalled** needs a reason, the release is limited to the owner and admin (`inventory.recall.release`) with a clearance reference, and each change is an audit row in **Status history**. Since Phase 1.6c (G-25) the recall event is the recall log: the notice, the lots and their on-hand when added, the LCB notification, the weekly rows and the outcome, each step audited (`recall_event.create`, `.add_lot`, `.lcb_notified`, `.weekly_row`, `.close`, `.refused`; tables `recall_events`, `recall_event_lots`, `recall_event_weekly`, migration `0311_recall_events.sql`). A factory reset keeps the recall log (`factory-reset-core.ts`, the three tables are KEEP), so it is never lost with test data. The plan and the coordinator are held in **Settings → Recall plan** (§4.13). Paper forms 8.4 and 8.5 remain the back-up when the app is down, and the signed plan stays in the binder.
 
-**Finding F-05a-16 (S2): a recall hold does not reach the website or online ordering.** The public menu filters out only **hidden** cards (`src/lib/pos/live-menu.ts` L167–171, L289–292). Online order pricing skips only hidden cards (`src/lib/orders/order-pricing.ts` L124–134). Neither reads lot status: `recalledProductKeys` has exactly four callers, the register menu route, the completion gate, restore to sale and the sellability report (`api/pos/menu/route.ts` L124; `completion-gate.ts` L132; `restore-to-sale-store.ts` L131; `register-sellability-store.ts` L188). A customer can still see a recalled product on the website and **reserve** it for pickup. The sale is refused only when staff try to complete the pickup (§4.11). Step 5 above (**Always hide**) is the interim control. It hides every size of the product, so if only one size of a mastered product is recalled, ask the owner before hiding.
+**Finding F-05a-16 (S2): FIXED in Phase 1.6c (G-25).** It was: a recall hold did not reach the website or online ordering, so a customer could still see and reserve a recalled product. Now the public menu leaves out every product with a Recalled lot, or only the recalled size on a mastered card (`withoutRecalled`, `recall-event-core.ts` L545; called in `loadLiveMenuItems` and `loadLiveMenuItemsCached`, `src/lib/pos/live-menu.ts` L182, L315, outside the menu cache so it applies at once), and online order pricing refuses a held line (`order-pricing.ts` L231–257). §4.11 has the detail. **Always hide** is no longer the recall control.
 
-> **Control: a recall is placed by a manager, on form 8.1 and form 8.5, the same hour the notice arrives; the product is physically segregated and counted; the website card is hidden; the LCB is notified (immediately for a recall, 48 hours for a withdrawal); nothing is destroyed before LCB coordination; only the admin (recall coordinator) releases a hold, on written clearance.** The app's hold stops register sales and is audited (G-22 built), but does not reach the website, and is lifted if the lot is scheduled for destruction (F-05a-15, F-05a-16, F-05a-18; gaps G-25, G-28).
+> **Control: a recall is placed by a manager, as a recall event in Inventory → Recalls, the same hour the notice arrives; every lot is added and set Recalled; the product is physically segregated and counted; the LCB is notified (immediately for a recall, 48 hours for a withdrawal) and the coordinator records it on the event; progress is recorded weekly; nothing is destroyed by us; only the admin (recall coordinator) or the owner releases a hold, on written clearance, and closes the event.** The hold stops register sales, the website and online orders, is audited, and its deadlines show on Issues (G-22, G-28, G-25 built; F-05a-15, F-05a-16, F-05a-18 FIXED).
 
 ### 4.11 What a recall hold does at the register
 
 Budtenders: read this section.
 
-**Two layers stop a recalled product at the register.**
+**Four layers stop a recalled product.** The first two are at the register; since Phase 1.6c (G-25) the last two carry the hold to the website and online orders.
 
 | Layer | What it does | How strong | Where |
 |---|---|---|---|
 | 1. The register menu | When a register downloads the menu, a product with any Recalled lot is left out. If only one size of a mastered product is recalled, only **that size** is left out | **Advisory.** If the recall read fails, the register gets the full menu rather than a blank screen | `api/pos/menu/route.ts` L119–124, L234–247, L311–313 |
 | 2. The completion gate | When the sale is completed (at the register, at sync, or a pickup order in the back office), every line is checked again. A held product refuses the whole sale | **Hard. No override.** If the recall table cannot be read, the sale is refused | `completion-gate.ts` L124–148; `recall-hold-core.ts` L108–117 |
+| 3. The website menu | A product with any Recalled lot is left off the public menu; on a mastered card only the recalled size is left out, and the card goes when no size is left. The check runs on every page load, outside the menu cache, and adding a lot to a recall event refreshes the website | **Advisory.** If the recall read fails, the website shows the menu (layer 4 still refuses the order) | `live-menu.ts` L179–182, L309–315; `withoutRecalled`, `recall-event-core.ts` L545 |
+| 4. Online order pricing | When a customer places a pickup order, every line is checked against the hold. A held line refuses the order with *"Some items changed while you were shopping. Please review your cart."* and *"<item>: no longer available on the current menu."* | **Hard.** If the recall status cannot be read, the order is refused: *"We could not confirm that these items are available right now. Please try again in a moment."* | `order-pricing.ts` L231–257; `recall-event-core.ts` L561–575 |
+
+The website and order messages never say "recall" (communications plan, §4.13).
 
 **The message the register shows** (layer 2), word for word:
 
@@ -488,7 +495,7 @@ Point 1 is what is missing today (F-05a-9, below). **Until G-26 is built, the ma
 4. **Wrong listing:** tell the owner. Menu listings are SOP-05b.
 5. **Stock is really there** (someone 86'd it by mistake, or it was restocked): use **Restore to sale** below.
 
-**Restore to sale (back office).** On **Inventory → Issues**, the panel **Marked unavailable, but you have stock** appears only when a product is flagged unavailable while Active lot units sit behind it (`RegisterSellabilityBanner.tsx` L142–188; placed at `inventory/page.tsx` L590–592). Its text: *"Someone pressed "86" on these at a register, or they were emptied and then restocked. They are on the shelf now. Restoring recomputes each one from its live lot count, so it can only clear a stale flag — it can never invent stock."* (L154–158). Each row shows the product and **N units on hand**, with the button **Restore to sale → <status>** (L180).
+**Restore to sale (back office).** On **Inventory → Issues**, the panel **Marked unavailable, but you have stock** appears only when a product is flagged unavailable while Active lot units sit behind it (`RegisterSellabilityBanner.tsx` L142–188; placed at `inventory/page.tsx` L602–604). Its text: *"Someone pressed "86" on these at a register, or they were emptied and then restocked. They are on the shelf now. Restoring recomputes each one from its live lot count, so it can only clear a stale flag — it can never invent stock."* (L154–158). Each row shows the product and **N units on hand**, with the button **Restore to sale → <status>** (L180).
 
 **Procedure: Restore to sale** (manager):
 1. Look at the shelf. Restore only when the product is physically there and sellable.
@@ -508,7 +515,7 @@ Point 1 is what is missing today (F-05a-9, below). **Until G-26 is built, the ma
 
 A recall *"must follow the procedures outlined in the recall plan unless otherwise agreed by the LCB and the licensee."* ((3)(d)(ii))
 
-**What the app has.** No recall plan, no coordinator field and no recall log (finding F-05a-15, **S2**; gap G-25). It has the pieces a plan points to: the **Recalled** status and its register hold (§4.10–§4.11) and the recall-destruction block in Returns & Destruction (SOP-15).
+**What the app has** (finding F-05a-15 FIXED, Phase 1.6c, G-25). **Settings → Recall plan** (`src/app/admin/settings/recall-plan/page.tsx`; owner and admin, `settings.manage`) holds the plan in four parts: **(A) Recall coordinator and contacts** (**Coordinator (the admin, D37)**, phones, the owner, **Local LCB enforcement officer** with phone and email), **(B) Identify and isolate**, **(C) Retrieve and destroy**, **(D) Communications**, and **Approval and annual review** (**Approved by (owner)**, **Approved on**, **Last reviewed by**, **Last reviewed on**). Sections B–D start from the form 8.4 wording. **Save recall plan** is audited with the before and after (`settings.recall_plan.save`; `saveRecallPlanAction`, `settings/recall-plan/actions.ts` L17). **Issues** shows **The written recall plan is not complete in the app** (warning) until the coordinator, the officer and the owner's approval are filled in, **Recall plan annual review overdue** (warning) a year after the last review or approval, and **Recall plan annual review due …** 30 days before (`recallPlanIssues`, `recall-event-core.ts` L418). The recall log is §4.10.
 
 **What Greenway does.** **Form 8.4** in §8 is the recall plan, written to (A)–(D) and built on this SOP:
 - (A) **Recall coordinator**: **the admin**, named on the form. The owner decided there is **no back-up**; the recall team is the owner and the manager (D37).
@@ -517,11 +524,11 @@ A recall *"must follow the procedures outlined in the recall plan unless otherwi
 - (D) **Communications**: who calls the LCB officer, the vendor, and the customers with open orders, and who approves any public notice. Only the owner speaks to the press or posts publicly.
 
 **Procedure.**
-1. The owner fills in form 8.4, signs and dates it, and files it in the compliance binder. Staff sign that they have read it.
-2. Review it **every year** and whenever the coordinator (the admin), the LCB officer's contact or this SOP changes. Write the review date on the form.
-3. In a recall, follow form 8.4 and §4.10. Any departure must be agreed with the LCB and written on form 8.5.
+1. The owner (or the admin for the owner) completes **Settings → Recall plan** and presses **Save recall plan**; the owner fills in **Approved by (owner)** and **Approved on**. Print it or copy it onto form 8.4, sign and date it, and file it in the compliance binder. Staff sign that they have read it.
+2. Review it **every year** and whenever the coordinator (the admin), the LCB officer's contact or this SOP changes. Enter **Last reviewed by** and **Last reviewed on** in the app and write the review date on the paper copy.
+3. In a recall, follow the plan and §4.10. Any departure must be agreed with the LCB and written in **Departures from the recall plan agreed with the LCB** when the event is closed.
 
-> **Control: a signed, current recall plan (form 8.4) with a named coordinator is in the binder, and every recall follows it.** WAC 314-55-225(3)(d) makes the plan mandatory. The app does not hold one (F-05a-15; gap G-25).
+> **Control: a current recall plan with a named coordinator is in Settings → Recall plan, approved by the owner, reviewed every year, and a signed copy (form 8.4) is in the binder; every recall follows it.** WAC 314-55-225(3)(d) makes the plan mandatory. Issues warns when it is incomplete or its review is due (G-25 built; F-05a-15 FIXED).
 
 # Part 4: Expiry dates
 
@@ -691,7 +698,7 @@ Every change is audited (`testing_lab.add`, `testing_lab.host_added`, `testing_l
 
 **Procedure:**
 1. Filter the list to the lots to fill. The easiest way is from the Issues tab: **Bulk fill the Cultivera-import lots** or a gap row, which opens the list already filtered.
-2. Press **Bulk fill missing fields…** under the filters (`inventory/page.tsx` L701–706). The panel uses **every lot the current filters show**.
+2. Press **Bulk fill missing fields…** under the filters (`inventory/page.tsx` L713–718). The panel uses **every lot the current filters show**.
 3. Choose **Field**, type **Value**, press **Preview fill for N lots**.
 4. Read **Review before saving — <field> on N lots**: *"Nothing has been saved yet."* It says how many will be set and how many will be skipped (*"they already have a value, are not from the one-time Cultivera import, or are destroyed. Those are protected and will not be changed."*).
 5. **Check the value applies to every one of those lots.** One value goes to all of them. An expiry date is rarely the same across many lots; filter tighter (one vendor, one product) until it is.
@@ -799,7 +806,7 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 ### 5.3 Restore to sale, the 86 and the register
 
-**Restore to sale** results appear at the top of the Inventory page (`inventory/page.tsx` L541–556).
+**Restore to sale** results appear at the top of the Inventory page (`inventory/page.tsx` L553–568).
 
 | Message | Cause | Do this |
 |---|---|---|
@@ -893,16 +900,16 @@ The green or red banner at the top of the lot page (`src/app/admin/inventory/[id
 
 | Control | Why | Where it comes from |
 |---|---|---|
-| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L849–864; `ccrs-batch.ts` L1196–1207, L380–391; `disposition.ts` L1087–1095 |
+| **Never set Destroyed by hand; destruction only through Returns & Destruction** | The manual path leaves units on file, writes no destruction and drops the lot from the CCRS Inventory file (F-05a-1, **S1**) | `store.ts` L849–864; `ccrs-batch.ts` L1196–1207, L380–391; `disposition.ts` L1105–1113 |
 | **A form 8.1 line before every status change** | **Lifecycle status** writes no audit row and asks no reason (F-05a-2; F-04-2) | `actions.ts` L142–155 |
 | **Active from quarantine only from a "now clear" Issues row** | No go-live check on the manual path (F-04-2, **S1**). WAC 314-55-102: no retail sale without a passing COA | SOP-04 §4.19; `lot-activation-gate-core.ts` |
-| **A recall placed the same hour; segregate, count, hide on the website, check open orders** | WAC 314-55-225(3)(b)(i): secure, isolate and prevent distribution; the hold does not reach the website (F-05a-16) | §4.10; `live-menu.ts` L167–171; `order-pricing.ts` L124–134 |
+| **A recall placed the same hour; segregate, count, hide on the website, check open orders** | WAC 314-55-225(3)(b)(i): secure, isolate and prevent distribution; the hold does not reach the website (F-05a-16) | §4.10; `live-menu.ts` L170–177; `order-pricing.ts` L128–138 |
 | **LCB notified immediately (recall) or within 48 hours (withdrawal)** | WAC 314-55-225(3)(b)(i)(A); (2)(b) | §4.10 step 8 |
 | **Nothing recalled is destroyed before LCB coordination** | WAC 314-55-225(3)(b)(i)(B), (3)(e) | §4.10 step 9; `disposition-core.ts` L226–243 |
 | **Weekly recall tracking** | WAC 314-55-225(3)(f) | Form 8.5 |
 | **A written, signed recall plan with a named coordinator, reviewed yearly** | WAC 314-55-225(3)(d) (mandatory) | Form 8.4; F-05a-15 |
 | **Only the admin (recall coordinator) releases a recall hold, on written clearance** | Owner decision D37; the app lets any manager release with no record | §4.10; F-05a-2 |
-| **A recalled lot is never destroyed by us (D65)** | The app refuses to schedule or complete it and never changes a Recalled lot (Phase 1.3, F-05a-18, F-05a-19 FIXED) | `destruction-lot-status-core.ts` L85, L193; `disposition.ts` L975, L1117; guard step 5 |
+| **A recalled lot is never destroyed by us (D65)** | The app refuses to schedule or complete it and never changes a Recalled lot (Phase 1.3, F-05a-18, F-05a-19 FIXED) | `destruction-lot-status-core.ts` L85, L193; `disposition.ts` L978, L1135; guard step 5 |
 | **Every manual adjustment: reason, note, double count, form 8.2** | The app enforces the reason, the CCRS notes and the zero floor and records who (Phase 1.2); the double count is the person's job | `manual-adjustment-core.ts` L105; `store.ts` L618 |
 | **Destruction only through Returns & Destruction** | Receive, Destruction and Recall removal removed from the lot page in Phase 1.2 (F-05a-5, F-05a-7 FIXED) | `manual-adjustment-core.ts` `RETIRED_ADJUSTMENT_REASONS` |
 | **Theft and seizure go to the owner first** | Theft and Seizure on the form since Phase 1.2, with a required incident reference (F-05a-6 FIXED) | `manual-adjustment-core.ts`; `ccrs-inventory-adjustment-core.ts` L87–90 |
@@ -1008,6 +1015,8 @@ Owner signed ________________   Date ____/____/______
 
 ### 8.4 Recall plan (WAC 314-55-225(3)(d)): one signed copy in the compliance binder
 
+> Since Phase 1.6c (G-25) the plan is kept in **Settings → Recall plan** (§4.13). This form is the signed paper copy for the binder; keep the two the same.
+
 ```
 GREENWAY MARIJUANA — WRITTEN RECALL PLAN                   WAC 314-55-225(3)(d)
 Licensee: Greenway Marijuana · Port Orchard, WA   UBI / license # ____________________
@@ -1060,6 +1069,8 @@ STAFF ACKNOWLEDGMENT — "I have read this recall plan."
 ```
 
 ### 8.5 Recall event worksheet (one per recall or market withdrawal)
+
+> Since Phase 1.6c (G-25) the record is the recall event in **Inventory → Recalls** (§4.10); its sections follow this worksheet. Use the paper worksheet only when the app is down, and enter it in the app afterwards.
 
 ```
 GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
@@ -1125,11 +1136,11 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 │ LIFECYCLE STATUS: form 8.1 line FIRST. It checks nothing and logs nothing.                │
 │   Quarantine → Active only from a "now clear" Issues row. Never a FAILED COA.             │
 │   ⚠ NEVER "Destroyed" by hand — destruction only via Returns & Destruction (SOP-15).      │
-│ RECALL (same hour): form 8.5 → every lot Recalled (8.1) → pull, bin, count → website      │
-│   Always hide → check a register + pickup orders → ADMIN tells LCB (recall: now;          │
-│   withdrawal: 48 h) → DESTROY NOTHING until LCB coordinated → track weekly.               │
-│   Only the ADMIN (coordinator, no back-up) releases a recall, on written clearance.       │
-│   Never schedule a Recalled lot for destruction in the app: it lifts the hold.            │
+│ RECALL (same hour): Inventory → Recalls → open the event → Add and set Recalled each      │
+│   lot → pull, bin, count → website + online orders drop it by themselves → call pickup    │
+│   orders on Issues → ADMIN tells LCB (recall: now; withdrawal: 48 h) and records it       │
+│   on the event → weekly row → DESTROY NOTHING (Recalled goes back to the vendor).         │
+│   Only the ADMIN (coordinator, no back-up) or owner releases, on written clearance.       │
 │ REGISTER: "Sale blocked … RECALL hold" → remove the item. No override. Tell the manager.  │
 │   86 = "we're out, take it off the menu". It comes back if stock is on file: manager      │
 │   checks the cause the same shift (count / quarantine / listing).                         │
@@ -1138,7 +1149,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 │ LABELS: lot page → Manifest → 🏷 Print 4×6 label. SCAN IT before use.                      │
 │ BULK FILL: blanks only, import lots only. One value must fit every lot.                   │
 │   NEVER type a cannabis unit cost. It comes only from the vendor's CCRS manifest.         │
-│ RECALL PLAN (8.4) signed, in the binder, reviewed every year. Records kept 5 years.       │
+│ RECALL PLAN: Settings → Recall plan, owner-approved, yearly review. Records kept 5 years. │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1159,7 +1170,8 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | **Recall** | WAC 314-55-225: product that may pose a risk to consumers. LCB notified immediately. |
 | **Market withdrawal** | WAC 314-55-225: removal for a reason with no consumer risk (for example packaging). LCB notified within 48 hours. |
 | **Recall coordinator** | The staff member the recall plan names to run every recall (WAC 314-55-225(3)(d)(i)(A)). At Greenway, **the admin**, with no back-up (D37). |
-| **Recall plan** | The written plan every licensee must have (form 8.4). |
+| **Recall plan** | The written plan every licensee must have. Kept in **Settings → Recall plan**, with a signed copy (form 8.4) in the binder (§4.13). |
+| **Recall event** | The app's record of one recall or market withdrawal in **Inventory → Recalls**: the notice, the lots, the LCB notification, the weekly rows and the outcome (§4.10). |
 | **Completion gate** | The final check when a sale completes. It refuses recalled products even if the register menu showed them. |
 | **86 / Mark out of stock** | Restaurant slang for "take it off the menu, we're out." The register link that marks a product's menu card unavailable on every register and the website (§4.12). It does not touch the lot, the count or CCRS. |
 | **Hard block** | The register refuses the sale and no one can override it. Owner decisions D36 and D44 for expired edibles, liquid edibles, tinctures, capsules and RSO (§4.16; built, G-24). |
@@ -1184,23 +1196,24 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 
 | SOP section | Code / document (read for this SOP) |
 |---|---|
-| 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L98, L114; `02-SOP-CATALOG-AND-ROADMAP.md` (Split, D35); `src/app/admin/inventory/page.tsx` L436 |
+| 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L98, L114; `02-SOP-CATALOG-AND-ROADMAP.md` (Split, D35); `src/app/admin/inventory/page.tsx` L448 |
 | 2 roles | `src/lib/auth/roles.ts` L106, L126, L142–149; `inventory/actions.ts` (every action `inventory.manage`: L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210); `expiration-rules/page.tsx` L222, `actions.ts` L62, L131, L141; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33; `reports/expiration/page.tsx` L151; `disposition/page.tsx` L97; `api/pos/stock-flag/route.ts` L28–34 |
 | 3 before you start | `src/components/admin/admin-nav-data.ts` L84–90; `completion-gate.ts` L124–148; `restore-to-sale-core.ts` L115–158; `expiration-rules/actions.ts` L146–157; `expiry-rules-core.ts` L10–34; `tags/actions.ts` L108–111 |
-| 4.1–4.2 list | `inventory/page.tsx` L92–102, L204–209, L439–475, L493–570, L603–709, L806–852; `InventoryFilterPanel.tsx` L345 |
-| 4.3 statuses | `inventory/actions.ts` L103–109; `[id]/page.tsx` L130–136; `sale-lot-read.ts` L45–53; `atomic-quantity.ts` L44; `disposition.ts` L1087–1094; `ccrs-batch.ts` L1006–1010, L1118–1122, L1196–1207 |
-| 4.4 Issues | `src/lib/admin/issues-core.ts` L16–25, L281–285, L314–489; `IssuesList.tsx` L11–12; `inventory/page.tsx` L572–597; `src/lib/inventory/store.ts` L32 |
+| 4.1–4.2 list | `inventory/page.tsx` L97–107, L209–214, L451–487, L505–582, L615–721, L818–864; `InventoryFilterPanel.tsx` L345 |
+| 4.3 statuses | `inventory/actions.ts` L103–109; `[id]/page.tsx` L130–136; `sale-lot-read.ts` L45–53; `atomic-quantity.ts` L44; `disposition.ts` L1105–1112; `ccrs-batch.ts` L1006–1010, L1118–1122, L1196–1207 |
+| 4.4 Issues | `src/lib/admin/issues-core.ts` L16–25, L281–285, L314–489; `IssuesList.tsx` L11–12; `inventory/page.tsx` L584–609; `src/lib/inventory/store.ts` L32 |
 | 4.5 lot page | `[id]/page.tsx` L360–418, L439–868, L1474–1546; `LabCertificatePanels.tsx` L35–56; `store.ts` L607–613 |
 | 4.6–4.7 adjust | `inventory/actions.ts` L89–140; `store.ts` L591–629; `[id]/page.tsx` L118–128, L1474–1494; `ccrs-inventory-adjustment-core.ts` L62–105, L201–212; `ccrs-preflight-core.ts` L271; `trade-samples.ts` L280–300; `atomic-quantity.ts` |
-| 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L849–864; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1196–1207; `disposition.ts` L1087–1095 |
-| 4.10–4.11 recall | `src/lib/pos/recall-hold-core.ts` L17–26, L44, L53–63, L108–117; `recall-hold-store.ts` L72–121; `api/pos/menu/route.ts` L119–124, L234–249, L311–313; `orders/completion-gate.ts` L124–148, L268; `pos/sync-store.ts` L1133–1162; `register-availability-core.ts` L332–345; `live-menu.ts` L167–171, L289–292; `order-pricing.ts` L124–134; `register-sellability-store.ts` L188; `products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270; `disposition-core.ts` L226–243; WAC 314-55-225 (app.leg.wa.gov, read 2026-10-27) |
+| 4.8–4.9 status | `inventory/actions.ts` L142–155; `store.ts` L849–864; `[id]/page.tsx` L1496–1512; `ccrs-batch.ts` L380–411, L1196–1207; `disposition.ts` L1105–1113 |
+| 4.10–4.11 recall | `src/lib/pos/recall-hold-core.ts` L17–26, L44, L53–63, L108–117; `recall-hold-store.ts` L72–121; `api/pos/menu/route.ts` L119–124, L234–249, L311–313; `orders/completion-gate.ts` L124–148, L268; `pos/sync-store.ts` L1133–1162; `register-availability-core.ts` L332–345; `live-menu.ts` L170–177, L295–304; `order-pricing.ts` L128–138; `register-sellability-store.ts` L188; `products/[key]/page.tsx` L1054–1074; `products/actions.ts` L205–211, L255–270; `disposition-core.ts` L226–243; WAC 314-55-225 (app.leg.wa.gov, read 2026-10-27) |
 | 4.12 86 / restore | `src/app/(site)/pos/SaleFlow.tsx` L4266–4283; `RegisterShell.tsx` L1557–1594; `stock-flag-core.ts` L31–32, L79–81; `api/pos/stock-flag/route.ts` L28–102; `register-availability-core.ts` L141–145, L318–421; `RegisterSellabilityBanner.tsx` L142–188; `inventory/actions.ts` L1174–1198; `restore-to-sale-core.ts` L115–167; `restore-to-sale-store.ts` L68–172 |
-| 4.13 recall plan | WAC 314-55-225(3)(d); `docs/RETURNS_DESTRUCTION_COMPLIANCE.md` L136 |
+| 4.13 recall plan | WAC 314-55-225(3)(d); `src/app/admin/settings/recall-plan/page.tsx`; `settings/recall-plan/actions.ts` L17; `recall-event-core.ts` L356–389, L418; `recall-event-store.ts` L40, L52 |
+| 4.10 recall log (1.6c) | `src/app/admin/inventory/recalls/page.tsx` L107–164; `recalls/[id]/page.tsx` L103–314; `recalls/actions.ts` L52, L87–150, L157, L192, L229; `recall-event-core.ts` L157, L188, L265, L479, L545, L598, L637; `recall-event-store.ts` L112–403; `inventory/page.tsx` L286, L436–442; `live-menu.ts` L179–182, L309–315; `order-pricing.ts` L231–257; `supabase/migrations/0311_recall_events.sql` |
 | 4.14–4.16 expiry | `expiry-rules-core.ts` L10–69, L209–232, L321–340, L438–447, L505, L770–777, L1116–1127; `expiration-rules/page.tsx` L57–62, L117–127, L180–216, L279–409; `expiration-rules/actions.ts` L61–180; `[id]/page.tsx` L603–628; `intake-store.ts` L1587–1612; `issues-core.ts` L388–394, L419, L454–476; `expired-stock-core.ts` L46–66, L104–135, L156–176, L227–259; `expired-stock-store.ts` L51–149; `completion-gate.ts` L151–188, L301–313; `sale-lot-read.ts` L65; `api/pos/menu/route.ts` L133, L329–331; `api/cron/expired-quarantine/route.ts`; `InventoryIntelPanel.tsx` L199–201; `reports/expiration/page.tsx` L151, L229–277; `ReportTabs.tsx` L22 |
 | 4.17 tags | `tags/page.tsx` L85, L130–131, L194, L246–256, L315, L375; `tags/actions.ts` L45–146; `src/lib/menu/product-tags-core.ts` L28–31, L163–176 |
 | 4.18 labs | `labs/page.tsx` L7–12, L156; `labs/actions.ts` L30–76; `testing-labs-core.ts` L141–160, L236–309 |
 | 4.19 label | `lots/[id]/label/page.tsx` L1–40, L116–124; `LabelPrintControls.tsx` L25–32; `intake/[id]/page.tsx` L1072–1078; `src/lib/pos/scan-to-cart-core.ts` L55–70 |
-| 4.20 bulk fill | `inventory/actions.ts` L903–996; `bulk-fill-core.ts` L49, L107, L164–290, L318–325; `BulkFillPanel.tsx` L62–122; `inventory/page.tsx` L684–709; `roles.ts` L143–148 |
+| 4.20 bulk fill | `inventory/actions.ts` L903–996; `bulk-fill-core.ts` L49, L107, L164–290, L318–325; `BulkFillPanel.tsx` L62–122; `inventory/page.tsx` L696–721; `roles.ts` L143–148 |
 | 4.21 corrections | `inventory/actions.ts` L174–211, L228–303, L315–371, L1247; `received-date-core.ts` L163–190; `lot-link-core.ts` L73–77, L167–173, L218–219; `LotLinkPanels.tsx` L55–220; `coa-panel-core.ts` L304–319; `[id]/page.tsx` L96, L439–475, L763, L806–868, L1022 |
 | 4.22 pointers | `src/lib/pos/low-stock-core.ts` L1–22; `oversold-report-core.ts` L45; `cycle-counts/page.tsx` L70, L96 |
 | Tests | This slice changes documentation only. The full CI gate (announcer check, compliance tests, pure self-tests) is run before merge and its result recorded in the pull request |
@@ -1214,7 +1227,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | A status change that checks the go-live rule, asks a reason and writes an audit row — **BUILT** (Phase 1.1) | Built: reason required, go-live check on Active, no manual Destroyed, recall release owner/admin with clearance reference, Status history | None needed (§4.8–§4.10) | G-19, **G-22** · F-04-2, F-05a-1, F-05a-2 FIXED |
 | A safe manual adjustment (atomic, no negative, Sold out at zero, **Theft / Seizure added**, note required where CCRS needs it, **Receive / Destruction / Recall removal removed**, a **Schedule destruction** link to Returns & Destruction) — **BUILT** (Phase 1.2) | Built: atomic strict write, no negative, Sold out at zero, Theft / Seizure with incident reference, CCRS notes required, retired reasons refused, Schedule destruction link, audit row, name and Pacific time | Count twice, always a note, form 8.2 (§4.6–§4.7) | **G-23** · F-05a-3 … F-05a-7 FIXED |
 | Register **hard block** on expired Solid Edible, Liquid Edible, Tincture, Capsule and RSO lots (RSO by store category and name, F-05a-20), **warning** on all other expired lots; FEFO lot draw; correct Issues text; nightly quarantine — **BUILT** (Phase 1.6b) | Built | None needed; the daily check still clears the shelf (§4.16) | **G-24** (D36, D44) · F-05a-8, F-05a-20 FIXED |
-| A recall plan and recall log in the app, with a named coordinator; the hold reaching the website and online orders | No plan, no coordinator, no log; the hold stops the register only | Forms 8.4 and 8.5; **Always hide** on Product Enrichment (§4.10, §4.13) | **G-25** · F-05a-15, F-05a-16 |
+| A recall plan and recall log in the app, with a named coordinator; the hold reaching the website and online orders — **BUILT** (Phase 1.6c) | Built: Settings → Recall plan; Inventory → Recalls with LCB deadlines and weekly rows on Issues; the website and online orders drop held products; open pickup orders flagged | None needed; forms 8.4 and 8.5 are the paper back-up (§4.10, §4.13) | **G-25** · F-05a-15, F-05a-16 FIXED |
 | A **Print label** link on the lot page; a scannable fallback barcode; **the professional 86** (reason-driven clearing, one queue, audited manager restore) — 86 part **APPROVED** (D40) | Label linked from the manifest only; fallback barcode does not scan; 86 reverts on the next download | Manifest link or typed address; scan before use; manager checks every 86 (§4.12, §4.19) | **G-26** · F-05a-9, F-05a-10 |
 | **No typed cannabis unit cost anywhere**: remove **Unit cost** from Bulk fill for cannabis lots — **BUILT** (Phase 0.5) | Anyone with Inventory access can bulk-fill it | Never use Bulk fill → Unit cost; cost only from the manifest (§4.20) | **G-27** · F-05a-11 (S1) |
 | Returns & Destruction handles held lots — **BUILT** (Phase 1.3, with D65) | Built: Active and Quarantine listed; Recalled never destroyed; earlier status kept and restored; owner-only cancel with reason | None needed (§4.9) | **G-28** · F-05a-17, F-05a-18, F-05a-19 FIXED |
@@ -1239,6 +1252,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 |---|---|---|---|
 | 1.0 draft | 2026-10-27 | First issue (slice SOP-05a, owner decision D35: inventory management in two slices). Written from the code at `main@ac251766`. Part 1 screens and the daily Issues check (§4.1–§4.4); Part 2 the lot page, adjustments and lifecycle status (§4.5–§4.9); Part 3 recalls, the 86, restore to sale and the written recall plan (§4.10–§4.13, WAC 314-55-225); Part 4 expiry dates and expiration rules (§4.14–§4.16); Part 5 tags, testing labs, labels, bulk fill and lot corrections (§4.17–§4.22). Adds findings F-05a-1…F-05a-16, gaps G-22…G-26, questions Q-05a-1…Q-05a-5, forms 8.1–8.5 (8.4 is the statutory recall plan). | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Owner answers to Q-05a-1…5 applied (decisions D36–D41). Re-verified at `main@827facb5` after the performance merge (register files now under `src/app/(site)/pos/`; line references updated; no described behaviour changed). Living-SOP reminder added (D41). §2, §4.10, §4.13, §6, form 8.4: the **admin** is the recall coordinator, no back-up (D37). §4.7: Receive, Destruction and Recall removal to be removed, Theft and Seizure to be added (D39, G-23 APPROVED). §4.9: how Returns & Destruction changes the lot by itself, and new findings F-05a-17…19 with an interim (gap G-28). §4.12: what an 86 is, and the professional method (D40, G-26 APPROVED). §4.16: expired edibles and liquid edibles never sold, others on the owner's decision (D36, G-24 APPROVED). §4.20: nobody types a cannabis unit cost (D38; F-05a-11 re-rated S1; gap G-27). §7, §9, glossary, Appendices B–C updated; questions Q-05a-6…8 added. | SOP program (for owner review) |
+| 1.9 draft | Fix phase | Phase 1.6c (owner D76 plan row 1.6; D37). G-25 BUILT: **Settings → Recall plan** holds the WAC 314-55-225(3)(d) plan (A–D, approval and annual review) with Issues warnings; **Inventory → Recalls** is the recall and market-withdrawal log (notice, **Add and set Recalled** through the gated lot status change, LCB notification recorded once by the owner or admin, weekly rows, close with outcome); Issues shows the LCB deadline (recall: now; withdrawal: 48 hours), the weekly report due and open pickup orders holding a recalled product; the public menu and online ordering now apply the recall hold (F-05a-16). A Recall vendor return takes the officer and date from the event (G-42 req 6, SOP-15). §4.10, §4.11, §4.13, forms 8.4–8.5 notes, §9, glossary, Appendices A, B updated; the interim **Always hide** step is retired (D41). F-05a-15, F-05a-16 FIXED. G-25 was still a draft requirement (not separately approved); it was built under the D76-approved plan row 1.6. | Fix program |
 | 1.8 draft | Fix phase | Phase 1.6b (owner D76, D36, D44). G-24 BUILT: an expired Solid Edible, Liquid Edible, Tincture, Capsule or RSO (RSO by store category or name, as it is filed as Concentrate for Inhalation) is left off the register menu and refused at completion with no override; every other expired item needs **I told the customer** at the register or in the back office and is noted on the order; the sale draws soonest-expiring first (FEFO); a nightly job at 4:20 AM PDT sets those lots to Quarantine (compare-and-set on Active); the Issues text follows the owner's rule. §3, §4.4, §4.16, §5, §6, §7, form 8.3, §9, glossary, Appendices A–B updated; the v1.7 paper rule is replaced (D41). Line references re-pinned after this change. F-05a-8, F-05a-20 FIXED. | Fix program |
 | 1.7 draft | Fix phase | Phase 1.4 (owner D76). G-44 BUILT (SOP-15 v1.4): the lot page shows **Held for destruction**; **Adjust quantity** never removes held units (§4.6). | Fix program |
 | 1.6 draft | Fix phase | Phase 1.3 (owner D76, D65). G-28 BUILT on Returns & Destruction (SOP-15 v1.3): held lots listed (Active, Quarantine), Recalled never destroyed by us, earlier status kept and restored, owner-only cancel with a reason. §4.9, §4.10 step 9, §6, §7, form 8.4 (C) and Appendix B updated. F-05a-17, F-05a-18, F-05a-19 FIXED. | Fix program |

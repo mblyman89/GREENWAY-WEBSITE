@@ -59,7 +59,12 @@ create index if not exists recall_events_status_idx on public.recall_events (sta
 create table if not exists public.recall_event_lots (
   id              uuid primary key default gen_random_uuid(),
   event_id        uuid not null references public.recall_events (id) on delete cascade,
-  lot_id          uuid not null references public.inventory_lots (id) on delete restrict,
+  -- lot_id is the inventory_lots id, deliberately WITHOUT a foreign key:
+  -- the recall log is KEPT by the factory reset (factory-reset-core.ts)
+  -- and inventory_lots is WIPED, and a kept table may not point at a
+  -- wiped one. The app reads the lot by id; a lot that is gone shows as
+  -- its id.
+  lot_id          uuid not null,
   on_hand_at_add  numeric,
   previous_status text,
   added_by        uuid references public.staff_profiles (id) on delete set null,

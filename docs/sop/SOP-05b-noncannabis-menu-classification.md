@@ -132,7 +132,7 @@ The page header reads **Non-cannabis inventory** with the line *"Glass, accessor
 
 **What it does not do (finding F-05b-1, S1):**
 
-- **It is not on the register.** The register's product list comes only from the published menu (`live-menu.ts` L155–157). The register's barcode list holds only cannabis lot codes and CCRS identifiers (`api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–75), and a scan matches only those (`scan-to-cart-core.ts` L101–144). No register or sale code reads the non-cannabis catalog at all; the only readers are this page, its store, the knowledge base and system tools.
+- **It is not on the register.** The register's product list comes only from the published menu (`live-menu.ts` L158–160). The register's barcode list holds only cannabis lot codes and CCRS identifiers (`api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–75), and a scan matches only those (`scan-to-cart-core.ts` L101–144). No register or sale code reads the non-cannabis catalog at all; the only readers are this page, its store, the knowledge base and system tools.
 - **So the SKU label and the UPC do not ring up,** although the label page's own design note says it exists *"so staff can scan them at the register"* (`[id]/label/page.tsx` L7–8), and the page's help panel says *"staff scan the package itself"* (`noncannabis/page.tsx` L230–240).
 - **A register sale does not lower On hand.** Keypad lines are skipped by the sale decrement on purpose (`sale-decrement.ts` L107–110), and there is no other link.
 
@@ -142,7 +142,7 @@ Until gap **G-29** is built, run Other Inventory as a **shelf catalog with a wee
 
 1. **Register scan and sale:** the SKU and UPC do not ring up, and a sale does not lower **On hand** (above).
 2. **Cost of goods sold:** a keypad line carries no cost (`costMinorUnits: null`, `custom-sale-core.ts` L144), and the accounting post skips keypad lines when it gathers costs (`sale-posting-service.ts` L360, L369–371). So non-cannabis sales post **no cost of goods sold** to the books, and the margin on them is overstated (finding **F-05b-15**).
-3. **The website and register menu:** the menu is built only from the published menu version (`live-menu.ts` L155–157). The Other Inventory catalog is not a menu source, so its items, prices and stock never reach the shop or the register's product list. (The shop already has a place for them: it groups accessories and merch at the bottom of the grid, `InteractiveMenuBrowser.tsx` L1143–1146.)
+3. **The website and register menu:** the menu is built only from the published menu version (`live-menu.ts` L158–160). The Other Inventory catalog is not a menu source, so its items, prices and stock never reach the shop or the register's product list. (The shop already has a place for them: it groups accessories and merch at the bottom of the grid, `InteractiveMenuBrowser.tsx` L1143–1146.)
 4. **Voids, returns and reports:** a void or return restores nothing, and reports know a keypad line only by its typed note.
 
 The full build list is in gap G-29 (gap register).
@@ -432,7 +432,7 @@ This writes a per-product override. On the website it changes where the product 
 
 **Store rule (owner decision D48, permanent), enforced since Phase 0.4 (G-31):** this box refuses **Accessories**, **Greenway Merch** or **Paraphernalia** (or a new category with one of those names) for a cannabis lot, and refuses a **Website type** whose mapping is non-cannabis (`lot-website-classification-core.ts` L93; `inventory/actions.ts` L544–557, L634). The page shows *"Refused: this lot came from a CCRS manifest, so it is cannabis and cannot be filed under ..."* and the attempt is audited as `cannabis_line.refused`. Use the box to move a product between cannabis categories, for example *Edibles* to *Edibles (Liquid)*, and note it on form 8.3.
 
-**Daily check (G-31 requirement 4).** **Inventory → Issues** shows a **blocking** row, *"N cannabis lot(s) filed under a non-cannabis category"*, whenever any lot's website category is non-cannabis (data from before the guard, for example). The fix button opens the first lot's Website category box (`cannabis-line-core.ts` L110; `inventory/page.tsx` L416).
+**Daily check (G-31 requirement 4).** **Inventory → Issues** shows a **blocking** row, *"N cannabis lot(s) filed under a non-cannabis category"*, whenever any lot's website category is non-cannabis (data from before the guard, for example). The fix button opens the first lot's Website category box (`cannabis-line-core.ts` L110; `inventory/page.tsx` L423).
 
 ---
 
@@ -697,7 +697,7 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 | Area | Files |
 |---|---|
 | Other Inventory | `src/app/admin/inventory/noncannabis/page.tsx`, `actions.ts`, `MerchCatalog.tsx`, `NonCannabisIntakeForm.tsx`, `InvoiceBuilderForm.tsx`, `[id]/label/page.tsx`; `src/lib/noncannabis/store.ts`, `invoice-store.ts`, `noncannabis-core.ts`, `cost-fill-core.ts`, `merch-intel-core.ts` |
-| Register disconnect | `src/lib/pos/live-menu.ts` L155–157; `src/app/api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–144; `src/lib/inventory/sale-decrement.ts` L107–110; `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2541–2589 |
+| Register disconnect | `src/lib/pos/live-menu.ts` L158–160; `src/app/api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–144; `src/lib/inventory/sale-decrement.ts` L107–110; `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2541–2589 |
 | Merch | `src/app/admin/inventory/merch/page.tsx`, `actions.ts`, `export/route.ts` |
 | Publish | `src/app/admin/publish/page.tsx`; `src/lib/pos/publish-guard-core.ts`, `publish-queue-core.ts`, `publish-now-core.ts`; `src/app/admin/menu-imports/actions.ts` L178–270; `menu-imports/version/[versionId]/page.tsx` L429–437; `src/lib/inventory/cutover-guard-core.ts` L64 |
 | Types & Categories | `src/app/admin/settings/types/page.tsx`, `actions.ts`; `category-registry-core.ts` L149–198; `category-registry.ts` L125–160 |
