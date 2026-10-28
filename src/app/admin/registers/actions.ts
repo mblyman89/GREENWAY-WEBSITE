@@ -6,8 +6,17 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { parseDenoms } from "@/lib/registers/cash";
-import { tipsToMinor } from "@/lib/pos/till-core";
+import { parseDenoms, denomTotalMinor } from "@/lib/registers/cash";
+import { tipsToMinor, SECOND_COUNT_REQUIRED_ERROR } from "@/lib/pos/till-core";
+import {
+  BACKOFFICE_TILL_THROTTLE_SCOPE,
+  CLOSER_REQUIRED_ERROR,
+  checkSecondCounter,
+  compareCounts,
+} from "@/lib/registers/second-count-core";
+import { getEmployeeByPin } from "@/lib/staffing/store";
+import { isValidPin } from "@/lib/staffing/time";
+import { pinPadBlocked, notePinFailure, notePinSuccess } from "@/lib/security/pin-throttle-store";
 import {
   openDrawer,
   closeDrawerBlind,
@@ -102,22 +111,52 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
   // Blank field = not recorded (NULL); a typed "0" = counted-zero jar.
   const tipsRaw = str(formData, "tips");
   const tipsParsed = tipsRaw ? tipsToMinor(tipsRaw) : null;
+  // Fix Phase 2.2 (G-01, owner D2): a second employee's own count and PIN.
+  const fail = (msg: string) => redirect(`${BASE}?error=` + encodeURIComponent(msg));
+  if (!employeeId) fail(CLOSER_REQUIRED_ERROR);
+  const secondPin = str(formData, "second_pin");
+  if (!secondPin) fail(SECOND_COUNT_REQUIRED_ERROR);
+  if (!isValidPin(secondPin)) fail("The second employee's PIN must be 4–6 digits.");
+  const locked = await pinPadBlocked(BACKOFFICE_TILL_THROTTLE_SCOPE);
+  if (locked) fail(locked);
+  const second = await getEmployeeByPin(secondPin);
+  if (!second) {
+    await notePinFailure(BACKOFFICE_TILL_THROTTLE_SCOPE);
+    fail("No active employee for the second PIN.");
+  }
+  await notePinSuccess(BACKOFFICE_TILL_THROTTLE_SCOPE);
+  const secondEmp = second as NonNullable<typeof second>;
+  const who = checkSecondCounter(employeeId, secondEmp.id);
+  if (!who.ok) fail(who.error);
+  const secondDenoms = parseDenoms((k) => formData.get(`second_${k}`) as string | null);
+
   const result = await closeDrawerBlind({
     sessionId,
     employeeId,
     denoms,
     ...(tipsRaw && tipsParsed !== null ? { tipsMinor: tipsParsed } : {}),
+    second: { employeeId: secondEmp.id, denoms: secondDenoms },
   });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
+  const cmp = compareCounts(denomTotalMinor(denoms), denomTotalMinor(secondDenoms));
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "drawer.closed_blind",
     entityType: "drawer_session",
     entityId: sessionId,
+    after: {
+      via: "back_office",
+      employeeId,
+      secondCountedBy: secondEmp.id,
+      secondCountedByName: secondEmp.full_name,
+      countsAgree: cmp.state === "match",
+      countDiffMinor: cmp.diffMinor,
+      ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
+    },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?closed=1`);
+  redirect(`${BASE}?closed=1${cmp.state === "match" ? "" : `&count_diff=${cmp.diffMinor}`}`);
 }
 
 /**

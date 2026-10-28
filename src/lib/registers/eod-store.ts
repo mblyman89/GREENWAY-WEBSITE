@@ -181,6 +181,8 @@ export type TillSummaryData = {
   registerName: string;
   openedByName: string | null;
   closedByName: string | null;
+  /** Fix Phase 2.2 (G-01, 0314): the second counter at close. null = none. */
+  secondCountedByName: string | null;
   drops: (DrawerDrop & { droppedByName: string | null; witnessedByName: string | null })[];
   /** Change swaps tied to this session (empty before 0135 — graceful). */
   swaps: (SafeSwapRow & { performedByName: string | null; approvedByName: string | null })[];
@@ -228,6 +230,7 @@ export async function tillSummaryData(sessionId: string): Promise<TillSummaryDat
     registerName: (regRow as { name: string } | null)?.name ?? "—",
     openedByName: nameFor(session.opened_by),
     closedByName: nameFor(session.closed_by),
+    secondCountedByName: nameFor(session.second_counted_by ?? null),
     drops,
     swaps,
   };

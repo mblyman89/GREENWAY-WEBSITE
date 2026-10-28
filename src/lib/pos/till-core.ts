@@ -16,6 +16,9 @@
  *   close — count-out: full denomination breakdown, recorded BLIND. The
  *           server never returns expected/variance here — the manager
  *           reveals that at reconcile in the back office.
+ *           Fix Phase 2.2 (G-01, owner D2: "close only, and it can be any
+ *           second employee"): a close also carries a SECOND employee's PIN
+ *           and that person's own denomination count. Required.
  *
  * Money is always MINOR UNITS (cents) as integers. Denomination math is
  * shared with the back office via src/lib/registers/cash.ts (also pure).
@@ -56,7 +59,18 @@ export type TillCloseRequest = {
    * employee's money and NEVER enter expected-close / over-short math.
    */
   tipsMinor?: number;
+  /**
+   * Fix Phase 2.2 (G-01, owner D2): the second employee's PIN. Any job
+   * role; the route refuses the closer's own PIN. Required at close.
+   */
+  secondPin: string;
+  /** The second employee's own count of the same drawer (blind to theirs). */
+  secondDenoms: DenomCounts;
 };
+
+/** Refusal when a close arrives without the second person (owner rule D2). */
+export const SECOND_COUNT_REQUIRED_ERROR =
+  "A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you.";
 
 export type TillSwapRequest = {
   action: "swap";
@@ -165,9 +179,18 @@ export function validateTillRequest(body: unknown): TillValidation {
     if (action === "open" && denomTotalMinor(denoms) <= 0) {
       return { ok: false, error: "Count in at least one bill or coin — an empty float cannot open a drawer." };
     }
+    if (action === "open") return { ok: true, req: { action, pin, denoms } };
     // A blind close of a genuinely empty drawer is legitimate (all cash was
     // dropped) — no minimum on close.
-    if (action === "close" && b.tipsMinor !== undefined) {
+    // Fix Phase 2.2 (G-01): the second person is required. Their count may
+    // be zero for the same reason (an all-dropped drawer).
+    const secondPin = typeof b.secondPin === "string" ? b.secondPin.trim() : "";
+    if (!secondPin) return { ok: false, error: SECOND_COUNT_REQUIRED_ERROR };
+    if (!b.secondDenoms || typeof b.secondDenoms !== "object") {
+      return { ok: false, error: "The second employee's count is missing. Have them count the drawer and enter each denomination." };
+    }
+    const secondDenoms = sanitizeDenoms(b.secondDenoms);
+    if (b.tipsMinor !== undefined) {
       const tipsMinor = Number(b.tipsMinor);
       if (!Number.isInteger(tipsMinor) || tipsMinor < 0) {
         return { ok: false, error: "Tips must be zero or a positive whole number of cents." };
@@ -175,9 +198,9 @@ export function validateTillRequest(body: unknown): TillValidation {
       if (tipsMinor > MAX_TIPS_MINOR) {
         return { ok: false, error: "Tips amount is implausibly large — check the number." };
       }
-      return { ok: true, req: { action, pin, denoms, tipsMinor } };
+      return { ok: true, req: { action, pin, denoms, tipsMinor, secondPin, secondDenoms } };
     }
-    return { ok: true, req: { action, pin, denoms } };
+    return { ok: true, req: { action, pin, denoms, secondPin, secondDenoms } };
   }
 
   if (action === "drop") {
@@ -293,7 +316,7 @@ export function __runTillCoreTests(): void {
     "drop: oversized notes rejected");
 
   // validateTillRequest — close (BLIND: an all-dropped empty drawer may close at 0)
-  const close1 = validateTillRequest({ action: "close", pin: "1234", denoms: {} });
+  const close1 = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {} });
   ok(close1.ok && close1.req.action === "close" && denomTotalMinor(close1.req.denoms) === 0,
     "close: zero-count blind close accepted (all cash was dropped)");
   ok(close1.ok && close1.req.action === "close" && close1.req.tipsMinor === undefined,
@@ -309,21 +332,36 @@ export function __runTillCoreTests(): void {
   ok(tipsToMinor("abc") === null, "tipsToMinor: garbage rejected");
 
   // validateTillRequest — close with tips (employee money, separate from drawer)
-  const closeTips = validateTillRequest({ action: "close", pin: "1234", denoms: { twenties: 2 }, tipsMinor: 4250 });
+  const closeTips = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: { twenties: 2 }, denoms: { twenties: 2 }, tipsMinor: 4250 });
   ok(closeTips.ok && closeTips.req.action === "close" && closeTips.req.tipsMinor === 4250,
     "close: $42.50 tips carried through validation");
-  const closeTips0 = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 0 });
+  const closeTips0 = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: 0 });
   ok(closeTips0.ok && closeTips0.req.action === "close" && closeTips0.req.tipsMinor === 0,
     "close: explicit zero tips preserved (counted-zero, distinct from omitted)");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: -1 }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: -1 }).ok,
     "close: negative tips rejected");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 10.5 }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: 10.5 }).ok,
     "close: non-integer tips cents rejected");
-  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok,
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok,
     "close: implausibly large tips rejected");
   const openNoTips = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });
   ok(openNoTips.ok && openNoTips.req.action === "open" && !("tipsMinor" in openNoTips.req),
     "open: stray tipsMinor ignored (tips only exist at close)");
+
+  // validateTillRequest — close requires the second person (Fix Phase 2.2, G-01, D2)
+  const noSecond = validateTillRequest({ action: "close", pin: "1234", denoms: { ones: 3 } });
+  ok(!noSecond.ok && noSecond.error === SECOND_COUNT_REQUIRED_ERROR, "close: missing second PIN refused (owner D2)");
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "   ", secondDenoms: {}, denoms: {} }).ok,
+    "close: blank second PIN refused");
+  ok(!validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", denoms: {} }).ok,
+    "close: missing second count refused");
+  const withSecond = validateTillRequest({ action: "close", pin: "1234", secondPin: " 5678 ", secondDenoms: { twenties: "2", bogus: 9 }, denoms: { twenties: 2 } });
+  ok(withSecond.ok && withSecond.req.action === "close" && withSecond.req.secondPin === "5678"
+    && denomTotalMinor(withSecond.req.secondDenoms) === 4000 && !("bogus" in withSecond.req.secondDenoms),
+    "close: second PIN trimmed and second count sanitized ($40.00)");
+  const openNoSecond = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, secondPin: "5678" });
+  ok(openNoSecond.ok && openNoSecond.req.action === "open" && !("secondPin" in openNoSecond.req),
+    "open: no second count at count-in (D2 says close only)");
 
   // validateTillRequest — swap (value-neutral change trade with the safe)
   const swap1 = validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678" });

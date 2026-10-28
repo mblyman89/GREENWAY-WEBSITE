@@ -14,15 +14,21 @@ import { DENOM_FIELDS, denomTotalMinor, formatCents, type DenomCounts } from "@/
  * `expectedMinor` is optional; when provided (e.g. an open drawer's starting
  * float, or the expected close), we show a live variance so the count is never
  * a mystery. For BLIND closes, omit it.
+ *
+ * `namePrefix` (Fix Phase 2.2, G-01) lets a second grid sit on the same form:
+ * the second person's count posts as `second_<key>` (read with
+ * parseDenoms((k) => formData.get("second_" + k))).
  */
 export function CountGrid({
   expectedMinor = null,
   expectedLabel = "Expected",
   totalLabel = "Counted total",
+  namePrefix = "",
 }: {
   expectedMinor?: number | null;
   expectedLabel?: string;
   totalLabel?: string;
+  namePrefix?: string;
 }) {
   const [counts, setCounts] = useState<Partial<DenomCounts>>({});
 
@@ -42,7 +48,7 @@ export function CountGrid({
               // text + numeric inputMode = free typing, NO spinner arrows, and a
               // numeric keypad on tablets (the iPad POS use case).
               type="text"
-              name={d.key}
+              name={`${namePrefix}${d.key}`}
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="off"

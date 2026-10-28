@@ -5599,6 +5599,14 @@ function PrinterSetupModal({
  * Blind discipline: the CLOSE screen shows the cashier their own running
  * count (they need it to count accurately) but the server NEVER returns
  * expected cash or variance — the manager reveals over/short at reconcile.
+ *
+ * Fix Phase 2.2 (G-01, owner D2: "close only, and it can be any second
+ * employee"): CLOSE has two steps. Step 1 is the closer's count, tips and
+ * PIN. Step 2 hides the closer's count and asks a SECOND employee (any job
+ * role, not the closer) for their own count and PIN. The server checks the
+ * second PIN and refuses the closer's. If the two counts differ the drawer
+ * still closes and the cashier is warned (the owner has not said a mismatch
+ * should block).
  */
 function TillModal({
   creds,
@@ -5628,8 +5636,14 @@ function TillModal({
   const [tips, setTips] = useState("");
   // Safe swap (mode "swap" only): a manager/lead approves with their PIN.
   const [approverPin, setApproverPin] = useState("");
+  // Second-person count (mode "close" only, G-01). The second grid starts
+  // empty and the closer's count is hidden in step 2, so it stays blind.
+  const [closeStep, setCloseStep] = useState<"first" | "second">("first");
+  const [secondDenoms, setSecondDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
+  const [secondPin, setSecondPin] = useState("");
 
   const countedMinor = denomTotalMinor(denoms);
+  const secondCountedMinor = denomTotalMinor(secondDenoms);
   const amountMinor = dollarsToMinor(amount);
   const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
 
@@ -5641,7 +5655,9 @@ function TillModal({
         ? amountMinor !== null
         : mode === "swap"
           ? amountMinor !== null && approverPin.length >= 4
-          : tipsMinor !== null);
+          : tipsMinor !== null && closeStep === "second" && secondPin.length >= 4);
+  // Step 1 of a close is done when the closer's PIN and tips are valid.
+  const firstStepReady = mode === "close" && closeStep === "first" && pin.length >= 4 && tipsMinor !== null;
 
   const TITLES = {
     open: "Count in drawer",
@@ -5686,6 +5702,8 @@ function TillModal({
                 // untouched field stays "not recorded" (NULL) while a typed
                 // "0" is a real counted-zero jar.
                 ...(tips.trim() && tipsMinor !== null ? { tipsMinor } : {}),
+                secondPin,
+                secondDenoms,
               }
             : { action: mode, pin, denoms };
       const res = await posFetch("/api/pos/till", {
@@ -5698,10 +5716,31 @@ function TillModal({
         body: JSON.stringify(body),
       });
       const resBody = (await res.json().catch(() => null)) as
-        | { ok?: boolean; drawer?: NonNullable<DrawerInfo>; error?: string }
+        | {
+            ok?: boolean;
+            drawer?: NonNullable<DrawerInfo>;
+            error?: string;
+            secondCount?: { name: string; agree: boolean; diffMinor: number };
+          }
         | null;
       if (!res.ok || !resBody?.ok) {
-        setError(resBody?.error ?? "Till action failed — try again.");
+        const msg = resBody?.error ?? "Till action failed — try again.";
+        if (mode === "close") {
+          // The closer's own PIN failed: hand the iPad back to the closer
+          // (step 1). Anything else is the second person's to fix here.
+          if (msg === "No active employee for that PIN." || msg === "Enter a valid 4–6 digit PIN.") {
+            setError(`${msg} The closer re-enters their PIN.`);
+            setPin("");
+            setSecondPin("");
+            setSecondDenoms({ ...EMPTY_DENOMS });
+            setCloseStep("first");
+            return;
+          }
+          setError(msg);
+          setSecondPin("");
+          return;
+        }
+        setError(msg);
         setPin("");
         return;
       }
@@ -5712,12 +5751,18 @@ function TillModal({
       } else if (mode === "swap") {
         onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`);
       } else {
+        const sc = resBody.secondCount;
+        const secondNote = !sc
+          ? ""
+          : sc.agree
+            ? ` Second count by ${sc.name}: both counts agree.`
+            : ` WARNING: the second count by ${sc.name} differs by ${formatCents(Math.abs(sc.diffMinor))} (${sc.diffMinor > 0 ? "they counted more" : "they counted less"}). Both counts are saved; tell a manager.`;
         onDone(
           "close",
           null,
-          tips.trim() && tipsMinor !== null
+          (tips.trim() && tipsMinor !== null
             ? `Blind count recorded with ${formatCents(tipsMinor)} in tips — a manager reconciles it in the back office.`
-            : "Blind count recorded — a manager reconciles it in the back office.",
+            : "Blind count recorded — a manager reconciles it in the back office.") + secondNote,
         );
       }
     } catch {
@@ -5743,7 +5788,9 @@ function TillModal({
               ? `Cash pulled from the drawer into the safe. Recorded under ${employeeName}'s PIN; a second person can witness with theirs.`
               : mode === "swap"
                 ? `Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under ${employeeName}'s PIN and approved by a manager or lead with theirs.`
-                : `Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you.`}
+                : closeStep === "second"
+                  ? `Second count. Hand the iPad to another employee (any employee, not ${employeeName}). They count the drawer by themselves and enter their own PIN. ${employeeName}'s count stays hidden.`
+                  : `Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you. Then a second employee counts it too.`}
         </p>
 
         {mode === "drop" ? (
@@ -5831,6 +5878,54 @@ function TillModal({
               onChange={(e) => setNotes(e.target.value)}
             />
           </>
+        ) : mode === "close" && closeStep === "second" ? (
+          <>
+            {/* Fix Phase 2.2 (G-01): the second person's own blind count. */}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {DENOM_FIELDS.map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+                  <span className="text-sm font-semibold text-[var(--pos-text)]">{label}</span>
+                  <input
+                    className="w-20 rounded-md border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-2 py-1.5 text-right text-sm"
+                    inputMode="numeric"
+                    value={secondDenoms[key] === 0 ? "" : String(secondDenoms[key])}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const n = Math.max(0, Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0));
+                      setSecondDenoms((d) => ({ ...d, [key]: n }));
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="mt-3 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-right text-base font-bold">
+              Second count: {formatCents(secondCountedMinor)}
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              Second employee&apos;s PIN
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={secondPin}
+              maxLength={6}
+              onChange={(e) => setSecondPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setSecondDenoms({ ...EMPTY_DENOMS });
+                setSecondPin("");
+                setError(null);
+                setCloseStep("first");
+              }}
+              className="mt-3 text-xs text-[var(--pos-text-muted)] underline"
+            >
+              Back to {employeeName}&apos;s count (clears the second count)
+            </button>
+          </>
         ) : (
           <>
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -5884,21 +5979,39 @@ function TillModal({
           </>
         )}
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-          Your PIN
-        </label>
-        <input
-          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          value={pin}
-          maxLength={6}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        />
+        {mode === "close" && closeStep === "second" ? null : (
+          <>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              Your PIN
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={pin}
+              maxLength={6}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+          </>
+        )}
 
         {error ? <p className="mt-3 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
 
+        {mode === "close" && closeStep === "first" ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (!firstStepReady) return;
+              setError(null);
+              setCloseStep("second");
+            }}
+            disabled={!firstStepReady || busy}
+            className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
+          >
+            Next: second count
+          </button>
+        ) : (
         <button
           type="button"
           onClick={() => void submit()}
@@ -5915,6 +6028,7 @@ function TillModal({
                   ? `Record swap${amountMinor !== null ? ` of ${formatCents(amountMinor)}` : ""}`
                   : "Record blind count & close"}
         </button>
+        )}
       </div>
     </div>
   );

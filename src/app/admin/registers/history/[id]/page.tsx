@@ -5,6 +5,7 @@ import { PrintButton } from "@/components/admin/orders/PrintButton";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { tillSummaryData } from "@/lib/registers/eod-store";
+import { compareCounts, secondCountSentence } from "@/lib/registers/second-count-core";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function TillSummaryPage({
 
   const data = await tillSummaryData(id);
   if (!data) notFound();
-  const { session, registerName, openedByName, closedByName, drops, swaps } = data;
+  const { session, registerName, openedByName, closedByName, secondCountedByName, drops, swaps } = data;
 
   const revealed = session.status === "reconciled" || session.status === "verified";
   const dropsTotal = drops.reduce((sum, d) => sum + d.amount_minor, 0);
@@ -107,6 +108,14 @@ export default async function TillSummaryPage({
               label={`Closed ${fmtTime(session.closed_at)}${closedByName ? ` by ${closedByName}` : ""} (blind count)`}
               value={session.closing_count_minor == null ? "—" : formatCents(session.closing_count_minor)}
             />
+            {/* Fix Phase 2.2 (G-01, owner D2): the second person's own count.
+                Not blind-sensitive: both people already know their counts. */}
+            {session.second_count_minor != null ? (
+              <Row
+                label={`Second count${secondCountedByName ? ` by ${secondCountedByName}` : ""}`}
+                value={formatCents(session.second_count_minor)}
+              />
+            ) : null}
             {revealed ? (
               <>
                 {/* Fix Phase 2.1 (G-05): the system figure the reconcile used
@@ -138,6 +147,11 @@ export default async function TillSummaryPage({
             ) : null}
           </tbody>
         </table>
+        {session.second_count_minor != null ? (
+          <p className="mt-1 text-[0.65rem] text-black/50">
+            {secondCountSentence(compareCounts(session.closing_count_minor, session.second_count_minor))}
+          </p>
+        ) : null}
         {!revealed ? (
           <p className="mt-1 text-[0.65rem] text-black/50">
             Expected close and over/short print only after a manager reconciles this session — the blind count stays

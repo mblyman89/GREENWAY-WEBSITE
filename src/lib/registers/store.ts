@@ -10,6 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { businessDayFor } from "@/lib/staffing/time";
 import { type DenomCounts, denomTotalMinor, expectedClose, overShort } from "@/lib/registers/cash";
+import { checkSecondCounter, closeErrorMessage } from "@/lib/registers/second-count-core";
 
 export type Register = {
   id: string;
@@ -43,6 +44,12 @@ export type DrawerSession = {
   cash_sales_minor?: number | null;
   /** Fix Phase 2.1 (0313): cash refunds this drawer paid. NULL = typed era. */
   refunds_paid_minor?: number | null;
+  /** Fix Phase 2.2 (0314, G-01): the second employee who counted at close. */
+  second_counted_by?: string | null;
+  /** Fix Phase 2.2 (0314): the second employee's own count, cents. */
+  second_count_minor?: number | null;
+  /** Fix Phase 2.2 (0314): when the second count was recorded. */
+  second_counted_at?: string | null;
   opened_at: string | null;
   closed_at: string | null;
   reconciled_at: string | null;
@@ -210,8 +217,17 @@ export async function closeDrawerBlind(opts: {
    * unapplied. Tips never touch the drawer's expected/over-short math.
    */
   tipsMinor?: number;
-}): Promise<{ ok: boolean; error?: string }> {
+  /**
+   * Fix Phase 2.2 (G-01, owner D2): the second employee and their own count.
+   * Required. The caller has already verified the second person's PIN; this
+   * function re-checks that they are not the closer (second-count-core),
+   * and migration 0314's check is the backstop.
+   */
+  second: { employeeId: string; denoms: DenomCounts };
+}): Promise<{ ok: boolean; error?: string; countRowWarnings?: string[] }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const who = checkSecondCounter(opts.employeeId, opts.second.employeeId);
+  if (!who.ok) return { ok: false, error: who.error };
   const admin = createSupabaseAdminClient();
   const session = await getSession(opts.sessionId);
   if (!session) return { ok: false, error: "Session not found." };
@@ -219,17 +235,29 @@ export async function closeDrawerBlind(opts: {
 
   const nowISO = new Date().toISOString();
   const closingMinor = denomTotalMinor(opts.denoms);
+  const secondMinor = denomTotalMinor(opts.second.denoms);
 
-  const { error } = await admin
+  // Compare-and-swap (F-01-2, close part): only a drawer that is still open
+  // closes. Two taps, or two devices, cannot both close it; the second sees
+  // nothing changed and is told so.
+  const { data: changed, error } = await admin
     .from("drawer_sessions")
     .update({
       status: "closed",
       closed_by: opts.employeeId,
       closing_count_minor: closingMinor,
       closed_at: nowISO,
+      second_counted_by: opts.second.employeeId,
+      second_count_minor: secondMinor,
+      second_counted_at: nowISO,
     })
-    .eq("id", opts.sessionId);
-  if (error) return { ok: false, error: error.message };
+    .eq("id", opts.sessionId)
+    .eq("status", "open")
+    .select("id");
+  if (error) return { ok: false, error: closeErrorMessage(error.message) };
+  if (!changed || changed.length === 0) {
+    return { ok: false, error: "This drawer was closed by someone else a moment ago. Nothing was changed." };
+  }
 
   // Best-effort tips stamp (drawer_sessions.tips_minor, migration 0134).
   // Separate update so an unapplied migration can never block the close —
@@ -246,14 +274,27 @@ export async function closeDrawerBlind(opts: {
     }
   }
 
-  await admin.from("drawer_counts").insert({
+  // Denomination breakdowns. The totals are already on the session row, so a
+  // failed breakdown does not undo the close; it is reported to the caller
+  // (and audited) instead of being silently ignored (F-01-2, count rows).
+  const countRowWarnings: string[] = [];
+  const { error: closeRowError } = await admin.from("drawer_counts").insert({
     session_id: opts.sessionId,
     count_type: "close",
     counted_by: opts.employeeId,
     ...opts.denoms,
     total_minor: closingMinor,
   });
-  return { ok: true };
+  if (closeRowError) countRowWarnings.push(`close breakdown not saved: ${closeRowError.message}`);
+  const { error: secondRowError } = await admin.from("drawer_counts").insert({
+    session_id: opts.sessionId,
+    count_type: "second",
+    counted_by: opts.second.employeeId,
+    ...opts.second.denoms,
+    total_minor: secondMinor,
+  });
+  if (secondRowError) countRowWarnings.push(`second-count breakdown not saved: ${secondRowError.message}`);
+  return countRowWarnings.length > 0 ? { ok: true, countRowWarnings } : { ok: true };
 }
 
 /**
