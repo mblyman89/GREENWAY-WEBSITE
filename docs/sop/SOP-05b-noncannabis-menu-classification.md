@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 (draft for owner review) |
+| **Version** | 1.1 (owner answers to Q-05b-1…5 applied; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after non-cannabis goods (glass, papers, devices), the greenwaymerch.com apparel list, the menu that goes live on the website and the register, website categories and inventory types, the sales-limit classification worklist, and cannabis sell prices. Budtenders read §4.4 (ringing non-cannabis items) and §9. |
-| **Verified against** | `main@827facb5` (2026-10-27). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel disagree, this SOP follows the code and records a finding. |
-| **Program records** | Findings `F-05b-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-29`…`G-32` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D35 (the 05a / 05b split), D41 (living SOPs), D42 (concierge covers every feature) and D43 (*"Please finish the inventory management sop."*) in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-05b) |
+| **Verified against** | `main@e1fe84eb` (v1.1, 2026-10-28: re-checked after the second performance merge; no file this SOP cites changed), `main@827facb5` (v1.0, 2026-10-27). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel disagree, this SOP follows the code and records a finding. |
+| **Program records** | Findings `F-05b-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-29`…`G-32` and `G-30A` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D35 (the 05a / 05b split), D41 (living SOPs), D42 (concierge covers every feature), D45–D49 (the answers applied in v1.1) and D43 (*"Please finish the inventory management sop."*) in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-05b) |
 
 > **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap named here (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
@@ -100,10 +100,10 @@ The owner asked for SOPs that cover how the back office is really used (`00-OWNE
 
 **Store rules on top of the app (this SOP).**
 
-- **Non-cannabis sell price and cost changes:** owner only, on form 8.2, until Q-05b-2 is answered (§4.9). The app has no way to change either after an item is created (finding F-05b-6).
-- **Moving or re-filing a product across the cannabis / non-cannabis line** (into or out of **Accessories**, **Greenway Merch** or **Paraphernalia**): **never**, by anyone, until gap G-31 is built (§4.16–§4.17, finding F-05b-9, **S1**).
-- **Removing a product from greenwaymerch.com:** owner or admin only, until Q-05b-3 is answered (§4.11).
-- **Cannabis sell price where the lot page says "Cost is unknown for this lot":** owner only, after reading the cost on the vendor's CCRS manifest (§4.21, D38).
+- **Non-cannabis sell price and cost changes:** **owner, admin or manager** (owner decision D46: *"Q-05b-2- owner, admin, manager."*), on form 8.2 (§4.9). The app has no way to change either after an item is created (finding F-05b-6), so until gap G-30 is built the change is made by archive and re-create. **The cost of a non-cannabis item may be changed** (D48: *"non cannabis should be allowed to have their cost modified."*). This is the opposite of cannabis, whose cost is never typed (D38).
+- **Moving or re-filing a product across the cannabis / non-cannabis line** (into or out of **Accessories**, **Greenway Merch** or **Paraphernalia**): **never, by anyone, in either direction. This is permanent** (owner decision D48: *"refused outright, non cannabis should also be refused outright moving them into a cannabis type."*). Gap G-31 (**APPROVED**) makes the app refuse it with no override (§4.16–§4.17, finding F-05b-9, **S1**).
+- **Removing a product from greenwaymerch.com:** **owner or admin only** (owner decision D47: *"Q05b-3- owner and admin."*). The app still lets a manager press **Remove** (finding F-05b-14), so this is a store rule until gap G-30A is built (§4.11).
+- **Cannabis sell price where the lot page says "Cost is unknown for this lot":** **nobody saves a price until the manifest cost is entered** (owner decision D49: *"blocked until the manifest cost is entered."*; §4.21, D38).
 
 ## 3. Before you start
 
@@ -137,6 +137,15 @@ The page header reads **Non-cannabis inventory** with the line *"Glass, accessor
 - **A register sale does not lower On hand.** Keypad lines are skipped by the sale decrement on purpose (`sale-decrement.ts` L107–110), and there is no other link.
 
 Until gap **G-29** is built, run Other Inventory as a **shelf catalog with a weekly count** (§4.4–§4.5). Its figures are true only as of the last reconciliation.
+
+**The owner approved G-29 and widened it** (decision D45): *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."* So G-29 now covers non-cannabis goods **everywhere they should appear**, not only the scan. Read in the code, these are the places where non-cannabis goods are not yet fully used, and each is part of G-29:
+
+1. **Register scan and sale:** the SKU and UPC do not ring up, and a sale does not lower **On hand** (above).
+2. **Cost of goods sold:** a keypad line carries no cost (`costMinorUnits: null`, `custom-sale-core.ts` L144), and the accounting post skips keypad lines when it gathers costs (`sale-posting-service.ts` L360, L369–371). So non-cannabis sales post **no cost of goods sold** to the books, and the margin on them is overstated (finding **F-05b-15**).
+3. **The website and register menu:** the menu is built only from the published menu version (`live-menu.ts` L155–157). The Other Inventory catalog is not a menu source, so its items, prices and stock never reach the shop or the register's product list. (The shop already has a place for them: it groups accessories and merch at the bottom of the grid, `InteractiveMenuBrowser.tsx` L1143–1146.)
+4. **Voids, returns and reports:** a void or return restores nothing, and reports know a keypad line only by its typed note.
+
+The full build list is in gap G-29 (gap register).
 
 ### 4.2 A tour of the page
 
@@ -257,6 +266,8 @@ A non-cannabis item with a $0.00 cost shows the **Cost missing** chip (`cost-fil
 2. Open the item. Type **Unit cost (what you paid per item)** from the vendor's invoice and press **Save cost** (`MerchCatalog.tsx` L148–173).
 3. The save works only while the cost is still $0.00: *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* (`cost-fill-core.ts` L46–47). It is audited (`noncannabis.cost_fill`).
 
+**How this fits the owner's newer answer.** Today **Save cost** is owner and admin only (`inventory.cost.fill`, `roles.ts` L148). The code cites an earlier owner decision for that, D-R3-1: *"owner and admin can add cost if missing. … It can only be used for non cannabis inventory."* (`roles.ts` L143–145). In this SOP program the owner answered that an owner, admin or manager may change a non-cannabis price or cost (D46), and that the cost may be modified (D48). This SOP does not guess whether D46 also widens **Save cost** to managers. That is question **Q-05b-6**. Until it is answered, **Save cost** stays owner and admin as the app enforces, and a manager changes a cost through the form 8.2 re-create (§4.9).
+
 This is **non-cannabis** cost only. **A cannabis unit cost is never typed by anyone**; it comes only from the vendor's CCRS manifest (owner decision D38; SOP-05a §4.20).
 
 ### 4.8 Barcode, reorder point and shelf: Save settings
@@ -269,12 +280,14 @@ Set a reorder point on every **A** and **B** item, so the **Reorder now** list m
 
 **There is no way to change a non-cannabis price or a non-zero cost in the app** (finding F-05b-6). The price is set once, when the draft is created (`noncannabis/actions.ts` L51), and no screen or action edits it later. The cost can be filled once, only while it is $0.00 (§4.7).
 
-**Interim procedure (owner only, form 8.2), until gap G-30 is built:**
+**Who may change them:** owner, admin or manager (D46). **Both price and cost may be changed** for non-cannabis (D48).
 
-1. Write the change on form 8.2: item, SKU, old price, new price, reason. The owner signs.
+**Interim procedure (owner, admin or manager; form 8.2), until gap G-30 is built:**
+
+1. Write the change on form 8.2: item, SKU, old price, new price (or old and new cost, with the vendor invoice number), reason. The person making the change signs, and the owner reviews form 8.2 weekly.
 2. **Archive** the old item (§4.9 below), noting its **On hand**.
 3. Stage a new draft with the same details and the new price (§4.3). It gets a new SKU. If the old item had a manufacturer barcode, enter it on the new item.
-4. Confirm the new item and post its stock as **Count correction**, **+ Add**, note `Price change from <old SKU>, form 8.2`.
+4. Confirm the new item and post its stock as **Count correction**, **+ Add**, note `Price change from <old SKU>, form 8.2`. For a cost change, the new draft carries the new cost. If the old item's cost was $0.00, use **Save cost** instead (§4.7): no re-create is needed, but only the owner or an admin can press it today (`inventory.cost.fill`).
 5. Print and apply new SKU labels and remove the old ones.
 
 **Archiving an item.** **Archive item** (or **Archive** on a draft) hides it from the catalog. **There is no restore, and archiving writes no audit row** (`noncannabis/actions.ts` L94–100; `store.ts` L436–447; finding F-05b-2). Archive only an item that is gone for good, at **On hand** zero, or as part of the price-change procedure above. Write every archive on form 8.1's catalog line.
@@ -303,7 +316,7 @@ New products appear here only when they are published from Merch Studio. Designi
 
 **Put it back.** Press **Put back on website**. The banner reads *"<name> is live on greenwaymerch.com again (within about a minute)."* It is audited (`merch.product_shown`).
 
-**Remove a product (store rule: owner or admin only, until Q-05b-3).** The app allows any manager to do this. Prefer **Hide**, because Hide can be undone.
+**Remove a product (owner or admin only, D47).** The owner said: *"Q05b-3- owner and admin."* The app still allows any manager to do this (`inventory.manage`, `merch/actions.ts` L34; finding **F-05b-14**), so a manager must not press it. Prefer **Hide**, because Hide can be undone.
 
 1. Open **Remove...** on the card (L129).
 2. Type the product's web name exactly as shown in grey in the box, then press **Remove** (L132–133).
@@ -405,7 +418,7 @@ All changes are audited (`website_category.*`, `inventory_type.*`). The rename a
 > - stops requiring a **scan** at the register (`scan-required-core.ts` L55–61);
 > - **lowers the legal price floor** (`price-correction-core.ts` L35–39, L61–67).
 >
-> **Store rule until G-31 is built:** **Move products** is used only between two cannabis categories, or between two non-cannabis categories, and only by the owner. Before pressing it, write the from, into and record count on form 8.3. If anyone ever finds cannabis filed under a non-cannabis category, **stop sales of that product** and tell the owner the same day. The excise owed has to be worked out for every sale made in the meantime.
+> **The owner's rule (D48, permanent):** a crossing is **refused outright, both ways**: cannabis never into a non-cannabis category, and non-cannabis never into a cannabis category or type. G-31 (**APPROVED**) builds that refusal into the app. **Until it is built:** **Move products** is used only between two cannabis categories, or between two non-cannabis categories, and only by the owner. Before pressing it, write the from, into and record count on form 8.3. If anyone ever finds cannabis filed under a non-cannabis category, **stop sales of that product** and tell the owner the same day. The excise owed has to be worked out for every sale made in the meantime.
 
 ### 4.17 Re-filing one product from its lot page
 
@@ -417,7 +430,7 @@ On a cannabis lot page, the **Website type & category (menu)** box (`[id]/page.t
 
 This writes a per-product override. On the website it changes where the product is listed (shop, home, specials and product page). On the lot page it changes the tax the price math uses: **Correct the sell price** folds in 9.3% instead of 37% + 9.3% when the category is non-cannabis (L1026, L1083), so the price **floor** drops. The override was **not** found in the register menu or in order pricing. Those read the live menu category, which is changed by **Move products** (§4.16) and by publishing.
 
-**Store rule (finding F-05b-9, until G-31):** in this box, **never choose Accessories, Greenway Merch or Paraphernalia for a cannabis lot.** Nothing in the box stops you (`parseClassificationEdit`, `lot-website-classification-core.ts` L61, has no cannabis check). Use the box only to move a product between cannabis categories, for example *Edibles* to *Edibles (Liquid)*, and note it on form 8.3.
+**Store rule (finding F-05b-9; owner decision D48, permanent):** in this box, **never choose Accessories, Greenway Merch or Paraphernalia for a cannabis lot.** Nothing in the box stops you (`parseClassificationEdit`, `lot-website-classification-core.ts` L61, has no cannabis check). Use the box only to move a product between cannabis categories, for example *Edibles* to *Edibles (Liquid)*, and note it on form 8.3.
 
 ---
 
@@ -482,7 +495,7 @@ If there is no price, the page says why (L508–512):
 - a product that isn't on the menu;
 - a failed check of other lots that share this price: *"… so nothing was saved."*.
 
-> **Cost unknown: owner only (finding F-05b-12, D38).** When the lot's cost is unknown, the help reads *"Cost is unknown for this lot, so no floor can be enforced."* (L1067), and the app will save **any** price above $0.00 (`afterTaxFloorMinor` returns nothing, `price-correction-core.ts` L65). **Store rule:** only the owner sets a price on a lot whose floor shows **— (cost unknown)**. First fix the cost from the vendor's CCRS manifest (SOP-04 / SOP-05a §4.20). If that cannot be done today, the owner reads the manifest cost, works out cost × 1.463, and sets a price at or above it, recording it on form 8.2.
+> **Cost unknown: blocked until the manifest cost is entered (finding F-05b-12; owner decisions D38, D49).** When the lot's cost is unknown, the help reads *"Cost is unknown for this lot, so no floor can be enforced."* (L1067), and the app will save **any** price above $0.00 (`afterTaxFloorMinor` returns nothing, `price-correction-core.ts` L65). **The owner's rule:** *"blocked until the manifest cost is entered."* **Nobody, the owner included, presses Save sell price on a lot whose floor shows — (cost unknown).** First get the cost onto the lot from the vendor's CCRS manifest (SOP-04 / SOP-05a §4.20); then the floor appears and the price can be set. Gap G-32 (**APPROVED**) makes the app refuse the save.
 
 ---
 
@@ -496,7 +509,7 @@ If there is no price, the page says why (L508–512):
 | *"That would take on-hand below zero (N on hand)."* | The adjustment would make the count negative | Recount. Post only what is really there (§4.5) |
 | *"A note is required for theft/other — say what happened."* | **Theft / loss** or **Other** needs a note | Write what happened (§4.5) |
 | *"Only the owner or an admin can key a missing cost."* | A manager tried **Save cost** | Give the invoice to the owner (§4.7) |
-| *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* | The cost is already set | Changing it is form 8.2, owner only (§4.9) |
+| *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* | The cost is already set | Changing it is form 8.2: owner, admin or manager (§4.9, D46) |
 | *"Invoice #… from … is already entered. Each paper invoice is entered once."* | A duplicate invoice | Check **Accounts Payable**. Do not enter it again (§4.6) |
 | *"Invoice #… from … saved ($…). … It now appears on the Accounts Payable page as a payable."* | Saved | Confirm the drafts and file the paper (§4.6) |
 | **Settings saved for <SKU>.** | Barcode, reorder point or shelf saved | None (§4.8) |
@@ -551,25 +564,25 @@ If there is no price, the page says why (L508–512):
 |---|---|---|
 | Cannabis found under **Accessories**, **Greenway Merch** or **Paraphernalia** (on the website, the register or the lot price box) | Stop selling it at once. Do not move it back yourself | **Owner, same day.** Excise owed on the sales since has to be worked out (F-05b-9) |
 | Weekly reconciliation is off by more than 2 units on one item, or more than $50 retail | Post the difference with its true reason (§4.5) | Owner, same day |
-| A non-cannabis item has the wrong price, or $0.00 | Keep selling at the label price on the keypad, with a correct label | Owner: form 8.2 (§4.9) |
+| A non-cannabis item has the wrong price or cost, or $0.00 | Keep selling at the label price on the keypad, with a correct label. Owner, admin or manager corrects it (§4.9) | Form 8.2; owner reviews weekly |
 | An invoice save failed part-way | Clean up the partial drafts and adjustments (§4.6), then enter it again | Owner if you are unsure what was left |
 | A Save invoice succeeds, but the audit log has no `noncannabis.invoice_entered` row | Nothing to fix on the page. The audit write is not checked (`noncannabis/actions.ts` L307, `.catch(() => {})`; finding F-05b-8) | Note it on form 8.1 |
 | **Live variants** fell by more than the listed removals after a publish | Do not publish again | Owner, at once (F-05b-10) |
 | **Publish didn't finish** twice | Stop | Owner |
 | Classification: the package label is unclear | Answer the stricter way (No — ordinary liquid). Keep the item on sale | Owner |
-| A lot shows **— (cost unknown)** and needs a price | Do not set a price | Owner (§4.21) |
-| A merch product must come off greenwaymerch.com for good | **Hide** it | Owner or admin removes it (§4.11) |
+| A lot shows **— (cost unknown)** and needs a price | Do not set a price. Get the manifest cost onto the lot first (SOP-05a §4.20) | Owner (§4.21, D49) |
+| A merch product must come off greenwaymerch.com for good | **Hide** it. A manager never presses **Remove** (D47) | Owner or admin removes it (§4.11) |
 
 ## 7. Controls & compliance (why the rules exist)
 
 | Rule | Why | Where in the code |
 |---|---|---|
 | Cannabis carries 37% excise plus 9.3% sales tax; non-cannabis carries 9.3% only. Every published price is out-the-door | WA cannabis excise (RCW 69.50.535) and retail sales tax. The **category** alone picks the tax | `order-pricing-core.ts` L42–50 |
-| Never move or re-file a product across the cannabis line | It removes excise, the purchase limit and the scan requirement, and it lowers the floor (F-05b-9, **S1**) | `sales-limits-core.ts` L370–374; `scan-required-core.ts` L55–61; `price-correction-core.ts` L35–39 |
+| Never move or re-file a product across the cannabis line, in either direction (D48) | It removes excise, the purchase limit and the scan requirement, and it lowers the floor (F-05b-9, **S1**) | `sales-limits-core.ts` L370–374; `scan-required-core.ts` L55–61; `price-correction-core.ts` L35–39 |
 | Purchase limits follow the classification | WAC 314-55-095(1)(d)(i): the 10-unit "otherwise taken" limit and the low-THC (≤ 4 mg per unit) beverage limit | `sales-limits-core.ts` L288; `classification-status-core.ts` L230–239 |
 | No sale below cost plus tax | RCW 69.50.357 / WAC 314-55-155 | `price-correction-core.ts` L61–67, L125–133 |
 | Cannabis cost comes only from the vendor's CCRS manifest. Nobody types it | Owner D38 (*"absolutely not. That's illegal."*) | SOP-05a §4.20; G-27 |
-| A cost-unknown price is set by the owner only | The app enforces no floor there (F-05b-12) | `price-correction-core.ts` L65 |
+| No price is saved on a cost-unknown lot until the manifest cost is entered | Owner D49. The app enforces no floor there (F-05b-12) | `price-correction-core.ts` L65 |
 | Non-cannabis goods are rung on the keypad with the SKU in the note, and reconciled weekly | Other Inventory is not on the register (F-05b-1, **S1**) | §4.4–§4.5; G-29 |
 | Removing anything from the live menu needs a named list and a tick | One old draft once wiped an 18-item menu (code comment, `menu-imports/actions.ts` L214–218) | `publish-guard-core.ts` L102–108 |
 | Non-cannabis is not reported to CCRS | CCRS covers cannabis only | `admin-nav-data.ts` L84–86 |
@@ -592,7 +605,7 @@ CATALOG LINE - confirms / archives this week (no audit row: F-05b-2)
  Any diff > 2 units or > $50 retail reported to owner [ ]   Initials: ______
 ```
 
-### 8.2 Non-cannabis price or cost change (owner only); cost-unknown cannabis price
+### 8.2 Non-cannabis price or cost change (owner, admin or manager); cost-unknown cannabis price
 
 ```
 FORM 8.2   PRICE / COST CHANGE                                   Date: __________
@@ -601,8 +614,9 @@ FORM 8.2   PRICE / COST CHANGE                                   Date: _________
  Reason: _____________________________________________________________________
  Non-cannabis: old item archived [ ]  new SKU: __________  stock moved [ ]
                labels replaced [ ]
- Cannabis, cost unknown: manifest cost ______ x 1.463 = floor ______  price >= floor [ ]
- Owner signature: ______________________
+ Cannabis, cost unknown: NO PRICE SAVED until the manifest cost is on the lot (D49)
+   manifest cost entered on: ______  floor now shows: ______  price >= floor [ ]
+ Changed by (owner / admin / manager): ______________  Owner review: ______
 ```
 
 ### 8.3 Category and menu change log
@@ -639,16 +653,16 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 ║  - The SKU label and the UPC do NOT scan. On hand does NOT drop on a sale.      ║
 ║  - Monday: count, post keypad sales, post shrink separately (form 8.1).         ║
 ║ ADDING: Stage draft -> CHECK PRICE -> Confirm -> Print SKU. No price edit later ║
-║ PRICE/COST CHANGE: owner only, form 8.2 (archive + re-create).                  ║
+║ PRICE/COST CHANGE: owner/admin/manager, form 8.2 (archive + re-create).         ║
 ║ MERCH: Hide (undoable) > Remove (owner/admin). Copy Printful stock weekly.      ║
 ║ PUBLISH: tick the removal box ONLY if every listed product should come off.     ║
 ║  - Never publish an old/small menu to "86" one product. 86 = SOP-05a 4.12.      ║
 ║ CATEGORIES: NEVER move cannabis into Accessories / Greenway Merch /             ║
-║  Paraphernalia (or back). It drops excise, limits and scan. Owner only.         ║
+║  Paraphernalia, NOR non-cannabis into cannabis. Refused outright (D48).         ║
 ║ CLASSIFY: label in hand. Suppository = units per package. Low-THC <= 4 mg/unit  ║
 ║  Unsure -> the stricter answer. Urgent = 0 by Monday close.                     ║
 ║ SELL PRICE: out-the-door. Floor = cost x 1.463 (cannabis). Below = Blocked.     ║
-║  "Cost unknown" -> owner only. Cannabis cost only from the CCRS manifest.       ║
+║  "Cost unknown" -> NO price save until manifest cost is entered (D49).          ║
 ╚═════════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -695,23 +709,26 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
-| **G-29** | Other Inventory on the register: the SKU and UPC scan to a priced non-cannabis line, the sale lowers **On hand**, a void or return restores it, and all of it is audited | F-05b-1 (**S1**) | Keypad with the SKU in the note, plus the Monday reconciliation (§4.4–§4.5, form 8.1) | §4.1–§4.5, §4.8, §9, form 8.1 | OPEN (Q-05b-1) |
-| **G-30** | Edit a non-cannabis price and cost, audited old → new, by role; refuse a $0.00 price | F-05b-6 | Owner only: archive and re-create (§4.9, form 8.2) | §2, §4.3, §4.6, §4.9, form 8.2 | OPEN (Q-05b-2) |
-| **G-31** | Cannabis-line guard: refuse, or require owner approval with a reason, for any lot override, **Move products** or inventory-type mapping that crosses into or out of a non-cannabis category | F-05b-9 (**S1**) | Never cross the line; owner only; form 8.3 (§4.15–§4.17) | §2, §4.15–§4.17, §4.21, §6, §9 | OPEN (Q-05b-4) |
-| **G-32** | Hardening bundle: audit Confirm and Archive, plus a Restore; an atomic adjustment; Direction locked to Reason; actor and Pacific time in Recent adjustments; a full invoice rollback; a checked invoice audit; publish refuses when the removal diff can't be read; owner-only save when the cost is unknown; before/after on category audits; a visible warning when the classification lot-row write fails | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | The store rules in §4.3–§4.9, §4.14, §4.15, §4.21 | Those sections, §5, §6 | OPEN (Q-05b-5) |
+| **G-29** | Other Inventory on the register: the SKU and UPC scan to a priced non-cannabis line, the sale lowers **On hand**, a void or return restores it, and all of it is audited | F-05b-1 (**S1**) | Keypad with the SKU in the note, plus the Monday reconciliation (§4.4–§4.5, form 8.1) | §4.1–§4.5, §4.8, §9, form 8.1; reports and the books (F-05b-15) | **APPROVED** (D45), widened to every place non-cannabis goods should be used: register, menu, cost of goods, returns and reports |
+| **G-30** | Edit a non-cannabis price and cost, audited old → new, by **owner, admin or manager**; refuse a $0.00 price | F-05b-6 | Owner, admin or manager: archive and re-create (§4.9, form 8.2) | §2, §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** (D45, D46, D48) |
+| **G-30A** | Merch **Remove** limited to owner and admin (new permission), audited as today | F-05b-14 | Store rule: managers Hide, never Remove (§4.11) | §2, §4.11, §6, §9 | **APPROVED** (D47) |
+| **G-31** | Cannabis-line guard: **refuse outright, with no override, in both directions**, any lot override, **Move products** or inventory-type mapping that crosses into or out of a non-cannabis category | F-05b-9 (**S1**) | Never cross the line; owner only; form 8.3 (§4.15–§4.17) | §2, §4.15–§4.17, §4.21, §6, §9 | **APPROVED** (D48) |
+| **G-32** | Hardening bundle: audit Confirm and Archive, plus a Restore; an atomic adjustment; Direction locked to Reason; actor and Pacific time in Recent adjustments; a full invoice rollback; a checked invoice audit; publish refuses when the removal diff can't be read; **no price save at all while the cost is unknown (D49)**; before/after on category audits; a visible warning when the classification lot-row write fails | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | The store rules in §4.3–§4.9, §4.14, §4.15, §4.21 | Those sections, §5, §6 | **APPROVED** (D45, D49) |
 
 ## Appendix C: Open questions for the owner
 
 | # | Question | Why it matters |
 |---|---|---|
-| **Q-05b-1** | Approve G-29, connecting Other Inventory to the register (scan the SKU/UPC, decrement on sale, restore on void or return)? | Today the counts are only as good as Monday's reconciliation (F-05b-1, S1) |
-| **Q-05b-2** | Who may change a non-cannabis price or cost once G-30 exists: owner only, owner and admin, or managers too? | Interim: owner only |
-| **Q-05b-3** | Who may permanently **Remove** a merch product: owner and admin only (interim), or managers too? | It can't be undone |
-| **Q-05b-4** | Approve G-31: should a cannabis-line crossing be refused outright, or allowed only by the owner with a written reason? | It changes the tax and limits at the register (F-05b-9, S1) |
-| **Q-05b-5** | Approve the G-32 hardening bundle, including blocking any sell-price save on a cost-unknown lot until the CCRS cost is in? | Closes F-05b-12 and the audit gaps |
+| **Q-05b-1** | ~~Approve G-29, connecting Other Inventory to the register?~~ | **ANSWERED** (D45): *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."* G-29 APPROVED and widened |
+| **Q-05b-2** | ~~Who may change a non-cannabis price or cost?~~ | **ANSWERED** (D46): *"Q-05b-2- owner, admin, manager."* |
+| **Q-05b-3** | ~~Who may permanently **Remove** a merch product?~~ | **ANSWERED** (D47): *"Q05b-3- owner and admin."* Gap G-30A |
+| **Q-05b-4** | ~~Refuse a cannabis-line crossing outright, or allow it for the owner with a reason?~~ | **ANSWERED** (D48): *"Q05b-4- refused outright, non cannabis should also be refused outright moving them into a cannabis type. non cannabis should be allowed to have their cost modified."* |
+| **Q-05b-5** | ~~Approve the G-32 hardening bundle, including blocking a cost-unknown price save?~~ | **ANSWERED** (D49): *"Q-05b-5- yes, plan on the group of smaller fixes. blocked until the manifest cost is entered."* |
+| **Q-05b-6** | Does D46 (*"owner, admin, manager"*) also let a **manager** use **Save cost** to fill a missing ($0.00) non-cannabis cost? The earlier decision D-R3-1 (*"owner and admin can add cost if missing"*, `roles.ts` L143–148) says owner and admin. | Until answered: **Save cost** stays owner and admin; managers use the form 8.2 re-create |
 
 ## Appendix D: Revision history
 
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-27 | First draft, verified against `main@827facb5`. Findings F-05b-1…13 and F-05b-C; gaps G-29…G-32; questions Q-05b-1…5. Owner decisions D35, D38, D40, D41, D42 and D43 applied | SOP program |
+| 1.1 | 2026-10-28 | Owner answers to Q-05b-1…5 applied (decisions D45–D49). G-29 APPROVED and widened to every place non-cannabis goods should be used (register, menu, cost of goods, returns, reports); new finding F-05b-15 (keypad sales post no cost of goods). G-30 APPROVED: owner, admin or manager change price and cost; non-cannabis cost is changeable. New G-30A and finding F-05b-14: merch Remove is owner and admin only. G-31 APPROVED: crossings refused outright in both directions. G-32 APPROVED: no price save on a cost-unknown lot until the manifest cost is entered. §2, §4.1, §4.9, §4.11, §4.16, §4.17, §4.21, §6, §7, form 8.2, §9, Appendices B–C updated; new question Q-05b-6 (does D46 widen **Save cost** to managers; earlier decision D-R3-1 says owner and admin). Re-verified at `main@e1fe84eb`. | SOP program |
