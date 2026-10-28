@@ -83,7 +83,7 @@ import { countFriendsFamilyUses, getSpecialDiscountSettings, recordSpecialDiscou
 import { checkSpecialDiscountAtRegister, specialNoStackFloor } from "./special-discount-sale-core";
 import { validateCartAdjustPayload, type CartAdjustPayload } from "./cart-adjust-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
-import { toRecognitionCard } from "@/lib/medical/store";
+import { toRecognitionCard, getMedTaxSettings } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
 
 // ---------------------------------------------------------------------------
@@ -605,6 +605,22 @@ async function processSale(
       );
     }
     medicalAuth = { id: auth.id, customer_id: auth.customer_id };
+    // Phase 0.1 (F-01-14) — tax may only come off when the STORE is really
+    // endorsed. A device in medical TEST MODE simulates the endorsement; if its
+    // sale removed tax while the durable setting says "not endorsed", the
+    // completion gate would write no WAC 314-55-090(2) record and the store
+    // would under-collect. Refuse it as an exception for a manager to resolve.
+    if (sale.medical.medicalSavingsMinor > 0) {
+      const medSettings = await getMedTaxSettings();
+      if (!medSettings.medicallyEndorsed) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Medical sale removed ${sale.medical.medicalSavingsMinor} cents of tax, but the store is not medically endorsed (medical test mode was probably on). Refused: tax cannot be exempted without the endorsement and the WAC 314-55-090(2) record. Turn test mode off and ring the sale again at full tax.`,
+        );
+      }
+    }
   }
 
   // POS B14 — loyalty member attach: the customerId came from the server's

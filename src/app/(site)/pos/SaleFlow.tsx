@@ -145,6 +145,7 @@ import {
   type PosCardCapture,
   type MedicalPricingResult,
 } from "@/lib/pos/medical-pos-core";
+import { medicalTestModeSaleBlock } from "@/lib/pos/medical-testmode-core";
 import { computeOrderTotals, type OrderTotals } from "@/lib/orders/order-pricing-core";
 import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
@@ -1098,6 +1099,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             payLater && appliedSpecial?.kind === "employee" ? appliedSpecial.beneficiaryEmployeeId ?? null : null;
           if (payLater && !tabEmployeeId) return "Pay later is only for an employee purchase (apply the employee discount first).";
           const base = priceForBuyer(cart, bundle, !!medicalCard, overrides);
+          // Phase 0.1 (F-01-14) — never take payment on tax removed only by
+          // the simulated (test mode) endorsement.
+          const testModeBlock = medicalTestModeSaleBlock(bundle, base.med?.medicalSavingsMinor ?? 0);
+          if (testModeBlock) return testModeBlock;
           // AM-B — apply the server-computed loyalty spread to the FINAL
           // priced lines (the drift effect guarantees the fingerprint still
           // matches; a mismatch here would have dropped the discount).

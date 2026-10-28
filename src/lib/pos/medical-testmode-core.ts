@@ -91,8 +91,25 @@ export function applyMedicalTestMode(bundle: PosMenuBundle, on: boolean): PosMen
   if (bundle.medical.endorsed === true) return bundle;
   return {
     ...bundle,
-    medical: { ...bundle.medical, endorsed: true },
+    medical: { ...bundle.medical, endorsed: true, simulated: true },
   };
+}
+
+/**
+ * Phase 0.1 (F-01-14) — a REAL sale can never be paid while the endorsement is
+ * only simulated. Test mode stays useful for rehearsal (the cart shows the tax
+ * coming off), but taking payment is refused when any tax was removed, because
+ * the server would store the device's lower tax with no WAC 314-55-090(2)
+ * exemption record (WAC 314-55-090(3): unrecorded exemptions are presumed
+ * incorrect). Returns the message to show, or null when the sale may proceed.
+ */
+export function medicalTestModeSaleBlock(
+  bundle: Pick<PosMenuBundle, "medical"> | null,
+  medicalSavingsMinor: number,
+): string | null {
+  if (!bundle?.medical?.simulated) return null;
+  if (!(medicalSavingsMinor > 0)) return null;
+  return "Medical TEST MODE is on, so the tax taken off this sale is only a simulation. A real sale cannot be paid this way. Turn OFF medical test mode (Menu), then ring the sale again at full tax.";
 }
 
 /**
@@ -169,6 +186,12 @@ export function __runMedicalTestModeCoreTests(): void {
   const flipped = applyMedicalTestMode(bundleEndorsedFalse, true);
   ok(flipped !== bundleEndorsedFalse, "ON with unendorsed block returns a NEW bundle");
   ok(flipped.medical?.endorsed === true, "ON flips endorsed to true");
+  ok(flipped.medical?.simulated === true, "ON marks the endorsement as simulated");
+  ok(medicalTestModeSaleBlock(flipped, 500) !== null, "simulated + tax removed -> payment refused");
+  ok(medicalTestModeSaleBlock(flipped, 0) === null, "simulated + no tax removed -> allowed");
+  ok(medicalTestModeSaleBlock(bundleEndorsedFalse, 500) === null, "real bundle -> not blocked by test mode");
+  ok(medicalTestModeSaleBlock(bundleAlreadyEndorsed, 500) === null, "real endorsement -> allowed");
+  ok(medicalTestModeSaleBlock(null, 500) === null, "no bundle -> null");
   ok(
     // registry + sunset preserved untouched.
     flipped.medical?.exciseExemptionUntil === "2029-06-30" && !!flipped.medical?.registry.p1,
