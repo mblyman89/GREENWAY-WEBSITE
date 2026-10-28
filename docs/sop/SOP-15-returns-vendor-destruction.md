@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
+| **Version** | 1.3 (Phase 1.3 fix G-28 built: destruction keeps held lots held; owner answers Q-15-1…Q-15-6 applied; Phase 0.2 fix G-51 + G-47 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory → Returns & Destruction** (`/admin/inventory/disposition`) and the **Returns desk** (`/admin/registers/returns`): owner, admin and manager (`inventory.manage`). The register's **Return an item** (SOP-01 §4.23): any budtender starts it, a manager or lead approves with a PIN. Destruction day: the person who renders the product unusable **and** a witness. Recalled product: the **admin** (recall coordinator, D37) and the owner. |
@@ -20,7 +20,7 @@
 > **The one thing to know before anything else.** Three things on this screen do **not** work the way their labels suggest, and each has an interim rule in this SOP:
 > 1. **Log a vendor return takes the product off on-hand the moment you press the button** (`disposition.ts` L828–837). The state's method (D63) is that Greenway files the CCRS manifest as the origin, and the product leaves only with the LCB's manifest PDF. So **log the vendor return in the app only at departure**, when the driver has the printed manifest PDF and the units are being handed over (§4.11; finding F-15-1, **S1**; G-42 **APPROVED**).
 > 2. **A customer return marked "Destroy" adds the unit back to an Active lot**, and that lot stays Active (`disposition.ts` L710, L715–723). Until the destruction is completed, the app counts that unit as sellable stock, and the register can draw from that lot (`sale-lot-read.ts` L44–47). The unit must go straight into the **sealed destroy bin** (§4.7; finding F-15-6, **S1**).
-> 3. **Recalled product is never destroyed by us; it goes back to the vendor (D65).** When the state has the vendor ask for it back, the admin tells the LCB officer and Greenway starts a vendor return with reason **Recall** (§4.21). Never schedule a destruction for a recalled lot: scheduling overwrites **Recalled** with **Quarantine** and lifts the register's recall hold (F-05a-18, **S1**).
+> 3. **Recalled product is never destroyed by us; it goes back to the vendor (D65).** When the state has the vendor ask for it back, the admin tells the LCB officer and Greenway starts a vendor return with reason **Recall** (§4.21). Since Phase 1.3 (G-28) the app refuses it: a Recalled lot is not in the destruction list, the **Recall** reason is gone from **Schedule a destruction**, and **Complete destruction** is refused while the lot is Recalled (F-05a-18 FIXED).
 
 ---
 
@@ -117,7 +117,7 @@ A login without the permission is sent back to the back-office home with a "deni
 **Store rules on top of the app.**
 1. **Customer returns go through the register or the Returns desk only** (§4.4). The back-office **Customer return** wizard is **not used**: the owner decided to remove it (D66: *"Q4- remove it."*; G-45 **APPROVED**).
 2. **A manager may schedule a destruction. Completing one needs two people**: the person who grinds and mixes, and a **witness, who may be anyone** on staff (D64: *"anyone may witness the destruction."*), never the person doing it. The destruction is done **in view of a security camera** (D64: *"It has to be done on camera as well."*; WAC 314-55-083(3)(a)). Both names go in **Witnessed by** and on form 8.3 with the camera and time. The app does not require a witness or a camera reference (F-15-4, F-15-21); this SOP does.
-3. **Only the owner cancels a scheduled destruction** (§4.19). The app lets any manager do it, and it always sets the lot back to Active (F-05a-19).
+3. **Only the owner cancels a scheduled destruction** (§4.19). Since Phase 1.3 the app enforces it (`inventory.destruction.cancel`, owner only, `roles.ts` L161), asks a written reason, and puts the lot back to the status it had before scheduling (F-05a-19, F-15-9 FIXED).
 4. **Recalled product is handled by the admin, the recall coordinator (D37), with the owner, and goes back to the vendor as a vendor return (D65).** Nobody schedules a destruction for a recalled lot (§4.21).
 5. **A vendor return is logged in the app only at departure**, after Greenway's CCRS manifest was accepted and the LCB's manifest PDF is printed (§4.11, D63).
 6. **The owner alone approves anything in the books** (books-23: *"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*). Refunds and write-offs are reviewed by the owner monthly (form 8.6).
@@ -158,16 +158,16 @@ A login without the permission is sent back to the back-office home with a "deni
 | Customer return, **Destroy** | **+qty** on the lot; the menu stock is **not** raised (L330) | **Unchanged (stays Active)** (L715–723) | As above, plus a destruction event is opened (reason **Other**, detail *"Customer return (…) — sale …"*) | As above | As above |
 | **Log a vendor return** | **−qty at once** (L828–837) | Unchanged | Inventory adjustment **Other**, note *"Vendor return (reason) RMA … manifest …: detail"* (L831–833) | None in the app (any credit from the processor is outside the app) | `vendor_return.create` (`actions.ts` L137) |
 | **Update manifest** | None | None | None (the manifest lives in the CCRS portal) | None | `vendor_return.manifest` (L162) |
-| **Schedule** a destruction | None yet | Set to **Quarantine** (L965–971), whatever it was before | None yet | None | `destruction.schedule` (L187) |
+| **Schedule** a destruction | None yet | **Active** → **Quarantine**; a lot already in **Quarantine** stays; **Recalled**, Sold out and Destroyed lots are refused (`disposition.ts` L975, rules `destruction-lot-status-core.ts` L85). The status before is kept on the event | None yet | None | `destruction.schedule` |
 | **Complete destruction** | **−qty** in one safe step that refuses to go below zero (L1050; L233–282) | **Destroyed** only if the lot is now at zero (L1087–1095); otherwise it **stays Quarantine** | Inventory adjustment **Destruction** with the method and destination in the note (`disposition-core.ts` L274–298) | Cost written off through the inventory adjustments export (`sage-exports.ts` L644–698: debit cost of goods, credit inventory) | `destruction.complete` (L228) |
-| **Cancel (release quarantine)** | None | Set to **Active** (L1112–1114), whatever it was before | None | None | `destruction.cancel` (L253), with no reason |
+| **Cancel destruction (owner)** | None | Put back to the status before scheduling: **Quarantine → Active** only if it was Active, nothing else holds it and nobody changed it since; otherwise left alone and the page says why. A customer-return event never touches the lot (`disposition.ts` L1193, L934) | None | None | `destruction.cancel` with the reason and the lot status before and after; a refused try writes `destruction.cancel_refused` |
 
 **Records the app keeps** (database, `supabase/migrations/0042_*.sql` and `0115_*.sql`): `customer_returns` (0115 L38), `vendor_returns` (0042 L22–36, manifest columns 0115 L104–109), `destruction_events` (0042 L47–66, waste-record columns 0115 L94–101), `disposition_settings` (hold hours) and `sample_settings`.
 
 ### 4.3 Lot statuses, the hold and quarantine
 
 - **Active**: sellable. The register draws only from Active lots with stock, oldest first (`sale-lot-read.ts` L44–47).
-- **Quarantine**: not sellable. Scheduling a destruction puts the **whole lot** here (L965–971), except for a customer-return destruction, which leaves the lot Active (L722).
+- **Quarantine**: not sellable. Scheduling a destruction puts an **Active** lot here (the whole lot), except for a customer-return destruction, which leaves the lot Active. A lot already in Quarantine stays there.
 - **Recalled**: not sellable; the register's recall hold reads only this status (SOP-05a §4.11).
 - **Destroyed**: set only by **Complete destruction** when the lot reaches zero. Never set it by hand (SOP-05a §4.9).
 
@@ -324,11 +324,11 @@ Destruction is governed by the current WAC 314-55-097 (compliance doc §5). Cann
 
 1. Pull the units and count them twice. Put them in the **sealed destroy bin**.
 2. Open **Schedule a destruction** (*"Opens a {hours}h hold and quarantines the lot. Complete it below once the hold elapses."*).
-3. **Lot**: pick the lot. Only **Active** lots are listed (F-05a-17; for a lot in Quarantine see §4.22, for Recalled see §4.21).
+3. **Lot**: pick the lot. **Active** and **Quarantine** lots are listed, each with its status (since Phase 1.3, F-05a-17 FIXED). **Recalled** lots are never listed: they go back to the vendor (§4.21). The **Recall** reason is no longer offered.
 4. **Quantity**: the counted number. The app does **not** check it against on-hand now; a wrong number is caught only at completion (F-15-12). Look at the on-hand shown in the lot list and make sure your number is not larger.
 5. **Reason** (default **Expired**) and **Detail** (*"What & why…"*): always write a sentence, including the owner's approval.
 6. Press **Schedule (opens {hours}h hold)** (with the store setting at 0 it reads *"opens 0h hold"*, D67). You see *"Destruction scheduled — the hold timer is running and the lot is quarantined."*
-7. The **whole lot** is now in Quarantine (L965–971), not just the units you scheduled. If you are destroying only part of a lot and the rest is sellable, see §4.20.
+7. An Active lot is now in Quarantine as a whole, not just the units you scheduled (a Quarantine lot simply stays there). The app keeps the status it had, so a cancel or a partial destruction can put it back. If you are destroying only part of a lot and the rest is sellable, see §4.20.
 8. Start **form 8.3** with the event: date scheduled, lot, quantity, reason, who scheduled, the owner's approval.
 
 If you see the bare word *"qty"* or *"reason"* in a red box, the Lot, Quantity or Reason was missing or invalid (`actions.ts` L179–180 redirect with a code; the same happens on the vendor return, L126–127, and the wizard, L83–84, which the page prints as is; F-15-13). Fill the form again.
@@ -374,29 +374,35 @@ Right after §4.17, on the event under **Destruction events**:
 
 ### 4.19 Cancelling a scheduled destruction
 
-**Cancel (release quarantine)** marks the event cancelled and sets the lot to **Active**, whatever it was before: Quarantine, Recalled, or (for a customer-return event) a lot that was never quarantined (`disposition.ts` L1100–1116; F-05a-19). It asks for no reason (`actions.ts` L246–253). You see *"Destruction cancelled and the lot released from quarantine."*
+**Since Phase 1.3 (G-28).** Under an open event the owner sees **Why cancel? (required)** and **Cancel destruction (owner)**. Everyone else sees *"Only the owner can cancel a scheduled destruction (SOP-15 §2 rule 3)."* (`disposition/page.tsx` L417). The server checks it again (`cancelDestructionAction`, `actions.ts` L265): without the owner or without a reason it refuses, with every reason at once, and writes `destruction.cancel_refused`.
 
-**Rule: only the owner cancels.** Then, the same minute:
-1. Write it on **form 8.5**: event, lot, the status **before** scheduling (look at SOP-05a form 8.1 or the lot's history), why, owner's signature.
-2. If the lot was **Recalled** before (it should never have been scheduled, §4.21), the admin sets it back to **Recalled** at once.
-3. If the lot was **Quarantine** before (damaged, expired), the manager sets it back to **Quarantine**.
-4. If the event was a **customer-returned unit**, leave the lot Active and decide with the owner what happens to the unit in the bin (restock only if it is sealed and the owner agrees).
-5. If the destruction was cancelled because the product will now go back to the vendor, continue with Part 3.
+On a cancel the event is closed (only if it is still open), the reason, who and when are kept on it, and the lot goes back to the status it had before scheduling (`restoreLotAfterEventCloses`, `disposition.ts` L934). The page says what happened to the lot:
+- *"The lot was put back to Active, the status it had before the destruction was scheduled."*
+- *"The lot stays in Quarantine, the status it had before the destruction was scheduled."*
+- *"The lot stays in Quarantine because another destruction for it is still open."*
+- *"The lot status was not changed: someone changed it after the destruction was scheduled."*
+- *"The lot status was not changed (this destruction never moved the lot)."* (a customer-returned unit)
+- *"The lot stays as it is: this destruction was scheduled before the app kept the earlier status. Set the status on the lot page (Lifecycle status) if it should change."*
+
+The app only ever moves Quarantine → Active, and only for a lot that was Active (go-live checked) when it was scheduled. It never touches a Recalled lot.
+
+**Rule: only the owner cancels.** Then:
+1. Write it on **form 8.5**: event, lot, status before and status now (both shown in the message and the Security Log), why, owner's initials.
+2. If the event was a **customer-returned unit**, decide with the owner what happens to the unit in the bin (restock only if it is sealed and the owner agrees).
+3. If the destruction was cancelled because the product will now go back to the vendor, continue with Part 3.
 
 ### 4.20 Destroying part of a lot
 
-Scheduling quarantines the whole lot. After completion, if units remain, the lot **stays in Quarantine** (`disposition.ts` L1087–1095 sets Destroyed only at zero) and the rest of the lot cannot be sold (F-15-11).
-1. Before scheduling part of a lot, decide with the owner whether the remaining units are sellable.
-2. If they are, after **Complete destruction**, the manager sets the lot back to **Active** on the lot page (SOP-05a §4.8), with a line on SOP-05a form 8.1 and form 8.5 here.
-3. If they are not, schedule all of them.
+Scheduling quarantines a whole Active lot. **Since Phase 1.3** (G-28, F-15-11 FIXED), after **Complete destruction**, if units remain, the app puts the lot back to the status it had before scheduling by the same rule as a cancel (§4.19): an Active lot goes back to **Active** unless another destruction for it is still open or someone changed it since; a Quarantine lot stays in Quarantine.
+1. Before scheduling part of a lot, decide with the owner whether the remaining units are sellable. If they are not, schedule all of them.
+2. After completion, look at the lot's status and write the line on form 8.5.
 
 ### 4.21 Recalled product: a transfer back to the vendor (D65)
 
 The law (WAC 314-55-225; compliance doc §4): the licensee is **prohibited from destroying any affected cannabis product until the LCB has been notified and destruction has been coordinated with the enforcement officer**. An exempt market withdrawal is reported to the officer within 48 hours; a consumer-safety recall is reported immediately.
 
 The app has a guard: a **Recall** event shows the badge **recall — coordinate with LCB** and the gold box *"Recall destruction — LCB coordination is REQUIRED first (WAC 314-55-225)."* Completion is refused without the tick box *"The LCB has been notified and destruction was coordinated with our officer."* (*"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."*) and without the officer's name (*"Record the LCB enforcement officer you coordinated with."*). But:
-- **Scheduling overwrites Recalled with Quarantine** (F-05a-18, **S1**), which lifts the register's recall hold.
-- A **Recalled** lot is not in the lot list (F-05a-17).
+- Since Phase 1.3 a **Recalled** lot cannot be scheduled or completed, and **Recall** is not offered as a destruction reason (F-05a-18 FIXED). The old recall box remains only for an event scheduled before the fix.
 - The **Contact date** is not required (F-15-4).
 - A vendor return with reason **Recall (coordinate with LCB first)** has no guard at all (F-15-2).
 
@@ -404,12 +410,12 @@ The app has a guard: a **Recall** event shows the badge **recall — coordinate 
 1. Keep the lot **Recalled** (SOP-05a §4.10) and the product in the **vendor-return tote**, out of sale.
 2. The **admin** (recall coordinator, D37) records the vendor's request and tells the LCB enforcement officer at once (WAC 314-55-225 still applies: *"Immediately notify the local LCB enforcement officer"*). Record every contact on **form 8.4** and SOP-05a form 8.5.
 3. Return it to the vendor under Part 3 (§4.9–§4.13), reason **Recall (coordinate with LCB first)**. **Never schedule a destruction** for it, and never destroy it ourselves: the law prohibits destruction before the officer has coordinated it, and the owner has chosen the return route.
-4. Because **Log a vendor return** lists only Active lots (F-05a-17), at departure the admin sets the lot from Recalled to **Active** on the lot page and logs the return **in the same minute**, with a line on SOP-05a form 8.1 and form 8.5 here. Do nothing else in between.
+4. Because **Log a vendor return** still lists only Active lots (until G-42, Phase 1.5), at departure the admin sets the lot from Recalled to **Active** on the lot page and logs the return **in the same minute**, with a line on SOP-05a form 8.1 and form 8.5 here. Do nothing else in between.
 5. If the officer directs something other than a return (for example destruction under LCB oversight), stop and call the owner; that is outside this SOP until the owner decides.
 
 ### 4.22 Lots already in Quarantine
 
-A lot set to **Quarantine** on the lot page (damaged, expired, under investigation) cannot be picked in **Schedule a destruction** (F-05a-17). Follow SOP-05a §4.9 interim point 2: the owner decides; only with the owner's say-so, the product in the sealed bin and the scheduling done in the same sitting, set it **Active**, schedule at once (which puts it straight back in Quarantine), and write each step on SOP-05a form 8.1 and form 8.5 here.
+Since Phase 1.3 (G-28) a lot in **Quarantine** (damaged, expired, under investigation) is listed in **Schedule a destruction** with its status, and stays in Quarantine when scheduled. A cancel or a partial destruction leaves it in Quarantine (§4.19, §4.20). The owner still decides before it is scheduled.
 
 # Part 5: Related matters
 
@@ -507,7 +513,11 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 
 | Message | What it means | Do this |
 |---|---|---|
-| *"Destruction scheduled — the hold timer is running and the lot is quarantined."* | Event opened; the whole lot is in Quarantine | Form 8.3; §4.20 if partial |
+| *"Destruction scheduled — the hold timer is running and the lot is quarantined."* | Event opened; the lot is in Quarantine | Form 8.3; §4.20 if partial |
+| *"Recalled product is never destroyed by us (owner decision D65). It goes back to the vendor…"* | A Recalled lot or the Recall reason (schedule or complete) | §4.21: admin, vendor return |
+| *"The lot's status changed while you were scheduling. Nothing was scheduled; reload and try again."* | Someone changed the lot a moment earlier | Reload; check the status |
+| *"This lot is Sold out; there is nothing on hand to destroy."* / *"This lot is already Destroyed…"* | Nothing to destroy | Nothing |
+| *"Only the owner can cancel a scheduled destruction (SOP-15 §2 rule 3)."* / *"Write why the destruction is being cancelled."* | Cancel refused | Owner, with a reason |
 | **Hold not elapsed** (greyed button) | The hold is running | Wait |
 | *"Hold policy not elapsed — earliest destroy at …"* | Too early; the time is in the server's clock (F-15-5) | Wait until the time shown on the event |
 | *"RECALL product: destruction is prohibited until LCB has been notified and destruction is coordinated with your enforcement officer (WAC 314-55-225). Confirm coordination first."* | Recall guard | Stop; admin; §4.21 |
@@ -519,7 +529,8 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 | *"Destruction completed and the CCRS 'Destruction' adjustment posted."* | Done | Finish form 8.3; §4.20 if units remain |
 | *"Already completed."* / *"This event was cancelled."* / *"Completed events cannot be cancelled."* | Event already closed | Nothing |
 | *"Destruction event not found."* / *"Lot not found."* | Stale page | Reload |
-| *"Destruction cancelled and the lot released from quarantine."* | Lot is now **Active** whatever it was | Form 8.5 at once; restore the earlier status (§4.19) |
+| *"Destruction cancelled."* followed by what happened to the lot | Cancelled; the lot is back to its earlier status or left as it was (§4.19) | Form 8.5 |
+| *"This event was completed or cancelled by someone else just now. Nothing was changed."* | Two people at once | Reload |
 | **qty** or **reason** alone in a red box | A field was missing (F-15-13) | Fill the form again |
 | **No destruction events** / *"Scheduled destructions appear here."* | None yet | Nothing |
 
@@ -546,9 +557,9 @@ The one rule lives in `src/lib/inventory/sample-lot-core.ts`. The old **Sample-p
 | Driver, vehicle or time differs from the manifest | Do not release; upload a corrected manifest first (§4.10 step 5) | Owner / admin |
 | Vendor return logged too early | Tell the owner; the owner decides whether to add the units back (SOP-05a §4.6) and log again at departure | Manager → owner |
 | Vendor asks for recalled product back | §4.21: admin tells the officer, then a vendor return (D65); never destroy it | Admin + owner |
-| Recalled or quarantined lot not in the list | §4.21 / §4.22 | Owner |
+| Recalled lot not in the destruction list | Correct: §4.21 (vendor return) | Admin + owner |
 | Destruction quantity larger than on-hand | Stop; owner; count the lot | Manager → owner |
-| A destruction was cancelled | Form 8.5; restore the earlier status the same minute (§4.19) | Owner |
+| A destruction was cancelled | Read what the page says happened to the lot; form 8.5 (§4.19) | Owner |
 | Part of a lot destroyed; rest sellable | §4.20 | Manager |
 | No second person available, or the camera is not recording | Do not destroy; wait until both are in place (D64) | Manager |
 | A sample lot went down other than on the Employee Samples hub, or Approve refuses a draft as a trade sample | Dismiss the draft; tell the owner the same day (§4.26) | Anyone → owner |
@@ -751,7 +762,7 @@ VENDOR RETURN — CARD
 ```
 DESTRUCTION — CARD
 1. Owner approves. Recall? STOP → never destroyed; vendor return (§4.21).
-2. Schedule a destruction (whole lot goes to Quarantine) → form 8.3.
+2. Schedule a destruction (an Active lot goes to Quarantine) → form 8.3.
 3. Hold is 0 h (law has none). Product stays in the sealed bin until done.
 4. ON CAMERA (check it records; note cam + time). TWO people, the witness
    can be anyone: grind → mix with ≥ equal volume of
@@ -761,9 +772,8 @@ DESTRUCTION — CARD
 5. Into the final destination. Photo. Witness watches.
 6. Complete destruction: method · mixed with · 50% tick · final destination
    AND facility · BOTH names + camera in Witnessed by.
-7. Units left in the lot and sellable? → set lot Active, form 8.5.
-8. Never "Cancel" without the owner. After a cancel, restore the earlier
-   status the same minute (form 8.5).
+7. Units left? The app puts the lot back to its earlier status → form 8.5.
+8. Only the owner cancels, with a reason; the app restores the status.
 ```
 
 ## 10. Glossary
@@ -826,7 +836,7 @@ DESTRUCTION — CARD
 | **G-43** | Hardened destruction record: witness required (any second person, not the one completing; D64), a **camera reference** (camera name and start/end time; D64), approval reference for **Other method**, on-hand checked at scheduling, Pacific times in messages, printable destruction log (form 8.3 in the app). The recall contact-date part is dropped (recalls are not destroyed, D65) | F-15-4, F-15-5, F-15-12, F-15-21 | Form 8.3 with two signatures and the camera (§4.17–§4.18) | §2, §4.15–§4.18, §5.3, §8.3, §9.3 | **APPROVED** (D64) |
 | **G-44** | Customer-return segregation: a destroy-return unit goes to a **returned / quarantine** bucket that is never sellable (a separate quarantine lot or a held quantity); the return, the add-back and the destruction event saved together or not at all | F-15-6 (**S1**), F-15-7 | Sealed destroy bin, form 8.1 (§4.7) | §1 box, §4.2, §4.3, §4.7, §5.1 | PROPOSED |
 | **G-45** | **Remove** the back-office Customer return wizard (D66); the CSV download checks the ledger like the weekly batch or is removed | F-15-8, F-15-10 | Register / Returns desk only (§4.4–§4.6); no CSV (§4.8) | §1, §2, §4.1, §4.4–§4.8, §5.1, §8.6, §9.1 | **APPROVED** (D66) |
-| **G-28** (extended) | Returns & Destruction handles held lots: lists Quarantine lots for destruction; lists **Recalled** lots for a **vendor return** (not destruction, D65) and keeps them Recalled until departure; **Cancel** restores the earlier status and requires a reason (owner only); a partial destruction restores the lot's earlier status | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | §4.19–§4.22, form 8.5 | §2, §4.15, §4.19–§4.22, §5.3 | OPEN (recall design settled by D65) |
+| **G-28** (extended) | Returns & Destruction handles held lots: lists Quarantine lots for destruction; lists **Recalled** lots for a **vendor return** (not destruction, D65) and keeps them Recalled until departure; **Cancel** restores the earlier status and requires a reason (owner only); a partial destruction restores the lot's earlier status | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | §4.19–§4.22, form 8.5 | §2, §4.15, §4.19–§4.22, §5.3 | **BUILT** (Phase 1.3); listing Recalled lots for a vendor return comes with G-42 (Phase 1.5) |
 | **G-25** | Recall plan and event log in the app, linked to the destruction or vendor return of the recalled lots | F-05a-15, F-05a-16 | Form 8.4 + SOP-05a form 8.5 | §4.21, §8.4 | OPEN |
 | **G-23** | Theft and Seizure as adjustment reasons | F-05a-6 | SOP-05a §4.7 "THEFT:" / "SEIZURE:" note | §4.23 | **APPROVED** (D39) |
 | **G-22** | No manual **Destroyed** on the lot page | F-05a-1 (**S1**) | SOP-05a §4.9 | §4.3 | OPEN |
@@ -854,6 +864,7 @@ DESTRUCTION — CARD
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.3 | Fix phase | Phase 1.3 (owner D76). G-28 BUILT with D65: **Schedule a destruction** lists Active and Quarantine lots with their status and never Recalled; the Recall reason is gone; scheduling refuses Recalled, Sold out and Destroyed lots, moves only Active to Quarantine (compare-and-set) and keeps the earlier status on the event (migration 0307); **Complete destruction** is refused while the lot is Recalled; a partial destruction puts the lot back to its earlier status; **Cancel** is owner-only (`inventory.destruction.cancel`), needs a reason, restores the earlier status only Quarantine → Active and only if it was Active, never touches a customer-return lot, and is audited with before/after; the activation guard checks every lot-status write on this page is compare-and-set. Summary, §2, §4.2, §4.3, §4.15, §4.19–§4.22, §5.3, §6, card 9.3 and Appendix B updated. F-05a-17, F-05a-18, F-05a-19, F-15-9, F-15-11 FIXED. | Fix program |
 | 1.2 | Fix phase | Phase 0.2 (owner D76). G-51 BUILT: samples never get a draft, cannot be approved or staged, are never drawn by a sale, never count as register stock or barcodes, never move menu stock, and a void never restocks onto them (`sample-lot-core.ts` and callers). G-47 BUILT: the legacy Sample-pricing panel, its action, `get/updateSampleSettings` in `disposition.ts` and `sample-guardrails.ts` removed; concierge line corrected. §4.26 rewritten; §6, §7 and checklist updated. F-15-16 and F-15-20 FIXED. | Fix program |
 | 1.1 | 2026-10-28 | Owner answers D63–D68 applied after the state texts were read (WAC 314-55-079, -083, -085, -096, -097, -225; CCRS Upload and Manifest User Guides) and the samples branch was audited end to end: vendor returns follow the CCRS manifest method with Greenway as origin, logged at departure (§3, §4.9–§4.13, form 8.2, card 9.2); witness anyone, on camera (§2, §4.17–§4.18, form 8.3, card 9.3); recalls returned to the vendor, never destroyed by us (§4.21, form 8.4); wizard not used, to be removed (§4.6); hold 0 h (§4.3, §4.27); samples section rewritten with the audit and an interim check (§4.26). New findings F-15-18…F-15-21; G-42, G-43, G-45, G-47 APPROVED; new G-50, G-51 | SOP program |
 | 1.0 | 2026-10-28 | First draft, verified against `main@b8101abb`. Owner decision D62 applied (with D37, D39, D41, D42). Findings F-15-1…F-15-17 and F-15-C; gaps G-42…G-49 proposed and G-28 extended; questions Q-15-1…Q-15-6. Paper forms 8.1–8.6 | SOP program |

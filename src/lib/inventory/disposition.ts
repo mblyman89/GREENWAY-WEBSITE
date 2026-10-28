@@ -38,6 +38,15 @@ import {
 } from "@/lib/compliance/ccrs-identifiers";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
+// Fix Phase 1.3 (G-28): what a destruction does to the lot's status.
+import {
+  evaluateDestructionSchedule,
+  lotStatusAfterEventCloses,
+  lotCloseMessage,
+  completionLotRefusal,
+  OPEN_DESTRUCTION_STATUSES,
+  type LotCloseAction,
+} from "@/lib/inventory/destruction-lot-status-core";
 
 /**
  * LEGACY default pre-destruction hold (hours). The old 72-hour WSLCB notice
@@ -132,6 +141,14 @@ export type DestructionEvent = {
   lcb_coordinated?: boolean | null;
   lcb_officer?: string | null;
   lcb_contact_date?: string | null;
+  // Fix Phase 1.3 (G-28) columns (migration 0307; undefined pre-migration).
+  /** The lot's status before scheduling (active | quarantine); null when the event never moved the lot. */
+  previous_lot_status?: string | null;
+  /** false = a customer-return unit: the event never touches the lot status. */
+  lot_status_touched?: boolean | null;
+  cancel_reason?: string | null;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
 };
 
 type WithLot = { lot_code: string | null; product_name: string | null; unit: string | null };
@@ -886,12 +903,74 @@ export async function getDestructionEvent(id: string): Promise<DestructionEvent 
   return (data as DestructionEvent | null) ?? null;
 }
 
+/** The other OPEN destruction events on a lot (oldest first), for the G-28 status rules. */
+async function openEventsForLot(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  lotId: string,
+  excludeId: string | null,
+): Promise<DestructionEvent[]> {
+  const { data } = await admin
+    .from("destruction_events")
+    .select("*")
+    .eq("lot_id", lotId)
+    .in("status", [...OPEN_DESTRUCTION_STATUSES])
+    .order("created_at", { ascending: true });
+  return ((data as DestructionEvent[] | null) ?? []).filter((e) => e.id !== excludeId);
+}
+
+/** Did this event move the lot? New events say so; a legacy (pre-0307) event is assumed to have. */
+function eventTouchedLot(e: DestructionEvent): boolean {
+  return e.lot_status_touched !== false;
+}
+
+/**
+ * Fix Phase 1.3 (G-28): when an event closes without emptying the lot (an
+ * owner cancel, or a partial completion), put the lot back to the status it
+ * had before scheduling. The ONLY write is Quarantine -> Active, compare-and-
+ * set on Quarantine, and only for a lot that was Active (go-live checked) when
+ * it was scheduled (lotStatusAfterEventCloses). A Recalled lot, a lot someone
+ * changed since, or a customer-return event is never touched.
+ */
+async function restoreLotAfterEventCloses(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  event: DestructionEvent,
+  actorId: string | null,
+): Promise<{ action: LotCloseAction; lotBefore: string | null; lotAfter: string | null; message: string }> {
+  const { data: lotRow } = await admin.from("inventory_lots").select("status").eq("id", event.lot_id).maybeSingle();
+  const lotBefore = (lotRow as { status: string } | null)?.status ?? null;
+  const others = (await openEventsForLot(admin, event.lot_id, event.id)).filter(eventTouchedLot);
+  const action = lotStatusAfterEventCloses({
+    previousLotStatus: event.previous_lot_status ?? null,
+    touchedLot: eventTouchedLot(event),
+    lotStatus: lotBefore,
+    otherOpenEvents: others.length,
+  });
+  let lotAfter = lotBefore;
+  let final: LotCloseAction = action;
+  if (action.action === "restore_active") {
+    const { data: moved } = await admin
+      .from("inventory_lots")
+      .update({ status: "active", updated_by: actorId })
+      .eq("id", event.lot_id)
+      .eq("status", "quarantine")
+      .select("id");
+    if (Array.isArray(moved) && moved.length > 0) lotAfter = "active";
+    else final = { action: "leave", why: "changed_since" };
+  }
+  return { action: final, lotBefore, lotAfter, message: lotCloseMessage(final) };
+}
+
 /**
  * Schedule a destruction: opens the store-policy hold (configurable in
  * disposition_settings; the old 72h WSLCB notice was removed from current
- * rule — see compliance doc §5.1). Does NOT reduce on-hand yet (the product
- * is quarantined internally, not destroyed). Quantity is validated against
- * on-hand at completion time.
+ * rule — see compliance doc §5.1). Does NOT reduce on-hand yet (the
+ * product is quarantined internally, not destroyed). Quantity is validated
+ * against on-hand at completion time.
+ *
+ * Fix Phase 1.3 (G-28; D65): only Active and Quarantine lots may be scheduled
+ * and never with reason Recall (Recalled product goes back to the vendor).
+ * The event stores the lot's status before scheduling; only an Active lot is
+ * moved to Quarantine (compare-and-set on Active), a Quarantine lot stays.
  */
 export async function scheduleDestruction(
   input: {
@@ -903,7 +982,8 @@ export async function scheduleDestruction(
      * Move the whole LOT to internal quarantine status (default true). A
      * customer-return destruction of a single returned unit passes false so
      * the rest of the lot stays sellable — the returned unit is physically
-     * segregated on the shop floor instead.
+     * segregated on the shop floor instead. Such an event never touches the
+     * lot status, now or on cancel (F-15-9).
      */
     quarantineLot?: boolean;
   },
@@ -914,34 +994,70 @@ export async function scheduleDestruction(
   }
   if (!(input.quantity > 0)) return { ok: false, error: "Quantity must be greater than zero." };
   const admin = createSupabaseAdminClient();
+  const touchesLot = input.quarantineLot !== false;
+
+  let lotStatus: string | null = null;
+  let openEventPrevious: string | null = null;
+  if (touchesLot) {
+    const { data: lotRow } = await admin.from("inventory_lots").select("status").eq("id", input.lotId).maybeSingle();
+    lotStatus = (lotRow as { status: string } | null)?.status ?? null;
+    const earlier = (await openEventsForLot(admin, input.lotId, null)).find(
+      (e) => eventTouchedLot(e) && e.previous_lot_status != null,
+    );
+    openEventPrevious = earlier?.previous_lot_status ?? null;
+  }
+  const decision = evaluateDestructionSchedule({ reason: input.reason, touchesLot, lotStatus, openEventPrevious });
+  if (!decision.ok) return { ok: false, error: decision.message };
 
   const settings = await getDispositionSettings();
   const now = new Date();
   const earliest = new Date(computeEarliestDestroyAt(now.toISOString(), settings.holdHours));
 
-  // Move the lot into quarantine status for clear shop-floor signalling.
-  if (input.quarantineLot !== false) {
-    await admin
+  // Move an ACTIVE lot into quarantine for clear shop-floor signalling.
+  // Compare-and-set: if the lot changed since we read it, nothing is written.
+  if (decision.setQuarantine) {
+    const { data: moved } = await admin
       .from("inventory_lots")
       .update({ status: "quarantine", updated_by: actorId })
-      .eq("id", input.lotId);
+      .eq("id", input.lotId)
+      .eq("status", "active")
+      .select("id");
+    if (!Array.isArray(moved) || moved.length === 0) {
+      return { ok: false, error: "The lot's status changed while you were scheduling. Nothing was scheduled; reload and try again." };
+    }
   }
 
-  const { data, error } = await admin
+  const baseRow = {
+    lot_id: input.lotId,
+    quantity: input.quantity,
+    reason: input.reason,
+    detail: input.detail ?? null,
+    status: "pending_quarantine",
+    quarantine_start: now.toISOString(),
+    earliest_destroy_at: earliest.toISOString(),
+    created_by: actorId,
+  };
+  let { data, error } = await admin
     .from("destruction_events")
-    .insert({
-      lot_id: input.lotId,
-      quantity: input.quantity,
-      reason: input.reason,
-      detail: input.detail ?? null,
-      status: "pending_quarantine",
-      quarantine_start: now.toISOString(),
-      earliest_destroy_at: earliest.toISOString(),
-      created_by: actorId,
-    })
+    .insert({ ...baseRow, previous_lot_status: decision.previousLotStatus, lot_status_touched: touchesLot })
     .select("id")
     .single();
-  if (error || !data) return { ok: false, error: error?.message ?? "Could not schedule destruction." };
+  if (error && isMissingSchemaError(error.message)) {
+    // Migration 0307 not applied yet: schedule without the remembered status.
+    // A later Cancel then leaves the lot as it is (safe) instead of guessing.
+    ({ data, error } = await admin.from("destruction_events").insert(baseRow).select("id").single());
+  }
+  if (error || !data) {
+    if (decision.setQuarantine) {
+      // Undo our own Quarantine move (compare-and-set on Quarantine).
+      await admin
+        .from("inventory_lots")
+        .update({ status: "active", updated_by: actorId })
+        .eq("id", input.lotId)
+        .eq("status", "quarantine");
+    }
+    return { ok: false, error: error?.message ?? "Could not schedule destruction." };
+  }
   return { ok: true, id: (data as { id: string }).id };
 }
 
@@ -994,6 +1110,12 @@ export async function completeDestruction(
     nowMs: Date.now(),
   });
   if (!verdict.ok) return verdict;
+
+  // Fix Phase 1.3 (G-28; D65): never destroy a lot that is Recalled now,
+  // whatever the event's reason (it goes back to the vendor).
+  const { data: lotNow } = await admin.from("inventory_lots").select("status").eq("id", event.lot_id).maybeSingle();
+  const recallRefusal = completionLotRefusal((lotNow as { status: string } | null)?.status ?? null);
+  if (recallRefusal) return { ok: false, error: recallRefusal };
 
   const note = buildDestructionAdjustmentNote({
     reason: event.reason,
@@ -1049,15 +1171,33 @@ export async function completeDestruction(
     .maybeSingle();
   if (lot && Number((lot as { on_hand_qty: number }).on_hand_qty) <= 0) {
     await admin.from("inventory_lots").update({ status: "destroyed", updated_by: actorId }).eq("id", event.lot_id);
+  } else if (lot) {
+    // Fix Phase 1.3 (G-28 req 7, F-15-11): a PARTIAL destruction puts the rest
+    // of the lot back to the status it had before scheduling (Active only if
+    // it was Active and nothing else holds it; otherwise it is left alone).
+    await restoreLotAfterEventCloses(admin, event, actorId);
   }
 
   return { ok: true };
 }
 
+/**
+ * Fix Phase 1.3 (G-28 req 3 + 6; F-05a-19, F-15-9): cancel a scheduled
+ * destruction. The caller (cancelDestructionAction) has already run
+ * evaluateDestructionCancel: the owner only, with a written reason. The event
+ * is closed compare-and-set on an open status, the reason and who/when are
+ * kept on it (migration 0307; pre-migration they live in the audit row), and
+ * the lot goes back to the status it had before scheduling — never
+ * blindly Active (restoreLotAfterEventCloses).
+ */
 export async function cancelDestruction(
   id: string,
   actorId: string | null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  reason: string,
+): Promise<
+  | { ok: true; lotId: string; lotBefore: string | null; lotAfter: string | null; previousLotStatus: string | null; lotMessage: string; lotAction: LotCloseAction }
+  | { ok: false; error: string }
+> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
@@ -1065,11 +1205,38 @@ export async function cancelDestruction(
   const event = await getDestructionEvent(id);
   if (!event) return { ok: false, error: "Destruction event not found." };
   if (event.status === "completed") return { ok: false, error: "Completed events cannot be cancelled." };
+  if (event.status === "cancelled") return { ok: false, error: "This event was already cancelled." };
 
-  await admin.from("destruction_events").update({ status: "cancelled" }).eq("id", id);
-  // Release quarantine back to active (best effort).
-  await admin.from("inventory_lots").update({ status: "active", updated_by: actorId }).eq("id", event.lot_id);
-  return { ok: true };
+  const nowIso = new Date().toISOString();
+  let { data: closed, error } = await admin
+    .from("destruction_events")
+    .update({ status: "cancelled", cancel_reason: reason, cancelled_by: actorId, cancelled_at: nowIso })
+    .eq("id", id)
+    .in("status", [...OPEN_DESTRUCTION_STATUSES])
+    .select("id");
+  if (error && isMissingSchemaError(error.message)) {
+    ({ data: closed, error } = await admin
+      .from("destruction_events")
+      .update({ status: "cancelled" })
+      .eq("id", id)
+      .in("status", [...OPEN_DESTRUCTION_STATUSES])
+      .select("id"));
+  }
+  if (error) return { ok: false, error: error.message };
+  if (!Array.isArray(closed) || closed.length === 0) {
+    return { ok: false, error: "This event was completed or cancelled by someone else just now. Nothing was changed." };
+  }
+
+  const restored = await restoreLotAfterEventCloses(admin, event, actorId);
+  return {
+    ok: true,
+    lotId: event.lot_id,
+    lotBefore: restored.lotBefore,
+    lotAfter: restored.lotAfter,
+    previousLotStatus: event.previous_lot_status ?? null,
+    lotMessage: restored.message,
+    lotAction: restored.action,
+  };
 }
 
 export type DispositionSummary = {

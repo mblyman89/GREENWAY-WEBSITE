@@ -518,16 +518,19 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** §4.10 step 5: set **Always hide** on Product Enrichment (audited `product.visibility_changed`). Ties to **G-25** (propagation requirement).
 
 ### F-05a-17 · CONFIRMED · GAP · S2 — Returns & Destruction lists only Active lots
+- **Status: FIXED (Phase 1.3, G-28). `disposition/page.tsx` L114 also loads Quarantine lots; the picker shows each lot's status; Recalled lots are never listed (D65)).**
 - **Pin:** `src/app/admin/inventory/disposition/page.tsx` L103: `listLots({ status: "active", limit: 500 })` feeds the destruction form. Lots in **Quarantine** or **Recalled**, the ones most likely to be destroyed, cannot be chosen.
 - **Effect:** staff are pushed to set a held lot Active to destroy it, which puts it back on sale in the meantime (and for a Recalled lot, lifts the hold).
 - **SOP impact:** SOP-05a v1.1 §4.9 interim. Fixed by **G-28**. Found while answering the owner's Q-05a-4 question about the Destructions page.
 
 ### F-05a-18 · CONFIRMED · BUG · S1 — Scheduling a destruction overwrites Recalled with Quarantine and lifts the recall hold
+- **Status: FIXED (Phase 1.3, G-28). `evaluateDestructionSchedule` (`destruction-lot-status-core.ts` L85) refuses a Recalled lot and the Recall reason; the Quarantine write is compare-and-set on Active (`disposition.ts` L975); completion refuses a Recalled lot (L1117); guard step 5 fails any lot-status write in disposition.ts that is not compare-and-set).**
 - **Pin:** `scheduleDestruction` (`src/lib/inventory/disposition.ts` L939–997) writes `status: "quarantine"` at L965–971 whatever the lot's status was (unless `quarantineLot === false`, used only for a single customer-returned unit, L716–723). The register recall hold reads only `recalled` (`src/lib/pos/recall-hold-core.ts` L44); quarantine does not hold (`completion-gate.ts` L98–100).
 - **Effect:** once a recalled lot is scheduled, nothing in the app shows it was recalled, and other lots of that product stop being held if it was the only Recalled lot. WAC 314-55-225(3)(b)(i) requires isolating recalled product.
 - **SOP impact:** SOP-05a v1.1 §4.9 point 3, §4.10 step 9, form 8.4 (C): recalled lots are not scheduled in the app until **G-28**.
 
 ### F-05a-19 · CONFIRMED · BUG · S2 — Cancelling a destruction always sets the lot Active
+- **Status: FIXED (Phase 1.3, G-28). `cancelDestruction` (`disposition.ts` L1193) restores the stored status via `restoreLotAfterEventCloses` (L934): only Quarantine → Active, only if it was Active, compare-and-set; migration 0307 keeps the status).**
 - **Pin:** `cancelDestruction` (`disposition.ts` L1100–1116) sets `status: "active"` at L1113–1114, with the comment *"Release quarantine back to active (best effort)."*; it does not remember the earlier status.
 - **Effect:** a cancelled destruction of an expired, damaged or (if F-05a-17 is worked around) recalled lot returns it to sale with no check.
 - **SOP impact:** SOP-05a v1.1 §4.9 point 1, §6. Fixed by **G-28**.
@@ -758,6 +761,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §2 rule 1, §4.4, §4.6. **G-45**.
 
 ### F-15-9 · CONFIRMED · GAP · S2 — Cancelling a customer-return destruction sets the lot Active even though it was never quarantined, and no cancel records a reason
+- **Status: FIXED (Phase 1.3, G-28). Owner-only `inventory.destruction.cancel`, a required reason kept on the event and in the audit row (before/after lot status); a customer-return event (`lot_status_touched = false`) never touches the lot).**
 - **Pin:** `cancelDestruction` sets `status: "active"` on the lot unconditionally (`disposition.ts` L1112–1114); `cancelDestructionAction` records no reason (`actions.ts` L246–253). Extends F-05a-19 to the customer-return case and to the missing reason.
 - **Effect:** the destroy-return unit silently becomes ordinary stock; any lot status set by hand after scheduling is overwritten; nobody can tell why a destruction was stopped.
 - **SOP impact:** SOP-15 §2 rule 3, §4.19, form 8.5. **G-28** (extended).
@@ -768,6 +772,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.8 (do not download unless uploading by hand that day), form 8.6. **G-45**.
 
 ### F-15-11 · CONFIRMED · GAP · S3 — A partial destruction leaves the rest of the lot in Quarantine
+- **Status: FIXED (Phase 1.3, G-28). `completeDestruction` calls `restoreLotAfterEventCloses` when units remain (L1178)).**
 - **Pin:** scheduling quarantines the whole lot (`disposition.ts` L965–971); completion sets **Destroyed** only at zero (L1087–1095) and otherwise leaves the status alone.
 - **Effect:** sellable units stay off sale until someone sets the lot Active by hand.
 - **SOP impact:** SOP-15 §4.20. **G-28** (extended).

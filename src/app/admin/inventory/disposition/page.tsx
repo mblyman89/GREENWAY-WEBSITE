@@ -42,6 +42,14 @@ import {
   HOLD_HOURS_MIN,
   HOLD_HOURS_MAX,
 } from "@/lib/inventory/disposition-core";
+import {
+  DESTROYABLE_LOT_STATUS_LABELS,
+  isDestroyableLotStatus,
+  schedulableDestructionReasons,
+  lotCloseMessage,
+  DESTRUCTION_CANCEL_REASON_MAX,
+  type LotCloseAction,
+} from "@/lib/inventory/destruction-lot-status-core";
 import { isAiConfigured } from "@/lib/inventory/disposition-advisor";
 import { CustomerReturnWizard } from "@/components/admin/inventory/CustomerReturnWizard";
 import { DispositionAdvisorPanel } from "@/components/admin/inventory/DispositionAdvisorPanel";
@@ -63,7 +71,7 @@ const OK_MESSAGES: Record<string, string> = {
   manifest: "Manifest status updated.",
   scheduled: "Destruction scheduled — the hold timer is running and the lot is quarantined.",
   destroyed: "Destruction completed and the CCRS 'Destruction' adjustment posted.",
-  cancelled: "Destruction cancelled and the lot released from quarantine.",
+  cancelled: "Destruction cancelled.",
   settings: "Hold policy saved.",
 };
 
@@ -89,15 +97,21 @@ function manifestTone(status: string): "neutral" | "green" | "gold" | "orange" |
 export default async function DispositionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string; lot?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; lot?: string; lotmsg?: string }>;
 }) {
   const session = await requirePermission("inventory.manage");
   const canSettings = can(session.profile.role, "settings.manage");
+  // Fix Phase 1.3 (G-28 req 6): only the owner may cancel a scheduled destruction.
+  const canCancelDestruction = can(session.profile.role, "inventory.destruction.cancel");
   const sp = await searchParams;
 
-  const [lots, returns, destructions, customerReturns, summary, dispositionSettings] =
+  const [lots, quarantineLots, returns, destructions, customerReturns, summary, dispositionSettings] =
     await Promise.all([
       listLots({ status: "active", limit: 500 }),
+      // Fix Phase 1.3 (G-28 req 1, F-05a-17): the destruction picker also lists
+      // Quarantine lots. Recalled lots are NOT listed: recalled product is never
+      // destroyed by us, it goes back to the vendor (D65; SOP-15 §4.21).
+      listLots({ status: "quarantine", limit: 500 }),
       listVendorReturns(50),
       listDestructionEvents(50),
       listCustomerReturns(20),
@@ -106,7 +120,18 @@ export default async function DispositionPage({
     ]);
 
   const holdHours = dispositionSettings.holdHours;
-  const preselectLot = typeof sp.lot === "string" && lots.some((l) => l.id === sp.lot) ? sp.lot : "";
+  const destroyableLots = [...lots, ...quarantineLots].filter((l) => isDestroyableLotStatus(l.status));
+  const preselectLot = typeof sp.lot === "string" && destroyableLots.some((l) => l.id === sp.lot) ? sp.lot : "";
+  const destructionReasons = schedulableDestructionReasons(DESTRUCTION_REASONS);
+  const lotCloseWhys: LotCloseAction["why"][] = ["restored", "untouched", "was_quarantine", "other_open_event", "changed_since", "unknown_previous"];
+  const cancelLotMessage =
+    sp.ok === "cancelled" && lotCloseWhys.includes(sp.lotmsg as LotCloseAction["why"])
+      ? lotCloseMessage(
+          sp.lotmsg === "restored"
+            ? { action: "restore_active", why: "restored" }
+            : { action: "leave", why: sp.lotmsg as Exclude<LotCloseAction["why"], "restored"> },
+        )
+      : null;
 
   return (
     <div className="space-y-5">
@@ -126,6 +151,7 @@ export default async function DispositionPage({
       {sp.ok ? (
         <div className="rounded-xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
           {OK_MESSAGES[sp.ok] ?? "Saved."}
+          {cancelLotMessage ? <span data-testid="cancel-lot-message"> {cancelLotMessage}</span> : null}
         </div>
       ) : null}
 
@@ -250,10 +276,12 @@ export default async function DispositionPage({
         <section id="schedule-destruction" className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
           <h2 className="mb-1 text-sm font-black uppercase tracking-[0.14em] text-white/80">Schedule a destruction</h2>
           <p className="mb-4 text-xs text-white/40">
-            Opens a {holdHours}h hold and quarantines the lot. Complete it below once the hold elapses.
+            Opens a {holdHours}h hold and quarantines the lot (a lot already in Quarantine stays there). Complete
+            it below once the hold elapses. Recalled lots are not listed: they go back to the vendor, never
+            destroyed by us.
           </p>
-          {lots.length === 0 ? (
-            <EmptyState title="No active lots" description="Receive inventory first." />
+          {destroyableLots.length === 0 ? (
+            <EmptyState title="No Active or Quarantine lots" description="Receive inventory first." />
           ) : (
             <form action={scheduleDestructionAction} className="space-y-3">
               <Field label="Lot" required>
@@ -261,9 +289,10 @@ export default async function DispositionPage({
                     opens this form with that lot chosen (?lot=<id>). */}
                 <Select name="lot_id" required defaultValue={preselectLot}>
                   <option value="">Select a lot…</option>
-                  {lots.map((l) => (
+                  {destroyableLots.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {(l.product_name ?? "—") + " · " + (l.lot_code ?? l.id.slice(0, 8))} ({fmtQty(l.on_hand_qty, l.unit)})
+                      {(l.product_name ?? "—") + " · " + (l.lot_code ?? l.id.slice(0, 8))} ({fmtQty(l.on_hand_qty, l.unit)}) ·{" "}
+                      {isDestroyableLotStatus(l.status) ? DESTROYABLE_LOT_STATUS_LABELS[l.status] : l.status}
                     </option>
                   ))}
                 </Select>
@@ -274,7 +303,7 @@ export default async function DispositionPage({
                 </Field>
                 <Field label="Reason" required>
                   <Select name="reason" required defaultValue="expired">
-                    {DESTRUCTION_REASONS.map((r) => (
+                    {destructionReasons.map((r) => (
                       <option key={r} value={r}>
                         {DESTRUCTION_REASON_LABELS[r]}
                       </option>
@@ -286,8 +315,8 @@ export default async function DispositionPage({
                 <Textarea name="detail" rows={2} placeholder="What & why…" />
               </Field>
               <p className="text-xs text-[var(--admin-gold)]/80">
-                Recall product? Do NOT destroy before notifying the LCB and coordinating with your enforcement
-                officer (WAC 314-55-225).
+                Recall product? Never destroy it: recalled product goes back to the vendor (owner decision D65).
+                The admin tells the LCB officer first (WAC 314-55-225), then Log a vendor return with reason Recall.
               </p>
               <Button type="submit">Schedule (opens {holdHours}h hold)</Button>
             </form>
@@ -385,12 +414,26 @@ export default async function DispositionPage({
                           {holdElapsed ? "Complete destruction" : "Hold not elapsed"}
                         </Button>
                       </form>
-                      <form action={cancelDestructionAction.bind(null, d.id)}>
-                        <Button type="submit" variant="neutral">
-                          Cancel (release quarantine)
-                        </Button>
-                      </form>
+                      {canCancelDestruction ? (
+                        <form action={cancelDestructionAction.bind(null, d.id)} className="space-y-2" data-testid="cancel-destruction-form">
+                          <Field label="Why cancel? (required)" help="Kept on the event and in the Security Log with your name. The lot goes back to the status it had before scheduling.">
+                            <Input name="cancel_reason" required maxLength={DESTRUCTION_CANCEL_REASON_MAX} placeholder="e.g. Vendor will take it back" />
+                          </Field>
+                          <Button type="submit" variant="neutral">
+                            Cancel destruction (owner)
+                          </Button>
+                        </form>
+                      ) : (
+                        <p className="text-xs text-white/40" data-testid="cancel-destruction-owner-only">
+                          Only the owner can cancel a scheduled destruction (SOP-15 §2 rule 3).
+                        </p>
+                      )}
                     </div>
+                  ) : d.status === "cancelled" ? (
+                    <p className="mt-2 text-xs text-white/40">
+                      Cancelled {d.cancelled_at ? new Date(d.cancelled_at).toLocaleString() : ""}
+                      {d.cancel_reason ? ` · why: ${d.cancel_reason}` : ""}
+                    </p>
                   ) : d.status === "completed" ? (
                     <p className="mt-2 text-xs text-white/40">
                       Destroyed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ""}

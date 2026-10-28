@@ -5,12 +5,14 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import {
   createVendorReturn,
   createCustomerReturn,
   scheduleDestruction,
   completeDestruction,
   cancelDestruction,
+  getDestructionEvent,
   updateDispositionSettings,
   updateVendorReturnManifest,
   findReturnableOrderLines,
@@ -28,6 +30,11 @@ import {
   CUSTOMER_RETURN_REASONS,
   MANIFEST_STATUSES,
 } from "@/lib/inventory/disposition-core";
+import {
+  evaluateDestructionCancel,
+  DESTRUCTION_CANCEL_AUDIT_ACTION,
+  DESTRUCTION_CANCEL_REFUSED_AUDIT_ACTION,
+} from "@/lib/inventory/destruction-lot-status-core";
 import {
   generateDispositionAdvice,
   isAiConfigured,
@@ -190,6 +197,10 @@ export async function scheduleDestructionAction(formData: FormData) {
   });
   revalidatePath(BASE);
   revalidatePath("/admin/inventory");
+  revalidatePath(`/admin/inventory/${lotId}`);
+  // Fix Phase 1.3 (G-28): an Active lot just moved to Quarantine, so the
+  // register and the website must stop offering it.
+  await revalidatePublicMenuSurfaces();
   redirect(`${BASE}?ok=scheduled`);
 }
 
@@ -242,19 +253,58 @@ export async function completeDestructionAction(id: string, formData: FormData) 
   redirect(`${BASE}?ok=destroyed`);
 }
 
-export async function cancelDestructionAction(id: string) {
+/**
+ * Fix Phase 1.3 (G-28 req 3 + 6; F-05a-19, F-15-9). Before: any manager
+ * could cancel, no reason was asked, and the lot was always set Active. Now:
+ * the owner only (inventory.destruction.cancel; SOP-15 §2 rule 3), a written
+ * reason is required, the lot goes back to the status it had before
+ * scheduling (never blindly Active; a customer-return event never touches
+ * the lot), and the audit row keeps the reason and the lot status before and
+ * after. A refused cancel is audited too.
+ */
+export async function cancelDestructionAction(id: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
-  const result = await cancelDestruction(id, session.userId);
+  const reason = (formData.get("cancel_reason") as string | null) ?? "";
+  const event = await getDestructionEvent(id);
+  const decision = evaluateDestructionCancel({
+    eventStatus: event?.status ?? null,
+    canCancel: can(session.profile.role, "inventory.destruction.cancel"),
+    reason,
+  });
+  if (!decision.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: DESTRUCTION_CANCEL_REFUSED_AUDIT_ACTION,
+      entityType: "destruction_events",
+      entityId: id,
+      after: { reason: reason.trim().slice(0, 500) || null, refusals: decision.refusals.map((r) => r.code) },
+    });
+    const msg = decision.refusals.map((r) => r.message).join(" ");
+    redirect(`${BASE}?error=${encodeURIComponent(msg.slice(0, 900))}`);
+  }
+  const result = await cancelDestruction(id, session.userId, decision.reason);
   if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: "destruction.cancel",
+    action: DESTRUCTION_CANCEL_AUDIT_ACTION,
     entityType: "destruction_events",
     entityId: id,
+    before: { event_status: event?.status ?? null, lot_status: result.lotBefore, previous_lot_status: result.previousLotStatus },
+    after: {
+      event_status: "cancelled",
+      reason: decision.reason,
+      lot_id: result.lotId,
+      lot_status: result.lotAfter,
+      lot_outcome: result.lotAction.why,
+    },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?ok=cancelled`);
+  revalidatePath("/admin/inventory");
+  revalidatePath(`/admin/inventory/${result.lotId}`);
+  if (result.lotAfter !== result.lotBefore) await revalidatePublicMenuSurfaces();
+  redirect(`${BASE}?ok=cancelled&lotmsg=${encodeURIComponent(result.lotAction.why)}`);
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
