@@ -47,6 +47,7 @@ import { applyLotDelta, applyVariantDelta } from "@/lib/inventory/atomic-quantit
 import { lotKeyForSaleLine, lotKeysForLines } from "@/lib/pos/variant-lot-core";
 // R74 S31: one lot read shared with the cost replan (sale-posting-service).
 import { readSaleLots } from "@/lib/inventory/sale-lot-read";
+import { sellableQty } from "@/lib/inventory/held-stock-core";
 
 const EVENT_TYPE = "inventory_decremented";
 
@@ -178,16 +179,19 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     // R74 S31: the shared reader (the cost replan uses the same one) also
     // carries each lot's size link (0294) so a sold size draws from its own lots.
     let sizeLinkPending = false;
+    const heldByLot = new Map<string, number>();
     if (lotKeys.length > 0) {
       const read = await readSaleLots(admin, lotKeys);
       if (!read.ok) throw new Error(`Could not read the lots to draw from: ${read.error}`);
       sizeLinkPending = read.sizeLinkPending;
+      for (const r of read.rows) if (r.held_qty > 0) heldByLot.set(r.id, r.held_qty);
       lots = read.rows
         .filter((r) => !!r.pos_product_key)
         .map((r) => ({
           id: r.id,
           posProductKey: r.pos_product_key as string,
-          onHandQty: r.on_hand_qty,
+          // Fix Phase 1.4 (G-44): plan on SELLABLE units; held units are never drawn.
+          onHandQty: sellableQty(r.on_hand_qty, r.held_qty),
           // The lot's canonical CCRS id — identical derivation to the weekly
           // Sale.csv builder's lot index (explicit → lot_code → key → LOT-id).
           ccrsExternalId: deriveInventoryExternalId({
@@ -203,13 +207,18 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     for (const u of lotPlan.lotUpdates) {
       // GW-012: atomic clamped delta; the DB flips active→sold_out at 0
       // itself. Falls back to the plan's absolute + status pre-0129.
+      // Fix Phase 1.4 (G-44): the plan ran on sellable units, so the absolute
+      // fallback adds the held units back (they stay on hand) and a lot that
+      // still holds units is never marked Sold out.
+      const held = heldByLot.get(u.id) ?? 0;
       await applyLotDelta(admin, {
         lotId: u.id,
         delta: u.delta,
         clamp: true,
-        fallbackAbsolute: u.soldOut
-          ? { onHandQty: u.newOnHand, status: "sold_out" }
-          : { onHandQty: u.newOnHand },
+        fallbackAbsolute:
+          u.soldOut && held <= 0
+            ? { onHandQty: u.newOnHand, status: "sold_out" }
+            : { onHandQty: u.newOnHand + held },
       });
     }
 

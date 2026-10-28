@@ -746,11 +746,13 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.16, §5.3. **G-43**.
 
 ### F-15-6 · CONFIRMED · BUG · S1 — A customer-returned unit marked Destroy is added back to an Active lot and can be sold at the register until the destruction is completed
+- **Status: FIXED (Phase 1.4, G-44). `record_customer_return` (migration 0308) adds the unit and holds it (`inventory_lots.held_qty`); every sale and stock reader uses `sellableQty` (`held-stock-core.ts` L43): `sale-lot-read.ts`, `sale-decrement.ts`, `sale-posting-service.ts`, `api/pos/menu/route.ts`, `register-sellability-store.ts`; manual adjustments and other disposition reductions refuse held units; guard step 6).**
 - **Pin:** `postAddition(lotId, qty, "return", …, { sellable: false })` adds the units to on-hand (`disposition.ts` L710; L289–333); `sellable:false` only skips the menu sync (L330). The destruction is scheduled with `quarantineLot: false` (L715–723), so the lot stays **Active**. The register draws from Active lots with stock, oldest first (`sale-lot-read.ts` L44–47).
 - **Effect:** the app counts the returned (often opened) unit as sellable stock; a sale of that product can draw it, and the later destruction then removes a sellable unit instead. On-hand is overstated until completion (S1: product that must not be sold).
 - **SOP impact:** SOP-15 "one thing to know" 2, §4.7 (sealed destroy bin, form 8.1). **G-44**.
 
 ### F-15-7 · CONFIRMED · BUG · S2 — A customer return is not atomic: the add-back is posted before the return is saved, and a failed destruction event is ignored
+- **Status: FIXED (Phase 1.4, G-44). The return, add-back, hold and destruction event are one RPC (`disposition.ts` L779); an RPC error changes nothing; before 0308 every later failure undoes the add-back (`undoAddition` L860) and the "reverse it manually" message is gone).**
 - **Pin:** add-back L710; schedule result used only when `ok` (L727); the `customer_returns` insert follows (L731–762). On an insert error the function returns *"Apply migration 0115 first … The inventory add-back was posted — reverse it manually if you abort."* (L768) or the raw error (L770), with the add-back left in place.
 - **Effect:** stock can rise with no return record and no Sale correction; a Destroy return can save with no destruction event, so the unit is never scheduled.
 - **SOP impact:** SOP-15 §4.7 steps 3–4 and last paragraph. **G-44**.

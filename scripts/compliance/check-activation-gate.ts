@@ -22,6 +22,10 @@
  *     was Active (gate-passed) before scheduling, compare-and-set on
  *     quarantine; this is an un-quarantine, not an intake activation.
  *
+ * Step 6 (Fix Phase 1.4, G-44): units held for a customer-return destruction
+ * are never sellable (sale lot read, both planners, POS menu, sellability
+ * report), never taken by another reduction, and the return is one transaction.
+ *
  * Run: npx tsx scripts/compliance/check-activation-gate.ts
  */
 import { execFileSync } from "node:child_process";
@@ -226,6 +230,27 @@ if (!actionsSrc.includes("evaluateLotLifecycleChange(")) {
   }
   if (!disposition.includes("completionLotRefusal(")) {
     fail("disposition.ts completeDestruction no longer refuses a Recalled lot (D65)");
+  }
+}
+
+// 6. Fix Phase 1.4 (G-44; F-15-6, F-15-7): a customer-returned unit marked
+//    Destroy is HELD (inventory_lots.held_qty) and never sellable. The one
+//    lot read a sale draws from must read held_qty, both callers must plan on
+//    sellableQty(), the register menu and sellability report must subtract
+//    it, and the return must be saved in one transaction (record_customer_return).
+{
+  const need: [string, string, string][] = [
+    ["src/lib/inventory/sale-lot-read.ts", "held_qty", "the sale lot read no longer reads held_qty (held units could be sold)"],
+    ["src/lib/inventory/sale-decrement.ts", "sellableQty(", "the sale decrement no longer plans on sellable units (held units could be sold)"],
+    ["src/lib/accounting/sale-posting-service.ts", "sellableQty(", "the cost replan no longer plans on sellable units (it would disagree with the decrement)"],
+    ["src/app/api/pos/menu/route.ts", "sellableQty(", "the POS menu no longer subtracts held units from register stock"],
+    ["src/lib/inventory/register-sellability-store.ts", "sellableQty(", "the sellability report no longer subtracts held units"],
+    ["src/lib/inventory/disposition.ts", "RECORD_CUSTOMER_RETURN_RPC", "createCustomerReturn no longer saves the return in one transaction"],
+    ["src/lib/inventory/disposition.ts", "evaluateReductionAgainstHold(", "disposition reductions no longer protect held units"],
+    ["src/lib/inventory/store.ts", "evaluateReductionAgainstHold(", "manual lot adjustments no longer protect held units"],
+  ];
+  for (const [file, token, why] of need) {
+    if (!readFileSync(resolve(root, file), "utf8").includes(token)) fail(`${file}: ${why} (G-44)`);
   }
 }
 

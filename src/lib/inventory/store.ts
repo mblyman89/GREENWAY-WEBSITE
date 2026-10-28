@@ -6,6 +6,8 @@
  * service-role client behind RLS. Part of POS Slice 3 (compliance backbone).
  */
 import "server-only";
+// Fix Phase 1.4 (G-44): held units are never removed by a manual adjustment.
+import { evaluateReductionAgainstHold, isMissingHeldQtyColumnError, toHeldNumber } from "@/lib/inventory/held-stock-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
@@ -633,16 +635,28 @@ export async function createAdjustment(
   if (!Number.isFinite(delta) || delta === 0) return { ok: false, error: "Enter a non-zero quantity." };
   const admin = createSupabaseAdminClient();
 
-  const { data: lot } = await admin
-    .from("inventory_lots")
-    .select("id, on_hand_qty, status")
-    .eq("id", input.lotId)
-    .maybeSingle();
+  // Fix Phase 1.4 (G-44): read the held units too (pre-0308: none are held).
+  let lotRead = await admin.from("inventory_lots").select("id, on_hand_qty, status, held_qty").eq("id", input.lotId).maybeSingle();
+  if (lotRead.error && isMissingHeldQtyColumnError(lotRead.error)) {
+    lotRead = (await admin.from("inventory_lots").select("id, on_hand_qty, status").eq("id", input.lotId).maybeSingle()) as typeof lotRead;
+  }
+  const lot = lotRead.data as { on_hand_qty: number; status: string | null; held_qty?: number | null } | null;
   if (!lot) return { ok: false, error: "Lot not found." };
-  const current = Number((lot as { on_hand_qty: number }).on_hand_qty) || 0;
-  const status = String((lot as { status: string | null }).status ?? "");
+  const current = Number(lot.on_hand_qty) || 0;
+  const status = String(lot.status ?? "");
   if (status === "destroyed") {
     return { ok: false, error: "This lot is Destroyed. Its quantity cannot be adjusted." };
+  }
+  // A removal never takes units held for a customer-return destruction; they
+  // leave only through that destruction (or the owner cancels it first).
+  if (delta < 0) {
+    const holdCheck = evaluateReductionAgainstHold({ qty: Math.abs(delta), onHand: current, held: lot.held_qty });
+    if (!holdCheck.ok && toHeldNumber(lot.held_qty) > 0 && Math.abs(delta) <= current) {
+      return {
+        ok: false,
+        error: `${holdCheck.error} Complete that destruction on Returns & Destruction (or the owner cancels it) first.`,
+      };
+    }
   }
   // Pre-check (the database check below is the real floor; this one also
   // protects the pre-0129 fallback, which cannot refuse on its own).

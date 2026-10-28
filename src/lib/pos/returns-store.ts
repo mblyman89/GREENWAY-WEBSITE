@@ -42,6 +42,7 @@ import {
   RETURN_WINDOW_DAYS,
 } from "@/lib/pos/returns-core";
 import { createCustomerReturn } from "@/lib/inventory/disposition";
+import { DESTROY_RETURN_HELD_NOTE } from "@/lib/inventory/held-stock-core";
 import type { CustomerReturnDisposition } from "@/lib/inventory/disposition-core";
 import { adjustPoints, getAccountByCustomer } from "@/lib/loyalty/loyalty-store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
@@ -239,6 +240,12 @@ export type ProcessCounterReturnResult =
       correctionOperation: "Delete" | "Update";
       /** Ready-to-print refund receipt (same 576px pure builder family). */
       receiptHtml: string;
+      /**
+       * Fix Phase 1.4 (G-44): where a Destroy unit stands. Null for Restock.
+       * Held (0308 applied): "Held for destruction: ... never sellable ...".
+       * Pre-0308: the app could not hold it, keep it in the sealed destroy bin.
+       */
+      stockNote: string | null;
     }
   | { ok: false; error: string };
 
@@ -357,6 +364,7 @@ export async function processCounterReturn(
     pointsClawed,
     correctionOperation,
     receiptHtml,
+    stockNote: input.disposition === "destroy" ? (created.notice ?? DESTROY_RETURN_HELD_NOTE) : null,
   };
 }
 

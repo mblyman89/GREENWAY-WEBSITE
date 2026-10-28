@@ -41,6 +41,8 @@ type DoneState = {
   pointsClawed: number;
   correctionOperation: "Delete" | "Update";
   receiptHtml: string;
+  /** Fix Phase 1.4 (G-44): where a Destroy unit stands (null for Restock). */
+  stockNote: string | null;
 };
 
 export function CounterReturnDesk() {
@@ -129,6 +131,7 @@ export function CounterReturnDesk() {
         pointsClawed: res.pointsClawed,
         correctionOperation: res.correctionOperation,
         receiptHtml: res.receiptHtml,
+        stockNote: res.stockNote ?? null,
       });
       toast({ tone: "success", message: `Return logged. Refund ${money(res.refundMinor)} in cash.` });
     });
@@ -151,6 +154,11 @@ export function CounterReturnDesk() {
             <li>
               Cash to refund: <strong>{money(done.refundMinor)}</strong>
             </li>
+            {done.stockNote ? (
+              <li>
+                Returned unit: <strong>{done.stockNote}</strong> Put it in the sealed destroy bin now (SOP-15 §4.7).
+              </li>
+            ) : null}
             <li>
               Loyalty points adjusted: <strong>{done.pointsClawed > 0 ? `-${done.pointsClawed}` : "none"}</strong>
             </li>

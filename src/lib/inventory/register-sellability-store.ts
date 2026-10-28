@@ -36,6 +36,8 @@ import { chunkedIn, pagedAll, MENU_READ_CONCURRENCY, ADMIN_PAGED_CONCURRENCY } f
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+// Fix Phase 1.4 (G-44): units held for a customer-return destruction are not live stock.
+import { isMissingHeldQtyColumnError, sellableQty } from "@/lib/inventory/held-stock-core";
 import {
   diagnoseLot,
   summarizeSellability,
@@ -106,6 +108,8 @@ type LotRow = {
   on_hand_qty: number | string | null;
   product_name: string | null;
   lot_code: string | null;
+  /** Fix Phase 1.4 (G-44, migration 0308): units held for destruction. */
+  held_qty?: number | string | null;
 };
 
 type ItemRow = {
@@ -235,10 +239,14 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
     const loadedP = loadPublishedCards();
     loadedP.catch(() => undefined); // awaited below
     let lotsFailed = false;
+    // Fix Phase 1.4 (G-44): read held units too; before 0308 retry without.
+    const LOT_COLS = "id, pos_product_key, status, on_hand_qty, product_name, lot_code";
+    const probe = await admin.from("inventory_lots").select(`${LOT_COLS}, held_qty`).range(0, 0);
+    const lotCols = probe.error && isMissingHeldQtyColumnError(probe.error) ? LOT_COLS : `${LOT_COLS}, held_qty`;
     const rows = await pagedAll<LotRow>(async (from, to) => {
       const { data, error } = await admin
         .from("inventory_lots")
-        .select("id, pos_product_key, status, on_hand_qty, product_name, lot_code")
+        .select(lotCols)
         // Fix Phase 0.2 (G-51): trade samples are never live register stock.
         .eq("is_sample", false)
         // Stable UNIQUE ordering — REQUIRED for deterministic paging.
@@ -248,7 +256,7 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
         lotsFailed = true;
         return [];
       }
-      return (data as LotRow[] | null) ?? [];
+      return (data as unknown as LotRow[] | null) ?? [];
     }, { concurrency: ADMIN_PAGED_CONCURRENCY });
     if (lotsFailed) return EMPTY;
 
@@ -260,13 +268,14 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
       .filter(
         (r) =>
           (r.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS &&
-          toQty(r.on_hand_qty) > 0,
+          sellableQty(toQty(r.on_hand_qty), r.held_qty) > 0,
       )
       .map((r) => ({
         id: r.id,
         posProductKey: r.pos_product_key,
         status: r.status,
-        onHandQty: r.on_hand_qty,
+        // Fix Phase 1.4 (G-44): held units are not live stock.
+        onHandQty: sellableQty(toQty(r.on_hand_qty), r.held_qty),
         productName: r.product_name,
         lotCode: r.lot_code,
       }));

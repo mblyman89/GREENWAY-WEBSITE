@@ -591,6 +591,13 @@ export default async function LotDetailPage({
                 value={lot.unit_weight != null ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim() : "—"}
               />
               <Row label="Sample" value={lot.is_sample ? "Yes (vendor sample)" : "No"} />
+              {/* Fix Phase 1.4 (G-44): units held for a customer-return destruction. */}
+              {Number(lot.held_qty ?? 0) > 0 ? (
+                <Row
+                  label="Held for destruction"
+                  value={`${Number(lot.held_qty)} (customer return; on hand but never sellable)`}
+                />
+              ) : null}
               <Row label="Medical" value={lot.is_medical ? "Yes (DOH compliant)" : "No"} />
               {/* S37: an unlinked lot links straight to the form below. */}
               {lot.pos_product_key ? (

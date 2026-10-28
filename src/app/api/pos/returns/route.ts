@@ -189,6 +189,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     pointsClawed: result.pointsClawed,
     correctionOperation: result.correctionOperation,
     receiptHtml: result.receiptHtml,
+    stockNote: result.stockNote,
   });
 }
 

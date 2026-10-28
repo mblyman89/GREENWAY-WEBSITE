@@ -66,7 +66,12 @@ describe("R74 S32 C — wiring", () => {
     const disp = read("src/lib/inventory/disposition.ts");
     expect(disp).toMatch(/syncLotMenuStock\(admin, lotId, -Math\.abs\(qtyMagnitude\)\)/);
     expect(disp).toMatch(/if \(opts\.sellable\) await syncLotMenuStock\(admin, lotId, Math\.abs\(qtyMagnitude\)\)/);
-    expect(disp).toContain('{ sellable: input.disposition !== "destroy" }');
+    // Fix Phase 1.4 (G-44): a Restock return moves the menu, a Destroy return
+    // never does (its units are held). Both the one-step RPC path and the
+    // pre-0308 fallback keep that rule.
+    expect(disp).toContain('const isDestroy = input.disposition === "destroy";');
+    expect(disp).toContain("{ sellable: !isDestroy }");
+    expect(disp).toMatch(/if \(!isDestroy\) await syncLotMenuStock\(admin, lotId, Math\.abs\(input\.quantity\)\)/);
     expect(read("src/lib/pos/cultivera-count-store.ts")).toMatch(/syncLotMenuStock\(admin, a\.lotId, a\.delta, \{ versions \}\)/);
     expect(read("src/lib/pos/legacy-lot-removal-store.ts")).toMatch(/syncLotMenuStock\(admin, r\.id, -r\.qty, \{ versions \}\)/);
   });
