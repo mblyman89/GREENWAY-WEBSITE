@@ -140,6 +140,11 @@ export default async function TillSummaryPage({
                   value={session.over_short_minor == null ? "—" : overShortLabel(session.over_short_minor)}
                   strong
                 />
+                {/* Fix Phase 2.3 (G-03, owner D7 / D21): the reason written at
+                    reconcile (required when more than $5.00). */}
+                {session.over_short_reason ? (
+                  <Row label="Over/short reason" value={session.over_short_reason} />
+                ) : null}
               </>
             ) : null}
             {session.tips_minor != null ? (

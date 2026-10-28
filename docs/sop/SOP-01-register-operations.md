@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.6 (draft for owner review; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.7 (draft for owner review; Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -821,8 +821,12 @@ Since Phase 2.1 (G-05, findings F-01-4 and F-01-3) **you do not type cash sales*
 4. **Tying a refund.** Under *"Say where each refund's cash came from:"* each untied void or return is listed with its amount and time. Pick the drawer it was paid from (or **Store safe**) under **Paid from…**, then tap **Tie refund**. Use the close slips and the void/return receipts to decide. **Do not guess**: if you are not sure, ask the cashiers first. A refund can be tied only once, and never to a drawer that is already reconciled. The banner reads *"Refund tied. The drawer figures below now include it."*
 5. Tap **Reconcile**. You are signed in, so the system records **you** as the reconciler (your employee record). There is no name box any more (finding F-01-5). The server builds the figure again at the moment you click, and refuses if anything changed. Expected and over/short are worked out as in the table. The banner shows *"Drawer reconciled · Balanced"*, *"Over by $X"* or *"Short by $X"*, plus the books outcome. Reconcile posts the drawer's cash and over/short to the books, and that posting cannot be undone from this screen.
    - If two managers click at once, only the first counts. The second sees *"This drawer was reconciled by someone else a moment ago. Nothing was changed. Reload the page."* (finding F-01-2, reconcile part).
-6. **$5 rule (owner decision D7, interim paper step):** if the result is **over or short by more than $5.00**, the manager fills in the **Over/short reason form (form 8.5)** with the cashier: who, when, how much, and the **required** reason. Give it to the owner. The admin-only warnings screen the owner asked for is not built yet (finding F-01-11).
-   - **$5.00 or less:** write the amount on the close slip (form 8.2). **No reason is required** (owner decision **D21**: *"Q-03-1- only over $5"*). A note is welcome if the cause is known, but it is optional (gap G-03).
+6. **$5 rule (owner decisions D7 and D21; built in Phase 2.3, gap G-03, finding F-01-11 FIXED).** Above the **Reconcile** button there is a reason box (`registers/page.tsx` L703–728):
+   - **More than $5.00 over or short:** the box turns gold and reads *"Warning: more than $5.00 over. Reason (required)"* (or *short*). Talk to the cashier and the second counter, then write **why** it is over or short. The server works out the over/short again when you click and refuses a blank reason: *"This drawer is short by $X, more than $5.00. Write the reason (why it is over or short) and try again. Nothing was saved."* (`over-short-warning-core.ts` `checkOverShortReason` L54; called in `store.ts` `reconcileDrawer` L360). The refusal is written to the Security Log (`drawer.reconcile_refused`).
+   - **$5.00 or less:** the box reads *"Reason for over / short (optional at $5.00 or less)"*. **No reason is required** (owner decision **D21**: *"Q-03-1- only over $5"*). A note is welcome if the cause is known.
+   - After a warning reconcile the banner adds *"Warning: more than $5.00 over or short. The reason is saved and the owner sees it on Over / short warnings."* The reason is saved on the drawer (migration 0315), printed on its **Till summary** as **Over/short reason**, and the Security Log gets `drawer.over_short_warning`. **Warnings never block** (D7: *"Just warnings for now"*).
+   - **Over / short warnings** (`/admin/registers/over-short`) is the owner's screen: **owner and admin only** (permission `registers.warnings`), reached from the **Over / short warnings** button on Register Activity and from the menu (Employee → **Over / Short Warnings**). It lists every drawer and master till count more than $5.00 off: when, what (register or master till and window), who counted (closer and second counter), who signed it off, how much, and the reason. Ranges 7 / 30 / 90 / 365 days; printable. Managers write the reasons but do not see this list.
+   - Paper form 8.5 is no longer needed when migration 0315 is applied. Before it is applied the reconcile still lands, the reason is kept in the Security Log only, and the banner says so; then fill in form 8.5 as before.
 
 > ⚠ **Known problem, "Verified by" (findings F-00-4, F-00-3).** This box is typed text, but the database column only accepts an employee ID. **Typing a name is expected to fail with a database error.** Until this is fixed: **leave the box blank** and write your name and the time on the close slip. The back-office audit log still records which login pressed the button. (Reconcile no longer has a name box: Phase 2.1 records the signed-in manager, F-01-5 reconcile part.)
 
@@ -840,6 +844,7 @@ Since Phase 2.1 (G-05, findings F-01-4 and F-01-3) **you do not type cash sales*
 - **Cash drawer reports** (`/admin/registers/history`): closed, reconciled and verified sessions, each with a printable summary. After a Phase 2.1 reconcile the summary also prints **Cash sales on this drawer (system figure)** and **Refunds paid from this drawer**. Drawers reconciled before Phase 2.1 were typed, so those rows are left off.
 - **End of day** (`/admin/registers/eod`): the whole-store day, marked *"Preliminary — a drawer is still open"* or *"Final — all drawers closed"*. Printable.
 - **Store safe** (`/admin/registers/safe`): *"The $1,000 change fund behind the registers."* AM/PM counts → SOP-02.
+- **Over / short warnings** (`/admin/registers/over-short`, owner and admin only): every drawer and master till count more than $5.00 over or short, with who, when, how much and the reason (step 6 above).
 - **Register exceptions** (`/admin/registers/exceptions`) → 4.32.
 - **Rounding**, **Scanning** (policy, `settings.manage`) and **Devices** (`staffing.manage`) → SOP-17.
 
@@ -1075,7 +1080,7 @@ Do **not** 86 an item just because you cannot find it. Ask someone first, becaus
 | Internet down | Keep ringing sales on an open drawer. No PIN steps are possible. | Manager. If the outage lasts, stop sales that need approval. |
 | Printer down | **Browser print** for receipts; **No Sale** cannot open the drawer without a printer (the printer kicks the drawer). Use the drawer key if the store has one. | Manager / SOP-17 |
 | Rejected events or exceptions on the iPad | Do not re-ring. Do not reset the iPad. | Manager → owner |
-| Drawer over or short by more than $5 at reconcile | Form 8.5, the same day | Owner (D7) |
+| Drawer over or short by more than $5 at reconcile | Write the required reason in the Reconcile card (4.30 step 6); it lands on the owner's **Over / short warnings** screen. Form 8.5 only if migration 0315 is not applied | Owner (D7) |
 | Two drawers open on one register (F-01-1) | Stop. Do not ring more sales. | Manager → owner |
 | Robbery | Comply. Do not resist. Call 911 when safe. Do not touch anything. | Owner (who handles any required reporting; security SOP) |
 | Adverse reaction reported at a return | Process the return as **Adverse reaction** | Manager → product-complaint process |
@@ -1173,6 +1178,8 @@ Part of form 8.2. Any second employee counts alone, without seeing the first cou
 
 ### 8.5 Over/short reason form (D7: more than $5.00)
 
+> **Since Phase 2.3 (G-03) the reason is written in the app** at reconcile (4.30 step 6) and the owner reads it on **Over / short warnings**. Use this paper form only when migration 0315 is not applied (the banner says the reason is in the Security Log only).
+
 ```
 GREENWAY — OVER/SHORT REASON           (required when |over/short| > $5.00)
 Date of drawer: ____/____/______   Register: __________
@@ -1192,7 +1199,7 @@ Owner reviewed: ____________________   Date: ________
 - [ ] Every drawer closed blind, with a signed close slip (8.2)
 - [ ] Z report printed (REPORTS → manager PIN)
 - [ ] Register Activity: every closed drawer **reconciled** (cash sales worked out on paper, net of this drawer's voids/returns, never blank)
-- [ ] Any over/short > $5 → form 8.5
+- [ ] Any over/short > $5 → reason written in the Reconcile card (form 8.5 only before migration 0315)
 - [ ] **Register exceptions** reviewed; **Rejected events on registers** is empty
 - [ ] Swap log (8.3) matches the register's swap records
 - [ ] Cash and deposit handled per SOP-02 / SOP-03
@@ -1271,7 +1278,7 @@ Owner reviewed: ____________________   Date: ________
 | 4.20 pickup | `RegisterShell.tsx` (PickupQueueModal ≈L4350), `src/app/api/pos/pickup/route.ts`, `src/lib/pos/pickup-progress-core.ts`, `pickup-detail-core.ts` |
 | 4.21–4.24 no sale, void, return, reprint | `RegisterShell.tsx` (NoSaleModal ≈L3176, VoidSaleModal ≈L3319, ReturnsModal ≈L3574), `src/lib/pos/void-sale-core.ts`, `returns-core.ts`, `/api/pos/void`, `/api/pos/returns`, `/api/pos/reprint` |
 | 4.28 X/Z | `RegisterShell.tsx` (DayReportModal ≈L5149), `src/lib/pos/day-report-core.ts`, `/api/pos/day-report` |
-| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L525), `actions.ts` (reconcileDrawerAction L169, assignRefundAction L269), `src/lib/registers/store.ts` (reconcileDrawer L314), `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
+| 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L548), `actions.ts` (reconcileDrawerAction L170, assignRefundAction L305), `src/lib/registers/store.ts` (reconcileDrawer L326), `over-short-warning-core.ts` (checkOverShortReason L54), `over-short/page.tsx`, `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
 | 4.32 sync/exceptions | `src/lib/pos/sync-store.ts`, `sync-core.ts`, `src/lib/orders/completion-gate.ts`, `src/app/admin/registers/exceptions/page.tsx` |
 | 4.33 86 | `SaleFlow.tsx` (ProductInfoModal ≈L4274), `src/lib/pos/stock-flag-core.ts`, `src/components/admin/inventory/RegisterSellabilityBanner.tsx` |
 
@@ -1281,7 +1288,7 @@ Owner reviewed: ____________________   Date: ________
 |---|---|---|---|
 | ~~D2: second-person count at close (any second employee)~~ | **BUILT, Phase 2.2**: the register (and the back-office close) takes a second employee's PIN and own count (4.27). A difference is a warning | Paper slip 8.2/8.4 only if migration 0314 is not applied | G-01 BUILT · F-01-9 FIXED, F-00-5 close part FIXED |
 | D3: log big bills master till → little safe, and which small bills/coin came back | Swap records value only | Swap log 8.3 and Notes | G-02 · F-01-8, F-00-7 |
-| D7: $5 over/short warning screen (admin only: who, when, how much, required reason) | Not built | Form 8.5 to the owner | G-03 · F-01-11 |
+| ~~D7: $5 over/short warning screen (admin only: who, when, how much, required reason)~~ | **BUILT, Phase 2.3**: reason required over $5.00 at reconcile (optional at $5.00 or less, D21); **Over / short warnings** screen, owner and admin only, drawers and master till (4.30 step 6) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-01-11 FIXED |
 | Deposit bag (seal → morning verify → safe → bank) | Tables exist, no screen | SOP-03 paper | G-04 · F-00-6 |
 | Per-shift / per-cashier report | **Reconcile figure is per drawer (BUILT, Phase 2.1).** The printed X/Z day report is still per register | Close slip per drawer; the till summary prints the drawer's figure | G-05 (drawer figure BUILT; printable per-cashier shift report open) · F-01-10 |
 | Morning verify with recount and verifier identity | No denominations; name box broken | Paper slip is the record | F-00-3 |
@@ -1295,6 +1302,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.7 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT, F-01-11 FIXED: the Reconcile card has a reason box; more than $5.00 over or short needs a reason, checked by the server against its own figure (blank → refused, audited); $5.00 or less optional; the reason is saved on the drawer (migration 0315) and printed on the till summary; every warning is audited; new owner/admin screen **Over / short warnings** (drawers and master till; who, when, how much, reason), linked from Register Activity and the menu. Warnings never block. §4.30 step 6 and related pages, §6 row, form 8.5 note, checklist 8.6 and Appendix B updated. | Fix program |
 | 1.6 draft | Fix phase | Phase 2.2 (owner message 4: *"then second-person count"*; owner D2: *"Q2- close only, and it can be any second employee"*). G-01 BUILT: a close needs a second employee's PIN and their own blind count (register two-step close and the back-office close form); the server refuses the closer's own PIN; both counts are stored (migration 0314); a difference is a warning only; over/short still uses the closer's count. Close is now compare-and-swap (F-01-2, close part) and count-row save errors are recorded, not ignored. §4.27 steps 5, 8–13 and back-office close, §4.29 step 3, §4.30 card rows and step 1, §5.8 messages, form 8.4 note, Appendix A and B updated. | Fix program |
 | 1.5 draft | Fix phase | Phase 2.1 (owner message 4: *"per-drawer figure"*). G-05 drawer figure BUILT: reconcile shows and uses the system figure per drawer (no typed cash sales, F-01-4 / F-00-13 FIXED; real expected before reconcile, F-01-3 FIXED); refunds say which drawer or the safe paid (migration 0313); untied refunds block reconcile until a manager ties them; reconcile is compare-and-swap (F-01-2 reconcile part) and records the signed-in manager (F-01-5 reconcile part). §4.22, §4.23, §4.27 step 9, §4.28, §4.30, Appendix A and B updated. | Fix program |
 | 1.4 draft | Fix phase | Phase 1.4 (owner D76). G-44 BUILT (SOP-15 v1.4): a **Destroy** return's units are held on the lot, counted on hand but never sellable, and the return is saved in one step. §4.23 step 6 updated. | Fix program |

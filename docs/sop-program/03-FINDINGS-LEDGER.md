@@ -20,7 +20,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 ## SOP-00 recon findings (found while walking the tree for the roadmap)
 
 ### F-00-1 · CONFIRMED · DOC · S2 — The concierge tells staff the POS "is PLANNED, not built yet"
-- **Pin:** `src/lib/admin/concierge-kb.ts` L484–497 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
+- **Pin:** `src/lib/admin/concierge-kb.ts` L486–499 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
 - **Reality:** the register exists. `src/app/(site)/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
 - **Effect:** an employee who asks the concierge "how do I close my till?" is told the register does not exist. This is the single biggest knowledge gap in the concierge.
 
@@ -30,13 +30,13 @@ Audited at commit `54445a68` (main, 2026-10-27).
 - **Effect:** the help content already exists, but the global helper cannot see it. See `04-CONCIERGE-COVERAGE-LEDGER.md`.
 
 ### F-00-3 · CONFIRMED · BUG · S2 — Morning "Verify till" records no recount and no verifier identity
-- **Pin:** `src/app/admin/registers/page.tsx` L254–266. The form posts only `session_id`, a free-text `verified_by` ("Manager name") and an `agrees` checkbox. It has **no denomination inputs.**
-- `src/app/admin/registers/actions.ts` L243: `parseDenoms(...)` therefore reads all zeros, so `verifyTill()` (`src/lib/registers/store.ts` L381–382) stores `verified_count_minor = 0` and `variance_minor = 0 − closing_count`. The variance always equals the negative of the close, even when "Count agrees" is ticked.
+- **Pin:** `src/app/admin/registers/page.tsx` L264–276. The form posts only `session_id`, a free-text `verified_by` ("Manager name") and an `agrees` checkbox. It has **no denomination inputs.**
+- `src/app/admin/registers/actions.ts` L279: `parseDenoms(...)` therefore reads all zeros, so `verifyTill()` (`src/lib/registers/store.ts` L417–418) stores `verified_count_minor = 0` and `variance_minor = 0 − closing_count`. The variance always equals the negative of the close, even when "Count agrees" is ticked.
 - `verified_by` is `uuid references employees(id)` (`supabase/migrations/0038_registers_drawers.sql` L152), but it receives typed text such as "Mike". **Suspected** outcome: the insert fails (Postgres invalid-uuid error) and the action redirects with an error, so the morning verify may never succeed at all. Must be proven in SOP-01 against the live schema.
 - **Owner requirement affected:** *"the morning employee recounts and verifies the amount."*
 
 ### F-00-4 · CONFIRMED · BUG · S2 — Same free-text-into-uuid pattern on Reconcile
-- **Pin:** `src/app/admin/registers/page.tsx` L238–241 `name="reconciled_by" placeholder="Manager name"` → `store.ts` L285 `reconciled_by: opts.reconciledBy` → column `uuid references employees(id)` (`0038` L84).
+- **Pin:** `src/app/admin/registers/page.tsx` L248–251 `name="reconciled_by" placeholder="Manager name"` → `store.ts` L285 `reconciled_by: opts.reconciledBy` → column `uuid references employees(id)` (`0038` L84).
 - **Suspected** effect: reconcile fails whenever a name is typed, and "succeeds" only when the box is left blank, which records no reconciler. The safe count does this correctly with a `<Select>` of employees (`registers/safe/page.tsx` L165), which proves the right pattern already exists in the codebase.
 
 ### F-00-5 · CONFIRMED · GAP · S1 — No second-person sign-off on a till count
@@ -82,7 +82,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 - To verify in SOP-01 (does the register UI debounce? does `/api/pos/till` carry an idempotency key?).
 
 ### F-00-13 · ~~SUSPECTED~~ CONFIRMED in SOP-01 (F-01-4, raised to S1) · HARDEN · S2 — Reconcile "cash sales" is a hand-typed number
-- **Pin:** `registers/page.tsx` L229–236 has a manager-typed `cash_sales` input. `actions.ts` L26–30 has a local `dollarsToMinor` that strips everything except digits, "." and "-", returns **0** on bad input, and accepts negatives. The pure `till-core.ts dollarsToMinor` already returns `null` on invalid input.
+- **Pin:** `registers/page.tsx` L239–246 has a manager-typed `cash_sales` input. `actions.ts` L26–30 has a local `dollarsToMinor` that strips everything except digits, "." and "-", returns **0** on bad input, and accepts negatives. The pure `till-core.ts dollarsToMinor` already returns `null` on invalid input.
 - Expected-close and over/short therefore depend on a manager typing the right figure, even though the register records every sale (`pos_sale_events`, `day-report-core.ts`). A blank field = $0 cash sales = a large false "over".
 - To verify in SOP-01: is there a reason the system figure is not prefilled (for example, sales across sessions on a shared register)?
 - **Status: FIXED (Phase 2.1, G-05).** The `cash_sales` input is gone. The figure is built by the server from the drawer's own processed cash sales, the refunds tied to it and its drops (`drawer-figure-core.ts` `buildDrawerFigure` L129, loaded by `drawer-figure-store.ts` `loadDrawerFigure` L218) at the moment of the click (`registers/actions.ts` `reconcileDrawerAction` L169). Answer to the open question: sales across sessions on a shared register are split exactly by the `drawerSessionId` each sale payload carries. SOP-01 v1.5.
@@ -118,18 +118,18 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Status: PARTLY FIXED (Phase 2.1).** `reconcileDrawer` (`store.ts` L314) now updates only `.eq("status", "closed")` and reports *"This drawer was reconciled by someone else a moment ago. Nothing was changed. Reload the page."* when no row changed, so a second reconcile can no longer overwrite the first figure. ~~**Still OPEN:** close and verify have no compare-and-swap, and the `drawer_counts` insert errors are still ignored.~~ **Close part FIXED (Phase 2.2, #1545):** `closeDrawerBlind` updates only `.eq("status", "open")` and reports *"This drawer was closed by someone else a moment ago. Nothing was changed."* when no row changed; an error on the close / second `drawer_counts` rows is now returned and written to the audit row (`countRowWarnings`). **Still OPEN:** verify has no compare-and-swap, and the open and verify `drawer_counts` insert errors are still ignored.
 
 ### F-01-3 · CONFIRMED · BUG · S3 — Reconcile card shows "expected $0.00" before reconcile
-- **Pin:** `src/app/admin/registers/page.tsx` L214–215 prints `formatCents(a.expectedCloseMinor)`. `expected_close_minor` is written **only** by `reconcileDrawer` (`store.ts` L282). `formatCents(null)` returns `$0.00` (`src/lib/registers/cash.ts` L91–92).
+- **Pin:** `src/app/admin/registers/page.tsx` L224–225 prints `formatCents(a.expectedCloseMinor)`. `expected_close_minor` is written **only** by `reconcileDrawer` (`store.ts` L282). `formatCents(null)` returns `$0.00` (`src/lib/registers/cash.ts` L91–92).
 - **Effect:** every Reconcile card reads "counted $X vs expected $0.00". This is misleading, and it undercuts the blind-count design, because a manager may think the drawer is massively over.
 - **Status: FIXED (Phase 2.1, G-05).** The card no longer prints `expected_close_minor` before reconcile. It shows the computed **= Expected in drawer** from the system figure (`registers/page.tsx` ReconcileCard L525, L580), shown only to `inventory.manage`. The blind count stays blind on the register.
 
 ### F-01-4 · CONFIRMED · HARDEN · S1 — Reconcile cash sales is hand-typed, with no per-drawer refunds and no per-drawer sales figure
-- **Pin:** `registers/page.tsx` L229–236 (`cash_sales` input, `min="0"`), `actions.ts` L115 (local `dollarsToMinor`, blank → 0). The day report (`src/lib/pos/day-report-core.ts`; `/api/pos/day-report` filters `register_id`, L104/L119) is **per register per business day**, not per drawer session. Voids and returns carry no register attribution (*"Voids/returns are not tied to one register — count them against the drawer that paid."*).
+- **Pin:** `registers/page.tsx` L239–246 (`cash_sales` input, `min="0"`), `actions.ts` L115 (local `dollarsToMinor`, blank → 0). The day report (`src/lib/pos/day-report-core.ts`; `/api/pos/day-report` filters `register_id`, L104/L119) is **per register per business day**, not per drawer session. Voids and returns carry no register attribution (*"Voids/returns are not tied to one register — count them against the drawer that paid."*).
 - **Effect:** expected close and over/short depend entirely on a manager's arithmetic. A register with two drawers in one day has no system figure for either drawer. A blank field shows a large false "over". Over/short then posts to the books (`postDrawerCloseForSession`).
 - **Interim:** SOP-01 §4.27 step 9 (X report at each mid-day close) and §4.30 (paper formula). Confirms and extends F-00-13.
 - **Status: FIXED (Phase 2.1, G-05; owner message 4: *"per-drawer figure"*).** No typed cash sales. Per drawer: processed **cash** sales carrying the drawer's id, + rounding, employee tab and any other tender left out; minus refunds **tied to the drawer** (migration 0313 adds `customer_returns.refund_paid_from` / `refund_drawer_session_id`; a void's audit entry carries `drawerSessionId`, `void-store.ts`; the register ties voids and returns to its open drawer, `api/pos/void/route.ts` L101, `api/pos/returns/route.ts` L169; the Returns desk requires **Cash paid from**); minus drops. Anything unknown blocks reconcile: a pending sale, a refund of the day tied to nothing (a manager ties it with **Tie refund**, `assignRefundAction` L269, compare-and-set), an incomplete read, no opening count. Stored on the session (`cash_sales_minor`, `refunds_paid_minor`) and in the `drawer.reconciled` audit. SOP-01 v1.5 §4.27 step 9 and §4.30 paper formula retired.
 
 ### F-01-5 · CONFIRMED (code path) · BUG · S2 — Free-text names posted into uuid columns at reconcile and verify
-- **Pin:** `registers/page.tsx` L240 `reconciled_by` / L260 `verified_by` (`placeholder="Manager name"`) → `actions.ts` L116 / L150 → `store.ts` L285 / L316 → columns `uuid references public.employees(id)` (`0038` L84, L152).
+- **Pin:** `registers/page.tsx` L250 `reconciled_by` / L260 `verified_by` (`placeholder="Manager name"`) → `actions.ts` L116 / L150 → `store.ts` L285 / L316 → columns `uuid references public.employees(id)` (`0038` L84, L152).
 - Postgres rejects non-uuid text for a uuid column (`22P02 invalid input syntax for type uuid`). The SOP therefore instructs "leave blank, sign the paper slip". Proof against production is still owed (no live DB access in this slice). Also, `reconcileDrawerAction` audits `session.userId` (the back-office login), so identity is captured in the audit log even when the column is blank.
 - Same root as F-00-3/F-00-4. Recorded here because SOP-01 now carries a workaround that depends on it.
 - **Status: PARTLY FIXED (Phase 2.1).** Reconcile has no name box: `reconciled_by` is the signed-in manager's own `employees.id` (looked up by `staff_id`, `actions.ts` `employeeIdForStaff` L38; blank when no single linked employee). **Still OPEN:** `verified_by` is still free text (F-00-3 / F-00-4).
@@ -155,10 +155,11 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `/api/pos/day-report` is scoped by `auth.device.register_id` and business day (L58, L104, L119). Cart adjustments are tracked per employee (`pos_cart_adjustments`), but there is no printable per-cashier shift summary of sales, voids, no-sales, discounts given or adjustments.
 - Owner SOP-00 request: shift reports *"exported and printed"*. Ties to F-00-8.
 
-### F-01-11 · CONFIRMED · GAP · S2 — No $5 over/short warning screen or required reason (owner D7)
+### F-01-11 · CONFIRMED · GAP · S2 — No $5 over/short warning screen or required reason (owner D7) · **FIXED (Phase 2.3)**
 - **Pin:** `reconcileDrawerAction` (`actions.ts` L109–141) redirects with an `overShortLabel` banner only. There is no threshold, no reason field and no admin list. `grep -ri "over_short_reason\|overShortReason" src supabase` → 0 hits.
 - Owner D7: *"$5. It should be an admin only screen placed in the most logical place… Just warnings for now. Who, when, how much, their reason for why it's over/ under (should be required to be input for over/ under)."*
 - **Interim:** SOP-01 form 8.5. Suggested home (for the build discussion, not decided): a **Register Activity → Over/short warnings** section, or a tab gated `settings.manage`/owner-admin.
+- **Status: FIXED (Phase 2.3, G-03, #P23).** Threshold `OVER_SHORT_WARN_MINOR = 500` (`over-short-warning-core.ts` L23; more than $5.00 is a warning, `isOverShortWarning` L29). `reconcileDrawer` checks the reason against the server's own over/short (`store.ts` L360, `checkOverShortReason` core L54): blank over $5 → refused, nothing saved, audited `drawer.reconcile_refused` (`actions.ts` L206); $5.00 or less the reason is optional (D21). The reason is saved on `drawer_sessions.over_short_reason` (migration 0315), audited on `drawer.reconciled` and a separate `drawer.over_short_warning` (`actions.ts` L258), and shown on the till summary (`history/[id]/page.tsx` L146). New owner/admin screen **Over / short warnings** (`/admin/registers/over-short`, `requirePermission("registers.warnings")` L59; permission `registers.warnings` = owner, admin, `roles.ts` L287) lists who, when, how much and the reason for drawers and the master till. Linked from Register Activity and the menu (`admin-nav-data.ts` L114). Warnings never block. SOP-01 v1.7 §4.30 step 6.
 
 ### F-01-12 · CONFIRMED · HARDEN · S2 — Verify is allowed on a drawer that was never reconciled
 - **Pin:** `store.ts` `verifyTill` L307 accepts `status === "closed"` **or** `"reconciled"`, then sets `status = "verified"` (L332). `reconcileDrawer` L268 requires `status === "closed"`. A drawer verified straight from "closed" can therefore never be reconciled. Its over/short is never computed, and `postDrawerCloseForSession` never runs for it.
@@ -178,7 +179,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `till-core.ts` L218 (`witnessPin` optional), UI *"Witness PIN (optional, second person)"* (`RegisterShell.tsx` L5826). Drops are the highest-value cash movement during a shift. The SOP sets "always get a witness when someone else is on the floor" as store practice.
 
 ### F-01-16 · CONFIRMED · DOC · S2 — The concierge still says the POS is planned (re-confirmed)
-- `src/lib/admin/concierge-kb.ts` L487 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
+- `src/lib/admin/concierge-kb.ts` L489 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
 
 ---
 
@@ -190,7 +191,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 
 ### F-02-1 · CONFIRMED · BUG · S1 — Cash drops are never posted; 10110 Tills keeps every dropped dollar for good
 - **Pin:** `register-cash-journal-core.ts` `buildTillCloseJournal` L235–345. With `floatStaysInDrawer: true` (passed by `drawer-posting-service.ts` L190–193), `removedMinor = counted − float` (L275–277). The till is relieved by `removedMinor − overShort` (L307–310). Drops are used only to work out *expected* (L270). They are never moved out of 10110 or into 10100.
-- **No other poster:** `grep -rn drawer_drops src/lib/accounting` returns only `factory-reset-core.ts` L426. `recordDrop` (`src/lib/registers/store.ts` L182–201) inserts a row and posts nothing. `ledger-census-data.ts` has no drop event (`grep -i drop` → 0 hits).
+- **No other poster:** `grep -rn drawer_drops src/lib/accounting` returns only `factory-reset-core.ts` L426. `recordDrop` (`src/lib/registers/store.ts` L189–208) inserts a row and posts nothing. `ledger-census-data.ts` has no drop event (`grep -i drop` → 0 hits).
 - **Proof by running the real builder** (`sop02/drops.ts`, run with tsx at `0055f06c`): $167.50 float, $500.00 cash sales, a $200.00 drop, counted $467.50 → lines `10100 +30000 "Cash from Register 1 to safe"`, `10110 −30000`. Each sale debits 10110 (`sale-journal-core.ts` L106, L415–417), so 10110 got +$500.00 and lost $300.00. **$200.00 stays in 10110 with no entry**, and 10100 Vault is $200.00 low. The builder self-test (L860–872) checks only "not short" and "balances", not the 10110 net. The tests repeat the gap.
 - **Effect:** 10110 "Cash on Hand — Tills" goes up by the day's total drops, every day, forever. That is the same shape as the D-39 "drawers hold more money every day" problem the close posting was built to fix. 10100 Vault and later 10400 Undeposited Funds (bag seal) come up short by the same amount. The bank match (D-77 notes) works from a pool that never had the drop cash in it.
 - **SOP impact:** none for staff. Recorded in SOP-02 §4.12 for the owner and bookkeeper.
@@ -212,25 +213,27 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - **Interim:** SOP-02 form 8.1 mix columns. Gap **G-08**.
 
 ### F-02-4 · CONFIRMED · HARDEN · S2 — Who counted is optional and unverified; the audit row is not linked to the count
-- **Pin:** **Counted by** defaults to **— none —** (`safe/page.tsx` L165–166). The action sends `counted_by || null` (`safe/actions.ts` L31) and `recordSafeCount` inserts it as given (`safe-store.ts` L82). No PIN, no second counter. Any manager-level login can name any active employee. The audit `safe.counted` stores the login, window and variance, with `entityId: null` (`safe/actions.ts` L38–45), so the audit row cannot be tied to the `safe_counts` row except by time.
+- **Pin:** **Counted by** defaults to **— none —** (`safe/page.tsx` L165–166). The action sends `counted_by || null` (`safe/actions.ts` L33) and `recordSafeCount` inserts it as given (`safe-store.ts` L101). No PIN, no second counter. Any manager-level login can name any active employee. The audit `safe.counted` stores the login, window and variance, with `entityId: null` (`safe/actions.ts` L63–78), so the audit row cannot be tied to the `safe_counts` row except by time.
 - **Contrast:** a register swap checks a manager/lead PIN on the server (`till/route.ts` L193–218), and a drop can take a witness PIN. The master till, which the owner calls *"the one to watch"* (books-98 L64), has the weakest attribution of any cash movement.
 - **Effect:** with an open count (by design, `safe-core.ts` L7–10), a named, verified counter is the main control. Today it is optional.
 - **Interim:** SOP-02 §4.5 step 10. Always pick the counter; note who entered it.
+- **Status: PARTLY FIXED (Phase 2.3, #P23).** **Counted by** is now required: the page has no "— none —" option (`safe/page.tsx` L175–187), the action refuses a blank or non-active employee (`safe/actions.ts` L41, L45) and `recordSafeCount` refuses a blank counter (`safe-store.ts` L91). The `safe.counted` audit now carries `entityId` = the `safe_counts` row id (`safe/actions.ts` L69) and the counter. **Still open:** no PIN check of the counter (a manager login can still name any active employee). SOP-02 v1.4.
 
 ### F-02-5 · CONFIRMED · HARDEN · S2 — Several AM/PM counts per day are allowed; the EOD shows only the newest; the window defaults to AM; no double-submit guard
-- **Pin:** no unique `(business_day, count_window)`. Only plain indexes (`0135` L65–66). `safeStatus` uses `.some(...)` (`safe-store.ts` L178–179). `eod-core.ts` L182–183 takes `find(...)` on newest-first rows, so it shows the **latest** AM and PM. The select starts at `defaultValue="am"` (`safe/page.tsx` L157) at every time of day. The submit button has no pending/disabled state, and a server action re-post saves a second row.
+- **Pin:** no unique `(business_day, count_window)`. Only plain indexes (`0135` L65–66). `safeStatus` uses `.some(...)` (`safe-store.ts` L216–217). `eod-core.ts` L182–183 takes `find(...)` on newest-first rows, so it shows the **latest** AM and PM. The select starts at `defaultValue="am"` (`safe/page.tsx` L169) at every time of day. The submit button has no pending/disabled state, and a server action re-post saves a second row.
 - **Effect:** (a) a PM count saved by mistake as AM leaves today's PM **Not yet**, while the AM card already said Done; (b) a bad count can be pushed off the EOD report by saving another one; (c) a double tap saves two counts. All earlier counts stay in **Recent counts**, so nothing is lost, but the official daily record can be chosen after the fact.
 - **Interim:** SOP-02 §4.6 (change the window), §4.17 (corrections as Extra, never overwrite).
 
 ### F-02-6 · CONFIRMED · GAP · S2 — No variance threshold, no reason, and no books posting for master till variances
-- **Pin:** `safe-core.ts` has no threshold. Notes are optional (L79–82). `recordSafeCount` posts no journal (`safe-store.ts` L62–93). `grep -rn "safe_counts" src/lib/accounting` → only `factory-reset-core.ts`. Drawer over/short posts to 50920 at reconcile (`buildTillCloseJournal` L313–326); a master till short posts nothing, so 10100 Vault keeps the old figure.
+- **Pin:** `safe-core.ts` has no threshold. Notes are optional (L79–82). `recordSafeCount` posts no journal (`safe-store.ts` L71–131). `grep -rn "safe_counts" src/lib/accounting` → only `factory-reset-core.ts`. Drawer over/short posts to 50920 at reconcile (`buildTillCloseJournal` L313–326); a master till short posts nothing, so 10100 Vault keeps the old figure.
 - **Owner D7** set $5 + a required reason for drawer over/short. Whether it covers the master till is **Q-02-3**.
 - **Update (D16, slice SOP-03):** the owner confirmed D7 **applies to the master till as well**. This finding is now a confirmed owner requirement (gap G-03).
 - **Interim:** SOP-02 §4.8 (reason for any variance; form 8.5 over $5). Extends gap **G-03**.
+- **Status: PARTLY FIXED (Phase 2.3, G-03, #P23).** Threshold and reason **FIXED**: a master till count more than $5.00 off the $1,000.00 target needs a reason (`safe-store.ts` L93, refused and audited `safe.count_refused`, `safe/actions.ts` L54); the reason is saved on `safe_counts.variance_reason` (migration 0315), audited `safe.over_short_warning` (L84) and listed on the Over / short warnings screen and in Recent counts. **Still open:** no books posting for a master till variance (10100 keeps the old figure); that is Phase 2.4/2.5 territory. SOP-02 v1.4 §4.8.
 
 ### F-02-7 · CONFIRMED · DOC/UX · S2 — One "safe" in code, three places in the store; the page's help says to count drops with the change fund
 - **Owner:** *"three tills, one master till, and a store safe"* (quoted in `safe-bag-core.ts` L17), plus a **little safe** (original request; D3).
-- **Code:** one "safe" = *"the $1,000 master change fund"* (`safe-core.ts` L1–5); `VAULT_ACCOUNT` 10100 = *"The safe / master till"* (`register-cash-journal-core.ts` L70); close takings also post *"to safe"* into the same 10100 (L302). The page is titled **Store safe** (`safe/page.tsx` L75).
+- **Code:** one "safe" = *"the $1,000 master change fund"* (`safe-core.ts` L1–5); `VAULT_ACCOUNT` 10100 = *"The safe / master till"* (`register-cash-journal-core.ts` L70); close takings also post *"to safe"* into the same 10100 (L302). The page is titled **Store safe** (`safe/page.tsx` L76).
 - **Help and placeholder pin:** HelpPanel L97–100: *"Cash drops … appear on the drawer session, not here. If the safe drifts off target, drops waiting to be banked are the usual reason — note it and bank the overage."* Notes placeholder L177: *"e.g. two drops waiting to be banked"*. Both tell a counter to accept drop cash as master till "over", which is the opposite of the owner's three-place model.
 - **Effect:** confused counts (false Over), and a books account (10100) that mixes the change fund and the takings, so the PM count can never be checked against 10100.
 - **Interim:** SOP-02 §1 terms, §4.3 warning, §4.12.
@@ -240,12 +243,12 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - **Fix in the SOP program:** SOP-02 splits them into form 8.2 (master till ↔ little safe) and form 8.3 (register ↔ master till). SOP-01 is to point to SOP-02 at its next revision. Not edited in this slice (one SOP per slice).
 
 ### F-02-9 · CONFIRMED · DOC · S3 — Stale code comments about posting and floats
-- `register-cash-journal-core.ts` L50–52: *"nothing calls `submitJournal` with them yet: closing a shift still does not post. That is D-39"*. That is stale: `reconcileDrawerAction` → `postDrawerCloseForSession` → `submitJournal` (`src/app/admin/registers/actions.ts` L202; `drawer-posting-service.ts` L218; census `till_close_to_safe` reachable = PRESENT, `ledger-census-data.ts` L1471–1478). The same stale claim is in `docs/MICHAEL-books-93-register-cash.md` L58 (*"Nothing posts yet"*). That is a dated memo, so it stays as history.
+- `register-cash-journal-core.ts` L50–52: *"nothing calls `submitJournal` with them yet: closing a shift still does not post. That is D-39"*. That is stale: `reconcileDrawerAction` → `postDrawerCloseForSession` → `submitJournal` (`src/app/admin/registers/actions.ts` L218; `drawer-posting-service.ts` L218; census `till_close_to_safe` reachable = PRESENT, `ledger-census-data.ts` L1471–1478). The same stale claim is in `docs/MICHAEL-books-93-register-cash.md` L58 (*"Nothing posts yet"*). That is a dated memo, so it stays as history.
 - `drawer-posting-service.ts` L190–191 says the float is *"16750"* for every register (see F-02-2).
 - `docs/MICHAEL-books-93` L26 says the close debits *10400*, which D-77 (books-98) changed to 10100. That is history; the code is right.
 
 ### F-02-10 · CONFIRMED · UX · S3 — The Safe button is shown to staff logins, who are then denied
-- **Pin:** `registers/page.tsx` L120–122 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L90). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L184). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
+- **Pin:** `registers/page.tsx` L125–127 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L91). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L184). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
 
 - **Update (D15, slice SOP-03):** the owner wants **any employee** to count *and record* the master count. So staff being refused the safe page is now against an owner decision, not just a UX issue. Gap **G-13**.
 
@@ -259,7 +262,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - See `04-CONCIERGE-COVERAGE-LEDGER.md` SOP-02 slice log.
 
 ### F-02-13 · CONFIRMED · GAP · S3 — Count and swap history is capped at 30 with no date filter
-- **Pin:** `listSafeCounts(30)` and `listSwaps(30)` (`safe/page.tsx` L61–62; `safe-store.ts` L126–150). There is no paging, date picker or per-day view. At two counts a day, the page shows about 15 days of counts. Older counts exist in the database but can be reached only through Supabase. Ties to G-09 (print/export).
+- **Pin:** `listSafeCounts(30)` and `listSwaps(30)` (`safe/page.tsx` L62–63; `safe-store.ts` L164–188). There is no paging, date picker or per-day view. At two counts a day, the page shows about 15 days of counts. Older counts exist in the database but can be reached only through Supabase. Ties to G-09 (print/export).
 
 ---
 
@@ -288,7 +291,7 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 
 ### F-03-4 · CONFIRMED · DOC · S3 — SOP-01 §4.29 says the float goes back to the master till / safe (self-finding)
 - **Pin:** `docs/sop/SOP-01-register-operations.md` §4.29 (≈L749–757): *"the float for tomorrow goes back to the master till / safe"*. The code keeps the float in the drawer (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L193; `register-cash-journal-core.ts` L275). SOP-03 §4.4 (the float stays in the till) follows the code and the owner.
-- **Also stale:** the Registers page help (`src/app/admin/registers/page.tsx` L150–153) says sales shown are *"online pickup order sales … the only transaction records in this back office"*. That is out of date now that the register records in-store sales (`sale-event-core.ts` L15–33).
+- **Also stale:** the Registers page help (`src/app/admin/registers/page.tsx` L160–163) says sales shown are *"online pickup order sales … the only transaction records in this back office"*. That is out of date now that the register records in-store sales (`sale-event-core.ts` L15–33).
 - **Fix later:** correct SOP-01 §4.29 at its next revision (docs only; recorded here first per the program rule).
 - **Status (slice SOP-04):** the SOP-01 half is **FIXED IN DOCS** (SOP-01 v1.1 §4.29: the float stays in the drawer). It is a documentation correction of the program's own SOP, not a code change. The Registers page help text (`page.tsx` L117–120) is code and stays **OPEN**.
 
@@ -453,7 +456,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ### F-05a-2 · CONFIRMED · HARDEN · S1 — A recall hold (status Recalled) is placed and released with no audit row, no reason and no role limit
 - **Status: FIXED (Phase 1.1, G-22). A reason is required on every change; Recalled → other needs `inventory.recall.release` (owner, admin; D37) and a clearance reference; audit rows `inventory_lot.status_changed` / `inventory_lot.status_change_refused`; Status history on the lot page).**
-- **Pin:** **Recalled** is set only through the same blind Lifecycle status write (`actions.ts` L142–155 → `store.ts` L849–864). The register hold keys on it (`src/lib/pos/recall-hold-core.ts` L44, L53–63). Any `inventory.manage` login (owner, admin, manager; `roles.ts` L106) can set or clear it.
+- **Pin:** **Recalled** is set only through the same blind Lifecycle status write (`actions.ts` L142–155 → `store.ts` L849–864). The register hold keys on it (`src/lib/pos/recall-hold-core.ts` L44, L53–63). Any `inventory.manage` login (owner, admin, manager; `roles.ts` L107) can set or clear it.
 - **Effect:** a statutory sale stop (WAC 314-55-225) can be lifted by any manager with no record of who, when or why. Rated S1 with F-04-2 because it is a control over a regulated sale stop (license integrity).
 - **SOP impact:** §4.8, §4.10: form 8.1 for every change; only the owner releases, on written clearance. Ties to **G-22** (extends G-19).
 
@@ -499,7 +502,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ### F-05a-11 · CONFIRMED · HARDEN · **S1** (re-rated from S3 by owner decision D38) — Bulk fill lets anyone with Inventory access type a cannabis unit cost
 - **Status: FIXED (Phase 0.5, G-27).** `unit_cost_minor_units` removed from `BULK_FILLABLE_FIELDS` and added to `BULK_FORBIDDEN_FIELDS` (`bulk-fill-core.ts`); `planBulkFill`, `bulkFillLotsAction` and `applyBulkFill` all refuse it; Issues / lot page / POS-import diagnostics say "Cost missing — correct from the manifest". Guard test `tests/compliance/fix-p0-5-no-typed-cannabis-cost.test.ts` allows only `intake-store.ts`, `receipt-service.ts` and `import-service.ts` to write a lot's cost.
-- **Pin:** `bulkFillAction` is `inventory.manage` (`actions.ts` L904) and accepts `unit_cost_minor_units` (`bulk-fill-core.ts` L318–325). `roles.ts` L143–148: *"Cannabis cost entry is NOT built"*; `inventory.cost.fill` is owner + admin. The fill is blank-only, migration-lot-only and audited (`inventory_lot.bulk_filled`, `actions.ts` L975–996), which limits the risk.
+- **Pin:** `bulkFillAction` is `inventory.manage` (`actions.ts` L904) and accepts `unit_cost_minor_units` (`bulk-fill-core.ts` L318–325). `roles.ts` L144–149: *"Cannabis cost entry is NOT built"*; `inventory.cost.fill` is owner + admin. The fill is blank-only, migration-lot-only and audited (`inventory_lot.bulk_filled`, `actions.ts` L975–996), which limits the risk.
 - **Owner decision D38** (Q-05a-3): *"absolutely not. That's illegal. Cost comes from the state CCRS manifest created by the vendor."* Cannabis cost comes only from the manifest (`intake-parser.ts` L415–420) and is locked on the lot page (`lot-edit-core.ts` L38). Bulk fill is the one place it can be typed (`bulk-fill-core.ts` L54).
 - **SOP impact:** SOP-05a v1.1 §4.20: nobody uses Bulk fill → Unit cost. Fixed by **G-27** (APPROVED).
 
@@ -627,7 +630,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** §4.19 step 6. **G-32**.
 
 ### F-05b-14 · CONFIRMED · GAP · S3 — A manager can permanently Remove a merch product; the owner limited it to owner and admin (fix slice, D47)
-- **Pin:** `removeMerchAction` checks only `requirePermission("inventory.manage")` (`merch/actions.ts` L33–34), and `inventory.manage` includes manager (`roles.ts` L106).
+- **Pin:** `removeMerchAction` checks only `requirePermission("inventory.manage")` (`merch/actions.ts` L33–34), and `inventory.manage` includes manager (`roles.ts` L107).
 - **Effect:** the owner said *"Q05b-3- owner and admin."* The removal can't be undone except by republishing from Merch Studio.
 - **SOP impact:** SOP-05b v1.1 §2, §4.11, §6 (store rule). **G-30A**.
 

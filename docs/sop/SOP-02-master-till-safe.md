@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (draft for owner review; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
+| **Version** | 1.4 (draft for owner review; Phase 2.3 fix G-03: $5 reason rule on master till counts, Counted by required, owner's warnings screen; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The morning and night employees who count and balance the master till; the managers who record the counts and approve change swaps; the owner, who reviews variances |
@@ -74,7 +74,7 @@
 - Takings in the store safe, the end-of-day sheet, the morning recount and the deposit bag → **SOP-03**.
 - The shop card (supplies are bought on the card, not with master till cash) → books SOPs (later slice).
 
-**One word, two meanings.** The app calls the master till the **"Store safe"**. Its page title is **Store safe** and its subtitle is *"The change fund behind the registers — target $1,000.00, counted twice a day."* (`safe/page.tsx` L75–76). In the store, the **store safe** is also the box where drops and takings sit until the deposit (owner: *"167.50 is left in the register and the rest goes into the safe"*, quoted in `safe-bag-core.ts` L17–22). In this SOP:
+**One word, two meanings.** The app calls the master till the **"Store safe"**. Its page title is **Store safe** and its subtitle is *"The change fund behind the registers — target $1,000.00, counted twice a day."* (`safe/page.tsx` L76–77). In the store, the **store safe** is also the box where drops and takings sit until the deposit (owner: *"167.50 is left in the register and the rest goes into the safe"*, quoted in `safe-bag-core.ts` L17–22). In this SOP:
 - **master till** = the $1,000 change fund. This is what the **Store safe** page counts.
 - **store safe** = the physical safe that holds drops and takings for the deposit (SOP-03).
 - **little safe** = where spare small bills and coin are kept to rebuild the master till's mix (D3).
@@ -88,8 +88,9 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 | Task | Who | How the system checks |
 |---|---|---|
 | Physically count the master till (AM / PM) | The morning or night employee (owner: *"Either morning or night employee can balance the master till"*) | Not checked. The counting itself happens off-screen. |
-| **Enter** the count on the Store safe page | **Owner (D15): any employee.** Today the system only lets a back-office login with the **owner**, **admin** or **manager** role do it (gap G-13) | `requirePermission("inventory.manage")` (`safe/page.tsx` L47, `safe/actions.ts` L29). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). |
-| Choose who did the count (**Counted by**) | The person entering | Any **active employee** can be picked, or **— none —** (`safe/page.tsx` L163–173). There is no PIN check (finding F-02-4). |
+| **Enter** the count on the Store safe page | **Owner (D15): any employee.** Today the system only lets a back-office login with the **owner**, **admin** or **manager** role do it (gap G-13) | `requirePermission("inventory.manage")` (`safe/page.tsx` L48, `safe/actions.ts` L31). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L107). |
+| Choose who did the count (**Counted by**) | The person entering | **Required** since Phase 2.3: any **active employee** (`safe/page.tsx` L175–187); the server refuses a blank or inactive one (`safe/actions.ts` L39–46). There is still no PIN check (finding F-02-4, PIN part open). |
+| See the **Over / short warnings** screen | Owner, admin | Permission `registers.warnings` (owner, admin). Managers write reasons but do not see the list (Phase 2.3, G-03). |
 | Balance the master till with the little safe | Morning or night employee | Not in the app. Paper form 8.2 (gap G-02). |
 | Approve a register change swap | An employee whose job role is **manager** or **lead**, and not the person doing the swap | Approver PIN checked on the server (`src/app/api/pos/till/route.ts` L54, L193–218) |
 | See the end-of-day report | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45) |
@@ -97,7 +98,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 
 **Two kinds of role.** A back-office login has a *staff role* (owner, admin, manager, staff). An employee has a *job role* (sales, manager, lead, other). They are kept separate on purpose (D8). The Store safe page checks the **login's staff role**. The register swap checks the **approver's job role**.
 
-> **Staff logins see a Safe button they cannot use.** On Register Activity, the **Safe** button shows for every login that can open the page (`registers/page.tsx` L120–122). A login with the *staff* role who taps it is sent back to the admin home (`/admin?denied=1`, `src/lib/auth/session.ts` L164). This is expected today (finding F-02-10). A non-manager who counts the master till asks a manager to enter the count, and the manager picks them under **Counted by**.
+> **Staff logins see a Safe button they cannot use.** On Register Activity, the **Safe** button shows for every login that can open the page (`registers/page.tsx` L125–127). A login with the *staff* role who taps it is sent back to the admin home (`/admin?denied=1`, `src/lib/auth/session.ts` L164). This is expected today (finding F-02-10). A non-manager who counts the master till asks a manager to enter the count, and the manager picks them under **Counted by**.
 
 ---
 
@@ -178,16 +179,16 @@ A $20, $50 or $100 in the master till means a register swap brought in big bills
 
 1. Sign in to the back office with a manager-level login (§2).
 2. Go to **Register Activity** (Employee group in the menu, `/admin/registers`). Register Activity itself needs the `orders.manage` permission (`admin-nav-data.ts` L112).
-3. In the header buttons, tap **Safe** (`registers/page.tsx` L120–122).
+3. In the header buttons, tap **Safe** (`registers/page.tsx` L125–127).
 4. The page opens with the breadcrumb **Sell › Register Activity › Safe** and the title **Store safe**. **← Register Activity** takes you back.
 
 Direct address: `/admin/registers/safe`.
 
-**Help on the page:** tap **How the safe works** (HelpPanel `registers-safe`, `safe/page.tsx` L83–102). It explains the twice-daily count, that counts are open (not blind), and swaps. ⚠ Its last paragraph says *"If the safe drifts off target, drops waiting to be banked are the usual reason — note it and bank the overage."* **Do not follow that sentence at Greenway.** Drops and takings belong in the store safe, never in the master till count (§4.12, finding F-02-7).
+**Help on the page:** tap **How the safe works** (HelpPanel `registers-safe`, `safe/page.tsx` L84–109). It explains the twice-daily count, that counts are open (not blind), and swaps. ⚠ Its last paragraph says *"If the safe drifts off target, drops waiting to be banked are the usual reason — note it and bank the overage."* **Do not follow that sentence at Greenway.** Drops and takings belong in the store safe, never in the master till count (§4.12, finding F-02-7).
 
 ### 4.4 Reading the Store safe page
 
-From top to bottom (`safe/page.tsx` L106–272):
+From top to bottom (`safe/page.tsx` L113–290):
 
 **Message banner** (after a save):
 - Green: *"Safe counted — balanced on the $1,000 target."*, *"Safe counted — over the target by $X."* or *"Safe counted — short of the target by $X."* (`safe/actions.ts` L50–54).
@@ -199,18 +200,19 @@ From top to bottom (`safe/page.tsx` L106–272):
 |---|---|---|
 | **Target float** | $1,000.00, hint *"Store policy"* | Fixed in code (`SAFE_TARGET_MINOR = 100_000`, `safe-core.ts` L26). There is no setting to change it. |
 | **Last count** | Total of the newest count, plus *"Balanced / Over $X / Short $X · time"*. *"No counts yet"* if none. | The newest count of any window |
-| **Today's AM count** | **Done** / **Not yet**, hint *"Before open"* | Done if at least one AM count exists for today's Pacific business day (`safe-store.ts` L178) |
+| **Today's AM count** | **Done** / **Not yet**, hint *"Before open"* | Done if at least one AM count exists for today's Pacific business day (`safe-store.ts` L216) |
 | **Today's PM count** | **Done** / **Not yet**, hint *"Evening"* | Same, for PM (L179) |
 
 **Count the safe** form: *"Count every denomination in the safe. The variance against the $1,000.00 target updates live as you type."*
-- A grid of 13 boxes: **$100, $50, $20, $10, $5, $2, $1, $1 coin, 50¢, 25¢, 10¢, 5¢, 1¢** (`cash.ts` L36–50). Each box takes digits only. Anything else is removed as you type (`CountGrid.tsx` L57–62).
-- **Safe total** (live sum), **Target: $1,000.00**, and a live **Balanced** / **Over by $X** / **Short by $X** (`CountGrid.tsx` L70–98).
-- **Count window**: **AM (before open)** / **PM (evening)** / **Extra count**. ⚠ The default is always **AM**, even at night (`safe/page.tsx` L157, finding F-02-5).
-- **Counted by**: **— none —** or any active employee. Non-sales job roles show in brackets, for example *"Jane (manager)"*.
+- A grid of 13 boxes: **$100, $50, $20, $10, $5, $2, $1, $1 coin, 50¢, 25¢, 10¢, 5¢, 1¢** (`cash.ts` L36–50). Each box takes digits only. Anything else is removed as you type (`CountGrid.tsx` L65–70).
+- **Safe total** (live sum), **Target: $1,000.00**, and a live **Balanced** / **Over by $X** / **Short by $X** (`CountGrid.tsx` L78–106).
+- **Count window**: **AM (before open)** / **PM (evening)** / **Extra count**. ⚠ The default is always **AM**, even at night (`safe/page.tsx` L169, finding F-02-5).
+- **Counted by (required)**: starts at *"Pick who counted…"*; pick any active employee. Non-sales job roles show in brackets, for example *"Jane (manager)"*. There is no **— none —** any more (Phase 2.3).
+- **Reason box** under the variance (Phase 2.3, G-03): *"Reason for over / short (optional at $5.00 or less)"*. As soon as the live variance is more than $5.00 either way it turns gold, *"Warning: more than $5.00 over. Reason (required)"* (or *short*), and the form will not submit while it is blank (`CountGrid.tsx` L108–129).
 - **Notes (optional)**: up to 500 characters. The placeholder is *"e.g. two drops waiting to be banked"*. Ignore that example (§4.12).
 - **Record safe count** button.
 
-**Recent counts**: the last 30 counts, newest first. Columns **When / Window / Counted by / Total / Target / Variance / Notes**. Window shows **AM**, **PM** or **Extra**. Variance shows **Balanced**, **Over $X** (gold) or **Short $X** (red). The denominations are saved but **not shown** (F-02-3).
+**Recent counts**: the last 30 counts, newest first. Columns **When / Window / Counted by / Total / Target / Variance / Reason / Notes**. **Reason** shows the reason written with the count, or *"No reason"* for a count more than $5.00 off saved before Phase 2.3. Window shows **AM**, **PM** or **Extra**. Variance shows **Balanced**, **Over $X** (gold) or **Short $X** (red). The denominations are saved but **not shown** (F-02-3).
 
 **Recent change swaps**: the last 30 register swaps. Columns **When / Amount / Performed by / Approved by / Notes**. Value only, no denominations (F-01-8).
 
@@ -227,8 +229,8 @@ From top to bottom (`safe/page.tsx` L106–272):
 7. In the grid, type **how many** of each denomination, not the dollar value. Leave empty boxes blank (blank = 0).
 8. Check that **Safe total** matches your paper total. If it does not, you mistyped a box. Fix it before you continue.
 9. **Count window**: choose **AM (before open)** (it is the default).
-10. **Counted by**: pick **the person who physically counted**. Never leave it **— none —** (store rule; the page allows it, finding F-02-4). If a manager enters someone else's count, pick the counter and write *"entered by <manager>"* in **Notes**.
-11. **Notes**: write anything that is not standard, for example *"3×$20 from swaps, not yet to little safe"*. If the result is over or short, write the reason (§4.8).
+10. **Counted by**: pick **the person who physically counted**. The page requires it (Phase 2.3). If a manager enters someone else's count, pick the counter and write *"entered by <manager>"* in **Notes**. The Security Log entry `safe.counted` now names the count row and the counter.
+11. **Reason**: if the grid says more than $5.00 over or short, recount first (§4.7). If it is still off, write **why** in the reason box (required, §4.8). **Notes**: anything else that is not standard, for example *"3×$20 from swaps, not yet to little safe"*.
 12. Tap **Record safe count** **once**. Wait for the green banner (finding F-02-5: a second tap saves a second count).
 13. Check that **Today's AM count** now says **Done**, and that your row is at the top of **Recent counts**.
 14. **Write the banner result on form 8.1**, sign it, and file it (§4.18).
@@ -264,14 +266,16 @@ The page works out **variance = counted total − $1,000.00** on the server. The
 | **Over by $X** | More than $1,000.00 | 1) Recount (Extra count). 2) Check form 8.3: was a swap entered with the wrong value, or did a till give more than it took? 3) Check form 8.2: did more go into the master till from the little safe than came out? 4) Look for takings or drop cash mixed in (§4.12). Pull any that are found, put them in the store safe, and recount. |
 | **Short by $X** | Less than $1,000.00 | 1) Recount (Extra count). 2) Check forms 8.3 and 8.2 as above. 3) Ask whether any cash was taken for supplies (§4.13). 4) Check the area and the drop slot. 5) Escalate (§6). |
 
-**The $5 rule (D16).** The owner set a $5 threshold for over/short, with a required reason (D7), and confirmed it **applies to the master till as well** (*"Q02-3- yes, it applies to the master as well"*). The code has **no threshold and no reason field for master till counts** (finding F-02-6, gap G-03). Until it is built:
+**The $5 rule (D16; built in Phase 2.3, gap G-03).** The owner set a $5 threshold for over/short, with a required reason (D7), and confirmed it **applies to the master till as well** (*"Q02-3- yes, it applies to the master as well"*).
 - **Any** non-zero variance: write the amount on form 8.1. Recount first (Extra count, §4.7).
-- A variance **over $5.00** after the recount: a reason is **required**. Write it in **Notes**, fill in **form 8.5** and give it to the owner that day.
-- **$5.00 or less:** no reason is required (owner decision **D21**: *"Q-03-1- only over $5"*). A note is optional.
+- A variance **more than $5.00** after the recount: a reason is **required** in the reason box. The server works the variance out again from your denominations and refuses a blank reason: *"The master till is short by $X, more than $5.00. Write the reason (why it is over or short) and try again. Nothing was saved."* (`over-short-warning-core.ts` `checkOverShortReason` L54; called in `safe-store.ts` `recordSafeCount` L93). The refusal is in the Security Log (`safe.count_refused`).
+- **$5.00 or less:** no reason is required (owner decision **D21**: *"Q-03-1- only over $5"*). The reason box is optional.
+- A count more than $5.00 off is saved as a **warning** (never blocked). The banner adds *"Warning: more than $5.00. The reason is saved and the owner sees it on Over / short warnings."* The owner (and admin) see it on **Over / short warnings** (`/admin/registers/over-short`) with the window, Counted by, time, amount and reason; the Security Log gets `safe.over_short_warning`.
+- Form 8.5 is needed only if migration 0315 is not applied (the banner then says the reason is in the Security Log only).
 
 **Never "fix" a variance by moving cash** in from the little safe, a till or the store safe to make the total come out right. The difference must stay visible and be explained. The owner wants a genuine master till variance to be *"rare and therefore meaningful"* (books-98 L77–80).
 
-> **The books do not see master till variances.** A drawer's over/short posts to 50920 Cash Over/(Short) at reconcile. A master till count posts nothing (F-02-6). The paper form 8.5 is the record.
+> **The books do not see master till variances.** A drawer's over/short posts to 50920 Cash Over/(Short) at reconcile. A master till count posts nothing (F-02-6, books part still open). The count row with its reason (Phase 2.3) is the record.
 
 ### 4.9 Checking the mix against the standard
 
@@ -390,7 +394,7 @@ Daily (manager) and weekly (owner), on the Store safe page:
 1. **Recent counts:** two counts per day (AM + PM), each with a **Counted by** name. Look for **—** (no name) in **Counted by**; days with a missing AM or PM; several AM or PM counts on one day; and any **Over** or **Short** without a note.
 2. **Pattern, not day.** The owner: small differences in both directions mean little, while the same person or shift showing the same rough amount again and again means something (books-98 L66–72).
 3. **Recent change swaps:** every swap has an **Approved by** name, and each has a matching line on form 8.3.
-4. Only the last **30** of each are shown (`safe-store.ts` L126, L139). For older records, use the filed paper forms or ask the owner to query Supabase.
+4. Only the last **30** of each are shown (`safe-store.ts` L164, L177). For older records, use the filed paper forms or ask the owner to query Supabase.
 
 ### 4.17 A count was recorded wrong
 
@@ -423,12 +427,16 @@ Until it is built:
 | *"Pick a count window (morning, evening, or other)."* | BLOCK | The window value was missing or not am/pm/other (`safe-core.ts` L71) | Choose **AM**, **PM** or **Extra count** and save again | — |
 | *"Count at least one bill or coin — an empty safe count records nothing."* | BLOCK | Every box was blank or 0 (L76) | Enter the counts | — |
 | *"Notes must be 500 characters or fewer."* | BLOCK | Notes too long (L81). The box stops at 500 anyway. | Shorten it. Put details on form 8.1. | — |
-| *"The safe tables aren't set up yet — run migration 0135_safe_counts_swaps.sql in the Supabase SQL editor."* | BLOCK | Database migration not run (`safe-store.ts` L25–26) | Count on paper. Tell the owner. | Owner |
-| *"Safe tracking not set up yet"* (empty page) | BLOCK | Same (`safe/page.tsx` L116–120). Register swaps will also refuse. | Same | Owner |
+| *"The safe tables aren't set up yet — run migration 0135_safe_counts_swaps.sql in the Supabase SQL editor."* | BLOCK | Database migration not run (`safe-store.ts` L26–27) | Count on paper. Tell the owner. | Owner |
+| *"Safe tracking not set up yet"* (empty page) | BLOCK | Same (`safe/page.tsx` L123–127). Register swaps will also refuse. | Same | Owner |
 | *"Supabase not configured"* / *"Connect the service role key to manage the safe."* | BLOCK | Server not connected to the database (L49–57) | Paper. Tell the owner. | Owner |
-| *"Database not configured."* | BLOCK | Same, at save (`safe-store.ts` L68) | Same | Owner |
+| *"Database not configured."* | BLOCK | Same, at save (`safe-store.ts` L81) | Same | Owner |
 | Any other red database message | BLOCK | Unexpected database error (the raw message is shown, L90) | Do not retry more than once. Paper. Screenshot it for the owner. | Owner |
 | Sent to the admin home (`/admin?denied=1`) | BLOCK | Your login is not owner/admin/manager (`session.ts` L184) | Ask a manager to enter the count, naming you as **Counted by** | Manager |
+| *"Pick who counted the master till (Counted by). Nothing was saved."* | BLOCK | Counted by left blank (Phase 2.3; `safe/actions.ts` L41) | Pick the person who counted | — |
+| *"Counted by must be an active employee. Nothing was saved."* | BLOCK | The person picked is not active (L45) | Pick an active employee; if the counter is missing from the list, tell a manager | Manager |
+| *"The master till is over/short by $X, more than $5.00. Write the reason (why it is over or short) and try again. Nothing was saved."* | BLOCK (reason only) | More than $5.00 off with a blank reason (§4.8) | Recount; if still off, write the reason | Manager |
+| *"… Warning: more than $5.00. The reason is saved and the owner sees it on Over / short warnings."* | WARN (saved) | Saved with a reason; on the owner's screen | Nothing more (form 8.5 no longer needed) | Owner |
 | *"Safe counted — over the target by $X."* | WARN (saved) | The total is above $1,000.00 | §4.8 | Manager |
 | *"Safe counted — short of the target by $X."* | WARN (saved) | The total is below $1,000.00 | §4.8 | Manager → owner |
 | *"Safe counted — balanced on the $1,000 target."* | OK | Total is $1,000.00. **The mix is not checked.** | §4.9 | — |
@@ -446,7 +454,7 @@ Until it is built:
 | *"Swap amount is implausibly large — check the number."* | BLOCK | Over $2,000.00 (L113) | Check. Very large swaps are not normal. |
 | *"No open drawer on this register."* | BLOCK | No drawer counted in (`till/route.ts` L139–142) | Count in first (SOP-01 §4.3) |
 | *"Offline — drawer actions need a connection to verify your PIN and record the cash."* | BLOCK | No connection | Wait for the connection. Do not swap off the record. |
-| The migration message above (as the swap error) | BLOCK | Safe tables missing. The swap is refused, not skipped (`safe-store.ts` L119–121). | Tell the owner. No swaps until fixed. |
+| The migration message above (as the swap error) | BLOCK | Safe tables missing. The swap is refused, not skipped (`safe-store.ts` L157–159). | Tell the owner. No swaps until fixed. |
 | *"$X change swap with the safe recorded."* | OK | Saved | Fill in form 8.3 |
 
 ---
@@ -477,11 +485,11 @@ Until it is built:
 | Total calculated by the server | Total and variance are worked out from the denominations on the server, never taken from the form (`safe-core.ts` L59–96) | Strong | — |
 | Target recorded with each count | `expected_minor` is saved per row, so old rows stay true if the target ever changes (`0135` L54–56) | Strong | — |
 | Counts cannot be changed | No edit or delete; no human write policy (`0135` L95–108) | Strong | — |
-| Who counted | **Counted by** is optional, chosen from a list, no PIN | **Weak** | F-02-4 |
-| Who entered | The audit log records the login (`safe.counted`, `safe/actions.ts` L38–45), but no link to the count row (`entityId: null`) | Partial | F-02-4 |
+| Who counted | **Counted by** is required and must be an active employee (Phase 2.3); still no PIN | Partial | F-02-4 (PIN part open) |
+| Who entered | The audit log records the login and now names the count row and the counter (`safe.counted`, `entityId` = the count, `safe/actions.ts` L63–77) | **Good** | F-02-4 (audit part FIXED) |
 | One official AM/PM per day | Not enforced. Any number allowed; the report uses the newest. | **Weak** | F-02-5 |
 | Mix (denomination) standard | Not checked. Denominations are saved but not shown. | **Missing** | F-02-3, G-08 |
-| Variance reason / threshold | None for the master till | **Missing** | F-02-6, D7 + D16 |
+| Variance reason / threshold | $5.00 threshold; reason required over $5.00 (server-checked), optional at $5.00 or less; warning on the owner's screen (Phase 2.3) | **Good** | F-02-6 (threshold and reason FIXED), D7 + D16 + D21 |
 | Variance in the books | Not posted | Missing | F-02-6 |
 | Open (not blind) count | By design: *"the target is known policy"* (`safe-core.ts` L7–10, help text). Drawers are blind, the master till is not. | Design choice | Because the count is open, the counter's name (F-02-4) and a second counter matter more |
 | Register swap approval | Manager/lead PIN, different person, checked on the server, `safe.swap` audit tied to the drawer session (`till/route.ts` L193–241) | Strong | Value only, no denominations (F-01-8) |
@@ -582,7 +590,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 - [ ] Enter it on **Store safe**, window **AM (before open)**, **Counted by** = the counter
 - [ ] **Today's AM count: Done**
 - [ ] Mix checked; little-safe balance done if needed (form 8.2)
-- [ ] Any variance: amount written; over $5 → reason + form 8.5 (D21)
+- [ ] Any variance: amount written; over $5 → reason in the app's reason box (D21; form 8.5 only before migration 0315)
 
 **During the day**
 - [ ] Every register swap: manager/lead PIN + one line on form 8.3
@@ -609,7 +617,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 │   Register Activity → Safe → type HOW MANY of each → window → Counted by    │
 │   → Record safe count (ONCE). PM: CHANGE THE WINDOW TO PM.                  │
 │ "Balanced" = total only. Check the MIX on the paper sheet.                  │
-│ Over/short: recount (Extra count) → if > $5: reason in Notes + form 8.5     │
+│ Over/short: recount (Extra count) → if > $5: reason box (required)          │
 │ Big bills out → little safe; small bills/coin in → log BOTH SIDES (form 8.2)│
 │ Register swap: manager/lead PIN + one line on form 8.3                      │
 │ NEVER: takings/drops in the master till · cash for supplies (shop card)    │
@@ -648,15 +656,15 @@ Counter signature: ______________   Manager signature: ______________   → owne
 
 | SOP section | Code / document (read for this SOP) |
 |---|---|
-| 2 roles | `src/lib/auth/roles.ts` L90, L106; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L112; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
+| 2 roles | `src/lib/auth/roles.ts` L91, L107; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L112; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
 | 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L183–194; `src/lib/accounting/card-payment-core.ts` L7–8 |
 | 4.2 standard | Owner D11; `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
-| 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L120–122 |
+| 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L125–127 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
 | 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L660–702 |
 | 4.11 swaps | `src/app/api/pos/till/route.ts` L54, L139–142, L190–241; `src/lib/pos/till-core.ts` L75–88, L233–255; `src/app/(site)/pos/RegisterShell.tsx` L5666, L5752, L5790, L5846–5879, L6015–6030 |
-| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L115–129, L179–201; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
+| 4.12 drops / books | `register-cash-journal-core.ts` L45–77, L235–345, L855–872; `src/lib/registers/store.ts` L122–136, L186–208; `drawer-posting-service.ts` L170–195; builder run (finding F-02-1) |
 | 4.13 supply runs | `register-cash-journal-core.ts` L495–646; `src/lib/accounting/ledger-census-data.ts` L1639–1670; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
 | 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L316 |
 | 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L45, L74, L208–247; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L122–151 |
@@ -674,11 +682,11 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | D3: master till ↔ little safe log | Nothing recorded | Form 8.2 (§4.10) | G-02 · F-00-7, F-02-8 |
 | D3: register swap denominations | Value only | Form 8.3 + Notes (§4.11) | G-02 · F-01-8 |
 | Master till sheet printable and exportable | Neither | Form 8.1 binder; EOD print (§4.18) | G-09 · F-00-8 |
-| D7 for the master till ($5 / reason), confirmed D16 | Nothing | Reason in Notes + form 8.5 (§4.8) | G-03 (extended) · F-02-6 |
+| ~~D7 for the master till ($5 / reason), confirmed D16~~ | **BUILT, Phase 2.3**: reason box, required over $5.00; **Over / short warnings** screen lists master till counts with window and Counted by (§4.8) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-02-6 threshold and reason FIXED (books posting open) |
 | D19: Manager Till float $300.00 | Seeded $300 ✅ | — (met) | G-10 closed · F-02-2 withdrawn |
 | Supply runs recorded (screen approved, D17) | Builders only, no screen | Store rule: shop card; form 8.4 (§4.13) | G-11 (approved) · F-02-11 |
-| D15: any employee records the master till count | Manager-level login required (`safe/actions.ts` L29) | A manager login enters it and picks the counter (§4.5) | G-13 · F-02-10 |
-| Named, verified counter | Optional picker, no PIN | Always pick the counter; note the enterer (§4.5) | F-02-4 |
+| D15: any employee records the master till count | Manager-level login required (`safe/actions.ts` L31) | A manager login enters it and picks the counter (§4.5) | G-13 · F-02-10 |
+| Named, verified counter | **Counted by required** (Phase 2.3); no PIN yet | Pick the counter; note the enterer (§4.5) | F-02-4 (required picker and audit link FIXED; PIN open, G-13) |
 
 ## Appendix C: Open questions for the owner
 
@@ -687,7 +695,7 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 | # | Question | Owner answer | Decision |
 |---|---|---|---|
 | Q-02-1 | When a cashier does a **change swap** at the register, do the small bills come from the **master till**? | *"yes you have that correct"* | **D14** — till ↔ master till (form 8.3); master till ↔ little safe (form 8.2) |
-| Q-02-2 | May **any** employee count the master till, or managers only? | *"anyone can count and record the master count"* | **D15** — any employee counts **and records**. Today recording needs a manager login (`safe/actions.ts` L29), so gap **G-13**. Interim: a manager login enters it and picks the counter. |
+| Q-02-2 | May **any** employee count the master till, or managers only? | *"anyone can count and record the master count"* | **D15** — any employee counts **and records**. Today recording needs a manager login (`safe/actions.ts` L31), so gap **G-13**. Interim: a manager login enters it and picks the counter. |
 | Q-02-3 | Does the **$5** rule (D7) also apply to the **master till** counts? | *"yes, it applies to the master as well"* | **D16**. The carried half was answered in SOP-04 as **D21**: a reason is required **only over $5**. |
 | Q-02-4 | Should a supply run ever happen; is the supply-run screen needed? | *"id like the supply run screen built"* | **D17** — G-11 approved, queued for build |
 | Q-02-5 | Is the system's "Manager Till" the **manager register** of D10? | *"yes correct"* + *"it should be 300 in it"* | **D18** (yes) and **D19** (Manager Till float $300.00) |
@@ -699,4 +707,5 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `0055f06c`, with owner decisions D3, D7 and D10–D13. Adds findings F-02-1…F-02-13 and gaps G-08…G-11. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Owner answers D14–D19 applied in slice SOP-03: Manager Till float $300.00 (D19; F-02-2 withdrawn, G-10 closed); totals now $635.00 / $1,635.00; Q-02-1…Q-02-5 resolved; D7 applies to the master till (D16); supply-run screen approved (D17); any employee may record the count (D15, G-13). No code was re-audited; pins still at `0055f06c` (no code changed since, `3385bfa9` is docs-only). | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-04. D21: a reason is required only for a variance over $5.00 (§4.8, checklist, quick card, Appendix C). D22 confirms floats ($167.50 sales, $300.00 Manager Till). Docs only. | SOP program |
+| 1.4 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT for the master till: reason box under the variance, required (server-checked) when more than $5.00 off, optional at $5.00 or less; reason saved on the count (migration 0315) and shown in **Recent counts**; warnings audited and listed on the owner/admin **Over / short warnings** screen. **Counted by** is now required and must be active; the audit entry names the count row (F-02-4 partly FIXED). §2, §4.4, §4.5 steps 10–11, §4.8, §5.1, §7, Appendix B updated. | Fix program |
 | 1.3 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

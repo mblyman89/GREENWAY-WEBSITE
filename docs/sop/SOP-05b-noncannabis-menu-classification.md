@@ -89,13 +89,13 @@ The owner asked for SOPs that cover how the back office is really used (`00-OWNE
 
 | Action | Who the app allows | Where the rule lives |
 |---|---|---|
-| Open **Other Inventory**, add a product, **Confirm**, **Archive**, **Post adjustment**, **Save settings**, **Save invoice**, print a SKU label | Owner, admin, manager (`inventory.manage`) | `noncannabis/page.tsx` L87; `noncannabis/actions.ts` L66, L87, L95, L108, L156, L284; `[id]/label/page.tsx` L28; `roles.ts` L106 |
-| **Save cost** (key a missing non-cannabis unit cost) | Owner, admin only (`inventory.cost.fill`) | `roles.ts` L148; `noncannabis/actions.ts` L337–368 |
+| Open **Other Inventory**, add a product, **Confirm**, **Archive**, **Post adjustment**, **Save settings**, **Save invoice**, print a SKU label | Owner, admin, manager (`inventory.manage`) | `noncannabis/page.tsx` L87; `noncannabis/actions.ts` L66, L87, L95, L108, L156, L284; `[id]/label/page.tsx` L28; `roles.ts` L107 |
+| **Save cost** (key a missing non-cannabis unit cost) | Owner, admin only (`inventory.cost.fill`) | `roles.ts` L149; `noncannabis/actions.ts` L337–368 |
 | Open **Merch Inventory**, **Hide from website**, **Put back on website**, **Remove**, **Copy Printful stock to the website**, **Download CSV** | Owner, admin, manager (`inventory.manage`) | `merch/page.tsx` L34; `merch/actions.ts` L23, L34, L51; `merch/export/route.ts` L14 |
-| Open **Publish Menu** | Owner, admin, manager (`menu.import`) | `publish/page.tsx` L116; `roles.ts` L82 |
-| Press the row button that publishes, **Publish this menu live**, **Publish the ready products** | Owner, admin, manager (`menu.publish`) | `publish/page.tsx` L118, L395–412; `menu-imports/actions.ts` L179, L358; `roles.ts` L83 |
-| Publish with products still awaiting review (**Publish now and fix after**) | Owner, admin only (`menu.publish.open_reviews`) | `menu-imports/actions.ts` L245–250; `roles.ts` L88 |
-| **Types & Categories**: add, save, delete or hide a category or type, **Move products** | Owner, admin only (`settings.manage`) | `settings/types/page.tsx` L68; `settings/types/actions.ts` L50, L89, L124, L181, L217, L284, L368; `roles.ts` L248 |
+| Open **Publish Menu** | Owner, admin, manager (`menu.import`) | `publish/page.tsx` L116; `roles.ts` L83 |
+| Press the row button that publishes, **Publish this menu live**, **Publish the ready products** | Owner, admin, manager (`menu.publish`) | `publish/page.tsx` L118, L395–412; `menu-imports/actions.ts` L179, L358; `roles.ts` L84 |
+| Publish with products still awaiting review (**Publish now and fix after**) | Owner, admin only (`menu.publish.open_reviews`) | `menu-imports/actions.ts` L245–250; `roles.ts` L89 |
+| **Types & Categories**: add, save, delete or hide a category or type, **Move products** | Owner, admin only (`settings.manage`) | `settings/types/page.tsx` L68; `settings/types/actions.ts` L50, L89, L124, L181, L217, L284, L368; `roles.ts` L249 |
 | Lot page: **Save website type & category**, **Save sales-limit classification**, **Save sell price**, **Save size**; open the classification worklist | Owner, admin, manager (`inventory.manage`) | `inventory/actions.ts` L507, L709, L840, L1040; `compliance/classification/page.tsx` L75 |
 
 **Store rules on top of the app (this SOP).**
@@ -266,7 +266,7 @@ A non-cannabis item with a $0.00 cost shows the **Cost missing** chip (`cost-fil
 2. Open the item. Type **Unit cost (what you paid per item)** from the vendor's invoice and press **Save cost** (`MerchCatalog.tsx` L148–173).
 3. The save works only while the cost is still $0.00: *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* (`cost-fill-core.ts` L46–47). It is audited (`noncannabis.cost_fill`).
 
-**How this fits the owner's newer answer.** Today **Save cost** is owner and admin only (`inventory.cost.fill`, `roles.ts` L148). The code cites an earlier owner decision for that, D-R3-1: *"owner and admin can add cost if missing. … It can only be used for non cannabis inventory."* (`roles.ts` L143–145). In this SOP program the owner answered that an owner, admin or manager may change a non-cannabis price or cost (D46), and that the cost may be modified (D48). This SOP does not guess whether D46 also widens **Save cost** to managers. That is question **Q-05b-6**. Until it is answered, **Save cost** stays owner and admin as the app enforces, and a manager changes a cost through the form 8.2 re-create (§4.9).
+**How this fits the owner's newer answer.** Today **Save cost** is owner and admin only (`inventory.cost.fill`, `roles.ts` L149). The code cites an earlier owner decision for that, D-R3-1: *"owner and admin can add cost if missing. … It can only be used for non cannabis inventory."* (`roles.ts` L144–146). In this SOP program the owner answered that an owner, admin or manager may change a non-cannabis price or cost (D46), and that the cost may be modified (D48). This SOP does not guess whether D46 also widens **Save cost** to managers. That is question **Q-05b-6**. Until it is answered, **Save cost** stays owner and admin as the app enforces, and a manager changes a cost through the form 8.2 re-create (§4.9).
 
 This is **non-cannabis** cost only. **A cannabis unit cost is never typed by anyone**; it comes only from the vendor's CCRS manifest (owner decision D38; SOP-05a §4.20).
 
@@ -727,7 +727,7 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 | **Q-05b-3** | ~~Who may permanently **Remove** a merch product?~~ | **ANSWERED** (D47): *"Q05b-3- owner and admin."* Gap G-30A |
 | **Q-05b-4** | ~~Refuse a cannabis-line crossing outright, or allow it for the owner with a reason?~~ | **ANSWERED** (D48): *"Q05b-4- refused outright, non cannabis should also be refused outright moving them into a cannabis type. non cannabis should be allowed to have their cost modified."* |
 | **Q-05b-5** | ~~Approve the G-32 hardening bundle, including blocking a cost-unknown price save?~~ | **ANSWERED** (D49): *"Q-05b-5- yes, plan on the group of smaller fixes. blocked until the manifest cost is entered."* |
-| **Q-05b-6** | Does D46 (*"owner, admin, manager"*) also let a **manager** use **Save cost** to fill a missing ($0.00) non-cannabis cost? The earlier decision D-R3-1 (*"owner and admin can add cost if missing"*, `roles.ts` L143–148) says owner and admin. | Until answered: **Save cost** stays owner and admin; managers use the form 8.2 re-create |
+| **Q-05b-6** | Does D46 (*"owner, admin, manager"*) also let a **manager** use **Save cost** to fill a missing ($0.00) non-cannabis cost? The earlier decision D-R3-1 (*"owner and admin can add cost if missing"*, `roles.ts` L144–149) says owner and admin. | Until answered: **Save cost** stays owner and admin; managers use the form 8.2 re-create |
 
 ## Appendix D: Revision history
 

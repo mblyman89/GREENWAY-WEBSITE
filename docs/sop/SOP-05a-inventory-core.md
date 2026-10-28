@@ -108,18 +108,18 @@ and set how it is to be built when this slice began:
 
 | Task | Who | How the system checks |
 |---|---|---|
-| Open **Inventory**, the lot page, **Expiration rules**, **Tags**, **Testing labs**, a lot label | Owner, admin, manager | Page gates `requirePermission("inventory.manage")`: list `inventory/page.tsx` L210; lot page; `expiration-rules/page.tsx` L222; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33. `inventory.manage` = owner, admin, manager (`src/lib/auth/roles.ts` L106). |
+| Open **Inventory**, the lot page, **Expiration rules**, **Tags**, **Testing labs**, a lot label | Owner, admin, manager | Page gates `requirePermission("inventory.manage")`: list `inventory/page.tsx` L210; lot page; `expiration-rules/page.tsx` L222; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33. `inventory.manage` = owner, admin, manager (`src/lib/auth/roles.ts` L107). |
 | **Record adjustment**, **Update status**, received date, lot details, product link, lab result, website classification, size, bulk fill, compliance classification, **Restore to sale**, **Re-read lab certificate** | Owner, admin, manager | Every action in `src/app/admin/inventory/actions.ts` calls `requirePermission("inventory.manage")` (L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210). |
 | Save, preview and apply **Expiration rules** | Owner, admin, manager | `expiration-rules/actions.ts` L62, L131, L141 (`inventory.manage`) |
-| Read the **Expiration report** | Owner, admin, manager, readonly | `reports/expiration/page.tsx` L151 (`reports.view`; `roles.ts` L149) |
+| Read the **Expiration report** | Owner, admin, manager, readonly | `reports/expiration/page.tsx` L151 (`reports.view`; `roles.ts` L150) |
 | Press **"Shelf is empty? Mark out of stock…"** (the 86) at the register | Any signed-in register | Device-authenticated route `api/pos/stock-flag/route.ts` L28–34; button `SaleFlow.tsx` L4266–4277 |
-| Count the shelf (cycle counts) | Owner, admin, manager, **staff** | `inventory.count` (`roles.ts` L126). SOP-06. |
-| Approve and post an inventory audit | **Owner only** | `inventory.audit` (`roles.ts` L142). SOP-06. |
-| Key a missing **non-cannabis** unit cost | Owner, admin | `inventory.cost.fill` (`roles.ts` L148). SOP-05b. |
+| Count the shelf (cycle counts) | Owner, admin, manager, **staff** | `inventory.count` (`roles.ts` L127). SOP-06. |
+| Approve and post an inventory audit | **Owner only** | `inventory.audit` (`roles.ts` L143). SOP-06. |
+| Key a missing **non-cannabis** unit cost | Owner, admin | `inventory.cost.fill` (`roles.ts` L149). SOP-05b. |
 | **Place** a recall hold (status **Recalled**) | **Manager-level login, with a reason** (confirm in Q-05a-7) | `inventory.manage`; the reason is required and saved in the audit row `inventory_lot.status_changed` (Phase 1.1, G-22). |
-| **Release** a recall hold; notify the LCB | **The admin** (recall coordinator, D37), and the owner | `inventory.recall.release` = owner, admin (`roles.ts` L156), checked in `setLotStatusAction` with a required clearance reference. On a recall event, **Record the LCB notification** and **Close the event** need the same permission (`recalls/actions.ts` L158, L230). |
+| **Release** a recall hold; notify the LCB | **The admin** (recall coordinator, D37), and the owner | `inventory.recall.release` = owner, admin (`roles.ts` L157), checked in `setLotStatusAction` with a required clearance reference. On a recall event, **Record the LCB notification** and **Close the event** need the same permission (`recalls/actions.ts` L158, L230). |
 | Open a recall event, **Add and set Recalled**, **Add weekly row** (Inventory → Recalls) | Owner, admin, manager | `inventory.manage` (`recalls/actions.ts` L53, L88, L193). Phase 1.6c, G-25. |
-| Edit **Settings → Recall plan** | Owner, admin | `settings.manage` (`roles.ts` L266; `settings/recall-plan/actions.ts` L17). Phase 1.6c, G-25. |
+| Edit **Settings → Recall plan** | Owner, admin | `settings.manage` (`roles.ts` L267; `settings/recall-plan/actions.ts` L17). Phase 1.6c, G-25. |
 | **Destroy** a lot | Owner, admin, manager through **Returns & Destruction** only | `disposition/page.tsx` L134 (`inventory.manage`). SOP-15. |
 
 **Recall coordinator.** WAC 314-55-225(3)(d) requires a named recall coordinator (§4.13). The owner answered Q-05a-2: *"admin. No back up. Just my manager and I."* (decision D37). So **the admin is the recall coordinator, with no back-up**, and the recall team is **the owner and the manager**. The coordinator decides recall or withdrawal, notifies the LCB, agrees any destruction with the officer and releases holds. This SOP still lets the manager **place** a hold at once, because that only protects customers; the owner is asked to confirm that in **Q-05a-7**.
@@ -1197,7 +1197,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L98, L114; `02-SOP-CATALOG-AND-ROADMAP.md` (Split, D35); `src/app/admin/inventory/page.tsx` L448 |
-| 2 roles | `src/lib/auth/roles.ts` L106, L126, L142–149; `inventory/actions.ts` (every action `inventory.manage`: L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210); `expiration-rules/page.tsx` L222, `actions.ts` L62, L131, L141; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33; `reports/expiration/page.tsx` L151; `disposition/page.tsx` L134; `api/pos/stock-flag/route.ts` L28–34 |
+| 2 roles | `src/lib/auth/roles.ts` L107, L127, L143–150; `inventory/actions.ts` (every action `inventory.manage`: L112, L143, L175, L228, L273, L316, L451, L507, L709, L840, L904, L1040, L1175, L1210); `expiration-rules/page.tsx` L222, `actions.ts` L62, L131, L141; `tags/page.tsx` L85; `labs/page.tsx` L156; `lots/[id]/label/page.tsx` L33; `reports/expiration/page.tsx` L151; `disposition/page.tsx` L134; `api/pos/stock-flag/route.ts` L28–34 |
 | 3 before you start | `src/components/admin/admin-nav-data.ts` L84–90; `completion-gate.ts` L124–148; `restore-to-sale-core.ts` L115–158; `expiration-rules/actions.ts` L146–157; `expiry-rules-core.ts` L10–34; `tags/actions.ts` L108–111 |
 | 4.1–4.2 list | `inventory/page.tsx` L97–107, L209–214, L451–487, L505–582, L615–721, L818–864; `InventoryFilterPanel.tsx` L345 |
 | 4.3 statuses | `inventory/actions.ts` L103–109; `[id]/page.tsx` L130–136; `sale-lot-read.ts` L45–53; `atomic-quantity.ts` L44; `disposition.ts` L1163–1170; `ccrs-batch.ts` L1006–1010, L1118–1122, L1196–1207 |
@@ -1213,7 +1213,7 @@ GREENWAY — RECALL / MARKET WITHDRAWAL WORKSHEET          Event #: ______
 | 4.17 tags | `tags/page.tsx` L85, L130–131, L194, L246–256, L315, L375; `tags/actions.ts` L45–146; `src/lib/menu/product-tags-core.ts` L28–31, L163–176 |
 | 4.18 labs | `labs/page.tsx` L7–12, L156; `labs/actions.ts` L30–76; `testing-labs-core.ts` L141–160, L236–309 |
 | 4.19 label | `lots/[id]/label/page.tsx` L1–40, L116–124; `LabelPrintControls.tsx` L25–32; `intake/[id]/page.tsx` L1072–1078; `src/lib/pos/scan-to-cart-core.ts` L55–70 |
-| 4.20 bulk fill | `inventory/actions.ts` L903–996; `bulk-fill-core.ts` L49, L107, L164–290, L318–325; `BulkFillPanel.tsx` L62–122; `inventory/page.tsx` L696–721; `roles.ts` L143–148 |
+| 4.20 bulk fill | `inventory/actions.ts` L903–996; `bulk-fill-core.ts` L49, L107, L164–290, L318–325; `BulkFillPanel.tsx` L62–122; `inventory/page.tsx` L696–721; `roles.ts` L144–149 |
 | 4.21 corrections | `inventory/actions.ts` L174–211, L228–303, L315–371, L1247; `received-date-core.ts` L163–190; `lot-link-core.ts` L73–77, L167–173, L218–219; `LotLinkPanels.tsx` L55–220; `coa-panel-core.ts` L304–319; `[id]/page.tsx` L96, L439–475, L763, L806–868, L1022 |
 | 4.22 pointers | `src/lib/pos/low-stock-core.ts` L1–22; `oversold-report-core.ts` L45; `cycle-counts/page.tsx` L70, L96 |
 | Tests | This slice changes documentation only. The full CI gate (announcer check, compliance tests, pure self-tests) is run before merge and its result recorded in the pull request |

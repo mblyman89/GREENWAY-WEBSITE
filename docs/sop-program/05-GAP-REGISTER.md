@@ -28,7 +28,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 |---|---|---|---|---|---|
 | G-01 | Second-person count at till close | D2 | F-01-9, F-00-5 | SOP-01 §4.27 steps 8–12, forms 8.2 / 8.4 | **BUILT** (Phase 2.2) |
 | G-02 | Master till ↔ little safe denomination log (and register-swap denominations) | D3 | F-01-8, F-00-7, F-02-8 | **SOP-02 §4.10 form 8.2** (master ↔ little safe) and **§4.11 form 8.3** (register ↔ master); SOP-01 §4.26 | OPEN |
-| G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | OPEN |
+| G-03 | $5 over/short admin warnings screen (reason required); **covers the master till too (D16)** | D7, D16 | F-01-11, F-02-6 | SOP-01 §4.30 form 8.5 · SOP-02 §4.8 form 8.5 | **BUILT** (Phase 2.3) |
 | G-04 | Deposit bag screen (night count → morning verify → seal → safe → bank) | (original request) | F-00-6, F-03-9, F-03-10 | **SOP-03 §4.5–4.13, forms 8.1 / 8.2 / 8.6** | OPEN (D23–D27 set the rules) |
 | G-05 | Per-shift / per-cashier report | (original request: "shift close reports") | F-01-10 | Close slip 8.2 per drawer; the till summary prints the drawer's figure | **PARTLY BUILT** (Phase 2.1: per-drawer cash figure at reconcile, F-01-4 FIXED); printable per-cashier shift report still OPEN |
 | G-06 | SOPs readable, printable and **exportable** in the Employee area; report export | (original request) | F-00-8, F-00-10 | Markdown files in `docs/sop/`; print from the browser | **PARTLY BUILT** (D75: SOP Library at Employee → SOP Library reads and prints every SOP); report export still OPEN |
@@ -122,6 +122,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   3. An **admin-only** screen showing who, when, how much (over or short) and the reason. Proposed location: under Registers, next to reconcile (the owner will confirm the "most logical place").
 - **Interim:** SOP-01 §4.30 and form 8.5. The manager writes who / when / how much / reason and hands it to the owner.
 - **SOP-02 update (2026-10-27):** master till counts have no threshold or reason either (F-02-6). D7 covers them (**D16**), with a reason only over $5 (**D21**). Interim: SOP-02 §4.8 and its form 8.5. The same warnings screen should list master till variances, with the count window and **Counted by**.
+- **Status: BUILT (Phase 2.3, #P23).** All three requirements are built as drafted. (1) `OVER_SHORT_WARN_MINOR = 500`, more than $5.00 is a warning, nothing blocked (`over-short-warning-core.ts` L23–29). (2) Reason required only over $5.00 (D21), checked on the server against its own figure for a drawer (`store.ts` L360) and for a master till count (`safe-store.ts` L93); saved in `drawer_sessions.over_short_reason` / `safe_counts.variance_reason`. (3) Admin-only screen **Employee → Over / Short Warnings** (`/admin/registers/over-short`; permission `registers.warnings` = owner, admin) next to Register Activity, with a button on Register Activity. It lists who counted, who signed off, when, how much, the reason, and links to the till summary or the safe page; 7/30/90/365-day ranges; printable. Master till **Counted by** is now required (F-02-4 part). **Owner action:** apply migration **0315** (until then the reason is still required and audited, but not stored on the row, and the screen says so).
 
 ## G-04 · Deposit bag screen
 
@@ -223,7 +224,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ## G-13 · Any employee records the master till count
 
 - **Owner (D15, slice SOP-03):** *"Q02-2- anyone can count and record the master count."*
-- **Today:** the Store safe page and its action need `inventory.manage` (owner/admin/manager) (`safe/page.tsx` L47, `safe/actions.ts` L29, `roles.ts` L106). Staff logins see the **Safe** button but are refused (F-02-10).
+- **Today:** the Store safe page and its action need `inventory.manage` (owner/admin/manager) (`safe/page.tsx` L48, `safe/actions.ts` L31, `roles.ts` L107). Staff logins see the **Safe** button but are refused (F-02-10).
 - **Requirements (draft):**
   1. Let any active employee record a count. Options: (a) open the page to the `staff` role (e.g. `orders.manage`) for the count form only, keeping history and settings manager-only; or (b) a register-side "Master till count" screen that takes the counter's **employee PIN**, which also fixes F-02-4 (verified counter).
   2. Keep D8: back-office permission uses the login's StaffRole; the counter identity uses the employee.
@@ -442,7 +443,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Today:** price is set only at draft; cost only while $0.00; a $0.00 price is accepted (F-05b-6).
 - **Owner decisions:** D46 *"Q-05b-2- owner, admin, manager."* · D48 *"non cannabis should be allowed to have their cost modified."*
 - **Requirements:**
-  1. **Change price** and **Change cost** on an active item for **owner, admin and manager**, with a required reason and an audit row old → new. Cost changes are allowed at any value, not only from $0.00. **Open: Q-05b-6**, whether managers may also use the existing **Save cost** (today owner and admin, earlier decision D-R3-1, `roles.ts` L143–148).
+  1. **Change price** and **Change cost** on an active item for **owner, admin and manager**, with a required reason and an audit row old → new. Cost changes are allowed at any value, not only from $0.00. **Open: Q-05b-6**, whether managers may also use the existing **Save cost** (today owner and admin, earlier decision D-R3-1, `roles.ts` L144–149).
   2. Refuse a $0.00 or blank price at draft, at confirm and in the invoice builder (or require an explicit "free item" flag).
   3. Price history on the item. The SKU never changes.
 - **Interim:** SOP-05b §4.9 (archive and re-create; owner, admin or manager; form 8.2).
@@ -710,7 +711,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ## G-59 · Activate, Terminate and Rehire are owner and admin only (BUILT, Phase 0.3, SOP-08) — S2
 - **Built (Phase 0.3, D76):** `staffing.lifecycle` = [owner, admin] in `roles.ts` (labelled, listed); `setStatusAction` requires it for every transition (Start onboarding, Activate, Terminate, Rehire); the file page hides all four controls for managers and shows "owner or admin only". The legacy `active` checkbox path in `updateEmployeeAction` was removed so nobody can bypass the lifecycle. Managers keep the rest of the file.
 - **Owner basis:** D74 (*"I would like to modify this to be owner admin only. No manager access."*).
-- **Today:** the status buttons on the employee file and `setStatus` (`[id]/actions.ts` L190–229) need only `staffing.manage` (owner, admin, manager; `roles.ts` L260).
+- **Today:** the status buttons on the employee file and `setStatus` (`[id]/actions.ts` L190–229) need only `staffing.manage` (owner, admin, manager; `roles.ts` L261).
 - **Requirements:**
   1. New permission (e.g. `staffing.lifecycle`) = [owner, admin], labelled in the permission matrix.
   2. `setStatus` (Activate, Terminate, Rehire) requires it on the server; the buttons are hidden for managers, with a line saying "Owner or admin only".

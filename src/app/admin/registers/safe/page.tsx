@@ -7,6 +7,7 @@ import { Button, Badge, Select, Input } from "@/components/admin/ui";
 import { CountGrid } from "@/components/admin/registers/CountGrid";
 import { formatCents } from "@/lib/registers/cash";
 import { SAFE_TARGET_MINOR } from "@/lib/registers/safe-core";
+import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 import { listSafeCounts, listSwaps, safeStatus } from "@/lib/registers/safe-store";
 import { listEmployees } from "@/lib/staffing/store";
 import { backHref } from "@/lib/admin/back-link-core";
@@ -99,6 +100,12 @@ export default async function SafePage({
               drawer session, not here. If the safe drifts off target, drops waiting to be banked
               are the usual reason — note it and bank the overage.
             </p>
+            <p>
+              <strong>The $5 rule</strong> (owner decisions D7, D16, D21): pick who counted (required). When the
+              count is more than $5.00 over or short of the target, a written reason is required and the count
+              shows as a warning on the owner&apos;s Over / short warnings screen. At $5.00 or less the reason is
+              optional. Warnings never block a count.
+            </p>
           </HelpPanel>
         }
       />
@@ -150,7 +157,12 @@ export default async function SafePage({
               updates live as you type.
             </p>
             <form action={recordSafeCountAction} className="mt-3 space-y-3">
-              <CountGrid expectedMinor={SAFE_TARGET_MINOR} expectedLabel="Target" totalLabel="Safe total" />
+              <CountGrid
+                expectedMinor={SAFE_TARGET_MINOR}
+                expectedLabel="Target"
+                totalLabel="Safe total"
+                reasonName="variance_reason"
+              />
               <div className="flex flex-wrap items-end gap-3">
                 <label className="block text-xs text-[var(--admin-text-muted)]">
                   Count window
@@ -161,9 +173,11 @@ export default async function SafePage({
                   </Select>
                 </label>
                 <label className="block text-xs text-[var(--admin-text-muted)]">
-                  Counted by
-                  <Select name="counted_by" defaultValue="">
-                    <option value="">— none —</option>
+                  Counted by (required)
+                  <Select name="counted_by" defaultValue="" required>
+                    <option value="" disabled>
+                      Pick who counted…
+                    </option>
                     {activeEmployees.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.full_name}
@@ -189,7 +203,7 @@ export default async function SafePage({
               <p className="mt-2 text-sm text-[var(--admin-text-muted)]">No safe counts recorded yet.</p>
             ) : (
               <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
+                <table className="w-full min-w-[820px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-[var(--admin-border)] text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                       <th className="py-2 pr-3">When</th>
@@ -198,6 +212,7 @@ export default async function SafePage({
                       <th className="py-2 pr-3 text-right">Total</th>
                       <th className="py-2 pr-3 text-right">Target</th>
                       <th className="py-2 pr-3">Variance</th>
+                      <th className="py-2 pr-3">Reason</th>
                       <th className="py-2">Notes</th>
                     </tr>
                   </thead>
@@ -225,6 +240,9 @@ export default async function SafePage({
                           >
                             {varianceLabel(c.variance_minor)}
                           </span>
+                        </td>
+                        <td className="py-2 pr-3 text-[var(--admin-text-muted)]">
+                          {c.variance_reason ?? (isOverShortWarning(c.variance_minor) ? "No reason" : "—")}
                         </td>
                         <td className="py-2 text-[var(--admin-text-muted)]">{c.notes ?? "—"}</td>
                       </tr>

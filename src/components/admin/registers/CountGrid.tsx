@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DENOM_FIELDS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
+import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
 
 /**
  * CountGrid — a denomination-count grid with a LIVE running total.
@@ -18,17 +19,24 @@ import { DENOM_FIELDS, denomTotalMinor, formatCents, type DenomCounts } from "@/
  * `namePrefix` (Fix Phase 2.2, G-01) lets a second grid sit on the same form:
  * the second person's count posts as `second_<key>` (read with
  * parseDenoms((k) => formData.get("second_" + k))).
+ *
+ * `reasonName` (Fix Phase 2.3, G-03, owner D7 / D21) adds a reason box under
+ * the variance. It turns REQUIRED, with a warning, as soon as the live
+ * variance is more than $5.00 either way. Only for OPEN counts (the master
+ * till), never a blind close. The server checks the rule again.
  */
 export function CountGrid({
   expectedMinor = null,
   expectedLabel = "Expected",
   totalLabel = "Counted total",
   namePrefix = "",
+  reasonName,
 }: {
   expectedMinor?: number | null;
   expectedLabel?: string;
   totalLabel?: string;
   namePrefix?: string;
+  reasonName?: string;
 }) {
   const [counts, setCounts] = useState<Partial<DenomCounts>>({});
 
@@ -95,6 +103,26 @@ export function CountGrid({
                 : `Short by ${formatCents(Math.abs(variance ?? 0))}`}
           </span>
         </div>
+      )}
+
+      {reasonName && expectedMinor != null && (
+        <label className="block px-1 text-xs text-[var(--admin-text-muted)]">
+          {isOverShortWarning(variance) ? (
+            <span className="mb-1 block font-semibold text-[var(--admin-gold)]">
+              Warning: more than $5.00 {(variance ?? 0) > 0 ? "over" : "short"}. Reason (required)
+            </span>
+          ) : (
+            <span className="mb-1 block">Reason for over / short (optional at $5.00 or less)</span>
+          )}
+          <textarea
+            name={reasonName}
+            required={isOverShortWarning(variance)}
+            maxLength={OVER_SHORT_REASON_MAX_LEN}
+            rows={2}
+            placeholder={isOverShortWarning(variance) ? "Why is it over or short?" : "Optional"}
+            className="admin-focus w-full rounded border border-[var(--admin-border)] bg-[var(--admin-surface)] px-2 py-1.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
+          />
+        </label>
       )}
     </div>
   );

@@ -26,6 +26,7 @@ import {
 } from "@/lib/registers/store";
 import { loadDrawerFigure, assignReturnRefund, VOID_REFUND_ASSIGNED_ACTION, voidRefundState } from "@/lib/registers/drawer-figure-store";
 import { figureReady, parsePaidFrom } from "@/lib/registers/drawer-figure-core";
+import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
 import { getSession } from "@/lib/registers/store";
 import {
   postDrawerCloseForSession,
@@ -192,7 +193,22 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
     // signed-in manager's own employee record (never typed text). No linked
     // employee record -> left blank; the audit entry still names the login.
     reconciledBy: await employeeIdForStaff(session.profile.id),
+    // Fix Phase 2.3 (G-03, owner D7 / D21): required when the drawer is more
+    // than $5.00 over or short; reconcileDrawer checks it against its own
+    // over/short (never the page's).
+    overShortReason: str(formData, "over_short_reason"),
   });
+  if (!result.ok && result.overShortMinor != null && isOverShortWarning(result.overShortMinor)) {
+    // A refusal for a missing reason is recorded, so the owner can see it.
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.reconcile_refused",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: { reason_required: true, over_short_minor: result.overShortMinor, error: result.error ?? null },
+    });
+  }
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
 
   // Reconcile is the first moment over/short is a FACT rather than an unknown,
@@ -226,12 +242,32 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
       expected_minor: result.expectedMinor ?? null,
       over_short_minor: result.overShortMinor ?? null,
       exceptions_not_counted: figure.exceptionCount,
+      // Fix Phase 2.3 (G-03): the $5 warning and the reason, kept here too so
+      // the reason survives even before migration 0315 adds its column.
+      over_short_warning: result.warning ?? false,
+      over_short_reason: result.reason ?? null,
+      over_short_reason_saved: result.reasonSaved ?? true,
     },
   });
+  if (result.warning) {
+    // D7: "Just warnings for now." A separate, searchable audit action for
+    // every drawer more than $5.00 over or short.
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "drawer.over_short_warning",
+      entityType: "drawer_session",
+      entityId: sessionId,
+      after: { over_short_minor: result.overShortMinor ?? null, reason: result.reason ?? null },
+    });
+  }
   revalidatePath(BASE);
+  revalidatePath(`${BASE}/over-short`);
   redirect(
     `${BASE}?reconciled=${result.overShortMinor ?? 0}&posted=` +
-      encodeURIComponent(describeDrawerPostOutcome(posted)),
+      encodeURIComponent(describeDrawerPostOutcome(posted)) +
+      (result.warning ? "&warn=1" : "") +
+      (result.reason && result.reasonSaved === false ? "&reason_unsaved=1" : ""),
   );
 }
 

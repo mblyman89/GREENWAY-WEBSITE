@@ -95,12 +95,12 @@ Appendix A: Source map · Appendix B: Not built yet (interim procedures) · Appe
 
 | Action | Who the app allows | Where the rule lives |
 |---|---|---|
-| See the **Inventory Auditing** menu item, open the hub, plan and create an audit, open an audit, write reasons, change the stage, approve, post, print the work paper | **Owner only** (`inventory.audit`) | `roles.ts` L142; nav `admin-nav-data.ts` L182 (Accounting group); pages `audits/page.tsx`, `audits/new/page.tsx` L76, `audits/[id]/page.tsx`, `audits/[id]/export/page.tsx` L86; actions `createAuditAction`, `saveReasonAction`, `moveStatusAction`, `postAuditAction` (`audits/actions.ts` L89–415) |
-| See the **Cycle Counts** menu item and page; open a count sheet; record a count | **Owner, admin, manager, budtender** (`inventory.count`; budtender is the role `staff`, labelled "Budtender / Staff") | `roles.ts` L126; nav `admin-nav-data.ts` L89 (Inventory group); `cycle-counts/page.tsx` L86; `audits/[id]/count/page.tsx`; `saveCountAction` (`audits/actions.ts` L148–210) |
-| Fill a missing unit cost (needed before an unvalued lot can post, §4.15) | Owner, admin (`inventory.cost.fill`) | `roles.ts` L148 |
-| Open a retired cycle-count session, its export, or use its leftover buttons (§4.20) | Owner, admin, manager (`inventory.manage`) | `roles.ts` L106; `cycle-counts/[id]/page.tsx` L74; `cycle-counts/[id]/export/route.ts` L37; `cycle-counts/actions.ts` |
+| See the **Inventory Auditing** menu item, open the hub, plan and create an audit, open an audit, write reasons, change the stage, approve, post, print the work paper | **Owner only** (`inventory.audit`) | `roles.ts` L143; nav `admin-nav-data.ts` L183 (Accounting group); pages `audits/page.tsx`, `audits/new/page.tsx` L76, `audits/[id]/page.tsx`, `audits/[id]/export/page.tsx` L86; actions `createAuditAction`, `saveReasonAction`, `moveStatusAction`, `postAuditAction` (`audits/actions.ts` L89–415) |
+| See the **Cycle Counts** menu item and page; open a count sheet; record a count | **Owner, admin, manager, budtender** (`inventory.count`; budtender is the role `staff`, labelled "Budtender / Staff") | `roles.ts` L127; nav `admin-nav-data.ts` L89 (Inventory group); `cycle-counts/page.tsx` L86; `audits/[id]/count/page.tsx`; `saveCountAction` (`audits/actions.ts` L148–210) |
+| Fill a missing unit cost (needed before an unvalued lot can post, §4.15) | Owner, admin (`inventory.cost.fill`) | `roles.ts` L149 |
+| Open a retired cycle-count session, its export, or use its leftover buttons (§4.20) | Owner, admin, manager (`inventory.manage`) | `roles.ts` L107; `cycle-counts/[id]/page.tsx` L74; `cycle-counts/[id]/export/route.ts` L37; `cycle-counts/actions.ts` |
 | Approve the journal draft that posting creates | Owner (books) | `postAuditSession` (`inventory-audit-store.ts` L396–520) does not pass auto-post; see SOP for the books |
-| Read-only and content-editor logins | Cannot count, cannot open either screen | `roles.ts` L126 (not listed) |
+| Read-only and content-editor logins | Cannot count, cannot open either screen | `roles.ts` L127 (not listed) |
 
 A login without the permission is sent back to the back-office home with a "denied" notice (`requirePermission` redirects to `/admin?denied=1`).
 
@@ -728,7 +728,7 @@ YEAR END
 
 | Topic | Source (verified at `main@c976c7e4`) |
 |---|---|
-| Roles | `src/lib/auth/roles.ts` L106, L126, L142, L148; nav `src/components/admin/admin-nav-data.ts` L89, L182 |
+| Roles | `src/lib/auth/roles.ts` L107, L127, L143, L149; nav `src/components/admin/admin-nav-data.ts` L89, L183 |
 | Hub | `src/app/admin/inventory/audits/page.tsx` (L60–65 tones, L98–101 owner quote) |
 | Plan a count | `audits/new/page.tsx` L76–92, L433–435 |
 | Actions | `audits/actions.ts` L89–133, L148–210, L221–263, L277–308, L369–415 |

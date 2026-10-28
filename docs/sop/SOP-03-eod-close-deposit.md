@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (draft for owner review; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
+| **Version** | 1.4 (draft for owner review; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
@@ -93,7 +93,7 @@ This SOP makes sure that:
 | Close a drawer (blind count, second count) | The cashier, plus **any second employee** (D2) | Register PIN, then the second employee's PIN and their own blind count in the app (SOP-01 §4.27 steps 8–12; built in Phase 2.2, G-01) |
 | Pull takings, count the deposit, complete the **night sheet** (form 8.1) | The night closer ("one person completes before close") | Not in the app. Paper. |
 | Reconcile each drawer | Owner, admin or manager login | `requirePermission("inventory.manage")` on Register Activity (SOP-01 §4.30) |
-| Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L106). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L129–131) is sent to `/admin?denied=1` (F-02-10). |
+| Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L107). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L139–141) is sent to `/admin?denied=1` (F-02-10). |
 | **Morning recount** and verify the night sheet | The morning employee ("the morning employee recounts and verifies") | Not in the app. Paper (form 8.1, part B). |
 | Seal the bag, write the bag number, log it | **Any employee** (D25: *"anyone can seal the bag"*), after the morning recount | Not in the app (F-00-6). Paper (form 8.2). |
 | **Verify till** in the back office | Owner, admin, manager | `inventory.manage`. Records no recount (F-00-3); paper is the record. |
@@ -206,7 +206,7 @@ Before the deposit can be counted, **every** drawer that was open today must be 
 
 ### 4.7 Night or morning: manager reconciles every drawer
 
-A manager reconciles each closed drawer on **Register Activity** exactly as in **SOP-01 §4.30** (cash sales worked out on paper from the Z/X report, net of this drawer's voids/returns, never blank; leave **Reconciled by** blank because of F-00-4/F-01-5; any over/short **over $5.00** → a written reason is required, on SOP-01 form 8.5; $5.00 or less needs no reason, D21).
+A manager reconciles each closed drawer on **Register Activity** exactly as in **SOP-01 §4.30**. Since Phase 2.1 the cash sales are the system's figure for the drawer (nothing typed) and the reconciler is the signed-in manager. Since Phase 2.3 (G-03) any over/short **more than $5.00** needs a written reason in the Reconcile card (the server refuses a blank one) and shows on the owner's **Over / short warnings** screen; $5.00 or less needs no reason (D21). SOP-01 form 8.5 is used only if migration 0315 is not applied.
 
 What reconcile does to the books (owner and bookkeeper only): it posts the drawer's takings into **10100 Cash on Hand — Vault** (*"Cash from <register> to safe"*, `register-cash-journal-core.ts` L294–303) and the over/short to Cash Over/(Short). It does **not** touch **10400 Undeposited Funds**. That account was designed to fill only when a bag is sealed (L296–301, self-test L807–813), and the seal is not wired (§4.15, F-03-1).
 
@@ -252,7 +252,7 @@ Reconcile can happen tonight or first thing in the morning. The End-of-day repor
 1. When the banner says **Final — all drawers closed** and every drawer is reconciled (Over/short shows a figure, not **—**), tap **Print** (`eod/page.tsx` L74; it opens the browser's print dialog).
 2. If you must print before reconcile, write **"PRINTED BEFORE RECONCILE"** across the top and reprint after.
 3. Sign **Prepared by (signature)** and **Date / time**.
-4. Staple to it, in this order: the night sheet (form 8.1, after the morning recount), the Z report, every close slip (SOP-01 form 8.2), any over/short forms (SOP-01 form 8.5), the master till sheet (SOP-02 form 8.1).
+4. Staple to it, in this order: the night sheet (form 8.1, after the morning recount), the Z report, every close slip (SOP-01 form 8.2), any over/short forms (SOP-01 form 8.5, only when migration 0315 is not applied; otherwise the reasons are in the app), the master till sheet (SOP-02 form 8.1).
 5. File by date in the month binder. The footer says it plainly: *"file with the day's physical records"*. Records are kept on the licensed premises for five years (`docs/CASH_DEPOSIT_POLICY_DECISION.md` L116–121; WAC 314-55-087).
 
 ### 4.10 Morning: recount and verify the night sheet
@@ -287,7 +287,7 @@ After the recount, a manager does **Verify till** for each drawer on Register Ac
 
 Remember the known problems, which are not fixed yet:
 - **Verified by** is typed text going into an employee-ID column. **Leave it blank** (F-00-4, F-01-5).
-- The screen has **no denomination boxes**, and **Count agrees** is ticked by default (`registers/page.tsx` L261–262). The system records the recount as **$0** whatever you tick (F-00-3). **Part B of the night sheet, signed, is the real morning verify.**
+- The screen has **no denomination boxes**, and **Count agrees** is ticked by default (`registers/page.tsx` L271–272). The system records the recount as **$0** whatever you tick (F-00-3). **Part B of the night sheet, signed, is the real morning verify.**
 - Always reconcile before verify (F-01-12). Click once (F-01-2).
 
 ### 4.13 Bank day: taking the bags to the bank
@@ -352,7 +352,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 
 - The End-of-day report **prints** (§4.9). It has **no export** (no CSV or spreadsheet route under `src/app/admin/registers/eod/`; finding F-00-8, gap G-09/G-15).
 - The owner asked that the closing-day reports *"can be exported and printed"*. Until export is built, the printed report plus the paper night sheet are the record. The owner can query `drawer_sessions`, `drawer_drops` and `pos_sale_events` in Supabase for a CSV.
-- The per-drawer **Till summary** (Register Activity → **Cash drawer reports** → a session) also prints, with one **Manager (signature)** line (`registers/history/[id]/page.tsx` L81, L233). Use it when a single drawer needs a record (an exception, a disputed shortage).
+- The per-drawer **Till summary** (Register Activity → **Cash drawer reports** → a session) also prints, with one **Manager (signature)** line (`registers/history/[id]/page.tsx` L81, L238). Use it when a single drawer needs a record (an exception, a disputed shortage).
 
 ---
 
@@ -552,11 +552,11 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7; `src/lib/accounting/safe-bag-core.ts` L15–25; `docs/MICHAEL-books-96-one-bag-one-day.md` L1–20 |
-| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L106; `src/app/admin/registers/page.tsx` L129–131; `src/app/admin/books/bank/page.tsx` L175 |
+| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L107; `src/app/admin/registers/page.tsx` L139–141; `src/app/admin/books/bank/page.tsx` L175 |
 | 4.1 money | `drawer-posting-service.ts` L20–29, L170–194; `register-cash-journal-core.ts` L265–303; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
-| 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L235–268 |
+| 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L245–278 |
 | 4.8 report | `eod/page.tsx` (268 lines) L15–19, L48–264; `src/lib/registers/eod-core.ts` (295) L80–201; `src/lib/registers/eod-store.ts` (234) L65–173; `src/lib/pos/day-report-core.ts` L40–70, L136–175 |
-| 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L50, L81, L229–242 |
+| 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L50, L81, L234–247 |
 | 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L364–441; `ledger-census-data.ts` L1577–1636; `factory-reset-core.ts` L427–428 |
 | 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–60, L160–260; `deposit-clearing-core.ts` L4–14, L128–130, L390–490; `ledger-census-data.ts` L1519–1575; `books/bank/BankMatchExplainer.tsx` L719–722 |
 | 4.14 $10,000 | `CASH_DEPOSIT_POLICY_DECISION.md` L9–73; `safe-bag-core.ts` L262–328; `books/bank/page.tsx` L495–515; `bank-match-core.ts` L1587, L1594; `docs/MICHAEL-books-98-the-store-safe.md` L43–60 |
@@ -600,4 +600,5 @@ All seven questions were answered by the owner after v1.0 (recorded verbatim in 
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `3385bfa9` (no code change since `0055f06c`), with owner decisions D2, D7, D10, D14–D20 and the cash deposit policy decision. Adds findings F-03-1…F-03-11 and gaps G-14, G-15 (G-04 updated). | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04. Owner answers D21–D27 applied: reason only over $5 (D21); floats confirmed (D22); unsealed overnight in the safe (D23); no second night count (D24); anyone seals, owner-only banking (D25); tamper-evident pre-numbered bags (D26); undeclared bag = warning only (D27). Appendix C now records the answers. Docs only; pins still at `3385bfa9`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). No procedure changed. | SOP program (for owner review) |
+| 1.4 draft | Fix phase | Phase 2.3 (G-03, owner D7, D21). §4.7 reconcile paragraph: cash sales are the system figure (Phase 2.1), the reconciler is the signed-in manager, and a reason over $5.00 is written in the Reconcile card and shown on the owner's Over / short warnings screen (form 8.5 only before migration 0315); §4.9 staple list note. | Fix phase |
 | 1.3 draft | Fix phase | Phase 2.2 (G-01, owner D2). §2 roles table, §4.3 step 2, the known-weaknesses line and the Appendix B row now say the second count at till close is recorded in the app (SOP-01 §4.27 steps 8–12); the paper close slip is still signed. | Fix phase |
