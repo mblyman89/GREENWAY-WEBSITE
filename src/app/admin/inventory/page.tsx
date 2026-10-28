@@ -77,6 +77,8 @@ import { attachLotWebsiteCategories } from "@/lib/inventory/lot-website-category
 import { loadLotLivePrices } from "@/lib/inventory/lot-live-price-server";
 import { attachLotParity, lotAcidFigures, shelfPriceSourceLabel } from "@/lib/inventory/lot-live-price-core";
 import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
+// Phase 0.4 (G-31): cannabis lots filed under a non-cannabis category.
+import { buildCannabisLineIssue } from "@/lib/compliance/cannabis-line-core";
 
 export const dynamic = "force-dynamic";
 
@@ -409,7 +411,11 @@ export default async function InventoryPage({
     lots: intel.lots,
     medicalEndorsement: taxSettings.medicalEndorsement,
   });
+  // Phase 0.4 (G-31 req. 4): any cannabis lot whose effective website category
+  // is non-cannabis is a blocking Issue (it changes tax and purchase limits).
+  const cannabisLineIssue = buildCannabisLineIssue(categorized.lots);
   const issues = sortIssues([
+    ...(cannabisLineIssue ? [cannabisLineIssue] : []),
     ...intelIssues,
     ...buildInventoryIssues({
       receivedDateFlag,

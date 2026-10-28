@@ -947,6 +947,7 @@ import { __runLotActivationGateTests } from "../../src/lib/inventory/lot-activat
 import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pipeline-core";
 import { __runSampleLotCoreTests } from "../../src/lib/inventory/sample-lot-core";
 import { __runCandidateStartCoreTests } from "../../src/lib/staffing/candidate-start-core";
+import { __runCannabisLineCoreTests } from "../../src/lib/compliance/cannabis-line-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
 import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
@@ -1883,6 +1884,7 @@ __runLiquidVolumeTests();
   assertNoFailures("manifest-pipeline-core", __runManifestPipelineTests());
   __runSampleLotCoreTests();
   __runCandidateStartCoreTests();
+  __runCannabisLineCoreTests();
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);

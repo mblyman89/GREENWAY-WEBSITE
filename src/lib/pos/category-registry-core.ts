@@ -23,6 +23,8 @@
  */
 
 /** Minimal registry row shape (matches WebsiteCategoryType where it matters). */
+import { crossesCannabisLine, crossingMessage } from "@/lib/compliance/cannabis-line-core";
+
 export type CategoryRegistryRow = {
   value: string;
   label: string;
@@ -139,7 +141,7 @@ export type ReassignPlan =
       /** Total rows across all surfaces. */
       total: number;
     }
-  | { ok: false; error: string };
+  | { ok: false; error: string; /** Phase 0.4: the refusal is a cannabis-line crossing (audited). */ crossesCannabisLine?: boolean };
 
 /**
  * Validate a bulk category move and describe it in plain English.
@@ -166,6 +168,11 @@ export function buildReassignPlan(input: {
       ok: false,
       error: `"${toRow.label}" is hidden — products can't be moved into a hidden category. Re-activate it first.`,
     };
+  }
+  // Phase 0.4 (G-31, D48): "refused outright, non cannabis should also be
+  // refused outright moving them into a cannabis type." No override.
+  if (crossesCannabisLine(from, to)) {
+    return { ok: false, error: crossingMessage(fromRow.label, toRow.label), crossesCannabisLine: true };
   }
 
   const c = input.counts;

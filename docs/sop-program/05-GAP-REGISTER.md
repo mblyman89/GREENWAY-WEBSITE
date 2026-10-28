@@ -57,7 +57,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-29 | Non-cannabis goods fully used everywhere: register scan to a priced line, sale decrements On hand, void / return restores, cost of goods posted, menu presence, reports; audited | **D45** | F-05b-1 (**S1**), F-05b-15 | SOP-05b §4.1–§4.5, §4.8, form 8.1 | **APPROVED** |
 | G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** |
 | G-30A | Merch **Remove** limited to owner and admin (a new permission) | **D47** | F-05b-14 | SOP-05b §2, §4.11, §6, §9 | **APPROVED** |
-| G-31 | Cannabis-line guard: **refused outright, both directions, no override**, for any lot override, Move products or type mapping | **D48** (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | **APPROVED** |
+| G-31 | Cannabis-line guard: **refused outright, both directions, no override**, for any lot override, Move products or type mapping | **D48** (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | **BUILT** (Phase 0.4) |
 | G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, **no price save on a cost-unknown lot**, classification write warning | **D45, D49** (D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | **APPROVED** |
 | G-33 | Audit stage controls: **Release to Cycle Counts** (separate owner button), send back, cancel | **D54** | F-06-1 (**S1**), F-06-2 | SOP-06 §4.7 (paper count, form 8.2) | **APPROVED** |
 | G-34 | Counter **I'm done** → back to the audit + **/admin cockpit** notice; staff-safe links; live progress | **D55** | F-06-3, F-06-4, F-06-16 | SOP-06 §4.8 (tell the owner) | **APPROVED** |
@@ -444,7 +444,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** a permission such as `merch.remove` = owner, admin; the **Remove...** control hidden for others; the action refuses others; a test.
 - **Interim:** SOP-05b §4.11 (managers Hide, never Remove).
 
-## G-31 · Cannabis-line guard for categories (APPROVED, D48)
+## G-31 · Cannabis-line guard for categories (BUILT, Phase 0.4, D48)
+- **Built (Phase 0.4, D76):** requirements 1–5 met. `crossesCannabisLine` and friends live in `src/lib/compliance/cannabis-line-core.ts` and are shared by `parseClassificationEdit` (with `cannabisLot: true` from the lot action), `buildReassignPlan` and the type save (`refuseTypeCrossing`). Refused outright both ways, no override; each refusal writes `cannabis_line.refused` with its entry point. Every inventory lot came from a CCRS manifest, so a lot can never take a non-cannabis category or type; a type carried by lots or mapped to cannabis can never be mapped non-cannabis, and a non-cannabis type can never be mapped cannabis. Inventory → Issues shows a blocking `cannabis_on_non_cannabis_category` row. Test `tests/compliance/fix-p0-4-cannabis-line.test.ts`.
 
 - **Today:** the lot override, **Move products** and the inventory-type mapping can each cross into or out of `merch` / `accessories` / `accessory` / `paraphernalia` with no check. This changes tax, limits, scan and floor (F-05b-9, **S1**).
 - **Owner decision D48:** *"Q05b-4- refused outright, non cannabis should also be refused outright moving them into a cannabis type."*
