@@ -958,6 +958,7 @@ import { __runRecallEventCoreTests } from "../../src/lib/inventory/recall-event-
 import { __runDestructionEvidenceCoreTests } from "../../src/lib/inventory/destruction-evidence-core";
 import { __runVendorReturnPacketCoreTests } from "../../src/lib/inventory/vendor-return-packet-core";
 import { __runDrawerFigureCoreTests } from "../../src/lib/registers/drawer-figure-core";
+import { __runSecondCountCoreTests } from "../../src/lib/registers/second-count-core";
 import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
@@ -1907,6 +1908,7 @@ __runLiquidVolumeTests();
   assertRan("destruction-evidence-core", __runDestructionEvidenceCoreTests(), 36); // Fix Phase 1.7a: G-43 req 7 photo + video evidence (private bucket, bytes checked)
   assertRan("vendor-return-packet-core", __runVendorReturnPacketCoreTests(), 37); // Fix Phase 1.7b: G-42 req 7 printable vendor-return packet (form 8.2)
   assertRan("drawer-figure-core", __runDrawerFigureCoreTests(), 34); // Fix Phase 2.1: G-05 / F-01-4 per-drawer cash figure (no typed cash sales)
+  assertRan("second-count-core", __runSecondCountCoreTests(), 25); // Fix Phase 2.2: G-01 / owner D2 second-person count at till close
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);

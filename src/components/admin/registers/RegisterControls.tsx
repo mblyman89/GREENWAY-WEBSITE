@@ -146,7 +146,22 @@ export function RegisterControls({
             blank if not recorded.
             <Input name="tips" type="number" step="0.01" min="0" placeholder="0.00" />
           </label>
-          <EmployeePicker name="employee_id" employees={employees} label="Counted by" />
+          <EmployeePicker name="employee_id" employees={employees} label="Counted by" required />
+          {/* Fix Phase 2.2 (G-01, owner D2): any second employee counts the
+              same drawer on their own and enters their PIN. Required. */}
+          <div className="space-y-2 rounded-lg border border-[var(--admin-border)] p-2">
+            <p className="text-xs font-semibold text-[var(--admin-text)]">Second count (required)</p>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              Any other employee counts the drawer by themselves, without looking at the count
+              above, and types what they counted. They cannot be the person in Counted by. If the
+              two counts differ, the drawer still closes and the difference is shown at reconcile.
+            </p>
+            <CountGrid totalLabel="Second count total" namePrefix="second_" />
+            <label className="block text-xs text-[var(--admin-text-muted)]">
+              Second employee&apos;s PIN
+              <Input name="second_pin" type="password" inputMode="numeric" autoComplete="off" maxLength={6} required />
+            </label>
+          </div>
           <div className="flex justify-end">
             <Button type="submit" variant="danger" size="sm">
               Close drawer

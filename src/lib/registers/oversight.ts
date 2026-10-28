@@ -121,6 +121,12 @@ export type AttentionItem = {
    * Employee money — shown for context only; NEVER part of expected/over-short.
    */
   tipsMinor: number | null;
+  /** Fix Phase 2.2 (G-01): who closed (counted first). null = not named. */
+  closedByName: string | null;
+  /** Fix Phase 2.2 (G-01, 0314): the second counter. null = no second count. */
+  secondCountedByName: string | null;
+  /** Fix Phase 2.2 (G-01, 0314): the second person's count, cents. */
+  secondCountMinor: number | null;
 };
 
 export type ActivityKind =
@@ -345,6 +351,9 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,
         tipsMinor: s.tips_minor ?? null,
+        closedByName: nameFor(s.closed_by),
+        secondCountedByName: nameFor(s.second_counted_by ?? null),
+        secondCountMinor: s.second_count_minor ?? null,
       });
     } else if (s.status === "reconciled") {
       attention.push({
@@ -355,6 +364,9 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,
         tipsMinor: s.tips_minor ?? null,
+        closedByName: nameFor(s.closed_by),
+        secondCountedByName: nameFor(s.second_counted_by ?? null),
+        secondCountMinor: s.second_count_minor ?? null,
       });
     }
   }

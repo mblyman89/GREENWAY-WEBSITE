@@ -20,6 +20,11 @@
  *   close — count-out, recorded BLIND. This endpoint NEVER returns expected
  *           cash or variance — the manager reveals over/short at reconcile
  *           in the back office. That is the whole point of a blind count.
+ *           Fix Phase 2.2 (G-01, owner D2: "close only, and it can be any
+ *           second employee"): a SECOND employee's PIN is verified here and
+ *           must be a different person; their own count is stored too. The
+ *           only thing echoed back is whether the two counts agree (and by
+ *           how much they differ) — never expected or over/short.
  *   swap  — value-neutral change trade with the safe (big bills in, equal
  *           change out; zero net movement on both sides). Requires a
  *           manager/lead approval PIN verified here (same role gate as
@@ -35,6 +40,8 @@ import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { validateTillRequest } from "@/lib/pos/till-core";
+import { checkSecondCounter, compareCounts } from "@/lib/registers/second-count-core";
+import { denomTotalMinor } from "@/lib/registers/cash";
 import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession } from "@/lib/registers/store";
 import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -233,7 +240,19 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  // ── close: BLIND count-out ──
+  // ── close: BLIND count-out + second-person count (G-01, owner D2) ──
+  if (!isValidPin(till.secondPin)) {
+    return NextResponse.json({ error: "The second employee's PIN must be 4–6 digits." }, { status: 400 });
+  }
+  const second = await getEmployeeByPin(till.secondPin);
+  if (!second) {
+    await notePinFailure(throttleScope);
+    return NextResponse.json({ error: "No active employee for the second PIN." }, { status: 401 });
+  }
+  await notePinSuccess(throttleScope);
+  const who = checkSecondCounter(employee.id, second.id);
+  if (!who.ok) return NextResponse.json({ error: who.error }, { status: 400 });
+
   const result = await closeDrawerBlind({
     sessionId: session.id,
     employeeId: employee.id,
@@ -241,8 +260,10 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     // Tips are the employee's money — recorded alongside the close but kept
     // OUT of the drawer math (migration 0134; best-effort if unapplied).
     ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
+    second: { employeeId: second.id, denoms: till.secondDenoms },
   });
   if (!result.ok) return NextResponse.json({ error: result.error ?? "Close failed." }, { status: 409 });
+  const cmp = compareCounts(denomTotalMinor(till.denoms), denomTotalMinor(till.secondDenoms));
 
   await recordAudit({
     actorId: employee.staff_id,
@@ -256,11 +277,22 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       employeeId: employee.id,
       // Tips are NOT blind (they're the cashier's own money) — auditable here.
       ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
+      // Fix Phase 2.2 (G-01): who counted second and whether the counts agree.
+      secondCountedBy: second.id,
+      secondCountedByName: second.full_name,
+      countsAgree: cmp.state === "match",
+      countDiffMinor: cmp.diffMinor,
+      ...(result.countRowWarnings ? { countRowWarnings: result.countRowWarnings } : {}),
     },
   });
 
-  // BLIND: no expected, no variance, no counted total echoed back beyond ok.
-  return NextResponse.json({ ok: true });
+  // BLIND: no expected, no variance. The two people already know both of
+  // their own counts, so whether they agree is not a secret; it is returned
+  // so the register can warn them before they walk away.
+  return NextResponse.json({
+    ok: true,
+    secondCount: { name: second.full_name, agree: cmp.state === "match", diffMinor: cmp.diffMinor },
+  });
 }
 
 /**

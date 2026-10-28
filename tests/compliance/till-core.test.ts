@@ -9,6 +9,7 @@ import {
   MAX_DENOM_COUNT,
   MAX_DROP_MINOR,
   MAX_TIPS_MINOR,
+  SECOND_COUNT_REQUIRED_ERROR,
   dollarsToMinor,
   tipsToMinor,
   sanitizeDenoms,
@@ -46,7 +47,7 @@ describe("till-core (POS B21)", () => {
     if (open.ok) expect(denomTotalMinor((open.req as { denoms: Record<string, number> }).denoms)).toBe(11000);
 
     expect(validateTillRequest({ action: "open", pin: "1234", denoms: {} }).ok).toBe(false);
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {} }).ok).toBe(true);
+    expect(validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {} }).ok).toBe(true);
   });
 
   it("drop validates amount (integer cents, positive, plausible), window, witness, notes", () => {
@@ -85,26 +86,43 @@ describe("till-core (POS B21)", () => {
   });
 
   it("close carries optional tips (employee money, kept out of drawer math)", () => {
-    const withTips = validateTillRequest({ action: "close", pin: "1234", denoms: { twenties: 2 }, tipsMinor: 4250 });
+    const withTips = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: { twenties: 2 }, tipsMinor: 4250 });
     expect(withTips.ok).toBe(true);
     if (withTips.ok && withTips.req.action === "close") expect(withTips.req.tipsMinor).toBe(4250);
 
-    const zeroTips = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 0 });
+    const zeroTips = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: 0 });
     expect(zeroTips.ok).toBe(true);
     if (zeroTips.ok && zeroTips.req.action === "close") expect(zeroTips.req.tipsMinor).toBe(0);
 
-    const omitted = validateTillRequest({ action: "close", pin: "1234", denoms: {} });
+    const omitted = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {} });
     expect(omitted.ok).toBe(true);
     if (omitted.ok && omitted.req.action === "close") expect(omitted.req.tipsMinor).toBeUndefined();
 
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: -1 }).ok).toBe(false);
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 10.5 }).ok).toBe(false);
-    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: -1 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: 10.5 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: {}, denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok).toBe(false);
 
     // Tips only exist at close — a stray tipsMinor on open is ignored.
     const open = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });
     expect(open.ok).toBe(true);
     if (open.ok) expect("tipsMinor" in open.req).toBe(false);
+  });
+
+  it("close requires a second employee's PIN and count (Fix Phase 2.2, G-01, owner D2)", () => {
+    const none = validateTillRequest({ action: "close", pin: "1234", denoms: { ones: 2 } });
+    expect(none.ok).toBe(false);
+    if (!none.ok) expect(none.error).toBe(SECOND_COUNT_REQUIRED_ERROR);
+    expect(validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", denoms: {} }).ok).toBe(false);
+    const both = validateTillRequest({ action: "close", pin: "1234", secondPin: "5678", secondDenoms: { fives: 3 }, denoms: { fives: 3 } });
+    expect(both.ok).toBe(true);
+    if (both.ok && both.req.action === "close") {
+      expect(both.req.secondPin).toBe("5678");
+      expect(denomTotalMinor(both.req.secondDenoms)).toBe(1500);
+    }
+    // Count-in has no second count (D2: close only).
+    const open = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, secondPin: "5678" });
+    expect(open.ok).toBe(true);
+    if (open.ok) expect("secondPin" in open.req).toBe(false);
   });
 
   it("rejects missing PIN, null body, and register-side reconcile (manager-only, back office)", () => {

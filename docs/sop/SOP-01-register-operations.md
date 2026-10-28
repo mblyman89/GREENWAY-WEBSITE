@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.5 (draft for owner review; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.6 (draft for owner review; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -706,18 +706,38 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
 2. Make your last **cash drop** if one is due (4.25). The drop must be recorded **before** the close.
 3. Take the **tip jar** out and count it **by itself**. Tips are employee money, not drawer cash.
 4. **MORE ▾ → 🔐 Close drawer (blind count)** (or **Close (blind count)** in the Cash drawer panel).
-5. The window is titled **Close drawer — blind count**: *"Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you."*
+5. The window is titled **Close drawer — blind count**: *"Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you. Then a second employee counts it too."*
 6. Count **every** bill and coin in the drawer by denomination and type **how many** of each. Count twice.
 7. **Tips (counted separately)**: enter the tip-jar total, or leave it blank if there is no tip jar. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."* Blank means "not recorded". **0** means "counted, and there were none".
-8. **Second-person count (owner rule D2, interim paper step).** Before you tap the button, **any second employee** recounts the drawer by themselves and writes their total on the **Close slip (form 8.2)**. If the two counts differ, recount together until they agree. Both sign the slip. The register does not record the second count yet (findings F-01-9 and F-00-5).
-9. **More than one drawer on this register today?** You no longer need an X report to split the day. Since Phase 2.1 (G-05) every sale carries the drawer it was rung on, and reconcile adds up only this drawer's sales (4.30). An X report is still useful for the paperwork, but it is optional.
-10. Tap **Record blind count & close**.
-11. Success: *"Blind count recorded — a manager reconciles it in the back office."* (or *"Blind count recorded with $X in tips — …"*).
-12. Handle the cash as in 4.29.
+8. **Enter your PIN** and tap **Next: second count**. (The button stays off until your PIN is typed and the tips box is valid.)
+9. **Second-person count (owner rule D2, built in Phase 2.2, gap G-01).** The owner said: *"Q2- close only, and it can be any second employee. It doesn't need to be a lead or manager."* Hand the iPad to **any other employee**. The window now reads: *"Second count. Hand the iPad to another employee (any employee, not <you>). They count the drawer by themselves and enter their own PIN. <your> count stays hidden."*
+   - Your count is **hidden** on this step and the second grid starts **empty**, so the second person counts blind, on their own.
+   - They count every bill and coin and type how many of each. The line **Second count: $X** adds up as they type.
+   - They type **their own PIN** under **Second employee's PIN**.
+   - Made a mistake? **Back to <your> count (clears the second count)** returns to your step and wipes the second count.
+   - The server checks the second PIN and refuses **your own** PIN: *"The second count must be done by a different employee. Hand the count to someone else and have them enter their own PIN."* A wrong PIN: *"No active employee for the second PIN."* (wrong PINs count toward the iPad's lock, 5 misses in 60 seconds).
+   - Count-in has **no** second count (D2 says close only).
+10. **More than one drawer on this register today?** You no longer need an X report to split the day. Since Phase 2.1 (G-05) every sale carries the drawer it was rung on, and reconcile adds up only this drawer's sales (4.30). An X report is still useful for the paperwork, but it is optional.
+11. The second person taps **Record blind count & close**.
+12. Success: *"Blind count recorded — a manager reconciles it in the back office."* (or *"Blind count recorded with $X in tips — …"*), followed by the second-count result:
+    - *"Second count by <name>: both counts agree."*, or
+    - *"WARNING: the second count by <name> differs by $X (they counted more / they counted less). Both counts are saved; tell a manager."*
+    A difference is a **warning only**: the drawer is already closed and both counts are saved. The owner has not said a difference should block (gap G-01 requirement 2). **Over / short uses your count** (the closer's), the same as before. If the counts differ, tell the manager on duty. It is good practice to recount together before you walk away, but the system does not ask for it.
+13. Handle the cash as in 4.29.
+
+**Why two counts:** one person can miscount, or be tempted. A second person counting on their own catches a miscount on the spot, and a match is strong evidence the count is right. Both names and both totals stay on the drawer record (migration 0314: `second_counted_by`, `second_count_minor`), and both denomination breakdowns are kept (`drawer_counts` rows `close` and `second`).
+
+**Closing from the back office (managers).** A manager can also close a drawer on **Register Activity** → the register's card → **Close drawer (blind count-out)** (used for the Manager Till, SOP-02). The same rule applies there (Phase 2.2):
+- **Counted by** is now **required** (it says *"Select…"*): pick the person who counted.
+- Under **Second count (required)**: *"Any other employee counts the drawer by themselves, without looking at the count above, and types what they counted. They cannot be the person in Counted by. If the two counts differ, the drawer still closes and the difference is shown at reconcile."* They fill in **Second count total** and type their PIN under **Second employee's PIN**.
+- The server checks the PIN and refuses the person picked in **Counted by**. Wrong PINs on this form share one lock (5 misses in 60 seconds locks it for 60 seconds).
+- The banner reads *"Drawer closed. Both counts agree. A manager reconciles it below."* or, in gold, *"Drawer closed. Warning: The counts differ by $X: the second person counted $X more/less. Over / short uses the closer's count. Both counts are saved and shown at reconcile."*
+
+**Two taps, or two iPads.** Only one close counts. If the drawer was closed a moment earlier: *"This drawer was closed by someone else a moment ago. Nothing was changed."* (finding F-01-2, close part).
 
 **Why it is blind:** if you could see the expected amount, a short drawer could be "fixed" by fudging the count, and an honest miscount could not be told apart from theft. With a blind count your number stands on its own. A manager compares it to the system later. A blind count protects you.
 
-Messages: *"No open drawer on this register."* (already closed, or never opened) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50) or leave it blank."*
+Messages: *"No open drawer on this register."* (already closed, or never opened) · *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* · *"The second employee's PIN must be 4–6 digits."* · *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* (tell the owner) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50) or leave it blank."*
 
 **After closing:** the register shows **No drawer**. You cannot ring another sale on this register until someone counts in again.
 
@@ -755,7 +775,7 @@ Messages: *"Offline — the day report needs a connection to verify the PIN and 
 At close, after the blind count:
 1. **Drawer cash**: follow the store's cash routine in **SOP-02** (master till / safe) and **SOP-03** (end-of-day sheet, deposit bag). **The float stays in the drawer** for tomorrow (**$167.50** in each sales register, **$300.00** in the Manager Till, owner decisions D19/D22; the system closes with `floatStaysInDrawer: true`, `drawer-posting-service.ts` L193). Everything above the float is the takings and goes into the deposit (SOP-03 §4.4–4.5). *(Corrected in v1.1: v1.0 said the float "goes back to the master till / safe", which was wrong, finding F-03-4.)*
 2. **Tips**: per store tip policy. Tips never go into the drawer count or the deposit.
-3. **Close slip (form 8.2)**: hand it to the manager with the second-person signature, the void and return receipts, and the swap log (form 8.3).
+3. **Close slip (form 8.2)**: hand it to the manager with the void and return receipts and the swap log (form 8.3). The second count is now recorded by the register (Phase 2.2). Fill in the slip's second-count column only when the register could not take it (for example, migration 0314 not applied yet).
 4. **Print the Z report** (4.28) when the last drawer of the day is closed, and put it with the end-of-day paperwork.
 
 > The deposit bag (seal, morning verify, into the safe, to the bank) is **not built in the app yet** (finding F-00-6). Follow SOP-03's paper procedure.
@@ -785,9 +805,11 @@ Since Phase 2.1 (G-05, findings F-01-4 and F-01-3) **you do not type cash sales*
 | **Refunds paid from this drawer (N)** | Voids and returns tied to this drawer, listed one per line |
 | **Drops to the safe** | This drawer's recorded drops |
 | **= Expected in drawer** | Opening float + Cash sales − Refunds − Drops |
-| **Counted at close** / **Over / short** | The blind count, and counted − expected |
+| **Counted at close (name)** / **Over / short** | The closer's blind count, and counted − expected |
+| **Second count (name)** | The second employee's own count (Phase 2.2, G-01). **None** on drawers closed before migration 0314 |
 
 1. Read the figure. The expected amount is now the real one (the old "$0.00 before reconcile" problem is gone).
+   - Under the figure one line compares the two counts: *"Both counts agree."* or, in gold, *"Warning: The counts differ by $X: the second person counted $X more/less. Over / short uses the closer's count."* A difference does **not** block reconcile (warning only, gap G-01). Talk to both counters before you reconcile, and note what you find on the close slip.
 2. If a sale from this drawer was **refused by the server** (an exception), the card says so. It is **not** counted, so if the customer paid, the drawer will show over by that amount. Clear it in **Register exceptions** (4.32).
 3. **Reconcile waits until:** a red box lists anything the system cannot know. The **Reconcile** button stays off until the list is empty:
    - *"N sale(s) from this drawer is/are still processing. Wait for the register to finish syncing, then reload."*
@@ -1015,6 +1037,12 @@ Do **not** 86 an item just because you cannot find it. Ask someone first, becaus
 | *"This register already has an open drawer. Close it first."* | BLOCK | One drawer per register | Use the open drawer, or close it | Manager |
 | *"No open drawer on this register."* | BLOCK | Drop/swap/close need an open drawer | Count in | — |
 | *"A drop cannot witness itself — a second person must enter their PIN."* | BLOCK | Two-person rule | Another person, or no witness | — |
+| *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* | BLOCK | Owner rule D2: a second count at every close | Hand the iPad to any other employee | Co-worker |
+| *"The second count must be done by a different employee. Hand the count to someone else and have them enter their own PIN."* | BLOCK | The closer typed their own PIN as the second counter | Another employee counts and enters their PIN | Co-worker |
+| *"No active employee for the second PIN."* / *"The second employee's PIN must be 4–6 digits."* | BLOCK | The second PIN did not match an active employee (counts toward the PIN lock) | Re-type carefully | — |
+| *"WARNING: the second count by <name> differs by $X …"* | WARN | The two counts are different. The drawer **is** closed and both counts are saved | Tell the manager on duty; recount together if you can | Manager |
+| *"This drawer was closed by someone else a moment ago. Nothing was changed."* | BLOCK | A second close of the same drawer (two taps or two iPads) | Nothing; it is already closed | — |
+| *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* | BLOCK | Setup not finished | Use the paper close slip (8.2) and tell the owner | Owner |
 | *"Pick a drop window (afternoon, night, or other)."* | BLOCK | Required | Pick one | — |
 | *"Drop amount must be a positive whole number of cents."* / *"Drop amount is implausibly large — check the number."* | BLOCK | Typo guard (max $50,000) | Re-type | — |
 | *"A manager or lead must approve the swap with their PIN."* / *"A swap cannot approve itself — a manager or lead must enter their PIN."* | BLOCK | Control | Manager or lead | Lead / manager |
@@ -1139,6 +1167,8 @@ Every swap needs one line. The register keeps the dollar value; this log keeps *
 
 Part of form 8.2. Any second employee counts alone, without seeing the first count, then the two compare. Both sign.
 
+> **Since Phase 2.2 (G-01) the register records the second count** (4.27 step 9): the second person's PIN, their own denominations and total. Use this paper sign-off only when the register cannot take it (migration 0314 not applied). Otherwise the slip's second-count column may be left blank.
+
 ### 8.5 Over/short reason form (D7: more than $5.00)
 
 ```
@@ -1229,7 +1259,7 @@ Owner reviewed: ____________________   Date: ________
 |---|---|
 | 2, 4.1 unlock, PIN rules | `src/app/api/pos/unlock/route.ts`, `approve/route.ts`, `witness/route.ts`, `src/lib/staffing/handbook-ack-core.ts` |
 | 4.2 clock | `src/app/(site)/pos/RegisterShell.tsx` (onPunch) |
-| 4.3, 4.25–4.27 till | `src/app/(site)/pos/RegisterShell.tsx` (TillModal ≈L5603), `src/app/api/pos/till/route.ts`, `src/lib/pos/till-core.ts`, `src/lib/registers/store.ts`, `src/lib/registers/cash.ts`, `supabase/migrations/0038_registers_drawers.sql` |
+| 4.3, 4.25–4.27 till | `src/app/(site)/pos/RegisterShell.tsx` (TillModal L5611; second-count step L5643, L5660, L5982, L6012), `src/app/api/pos/till/route.ts` (close L243–294), `src/lib/pos/till-core.ts` (`secondPin` L66, `SECOND_COUNT_REQUIRED_ERROR` L72), `src/lib/registers/store.ts` (`closeDrawerBlind` L209, compare-and-swap L255), `src/lib/registers/second-count-core.ts`, `src/app/admin/registers/actions.ts` (`closeDrawerAction` L104), `src/components/admin/registers/RegisterControls.tsx` (L153), `src/lib/registers/cash.ts`, `supabase/migrations/0038_registers_drawers.sql`, `0314_drawer_second_count.sql` |
 | 4.4 home screen, 4.34 MORE | `RegisterShell.tsx` (≈L2550–2915), `src/lib/pos/medical-testmode-core.ts` |
 | 4.5–4.6 ID / medical | `src/lib/pos/id-scan-core.ts`, `src/lib/pos/medical-pos-core.ts`, `SaleFlow.tsx` (ID gate) |
 | 4.7–4.10 cart, limits | `src/app/(site)/pos/SaleFlow.tsx`, `src/lib/pos/scan-required-core.ts`, `low-stock-core.ts`, `favorites-core.ts`, `src/lib/compliance/sales-limits-core.ts`, `sales-hours-core.ts` |
@@ -1247,7 +1277,7 @@ Owner reviewed: ____________________   Date: ________
 
 | Owner requirement | Today | Interim procedure in this SOP | Gap / finding |
 |---|---|---|---|
-| D2: second-person count at close (any second employee) | Close takes one PIN | Close slip second count (4.27, 8.2/8.4) | G-01 · F-01-9, F-00-5 |
+| ~~D2: second-person count at close (any second employee)~~ | **BUILT, Phase 2.2**: the register (and the back-office close) takes a second employee's PIN and own count (4.27). A difference is a warning | Paper slip 8.2/8.4 only if migration 0314 is not applied | G-01 BUILT · F-01-9 FIXED, F-00-5 close part FIXED |
 | D3: log big bills master till → little safe, and which small bills/coin came back | Swap records value only | Swap log 8.3 and Notes | G-02 · F-01-8, F-00-7 |
 | D7: $5 over/short warning screen (admin only: who, when, how much, required reason) | Not built | Form 8.5 to the owner | G-03 · F-01-11 |
 | Deposit bag (seal → morning verify → safe → bank) | Tables exist, no screen | SOP-03 paper | G-04 · F-00-6 |
@@ -1263,6 +1293,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.6 draft | Fix phase | Phase 2.2 (owner message 4: *"then second-person count"*; owner D2: *"Q2- close only, and it can be any second employee"*). G-01 BUILT: a close needs a second employee's PIN and their own blind count (register two-step close and the back-office close form); the server refuses the closer's own PIN; both counts are stored (migration 0314); a difference is a warning only; over/short still uses the closer's count. Close is now compare-and-swap (F-01-2, close part) and count-row save errors are recorded, not ignored. §4.27 steps 5, 8–13 and back-office close, §4.29 step 3, §4.30 card rows and step 1, §5.8 messages, form 8.4 note, Appendix A and B updated. | Fix program |
 | 1.5 draft | Fix phase | Phase 2.1 (owner message 4: *"per-drawer figure"*). G-05 drawer figure BUILT: reconcile shows and uses the system figure per drawer (no typed cash sales, F-01-4 / F-00-13 FIXED; real expected before reconcile, F-01-3 FIXED); refunds say which drawer or the safe paid (migration 0313); untied refunds block reconcile until a manager ties them; reconcile is compare-and-swap (F-01-2 reconcile part) and records the signed-in manager (F-01-5 reconcile part). §4.22, §4.23, §4.27 step 9, §4.28, §4.30, Appendix A and B updated. | Fix program |
 | 1.4 draft | Fix phase | Phase 1.4 (owner D76). G-44 BUILT (SOP-15 v1.4): a **Destroy** return's units are held on the lot, counted on hand but never sellable, and the return is saved in one step. §4.23 step 6 updated. | Fix program |
 | 1.3 draft | Fix phase | Phase 0.1 (owner D76). F-01-14 FIXED: the register refuses payment when the simulated endorsement took tax off (`medicalTestModeSaleBlock`, `src/lib/pos/medical-testmode-core.ts`; called in `SaleFlow.tsx` onPaid). The server sync refuses a medical sale with tax removed when `medical_endorsement_config` says not endorsed (`src/lib/pos/sync-store.ts`). §4.4 banner note and the MORE-menu row updated. | Fix program |

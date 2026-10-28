@@ -14,6 +14,7 @@ import { reconcileDrawerAction, verifyTillAction, assignRefundAction } from "./a
 import { loadDrawerFigure, drawersForDay, type LoadedDrawerFigure } from "@/lib/registers/drawer-figure-store";
 import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-core";
 import { businessDayFor } from "@/lib/staffing/time";
+import { compareCounts, secondCountSentence } from "@/lib/registers/second-count-core";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ export default async function RegisterActivityPage({
     verified?: string;
     posted?: string;
     assigned?: string;
+    closed?: string;
+    count_diff?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
@@ -443,7 +446,15 @@ export default async function RegisterActivityPage({
 function Flash({
   sp,
 }: {
-  sp: { error?: string; reconciled?: string; verified?: string; posted?: string; assigned?: string };
+  sp: {
+    error?: string;
+    reconciled?: string;
+    verified?: string;
+    posted?: string;
+    assigned?: string;
+    closed?: string;
+    count_diff?: string;
+  };
 }) {
   if (sp.error) {
     return (
@@ -462,6 +473,25 @@ function Flash({
         {sp.posted ? (
           <span className="mt-1 block text-xs opacity-80">{sp.posted}</span>
         ) : null}
+      </div>
+    );
+  }
+  if (sp.closed != null) {
+    // Fix Phase 2.2 (G-01): the close records both counts. A difference is a
+    // warning only (the owner has not said it should block).
+    const diff = Number(sp.count_diff);
+    const differs = sp.count_diff != null && Number.isFinite(diff) && diff !== 0;
+    return (
+      <div
+        className={
+          differs
+            ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
+            : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]"
+        }
+      >
+        {differs
+          ? `Drawer closed. Warning: ${secondCountSentence(compareCounts(0, diff))} Both counts are saved and shown at reconcile.`
+          : "Drawer closed. Both counts agree. A manager reconciles it below."}
       </div>
     );
   }
@@ -497,7 +527,16 @@ function ReconcileCard({
   loaded,
   drawerChoices,
 }: {
-  item: { sessionId: string; registerName: string; businessDay: string; closingCountMinor: number | null; tipsMinor: number | null };
+  item: {
+    sessionId: string;
+    registerName: string;
+    businessDay: string;
+    closingCountMinor: number | null;
+    tipsMinor: number | null;
+    closedByName: string | null;
+    secondCountedByName: string | null;
+    secondCountMinor: number | null;
+  };
   loaded: LoadedDrawerFigure | null;
   drawerChoices: Map<string, { id: string; label: string }[]>;
 }) {
@@ -540,11 +579,31 @@ function ReconcileCard({
             <Row label="Drops to the safe" value={`− ${formatCents(f.dropsMinor)}`} />
             <Row label="= Expected in drawer" value={f.expectedMinor == null ? "Unknown" : formatCents(f.expectedMinor)} />
             <Row
-              label="Counted at close"
+              label={item.closedByName ? `Counted at close (${item.closedByName})` : "Counted at close"}
               value={item.closingCountMinor == null ? "Not counted" : formatCents(item.closingCountMinor)}
+            />
+            {/* Fix Phase 2.2 (G-01, owner D2): the second person's own count. */}
+            <Row
+              label={item.secondCountedByName ? `Second count (${item.secondCountedByName})` : "Second count"}
+              value={item.secondCountMinor == null ? "None" : formatCents(item.secondCountMinor)}
             />
             {f.overShortMinor != null && <Row label="Over / short" value={overShortLabel(f.overShortMinor)} />}
           </dl>
+          {(() => {
+            const cmp = compareCounts(item.closingCountMinor, item.secondCountMinor);
+            return (
+              <p
+                className={`mb-3 text-xs ${
+                  cmp.state === "second_higher" || cmp.state === "second_lower"
+                    ? "text-[var(--admin-gold)]"
+                    : "text-[var(--admin-text-muted)]"
+                }`}
+              >
+                {cmp.state === "second_higher" || cmp.state === "second_lower" ? "Warning: " : ""}
+                {secondCountSentence(cmp)}
+              </p>
+            );
+          })()}
           {f.refundsPaid.length > 0 && (
             <ul className="mb-3 list-disc pl-5 text-xs text-[var(--admin-text-muted)]">
               {f.refundsPaid.map((r) => (
