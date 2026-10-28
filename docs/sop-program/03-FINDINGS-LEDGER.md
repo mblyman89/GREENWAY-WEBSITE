@@ -20,7 +20,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 ## SOP-00 recon findings (found while walking the tree for the roadmap)
 
 ### F-00-1 · CONFIRMED · DOC · S2 — The concierge tells staff the POS "is PLANNED, not built yet"
-- **Pin:** `src/lib/admin/concierge-kb.ts` L478–491 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
+- **Pin:** `src/lib/admin/concierge-kb.ts` L479–492 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
 - **Reality:** the register exists. `src/app/(site)/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
 - **Effect:** an employee who asks the concierge "how do I close my till?" is told the register does not exist. This is the single biggest knowledge gap in the concierge.
 
@@ -171,7 +171,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `till-core.ts` L195 (`witnessPin` optional), UI *"Witness PIN (optional, second person)"* (`RegisterShell.tsx` L5779). Drops are the highest-value cash movement during a shift. The SOP sets "always get a witness when someone else is on the floor" as store practice.
 
 ### F-01-16 · CONFIRMED · DOC · S2 — The concierge still says the POS is planned (re-confirmed)
-- `src/lib/admin/concierge-kb.ts` L481 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
+- `src/lib/admin/concierge-kb.ts` L482 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
 
 ---
 
@@ -315,7 +315,7 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 - **SOP impact:** SOP-03 §4.14, the $10k rule on paper and the bag log's **Note** column. Ties to G-04 / G-14.
 
 ### F-03-11 · CONFIRMED · DOC · S3 — Help and concierge have no end-of-day or deposit-bag content
-- **Pin:** `grep -n -i "deposit\|end.of.day\|eod" src/lib/admin/help-content.ts src/lib/admin/concierge-kb.ts` → only payroll **direct deposit** (`help-content.ts` L725–742; `concierge-kb.ts` L264–282).
+- **Pin:** `grep -n -i "deposit\|end.of.day\|eod" src/lib/admin/help-content.ts src/lib/admin/concierge-kb.ts` → only payroll **direct deposit** (`help-content.ts` L725–742; `concierge-kb.ts` L265–283).
 - **Effect:** an employee asking the concierge *"how do I do the deposit?"* gets payroll ACH content or nothing.
 - **SOP impact:** recorded in `04-CONCIERGE-COVERAGE-LEDGER.md` (SOP-03 slice); grounding comes from SOP-03 §4, §8 and §9 in Phase D.
 
@@ -440,7 +440,7 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 
 ### F-05a-1 · CONFIRMED · BUG/HARDEN · S1 — "Destroyed" set by hand leaves units on file and drops the lot from the CCRS Inventory file
 - **Status: FIXED (Phase 1.1, G-22). Destroyed is not in `MANUAL_LOT_STATUSES`; the core and `updateLotStatus` refuse it; the guard fails the build if `destroyed` is written outside `disposition.ts` completeDestruction).**
-- **Pin:** Lifecycle status → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864) writes the status only: no quantity change, no adjustment row, no audit. The weekly CCRS Inventory file reads lots `.neq("status","destroyed")` (`src/lib/compliance/ccrs-batch.ts` L1196–1207) and re-reads destroyed lots only when an event row in the same batch names them (`readDestroyedLots`, L380–411). The proper path sets Destroyed only when the destruction empties the lot (`src/lib/inventory/disposition.ts` L1105–1112).
+- **Pin:** Lifecycle status → `setLotStatusAction` (`src/app/admin/inventory/actions.ts` L142–155) → `updateLotStatus` (`src/lib/inventory/store.ts` L849–864) writes the status only: no quantity change, no adjustment row, no audit. The weekly CCRS Inventory file reads lots `.neq("status","destroyed")` (`src/lib/compliance/ccrs-batch.ts` L1196–1207) and re-reads destroyed lots only when an event row in the same batch names them (`readDestroyedLots`, L380–411). The proper path sets Destroyed only when the destruction empties the lot (`src/lib/inventory/disposition.ts` L1163–1170).
 - **Effect:** a lot destroyed by hand silently leaves Greenway's state filing while CCRS still holds its last quantity. No Destruction adjustment is filed and no waste record exists.
 - **SOP impact:** SOP-05a §4.9 ("Never Destroyed by hand"), header box, §9 card. Ties to **G-22**.
 
@@ -527,14 +527,14 @@ Owner sources quoted in SOP-05a §1: `00-OWNER-REQUEST-VERBATIM.md` L7 (*"Sop fo
 - **SOP impact:** SOP-05a v1.1 §4.9 interim. Fixed by **G-28**. Found while answering the owner's Q-05a-4 question about the Destructions page.
 
 ### F-05a-18 · CONFIRMED · BUG · S1 — Scheduling a destruction overwrites Recalled with Quarantine and lifts the recall hold
-- **Status: FIXED (Phase 1.3, G-28). `evaluateDestructionSchedule` (`destruction-lot-status-core.ts` L85) refuses a Recalled lot and the Recall reason; the Quarantine write is compare-and-set on Active (`disposition.ts` L978); completion refuses a Recalled lot (L1117); guard step 5 fails any lot-status write in disposition.ts that is not compare-and-set).**
-- **Pin:** `scheduleDestruction` (`src/lib/inventory/disposition.ts` L942–1000) writes `status: "quarantine"` at L965–971 whatever the lot's status was (unless `quarantineLot === false`, used only for a single customer-returned unit, L716–723). The register recall hold reads only `recalled` (`src/lib/pos/recall-hold-core.ts` L44); quarantine does not hold (`completion-gate.ts` L127–129).
+- **Status: FIXED (Phase 1.3, G-28). `evaluateDestructionSchedule` (`destruction-lot-status-core.ts` L85) refuses a Recalled lot and the Recall reason; the Quarantine write is compare-and-set on Active (`disposition.ts` L1036); completion refuses a Recalled lot (L1117); guard step 5 fails any lot-status write in disposition.ts that is not compare-and-set).**
+- **Pin:** `scheduleDestruction` (`src/lib/inventory/disposition.ts` L942–1058) writes `status: "quarantine"` at L965–971 whatever the lot's status was (unless `quarantineLot === false`, used only for a single customer-returned unit, L716–723). The register recall hold reads only `recalled` (`src/lib/pos/recall-hold-core.ts` L44); quarantine does not hold (`completion-gate.ts` L127–129).
 - **Effect:** once a recalled lot is scheduled, nothing in the app shows it was recalled, and other lots of that product stop being held if it was the only Recalled lot. WAC 314-55-225(3)(b)(i) requires isolating recalled product.
 - **SOP impact:** SOP-05a v1.1 §4.9 point 3, §4.10 step 9, form 8.4 (C): recalled lots are not scheduled in the app until **G-28**.
 
 ### F-05a-19 · CONFIRMED · BUG · S2 — Cancelling a destruction always sets the lot Active
-- **Status: FIXED (Phase 1.3, G-28). `cancelDestruction` (`disposition.ts` L1211) restores the stored status via `restoreLotAfterEventCloses` (L934): only Quarantine → Active, only if it was Active, compare-and-set; migration 0307 keeps the status).**
-- **Pin:** `cancelDestruction` (`disposition.ts` L1118–1134) sets `status: "active"` at L1113–1114, with the comment *"Release quarantine back to active (best effort)."*; it does not remember the earlier status.
+- **Status: FIXED (Phase 1.3, G-28). `cancelDestruction` (`disposition.ts` L1269) restores the stored status via `restoreLotAfterEventCloses` (L934): only Quarantine → Active, only if it was Active, compare-and-set; migration 0307 keeps the status).**
+- **Pin:** `cancelDestruction` (`disposition.ts` L1176–1192) sets `status: "active"` at L1113–1114, with the comment *"Release quarantine back to active (best effort)."*; it does not remember the earlier status.
 - **Effect:** a cancelled destruction of an expired, damaged or (if F-05a-17 is worked around) recalled lot returns it to sale with no check.
 - **SOP impact:** SOP-05a v1.1 §4.9 point 1, §6. Fixed by **G-28**.
 
@@ -725,7 +725,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 ## SOP-15 · Returns to Vendor, Customer-Return Disposition & Product Destruction (verified at `main@b8101abb`)
 
 ### F-15-1 · CONFIRMED · BUG · S1 — Logging a vendor return reduces on-hand and posts the CCRS adjustment before the manifest is confirmed or the product leaves
-- **Status: FIXED (Phase 1.5, G-42). `createVendorReturn` now only reserves the units (`reserve_vendor_return`, migration 0309; `disposition.ts` L979–1061; no `postReduction`); the reduction and the CCRS Other adjustment post at **Record departure**, after the LCB success email step (`depart_vendor_return`, `disposition.ts` L1188). Before 0309 the app refuses to log rather than reduce. Guard step 7; `tests/compliance/fix-p1-5-vendor-return.test.ts`).**
+- **Status: FIXED (Phase 1.5, G-42). `createVendorReturn` now only reserves the units (`reserve_vendor_return`, migration 0309; `disposition.ts` L1037–1119; no `postReduction`); the reduction and the CCRS Other adjustment post at **Record departure**, after the LCB success email step (`depart_vendor_return`, `disposition.ts` L1246). Before 0309 the app refuses to log rather than reduce. Guard step 7; `tests/compliance/fix-p1-5-vendor-return.test.ts`).**
 - **Pin:** `createVendorReturn` posts `postReduction(…, "other", …)` first (`src/lib/inventory/disposition.ts` L831–840), at the moment **Log return (reduces on-hand)** is pressed (`disposition/page.tsx` L201, L246). The screen's own checklist says *"Do not release product until the manifest is confirmed."* (`disposition-core.ts` L348). The manifest status is tracked afterwards (L855; `updateVendorReturnManifest` L879–904) but never moves stock.
 - **Effect:** if the return is logged when the RMA arrives, the app and that week's CCRS InventoryAdjustment file report the product gone while it is still in the vault for 48–72 hours or more. A cancelled or rescheduled pickup leaves a false CCRS record (S1: state filing).
 - **SOP impact:** SOP-15 §4.11 (log on pickup day only), form 8.2. Gap **G-42**.
@@ -773,7 +773,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 
 ### F-15-9 · CONFIRMED · GAP · S2 — Cancelling a customer-return destruction sets the lot Active even though it was never quarantined, and no cancel records a reason
 - **Status: FIXED (Phase 1.3, G-28). Owner-only `inventory.destruction.cancel`, a required reason kept on the event and in the audit row (before/after lot status); a customer-return event (`lot_status_touched = false`) never touches the lot).**
-- **Pin:** `cancelDestruction` sets `status: "active"` on the lot unconditionally (`disposition.ts` L1130–1132); `cancelDestructionAction` records no reason (`actions.ts` L246–253). Extends F-05a-19 to the customer-return case and to the missing reason.
+- **Pin:** `cancelDestruction` sets `status: "active"` on the lot unconditionally (`disposition.ts` L1188–1190); `cancelDestructionAction` records no reason (`actions.ts` L246–253). Extends F-05a-19 to the customer-return case and to the missing reason.
 - **Effect:** the destroy-return unit silently becomes ordinary stock; any lot status set by hand after scheduling is overwritten; nobody can tell why a destruction was stopped.
 - **SOP impact:** SOP-15 §2 rule 3, §4.19, form 8.5. **G-28** (extended).
 
@@ -789,7 +789,7 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** SOP-15 §4.20. **G-28** (extended).
 
 ### F-15-12 · CONFIRMED · GAP · S3 — Scheduling does not check the quantity against on-hand
-- **Status: FIXED (Phase 1.6a, G-43). `scheduleDestruction` (`disposition.ts` L1475–1484) refuses a quantity above on hand less held units less open destructions not backed by held units (`evaluateScheduleQuantity`), with the figures in the message.**
+- **Status: FIXED (Phase 1.6a, G-43). `scheduleDestruction` (`disposition.ts` L1533–1542) refuses a quantity above on hand less held units less open destructions not backed by held units (`evaluateScheduleQuantity`), with the figures in the message.**
 - **Pin:** `scheduleDestruction` checks only `quantity > 0` (`disposition.ts` L961); the comment says *"Quantity is validated against on-hand at completion time."* (L936–937); completion refuses with *"Quantity (x) exceeds on-hand (y)."* (L250).
 - **Effect:** an over-scheduled event waits out the whole hold and then fails on destruction day.
 - **SOP impact:** SOP-15 §4.15 step 4, §4.18. **G-43**.

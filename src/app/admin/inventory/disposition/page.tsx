@@ -632,9 +632,20 @@ export default async function DispositionPage({
                         <p className="mt-0.5 text-xs text-white/50">Logged before Phase 1.5: on-hand already came off at logging.</p>
                       ) : null}
                     </div>
-                    <Badge tone={manifestTone(status)}>
-                      {VENDOR_RETURN_STATUS_LABELS[status as keyof typeof VENDOR_RETURN_STATUS_LABELS] ?? status}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge tone={manifestTone(status)}>
+                        {VENDOR_RETURN_STATUS_LABELS[status as keyof typeof VENDOR_RETURN_STATUS_LABELS] ?? status}
+                      </Badge>
+                      {/* Fix Phase 1.7b (G-42 req 7): form 8.2 filled in from the app, at every step. */}
+                      <Link
+                        href={`/admin/inventory/disposition/vendor-return-packet?id=${encodeURIComponent(r.id)}`}
+                        prefetch={false}
+                        className="text-xs font-semibold text-[var(--admin-accent)] underline"
+                        data-testid="vendor-return-packet-link"
+                      >
+                        Print packet (form 8.2)
+                      </Link>
+                    </div>
                   </div>
 
                   {open && status !== "none" ? (

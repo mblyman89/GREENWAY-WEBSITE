@@ -956,6 +956,7 @@ import { __runVendorReturnCoreTests } from "../../src/lib/inventory/vendor-retur
 import { __runDestructionRecordCoreTests } from "../../src/lib/inventory/destruction-record-core";
 import { __runRecallEventCoreTests } from "../../src/lib/inventory/recall-event-core";
 import { __runDestructionEvidenceCoreTests } from "../../src/lib/inventory/destruction-evidence-core";
+import { __runVendorReturnPacketCoreTests } from "../../src/lib/inventory/vendor-return-packet-core";
 import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
@@ -1903,6 +1904,7 @@ __runLiquidVolumeTests();
   assertRan("destruction-record-core", __runDestructionRecordCoreTests(), 28); // Fix Phase 1.6a: G-43 witness from roster, camera, Other approval, schedule qty, Pacific
   assertRan("recall-event-core", __runRecallEventCoreTests(), 68); // Fix Phase 1.6c: G-25 recall log, LCB deadlines, plan, website/online propagation
   assertRan("destruction-evidence-core", __runDestructionEvidenceCoreTests(), 36); // Fix Phase 1.7a: G-43 req 7 photo + video evidence (private bucket, bytes checked)
+  assertRan("vendor-return-packet-core", __runVendorReturnPacketCoreTests(), 37); // Fix Phase 1.7b: G-42 req 7 printable vendor-return packet (form 8.2)
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);
