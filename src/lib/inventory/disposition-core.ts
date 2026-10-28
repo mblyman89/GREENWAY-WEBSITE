@@ -318,7 +318,11 @@ export const MANIFEST_STATUS_LABELS: Record<ManifestStatus, string> = {
   picked_up: "Picked up / in transit",
 };
 
-/** Legal forward transitions (may also stay put). */
+/**
+ * Legal forward transitions (may also stay put). Kept for older callers; the
+ * vendor-return screen now uses nextVendorReturnStatus in vendor-return-core
+ * (one next step at a time, plus owner-only cancel).
+ */
 export function nextManifestStatuses(current: string): ManifestStatus[] {
   switch (current) {
     case "none":
@@ -334,19 +338,10 @@ export function nextManifestStatuses(current: string): ManifestStatus[] {
   }
 }
 
-/**
- * Operator guidance for the vendor-return manifest workflow. Verified against
- * WAC 314-55-085 + LCB/industry practice (see compliance doc §3): manifests
- * must be generated in CCRS (POS PDFs are not valid; contingency manifests
- * were discontinued Nov 2025), submitted 48–72h before pickup, and LCB
- * confirms Mon/Wed/Fri by email.
- */
-export const VENDOR_RETURN_MANIFEST_STEPS: readonly string[] = [
-  "Get the processor's written acceptance (RMA number) BEFORE anything moves.",
-  "Create the transport manifest in the CCRS portal — POS-generated manifests are not valid and contingency manifests were discontinued (Nov 2025).",
-  "Submit the manifest 48–72 hours before pickup; LCB confirms manifests Mon/Wed/Fri by email (info@lcb.wa.gov).",
-  "Do not release product until the manifest is confirmed. Keep the manifest + RMA with this record for 5 years (WAC 314-55-087).",
-];
+// The old VENDOR_RETURN_MANIFEST_STEPS list (with its "48-72 hours before
+// pickup" and "LCB confirms Mon/Wed/Fri" lines) was removed in Phase 1.5
+// (F-15-19): neither is in the state's Manifest guide. The current checklist
+// is VENDOR_RETURN_STATE_STEPS in src/lib/inventory/vendor-return-core.ts.
 
 // ---------------------------------------------------------------------------
 // Self-tests (tsx/vitest-runnable — PURE module)

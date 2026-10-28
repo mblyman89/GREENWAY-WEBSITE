@@ -15,6 +15,9 @@ import {
   getDestructionEvent,
   updateDispositionSettings,
   updateVendorReturnManifest,
+  updateVendorReturnTransport,
+  cancelVendorReturn,
+  getVendorReturn,
   findReturnableOrderLines,
   dispositionSummary,
   listDestructionEvents,
@@ -26,10 +29,16 @@ import {
   VENDOR_RETURN_REASONS,
   DESTRUCTION_REASONS,
 } from "@/lib/inventory/disposition-reasons";
+import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import {
-  CUSTOMER_RETURN_REASONS,
-  MANIFEST_STATUSES,
-} from "@/lib/inventory/disposition-core";
+  VENDOR_RETURN_STATUSES,
+  evaluateVendorReturnCancel,
+  isLegacyReducedReturn,
+  isOpenVendorReturn,
+  pacificInputToIso,
+  VENDOR_RETURN_CANCEL_AUDIT_ACTION,
+  VENDOR_RETURN_DEPART_AUDIT_ACTION,
+} from "@/lib/inventory/vendor-return-core";
 import {
   evaluateDestructionCancel,
   DESTRUCTION_CANCEL_AUDIT_ACTION,
@@ -44,12 +53,18 @@ import {
 const RET = new Set<string>(VENDOR_RETURN_REASONS);
 const DES = new Set<string>(DESTRUCTION_REASONS);
 const CUST = new Set<string>(CUSTOMER_RETURN_REASONS);
-const MANIFEST = new Set<string>(MANIFEST_STATUSES);
+const MANIFEST = new Set<string>(VENDOR_RETURN_STATUSES);
 
 const BASE = "/admin/inventory/disposition";
 
 function str(formData: FormData, key: string): string {
   return ((formData.get(key) as string | null) ?? "").trim();
+}
+
+/** A positive number typed on the form, or null (blank = use the lot's own value). */
+function posNum(v: string): number | null {
+  const n = Number(v);
+  return v !== "" && Number.isFinite(n) && n > 0 ? n : null;
 }
 
 // ── Customer returns (Task Q) ────────────────────────────────────────────────
@@ -120,20 +135,27 @@ export async function createCustomerReturnAction(formData: FormData) {
 
 // ── Vendor returns ───────────────────────────────────────────────────────────
 
+/**
+ * Fix Phase 1.5 (G-42; F-15-1, F-15-2): logging RESERVES the units (D63 (4)).
+ * RMA, vendor, processor license and detail are required (checked again in
+ * createVendorReturn); a Recall return carries the LCB officer and date (D65).
+ */
 export async function createVendorReturnAction(formData: FormData) {
   const session = await requirePermission("inventory.manage");
   const lotId = str(formData, "lot_id");
-  const reason = str(formData, "reason") || "other";
+  const reason = str(formData, "reason");
   const detail = str(formData, "detail") || null;
   const rma = str(formData, "rma_number") || null;
-  const manifestNumber = str(formData, "manifest_number") || null;
+  const vendorId = str(formData, "vendor_id") || null;
   const processorLicense = str(formData, "processor_license") || null;
+  const recallOfficer = str(formData, "recall_officer") || null;
+  const recallContactDate = str(formData, "recall_contact_date") || null;
   const qty = Number(formData.get("quantity"));
-  if (!lotId || !Number.isFinite(qty) || qty <= 0) redirect(`${BASE}?error=qty`);
-  if (!RET.has(reason)) redirect(`${BASE}?error=reason`);
+  if (!lotId || !Number.isFinite(qty) || qty <= 0) redirect(`${BASE}?error=${encodeURIComponent("Choose a lot and enter a quantity greater than zero.")}`);
+  if (!RET.has(reason)) redirect(`${BASE}?error=${encodeURIComponent("Choose a reason for the vendor return.")}`);
 
   const result = await createVendorReturn(
-    { lotId, quantity: qty, reason, detail, rmaNumber: rma, manifestNumber, processorLicense },
+    { lotId, vendorId, quantity: qty, reason, detail, rmaNumber: rma, processorLicense, recallOfficer, recallContactDate },
     session.userId,
   );
   if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
@@ -143,35 +165,142 @@ export async function createVendorReturnAction(formData: FormData) {
     action: "vendor_return.create",
     entityType: "vendor_returns",
     entityId: result.id,
-    after: { lot_id: lotId, quantity: qty, reason, rma_number: rma, manifest_number: manifestNumber },
+    after: {
+      lot_id: lotId,
+      vendor_id: vendorId,
+      quantity: qty,
+      reason,
+      rma_number: rma,
+      processor_license: processorLicense,
+      reserved: qty,
+      recall_officer: reason === "recall" ? recallOfficer : null,
+      recall_contact_date: reason === "recall" ? recallContactDate : null,
+    },
   });
   revalidatePath(BASE);
   revalidatePath("/admin/inventory");
+  revalidatePath(`/admin/inventory/${lotId}`);
+  await revalidatePublicMenuSurfaces();
   redirect(`${BASE}?ok=returned`);
 }
 
+/** Fix Phase 1.5 (G-42 v1.1 item 8): the transport details Manifest.CSV needs. */
+export async function updateVendorReturnTransportAction(id: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const estDepartureAt = pacificInputToIso(str(formData, "est_departure_date"), str(formData, "est_departure_time"));
+  const estArrivalAt = pacificInputToIso(str(formData, "est_arrival_date"), str(formData, "est_arrival_time"));
+  const input = {
+    id,
+    transportationType: str(formData, "transportation_type"),
+    transporterLicense: str(formData, "transporter_license") || null,
+    driverName: str(formData, "driver_name") || null,
+    vin: str(formData, "vehicle_vin") || null,
+    plate: str(formData, "vehicle_plate") || null,
+    make: str(formData, "vehicle_make") || null,
+    model: str(formData, "vehicle_model") || null,
+    color: str(formData, "vehicle_color") || null,
+    estDepartureAt,
+    estArrivalAt,
+    weightPerUnitG: posNum(str(formData, "weight_per_unit_g")),
+    servingsPerUnit: posNum(str(formData, "servings_per_unit")),
+  };
+  const result = await updateVendorReturnTransport(input);
+  if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "vendor_return.transport",
+    entityType: "vendor_returns",
+    entityId: id,
+    after: { ...input, id: undefined },
+  });
+  revalidatePath(BASE);
+  redirect(`${BASE}?ok=transport`);
+}
+
+/**
+ * Fix Phase 1.5 (G-42 req 3, 4; F-15-3): one step at a time, checked on the
+ * server. Departure takes the pickup date and time as Pacific wall time.
+ */
 export async function updateManifestAction(id: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
   const status = str(formData, "manifest_status");
   const manifestNumber = str(formData, "manifest_number") || null;
-  const pickupAt = str(formData, "pickup_at") || null;
-  if (!MANIFEST.has(status)) redirect(`${BASE}?error=${encodeURIComponent("Invalid manifest status.")}`);
+  const lcbEmailDate = str(formData, "lcb_email_date") || null;
+  const pickupIso = pacificInputToIso(str(formData, "pickup_date"), str(formData, "pickup_time"));
+  const driverName = str(formData, "driver_name") || null;
+  if (!MANIFEST.has(status) || status === "cancelled") redirect(`${BASE}?error=${encodeURIComponent("Invalid manifest step.")}`);
+  const before = await getVendorReturn(id);
 
   const result = await updateVendorReturnManifest(
-    { id, manifestStatus: status, manifestNumber, pickupAt },
+    { id, manifestStatus: status, manifestNumber, lcbEmailDate, pickupIso, driverName },
     session.userId,
   );
   if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: "vendor_return.manifest",
+    action: status === "picked_up" ? VENDOR_RETURN_DEPART_AUDIT_ACTION : "vendor_return.manifest",
     entityType: "vendor_returns",
     entityId: id,
-    after: { manifest_status: status, manifest_number: manifestNumber, pickup_at: pickupAt },
+    before: { manifest_status: before?.manifest_status ?? null, reserved_qty: before?.reserved_qty ?? null },
+    after: {
+      manifest_status: status,
+      manifest_number: manifestNumber,
+      lcb_email_date: lcbEmailDate,
+      pickup_at: pickupIso,
+      driver_name: driverName,
+      adjustment_id: result.adjustmentId ?? null,
+      legacy_reduced_at_logging: before ? isLegacyReducedReturn(before) : null,
+    },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?ok=manifest`);
+  if (status === "picked_up") {
+    revalidatePath("/admin/inventory");
+    revalidatePath(`/admin/inventory/${result.lotId}`);
+  }
+  redirect(`${BASE}?ok=${status === "picked_up" ? "departed" : "manifest"}`);
+}
+
+/** Fix Phase 1.5 (G-42 req 5): the owner cancels with a reason; the reserved units are released. */
+export async function cancelVendorReturnAction(id: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const reason = str(formData, "cancel_reason");
+  const current = await getVendorReturn(id);
+  const decision = evaluateVendorReturnCancel({
+    status: current?.manifest_status ?? null,
+    canCancel: can(session.profile.role, "inventory.vendor_return.cancel"),
+    legacyReduced: current ? isLegacyReducedReturn(current) : false,
+    reason,
+  });
+  if (!current || !decision.ok) {
+    const msg = !current ? "Vendor return not found." : decision.ok ? "" : decision.refusals.map((r) => r.message).join(" ");
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: `${VENDOR_RETURN_CANCEL_AUDIT_ACTION}_refused`,
+      entityType: "vendor_returns",
+      entityId: id,
+      after: { reason: reason.slice(0, 500) || null, message: msg.slice(0, 500) },
+    });
+    redirect(`${BASE}?error=${encodeURIComponent(msg.slice(0, 900))}`);
+  }
+  const result = await cancelVendorReturn(id, session.userId, decision.reason);
+  if (!result.ok) redirect(`${BASE}?error=${encodeURIComponent(result.error)}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: VENDOR_RETURN_CANCEL_AUDIT_ACTION,
+    entityType: "vendor_returns",
+    entityId: id,
+    before: { manifest_status: current.manifest_status ?? null, reserved_qty: current.reserved_qty ?? null },
+    after: { manifest_status: "cancelled", reason: decision.reason, released: result.released, lot_id: result.lotId },
+  });
+  revalidatePath(BASE);
+  revalidatePath("/admin/inventory");
+  revalidatePath(`/admin/inventory/${result.lotId}`);
+  if (result.released > 0) await revalidatePublicMenuSurfaces();
+  redirect(`${BASE}?ok=vr_cancelled&held=${encodeURIComponent(String(result.released))}`);
 }
 
 // ── Destructions ─────────────────────────────────────────────────────────────
@@ -352,10 +481,8 @@ export async function generateDispositionAdviceAction(
     const open = destructions.filter((d) => d.status === "pending_quarantine" || d.status === "ready");
     const ready = open.filter((d) => d.hold_elapsed);
     const recallsOpen = open.filter((d) => d.reason === "recall");
-    const awaitingManifest = vendorReturns.filter((r) => {
-      const s = (r.manifest_status ?? "none") as string;
-      return s !== "picked_up";
-    });
+    // Fix Phase 1.5: a cancelled return is closed too.
+    const awaitingManifest = vendorReturns.filter((r) => isOpenVendorReturn(r.manifest_status));
     const advice = await generateDispositionAdvice({
       summary,
       holdHours: settings.holdHours,

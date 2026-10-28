@@ -22,6 +22,7 @@
  *  - register-sellability-store.ts         → live stock = sellable
  *  - disposition.ts postReduction          → a disposition never removes held units
  *  - disposition.ts createCustomerReturn   → Destroy return is held, atomically (RPC)
+ *  - disposition.ts createVendorReturn     → a vendor return reserves its units until departure (0309; G-42)
  *
  * Pure: no I/O.
  */
@@ -79,7 +80,7 @@ export function evaluateReductionAgainstHold(input: {
   if (input.qty > free) {
     return {
       ok: false,
-      error: `Quantity (${input.qty}) exceeds what is free on this lot (${free}): ${held} unit(s) are held for a customer-return destruction and cannot be used for anything else.`,
+      error: `Quantity (${input.qty}) exceeds what is free on this lot (${free}): ${held} unit(s) are held (for a customer-return destruction or a vendor return waiting to depart) and cannot be used for anything else.`,
     };
   }
   return { ok: true };
@@ -127,7 +128,7 @@ export function __runHeldStockCoreTests(): { passed: number; failed: number } {
   const r1 = evaluateReductionAgainstHold({ qty: 2, onHand: 5, held: 3 });
   ok(r1.ok === true, "2 of 2 free ok");
   const r2 = evaluateReductionAgainstHold({ qty: 3, onHand: 5, held: 3 });
-  ok(r2.ok === false && /held for a customer-return destruction/.test(r2.error), "cannot take held units");
+  ok(r2.ok === false && /held \(for a customer-return destruction or a vendor return/.test(r2.error), "cannot take held units");
   const r3 = evaluateReductionAgainstHold({ qty: 6, onHand: 5, held: 0 });
   ok(r3.ok === false && /exceeds on-hand \(5\)/.test(r3.error), "on-hand message kept");
   const r4 = evaluateReductionAgainstHold({ qty: 5, onHand: 5, held: null });

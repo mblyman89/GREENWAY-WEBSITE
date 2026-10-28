@@ -9,6 +9,8 @@
  * Grounded in docs/RETURNS_DESTRUCTION_COMPLIANCE.md:
  * - Vendor returns ("Returned to seller") map to CCRS adjustment reason
  *   "Other" (CCRS Upload User Guide Table 3) and always require detail.
+ *   Since Phase 1.5 (G-42) that Other adjustment posts at DEPARTURE, not at
+ *   logging; logging only reserves the units (vendor-return-core.ts).
  * - Destruction reasons map to CCRS "Destruction"; recall destructions are
  *   PROHIBITED before LCB coordination (WAC 314-55-225).
  */

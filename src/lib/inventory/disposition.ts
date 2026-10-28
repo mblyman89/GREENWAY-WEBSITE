@@ -59,6 +59,14 @@ import {
   RELEASE_LOT_HOLD_RPC,
 } from "@/lib/inventory/held-stock-core";
 import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+// Fix Phase 1.5 (G-42): the state's vendor-return method (D63, D65).
+import {
+  evaluateVendorReturnLog,
+  evaluateVendorReturnStep,
+  isLegacyReducedReturn,
+  vendorReturnAdjustmentNote,
+  TRANSPORTATION_TYPES,
+} from "@/lib/inventory/vendor-return-core";
 
 /**
  * LEGACY default pre-destruction hold (hours). The old 72-hour WSLCB notice
@@ -94,6 +102,34 @@ export type VendorReturn = {
   manifest_status?: string | null;
   pickup_at?: string | null;
   processor_license?: string | null;
+  // Fix Phase 1.5 (G-42, migration 0309; null/undefined pre-migration).
+  reserved_qty?: number | null;
+  recall_officer?: string | null;
+  recall_contact_date?: string | null;
+  requested_by?: string | null;
+  requested_at?: string | null;
+  transportation_type?: string | null;
+  transporter_license?: string | null;
+  driver_name?: string | null;
+  vehicle_vin?: string | null;
+  vehicle_plate?: string | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  vehicle_color?: string | null;
+  est_departure_at?: string | null;
+  est_arrival_at?: string | null;
+  weight_per_unit_g?: number | null;
+  servings_per_unit?: number | null;
+  submitted_by?: string | null;
+  submitted_at?: string | null;
+  lcb_email_date?: string | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
+  departed_by?: string | null;
+  departed_at?: string | null;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
 };
 
 export type CustomerReturn = {
@@ -912,105 +948,287 @@ export async function listVendorReturns(limit = 100): Promise<VendorReturnWithLo
   return normaliseLot(data) as VendorReturnWithLot[];
 }
 
+/** The RPCs of migration 0309 (G-42). */
+export const RESERVE_VENDOR_RETURN_RPC = "reserve_vendor_return";
+export const DEPART_VENDOR_RETURN_RPC = "depart_vendor_return";
+export const RELEASE_VENDOR_RETURN_RPC = "release_vendor_return";
+
+/** Shown when migration 0309 is not applied: the app never falls back to reduce-at-logging. */
+export const VENDOR_RETURN_PENDING_MIGRATION =
+  "Apply migration 0309 first: until then a vendor return cannot be logged in the app (it would take the units off on-hand before they leave). Follow SOP-15 §4.11 on paper.";
+
+export async function getVendorReturn(id: string): Promise<VendorReturn | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("vendor_returns").select("*").eq("id", id).maybeSingle();
+  return (data as VendorReturn | null) ?? null;
+}
+
 /**
- * Create a vendor return: posts a reducing 'other' adjustment (CCRS maps 'other'
- * → Other) and records the return. on-hand is reduced immediately.
+ * Fix Phase 1.5 (G-42 req 1, 2, 6; F-15-1, F-15-2; D63 (4), D65): log a vendor
+ * return. The units are RESERVED (inventory_lots.held_qty): out of sale but
+ * still on hand and in CCRS. Nothing posts to CCRS now; the reduction and the
+ * CCRS Other adjustment post at departure (departVendorReturn). RMA, vendor,
+ * numeric processor license and detail are required; a Recalled lot may be
+ * returned (reason Recall, with the LCB officer and contact date) and keeps
+ * its status until it departs. One transaction (reserve_vendor_return).
  */
 export async function createVendorReturn(
   input: {
     lotId: string;
-    vendorId?: string | null;
+    vendorId: string | null;
     quantity: number;
     reason: string;
-    detail?: string | null;
-    rmaNumber?: string | null;
-    manifestNumber?: string | null;
-    processorLicense?: string | null;
+    detail: string | null;
+    rmaNumber: string | null;
+    processorLicense: string | null;
+    recallOfficer?: string | null;
+    recallContactDate?: string | null;
   },
   actorId: string | null,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
-  if (!(input.quantity > 0)) return { ok: false, error: "Quantity must be greater than zero." };
   const admin = createSupabaseAdminClient();
-
-  const posted = await postReduction(
-    input.lotId,
-    input.quantity,
-    "other",
-    `Vendor return (${input.reason})${input.rmaNumber ? ` RMA ${input.rmaNumber}` : ""}${
-      input.manifestNumber ? ` manifest ${input.manifestNumber}` : ""
-    }${input.detail ? `: ${input.detail}` : ""}`,
-    actorId,
-  );
-  if (!posted.ok) return posted;
-
-  const baseRow = {
-    lot_id: input.lotId,
-    vendor_id: input.vendorId ?? null,
-    quantity: input.quantity,
+  const lotRead = await admin.from("inventory_lots").select("id, status, on_hand_qty, held_qty, vendor_id").eq("id", input.lotId).maybeSingle();
+  if (lotRead.error && isMissingHeldQtyColumnError(lotRead.error)) return { ok: false, error: VENDOR_RETURN_PENDING_MIGRATION };
+  const lot = lotRead.data as { status: string; on_hand_qty: number; held_qty: number | null; vendor_id: string | null } | null;
+  if (!lot) return { ok: false, error: "Lot not found." };
+  // Req 2: the vendor is pre-filled from the lot (the one it was received
+  // from) and its license from Vendors & Brands, unless the form names others.
+  const vendorId = input.vendorId?.trim() || lot.vendor_id || null;
+  let processorLicense = input.processorLicense?.trim() || null;
+  if (!processorLicense && vendorId) {
+    const { data: vrow } = await admin.from("vendors").select("license_number").eq("id", vendorId).maybeSingle();
+    processorLicense = (vrow as { license_number: string | null } | null)?.license_number?.trim() || null;
+  }
+  const free = Math.max(0, toHeldNumber(lot.on_hand_qty) - toHeldNumber(lot.held_qty));
+  const decision = evaluateVendorReturnLog({
+    lotStatus: lot.status,
     reason: input.reason,
-    detail: input.detail ?? null,
-    rma_number: input.rmaNumber ?? null,
-    adjustment_id: posted.adjustmentId,
-    created_by: actorId,
-  };
-  // Manifest columns exist after migration 0115 — degrade gracefully before.
-  const { data, error } = await admin
-    .from("vendor_returns")
-    .insert({
-      ...baseRow,
-      manifest_number: input.manifestNumber?.trim() || null,
-      manifest_status: input.rmaNumber?.trim() ? "requested" : "none",
-      processor_license: input.processorLicense?.trim() || null,
-    })
-    .select("id")
-    .single();
+    quantity: input.quantity,
+    free,
+    vendorId,
+    rmaNumber: input.rmaNumber,
+    processorLicense,
+    detail: input.detail,
+    recallOfficer: input.recallOfficer ?? null,
+    recallContactDate: input.recallContactDate ?? null,
+    todayPacific: pacificDayKey(new Date()),
+  });
+  if (!decision.ok) return { ok: false, error: decision.refusals.map((r) => r.message).join(" ") };
+
+  const { data, error } = await admin.rpc(RESERVE_VENDOR_RETURN_RPC, {
+    p_lot_id: input.lotId,
+    p_qty: input.quantity,
+    p_actor: actorId,
+    p_return: {
+      vendor_id: vendorId,
+      reason: input.reason,
+      detail: input.detail?.trim() || null,
+      rma_number: input.rmaNumber?.trim() || null,
+      processor_license: processorLicense,
+      recall_officer: input.reason === "recall" ? input.recallOfficer?.trim() || null : null,
+      recall_contact_date: input.reason === "recall" ? input.recallContactDate?.trim() || null : null,
+    },
+  });
   if (error) {
-    if (isMissingSchemaError(error.message)) {
-      const { data: legacy, error: legacyErr } = await admin
-        .from("vendor_returns")
-        .insert(baseRow)
-        .select("id")
-        .single();
-      if (legacyErr || !legacy) {
-        return { ok: false, error: legacyErr?.message ?? "Could not save return." };
-      }
-      return { ok: true, id: (legacy as { id: string }).id };
-    }
+    if (isMissingDbFunctionError(error) || isMissingSchemaError(error.message)) return { ok: false, error: VENDOR_RETURN_PENDING_MIGRATION };
     return { ok: false, error: error.message };
   }
   if (!data) return { ok: false, error: "Could not save return." };
-  return { ok: true, id: (data as { id: string }).id };
+  // The reserved units leave the menu now (they are no longer sellable).
+  await syncLotMenuStock(admin, input.lotId, -Math.abs(input.quantity));
+  return { ok: true, id: String(data) };
 }
 
-/** Advance the CCRS-manifest workflow on a vendor return (WAC 314-55-085). */
+/**
+ * Fix Phase 1.5 (G-42 req 3; v1.1 items 8, 9): the transport details for
+ * Manifest.CSV (Greenway is the origin). Editable until the manifest is
+ * uploaded; after that a change means a corrected upload (SOP-15 §4.10 step 5).
+ */
+export async function updateVendorReturnTransport(
+  input: {
+    id: string;
+    transportationType: string;
+    transporterLicense: string | null;
+    driverName: string | null;
+    vin: string | null;
+    plate: string | null;
+    make: string | null;
+    model: string | null;
+    color: string | null;
+    estDepartureAt: string | null;
+    estArrivalAt: string | null;
+    weightPerUnitG: number | null;
+    servingsPerUnit: number | null;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
+  if (!(TRANSPORTATION_TYPES as readonly string[]).includes(input.transportationType)) {
+    return { ok: false, error: "Choose the transportation type: Regular, Pick-up or Transporter Licensee." };
+  }
+  const admin = createSupabaseAdminClient();
+  const current = await getVendorReturn(input.id);
+  if (!current) return { ok: false, error: "Vendor return not found." };
+  const status = current.manifest_status ?? "none";
+  if (status !== "requested" && status !== "submitted" && status !== "confirmed") {
+    return { ok: false, error: "Transport details can only be changed on an open return." };
+  }
+  const t = (v: string | null) => v?.trim() || null;
+  const { error } = await admin
+    .from("vendor_returns")
+    .update({
+      transportation_type: input.transportationType,
+      transporter_license: input.transportationType === "Transporter Licensee" ? t(input.transporterLicense) : null,
+      driver_name: t(input.driverName),
+      vehicle_vin: t(input.vin),
+      vehicle_plate: t(input.plate),
+      vehicle_make: t(input.make),
+      vehicle_model: t(input.model),
+      vehicle_color: t(input.color),
+      est_departure_at: input.estDepartureAt,
+      est_arrival_at: input.estArrivalAt,
+      weight_per_unit_g: input.weightPerUnitG,
+      servings_per_unit: input.servingsPerUnit,
+    })
+    .eq("id", input.id)
+    .in("manifest_status", ["requested", "submitted", "confirmed"]);
+  if (error) {
+    if (isMissingSchemaError(error.message)) return { ok: false, error: VENDOR_RETURN_PENDING_MIGRATION };
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/**
+ * Fix Phase 1.5 (G-42 req 3, 4; F-15-3): advance ONE step, checked on the
+ * server, stamped with who and when. "Manifest uploaded" needs the manifest
+ * number; "LCB success email and PDF received" needs the email date;
+ * departure (pickup time in Pacific, driver) posts the CCRS Other adjustment
+ * and takes on-hand and the reservation down together (depart_vendor_return).
+ * Each status write is compare-and-set on the status it replaces.
+ */
 export async function updateVendorReturnManifest(
   input: {
     id: string;
     manifestStatus: string;
     manifestNumber?: string | null;
-    pickupAt?: string | null;
+    lcbEmailDate?: string | null;
+    pickupIso?: string | null;
+    driverName?: string | null;
   },
   actorId: string | null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  void actorId;
+): Promise<{ ok: true; adjustmentId?: string; lotId: string } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
-  const patch: Record<string, unknown> = { manifest_status: input.manifestStatus };
-  if (input.manifestNumber !== undefined) patch.manifest_number = input.manifestNumber?.trim() || null;
-  if (input.pickupAt !== undefined) patch.pickup_at = input.pickupAt || null;
-  const { error } = await admin.from("vendor_returns").update(patch).eq("id", input.id);
-  if (error) {
-    if (isMissingSchemaError(error.message)) {
-      return { ok: false, error: "Apply migration 0115 first (manifest columns missing)." };
+  const current = await getVendorReturn(input.id);
+  if (!current) return { ok: false, error: "Vendor return not found." };
+  const from = current.manifest_status ?? "none";
+  const decision = evaluateVendorReturnStep({
+    from,
+    to: input.manifestStatus,
+    manifestNumber: input.manifestNumber ?? current.manifest_number ?? null,
+    lcbEmailDate: input.lcbEmailDate ?? null,
+    submittedDay: current.submitted_at ? pacificDayKey(current.submitted_at) : null,
+    pickupIso: input.pickupIso ?? null,
+    driverName: input.driverName ?? current.driver_name ?? null,
+    todayPacific: pacificDayKey(new Date()),
+    nowIso: new Date().toISOString(),
+  });
+  if (!decision.ok) return { ok: false, error: decision.refusals.map((r) => r.message).join(" ") };
+
+  const now = new Date().toISOString();
+  if (input.manifestStatus === "picked_up") {
+    if (isLegacyReducedReturn(current)) {
+      // Logged before Phase 1.5: on-hand already came off at logging. Only the step is recorded.
+      const { error } = await admin
+        .from("vendor_returns")
+        .update({ manifest_status: "picked_up", pickup_at: input.pickupIso, driver_name: input.driverName?.trim() || null, departed_by: actorId, departed_at: now })
+        .eq("id", input.id)
+        .eq("manifest_status", from);
+      if (error) return { ok: false, error: isMissingSchemaError(error.message) ? VENDOR_RETURN_PENDING_MIGRATION : error.message };
+      return { ok: true, lotId: current.lot_id };
     }
+    let processorName: string | null = null;
+    if (current.vendor_id) {
+      const { data: v } = await admin.from("vendors").select("display_name, legal_name").eq("id", current.vendor_id).maybeSingle();
+      const vr = v as { display_name: string | null; legal_name: string | null } | null;
+      processorName = vr?.legal_name?.trim() || vr?.display_name?.trim() || null;
+    }
+    const note = vendorReturnAdjustmentNote({
+      processorName,
+      processorLicense: current.processor_license,
+      manifestNumber: current.manifest_number,
+      rmaNumber: current.rma_number,
+      reason: current.reason,
+      detail: current.detail,
+    });
+    const { data, error } = await admin.rpc(DEPART_VENDOR_RETURN_RPC, {
+      p_return_id: input.id,
+      p_note: note,
+      p_pickup_at: input.pickupIso,
+      p_driver: input.driverName?.trim() || "",
+      p_actor: actorId,
+    });
+    if (error) {
+      if (isMissingDbFunctionError(error)) return { ok: false, error: VENDOR_RETURN_PENDING_MIGRATION };
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, adjustmentId: data ? String(data) : undefined, lotId: current.lot_id };
+  }
+
+  const patch: Record<string, unknown> = { manifest_status: input.manifestStatus };
+  if (input.manifestStatus === "submitted") {
+    patch.manifest_number = (input.manifestNumber ?? current.manifest_number ?? "").trim();
+    patch.submitted_by = actorId;
+    patch.submitted_at = now;
+  } else if (input.manifestStatus === "confirmed") {
+    patch.lcb_email_date = input.lcbEmailDate;
+    patch.confirmed_by = actorId;
+    patch.confirmed_at = now;
+  }
+  const { data: moved, error } = await admin
+    .from("vendor_returns")
+    .update(patch)
+    .eq("id", input.id)
+    .eq("manifest_status", from)
+    .select("id");
+  if (error) {
+    if (isMissingSchemaError(error.message)) return { ok: false, error: VENDOR_RETURN_PENDING_MIGRATION };
     return { ok: false, error: error.message };
   }
-  return { ok: true };
+  if (!moved || (moved as unknown[]).length === 0) {
+    return { ok: false, error: "Someone changed this return a moment ago. Refresh and check its step." };
+  }
+  return { ok: true, lotId: current.lot_id };
+}
+
+/**
+ * Fix Phase 1.5 (G-42 req 5): the owner's cancel releases the reserved units
+ * (on hand unchanged; they become sellable again) with a reason. The action
+ * checks the permission (inventory.vendor_return.cancel) and the reason.
+ */
+export async function cancelVendorReturn(
+  id: string,
+  actorId: string | null,
+  reason: string,
+): Promise<{ ok: true; released: number; lotId: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
+  const admin = createSupabaseAdminClient();
+  const current = await getVendorReturn(id);
+  if (!current) return { ok: false, error: "Vendor return not found." };
+  const { data, error } = await admin.rpc(RELEASE_VENDOR_RETURN_RPC, { p_return_id: id, p_reason: reason, p_actor: actorId });
+  if (error) {
+    if (isMissingDbFunctionError(error)) return { ok: false, error: VENDOR_RETURN_PENDING_MIGRATION };
+    return { ok: false, error: error.message };
+  }
+  const released = toHeldNumber(data);
+  if (released > 0) await syncLotMenuStock(admin, current.lot_id, released);
+  return { ok: true, released, lotId: current.lot_id };
 }
 
 // ---------------------------------------------------------------------------
