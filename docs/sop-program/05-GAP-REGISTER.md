@@ -310,7 +310,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ### Fix Phase 3.2b (F-04-11, F-04-3): hardening on the receiving screen (no new gap number)
 
 - **Owner (owner message 7: *"Please proceed with the remaining receiving list … If there are other things you feel as the expert you are, add in these things as you go. Add value if you can."*)**. Two findings from the receiving list had no gap row; both are hardening of the screen built under R31.
-- **Status: BUILT (Phase 3.2b, #P..).**
+- **Status: BUILT (Phase 3.2b, #1560).**
   1. **F-04-11 (FIXED).** A line that fails to save at staging is a red timeline event naming the line, a banner on the review screen, a sentence on the email row and the batch import result; Finalize is refused until **The missing lines go back with the driver** is ticked; the delivery is then partial and the timeline records it (`intake-staging-core.ts`; `intake-store.ts` L968–987, L1744–1756, L1998; `[id]/page.tsx` L712–735, L1569–1575).
   2. **F-04-3 (control note BUILT).** The sticky bar names lines not marked one by one; the Finalize timeline counts lines accepted with no decision (`finalize-label-core.ts` L128–134; `undecidedFinalizeNote`).
   No migration. Tests `fix-p3-2b-intake-visibility` (26), self-tests `intake-staging-core` 29 (+ `finalize-label-core` 37, `manifest-event-labels-core` 66), mutation probe `scripts/compliance/mutate-fix-p3-2b.py`. SOP-04 v1.7.
