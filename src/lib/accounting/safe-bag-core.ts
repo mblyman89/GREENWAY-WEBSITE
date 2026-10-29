@@ -41,6 +41,9 @@
  *      register close while such a bag is outstanding. That single rule closes
  *      the most common cash-shrinkage hole in retail: pull cash, never declare
  *      it, and let the drawer's own over/short absorb the loss.
+ *      GREENWAY DEPARTS FROM THIS ON PURPOSE (owner D27, "Q-03-7- warning
+ *      only please"): an undeclared bag is WARNED about, by name, and never
+ *      blocks a close. See undeclaredBagWarning below (Fix Phase 2.6).
  *
  * THE STATES
  * ----------
@@ -200,28 +203,33 @@ function describeAction(action: BagAction): string {
 }
 
 /**
- * THE CLOSE BLOCK (Xstore's rule, copied on purpose).
+ * THE UNDECLARED-BAG WARNING (owner decision D27, Fix Phase 2.6).
  *
- * A drawer session cannot be closed while any bag pulled from it is still
- * `undeclared`, because that cash is still, in the books' eyes, in the drawer.
- * Closing anyway would let the drawer's own over/short quietly absorb a
- * missing bag.
+ * books-98 copied Xstore's rule here as a BLOCK: a drawer could not close
+ * while a bag pulled from it was still `undeclared`. The owner decided
+ * otherwise: "Q-03-7- warning only please" (D27,
+ * docs/sop-program/00-OWNER-REQUEST-VERBATIM.md L93). In this store the bag is
+ * made AFTER every drawer is closed, counted by one person at night and left
+ * unsealed in the safe until a different person recounts it in the morning
+ * (D23, D24), so an `undeclared` bag at the next close is normal for a few
+ * hours and a real problem only when it is forgotten. The screens therefore
+ * WARN, naming every bag, and never refuse.
  *
- * Returns the reason to REFUSE, or null when the close may proceed.
+ * Returns the warning sentence, or null when there is nothing to warn about.
+ * Nothing calls this to refuse anything; tests pin that it is a warning.
  */
-export function blockCloseForUndeclaredBags(
-  bags: readonly { readonly bagNo: string; readonly status: BagStatus }[],
+export function undeclaredBagWarning(
+  bags: readonly { readonly bagNo: string; readonly status: BagStatus; readonly businessDay?: string }[],
 ): string | null {
   const open = bags.filter((b) => b.status === "undeclared");
   if (open.length === 0) return null;
-  const list = open.map((b) => b.bagNo).join(", ");
+  const list = open.map((b) => (b.businessDay ? `${b.bagNo} (${b.businessDay})` : b.bagNo)).join(", ");
   return (
-    `${open.length === 1 ? "Bag" : "Bags"} ${list} ` +
-    `${open.length === 1 ? "was" : "were"} taken out of the drawer but never ` +
-    `counted into the safe. Until that count happens the money still belongs ` +
-    `to this drawer, so closing now would hide a shortage. Count ${
-      open.length === 1 ? "it" : "them"
-    } into the safe first.`
+    `Warning: ${open.length === 1 ? "bag" : "bags"} ${list} ` +
+    `${open.length === 1 ? "was" : "were"} counted at night but not yet ` +
+    `recounted by a second employee. That cash is not yet declared into the ` +
+    `safe. Recount ${open.length === 1 ? "it" : "them"} on the Deposit bags ` +
+    `screen (SOP-03 \u00a74.10). This is a warning only; nothing is blocked (D27).`
   );
 }
 
@@ -399,40 +407,30 @@ export function __runSafeBagTests(): void {
     }
   }
 
-  // ── the close block ────────────────────────────────────────────────────
+  // ── the undeclared-bag WARNING (D27: "warning only please") ─────────────
   {
+    ok(undeclaredBagWarning([]) === null, "no bags at all: no warning");
     ok(
-      blockCloseForUndeclaredBags([]) === null,
-      "no bags at all does not block a close",
-    );
-    ok(
-      blockCloseForUndeclaredBags([
+      undeclaredBagWarning([
         { bagNo: "A1", status: "counted" },
         { bagNo: "A2", status: "deposited" },
       ]) === null,
-      "counted and deposited bags do not block a close",
+      "counted and deposited bags give no warning",
     );
-    const blocked = blockCloseForUndeclaredBags([
+    const warned = undeclaredBagWarning([
       { bagNo: "A1", status: "counted" },
-      { bagNo: "B7", status: "undeclared" },
+      { bagNo: "B7", status: "undeclared", businessDay: "2026-11-02" },
     ]);
-    ok(blocked !== null, "an undeclared bag BLOCKS the close");
-    ok(
-      blocked !== null && blocked.includes("B7"),
-      "the block names the offending bag, not just the count",
-    );
-    ok(
-      blocked !== null && !blocked.includes("A1"),
-      "the block does not accuse a bag that was properly counted",
-    );
-    const two = blockCloseForUndeclaredBags([
+    ok(warned !== null, "an undeclared bag gives a warning");
+    ok(warned !== null && warned.startsWith("Warning:"), "it is worded as a warning, not a refusal (D27)");
+    ok(warned !== null && warned.includes("nothing is blocked"), "it says nothing is blocked (D27)");
+    ok(warned !== null && warned.includes("B7") && warned.includes("2026-11-02"), "the warning names the bag and its day");
+    ok(warned !== null && !warned.includes("A1"), "the warning does not accuse a bag that was properly counted");
+    const two = undeclaredBagWarning([
       { bagNo: "B7", status: "undeclared" },
       { bagNo: "B8", status: "undeclared" },
     ]);
-    ok(
-      two !== null && two.includes("B7") && two.includes("B8"),
-      "every undeclared bag is named, not only the first",
-    );
+    ok(two !== null && two.includes("B7") && two.includes("B8"), "every undeclared bag is named, not only the first");
   }
 
   // ── amounts ────────────────────────────────────────────────────────────

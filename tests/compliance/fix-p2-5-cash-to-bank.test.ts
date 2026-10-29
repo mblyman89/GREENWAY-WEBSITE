@@ -365,9 +365,13 @@ describe("Phase 2.5 · the census tells the truth", () => {
     expect(r.layers.exists.evidence).not.toContain("the drawer count into 10400");
   });
 
-  it("the seal stays MISSING until the bag screen wires it (G-14 requirement 3)", () => {
+  // STATED: Phase 2.5 pinned the seal as MISSING "until the bag screen wires
+  // it". Phase 2.6 built that screen, so the pin now checks the wiring it was
+  // waiting for (poster named, reachable through sealBagAction).
+  it("the seal is wired by the bag screen (G-14 requirement 3, Phase 2.6)", () => {
     const r = row("cash_and_banking.seal_deposit_bag");
-    expect(r.poster).toBeNull();
-    expect(r.layers.reachable.status).toBe("MISSING");
+    expect(r.poster).toBe("src/lib/accounting/seal-bag-posting-service.ts#postSealForBag");
+    expect(r.layers.reachable.status).toBe("PRESENT");
+    expect(r.layers.reachable.evidence).toContain("sealBagAction");
   });
 });

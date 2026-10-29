@@ -211,6 +211,23 @@ Concierge code is **unchanged** (record-only). Today neither the concierge nor `
 
 The caveat *"F-03-1: do not trust the Undeposited Funds panel's green 'all matched'"* above is narrowed: the wording is fixed; the panel still counts sealed bags only. `concierge-kb.ts` `registers` carries the Phase 2.5 fact.
 
+**Phase 2.6a (G-04 deposit bag screen, G-14 seal) answers:**
+
+| Question | Answer (built, Phase 2.6a) |
+|---|---|
+| Where do I record the deposit bag? | Register Activity → **Deposit bags** (SOP-03 §4.5) |
+| Who counts at night? | One person (D24). Enter the count by denomination, the pre-printed **Bag #** and your PIN, tap **Save night count**; the bag stays unsealed in the safe (D23) |
+| Can I do the morning recount if I counted last night? | No. A different employee must; the server refuses your PIN and logs the attempt (D24; SOP-03 §4.10) |
+| Why can't I see last night's figure? | The recount is blind; the screen shows it after you save (SOP-03 §4.10 step 2) |
+| The counts differ — what now? | $5.00 or less: nothing more. Over $5.00: recount with the manager, then write the reason; both counts are kept (D21) |
+| Who can seal? | Anyone, with their own PIN, after the recount (D25). The seal posts 10400 up / 10100 down |
+| It says NOT POSTED | The bag is sealed but the books entry failed. Tap **Post to the books**; it never books twice |
+| Who takes the bags to the bank? | Only the owner (D25), who records the bank run on the same screen, ticking every sealed bag |
+| Does an unrecounted bag stop the till close? | No. It shows a gold warning on Register Activity only (D27) |
+| Can I print or export the bag log? | Yes: **Deposit bag log** → print, or **Download CSV** (SOP-03 §4.17) |
+
+The caveat *"The bag screen does not exist (F-00-6 / G-04), so never tell anyone to 'seal the bag in the app'"* above is **retired** by Phase 2.6a. `concierge-kb.ts` `registers` carries the two Phase 2.6 facts.
+
 ### SOP-04 Receiving Intake & Monthly CCRS Public Records Request (`docs/sop/SOP-04-receiving-intake.md`, verified at `5299660b`)
 
 Concierge code is **unchanged** (record-only). Today the concierge's `product-intake` topic (`src/lib/admin/concierge-kb.ts` L132–148) is journey-level only. Its one Receiving fact is the transport-manifest details. The `ccrs` topic (L349–360) covers the weekly upload and the LIQ-1295 only. Nothing covers dock counting, refusing lines, Finalize, held lots, the monthly public records request or the zip drop (finding **F-04-C**). The in-app SOP sheets in `src/lib/catalog/sop-core.ts` and the Receiving help panel describe the pre-R31 flow (F-04-5), so they **must not** be used as grounding. What SOP-04 now provides as source material for the integration phase:

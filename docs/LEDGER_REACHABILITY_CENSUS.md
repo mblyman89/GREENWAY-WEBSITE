@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 40 money events that should reach the books. 25 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 40 money events that should reach the books. 24 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 40 |
 | Proven on all six layers | 3 |
-| Cannot reach the books at all | 25 |
+| Cannot reach the books at all | 24 |
 | Have nothing that even builds the entry | 16 |
 | Layers that could not be measured | 5 |
 
@@ -44,10 +44,10 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 15 of 40 |
-| `reachable` | 25 of 40 |
+| `reachable` | 24 of 40 |
 | `correct` | 12 of 40 |
 | `accepted` | 22 of 40 |
-| `idempotent` | 22 of 40 |
+| `idempotent` | 21 of 40 |
 | `married` | 14 of 40 |
 
 ## Sales, and the tax you collect on someone else's behalf
@@ -455,7 +455,7 @@ A child-support or garnishment withholding is forwarded to the agency.
 | `till_open_from_vault` | yes | NO | yes | n/a | NO | n/a | D-39 |
 | `till_close_to_safe` | yes | yes | yes | n/a | yes | NO | D-39 |
 | `cash_deposit_to_bank` | yes | yes | part | NO | yes | part | D-39 |
-| `seal_deposit_bag` | yes | NO | yes | n/a | NO | NO | D-77 |
+| `seal_deposit_bag` | yes | yes | yes | n/a | yes | NO | D-77 |
 | `employee_supply_advance` | yes | NO | yes | NO | NO | n/a | D-77 |
 | `till_over_short` | yes | yes | yes | n/a | yes | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
@@ -519,14 +519,14 @@ Safe cash is counted into a numbered deposit bag and sealed.
 
 - Accounts: `10400`, `10100`
 - Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildSealBagJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/seal-bag-posting-service.ts#postSealForBag`
 
 - **exists: PRESENT** -- books-98 built buildSealBagJournal: 10400 Undeposited Funds debited, 10100 Vault credited, with the bag number written onto both lines and the memo. safe-bag-core enforces the lifecycle around it.
-- **reachable: MISSING** -- No screen seals a bag yet. The builder and the deposit_bags table in 0212_deposit_bags.sql exist; grep buildSealBagJournal under src/app finds nothing. Rule 50: a finished feature nobody can reach.
+- **reachable: PRESENT** -- Fix Phase 2.6 (G-04, G-14): until then no screen sealed a bag. Now an employee presses Seal on /admin/registers/deposit-bags: src/app/admin/registers/deposit-bags/actions.ts sealBagAction (orders.manage, the sealer's PIN, checkSeal: morning recount by a different employee first, D24) saves the seal once, then calls src/lib/accounting/seal-bag-posting-service.ts postSealForBag, which re-reads the sealed bag, calls buildSealBagJournal dated on the bag's business day and calls submitJournal with autoPost. A failed post leaves the bag sealed and shows NOT POSTED with a retry button (retrySealPostAction).
 - **correct: PRESENT** -- 20/20 books-98 mutations caught, including both DOOR probes that strip the bag number from the memo and from the lines. A bag with no id, a zero bag and a fractional bag are all refused.
 - **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _Counting the bag IS the human act, and it is witnessed. A second approval would delay the bank run without adding a second pair of eyes to the cash._
-- **idempotent: MISSING** -- The source ref will be seal-bag:<bagId>, but there is no poster yet to key it on.
-- **married: MISSING** -- This is the entry that will END the guesswork: the bag number is also on the bank's deposit slip, so a Plaid credit can be matched to counted cash by evidence rather than by date. Not wired yet.
+- **idempotent: PRESENT** -- sourceRef seal-bag:<bagId> (deposit-bag-flow-core sealSourceRef), so a retry or a second press returns duplicate and writes nothing. The seal itself is a conditional update (status counted and sealed_at null), and migration 0316 lets seal_journal_id be filled once.
+- **married: MISSING** -- This is the entry that will END the guesswork: the bag number is also on the bank's deposit slip, so a Plaid credit can be matched to counted cash by evidence rather than by date. Fix Phase 2.6 wired the seal and the owner's bank-run record (banked_on), but the bank clearing still matches by business day, oldest first (deposit-clearing-core), and nothing yet reads the bag number off the bank line or fills deposit_confirmed_on. Kept MISSING on purpose.
 
 **If this stays broken:** Without the bag layer a deposit is matched to the cash it came from by FIFO on date alone. That is a convention, not a fact: two bags sealed on one day, or a bag held over a weekend, cannot be told apart.
 
@@ -830,7 +830,6 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cash_and_banking.till_open_from_vault` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal`
-- `cash_and_banking.seal_deposit_bag` (D-77) -- `src/lib/accounting/register-cash-journal-core.ts#buildSealBagJournal`
 - `cash_and_banking.employee_supply_advance` (D-77) -- `src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`

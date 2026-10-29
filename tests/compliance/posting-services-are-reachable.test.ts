@@ -91,6 +91,13 @@ const POSTING_SERVICES = [
     entry: "clearDepositForBankRow",
     door: "the owner pressing Clear against bags on /admin/books/bank (Fix Phase 2.5, G-14)",
   },
+  {
+    // Fix Phase 2.6 (G-04, G-14). books-98 built buildSealBagJournal and nothing
+    // called it; the census said reachable MISSING. The seal now posts.
+    file: "src/lib/accounting/seal-bag-posting-service.ts",
+    entry: "postSealForBag",
+    door: "an employee pressing Seal on /admin/registers/deposit-bags (Fix Phase 2.6, G-04)",
+  },
 ] as const;
 
 /**
@@ -135,7 +142,9 @@ describe("every posting service is reachable from something a human can press", 
     // STATED per rule 89: 4 -> 5 posters (books-89 adds the ATM settlement door).
     // STATED per rule 89: 5 -> 6 posters (Fix Phase 2.5 adds the bank-deposit
     // clearing door, G-14 / F-03-3).
-    expect(POSTING_SERVICES).toHaveLength(6);
+    // STATED per rule 89: 6 -> 7 posters (Fix Phase 2.6 adds the deposit bag
+    // seal door, G-04 / G-14).
+    expect(POSTING_SERVICES).toHaveLength(7);
 
     // Names, not just a number, so a deletion cannot be papered over by an
     // unrelated addition that happens to keep the total at five.
@@ -145,6 +154,7 @@ describe("every posting service is reachable from something a human can press", 
       "postAuditSession",
       "postManifestVendorBill",
       "postSaleForOrder",
+      "postSealForBag",
       "recordBankExpenses",
     ]);
   });
