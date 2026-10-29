@@ -22,6 +22,7 @@
  */
 import { deriveManifestStatus } from "@/lib/inventory/intake-disposition-core";
 import { evaluateLotActivation, type LotGateFacts } from "@/lib/inventory/lot-activation-gate-core";
+import { statusWithShortLines } from "@/lib/inventory/intake-count-core";
 
 export type FinalizeLineFacts = {
   id: string;
@@ -29,6 +30,8 @@ export type FinalizeLineFacts = {
   disposition: string | null;
   /** Facts for the activation gate; omitted means "do not predict a hold". */
   gate?: Omit<LotGateFacts, "id"> | null;
+  /** Fix Phase 3.1 (G-16): the line was counted short at the dock ("18 of 20"). */
+  shortCounted?: boolean;
 };
 
 export type FinalizePlan = {
@@ -42,6 +45,8 @@ export type FinalizePlan = {
   held: number;
   /** Lines nobody has touched (they ride along as accepted). */
   undecided: number;
+  /** Fix Phase 3.1: accepted lines counted short at the dock (subset of accept). */
+  short: number;
   /** The button text. */
   label: string;
   /** One plain sentence for the sticky bar. */
@@ -61,12 +66,14 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
   let reject = 0;
   let undecided = 0;
   let held = 0;
+  let short = 0;
   for (const l of lines) {
     if (l.disposition === "rejected_at_dock") {
       reject += 1;
       continue;
     }
     if (l.disposition !== "accepted") undecided += 1;
+    if (l.shortCounted) short += 1;
     if (l.gate) {
       const v = evaluateLotActivation({ id: l.id, ...l.gate });
       if (!v.canActivate) held += 1;
@@ -75,7 +82,7 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
   const accept = total - reject;
   const willActivate = accept - held;
   const noteRequired =
-    total > 0 && deriveManifestStatus(willActivate, reject, held) === "partially_accepted";
+    total > 0 && statusWithShortLines(deriveManifestStatus(willActivate, reject, held), short) === "partially_accepted";
 
   let label: string;
   if (total === 0) label = "Finalize (no lines)";
@@ -99,6 +106,11 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
       `${plural(accept, "line", "lines")} will be accepted and ${plural(reject, "line", "lines")} refused at the dock.`,
     );
   }
+  if (short > 0) {
+    parts.push(
+      `${plural(short, "line was", "lines were")} counted short at the dock and ${short === 1 ? "goes" : "go"} in at the counted quantity; the rest goes back with the driver.`,
+    );
+  }
   if (held > 0) {
     parts.push(
       `${plural(held, "accepted line is", "accepted lines are")} missing a CCRS id or a passing COA, so ${held === 1 ? "it stays" : "they stay"} in quarantine (not sellable) until fixed.`,
@@ -112,6 +124,7 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
     reject,
     held,
     undecided,
+    short,
     label,
     status: parts.join(" "),
     noteRequired,
@@ -221,6 +234,11 @@ export function __runFinalizeLabelCoreTests(): { passed: number; failed: number 
     line("3", null),
   ]);
   ok(m.status.includes("2 accepted lines are missing") && m.status.includes("they stay"), "held sentence plural");
+
+  // 14b. Fix Phase 3.1: a line counted short ("18 of 20") makes it partial.
+  const sh = planFinalize([{ ...line("1", null), shortCounted: true }, line("2", null)]);
+  ok(sh.short === 1 && sh.noteRequired && sh.label === "Accept All & Finalize" && sh.status.includes("counted short at the dock"), "short line -> note required, still Accept All");
+  ok(!planFinalize([{ ...line("1", "rejected_at_dock"), shortCounted: true }, line("2", null)]).short, "a refused line is not counted as short going in");
 
   // 15. R31 receive-on-finalize gate.
   ok(shouldMarkArrivedOnFinalize("pending") && shouldMarkArrivedOnFinalize("in_transit"), "pending/in_transit are stamped received");

@@ -15,6 +15,7 @@ import {
   setManifestInvoiceOverride,
   dismissDuplicateManifest,
   setLotVendorInventoryId,
+  setLotDockCount,
 } from "@/lib/inventory/intake-store";
 import { normalizeOwnerVendorId } from "@/lib/compliance/ccrs-transfer-core";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
@@ -610,6 +611,32 @@ export async function setLotDispositionAction(
   }
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
   redirect(`/admin/inventory/intake/${manifestId}?lot=${disposition}`);
+}
+
+/**
+ * Fix Phase 3.1 (G-16, F-04-1, owner D29): enter the dock count for one line,
+ * "18 of 20". Manager-only like the rest of Receiving (D30: inventory.manage).
+ * The store validates (planDockCount), writes guarded on the quantity it read,
+ * logs the timeline event and the audit row. The result comes back as
+ * ?count=short|refused|cleared|error with its sentence in ?countmsg=.
+ */
+export async function setLotDockCountAction(manifestId: string, lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const base = `/admin/inventory/intake/${manifestId}`;
+  const res = await setLotDockCount(
+    manifestId,
+    lotId,
+    {
+      counted: formData.get("counted_qty"),
+      reasonCode: formData.get("short_reason_code") as string | null,
+      reasonText: formData.get("short_reason_text") as string | null,
+    },
+    session.userId,
+  );
+  revalidatePath(base);
+  if (!res.ok) redirect(`${base}?count=error&countmsg=${encodeURIComponent(res.error.slice(0, 400))}#manifest-lines`);
+  const flag = res.kind === "short" ? "short" : res.kind === "clear" ? "cleared" : "refused";
+  redirect(`${base}?count=${flag}&countmsg=${encodeURIComponent(res.note.slice(0, 400))}#manifest-lines`);
 }
 
 /**

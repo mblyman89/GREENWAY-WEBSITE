@@ -357,6 +357,21 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 | Where do I see what happened with the COAs? | The delivery timeline: *"Lab results attached from the emailed COAs"* or *"Lab results · some lines still need a COA (or a name match to verify)"*, and the email's result sentence (§4.4) |
 | The COA PDF could not be read | The note names it. Ask the vendor for a text PDF; attach on the lot page by lab test id once imported (§5.2) |
 
+**Fix Phase 3.1 update to the SOP-04 rows (G-16 BUILT, F-04-1 FIXED; owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*).** `concierge-kb.ts` `product-intake` gains one fact (**Receiving → Count short**), grounded on SOP-04 v1.5 §4.11, §4.17, §5.2. Superseded answers, kept as history:
+- the caveat *"F-04-1: there is no partial-quantity receive. Follow the interim short-count rule (§4.11) and log it on form 8.2."* (above) now reads: press **Count short** (§4.11); the interim rule applies only while migration 0319 is not applied (no Count short button);
+- *"Short lines are still refused whole until G-16 is built (D29, now serious)."* (SOP-05a update, below) is superseded the same way;
+- the truck-day row's *"§4.11 short counts (interim rule)"* and *"(🟡 for short counts until G-16 is built)"*: short counts are now ✅ source material.
+
+| Question | Answer (SOP-04 v1.5) |
+|---|---|
+| 18 came in but the manifest says 20. What do I do? | Recount with a second person. Still 18: **Count short** on the line, type 18, pick the reason for the 2, **Save count**. The 2 go back with the driver; the vendor Updates their CCRS manifest to 18 (§4.11) |
+| What does Finalize do with it? | The lot goes in at 18; the delivery is **Partially Accepted**, so the why-partial note is required; the timeline says *"Received short: … 18 of 20 (2 refused: …)"*. CCRS InventoryTransfer and the vendor bill use 18 (§4.11 step 6) |
+| More came than the manifest says | It can never be received. Refuse the line with **Overage — more than ordered**, or call the manager (§4.11) |
+| I typed the wrong count | **Recount** and type the right number; typing the manifest quantity removes the short count. **reject instead** refuses the line and puts the manifest quantity back (§4.11 step 7) |
+| Nothing of the line came | Type **0**: the whole line is refused at the dock with your reason (§4.11 step 7) |
+| There is no Count short button | Migration 0319 is not applied yet. Refuse the whole short line and have the vendor re-send (§4.11 step 8); tell the owner |
+| Can I fix a short line after Finalize? | No. Count short is only before Finalize. Never accept 20 and adjust to 18 later: CCRS would be told 20 (§4.11) |
+
 **SOP-05a update to the SOP-04 row (owner answers D29–D34).**
 - **New facts for `receiving`:** a second count is strongly recommended and expected on a vendor's first delivery (D31). Short lines are still refused whole until G-16 is built (D29, now serious).
 - **New facts for `ccrs-records-request`:**

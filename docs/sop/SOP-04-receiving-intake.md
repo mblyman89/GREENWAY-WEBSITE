@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (Phase 3.1a: emailed COAs are read certificate by certificate and attached to the delivery's lines; **Re-read COAs** and **Attach lab result** on the receiving page. Earlier: 1.3 Phase 1.1 G-19 gated activation; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
+| **Version** | 1.5 (Phase 3.1: **Count short** receives part of a line ("18 of 20"); the rest is refused at the dock and goes back with the driver (G-16 BUILT, F-04-1 FIXED). 1.4 Phase 3.1a: emailed COAs are read certificate by certificate and attached to the delivery's lines; **Re-read COAs** and **Attach lab result** on the receiving page. Earlier: 1.3 Phase 1.1 G-19 gated activation; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Everyone who handles a vendor delivery: the manager who processes the manifest (D30), any trained employee who helps count at the dock, the person who onboards new products onto the menu, the **admin** who files the monthly CCRS public records request on the 10th (D32), and the owner, who reviews the books |
@@ -13,7 +13,7 @@
 
 > **How to use this document.** Part 1 (§4.1–§4.24) is truck day, in the order the work happens: the manifest arrives, the truck arrives, you count, you refuse what is wrong, you press one Finalize button, and the new products go onto the menu. Part 2 (§4.25–§4.34) is the **monthly CCRS public records request**, which brings the state's market data in for the benchmarks. It is owner work, done once a month. Section 5 lists every message the screens can show, with what to do. Section 8 holds the paper forms. Section 9 is a one-page card for the receiving area. Words in **bold** are the exact labels you will see on the screen.
 
-> **The one thing to know before anything else.** **Count first, decide at the dock, then press Finalize once.** Every line on a manifest says **Will accept** until you press **✕ Reject** on it. When you press Finalize, **every line you did not reject is accepted** (`intake-store.ts` L1416; by design, recorded as control note F-04-3). So the count is the one job only a human can do, and a line that is short, broken or wrong must be rejected **before** Finalize, while the driver is still there. Refused product leaves on the truck, never becomes Greenway's inventory, and **Greenway files nothing with CCRS**. The vendor fixes their own manifest.
+> **The one thing to know before anything else.** **Count first, decide at the dock, then press Finalize once.** Every line on a manifest says **Will accept** until you press **✕ Reject** on it. When you press Finalize, **every line you did not reject is accepted** (`intake-store.ts` L1667; by design, recorded as control note F-04-3). So the count is the one job only a human can do. A line that came up short is **counted short** (§4.11: it goes in at your count and the rest is refused), and a line that is broken or wrong is rejected, both **before** Finalize, while the driver is still there. Refused product leaves on the truck, never becomes Greenway's inventory, and **Greenway files nothing with CCRS**. The vendor fixes their own manifest.
 
 ---
 
@@ -35,7 +35,7 @@
    - 4.8 When the truck arrives: driver, vehicle and transport details
    - 4.9 Count every line (the one human job)
    - 4.10 Refusing a line at the dock
-   - 4.11 Short counts (interim rule)
+   - 4.11 Short counts: receive part of a line ("18 of 20")
    - 4.12 Refusing the whole manifest
    - 4.13 Trade samples and the quarterly sample cap
    - 4.14 Vendor inventory ids (for the weekly CCRS report)
@@ -90,7 +90,7 @@ and set the standard for it when this slice began:
 
 **How the Receiving page should feel**, also from the owner. This is why there is no per-line Accept button:
 
-> *"I don't want to have to push any buttons while I walk the page unless I have to."* (quoted in `src/components/admin/inventory/ManifestLotDisposition.tsx` L135)
+> *"I don't want to have to push any buttons while I walk the page unless I have to."* (quoted in `src/components/admin/inventory/ManifestLotDisposition.tsx` L235)
 
 **What the monthly records request is for**, from the owner:
 
@@ -172,18 +172,18 @@ Every manifest moves through these stages. The labels are exactly what the scree
 |---|---|---|
 | **Pending** | "Imported/entered but not yet marked on its way." | A manual import (§4.5) |
 | **In transit** | "The transporter is on the way. Watch the ETA." | An emailed manifest is moved here automatically: *"Auto-advanced to In transit (arrived via vendor email — delivery already dispatched)."* (`inbound-store.ts` L803–814) |
-| **Awaiting intake** | "Physically here — verify counts, then accept to activate the lots." | Finalize stamps it received first (R31; `intake/actions.ts` L949, L1075–1097). There are **no** "Mark in transit" / "Mark received" buttons any more. |
+| **Awaiting intake** | "Physically here — verify counts, then accept to activate the lots." | Finalize stamps it received first (R31; `intake/actions.ts` L976, L1102–1124). There are **no** "Mark in transit" / "Mark received" buttons any more. |
 | **Accepted** | "Lots activated and receive adjustments logged." | Finalize with every line accepted |
 | **Partially Accepted** | "Some lots accepted; the rest were refused at the dock (never received)." | Finalize with a mix, or with a lot held in quarantine (`intake-disposition-core.ts` L128–142) |
 | **Rejected** | "Refused at the dock — never received (nothing destroyed; no CCRS filing)." | Whole-manifest reject (§4.12), or Finalize with every line refused |
 | **Dismissed duplicate** | "A second copy of a manifest that was already here (the same email delivered twice)…" | **⧉ Dismiss duplicate** (§4.7) |
 
 **What happens to the product at each step:**
-- **On staging**, each line becomes an inventory lot with status **quarantine**: "held until the manifest is accepted" (`intake-store.ts` L899). Nothing can be sold.
+- **On staging**, each line becomes an inventory lot with status **quarantine**: "held until the manifest is accepted" (`intake-store.ts` L912). Nothing can be sold.
 - **On Finalize**, each accepted lot passes the **go-live check** (`lot-activation-gate-core.ts` L76–107) and becomes **active** (sellable), or is **held in quarantine** with the reason shown (§4.19).
 - A refused lot is marked rejected at the dock and never becomes stock.
 
-**The review screen's own guide.** The ribbon at the top of the review screen shows three steps, **Arrived → Verify counts → Accept** (`guided-accept-core.ts` L65). It also gives one plain-English line for the current stage, for example: *"It's here. Count each line against the manifest — the counts are the ONE thing only you can verify. Refuse any short or wrong line at the dock (press Reject on it); every other line is accepted when you press Finalize."* (L84).
+**The review screen's own guide.** The ribbon at the top of the review screen shows three steps, **Arrived → Verify counts → Accept** (`guided-accept-core.ts` L65). It also gives one plain-English line for the current stage, for example: *"It's here. Count each line against the manifest — the counts are the ONE thing only you can verify. Fewer than the manifest? Press Count short on that line and enter what you counted. Refuse any wrong line at the dock (press Reject on it); every other line is accepted when you press Finalize."* (L84; Phase 3.1).
 
 > **Do not follow the old printed sheets or the Receiving help panel where they disagree with this SOP (finding F-04-5).** The in-app paper sheets at `/admin/sop` (**SOP — Truck day (delivery to sellable)** and the **receive** sheet behind *"Prefer paper?"*) and the Receiving page's help panel *"How inbound transfers work in Washington"* still say to *"enter it by hand"*, to *"Move the record along the pipeline (in transit → received)"*, and to *"reject it to discard"* (`src/lib/catalog/sop-core.ts` L79, L81, L83, L158, L162; `intake/page.tsx` L279–282). None of that is true any more. There is no hand-entry form, Finalize marks the delivery received, and a refusal is "refuse at the dock" (nothing is discarded). The order sheet's *"receive it against each line in Receiving; the PO moves to Partial then Received"* (L137) is also out of date: a linked PO is received automatically at Finalize (§4.16).
 
@@ -192,7 +192,7 @@ Every manifest moves through these stages. The labels are exactly what the scree
 | Screen | Where | What it is for |
 |---|---|---|
 | **Receiving** (list) | Product Intake → Receiving, `/admin/inventory/intake` | Every manifest, with status cards, export, and two tabs: **Incoming (email)** and **Manual tools** |
-| Manifest review | Click a manifest. `/admin/inventory/intake/<id>`. Its breadcrumb says **Vendor intake** (F-04-8); it is the same thing as Receiving | Count, refuse, samples, vendor ids, COAs, transport, PO link, **Finalize**. Three tabs: **Delivery · Issues · Accounting** (`[id]/page.tsx` L770–790) |
+| Manifest review | Click a manifest. `/admin/inventory/intake/<id>`. Its breadcrumb says **Vendor intake** (F-04-8); it is the same thing as Receiving | Count, refuse, samples, vendor ids, COAs, transport, PO link, **Finalize**. Three tabs: **Delivery · Issues · Accounting** (`[id]/page.tsx` L838–858) |
 | Menu match | A link from the review screen when needed, `/intake/<id>/match` | Decide where a product belongs on the menu (§4.23) |
 | **Print lot label** | **🏷 Print 4×6 label** on a line | 4×6 label for the Rollo printer (§4.21) |
 | **Product Onboarding** | Product Intake → Product Onboarding, `/admin/inventory/drafts` | Approve brand-new products with a price (§4.22) |
@@ -253,7 +253,7 @@ Use these when an email did not produce a row, or a vendor handed over paper or 
 | **CCRS manifest.csv** | You only have the state's manifest CSV | Paste the full contents of the `manifest_*.csv`. It carries *"no product names, prices, or COAs"*, so each line is a sparse draft. | **Parse CSV & stage for review** |
 | **Manifest PDF** | You only have the WA LCB **Internal Shipping Document (Third Party)** PDF | Choose the .pdf. Text PDFs only, not scans. No prices or COAs. *"Prefer the JSON when you have it."* | **Parse PDF & stage for review** |
 
-**After any import,** you land on the new manifest's review screen with: *"Manifest staged as a draft. Review the lines below, then accept to activate the lots."* (`[id]/page.tsx` L583–587). A manually imported manifest stays **Pending**; that is normal (§4.1).
+**After any import,** you land on the new manifest's review screen with: *"Manifest staged as a draft. Review the lines below, then accept to activate the lots."* (`[id]/page.tsx` L619–623). A manually imported manifest stays **Pending**; that is normal (§4.1).
 
 **CSV and PDF imports carry no cost and no COA.** The screen then adds *"…Fill in cost and COA before accepting."* (L588–596). **There is no field on the review screen to type a cost or a COA** (F-04-10). Do this instead:
 1. Ask the vendor for the **Transfer Data Link** or JSON, and import that instead if it arrives before the truck. Dismiss the sparse copy as a duplicate (§4.7) only if both rows show the same manifest # and vendor.
@@ -274,9 +274,9 @@ Open the manifest from the list. Before the truck comes, read the review screen 
 3. **Guide ribbon and intake checklist.**
    - The checklist (`intake-checklist-core.ts` L102–175) lists **Mark the delivery received**, **Walk the lines & verify counts**, **Verify transport details**, **Finalize intake**, **Mark manifest accepted** and **Promote facts to Knowledge Base**.
    - Steps marked automatic are done by Finalize.
-4. **Review flags panel.** Per-line compliance flags (vendor license, lot codes, COAs, failed labs, samples, quantities). It shows nothing when the manifest is clean (`[id]/page.tsx` ~L905). **Read every flag before the truck comes.**
+4. **Review flags panel.** Per-line compliance flags (vendor license, lot codes, COAs, failed labs, samples, quantities). It shows nothing when the manifest is clean (`[id]/page.tsx` ~L973). **Read every flag before the truck comes.**
 5. **"Which order is this delivery for?"** (§4.16).
-6. **Lines table** (L936–1100). Columns: **Product / lot**, **Qty**, **COA**, **Catalog**, **Expires**, **Decision**. The **COA** cell (`[id]/page.tsx` L1142–1180; `coa-bundle-core.ts` L671–677) shows:
+6. **Lines table** (L936–1100). Columns: **Product / lot**, **Qty**, **COA**, **Catalog**, **Expires**, **Decision**. The **COA** cell (`[id]/page.tsx` L1188–1226; `coa-bundle-core.ts` L671–677) shows:
    - **✅ matched by lab id** — the certificate prints an id the line carries. Safe.
    - **✅ matched by name — verify** (gold) — the certificate was matched by the product name only. **Open the certificate and check the name and lot before Finalize.** If it is wrong, tell the manager (a lab result once attached is changed on the lot page, SOP-05a).
    - **✅ attached by hand** — a manager chose it on this page.
@@ -286,9 +286,9 @@ Open the manifest from the list. Before the truck comes, read the review screen 
    - A **sample** chip marks free trade samples.
    - **Unmapped category** with **Map it →** means the product type is not mapped yet. Ask the manager to map it under Settings → Types & Categories before Finalize.
 7. **Certificates of analysis (N).** The COAs pulled from the transfer file (§4.15).
-8. **AI extract.** Shown only when it can add something. **🤖 Run AI extract** re-reads the archived documents for this one manifest. *"The button only fills EMPTY transport fields and re-checks the invoice/order # for this one delivery — it never overwrites what you typed."* (L886–887). It never changes lines or decisions (`intake/actions.ts` L320–337).
+8. **AI extract.** Shown only when it can add something. **🤖 Run AI extract** re-reads the archived documents for this one manifest. *"The button only fills EMPTY transport fields and re-checks the invoice/order # for this one delivery — it never overwrites what you typed."* (L886–887). It never changes lines or decisions (`intake/actions.ts` L321–338).
 
-Write the manifest number, vendor and the number of lines on form 8.1 before the truck arrives. **Compare that number with the vendor's paper or PDF manifest.** If a line failed to save when the manifest was staged, the system only notes it in a server log and the line is simply missing from the screen (`intake-store.ts` L930–936; finding F-04-11). A line on the paper but not on the screen means: do not finalize; tell the manager, who re-imports it with a manual tool (§4.5) or calls the owner.
+Write the manifest number, vendor and the number of lines on form 8.1 before the truck arrives. **Compare that number with the vendor's paper or PDF manifest.** If a line failed to save when the manifest was staged, the system only notes it in a server log and the line is simply missing from the screen (`intake-store.ts` L943–949; finding F-04-11). A line on the paper but not on the screen means: do not finalize; tell the manager, who re-imports it with a manual tool (§4.5) or calls the owner.
 
 ### 4.7 Duplicates, invoice numbers and overdue trucks
 
@@ -299,7 +299,7 @@ Write the manifest number, vendor and the number of lines on form 8.1 before the
   - removes that copy's lines (never received);
   - moves its invoice #, documents and transport details to the kept row;
   - is **not** a rejection, and nothing is filed with CCRS.
-- It runs in one database transaction and writes an audit row `manifest.dismiss_duplicate` (`intake/actions.ts` L546–583).
+- It runs in one database transaction and writes an audit row `manifest.dismiss_duplicate` (`intake/actions.ts` L547–584).
 
 **Identity of a manifest** = manifest number + vendor.
 - A manifest with **no** number is never treated as a duplicate (`manifest-dedupe-core.ts` L24–35).
@@ -307,7 +307,7 @@ Write the manifest number, vendor and the number of lines on form 8.1 before the
 
 **Invoice #:**
 - The list's **Invoice #** cell can be corrected: type it in **Invoice / Order #** and press **Save** (`InvoiceNumberCell.tsx`).
-- Saving a blank clears your correction and goes back to the number read from the documents (`intake/actions.ts` L488–506).
+- Saving a blank clears your correction and goes back to the number read from the documents (`intake/actions.ts` L489–507).
 - The banners say *"Invoice # updated — your correction now shows on this manifest everywhere the invoice number appears."* or *"Invoice # correction cleared…"*.
 
 **Overdue truck:** see §4.3 step 3. Write each follow-up call on form 8.1.
@@ -329,12 +329,12 @@ Washington transport manifests must carry the transport details (WAC 314-55-085,
    - **Departed**
    - **Arrived**: type the real arrival time.
    - **Route notes**: *"Stops, conditions, seal numbers, etc."* Write any **seal numbers** and the condition of the seals here.
-3. Press **💾 Save transport details**. The fields saved are listed in `intake/actions.ts` L289–318.
+3. Press **💾 Save transport details**. The fields saved are listed in `intake/actions.ts` L290–319.
 4. Values that came straight from the signed transfer document show as green **from the manifest** chips. *"These values were staged straight from the signed transfer document — legally validated for CCRS, no need to re-type or re-verify them."* (`GuidedAcceptRibbon.tsx` L128).
 
 ### 4.9 Count every line (the one human job)
 
-The screen's own words for the Qty column: *"Shipped quantity from the manifest. Your ONE human job: confirm the physical count matches before accepting."* (`guided-accept-core.ts` L165–175).
+The screen's own words for the Qty column: *"Shipped quantity from the manifest. Your ONE human job: confirm the physical count matches before accepting. Fewer came in (for example 18 of 20)? Press Count short on the line and enter what you counted."* (`guided-accept-core.ts` L165–175). A line counted short shows **18 of 20 each** with **2 refused** under it (`[id]/page.tsx` L1172–1187).
 
 1. **Unload onto the counting table, one line at a time.** Do not open other boxes until the current line is done.
 2. **For each line, check the product name, the lot or batch number on the package, and the unit count against the Qty on screen.** Also check:
@@ -342,15 +342,15 @@ The screen's own words for the Qty column: *"Shipped quantity from the manifest.
    - **Expiry or short date**, if printed.
    - **Labels:** the required WA labeling is present.
 3. **Mark the line on form 8.1:** ✔ (count matches and condition is good), or the problem in words ("18 of 20", "2 crushed", "wrong strain").
-4. **Lines that are correct need nothing on screen.** They say **Will accept**: *"Nothing to press: Finalize accepts this line unless you reject it."* (`ManifestLotDisposition.tsx` L138–143).
-5. **Lines that are wrong are refused at the dock now** (§4.10, §4.11). Do this while the driver is still here, so the product can leave on the truck.
+4. **Lines that are correct need nothing on screen.** They say **Will accept**: *"Nothing to press: Finalize accepts this line unless you reject it."* (`ManifestLotDisposition.tsx` L238–243).
+5. **Lines that are short are counted short; lines that are wrong are refused at the dock** (§4.11, §4.10). Do this while the driver is still here, so the product can leave on the truck.
 6. **Second count: strongly recommended (D31).** The owner's rule: *"no second count required, it should be highly suggested, especially for new vendors we havent received from before."* So:
    - **First delivery from this vendor?** Treat a second count as expected. A second trained employee recounts every line and signs form 8.1. If nobody else is on shift, the manager writes "single count, first delivery, nobody available" on form 8.1.
    - **Any other delivery:** a second count is a good habit, especially for high-value lines or anything that looked short, damaged or odd on the first pass.
    - **How to tell it is a first delivery.** The app has no "new vendor" marker (gap G-21). Before the truck arrives, the manager opens **Receiving**, clicks the **All** view, and picks the vendor in the **Vendor** filter (`ReceivingFilterBar.tsx` L101–111). No earlier manifest from that vendor means it is a first delivery. With a filter on, the list reads only the newest 1,000 manifests (`intake/page.tsx` L156–160), so an old vendor coming back after a long gap may also look new. Treat it as new. Tick the box on form 8.1.
 7. **Every line counted? Every problem refused?** Sign form 8.1 as the counter. The second counter signs too.
 
-> **No partial quantities.** The system cannot record "18 received of 20". Each line is accepted **whole** or refused **whole** (finding F-04-1; the received quantity is taken from the manifest, `intake-parser.ts` L606). Read §4.11 before you accept any line that is short.
+> **Partial quantities (since Phase 3.1).** A line that came up short is received at what you counted: press **Count short** on it (§4.11). Until then every line says the manifest's quantity (`intake-parser.ts` L606). Never accept a short line at the manifest quantity and "fix" it later.
 
 ### 4.10 Refusing a line at the dock
 
@@ -367,22 +367,49 @@ The screen's own words for the Qty column: *"Shipped quantity from the manifest.
 4. **Set the product aside with the driver.** Refused product goes back on the truck, and the driver takes it. Write the line, reason and quantity on the dock refusal log (form 8.2). Have the driver initial it if they will.
 5. **If a line was already marked accepted earlier,** the reject box warns: *"Heads up: this line was already marked accepted. Product should be refused at the dock before you accept it — accepting first and rejecting later means it briefly entered inventory. Only continue if this is a genuine correction."* (L95–101).
 
-**What refusing does and does not do** (help panel *"How rejecting product works (and stays compliant)"*, `[id]/page.tsx` L1341–1357):
+**What refusing does and does not do** (help panel *"How rejecting product works (and stays compliant)"*, `[id]/page.tsx` L1492–1508):
 - *"Rejecting is 'refuse at the dock' — the product leaves with the driver and never becomes your reported inventory. Nothing is destroyed."*
 - *"Because refused product was never yours, you file NOTHING with CCRS. Ask the vendor to submit a CCRS manifest Update (to fix a quantity) or Delete (to remove a line) so their record matches what physically stayed."*
 - *"Do NOT create a return manifest for driver-present refusals. Contingency manifests are discontinued (WSLCB, Nov 2025)."*
 
-### 4.11 Short counts (interim rule)
+### 4.11 Short counts: receive part of a line ("18 of 20")
 
-The system has no way to receive part of a line (F-04-1, gap G-16). **The owner has ruled that this must be built and is on the list of serious issues to fix** (D29: *"we need a way to accept less than what came in"*; F-04-1 is now **S1**, G-16 **APPROVED**). **Until it is built**, follow this interim rule. It matches the owner's own practice of *"We just tell the vendor to take it back with them"*:
+The owner asked for this: *"So we need the ability to tell the system that we are only accepting a part of the manifest and the rest was rejected. There are several instances where the vendor forgot to send an item, or it broke in transit, etc."* (`docs/ccrs-rejection-and-returns.md` L15–21), then D29: *"we need a way to accept less than what came in, please add this to the list of serious issues to fix"*, and in owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*. Built in Fix Phase 3.1 (G-16 BUILT, F-04-1 FIXED). **It needs migration `0319_intake_counted_short.sql`.** Until it is applied, the **Count short** button is not shown (`[id]/page.tsx` L336, L1237) and the old rule applies: refuse the whole short line (step 8 below).
+
+**When:** the count on the counting table is lower than the line's **Qty** (for example 18 cartridges arrived, the manifest says 20). Only before Finalize, while the delivery is open and the driver is still here.
 
 1. **Recount** with a second person. Many shorts are miscounts. A short line is one of the times a second count matters most (D31).
-2. **Still short? Refuse the whole line** with **Short shipment — vendor forgot it / came up short**. Write the real count in form 8.2 (for example "18 of 20 — refused whole line").
-3. **The physical units go back with the driver.** Ask the vendor to Update or Delete the line in CCRS (§4.24) and re-send the correct quantity on a new manifest if you still want it.
-4. **Do not** accept the line and then "fix" the number with an inventory adjustment.
-   - The lot would say 20 while the shelf holds 18.
-   - The weekly CCRS InventoryTransfer report sends the **received quantity** (`ccrs-transfer-core.ts` L33–36), so the state would be told 20.
-5. **Overages** (more than the manifest says) are the same. Refuse with **Overage — more than ordered**, or call the manager.
+2. **Still short? On the line, press Count short** (`ManifestLotDisposition.tsx` L71–81). A count box opens:
+   - **Counted at the dock (manifest: 20)**: type what you counted, for example **18**. The box takes a plain number (whole units for an each line; up to three decimals for a weighed line).
+   - **The reason for the rest**: the dock reasons, without Overage: **Short shipment — vendor forgot it / came up short**, **Damaged / broke in transit**, **Wrong product**, **Failed COA / quality**, **Expired / short-dated**, **Other (explain)** (an **Explain the reason…** box appears and is required) (`intake-count-core.ts` L50–72).
+   - The help line reads *"The line goes in at your count; the rest goes back with the driver. 0 refuses the whole line. More than the manifest cannot be received (refuse it as Overage)."* (`ManifestLotDisposition.tsx` L106–109).
+3. **Press Save count** (or **cancel**). The banner reads **Count saved.** and the sentence the timeline keeps, for example *"Blue Dream 1g Cart: counted 18 of 20 shipped; 2 refused at the dock (Damaged / broke in transit). The lot will be received at 18; the refused units go back with the driver and the vendor corrects their CCRS manifest (Update)."* (`[id]/page.tsx` L706–719; `intake-count-core.ts` L207–214).
+4. **The line now says Accepting 18 of 20** and *"Rest refused: …"*, with **Recount** and **reject instead** (`ManifestLotDisposition.tsx` L122–141). The Qty column shows **18 of 20 each** and **2 refused**.
+5. **The refused units go back with the driver.** Write the line on form 8.2 (for example *"20 · 18 · Damaged — 2 refused, 18 received"*). Ask the vendor to **Update** the line in CCRS to 18 (§4.24, form 8.3). Greenway files nothing for the refused units: they were never received.
+6. **Finalize as usual (§4.17).** The delivery is a **partial** acceptance, so the note box asks *"Why is this partial? (required — audit trail)"* even if no line is refused. The bar says *"1 line was counted short at the dock and goes in at the counted quantity; the rest goes back with the driver."* (`finalize-label-core.ts` L111). At Finalize:
+   - the lot goes live at **18** (the receive adjustment is +18, note *"Accepted from vendor manifest intake at the dock count: 18 of 20 shipped (Fix Phase 3.1)."*, `intake-count-core.ts` L255–258);
+   - the delivery becomes **Partially Accepted**, and the timeline adds *"Received short: Blue Dream 1g Cart 18 of 20 (2 refused: Damaged / broke in transit)."* (`intake-store.ts` L1684–1699, L1932);
+   - everything that reads the received quantity follows the count with no other step: the weekly CCRS **InventoryTransfer** Quantity (`ccrs-transfer-core.ts` rule 3, `ccrs-batch.ts` L312), **Inventory.csv**, the goods receipt, the vendor bill (18 × unit cost, `vendor-bill-service.ts` L237), the linked PO and the sample count.
+7. **Changing your mind before Finalize:**
+   - **Wrong count?** Press **Recount** and type the right number. Typing the manifest quantity (20) removes the short count: banner **Short count removed.**
+   - **Counted 0?** Nothing of the line came in: Save count refuses the **whole line** at the dock with your reason (*"Counted 0 of 20 — …"*); banner **Line refused (counted 0).**
+   - **Refuse the line after all?** Press **reject instead** (§4.10). A refused line goes back to the manifest quantity, so the refusal says what the vendor shipped (`intake-store.ts` L1092–1096, L1107–1131). Refusing the whole manifest does the same for every line (L1017–1027).
+8. **Before migration 0319 is applied** (no Count short button): refuse the whole short line with **Short shipment — vendor forgot it / came up short**, write *"18 of 20 — refused whole line"* on form 8.2, and have the vendor re-send.
+
+**What the screen refuses (nothing is changed):**
+- *"You counted 21 but the manifest says 20. More than the manifest cannot be received: refuse the line with “Overage”, or call the manager (SOP-04 §4.11)."* **Overages are never received.** Refuse the line with **Overage — more than ordered**, or call the manager.
+- *"The count matches the manifest (20). Nothing to change: Finalize accepts the full line."*
+- *"This line came as whole units (20), so the count must be a whole number."* · *"Type the count as a plain number, for example 18."* · *"A count cannot be negative."*
+- *"Pick why the rest was refused (a reason is required)."* · *"Please explain the ‘Other’ reason."*
+- *"This line is refused at the dock. Press “accept instead” first if part of it came in."*
+- *"This line is no longer waiting at the dock (it was finalized). A count can only be entered before Finalize."* / *"This delivery is already finalized. A count can only be entered before Finalize."*
+- *"The line changed while you were counting (someone else saved a count, or it was finalized). Nothing was saved: reload and count again."* (two people saved at once; `intake-store.ts` L1255–1273)
+- *"Migration 0319 is not applied yet, so a short count cannot be saved. Nothing was changed: refuse the whole short line for now (SOP-04 §4.11)."*
+(`intake-count-core.ts` L140–203; `intake-store.ts` L1145–1291.) These show in a red **Count not saved.** banner.
+
+**Never** accept a short line at the manifest quantity and "fix" the number later with an inventory adjustment. The weekly CCRS InventoryTransfer report sends the **received quantity**, so the state would be told 20 while the shelf holds 18. Count short **before** Finalize instead.
+
+**Who and the record.** A manager (`inventory.manage`, D30; `intake/actions.ts` L623–640). Each save writes a timeline event (**Counted short at the dock (the rest refused)** or **Short count removed**, `manifest-event-labels-core.ts` L79–80) and an audit row `inventory_lot.dock_count_short` / `_clear` / `_refuse_whole` with the quantities before and after (`intake-store.ts` L1274–1289). The lot keeps the manifest quantity (`shipped_qty`), the reason, who counted and when (migration 0319).
 
 ### 4.12 Refusing the whole manifest
 
@@ -398,24 +425,24 @@ Use this when nothing on the truck should come in (for example, the wrong store,
    - **Overage — more than ordered**
    - **Other (explain)**
 3. **Details (optional / required for Other)**: explain.
-4. Press **✕ Reject whole manifest** (`[id]/page.tsx` L1394–1417).
+4. Press **✕ Reject whole manifest** (`[id]/page.tsx` L1545–1568).
 5. The banner reads *"You rejected this whole manifest at the dock."* … *"Refused product never entered inventory (nothing destroyed). No CCRS filing on our end — ask the vendor to Update or Delete their manifest."* (`finalize-banner-core.ts`).
 6. **What changes in the system:**
    - Every lot is marked rejected at the dock.
    - The manifest becomes **Rejected**.
    - Its duplicate lock is released, so the vendor's corrected re-send can come in.
-   - The timeline records *"…No CCRS filing; vendor to Update/Delete their manifest."* (`intake-store.ts` L970–1036).
+   - The timeline records *"…No CCRS filing; vendor to Update/Delete their manifest."* (`intake-store.ts` L983–1060).
 7. Fill form 8.2 (one line: "whole manifest") and form 8.3 (vendor follow-up).
 
 ### 4.13 Trade samples and the quarterly sample cap
 
 Lines marked **sample** are free trade samples from the processor.
 
-- **The law** (as the code cites it): a processor may send **no more than 120 sample units per quarter** to one retailer (WAC 314-55-096(1)(f)(ii); `intake-store.ts` L1070–1099). Exactly 120 is allowed; 121 is over (`sample-intake-cap-core.ts` L146–154).
+- **The law** (as the code cites it): a processor may send **no more than 120 sample units per quarter** to one retailer (WAC 314-55-096(1)(f)(ii); `intake-store.ts` L1321–1350). Exactly 120 is allowed; 121 is over (`sample-intake-cap-core.ts` L146–154).
 - **What happens at Finalize.**
   - If accepting this manifest would put the vendor over 120 this quarter, **and** the owner has the cap set to **Enforce limits** + **Hard block over-cap events** (Compliance → Samples, `samples/page.tsx` L283–286), Finalize is refused **before anything activates**:
-    > **Accept refused — quarterly sample cap.** … *"No lots were activated and no sample event was recorded. The processor must not send more sample units this quarter, or an owner may adjust the sample-cap enforcement settings."* (`[id]/page.tsx` L682–705)
-  - In **Warn only** mode, it never blocks (`intake-store.ts` L1070–1099).
+    > **Accept refused — quarterly sample cap.** … *"No lots were activated and no sample event was recorded. The processor must not send more sample units this quarter, or an owner may adjust the sample-cap enforcement settings."* (`[id]/page.tsx` L750–773)
+  - In **Warn only** mode, it never blocks (`intake-store.ts` L1321–1350).
 - **What to do when it is refused:**
   1. Press **✉️ Notify vendor (sample delivery on hold)**. It *"Emails the processor that their delivery is on hold and asks them to hold the samples until next quarter. Cites WAC 314-55-096 — no dollar amounts or customer data. An internal copy is kept for staff."*
   2. Then **refuse the sample lines** that put them over (§4.10, reason **Other (explain)**: "over quarterly sample cap"), and press Finalize again for the rest.
@@ -431,10 +458,10 @@ Lines marked **sample** are free trade samples from the processor.
 
 Each week Greenway, as the receiver, must report accepted inbound lots to CCRS in an **InventoryTransfer** file. The "from" id must be **exactly the vendor's** inventory id (`ccrs-transfer-core.ts` L1–43). SOP-16 covers the upload itself; receiving's job is to make the id right.
 
-1. On each accepted line, look at **Vendor inventory id** (`[id]/page.tsx` L1038–1072).
+1. On each accepted line, look at **Vendor inventory id** (`[id]/page.tsx` L1130–1164).
 2. Ids that came from a Transfer Data Link / WCIA JSON, a CCRS manifest.csv, or that someone already typed are **trusted** (L55). The button says **Save**.
 3. Ids read from a **PDF** may really be a batch number, so the line says **needs confirming for CCRS** and the button says **Confirm**. Compare with the vendor's manifest, correct it if needed, and press **Confirm**.
-   - It is stamped as owner-entered (`intake/actions.ts` L622–629).
+   - It is stamped as owner-entered (`intake/actions.ts` L649–656).
    - Until it is confirmed, the weekly file flags `E14_TRANSFER_VENDOR_ID_UNKNOWN`.
 4. If the screen says *"Not saved: enter the vendor's id exactly as on their manifest (1-100 characters, no commas or quotes)."*, retype it without commas or quotes.
 
@@ -447,9 +474,9 @@ Each week Greenway, as the receiver, must report accepted inbound lots to CCRS i
   - *"No lab result / COA on record — WA testing rules (WAC 314-55-102) require a passing COA before retail sale."*
   - A COA that is on record but still pending is allowed.
 - **Emailed COAs are attached automatically** when the email arrives (§4.4). Read the delivery's timeline and the **COA** column (§4.6 step 6).
-- **When lines still have no lab result (Phase 3.1a)**, a row above the lines table says *"N lines have no lab result yet."* and what the delivery's own lab documents hold (`[id]/page.tsx` L972–996). Two tools (manager, `inventory.manage`):
-  1. **Re-read COAs from this delivery's documents.** Reads every lab PDF on file again (with the document reader for hard layouts) and attaches what matches by lab id or by a unique name. Lines that already have a lab result are never changed. The result shows as a banner: **COAs re-read.** with the same sentence as the email, or **No COA could be read.** with the document named (`intake/actions.ts` L1344–1403). It writes the timeline event **COAs re-read from this delivery's documents** and an audit row `manifest.coa_reread`.
-  2. **Attach lab result** on the line. Pick the certificate in **Choose its certificate…** (each one reads *lab id · sample name · THC · PASS/FAIL*, e.g. *"WA-260902-019 · Bucked Flower - LA Kush Cake - (g) · THC 27% · PASS"*) and press **Attach lab result**. **Check the sample name against the line before pressing.** Banner **Lab result attached.** (`intake/actions.ts` L1413–1447). It writes the timeline event **Lab result attached by hand** and the audit row `inventory_lot.coa_linked` (the same as the lot page).
+- **When lines still have no lab result (Phase 3.1a)**, a row above the lines table says *"N lines have no lab result yet."* and what the delivery's own lab documents hold (`[id]/page.tsx` L1003–1027). Two tools (manager, `inventory.manage`):
+  1. **Re-read COAs from this delivery's documents.** Reads every lab PDF on file again (with the document reader for hard layouts) and attaches what matches by lab id or by a unique name. Lines that already have a lab result are never changed. The result shows as a banner: **COAs re-read.** with the same sentence as the email, or **No COA could be read.** with the document named (`intake/actions.ts` L1371–1430). It writes the timeline event **COAs re-read from this delivery's documents** and an audit row `manifest.coa_reread`.
+  2. **Attach lab result** on the line. Pick the certificate in **Choose its certificate…** (each one reads *lab id · sample name · THC · PASS/FAIL*, e.g. *"WA-260902-019 · Bucked Flower - LA Kush Cake - (g) · THC 27% · PASS"*) and press **Attach lab result**. **Check the sample name against the line before pressing.** Banner **Lab result attached.** (`intake/actions.ts` L1440–1474). It writes the timeline event **Lab result attached by hand** and the audit row `inventory_lot.coa_linked` (the same as the lot page).
   - Refusals you may see (banner **Lab result not attached.**): *"Choose a certificate for the line first."*; *"The documents read differently than when the page was opened. Reload the page and choose again."*; *"That certificate is no longer in this delivery's documents. Reload the page and choose again."*; *"That line already has a lab result (or changed meanwhile); nothing was replaced."*; *"That line is destroyed; a lab result is never attached to it."*; *"That certificate prints no lab test id; it cannot be attached safely."* (`coa-bundle-core.ts` L685–697; `coa-delivery-store.ts` L103–172).
   - **The app never guesses.** A line two certificates could fit is left for you (*"matched more than one certificate - not attached, choose by hand"*); a word that only names a kind of product (flower, pre-roll, rosin, 10pk…) never counts as a match.
 - **A line still with no COA (—)** before the truck: ask the vendor to send it now. Lines without a COA are **held in quarantine** at Finalize rather than going live (§4.19).
@@ -460,29 +487,29 @@ Each week Greenway, as the receiver, must report accepted inbound lots to CCRS i
 If the delivery was ordered on a Greenway purchase order, the panel **Which order is this delivery for?** suggests matching open POs (`ManifestPoLinkPanel.tsx`).
 
 - *"Vendors rarely put our PO number on the manifest, so nothing links automatically — confirm the right order below and the paper trail connects itself."*
-- Press **Link this PO** on the right one, or **Unlink** to undo. The link is never made automatically (`intake/actions.ts` L267).
+- Press **Link this PO** on the right one, or **Unlink** to undo. The link is never made automatically (`intake/actions.ts` L268).
 - If the delivery had no PO (a sample drop or walk-in deal), leave it unlinked.
-- **Why it matters:** on Finalize, a linked PO is received automatically, and Accounts Payable can compare invoice against PO when paying (`intake-store.ts` L1657+).
+- **Why it matters:** on Finalize, a linked PO is received automatically, and Accounts Payable can compare invoice against PO when paying (`intake-store.ts` L1936+).
 
 ### 4.17 Finalize: the one button
 
 When every line is counted and every wrong line refused:
 
-1. Look at the **sticky bar** at the bottom of the review screen. Its button names exactly what it will do (`finalize-label-core.ts` L80–84):
+1. Look at the **sticky bar** at the bottom of the review screen. Its button names exactly what it will do (`finalize-label-core.ts` L87–91):
    - **✓ Accept & Finalize** (one line) or **✓ Accept All & Finalize**.
    - **✓ Accept N · Reject M & Finalize**: a mix.
    - **✓ Reject & Finalize** or **✓ Reject All & Finalize**: everything refused (red).
    - **✓ Finalize (no lines)**.
 2. **Read the label against form 8.1.** The accept and reject numbers must match your sheet. If they do not, find the line before pressing.
 3. **The note box.**
-   - If any line is refused, it says *"Why is this partial? (required — audit trail)"* and **must** be filled.
+   - If any line is refused **or counted short** (§4.11), it says *"Why is this partial? (required — audit trail)"* and **must** be filled.
    - Otherwise it says *"Note (required only if this finalize ends up partial)"*.
    - Write a plain reason, for example *"2 lines refused: 1 crushed in transit, 1 short — vendor to Update."* The note is saved to the manifest's permanent timeline (L1366–1391; max 2,000 characters, `intake-disposition-core.ts` L150–168).
-4. Press the button. **One press does everything** (help panel step 6; `intake/actions.ts` L937–1073):
+4. Press the button. **One press does everything** (help panel step 6; `intake/actions.ts` L964–1100):
    1. Marks the delivery received (if it was Pending or In transit).
    2. Checks the sample cap (§4.13).
    3. Accepts every line you did not reject, runs the go-live check on each, and **activates** the clean ones. Each activation is logged as a "receive" inventory adjustment. Lots that fail the check are **held**.
-   4. Marks refused lines rejected at the dock.
+   4. Marks refused lines rejected at the dock. Lines counted short go in at the count (§4.11).
    5. Stamps the received date (Pacific) and expiry rules, fill-only.
    6. Records the **goods receipt** in the books, and the **vendor bill** if anything was activated (§4.20).
    7. Archives and reads the COAs, creates product **drafts** for onboarding, writes facts to the Knowledge Base, records samples, receives the linked PO, and publishes updates to products already on the menu.
@@ -507,7 +534,7 @@ After Finalize the lower part of the page says *"This manifest has been accepted
 
 ### 4.19 The Issues tab and held lots
 
-The **Issues** tab lists what still needs attention. When clean, it says *"Nothing needs attention on this delivery. Every accepted lot passed the go-live check."* (`[id]/page.tsx` L776–779).
+The **Issues** tab lists what still needs attention. When clean, it says *"Nothing needs attention on this delivery. Every accepted lot passed the go-live check."* (`[id]/page.tsx` L844–847).
 
 | Issues row | Meaning | Do this |
 |---|---|---|
@@ -520,7 +547,7 @@ The **Issues** tab lists what still needs attention. When clean, it says *"Nothi
 
 ### 4.20 The Accounting tab
 
-The **Accounting** tab shows **Books for this delivery** (`ManifestAccountingPanel.tsx`; texts from `manifest-event-labels-core.ts` L217–230):
+The **Accounting** tab shows **Books for this delivery** (`ManifestAccountingPanel.tsx`; texts from `manifest-event-labels-core.ts` L230–243):
 
 | Line | Meaning |
 |---|---|
@@ -865,7 +892,7 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | "The KB backfill couldn't run — check the server logs." | Maintenance tool failed | Owner or developer |
 | "The re-run couldn't read your data — check the server logs." | Maintenance tool failed | Owner or developer |
 | "🚨 N in-transit manifest(s) past ETA — follow up with the transporter." | A truck is late (L359–363) | §4.3 step 3 |
-| "Duplicate manifest X from V is already in intake … not staged again." | The same manifest # and vendor is already live (`intake-store.ts` L626–652) | Use the existing row |
+| "Duplicate manifest X from V is already in intake … not staged again." | The same manifest # and vendor is already live (`intake-store.ts` L639–665) | Use the existing row |
 
 ### 5.2 Manifest review screen
 
@@ -880,6 +907,10 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **Note required.** "This intake is partial … add the note next to the Finalize button and finalize again." | A refused line and an empty note | §4.17 step 3 |
 | "Something went wrong with that action." | Any other failure. The screen does not say which (F-04-7) | Check: a reject reason was picked; the whole-manifest reason was picked; you are logged in. Try once. Then tell the owner with the manifest # and time |
 | Green / gold / grey result banners | Finalize finished | §4.18 |
+| **Count saved.** / **Short count removed.** / **Line refused (counted 0).** + the timeline sentence | Save count on a line (Phase 3.1) | Normal (§4.11) |
+| Red **Count not saved.** + the reason (overage, same as the manifest, not a number, no reason, finalized, changed while counting, migration 0319 not applied) | The count was refused; nothing changed | §4.11 "What the screen refuses" |
+| "The dock counts could not be read (…). Quantities shown may not include a short count; Finalize will refuse until this reads." (under the lines) | The short-count read failed | Reload. If it stays, tell the owner; do not finalize |
+| "The dock counts could not be read, so nothing was finalized: …" | Same, at Finalize | Reload and finalize again; nothing changed |
 | "…held in quarantine until the missing paperwork is fixed — see the Issues tab." | A lot failed the go-live check | §4.19 |
 | "Vendor bill: not recorded yet — see the reason below." with *"…have no unit cost yet… Key the unit costs, then finalize again."* | A lot with no cost | §4.20: tell the owner; there is no screen to key it (F-04-10) |
 | "This manifest has been accepted. Lots are managed from the inventory list." | Already finalized | Corrections are SOP-05 or SOP-15 work |
@@ -916,8 +947,8 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 |---|---|---|
 | **The driver's ID or plate does not match the manifest** | Do not unload. Call the manager. If it cannot be resolved, refuse the whole manifest (§4.12, reason **Other (explain)**) | Manager → owner |
 | **A seal is broken or the product looks tampered with** | Do not accept the affected lines. Photograph it, write the seal numbers in **Route notes**, refuse at the dock (**Damaged / broke in transit** or **Other (explain)**) | Manager, same day |
-| **A short count** | §4.11: recount, then refuse the whole line | Vendor via form 8.3 |
-| **More product than the manifest** | Refuse the extra with **Overage — more than ordered**, or refuse the line | Manager |
+| **A short count** | §4.11: recount, then **Count short** with a reason; the rest leaves with the driver (before 0319: refuse the whole line) | Vendor via form 8.3 (CCRS Update to the count) |
+| **More product than the manifest** | It cannot be received (Count short refuses a count above the manifest). Refuse the line with **Overage — more than ordered**, or call the manager | Manager |
 | **A product arrived with no manifest row** (the email did not stage) | §4.3 step 4: import by hand before you count | Owner (note on form 8.1) |
 | **A whole delivery arrived with no manifest at all** | Do not accept product with no manifest. Ask the driver for the transfer document; import it (§4.5). If there is none, refuse the delivery | Manager → owner |
 | **Refused a line too late** (already finalized and accepted) | The product is now Greenway inventory. **Do not** try to "un-accept" it. Returning accepted product needs a return manifest and is **SOP-15** work | Owner, same day |
@@ -941,22 +972,22 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 
 | Control | Why | Where it comes from |
 |---|---|---|
-| **Count every line before Finalize** | Finalize accepts every line not rejected (`intake-store.ts` L1416). The count is the only check a human does | R31 design; owner quote in §1 |
+| **Count every line before Finalize** | Finalize accepts every line not rejected (`intake-store.ts` L1667). The count is the only check a human does | R31 design; owner quote in §1 |
 | **Refuse at the dock, never "accept then fix"** | Refused product was never Greenway's, so nothing is filed with CCRS. Accepting and adjusting misstates the weekly InventoryTransfer quantity | `docs/ccrs-rejection-and-returns.md` L15–21; `ccrs-transfer-core.ts` L33–36 |
-| **No partial quantities; refuse the whole short line** | The system cannot record "18 of 20" (F-04-1, **S1**, G-16 **APPROVED**, D29) | Interim rule §4.11 until G-16 is built |
+| **A short line is received at the count, before Finalize, with a reason** | The lot, CCRS InventoryTransfer and the vendor bill all read the received quantity, so they say 18, not 20. Overages are never received. Each count is on the timeline and in the audit log (G-16 BUILT, F-04-1 FIXED, D29) | §4.11; `intake-count-core.ts` L140–203; migration 0319 checks |
 | **Only managers process manifests** | Owner rule D30; matches `inventory.manage` | §2 |
 | **Second count strongly recommended; expected on a first delivery** | Owner rule D31 | §4.9 |
 | **Benchmark months kept 18 months, then removed on the 10th with owner approval** | Owner rule D33; a fixed schedule protects the history | §4.34 |
-| **No return manifest for driver-present refusals** | Contingency manifests are discontinued (WSLCB, Nov 2025); the vendor updates or deletes their own manifest | `[id]/page.tsx` L1341–1357 |
-| **A reason for every refusal; a note for every partial finalize** | The permanent timeline shows why stock did not arrive | `intake-disposition-core.ts` L68–84, L150–168 |
+| **No return manifest for driver-present refusals** | Contingency manifests are discontinued (WSLCB, Nov 2025); the vendor updates or deletes their own manifest | `[id]/page.tsx` L1492–1508 |
+| **A reason for every refusal and every short count; a note for every partial finalize (a short count makes it partial)** | The permanent timeline shows why stock did not arrive | `intake-disposition-core.ts` L68–84, L150–168 |
 | **The go-live check** (CCRS id, lab result, not FAILED) | WAC 314-55-102: no retail sale without a passing COA | `lot-activation-gate-core.ts` L76–107 |
 | **Only set a held lot Active from a "now clear" Issues row, with a reason** | The lot page's Lifecycle status runs the go-live check and writes an audit row since Phase 1.1 (F-04-2 FIXED; G-19 BUILT) | §4.19 |
-| **Quarterly sample cap: 120 units per processor** | WAC 314-55-096(1)(f)(ii) | `intake-store.ts` L1070–1099 |
+| **Quarterly sample cap: 120 units per processor** | WAC 314-55-096(1)(f)(ii) | `intake-store.ts` L1321–1350 |
 | **Transport details checked against the driver and vehicle** | WAC 314-55-085 transport manifest requirements | `concierge-kb.ts` L142; §4.8 |
 | **Vendor inventory ids confirmed** | The weekly InventoryTransfer "from" id must match the vendor exactly | `ccrs-transfer-core.ts` L1–43 |
 | **Manager login for every Receiving action** | `inventory.manage` on every action; staff cannot finalize | `intake/actions.ts`; `roles.ts` L107 |
 | **Every manifest email has a row** (daily comparison) | Failed or empty emails are logged but not shown (F-04-4, G-17) | §4.3 |
-| **Duplicate dismissal is audited and is not a rejection** | One transaction and an audit row; nothing is filed | `intake/actions.ts` L546–583 |
+| **Duplicate dismissal is audited and is not a rejection** | One transaction and an audit row; nothing is filed | `intake/actions.ts` L547–584 |
 | **Paper record of the count** (form 8.1, 8.2, 8.3) | The app does not record who physically counted | §2 |
 | **PRR data for internal buying and pricing only** | RCW 42.56.070(8) commercial-use limit | `ccrs/page.tsx` L278–280; roadmap L19–23 |
 | **Monthly request logged on form 8.4** | The app has no reminder and no tracking-number field (F-04-19, G-18) | §4.26, §4.28 |
@@ -1015,7 +1046,7 @@ FINALIZE (manager, §4.17)
 
 ```
 Date       | Manifest # | Vendor        | Line / product         | Qty on manifest | Qty here | Reason (as picked on screen)   | Left with driver? | Driver initials | Logged by
-2026-11-02 | 0012345678 | Example Farms | Blue Dream 3.5g        | 20              | 18       | Short shipment — refused whole | [x]               | ____            | J.D.
+2026-11-02 | 0012345678 | Example Farms | Blue Dream 3.5g        | 20              | 18       | Count short: 18 in, 2 refused (Short shipment) | [x] (the 2)  | ____            | J.D.
 2026-11-02 | 0012345678 | Example Farms | Gummies 10pk           | 12              | 12 (2 crushed) | Damaged / broke in transit | [x]           | ____            | J.D.
 2026-11-05 | 0012349999 | Other Co      | WHOLE MANIFEST         | —               | —        | Wrong product                  | [x]               | ____            | M.L.
 ```
@@ -1024,7 +1055,7 @@ Date       | Manifest # | Vendor        | Line / product         | Qty on manife
 
 ```
 Date opened | Manifest # | Vendor | What we asked for                                   | How (email/phone) | Vendor answer | CCRS confirmation seen (date) | Closed by
-2026-11-02  | 0012345678 | ...    | CCRS manifest UPDATE: line 3 qty 20 → removed       | email             | ...           | 2026-11-04 (Mon/Wed/Fri run)  | ____
+2026-11-02  | 0012345678 | ...    | CCRS manifest UPDATE: line 3 qty 20 → 18 (counted short) | email             | ...           | 2026-11-04 (Mon/Wed/Fri run)  | ____
 2026-11-02  | 0012345678 | ...    | COA for lot ___ (held in quarantine)                | phone             | ...           | n/a                           | ____
 2026-11-05  | 0012349999 | ...    | Sample cap notice sent? [sent / no email / not configured / failed] | button   | ...   | n/a                           | ____
 ```
@@ -1074,14 +1105,14 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 ```
 [ ] Every line counted and marked on form 8.1 (by me or a trained employee who signed it)
 [ ] Second count done — or the single-count reason written (expected on a FIRST delivery, D31)
-[ ] Every short / broken / wrong / overage line shows "✕ Rejected at dock" with a reason
+[ ] Every short line shows "Accepting N of M" with a reason (§4.11); every broken / wrong / overage line shows "✕ Rejected at dock" with a reason
 [ ] Refused product is back on the truck; form 8.2 filled
 [ ] Transport details saved; driver + plate checked; seal numbers in Route notes
 [ ] Vendor inventory ids: no line still says "needs confirming for CCRS" (or confirmed now)
 [ ] PO linked (or there was no PO)
 [ ] Sample lines: none over the quarterly cap (or the over-cap lines refused)
 [ ] The button's accept / reject numbers match form 8.1
-[ ] Partial note written if anything is refused
+[ ] Partial note written if anything is refused or counted short
 [ ] Press ONCE. Read the banner. Write it on form 8.1.
 [ ] After: Issues tab, Accounting tab, labels, Product Onboarding — same day
 [ ] NEVER set a lot Active from the lot page unless its Issues row says "now clear"
@@ -1103,7 +1134,8 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 │   2nd count strongly suggested — EXPECTED on a vendor's first delivery. Manager decides.  │
 │ GOOD line → touch nothing ("Will accept").                                                │
 │ BAD line → ✕ Reject → reason → ✕ Confirm reject → product leaves WITH THE DRIVER.         │
-│   SHORT? recount → still short → refuse the WHOLE line. Never "accept then adjust".       │
+│   SHORT? recount → Count short → type what came → reason → Save. Rest leaves w/ driver. │
+│   MORE than the manifest? never received: Reject → Overage. Never "accept then adjust".  │
 │ FINALIZE once: read the button numbers vs form 8.1, write the note if partial, press.     │
 │   Untouched lines are ACCEPTED. Refuse BEFORE Finalize.                                   │
 │ AFTER: Issues tab (held lots) · Accounting (bill refused? tell owner) · labels · onboard. │
@@ -1158,23 +1190,24 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 
 | SOP section | Code / document (read for this SOP) |
 |---|---|
-| 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L81, L94; `docs/ccrs-rejection-and-returns.md` L13–21; `ManifestLotDisposition.tsx` L133–136; `docs/ROADMAP_BACKOFFICE_FIXES.md` L276–300; `docs/INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L157 |
+| 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7, L81, L94; `docs/ccrs-rejection-and-returns.md` L13–21; `ManifestLotDisposition.tsx` L233–236; `docs/ROADMAP_BACKOFFICE_FIXES.md` L276–300; `docs/INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L157 |
 | 2 roles | `src/app/admin/inventory/intake/actions.ts` (all actions `inventory.manage`); `intake/page.tsx` L99; `src/lib/auth/roles.ts` L100, L107, L150, L249; `drafts/page.tsx` L252; `discovery/ccrs/page.tsx` L59; `discovery/competitors/page.tsx` L66; `discovery/benchmarks/page.tsx` L131; `reports/benchmarks/page.tsx` L81; `discovery/actions.ts` L99 |
 | 3 / 4.2 screens | `src/components/admin/admin-nav-data.ts` L71–81; `intake/page.tsx` L264–357, L430–681; `EmailIntakeTable.tsx` L133–294; `receiving-tabs-core.ts` |
-| 4.1 pipeline | `src/lib/inventory/manifest-pipeline-core.ts` L28–104, L190–206; `inbound-store.ts` L803–814; `intake-store.ts` L899; `guided-accept-core.ts` L65, L84 |
+| 4.1 pipeline | `src/lib/inventory/manifest-pipeline-core.ts` L28–104, L190–206; `inbound-store.ts` L803–814; `intake-store.ts` L912; `guided-accept-core.ts` L65, L84 |
 | 4.3 / 4.4 email | `src/app/api/webhooks/inbound-email/route.ts` L1–81, L135–160, L314–320; `inbound-store.ts` L862–884; `intake/page.tsx` L164, L213–220 (commit 7cb4702c removed the panel) |
-| 4.5 manual tools | `intake/page.tsx` L228–257, L497–681; `intake/actions.ts` L34–198, L636–648 |
-| 4.6 review | `intake/[id]/page.tsx` L440–597, L886–905, L936–1100; `intake-checklist-core.ts` L102–175 |
-| 4.7 duplicates | `manifest-dedupe-core.ts` L24–35, L84, L110–124; `intake-store.ts` L626–652; `intake/actions.ts` L488–506, L546–583; `DismissDuplicateForm.tsx`; `InvoiceNumberCell.tsx` |
-| 4.8 transport | `[id]/page.tsx` L1157–1308; `intake/actions.ts` L289–318; `GuidedAcceptRibbon.tsx` L128 |
-| 4.9–4.12 count / refuse | `guided-accept-core.ts` L165–175; `ManifestLotDisposition.tsx` L59–151; `intake-disposition-core.ts` L24–84, L128–193; `intake-store.ts` L970–1068; `[id]/page.tsx` L1341–1424; `intake-parser.ts` L606 |
-| 4.13 samples | `intake-store.ts` L1070–1100, L1371–1388; `sample-intake-cap-core.ts` L116, L146–154; `samples/page.tsx` L103–121, L283–286; `intake/actions.ts` L1146–1185; `[id]/page.tsx` L682–726 |
-| 4.14 vendor ids | `ccrs-transfer-core.ts` L1–63; `[id]/page.tsx` L465–485, L1038–1072; `intake/actions.ts` L622–629 |
-| 4.15 COAs | `lot-activation-gate-core.ts` L76–107; `[id]/page.tsx` L1104+; Phase 3.1a: `coa-bundle-core.ts` (split L120, ids L164, certificate test L205, match L366–442, fold L507, note L537, event L619, page helpers L648–703), `pdf-extract.ts` L272 `readCoaBundleFromBase64`, `inbound-store.ts` L465–640, L657–687, L812–872, `coa-delivery-store.ts` L55–190, `intake/actions.ts` L1344–1447, `[id]/page.tsx` L311–322, L674–693, L972–996, L1142–1180, `manifest-event-labels-core.ts` L72–75, `coa-archive.ts` L174–231, `cultivera-wcia-core.ts` L114–120 |
-| 4.16 PO | `ManifestPoLinkPanel.tsx`; `intake/actions.ts` L267 |
-| 4.17–4.18 finalize | `intake/actions.ts` L937–1133; `intake-store.ts` L1301–1840 (L1416 default-accept); `finalize-label-core.ts` L80–116; `finalize-banner-core.ts` L60–125; `[id]/page.tsx` L609–734, L1366–1391 |
-| 4.19 held lots | `[id]/page.tsx` L383–397, L770–790; `issues-core.ts` L548–572; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L849–864; `scripts/compliance/check-activation-gate.ts` L60–100 |
-| 4.20 accounting | `ManifestAccountingPanel.tsx`; `manifest-event-labels-core.ts` L217–230; `vendor-bill-service.ts` L262–287; `INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L34–46 |
+| 4.5 manual tools | `intake/page.tsx` L228–257, L497–681; `intake/actions.ts` L35–199, L663–675 |
+| 4.6 review | `intake/[id]/page.tsx` L476–633, L954–973, L1028–1245; `intake-checklist-core.ts` L102–175 |
+| 4.7 duplicates | `manifest-dedupe-core.ts` L24–35, L84, L110–124; `intake-store.ts` L639–665; `intake/actions.ts` L489–507, L547–584; `DismissDuplicateForm.tsx`; `InvoiceNumberCell.tsx` |
+| 4.8 transport | `[id]/page.tsx` L1308–1459; `intake/actions.ts` L290–319; `GuidedAcceptRibbon.tsx` L128 |
+| 4.11 short counts (Phase 3.1) | `intake-count-core.ts` (reasons L50–72, plan L140–203, notes L207–258, Qty cell L261); `intake-store.ts` `setLotDockCount` L1145–1291, `listLotShortCounts` L1299–1320, `restoreShippedQtyOnRefusal` L1107–1131 (used L1017–1027, L1092–1096), finalize L1684–1721, L1808, L1900, L1932; `finalize-label-core.ts` L76, L85, L111; `intake/actions.ts` L623–640; `ManifestLotDisposition.tsx` L71–141; `[id]/page.tsx` L238, L336, L353, L706–719, L1172–1187, L1237, L1249–1253; `manifest-event-labels-core.ts` L79–80; `supabase/migrations/0319_intake_counted_short.sql` (rollback `supabase/rollbacks/0319_intake_counted_short.rollback.sql`) |
+| 4.9–4.12 count / refuse | `guided-accept-core.ts` L165–175; `ManifestLotDisposition.tsx` L158–251; `intake-disposition-core.ts` L24–84, L128–193; `intake-store.ts` L983–1097; `[id]/page.tsx` L1492–1575; `intake-parser.ts` L606 |
+| 4.13 samples | `intake-store.ts` L1321–1351, L1622–1639; `sample-intake-cap-core.ts` L116, L146–154; `samples/page.tsx` L103–121, L283–286; `intake/actions.ts` L1173–1212; `[id]/page.tsx` L750–794 |
+| 4.14 vendor ids | `ccrs-transfer-core.ts` L1–63; `[id]/page.tsx` L501–521, L1130–1164; `intake/actions.ts` L649–656 |
+| 4.15 COAs | `lot-activation-gate-core.ts` L76–107; `[id]/page.tsx` L1135+; Phase 3.1a: `coa-bundle-core.ts` (split L120, ids L164, certificate test L205, match L366–442, fold L507, note L537, event L619, page helpers L648–703), `pdf-extract.ts` L272 `readCoaBundleFromBase64`, `inbound-store.ts` L465–640, L657–687, L812–872, `coa-delivery-store.ts` L55–190, `intake/actions.ts` L1371–1474, `[id]/page.tsx` L324–335, L689–724, L1003–1027, L1188–1226, `manifest-event-labels-core.ts` L74–77, `coa-archive.ts` L174–231, `cultivera-wcia-core.ts` L114–120 |
+| 4.16 PO | `ManifestPoLinkPanel.tsx`; `intake/actions.ts` L268 |
+| 4.17–4.18 finalize | `intake/actions.ts` L964–1160; `intake-store.ts` L1552–2119 (L1416 default-accept); `finalize-label-core.ts` L87–129; `finalize-banner-core.ts` L60–125; `[id]/page.tsx` L645–802, L1517–1542 |
+| 4.19 held lots | `[id]/page.tsx` L419–433, L838–858; `issues-core.ts` L548–572; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L849–864; `scripts/compliance/check-activation-gate.ts` L60–100 |
+| 4.20 accounting | `ManifestAccountingPanel.tsx`; `manifest-event-labels-core.ts` L230–243; `vendor-bill-service.ts` L262–287; `INTAKE_PIPELINE_ROADMAP_DECISIONS.md` L34–46 |
 | 4.21 labels | `lots/[id]/label/page.tsx` L1–63 |
 | 4.22–4.23 onboarding | `drafts/page.tsx` L263, L775, L797–815, L1984–2026; `src/lib/inventory/catalog-drafts.ts` L1218+, L1348–1356; `receiving-classification-core.ts` L178–245; `merge-review-core.ts` L30–50 |
 | 4.24 follow-up | `docs/ccrs-rejection-and-returns.md` L158–163, L192–196 |
@@ -1188,13 +1221,13 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 4.34 redo / delete / off | `discovery/actions.ts` L84–112, L770–788, L847–874; `ccrs/page.tsx` L321–360, L422–425; `discovery/page.tsx` L85–87; `discovery/import/page.tsx` L59–61 |
 | In-app SOP sheets (stale) | `src/lib/catalog/sop-core.ts` L66–96 (truck-day; stale L79, L81, L83), L125–145 (order; stale L137), L148–170 (receive; stale L158, L162); `intake/page.tsx` HelpPanel L275–287 (stale L279–282) |
 | Help / concierge | `src/lib/admin/concierge-kb.ts` `product-intake` L132–148, `ccrs` L349–360; `src/lib/admin/help-content.ts` L1009–1011 |
-| Tests (all in `tests/compliance/`) | `fix-p3-1a-coa-bundle`, `fix-p3-1a-coa-archive` (mutation probe `scripts/compliance/mutate-fix-p3-1a.py`), `intake-partial-accept`, `otherwise-taken-receiving`, `r31-manifest-review-walk` (.tsx), `r6-2-inventory-transfer`, `manifest-dedupe`, `r36-inbound-dedupe`, `intake-transport`, `intake-checklist-core`, `r23-finalize-banner`, `sample-intake-cap`, `sample-cap-notice`, `disposition-core`, `ccrs-monthly-rollups`, `intake-roadmap-decisions` |
+| Tests (all in `tests/compliance/`) | `fix-p3-1-partial-receive` (mutation probe `scripts/compliance/mutate-fix-p3-1.py`), `fix-p3-1a-coa-bundle`, `fix-p3-1a-coa-archive` (mutation probe `scripts/compliance/mutate-fix-p3-1a.py`), `intake-partial-accept`, `otherwise-taken-receiving`, `r31-manifest-review-walk` (.tsx), `r6-2-inventory-transfer`, `manifest-dedupe`, `r36-inbound-dedupe`, `intake-transport`, `intake-checklist-core`, `r23-finalize-banner`, `sample-intake-cap`, `sample-cap-notice`, `disposition-core`, `ccrs-monthly-rollups`, `intake-roadmap-decisions` |
 
 ## Appendix B: Not built yet (interim procedures)
 
 | Need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
-| Receive part of a line ("18 of 20") | Accept whole or refuse whole only | Refuse the whole short line; vendor re-sends (§4.11) | G-16 (**APPROVED**, D29) · F-04-1 (S1) |
+| Receive part of a line ("18 of 20") — **BUILT** (Phase 3.1) | Built: **Count short** on the line; the lot goes in at the count; the rest is refused | None needed once migration 0319 is applied; before that, refuse the whole short line (§4.11 step 8) | G-16 BUILT · F-04-1 FIXED |
 | See emails that failed to stage | Logged, shown nowhere | Daily email-vs-list comparison (§4.3) | G-17 · F-04-4 |
 | Monthly PRR reminder and tracking | No calendar task; no tracking # field | Form 8.4 (§4.26–§4.28) | G-18 · F-04-19 |
 | Activate a now-clear held lot safely — **BUILT** (Phase 1.1) | Built: go-live check, reason, audit row, Status history | None needed (§4.19) | G-19 · F-04-2, F-04-12 FIXED |
@@ -1208,7 +1241,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 
 | # | Question | Why it matters | Interim rule in this SOP |
 |---|---|---|---|
-| **Q-04-1** | Short lines: refuse whole, or build partial receive? | **Answered (D29):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* G-16 **APPROVED**; F-04-1 → **S1**. | Refuse the whole line until built (§4.11). |
+| **Q-04-1** | Short lines: refuse whole, or build partial receive? | **Answered (D29):** *"we need a way to accept less than what came in, please add this to the list of serious issues to fix."* G-16 **APPROVED**; F-04-1 → **S1**. | **Built (Phase 3.1):** Count short (§4.11). |
 | **Q-04-2** | Receiver-level access without a manager login? | **Answered (D30):** *"no, only managers will process manifests."* | §2. |
 | **Q-04-3** | Second count required? | **Answered (D31):** not required; *"highly suggested, especially for new vendors we havent received from before."* | §4.9, form 8.1. |
 | **Q-04-4** | Who files, which day, standing request, wording? | **Answered (D32):** admin only, the 10th, standing request wanted, the built-in text; month drop-down approved (G-18); each month arrives as its own zip. | §4.26–§4.31. |
@@ -1226,4 +1259,5 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 1.1 draft | 2026-10-27 | Slice SOP-05a. Owner answers D29–D34 applied: partial receive approved and S1 (§4.11; G-16); only managers process manifests (§2); second count strongly recommended, expected on a vendor's first delivery (§4.9, form 8.1; G-21); admin files on the 10th, standing request procedure with WAC 44-14-04004(4), built-in wording kept, one zip per month (§4.26–§4.31, form 8.4; G-18); 18-month retention with owner approval and backup purge (§4.34, form 8.4 part G; G-20); delete confirmation and working-buttons-only approved (§4.33; G-20). New questions Q-04-7…Q-04-9. No code was re-audited; pins still at `5299660b` (`ac251766` is docs-only). | SOP program |
 | 1.3 draft | Fix phase | Phase 1.1 (owner D76). G-19 BUILT: Lifecycle status runs the go-live check before Active, asks a reason, writes an audit row and shows Status history; the "now clear" Issues row points at that gated path; the held-lot row's stale "cannot attach one yet" text replaced (F-04-12). §4.19, §7 and Appendix B updated. F-04-2, F-04-12 FIXED. | Fix program |
 | 1.4 draft | Fix phase | Phase 3.1a (owner message 6: *"didn't or couldn't attach the coa lab results to the products in the receiving detail page. So I can't accept it nor move it to onboarding."*). Every emailed lab PDF is read certificate by certificate and matched by lab id, then by a unique product name (flagged verify); the outcome is said in the email result and on the timeline; each PDF is filed under its own lab results; the receiving page gains the COA cell wording, **Re-read COAs** and **Attach lab result**. §4.4, §4.6, §4.15, §5.2, §9, Appendix A, B updated. F-04-21 FIXED; F-04-10 COA part FIXED. | Fix program |
+| 1.5 draft | Fix phase | Phase 3.1 (owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*; D29). G-16 BUILT, F-04-1 FIXED: **Count short** on a line records what was counted; the lot goes in at the count and the rest is refused at the dock with a reason; counted 0 refuses the line; overages are never received; Recount / the manifest quantity removes it; a refusal puts the manifest quantity back; a short count makes the delivery partial (note required) and the timeline names it; CCRS InventoryTransfer, Inventory.csv, the goods receipt and the vendor bill read the count. Migration 0319 (manual) with rollback. § top note, §4.6, §4.9, §4.11 (rewritten; was "Short counts (interim rule)"), §4.17, §5.2, §6, §7, forms 8.2, 8.3, 8.5, §9, Appendix A–C updated. Line pins in `intake-store.ts`, `[id]/page.tsx`, `intake/actions.ts`, `ManifestLotDisposition.tsx`, `finalize-label-core.ts` and `manifest-event-labels-core.ts` re-pinned (several `[id]/page.tsx` pins were already off after 3.1a). | Fix program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

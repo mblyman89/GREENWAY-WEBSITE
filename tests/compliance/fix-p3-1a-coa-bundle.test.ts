@@ -307,7 +307,8 @@ describe("5. the SOP, the ledgers and the concierge say the same (standing rules
   const doc = (f: string) => readFileSync(path.resolve(__dirname, "../..", f), "utf8");
   it("SOP-04 v1.4 documents Re-read COAs, Attach lab result and the verify cell", () => {
     const sop = doc("docs/sop/SOP-04-receiving-intake.md");
-    expect(sop).toMatch(/\| \*\*Version\*\* \| 1\.4 \(Phase 3\.1a/);
+    // Fix 3.1 bumped SOP-04 to v1.5; the version row keeps 1.4 as history.
+    expect(sop).toMatch(/\| \*\*Version\*\* \|[^\n]*1\.4 \(?Phase 3\.1a/);
     expect(sop).toMatch(/Re-read COAs from this delivery's documents/);
     expect(sop).toMatch(/\*\*Attach lab result\*\*/);
     expect(sop).toMatch(/matched by name — verify/);

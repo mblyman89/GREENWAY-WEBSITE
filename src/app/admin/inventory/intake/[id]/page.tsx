@@ -29,6 +29,7 @@ import { getVendorById } from "@/lib/vendors/store";
 import {
   listManifestLots,
   listLotVendorIds,
+  listLotShortCounts,
   listManifestEvents,
   listLabFactsByIds,
   findDuplicateTwinsFor,
@@ -41,6 +42,7 @@ import { ManifestAccountingPanel } from "@/components/admin/inventory/ManifestAc
 import { accountingStatus, booksNeedsAttention, booksRefusalNextStep, booksResultText } from "@/lib/inventory/manifest-event-labels-core";
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
+import { qtyCellText } from "@/lib/inventory/intake-count-core";
 import { finalizeBanner } from "@/lib/inventory/finalize-banner-core";
 import {
   parseUsualTransport,
@@ -66,6 +68,7 @@ import {
   rejectManifestAction,
   updateManifestTransportAction,
   setLotDispositionAction,
+  setLotDockCountAction,
   setLotVendorIdAction,
   finalizeManifestAction,
   promoteManifestToKbAction,
@@ -143,6 +146,9 @@ export default async function ManifestReviewPage({
     /** Fix Phase 3.1a: COA re-read / attach-by-hand result (reread | linked | nodocs | error) + its sentence. */
     coa?: string;
     coamsg?: string;
+    /** Fix Phase 3.1: dock count result (short | refused | cleared | error) + its sentence. */
+    count?: string;
+    countmsg?: string;
   }>;
 }) {
   // S29: the session is kept so owner-only books links render only for a
@@ -181,6 +187,8 @@ export default async function ManifestReviewPage({
     vendorid,
     coa,
     coamsg,
+    count,
+    countmsg,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -224,6 +232,11 @@ export default async function ManifestReviewPage({
   // R6-2: the vendor's own inventory id per lot (InventoryTransfer's
   // FromInventoryExternalIdentifier). null = migration 0285 not applied.
   const vendorIds = await listLotVendorIds(id);
+  // Fix Phase 3.1 (G-16, 0319): lines counted short at the dock ("18 of 20").
+  // absent = migration 0319 not applied (no Count short control); error = said
+  // in an Issues-free line under the table, never read as "no short lines".
+  const shortCounts = await listLotShortCounts(id);
+  const shortByLot = shortCounts.kind === "loaded" ? shortCounts.byLot : new Map<string, { shippedQty: number; reason: string | null }>();
   const events = await listManifestEvents(id);
 
   // SLICE 39: Slice 97's intake REVIEW summary, finally connected. Built from
@@ -320,6 +333,7 @@ export default async function ManifestReviewPage({
   const certChoices = choosableCertificates(deliveryCoas.certs);
   const rereadCoasAction = rereadDeliveryCoasAction.bind(null, id);
   const attachCoaAction = attachDeliveryCoaAction.bind(null, id);
+  const countOn = shortCounts.kind === "loaded";
   const sampleCount = lots.filter((l) => l.is_sample).length;
   // SLICE 101 — any line already marked refused makes this a PARTIAL finalize,
   // so the why-partial note field becomes required up front (the server also
@@ -336,6 +350,7 @@ export default async function ManifestReviewPage({
         hasLabResult: l.lab_result_id != null,
         labPassed: l.lab_result_id ? (labFacts.get(l.lab_result_id)?.passed ?? null) : null,
       },
+      shortCounted: shortByLot.has(l.id),
     })),
   );
   const hasRefusedLine = finalizePlan.noteRequired;
@@ -685,6 +700,22 @@ export default async function ManifestReviewPage({
               {coa === "reread" ? "COAs re-read." : coa === "linked" ? "Lab result attached." : coa === "nodocs" ? "No COA could be read." : "Lab result not attached."}
             </strong>{" "}
             {coamsg ?? ""}
+          </div>
+        )}
+        {/* Fix Phase 3.1: the dock count result ("18 of 20"), in words. */}
+        {count && (
+          <div
+            data-count-result={count}
+            className={
+              count === "error"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            <strong>
+              {count === "short" ? "Count saved." : count === "cleared" ? "Short count removed." : count === "refused" ? "Line refused (counted 0)." : "Count not saved."}
+            </strong>{" "}
+            {countmsg ?? ""}
           </div>
         )}
         {transport && (
@@ -1138,7 +1169,22 @@ export default async function ManifestReviewPage({
                       🏷 Print 4×6 label
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtQty(l.received_qty, l.unit)}</td>
+                  <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                    {(() => {
+                      // Fix Phase 3.1: a line counted short reads "18 of 20 each / 2 refused".
+                      const sc = shortByLot.get(l.id);
+                      if (!sc) return fmtQty(l.received_qty, l.unit);
+                      const cell = qtyCellText({ receivedQty: Number(l.received_qty), shippedQty: sc.shippedQty });
+                      return (
+                        <span data-qty-short={l.id} className="inline-flex flex-col items-end">
+                          <span className="font-semibold text-[var(--admin-text)]">
+                            {cell.main} {l.unit}
+                          </span>
+                          <span className="text-[10px] text-[var(--admin-text-faint)]">{cell.short}</span>
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     {l.lab_result_id ? (
                       (() => {
@@ -1188,6 +1234,10 @@ export default async function ManifestReviewPage({
                         disposition={l.disposition}
                         rejectReason={l.reject_reason}
                         acceptAction={setLotDispositionAction}
+                        countAction={countOn ? setLotDockCountAction : undefined}
+                        receivedQty={Number(l.received_qty)}
+                        shippedQty={shortByLot.get(l.id)?.shippedQty ?? null}
+                        shortReason={shortByLot.get(l.id)?.reason ?? null}
                       />
                     </td>
                   )}
@@ -1195,6 +1245,12 @@ export default async function ManifestReviewPage({
               ))}
             </tbody>
           </table>
+          {/* Fix Phase 3.1: a failed dock-count read is said, never shown as "no short lines". */}
+          {shortCounts.kind === "error" && (
+            <p data-short-read-error className="border-t border-[var(--admin-border)] px-4 py-2 text-xs text-[var(--admin-text-muted)]">
+              The dock counts could not be read ({shortCounts.error}). Quantities shown may not include a short count; Finalize will refuse until this reads.
+            </p>
+          )}
         </div>
 
         {/* Captured COAs (knowledge-base snapshot) */}
