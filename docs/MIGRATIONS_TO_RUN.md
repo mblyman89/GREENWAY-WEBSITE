@@ -3031,7 +3031,7 @@ in Vercel.
   `invoice_adjustments_minor` (their sum, cents, never above zero — a check
   constraint), `invoice_adjustments_note`, and `invoice_manual_adjustments`
   (credits a manager adds on Vendor payments, jsonb; voided, never deleted).
-  (#P..)
+  (#1562)
   - Owner, verbatim: *"this new manifest has a credit amount on it, and the
     system did not see it or did and disregarded it … if the system isnt able
     to work out if there is a credit or discount, i need a way to add a credit
