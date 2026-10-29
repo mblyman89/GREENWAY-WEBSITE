@@ -7,7 +7,12 @@ import { helperHref } from "@/lib/admin/page-helpers-core";
  *
  * Slots:
  *  - breadcrumbs: wayfinding row above the title (use <Breadcrumbs />)
- *  - action: right-aligned primary action(s)
+ *  - action: right-aligned primary action(s). Wraps onto more lines rather
+ *    than running off the screen (Fix Phase 2.9: it used to be shrink-0, so a
+ *    long button row pushed past the right edge and was cut off).
+ *  - toolbar: a FULL-WIDTH, wrapping row of buttons under the title, for
+ *    pages with many links (Register Activity). Every button stays visible
+ *    at any screen width.
  *  - helpId: R73 S5 — the page's "How this works" guide lives on the Helpers
  *    page (/admin/helpers); the header only shows a small link to it, so the
  *    guide no longer takes canvas space at the top of the page.
@@ -26,10 +31,12 @@ export function AdminPageHeader({
   breadcrumbs,
   help,
   helpId,
+  toolbar,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  toolbar?: ReactNode;
   breadcrumbs?: ReactNode;
   help?: ReactNode;
   helpId?: string;
@@ -40,7 +47,7 @@ export function AdminPageHeader({
         <div className="px-5 pt-3 sm:px-8">{breadcrumbs}</div>
       ) : null}
       <div className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <div className="min-w-0">
+        <div className="min-w-0 sm:max-w-[60%] sm:shrink-0">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h1 className="truncate text-lg font-bold tracking-tight text-[var(--admin-text)] sm:text-xl">
               {title}
@@ -61,11 +68,16 @@ export function AdminPageHeader({
           ) : null}
         </div>
         {action ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:justify-end">
             {action}
           </div>
         ) : null}
       </div>
+      {toolbar ? (
+        <nav aria-label={`${title} links`} className="flex flex-wrap items-center gap-2 px-5 pb-3 sm:px-8">
+          {toolbar}
+        </nav>
+      ) : null}
       {help ? <div className="px-5 pb-3 sm:px-8">{help}</div> : null}
     </div>
   );

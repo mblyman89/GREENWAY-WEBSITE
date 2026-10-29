@@ -77,7 +77,7 @@ export default async function RegisterHistoryPage({
         title="Cash drawer reports"
         subtitle="Closed, reconciled, and verified drawer sessions across all registers."
         action={
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex flex-wrap gap-2">
             <Button href={`${BASE}/eod`} variant="neutral">
               End-of-day report
             </Button>

@@ -38,7 +38,7 @@ function builder(table: string) {
     const q = QUEUE[table] ?? [];
     return q.length > 0 ? (q.shift() as Res) : { data: null, error: null };
   };
-  for (const m of ["select", "eq", "is", "order", "range", "gte", "lt", "lte"]) {
+  for (const m of ["select", "eq", "is", "order", "range", "gte", "lt", "lte", "in", "like"]) {
     b[m] = (...args: unknown[]) => {
       call.ops.push(`${m}(${args.map((a) => JSON.stringify(a)).join(",")})`);
       return b;
@@ -469,7 +469,16 @@ describe("Fix Phase 2.8: the owner-only action", () => {
     QUEUE.order_lines = [{ data: { category: "Flower", quantity: 1, price_minor_units: 1463, product_name: "x" }, error: null }];
     const out = await draftRefundsAction("2026-11-02");
     expect(out.kind).toBe("drafted");
-    expect(AUDITS[0].after).toEqual({ kind: "drafted", code: "DRAFTED", journalId: "j-9", refundCents: 1463 });
+    // Fix Phase 2.8b: the audit also carries the cost entry's result (no disposition -> 0115 default destroy -> nothing).
+    expect(AUDITS[0].after).toEqual({
+      kind: "drafted",
+      code: "DRAFTED",
+      journalId: "j-9",
+      refundCents: 1463,
+      cogsKind: "nothing",
+      cogsCode: null,
+      cogsCostCents: 0,
+    });
     expect(REVALIDATED).toEqual(["/admin/books/drafts"]);
   });
 });

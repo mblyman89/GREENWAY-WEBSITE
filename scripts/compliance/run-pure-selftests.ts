@@ -1077,6 +1077,9 @@ import { __runSeoCoreTests as __runMerchSeoTests } from "../../merch-site/lib/se
 import { __runPageHelpersTests } from "../../src/lib/admin/page-helpers-core";
 import { __runBrandSizesTests } from "../../src/lib/brand/brand-sizes-core";
 import { __runMerchOrdersPanelTests } from "../../src/lib/orders/merch-orders-core";
+import { __runCashierReportCoreTests } from "../../src/lib/registers/cashier-report-core";
+import { __runTipsCoreTests } from "../../src/lib/staffing/tips-core";
+import { __runRefundCogsCoreTests } from "../../src/lib/accounting/refund-cogs-core";
 import { __runMerchInventoryTests } from "../../src/lib/merch/merch-inventory-core";
 import { __runMerchReportsTests } from "../../src/lib/merch/merch-reports-core";
 import { BLANKS as MERCH_BLANKS } from "../../src/lib/merch-studio/garment-catalog-core";
@@ -2609,6 +2612,9 @@ __runLiquidVolumeTests();
   assertRan("brand-sizes-core", __runBrandSizesTests(), 25); // R73 S6: Brand hub custom sizes + PNG export maths
   assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
   assertRan("refund-journal-core", __runRefundJournalCoreTests(), 20); // Fix Phase 2.8 (G-48): the daily refund draft - DR 50910 + 32000 + 32100, CR 10110 / 10100
+  assertRan("cashier-report-core", __runCashierReportCoreTests(), 31); // Fix Phase 2.1b (G-05): per-cashier shift report - sales, discounts split, no-sales, adjustments, refunds to the cashier who rang the sale
+  assertRan("refund-cogs-core", __runRefundCogsCoreTests(), 30); // Fix Phase 2.8b: cost of returned units back to inventory
+  assertRan("tips-core", __runTipsCoreTests(), 30); // Fix Phase 2.1c: tip tracker - per-employee stats, not recorded vs $0, corrections
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

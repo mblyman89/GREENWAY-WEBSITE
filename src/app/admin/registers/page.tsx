@@ -120,19 +120,27 @@ export default async function RegisterActivityPage({
         breadcrumbs={
           <Breadcrumbs items={[{ label: "Register Activity" }]} />
         }
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button href={`${BASE}/devices`} variant="neutral" size="sm">
-              POS devices
+        toolbar={
+          // Fix Phase 2.9 (owner message 6: "the top button bar, is cutoff.
+          // Can you fix it so everything is visible on screen"). A full-width
+          // row that wraps, so every button is on screen at any width.
+          <>
+            <Button href={`${BASE}/eod`} variant="neutral" size="sm">
+              End-of-day report
             </Button>
-            <Button href={`${BASE}/receipt`} variant="neutral" size="sm">
-              Receipt design
+            <Button href={`${BASE}/cashiers`} variant="neutral" size="sm">
+              Cashier shift report
             </Button>
-            <Button href={`${BASE}/rounding`} variant="neutral" size="sm">
-              Cash rounding
+            <Button href={`${BASE}/history`} variant="neutral" size="sm">
+              Cash drawer reports
             </Button>
-            <Button href={`${BASE}/scanning`} variant="neutral" size="sm">
-              Scan-required mode
+            {canSeeWarnings ? (
+              <Button href={`${BASE}/over-short`} variant="neutral" size="sm">
+                Over / short warnings
+              </Button>
+            ) : null}
+            <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
+              Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
             </Button>
             <Button href={`${BASE}/returns`} variant="neutral" size="sm">
               Returns desk
@@ -146,21 +154,22 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/supply-runs`} variant="neutral" size="sm">
               Supply runs{openRuns.length > 0 ? ` (${openRuns.length} open)` : ""}
             </Button>
-            <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
-              Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
+            <Button href="/admin/staffing/tips" variant="neutral" size="sm">
+              Tip tracker
             </Button>
-            <Button href={`${BASE}/history`} variant="neutral" size="sm">
-              Cash drawer reports
+            <Button href={`${BASE}/devices`} variant="neutral" size="sm">
+              POS devices
             </Button>
-            {canSeeWarnings ? (
-              <Button href={`${BASE}/over-short`} variant="neutral" size="sm">
-                Over / short warnings
-              </Button>
-            ) : null}
-            <Button href={`${BASE}/eod`} variant="neutral" size="sm">
-              End-of-day report
+            <Button href={`${BASE}/receipt`} variant="neutral" size="sm">
+              Receipt design
             </Button>
-          </div>
+            <Button href={`${BASE}/rounding`} variant="neutral" size="sm">
+              Cash rounding
+            </Button>
+            <Button href={`${BASE}/scanning`} variant="neutral" size="sm">
+              Scan-required mode
+            </Button>
+          </>
         }
         help={
           <HelpPanel id="register-activity" title="What is this page?">

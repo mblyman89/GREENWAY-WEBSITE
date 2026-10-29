@@ -555,11 +555,18 @@ describe("the unreachable subsystems really are unreachable (negative control)",
     // pos_sale). Its poster, refund-posting-service.ts, passes
     // built.journal.sourceKind and so does not match. STATED per rule 89:
     // pos_sale producers 2 -> 3.
+    //
+    // Fix Phase 2.8b (G-48 cost reversal) adds a FOURTH, on purpose:
+    // refund-cogs-core.ts builds the refund COST entry (refunds:<day>#cogs,
+    // DR inventory / CR COGS), the reversal of the sale's order:<id>#cogs
+    // entry, filed under the same pos_sale kind. STATED per rule 89:
+    // pos_sale producers 3 -> 4.
     const producers = walk("src")
       .filter((f) => !f.endsWith("/ledger-census-data.ts"))
       .filter((f) => !f.endsWith("/ledger-census-core.ts"))
       .filter((f) => read(f).includes('sourceKind: "pos_sale"'));
     expect(producers.sort()).toEqual([
+      "src/lib/accounting/refund-cogs-core.ts",
       "src/lib/accounting/refund-journal-core.ts",
       "src/lib/accounting/sale-journal-core.ts",
       "src/lib/accounting/sale-posting-service.ts",

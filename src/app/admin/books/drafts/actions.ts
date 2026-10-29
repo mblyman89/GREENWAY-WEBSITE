@@ -88,8 +88,21 @@ export async function draftRefundsAction(businessDay: string): Promise<RefundDra
       code: outcome.kind === "drafted" ? (outcome.duplicate ? "DUPLICATE" : "DRAFTED") : outcome.code,
       journalId: outcome.kind === "drafted" ? outcome.journalId : null,
       refundCents: outcome.kind === "drafted" ? outcome.totals.refundCents : null,
+      // Fix Phase 2.8b: the cost-back entry's own result.
+      cogsKind: outcome.cogs?.kind ?? null,
+      cogsCode:
+        outcome.cogs?.kind === "drafted"
+          ? outcome.cogs.duplicate
+            ? "DUPLICATE"
+            : "DRAFTED"
+          : outcome.cogs?.kind === "refused" || outcome.cogs?.kind === "failed"
+            ? outcome.cogs.code
+            : null,
+      cogsCostCents: outcome.cogs?.kind === "drafted" || outcome.cogs?.kind === "nothing" ? outcome.cogs.totals.costCents : null,
     },
   });
-  if (outcome.kind === "drafted" && !outcome.duplicate) revalidatePath("/admin/books/drafts");
+  if ((outcome.kind === "drafted" && !outcome.duplicate) || (outcome.cogs?.kind === "drafted" && !outcome.cogs.duplicate)) {
+    revalidatePath("/admin/books/drafts");
+  }
   return outcome;
 }

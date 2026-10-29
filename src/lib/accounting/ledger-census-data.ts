@@ -284,8 +284,13 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "uses, per category, so a refund reverses exactly what the sale booked; " +
           "non-cannabis lines reverse no excise. A day with any refund not tied " +
           "to the drawer or the safe is refused whole, as is an unknown category. " +
-          "Stated limit: the cost of returned units is not reversed here (left to " +
-          "the inventory audit adjustment).",
+          "Fix Phase 2.8b: the same press drafts a second entry, refunds:<day>#cogs " +
+          "(refund-cogs-core.ts buildRefundCogsJournal), debit the category " +
+          "inventory account 2xxxx and credit its COGS account 6xxxx for every unit " +
+          "back on the shelf: a void reverses the sale's own order:<id>#cogs entry " +
+          "exactly, a return uses its lot's unit cost x quantity, an unknown cost " +
+          "refuses the cost entry, and a destroyed return keeps its cost in COGS " +
+          "because destruction posts no journal.",
       },
       accepted: {
         status: "PARTIAL",
@@ -301,7 +306,8 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "sourceRef refunds:<day> (refundDaySourceRef), so a second press returns " +
           "duplicate and writes nothing. A refund added to a day after its entry " +
           "was drafted makes different content under the same ref, which the " +
-          "ledger refuses (GL_POST_CONFLICT) - it never writes a second entry.",
+          "ledger refuses (GL_POST_CONFLICT) - it never writes a second entry. " +
+          "The cost entry has its own ref, refunds:<day>#cogs, with the same rules.",
       },
       married: {
         status: "NOT_APPLICABLE",

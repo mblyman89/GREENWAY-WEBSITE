@@ -43,8 +43,11 @@ export function DraftRefundsPanel({ defaultDay }: { defaultDay: string }) {
       <p className="max-w-3xl text-xs text-white/50">
         Writes one draft for every void and customer return of a finished business day: debit
         50910 Returns &amp; Refunds and the excise and sales tax that came back, credit the
-        drawer or the safe the cash left from. It is a draft — it waits in the list below for
-        your Post. Pressing it again for the same day writes nothing.
+        drawer or the safe the cash left from. A second draft puts the cost of every unit that
+        went back on the shelf back into inventory (debit 2xxxx, credit 6xxxx COGS): a void
+        reverses the sale&apos;s own cost entry, a return uses its lot&apos;s unit cost. Destroyed
+        returns keep their cost in COGS. Both are drafts — they wait in the list below for your
+        Post. Pressing it again for the same day writes nothing.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-white/60">
@@ -90,6 +93,21 @@ export function DraftRefundsPanel({ defaultDay }: { defaultDay: string }) {
           ) : (
             <p className="mt-1 text-white/45">Code: {outcome.code}. Nothing was written.</p>
           )}
+          {outcome.cogs ? (
+            <div className="mt-3 border-t border-white/10 pt-2" aria-label="Cost of returned units">
+              <p className="font-semibold text-white/80">Cost of returned units</p>
+              <p>{outcome.cogs.message}</p>
+              {outcome.cogs.kind === "drafted" || outcome.cogs.kind === "nothing" ? (
+                <p className="mt-1 text-white/55">
+                  Back to inventory: {money(outcome.cogs.totals.costCents)} · {outcome.cogs.totals.restockedCount} restocked ·{" "}
+                  {outcome.cogs.totals.destroyedCount} destroyed (cost stays in COGS) · {outcome.cogs.totals.noCostCount} with no
+                  cost booked
+                </p>
+              ) : (
+                <p className="mt-1 text-white/45">Code: {outcome.cogs.code}. The cost entry was not written.</p>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
