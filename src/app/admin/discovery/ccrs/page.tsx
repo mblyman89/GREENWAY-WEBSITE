@@ -329,7 +329,7 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
                   <Input name="label" defaultValue="" placeholder="Statewide — Q1 2025" required />
                 </Field>
                 <Field label="Source note (optional)" help="e.g. PRA tracking number or received date.">
-                  <Input name="source_note" defaultValue="" placeholder="PRA #P012345 · received 2025-04-10" />
+                  <Input name="source_note" defaultValue="" placeholder="PRA #15562345 · received 2025-04-10" />
                 </Field>
                 <Field label="Period start (optional)" help="First day the data covers.">
                   <Input name="period_start" type="date" defaultValue="" />
