@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.8 (draft for owner review; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.9 (draft for owner review; Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -55,6 +55,9 @@
    - 4.32 Offline mode, sync and rejected events
    - 4.33 Marking an item out of stock
    - 4.34 Other MORE-menu items
+   - 4.35 Manager: the cashier shift report
+   - 4.36 Tip Tracker (Employee menu)
+   - 4.37 Register Activity buttons
 5. Hard blocks: "If you see this message"
 6. Exceptions & escalation
 7. Controls & compliance (why the rules exist)
@@ -929,6 +932,40 @@ Do **not** 86 an item just because you cannot find it. Ask someone first, becaus
 | **⏱️ Clock in / Clock out** | Punches the signed-in employee (4.2). |
 | **🔒 Lock register** | Locks now (4.31). |
 
+### 4.35 Manager: the cashier shift report (per cashier, printable)
+
+**Who:** managers and up (`inventory.manage`, the same gate as Cash drawer reports). **Where:** Register Activity → **Cashier shift report** (`/admin/registers/cashiers`).
+
+G-05 asked for *"a printable per-cashier shift summary (sales, voids, no-sales, discounts, adjustments by employee)"* (owner's original request: *"shift close reports"*). Built in Phase 2.1b (owner message 6: *"please completely finish G-05 (2.1), the per cashier print out"*).
+
+1. Pick **From** and **To** (Pacific business days, up to 31 days; `CASHIER_REPORT_MAX_DAYS`, `cashier-report-core.ts` L418) and tap **Show**. A bad date or a range over 31 days shows an error, nothing else.
+2. The summary table lists each cashier: **Shifts, Sales, Gross, Cash, Discounts, No-sales, Adjustments, Voids, Returns, Net**, then a **Store** row.
+3. Below it, one section per cashier (each starts on a new printed page) with **All shifts** and then each **Shift · <day>**: Sales (and units), Gross (tax in), Pre-tax / tax, Average sale, Cash, Employee tab, Other tender, Cash rounding, Medical sales, Registers; **Discounts total** split into Deals and sale prices, Manager overrides, Loyalty rewards, Special programs (by kind) and Medical tax exempt (the parts always add up to the total, the same split the receipt explains); **No-sales (drawer opened)** with each reason and who approved it; **Cart adjustments** (lines removed, quantities lowered, carts cancelled, and their value); **Voids of their sales**, **Returns of their sales**, **Net after refunds**.
+4. A line at the end of each cashier's section reads *"cashier sign-off: ____ · manager: ____"*. Print with **Print**, sign, and file with the day's close slips. **Download CSV** gives one row per shift.
+
+**How the figures are made** (`buildCashierReport`, core L297; read by `loadCashierReport`, `cashier-report-store.ts` L57):
+- A **shift** is one cashier on one business day. Sales and no-sales come from the register events, which always carry the employee signed in to ring them. Only **processed** sales count as money (the X/Z rule); exceptions and pending sales are counted, shown as *"Not counted as money"*.
+- Voids and returns do not record a cashier, so each is filed against the cashier who **rang the original sale**, on the day of the refund. A refund that cannot be traced to a register sale (an online order) is listed separately and given to nobody (`untracedNote`, L533).
+- If any record fails to load the page says *"This report is incomplete. Do not file it until it loads cleanly."* and the CSV refuses to download (409) until it loads.
+
+### 4.36 Tip Tracker (Employee menu)
+
+**Who:** everyone with a time clock (`timeclock.use`) sees **their own** tips; managers (`staffing.manage`) see everyone and can correct a figure. **Where:** Employee → **Tip Tracker** (`/admin/staffing/tips`; menu entry `admin-nav-data.ts` L109). Owner, message 6: *"I want to add to this an employee tip tracker with a new page in the employee drop down menu to track tips and give stats on them."*
+
+**Where the figure comes from (existing, unchanged).** At close the cashier counts the tip jar by itself and types it in **Tips (counted separately)** on the iPad close (§4.27) or the back-office close form. It is stored on the drawer session (`drawer_sessions.tips_minor`, migration 0134). Tips are the employee's money: they never enter the drawer count, the expected figure or the over/short. A blank box is **not recorded**; `$0.00` means an empty jar was counted. They are different and stay different.
+
+1. Pick **From** and **To** (up to 366 days; `checkTipRange`, `tips-core.ts` L220) and tap **Show**.
+2. The cards show **Total tips**, **Average per close** (recorded closes only), **Closes not recorded** and **Best day of the week**.
+3. **By employee**: Total, Closes, Recorded, Not recorded, Average, Highest (and the day), Hours worked (from the time clock in the same days) and Per hour.
+4. **By day of the week**, and every session: Day, Register, Closed by (with *"opened by …"* when someone else opened it), Status, Tips.
+5. **Who gets the tips:** the employee who **closed** the session (`buildTipReport`, L110). The app never splits tips by itself; if two people shared a drawer, settle it by hand and correct the figure.
+6. **Correcting a figure (managers):** in the session's **Correct** column type the amount (or leave it blank for not recorded) and a **Reason (required)** (5–300 characters), then **Save**. An open drawer is refused (*"That drawer is still open. Tips are recorded when it is closed."*). If somebody changed it since the page loaded: *"The tip figure changed (or the drawer is open) since this page loaded. Nothing was changed; reload and try again."* Every correction is logged with the old and new amounts and the reason (`drawer.tips_corrected`, `tips-store.ts` L145).
+7. **Print** or **Download CSV**. If your sign-in is not linked to an employee record the page says *"Your sign-in is not linked to an employee record"*: ask a manager to link it (SOP-08).
+
+### 4.37 Register Activity buttons
+
+Since Phase 2.9 (owner message 6: *"The register activity page also, the top button bar, is cutoff. Can you fix it so everything is visible on screen."*) the buttons along the top of Register Activity sit in their own full-width row under the title and **wrap onto as many lines as they need**, so none is cut off on any screen (`AdminPageHeader.tsx` `toolbar`, L76; `registers/page.tsx` L123). The order: End-of-day report, Cashier shift report, Cash drawer reports, Over / short warnings (owner and admin), Exceptions, Returns desk, Safe, Deposit bags, Supply runs, Tip tracker, POS devices, Receipt design, Cash rounding, Scan-required mode.
+
 ---
 
 ## 5. Hard blocks: "If you see this message"
@@ -1283,6 +1320,9 @@ Owner reviewed: ____________________   Date: ________
 | 4.28 X/Z | `RegisterShell.tsx` (DayReportModal ≈L5149), `src/lib/pos/day-report-core.ts`, `/api/pos/day-report` |
 | 4.30 reconcile/verify | `src/app/admin/registers/page.tsx` (ReconcileCard L548), `actions.ts` (reconcileDrawerAction L170, assignRefundAction L305), `src/lib/registers/store.ts` (reconcileDrawer L326), `over-short-warning-core.ts` (checkOverShortReason L54), `over-short/page.tsx`, `drawer-figure-core.ts` (buildDrawerFigure L129), `drawer-figure-store.ts` (loadDrawerFigure L218, assignReturnRefund L306), `oversight.ts`, `eod/`, `history/`, `safe/`, `supabase/migrations/0313_drawer_cash_refunds.sql` |
 | 4.32 sync/exceptions | `src/lib/pos/sync-store.ts`, `sync-core.ts`, `src/lib/orders/completion-gate.ts`, `src/app/admin/registers/exceptions/page.tsx` |
+| 4.35 cashier shift report | `src/app/admin/registers/cashiers/page.tsx` (gate L109), `cashiers/csv/route.ts` (gate L24, 409 on incomplete), `src/lib/registers/cashier-report-core.ts` (`saleDiscounts` L210, `buildCashierReport` L297, `CASHIER_REPORT_MAX_DAYS` L418, `untracedNote` L533), `cashier-report-store.ts` (`loadCashierReport` L57) |
+| 4.36 tip tracker | `src/app/admin/staffing/tips/page.tsx` (gate L40, own-only L58), `tips/actions.ts` (`staffing.manage` L24), `tips/csv/route.ts`, `src/lib/staffing/tips-core.ts` (`buildTipReport` L110, `validateTipCorrection` L240), `tips-store.ts` (`loadTipReport` L39, `correctSessionTips` L145), `src/components/admin/admin-nav-data.ts` L109; tips entered `RegisterShell.tsx` TillModal, stored `drawer_sessions.tips_minor` (0134) |
+| 4.37 buttons | `src/components/admin/AdminPageHeader.tsx` (`toolbar` L76), `src/app/admin/registers/page.tsx` L123 |
 | 4.33 86 | `SaleFlow.tsx` (ProductInfoModal ≈L4274), `src/lib/pos/stock-flag-core.ts`, `src/components/admin/inventory/RegisterSellabilityBanner.tsx` |
 
 ## Appendix B: Not built yet (interim paper procedures)
@@ -1293,7 +1333,7 @@ Owner reviewed: ____________________   Date: ________
 | ~~D3: log big bills master till → little safe, and which small bills/coin came back~~ | **BUILT, Phase 2.7b**: the change swap takes the bills both ways (4.26); the master till ↔ little safe exchange is on the Store safe page (SOP-02 §4.10) | SOP-02 form 8.3 only for an iPad not yet rebuilt | G-02 BUILT · F-01-8, F-00-7 FIXED |
 | ~~D7: $5 over/short warning screen (admin only: who, when, how much, required reason)~~ | **BUILT, Phase 2.3**: reason required over $5.00 at reconcile (optional at $5.00 or less, D21); **Over / short warnings** screen, owner and admin only, drawers and master till (4.30 step 6) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-01-11 FIXED |
 | Deposit bag (seal → morning verify → safe → bank) | Tables exist, no screen | SOP-03 paper | G-04 · F-00-6 |
-| Per-shift / per-cashier report | **Reconcile figure is per drawer (BUILT, Phase 2.1).** The printed X/Z day report is still per register | Close slip per drawer; the till summary prints the drawer's figure | G-05 (drawer figure BUILT; printable per-cashier shift report open) · F-01-10 |
+| ~~Per-shift / per-cashier report~~ | **BUILT, Phase 2.1 (drawer figure) and Phase 2.1b (printable Cashier shift report, §4.35).** The X/Z day report stays per register | None needed; print the Cashier shift report | G-05 BUILT · F-01-10 FIXED |
 | Morning verify with recount and verifier identity | No denominations; name box broken | Paper slip is the record | F-00-3 |
 | Verify name box | Free text into an ID column | Leave blank, sign the slip | F-00-4 (reconcile part of F-01-5 FIXED, Phase 2.1) |
 | ~~Computed cash sales per drawer~~ | **BUILT, Phase 2.1**: the system figure (4.30) | None needed | F-01-4, F-00-13, F-01-3 FIXED |
@@ -1305,6 +1345,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.9 draft | Fix phase | Phase 2.1b, 2.1c, 2.9 (owner message 6: *"please completely finish G-05 (2.1), the per cashier print out. I want to add to this an employee tip tracker with a new page in the employee drop down menu to track tips and give stats on them … The register activity page also, the top button bar, is cutoff."*). G-05 BUILT, F-01-10 FIXED: new §4.35 **Cashier shift report** (per cashier and shift; sales, voids, no-sales, discounts by kind, cart adjustments; sign-off line; print and CSV). New §4.36 **Tip Tracker** (Employee menu; own tips for everyone, all for managers; totals, averages, highest, weekday, per hour; manager correction with a reason, audited). New §4.37: the Register Activity buttons wrap so none is cut off. No migration. Appendix A and B updated. | Fix program |
 | 1.8 draft | Fix phase | Phase 2.7b (plan row 2.7: *"Master till items"*; owner D3, D14). G-02 BUILT, F-01-8 FIXED: §4.26 change swap now takes **Big bills to the safe** and **Change back** by denomination and refuses unequal sides; new messages listed; the D3 note says the iPad must be rebuilt. Form 8.3 retitled and pointed to SOP-02 form 8.3 (F-02-8 FIXED). Quick card and Appendix B updated. | Fix program |
 | 1.7 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT, F-01-11 FIXED: the Reconcile card has a reason box; more than $5.00 over or short needs a reason, checked by the server against its own figure (blank → refused, audited); $5.00 or less optional; the reason is saved on the drawer (migration 0315) and printed on the till summary; every warning is audited; new owner/admin screen **Over / short warnings** (drawers and master till; who, when, how much, reason), linked from Register Activity and the menu. Warnings never block. §4.30 step 6 and related pages, §6 row, form 8.5 note, checklist 8.6 and Appendix B updated. | Fix program |
 | 1.6 draft | Fix phase | Phase 2.2 (owner message 4: *"then second-person count"*; owner D2: *"Q2- close only, and it can be any second employee"*). G-01 BUILT: a close needs a second employee's PIN and their own blind count (register two-step close and the back-office close form); the server refuses the closer's own PIN; both counts are stored (migration 0314); a difference is a warning only; over/short still uses the closer's count. Close is now compare-and-swap (F-01-2, close part) and count-row save errors are recorded, not ignored. §4.27 steps 5, 8–13 and back-office close, §4.29 step 3, §4.30 card rows and step 1, §5.8 messages, form 8.4 note, Appendix A and B updated. | Fix program |

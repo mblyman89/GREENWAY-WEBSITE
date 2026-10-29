@@ -106,6 +106,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Handbook & Policies", href: "/admin/staffing/handbook", permission: "staffing.manage", icon: "\ud83d\udcd6", group: "Employee" }, // 📖 handbook
   { label: "SOP Library", href: "/admin/staffing/sop-library", permission: "timeclock.use", icon: "\ud83d\udcda", group: "Employee" }, // 📚 every SOP (docs/sop), readable by every sign-in
   { label: "Time Clock", href: "/admin/staffing", permission: "timeclock.use", icon: "\ud83d\udd50", group: "Employee" }, // 🕐 clock
+  { label: "Tip Tracker", href: "/admin/staffing/tips", permission: "timeclock.use", icon: "\ud83e\uded9", group: "Employee" }, // 🫙 tip jar. Fix Phase 2.1c (owner message 6): tips counted at each drawer close (drawer_sessions.tips_minor, 0134) with per-employee stats; managers see everyone and can correct with a reason, everyone else sees only their own
   { label: "Payroll", href: "/admin/payroll", permission: "settings.manage", icon: "\ud83d\udcb0", group: "Employee" }, // 💰 pay
   { label: "Employee Tabs", href: "/admin/staffing/employee-tabs", permission: "settings.manage", icon: "\ud83e\uddfe", group: "Employee" }, // 🧾 pay-later product loans
   { label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade samples

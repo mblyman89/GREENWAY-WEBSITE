@@ -117,6 +117,35 @@ Concierge code is **unchanged** (record-only). What SOP-01 now provides as sourc
 | Do I still need an X report when a register has two drawers? | No; each sale carries its drawer, so each drawer's figure is exact (SOP-01 §4.27 step 9) |
 | At the Returns desk, what is "Cash paid from"? | The open register drawer you take the refund out of, or **Store safe**; required, never defaulted (SOP-15 §4.5 step 7) |
 
+**Phase 2.1b (G-05 per-cashier shift report) answers, managers only (`inventory.manage`):**
+
+| Question | Answer (built, Phase 2.1b) |
+|---|---|
+| Is there a per-cashier shift report? | Yes. Register Activity → **Cashier shift report**; pick From / To (up to 31 days), **Show**, then **Print** or **Download CSV** (SOP-01 §4.35) |
+| What is a shift on that report? | One cashier on one business day; sales and no-sales come from the register events, which always carry who rang them (§4.35) |
+| Whose shift does a void or return count against? | The cashier who rang the original sale, on the refund day; an online-order refund is listed apart and given to nobody (§4.35) |
+| It says the report is incomplete | A record did not load. Do not file it; reload. The CSV refuses until it loads cleanly (§4.35) |
+| Do the discount lines add up? | Yes. Deals and sale prices, manager overrides, loyalty, special programs and medical exempt always add up to **Discounts total** (§4.35) |
+
+The Phase 2.1 *"PARTLY BUILT … printable per-cashier shift report still OPEN"* state is superseded by these answers.
+
+**Phase 2.1c (Tip Tracker) answers, every time-clock user (own tips) and managers (everyone, corrections):**
+
+| Question | Answer (built, Phase 2.1c) |
+|---|---|
+| Where do I see my tips? | Employee → **Tip Tracker**; you see your own, managers see everyone (SOP-01 §4.36) |
+| Where does the tip figure come from? | The **Tips (counted separately)** box at drawer close; tips never enter the drawer count or over/short (§4.36) |
+| What is "not recorded"? | The tips box was left blank at close. It is not the same as $0.00, which means an empty jar was counted (§4.36) |
+| Who gets the tips of a drawer? | The employee who closed it. The app never splits tips; if two people shared, settle by hand and a manager corrects the figure (§4.36 step 5) |
+| How do I fix a wrong tip figure? | Managers: **Correct** column, amount (or blank), a reason, **Save**; open drawers are refused and every change is logged (§4.36 step 6) |
+| It says my sign-in is not linked to an employee record | Ask a manager to link your login to your employee record (SOP-08) |
+
+**Phase 2.9 (Register Activity buttons) answer:**
+
+| Question | Answer (built, Phase 2.9) |
+|---|---|
+| The buttons at the top of Register Activity were cut off | Fixed: they sit in their own row under the title and wrap onto as many lines as needed (SOP-01 §4.37) |
+
 **Phase 2.2 (G-01 second-person count) answers, every register user:**
 
 | Question | Answer (built, Phase 2.2) |
@@ -520,6 +549,15 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | It says an entry already exists with different figures | A refund was added or changed after that day's draft. If the draft is still a draft, tell the developer; if it is posted, write the difference as a journal entry |
 | Do returns reduce the excise return? | Yes. Box 1 is cannabis sales less the month's customer returns (pre-tax, by return date). The excise screen shows the sum under **How Box 1 is made**. Do not file if it warns *"Box 1 below is NOT net of returns - do not file until this loads."* |
 | Does the refund entry put the product cost back? | No. The cost of returned units is not reversed by the refund entry (restocked units: inventory audit; destroyed units: the write-off) |
+
+**Phase 2.8b (cost of returned units) answers, owner only.** The row above (*"No. The cost of returned units is not reversed by the refund entry (restocked units: inventory audit; destroyed units: the write-off)"*) is **superseded**:
+
+| Question | Answer (built, Phase 2.8b) |
+|---|---|
+| Does the refund entry put the product cost back? | Yes. The same **Draft refunds** press also drafts **Cost of returned units** (`refunds:<day>#cogs`): DR inventory / CR cost of goods sold per category. Check it and **Post** it with the refund entry (SOP-15 §4.24) |
+| Where does the cost come from? | A void: the sale's own cost entry, line for line. A restocked return: the lot's unit cost x the units returned. Never guessed (§4.24) |
+| What about destroyed returns? | Their cost stays in cost of goods sold; destroying stock in the app posts nothing, so putting it back would overstate inventory (§4.24) |
+| It says the cost of a refund is unknown | Only the cost draft is refused; the money draft still went through. Fix the lot's unit cost (or the sale's cost entry) and press **Draft refunds** again (§4.24) |
 
 The row above (*"No journal; excise Box 1 likely not reduced; form 8.6 and the excise override (§4.24)"*) is **superseded** by these answers.
 | Stolen or seized product? | Not a destruction; SOP-20; call the owner, then lot page **Theft** / **Seizure** with the incident reference (SOP-05a §4.7) | Built (Phase 1.2, G-23) |

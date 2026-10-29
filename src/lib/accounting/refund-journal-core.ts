@@ -51,13 +51,14 @@
  * A partial entry is not an option: the source ref is one per day, so a later
  * "rest of the day" entry could never be written.
  *
- * DELIBERATE LIMIT (stated, not hidden)
- * -------------------------------------
- * This books the MONEY. It does not reverse cost of goods sold for the
- * returned unit. A restocked unit goes back on the lot through the CCRS add-back
- * and a destroyed one becomes a destruction; their cost is picked up by the
- * inventory audit adjustment, which already posts (census row
- * cost_of_goods_sold.inventory_audit_adjustment).
+ * THE COST OF THE RETURNED UNITS (Fix Phase 2.8b)
+ * -----------------------------------------------
+ * This entry books the MONEY. The cost of the units that went back on the
+ * shelf is a SECOND draft, refunds:<day>#cogs, built by refund-cogs-core.ts
+ * and drafted by the same press (refund-posting-service.ts). The earlier text
+ * here said the inventory audit adjustment would pick that cost up; it could
+ * not, because the return already raised the system on-hand figure, so a
+ * count agrees and the audit posts no variance. Superseded by 2.8b.
  */
 
 import { INVENTORY_CATEGORIES } from "./coa-core";
@@ -302,7 +303,7 @@ export function buildRefundDayJournal(input: RefundDayInput): RefundDayOutcome {
     memo: `Customer refunds ${day} (${returnCount} return${returnCount === 1 ? "" : "s"}, ${voidCount} void${voidCount === 1 ? "" : "s"})`,
     assumptionNote:
       "Taxes are extracted from each refund with the same divisors as the sale entry (14630 cannabis, 10930 other), per category. " +
-      "Cost of goods for the returned units is not reversed here (inventory audit adjustment).",
+      "Cost of goods for the returned units is put back by the separate draft refunds:<day>#cogs (Fix Phase 2.8b).",
     lines,
   };
 
