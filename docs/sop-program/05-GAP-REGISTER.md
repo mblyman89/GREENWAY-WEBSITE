@@ -297,7 +297,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   2. A "Resolved (imported by hand / not a manifest)" action with an audit row.
   3. A count badge on the Receiving status cards.
 - **Owner (message 7):** *"In addition to a notice when an email fails, please add a refetch button, or some intelligent way to manually ask the fetcher to look again … I need a way to ask the system to grab the ones it missed or failed to get. Make it enterprise grade … I want this table to receive every manifest, no exceptions."*
-- **Status: BUILT (Phase 3.2a, #P..).** Each requirement, and what was added:
+- **Status: BUILT (Phase 3.2a, #1559).** Each requirement, and what was added:
   1. **Needs attention** on the Incoming (email) tab (`InboundAttentionPanel.tsx`): every intake email from the last **90** days (wider than the draft's 30) with no manifest and not Resolved, with sender, subject, received time, a badge (Could not read / Fetch failed / Stuck / No manifest found), one sentence of advice and **What the fetch saw**. The archived attachments stay in the Docs column of the delivery once it stages.
   2. **Resolved** with a reason (handled by hand, not a manifest, vendor re-sent, duplicate, pulled in with Find, other + note), compare-and-set, audit row `inbound_email.resolve` (`resolveInboundEmail`, `inbound-reconcile-store.ts` L403).
   3. A red count line on every Receiving tab linking to the panel (`intake/page.tsx` L402–408) rather than a status card (the cards count manifests; these are emails with no manifest).
