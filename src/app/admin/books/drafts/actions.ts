@@ -22,6 +22,9 @@ import {
   approveAndPostJournal,
   type ApprovalResult,
 } from "@/lib/accounting/approval-service";
+import { requireBooksAccess } from "@/lib/accounting/books-access";
+import { draftRefundsForDay, type RefundDraftOutcome } from "@/lib/accounting/refund-posting-service";
+import { recordAudit } from "@/lib/auth/audit";
 
 export async function postDraftAction(
   journalId: string,
@@ -47,4 +50,46 @@ export async function postDraftAction(
       journalNo: null,
     };
   }
+}
+
+/**
+ * Fix Phase 2.8 (G-48 · F-15-14). THE REFUND DOOR.
+ *
+ * G-48, verbatim: "a daily draft journal for customer refunds (debit 50910
+ * Returns & Refunds and the tax liabilities as applicable, credit cash)
+ * awaiting owner approval". Owner basis books-23: "Anything accounting,
+ * bookkeeping, taxes, finance, should be hard gated to me only."
+ *
+ * The owner gate runs BEFORE anything is read. The service only drafts
+ * (no autoPost); the entry then waits in the list below for Post.
+ */
+export async function draftRefundsAction(businessDay: string): Promise<RefundDraftOutcome> {
+  const session = await requireBooksAccess();
+  const day = (businessDay ?? "").trim();
+  let outcome: RefundDraftOutcome;
+  try {
+    outcome = await draftRefundsForDay(day);
+  } catch (err) {
+    outcome = {
+      kind: "failed",
+      businessDay: day,
+      code: "REFUND_DRAFT_FAILED",
+      message: `The refunds could not be drafted: ${err instanceof Error ? err.message : String(err)}. Nothing was written.`,
+    };
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: null,
+    action: "books.refunds.drafted",
+    entityType: "business_day",
+    entityId: day || null,
+    after: {
+      kind: outcome.kind,
+      code: outcome.kind === "drafted" ? (outcome.duplicate ? "DUPLICATE" : "DRAFTED") : outcome.code,
+      journalId: outcome.kind === "drafted" ? outcome.journalId : null,
+      refundCents: outcome.kind === "drafted" ? outcome.totals.refundCents : null,
+    },
+  });
+  if (outcome.kind === "drafted" && !outcome.duplicate) revalidatePath("/admin/books/drafts");
+  return outcome;
 }

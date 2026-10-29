@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 40 money events that should reach the books. 23 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 4 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 40 money events that should reach the books. 22 cannot reach them at all. 15 have nothing that builds the entry, so wiring alone will not fix them. 4 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 40 |
 | Proven on all six layers | 4 |
-| Cannot reach the books at all | 23 |
-| Have nothing that even builds the entry | 16 |
+| Cannot reach the books at all | 22 |
+| Have nothing that even builds the entry | 15 |
 | Layers that could not be measured | 5 |
 
 ## The six layers
@@ -43,11 +43,11 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 15 of 40 |
-| `reachable` | 23 of 40 |
-| `correct` | 12 of 40 |
-| `accepted` | 21 of 40 |
-| `idempotent` | 20 of 40 |
+| `exists` | 14 of 40 |
+| `reachable` | 22 of 40 |
+| `correct` | 11 of 40 |
+| `accepted` | 20 of 40 |
+| `idempotent` | 19 of 40 |
 | `married` | 14 of 40 |
 
 ## Sales, and the tax you collect on someone else's behalf
@@ -57,7 +57,7 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | `retail_sale` | yes | yes | part | part | part | n/a | D-31 |
 | `excise_liability_split` | NO | NO | NO | NO | NO | n/a | D-32 |
 | `discount_and_comp` | NO | NO | NO | NO | NO | n/a | D-31 |
-| `refund_or_return` | NO | NO | NO | NO | NO | n/a | D-31 |
+| `refund_or_return` | yes | yes | yes | part | yes | n/a | D-31 |
 
 ### `revenue_and_tax_collected.retail_sale`
 
@@ -114,15 +114,15 @@ A discount, loyalty redemption or comped item reduces what is collected.
 
 A customer returns product, or a sale is voided after tender.
 
-- Accounts: `50910`, `10110`, `32000`, `32100`
-- Builds the entry: **nothing**
-- Posts the entry: **nothing**
+- Accounts: `50910`, `10110`, `10100`, `32000`, `32100`
+- Builds the entry: `src/lib/accounting/refund-journal-core.ts#buildRefundDayJournal`
+- Posts the entry: `src/lib/accounting/refund-posting-service.ts#draftRefundsForDay`
 
-- **exists: MISSING** -- No pos_sale builder.
-- **reachable: MISSING** -- 0 submitJournal hits under src/lib/pos/.
-- **correct: MISSING** -- A refund must also reverse the two trust liabilities, not just revenue. 50910 Returns & Refunds is seeded and unused.
-- **accepted: MISSING** -- Never presented.
-- **idempotent: MISSING** -- Highest-risk idempotency case in the family: a retried refund that double-posts hands money back twice in the books.
+- **exists: PRESENT** -- Fix Phase 2.8 (G-48) built buildRefundDayJournal: one entry per business day for every void and customer return, debit 50910 Returns & Refunds with the pre-tax amount, debit 32000 and 32100 with the excise and sales tax that came back, credit 10110 Till for refunds paid from the drawer and 10100 Vault for refunds paid from the safe.
+- **reachable: PRESENT** -- The owner presses Draft refunds on /admin/books/drafts: src/app/admin/books/drafts/actions.ts draftRefundsAction (requireBooksAccess first) calls refund-posting-service.ts draftRefundsForDay, which reads the day's refunds with readDayRefunds (the same read the drawer reconcile uses), builds the entry and calls submitJournal WITHOUT autoPost.
+- **correct: PRESENT** -- The taxes come out with the same extractTaxes divisors the sale entry uses, per category, so a refund reverses exactly what the sale booked; non-cannabis lines reverse no excise. A day with any refund not tied to the drawer or the safe is refused whole, as is an unknown category. Stated limit: the cost of returned units is not reversed here (left to the inventory audit adjustment).
+- **accepted: PARTIAL** -- Deliberately a draft: G-48 says "awaiting owner approval", so the entry waits on /admin/books/drafts for the owner's Post (approveAndPostJournal, owner-only). Not yet round-tripped against the live ledger.
+- **idempotent: PRESENT** -- sourceRef refunds:<day> (refundDaySourceRef), so a second press returns duplicate and writes nothing. A refund added to a day after its entry was drafted makes different content under the same ref, which the ledger refuses (GL_POST_CONFLICT) - it never writes a second entry.
 - **married: NOT_APPLICABLE** -- Cash refunds leave the till, not the bank. _Card refunds appear in the settlement row, which is censused there._
 
 **If this stays broken:** Refunds reduce the excise Michael owes. Not booking them means overpaying trust tax, and there is no record to claim it back with.
@@ -807,7 +807,6 @@ all, so the work is to write it, then wire it.
 
 - `revenue_and_tax_collected.excise_liability_split` (D-32)
 - `revenue_and_tax_collected.discount_and_comp` (D-31)
-- `revenue_and_tax_collected.refund_or_return` (D-31)
 - `cost_of_goods_sold.freight_in` (D-34)
 - `vendor_cycle.purchase_order_commitment` (D-35)
 - `vendor_cycle.vendor_paid_by_ach` (D-36)

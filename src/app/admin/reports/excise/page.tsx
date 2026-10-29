@@ -68,6 +68,11 @@ function fmt(n: number): string {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Minor units (cents) -> $#,##0.00. Fix Phase 2.8 (Box 1 returns line). */
+function fmtMinor(minor: number): string {
+  return fmt(Math.round(minor) / 100);
+}
+
 /** Minor units → plain dollar string for form defaults ("" when null). */
 function minorToInput(minor: number | null | undefined): string {
   if (minor == null) return "";
@@ -222,6 +227,17 @@ export default async function ExcisePage({
       {/* Box preview */}
       {data ? (
         <>
+          {/* Fix Phase 2.8 (G-48 · F-15-15): Box 1 is "after returns". The returns
+              come off by return date and are shown on their own line. */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/70">
+            <p className="mb-1 text-xs font-black uppercase tracking-[0.12em] text-white/50">How Box 1 is made</p>
+            <p>
+              Cannabis sales (pre-tax) {fmtMinor(data.box1SalesMinor)} &minus; customer returns this month (pre-tax,{" "}
+              {data.box1ReturnCount} return{data.box1ReturnCount === 1 ? "" : "s"}, by return date){" "}
+              {fmtMinor(data.box1ReturnsMinor)} = Box 1 {fmt(data.boxes.box1_cannabisSales)}
+              {draft?.box1_cannabis_sales_minor != null ? " (Box 1 is overridden on the saved draft)" : ""}.
+            </p>
+          </div>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard label="Box 1 · Cannabis sales" value={fmt(data.boxes.box1_cannabisSales)} accent="green" />
             <StatCard label="Box 2 · Less medical" value={fmt(data.boxes.box2_lessMedical)} accent="gold" />

@@ -467,7 +467,7 @@ The owner (D62): *"make sure the ai concierge is taught all the things we will b
 - F-15-16: the sample-pricing panel is dead legacy code; never say it protects anything (to be removed, G-47).
 - F-15-20 (**S1**): the app does **not** yet keep samples off the menu or the register. Never say "the system blocks samples". Answer with the owner's rules (D68) and the §4.26 interim check: dismiss sample drafts, and run the weekly Samples-only check.
 - F-15-18, F-15-19: never say the LCB "confirmed" Other for vendor returns (open question U-72), and never cite a 48–72 h lead time or Mon/Wed/Fri confirmation as LCB rules.
-- F-15-15: never say returns reduce the excise return automatically.
+- F-15-15: never say returns reduce the excise return automatically. **Superseded (Phase 2.8, G-48):** since Phase 2.8 Box 1 IS net of the month's customer returns (by return date); say so, and point to **How Box 1 is made** on the excise screen. Never say a voided sale needs taking off (a void cancels the order, so it was never in Box 1).
 - Law vs policy (v1.1, read from the state texts 2026-10-28): **no legal hold, notice or witness for destruction** (WAC 314-55-097); the store hold is **0 h** (D67); the witness and the camera are store rules (D64), and cameras are also required by WAC 314-55-083(3)(a). **Greenway files the CCRS manifest as origin** and the LCB replies with an automatic email and PDF that travels with the product (WAC 314-55-085; CCRS Manifest User Guide). There is **no LCB lead time**. The **recall prohibition** (WAC 314-55-225), **render unusable ≥50%** (WAC 314-55-097) and **samples may not be sold** (WAC 314-55-096(1)(i)) are law.
 
 #### SOP-15: today vs once built (teach both now, D42 and D62)
@@ -508,6 +508,20 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 | Can a sample be sold or show on the menu? | **Never** (law and owner, D68). The app does not block it yet: dismiss any sample draft on Product Onboarding; weekly **Samples only** check on Inventory; tell the owner if a sample lot went down at the register (§4.26) | Sample lots get no draft and are invisible to the register, barcodes and website (G-51 APPROVED) |
 | How are samples given out? | Only on the **Employee Samples** hub (owner/admin), max 30 per employee per quarter; that is when inventory goes down (§4.26) | Same |
 | Do refunds hit the books / excise? (owner) | No journal; excise Box 1 likely not reduced; form 8.6 and the excise override (§4.24) | Daily refund journal to 50910 for approval; Box 1 net of returns (G-48) |
+
+**Phase 2.8 (G-48 returns in the books and excise Box 1) answers, owner only:**
+
+| Question | Answer (built, Phase 2.8) |
+|---|---|
+| Do refunds hit the books? | Yes, as a draft you post. Books → Waiting to be posted → **Refunds for a day**: pick the **Business day** (it starts on yesterday) and press **Draft refunds**. One entry for every void and customer return of that day: DR 50910 Returns & Refunds, DR 32000 / 32100 the tax handed back, CR 10110 (drawer) / CR 10100 (safe). Check it in the list and press **Post** (SOP-15 §4.24) |
+| It says a refund is not tied | Every refund of the day must say whether its cash came from a drawer or the safe. Tie it on the drawer's Reconcile card (**Paid from…**, **Tie refund**), then press **Draft refunds** again. Nothing is drafted until every refund is tied |
+| It says "is not over yet" | Today cannot be drafted; draft a day after its drawers are reconciled |
+| I pressed it twice | Nothing was written twice: *"…refunds were already drafted. Nothing was written twice."* |
+| It says an entry already exists with different figures | A refund was added or changed after that day's draft. If the draft is still a draft, tell the developer; if it is posted, write the difference as a journal entry |
+| Do returns reduce the excise return? | Yes. Box 1 is cannabis sales less the month's customer returns (pre-tax, by return date). The excise screen shows the sum under **How Box 1 is made**. Do not file if it warns *"Box 1 below is NOT net of returns - do not file until this loads."* |
+| Does the refund entry put the product cost back? | No. The cost of returned units is not reversed by the refund entry (restocked units: inventory audit; destroyed units: the write-off) |
+
+The row above (*"No journal; excise Box 1 likely not reduced; form 8.6 and the excise override (§4.24)"*) is **superseded** by these answers.
 | Stolen or seized product? | Not a destruction; SOP-20; call the owner, then lot page **Theft** / **Seizure** with the incident reference (SOP-05a §4.7) | Built (Phase 1.2, G-23) |
 
 **Future features (D41/D42):** when G-42…G-51, G-28, G-25 or G-23 is built, the topics above and this table are updated in the same slice as SOP-15 (charter rules 9–10), and `concierge-kb.ts` L176 and `help-content.ts` L465–467 are rewritten to match.
