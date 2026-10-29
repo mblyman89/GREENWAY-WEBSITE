@@ -127,7 +127,8 @@ describe("SLICE 101 — wiring pins (str_replace hazard)", () => {
   it("the action reads partial_note from the form and routes the specific error", () => {
     const actions = repoFile("src/app/admin/inventory/intake/actions.ts");
     expect(actions).toContain('formData?.get("partial_note")');
-    expect(actions).toContain("{ partialNote }");
+    // Fix 3.2b pin update (on purpose): the missing-lines tick rides along.
+    expect(actions).toContain("{ partialNote, missingLinesConfirmed }");
     expect(actions).toContain("error=partial_note");
   });
 

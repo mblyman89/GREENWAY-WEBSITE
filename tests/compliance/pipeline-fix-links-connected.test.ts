@@ -584,7 +584,8 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'danger\u2192error === "aiextract"',
     'danger\u2192error === "sample_cap"',
     'danger\u2192notified === "failed"',
-    'danger\u2192error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && !error.startsWith("notify_")',
+    // Fix 3.2b pin update (on purpose): missing_lines has its own banner.
+    'danger\u2192error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && error !== "missing_lines" && !error.startsWith("notify_")',
     'danger\u2192error === "polink"',
     "gold\u2192transportSuggestion.usedUsual", // hint on the transport form
     "danger\u2192dismisserr", // R36: result of the Dismiss duplicate action
@@ -592,6 +593,7 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'danger\u2192vendorid && vendorid !== "saved"', // R6-2: result of saving a vendor inventory id
     'danger\u2192coa === "error" || coa === "nodocs"', // Fix 3.1a: result of Re-read COAs / Attach lab result (URL flag ?coa=)
     'danger\u2192count === "error"', // Fix 3.1: result of Save count on a line (URL flag ?count=)
+    "danger\u2192stagingFailures.lines > 0", // Fix 3.2b: lit only while lines did not save at staging (F-04-11)
   ],
   "src/app/admin/inventory/drafts/page.tsx": [
     "gold\u2192if !isSupabaseServiceConfigured",
