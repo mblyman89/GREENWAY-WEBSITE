@@ -398,7 +398,15 @@ describe("the two working paths really are wired (positive control)", () => {
     // yet matches the safe drop against the Plaid deposit credit, and the
     // whole point of that layer is that cash counted is not cash banked.
     // STATED per rule 89: fully proven 2 -> 3 of 37.
+    // Fix Phase 2.7c (G-11, owner D17) adds a FOURTH.
+    // cash_and_banking.employee_supply_advance now has a poster
+    // (supply-run-posting-service.ts#postAdvanceForRun) called by cashOutAction
+    // on /admin/registers/supply-runs, supply-advance:/supply-settle: source
+    // refs, approval exempt by sourceKind with the two PINs as the human act,
+    // and no bank line to marry (married stays a reasoned NOT_APPLICABLE).
+    // STATED per rule 89: fully proven 3 -> 4 of 40.
     expect(keys).toEqual([
+      "cash_and_banking.employee_supply_advance",
       "cash_and_banking.till_over_short",
       "cost_of_goods_sold.inventory_audit_adjustment",
       "periodic_and_other.manual_journal",
@@ -1004,8 +1012,13 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // button, an idempotent source ref and its own mutation probe
     // (scripts/compliance/mutate-fix-p2-6.py).
     // STATED per rule 89: unreachable 25 -> 24 of 40.
+    // Fix Phase 2.7c lowers it a seventh time, 0.59 -> 0.57, one row again.
+    // The supply-run screen (G-11) made cash_and_banking.employee_supply_advance
+    // post, so it moved from unreachable to reachable and the ratio MEASURED
+    // 23/40 = 0.575 (scripts/compliance/mutate-fix-p2-7c.py probes the door).
+    // STATED per rule 89: unreachable 24 -> 23 of 40.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.59);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.57);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {
@@ -1406,7 +1419,11 @@ describe("evidence cannot be softened without a test failing", () => {
     // by sealBagAction on /admin/registers/deposit-bags, so it no longer
     // qualifies. employee_supply_advance stays a driver (no screen yet).
     // STATED per rule 89: backlog drivers 9 -> 8.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(8);
+    // Fix Phase 2.7c removes the other books-98 driver: employee_supply_advance
+    // names supply-run-posting-service.ts#postAdvanceForRun and is called by
+    // cashOutAction on /admin/registers/supply-runs.
+    // STATED per rule 89: backlog drivers 8 -> 7.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
 
     for (const r of drivers) {
       expect(
@@ -1545,8 +1562,12 @@ describe("the good news cannot be inflated", () => {
     // fact - the other is in the positive-control block above - and both were
     // updated deliberately rather than one being loosened to match the other.
     // STATED per rule 89: fully proven 2 -> 3 of 37.
+    // Fix Phase 2.7c (G-11): employee_supply_advance joins, the same fact as the
+    // positive-control pin above, updated deliberately in both places.
+    // STATED per rule 89: fully proven 3 -> 4 of 40.
     const proven = census().fullyProven().map((r) => r.key).sort();
     expect(proven).toEqual([
+      "cash_and_banking.employee_supply_advance",
       "cash_and_banking.till_over_short",
       "cost_of_goods_sold.inventory_audit_adjustment",
       "periodic_and_other.manual_journal",

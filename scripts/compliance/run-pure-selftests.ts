@@ -965,6 +965,7 @@ import { __runDepositBagFlowTests } from "../../src/lib/registers/deposit-bag-fl
 import { __runEodSheetTests } from "../../src/lib/registers/eod-sheet-core";
 import { __runMasterTillTests } from "../../src/lib/registers/master-till-core";
 import { __runLittleSafeTests } from "../../src/lib/registers/little-safe-core";
+import { __runSupplyRunTests } from "../../src/lib/registers/supply-run-core";
 import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
@@ -1919,6 +1920,7 @@ __runLiquidVolumeTests();
   assertRan("deposit-bag-flow-core", __runDepositBagFlowTests(), 69); // Fix Phase 2.6: G-04 / owner D21, D23-D27 night count, morning recount, seal, bank
   assertRan("eod-sheet-core", __runEodSheetTests(), 28); // Fix Phase 2.6b: G-15 end-of-day deposit sheet (deposit, refunds, bag, export)
   assertRan("master-till-core", __runMasterTillTests(), 42); // Fix Phase 2.7a: G-08 / G-09 / G-13 master till mix standard (D11), printable sheet, any-employee count (D15); 2.7b: swap bills + Exchanges sheet
+  assertRan("supply-run-core", __runSupplyRunTests(), 45);
   assertRan("little-safe-core", __runLittleSafeTests(), 30); // Fix Phase 2.7b: G-02 master till <-> little safe exchange (D3), register swap bills both ways (F-01-8)
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();

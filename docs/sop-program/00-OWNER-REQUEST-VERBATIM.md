@@ -367,3 +367,25 @@ The owner asked for *"the states requirements"* and to *"look it up in CCRS"*. E
 
 - **D76** in `06-FIX-PHASE-PLAN.md` (status → approved; progress table).
 - **D77** in `06-FIX-PHASE-PLAN.md` §2 note.
+
+## Owner message 4 (recorded verbatim, fix phase, after Phase 1)
+
+> Thank you. for completeness, please build the photo upload (G-43), as well as a video upload just in case. please also build the printable vendor-return packet (G-42). then i want you to move on to phase 2, Cash, in SOP order 01 → 02 → 03: per-drawer figure, then second-person count, then over/short warnings; post drops, then deposit-to-bank books, then deposit bag screen and end-of-day sheet. please complete the full phase before reporting back with a summary report of what was built. i have already applied all migrations. i am testing and inspecting the work now. please go above and beyond for me. follow the standing rules and never guess. thank you.
+
+The list in this message ends at *"deposit bag screen and end-of-day sheet"*. The plan's Phase 2 table (`06-FIX-PHASE-PLAN.md` §3, rows 2.1–2.8) also has row 2.7 *"Master till items: denomination log, mix standard, printable sheet, supply run, any-employee count"* and row 2.8 *"Returns in the books and excise Box 1"*. Those words are the plan's, not the owner's.
+
+## Owner message 5 (recorded verbatim, during Phase 2.7c)
+
+> Please finish phase 2. My list must have gotten cut off so I was worried you were off doing something random. Please finish phase 2. Then report back with a full summary report of everything that has been done. Also, since I have your attention now, pr #1547 failed to build in vercel. It’s the only one to out of phase 2s work. Please make sure to go back and fix it too. The error was npm run build exited with 1. Please finish phase 2. Thank you!
+
+### Decisions derived (each traced to the words above)
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D78 | **Phase 2 is the whole plan table, rows 2.1–2.8**, including 2.7 (master till items) and 2.8 (returns in the books, excise Box 1). The owner's list in message 4 was cut short, not a narrower scope. | "Please finish phase 2. My list must have gotten cut off" |
+| D79 | **A failed Vercel deployment on a Phase 2 merge is fixed as part of Phase 2**, and reported. | "pr #1547 failed to build in vercel … Please make sure to go back and fix it too." |
+| D80 | **Report after Phase 2 with a full summary of everything done.** | "Then report back with a full summary report of everything that has been done." |
+
+### Correction (rule: quote the owner verbatim)
+
+Progress rows for Phase 2.7a and 2.7b quoted *"Master till items: …"* as **owner message 4**. Those are the plan's words (row 2.7), not the owner's. Fix Phase 2.7c corrected each one to cite *plan row 2.7* (`06-FIX-PHASE-PLAN.md` §7 rows 2.7a and 2.7b; `03-FINDINGS-LEDGER.md` F-00-7 and F-01-8; `05-GAP-REGISTER.md` G-02; SOP-01 revision 1.8; SOP-02 revisions 1.6 and 1.7).

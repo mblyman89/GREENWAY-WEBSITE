@@ -1670,7 +1670,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     accountCodes: ["12100", "10100"],
     builder:
       "src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal",
-    poster: null,
+    poster: "src/lib/accounting/supply-run-posting-service.ts#postAdvanceForRun",
     layers: {
       exists: {
         status: "PRESENT",
@@ -1682,10 +1682,21 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "and clears 12100 to zero.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "No screen records a supply run yet: grep buildSupplyAdvanceJournal " +
-          "under src/app finds nothing. Rule 50: finished, unreachable.",
+          "Fix Phase 2.7c (G-11, owner D17): until then no screen recorded a supply " +
+          "run. Now /admin/registers/supply-runs: " +
+          "src/app/admin/registers/supply-runs/actions.ts cashOutAction " +
+          "(orders.manage, the taker's PIN and a manager or lead's PIN, checkCashOut) " +
+          "saves the run, then calls " +
+          "src/lib/accounting/supply-run-posting-service.ts postAdvanceForRun, which " +
+          "re-reads the run, calls buildSupplyAdvanceJournal dated on the run's " +
+          "business day and calls submitJournal with autoPost. settleAction (a " +
+          "different employee's PIN receives the receipt and change, checkSettle) " +
+          "saves the settle once, then calls postSettleForRun, which calls " +
+          "buildSupplySettleJournal and puts the cost class on the expense line " +
+          "(settleLinesWithCostClass). A failed post shows NOT POSTED with a retry " +
+          "button (retrySupplyPostAction).",
       },
       correct: {
         status: "PRESENT",
@@ -1695,10 +1706,23 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "larger than the advance is refused rather than sign-flipped, " +
           "because that is a reimbursement owed TO the employee.",
       },
-      accepted: { status: "MISSING", evidence: "Never presented." },
+      accepted: {
+        status: "NOT_APPLICABLE",
+        evidence: "sourceKind bank is approval-exempt.",
+        reason:
+          "The two PINs at cash-out (taker plus a manager or lead) and the " +
+          "different employee's PIN at settle ARE the human acts, the same two " +
+          "signatures form 8.4 asks for. A third approval in the books queue " +
+          "would add no new pair of eyes on the cash.",
+      },
       idempotent: {
-        status: "MISSING",
-        evidence: "No poster yet, so no source ref to key on.",
+        status: "PRESENT",
+        evidence:
+          "sourceRef supply-advance:<runId> and supply-settle:<runId> " +
+          "(supply-run-core advanceSourceRef / settleSourceRef), so a retry or a " +
+          "second press returns duplicate and writes nothing. The settle is a " +
+          "conditional update (settled_at null), and migration 0318 lets " +
+          "advance_journal_id and settle_journal_id be filled once.",
       },
       married: {
         status: "NOT_APPLICABLE",

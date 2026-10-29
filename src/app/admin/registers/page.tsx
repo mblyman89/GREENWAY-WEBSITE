@@ -19,6 +19,7 @@ import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/o
 import { undeclaredBagsBefore } from "@/lib/registers/deposit-bag-store";
 import { undeclaredBagWarning } from "@/lib/accounting/safe-bag-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import { listOpenSupplyRuns } from "@/lib/registers/supply-run-store";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default async function RegisterActivityPage({
     );
   }
 
-  const [data, openExceptions, devicesResult, undeclaredRes] = await Promise.all([
+  const [data, openExceptions, devicesResult, undeclaredRes, openRunsRes] = await Promise.all([
     getRegisterActivity(),
     listPosExceptions(200),
     listPosDevices(),
@@ -71,7 +72,11 @@ export default async function RegisterActivityPage({
     // this page; it never blocks a close. Missing 0316 = no warning (the bag
     // screen itself says the migration is needed).
     undeclaredBagsBefore(pacificToday()),
+    // Fix Phase 2.7c (G-11, D17): cash out with employees on supply runs.
+    // Missing 0318 = no count (the supply-run screen says the migration is needed).
+    listOpenSupplyRuns(),
   ]);
+  const openRuns = openRunsRes.ok ? openRunsRes.runs : [];
   const undeclared = undeclaredRes.ok ? undeclaredRes.bags : [];
   const undeclaredWarning = undeclaredBagWarning(undeclared.map((b) => ({ bagNo: b.bagNo, businessDay: b.businessDay, status: "undeclared" as const })));
   const { kpis, onClock, registers, attention, feed, employees } = data;
@@ -137,6 +142,9 @@ export default async function RegisterActivityPage({
             </Button>
             <Button href={`${BASE}/deposit-bags`} variant="neutral" size="sm">
               Deposit bags{undeclared.length > 0 ? ` (${undeclared.length} to recount)` : ""}
+            </Button>
+            <Button href={`${BASE}/supply-runs`} variant="neutral" size="sm">
+              Supply runs{openRuns.length > 0 ? ` (${openRuns.length} open)` : ""}
             </Button>
             <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
               Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
