@@ -254,24 +254,54 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     event: "A customer returns product, or a sale is voided after tender.",
     sourceKind: "pos_sale",
     entityCode: "greenway",
-    accountCodes: ["50910", "10110", "32000", "32100"],
-    builder: null,
-    poster: null,
+    accountCodes: ["50910", "10110", "10100", "32000", "32100"],
+    builder: "src/lib/accounting/refund-journal-core.ts#buildRefundDayJournal",
+    poster: "src/lib/accounting/refund-posting-service.ts#draftRefundsForDay",
     layers: {
-      exists: { status: "MISSING", evidence: "No pos_sale builder." },
-      reachable: { status: "MISSING", evidence: "0 submitJournal hits under src/lib/pos/." },
-      correct: {
-        status: "MISSING",
+      exists: {
+        status: "PRESENT",
         evidence:
-          "A refund must also reverse the two trust liabilities, not just revenue. " +
-          "50910 Returns & Refunds is seeded and unused.",
+          "Fix Phase 2.8 (G-48) built buildRefundDayJournal: one entry per business " +
+          "day for every void and customer return, debit 50910 Returns & Refunds " +
+          "with the pre-tax amount, debit 32000 and 32100 with the excise and sales " +
+          "tax that came back, credit 10110 Till for refunds paid from the drawer " +
+          "and 10100 Vault for refunds paid from the safe.",
       },
-      accepted: { status: "MISSING", evidence: "Never presented." },
-      idempotent: {
-        status: "MISSING",
+      reachable: {
+        status: "PRESENT",
         evidence:
-          "Highest-risk idempotency case in the family: a retried refund that " +
-          "double-posts hands money back twice in the books.",
+          "The owner presses Draft refunds on /admin/books/drafts: " +
+          "src/app/admin/books/drafts/actions.ts draftRefundsAction " +
+          "(requireBooksAccess first) calls refund-posting-service.ts " +
+          "draftRefundsForDay, which reads the day's refunds with readDayRefunds " +
+          "(the same read the drawer reconcile uses), builds the entry and calls " +
+          "submitJournal WITHOUT autoPost.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "The taxes come out with the same extractTaxes divisors the sale entry " +
+          "uses, per category, so a refund reverses exactly what the sale booked; " +
+          "non-cannabis lines reverse no excise. A day with any refund not tied " +
+          "to the drawer or the safe is refused whole, as is an unknown category. " +
+          "Stated limit: the cost of returned units is not reversed here (left to " +
+          "the inventory audit adjustment).",
+      },
+      accepted: {
+        status: "PARTIAL",
+        evidence:
+          "Deliberately a draft: G-48 says \"awaiting owner approval\", so the entry " +
+          "waits on /admin/books/drafts for the owner's Post " +
+          "(approveAndPostJournal, owner-only). Not yet round-tripped against the " +
+          "live ledger.",
+      },
+      idempotent: {
+        status: "PRESENT",
+        evidence:
+          "sourceRef refunds:<day> (refundDaySourceRef), so a second press returns " +
+          "duplicate and writes nothing. A refund added to a day after its entry " +
+          "was drafted makes different content under the same ref, which the " +
+          "ledger refuses (GL_POST_CONFLICT) - it never writes a second entry.",
       },
       married: {
         status: "NOT_APPLICABLE",

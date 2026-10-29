@@ -27,7 +27,7 @@
  * expects DOLLARS, so the box values are returned in dollars (number, 2dp).
  */
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
-import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
+import { backOutInclusiveMinor, preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 
 export type ExciseReturnInput = {
   /** Reporting month 1-12. */
@@ -146,6 +146,78 @@ export function aggregateBox1Lines(
     cannabisLineCount: cannabisLines,
     nonCannabisLineCount: nonCannabisLines,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Box 1 net of returns (Fix Phase 2.8 · G-48 · F-15-15)
+// ---------------------------------------------------------------------------
+
+/**
+ * One customer return as Box 1 sees it (customer_returns, migration 0115).
+ * Box 1 is "Total cannabis product sales BEFORE sales & excise tax, after
+ * returns & discounts" (header above). Until Fix Phase 2.8 it was built from
+ * completed orders only, so a returned cannabis sale stayed in Box 1 and
+ * Michael paid 37% excise on money he had handed back (F-15-15).
+ *
+ * Counted BY RETURN DATE (created_at in the month), as G-48 requires: the sale
+ * may sit in an earlier, already-filed month, and that month is not reopened.
+ */
+export type Box1ReturnRow = {
+  /** customer_returns.refund_minor_units - tax-INCLUSIVE cash handed back. */
+  refundMinor: number;
+  /**
+   * customer_returns.excise_minor - excise on the original line. Greater than
+   * zero means the line was cannabis and the excise was charged, so the
+   * refund carries excise and comes off Box 1.
+   */
+  exciseMinor: number | null;
+  /** customer_returns.sale_type - RecreationalRetail | RecreationalMedical. */
+  saleType: string | null;
+};
+
+export type Box1ReturnsAggregate = {
+  /** Σ pre-tax part of the cannabis refunds in the month, minor units. */
+  returnsMinor: number;
+  /** Returns that came off Box 1. */
+  returnCount: number;
+  /** Medical returns with no excise charged: not taken off (they sit in Box 2). */
+  medicalExemptSkipped: number;
+  /** Non-cannabis returns (no excise, not medical): never in Box 1. */
+  nonCannabisSkipped: number;
+};
+
+/**
+ * Pre-tax part of each cannabis refund, backed out with the SAME divisor as
+ * Box 1 itself (tax-base-core, rate = sales + excise), so a full return of a
+ * line takes off what that line put in.
+ */
+export function aggregateBox1Returns(
+  rows: readonly Box1ReturnRow[],
+  rates: { combinedSalesRateBps: number; exciseRateBps: number },
+): Box1ReturnsAggregate {
+  let returnsMinor = 0;
+  let returnCount = 0;
+  let medicalExemptSkipped = 0;
+  let nonCannabisSkipped = 0;
+  for (const r of rows) {
+    const refund = Math.max(0, Math.round(r.refundMinor ?? 0));
+    const excise = Math.max(0, Math.round(r.exciseMinor ?? 0));
+    if (excise <= 0) {
+      if (r.saleType === "RecreationalMedical") medicalExemptSkipped += 1;
+      else nonCannabisSkipped += 1;
+      continue;
+    }
+    if (refund <= 0) continue;
+    returnsMinor += backOutInclusiveMinor(refund, rates.combinedSalesRateBps + rates.exciseRateBps);
+    returnCount += 1;
+  }
+  return { returnsMinor, returnCount, medicalExemptSkipped, nonCannabisSkipped };
+}
+
+/** Box 1 = sales less returns, never below zero (a negative Box 1 is not fileable). */
+export function netBox1(grossMinor: number, returnsMinor: number): { netMinor: number; clamped: boolean } {
+  const net = Math.round(grossMinor) - Math.round(returnsMinor);
+  return net < 0 ? { netMinor: 0, clamped: true } : { netMinor: net, clamped: false };
 }
 
 /** Minor units → dollars rounded to 2dp. */
@@ -408,6 +480,23 @@ export function __runExciseReturnTests(): void {
     });
   }
   eq(agg.cannabisSalesMinor, mirror, "Box 1 ≡ Σ per-line wa-tax bases (reconciliation identity)");
+
+  // Fix Phase 2.8 (G-48): returns come off Box 1 by return date.
+  const rr = aggregateBox1Returns(
+    [
+      { refundMinor: 1000, exciseMinor: 253, saleType: "RecreationalRetail" }, // $10 cannabis -> 684
+      { refundMinor: 1093, exciseMinor: 0, saleType: "RecreationalRetail" }, // accessory: skipped
+      { refundMinor: 1093, exciseMinor: 0, saleType: "RecreationalMedical" }, // exempt medical: skipped
+      { refundMinor: 0, exciseMinor: 253, saleType: "RecreationalRetail" }, // nothing handed back
+    ],
+    RATES,
+  );
+  eq(rr.returnsMinor, 684, "cannabis $10 refund takes 684 off Box 1 (same base a $10 sale adds)");
+  eq(rr.returnCount, 1, "one return counted");
+  eq(rr.nonCannabisSkipped, 1, "accessory return skipped");
+  eq(rr.medicalExemptSkipped, 1, "exempt medical return skipped");
+  eq(netBox1(10000, 684), { netMinor: 9316, clamped: false }, "net Box 1");
+  eq(netBox1(500, 684), { netMinor: 0, clamped: true }, "never below zero");
 
   console.log(`excise-return-core: ${pass} assertions passed`);
 }

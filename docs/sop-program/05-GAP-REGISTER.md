@@ -74,7 +74,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-45 | Remove the back-office Customer return wizard; CSV download checks the ledger or is removed | D66 | F-15-8, F-15-10 | SOP-15 §4.4–§4.8 | **APPROVED** |
 | G-46 | Readable errors on Returns & Destruction (no bare "qty" / "reason") | (procedure need) | F-15-13 | SOP-15 §4.15 | PROPOSED |
 | G-47 | Remove the dead legacy Sample-pricing panel (`sample_settings`, `sample-guardrails.ts`), with G-51 | D68 | F-15-16 | SOP-15 §4.26 | **BUILT** (Phase 0.2) |
-| G-48 | Returns in the books and taxes: refund journal to 50910 for owner approval; excise Box 1 net of returned sales | (books-23; RCW 69.50.535) | F-15-14, F-15-15 | SOP-15 §4.24, form 8.6 | PROPOSED |
+| G-48 | Returns in the books and taxes: refund journal to 50910 for owner approval; excise Box 1 net of returned sales | (books-23; RCW 69.50.535) | F-15-14, F-15-15 | SOP-15 §4.24, form 8.6 | **BUILT** (Phase 2.8, #P28) |
 | G-49 | Disposition housekeeping: migration comment, reasons header, help panel names the Sale correction file; compliance doc's "Returned to seller" citation corrected | (procedure need) | F-15-17, F-15-18 | SOP-15 §4.1, §4.13, §4.27 | PROPOSED |
 | G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
 | G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **BUILT** (Phase 0.2) |
@@ -627,11 +627,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Interim:** SOP-15 §4.26 (never sell samples).
 - **v1.1 update (D68):** the audit showed the panel is legacy (migration 0042) and unrelated to the samples branch (`trade_sample_settings`, migration 0054). Decision: **remove** the panel, `updateSampleSettingsAction`, `get/updateSampleSettings` and `sample-guardrails.ts` (with its self-test), and correct the concierge line, **in the same build as G-51** so the screen never implies protection. The owner: *"If the panel truly does nothing because our system is properly set up to handle samples, then you may turn it off."*
 
-## G-48 · Returns in the books and the excise return (PROPOSED, SOP-15)
+## G-48 · Returns in the books and the excise return (BUILT, Phase 2.8; SOP-15)
 - **Owner basis:** books-23 (*"Anything accounting, bookkeeping, taxes, finance, should be hard gated to me only."*); postings Q1 (drafts await approval).
 - **Today:** no refund journal; 50910 unused (F-15-14); excise Box 1 from completed orders only (F-15-15).
 - **Requirements:** a daily draft journal for customer refunds (debit 50910 Returns & Refunds and the tax liabilities as applicable, credit cash) awaiting owner approval; LIQ-1295 Box 1 net of returns in the month (by return date), shown as its own line; tests.
 - **Interim:** SOP-15 §4.24, form 8.6.
+- **Status: BUILT (Fix Phase 2.8, G-48, #P28; plan row 2.8; owner message 5: *"Please finish phase 2"*).** "Today" above is superseded. Each requirement as worded: (1) *"a daily draft journal for customer refunds (debit 50910 Returns & Refunds and the tax liabilities as applicable, credit cash) awaiting owner approval"*: **Draft refunds** on `/admin/books/drafts` writes one draft per business day (`refunds:<day>`) for every void and customer return: DR 50910, DR 32000 excise and DR 32100 sales tax when there is any, CR 10110 for drawer-paid and CR 10100 for safe-paid refunds (`refund-journal-core.ts` L203; `refund-posting-service.ts` L112, no autoPost L173); owner-only, audited; the whole day refused while any refund is untied. (2) *"LIQ-1295 Box 1 net of returns in the month (by return date), shown as its own line"*: `excise-return.ts` L283–342 and **How Box 1 is made** on the excise screen (`page.tsx` L233). (3) *"tests"*: `tests/compliance/fix-p2-8-returns-books.test.ts` (29), self-tests (refund core 20; excise +6), mutation probe `scripts/compliance/mutate-fix-p2-8.py`. Stated limit: the refund entry does not reverse the cost of the returned units. No migration. SOP-15 v1.11.
 
 ## G-49 · Disposition housekeeping (PROPOSED, SOP-15)
 - **Today:** F-15-17 (stale migration comment and reasons header); help panel step 5 implies the Sale correction goes in the InventoryAdjustment file.

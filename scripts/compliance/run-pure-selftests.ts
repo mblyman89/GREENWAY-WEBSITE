@@ -7,6 +7,7 @@
 import { __runOrderPricingTests } from "../../src/lib/orders/order-pricing-core";
 import { __runTaxBaseCoreTests } from "../../src/lib/reports/tax-base-core";
 import { __runExciseReturnTests } from "../../src/lib/compliance/excise-return-core";
+import { __runRefundJournalCoreTests } from "../../src/lib/accounting/refund-journal-core";
 // SLICE T1 -- the ONE brand matcher. Registered here because "is this
 // product on the brand sale?" used to be answered by five separate
 // hand-rolled copies, two of which decide MONEY (the engine and the
@@ -2607,6 +2608,7 @@ __runLiquidVolumeTests();
   assertRan("page-helpers-core", __runPageHelpersTests(), 17); // R73 S5: Helpers page registry (guides moved off the top of the editors/studios)
   assertRan("brand-sizes-core", __runBrandSizesTests(), 25); // R73 S6: Brand hub custom sizes + PNG export maths
   assertRan("merch-orders-core", __runMerchOrdersPanelTests(), 40); // R73 S1: Printful orders as the 3rd (last) panel on /admin/orders - status map, money, view parity
+  assertRan("refund-journal-core", __runRefundJournalCoreTests(), 20); // Fix Phase 2.8 (G-48): the daily refund draft - DR 50910 + 32000 + 32100, CR 10110 / 10100
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -98,6 +98,14 @@ const POSTING_SERVICES = [
     entry: "postSealForBag",
     door: "an employee pressing Seal on /admin/registers/deposit-bags (Fix Phase 2.6, G-04)",
   },
+  {
+    // Fix Phase 2.8 (G-48, F-15-14). Refunds never reached the books: census
+    // row refund_or_return had no builder and no poster. It drafts (no
+    // autoPost) and waits for the owner's Post.
+    file: "src/lib/accounting/refund-posting-service.ts",
+    entry: "draftRefundsForDay",
+    door: "the owner pressing Draft refunds on /admin/books/drafts (Fix Phase 2.8, G-48)",
+  },
 ] as const;
 
 /**
@@ -144,12 +152,15 @@ describe("every posting service is reachable from something a human can press", 
     // clearing door, G-14 / F-03-3).
     // STATED per rule 89: 6 -> 7 posters (Fix Phase 2.6 adds the deposit bag
     // seal door, G-04 / G-14).
-    expect(POSTING_SERVICES).toHaveLength(7);
+    // STATED per rule 89: 7 -> 8 posters (Fix Phase 2.8 adds the daily refund
+    // draft door, G-48 / F-15-14).
+    expect(POSTING_SERVICES).toHaveLength(8);
 
     // Names, not just a number, so a deletion cannot be papered over by an
     // unrelated addition that happens to keep the total at five.
     expect(POSTING_SERVICES.map((s) => s.entry).sort()).toEqual([
       "clearDepositForBankRow",
+      "draftRefundsForDay",
       "postAtmSettlements",
       "postAuditSession",
       "postManifestVendorBill",

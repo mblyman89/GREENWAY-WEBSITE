@@ -548,11 +548,19 @@ describe("the unreachable subsystems really are unreachable (negative control)",
     // sourceKind as an argument. Two files legitimately mention it: the builder
     // that produces the draft and the service that submits it. Both are listed
     // explicitly so a THIRD producer still fails this test.
+    //
+    // Fix Phase 2.8 (G-48) adds a THIRD, on purpose: refund-journal-core.ts
+    // builds the daily refund entry, which is a pos_sale reversal of the sale
+    // (census row revenue_and_tax_collected.refund_or_return, sourceKind
+    // pos_sale). Its poster, refund-posting-service.ts, passes
+    // built.journal.sourceKind and so does not match. STATED per rule 89:
+    // pos_sale producers 2 -> 3.
     const producers = walk("src")
       .filter((f) => !f.endsWith("/ledger-census-data.ts"))
       .filter((f) => !f.endsWith("/ledger-census-core.ts"))
       .filter((f) => read(f).includes('sourceKind: "pos_sale"'));
     expect(producers.sort()).toEqual([
+      "src/lib/accounting/refund-journal-core.ts",
       "src/lib/accounting/sale-journal-core.ts",
       "src/lib/accounting/sale-posting-service.ts",
     ]);
@@ -1017,8 +1025,14 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // post, so it moved from unreachable to reachable and the ratio MEASURED
     // 23/40 = 0.575 (scripts/compliance/mutate-fix-p2-7c.py probes the door).
     // STATED per rule 89: unreachable 24 -> 23 of 40.
+    // Fix Phase 2.8 lowers it an eighth time, 0.57 -> 0.54, one row again.
+    // The refund door (G-48) on /admin/books/drafts made
+    // revenue_and_tax_collected.refund_or_return reachable (a draft the owner
+    // posts), so the ratio MEASURED 22/40 = 0.55
+    // (scripts/compliance/mutate-fix-p2-8.py probes the door).
+    // STATED per rule 89: unreachable 23 -> 22 of 40.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.57);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.54);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {

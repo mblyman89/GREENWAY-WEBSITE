@@ -26,6 +26,10 @@ import { DraftList } from "./DraftList";
 // question "what am I actually looking at?" has an answer on this page even on
 // a day when the list is empty. Pure: it needs no database and no session.
 import { JournalSpecimen } from "./JournalSpecimen";
+// Fix Phase 2.8 (G-48): the refund door. Defaults to yesterday (Pacific),
+// because today is refused until the day is over.
+import { DraftRefundsPanel } from "./DraftRefundsPanel";
+import { addPacificDays, pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +95,8 @@ export default async function DraftsPage({
       </header>
 
       <JournalSpecimen />
+
+      <DraftRefundsPanel defaultDay={addPacificDays(pacificToday(), -1)} />
 
       {!result.ok ? (
         <div className="rounded-xl border border-[var(--admin-orange)]/45 bg-[var(--admin-orange)]/[0.08] p-4 text-sm text-white/80">

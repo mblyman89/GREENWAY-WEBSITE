@@ -21,7 +21,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   aggregateBox1Lines,
+  aggregateBox1Returns,
   computeExciseReturn,
+  netBox1,
+  type Box1ReturnRow,
   exciseDueDate,
   monthRange,
   type Box1Line,
@@ -63,6 +66,18 @@ export type ExciseReturnData = {
    * against the wa-tax report's cannabis-only base.
    */
   nonCannabisExcludedMinor: number;
+  /**
+   * Fix Phase 2.8 (G-48 · F-15-15). Box 1 before returns: the month's completed
+   * cannabis sales, pre-tax, minor units.
+   */
+  box1SalesMinor: number;
+  /**
+   * Pre-tax cannabis returns in the month (by RETURN date), minor units, taken
+   * off Box 1. Shown on its own line so the owner can see it.
+   */
+  box1ReturnsMinor: number;
+  /** Customer returns taken off Box 1. */
+  box1ReturnCount: number;
   warnings: string[];
   /** LIQ-1295 Yes/No flags (default all false). */
   flags?: { isRevised: boolean; isNoSales: boolean; isFinal: boolean };
@@ -123,6 +138,8 @@ export async function computeExciseReturnForMonth(
   let exemptMedicalSalesMinor = 0;
   let orderCount = 0;
   let exemptRecordCount = 0;
+  let returnsMinor = 0;
+  let returnCount = 0;
 
   if (isSupabaseServiceConfigured) {
     const admin = createSupabaseAdminClient();
@@ -256,6 +273,48 @@ export async function computeExciseReturnForMonth(
         }
       }
     }
+    // Fix Phase 2.8 (G-48 · F-15-15). Box 1 is "after returns". Returns are
+    // counted by the day the cash went back (created_at in the month), not
+    // the day of the sale: a sale in a filed month is not reopened.
+    {
+      type ReturnRow = { refund_minor_units: number | null; excise_minor: number | null; sale_type: string | null };
+      const returnRows = await pagedAll<ReturnRow>(async (from, to) => {
+        const { data, error } = await admin
+          .from("customer_returns")
+          .select("id, refund_minor_units, excise_minor, sale_type, created_at")
+          .gte("created_at", fromISO)
+          .lt("created_at", toISO)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        return (data as ReturnRow[] | null) ?? [];
+      }).catch((e: Error) => {
+        warnings.push(
+          `Could not load customer returns: ${e.message}. Box 1 below is NOT net of returns - do not file until this loads.`,
+        );
+        return null;
+      });
+      if (returnRows) {
+        const taxSettings = await getTaxSettings().catch(() => null);
+        const rows: Box1ReturnRow[] = returnRows.map((r) => ({
+          refundMinor: Number(r.refund_minor_units) || 0,
+          exciseMinor: r.excise_minor === null ? null : Number(r.excise_minor) || 0,
+          saleType: r.sale_type,
+        }));
+        const agg = aggregateBox1Returns(rows, {
+          combinedSalesRateBps: (taxSettings?.stateSalesRateBps ?? 650) + (taxSettings?.localSalesRateBps ?? 280),
+          exciseRateBps: taxSettings?.exciseRateBps ?? 3700,
+        });
+        returnsMinor = agg.returnsMinor;
+        returnCount = agg.returnCount;
+        if (agg.returnCount > 0) {
+          warnings.push(
+            `Customer returns of $${(agg.returnsMinor / 100).toFixed(2)} (pre-tax, ${agg.returnCount} return${agg.returnCount === 1 ? "" : "s"} this month) were taken off Box 1.`,
+          );
+        }
+      }
+    }
+
     const { data: exempt, error: exErr } = await admin
       .from("medical_exempt_sales")
       .select("sales_price_minor, sale_date")
@@ -273,8 +332,14 @@ export async function computeExciseReturnForMonth(
   // Manual overrides for Box 1 / Box 2 win over the live-aggregated figures
   // (used when an employee corrects the return against a POS report or files a
   // revised return). A defined override replaces the computed value entirely.
+  const net = netBox1(cannabisSalesMinor, returnsMinor);
+  if (net.clamped) {
+    warnings.push(
+      "Returns this month are larger than the month's cannabis sales, so Box 1 is shown as $0.00. Ask the owner how to report the difference before filing.",
+    );
+  }
   const effectiveCannabisSalesMinor =
-    overrides?.cannabisSalesMinorOverride != null ? overrides.cannabisSalesMinorOverride : cannabisSalesMinor;
+    overrides?.cannabisSalesMinorOverride != null ? overrides.cannabisSalesMinorOverride : net.netMinor;
   const effectiveExemptMedicalSalesMinor =
     overrides?.exemptMedicalSalesMinorOverride != null
       ? overrides.exemptMedicalSalesMinorOverride
@@ -306,6 +371,9 @@ export async function computeExciseReturnForMonth(
     orderCount,
     exemptRecordCount,
     nonCannabisExcludedMinor,
+    box1SalesMinor: cannabisSalesMinor,
+    box1ReturnsMinor: returnsMinor,
+    box1ReturnCount: returnCount,
     warnings,
   };
 }
