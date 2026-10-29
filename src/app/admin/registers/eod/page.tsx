@@ -55,6 +55,12 @@ function fmtDay(ymd: string): string {
   }
 }
 
+/** Fix Phase 2.7a (G-08 requirement 5): "mix on standard: yes/no" on the safe lines. */
+function mixWords(onStandard: boolean | undefined): string {
+  if (onStandard === undefined) return "";
+  return onStandard ? " · mix on standard: yes" : " · mix on standard: no";
+}
+
 function dash(minor: number | null): string {
   return minor == null ? "—" : formatCents(minor);
 }
@@ -436,13 +442,13 @@ export default async function EodReportPage({
               <tr>
                 <td className="py-0.5">AM count</td>
                 <td className="py-0.5 text-right font-bold tabular-nums">
-                  {safe.amCount ? `${formatCents(safe.amCount.totalMinor)} · ${overShortLabel(safe.amCount.varianceMinor)}` : "Not done"}
+                  {safe.amCount ? `${formatCents(safe.amCount.totalMinor)} · ${overShortLabel(safe.amCount.varianceMinor)}${mixWords(safe.amCount.mixOnStandard)}` : "Not done"}
                 </td>
               </tr>
               <tr>
                 <td className="py-0.5">PM count</td>
                 <td className="py-0.5 text-right font-bold tabular-nums">
-                  {safe.pmCount ? `${formatCents(safe.pmCount.totalMinor)} · ${overShortLabel(safe.pmCount.varianceMinor)}` : "Not done"}
+                  {safe.pmCount ? `${formatCents(safe.pmCount.totalMinor)} · ${overShortLabel(safe.pmCount.varianceMinor)}${mixWords(safe.pmCount.mixOnStandard)}` : "Not done"}
                 </td>
               </tr>
               {safe.otherCount > 0 ? (
@@ -460,6 +466,14 @@ export default async function EodReportPage({
             </tbody>
           </table>
         )}
+        {safe.ready ? (
+          <p className="mt-1 text-xs print:hidden">
+            <a className="underline" href={`${BASE}/safe/sheet?day=${businessDay}`}>
+              Master till sheet for this day
+            </a>{" "}
+            (every denomination against the standard; print or export).
+          </p>
+        ) : null}
 
         {/* Sign-off */}
         <div className="mt-8 grid grid-cols-2 gap-8 border-t-2 border-black pt-4">

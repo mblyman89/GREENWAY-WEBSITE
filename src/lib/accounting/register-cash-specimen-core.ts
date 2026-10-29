@@ -20,6 +20,7 @@
  */
 import type { DenomCounts } from "@/lib/registers/cash";
 import { denomTotalMinor } from "@/lib/registers/cash";
+import { MASTER_TILL_STANDARD } from "@/lib/registers/safe-core";
 import {
   buildTillOpenJournal,
   buildTillCloseJournal,
@@ -39,11 +40,11 @@ export const SPECIMEN_TILL_COUNTS: Partial<DenomCounts> = {
   quarters: 40, dimes: 50, nickels: 40, pennies: 50,
 };
 
-/** The master till, as corrected to 100 nickels. */
-export const SPECIMEN_MASTER_COUNTS: Partial<DenomCounts> = {
-  tens: 32, fives: 64, ones: 318,
-  quarters: 95, dimes: 120, nickels: 100, pennies: 125,
-};
+/**
+ * The master till, as corrected to 100 nickels. Fix Phase 2.7a (rule 25): the
+ * owner's D11 mix now has one source, MASTER_TILL_STANDARD in safe-core.ts.
+ */
+export const SPECIMEN_MASTER_COUNTS: Partial<DenomCounts> = MASTER_TILL_STANDARD;
 
 export const SPECIMEN_TILL_COUNT = 3;
 export const SPECIMEN_DATE = "2026-11-02";

@@ -33,6 +33,17 @@ export const MAX_SWAP_MINOR = 200_000;
 
 export const SAFE_NOTES_MAX_LEN = 500;
 
+/**
+ * Fix Phase 2.7a (G-08, owner D11, verbatim): "The master till has 1000. 32
+ * tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 100 nickels, and 125
+ * pennies." The ONE source of the standard mix (rule 25): the master till
+ * sheet and the EOD worked example both read it from here.
+ */
+export const MASTER_TILL_STANDARD: DenomCounts = {
+  pennies: 125, nickels: 100, dimes: 120, quarters: 95, half_dollars: 0, dollar_coins: 0,
+  ones: 318, twos: 0, fives: 64, tens: 32, twenties: 0, fifties: 0, hundreds: 0,
+};
+
 /** The owner's two daily counts, plus ad-hoc recounts. */
 export type SafeCountWindow = "am" | "pm" | "other";
 

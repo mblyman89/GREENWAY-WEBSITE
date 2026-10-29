@@ -35,6 +35,8 @@ import { type SafeSwapRow } from "@/lib/registers/safe-store";
 import { readDayRefunds } from "@/lib/registers/drawer-figure-store";
 import { bagDetailForDay } from "@/lib/registers/deposit-bag-store";
 import { buildEodSheet, denomsFromJson, type EodSheet, type SheetBagInput } from "@/lib/registers/eod-sheet-core";
+import { DENOM_FIELDS, type DenomCounts } from "@/lib/registers/cash";
+import { denomsOf, mixCheck } from "@/lib/registers/master-till-core";
 
 /** PostgREST "table doesn't exist" (same detection as safe-store). */
 function isMissingTable(err: { code?: string; message?: string } | null): boolean {
@@ -167,7 +169,8 @@ export async function eodData(businessDay: string): Promise<EodData> {
   let swaps: { amountMinor: number }[] = [];
   const { data: countRows, error: countErr } = await admin
     .from("safe_counts")
-    .select("count_window, total_minor, variance_minor")
+    // Fix Phase 2.7a (G-08 req. 5): the 13 denomination columns too, for "mix on standard".
+    .select(["count_window", "total_minor", "variance_minor", ...DENOM_FIELDS.map((d) => d.key)].join(", "))
     .eq("business_day", businessDay)
     .order("counted_at", { ascending: false });
   if (countErr) {
@@ -175,8 +178,13 @@ export async function eodData(businessDay: string): Promise<EodData> {
     else readProblems.push(`Safe counts could not be read: ${countErr.message}`);
   } else {
     safeCounts = (
-      (countRows as { count_window: string; total_minor: number; variance_minor: number }[] | null) ?? []
-    ).map((c) => ({ window: c.count_window, totalMinor: c.total_minor, varianceMinor: c.variance_minor }));
+      (countRows as unknown as ({ count_window: string; total_minor: number; variance_minor: number } & Record<string, unknown>)[] | null) ?? []
+    ).map((c) => ({
+      window: c.count_window,
+      totalMinor: c.total_minor,
+      varianceMinor: c.variance_minor,
+      mixOnStandard: mixCheck(denomsOf(c as Partial<Record<keyof DenomCounts, unknown>>)).onStandard,
+    }));
   }
   if (safeReady) {
     const { data: swapRows, error: swapErr } = await admin

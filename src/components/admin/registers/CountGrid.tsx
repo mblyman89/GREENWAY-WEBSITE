@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DENOM_FIELDS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
+import { mixCheck, mixRows } from "@/lib/registers/master-till-core";
 
 /**
  * CountGrid — a denomination-count grid with a LIVE running total.
@@ -24,6 +25,11 @@ import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/o
  * the variance. It turns REQUIRED, with a warning, as soon as the live
  * variance is more than $5.00 either way. Only for OPEN counts (the master
  * till), never a blind close. The server checks the rule again.
+ *
+ * `showStandard` (Fix Phase 2.7a, G-08 requirements 2\u20133, owner D11) shows
+ * the master till standard and a live Diff under every box, and a mix line
+ * kept apart from the total ("Mix on standard" / "Mix off: +10 \u00d7 $20,
+ * \u221220 \u00d7 $10"). Only for the master till: it is an OPEN count.
  */
 export function CountGrid({
   expectedMinor = null,
@@ -31,14 +37,18 @@ export function CountGrid({
   totalLabel = "Counted total",
   namePrefix = "",
   reasonName,
+  showStandard = false,
 }: {
   expectedMinor?: number | null;
   expectedLabel?: string;
   totalLabel?: string;
   namePrefix?: string;
   reasonName?: string;
+  showStandard?: boolean;
 }) {
   const [counts, setCounts] = useState<Partial<DenomCounts>>({});
+  const mix = showStandard ? mixRows(counts) : null;
+  const mixLine = showStandard ? mixCheck(counts) : null;
 
   const total = denomTotalMinor(counts);
   const variance = expectedMinor != null ? total - expectedMinor : null;
@@ -71,6 +81,26 @@ export function CountGrid({
               }}
               className="admin-focus w-full rounded border border-[var(--admin-border)] bg-[var(--admin-surface)] px-2 py-1.5 text-right text-base font-medium text-white outline-none focus:border-[var(--admin-accent)]"
             />
+            {mix ? (() => {
+              const r = mix.find((m) => m.key === d.key);
+              if (!r) return null;
+              return (
+                <span className="flex justify-between text-[0.65rem] tabular-nums">
+                  <span className="text-[var(--admin-text-faint)]">Standard {r.standard}</span>
+                  <span
+                    className={
+                      r.diff === 0
+                        ? "text-[var(--admin-text-faint)]"
+                        : r.diff > 0
+                          ? "text-[var(--admin-gold)]"
+                          : "text-[var(--admin-danger)]"
+                    }
+                  >
+                    Diff {r.diff > 0 ? `+${r.diff}` : r.diff === 0 ? "0" : `\u2212${Math.abs(r.diff)}`}
+                  </span>
+                </span>
+              );
+            })() : null}
           </label>
         ))}
       </div>
@@ -101,6 +131,15 @@ export function CountGrid({
               : (variance ?? 0) > 0
                 ? `Over by ${formatCents(variance ?? 0)}`
                 : `Short by ${formatCents(Math.abs(variance ?? 0))}`}
+          </span>
+        </div>
+      )}
+
+      {mixLine && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+          <span className="text-[var(--admin-text-faint)]">Mix vs standard (owner D11)</span>
+          <span className={mixLine.onStandard ? "text-[var(--admin-text-muted)]" : "text-[var(--admin-gold)]"}>
+            {mixLine.onStandard ? "Mix on standard" : `Mix off: ${mixLine.offText}`}
           </span>
         </div>
       )}
