@@ -93,7 +93,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 | See the **Over / short warnings** screen | Owner, admin | Permission `registers.warnings` (owner, admin). Managers write reasons but do not see the list (Phase 2.3, G-03). |
 | Balance the master till with the little safe | Morning or night employee | Not in the app. Paper form 8.2 (gap G-02). |
 | Approve a register change swap | An employee whose job role is **manager** or **lead**, and not the person doing the swap | Approver PIN checked on the server (`src/app/api/pos/till/route.ts` L54, L193–218) |
-| See the end-of-day report | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45) |
+| See the end-of-day report | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L68) |
 | Read the counts straight from the database | Owner/admin/manager logins only | RLS `safe_counts_mgr_read` / `safe_swaps_mgr_read` → `public.is_manager()` (`0135_safe_counts_swaps.sql` L99–108, `0130` L55–61). No one can write through RLS. Every write goes through the app's server code. |
 
 **Two kinds of role.** A back-office login has a *staff role* (owner, admin, manager, staff). An employee has a *job role* (sales, manager, lead, other). They are kept separate on purpose (D8). The Store safe page checks the **login's staff role**. The register swap checks the **approver's job role**.
@@ -371,21 +371,21 @@ A till's float never comes from the master till on an ordinary day. It stays in 
 
 ### 4.15 The safe section of the end-of-day report
 
-**End-of-day report** (`/admin/registers/eod`, Register Activity → **End-of-day report**) has a section **Safe ($1,000 change fund)** (`eod/page.tsx` L208–247):
+**End-of-day report** (`/admin/registers/eod`, Register Activity → **End-of-day report**) has a section **Safe ($1,000 change fund)** (`eod/page.tsx` L424–463):
 
 | Line | Shows | Source |
 |---|---|---|
 | **AM count** | Total · **Balanced** / **Over by $X** / **Short by $X**, or **Not done** | The **newest** AM count for that business day (`eod-core.ts` L182) |
 | **PM count** | Same, for PM | Newest PM count (L183) |
 | **Extra counts** | How many (only shown if there is at least one) | L184 |
-| **Change swaps (value-neutral)** | *"N · $total"* or **None** | Swaps on that Pacific day (`eod-store.ts` L138–150) |
+| **Change swaps (value-neutral)** | *"N · $total"* or **None** | Swaps on that Pacific day (`eod-store.ts` L181–194) |
 
 If the database migration has not run: *"Safe tracking not set up yet — run migration 0135_safe_counts_swaps.sql to include safe counts and change swaps on this report."*
 
 **Know this when you read it:**
 - If two AM counts were saved, the report shows **only the newest**. An earlier count, even a bad one, is not shown (F-02-5). Check **Recent counts** on the Store safe page for the full list.
 - Extra count totals are not on the report. Only how many there were.
-- The report is printable (**Print** button, `eod/page.tsx` L74) but cannot be exported (F-00-8).
+- The report is printable (**Print** button, `eod/page.tsx` L116) but cannot be exported (F-00-8).
 - Close-of-day steps → SOP-03.
 
 ### 4.16 Reviewing recent counts and swaps
@@ -667,7 +667,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | 4.12 drops / books | `register-cash-journal-core.ts` L71, L221–228, L241–386 (drops booked: L297–321, L329, L369–372), self-test L886–939; `src/lib/registers/store.ts` L189 (`recordDrop`); `drawer-posting-service.ts` L174–195; finding F-02-1 FIXED (Phase 2.4) |
 | 4.13 supply runs | `register-cash-journal-core.ts` L520–671; `src/lib/accounting/ledger-census-data.ts` L1663–1694; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
 | 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L316 |
-| 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L45, L74, L208–247; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L122–151 |
+| 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L68, L116, L424–463; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L164–195 |
 | 4.17 immutability | `0135` L95–108; `grep safe_counts src` (insert and select only) |
 | 4.18 print/export | `safe/page.tsx` (no `PrintButton`); finding F-00-8 |
 | 7 reset | `src/lib/accounting/factory-reset-core.ts` L429–430; `0140` L97–100; `0209` L335–336 |
