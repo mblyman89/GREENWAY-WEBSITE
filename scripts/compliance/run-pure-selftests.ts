@@ -853,6 +853,7 @@ import { __runIntakeCountCoreTests } from "../../src/lib/inventory/intake-count-
 import { __runInboundReconcileCoreTests } from "../../src/lib/inbound-email/inbound-reconcile-core";
 import { __runGrowFlowInvoiceTests } from "../../src/lib/inventory/pdf-growflow-invoice-core";
 import { __runManifestSiblingTests } from "../../src/lib/inventory/manifest-sibling-core";
+import { __runInvoiceAdjustmentsTests } from "../../src/lib/inventory/invoice-adjustments-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -2624,7 +2625,8 @@ __runLiquidVolumeTests();
   assertRan("intake-count-core", __runIntakeCountCoreTests(), 36); // Fix Phase 3.1 (G-16): dock count "18 of 20" - overage refused, 0 = refuse, reason, partial
   assertRan("inbound-reconcile-core", __runInboundReconcileCoreTests(), 111); // Fix Phase 3.2a (G-17 / F-04-4): mailbox check - match by key / Message-ID / fingerprint, temporary vs permanent, backoff, alerts once, heartbeat
   assertRan("pdf-growflow-invoice-core", __runGrowFlowInvoiceTests(), 11); // Fix Phase 3.3 (F-04-22): GrowFlow invoice -> unit prices by lot (split ids rejoined, qty x unit = total checked)
-  assertRan("manifest-sibling-core", __runManifestSiblingTests(), 17); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
+  assertRan("invoice-adjustments-core", __runInvoiceAdjustmentsTests(), 25); // Fix Phase 3.4 (F-04-24): credits / discounts / negative lines read off the invoice; manual credits validated; invoice amount = lines + credits
+  assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

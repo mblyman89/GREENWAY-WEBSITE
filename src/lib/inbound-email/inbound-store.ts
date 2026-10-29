@@ -107,6 +107,7 @@ import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 import { archiveManifestDocuments, listManifestDocMeta } from "@/lib/inventory/manifest-docs";
 import { classifyMinerKind, type MinerSource } from "@/lib/inventory/vendor-goldminer-core";
 import { enrichVendorFromIntakeDocs } from "@/lib/inventory/vendor-goldminer-store";
+import { healVendorLabel, recordInvoiceAdjustments } from "@/lib/inventory/invoice-adjustments-store";
 
 export type InboundDisposition =
   | "received"
@@ -720,6 +721,10 @@ export async function stageManifestsFromEmail(
       // Fix Phase 3.2b (F-04-11): a line that did not save is said on the email row too.
       if (staged.lineFailures) result.notes.push(`${staged.lineFailures.count} line(s) did not save; see the delivery's timeline before finalizing`);
       await recordInvoiceNumberDetected(staged.manifestId, invoicePick, actorId);
+      // Fix Phase 3.4 (F-04-24): credits / printed total across every document,
+      // and a real vendor name when the row staged without one.
+      await recordInvoiceAdjustments(staged.manifestId, invoiceDocs, actorId);
+      await healVendorLabel(staged.manifestId, invoiceDocs, { license: manifest.vendor_license, from: email.from, actorId });
       // SLICE 69: archive EVERY document the email carried (manifest PDF,
       // invoice PDF, COA, transfer JSON, extras) into private storage linked
       // to this manifest — permanent download buttons for every row.
@@ -748,6 +753,8 @@ export async function stageManifestsFromEmail(
           "re-sent vendor email",
         );
         await recordInvoiceNumberDetected(staged.existingManifestId, invoicePick, actorId);
+        await recordInvoiceAdjustments(staged.existingManifestId, invoiceDocs, actorId); // Fix 3.4
+        await healVendorLabel(staged.existingManifestId, invoiceDocs, { license: manifest.vendor_license, from: email.from, actorId });
         await archiveDocsToExistingIfNone(staged.existingManifestId, email.attachments);
       }
       console.warn("[inbound-email] duplicate manifest skipped:", staged.error);
@@ -907,6 +914,10 @@ export async function stageManifestsFromEmail(
         // Fix Phase 3.2b (F-04-11): a line that did not save is said on the email row too.
         if (staged.lineFailures) result.notes.push(`${staged.lineFailures.count} line(s) did not save; see the delivery's timeline before finalizing`);
         await recordInvoiceNumberDetected(staged.manifestId, invoicePick, actorId);
+        // Fix Phase 3.4 (F-04-24): credits / printed total across every document
+        // (the OpenTHC parser keeps lot lines only), and a real vendor name.
+        await recordInvoiceAdjustments(staged.manifestId, invoiceDocs, actorId);
+        await healVendorLabel(staged.manifestId, invoiceDocs, { license: merged.vendor_license, from: email.from, actorId });
         // PR-A: record which engine read this manifest (llama / FB) so the
         // intake table badge + detail statement can show it. Best-effort.
         await recordManifestParseStatus(
@@ -948,6 +959,8 @@ export async function stageManifestsFromEmail(
             "re-sent vendor email (PDF)",
           );
           await recordInvoiceNumberDetected(staged.existingManifestId, invoicePick, actorId);
+          await recordInvoiceAdjustments(staged.existingManifestId, invoiceDocs, actorId); // Fix 3.4
+          await healVendorLabel(staged.existingManifestId, invoiceDocs, { license: merged.vendor_license, from: email.from, actorId });
           await archiveDocsToExistingIfNone(staged.existingManifestId, email.attachments);
         }
         console.warn("[inbound-email] duplicate manifest (pdf) skipped:", staged.error);

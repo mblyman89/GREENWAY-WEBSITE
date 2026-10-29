@@ -70,6 +70,8 @@ import { groupByVendor } from "@/lib/inventory/cultivera-vendor-core";
 import { ReceivingFilterBar } from "@/components/admin/inventory/ReceivingFilterBar";
 import { CultiveraManifestTable } from "@/components/admin/inventory/CultiveraManifestTable";
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
+import { DismissibleBanner } from "@/components/admin/inventory/DismissibleBanner";
+import { healLabelVendors, loadInvoiceAmounts } from "@/lib/inventory/invoice-adjustments-store";
 
 export const dynamic = "force-dynamic";
 /**
@@ -257,6 +259,15 @@ export default async function IntakePage({
     tableRows.map((m) => m.id),
   );
 
+  // Fix 3.4 (owner: "i want the system to keep trying to find the name of the
+  // vendor for that manifest ... no exceptions"): every page load re-tries any
+  // row whose Vendor is a label ("Manifest ID") - documents, license lookup,
+  // the sender's name. Healed names show on the next load (best-effort).
+  void healLabelVendors(tableRows, 10).catch(() => 0);
+  // Fix 3.4 (owner: "i want the invoice amount to be shown on the receiving
+  // table"): lines minus credits found on the invoice / added by hand.
+  const invoiceAmountByManifestId = await loadInvoiceAmounts(tableRows.map((m) => m.id));
+
   const errorMsg =
     error === "empty"
       ? "Paste the vendor JSON before importing."
@@ -389,14 +400,21 @@ export default async function IntakePage({
         </div>
 
         {overdue.length > 0 && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+          <DismissibleBanner
+            rememberKey={`overdue:${overdue.map((m) => m.id).sort().join(",")}`}
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+          >
             🚨 {overdue.length} in-transit manifest{overdue.length === 1 ? "" : "s"} past ETA — follow up with the transporter.
-          </div>
+          </DismissibleBanner>
         )}
 
         {/* Fix Phase 3.2a (G-17): an email that did not make a manifest is never
             silent - it is counted here on every tab and listed under Needs attention. */}
         {attention.summary.total > 0 && (
+          <DismissibleBanner
+            rememberKey={`attention:${attention.summary.total}:${attention.summary.needPerson}`}
+            className="rounded-[var(--admin-radius)]"
+          >
           <a
             href="/admin/inventory/intake?tab=email#needs-attention"
             data-testid="attention-banner"
@@ -408,6 +426,7 @@ export default async function IntakePage({
               : " (the system is fetching again by itself)"}
             . Open Needs attention &rarr;
           </a>
+          </DismissibleBanner>
         )}
         {(
           [
@@ -422,9 +441,9 @@ export default async function IntakePage({
           ] as const
         ).map(([text, tone, title]) =>
           text ? (
-            <div
+            <DismissibleBanner
               key={title + tone}
-              data-testid={`mail-banner-${tone}`}
+              testId={`mail-banner-${tone}`}
               className={
                 tone === "ok"
                   ? "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
@@ -432,7 +451,7 @@ export default async function IntakePage({
               }
             >
               <strong>{title}</strong> {text}
-            </div>
+            </DismissibleBanner>
           ) : null,
         )}
 
@@ -440,63 +459,63 @@ export default async function IntakePage({
             behind the other tab; resolveReceivingTab additionally auto-opens
             Manual tools so the form that produced the error is on screen. */}
         {errorMsg && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+          <DismissibleBanner className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             {errorMsg}
-          </div>
+          </DismissibleBanner>
         )}
 
         {kbdone && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+          <DismissibleBanner className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             KB backfill finished — {kbdone} manifest{kbdone === "1" ? "" : "s"} processed,{" "}
             {kbnew ?? 0} product fact{kbnew === "1" ? "" : "s"} promoted as KB drafts
             {kberr && kberr !== "0" ? ` (${kberr} manifest(s) had errors — see server logs)` : ""}.
             Nothing was published — validate the drafts in the KB review lanes.
-          </div>
+          </DismissibleBanner>
         )}
 
         {repdone && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+          <DismissibleBanner className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Re-run finished — {replots ?? 0} lot{replots === "1" ? "" : "s"} and{" "}
             {repitems ?? 0} live menu item{repitems === "1" ? "" : "s"} were improved with verified
             facts, product types, or cleaner display names
             {reperr && reperr !== "0" ? ` (${reperr} row(s) failed to save — see server logs)` : ""}.
             Everything else already had its facts or gave the engines nothing verifiable — no guesses were written.
-          </div>
+          </DismissibleBanner>
         )}
 
         {invoice === "saved" && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+          <DismissibleBanner className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Invoice # updated — your correction now shows on this manifest everywhere the invoice number appears.
-          </div>
+          </DismissibleBanner>
         )}
         {invoice === "cleared" && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
+          <DismissibleBanner className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
             Invoice # correction cleared — this manifest is back to the value read from its documents.
-          </div>
+          </DismissibleBanner>
         )}
         {/* R36 #2 - Dismiss duplicate result. Text comes from our own server
             action (describeDismissResult / the SQL refusal), rendered as
             text (React escapes it). */}
         {dismissed && (
-          <div
-            data-testid="dismiss-banner"
+          <DismissibleBanner
+            testId="dismiss-banner"
             className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
           >
             <strong>Duplicate dismissed.</strong> {dismissed}
-          </div>
+          </DismissibleBanner>
         )}
         {dismisserr && (
-          <div
-            data-testid="dismiss-error"
+          <DismissibleBanner
+            testId="dismiss-error"
             className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
           >
             <strong>Not dismissed.</strong> {dismisserr}
-          </div>
+          </DismissibleBanner>
         )}
         {invoice === "error" && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+          <DismissibleBanner className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Couldn&apos;t save that Invoice # correction. Please try again — if it keeps failing, the change did not persist.
-          </div>
+          </DismissibleBanner>
         )}
 
         {/* H15d — two tabs: the "Incoming (email)" hero view staff live on,
@@ -556,6 +575,7 @@ export default async function IntakePage({
           rows={tableRows}
           linksByManifestId={linksByManifestId}
           docsByManifestId={docsByManifestId}
+          invoiceAmountByManifestId={invoiceAmountByManifestId}
           parseStatusByManifest={parseStatusByManifest}
           setInvoiceAction={setInvoiceNumberAction}
           view={intakeView}

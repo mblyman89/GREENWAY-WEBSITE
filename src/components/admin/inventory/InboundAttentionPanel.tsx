@@ -22,6 +22,7 @@ import { SaveButton } from "@/components/admin/orders/SaveButton";
 import { fmtPulledIn } from "@/lib/inventory/manifest-table-core";
 import { healthLine, MAX_FIND_DAYS, RESOLVE_REASONS, sourceRefFor, type AttentionItem, type HealthTone } from "@/lib/inbound-email/inbound-reconcile-core";
 import type { AttentionView } from "@/lib/inbound-email/inbound-reconcile-store";
+import { CollapsedUntilLinked } from "@/components/admin/inventory/DismissibleBanner";
 
 type RowAction = (logId: string) => Promise<void>;
 type ResolveAction = (logId: string, formData: FormData) => Promise<void>;
@@ -59,21 +60,30 @@ export function InboundAttentionPanel({
   const health = healthLine(view.heartbeat, nowMs, view.migrationApplied);
   const { items, summary } = view;
   return (
-    <section
+    // Fix Phase 3.4 (F-04-25): collapsed when the page loads (owner: "the emails
+    // that did not make a manifest section should be collapsed when landing on
+    // the page"); the count shows on the closed bar, and the red banner's
+    // "Open Needs attention" link (#needs-attention) opens it.
+    <CollapsedUntilLinked
       id="needs-attention"
-      data-testid="inbound-attention"
+      testId="inbound-attention"
       className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"
+      summary={
+        <h2 className="text-sm font-bold text-[var(--admin-text)]">
+          <span aria-hidden="true">▸ </span>Emails that did not make a manifest{" "}
+          {summary.total > 0 ? (
+            <span className="ml-1 rounded-full bg-[var(--admin-danger)]/15 px-2 py-0.5 text-xs font-bold text-[var(--admin-danger)]" data-testid="attention-count">
+              {summary.total}
+            </span>
+          ) : (
+            <span className="ml-1 text-xs font-normal text-[var(--admin-text-faint)]">none</span>
+          )}
+          <span className="ml-2 text-xs font-normal text-[var(--admin-text-faint)]">(click to open)</span>
+        </h2>
+      }
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold text-[var(--admin-text)]">
-            Emails that did not make a manifest{" "}
-            {summary.total > 0 ? (
-              <span className="ml-1 rounded-full bg-[var(--admin-danger)]/15 px-2 py-0.5 text-xs font-bold text-[var(--admin-danger)]" data-testid="attention-count">
-                {summary.total}
-              </span>
-            ) : null}
-          </h2>
           <p className="mt-1 max-w-3xl text-xs text-[var(--admin-text-muted)]">
             Every manifest comes by email, so every email to vendor_intake@ must end up on the table. The system checks
             the mailbox every 15 minutes and pulls in anything the instant delivery missed; anything that still did not
@@ -203,6 +213,6 @@ export function InboundAttentionPanel({
           })}
         </ul>
       )}
-    </section>
+    </CollapsedUntilLinked>
   );
 }

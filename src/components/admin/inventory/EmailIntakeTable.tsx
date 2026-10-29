@@ -35,6 +35,8 @@ import { CONCIERGE_HINTS } from "@/lib/inventory/guided-accept-core";
 import type { ParseStatus } from "@/lib/inbound-email/llamaparse-status-core";
 import { InvoiceNumberCell } from "@/components/admin/inventory/InvoiceNumberCell";
 import { DismissDuplicateForm } from "@/components/admin/inventory/DismissDuplicateForm";
+import { formatUsdCents } from "@/lib/inventory/invoice-adjustments-core";
+import type { InvoiceAmountCell } from "@/lib/inventory/invoice-adjustments-store";
 
 export type ManifestDownloadLinks = {
   manifestUrl: string | null;
@@ -60,6 +62,7 @@ export function EmailIntakeTable({
   rows,
   linksByManifestId,
   docsByManifestId,
+  invoiceAmountByManifestId,
   parseStatusByManifest,
   setInvoiceAction,
   view = "action",
@@ -88,6 +91,8 @@ export function EmailIntakeTable({
    * which expire within hours.
    */
   docsByManifestId?: Map<string, ArchivedDocLink[]>;
+  /** Fix 3.4: manifest id -> invoice amount after credits (cents) for the Invoice amount column. */
+  invoiceAmountByManifestId?: Map<string, InvoiceAmountCell>;
   /**
    * SLICE 101 — the owner's filter: "action" (default) hides accepted +
    * partially accepted rows; "all" shows everything, open rows first. The
@@ -156,6 +161,12 @@ export function EmailIntakeTable({
                   AI
                 </th>
                 <th className="px-4 py-3">Vendor</th>
+                <th
+                  className="cursor-help px-4 py-3 text-right"
+                  title="What the invoice comes to: every priced line, minus credits / discounts read off the invoice or added on Vendor payments."
+                >
+                  Invoice amount
+                </th>
                 <th className="cursor-help px-4 py-3" title="When the email landed in vendor_intake@ and the system staged this draft.">
                   Pulled in
                 </th>
@@ -237,6 +248,31 @@ export function EmailIntakeTable({
                       })()}
                     </td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">{m.vendor_label ?? "—"}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--admin-text)]" data-testid="invoice-amount-cell">
+                      {(() => {
+                        const inv = invoiceAmountByManifestId?.get(m.id);
+                        if (!inv) return <span className="text-[var(--admin-text-faint)]">—</span>;
+                        const tip = [
+                          `Lines ${formatUsdCents(inv.linesMinor)}`,
+                          ...inv.labels,
+                          inv.printedTotalMinor !== null ? `Invoice prints ${formatUsdCents(inv.printedTotalMinor)}` : "",
+                          inv.unpriced > 0 ? `${inv.unpriced} line(s) have no cost yet` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
+                        return (
+                          <span title={tip}>
+                            {formatUsdCents(inv.amountMinor)}
+                            {inv.creditMinor < 0 && (
+                              <span className="block text-[0.65rem] text-[var(--admin-accent)]">credit {formatUsdCents(inv.creditMinor)}</span>
+                            )}
+                            {inv.unpriced > 0 && (
+                              <span className="block text-[0.65rem] text-[var(--admin-gold)]">{inv.unpriced} unpriced</span>
+                            )}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">{fmtPulledIn(m.created_at)}</td>
                     <td className="px-4 py-3 text-center">
                       {m.eta_date ? (

@@ -1390,9 +1390,17 @@ export async function rereadDeliveryCoasAction(manifestId: string) {
   const { listManifestLots, listLotVendorIds } = await import("@/lib/inventory/intake-store");
   const core = await import("@/lib/inventory/coa-bundle-core");
 
+  // Fix Phase 3.4 (F-04-24). Owner, verbatim: "when i click the reread coa in
+  // the receiving detail page, i want it to re read every document sent in
+  // that email." First every non-lab document: empty unit costs filled by lot
+  // id from the invoice, the invoice #, credits / printed total, and a vendor
+  // name when the row has none. Then the lab documents, as before.
+  const { rereadAllDeliveryDocs, describeRereadAll } = await import("@/lib/inventory/invoice-adjustments-store");
+  const all = await rereadAllDeliveryDocs(manifestId, session.userId);
+  const allNote = describeRereadAll(all);
   const read = await readDeliveryCoas(manifestId, { recover: true });
   if (read.certs.length === 0) {
-    const why = core.coaUnreadNote(read.unread) ?? "No lab (COA) documents are on file for this delivery.";
+    const why = `${allNote} ${core.coaUnreadNote(read.unread) ?? "No lab (COA) documents are on file for this delivery."}`;
     await logManifestEvent(manifestId, "coa_reread", why, session.userId);
     revalidatePath(base);
     redirect(`${base}?coa=nodocs&coamsg=${encodeURIComponent(why.slice(0, 400))}#manifest-lines`);
@@ -1420,6 +1428,7 @@ export async function rereadDeliveryCoasAction(manifestId: string) {
   }
   const nameOf = (lotId: string) => lots.find((l) => l.id === lotId)?.product_name ?? "a line";
   const note =
+    `${allNote} ` +
     core.coaBundleNote({ docs: read.docs.size - read.unread.length, certs: read.certs, lineCount: lots.length, plan, lineLabel: nameOf }) +
     (changed > 0 ? ` ${changed} line(s) changed while reading (already had a lab result) - left as they were.` : "") +
     (errors.length > 0 ? ` Not saved: ${errors.join("; ")}.` : "") +

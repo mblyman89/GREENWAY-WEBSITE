@@ -51,6 +51,7 @@ import { submitJournal } from "@/lib/accounting/posting-service";
 import { findReceiptJournal } from "@/lib/accounting/receipt-evidence";
 import { mapReceiptCategory } from "@/lib/accounting/receipt-category-core";
 import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
+import { liveManualMinor, parseManualAdjustments } from "@/lib/inventory/invoice-adjustments-core";
 import { PAYLOAD_KIND_SELECT, isMigrationKind, migrationStockRefusal } from "@/lib/accounting/migration-stock-core";
 import {
   evaluateVendorBill,
@@ -397,14 +398,45 @@ export async function postManifestVendorBill(
   const invoiceNumber =
     (manifest.manifest_number ?? "").trim() || `manifest:${manifestId}`;
 
+  // Fix 3.4 (owner: "this new manifest has a credit amount on it, and the
+  // system did not see it or did and disregarded it"): credits/discounts read
+  // off the invoice (0322 invoice_adjustments_minor) and credits added by hand
+  // on Vendor payments post as ONE negative trade-discount line (60900,
+  // contra-COGS) so A/P equals what the invoice actually says. Missing 0322
+  // columns -> no credit line, exactly as before.
+  const billLines = [...translated.lines];
+  let billTotal = translated.totalCents;
+  {
+    const { data: adj, error: aErr } = await admin
+      .from("inbound_manifests")
+      .select("invoice_adjustments_minor, invoice_manual_adjustments")
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (!aErr && adj) {
+      const a = adj as { invoice_adjustments_minor: number | null; invoice_manual_adjustments: unknown };
+      const credit =
+        Math.min(0, Number(a.invoice_adjustments_minor) || 0) +
+        Math.min(0, liveManualMinor(parseManualAdjustments(a.invoice_manual_adjustments)));
+      if (credit < 0 && billTotal + credit > 0) {
+        billLines.push({
+          lineNo: billLines.length + 1,
+          purchaseKindCode: "purchase_discount",
+          amountCents: credit,
+          description: "Invoice credit / discount",
+        });
+        billTotal += credit;
+      }
+    }
+  }
+
   const bill: VendorBillInput = {
     entityCode: "greenway",
     vendorName: (manifest.vendor_label ?? "").trim() || "Unknown vendor",
     vendorId: manifest.vendor_id ?? null,
     invoiceNumber,
     invoiceDate: invoiceDateIso,
-    statedTotalCents: translated.totalCents,
-    lines: translated.lines,
+    statedTotalCents: billTotal,
+    lines: billLines,
     fromAcceptedManifest: true,
     manifestNumber: manifest.manifest_number ?? null,
     goodsAlreadyReceived,
@@ -464,7 +496,7 @@ export async function postManifestVendorBill(
           "goods-receipt entry exists for it.",
     journalId: posted.journalId,
     outcome: posted.outcome,
-    totalCents: translated.totalCents,
+    totalCents: billTotal,
     relievedInTransit: goodsAlreadyReceived,
   };
 }

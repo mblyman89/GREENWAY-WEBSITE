@@ -326,6 +326,15 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   Migration `0321_inbound_sibling_dismiss.sql` (manual; rollback shipped). Tests `fix-p3-3-growflow-intake` (37), self-tests `pdf-growflow-invoice-core` 11, `manifest-sibling-core` 17, mutation probe `scripts/compliance/mutate-fix-p3-3.py`. SOP-04 v1.8.
 - **Was (interim, superseded):** SOP-04 v1.7 §4.4, *"duplicate (the same manifest # and vendor is already live, so it is not staged again)"*.
 
+### Fix Phase 3.4 (F-04-24, F-04-25): invoice credits, invoice amount, re-read everything, vendor name, closable banners (no new gap number)
+
+- **Owner:** *"this new manifest has a credit amount on it, and the system did not see it or did and disregarded it … i want the invoice amount to be shown on the receiving table … i want the system to keep trying to find the name of the vendor for that manifest … no exceptions … i need a way to add a credit or discount to the invoice before paying for it in the vendor payments page. finally, i want to be able to dismiss the warnings and other banners at the top of the page. the emails that did not make a manifest section should be collapsed when landing on the page."*
+- **Status: BUILT (Phase 3.4, #P..).**
+  1. **F-04-24 (FIXED).** Credits read off the invoice (`invoice-adjustments-core.ts`), stored on the delivery (migration 0322), subtracted from owed (`vendor-payables-store.ts`) and posted as a 60900 trade-discount line (`vendor-bill-service.ts`); **Invoice amount** on Receiving; **Add a credit or discount to an invoice** on Vendor payments; re-read reads every document (costs, invoice #, credits, vendor); label vendors repaired at staging, re-read and page load.
+  2. **F-04-25 (FIXED).** Banners have **×**; Needs attention starts closed.
+  Migration `0322_invoice_adjustments.sql` (manual; rollback shipped). Tests `fix-p3-4-invoice-credits`, self-tests `invoice-adjustments-core` 25, `manifest-sibling-core` 21. SOP-04 v1.9.
+- **Was (interim, superseded):** SOP-04 v1.8 §4.15 *"Re-read COAs from this delivery's documents"* (COAs only).
+
 ## G-18 · Monthly CCRS public records request (reminder, log, template)
 
 - **Owner (D28):** *"Please make sure to include the monthly CCRS public record request to ingest the states data for the benchmarks."* Vision: *"Ideally, I will make the public records request once per month to get the previous months data…"* (`ROADMAP_BACKOFFICE_FIXES.md` L276–289).

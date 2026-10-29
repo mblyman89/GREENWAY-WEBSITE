@@ -270,8 +270,9 @@ describe("4. the same delivery under another number", () => {
     expect(dedupe.checkDismiss(dup, keep, "  ").ok).toBe(false);
   });
   it("self-tests at the exact floor and registered", () => {
-    expect(sib.__runManifestSiblingTests()).toEqual({ passed: 17, failed: 0 });
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("manifest-sibling-core", __runManifestSiblingTests(), 17)');
+    // Fix 3.4 added 4 vendor-name assertions (vendorNameFromText / senderDisplayName): 17 -> 21.
+    expect(sib.__runManifestSiblingTests()).toEqual({ passed: 21, failed: 0 });
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21)');
     const src = read("src/lib/inventory/manifest-sibling-core.ts");
     expect(src).not.toMatch(/process\.env|supabase|server-only|from "react"|from "next\//);
     expect(src.match(/^import .*$/gm)).toEqual(['import { compareOldestFirst, isBlockingStatus } from "./manifest-dedupe-core";']);

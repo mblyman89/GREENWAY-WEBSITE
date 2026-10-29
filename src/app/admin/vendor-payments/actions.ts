@@ -36,6 +36,8 @@ import {
   type PaymentMethod,
 } from "@/lib/payments/vendor-payables-store";
 import { isValidRouting } from "@/lib/payments/nacha-core";
+import { listManualAdjustments, writeManualAdjustment } from "@/lib/inventory/invoice-adjustments-store";
+import { formatUsdCents, validateManualCredit } from "@/lib/inventory/invoice-adjustments-core";
 import { getLinkedPoFactsForManifests } from "@/lib/payments/invoice-po-match";
 import {
   compareInvoiceToPo,
@@ -825,4 +827,108 @@ export async function recordManualPaymentAction(
     message: `${methodLabel} payment of ${usd(amountCents)} recorded for ${docLabel} #${payable.number}. This ${docLabel} is now paid in full and cleared from payables.`,
     remainingMinorUnits: remainingAfter,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Fix 3.4 — credits / discounts added by hand before paying an invoice.
+// Owner (verbatim): "if the system isnt able to work out if there is a credit
+// or discount, i need a way to add a credit or discount to the invoice before
+// paying for it in the vendor payments page."
+// Stored on inbound_manifests.invoice_manual_adjustments (migration 0322);
+// never deleted, only voided with a reason. Owed on this page and the vendor
+// bill (60900 trade-discount line) both subtract the live credits.
+// ---------------------------------------------------------------------------
+
+export type InvoiceCreditResult = { ok: boolean; message?: string; error?: string };
+
+export type InvoiceCreditView = {
+  id: string;
+  kind: string;
+  amountMinor: number;
+  reason: string;
+  at: string;
+  voided: boolean;
+  voidReason: string | null;
+};
+
+export async function listInvoiceCreditsAction(payableKey: string): Promise<InvoiceCreditView[]> {
+  await requirePermission("payables.manage");
+  const { source, id } = decodePayableKey(String(payableKey ?? ""));
+  if (source !== "manifest" || !id) return [];
+  const list = (await listManualAdjustments(id)) ?? [];
+  return list.map((m) => ({
+    id: m.id,
+    kind: m.kind,
+    amountMinor: m.amountMinor,
+    reason: m.reason,
+    at: m.at,
+    voided: Boolean(m.voidedAt),
+    voidReason: m.voidReason ?? null,
+  }));
+}
+
+export async function addInvoiceCreditAction(
+  _prev: InvoiceCreditResult | null,
+  formData: FormData,
+): Promise<InvoiceCreditResult> {
+  const session = await requirePermission("payables.manage");
+  const { source, id } = decodePayableKey(String(formData.get("payableKey") ?? ""));
+  if (source !== "manifest" || !id) {
+    return { ok: false, error: "Pick a delivery (manifest) invoice. Merch invoices take credits on the non-cannabis invoice itself." };
+  }
+  const payable = await getVendorPayable(id);
+  if (!payable) return { ok: false, error: "That invoice is not open for payment (not accepted, or already paid)." };
+  const remaining = payable.owedMinorUnits - payable.paidMinorUnits;
+  const v = validateManualCredit({
+    amountText: String(formData.get("amountDollars") ?? ""),
+    reason: String(formData.get("reason") ?? ""),
+    kind: String(formData.get("kind") ?? "credit"),
+    remainingOwedMinor: remaining,
+  });
+  if (!v.ok) return { ok: false, error: v.error };
+  const res = await writeManualAdjustment(
+    id,
+    { add: { kind: v.kind, amountMinor: v.amountMinor, reason: v.reason, by: session.email ?? session.userId } },
+    session.userId,
+  );
+  if (!res.ok) return { ok: false, error: res.error };
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "vendor_invoice.credit_added",
+    entityType: "inbound_manifest",
+    entityId: id,
+    after: { kind: v.kind, amountMinor: v.amountMinor, reason: v.reason, entryId: res.entry.id },
+  }).catch(() => {});
+  revalidatePath("/admin/vendor-payments");
+  revalidatePath("/admin/inventory/intake");
+  return {
+    ok: true,
+    message: `${formatUsdCents(v.amountMinor)} ${v.kind.replace("_", " ")} added to manifest #${payable.manifestNumber}. It now owes ${formatUsdCents(Math.max(0, remaining + v.amountMinor))}.`,
+  };
+}
+
+export async function voidInvoiceCreditAction(
+  _prev: InvoiceCreditResult | null,
+  formData: FormData,
+): Promise<InvoiceCreditResult> {
+  const session = await requirePermission("payables.manage");
+  const { source, id } = decodePayableKey(String(formData.get("payableKey") ?? ""));
+  const entryId = String(formData.get("entryId") ?? "").trim();
+  const voidReason = String(formData.get("voidReason") ?? "").replace(/\s+/g, " ").trim();
+  if (source !== "manifest" || !id || !entryId) return { ok: false, error: "Pick the credit to void." };
+  if (voidReason.length < 3) return { ok: false, error: "Say why this credit is being voided." };
+  const res = await writeManualAdjustment(id, { voidId: entryId, voidReason, by: session.email ?? session.userId }, session.userId);
+  if (!res.ok) return { ok: false, error: res.error };
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "vendor_invoice.credit_voided",
+    entityType: "inbound_manifest",
+    entityId: id,
+    after: { entryId, voidReason },
+  }).catch(() => {});
+  revalidatePath("/admin/vendor-payments");
+  revalidatePath("/admin/inventory/intake");
+  return { ok: true, message: "Credit voided. The invoice owes the full amount again." };
 }

@@ -26,6 +26,8 @@ import {
   PAYABLE_MANIFEST_STATUSES,
   type ManifestPayable,
 } from "@/lib/payments/vendor-ach-core";
+import { loadInvoiceAdjustmentTotals } from "@/lib/inventory/invoice-adjustments-store";
+import { invoiceAmountMinor } from "@/lib/inventory/invoice-adjustments-core";
 
 /** A payable with light display extras for the UI (still CENTS internally). */
 export type VendorPayableRow = ManifestPayable & {
@@ -192,8 +194,16 @@ export async function listVendorPayables(opts?: {
     }
   }
 
+  // Fix 3.4 (owner: "add intelligent logic to the system that helps it
+  // identify credits, discounts ... so it can give an accurate invoice
+  // amount"): credits read off the invoice + credits added by hand on Vendor
+  // payments come off what is owed. Missing 0322 columns -> no credits.
+  const credits = await loadInvoiceAdjustmentTotals(manifestIds);
+
   const rows: VendorPayableRow[] = mrows.map((m) => {
-    const owed = owedByManifest.get(m.id) ?? 0;
+    const c = credits.get(m.id);
+    const linesOwed = owedByManifest.get(m.id) ?? 0;
+    const owed = c ? invoiceAmountMinor(linesOwed, c.detectedMinor, c.manualMinor) : linesOwed;
     const paid = paidByManifest.get(m.id) ?? 0;
     const vendorName =
       (m.vendor_id ? vendorNames.get(m.vendor_id) : null) || m.vendor_label || "Unknown vendor";
