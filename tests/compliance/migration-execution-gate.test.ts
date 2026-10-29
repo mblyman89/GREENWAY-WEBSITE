@@ -1847,28 +1847,32 @@ describe("the migration list is ordered the way the database will see it", () =>
     // receipt + change, no delete, cash-out fixed, settle once; KEEP, manager read only).
     // Fix Phase 3.1 (G-16, F-04-1, owner D29 / message 6): inventory_lots shipped_qty /
     // short_reason_code / short_reason / counted_by / counted_at ("18 of 20"; columns + checks only).
-    expect(listed[listed.length - 1]).toMatch(/^0319_/);
-    expect(listed[listed.length - 1]).toBe("0319_intake_counted_short.sql");
-    expect(listed[listed.length - 2]).toMatch(/^0318_/);
-    expect(listed[listed.length - 2]).toBe("0318_supply_runs.sql");
-    expect(listed[listed.length - 3]).toMatch(/^0317_/);
-    expect(listed[listed.length - 3]).toBe("0317_little_safe_exchanges.sql");
-    expect(listed[listed.length - 4]).toMatch(/^0316_/);
-    expect(listed[listed.length - 4]).toBe("0316_deposit_bag_custody.sql");
-    expect(listed[listed.length - 5]).toMatch(/^0315_/);
-    expect(listed[listed.length - 5]).toBe("0315_over_short_reasons.sql");
-    expect(listed[listed.length - 6]).toMatch(/^0314_/);
-    expect(listed[listed.length - 6]).toBe("0314_drawer_second_count.sql");
-    expect(listed[listed.length - 7]).toMatch(/^0313_/);
-    expect(listed[listed.length - 7]).toBe("0313_drawer_cash_refunds.sql");
-    expect(listed[listed.length - 8]).toMatch(/^0312_/);
-    expect(listed[listed.length - 8]).toBe("0312_destruction_evidence.sql");
-    expect(listed[listed.length - 9]).toMatch(/^0311_/);
-    expect(listed[listed.length - 9]).toBe("0311_recall_events.sql");
-    expect(listed[listed.length - 10]).toMatch(/^0310_/);
-    expect(listed[listed.length - 10]).toBe("0310_destruction_record.sql");
-    expect(listed[listed.length - 11]).toMatch(/^0309_/);
-    expect(listed[listed.length - 11]).toBe("0309_vendor_return_staged.sql");
+    // Fix Phase 3.2a (G-17, F-04-4, owner message 7): inbound_email_log provider 'gmail',
+    // message_id / source_ref / ingest_source / retry_* / resolved_* (columns + checks only).
+    expect(listed[listed.length - 1]).toMatch(/^0320_/);
+    expect(listed[listed.length - 1]).toBe("0320_inbound_email_reconcile.sql");
+    expect(listed[listed.length - 2]).toMatch(/^0319_/);
+    expect(listed[listed.length - 2]).toBe("0319_intake_counted_short.sql");
+    expect(listed[listed.length - 3]).toMatch(/^0318_/);
+    expect(listed[listed.length - 3]).toBe("0318_supply_runs.sql");
+    expect(listed[listed.length - 4]).toMatch(/^0317_/);
+    expect(listed[listed.length - 4]).toBe("0317_little_safe_exchanges.sql");
+    expect(listed[listed.length - 5]).toMatch(/^0316_/);
+    expect(listed[listed.length - 5]).toBe("0316_deposit_bag_custody.sql");
+    expect(listed[listed.length - 6]).toMatch(/^0315_/);
+    expect(listed[listed.length - 6]).toBe("0315_over_short_reasons.sql");
+    expect(listed[listed.length - 7]).toMatch(/^0314_/);
+    expect(listed[listed.length - 7]).toBe("0314_drawer_second_count.sql");
+    expect(listed[listed.length - 8]).toMatch(/^0313_/);
+    expect(listed[listed.length - 8]).toBe("0313_drawer_cash_refunds.sql");
+    expect(listed[listed.length - 9]).toMatch(/^0312_/);
+    expect(listed[listed.length - 9]).toBe("0312_destruction_evidence.sql");
+    expect(listed[listed.length - 10]).toMatch(/^0311_/);
+    expect(listed[listed.length - 10]).toBe("0311_recall_events.sql");
+    expect(listed[listed.length - 11]).toMatch(/^0310_/);
+    expect(listed[listed.length - 11]).toBe("0310_destruction_record.sql");
+    expect(listed[listed.length - 12]).toMatch(/^0309_/);
+    expect(listed[listed.length - 12]).toBe("0309_vendor_return_staged.sql");
     // Fix Phase 1.4 (G-44) added 0308_customer_return_held_stock.sql
     // Fix Phase 1.3 (G-28) added 0307_destruction_previous_lot_status.sql
     // (owner applies by hand; idempotent: add column if not exists + a guarded
