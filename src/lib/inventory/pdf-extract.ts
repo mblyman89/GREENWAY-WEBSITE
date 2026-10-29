@@ -14,6 +14,7 @@ import type { ParsedManifest } from "@/lib/inventory/intake-parser";
 import { parsePdfManifestText } from "@/lib/inventory/pdf-manifest-dispatch-core";
 import { parseCoaSummary, looksLikeCoaSummary } from "@/lib/inventory/pdf-coa-core";
 import { markdownToPlain } from "@/lib/inbound-email/intake-harden-core";
+import { readCoaBundleText, identifiableCount, type CoaCertificate } from "@/lib/inventory/coa-bundle-core";
 import type { PageLayer, PositionedText } from "@/lib/inventory/pdf-contingency-manifest-core";
 
 /** Extract the merged plain text from a PDF given its raw bytes. */
@@ -251,4 +252,66 @@ export async function parseCoaFromBase64(
     return { ok: false, error: "No COA lots could be read from the PDF.", text: coaText };
   }
   return { ok: true, coa, text: coaText };
+}
+
+/**
+ * Fix Phase 3.1a - read EVERY certificate in an emailed lab PDF (a GrowFlow
+ * `QA_*.pdf` bundles one certificate per product; a single COA is a bundle of
+ * one). The free text layer first; the injected recovery (LlamaParse) only
+ * when the text layer left a certificate unidentified (an image-style
+ * certificate such as GGL's) - the reading that identifies more wins. Each
+ * certificate is read by the per-certificate reader (coa-bundle-core). Never
+ * throws; `error` says why nothing was read.
+ */
+export type CoaBundleRead = {
+  certs: CoaCertificate[];
+  via: "unpdf" | "recovery" | "none";
+  error: string | null;
+};
+
+export async function readCoaBundleFromBase64(
+  base64: string,
+  docLabel: string,
+  recoverText?: PdfTextRecovery,
+): Promise<CoaBundleRead> {
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(Buffer.from(base64, "base64"));
+  } catch {
+    return { certs: [], via: "none", error: "Attachment was not valid base64." };
+  }
+  if (bytes.byteLength === 0) return { certs: [], via: "none", error: "The lab PDF is empty." };
+  const keep = safeCopy(bytes);
+  let layer = "";
+  try {
+    layer = await extractPdfText(bytes);
+  } catch {
+    layer = "";
+  }
+  const fromLayer = layer.trim() ? readCoaBundleText(layer, docLabel) : [];
+  const layerOk = fromLayer.length > 0 && identifiableCount(fromLayer) === fromLayer.length;
+  if (layerOk || !recoverText) {
+    if (fromLayer.length === 0) {
+      return { certs: [], via: "none", error: layer.trim() ? "No lab certificate could be read from the PDF." : "The lab PDF has no text layer (scanned) and no reader was available." };
+    }
+    return { certs: fromLayer, via: "unpdf", error: null };
+  }
+  let recovered = "";
+  try {
+    recovered = (await recoverText(keep)) ?? "";
+  } catch {
+    recovered = "";
+  }
+  const candidates = [recovered, markdownToPlain(recovered)].filter((t) => t && t.trim());
+  let best = fromLayer;
+  let via: CoaBundleRead["via"] = fromLayer.length > 0 ? "unpdf" : "none";
+  for (const t of candidates) {
+    const certs = readCoaBundleText(t, docLabel);
+    if (identifiableCount(certs) > identifiableCount(best)) {
+      best = certs;
+      via = "recovery";
+    }
+  }
+  if (best.length === 0) return { certs: [], via: "none", error: "No lab certificate could be read from the PDF." };
+  return { certs: best, via, error: null };
 }

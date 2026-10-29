@@ -35,6 +35,7 @@ import {
   setManifestLifecycle,
   backfillManifestTransport,
   recordInvoiceNumberDetected,
+  logManifestEvent,
 } from "@/lib/inventory/intake-store";
 import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
 import {
@@ -70,7 +71,19 @@ import {
   parsePdfManifestFromBase64,
   parseCoaFromBase64,
   readPdfLayer,
+  readCoaBundleFromBase64,
+  type CoaBundleRead,
 } from "@/lib/inventory/pdf-extract";
+import {
+  foldCoaBundle,
+  coaBundleNote,
+  coaUnreadNote,
+  coaAttachEventType,
+  uniqueDocLabels,
+  looksLikeCertificate,
+  type CoaCertificate,
+  type CoaFoldResult,
+} from "@/lib/inventory/coa-bundle-core";
 import { llamaParseRecoverText, makeCapturingRecovery } from "@/lib/inbound-email/llamaparse-recovery";
 import { aiReadManifest } from "@/lib/inbound-email/intake-ai-fallback";
 import { recordManifestParseStatus } from "@/lib/inbound-email/llamaparse-status-server";
@@ -449,6 +462,25 @@ export async function stageManifestsFromEmail(
   // transport with the grounded one - otherwise a hallucinated value in the
   // primary manifest would sit in the base and win the fill-only fold.
   const groundedByAtt = new Map<object, ParsedTransport | null>();
+  // Fix Phase 3.1a (owner, 2026: "didn't or couldn't attach the coa lab
+  // results to the products in the receiving detail page"). A GrowFlow
+  // `QA_*.pdf` is a BUNDLE of one certificate per product - not the COA
+  // Summary the old reader expected - so every line staged with no lab and
+  // the activation gate held it. EVERY lab PDF on the email is now read
+  // certificate by certificate (coa-bundle-core), on BOTH staging paths,
+  // started here so it runs in parallel with the donor reads (300 s budget).
+  const coaRoleAtts = pdfCands.filter((att) => classifyAttachmentRole(att) === "coa");
+  const coaRoleLabels = uniqueDocLabels(coaRoleAtts.map((a) => a.filename));
+  const coaRoleReads: Promise<{ att: (typeof pdfCands)[number]; label: string; read: CoaBundleRead }[]> = Promise.all(
+    coaRoleAtts.map(async (att, i) => ({
+      att,
+      label: coaRoleLabels[i],
+      read: await readCoaBundleFromBase64(att.base64 as string, coaRoleLabels[i], llamaParseRecoverText),
+    })),
+  );
+  // An unknown-role PDF (no "QA"/"COA" in its name) that is not a manifest but
+  // whose own text reads as a lab certificate is a lab document too.
+  const certLikeAtts: (typeof pdfCands)[number][] = [];
   if (pdfCands.length > 0) {
     // R74 S51: read every non-COA PDF IN PARALLEL (LlamaParse polls up to 90 s
     // per file; four PDFs read one after another could outlive the webhook's
@@ -464,6 +496,10 @@ export async function stageManifestsFromEmail(
     );
     for (const { att, parsed, layer } of reads) {
       if (classifyAttachmentRole(att) === "coa") continue; // COAs never feed the miner (already filtered)
+      if (classifyAttachmentRole(att) === "unknown" && !parsed.ok && looksLikeCertificate(layer.text ?? "")) {
+        certLikeAtts.push(att); // Fix Phase 3.1a: a lab certificate under an unexpected filename
+        continue; // a lab report prints the LAB's details: never a transport / miner / invoice source
+      }
       // PR-2: text via LlamaParse (vision-OCR) - the PRIMARY reader.
       // R26: the PDF's OWN text layer (+ page-1 positions), read independently
       // of LlamaParse. It grounds vision values (a hallucinated value the
@@ -542,6 +578,65 @@ export async function stageManifestsFromEmail(
     invoiceDocs.push({ role: "email-body", label: "email body", text: email.bodyText });
   }
 
+  // Fix Phase 3.1a: settle the lab-document reads (all certificates, every lab PDF).
+  const certLikeLabels = uniqueDocLabels([...coaRoleLabels, ...certLikeAtts.map((a) => a.filename)]).slice(coaRoleLabels.length);
+  const labReads = [
+    ...(await coaRoleReads),
+    ...(await Promise.all(
+      certLikeAtts.map(async (att, i) => ({
+        att,
+        label: certLikeLabels[i],
+        read: await readCoaBundleFromBase64(att.base64 as string, certLikeLabels[i]),
+      })),
+    )),
+  ];
+  const coaCerts: CoaCertificate[] = labReads.flatMap((r) => r.read.certs);
+  const coaUnread = labReads.filter((r) => r.read.certs.length === 0).map((r) => ({ label: r.label, error: r.read.error }));
+  /** Fill EMPTY line labs from the certificates (never replaces one). */
+  const foldCoas = (m: ParsedManifest): { manifest: ParsedManifest; fold: CoaFoldResult | null } => {
+    if (coaCerts.length === 0) return { manifest: m, fold: null };
+    const fold = foldCoaBundle(m, coaCerts);
+    return { manifest: fold.manifest, fold };
+  };
+  /**
+   * After a manifest staged: say what the COA read did (email note + one
+   * delivery-timeline event; incomplete = attention tone) and file each lab
+   * PDF under the lab results read from IT. Never throws; never silent.
+   */
+  const reportCoas = async (manifestId: string, staged: ParsedManifest, fold: CoaFoldResult | null): Promise<void> => {
+    if (labReads.length === 0) return;
+    const sentences: string[] = [];
+    if (fold) {
+      sentences.push(
+        coaBundleNote({
+          docs: labReads.length - coaUnread.length,
+          certs: coaCerts,
+          lineCount: staged.lines.length,
+          plan: fold.plan,
+          lineLabel: (k) => staged.lines[Number(k)]?.product_name ?? `line ${Number(k) + 1}`,
+        }),
+      );
+    }
+    const unread = coaUnreadNote(coaUnread);
+    if (unread) sentences.push(unread);
+    const note = sentences.join(" ");
+    if (note) {
+      result.notes.push(note);
+      await logManifestEvent(manifestId, coaAttachEventType(fold?.plan ?? null, coaUnread.length), note, actorId);
+    }
+    if (fold) {
+      for (const r of labReads) {
+        const ids = fold.labIdsByDoc[r.label] ?? [];
+        if (ids.length === 0) continue;
+        try {
+          await archiveEmailedCoaForManifest(manifestId, r.att.base64 as string, ids);
+        } catch (err) {
+          console.warn("[inbound-email] emailed COA archive skipped:", err);
+        }
+      }
+    }
+  };
+
   // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
   //    verifiable manifests stage; junk (tracking exports, receipts, random
   //    JSON) is skipped WITHOUT counting as a failure — it's logged on the
@@ -559,6 +654,10 @@ export async function stageManifestsFromEmail(
     // invoice), fill-only-empty — no longer just the first match.
     const donor = mergeMatchingDonors(manifest.manifest_number, pdfDonors);
     if (donor) manifest = foldTransport(manifest, donor);
+    // Fix Phase 3.1a: lines the JSON left without a lab take the emailed
+    // certificate that names them (lab id first, then a flagged name match).
+    const jsonCoa = foldCoas(manifest);
+    manifest = jsonCoa.manifest;
     // Keep the original text as raw payload for provenance in the KB snapshot.
     const rawPayload =
       att.text && att.contentType && att.contentType.toLowerCase().includes("json")
@@ -585,6 +684,7 @@ export async function stageManifestsFromEmail(
       } catch (err) {
         console.warn("[inbound-email] document archive skipped:", err);
       }
+      await reportCoas(staged.manifestId, manifest, jsonCoa.fold); // Fix Phase 3.1a
       // SLICE 102: gap-fill the vendor profile from the email's own documents
       // (fill-only-empty; audited on the manifest timeline; never throws).
       await enrichVendorFromIntakeDocs(staged.manifestId, minerSources, email.from, actorId);
@@ -709,18 +809,26 @@ export async function stageManifestsFromEmail(
       // (c) read + merge the COA PDF (no longer skipped). Keep the raw bytes so
       //     we can ARCHIVE the certificate itself after staging (H16b-2) — a
       //     bundled COA has no coa_url, so archiveCoasForManifest can't fetch it.
-      const coaAtt = rankedPdfs.find((a) => classifyAttachmentRole(a) === "coa");
-      let coaArchiveBase64: string | null = null;
-      if (coaAtt) {
+      // Fix Phase 3.1a: the COA SUMMARY reader (exact Lot ID) stays the first
+      // try, now for EVERY lab PDF (it used to read only the first); a
+      // document it cannot read falls through to the per-certificate fold
+      // below instead of a console-only warning.
+      const summaryArchives: { base64: string; ids: string[] }[] = [];
+      for (const coaAtt of rankedPdfs.filter((a) => classifyAttachmentRole(a) === "coa")) {
         const coaRes = await parseCoaFromBase64(coaAtt.base64 as string, llamaParseRecoverText);
         if (coaRes.ok) {
           const cm = mergeCoaByLot(merged, coaRes.coa.byLot, coaRes.coa.expiresByLot);
           merged = cm.manifest;
-          coaArchiveBase64 = coaAtt.base64 as string;
-        } else {
-          console.warn("[inbound-email] COA parse (for merge) skipped:", coaRes.error);
+          summaryArchives.push({
+            base64: coaAtt.base64 as string,
+            ids: Object.values(coaRes.coa.byLot)
+              .map((l) => l.labtest_external_identifier)
+              .filter((x): x is string => Boolean(x)),
+          });
         }
       }
+      const pdfCoa = foldCoas(merged);
+      merged = pdfCoa.manifest;
 
       // H18: fold any sibling document's transport (e.g. the Cultivera
       // invoice's driver / plate / vehicle) onto the primary manifest too —
@@ -752,13 +860,16 @@ export async function stageManifestsFromEmail(
         }
         // H16b-2: retain the emailed COA PDF (bytes → private `coa` bucket)
         // linked to the manifest's lab rows. Best-effort — never fail staging.
-        if (coaArchiveBase64) {
+        // Fix Phase 3.1a: one lab PDF keeps the old behaviour (every
+        // emailed-only lab row); several are each filed under their own ids.
+        for (const s of summaryArchives) {
           try {
-            await archiveEmailedCoaForManifest(staged.manifestId, coaArchiveBase64);
+            await archiveEmailedCoaForManifest(staged.manifestId, s.base64, labReads.length > 1 ? s.ids : undefined);
           } catch (err) {
             console.warn("[inbound-email] emailed COA archive skipped:", err);
           }
         }
+        await reportCoas(staged.manifestId, merged, pdfCoa.fold);
         // SLICE 102: gap-fill the vendor profile from the email's documents
         // (fill-only-empty; audited on the manifest timeline; never throws).
         await enrichVendorFromIntakeDocs(staged.manifestId, minerSources, email.from, actorId);

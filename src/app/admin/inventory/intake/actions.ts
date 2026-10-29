@@ -1330,3 +1330,118 @@ export async function forgetMergeDecisionAction(formData: FormData) {
   if (code === "error" && message) extra.merge_msg = message.slice(0, 300);
   redirect(matchPageHref(manifestId, identity, extra, back));
 }
+
+/**
+ * Fix Phase 3.1a - "Re-read COAs from this delivery's documents". Reads every
+ * certificate in the delivery's ARCHIVED lab PDFs (the settled copy, same
+ * reasoning as reExtractManifestAiAction) with the per-certificate reader,
+ * matches each line WITHOUT a lab result (lab id first, then a unique
+ * product-name match that the line then shows as "matched by name - verify"),
+ * and fills only EMPTY lab results (guarded link; never replaces one, never a
+ * destroyed lot). Ambiguous and unmatched lines are named, never guessed.
+ * Manager permission (inventory.manage); audited; one timeline event.
+ */
+export async function rereadDeliveryCoasAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+  const base = `/admin/inventory/intake/${manifestId}`;
+  const { getManifestById } = await import("@/lib/inventory/store");
+  const manifest = await getManifestById(manifestId);
+  if (!manifest) redirect(`${base}?coa=error&coamsg=${encodeURIComponent("That delivery could not be loaded.")}`);
+
+  const { readDeliveryCoas, attachCertificateToLot } = await import("@/lib/inventory/coa-delivery-store");
+  const { listManifestLots, listLotVendorIds } = await import("@/lib/inventory/intake-store");
+  const core = await import("@/lib/inventory/coa-bundle-core");
+
+  const read = await readDeliveryCoas(manifestId, { recover: true });
+  if (read.certs.length === 0) {
+    const why = core.coaUnreadNote(read.unread) ?? "No lab (COA) documents are on file for this delivery.";
+    await logManifestEvent(manifestId, "coa_reread", why, session.userId);
+    revalidatePath(base);
+    redirect(`${base}?coa=nodocs&coamsg=${encodeURIComponent(why.slice(0, 400))}#manifest-lines`);
+  }
+
+  const lots = await listManifestLots(manifestId);
+  const vendorIdMap = await listLotVendorIds(manifestId);
+  const vendorIds = new Map<string, string | null>();
+  for (const [k, v] of vendorIdMap ?? new Map()) vendorIds.set(k, v.vendorId);
+  const plan = core.planCoaBundle(read.certs, core.lotsForMatch(lots, vendorIds));
+  const certByKey = new Map(read.certs.map((c) => [c.key, c]));
+  let linked = 0;
+  let changed = 0;
+  const errors: string[] = [];
+  for (const m of plan.matches) {
+    const cert = certByKey.get(m.certKey);
+    if (!cert) continue;
+    const res = await attachCertificateToLot(manifestId, m.lineKey, cert, m.by, m.evidence, session.userId, read.docs.get(cert.docLabel) ?? null);
+    if (!res.ok) {
+      if (errors.length < 3) errors.push(res.error);
+      continue;
+    }
+    if (res.linked) linked += 1;
+    else changed += 1;
+  }
+  const nameOf = (lotId: string) => lots.find((l) => l.id === lotId)?.product_name ?? "a line";
+  const note =
+    core.coaBundleNote({ docs: read.docs.size - read.unread.length, certs: read.certs, lineCount: lots.length, plan, lineLabel: nameOf }) +
+    (changed > 0 ? ` ${changed} line(s) changed while reading (already had a lab result) - left as they were.` : "") +
+    (errors.length > 0 ? ` Not saved: ${errors.join("; ")}.` : "") +
+    (read.unread.length > 0 ? ` ${core.coaUnreadNote(read.unread)}` : "");
+  await logManifestEvent(manifestId, "coa_reread", note, session.userId);
+  const { recordAudit } = await import("@/lib/auth/audit");
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "manifest.coa_reread",
+    entityType: "inbound_manifest",
+    entityId: manifestId,
+    before: { linesWithoutLab: lots.filter((l) => !l.lab_result_id).length },
+    after: { linked, byName: plan.matches.filter((x) => x.by === "name").length, unmatched: plan.unmatchedLines.length, ambiguous: plan.ambiguous.length, note },
+  });
+  revalidatePath(base);
+  revalidatePath("/admin/inventory/intake");
+  redirect(`${base}?coa=reread&coamsg=${encodeURIComponent(note.slice(0, 600))}#manifest-lines`);
+}
+
+/**
+ * Fix Phase 3.1a - attach ONE certificate (read from this delivery's lab
+ * documents) to ONE line, by hand. The form carries the certificate key AND
+ * the lab test id that was on screen; a mismatch (the documents read
+ * differently now) is refused, never a different certificate. Fills an
+ * EMPTY lab result only. Audited as inventory_lot.coa_linked (the lot page's
+ * action name) + a delivery timeline event.
+ */
+export async function attachDeliveryCoaAction(manifestId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const base = `/admin/inventory/intake/${manifestId}`;
+  const lotId = String(formData.get("lotId") ?? "").trim();
+  const choice = String(formData.get("cert") ?? "").trim();
+  const sep = choice.lastIndexOf("|");
+  const certKey = sep > 0 ? choice.slice(0, sep) : "";
+  const shownId = sep > 0 ? choice.slice(sep + 1) : "";
+  const fail = (msg: string): never => redirect(`${base}?coa=error&coamsg=${encodeURIComponent(msg.slice(0, 400))}#manifest-lines`);
+  if (!lotId || !certKey || !shownId) fail("Choose a certificate for the line first.");
+
+  const { readDeliveryCoas, attachCertificateToLot } = await import("@/lib/inventory/coa-delivery-store");
+  const { pickCertificate } = await import("@/lib/inventory/coa-bundle-core");
+  const read = await readDeliveryCoas(manifestId);
+  const pick = pickCertificate(read.certs, certKey, shownId);
+  if (!pick.ok) return fail(pick.reason);
+  const res = await attachCertificateToLot(manifestId, lotId, pick.cert, "manual", "chosen by hand on the receiving page", session.userId, read.docs.get(pick.cert.docLabel) ?? null);
+  if (!res.ok) return fail(res.error);
+  if (!res.linked) return fail("That line already has a lab result (or changed meanwhile); nothing was replaced.");
+
+  const label = `${shownId}${pick.cert.sampleName ? ` ("${pick.cert.sampleName}")` : ""}`;
+  await logManifestEvent(manifestId, "coa_linked_by_hand", `Lab result ${label} attached by hand to one line.`, session.userId);
+  const { recordAudit } = await import("@/lib/auth/audit");
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.coa_linked",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { lab_result_id: null },
+    after: { lab_result_id: res.labId, labtest_external_identifier: shownId, reused: res.reused, via: "receiving page (emailed certificate)", changes: [`Attached lab result ${shownId}`] },
+  });
+  revalidatePath(base);
+  redirect(`${base}?coa=linked&coamsg=${encodeURIComponent(`Attached ${label}.`)}#manifest-lines`);
+}

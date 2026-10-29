@@ -19,6 +19,9 @@
  *                                 in_transit/received (lifecycle), transport,
  *                                 invoice_number_override,
  *                                 invoice_number_detected (R26)
+ *   inbound-store.ts              coa_attach / coa_attach_incomplete (Fix
+ *                                 Phase 3.1a; named constants in coa-bundle-core)
+ *   intake/actions.ts             coa_reread, coa_linked_by_hand (Fix Phase 3.1a)
  *   import-service.ts             accepted (Cultivera migration)
  *   po-link-store.ts              po_link
  *   kb-link-store.ts              kb_link
@@ -65,6 +68,11 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   dismissed_duplicate: { label: "Dismissed as a duplicate row", group: "delivery", problem: false },
   duplicate_merged: { label: "Duplicate row dismissed \u00b7 its facts kept here", group: "delivery", problem: false },
   note: { label: "Note", group: "delivery", problem: false },
+  // Fix Phase 3.1a: emailed lab certificates attached to the delivery's lines.
+  coa_attach: { label: "Lab results attached from the emailed COAs", group: "delivery", problem: false },
+  coa_attach_incomplete: { label: "Lab results \u00b7 some lines still need a COA (or a name match to verify)", group: "delivery", problem: true },
+  coa_reread: { label: "COAs re-read from this delivery\u2019s documents", group: "delivery", problem: false },
+  coa_linked_by_hand: { label: "Lab result attached by hand", group: "delivery", problem: false },
   // Menu
   draft_seed_error: { label: "Onboarding drafts failed", group: "menu", problem: true },
   menu_auto_carry: { label: "Menu update", group: "menu", problem: false },
@@ -297,7 +305,9 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   // R26 pin update (on purpose): +invoice_number_detected (migration 0245 writer).
   // R27 pin update (on purpose): +menu_published_some_withheld (intake-menu-staging writer).
   // R36 pin update (on purpose): +dismissed_duplicate, +duplicate_merged (0255 SQL writer).
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 37, "37 known types (R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows)");
+  // Fix Phase 3.1a pin update (on purpose): +coa_attach, +coa_attach_incomplete, +coa_reread, +coa_linked_by_hand.
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 41, "41 known types (R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows; Fix 3.1a adds the four COA rows)");
+  ok(labelForEvent("coa_attach_incomplete").problem && !labelForEvent("coa_attach").problem && labelForEvent("coa_attach").group === "delivery", "Fix 3.1a COA attach: incomplete is a delivery problem, complete is not");
   ok(isKnownEventType("dismissed_duplicate") && isKnownEventType("duplicate_merged") && !labelForEvent("dismissed_duplicate").problem, "R36 dismiss events are known, non-problem delivery labels");
   ok(labelForEvent("menu_published_some_withheld").group === "menu" && labelForEvent("menu_published_some_withheld").problem, "R27 withheld publish is a menu problem (products still need facts)");
   ok(isKnownEventType("invoice_number_detected") && labelForEvent("invoice_number_detected").label === "Invoice # found in the documents" && labelForEvent("invoice_number_detected").group === "delivery" && !labelForEvent("invoice_number_detected").problem, "R26 invoice # found is a known delivery, non-problem label");

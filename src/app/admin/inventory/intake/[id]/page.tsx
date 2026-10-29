@@ -73,7 +73,11 @@ import {
   linkManifestPoAction,
   reExtractManifestAiAction,
   dismissDuplicateManifestAction,
+  rereadDeliveryCoasAction,
+  attachDeliveryCoaAction,
 } from "../actions";
+import { readDeliveryCoas, listLabProvenanceByIds } from "@/lib/inventory/coa-delivery-store";
+import { choosableCertificates, coaCellText, labProvenance } from "@/lib/inventory/coa-bundle-core";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
 function toLocalInput(iso: string | null): string {
@@ -136,6 +140,9 @@ export default async function ManifestReviewPage({
     dismisserr?: string;
     /** R6-2: vendor inventory id save result (saved | invalid | error). */
     vendorid?: string;
+    /** Fix Phase 3.1a: COA re-read / attach-by-hand result (reread | linked | nodocs | error) + its sentence. */
+    coa?: string;
+    coamsg?: string;
   }>;
 }) {
   // S29: the session is kept so owner-only books links render only for a
@@ -172,6 +179,8 @@ export default async function ManifestReviewPage({
     dismissed,
     dismisserr,
     vendorid,
+    coa,
+    coamsg,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -299,6 +308,18 @@ export default async function ManifestReviewPage({
 
   const withCoa = lots.filter((l) => l.lab_result_id).length;
   const missingCoa = lots.length - withCoa;
+  // Fix Phase 3.1a: where each line's lab result came from (a name match
+  // says "verify"), and - while receiving is open and a line still has no
+  // lab result - the certificates in this delivery's own lab documents, so a
+  // line can be attached by hand right here (no more dead end before Accept).
+  const labProv = await listLabProvenanceByIds(
+    lots.map((l) => l.lab_result_id).filter((v): v is string => Boolean(v)),
+  );
+  const deliveryCoas =
+    inProgress && missingCoa > 0 ? await readDeliveryCoas(id) : { certs: [], docs: new Map<string, string>(), unread: [] };
+  const certChoices = choosableCertificates(deliveryCoas.certs);
+  const rereadCoasAction = rereadDeliveryCoasAction.bind(null, id);
+  const attachCoaAction = attachDeliveryCoaAction.bind(null, id);
   const sampleCount = lots.filter((l) => l.is_sample).length;
   // SLICE 101 — any line already marked refused makes this a PARTIAL finalize,
   // so the why-partial note field becomes required up front (the server also
@@ -650,6 +671,22 @@ export default async function ManifestReviewPage({
             Archived {archived} COA PDF{archived === "1" ? "" : "s"} to our records.
           </div>
         )}
+        {/* Fix Phase 3.1a: the COA re-read / attach result, in words. */}
+        {coa && (
+          <div
+            data-coa-result={coa}
+            className={
+              coa === "error" || coa === "nodocs"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            <strong>
+              {coa === "reread" ? "COAs re-read." : coa === "linked" ? "Lab result attached." : coa === "nodocs" ? "No COA could be read." : "Lab result not attached."}
+            </strong>{" "}
+            {coamsg ?? ""}
+          </div>
+        )}
         {transport && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Transport details saved to the chain-of-custody record.
@@ -932,6 +969,30 @@ export default async function ManifestReviewPage({
         {/* S28: "N lines have no COA" is an Issues row while receiving is open
             (Review the lines → #manifest-lines), not a banner. */}
 
+        {/* Fix Phase 3.1a: re-read the delivery's own lab PDFs (every certificate).
+            A neutral tool row, not a coloured banner (S28: the standing problem
+            is the Issues row "N lines have no COA / lab result"). */}
+        {inProgress && missingCoa > 0 && (
+          <div
+            data-testid="coa-reread"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-2 text-sm text-[var(--admin-text)]"
+          >
+            <span>
+              {missingCoa} line{missingCoa === 1 ? " has" : "s have"} no lab result yet.{" "}
+              {deliveryCoas.certs.length > 0
+                ? `${certChoices.length} certificate${certChoices.length === 1 ? "" : "s"} can be read from this delivery's lab documents - attach one per line below, or re-read to match them automatically.`
+                : deliveryCoas.unread.length > 0
+                  ? "This delivery's lab document could not be read as it is - re-read uses the document reader too."
+                  : "No lab (COA) document is on file for this delivery - attach a lab result from the lot page by its lab test id."}
+            </span>
+            <form action={rereadCoasAction}>
+              <button type="submit" className="font-semibold text-[var(--admin-accent)] underline hover:brightness-110">
+                Re-read COAs from this delivery&apos;s documents
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* Parsed lines */}
         <div id="manifest-lines" className="scroll-mt-24 overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-sm">
@@ -1079,7 +1140,41 @@ export default async function ManifestReviewPage({
                   </td>
                   <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtQty(l.received_qty, l.unit)}</td>
                   <td className="px-4 py-3 text-center">
-                    {l.lab_result_id ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
+                    {l.lab_result_id ? (
+                      (() => {
+                        // Fix Phase 3.1a: a certificate matched by product name says "verify".
+                        const p = labProv.get(l.lab_result_id);
+                        const cell = coaCellText(p ? labProvenance(p.source, p.raw) : null);
+                        return (
+                          <span
+                            data-coa-cell={cell.verify ? "verify" : "ok"}
+                            className={cell.verify ? "text-xs font-semibold text-[var(--admin-gold)]" : undefined}
+                            title={p ? labProvenance(p.source, p.raw).sampleName ?? undefined : undefined}
+                          >
+                            {cell.text}
+                          </span>
+                        );
+                      })()
+                    ) : inProgress && certChoices.length > 0 && l.status !== "destroyed" ? (
+                      <form action={attachCoaAction} data-coa-attach={l.id} className="flex flex-col items-center gap-1">
+                        <input type="hidden" name="lotId" value={l.id} />
+                        <select name="cert" required defaultValue="" className="max-w-[16rem] rounded border border-[var(--admin-border)] bg-[var(--admin-surface)] px-1 py-0.5 text-[11px]">
+                          <option value="" disabled>
+                            Choose its certificate…
+                          </option>
+                          {certChoices.map((c) => (
+                            <option key={c.key} value={`${c.key}|${c.labtestId}`}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className="text-[11px] font-semibold text-[var(--admin-accent)] underline hover:brightness-110">
+                          Attach lab result
+                        </button>
+                      </form>
+                    ) : (
+                      <span className="text-[var(--admin-orange)]">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {l.pos_product_key ? "🔗" : <span className="text-[var(--admin-text-faint)]">—</span>}

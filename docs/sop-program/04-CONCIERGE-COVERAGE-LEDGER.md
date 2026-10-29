@@ -347,6 +347,16 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, `end-of-day`, `receiving`, `product-intake` (receiving and onboarding portion), plus the SOP-01 proposed topics. `deposit-bag` and `ccrs-records-request` are paper-reminder only. The concierge itself is still at the baseline until the integration phase. Baseline rows touched: Receiving intake 🟡 and CCRS 🟡 (§3), both unchanged in code.
 
+**Fix Phase 3.1a update to the SOP-04 rows (G-60 BUILT; owner message 6).** `concierge-kb.ts` `product-intake` gains two facts (emailed COAs attach; the COA column, Re-read COAs, Attach lab result), grounded on SOP-04 v1.4 §4.4, §4.6, §4.15, §5.2. The superseded answer *"A line with no COA (—) before the truck: ask the vendor to send it now"* (SOP-04 v1.3 §4.15) is now the **last** step, after the automatic attach, **Re-read COAs** and **Attach lab result**. The old record that the review screen has *"no cost or COA input"* (F-04-10) is now true for cost only.
+
+| Question | Answer (SOP-04 v1.4) |
+|---|---|
+| Why does a line say "matched by name — verify"? | The certificate was matched by the product name only. Open it and check the sample name and lot before Finalize (§4.6 step 6) |
+| The vendor emailed COAs but lines still show no lab result | Press **Re-read COAs from this delivery's documents**; attach the rest with **Choose its certificate… / Attach lab result** (manager) (§4.15) |
+| Will it ever overwrite a lab result? | No. A line that has one is never changed; a pick made on an out-of-date page is refused (§4.15) |
+| Where do I see what happened with the COAs? | The delivery timeline: *"Lab results attached from the emailed COAs"* or *"Lab results · some lines still need a COA (or a name match to verify)"*, and the email's result sentence (§4.4) |
+| The COA PDF could not be read | The note names it. Ask the vendor for a text PDF; attach on the lot page by lab test id once imported (§5.2) |
+
 **SOP-05a update to the SOP-04 row (owner answers D29–D34).**
 - **New facts for `receiving`:** a second count is strongly recommended and expected on a vendor's first delivery (D31). Short lines are still refused whole until G-16 is built (D29, now serious).
 - **New facts for `ccrs-records-request`:**
