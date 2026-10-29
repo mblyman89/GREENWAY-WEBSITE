@@ -280,7 +280,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. The timeline and partial note record shipped / counted / refused.
   5. Tests for "18 of 20", overage refusal, and zero counted (= refuse).
   6. Manager-only, like the rest of Receiving (D30).
-- **Status: BUILT (Phase 3.1, #P..; owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*).** Each requirement:
+- **Status: BUILT (Phase 3.1, #1558; owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*).** Each requirement:
   1. **Count short** on the line: **Counted at the dock (manifest: N)** and a reason for the rest (the dock reasons less Overage; **Other** needs text) (`ManifestLotDisposition.tsx` L71–141; `intake-count-core.ts` L50–72). Stored as `received_qty` = counted, `shipped_qty` = manifest, `short_reason_code` / `short_reason`, `counted_by` / `counted_at` (migration `0319_intake_counted_short.sql`, check `received_qty < shipped_qty`; rollback file shipped).
   2. Finalize activates at the count: the `receive` adjustment is +counted with the note *"Accepted from vendor manifest intake at the dock count: 18 of 20 shipped (Fix Phase 3.1)."* (`intake-store.ts` L1808; `intake-count-core.ts` L255–258).
   3. Every reader of `received_qty` follows: InventoryTransfer Quantity (`ccrs-transfer-core.ts` rule 3; `ccrs-batch.ts` L312), Inventory.csv, the goods receipt, the vendor bill (`vendor-bill-service.ts` L237), the PO and the sample count. The vendor Updates their CCRS manifest to the count (SOP-04 §4.11 step 5).
