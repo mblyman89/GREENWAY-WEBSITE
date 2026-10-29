@@ -466,3 +466,29 @@ describe("pages and route (source)", () => {
     expect(eod).toMatch(/\/safe\/sheet\?day=\$\{businessDay\}/);
   });
 });
+
+describe("Fix Phase 2.7a: living SOP and ledgers (D41)", () => {
+  const SOP2 = read("docs/sop/SOP-02-master-till-safe.md");
+  it("SOP-02 is v1.6 or later and describes the built screens", () => {
+    expect(SOP2).toMatch(/\| \*\*Version\*\* \| 1\.([6-9]|\d\d) /);
+    expect(SOP2).toMatch(/\| 1\.6 draft \| Fix phase \| Phase 2\.7a/);
+    expect(SOP2).toMatch(/Counted by: your PIN \(required\)/);
+    expect(SOP2).toMatch(/### 4\.18 Printing and exporting\n/);
+    expect(SOP2).toMatch(/~~D11: master till standard mix checked~~ \| \*\*BUILT, Phase 2\.7a\*\*/);
+    expect(SOP2).not.toMatch(/The page checks the total only\./);
+    expect(SOP2).not.toMatch(/The selector starts on \*\*AM\*\*\. Change it every time\./);
+  });
+  it("ledgers mark G-08, G-09, G-13 BUILT and the findings FIXED; the KB knows the PIN count", () => {
+    const gaps = read("docs/sop-program/05-GAP-REGISTER.md");
+    for (const g of ["G-08", "G-09", "G-13"]) expect(gaps).toMatch(new RegExp(`\\| ${g} \\|[^\\n]*\\*\\*BUILT\\*\\* \\(Phase 2\\.7a`));
+    const f = read("docs/sop-program/03-FINDINGS-LEDGER.md");
+    expect(f).toMatch(/Status: FIXED \(Phase 2\.7a, G-08/);
+    expect(f).toMatch(/Status: FIXED \(Phase 2\.7a, G-13/);
+    expect(f).toMatch(/Status: FIXED \(Phase 2\.7a, G-09/);
+    expect(f).toMatch(/Status: safe part FIXED \(Phase 2\.7a, G-09/);
+    expect(read("docs/sop-program/06-FIX-PHASE-PLAN.md")).toMatch(/\| 2\.7a \| G-08 mix standard/);
+    const kb = read("src/lib/admin/concierge-kb.ts");
+    expect(kb).toMatch(/Master till count \(Phase 2\.7a, G-08, G-09, G-13/);
+    expect(kb).not.toMatch(/The master till count also needs Counted by \(the employee who counted\)/);
+  });
+});
