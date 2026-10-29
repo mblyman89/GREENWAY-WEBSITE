@@ -2992,7 +2992,7 @@ in Vercel.
   "same transfer" guard also accepts a sibling: the same vendor and the same
   invoice # with a shared lot, or the same vendor and the identical set of 2+
   lots with identical quantities. Every other guard (accepted row, stock in
-  hand, inventory history, vendor payment) is unchanged. (#P..)
+  hand, inventory history, vendor payment) is unchanged. (#1561)
   - Owner, verbatim: *"i think it would be worth adding a button to dismiss
     duplicate manifests that somehow make it to the table. we should have
     logic in place to prevent this, so it may need hardening."*
