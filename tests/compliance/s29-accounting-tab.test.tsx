@@ -129,7 +129,9 @@ describe("1. manifest-event-labels-core self-tests", () => {
     // coa_attach / coa_attach_incomplete labels (emailed COA bundle attach).
     // Fix Phase 3.1 pin update (on purpose): 64 -> 65 - one assertion for the
     // count_short / count_short_cleared labels (dock count "18 of 20").
-    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 65, failed: 0 });
+    // Fix Phase 3.2b pin update (on purpose): 65 -> 66 - one assertion for the
+    // lot_insert_failed label (a line that did not save at staging, F-04-11).
+    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 66, failed: 0 });
   });
   it("is registered in run-pure-selftests (import AND run)", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
@@ -209,6 +211,8 @@ describe("2. every event a writer logs has a human label (bible S29.5)", () => {
       // Fix Phase 3.1: intake-store logs these two named constants (dock count).
       constant("src/lib/inventory/intake-count-core.ts", "COUNT_SHORT_EVENT"),
       constant("src/lib/inventory/intake-count-core.ts", "COUNT_SHORT_CLEARED_EVENT"),
+      // Fix Phase 3.2b: intake-store logs this named constant (a line did not save).
+      constant("src/lib/inventory/intake-staging-core.ts", "LOT_INSERT_FAILED_EVENT"),
     ];
     for (const n of names) expect(isKnownEventType(n), n).toBe(true);
   });

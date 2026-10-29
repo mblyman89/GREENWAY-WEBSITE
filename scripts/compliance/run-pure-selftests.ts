@@ -51,6 +51,7 @@ import { __runInventoryMetricsTests } from "../../src/lib/inventory/inventory-me
 import { __runInventoryTableCoreTests } from "../../src/lib/inventory/inventory-table-core";
 // R31: the one finalize button + the "should I press Run AI extract?" advice.
 import { __runFinalizeLabelCoreTests } from "../../src/lib/inventory/finalize-label-core";
+import { __runIntakeStagingCoreTests } from "../../src/lib/inventory/intake-staging-core";
 import { __runAiExtractAdviceCoreTests } from "../../src/lib/inventory/ai-extract-advice-core";
 import { __runLineIdentityChipCoreTests } from "../../src/lib/inventory/line-identity-chip-core";
 import { __runLiquidVolumeTests } from "../../src/lib/compliance/liquid-volume-core";
@@ -2465,7 +2466,8 @@ __runLiquidVolumeTests();
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
-  assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 31); // R31: Accept All & Finalize / Accept x · Reject y
+  assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 37); // R31: Accept All & Finalize / Accept x · Reject y. Fix 3.2b pin update (on purpose): +6 (undecided sentence, missing lines).
+  assertRan("intake-staging-core", __runIntakeStagingCoreTests(), 29); // Fix 3.2b (F-04-11, F-04-3): lines that did not save at staging
   assertRan("ai-extract-advice-core", __runAiExtractAdviceCoreTests(), 26); // R31: press / don't press, from what PDFs
   assertRan("line-identity-chip-core", __runLineIdentityChipCoreTests(), 22); // R31: identity-keyed line chip replaces the strain-name KB guesser
   assertRan("price-explain-core", __runPriceExplainCoreTests(), 66); // R32: 2x cost + tax, rounded up — explained, dynamic

@@ -24,6 +24,8 @@
  *   intake/actions.ts             coa_reread, coa_linked_by_hand (Fix Phase 3.1a)
  *   intake-store.ts               count_short / count_short_cleared (Fix Phase
  *                                 3.1; named constants in intake-count-core)
+ *   intake-store.ts               lot_insert_failed (Fix Phase 3.2b, F-04-11;
+ *                                 named constant in intake-staging-core)
  *   import-service.ts             accepted (Cultivera migration)
  *   po-link-store.ts              po_link
  *   kb-link-store.ts              kb_link
@@ -78,6 +80,8 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   // Fix Phase 3.1 (G-16): a line counted short at the dock ("18 of 20"); named constants in intake-count-core.
   count_short: { label: "Counted short at the dock (the rest refused)", group: "delivery", problem: false },
   count_short_cleared: { label: "Short count removed", group: "delivery", problem: false },
+  // Fix Phase 3.2b (F-04-11): a line of the vendor's manifest did not save at staging (intake-staging-core).
+  lot_insert_failed: { label: "Staging \u00b7 line(s) did not save (not on this screen; decide before Finalize)", group: "delivery", problem: true },
   // Menu
   draft_seed_error: { label: "Onboarding drafts failed", group: "menu", problem: true },
   menu_auto_carry: { label: "Menu update", group: "menu", problem: false },
@@ -312,7 +316,9 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   // R36 pin update (on purpose): +dismissed_duplicate, +duplicate_merged (0255 SQL writer).
   // Fix Phase 3.1a pin update (on purpose): +coa_attach, +coa_attach_incomplete, +coa_reread, +coa_linked_by_hand.
   // Fix Phase 3.1 pin update (on purpose): +count_short, +count_short_cleared.
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 43, "43 known types (R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows; Fix 3.1a adds the four COA rows; Fix 3.1 adds the two dock-count rows)");
+  // Fix Phase 3.2b pin update (on purpose): +lot_insert_failed.
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 44, "44 known types (R36 adds dismissed_duplicate + duplicate_merged; R50 S2a adds the two migration-stock rows; Fix 3.1a adds the four COA rows; Fix 3.1 adds the two dock-count rows; Fix 3.2b adds lot_insert_failed)");
+  ok(labelForEvent("lot_insert_failed").problem && labelForEvent("lot_insert_failed").group === "delivery", "Fix 3.2b: a line that did not save is a delivery problem");
   ok(isKnownEventType("count_short") && isKnownEventType("count_short_cleared") && !labelForEvent("count_short").problem && labelForEvent("count_short").group === "delivery", "Fix 3.1 dock count: known delivery labels, not problems");
   ok(labelForEvent("coa_attach_incomplete").problem && !labelForEvent("coa_attach").problem && labelForEvent("coa_attach").group === "delivery", "Fix 3.1a COA attach: incomplete is a delivery problem, complete is not");
   ok(isKnownEventType("dismissed_duplicate") && isKnownEventType("duplicate_merged") && !labelForEvent("dismissed_duplicate").problem, "R36 dismiss events are known, non-problem delivery labels");

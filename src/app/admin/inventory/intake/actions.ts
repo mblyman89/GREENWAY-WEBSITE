@@ -22,6 +22,7 @@ import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
 import { isMigrationStockResult, receiptEventFor } from "@/lib/inventory/manifest-event-labels-core";
 import { shouldMarkArrivedOnFinalize } from "@/lib/inventory/finalize-label-core";
+import { MISSING_LINES_REFUSAL } from "@/lib/inventory/intake-staging-core";
 import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
@@ -777,12 +778,14 @@ export async function importManifestBatchAction(
       results.push({ url, status: "save_failed", detail: staged.error, manifestId: null });
       continue;
     }
+    // Fix Phase 3.2b (F-04-11): say a line that did not save, here too.
+    const missing = staged.lineFailures ? ` ${staged.lineFailures.count} line(s) did not save; open it before finalizing.` : "";
     results.push({
       url,
       status: "staged",
       detail: parsed.manifest.manifest_number
-        ? `Staged ${parsed.manifest.manifest_number} (${parsed.manifest.lines.length} lines).`
-        : `Staged (${parsed.manifest.lines.length} lines).`,
+        ? `Staged ${parsed.manifest.manifest_number} (${parsed.manifest.lines.length} lines).${missing}`
+        : `Staged (${parsed.manifest.lines.length} lines).${missing}`,
       manifestId: staged.manifestId,
     });
   }
@@ -974,7 +977,10 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
   // BEFORE the line decisions run, exactly as if the button had been pressed.
   // Never blocks the finalize; see markArrivedOnFinalize below.
   await markArrivedOnFinalize(manifestId, session.userId);
-  const result = await finalizeManifestDispositions(manifestId, session.userId, { partialNote });
+  // Fix Phase 3.2b (F-04-11): the "missing lines go back with the driver"
+  // tick, shown only when lines did not save at staging.
+  const missingLinesConfirmed = formData?.get("missing_lines_confirmed") === "1";
+  const result = await finalizeManifestDispositions(manifestId, session.userId, { partialNote, missingLinesConfirmed });
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
   revalidatePath("/admin/inventory/intake");
   revalidatePath("/admin/inventory");
@@ -992,6 +998,11 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
     // reviewer types the note and finalizes again; nothing was touched).
     if (/note explaining why is required/i.test(result.error)) {
       redirect(`/admin/inventory/intake/${manifestId}?error=partial_note`);
+    }
+    // Fix Phase 3.2b (F-04-11): lines that did not save at staging and were
+    // not confirmed as going back. Nothing was touched.
+    if (result.error.includes(MISSING_LINES_REFUSAL)) {
+      redirect(`/admin/inventory/intake/${manifestId}?error=missing_lines`);
     }
     redirect(`/admin/inventory/intake/${manifestId}?error=finalize`);
   }

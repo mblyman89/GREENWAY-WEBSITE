@@ -47,6 +47,8 @@ export type FinalizePlan = {
   undecided: number;
   /** Fix Phase 3.1: accepted lines counted short at the dock (subset of accept). */
   short: number;
+  /** Fix Phase 3.2b (F-04-11): manifest lines that did not save at staging (not on the screen). */
+  missing: number;
   /** The button text. */
   label: string;
   /** One plain sentence for the sticky bar. */
@@ -61,7 +63,17 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
+export function planFinalize(
+  lines: FinalizeLineFacts[],
+  /**
+   * Fix Phase 3.2b (F-04-11): lines from the vendor's manifest that did not
+   * save at staging (intake-staging-core openStagingFailures). They go back
+   * with the driver, so the finalize is partial, the same rule as the server.
+   */
+  opts?: { missingLines?: number },
+): FinalizePlan {
+  const missingIn = opts?.missingLines;
+  const missing = typeof missingIn === "number" && Number.isSafeInteger(missingIn) && missingIn > 0 ? missingIn : 0;
   const total = lines.length;
   let reject = 0;
   let undecided = 0;
@@ -82,7 +94,7 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
   const accept = total - reject;
   const willActivate = accept - held;
   const noteRequired =
-    total > 0 && statusWithShortLines(deriveManifestStatus(willActivate, reject, held), short) === "partially_accepted";
+    total > 0 && statusWithShortLines(deriveManifestStatus(willActivate, reject, held), short + missing) === "partially_accepted";
 
   let label: string;
   if (total === 0) label = "Finalize (no lines)";
@@ -111,6 +123,20 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
       `${plural(short, "line was", "lines were")} counted short at the dock and ${short === 1 ? "goes" : "go"} in at the counted quantity; the rest goes back with the driver.`,
     );
   }
+  // Fix Phase 3.2b (F-04-3): a line nobody pressed Accept or Reject on is
+  // accepted (by design, R31). When the reviewer decided SOME lines and not
+  // others, say how many ride along undecided, so a missed line is seen
+  // before Finalize, not after.
+  if (undecided > 0 && undecided < total) {
+    parts.push(
+      `${plural(undecided, "of those lines was", "of those lines were")} not marked one by one; ${undecided === 1 ? "it is" : "they are"} accepted because ${undecided === 1 ? "it was" : "they were"} not rejected. Check the count.`,
+    );
+  }
+  if (missing > 0) {
+    parts.push(
+      `${plural(missing, "line", "lines")} from the vendor's manifest did not save at staging and ${missing === 1 ? "is" : "are"} not on this screen: ${missing === 1 ? "it goes" : "they go"} back with the driver (tick the box to confirm).`,
+    );
+  }
   if (held > 0) {
     parts.push(
       `${plural(held, "accepted line is", "accepted lines are")} missing a CCRS id or a passing COA, so ${held === 1 ? "it stays" : "they stay"} in quarantine (not sellable) until fixed.`,
@@ -125,10 +151,11 @@ export function planFinalize(lines: FinalizeLineFacts[]): FinalizePlan {
     held,
     undecided,
     short,
+    missing,
     label,
     status: parts.join(" "),
     noteRequired,
-    tone: noteRequired || held > 0 ? "warning" : "info",
+    tone: noteRequired || held > 0 || missing > 0 ? "warning" : "info",
   };
 }
 
@@ -239,6 +266,18 @@ export function __runFinalizeLabelCoreTests(): { passed: number; failed: number 
   const sh = planFinalize([{ ...line("1", null), shortCounted: true }, line("2", null)]);
   ok(sh.short === 1 && sh.noteRequired && sh.label === "Accept All & Finalize" && sh.status.includes("counted short at the dock"), "short line -> note required, still Accept All");
   ok(!planFinalize([{ ...line("1", "rejected_at_dock"), shortCounted: true }, line("2", null)]).short, "a refused line is not counted as short going in");
+
+  // 14c. Fix Phase 3.2b (F-04-3): some lines decided, some not -> say it.
+  const ud = planFinalize([line("1", "accepted"), line("2", null), line("3", null)]);
+  ok(ud.undecided === 2 && ud.status.includes("2 of those lines were not marked one by one") && ud.status.includes("Check the count"), "undecided sentence when some lines were decided");
+  ok(planFinalize([line("1", "rejected_at_dock"), line("2", null)]).status.includes("1 of those lines was not marked one by one; it is accepted"), "undecided singular beside a refusal");
+  ok(!planFinalize([line("1", null), line("2", null)]).status.includes("not marked one by one"), "all untouched is already 'All N lines will be accepted' (no extra sentence)");
+  ok(!planFinalize([line("1", "accepted"), line("2", "accepted")]).status.includes("not marked"), "all decided -> no undecided sentence");
+
+  // 14d. Fix Phase 3.2b (F-04-11): lines that did not save -> partial, warning.
+  const ms = planFinalize([line("1", null), line("2", null)], { missingLines: 1 });
+  ok(ms.missing === 1 && ms.noteRequired && ms.tone === "warning" && ms.status.includes("did not save at staging"), "missing line -> note required, warning (server parity)");
+  ok(planFinalize([line("1", null)], { missingLines: 0 }).missing === 0 && !planFinalize([line("1", null)], { missingLines: Number.NaN }).noteRequired, "no / junk missing count changes nothing");
 
   // 15. R31 receive-on-finalize gate.
   ok(shouldMarkArrivedOnFinalize("pending") && shouldMarkArrivedOnFinalize("in_transit"), "pending/in_transit are stamped received");

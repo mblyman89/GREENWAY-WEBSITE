@@ -43,6 +43,7 @@ import { accountingStatus, booksNeedsAttention, booksRefusalNextStep, booksResul
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
 import { qtyCellText } from "@/lib/inventory/intake-count-core";
+import { openStagingFailures } from "@/lib/inventory/intake-staging-core";
 import { finalizeBanner } from "@/lib/inventory/finalize-banner-core";
 import {
   parseUsualTransport,
@@ -238,6 +239,10 @@ export default async function ManifestReviewPage({
   const shortCounts = await listLotShortCounts(id);
   const shortByLot = shortCounts.kind === "loaded" ? shortCounts.byLot : new Map<string, { shippedQty: number; reason: string | null }>();
   const events = await listManifestEvents(id);
+  // Fix Phase 3.2b (F-04-11): lines of the vendor's manifest that did not save
+  // at staging (lot_insert_failed timeline events). They are not on this
+  // screen; the banner names them and Finalize asks for the tick.
+  const stagingFailures = openStagingFailures(events);
 
   // SLICE 39: Slice 97's intake REVIEW summary, finally connected. Built from
   // the STAGED rows (what acceptance would actually commit), not by
@@ -352,6 +357,8 @@ export default async function ManifestReviewPage({
       },
       shortCounted: shortByLot.has(l.id),
     })),
+    // Fix Phase 3.2b (F-04-11): lines that did not save at staging (from the timeline).
+    { missingLines: stagingFailures.lines },
   );
   const hasRefusedLine = finalizePlan.noteRequired;
   const coaLinks = Array.isArray(manifest.coa_links) ? manifest.coa_links : [];
@@ -702,6 +709,30 @@ export default async function ManifestReviewPage({
             {coamsg ?? ""}
           </div>
         )}
+        {/* Fix Phase 3.2b (F-04-11): lines that did not save at staging. */}
+        {stagingFailures.lines > 0 && (
+          <div
+            data-staging-failures={stagingFailures.lines}
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]"
+          >
+            <strong>
+              {stagingFailures.lines} line{stagingFailures.lines === 1 ? "" : "s"} from the vendor&apos;s manifest did not save, so {stagingFailures.lines === 1 ? "it is" : "they are"} not on this screen.
+            </strong>{" "}
+            Count the lines on the vendor&apos;s paper or PDF against this screen. A missing line cannot become Greenway&apos;s
+            inventory: at Finalize it goes back with the driver (tick the box next to the button), or reject the whole
+            delivery and call the owner. Ask a manager before you finalize.
+            {stagingFailures.notes.map((n, i) => (
+              <p key={i} className="mt-1 whitespace-pre-wrap text-xs">{n}</p>
+            ))}
+          </div>
+        )}
+        {error === "missing_lines" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-orange)]">
+            <strong>Not finalized.</strong> Some lines did not save at staging. Nothing was changed. Tick
+            &ldquo;The missing lines go back with the driver&rdquo; next to the Finalize button and finalize again, or
+            reject the whole delivery.
+          </div>
+        )}
         {/* Fix Phase 3.1: the dock count result ("18 of 20"), in words. */}
         {count && (
           <div
@@ -795,7 +826,7 @@ export default async function ManifestReviewPage({
             note next to the Finalize button and finalize again.
           </div>
         )}
-        {error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && !error.startsWith("notify_") && (
+        {error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && error !== "missing_lines" && !error.startsWith("notify_") && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
           </div>
@@ -1535,6 +1566,13 @@ export default async function ManifestReviewPage({
                   title="Saved to the manifest's permanent timeline. Required whenever some lines are refused or held — the audit trail's why."
                   className="w-full max-w-md rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none"
                 />
+                {/* Fix Phase 3.2b (F-04-11): only when lines did not save at staging. */}
+                {finalizePlan.missing > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-[var(--admin-danger)]">
+                    <input type="checkbox" name="missing_lines_confirmed" value="1" required />
+                    The missing line{finalizePlan.missing === 1 ? "" : "s"} ({finalizePlan.missing}) go{finalizePlan.missing === 1 ? "es" : ""} back with the driver
+                  </label>
+                )}
                 <Button type="submit" variant={finalizePlan.reject > 0 && finalizePlan.accept === 0 ? "danger" : "save"} size="sm">
                   ✓ {finalizePlan.label}
                 </Button>
