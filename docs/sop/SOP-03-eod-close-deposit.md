@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.6 (draft for owner review; Phase 2.6: the **Deposit bags** screen now records the night count, the blind morning recount by a different employee, the seal (which posts to the books) and the owner's bank run, and prints and exports the bag log; an undeclared bag only warns (D27); Phase 2.5: the owner-only bank screen can now clear a store cash deposit, and the "Cash on its way to the bank" panel no longer claims a drawer close fills it; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
+| **Version** | 1.7 (draft for owner review; Phase 2.6b: the **End-of-day report** is now the owner's end-of-day sheet: it has a date picker, the deposit by till, a cash check with refunds taken off, the day's bag by denomination (night figure hidden until the morning recount), two signature lines, a warning when any record could not be read, and CSV / Excel export; Phase 2.6: the **Deposit bags** screen now records the night count, the blind morning recount by a different employee, the seal (which posts to the books) and the owner's bank run, and prints and exports the bag log; an undeclared bag only warns (D27); Phase 2.5: the owner-only bank screen can now clear a store cash deposit, and the "Cash on its way to the bank" panel no longer claims a drawer close fills it; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
@@ -93,7 +93,7 @@ This SOP makes sure that:
 | Close a drawer (blind count, second count) | The cashier, plus **any second employee** (D2) | Register PIN, then the second employee's PIN and their own blind count in the app (SOP-01 §4.27 steps 8–12; built in Phase 2.2, G-01) |
 | Pull takings, count the deposit, complete the **night sheet** (form 8.1) | The night closer ("one person completes before close") | **Deposit bags** screen, **Save night count**: an owner/admin/manager login (`requirePermission("orders.manage")`, `deposit-bags/actions.ts` L102) plus the closer's own PIN (L108). Paper form 8.1 is still signed. |
 | Reconcile each drawer | Owner, admin or manager login | `requirePermission("inventory.manage")` on Register Activity (SOP-01 §4.30) |
-| Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L45). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L107). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L152–154) is sent to `/admin?denied=1` (F-02-10). |
+| Open and print the **End-of-day report** | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L68; the export, `eod/export/route.ts` L29). `inventory.manage` = owner/admin/manager (`src/lib/auth/roles.ts` L107). A staff login that taps **End-of-day report** on Register Activity (`registers/page.tsx` L152–154) is sent to `/admin?denied=1` (F-02-10). |
 | **Morning recount** and verify the night sheet | The morning employee ("the morning employee recounts and verifies") | **Deposit bags** screen, **Save recount**: `orders.manage` login (L165) plus the recounter's PIN (L174). The server refuses the night closer's PIN: *"The morning recount must be done by a different employee from the one who counted last night (owner rule D24). Nothing was saved."* (`deposit-bag-flow-core.ts` L226–227), and so does the database (0316). Paper part B is still signed. |
 | Seal the bag, write the bag number, log it | **Any employee** (D25: *"anyone can seal the bag"*), after the morning recount | **Deposit bags** screen, **Seal bag …**: `orders.manage` login (`actions.ts` L245) plus the sealer's PIN (L252). The seal posts to the books (§4.11). |
 | **Verify till** in the back office | Owner, admin, manager | `inventory.manage`. Records no recount (F-00-3); paper is the record. |
@@ -218,44 +218,46 @@ Reconcile can happen tonight or first thing in the morning. The End-of-day repor
 
 ### 4.8 Opening and reading the End-of-day report
 
-**Where:** back office → **Register Activity** → **End-of-day report** (`/admin/registers/eod`). Managers, admins and the owner only (§2). The breadcrumb reads **Sell › Register Activity › End-of-day report** (`eod/page.tsx` L63–65).
+**Where:** back office → **Register Activity** → **End-of-day report** (`/admin/registers/eod`). Managers, admins and the owner only (§2). The breadcrumb reads **Sell › Register Activity › End-of-day report** (`eod/page.tsx` L105–107).
 
-**Which day:** today's Pacific business day by default (`pacificToday`, L16–19). **There is no date picker on the page.** To see or reprint another day, add `?day=YYYY-MM-DD` to the address, for example `/admin/registers/eod?day=2026-11-02` (L15–19). Anything that is not in that shape silently shows today instead (finding F-03-8).
+**Which day:** today's Pacific business day by default (`pacificToday`, `eod/page.tsx` L69). To see or reprint another day, pick it in **Business day** at the top and tap **Show day** (`DayPicker`, L21–33). A date that is not a real day is **not** replaced by today: the page shows the error, for example *"2026-02-30 is not a real calendar day."*, and a date picker (`parseBusinessDay`, `deposit-bag-flow-core.ts` L60–75; page L70–82). Typing `?day=YYYY-MM-DD` in the address still works. (Phase 2.6b; F-03-8 FIXED.)
 
-**The report, top to bottom:**
+**The report, top to bottom (Phase 2.6b):**
 
-| Part | Exact label(s) | What it means | Pin |
+| Part | Exact label(s) | What it means | Pin (`eod/page.tsx`) |
 |---|---|---|---|
-| Header | **Greenway Marijuana** · **End-of-day summary report** · **Print** button | | L68–75 |
-| Business day | **Business day** + the full date | | L78–81 |
-| Status banner | **Final — all drawers closed** or **Preliminary — a drawer is still open** | Final = at least one drawer session today and none still open (`eod-core.ts` L195). It does **not** mean reconciled. | L82–89 |
-| Sales | **Sales (all registers, server-verified)**: **Completed sales**, **Subtotal**, **Tax collected**, **Gross sales** | Store-wide, from the server's processed sales for the Pacific day (`eod-store.ts` L112–120) | L92–113 |
-| | **Cash rounding (N sales)** (only if any) | Net rounding; cash expected = gross + rounding (`day-report-core.ts` L49–56) | L114–119 |
-| | **Employee tab, no cash (N)** (only if any) | A sale, but no cash came in | L120–125 |
-| | **Medical sales (tax savings)** (only if any) | Count · tax taken off | L126–133 |
-| | **Audited no-sale drawer opens** | | L134–137 |
-| | **⚠ Unresolved: exceptions / pending** (only if any) | Sales the server bounced, or still processing. Resolve before you trust the totals (SOP-01 §4.32). | L138–145 |
-| Tills | **Tills by register**: **Register**, **Opening**, **Drops**, **Closed count**, **Over/short**, **Tips**, then **Store total** | One row per register used today; idle registers are left out (`eod-core.ts` L122–125). **(open)** after a name = a drawer still open; **×2** = two sessions that day. | L149–202 |
-| | **No drawer sessions on this business day.** | Nothing was opened that day (or the read failed, F-03-7) | L153–154 |
-| | Footnote: *"Over/short shows only after a manager reconciles a session — blind counts stay blind until then. Tips are employee money, listed for the record and never part of drawer math."* | **Closed count** shows once a drawer is closed (`eod-core.ts` L135); **Over/short** only once reconciled or verified (L139). | L203–206 |
-| Safe | **Safe ($1,000 change fund)**: **AM count**, **PM count**, **Extra counts**, **Change swaps (value-neutral)** | The **master till**, not the deposit. See SOP-02 §4.15. | L208–246 |
-| Sign-off | **Prepared by (signature)** · **Date / time** | One signature line only (F-03-5) | L248–258 |
-| Footer | *"Greenway Marijuana · WA license 413541 · file with the day's physical records"* | | L259–261 |
-| Panel | **Cash on its way to the bank** | Read §4.15 before you trust it | L263; `UndepositedFunds.tsx` |
-| Panel | **What the ledger does with the cash drawer — a worked example** (folded; hidden when printed) | A teaching example, not your books. Its float total is out of date (F-03-2) | L264; `RegisterCashSpecimen.tsx` L113 |
+| Header | **Greenway Marijuana** · **End-of-day summary report** · **Print** button | | L110–117 |
+| Day and export (not printed) | **Business day** picker · **Show day** · **Export: CSV · Excel** | Export appears only when every record was read; otherwise *"Export is off until every record reads (see the warning below)."* | L118–134 |
+| Read warning (only if any) | **⚠ This report may be incomplete. Do not file it.** and one line per record that failed, then *"Reload in a minute. If it keeps failing, tell the owner and use the close slips (SOP-03 §6)."* | A table could not be read (registers, drawer sessions, drops, sales, safe counts, change swaps, refunds, the deposit bag or employee names: `eod-store.ts` L120–206). Before Phase 2.6b a failed read showed as zeros or "No drawer sessions" (F-03-7 FIXED) | L136–147 |
+| Business day | **Business day** + the full date | | L149–155 |
+| Status banner | **Final — all drawers closed** or **Preliminary — a drawer is still open** | Final = at least one drawer session today and none still open (`eod-core.ts` L195). It does **not** mean reconciled. | L156–162 |
+| Deposit | **Deposit: what goes in the bag**: **Till**, **Closing count**, **− Float**, **= Takings**, **+ Drops**, **To the bag**, then **Expected deposit (takings … + drops …)** | The same figure as the night sheet's (c) and the **Deposit bags** screen (`expectedDeposit`, `deposit-bag-flow-core.ts`). **Cannot be worked out** if a drawer is still open or a float is missing; the reason is listed under it. **No drawer sessions to deposit from.** when none. (F-03-5 FIXED) | L164–210 |
+| Cash check | **Cash check (refunds taken off)**: **Cash sales (N, with rounding)**, **Voided sales (N) and counter returns (N) paid from drawers** (minus), **Net cash from sales**, **Expected deposit − net cash (should match the drawers' total over/short)**; **Refunds paid from the safe (not drawer cash)** and **Other tender, not cash (N)** only if any | Cash sales = processed sales paid in cash, with rounding (`summarizeCashSales`, `eod-sheet-core.ts` L73). Net cash = cash sales − refunds paid from drawers (L212). A refund paid from the safe is listed but not taken off. Net cash shows **—** with a reason when a refund is not tied to a drawer or the safe, or when a record could not be read (L205–211). (F-03-6 FIXED) | L212–254 |
+| Bag | **Deposit bag … · <stage>**: **Denomination**, **Night qty**, **Night**, **Morning qty**, **Morning**, then **Counted** | The day's bag from the **Deposit bags** screen (§4.5, §4.10). Until the morning recount is saved the night figure reads **hidden until the morning recount**, so the printed report cannot spoil the blind recount (`showNightFigure`; `eod-sheet-core.ts` L226–227). Then *"Bag against expected deposit: …"*, any reason, who sealed it and the bank date | L256–302 |
+| | *"No deposit bag has been recorded for this day yet (Deposit bags screen, SOP-03 §4.5)."* or *"The Deposit bags screen is not set up yet (migration 0316). Use the paper night sheet (form 8.1)."* | No bag yet; or 0316 not applied (`eod-sheet-core.ts` L185–186) | L260–261 |
+| Sales | **Sales (all registers, server-verified)**: **Completed sales**, **Subtotal**, **Tax collected**, **Gross sales (not the cash: see Cash check)** | Store-wide, from the server's processed sales for the Pacific day, now read in pages so no day is cut short (`eod-store.ts` L149–160) | L304–324 |
+| | **Cash rounding (N sales)** · **Employee tab, no cash (N)** · **Medical sales (tax savings)** (each only if any) · **Audited no-sale drawer opens** | | L326–349 |
+| | **⚠ Unresolved: exceptions / pending** (only if any) | Sales the server bounced, or still processing. Resolve before you trust the totals (SOP-01 §4.32). | L350–357 |
+| Tills | **Tills by register**: **Register**, **Opening**, **Drops**, **Closed count**, **Over/short**, **Tips**, then **Store total** | One row per register used today; idle registers are left out (`eod-core.ts` L122–125). **(open)** after a name = a drawer still open; **×2** = two sessions that day. | L361–418 |
+| | **No drawer sessions on this business day.** or, when the read failed, *"The drawer sessions could not be read (see the warning at the top). This is not "no drawers"."* | | L366–369 |
+| | Footnote: *"Over/short shows only after a manager reconciles a session — blind counts stay blind until then. Tips are employee money, listed for the record and never part of drawer math."* | | L419–422 |
+| Safe | **Safe ($1,000 change fund)**: **AM count**, **PM count**, **Extra counts**, **Change swaps (value-neutral)** | The **master till**, not the deposit. See SOP-02 §4.15. | L424–462 |
+| Sign-off | **Night count, prepared by (signature)** · **Date / time** · **Morning recount and verify, a different employee (signature)** · **Date / time** | Two signatures, as the owner asked. When the bag screen has the names, each line shows *"In the app: <name>"* above it (`SignLine`, L35–41) | L464–470 |
+| Footer | *"Greenway Marijuana · WA license 413541 · file with the day's physical records"* | | L471–473 |
+| Panel | **Cash on its way to the bank** | Read §4.15 | L475; `UndepositedFunds.tsx` |
+| Panel | **What the ledger does with the cash drawer — a worked example** (folded; hidden when printed) | A teaching example, not your books. Its float total is out of date (F-03-2) | L476; `RegisterCashSpecimen.tsx` L113 |
 
-**What the report does NOT show** (so do not look for it):
-- **The deposit amount.** It shows Opening, Drops and Closed count, but not *takings to the bag*. Work the deposit out on the night sheet (§4.5). (F-03-5)
-- **Refunds.** Voids and counter returns paid cash out of the drawers, and the Z report lists them (*"REFUNDS — STORE-WIDE CASH OUT"*, SOP-01 §4.28), but the End-of-day report does not (F-03-6). **Gross sales on this report is not the cash you should have.** Use the Z report for cash.
-- The bag number, the morning recount, or a second signature (F-03-5, gap G-04).
+**Reading the cash check.** *Expected deposit − net cash* should equal the drawers' total over/short once every drawer is reconciled. If it does not, a drop slip, a refund's "paid from" or a count is wrong: find which before the morning seal. **Gross sales is still not the cash**: it includes tax on employee-tab sales and ignores refunds. Use **Net cash from sales**.
 
 **A quick cross-check the manager can do on the printed report:** for each register, *Closed count − float* is that till's takings. Add the **Drops** column total. The sum must equal the night sheet's **Expected deposit**. If it does not, a slip or a drop is wrong. Find which before the morning seal.
 
 ### 4.9 Printing the End-of-day report and filing it
 
-1. When the banner says **Final — all drawers closed** and every drawer is reconciled (Over/short shows a figure, not **—**), tap **Print** (`eod/page.tsx` L74; it opens the browser's print dialog).
+1. When the banner says **Final — all drawers closed** and every drawer is reconciled (Over/short shows a figure, not **—**), tap **Print** (`eod/page.tsx` L116; it opens the browser's print dialog).
 2. If you must print before reconcile, write **"PRINTED BEFORE RECONCILE"** across the top and reprint after.
-3. Sign **Prepared by (signature)** and **Date / time**.
+3. The night closer signs **Night count, prepared by (signature)** and **Date / time**. After the morning recount, the morning employee (a different person, D24) signs **Morning recount and verify, a different employee (signature)** and **Date / time**. Reprint after the recount so the bag's morning figure is on the filed copy.
+3a. **Export (Phase 2.6b):** tap **Export: CSV** or **Excel** for the same day. The file is named `end-of-day-<day>` and has six sheets: **Deposit**, **Cash check**, **Refunds**, **Bag**, **Sales**, **Signatures** (`eodSheetWorkbook`, `eod-sheet-core.ts` L299; `eod/export/route.ts` L38). It follows the same blind rule as the screen. If any record could not be read the export is refused with *"The end-of-day sheet for <day> is not exported because some records could not be read: …"* (HTTP 409, `route.ts` L35–37); a bad date is refused the same way as on the page (L32–33).
+3b. **Do not file** a report that shows **⚠ This report may be incomplete. Do not file it.** Reload, and reprint when the warning is gone.
 4. Staple to it, in this order: the night sheet (form 8.1, after the morning recount), the Z report, every close slip (SOP-01 form 8.2), any over/short forms (SOP-01 form 8.5, only when migration 0315 is not applied; otherwise the reasons are in the app), the master till sheet (SOP-02 form 8.1).
 5. File by date in the month binder. The footer says it plainly: *"file with the day's physical records"*. Records are kept on the licensed premises for five years (`docs/CASH_DEPOSIT_POLICY_DECISION.md` L116–121; WAC 314-55-087).
 
@@ -359,15 +361,14 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 - **A drawer opened but no cash taken** (every till left with only its float): no bag. Note it on the night sheet and the bag log.
 - **Missed bank run:** bags stay sealed in the safe. Take them all next time (§4.14). Each still matches its day (books-96).
 - **A bag sealed for the wrong day:** do not open it. Write the correction on the bag log and the night sheet, initial it, and tell the owner.
-- **Reprint an old day:** `/admin/registers/eod?day=YYYY-MM-DD` (§4.8).
+- **Reprint an old day:** pick it in **Business day** on the End-of-day report and tap **Show day** (§4.8).
 - **A bag counted at night but not recounted by the next day:** Register Activity shows the gold D27 warning naming it (§4.6). It blocks nothing. Recount it as soon as a different employee is in (§4.10).
 - **Counting a past day on the bag screen:** pick it in **Business day** and tap **Show this day** (`deposit-bags/page.tsx` L220–227). A date that is not a real day is shown as an error, never silently replaced by today (`parseBusinessDay`, `deposit-bag-flow-core.ts` L60–75).
 
 ### 4.17 Printing and exporting (interim)
 
 - The **Deposit bags** screen's **Deposit bag log** prints with a **Reviewed by (signature)** line and downloads as CSV (**Download CSV**, `deposit-bags/page.tsx` L436–519; `deposit-bags/csv/route.ts`). Pick **From** and **To** and tap **Show**. This is form 8.2 from the app.
-- The End-of-day report **prints** (§4.9). It has **no export** (no CSV or spreadsheet route under `src/app/admin/registers/eod/`; finding F-00-8, gap G-09/G-15).
-- The owner asked that the closing-day reports *"can be exported and printed"*. Until export is built, the printed report plus the paper night sheet are the record. The owner can query `drawer_sessions`, `drawer_drops` and `pos_sale_events` in Supabase for a CSV.
+- The End-of-day report **prints** (§4.9) and, since Phase 2.6b, **exports as CSV or Excel** (§4.9 step 3a; `eod/export/route.ts`). This meets the owner's *"can be exported and printed"* for the closing day (G-15; F-00-8 for the EOD). The master till sheet's export is Phase 2.7 (G-09).
 - The per-drawer **Till summary** (Register Activity → **Cash drawer reports** → a session) also prints, with one **Manager (signature)** line (`registers/history/[id]/page.tsx` L81, L238). Use it when a single drawer needs a record (an exception, a disputed shortage).
 
 ---
@@ -376,14 +377,22 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 
 | Where | Message (exact) | What it means | What to do |
 |---|---|---|---|
-| End-of-day page | **Supabase not configured** — *"Connect the service role key to build the end-of-day report."* (with only the worked example below) | The back office cannot reach the database (`eod/page.tsx` L48–56) | Do every paper step. Tell the owner. Print the report later with `?day=`. |
-| End-of-day page | *(redirected to the admin home)* | Your login is not owner/admin/manager (L45) | A manager prints the report. |
+| End-of-day page | **Supabase not configured** — *"Connect the service role key to build the end-of-day report."* (with only the worked example below) | The back office cannot reach the database (`eod/page.tsx` L48–56) | Do every paper step. Tell the owner. Print the report later (pick the day in **Business day**). |
+| End-of-day page | *(redirected to the admin home)* | Your login is not owner/admin/manager (L68) | A manager prints the report. |
+| End-of-day page | *"… is not a date. Use the date picker, or write it as YYYY-MM-DD (for example 2026-11-02)."* or *"… is not a real calendar day."* | The day in the address is not a real day (`deposit-bag-flow-core.ts` L67, L72; page L70–82). Nothing is shown for a wrong day | Pick the day in **Business day** and tap **Show day**. |
+| End-of-day page | **⚠ This report may be incomplete. Do not file it.** and a list of what failed | A record could not be read (`eod-store.ts` L120–206). Figures may be low or missing. Export is off | Reload in a minute. Still failing → tell the owner, use the close slips and the paper night sheet. Do not file this print. |
+| Export | *"The end-of-day sheet for <day> is not exported because some records could not be read: …"* | Same cause (`eod/export/route.ts` L35–37) | As above. |
+| Cash check | **Net cash from sales —** and *"N cash refund(s) … not tied to a drawer or the safe, so the net cash cannot be worked out. Say where each was paid from on the reconcile screen first."* | A refund has no drawer and is not marked paid from the safe (`eod-sheet-core.ts` L205–208) | A manager sets where it was paid from (SOP-01 §4.30), then reload. |
+| Deposit | **Cannot be worked out** next to **Expected deposit** | A drawer is still open or has no float; the reasons are listed (`expectedDeposit`) | Close the drawer (SOP-01 §4.27). |
+| Bag | *"No deposit bag has been recorded for this day yet (Deposit bags screen, SOP-03 §4.5)."* | No night count saved yet (`eod-sheet-core.ts` L185) | Night closer saves the night count (§4.5). |
+| Bag | *"The Deposit bags screen is not set up yet (migration 0316). Use the paper night sheet (form 8.1)."* | Migration 0316 not applied (L186) | Owner applies 0316. Paper meanwhile. |
+| Bag | **hidden until the morning recount** | The morning recount is not saved yet; the night figure is kept blind (L226–227) | Normal. It shows once the recount is saved. |
 | Banner | **Preliminary — a drawer is still open** | A drawer session that day is still open (`eod-core.ts` L133, L195) | Find and close it (SOP-01 §4.27; a manager can close from Register Activity). Do not seal a bag for a day that is not closed. |
 | Sales | **⚠ Unresolved: exceptions / pending** | Sales were bounced to the exception queue or are still processing (L138–145) | Pending: wait and reload. Exceptions: SOP-01 §4.32. Totals are not final until this is gone. |
-| Tills | **No drawer sessions on this business day.** | No drawer was opened, **or** the read failed silently (F-03-7) | If you know drawers were used, reload. Still empty → tell the owner; use the close slips. |
+| Tills | **No drawer sessions on this business day.** | No drawer was opened. A failed read now says *"The drawer sessions could not be read …"* instead, with the warning at the top (F-03-7 FIXED) | If you know drawers were used, tell the owner; use the close slips. |
 | Tills | **—** in **Over/short** | That drawer is not reconciled yet (`eod-core.ts` L139) | Reconcile (SOP-01 §4.30), then reprint. |
 | Safe | *"Safe tracking not set up yet — run migration 0135_safe_counts_swaps.sql to include safe counts and change swaps on this report."* | The master till tables are missing (L213–215) | Owner runs the migration (SOP-02 §5). The deposit is unaffected. |
-| Safe | **Not done** on AM or PM | No master till count of that kind that day, **or** the read failed for another reason (F-03-7) | SOP-02 §4.5–4.6. |
+| Safe | **Not done** on AM or PM | No master till count of that kind that day. A failed read now raises the warning at the top (`eod-store.ts` L175, L189) | SOP-02 §4.5–4.6. |
 | Panel | Amber *"This figure could not be read…"* | The books could not be read (`UndepositedFunds.tsx` L43–53) | Ignore the panel; use the bag log. |
 | Panel | Green *"Every sealed deposit bag recorded in the books has been matched…"* | Means: no sealed bag is waiting in the books. It says nothing about unsealed cash in the safe (F-03-1, wording fixed Phase 2.5) | Use the bag log and the safe for the safe. |
 | Bank screen | *"Nothing is sitting in Undeposited Funds, so there is no counted cash for this deposit to clear…"* | No bag sealed in the app is waiting (bags from before Phase 2.6 / migration 0316 were never in the books), or the money did not come from the tills | Nothing was written. Keep the bank receipt with the bag log. |
@@ -415,6 +424,8 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Broken / re-taped seal on bank day | Do not bank. Open with a second person, recount, write it up, re-seal in a new bag (new #). | Owner immediately |
 | Bag on the log not in the safe | Stop the bank run. Check every slot and the binder. | Owner immediately |
 | End-of-day page will not load | Paper steps continue. | Owner |
+| End-of-day report shows **⚠ This report may be incomplete** | Do not file or export it. Reload; still failing → paper (close slips, night sheet), reprint later. | Owner |
+| **Expected deposit − net cash** does not match the drawers' total over/short | Check each drop slip against the drops, each refund's paid-from, and each reconciled count. Do not seal until it is explained or written on part A. | Manager; owner next day |
 | Out of tamper-evident numbered bags (or they have not arrived yet, D26) | Do not seal in a plain envelope. Keep the verified cash with its night sheet in the safe "TO VERIFY" slot and write "no bag" on the bag log. | Owner the same day (only the owner banks, D25) |
 | A day's cash will not fit in one bag | Two consecutive-numbered bags, logged as one deposit (§4.11). | — |
 | Someone suggests splitting or holding back cash because of $10,000 | Do not. Bank the whole day (§4.14). | Owner |
@@ -437,8 +448,10 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Cash stays on the licensed premises | Records and cash on premises; a house safe is effectively uninsured | `CASH_DEPOSIT_POLICY_DECISION.md` L116–120 |
 | Paper filed five years | WAC 314-55-087 records retention | Footer L260; policy L116–121 |
 | End-of-day report is manager-only | It shows closed counts and over/short, which the blind close hides from cashiers | `eod-core.ts` L14–16 |
+| The report and its export keep the night figure hidden until the morning recount | A printed or downloaded night figure would spoil the blind recount (D24) | `eod-sheet-core.ts` L226–227 (`showNightFigure`) |
+| A report with a failed read cannot be exported and says *"Do not file it"* | A filed record must not be silently short | `eod-store.ts` L120–206; `eod/export/route.ts` L35–37 |
 
-**Known weaknesses this SOP works around** (all recorded): ~~no bag screen (F-00-6)~~ (fixed in Phase 2.6: the **Deposit bags** screen), ~~any staff login could rewrite a bag (F-03-9)~~ (fixed in Phase 2.6: migration 0316 removed the staff write policy; writes go through the server after a PIN), ~~the $10,000 shape check had no caller (F-03-10)~~ (shown at seal and bank run since Phase 2.6), ~~the panel's false all-clear (F-03-1)~~ (wording fixed in Phase 2.5; the seal itself comes with the bag screen), ~~unwired cash-to-bank books (F-03-3)~~ (Phase 2.5 built the owner's **Clear against bags** button; it refuses until bags are sealed in the app), the verify that records $0 (F-00-3), ~~no second count in the app (F-00-5/F-01-9)~~ (fixed in Phase 2.2: the app records the second count at close), a single-signature EOD print without the deposit figure (F-03-5), refunds missing from the EOD (F-03-6), silent read failures (F-03-7), no export (F-00-8).
+**Known weaknesses this SOP works around** (all recorded): ~~no bag screen (F-00-6)~~ (fixed in Phase 2.6: the **Deposit bags** screen), ~~any staff login could rewrite a bag (F-03-9)~~ (fixed in Phase 2.6: migration 0316 removed the staff write policy; writes go through the server after a PIN), ~~the $10,000 shape check had no caller (F-03-10)~~ (shown at seal and bank run since Phase 2.6), ~~the panel's false all-clear (F-03-1)~~ (wording fixed in Phase 2.5; the seal itself comes with the bag screen), ~~unwired cash-to-bank books (F-03-3)~~ (Phase 2.5 built the owner's **Clear against bags** button; it refuses until bags are sealed in the app), the verify that records $0 (F-00-3), ~~no second count in the app (F-00-5/F-01-9)~~ (fixed in Phase 2.2: the app records the second count at close), ~~a single-signature EOD print without the deposit figure (F-03-5)~~, ~~refunds missing from the EOD (F-03-6)~~, ~~silent read failures (F-03-7)~~, ~~no date picker (F-03-8)~~, ~~no EOD export (F-00-8, EOD part)~~ (all fixed in Phase 2.6b: the End-of-day report is the deposit sheet; the master till sheet export is Phase 2.7).
 
 ---
 
@@ -446,7 +459,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 
 ### 8.1 Night sheet: end-of-day deposit count (the owner's "end of day spreadsheet")
 
-*Since Phase 2.6 the counts on parts A and B are also entered on the **Deposit bags** screen (§4.5, §4.10), which works out the expected deposit for you. Keep signing this sheet: it is the signed record filed with the day.*
+*Since Phase 2.6 the counts on parts A and B are also entered on the **Deposit bags** screen (§4.5, §4.10), which works out the expected deposit for you. Since Phase 2.6b the **End-of-day report** prints the same deposit, the bag by denomination, refunds and both signature lines, and exports it (§4.8–4.9). Keep signing this sheet or the printed report: a signed copy is the record filed with the day.*
 
 ```
 GREENWAY — END-OF-DAY DEPOSIT SHEET            Business day: ____/____/______
@@ -526,7 +539,8 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 - [ ] Every drawer reconciled (Over/short shows a figure on the EOD report)
 - [ ] EOD report banner **Final — all drawers closed**; no **⚠ Unresolved** line
 - [ ] Cross-check: Σ(Closed count − float) + Drops total = night sheet (c)
-- [ ] EOD printed, signed, stapled with night sheet, Z, close slips, forms 8.5, master till sheet; filed
+- [ ] EOD shows no **⚠ This report may be incomplete** warning; **Expected deposit − net cash** matches the drawers' over/short
+- [ ] EOD printed, signed by the night closer and (after the recount) the morning employee, stapled with night sheet, Z, close slips, forms 8.5, master till sheet; filed; CSV/Excel saved if wanted
 - [ ] Morning: Verify till done (paper part B is the record; leave **Verified by** blank)
 - [ ] Bag log up to date; days with no bag explained
 
@@ -549,7 +563,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 │ MORNING (different person): recount BEFORE looking → agrees? sign B → slip → SEAL           │
 │   → bag # on sheet + slip + bag log → safe "SEALED — TO BANK".  Disagree? DON'T seal.       │
 │ BANK: take ALL sealed bags. ONE DAY = ONE BAG, banked WHOLE. $10,000 never decides a split. │
-│ EOD REPORT: /admin/registers/eod  (old day: ?day=YYYY-MM-DD). Print after reconcile, sign.  │
+│ EOD REPORT: /admin/registers/eod  (old day: Business day → Show day). Print, 2 signatures. │
 │ ⚠ "Cash on its way to the bank" green box is NOT reliable — use the bag log.               │
 │ ⚠ Verify till: leave "Verified by" blank; paper part B is the real verify.                 │
 │ Missing money / broken seal / missing bag → OWNER, same day.                                 │
@@ -562,7 +576,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 
 | Term | Meaning |
 |---|---|
-| **Business day** | The Pacific-time calendar day (`pacificToday`; `eod-store.ts` L82–83). A drawer belongs to the day it was opened (`drawer_sessions.business_day`). |
+| **Business day** | The Pacific-time calendar day (`pacificToday`; `eod-store.ts` L110–111). A drawer belongs to the day it was opened (`drawer_sessions.business_day`). |
 | **Float** | The cash a till keeps overnight: $167.50 (sales registers), $300.00 (Manager Till) (D10, D19). |
 | **Takings** | A till's closing count minus its float. |
 | **Drop** | Cash taken from a drawer to the store safe during a shift (SOP-01 §4.25). |
@@ -583,11 +597,11 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7; `src/lib/accounting/safe-bag-core.ts` L15–25; `docs/MICHAEL-books-96-one-bag-one-day.md` L1–20 |
-| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L107; `src/app/admin/registers/page.tsx` L152–154; `src/app/admin/books/bank/page.tsx` L181 |
+| 2 roles | `src/app/admin/registers/eod/page.tsx` L68; `src/lib/auth/roles.ts` L107; `src/app/admin/registers/page.tsx` L152–154; `src/app/admin/books/bank/page.tsx` L181 |
 | 4.1 money | `drawer-posting-service.ts` L20–30, L171–195; `register-cash-journal-core.ts` L271–322; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
 | 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L267–300 |
-| 4.8 report | `eod/page.tsx` (268 lines) L15–19, L48–264; `src/lib/registers/eod-core.ts` (295) L80–201; `src/lib/registers/eod-store.ts` (234) L65–173; `src/lib/pos/day-report-core.ts` L40–70, L136–175 |
-| 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L50, L81, L234–247 |
+| 4.8 report (Phase 2.6b) | `eod/page.tsx` (480 lines) L21–42, L62–476; `src/lib/registers/eod-sheet-core.ts` (562) L73–97, L119–135, L168–265, L268–424, self-tests L430–562 (28); `eod-store.ts` (323) L81–259; `src/app/admin/registers/eod/export/route.ts` (39); `deposit-bag-store.ts` `bagDetailForDay`; `tests/compliance/fix-p2-6b-eod-sheet.test.ts` (25 cases); `scripts/compliance/mutate-fix-p2-6b.py` (40/40). Before 2.6b: `eod/page.tsx` (268 lines) L15–19, L48–264; `src/lib/registers/eod-core.ts` (295) L80–201; `src/lib/registers/eod-store.ts` (234) L65–173; `src/lib/pos/day-report-core.ts` L40–70, L136–175 |
+| 4.9 / 4.17 print | `eod/page.tsx` L116, L118–134, L464–473; `eod/export/route.ts` L29–38; `registers/history/[id]/page.tsx` L50, L81, L234–247 |
 | 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L389–466; `ledger-census-data.ts` L1588–1660; `factory-reset-core.ts` L427–428 |
 | 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–64, L164–264; `deposit-clearing-core.ts` L4–15, L129–131, L391–491; `ledger-census-data.ts` L1524–1586; `books/bank/BankMatchExplainer.tsx` L719–722 |
 | 4.14 $10,000 | `CASH_DEPOSIT_POLICY_DECISION.md` L9–73; `safe-bag-core.ts` L270–336; `books/bank/page.tsx` L542–562; `bank-match-core.ts` L1587, L1594; `docs/MICHAEL-books-98-the-store-safe.md` L43–60 |
@@ -603,14 +617,14 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 
 | Owner requirement / need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
-| "End of day spreadsheet that one person completes before close" | EOD report prints the day; no deposit figure, no denomination count, one signature line | Night sheet form 8.1 part A (§4.5) | G-15 · F-03-5 |
+| "End of day spreadsheet that one person completes before close" | **Built (Phase 2.6b):** the End-of-day report shows the deposit by till, the bag by denomination, refunds and two signature lines, with a date picker | §4.8; form 8.1 still signed (or the printed report) | G-15 (BUILT) · F-03-5, F-03-8 (FIXED) |
 | "Morning employee recounts and verifies" | **Built (Phase 2.6):** blind morning recount by a different employee on **Deposit bags**, by denomination, PIN, audited. Verify till itself still records $0 (F-00-3) | §4.10 in the app; form 8.1 part B still signed; Verify till per SOP-01 | G-04 (BUILT) · F-00-3, F-00-4 open |
 | "Before sealing the bag and putting it into the safe" | ~~No bag screen~~ **Built (Phase 2.6):** seal on **Deposit bags** (anyone, PIN), posts DR 10400 / CR 10100; log prints and exports | §4.11 in the app; paper log only if the screen is down | G-04 (BUILT) · F-00-6 (FIXED), F-03-9 (FIXED) |
 | "For depositing to the bank" | **Built (Phase 2.6):** the seal fills 10400 and the owner records the bank run on **Deposit bags**. **Built (Phase 2.5):** owner-only **Clear against bags** on the bank screen; panel wording fixed | §4.13, bank receipts stapled to the printed log | G-14 (BUILT) · F-03-1 (wording FIXED), F-03-3 (FIXED) |
-| Closing-day report "exported and printed" | Print only | §4.9, §4.17 | G-15 / G-09 · F-00-8 |
+| Closing-day report "exported and printed" | **Built (Phase 2.6b):** End-of-day report prints and exports CSV / Excel. Master till sheet export: Phase 2.7 | §4.9, §4.17 | G-15 (BUILT) / G-09 · F-00-8 (EOD part FIXED) |
 | Second-person count at till close (D2) | ~~Paper only~~ **Built (Phase 2.2):** second PIN and blind count at close, both stored | SOP-01 §4.27 steps 8–12, form 8.2 | G-01 · F-01-9 (FIXED) |
 | $10,000 shape check | **Shown since Phase 2.6** at seal and bank run (never a block) | Bank run **Note** (§4.14) | G-14 · F-03-10 (FIXED) |
-| Refunds on the EOD | Not shown (Z report has them) | Use the Z report for cash (§4.8) | G-15 · F-03-6 |
+| Refunds on the EOD | **Built (Phase 2.6b):** **Cash check (refunds taken off)**, split drawer / safe; failed reads warned | §4.8 | G-15 (BUILT) · F-03-6, F-03-7 (FIXED) |
 
 ## Appendix C: Owner answers (were open questions)
 
@@ -636,4 +650,5 @@ All seven questions were answered by the owner after v1.0 (recorded verbatim in 
 | 1.4 draft | Fix phase | Phase 2.3 (G-03, owner D7, D21). §4.7 reconcile paragraph: cash sales are the system figure (Phase 2.1), the reconciler is the signed-in manager, and a reason over $5.00 is written in the Reconcile card and shown on the owner's Over / short warnings screen (form 8.5 only before migration 0315); §4.9 staple list note. | Fix phase |
 | 1.5 draft | Fix phase | Phase 2.5 (G-14, owner D25). §2 roles row, §4.13 books paragraph, §4.15 panel table and warning, §5 rows, the known-weaknesses line, Appendix A and Appendix B: the owner-only **Clear against bags** button now exists on /admin/books/bank, refuses with *"Nothing is sitting in Undeposited Funds…"* until bags are sealed in the app (Phase 2.6), and the panel no longer says a drawer close fills 10400. | Fix phase |
 | 1.6 draft | Fix phase | Phase 2.6a (G-04, G-14; F-00-6, F-03-9, F-03-10 FIXED; owner D23–D27). The **Deposit bags** screen: header note, §1 scope, §2 roles (night, morning, seal, bank rows), §4.5 night count in the app with the expected deposit, §4.6 the D27 warning, §4.10 blind recount by a different employee and the $5 reason, §4.11 the seal and its books entry (box rewritten from "would" to "does"), §4.13 the bank door now has sealed bags to clear and the owner's bank run, §4.14 shape check shown, §4.15 panel note, §4.16 and §4.17 additions, §5 new rows, §7 weaknesses, forms 8.1/8.2 notes, Appendix A/B/C. Needs migration 0316. | Fix phase |
+| 1.7 draft | Fix phase | Phase 2.6b (G-15; F-03-5, F-03-6, F-03-7, F-03-8 FIXED, F-00-8 EOD part FIXED; owner request *"end of day spreadsheet … exported and printed"*). Header; §2 pin; §4.8 rewritten (date picker, read warning, deposit, cash check with refunds, blind bag grid, two signatures; the "does NOT show" list removed); §4.9 steps 3–3b (two signatures, CSV/Excel export, do-not-file); §4.16–4.17; §5 new rows; §6 two rows; §7 two controls and weaknesses struck; form 8.1 note; 8.5; quick card; Appendix A/B. | Fix phase |
 | 1.3 draft | Fix phase | Phase 2.2 (G-01, owner D2). §2 roles table, §4.3 step 2, the known-weaknesses line and the Appendix B row now say the second count at till close is recorded in the app (SOP-01 §4.27 steps 8–12); the paper close slip is still signed. | Fix phase |

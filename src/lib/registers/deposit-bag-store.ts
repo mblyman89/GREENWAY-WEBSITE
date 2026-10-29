@@ -128,6 +128,30 @@ export async function bagForDay(day: string): Promise<{ ok: true; bagNo: string 
   return { ok: true, bagNo: rows[0]?.bag_no ?? null };
 }
 
+/**
+ * Fix Phase 2.6b (G-15): the day's bag with both denomination grids, for the
+ * end-of-day sheet. Errors are returned, never shown as "no bag".
+ */
+export async function bagDetailForDay(
+  day: string,
+): Promise<
+  | { ok: true; bag: (BagRow & { nightDenoms: unknown; morningDenoms: unknown }) | null }
+  | { ok: false; missingSchema: boolean; error: string }
+> {
+  if (!isSupabaseServiceConfigured) return { ok: false, missingSchema: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("deposit_bags")
+    .select(`${BAG_COLUMNS}, night_denoms, morning_denoms`)
+    .eq("business_day", day)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (error) return { ok: false, missingSchema: isMissingBagSchema(error), error: error.message };
+  const row = ((data as unknown as (DbBag & { night_denoms: unknown; morning_denoms: unknown })[] | null) ?? [])[0];
+  if (!row) return { ok: true, bag: null };
+  return { ok: true, bag: { ...toRow(row), nightDenoms: row.night_denoms, morningDenoms: row.morning_denoms } };
+}
+
 export type DayDrawers =
   | { ok: true; expected: ExpectedDeposit; sessionIds: string[] }
   | { ok: false; error: string };

@@ -228,6 +228,23 @@ The caveat *"F-03-1: do not trust the Undeposited Funds panel's green 'all match
 
 The caveat *"The bag screen does not exist (F-00-6 / G-04), so never tell anyone to 'seal the bag in the app'"* above is **retired** by Phase 2.6a. `concierge-kb.ts` `registers` carries the two Phase 2.6 facts.
 
+**Phase 2.6b (G-15 end-of-day sheet) answers:**
+
+| Question | Answer (built, Phase 2.6b) |
+|---|---|
+| How do I see an earlier day's end-of-day report? | Register Activity → **End-of-day report**, pick the day in **Business day**, tap **Show day** (SOP-03 §4.8) |
+| I typed a wrong date and it shows an error | Correct: a bad date is never replaced by today. Use the date picker |
+| How much should be in the bag? | **Deposit: what goes in the bag** → **Expected deposit** (closing count − float + drops, per till) |
+| Is Gross sales the cash I should have? | No. Use **Net cash from sales** in **Cash check (refunds taken off)**: cash sales minus refunds paid from drawers |
+| Why is Net cash a dash? | A refund is not tied to a drawer or the safe, or a record could not be read; the reason is under it |
+| Why does the bag say "hidden until the morning recount"? | So the printed report does not spoil the blind recount (D24). It shows once the recount is saved |
+| Who signs the report? | The night closer (**Night count, prepared by**) and, after the recount, a different morning employee (**Morning recount and verify**) |
+| It says "This report may be incomplete. Do not file it." | A record failed to read. Reload; still failing → tell the owner, use the close slips. Export is off until it reads |
+| Can I export the end-of-day report? | Yes: **Export: CSV · Excel**, six sheets (Deposit, Cash check, Refunds, Bag, Sales, Signatures) (SOP-03 §4.9) |
+| Can I export the master till sheet? | Not yet: Phase 2.7 (G-09) |
+
+The caveats F-03-6 (*"Use the Z report's net figure"*), F-03-5 (*"The night sheet is the record"*), F-03-7 (*"'No drawer sessions' may be a failed read"*) and F-03-8 (*"a typo silently shows today"*) above are **retired** by Phase 2.6b. `concierge-kb.ts` `registers` carries the Phase 2.6b fact.
+
 ### SOP-04 Receiving Intake & Monthly CCRS Public Records Request (`docs/sop/SOP-04-receiving-intake.md`, verified at `5299660b`)
 
 Concierge code is **unchanged** (record-only). Today the concierge's `product-intake` topic (`src/lib/admin/concierge-kb.ts` L132–148) is journey-level only. Its one Receiving fact is the transport-manifest details. The `ccrs` topic (L349–360) covers the weekly upload and the LIQ-1295 only. Nothing covers dock counting, refusing lines, Finalize, held lots, the monthly public records request or the zip drop (finding **F-04-C**). The in-app SOP sheets in `src/lib/catalog/sop-core.ts` and the Receiving help panel describe the pre-R31 flow (F-04-5), so they **must not** be used as grounding. What SOP-04 now provides as source material for the integration phase:

@@ -20,7 +20,7 @@ Audited at commit `54445a68` (main, 2026-10-27).
 ## SOP-00 recon findings (found while walking the tree for the roadmap)
 
 ### F-00-1 · CONFIRMED · DOC · S2 — The concierge tells staff the POS "is PLANNED, not built yet"
-- **Pin:** `src/lib/admin/concierge-kb.ts` L490–503 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
+- **Pin:** `src/lib/admin/concierge-kb.ts` L491–504 (`id: "pos"`, `planned: true`), plus `src/lib/admin/concierge-assistant.ts` prompt line *"If it's about the POS, note it's planned-not-built first."*
 - **Reality:** the register exists. `src/app/(site)/pos/RegisterShell.tsx` (5,949 lines), `SaleFlow.tsx` (6,198 lines), 23 `/api/pos/*` routes, and a Capacitor iOS build (`register-app/`, `ios/`).
 - **Effect:** an employee who asks the concierge "how do I close my till?" is told the register does not exist. This is the single biggest knowledge gap in the concierge.
 
@@ -56,9 +56,10 @@ Audited at commit `54445a68` (main, 2026-10-27).
 - **Needs an owner decision:** is the "little safe" a physical box whose balance we track, or just a source of change with no tracked balance? (See Open Question Q3 in `02-SOP-CATALOG-AND-ROADMAP.md`.)
 
 ### F-00-8 · CONFIRMED · GAP · S2 — Safe-count (master till) sheet has no print or export; EOD and till summary print only, with no export
-- **Pin:** `registers/safe/page.tsx`: no `PrintButton`, no CSV route. `registers/eod/page.tsx` L74 and `registers/history/[id]/page.tsx` L81 have `PrintButton` (window.print) but no CSV/XLSX route.
+- **Pin:** `registers/safe/page.tsx`: no `PrintButton`, no CSV route. `registers/eod/page.tsx` L116 and `registers/history/[id]/page.tsx` L81 have `PrintButton` (window.print) but no CSV/XLSX route.
 - **Owner requirement:** shift and day reports *"exported and printed"*. Master till *"exportable and printable"*.
 - `exceljs` and `xlsx` are already dependencies. CSV-route precedents exist (`inventory/cycle-counts/[id]/export/route.ts`, `reports/compliance/export/route.ts`).
+- **Status: EOD part FIXED (Phase 2.6b, G-15, #P26B).** The End-of-day report now exports CSV and Excel: `src/app/admin/registers/eod/export/route.ts` (`requirePermission("inventory.manage")` L29; a bad day is refused L32–33; a day with a failed read is refused with HTTP 409 L35–37) builds `eodSheetWorkbook` (`src/lib/registers/eod-sheet-core.ts` L299: sheets Deposit, Cash check, Refunds, Bag, Sales, Signatures). The deposit bag log exports CSV since Phase 2.6a. **Still OPEN:** the master till (safe-count) sheet print/export and the till summary export → Phase 2.7 (G-09).
 
 ### F-00-9 · CONFIRMED · GAP · S3 — No cleaning schedule or daily-task checklist feature exists
 - `grep -i "cleaning|dusting|sanitiz"` over `src` finds only unrelated text (data "cleaning", promotions). Checklists exist only for HR onboarding/offboarding (`employee-lifecycle-core.ts`) and payroll mentors.
@@ -180,7 +181,7 @@ Status updates to SOP-00 items: **F-00-12 → CONFIRMED** (see F-01-2). **F-00-1
 - **Pin:** `till-core.ts` L218 (`witnessPin` optional), UI *"Witness PIN (optional, second person)"* (`RegisterShell.tsx` L5826). Drops are the highest-value cash movement during a shift. The SOP sets "always get a witness when someone else is on the floor" as store practice.
 
 ### F-01-16 · CONFIRMED · DOC · S2 — The concierge still says the POS is planned (re-confirmed)
-- `src/lib/admin/concierge-kb.ts` L493 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
+- `src/lib/admin/concierge-kb.ts` L494 `planned: true` is unchanged at `d03fe15b`. SOP-01 content is now the source for fixing it (see `04-CONCIERGE-COVERAGE-LEDGER.md`). Same item as F-00-1. It is listed here only so the slice index counts it as re-verified. **Not a new defect.**
 
 ---
 
@@ -208,7 +209,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 
 ### F-02-3 · CONFIRMED · GAP · S2 — No master till denomination standard; the mix is saved but never shown or checked
 - **Owner (D11):** the master till is *"32 tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 100 nickels, and 125 pennies"*.
-- **Pin:** `validateSafeCount` (`safe-core.ts` L64–96) compares the **total** only, against `SAFE_TARGET_MINOR` (L26). The 13 denomination columns are stored (`0135` L37–50) but the **Recent counts** table shows only Total/Target/Variance (`safe/page.tsx` L192–233). The EOD reads only `count_window, total_minor, variance_minor` (`eod-store.ts` L126–129).
+- **Pin:** `validateSafeCount` (`safe-core.ts` L64–96) compares the **total** only, against `SAFE_TARGET_MINOR` (L26). The 13 denomination columns are stored (`0135` L37–50) but the **Recent counts** table shows only Total/Target/Variance (`safe/page.tsx` L192–233). The EOD reads only `count_window, total_minor, variance_minor` (`eod-store.ts` L168–171).
 - The owner's mix **is** in the code, but only as a worked example: `SPECIMEN_MASTER_COUNTS` (`register-cash-specimen-core.ts` L43–46), which is shown in the EOD specimen panel and is not used by the safe page.
 - **Effect:** 10 × $20 + 12 × $10 + the standard rest = $1,000.00 → **"Balanced"** (script-checked, `sop02/calc2.py`). The registers can run out of change while the page says all is well.
 - The $1,000 target is a code constant, with no setting (minor; recorded here so nobody looks for a setting).
@@ -250,7 +251,7 @@ Status updates: **F-00-7** re-confirmed (still no little-safe model; `grep -rni 
 - `docs/MICHAEL-books-93` L26 says the close debits *10400*, which D-77 (books-98) changed to 10100. That is history; the code is right.
 
 ### F-02-10 · CONFIRMED · UX · S3 — The Safe button is shown to staff logins, who are then denied
-- **Pin:** `registers/page.tsx` L135–137 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L91). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L184). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L45).
+- **Pin:** `registers/page.tsx` L135–137 renders **Safe** with no permission check. Register Activity needs `orders.manage`, which includes `staff` (`roles.ts` L91). The safe page needs `inventory.manage` (owner/admin/manager, L106), so staff are redirected to `/admin?denied=1` (`session.ts` L184). The same pattern applies to **End-of-day report** (L96–97; `eod/page.tsx` L68).
 
 - **Update (D15, slice SOP-03):** the owner wants **any employee** to count *and record* the master count. So staff being refused the safe page is now against an owner decision, not just a UX issue. Gap **G-13**.
 
@@ -300,24 +301,28 @@ Status updates: **F-00-6** re-confirmed (no deposit-bag screen; `grep -rn "depos
 - **Status (slice SOP-04):** the SOP-01 half is **FIXED IN DOCS** (SOP-01 v1.1 §4.29: the float stays in the drawer). It is a documentation correction of the program's own SOP, not a code change. The Registers page help text (`page.tsx` L117–120) is code and stays **OPEN**.
 
 ### F-03-5 · CONFIRMED · GAP · S2 — EOD print has one signature and no deposit figure, bag # or denominations
-- **Pin:** `src/app/admin/registers/eod/page.tsx` L248–258. Only *"Prepared by (signature)"* and *"Date / time"*. The table shows Opening / Drops / Closed count, but not takings-to-bag. There is no morning-verify line, no bag number and no denomination grid.
+- **Pin:** `src/app/admin/registers/eod/page.tsx` L464–470. Only *"Prepared by (signature)"* and *"Date / time"*. The table shows Opening / Drops / Closed count, but not takings-to-bag. There is no morning-verify line, no bag number and no denomination grid.
 - **Owner:** *"one person completes before close, and the morning employee recounts and verifies"*. Two people, two counts.
 - **SOP impact:** night sheet form 8.1 parts A/B/C. Ties to G-15.
+- **Status: FIXED (Phase 2.6b, G-15, #P26B; owner request *"end of day spreadsheet that one person completes before close, and the morning employee recounts and verifies"*).** `eod/page.tsx` now has **Deposit: what goes in the bag** (per till closing count − float = takings + drops = to the bag, and **Expected deposit**, L164–210, from the same `expectedDeposit` as the bag screen), the day's bag by denomination with night and morning columns (L256–302; the night figure reads *"hidden until the morning recount"* until the recount is saved, `eod-sheet-core.ts` L226–227), the bag number and stage, and two signature lines: **Night count, prepared by (signature)** and **Morning recount and verify, a different employee (signature)**, each with **Date / time** and the name from the app (L464–470). The pin above describes the page before Phase 2.6b. SOP-03 v1.7.
 
 ### F-03-6 · CONFIRMED · GAP · S2 — EOD report omits refunds; "Gross" is not cash
 - **Pin:** `src/lib/registers/eod-store.ts` does not query voids or returns. The Z report does (`day-report-core.ts` L136–175, L265–280: *"REFUNDS — STORE-WIDE CASH OUT"*).
 - **Effect:** a manager reading EOD "Gross" as the cash to expect will be over by the refunds paid out.
 - **SOP impact:** SOP-03 §4.8 says to use the Z report for cash. Ties to G-15.
+- **Status: FIXED (Phase 2.6b, G-15, #P26B).** `eod-store.ts` now reads the day's refunds with `readDayRefunds` (the same source as the Z report and the drawer figure) and the page shows **Cash check (refunds taken off)**: cash sales with rounding (`summarizeCashSales`, `eod-sheet-core.ts` L73) minus voids and counter returns paid from drawers = **Net cash from sales** (L212), then **Expected deposit − net cash (should match the drawers' total over/short)**. Refunds paid from the safe are listed, not taken off. A refund tied to neither a drawer nor the safe blanks the net cash with a reason (L205–208) rather than guessing. Sales now reads **Gross sales (not the cash: see Cash check)**. SOP-03 v1.7.
 
 ### F-03-7 · CONFIRMED · HARDEN · S3 — EOD store ignores read errors
 - **Pin:** `eod-store.ts`:
   - The register/session reads (L86–89), the drop read (L100–107) and the event read (L112–120) never check `error`. A failed read renders as *"No drawer sessions on this business day."* or as zeros.
   - The safe_counts/safe_swaps reads treat any error other than a missing table as "Not done" (L131–132, L144–145).
 - **SOP impact:** SOP-03 §6 says: if you know drawers were used, reload, then tell the owner and use the close slips.
+- **Status: FIXED (Phase 2.6b, G-15, #P26B).** `eodData` (`eod-store.ts` L81) now collects every failed read into `readProblems`: registers (L120), drawer sessions (L121), drops (L137), sales (read in pages with `pagedAllChecked`, L149–160), safe counts (L175) and change swaps (L189) other than a missing table, refunds (L204), the deposit bag (L205) and employee names (L206). The page shows **⚠ This report may be incomplete. Do not file it.** with the list, turns export off, and the Tills block says the sessions *"could not be read"* instead of *"No drawer sessions"*; the export route refuses with HTTP 409. SOP-03 v1.7.
 
 ### F-03-8 · CONFIRMED · UX · S3 — No date picker; a malformed `?day=` silently shows today
 - **Pin:** `src/app/admin/registers/eod/page.tsx` L15–19 `normalizeDay`: anything not `YYYY-MM-DD` falls back to `pacificToday()` with no message. There is no date control on the page, so a past day is reachable only by editing the address.
 - **SOP impact:** SOP-03 §4.8 documents `?day=YYYY-MM-DD`. Ties to G-15.
+- **Status: FIXED (Phase 2.6b, G-15, #P26B).** `normalizeDay` was removed. The page uses `parseBusinessDay` (`deposit-bag-flow-core.ts` L60–75; `eod/page.tsx` L70): an empty day is today, a malformed or impossible day shows the error (for example *"… is not a real calendar day."*) and a date picker, never today. A **Business day** date picker with **Show day** is on the page (`DayPicker`, L21–33). SOP-03 v1.7.
 
 ### F-03-9 · CONFIRMED · HARDEN · S2 — deposit_bags lets any staff login rewrite any bag (for when it is built)
 - **Pin:** `0212_deposit_bags.sql` L150–163. The `<t>_staff_write` policy is `for all using (is_staff()) with check (is_staff())` on `deposit_bags` and `deposit_bag_sessions`, so status and `amount_minor` can be changed directly via the API. There is no immutability trigger after `sealed`/`deposited`, and `updated_at` (L83) has no trigger. `pulled_by`/`counted_by` are deliberately not forced to differ (L68–73).
