@@ -236,7 +236,7 @@ describe("master-till-core (G-08 / G-09)", () => {
     const sorted: SheetCount[] = sortForSheet([pm, am]);
     expect(sorted.map((c) => c.window)).toEqual(["am", "pm"]);
     const wb = safeSheetWorkbook({ from: "2026-11-02", to: "2026-11-02" }, sorted, [
-      { id: "s", occurredAt: "2026-11-02T20:00:00Z", amountMinor: 5000, performedByName: "Ann", approvedByName: "Bo", notes: null },
+      { id: "s", occurredAt: "2026-11-02T20:00:00Z", amountMinor: 5000, performedByName: "Ann", approvedByName: "Bo", notes: null, inWords: "value only", outWords: "value only" },
     ]);
     expect(wb.filename).toBe("master-till-2026-11-02-to-2026-11-02");
     // Fix Phase 2.7b (G-02) appended the Exchanges sheet; Counts and Swaps stay first.
