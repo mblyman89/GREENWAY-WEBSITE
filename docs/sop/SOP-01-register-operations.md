@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.7 (draft for owner review; Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.8 (draft for owner review; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -683,18 +683,19 @@ A **change swap** trades big bills from your drawer for small bills and coin fro
 
 1. **MORE ▾ → 🔁 Change swap** (or **Change swap** in the Cash drawer panel).
 2. The window explains: *"Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under <your name>'s PIN and approved by a manager or lead with theirs."*
-3. **Amount swapped**: enter the value of **one side** only. *"Example: $100 in twenties goes to the safe, $100 in fives, ones and coins comes back. Enter the value of one side."*
+3. **Big bills to the safe (from this till)**: type **how many of each** bill leaves your drawer. **Change back (from the master till)**: how many of each bill and coin comes back (Phase 2.7b; `RegisterShell.tsx` L5858–5859). Coin is counted in pieces: a roll of quarters is 40. The line under the grids says *"Both sides $X — equal."* or *"Not equal yet: big bills $X, change $Y (…)"* (L5890–5896). You cannot record the swap until both sides are equal.
 4. A manager or lead (**not you**) counts **both** sides with you and enters **Manager or lead PIN (approval)**.
-5. **Notes (optional)…**: write what went each way, for example "OUT: 5×$20 · IN: 10×$5, 40×$1, 2 rolls quarters ($20)".
-6. Tap **Record swap of $X**. Success: *"$X change swap with the safe recorded."*
+5. **Notes (optional)…**.
+6. Tap **Record swap of $X**. Success: *"$X change swap with the safe recorded."* The bills both ways are saved with the swap and shown on the Store safe page (SOP-02 §4.11).
 
 Messages:
 - *"A manager or lead must approve the swap with their PIN."*: the approver box is empty.
 - *"A swap cannot approve itself — a manager or lead must enter their PIN."*: you used your own PIN.
 - *"<name> is not a manager or lead — safe swaps need a manager PIN."*: the approver is a budtender.
 - *"No active employee for the approver PIN."* / *"Approver PIN must be 4–6 digits."*: re-enter it.
+- *"Enter the bills both ways: the big bills going to the safe and the change coming back."* / *"The big bills to the safe add up to $X, not the swap amount $Y."* / *"The change back adds up to $X, but the big bills are $Y. A swap must be the same value both ways."*: recount both sides (`little-safe-core.ts` L133, L142, L147).
 
-> **Owner rule D3, interim paper step.** The owner wants to know **when big bills leave the master till and go into the little safe, and which small bills and coin came out of the little safe**. The register records only the **dollar value** of a swap, not which bills (finding F-01-8). Until that is built, **fill in the Change-swap denomination log (form 8.3) for every swap**, and also put the breakdown in **Notes**. Both people initial the form.
+> **Owner rule D3 (built, Phase 2.7b).** The owner wants to know **when big bills leave the master till and go into the little safe, and which small bills and coin came out of the little safe**. The register now records **which bills** went each way (finding F-01-8 FIXED). The master till ↔ little safe exchange itself is recorded on the Store safe page (SOP-02 §4.10). **The iPad app must be rebuilt** to show the two grids: an iPad built before Phase 2.7b still shows **Amount swapped** (the value of one side) and saves the swap by value only. On such an iPad, keep filling in **SOP-02 form 8.3** for every swap.
 
 **Change swap vs No sale:** a swap goes through **Change swap** and records the exchange. Do **not** use **No sale → Change fund swap with the safe** for an actual swap. That reason only opens the drawer. It records no amount and no approver for the exchange itself.
 
@@ -1162,13 +1163,15 @@ Reason (any over/short, even < $5): ________________________________
 Manager: ____________  Time: ______
 ```
 
-### 8.3 Change-swap denomination log (D3: master till ↔ little safe)
+### 8.3 Change-swap denomination log (register ↔ master till) — replaced by SOP-02 form 8.3
+
+> **Use SOP-02 form 8.3** (finding F-02-8, fixed in v1.8). This form's old title said *"master till ↔ little safe"*, but a register swap is **till ↔ master till** (owner D14); the master till ↔ little safe exchange is SOP-02 form 8.2 and is recorded on the Store safe page. Since Phase 2.7b the register records the bills both ways, so a paper line is needed only for an iPad not yet rebuilt. The layout below is kept for reference.
 
 ```
 Date | Time | Register/till | OUT of till → little safe (big bills) | IN from little safe → till (small bills & coin) | Value each side | Recorded by | Approved by (mgr/lead) | Matches register "Record swap"? 
      |      |               | e.g. 5×$20                           | e.g. 10×$5, 40×$1, 2 rolls 25¢ ($20)           | $100.00         |             |                        | [ ]
 ```
-Every swap needs one line. The register keeps the dollar value; this log keeps **which bills and coin**, which is what the owner asked for.
+Only for swaps from an iPad not yet rebuilt (they show *"not recorded (value only)"* on the Store safe page). A rebuilt register keeps **which bills and coin** itself.
 
 ### 8.4 Second-person count sign-off (D2)
 
@@ -1225,7 +1228,7 @@ Owner reviewed: ____________________   Date: ________
 │ HOLD = ⏸ (one at a time, ID re-checked on load). CANCEL = recorded under your name.    │
 │ VOID = same day only. RETURN = loyalty member, 15 days, original pkg, legible lot.     │
 │ REPRINT = MORE ▸ Reprint last receipt (drawer stays shut). Don't re-tap Print.         │
-│ DROP big bills (afternoon/night) + witness. SWAP = mgr PIN + fill swap log (8.3).      │
+│ DROP big bills (afternoon/night) + witness. SWAP = mgr PIN + bills BOTH WAYS on screen. │
 │ CLOSE: drop first → tips apart → blind count → 2nd person count on slip → Record.      │
 │ OFFLINE: sales OK on open drawer; no PIN steps; never wipe the iPad with SYNC pending. │
 │ STUCK? Read the message. It tells you why and what to do. Then call the manager.        │
@@ -1287,7 +1290,7 @@ Owner reviewed: ____________________   Date: ________
 | Owner requirement | Today | Interim procedure in this SOP | Gap / finding |
 |---|---|---|---|
 | ~~D2: second-person count at close (any second employee)~~ | **BUILT, Phase 2.2**: the register (and the back-office close) takes a second employee's PIN and own count (4.27). A difference is a warning | Paper slip 8.2/8.4 only if migration 0314 is not applied | G-01 BUILT · F-01-9 FIXED, F-00-5 close part FIXED |
-| D3: log big bills master till → little safe, and which small bills/coin came back | Swap records value only | Swap log 8.3 and Notes | G-02 · F-01-8, F-00-7 |
+| ~~D3: log big bills master till → little safe, and which small bills/coin came back~~ | **BUILT, Phase 2.7b**: the change swap takes the bills both ways (4.26); the master till ↔ little safe exchange is on the Store safe page (SOP-02 §4.10) | SOP-02 form 8.3 only for an iPad not yet rebuilt | G-02 BUILT · F-01-8, F-00-7 FIXED |
 | ~~D7: $5 over/short warning screen (admin only: who, when, how much, required reason)~~ | **BUILT, Phase 2.3**: reason required over $5.00 at reconcile (optional at $5.00 or less, D21); **Over / short warnings** screen, owner and admin only, drawers and master till (4.30 step 6) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-01-11 FIXED |
 | Deposit bag (seal → morning verify → safe → bank) | Tables exist, no screen | SOP-03 paper | G-04 · F-00-6 |
 | Per-shift / per-cashier report | **Reconcile figure is per drawer (BUILT, Phase 2.1).** The printed X/Z day report is still per register | Close slip per drawer; the till summary prints the drawer's figure | G-05 (drawer figure BUILT; printable per-cashier shift report open) · F-01-10 |
@@ -1302,6 +1305,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.8 draft | Fix phase | Phase 2.7b (owner message 4: *"Master till items"*; owner D3, D14). G-02 BUILT, F-01-8 FIXED: §4.26 change swap now takes **Big bills to the safe** and **Change back** by denomination and refuses unequal sides; new messages listed; the D3 note says the iPad must be rebuilt. Form 8.3 retitled and pointed to SOP-02 form 8.3 (F-02-8 FIXED). Quick card and Appendix B updated. | Fix program |
 | 1.7 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT, F-01-11 FIXED: the Reconcile card has a reason box; more than $5.00 over or short needs a reason, checked by the server against its own figure (blank → refused, audited); $5.00 or less optional; the reason is saved on the drawer (migration 0315) and printed on the till summary; every warning is audited; new owner/admin screen **Over / short warnings** (drawers and master till; who, when, how much, reason), linked from Register Activity and the menu. Warnings never block. §4.30 step 6 and related pages, §6 row, form 8.5 note, checklist 8.6 and Appendix B updated. | Fix program |
 | 1.6 draft | Fix phase | Phase 2.2 (owner message 4: *"then second-person count"*; owner D2: *"Q2- close only, and it can be any second employee"*). G-01 BUILT: a close needs a second employee's PIN and their own blind count (register two-step close and the back-office close form); the server refuses the closer's own PIN; both counts are stored (migration 0314); a difference is a warning only; over/short still uses the closer's count. Close is now compare-and-swap (F-01-2, close part) and count-row save errors are recorded, not ignored. §4.27 steps 5, 8–13 and back-office close, §4.29 step 3, §4.30 card rows and step 1, §5.8 messages, form 8.4 note, Appendix A and B updated. | Fix program |
 | 1.5 draft | Fix phase | Phase 2.1 (owner message 4: *"per-drawer figure"*). G-05 drawer figure BUILT: reconcile shows and uses the system figure per drawer (no typed cash sales, F-01-4 / F-00-13 FIXED; real expected before reconcile, F-01-3 FIXED); refunds say which drawer or the safe paid (migration 0313); untied refunds block reconcile until a manager ties them; reconcile is compare-and-swap (F-01-2 reconcile part) and records the signed-in manager (F-01-5 reconcile part). §4.22, §4.23, §4.27 step 9, §4.28, §4.30, Appendix A and B updated. | Fix program |

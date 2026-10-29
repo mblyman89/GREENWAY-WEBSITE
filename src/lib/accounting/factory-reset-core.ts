@@ -437,6 +437,12 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "recall_event_lots", disposition: "KEEP", because: "Which lots each recall event covered. Kept with the recall log; the lot id is a plain id (no link), so after a wipe it simply shows as an id." },
   { table: "recall_event_weekly", disposition: "KEEP", because: "The weekly recall tracking rows reported to the LCB \u2014 kept with the recall log." },
   { table: "destruction_evidence", disposition: "KEEP", because: "Photos and videos of destructions (Fix Phase 1.7a, G-43) \u2014 part of the five-year destruction record (WAC 314-55-097); append-only, and the files stay in the private bucket." },
+  // Fix Phase 2.7b (G-02, owner D3): the little safe exchange log (0317).
+  // KEEP like pos_cart_adjustments: an append-only cash-custody record
+  // (who moved which bills between the master till and the little safe).
+  // Its only link is recorded_by -> employees (KEEP), so no kept row points
+  // at a wiped one. safe_swaps stays WIPE; its new bill columns change nothing.
+  { table: "little_safe_exchanges", disposition: "KEEP", because: "The little safe exchange log (Fix Phase 2.7b, G-02) \u2014 which bills moved between the master till and the little safe, who did it and when. An append-only cash-custody record kept like the audit log." },
   { table: "pos_cart_adjustments", disposition: "KEEP", because: "The register minus / remove / cancel trail (who reduced which cart, when) — an anti-abuse audit record kept like the audit log." },
   { table: "registers", disposition: "KEEP", because: "Your physical registers. Hardware you own; deleting them would stop the POS from opening." },
   { table: "pos_devices", disposition: "KEEP", because: "The tablets and terminals you have paired." },

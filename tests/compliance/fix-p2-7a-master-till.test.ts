@@ -239,7 +239,8 @@ describe("master-till-core (G-08 / G-09)", () => {
       { id: "s", occurredAt: "2026-11-02T20:00:00Z", amountMinor: 5000, performedByName: "Ann", approvedByName: "Bo", notes: null },
     ]);
     expect(wb.filename).toBe("master-till-2026-11-02-to-2026-11-02");
-    expect(wb.sheets.map((s) => s.name)).toEqual(["Counts", "Swaps"]);
+    // Fix Phase 2.7b (G-02) appended the Exchanges sheet; Counts and Swaps stay first.
+    expect(wb.sheets.map((s) => s.name).slice(0, 2)).toEqual(["Counts", "Swaps"]);
     const rows = wb.sheets[0].rows;
     expect(rows[0]).toMatchObject({ window: "Standard (D11)", tens: 32, ones: 318, total: 1000 });
     expect(rows[1]).toMatchObject({ window: "AM", quarters: 87, variance: -2, mix: "off: \u22128 \u00d7 25\u00a2" });
@@ -435,7 +436,8 @@ describe("pages and route (source)", () => {
     expect(s).toMatch(/signedDiff\(d\)/);
     expect(s).toMatch(/PrintButton/);
     expect(s).toMatch(/This sheet may be incomplete\. Do not file it\./);
-    expect(s).toMatch(/gap G-02/);
+    // Fix Phase 2.7b replaced the "gap G-02" paper-form note with the recorded exchanges.
+    expect(s).toMatch(/gap G-02|Master till ↔ little safe exchanges/);
     expect(s).toMatch(/AM counter — signature/);
   });
 
@@ -444,7 +446,7 @@ describe("pages and route (source)", () => {
     expect(r).toMatch(/requirePermission\("inventory\.manage"\)/);
     expect(r).toMatch(/if \(!range\.ok\) return bad\(range\.error\)/);
     expect(r).toMatch(/some records could not be read.*409/);
-    expect(r).toMatch(/exportResponse\(safeSheetWorkbook\(range, counts, swaps\)/);
+    expect(r).toMatch(/exportResponse\(safeSheetWorkbook\(range, counts, swaps(, exchanges)?\)/);
   });
 
   it("the action keeps the Phase 2.3 strings and audits", () => {

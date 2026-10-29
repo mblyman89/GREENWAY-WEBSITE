@@ -16,7 +16,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificToday } from "@/lib/reports/timezone";
 import { exportResponse, parseFormat } from "@/lib/reports/workbook";
-import { listSafeCountsRange, listSwapsRange } from "@/lib/registers/safe-store";
+import { listLittleSafeExchangesRange, listSafeCountsRange, listSwapsRange } from "@/lib/registers/safe-store";
+import { sheetExchangeFromRow } from "@/lib/registers/little-safe-core";
 import { listEmployees } from "@/lib/staffing/store";
 import {
   parseDayRange,
@@ -37,15 +38,18 @@ export async function GET(req: Request) {
   const u = new URL(req.url);
   const range = parseDayRange(u.searchParams.get("from"), u.searchParams.get("to"), pacificToday());
   if (!range.ok) return bad(range.error);
-  const [countsRes, swapsRes, employees] = await Promise.all([
+  const [countsRes, swapsRes, exchangesRes, employees] = await Promise.all([
     listSafeCountsRange(range.from, range.to),
     listSwapsRange(range.from, range.to),
+    listLittleSafeExchangesRange(range.from, range.to),
     listEmployees({ includeInactive: true }),
   ]);
   if (!countsRes.ready || !swapsRes.ready) {
     return bad("The safe tables aren't set up yet — run migration 0135_safe_counts_swaps.sql. Nothing was exported.", 409);
   }
-  const problems = [countsRes.error, swapsRes.error].filter((x): x is string => x != null);
+  // Fix Phase 2.7b (G-02): before 0317 the Exchanges sheet is empty (ready
+  // false); a partial read of an applied table refuses the whole file.
+  const problems = [countsRes.error, swapsRes.error, exchangesRes.error].filter((x): x is string => x != null);
   if (problems.length > 0) {
     return bad(`The master till sheet for ${range.from} to ${range.to} is not exported because some records could not be read: ${problems.join(" · ")}`, 409);
   }
@@ -59,5 +63,6 @@ export async function GET(req: Request) {
   }
   const counts = [...byDay.keys()].sort().flatMap((d) => sortForSheet(byDay.get(d) ?? []));
   const swaps = [...swapsRes.swaps].reverse().map((r) => sheetSwapFromRow(r, nameFor));
-  return exportResponse(safeSheetWorkbook(range, counts, swaps), parseFormat(u.searchParams.get("format")));
+  const exchanges = [...exchangesRes.exchanges].reverse().map((r) => sheetExchangeFromRow(r, nameFor));
+  return exportResponse(safeSheetWorkbook(range, counts, swaps, exchanges), parseFormat(u.searchParams.get("format")));
 }

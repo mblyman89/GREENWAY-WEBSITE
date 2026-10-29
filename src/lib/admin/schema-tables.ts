@@ -209,6 +209,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "leafly_sync_runs",
   "leafly_webhook_events",
   "license_settings",
+  "little_safe_exchanges",
   "lookup_job_items",
   "lookup_jobs",
   "loyalty_accounts",
