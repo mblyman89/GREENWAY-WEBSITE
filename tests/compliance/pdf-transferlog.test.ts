@@ -56,12 +56,14 @@ describe("pdf-transferlog-core (H16b-3 — old-method Transfer Log PDF)", () => 
     expect(normalizeTransferLogDate("garbage")).toBeNull();
   });
 
-  it("reads every header field, preferring the real LCB Manifest ID", () => {
+  it("reads every header field (Fix 3.3: Greenway's UBI after 'LCB Manifest ID:' is never the manifest id)", () => {
     const m = parseTransferLog(sample)!;
     expect(m).not.toBeNull();
     expect(m.source_format).toBe("pdf-manifest");
-    // Real LCB Manifest ID beats the GF Transfer Log ID.
-    expect(m.manifest_number).toBe("603353555");
+    // Fix 3.3: "LCB Manifest ID: 603353555 - " prints GREENWAY's UBI (the
+    // destination, 6033535550010001), not the transfer - the GF Transfer Log
+    // ID is the identity when no CCRS manifest id follows the dash.
+    expect(m.manifest_number).toBe("GF41582000007617");
     expect(m.vendor_label).toBe("Svin Garden");
     expect(m.vendor_license).toBe("415820");
     expect(m.transfer_date).toBe("2026-06-29");

@@ -46,6 +46,7 @@
 
 import { parseCoaPdfText, normalizeCoaText, potencyRow, type CoaPdfDoc, type CoaTemplate } from "./coa-pdf-text-core";
 import type { ParsedLab, ParsedLine, ParsedManifest } from "./intake-parser";
+import { WA_TESTING_LABS } from "./testing-labs-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,7 +57,7 @@ export type CoaCertificate = {
   key: string;
   /** The document it came from (attachment filename). */
   docLabel: string;
-  template: CoaTemplate | null;
+  template: CoaTemplate | "growflow-qa" | null;
   labName: string | null;
   /** The lab's own id ("WA-260902-019"); null when the layout prints none. */
   labSampleId: string | null;
@@ -256,8 +257,146 @@ export function readCertificate(text: string, docLabel: string, n: number): CoaC
   };
 }
 
+// ---------------------------------------------------------------------------
+// 1b. GrowFlow "QA Results" summary (Fix Phase 3.3)
+// ---------------------------------------------------------------------------
+//
+// Owner (Fix 3.3, verbatim): "after pressing the "Re-read COAs from this
+// delivery's documents" button, this is the message i am given, "COAs re-read.
+// COA: read 1 certificate from 1 lab document; attached 0 of 12 lines without a
+// lab result; 12 lines have no matching certificate ... 1 certificate(s) could
+// not be read.""
+//
+// ROOT CAUSE (verified on the real PDF, tests/fixtures/growflow-canna/
+// 01-QA.unpdf.txt): GrowFlow's `QA_<timestamp>.pdf` is not always a bundle of
+// lab certificates. For Canna Processing it is ONE "QA Results" table - one
+// block per product:
+//   "Strain Lab Sample ID# Parent ID# Child ID# Additional Details
+//    Banana Cake MEDICINE CREEK ANALYTICS GF41918900062114 GF41918900062100
+//    GF41918905566988 MED THC THCA THCMax CBD CBDA CBDMax Moisture ... RS
+//    5.63 24.94 27.5 .73 0 .73"
+// It prints no "Page k of k" and no "Certificate of Analysis", so the bundle
+// reader saw ONE chunk with 36 ids ("a summary or a list") and refused it.
+// Each block IS one product's lab result: the Child ID# is the manifest line's
+// inventory id, so every line matches by id (tier 1) - nothing by name.
+// Units: a column headed "THC MgG" prints mg/g (57 = 5.7 %); the arithmetic is
+// verified on the fixture: 5.7 + 0.877 x 30.0 = 32.01 = the printed THCMax.
+
+const GF_QA_BLOCK = /Strain\s+Lab\s+Sample\s+ID#\s+Parent\s+ID#\s+Child\s+ID#\s+Additional\s+Details/gi;
+const GF_QA_HEADS = ["THC", "THCA", "THCMax", "CBD", "CBDA", "CBDMax"] as const;
+const GF_QA_ALL_HEADS = new Set(["THC", "THCA", "THCMAX", "CBD", "CBDA", "CBDMAX", "MOISTURE", "STEMS", "OTHER", "ABAC", "Y/M", "COL", "BT", "EC", "RS"]);
+
+/** True for a GrowFlow "QA Results" summary table. PURE. */
+export function looksLikeGrowFlowQaResults(raw: string): boolean {
+  const t = normalizeCoaText(typeof raw === "string" ? raw : "");
+  GF_QA_BLOCK.lastIndex = 0;
+  return /\bQA Results\b/i.test(t) && GF_QA_BLOCK.test(t);
+}
+
+/** Known lab names, upper-cased, without the legal suffix ("Integrity Labs"). */
+const KNOWN_LAB_NAMES: { upper: string; name: string }[] = WA_TESTING_LABS.map((l) => {
+  const name = l.name.replace(/,?\s*(?:LLC|Inc)\.?$/i, "").trim();
+  return { upper: name.toUpperCase().replace(/\s+/g, " "), name };
+}).sort((a, b) => b.upper.length - a.upper.length);
+
+/** "Cherry OG MEDICINE CREEK ANALYTICS" -> strain "Cherry OG", lab "Medicine Creek Analytics". PURE. */
+export function splitStrainAndLab(head: string): { strain: string | null; labName: string | null } {
+  const h = head.replace(/\s+/g, " ").trim();
+  const up = h.toUpperCase();
+  for (const k of KNOWN_LAB_NAMES) {
+    if (up.endsWith(" " + k.upper) || up === k.upper) {
+      return { labName: k.name, strain: h.slice(0, h.length - k.upper.length).trim() || null };
+    }
+  }
+  const lab = h.match(/((?:\b[A-Z][A-Z&.'-]{2,}\b\s*){2,})$/);
+  return {
+    labName: lab ? titleCaseLab(lab[1].trim()) : null,
+    strain: (lab ? h.slice(0, h.length - lab[0].length) : h).trim() || null,
+  };
+}
+
+function titleCaseLab(s: string): string {
+  return s
+    .toLowerCase()
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+/** One block -> one certificate (null when the block carries no GF id). PURE. */
+export function readGrowFlowQaBlock(block: string, docLabel: string, n: number): CoaCertificate {
+  const key = `${docLabel}#${n}`;
+  const t = normalizeCoaText(block);
+  const ids = [...t.matchAll(/\b(GF\d{14})\b/g)].map((m) => m[1].toUpperCase());
+  const firstId = t.search(/\bGF\d{14}\b/);
+  const head = firstId > 0 ? t.slice(0, firstId).trim() : "";
+  // "<Strain> <LAB NAME IN CAPITALS>". A known WA lab name is matched first
+  // (a strain can end in capitals too: "Cherry OG MEDICINE CREEK ANALYTICS");
+  // otherwise the lab is the trailing run of all-capital words of 3+ letters.
+  const { labName, strain } = splitStrainAndLab(head);
+  // Header row after the ids: tokens up to the first number; "MgG" marks the
+  // column before it as mg/g.
+  const afterIds = ids.length > 0 ? t.slice(t.lastIndexOf(ids[ids.length - 1]) + ids[ids.length - 1].length) : "";
+  const tokens = afterIds.trim().split(" ").filter(Boolean);
+  const heads: { name: string; mgPerG: boolean }[] = [];
+  let i = 0;
+  for (; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (/^-?\d*\.?\d+$/.test(tok)) break;
+    if (/^MgG$/i.test(tok) && heads.length > 0) heads[heads.length - 1].mgPerG = true;
+    else if (GF_QA_ALL_HEADS.has(tok.toUpperCase())) heads.push({ name: tok.toUpperCase(), mgPerG: false });
+  }
+  const nums = tokens.slice(i).filter((x) => /^-?\d*\.?\d+$/.test(x)).map(Number);
+  const potency: Record<string, number> = {};
+  const val = (name: string): number | null => {
+    const at = heads.findIndex((h) => h.name === name.toUpperCase());
+    if (at < 0 || at >= nums.length || !Number.isFinite(nums[at])) return null;
+    const v = heads[at].mgPerG ? nums[at] / 10 : nums[at];
+    return Math.round(v * 1000) / 1000;
+  };
+  const map: Record<(typeof GF_QA_HEADS)[number], string> = {
+    THC: "d9-thc", THCA: "thca", THCMax: "total-thc", CBD: "cbd", CBDA: "cbda", CBDMax: "total-cbd",
+  };
+  for (const h of GF_QA_HEADS) {
+    const v = val(h);
+    if (v !== null) potency[map[h]] = v;
+  }
+  // Sample ID# first: it is the lab's own id (the labtest external identifier).
+  const uniq = [...new Set(ids)];
+  const identifiable = uniq.length > 0;
+  return {
+    key, docLabel, template: "growflow-qa", labName,
+    labSampleId: uniq[0] ?? null,
+    ids: uniq, sampleName: strain, productType: null,
+    passed: null, // the table prints no pass/fail - never invented
+    totalThcPct: potency["total-thc"] ?? null,
+    totalCbdPct: potency["total-cbd"] ?? null,
+    totalCannabinoidsPct: null,
+    potency,
+    testedOn: null, releasedOn: null,
+    identifiable,
+    reason: identifiable ? null : "this QA Results row prints no GF id",
+  };
+}
+
+/** Every block of a GrowFlow "QA Results" table, one certificate each. PURE. */
+export function readGrowFlowQaResults(raw: string, docLabel: string): CoaCertificate[] {
+  const t = normalizeCoaText(typeof raw === "string" ? raw : "");
+  const starts: number[] = [];
+  GF_QA_BLOCK.lastIndex = 0;
+  for (const m of t.matchAll(GF_QA_BLOCK)) if (m.index !== undefined) starts.push(m.index);
+  const out: CoaCertificate[] = [];
+  starts.forEach((s, k) => {
+    const block = t.slice(s, k + 1 < starts.length ? starts[k + 1] : t.length).replace(GF_QA_BLOCK, " ");
+    GF_QA_BLOCK.lastIndex = 0;
+    out.push(readGrowFlowQaBlock(block, docLabel, k + 1));
+  });
+  return out;
+}
+
 /** Split + read every certificate in one document's text. */
 export function readCoaBundleText(raw: string, docLabel: string): CoaCertificate[] {
+  if (looksLikeGrowFlowQaResults(raw)) return readGrowFlowQaResults(raw, docLabel);
   return splitCoaCertificates(raw).map((chunk, i) => readCertificate(chunk, docLabel, i + 1));
 }
 

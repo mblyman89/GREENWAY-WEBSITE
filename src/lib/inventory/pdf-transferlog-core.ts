@@ -179,6 +179,44 @@ function meaningful(v: string | null): string | null {
 }
 
 /**
+ * Greenway's WA UBI (9-digit prefix of 6033535550010001, printed as "Bill To
+ * UBI" on every GrowFlow invoice and as "UBI #: 603353555" on Cultivera
+ * invoices). Fix 3.3: GrowFlow fills "LCB Manifest ID:" with it.
+ */
+export const GREENWAY_UBI_PREFIX = "603353555";
+
+/**
+ * The transfer's identity on a GrowFlow Transfer Log (Fix Phase 3.3). PURE.
+ *
+ * Owner (Fix 3.3, verbatim): "the growflow manifest that keeps failing, is
+ * still failing somehow".
+ *
+ * ROOT CAUSE (verified on two real Transfer Logs from two vendors - Svin Garden
+ * tests/compliance/fixtures/pdf-transferlog-oldmethod-sample.txt and Canna
+ * Processing tests/fixtures/growflow-canna/04-TransferLog.unpdf.txt): both
+ * print "LCB Manifest ID: 603353555 - ...". 603353555 is GREENWAY's UBI (the
+ * destination), so every GrowFlow Transfer Log from every vendor staged as
+ * manifest "603353555", while the same delivery's CCRS manifest staged as
+ * "GF41918900002835-1634964-1" - two rows, no duplicate detected. The Canna
+ * Processing log prints the real CCRS manifest id right after the dash:
+ * "LCB Manifest ID: 603353555 - GF41918900002835-1634964-1".
+ *
+ * Order: (1) the CCRS manifest id printed after "LCB Manifest ID: <n> -";
+ * (2) digits after "LCB Manifest ID:" only when they are NOT a UBI (Greenway's
+ * or any "UBI: <n>" printed on the document); (3) the GF Transfer Log ID.
+ */
+export function transferLogManifestNumber(text: string): string | null {
+  const t = typeof text === "string" ? text : "";
+  const ccrs = t.match(/LCB Manifest ID:\s*(?:\d{6,}\s*-\s*)?(GF\d{10,}-\d{3,}-\d{1,3})\b/i);
+  if (ccrs) return ccrs[1].toUpperCase();
+  const ubis = new Set<string>([GREENWAY_UBI_PREFIX]);
+  for (const m of t.matchAll(/\bUBI\b[^0-9]{0,6}(\d{9})/gi)) ubis.add(m[1]);
+  const digits = grab(t, /LCB Manifest ID:\s*(\d{6,})/i);
+  if (digits && !ubis.has(digits.slice(0, 9))) return digits;
+  return grab(t, /Transfer Log ID:\s*(GF\d{6,})/i);
+}
+
+/**
  * Parse an old-method Transfer Log PDF's text into a ParsedManifest with full
  * transport chain-of-custody. Returns null if it isn't a Transfer Log.
  */
@@ -186,11 +224,10 @@ export function parseTransferLog(text: string): ParsedManifest | null {
   if (!looksLikeTransferLog(text)) return null;
 
   // ── Header / IDs ────────────────────────────────────────────────────────────
-  // Prefer the real LCB Manifest ID; keep the GF Transfer Log ID as a fallback
-  // so we always have SOME identifier for the draft.
-  const lcbManifestId = grab(text, /LCB Manifest ID:\s*(\d{6,})/i);
-  const transferLogId = grab(text, /Transfer Log ID:\s*(GF\d{6,})/i);
-  const manifest_number = lcbManifestId ?? transferLogId ?? null;
+  // Fix 3.3: see transferLogManifestNumber - the digits GrowFlow prints after
+  // "LCB Manifest ID:" are the DESTINATION's UBI (Greenway's 603353555), not a
+  // transfer id; the real CCRS manifest id follows " - " when it is printed.
+  const manifest_number = transferLogManifestNumber(text);
 
   // Origin licensee = the SENDING vendor ("Licensee Name:" on this doc, with
   // "License #" nearby). The destination is separately labelled "Destination".
@@ -291,8 +328,13 @@ export function __runTransferLogTests(sampleText: string): { passed: number; fai
   const m = parseTransferLog(sampleText);
   ok(m !== null, "sample parses");
   ok(m?.source_format === "pdf-manifest", "source_format tagged");
-  // Real LCB Manifest ID beats the GF Transfer Log ID.
-  ok(m?.manifest_number === "603353555", `LCB manifest id preferred (got ${m?.manifest_number})`);
+  // Fix 3.3: "LCB Manifest ID: 603353555 - " is Greenway's UBI (the
+  // destination), never the transfer id - the GF Transfer Log ID is used.
+  ok(m?.manifest_number === "GF41582000007617", `Greenway UBI is not a manifest id (got ${m?.manifest_number})`);
+  ok(transferLogManifestNumber("LCB Manifest ID: 603353555 - GF41918900002835-1634964-1 #") === "GF41918900002835-1634964-1", "CCRS manifest id after the dash wins");
+  ok(transferLogManifestNumber("Transfer Log ID: GF41918900002835 LCB Manifest ID: 603353555 - ") === "GF41918900002835", "Greenway UBI refused -> Transfer Log ID");
+  ok(transferLogManifestNumber("License UBI: 603353015 Transfer Log ID: GF41582000007617 LCB Manifest ID: 603353015 - ") === "GF41582000007617", "vendor UBI refused too");
+  ok(transferLogManifestNumber("Transfer Log ID: GF41582000007617 LCB Manifest ID: 21544987 - ") === "21544987", "a real numeric LCB id is kept");
   ok(m?.vendor_label === "Svin Garden", `origin vendor (got ${m?.vendor_label})`);
   ok(m?.vendor_license === "415820", `origin license (got ${m?.vendor_license})`);
   ok(m?.transfer_date === "2026-06-29", `transfer date (got ${m?.transfer_date})`);

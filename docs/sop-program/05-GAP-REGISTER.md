@@ -316,6 +316,16 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   No migration. Tests `fix-p3-2b-intake-visibility` (26), self-tests `intake-staging-core` 29 (+ `finalize-label-core` 37, `manifest-event-labels-core` 66), mutation probe `scripts/compliance/mutate-fix-p3-2b.py`. SOP-04 v1.7.
 - **Was (interim, superseded):** SOP-04 v1.6 §4.6, *"A line on the paper but not on the screen means: do not finalize; tell the manager, who re-imports it with a manual tool (§4.5) or calls the owner."*
 
+### Fix Phase 3.3 (F-04-22, F-04-23): GrowFlow emails read whole, one delivery one row (no new gap number)
+
+- **Owner:** *"also, the growflow manifest that keeps failing, is still failing somehow … in the future, these emails with the manifests and invoices will be sent directly to the vendor_intake@ address rather than me forwarding them … i think it would be worth adding a button to dismiss duplicate manifests that somehow make it to the table. we should have logic in place to prevent this, so it may need hardening."* Hardening of the R31 intake and the G-17 pipeline; no new gap row.
+- **Status: BUILT (Phase 3.3, #P..).**
+  1. **F-04-22 (FIXED).** A GrowFlow *QA Results* PDF (one table, one row per Child ID with THC/CBD/total) is read as lab results for every line (`coa-bundle-core.ts` `readGrowFlowQaResults`), at staging and by **Re-read COAs**. The GrowFlow invoice is a price donor (`pdf-growflow-invoice-core.ts`). The transfer log no longer reads the UBI as the manifest number (`pdf-transferlog-core.ts` `transferLogManifestNumber`), and the primary PDF no longer depends on attachment order.
+  2. **F-04-23 (FIXED).** A second copy of one delivery is stopped at staging by sibling evidence (same vendor and the same invoice #, or the same vendor and the same lots) as well as by number (`manifest-sibling-core.ts`; `intake-store.ts` `findStagingSibling`). One already on the table is offered to **Dismiss duplicate** as a sibling; migration `0321_inbound_sibling_dismiss.sql` lets the dismiss function accept it. Label text such as "Manifest ID" is never taken as the vendor.
+  3. (Above and beyond) The Vercel build no longer logs `[enrichment-identity] identity read failed: TypeError: fetch failed` per page: identity reads are skipped during `NEXT_PHASE=phase-production-build`, and network failures at runtime warn once a minute.
+  Migration `0321_inbound_sibling_dismiss.sql` (manual; rollback shipped). Tests `fix-p3-3-growflow-intake` (37), self-tests `pdf-growflow-invoice-core` 11, `manifest-sibling-core` 17, mutation probe `scripts/compliance/mutate-fix-p3-3.py`. SOP-04 v1.8.
+- **Was (interim, superseded):** SOP-04 v1.7 §4.4, *"duplicate (the same manifest # and vendor is already live, so it is not staged again)"*.
+
 ## G-18 · Monthly CCRS public records request (reminder, log, template)
 
 - **Owner (D28):** *"Please make sure to include the monthly CCRS public record request to ingest the states data for the benchmarks."* Vision: *"Ideally, I will make the public records request once per month to get the previous months data…"* (`ROADMAP_BACKOFFICE_FIXES.md` L276–289).

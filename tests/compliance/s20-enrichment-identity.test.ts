@@ -118,12 +118,12 @@ afterEach(() => {
 });
 
 describe("S20 pure core", () => {
-  it("embedded self-tests: exactly 85 pass, 0 fail (pinned)", () => {
-    expect(__runEnrichmentIdentityCoreTests()).toEqual({ passed: 85, failed: 0 });
+  it("embedded self-tests: exactly 95 pass, 0 fail (pinned)", () => {
+    expect(__runEnrichmentIdentityCoreTests()).toEqual({ passed: 95, failed: 0 });
   });
   it("the runner registers them with the exact floor", () => {
     expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(
-      /assertRan\("enrichment-identity-core", __runEnrichmentIdentityCoreTests\(\), 85\)/,
+      /assertRan\("enrichment-identity-core", __runEnrichmentIdentityCoreTests\(\), 95\)/,
     );
   });
   it("two lots of one product share ONE identity; the size/label does not split it", () => {

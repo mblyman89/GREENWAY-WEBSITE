@@ -38,6 +38,8 @@ import {
   logManifestEvent,
 } from "@/lib/inventory/intake-store";
 import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
+import { parseGrowFlowInvoice, growFlowInvoiceAsPriceDonor } from "@/lib/inventory/pdf-growflow-invoice-core";
+import { looksLikeTransferLog } from "@/lib/inventory/pdf-transferlog-core";
 import {
   decideClaim,
   isDeliveryKeyConflict,
@@ -494,6 +496,10 @@ export async function stageManifestsFromEmail(
   // transport with the grounded one - otherwise a hallucinated value in the
   // primary manifest would sit in the base and win the fill-only fold.
   const groundedByAtt = new Map<object, ParsedTransport | null>();
+  // Fix Phase 3.3: the GrowFlow invoice prints every line's unit price, but no
+  // parser read it (it is not a manifest layout). Each one read is a PRICE
+  // donor (exact lot id, fill-only-empty, printed arithmetic checked).
+  const priceDonors: ParsedManifest[] = [];
   // Fix Phase 3.1a (owner, 2026: "didn't or couldn't attach the coa lab
   // results to the products in the receiving detail page"). A GrowFlow
   // `QA_*.pdf` is a BUNDLE of one certificate per product - not the COA
@@ -537,6 +543,8 @@ export async function stageManifestsFromEmail(
       // of LlamaParse. It grounds vision values (a hallucinated value the
       // layer does not contain is dropped) and lets the Contingency Manifest
       // - whose labels are an image - be read by cell position.
+      const gfInvoice = parseGrowFlowInvoice(layer.text ?? "") ?? parseGrowFlowInvoice(parsed.text ?? "");
+      if (gfInvoice && gfInvoice.rows.length > 0) priceDonors.push(growFlowInvoiceAsPriceDonor(gfInvoice));
       invoiceDocs.push({
         role: invoiceDocRole(classifyAttachmentRole(att)),
         label: att.filename ?? "attachment.pdf",
@@ -686,6 +694,8 @@ export async function stageManifestsFromEmail(
     // invoice), fill-only-empty — no longer just the first match.
     const donor = mergeMatchingDonors(manifest.manifest_number, pdfDonors);
     if (donor) manifest = foldTransport(manifest, donor);
+    // Fix Phase 3.3: the GrowFlow invoice's printed prices (empty costs only).
+    for (const inv of priceDonors) manifest = mergeInvoicePricesByLot(manifest, inv).manifest;
     // Fix Phase 3.1a: lines the JSON left without a lab take the emailed
     // certificate that names them (lab id first, then a flagged name match).
     const jsonCoa = foldCoas(manifest);
@@ -695,14 +705,15 @@ export async function stageManifestsFromEmail(
       att.text && att.contentType && att.contentType.toLowerCase().includes("json")
         ? safeJson(att.text)
         : att.text;
-    const staged = await stageManifest(manifest, rawPayload, actorId, { sourceUrl: null });
     // R26: the invoice/order # across ALL the email's documents (this JSON
     // first — the locked external_id decision — then invoice PDF, manifest
     // PDF, email body). Persisted for new AND re-sent (duplicate) manifests.
+    // Fix 3.3: read BEFORE staging - it is sibling-dedupe evidence.
     const invoicePick = selectInvoiceNumber([
       { role: "transfer-json", label: att.filename ?? "transfer.json", payload: rawPayload },
       ...invoiceDocs,
     ]);
+    const staged = await stageManifest(manifest, rawPayload, actorId, { sourceUrl: null, invoiceNumber: invoicePick?.value ?? null });
     if (staged.ok) {
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
@@ -771,6 +782,13 @@ export async function stageManifestsFromEmail(
     const rankedPdfs = [...pdfCands].sort(
       (a, b) => pdfRoleRank(classifyAttachmentRole(a)) - pdfRoleRank(classifyAttachmentRole(b)),
     );
+    // Fix Phase 3.3: GrowFlow sends TWO manifest-role PDFs (CCRS_Manifest and
+    // TransferLog). Which one was primary followed the attachment order, so
+    // the same delivery could stage under different numbers / vendor spellings.
+    // The legal shipping document (CCRS manifest: transporter license, product
+    // categories) is now always primary; the Transfer Log ("This document is
+    // NOT a manifest") donates its route through the transport donors.
+    const parseOrder: { att: (typeof rankedPdfs)[number]; parsed: Awaited<ReturnType<typeof parsePdfManifestFromBase64>>; cap: ReturnType<typeof makeCapturingRecovery> }[] = [];
 
     // (a) find the PRIMARY manifest: try each non-COA PDF in rank order until one
     //     parses as a manifest. Keep the OTHER manifest-parses around so an
@@ -792,11 +810,18 @@ export async function stageManifestsFromEmail(
       // the live Invoice # scanner reads).
       // PR-A: capture which engine won so we can record a manifest-tagged
       // parse-status row once the primary manifest is staged (below).
-      const primaryCap = makeCapturingRecovery();
-      const parsed = await parsePdfManifestFromBase64(
-        att.base64 as string,
-        primaryCap.recover,
-      );
+      const cap = makeCapturingRecovery();
+      const parsed = await parsePdfManifestFromBase64(att.base64 as string, cap.recover);
+      parseOrder.push({ att, parsed, cap });
+    }
+    // Stable: same role rank; a Transfer Log after any other parsed layout.
+    const isLog = (p: (typeof parseOrder)[number]) => (p.parsed.ok && looksLikeTransferLog(p.parsed.text) ? 1 : 0);
+    parseOrder.sort(
+      (a, b) =>
+        pdfRoleRank(classifyAttachmentRole(a.att)) - pdfRoleRank(classifyAttachmentRole(b.att)) || isLog(a) - isLog(b),
+    );
+    for (const { att, parsed, cap: primaryCap } of parseOrder) {
+      const role = classifyAttachmentRole(att);
       if (!parsed.ok) {
         if (role === "manifest") {
           manifestRoleParseFailed = true;
@@ -835,7 +860,7 @@ export async function stageManifestsFromEmail(
       let merged: ParsedManifest = primary.manifest;
 
       // (b) merge invoice prices (and descriptive blanks) by Lot ID.
-      for (const inv of invoiceParses) {
+      for (const inv of [...invoiceParses, ...priceDonors]) {
         const priceRes = mergeInvoicePricesByLot(merged, inv);
         merged = priceRes.manifest;
       }
@@ -871,10 +896,11 @@ export async function stageManifestsFromEmail(
       const pdfDonor = mergeMatchingDonors(merged.manifest_number, pdfDonors);
       if (pdfDonor) merged = foldTransport(merged, pdfDonor);
 
-      const staged = await stageManifest(merged, primary.text, actorId, { sourceUrl: null });
       // R26: the invoice/order # across ALL the email's PDFs (invoice-role
       // first) + body — not only the primary manifest's text.
+      // Fix 3.3: read BEFORE staging - it is sibling-dedupe evidence.
       const invoicePick = selectInvoiceNumber(invoiceDocs);
+      const staged = await stageManifest(merged, primary.text, actorId, { sourceUrl: null, invoiceNumber: invoicePick?.value ?? null });
       if (staged.ok) {
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);

@@ -63,6 +63,57 @@ export function enrichmentFollowsIdentityEnabled(raw: string | null | undefined)
   return !(v === "off" || v === "0" || v === "false" || v === "no" || v === "disabled");
 }
 
+// --- 0b. Build-time gate + quiet failure log (Fix Phase 3.3 - owner build-log report) ---
+//
+// The owner, verbatim: "will you look at these failures in the vercel build
+// logs, and make address them if needed." The Vercel log showed one
+// "[enrichment-identity] identity read failed: TypeError: fetch failed" line
+// per pre-rendered page while "Generating static pages using 29 workers".
+// Root cause: `next build` pre-renders every ISR page (revalidate = 60) at
+// build time, and the identity read was attempted from every worker; the
+// build container's fetch to Supabase failed and each page logged an error.
+// The read was already fail-closed (empty map = exactly pre-S20, the card's
+// own pos_product_key enrichment still shows), so no page was wrong - the
+// log was noise. Now: during the build phase the identity read is skipped
+// (the same empty map, without a network round-trip), and the first live
+// request after deploy re-renders the page with it (ISR). At run time a
+// network failure is a WARNING logged at most once a minute, not an error
+// per call.
+
+/** The variable Next.js sets in the build process and its workers. */
+export const NEXT_PHASE_VAR = "NEXT_PHASE";
+/** next/constants PHASE_PRODUCTION_BUILD. */
+export const NEXT_BUILD_PHASE = "phase-production-build";
+
+/** True while `next build` is generating pages - skip network identity reads. */
+export function isNextBuildPhase(raw: string | null | undefined): boolean {
+  return String(raw ?? "").trim() === NEXT_BUILD_PHASE;
+}
+
+/** A transient network failure (fetch failed / ECONNRESET / timeout), not a query error. */
+export function isTransientNetworkError(message: string | null | undefined): boolean {
+  return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|network|aborted|timeout/i.test(
+    String(message ?? ""),
+  );
+}
+
+export const IDENTITY_FAIL_LOG_INTERVAL_MS = 60_000;
+
+/**
+ * How to report one failed identity read: "error" for a real query error
+ * (always), "warn" for the first network failure in a minute, "silent" for
+ * repeats inside that minute (the read still fails closed either way).
+ */
+export function identityFailureLogLevel(
+  message: string | null | undefined,
+  lastNetworkLogAt: number | null,
+  now: number,
+): "error" | "warn" | "silent" {
+  if (!isTransientNetworkError(message)) return "error";
+  if (lastNetworkLogAt !== null && now - lastNetworkLogAt < IDENTITY_FAIL_LOG_INTERVAL_MS) return "silent";
+  return "warn";
+}
+
 // --- 1. The identity a card stores and queries --------------------------------------
 
 /**
@@ -367,6 +418,18 @@ export function __runEnrichmentIdentityCoreTests(): { passed: number; failed: nu
   eq("flag on", enrichmentFollowsIdentityEnabled("on"), true);
   for (const off of ["off", "0", "false", "no", "disabled", " OFF ", "False"]) eq(`flag ${off}`, enrichmentFollowsIdentityEnabled(off), false);
   eq("env name", ENRICHMENT_IDENTITY_ENV, "ENRICHMENT_FOLLOWS_IDENTITY");
+
+  // 0b. build gate + quiet log (Fix 3.3)
+  eq("build phase", isNextBuildPhase("phase-production-build"), true);
+  eq("server phase not build", isNextBuildPhase("phase-production-server"), false);
+  eq("unset not build", isNextBuildPhase(undefined), false);
+  eq("fetch failed transient", isTransientNetworkError("TypeError: fetch failed"), true);
+  eq("econnreset transient", isTransientNetworkError("read ECONNRESET"), true);
+  eq("query error not transient", isTransientNetworkError("column product_enrichments.x does not exist"), false);
+  eq("first network fail warns", identityFailureLogLevel("fetch failed", null, 1000), "warn");
+  eq("repeat inside a minute silent", identityFailureLogLevel("fetch failed", 1000, 30_000), "silent");
+  eq("after a minute warns again", identityFailureLogLevel("fetch failed", 1000, 61_000), "warn");
+  eq("query error always error", identityFailureLogLevel("permission denied", 1000, 1001), "error");
 
   // 1. identity
   const card = { name: "Blue Dream 3.5g", product_name: "Blue Dream", brand_name: "Phat Panda", vendor_name: "Grow Op Farms", category: "flower" };
