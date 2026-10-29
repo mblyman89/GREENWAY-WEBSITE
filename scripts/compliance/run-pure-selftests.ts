@@ -848,6 +848,7 @@ import { __runIssuesCoreTests } from "../../src/lib/admin/issues-core";
 import { __runProductVisibilityCoreTests } from "../../src/lib/enrichment/product-visibility-core";
 import { __runMigrationLotFixCoreTests } from "../../src/lib/inventory/migration-lot-fix-core";
 import { __runManifestEventLabelsCoreTests } from "../../src/lib/inventory/manifest-event-labels-core";
+import { __runIntakeCountCoreTests } from "../../src/lib/inventory/intake-count-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -2463,7 +2464,7 @@ __runLiquidVolumeTests();
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
-  assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 29); // R31: Accept All & Finalize / Accept x · Reject y
+  assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 31); // R31: Accept All & Finalize / Accept x · Reject y
   assertRan("ai-extract-advice-core", __runAiExtractAdviceCoreTests(), 26); // R31: press / don't press, from what PDFs
   assertRan("line-identity-chip-core", __runLineIdentityChipCoreTests(), 22); // R31: identity-keyed line chip replaces the strain-name KB guesser
   assertRan("price-explain-core", __runPriceExplainCoreTests(), 66); // R32: 2x cost + tax, rounded up — explained, dynamic
@@ -2615,6 +2616,7 @@ __runLiquidVolumeTests();
   assertRan("cashier-report-core", __runCashierReportCoreTests(), 31); // Fix Phase 2.1b (G-05): per-cashier shift report - sales, discounts split, no-sales, adjustments, refunds to the cashier who rang the sale
   assertRan("refund-cogs-core", __runRefundCogsCoreTests(), 30); // Fix Phase 2.8b: cost of returned units back to inventory
   assertRan("tips-core", __runTipsCoreTests(), 30); // Fix Phase 2.1c: tip tracker - per-employee stats, not recorded vs $0, corrections
+  assertRan("intake-count-core", __runIntakeCountCoreTests(), 36); // Fix Phase 3.1 (G-16): dock count "18 of 20" - overage refused, 0 = refuse, reason, partial
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

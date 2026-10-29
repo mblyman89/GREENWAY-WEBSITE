@@ -140,6 +140,19 @@ import {
   planReceivedOnStamp,
 } from "@/lib/inventory/intake-lot-facts-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import {
+  COUNT_SHORT_EVENT,
+  COUNT_SHORT_CLEARED_EVENT,
+  countClearedNote,
+  countShortNote,
+  finalizeShortSummary,
+  fmtCountQty,
+  isMissingCountColumns,
+  planDockCount,
+  receiveAdjustmentNote,
+  statusWithShortLines,
+  type ShortLine,
+} from "@/lib/inventory/intake-count-core";
 import { vendorIdSourceFor } from "@/lib/compliance/ccrs-transfer-core";
 import {
   deriveManifestStatus,
@@ -1001,6 +1014,17 @@ export async function rejectManifest(
       .eq("id", lot.id);
     rejected += 1;
   }
+  // Fix Phase 3.1: lines counted short read the manifest quantity again.
+  {
+    const back = await restoreShippedQtyOnRefusal(
+      admin,
+      rows.filter((r) => r.status !== "active" && r.status !== "sold_out").map((r) => r.id),
+      actorId,
+    );
+    if (back.error) {
+      await logManifestEvent(manifestId, "note", `A short count could not be removed from a refused line: ${back.error.slice(0, 300)}`, actorId);
+    }
+  }
 
   const { error } = await admin
     .from("inbound_manifests")
@@ -1065,7 +1089,234 @@ export async function setLotDisposition(
   }
   const { error } = await admin.from("inventory_lots").update(patch).eq("id", lotId);
   if (error) return { ok: false, error: error.message };
+  // Fix Phase 3.1: a short-counted line that is refused reads the manifest quantity again.
+  if (disposition === "rejected_at_dock") {
+    const back = await restoreShippedQtyOnRefusal(admin, [lotId], actorId);
+    if (back.error) return { ok: false, error: `Refused, but its short count could not be removed: ${back.error}` };
+  }
   return { ok: true };
+}
+
+/**
+ * Fix Phase 3.1 (G-16): a line counted short and then REFUSED goes back to
+ * the manifest quantity (received_qty = shipped_qty, short columns cleared),
+ * so a refused lot always reads what the vendor shipped. Only staged lots.
+ * Before migration 0319 there is nothing to restore (missing columns = no-op);
+ * any other failure is returned so the caller can put it on the timeline.
+ */
+async function restoreShippedQtyOnRefusal(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  lotIds: readonly string[],
+  actorId: string | null,
+): Promise<{ restored: number; error: string | null }> {
+  if (lotIds.length === 0) return { restored: 0, error: null };
+  const { data, error } = await admin
+    .from("inventory_lots")
+    .select("id, shipped_qty")
+    .in("id", [...lotIds])
+    .not("shipped_qty", "is", null);
+  if (error) return { restored: 0, error: isMissingCountColumns(error) ? null : error.message };
+  let restored = 0;
+  for (const r of (data ?? []) as { id: string; shipped_qty: number | string }[]) {
+    const shipped = Number(r.shipped_qty);
+    const { error: uErr } = await admin
+      .from("inventory_lots")
+      .update({ received_qty: shipped, on_hand_qty: shipped, shipped_qty: null, short_reason_code: null, short_reason: null, updated_by: actorId })
+      .eq("id", r.id)
+      .not("status", "in", "(active,sold_out)");
+    if (uErr) return { restored, error: uErr.message };
+    restored += 1;
+  }
+  return { restored, error: null };
+}
+
+/**
+ * Fix Phase 3.1 (G-16, F-04-1, owner D29) — "18 of 20". A manager enters the
+ * dock count for ONE staged line. The pure planDockCount decides (counted <=
+ * manifest; 0 = refuse the whole line; equal = clear an earlier short count;
+ * a reason for the refused part). A short count rewrites received_qty /
+ * on_hand_qty to the COUNTED quantity and keeps the manifest's in shipped_qty
+ * (migration 0319), so Finalize, the receive adjustment, the CCRS
+ * InventoryTransfer, the goods receipt and the vendor bill all follow the
+ * count. Only while the delivery is open and the lot is still staged; the
+ * write is guarded on the quantity it read (a second person's count in
+ * between is refused, never overwritten). Timeline event + audit row.
+ */
+export async function setLotDockCount(
+  manifestId: string,
+  lotId: string,
+  input: { counted: unknown; reasonCode?: string | null; reasonText?: string | null },
+  actorId: string | null,
+): Promise<{ ok: true; kind: "short" | "refuse_whole" | "clear"; note: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data: before, error: readErr } = await admin
+    .from("inventory_lots")
+    .select("id, manifest_id, product_name, lot_code, unit, received_qty, on_hand_qty, shipped_qty, short_reason_code, short_reason, status, disposition")
+    .eq("id", lotId)
+    .eq("manifest_id", manifestId)
+    .maybeSingle();
+  if (readErr) {
+    return {
+      ok: false,
+      error: isMissingCountColumns(readErr)
+        ? "Migration 0319 is not applied yet, so a short count cannot be saved. Nothing was changed: refuse the whole short line for now (SOP-04 \u00a74.11)."
+        : `The line could not be read: ${readErr.message}`,
+    };
+  }
+  if (!before) return { ok: false, error: "That line is not on this delivery." };
+  const lot = before as {
+    id: string;
+    product_name: string | null;
+    lot_code: string | null;
+    unit: string | null;
+    received_qty: number | string | null;
+    on_hand_qty: number | string | null;
+    shipped_qty: number | string | null;
+    short_reason_code: string | null;
+    short_reason: string | null;
+    status: string;
+    disposition: string | null;
+  };
+  const { data: m, error: mErr } = await admin.from("inbound_manifests").select("status").eq("id", manifestId).maybeSingle();
+  if (mErr) return { ok: false, error: `The delivery could not be read: ${mErr.message}` };
+  const mStatus = (m as { status: string | null } | null)?.status ?? null;
+  if (mStatus !== "pending" && mStatus !== "in_transit" && mStatus !== "received") {
+    return { ok: false, error: "This delivery is already finalized. A count can only be entered before Finalize." };
+  }
+  const receivedBefore = Number(lot.received_qty ?? 0);
+  const plan = planDockCount(
+    {
+      receivedQty: receivedBefore,
+      shippedQty: lot.shipped_qty == null ? null : Number(lot.shipped_qty),
+      status: lot.status,
+      disposition: lot.disposition,
+    },
+    input,
+  );
+  if (!plan.ok) return { ok: false, error: plan.error };
+
+  const label = lot.product_name || lot.lot_code || "A line";
+  const nowIso = new Date().toISOString();
+  let patch: Record<string, unknown>;
+  let eventType: string;
+  let note: string;
+  if (plan.kind === "short") {
+    patch = {
+      received_qty: plan.counted,
+      on_hand_qty: plan.counted,
+      shipped_qty: plan.shipped,
+      short_reason_code: plan.reasonCode,
+      short_reason: plan.reasonText,
+      counted_by: actorId,
+      counted_at: nowIso,
+      disposition: "accepted",
+      dispositioned_by: actorId,
+      dispositioned_at: nowIso,
+      updated_by: actorId,
+    };
+    eventType = COUNT_SHORT_EVENT;
+    note = countShortNote(label, plan, lot.unit);
+  } else if (plan.kind === "clear") {
+    patch = {
+      received_qty: plan.shipped,
+      on_hand_qty: plan.shipped,
+      shipped_qty: null,
+      short_reason_code: null,
+      short_reason: null,
+      counted_by: actorId,
+      counted_at: nowIso,
+      updated_by: actorId,
+    };
+    eventType = COUNT_SHORT_CLEARED_EVENT;
+    note = countClearedNote(label, plan.shipped, lot.unit);
+  } else {
+    // Counted 0: nothing of this line came in. The existing whole-line
+    // refusal (never received, nothing filed), with the manifest quantity put
+    // back so the refused lot reads what the vendor shipped.
+    patch = {
+      received_qty: plan.shipped,
+      on_hand_qty: plan.shipped,
+      shipped_qty: null,
+      short_reason_code: null,
+      short_reason: null,
+      counted_by: actorId,
+      counted_at: nowIso,
+      disposition: "rejected_at_dock",
+      reject_reason_code: plan.reasonCode,
+      reject_reason: `Counted 0 of ${fmtCountQty(plan.shipped)} \u2014 ${plan.reasonText}`.slice(0, 2000),
+      dispositioned_by: actorId,
+      dispositioned_at: nowIso,
+      updated_by: actorId,
+    };
+    eventType = "note";
+    note = `${label}: counted 0 of ${fmtCountQty(plan.shipped)} shipped, so the whole line is refused at the dock (${plan.reasonText}).`;
+  }
+  const { data: written, error: wErr } = await admin
+    .from("inventory_lots")
+    .update(patch)
+    .eq("id", lotId)
+    .eq("manifest_id", manifestId)
+    .in("status", ["quarantine", "pending"])
+    .eq("received_qty", receivedBefore)
+    .select("id");
+  if (wErr) {
+    return {
+      ok: false,
+      error: isMissingCountColumns(wErr)
+        ? "Migration 0319 is not applied yet, so a short count cannot be saved. Nothing was changed (SOP-04 \u00a74.11)."
+        : `The count was not saved: ${wErr.message}`,
+    };
+  }
+  if (!written || (written as unknown[]).length !== 1) {
+    return { ok: false, error: "The line changed while you were counting (someone else saved a count, or it was finalized). Nothing was saved: reload and count again." };
+  }
+  await logManifestEvent(manifestId, eventType, note, actorId);
+  const { error: auditErr } = await admin.from("audit_logs").insert({
+    actor_id: actorId,
+    action: `inventory_lot.dock_count_${plan.kind}`,
+    entity_type: "inventory_lot",
+    entity_id: lotId,
+    before_json: {
+      received_qty: lot.received_qty,
+      on_hand_qty: lot.on_hand_qty,
+      shipped_qty: lot.shipped_qty,
+      short_reason_code: lot.short_reason_code,
+      disposition: lot.disposition,
+    },
+    after_json: patch,
+  });
+  if (auditErr) console.error("[intake-store] dock count audit row failed:", auditErr.message);
+  return { ok: true, kind: plan.kind, note };
+}
+
+/**
+ * Fix Phase 3.1 (0319): the short counts of a delivery's lines. A SEPARATE
+ * read so the receiving page keeps working before 0319 is applied
+ * (absent = the columns are missing). Any other read error is returned as
+ * an error, never as "no short lines".
+ */
+export async function listLotShortCounts(
+  manifestId: string,
+): Promise<
+  | { kind: "absent" }
+  | { kind: "error"; error: string }
+  | { kind: "loaded"; byLot: Map<string, { shippedQty: number; reason: string | null }> }
+> {
+  if (!isSupabaseServiceConfigured) return { kind: "absent" };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inventory_lots")
+    .select("id, shipped_qty, short_reason")
+    .eq("manifest_id", manifestId)
+    .not("shipped_qty", "is", null);
+  if (error) return isMissingCountColumns(error) ? { kind: "absent" } : { kind: "error", error: error.message };
+  const byLot = new Map<string, { shippedQty: number; reason: string | null }>();
+  for (const r of (data ?? []) as { id: string; shipped_qty: number | string | null; short_reason: string | null }[]) {
+    if (r.shipped_qty == null) continue;
+    byLot.set(r.id, { shippedQty: Number(r.shipped_qty), reason: r.short_reason });
+  }
+  return { kind: "loaded", byLot };
 }
 
 /**
@@ -1431,6 +1682,22 @@ export async function finalizeManifestDispositions(
   const blocked: LotGateVerdict[] = [];
   let partialNote: string | null = null;
 
+  // Fix Phase 3.1 (G-16): the lines counted short at the dock ("18 of 20").
+  // received_qty already holds the COUNT (setLotDockCount); shipped_qty keeps
+  // the manifest's. A failed read refuses the finalize before any lot is
+  // touched: the partial-note rule and the timeline depend on it.
+  const shortRead = await listLotShortCounts(manifestId);
+  if (shortRead.kind === "error") {
+    return { ok: false, error: `The dock counts could not be read, so nothing was finalized: ${shortRead.error}` };
+  }
+  const shortByLot = shortRead.kind === "loaded" ? shortRead.byLot : new Map<string, { shippedQty: number; reason: string | null }>();
+  const shortGoingIn: ShortLine[] = [];
+  for (const r of rows) {
+    const s = shortByLot.get(r.id);
+    if (!s || r.disposition === "rejected_at_dock") continue;
+    shortGoingIn.push({ label: r.product_name || r.lot_code || r.id, shipped: s.shippedQty, counted: Number(r.received_qty), reason: s.reason });
+  }
+
   // SLICE 101 — PREDICT the outcome from the same facts the loop below uses,
   // BEFORE any lot is touched: a partial finalize (mixed accept/refuse, or any
   // dirty lot held) requires the mandatory why-partial note. Failing validation
@@ -1449,7 +1716,10 @@ export async function finalizeManifestDispositions(
         willReject += 1;
       }
     }
-    const predictedStatus = deriveManifestStatus(willActivate, willReject, willBlock);
+    const predictedStatus = statusWithShortLines(
+      deriveManifestStatus(willActivate, willReject, willBlock),
+      shortGoingIn.length,
+    );
     const noteCheck = normalizePartialNote(
       opts?.partialNote,
       predictedStatus === "partially_accepted",
@@ -1520,6 +1790,12 @@ export async function finalizeManifestDispositions(
   // adjustments land as a SINGLE bulk insert (per-lot qty preserved).
   if (activatedLotIds.length > 0) {
     const qtyByLot = new Map(rows.map((r) => [r.id, r.received_qty]));
+    // Fix Phase 3.1: a short-counted lot's received_qty IS the dock count, so
+    // the receive adjustment is the counted quantity; its note says so.
+    const shortForLot = (lotId: string) => {
+      const s = shortByLot.get(lotId);
+      return s ? { shipped: s.shippedQty, counted: Number(qtyByLot.get(lotId) ?? 0) } : null;
+    };
     await admin
       .from("inventory_lots")
       .update({ status: "active", disposition: "accepted", updated_by: actorId })
@@ -1529,7 +1805,7 @@ export async function finalizeManifestDispositions(
         lot_id: lotId,
         qty_delta: qtyByLot.get(lotId) ?? 0,
         reason: "receive",
-        note: "Accepted from vendor manifest intake (partial-accept flow).",
+        note: receiveAdjustmentNote(shortForLot(lotId)),
         actor_id: actorId,
       })),
     );
@@ -1619,7 +1895,10 @@ export async function finalizeManifestDispositions(
   // fix) rather than being falsely stamped "rejected". SLICE 101: the shared
   // pure derivation (intake-disposition-core) — the SAME function the pre-flight
   // note check used above, so prediction and outcome can never disagree.
-  const derivedStatus = deriveManifestStatus(activated, rejected, blocked.length);
+  const derivedStatus = statusWithShortLines(
+    deriveManifestStatus(activated, rejected, blocked.length),
+    shortGoingIn.length,
+  );
 
   const { error } = await admin
     .from("inbound_manifests")
@@ -1650,7 +1929,7 @@ export async function finalizeManifestDispositions(
   await logManifestEvent(
     manifestId,
     derivedStatus,
-    `Finalized: ${activated} activated, ${rejected} refused at dock.${blockedNote}${whyPartial} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
+    `Finalized: ${activated} activated, ${rejected} refused at dock.${finalizeShortSummary(shortGoingIn)}${blockedNote}${whyPartial} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
     actorId,
   );
 

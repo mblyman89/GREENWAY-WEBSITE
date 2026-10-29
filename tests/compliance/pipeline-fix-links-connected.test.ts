@@ -591,6 +591,7 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     "gold\u2192twinKeepId", // R36: lit only while a live twin of this row exists
     'danger\u2192vendorid && vendorid !== "saved"', // R6-2: result of saving a vendor inventory id
     'danger\u2192coa === "error" || coa === "nodocs"', // Fix 3.1a: result of Re-read COAs / Attach lab result (URL flag ?coa=)
+    'danger\u2192count === "error"', // Fix 3.1: result of Save count on a line (URL flag ?count=)
   ],
   "src/app/admin/inventory/drafts/page.tsx": [
     "gold\u2192if !isSupabaseServiceConfigured",
