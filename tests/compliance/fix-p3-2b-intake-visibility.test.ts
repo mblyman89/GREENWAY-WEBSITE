@@ -360,7 +360,10 @@ describe("6. SOP / ledgers / KB", () => {
   it("SOP-04 is v1.7; §4.6 is the built check, not the interim server-log text", () => {
     expect(sop).toMatch(/\| 1\.7 draft \| Fix phase \| Phase 3\.2b /);
     expect(sop).toMatch(/\| \*\*Version\*\* \|[^\n]*1\.7 \(Phase 3\.2b:/);
-    expect(sop).not.toContain("the system only notes it in a server log and the line is simply missing from the screen");
+    // The revision row and Appendix B quote the superseded text as history; the body must not.
+    const body = sop.slice(0, sop.indexOf("## Appendix A"));
+    expect(body).not.toContain("the system only notes it in a server log and the line is simply missing from the screen");
+    expect(sop.slice(sop.indexOf("## Appendix D"))).toContain("the system only notes it in a server log and the line is simply missing from the screen");
     expect(sop).toContain("The missing lines go back with the driver");
   });
   it("03: F-04-11 FIXED quoting the superseded text; F-04-3 control note built", () => {

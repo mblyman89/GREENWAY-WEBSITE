@@ -337,7 +337,7 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 **Must ship with caveats** until the findings are fixed:
 - F-04-2: the lot page's "Lifecycle status" skips the go-live check and writes no audit row. A manager may set a held lot Active **only** from an Issues row that says "now clear", logged on paper (SOP-04 §4.19). Never advise setting any other lot Active that way.
 - F-04-1: there is no partial-quantity receive. Follow the interim short-count rule (§4.11) and log it on form 8.2.
-- F-04-3: an undecided line is **accepted** on Finalize. Decide every line first (form 8.5).
+- F-04-3: an undecided line is **accepted** on Finalize. Decide every line first (form 8.5). (Phase 3.2b: the sticky bar and the timeline now count the lines not marked one by one; the caveat stays, the default is by design.)
 - F-04-4: **FIXED (Phase 3.2a).** A vendor email that did not make a manifest is listed under Receiving → Incoming (email) → **Needs attention** with **Try again** and **Resolved**; an email in the mailbox but not on the table is pulled in with **Find an email** (SOP-04 v1.6 §4.4a–c).
 - F-04-13: the WSLCB public records phone on the CCRS page (…664-1769) is wrong. Use **(360) 664-1753**.
 - F-04-14 / F-04-17: ignore the page's per-file CSV steps and "a few minutes". Drop the single monthly zip and allow up to ~1.5 h.
@@ -356,6 +356,14 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 | Will it ever overwrite a lab result? | No. A line that has one is never changed; a pick made on an out-of-date page is refused (§4.15) |
 | Where do I see what happened with the COAs? | The delivery timeline: *"Lab results attached from the emailed COAs"* or *"Lab results · some lines still need a COA (or a name match to verify)"*, and the email's result sentence (§4.4) |
 | The COA PDF could not be read | The note names it. Ask the vendor for a text PDF; attach on the lot page by lab test id once imported (§5.2) |
+
+**Fix Phase 3.2b update to the SOP-04 rows (F-04-11 FIXED, F-04-3 control note BUILT; owner message 7: *"Please proceed with the remaining receiving list … If there are other things you feel as the expert you are, add in these things as you go. Add value if you can."*).** `concierge-kb.ts` `product-intake` gains one fact (**Receiving → a line did not save**), grounded on SOP-04 v1.7 §4.6, §4.17, §5.2, §6. Superseded answer, kept as history: *"A line on the paper but not on the screen means: do not finalize; tell the manager, who re-imports it with a manual tool (§4.5) or calls the owner."* (SOP-04 v1.6 §4.6, which also said the failure was *"only"* in a server log). The concierge now says the red banner names the line, and the manager decides: back with the driver (tick at Finalize) or refuse the whole delivery.
+
+| Question | Answer (SOP-04 v1.7) |
+|---|---|
+| The delivery says a line did not save | It is not on the screen and cannot be received from it. Tell the manager: the missing line goes back with the driver (tick **The missing lines go back with the driver** at Finalize), or refuse the whole delivery and call the owner (§4.6, §6) |
+| Finalize says *"Not finalized. Some lines did not save at staging"* | Nothing changed. Tick the box next to the button and finalize again, or refuse the whole delivery (§4.17 step 2) |
+| The bar says some lines were *"not marked one by one"* | Those lines will be accepted because they were not rejected. Find them on form 8.1 before pressing (§4.17 step 2) |
 
 **Fix Phase 3.2a update to the SOP-04 rows (G-17 BUILT, F-04-4 FIXED; owner message 7: *"In addition to a notice when an email fails, please add a refetch button, or some intelligent way to manually ask the fetcher to look again … I need a way to ask the system to grab the ones it missed or failed to get. Make it enterprise grade … I want this table to receive every manifest, no exceptions."*).** `concierge-kb.ts` `product-intake` gains one fact (**Receiving → Needs attention**), grounded on SOP-04 v1.6 §4.3, §4.4a–c, §5.1a. Superseded caveat, kept as history: *"F-04-4: a vendor email that failed to stage does not appear on the Receiving list. If a truck is expected and no manifest is staged, use the manual import (§4.5)."* The manual import is now the last resort, after **Check the mailbox now**, **Find an email** and **Try again**.
 
