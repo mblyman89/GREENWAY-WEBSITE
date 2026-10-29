@@ -8,8 +8,12 @@ import { money } from "@/lib/accounting/deposit-clearing-core";
  *
  * WHY THIS PANEL EXISTS (rule 133 / D-71)
  * ---------------------------------------
- * books-94 made every reconciled drawer DEBIT `10400 Undeposited Funds`. This
- * slice built the entry that CREDITS it when the bank confirms the deposit.
+ * books-94 made every reconciled drawer DEBIT `10400 Undeposited Funds`. Since
+ * D-77 (books-98) that is no longer true: a drawer close moves cash to `10100
+ * Vault` (the safe), and only SEALING a deposit bag (`buildSealBagJournal`)
+ * debits 10400. books-95 built the entry that CREDITS it when the bank confirms
+ * the deposit, and Fix Phase 2.5 (G-14) gave that entry its owner-only caller
+ * on /admin/books/bank. Corrected in Fix Phase 2.5 (F-03-1).
  * A balance that only a developer can query is not a control: if this number
  * silently climbs, the balance sheet is claiming cash in transit that arrived
  * weeks ago, and nobody finds out until an accountant asks.
@@ -67,21 +71,23 @@ export async function UndepositedFunds() {
           {money(balanceMinor)}
         </span>{" "}
         <span className="text-slate-600">
-          counted out of the tills and not yet confirmed at the bank
+          sealed into deposit bags and not yet confirmed at the bank
         </span>
       </p>
 
       {clear ? (
         <p className="mt-2 text-emerald-900">
-          Every dollar counted out of a drawer has been matched to a deposit that
-          reached the bank. This is what it should read most mornings.
+          Every sealed deposit bag recorded in the books has been matched to a
+          deposit that reached the bank. Cash in the safe that has not been sealed
+          into a bag is not counted here.
         </p>
       ) : (
         <>
           <p className="mt-2 text-slate-700">
-            This is account <strong>10400 Undeposited Funds</strong>. A drawer
-            close moves cash into it; a confirmed bank deposit moves cash out of
-            it. It should return to zero within a day or two of banking.
+            This is account <strong>10400 Undeposited Funds</strong>. Sealing a
+            deposit bag moves cash into it from the safe; a confirmed bank deposit,
+            cleared by the owner on the bank screen, moves cash out of it. It should
+            return to zero within a day or two of banking.
           </p>
           {oldestDate ? (
             <p className="mt-2 text-slate-700">
@@ -119,7 +125,7 @@ export async function UndepositedFunds() {
           <p className="mt-2 text-slate-700">
             If this number keeps climbing, one of two things is true, and both
             are worth knowing: deposits are reaching the bank but nobody is
-            matching them here, or cash was counted out of a drawer and never
+            clearing them on the bank screen, or a bag was sealed and never
             banked.
           </p>
         </>

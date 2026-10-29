@@ -24,7 +24,8 @@ import "server-only";
  * so in the column comment, and the tip jar is counted separately from the
  * drawer, so the blind drawer count never contains it. This service therefore
  * never adds tips to the cash going to the safe: doing so would move an
- * employee's money into 10400 and then into the company's bank, which is both
+ * employee's money into 10100 Vault (since D-77; it was 10400 before), then
+ * into a sealed bag and the company's bank, which is both
  * an overstatement of company cash and somebody's wages going missing. A test
  * pins this, because it is the kind of mistake that balances perfectly.
  *

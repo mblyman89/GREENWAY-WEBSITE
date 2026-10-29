@@ -82,6 +82,15 @@ const POSTING_SERVICES = [
     entry: "postAtmSettlements",
     door: "the owner pressing a button on /admin/atm?tab=transactions (books-89, D-40)",
   },
+  {
+    // Fix Phase 2.5 (G-14, F-03-3). Finished in books-95 and called only by its
+    // own test until this slice, while the census said it was reachable: the
+    // D-70 shape again, found by the SOP-03 walk rather than by this gate,
+    // because this list never named it. It does now.
+    file: "src/lib/accounting/deposit-clearing-service.ts",
+    entry: "clearDepositForBankRow",
+    door: "the owner pressing Clear against bags on /admin/books/bank (Fix Phase 2.5, G-14)",
+  },
 ] as const;
 
 /**
@@ -124,11 +133,14 @@ describe("every posting service is reachable from something a human can press", 
   // that adds the poster it counts.
   it("watches every posting service the codebase has, and the count is stated", () => {
     // STATED per rule 89: 4 -> 5 posters (books-89 adds the ATM settlement door).
-    expect(POSTING_SERVICES).toHaveLength(5);
+    // STATED per rule 89: 5 -> 6 posters (Fix Phase 2.5 adds the bank-deposit
+    // clearing door, G-14 / F-03-3).
+    expect(POSTING_SERVICES).toHaveLength(6);
 
     // Names, not just a number, so a deletion cannot be papered over by an
     // unrelated addition that happens to keep the total at five.
     expect(POSTING_SERVICES.map((s) => s.entry).sort()).toEqual([
+      "clearDepositForBankRow",
       "postAtmSettlements",
       "postAuditSession",
       "postManifestVendorBill",
@@ -295,5 +307,38 @@ describe("the ATM settlement door specifically (D-40)", () => {
     expect(filed).toBeGreaterThan(-1);
     expect(refused).toBeLessThan(filed);
     expect(src).toContain("/admin/books/drafts");
+  });
+});
+
+describe("the bank-deposit clearing door specifically (Fix Phase 2.5, G-14)", () => {
+  const ACTION = "src/app/admin/books/bank/actions.ts";
+  const DOOR = "src/lib/accounting/bank-deposit-door-service.ts";
+  const PAGE = "src/app/admin/books/bank/page.tsx";
+  const PANEL = "src/components/admin/books/ClearBankDepositsPanel.tsx";
+
+  it("the door service calls the poster with the sales-deposit kind", () => {
+    const src = readFileSync(DOOR, "utf8");
+    expect(/\bclearDepositForBankRow\s*\(row,\s*SALES_DEPOSIT_EVENT_KIND/.test(src)).toBe(true);
+  });
+
+  it("the server action gates on books access BEFORE it calls the door", () => {
+    const src = readFileSync(ACTION, "utf8");
+    const fn = src.slice(src.indexOf("export async function clearBankDepositAction"));
+    const gate = fn.indexOf("requireBooksAccess(");
+    const call = fn.indexOf("clearBankDepositLine(");
+    expect(gate).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(gate);
+  });
+
+  it("the server action audits every press", () => {
+    expect(readFileSync(ACTION, "utf8")).toContain("books.bank_deposit.cleared");
+  });
+
+  it("the page renders the panel, not just imports it", () => {
+    expect(readFileSync(PAGE, "utf8")).toContain("<ClearBankDepositsPanel");
+  });
+
+  it("the panel calls the action", () => {
+    expect(/\bclearBankDepositAction\s*\(/.test(readFileSync(PANEL, "utf8"))).toBe(true);
   });
 });

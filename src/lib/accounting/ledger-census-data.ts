@@ -1534,17 +1534,23 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       exists: {
         status: "PRESENT",
         evidence:
-          "books-93 built the first leg - the drawer count into 10400 Undeposited " +
-          "Funds. books-95 built the second: buildDepositClearingJournal debits " +
-          "10200 and credits 10400 when the bank confirms the money arrived.",
+          "books-95 built buildDepositClearingJournal: it debits 10200 and " +
+          "credits 10400 when the bank confirms the money arrived. Since D-77 " +
+          "the drawer close no longer fills 10400 (it debits 10100 Vault); the " +
+          "10400 debit is the seal, buildSealBagJournal, which is the row " +
+          "cash_and_banking.seal_deposit_bag. Corrected in Fix Phase 2.5 (F-03-3).",
       },
       reachable: {
         status: "PRESENT",
         evidence:
-          "books-95: clearDepositForBankRow reads the real 10400 balance and calls " +
-          "submitJournal with autoPost. books-96: the end-of-day panel lists the " +
-          "open days one by one with what each is worth, so a manager can check " +
-          "the list against the bags in the safe instead of reading one total.",
+          "Fix Phase 2.5 (G-14): until then only a test called " +
+          "clearDepositForBankRow. Now the owner presses Clear against bags on a " +
+          "money-in line on /admin/books/bank: src/app/admin/books/bank/actions.ts " +
+          "clearBankDepositAction (requireBooksAccess first) calls " +
+          "src/lib/accounting/bank-deposit-door-service.ts clearBankDepositLine, " +
+          "which re-reads the line and refuses any account whose role is not main, " +
+          "then calls clearDepositForBankRow, which reads the real 10400 balance " +
+          "and calls submitJournal with autoPost.",
       },
       correct: {
         status: "PARTIAL",

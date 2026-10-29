@@ -72,6 +72,12 @@ import {
 import { ROLE_TO_CASH_ACCOUNT } from "@/lib/accounting/bank-expense-core";
 import { listPlaidAccounts } from "@/lib/plaid/store";
 import RecordBankExpensesPanel from "@/components/admin/books/RecordBankExpensesPanel";
+import ClearBankDepositsPanel from "@/components/admin/books/ClearBankDepositsPanel";
+import {
+  listDepositCandidates,
+  DEPOSIT_DOOR_FACTS,
+} from "@/lib/accounting/bank-deposit-door-service";
+import { pacificToday } from "@/lib/reports/timezone";
 import {
   SignWall,
   TiesIsNotDone,
@@ -196,6 +202,20 @@ export default async function BankBooksPage() {
         Object.prototype.hasOwnProperty.call(ROLE_TO_CASH_ACCOUNT, a.role.trim().toLowerCase()),
     }));
 
+  // Fix Phase 2.5 (G-14). The money-in lines the owner can clear against the
+  // sealed bags in 10400. Read on the server; a failed read is shown as a
+  // failure, never as an empty list (rule 46).
+  const depositList = await listDepositCandidates(pacificToday());
+  const depositRows = depositList.ok
+    ? depositList.candidates.map((c) => ({
+        transactionId: c.transactionId,
+        date: c.date,
+        label: c.merchantName ?? c.name ?? "Deposit",
+        depositMinor: c.depositMinor,
+        alreadyCleared: c.alreadyCleared,
+      }))
+    : [];
+
   const headline = HEADLINE_AUTHORITY_IDS.map((id) => findBankAuthority(id)).filter(
     (a): a is NonNullable<typeof a> => a !== undefined,
   );
@@ -236,6 +256,33 @@ export default async function BankBooksPage() {
         </p>
         <div className="mt-4">
           <RecordBankExpensesPanel accounts={bankChoices} />
+        </div>
+      </section>
+
+      {/* ── THE CASH DEPOSIT DOOR (Fix Phase 2.5, G-14) ─────────────────────
+          clearDepositForBankRow was finished in books-95 and nothing called
+          it. This is its caller. Owner (D25): "I am the only one to take cash
+          to the bank", so it lives on this owner-only page. */}
+      <section className="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.05] p-5">
+        <h2 className="text-sm font-semibold text-emerald-300">
+          Clear store cash deposits against the sealed bags
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/65">
+          When a sealed deposit bag reaches the bank, the deposit shows up here as
+          money in on your Main operating account. Pressing the button on that line
+          tells the books the counted cash waiting in 10400 Undeposited Funds has
+          arrived: 10200 goes up, 10400 comes down, and the entry names every business
+          day it covered. Cash only reaches 10400 when a deposit bag is sealed in the
+          system. Until the deposit bag screen is in place, nothing is sealed there,
+          so a deposit is refused with &ldquo;nothing is sitting in Undeposited
+          Funds&rdquo; rather than posted against cash the books never saw.
+        </p>
+        <div className="mt-4">
+          <ClearBankDepositsPanel
+            rows={depositRows}
+            readError={depositList.ok ? null : depositList.error}
+            lookbackDays={DEPOSIT_DOOR_FACTS.lookbackDays}
+          />
         </div>
       </section>
 

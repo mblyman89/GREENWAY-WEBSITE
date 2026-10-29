@@ -709,7 +709,9 @@ describe("books-95 · reachability", () => {
     const html = renderToStaticMarkup(await UndepositedFunds());
     expect(html).toMatch(/More was banked than was counted/i);
     expect(html).toContain("2026-11-01");
-    expect(html).not.toMatch(/Every dollar counted out of a drawer has been matched/i);
+    // Fix Phase 2.5 (F-03-1): the all-clear sentence now speaks of sealed bags,
+    // because since D-77 a drawer close no longer fills 10400.
+    expect(html).not.toMatch(/Every sealed deposit bag recorded in the books has been matched/i);
   });
 
   it("books-96: the panel ties a listed day to a physical bag", async () => {

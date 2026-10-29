@@ -6,10 +6,11 @@
  *
  * WHAT THIS FIXES, AND WHY IT IS URGENT AFTER books-94
  * ----------------------------------------------------
- * books-94 wired the drawer close. Every reconciled shift now DEBITS
- * `10400 Undeposited Funds` with the day's takings. Nothing credits it. Grep
- * `10400` across `src/` before this file and the only writers are the close
- * builder and its specimen panel.
+ * books-94 wired the drawer close. Every reconciled shift then DEBITED
+ * `10400 Undeposited Funds` with the day's takings, and nothing credited it.
+ * (Since D-77 / books-98 the close debits `10100 Vault` and the 10400 debit
+ * comes from sealing a deposit bag, `buildSealBagJournal`. Corrected in Fix
+ * Phase 2.5, F-03-1.)
  *
  * An asset account that is only ever debited is not a slow leak, it is a
  * permanent and growing lie: the balance sheet claims the business is holding
@@ -126,7 +127,7 @@ import {
 /** `10200 Bank — Operating`. Where the money actually lands. */
 export const BANK_OPERATING_ACCOUNT = "10200";
 
-/** `10400 Undeposited Funds`. The limbo books-94 fills and this file empties. */
+/** `10400 Undeposited Funds`. Sealing a bag fills it (D-77); this file empties it. */
 export const UNDEPOSITED_ACCOUNT = "10400";
 
 /**
@@ -397,8 +398,8 @@ export function buildDepositClearingJournal(input: DepositInput): DepositResult 
     return refuse(
       "DEPOSIT_NOTHING_UNDEPOSITED",
       "Nothing is sitting in Undeposited Funds, so there is no counted cash for " +
-        "this deposit to clear. Either the drawer closes have not been " +
-        "reconciled yet, or this money came from somewhere other than the tills.",
+        "this deposit to clear. Either the deposit bags have not been sealed " +
+        "in the system yet, or this money came from somewhere other than the tills.",
     );
   }
 

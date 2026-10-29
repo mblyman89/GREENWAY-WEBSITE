@@ -199,6 +199,18 @@ Concierge code is **unchanged** (record-only). Today neither the concierge nor `
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, `end-of-day`, plus the SOP-01 proposed topics; `deposit-bag` is paper-only. The concierge itself is still at the baseline until the integration phase.
 
+**Phase 2.5 (G-14 deposit-to-bank books) answers, owner only:**
+
+| Question | Answer (built, Phase 2.5) |
+|---|---|
+| Where do I clear a bank deposit? | Books → Bank, section **Clear store cash deposits against the sealed bags**: press **Clear against bags** on the deposit line (owner only; SOP-03 §4.13) |
+| Why does it say "Nothing is sitting in Undeposited Funds"? | Cash reaches 10400 only when a bag is sealed in the app, and the bag screen comes in Phase 2.6. Until then every press is refused and nothing is written; keep the bank receipt with the bag log |
+| Which lines can be cleared? | Money in on the account marked **Main operating**, last 60 days. Never a transfer between your own accounts, an ATM settlement or money you put in yourself |
+| What if I press it twice? | Nothing is written twice; the line shows **cleared** |
+| Can I trust the green box on the EOD panel? | It now says what it means: every **sealed bag** in the books has been matched. Unsealed cash in the safe is not counted there; use the bag log and the safe (SOP-03 §4.15) |
+
+The caveat *"F-03-1: do not trust the Undeposited Funds panel's green 'all matched'"* above is narrowed: the wording is fixed; the panel still counts sealed bags only. `concierge-kb.ts` `registers` carries the Phase 2.5 fact.
+
 ### SOP-04 Receiving Intake & Monthly CCRS Public Records Request (`docs/sop/SOP-04-receiving-intake.md`, verified at `5299660b`)
 
 Concierge code is **unchanged** (record-only). Today the concierge's `product-intake` topic (`src/lib/admin/concierge-kb.ts` L132–148) is journey-level only. Its one Receiving fact is the transport-manifest details. The `ccrs` topic (L349–360) covers the weekly upload and the LIQ-1295 only. Nothing covers dock counting, refusing lines, Finalize, held lots, the monthly public records request or the zip drop (finding **F-04-C**). The in-app SOP sheets in `src/lib/catalog/sop-core.ts` and the Receiving help panel describe the pre-R31 flow (F-04-5), so they **must not** be used as grounding. What SOP-04 now provides as source material for the integration phase:

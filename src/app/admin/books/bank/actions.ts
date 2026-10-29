@@ -50,6 +50,11 @@ import { revalidatePath } from "next/cache";
 import { recordBankExpenses } from "@/lib/accounting/bank-expense-service";
 import type { BankExpenseRunResult } from "@/lib/accounting/bank-expense-service";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
+import { clearBankDepositLine } from "@/lib/accounting/bank-deposit-door-service";
+import {
+  describeDepositOutcome,
+  type DepositClearOutcome,
+} from "@/lib/accounting/deposit-clearing-service";
 import { recordAudit } from "@/lib/auth/audit";
 
 /**
@@ -107,4 +112,54 @@ export async function recordBankExpensesAction(input: {
   }
 
   return result;
+}
+
+/**
+ * Fix Phase 2.5 (G-14, F-03-3). THE SECOND DOOR ON THIS PAGE.
+ *
+ * `clearDepositForBankRow` was finished in books-95 and nothing in `src/`
+ * called it. This is its caller: the owner presses "Clear against bags" on one
+ * money-in line of the Main operating account, and the counted cash waiting in
+ * 10400 Undeposited Funds is moved to 10200 Bank - Operating, oldest business
+ * day first.
+ *
+ * Owner, verbatim (D25): "anyone can seal the bag, I am the only one to take
+ * cash to the bank". So the gate is the books gate, which admits the owner
+ * only, and it runs BEFORE anything is read.
+ *
+ * Only the transaction id comes from the browser. The amount, date, account
+ * and role are all read again on the server by bank-deposit-door-service.ts.
+ */
+export async function clearBankDepositAction(input: {
+  transactionId: string;
+}): Promise<{ readonly outcome: DepositClearOutcome; readonly sentence: string }> {
+  const session = await requireBooksAccess();
+
+  const transactionId = input.transactionId?.trim() ?? "";
+  const outcome = await clearBankDepositLine(transactionId);
+  const sentence = describeDepositOutcome(outcome);
+
+  // Audited whatever happened. A refusal is as much a fact as a posting: it is
+  // the difference between "the bank line did not match" and "nobody tried".
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: null,
+    action: "books.bank_deposit.cleared",
+    entityType: "plaid_transaction",
+    entityId: transactionId === "" ? null : transactionId,
+    after: {
+      kind: outcome.kind,
+      code: outcome.code,
+      sourceRef: outcome.kind === "refused" ? null : outcome.sourceRef,
+      journalNo: outcome.kind === "posted" ? outcome.journalNo : null,
+      clearedDays: outcome.kind === "posted" ? outcome.clearedDays : [],
+    },
+  });
+
+  if (outcome.kind === "posted") {
+    revalidatePath("/admin/books/bank");
+    revalidatePath("/admin/registers/eod");
+  }
+
+  return { outcome, sentence };
 }
