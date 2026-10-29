@@ -24,6 +24,9 @@ import {
   indexPublishedByIdentity,
   planIdentityBackfill,
   identityBackfillSummary,
+  isNextBuildPhase,
+  identityFailureLogLevel,
+  NEXT_PHASE_VAR,
   type BackfillEnrichmentRow,
   type BackfillMenuRow,
   type IdentityCandidate,
@@ -34,6 +37,30 @@ type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 /** S20 rollback lever: off = every read and write is exactly pre-S20. */
 export function enrichmentFollowsIdentityOn(): boolean {
   return enrichmentFollowsIdentityEnabled(process.env[ENRICHMENT_IDENTITY_ENV]);
+}
+
+/**
+ * Fix 3.3 (owner build-log report): true while `next build` pre-renders
+ * pages. The identity read is skipped then (fail-closed = pre-S20; the page
+ * re-renders with it on the first live request - ISR revalidate = 60).
+ */
+export function identityReadSkippedForBuild(): boolean {
+  return isNextBuildPhase(process.env[NEXT_PHASE_VAR]);
+}
+
+let lastNetworkFailLogAt: number | null = null;
+
+/** One failed identity read: query errors log as errors; network failures warn at most once a minute. */
+function logIdentityReadFailure(where: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  const now = Date.now();
+  const level = identityFailureLogLevel(message, lastNetworkFailLogAt, now);
+  if (level === "error") {
+    console.error(`[enrichment-identity] ${where} failed:`, message);
+  } else if (level === "warn") {
+    lastNetworkFailLogAt = now;
+    console.warn(`[enrichment-identity] ${where} unavailable (network: ${message}); serving card-key enrichments only. Repeats are quiet for a minute.`);
+  }
 }
 
 const CHUNK_SIZE = 300;
@@ -75,6 +102,8 @@ export async function loadPublishedEnrichmentsByIdentity<T extends IdentityCandi
   if (!enrichmentFollowsIdentityOn()) return out;
   const keys = [...new Set(identityKeys.map((k) => (typeof k === "string" ? k.trim() : "")).filter(Boolean))];
   if (keys.length === 0 || !isSupabaseServiceConfigured) return out;
+  // Fix 3.3: no network identity reads while `next build` pre-renders pages.
+  if (identityReadSkippedForBuild()) return out;
   let client: AdminClient;
   try {
     client = admin ?? createSupabaseAdminClient();
@@ -114,7 +143,7 @@ export async function loadPublishedEnrichmentsByIdentity<T extends IdentityCandi
     }
     return out;
   } catch (err) {
-    console.error("[enrichment-identity] identity read failed:", err instanceof Error ? err.message : err);
+    logIdentityReadFailure("identity read", err);
     return new Map();
   }
 }
@@ -132,6 +161,7 @@ export const MENU_IDENTITY_COLUMNS = "source_item_id, name, product_name, brand_
 export async function identityForCardKey(posProductKey: string): Promise<string | null> {
   const key = (posProductKey ?? "").trim();
   if (!key || !enrichmentFollowsIdentityOn() || !isSupabaseServiceConfigured) return null;
+  if (identityReadSkippedForBuild()) return null; // Fix 3.3: build phase
   try {
     const version = await getPublishedVersion();
     if (!version) return null;

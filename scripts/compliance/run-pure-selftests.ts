@@ -851,6 +851,8 @@ import { __runMigrationLotFixCoreTests } from "../../src/lib/inventory/migration
 import { __runManifestEventLabelsCoreTests } from "../../src/lib/inventory/manifest-event-labels-core";
 import { __runIntakeCountCoreTests } from "../../src/lib/inventory/intake-count-core";
 import { __runInboundReconcileCoreTests } from "../../src/lib/inbound-email/inbound-reconcile-core";
+import { __runGrowFlowInvoiceTests } from "../../src/lib/inventory/pdf-growflow-invoice-core";
+import { __runManifestSiblingTests } from "../../src/lib/inventory/manifest-sibling-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -2414,13 +2416,13 @@ __runLiquidVolumeTests();
   assertRan("batch-unstick-core", __runBatchUnstickTests(), 9); // R74 S49: Unstick & re-ask (stuck / failed lookups)
   assertRan("count-roster-core", __runCountRosterTests(), 25); // R74 S50: count workbook roster
   assertRan("count-audit-stats-core", __runCountAuditStatsTests(), 12); // R74 S50: audit stats
-  assertRan("intake-harden-core", __runIntakeHardenTests(), 22); // R74 S51: intake auto-fetch hardening
+  assertRan("intake-harden-core", __runIntakeHardenTests(), 24); // R74 S51: intake auto-fetch hardening
   // R66: the batch lookup's stored findings (snapshot build / defensive parse / row-panel view). Floor = the exact count.
   { const r = __runLookupSnapshotCoreTests(); if (r.failed > 0 || r.passed < 48) throw new Error(`lookup-snapshot-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-snapshot-core: ${r.passed} assertions passed`); }
   { const r = __runLookupProgressCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`lookup-progress-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-progress-core: ${r.passed} assertions passed`); }
 
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
-  assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);
+  assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 95);
   assertRan("gap-vector-core", __runGapVectorCoreTests(), 92);
 
   // R21 (C): enrichment media-library picker. Floor = the exact count.
@@ -2621,6 +2623,8 @@ __runLiquidVolumeTests();
   assertRan("tips-core", __runTipsCoreTests(), 30); // Fix Phase 2.1c: tip tracker - per-employee stats, not recorded vs $0, corrections
   assertRan("intake-count-core", __runIntakeCountCoreTests(), 36); // Fix Phase 3.1 (G-16): dock count "18 of 20" - overage refused, 0 = refuse, reason, partial
   assertRan("inbound-reconcile-core", __runInboundReconcileCoreTests(), 111); // Fix Phase 3.2a (G-17 / F-04-4): mailbox check - match by key / Message-ID / fingerprint, temporary vs permanent, backoff, alerts once, heartbeat
+  assertRan("pdf-growflow-invoice-core", __runGrowFlowInvoiceTests(), 11); // Fix Phase 3.3 (F-04-22): GrowFlow invoice -> unit prices by lot (split ids rejoined, qty x unit = total checked)
+  assertRan("manifest-sibling-core", __runManifestSiblingTests(), 17); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

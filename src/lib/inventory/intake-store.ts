@@ -112,6 +112,15 @@ import {
   type DismissCheckRow,
   type TwinRow,
 } from "@/lib/inventory/inbound-dedupe-core";
+import {
+  cleanVendorLabel,
+  describeSiblingEvidence,
+  findLiveSibling,
+  findSiblingTwins,
+  normLot,
+  siblingEvidence,
+  type SiblingCandidate,
+} from "@/lib/inventory/manifest-sibling-core";
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
 import { CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
@@ -611,6 +620,118 @@ export async function resolveBrandIdDetailed(
   return { brandId, outcome };
 }
 
+/** One live delivery of a vendor, with its lots, for the sibling rules. */
+async function readSiblingCandidates(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  filter: { vendorIds?: string[]; lotCodes?: string[]; ids?: string[] },
+): Promise<SiblingCandidate[] | null> {
+  // Lots first (the evidence), then their deliveries.
+  let manifestIds: string[] = [];
+  if (filter.lotCodes && filter.lotCodes.length > 0) {
+    const rows = await chunkedIn<string, { manifest_id: string | null }>(filter.lotCodes, async (chunk, from, to) => {
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select("manifest_id")
+        .in("lot_code", chunk)
+        .not("manifest_id", "is", null)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) throw new Error(error.message);
+      return (data as { manifest_id: string | null }[] | null) ?? [];
+    });
+    manifestIds = [...new Set(rows.map((r) => r.manifest_id).filter((x): x is string => Boolean(x)))];
+    if (manifestIds.length === 0) return [];
+  }
+  const readManifests = async (cols: string) => {
+    let q = admin
+      .from("inbound_manifests")
+      .select(cols)
+      .in("status", [...BLOCKING_STATUSES, "rejected"])
+      .order("created_at", { ascending: true })
+      .limit(200);
+    if (manifestIds.length > 0) q = q.in("id", manifestIds.slice(0, 200));
+    if (filter.ids && filter.ids.length > 0) q = q.in("id", filter.ids.slice(0, 200));
+    if (filter.vendorIds && filter.vendorIds.length > 0) q = q.in("vendor_id", filter.vendorIds);
+    return await q;
+  };
+  let { data: mRows, error: mErr } = await readManifests("id, status, created_at, vendor_id, invoice_number_detected, invoice_number_override");
+  // Before 0151 / 0245 there are no invoice columns - the lot rule still works.
+  if (mErr && isMissingColumnError(mErr)) ({ data: mRows, error: mErr } = await readManifests("id, status, created_at, vendor_id"));
+  if (mErr) return null;
+  const ms = (mRows ?? []) as unknown as {
+    id: string;
+    status: string | null;
+    created_at: string | null;
+    vendor_id: string | null;
+    invoice_number_detected?: string | null;
+    invoice_number_override?: string | null;
+  }[];
+  if (ms.length === 0) return [];
+  const lots = await chunkedIn<string, { manifest_id: string; lot_code: string | null; received_qty: number | string | null; shipped_qty?: number | string | null }>(
+    ms.map((m) => m.id),
+    async (chunk, from, to) => {
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select("manifest_id, lot_code, received_qty, shipped_qty")
+        .in("manifest_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error && isMissingColumnError(error)) {
+        const r2 = await admin
+          .from("inventory_lots")
+          .select("manifest_id, lot_code, received_qty")
+          .in("manifest_id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (r2.error) throw new Error(r2.error.message);
+        return (r2.data as { manifest_id: string; lot_code: string | null; received_qty: number | string | null }[] | null) ?? [];
+      }
+      if (error) throw new Error(error.message);
+      return (data as { manifest_id: string; lot_code: string | null; received_qty: number | string | null; shipped_qty: number | string | null }[] | null) ?? [];
+    },
+  );
+  const byManifest = new Map<string, { lot: string | null; qty: number | null }[]>();
+  for (const l of lots) {
+    // The MANIFEST quantity (shipped_qty when a short count moved received_qty).
+    const raw = l.shipped_qty ?? l.received_qty;
+    const qty = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+    const arr = byManifest.get(l.manifest_id) ?? [];
+    arr.push({ lot: l.lot_code, qty: Number.isFinite(qty as number) ? (qty as number) : null });
+    byManifest.set(l.manifest_id, arr);
+  }
+  return ms.map((m) => ({
+    id: m.id,
+    status: m.status,
+    created_at: m.created_at,
+    vendor_id: m.vendor_id,
+    invoice: (m.invoice_number_override ?? "").trim() || (m.invoice_number_detected ?? "").trim() || null,
+    lots: byManifest.get(m.id) ?? [],
+  }));
+}
+
+/** Fix 3.3: the live delivery this parsed manifest is the same transfer as, or null. Never throws. */
+async function findStagingSibling(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  vendorId: string,
+  parsed: ParsedManifest,
+  invoiceNumber: string | null,
+): Promise<ReturnType<typeof findLiveSibling>> {
+  const lotCodes = [...new Set(parsed.lines.map((l) => normLot(l.lot_code)).filter((x): x is string => Boolean(x)))];
+  if (lotCodes.length === 0) return null;
+  try {
+    // lot_code is stored as printed; the parsers print GF / 16-digit ids without spaces.
+    const cands = await readSiblingCandidates(admin, { vendorIds: [vendorId], lotCodes: [...new Set([...lotCodes, ...parsed.lines.map((l) => (l.lot_code ?? "").trim()).filter(Boolean)])] });
+    if (!cands || cands.length === 0) return null;
+    return findLiveSibling(
+      { vendor_id: vendorId, invoice: invoiceNumber, lots: parsed.lines.map((l) => ({ lot: l.lot_code, qty: l.received_qty })) },
+      cands,
+    );
+  } catch (err) {
+    console.warn("[intake-store] sibling dedupe read skipped:", err);
+    return null;
+  }
+}
+
 /**
  * Stage a parsed manifest as DRAFT rows. Returns the new manifest id.
  */
@@ -618,7 +739,11 @@ export async function stageManifest(
   parsed: ParsedManifest,
   rawPayload: unknown,
   actorId: string | null,
-  meta?: { sourceUrl?: string | null },
+  meta?: {
+    sourceUrl?: string | null;
+    /** Fix 3.3: the invoice # the email's documents print (sibling dedupe evidence). */
+    invoiceNumber?: string | null;
+  },
 ): Promise<
   | {
       ok: true;
@@ -636,6 +761,14 @@ export async function stageManifest(
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
+
+  // Fix 3.3: a document field LABEL ("Manifest ID", "Licensee Name:") is never
+  // a vendor name - it would create a junk vendor and defeat the vendor-scoped
+  // dedupe below. Staged with no label instead (the license still resolves).
+  if (parsed.vendor_label !== null && cleanVendorLabel(parsed.vendor_label) === null) {
+    console.warn(`[intake-store] vendor label "${parsed.vendor_label}" is a field label, not a vendor - ignored`);
+    parsed = { ...parsed, vendor_label: null };
+  }
 
   const vendorId = await resolveOrCreateVendor(
     admin,
@@ -677,6 +810,27 @@ export async function stageManifest(
         error: `Duplicate manifest ${parsed.manifest_number} from ${
           parsed.vendor_label ?? "this vendor"
         } is already in intake (manifest ${blockingId}); not staged again.`,
+      };
+    }
+  }
+
+  // Fix 3.3 SIBLING DEDUPE: the same transfer staged under ANOTHER number (the
+  // owner's Canna Processing pair "GF41918900002835-1634964-1" and
+  // "603353555"). Same vendor + (same invoice # and a shared lot id, or the
+  // identical lots with identical quantities) = the same delivery -> the
+  // duplicate path (the caller backfills transport / invoice / documents onto
+  // the live row). Read failures never block staging (a real delivery is
+  // never dropped on a hiccup).
+  if (vendorId) {
+    const sibling = await findStagingSibling(admin, vendorId, parsed, meta?.invoiceNumber ?? null);
+    if (sibling) {
+      return {
+        ok: false,
+        duplicate: true,
+        existingManifestId: sibling.id,
+        error: `Duplicate delivery: ${describeSiblingEvidence(sibling.evidence)} as manifest ${sibling.id} already in intake (manifest # ${
+          parsed.manifest_number ?? "none"
+        } is another document's number for the same transfer); not staged again.`,
       };
     }
   }
@@ -2904,9 +3058,23 @@ export async function dismissDuplicateManifest(
     return { ok: false, error: `Could not read the two manifests - nothing was changed (${readErr.message}).` };
   }
   const rows = (pair as DismissCheckRow[] | null) ?? [];
+  // Fix 3.3: the same transfer staged under another number (a sibling) is a
+  // duplicate too - same vendor + same invoice and a shared lot, or the
+  // identical lots and quantities. The SQL function (0321) re-checks it.
+  let sibling: string | null = null;
+  try {
+    const cands = await readSiblingCandidates(admin, { ids: [duplicateId, keepId] });
+    const a = cands?.find((c) => c.id === duplicateId);
+    const b = cands?.find((c) => c.id === keepId);
+    const ev = a && b ? siblingEvidence(a, b) : null;
+    sibling = ev ? describeSiblingEvidence(ev) : null;
+  } catch {
+    sibling = null;
+  }
   const check = checkDismiss(
     rows.find((r) => r.id === duplicateId) ?? null,
     rows.find((r) => r.id === keepId) ?? null,
+    sibling,
   );
   if (!check.ok) return { ok: false, error: check.reason };
 
@@ -2918,6 +3086,33 @@ export async function dismissDuplicateManifest(
   });
   if (error) return { ok: false, error: dismissErrorMessage(error) };
   return { ok: true, summary: describeDismissResult((data ?? {}) as Record<string, never>) };
+}
+
+/**
+ * Fix 3.3: sibling twins among the listed rows' vendors (every live delivery
+ * of those vendors that shares a lot id with a listed row). Never throws;
+ * an unreadable answer is "no sibling button".
+ */
+async function findSiblingTwinsFor(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  rows: readonly TwinRow[],
+): Promise<Map<string, string>> {
+  try {
+    const live = rows.filter((r) => (r.status ?? "") !== "dismissed").map((r) => r.id);
+    if (live.length === 0) return new Map();
+    const listed = await readSiblingCandidates(admin, { ids: live });
+    if (!listed || listed.length === 0) return new Map();
+    const lotCodes = [...new Set(listed.flatMap((c) => c.lots.map((l) => (l.lot ?? "").trim()).filter(Boolean)))];
+    const vendorIds = [...new Set(listed.map((c) => c.vendor_id).filter((v): v is string => Boolean(v)))];
+    if (lotCodes.length === 0 || vendorIds.length === 0) return new Map();
+    const others = (await readSiblingCandidates(admin, { vendorIds, lotCodes })) ?? [];
+    const byId = new Map<string, SiblingCandidate>();
+    for (const c of [...listed, ...others]) byId.set(c.id, c);
+    return findSiblingTwins([...byId.values()]);
+  } catch (err) {
+    console.warn("[intake-store] sibling twin lookup skipped:", err);
+    return new Map();
+  }
 }
 
 /**
@@ -2955,6 +3150,11 @@ export async function findDuplicateTwinsFor(
     }
     const wanted = new Set(rows.map((r) => r.id));
     const twins = findDuplicateTwins(all);
+    // Fix 3.3: siblings - the same transfer under another number (the owner's
+    // "603353555" / "GF41918900002835-1634964-1" pair). A number twin wins.
+    for (const [id, keep] of await findSiblingTwinsFor(admin, rows)) {
+      if (!twins.has(id)) twins.set(id, keep);
+    }
     return new Map(Array.from(twins).filter(([id]) => wanted.has(id)));
   } catch (err) {
     console.error("[intake-store] twin lookup failed:", err);

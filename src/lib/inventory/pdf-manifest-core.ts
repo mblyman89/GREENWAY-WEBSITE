@@ -33,6 +33,7 @@
  * review. This mirrors the standing rule: machine output is a DRAFT.
  */
 
+import { cleanVendorLabel } from "./manifest-sibling-core";
 import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
 import { emptyTransport, combineDateAndTime } from "@/lib/inventory/intake-parser";
 import { readDriverLicenseNumber } from "@/lib/inventory/transport-fields-core";
@@ -153,12 +154,21 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
         `\\b${vendor_license}\\s+([A-Z][A-Za-z0-9&.'()\\- ]{2,60}?)\\s+\\d{16,18}\\b`,
       );
       const m = flat.match(re);
-      if (m) vendor_label = m[1].trim();
+      if (m) vendor_label = cleanVendorLabel(m[1].trim());
     }
     // Fallback: the Title-case token that immediately precedes the FIRST lot id.
+    // Fix 3.3: a 16-digit MANIFEST number ("Manifest ID 1575241667413695")
+    // looks like a lot id too, and the owner's table showed a delivery whose
+    // vendor read "Manifest ID". A field label is skipped - the next
+    // candidate is tried - and none means no vendor (never a label).
     if (!vendor_label) {
-      const m = flat.match(/([A-Z][A-Za-z0-9&.'()\- ]{2,60}?)\s+\d{16,18}\b/);
-      if (m) vendor_label = m[1].replace(/.*\b\d{4,}\s+/, "").trim();
+      for (const m of flat.matchAll(/([A-Z][A-Za-z0-9&.'()\- ]{2,60}?)\s+\d{16,18}\b/g)) {
+        const v = cleanVendorLabel(m[1].replace(/.*\b\d{4,}\s+/, "").trim());
+        if (v) {
+          vendor_label = v;
+          break;
+        }
+      }
     }
   }
 

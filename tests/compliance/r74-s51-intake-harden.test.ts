@@ -5,9 +5,9 @@ import { extractAllTransferLinksFromBody } from "@/lib/inbound-email/resend-rece
 
 describe("R74 S51 intake auto-fetch hardening", () => {
   it("self-tests pass and are pinned in the runner", () => {
-    expect(__runIntakeHardenTests()).toEqual({ passed: 22, failed: 0 });
+    expect(__runIntakeHardenTests()).toEqual({ passed: 24, failed: 0 });
     const runner = readFileSync("scripts/compliance/run-pure-selftests.ts", "utf8");
-    expect(runner).toContain('assertRan("intake-harden-core", __runIntakeHardenTests(), 22)');
+    expect(runner).toContain('assertRan("intake-harden-core", __runIntakeHardenTests(), 24)');
   });
 
   it("rebuilds the owner's wrapped GrowFlow token link", () => {

@@ -6,7 +6,10 @@
  * will happen, then press the button. Plain server-action form (no client JS).
  *
  * Shown ONLY for a row that has a live twin (findDuplicateTwinsFor); the SQL
- * function re-checks everything in one transaction anyway.
+ * function re-checks everything in one transaction anyway. Fix Phase 3.3:
+ * a twin may also be a SIBLING - the same delivery under another number
+ * (same vendor + same invoice # with shared lots, or identical lots and
+ * quantities) - re-checked by 0321 inbound_manifest_sibling.
  */
 import Link from "next/link";
 
@@ -32,13 +35,13 @@ export function DismissDuplicateForm({
             ? "cursor-pointer list-none rounded border border-[var(--admin-gold)]/50 px-2 py-1 text-xs font-semibold text-[var(--admin-gold)] hover:bg-[var(--admin-gold-soft)]"
             : "cursor-pointer text-sm font-semibold text-[var(--admin-gold)]"
         }
-        title="This row is a second copy of the same manifest (same manifest # and vendor). Dismiss it without rejecting."
+        title="This row is a second copy of the same delivery - the same manifest # and vendor, or (Fix 3.3) the same vendor with the same invoice # / identical lots under another number. Dismiss it without rejecting."
       >
         ⧉ Dismiss duplicate
       </summary>
       <form action={action} className={compact ? "mt-2 w-72 space-y-2 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3 text-xs" : "mt-3 space-y-3 text-sm"}>
         <p className="text-[var(--admin-text-muted)]">
-          This row is a second copy of the same manifest. Dismissing it keeps{" "}
+          This row is a second copy of the same delivery. Dismissing it keeps{" "}
           <Link href={`/admin/inventory/intake/${keepId}`} className="text-[var(--admin-accent)] underline-offset-2 hover:underline">
             {keepLabel}
           </Link>{" "}

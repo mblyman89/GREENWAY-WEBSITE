@@ -69,7 +69,7 @@ describe("llamaparse: LlamaParse-primary text pipeline", () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       // Recovered text flowed through the REAL Transfer Log parser.
-      expect(res.manifest.manifest_number).toBe("603353555");
+      expect(res.manifest.manifest_number).toBe("GF41582000007617") /* Fix 3.3: 603353555 is Greenway's UBI, never the manifest id */;
       expect(res.manifest.vendor_label).toBe("Svin Garden");
       expect(res.text).toContain("Transfer Log");
     }
@@ -89,7 +89,7 @@ describe("llamaparse: LlamaParse-primary text pipeline", () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       // The manifest came from the RECOVERED text, not from any unpdf read.
-      expect(res.manifest.manifest_number).toBe("603353555");
+      expect(res.manifest.manifest_number).toBe("GF41582000007617") /* Fix 3.3: 603353555 is Greenway's UBI, never the manifest id */;
     }
   });
 
@@ -99,7 +99,7 @@ describe("llamaparse: LlamaParse-primary text pipeline", () => {
     const res = await parsePdfManifestFromBase64(b64, spy);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.manifest.manifest_number).toBe("603353555");
+    if (res.ok) expect(res.manifest.manifest_number).toBe("GF41582000007617") /* Fix 3.3: 603353555 is Greenway's UBI, never the manifest id */;
   });
 
   it("a recovery fn returning '' falls back to the local unpdf net, then fails honestly", async () => {

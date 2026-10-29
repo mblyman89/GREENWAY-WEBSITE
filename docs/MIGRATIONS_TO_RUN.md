@@ -2983,3 +2983,42 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0320_inbound_email_reconcile.rollback.sql`.
   Read its header first: rows with `provider = 'gmail'` must be deleted or
   relabelled before the old provider check can return.
+
+## Fix 3.3 — 0321 — One delivery, one row: Dismiss duplicate accepts a second copy under another number
+
+- [ ] `0321_inbound_sibling_dismiss.sql` adds one read-only function,
+  `public.inbound_manifest_sibling(a, b)`, and replaces
+  `public.dismiss_duplicate_manifest` (0255) with the same function whose
+  "same transfer" guard also accepts a sibling: the same vendor and the same
+  invoice # with a shared lot, or the same vendor and the identical set of 2+
+  lots with identical quantities. Every other guard (accepted row, stock in
+  hand, inventory history, vendor payment) is unchanged. (#P..)
+  - Owner, verbatim: *"i think it would be worth adding a button to dismiss
+    duplicate manifests that somehow make it to the table. we should have
+    logic in place to prevent this, so it may need hardening."*
+  - It turns on **Dismiss duplicate** for the second Canna Processing row
+    (`603353555`, the GrowFlow transfer log) next to
+    `GF41918900002835-1634964-1` (SOP-04 v1.8 §4.7a).
+  - Preconditions: 0255 (the function it replaces) and 0319
+    (`inventory_lots.shipped_qty`); the file checks both first.
+  - Until it is applied, new copies are still stopped at staging (that is
+    code, not database), but pressing Dismiss on a different-number pair is
+    refused with the 0255 message ("not the same transfer") and nothing
+    changes.
+
+  Safe to re-run (create or replace only). No data is changed by applying it.
+
+  **Check:**
+
+  ```sql
+  select count(*) as fns from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname = 'inbound_manifest_sibling';
+  -- fns
+  -- 1
+  ```
+
+  **Then:** open the `603353555` row on Receiving, press **Dismiss
+  duplicate**, keep `GF41918900002835-1634964-1`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0321_inbound_sibling_dismiss.rollback.sql`.
+  It restores the 0255 function and drops the sibling function.

@@ -25,7 +25,13 @@
  *     lines whose lot id is printed verbatim in the document.
  *
  * No I/O. Self-tests: __runIntakeHardenTests.
+ *
+ * Fix Phase 3.3 (F-04-23): the AI may echo a FIELD LABEL as the vendor name
+ * (the owner's Receiving table showed a row whose vendor was "Manifest ID").
+ * A label is printed, so the "printed" check passed it; cleanVendorLabel
+ * (manifest-sibling-core) now refuses label-like names here too.
  */
+import { cleanVendorLabel } from "@/lib/inventory/manifest-sibling-core";
 
 /** Characters that may legally continue a URL token across a wrap. */
 const URL_TOKEN_RE = /^[A-Za-z0-9%._~+\/=&?#:@!$'*,;-]+$/;
@@ -220,7 +226,7 @@ export function groundAiManifest(
   const date = /^\d{4}-\d{2}-\d{2}$/.test(ai.transferDate ?? "") ? ai.transferDate : null;
   return {
     manifestNumber: printed(ai.manifestNumber) ? ai.manifestNumber.trim() : null,
-    vendorName: printed(ai.vendorName, 3) ? ai.vendorName.trim() : null,
+    vendorName: printed(ai.vendorName, 3) ? cleanVendorLabel(ai.vendorName) : null,
     vendorLicense: /^\d{6}$/.test((ai.vendorLicense ?? "").trim()) && printed(ai.vendorLicense, 6) ? ai.vendorLicense.trim() : null,
     transferDate: date,
     rows,
@@ -369,6 +375,10 @@ export function __runIntakeHardenTests(): { passed: number; failed: number } {
   ok(groundAiManifest({ manifestNumber: "X", vendorName: "", vendorLicense: "", transferDate: "", rows: [{ lot: "GF00000000000001", product: "a", qty: 1, unitPrice: null }] }, [doc]) === null, "nothing printed -> null");
   const g2 = groundAiManifest({ manifestNumber: "NOT-PRINTED-1", vendorName: "Somebody", vendorLicense: "999999", transferDate: "July", rows: [{ lot: "GF41918905566980", product: "b", qty: 2, unitPrice: null }] }, [doc]);
   ok(!!g2 && g2.manifestNumber === null && g2.vendorLicense === null && g2.transferDate === null, "unprinted header facts dropped");
+  // Fix 3.3: a printed FIELD LABEL is not a vendor name.
+  const g3 = groundAiManifest({ manifestNumber: "0009876543", vendorName: "Manifest ID", vendorLicense: "412345", transferDate: "", rows: [{ lot: "GF41918905566980", product: "b", qty: 2, unitPrice: null }] }, [doc]);
+  ok(!!g3 && g3.vendorName === null && g3.manifestNumber === "0009876543", "label echoed as vendor dropped (Fix 3.3)");
+  ok(!!g && g.vendorName === "Legit Cannabis Co", "real printed vendor kept");
 
   // 5) Forwarded-as-attachment .eml explode.
   const eml = [

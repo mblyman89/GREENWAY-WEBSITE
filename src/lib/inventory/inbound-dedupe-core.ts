@@ -231,7 +231,16 @@ export type DismissCheck = { ok: true } | { ok: false; reason: string };
  * repeats every check under row locks; this gives the owner a clear message
  * and is what the tests pin). PURE.
  */
-export function checkDismiss(dup: DismissCheckRow | null, keep: DismissCheckRow | null): DismissCheck {
+export function checkDismiss(
+  dup: DismissCheckRow | null,
+  keep: DismissCheckRow | null,
+  /**
+   * Fix 3.3: the sibling evidence (manifest-sibling-core describeSiblingEvidence)
+   * when the two rows are the same transfer under DIFFERENT numbers; null/absent
+   * = only the number identity counts (the R36 rule).
+   */
+  sibling?: string | null,
+): DismissCheck {
   if (!dup) return { ok: false, reason: "That manifest no longer exists." };
   if (!keep) return { ok: false, reason: "The manifest to keep no longer exists." };
   if (dup.id === keep.id) return { ok: false, reason: "A manifest cannot be a duplicate of itself." };
@@ -252,10 +261,11 @@ export function checkDismiss(dup: DismissCheckRow | null, keep: DismissCheckRow 
   }
   const a = groupKey(dup);
   const b = groupKey(keep);
-  if (!a || !b || a !== b) {
+  if ((!a || !b || a !== b) && !(typeof sibling === "string" && sibling.trim())) {
     return {
       ok: false,
-      reason: "These two manifests are not the same transfer (manifest # and vendor differ) - not a duplicate.",
+      reason:
+        "These two manifests are not the same transfer (manifest # and vendor differ, and they share no invoice # / identical lots from one vendor) - not a duplicate.",
     };
   }
   return { ok: true };
