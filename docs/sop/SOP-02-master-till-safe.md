@@ -94,7 +94,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 | See the **Over / short warnings** screen | Owner, admin | Permission `registers.warnings` (owner, admin). Managers write reasons but do not see the list (Phase 2.3, G-03). |
 | Balance the master till with the little safe | Morning or night employee | Not in the app. Paper form 8.2 (gap G-02). |
 | Approve a register change swap | An employee whose job role is **manager** or **lead**, and not the person doing the swap | Approver PIN checked on the server (`src/app/api/pos/till/route.ts` L54, L193–218) |
-| See the end-of-day report | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L68) |
+| See the end-of-day report | Owner, admin, manager | `requirePermission("inventory.manage")` (`eod/page.tsx` L80) |
 | Read the counts straight from the database | Owner/admin/manager logins only | RLS `safe_counts_mgr_read` / `safe_swaps_mgr_read` → `public.is_manager()` (`0135_safe_counts_swaps.sql` L99–108, `0130` L55–61). No one can write through RLS. Every write goes through the app's server code. |
 
 **Two kinds of role.** A back-office login has a *staff role* (owner, admin, manager, staff). An employee has a *job role* (sales, manager, lead, other). They are kept separate on purpose (D8). The Store safe page checks the **login's staff role**. The register swap checks the **approver's job role**.
@@ -126,7 +126,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
 | **Little safe** | No set balance (D3) | Spare small bills and coin used to rebuild the master till's mix | Not counted (D3) | **No** (F-00-7). Paper log, form 8.2. |
 | **Store safe** | Whatever the day's drops and takings are | Holds drops and close takings until the deposit bag is sealed | SOP-03 | Drops: yes (drawer sessions). Bag: **no screen** (F-00-6). |
 
-**Totals before a single sale** (script-checked, `sop03/calc.py`): 2 sales tills × $167.50 + Manager Till $300.00 = **$635.00**. Plus the master till, $1,000.00, that is **$1,635.00** of float in the building. ⚠ The system's worked example on the end-of-day page still uses 3 × $167.50 = $1,502.50 (`src/lib/accounting/register-cash-specimen-core.ts` L49, L136; `docs/MICHAEL-books-93-register-cash.md` L6–8). That was written from D10 before the D19 correction (finding **F-03-2**, SOP-03).
+**Totals before a single sale** (script-checked, `sop03/calc.py`): 2 sales tills × $167.50 + Manager Till $300.00 = **$635.00**. Plus the master till, $1,000.00, that is **$1,635.00** of float in the building. ⚠ The system's worked example on the end-of-day page still uses 3 × $167.50 = $1,502.50 (`src/lib/accounting/register-cash-specimen-core.ts` L51, L138; `docs/MICHAEL-books-93-register-cash.md` L6–8). That was written from D10 before the D19 correction (finding **F-03-2**, SOP-03).
 
 **How cash moves:**
 ```
@@ -205,12 +205,12 @@ From top to bottom (`safe/page.tsx` L125–443):
 | **Today's PM count** | **Done** / **Not yet**, hint *"Evening"* | Same, for PM |
 
 **Count the safe** form: *"Count every denomination in the safe. The variance against the $1,000.00 target updates live as you type."*
-- A grid of 13 boxes: **$100, $50, $20, $10, $5, $2, $1, $1 coin, 50¢, 25¢, 10¢, 5¢, 1¢** (`cash.ts` L36–50). Each box takes digits only. Anything else is removed as you type (`CountGrid.tsx` L65–70).
+- A grid of 13 boxes: **$100, $50, $20, $10, $5, $2, $1, $1 coin, 50¢, 25¢, 10¢, 5¢, 1¢** (`cash.ts` L36–50). Each box takes digits only. Anything else is removed as you type (`CountGrid.tsx` L75–80).
 - Under every box: **Standard N** (the owner's D11 count) and a live **Diff ±N**, gold when it is not 0 (Phase 2.7a, `CountGrid.tsx` L89–99).
 - **Safe total** (live sum), **Target: $1,000.00**, and a live **Balanced** / **Over by $X** / **Short by $X**. Below it, on its own line, **Mix vs standard (owner D11)**: **Mix on standard** or **Mix off: …** (L140–142).
 - **Count window**: **AM (before open)** / **PM (evening)** / **Extra count**. Since Phase 2.7a it **starts on the next count due**: AM until today's AM is done, then PM, then Extra once both are done (`defaultCountWindow`, `master-till-core.ts` L122; `safe/page.tsx` L122, L230). Check it anyway.
 - **Counted by: your PIN (required)**: the counter types their own PIN (Phase 2.7a, `safe/page.tsx` L239). There is no list to pick from any more.
-- **Reason box** under the variance (Phase 2.3, G-03): *"Reason for over / short (optional at $5.00 or less)"*. As soon as the live variance is more than $5.00 either way it turns gold, *"Warning: more than $5.00 over. Reason (required)"* (or *short*), and the form will not submit while it is blank (`CountGrid.tsx` L108–129).
+- **Reason box** under the variance (Phase 2.3, G-03): *"Reason for over / short (optional at $5.00 or less)"*. As soon as the live variance is more than $5.00 either way it turns gold, *"Warning: more than $5.00 over. Reason (required)"* (or *short*), and the form will not submit while it is blank (`CountGrid.tsx` L147–168).
 - **Notes (optional)**: up to 500 characters. The placeholder is *"e.g. 3 × $20 from swaps, not yet to the little safe"* (`safe/page.tsx` L252).
 - **Record safe count** button. It greys out and says **Saving…** while the save runs, so a double tap cannot save twice (`safe/page.tsx` L254).
 
@@ -263,7 +263,7 @@ Extra counts appear in **Count history** as **Extra**. The end-of-day report sho
 
 ### 4.8 Reading the result: Balanced, Over, Short
 
-The page works out **variance = counted total − $1,000.00** on the server. The number you see on the grid while typing is only a preview. The saved figure is calculated again from your denominations (`safe-core.ts` L59–96).
+The page works out **variance = counted total − $1,000.00** on the server. The number you see on the grid while typing is only a preview. The saved figure is calculated again from your denominations (`safe-core.ts` L81–118).
 
 | Result | What it means | What to do |
 |---|---|---|
@@ -327,7 +327,7 @@ At the register, a cashier trades big bills for the same value in small bills an
 **Rules from the code:**
 - The till must have an open drawer: *"No open drawer on this register."* (`till/route.ts` L139–142).
 - A swap needs a connection (the PIN is checked on the server).
-- A single swap over $2,000.00 is refused as a typo (`MAX_SWAP_MINOR`, `safe-core.ts` L32, L113–114).
+- A single swap over $2,000.00 is refused as a typo (`MAX_SWAP_MINOR`, `safe-core.ts` L32, L135–136).
 - A swap creates **no journal entry**, by design (`buildBillSwapJournal`, `register-cash-journal-core.ts` L692–727).
 - Do **not** use **No sale → Change fund swap with the safe** for a real swap. That only opens the drawer and records no amount or approver (SOP-01 §4.26).
 
@@ -383,7 +383,7 @@ A till's float never comes from the master till on an ordinary day. It stays in 
 | **AM count** | Total · **Balanced** / **Over by $X** / **Short by $X** · **mix on standard: yes / no** (Phase 2.7a), or **Not done** | The **newest** AM count for that business day (`eod/page.tsx` L445; mix from `eod-store.ts` L173, L186) |
 | **PM count** | Same, for PM | Newest PM count (L451) |
 | **Extra counts** | How many (only shown if there is at least one) | L184 |
-| **Change swaps (value-neutral)** | *"N · $total"* or **None** | Swaps on that Pacific day (`eod-store.ts` L181–194) |
+| **Change swaps (value-neutral)** | *"N · $total"* or **None** | Swaps on that Pacific day (`eod-store.ts` L197–210) |
 
 Under the lines, **Master till sheet for this day** opens the printable sheet for the same day (§4.18; `eod/page.tsx` L472, hidden when printing).
 
@@ -439,13 +439,13 @@ Filing: print the day's sheet after the PM count, have it signed, and keep it wi
 
 | Message (exact) | Type | Why | What to do | Who |
 |---|---|---|---|---|
-| *"Pick a count window (morning, evening, or other)."* | BLOCK | The window value was missing or not am/pm/other (`safe-core.ts` L71) | Choose **AM**, **PM** or **Extra count** and save again | — |
+| *"Pick a count window (morning, evening, or other)."* | BLOCK | The window value was missing or not am/pm/other (`safe-core.ts` L93) | Choose **AM**, **PM** or **Extra count** and save again | — |
 | *"Count at least one bill or coin — an empty safe count records nothing."* | BLOCK | Every box was blank or 0 (L76) | Enter the counts | — |
 | *"Notes must be 500 characters or fewer."* | BLOCK | Notes too long (L81). The box stops at 500 anyway. | Shorten it. Put details on form 8.1. | — |
-| *"The safe tables aren't set up yet — run migration 0135_safe_counts_swaps.sql in the Supabase SQL editor."* | BLOCK | Database migration not run (`safe-store.ts` L26–27) | Count on paper. Tell the owner. | Owner |
+| *"The safe tables aren't set up yet — run migration 0135_safe_counts_swaps.sql in the Supabase SQL editor."* | BLOCK | Database migration not run (`safe-store.ts` L28–29) | Count on paper. Tell the owner. | Owner |
 | *"Safe tracking not set up yet"* (empty page) | BLOCK | Same (`safe/page.tsx` L185). Register swaps will also refuse. | Same | Owner |
 | *"Supabase not configured"* / *"Connect the service role key to manage the safe."* | BLOCK | Server not connected to the database (L101) | Paper. Tell the owner. | Owner |
-| *"Database not configured."* | BLOCK | Same, at save (`safe-store.ts` L81) | Same | Owner |
+| *"Database not configured."* | BLOCK | Same, at save (`safe-store.ts` L83) | Same | Owner |
 | *"This history may be incomplete."* (red box, manager view) | WARN | A page of counts or swaps could not be read (`safe/page.tsx` L302–304). CSV / Excel are hidden. | Reload. If it stays, tell the owner. | Owner |
 | *"The master till sheet for <from> to <to> is not exported because some records could not be read: …"* | BLOCK (export) | Same, on export (`safe/export/route.ts` L50). No partial file is made. | Same | Owner |
 | *"⚠ This sheet may be incomplete. Do not file it."* | WARN (sheet) | Same, on the printable sheet (`safe/sheet/page.tsx` L167) | Do not file it. Reload; use form 8.1 if it stays. | Owner |
@@ -471,11 +471,11 @@ Filing: print the day's sheet after the PM count, have it signed, and keep it wi
 | *"No active employee for the approver PIN."* | BLOCK | Wrong PIN, or the employee is inactive. Counts toward PIN lockout (L193–194). | Re-enter carefully |
 | *"<name> is not a manager or lead — safe swaps need a manager PIN."* | BLOCK | The approver's job role is sales/other (L197–201) | Get a manager or lead |
 | *"A swap cannot approve itself — a manager or lead must enter their PIN."* | BLOCK | Approver = cashier (L203–207) | A different person approves |
-| *"Swap amount must be a positive whole number of cents."* | BLOCK | Amount 0, negative or not whole cents (`safe-core.ts` L110) | Enter one side's value |
+| *"Swap amount must be a positive whole number of cents."* | BLOCK | Amount 0, negative or not whole cents (`safe-core.ts` L132) | Enter one side's value |
 | *"Swap amount is implausibly large — check the number."* | BLOCK | Over $2,000.00 (L113) | Check. Very large swaps are not normal. |
 | *"No open drawer on this register."* | BLOCK | No drawer counted in (`till/route.ts` L139–142) | Count in first (SOP-01 §4.3) |
 | *"Offline — drawer actions need a connection to verify your PIN and record the cash."* | BLOCK | No connection | Wait for the connection. Do not swap off the record. |
-| The migration message above (as the swap error) | BLOCK | Safe tables missing. The swap is refused, not skipped (`safe-store.ts` L157–159). | Tell the owner. No swaps until fixed. |
+| The migration message above (as the swap error) | BLOCK | Safe tables missing. The swap is refused, not skipped (`safe-store.ts` L159–161). | Tell the owner. No swaps until fixed. |
 | *"$X change swap with the safe recorded."* | OK | Saved | Fill in form 8.3 |
 
 ---
@@ -503,7 +503,7 @@ Filing: print the day's sheet after the PM count, have it signed, and keep it wi
 | Control | How it works today | Strength | Finding / gap |
 |---|---|---|---|
 | Twice-daily count | AM and PM windows; cards show **Done / Not yet**; the window starts on the next count due (Phase 2.7a) | Exists (D12 met) | F-02-5 default-window part FIXED |
-| Total calculated by the server | Total and variance are worked out from the denominations on the server, never taken from the form (`safe-core.ts` L59–96) | Strong | — |
+| Total calculated by the server | Total and variance are worked out from the denominations on the server, never taken from the form (`safe-core.ts` L81–118) | Strong | — |
 | Target recorded with each count | `expected_minor` is saved per row, so old rows stay true if the target ever changes (`0135` L54–56) | Strong | — |
 | Counts cannot be changed | No edit or delete; no human write policy (`0135` L95–108) | Strong | — |
 | Who counted | The counter's own **PIN**, checked on the server against active employees, with the PIN lockout (Phase 2.7a) | **Strong** | F-02-4 FIXED, G-13 BUILT |
@@ -683,7 +683,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | 4.2 standard | Owner D11; `src/lib/registers/safe-core.ts` L42 (`MASTER_TILL_STANDARD`, Phase 2.7a; the worked example now reads it); `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
 | 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (443 lines), `safe/actions.ts` (133), `src/lib/registers/safe-core.ts` (195), `safe-store.ts` (294), `src/lib/registers/master-till-core.ts` (425; Phase 2.7a), `src/components/admin/registers/CountGrid.tsx` (168), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L135–137 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
-| 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
+| 4.8 variance | `safe-core.ts` L81–118; `safe/actions.ts` L71–79 |
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L685–727 |
 | 4.11 swaps | `src/app/api/pos/till/route.ts` L54, L139–142, L190–241; `src/lib/pos/till-core.ts` L75–88, L233–255; `src/app/(site)/pos/RegisterShell.tsx` L5666, L5752, L5790, L5846–5879, L6015–6030 |
 | 4.12 drops / books | `register-cash-journal-core.ts` L71, L221–228, L241–386 (drops booked: L297–321, L329, L369–372), self-test L886–939; `src/lib/registers/store.ts` L189 (`recordDrop`); `drawer-posting-service.ts` L174–195; finding F-02-1 FIXED (Phase 2.4) |
