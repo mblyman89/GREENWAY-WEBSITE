@@ -25,6 +25,7 @@ import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCou
 import { SAFE_TARGET_MINOR, MASTER_TILL_STANDARD } from "@/lib/registers/safe-core";
 import { parseBusinessDay } from "@/lib/registers/deposit-bag-flow-core";
 import type { WorkbookSpec, TableRow } from "@/lib/reports/workbook";
+import { swapBillWords, type SheetExchange } from "@/lib/registers/little-safe-core";
 
 /** PIN throttle scope for the master till count (separate from the till pad). */
 export const SAFE_COUNT_PIN_SCOPE = "backoffice-safe-count";
@@ -184,6 +185,10 @@ export type SheetSwap = {
   performedByName: string;
   approvedByName: string;
   notes: string | null;
+  /** Fix Phase 2.7b (F-01-8): big bills IN from the till, or "not recorded (value only)". */
+  inWords: string;
+  /** Fix Phase 2.7b (F-01-8): change OUT to the till, or "not recorded (value only)". */
+  outWords: string;
 };
 
 export const WINDOW_WORD: Record<string, string> = { am: "AM", pm: "PM", other: "Extra" };
@@ -209,6 +214,9 @@ export type SafeSwapRowLike = {
   approved_by: string | null;
   notes: string | null;
   occurred_at: string;
+  /** 0317 (F-01-8); absent or null on swaps recorded before it. */
+  in_denoms?: unknown;
+  out_denoms?: unknown;
 };
 
 /** One mapping from database rows to sheet rows (page, print sheet and export). */
@@ -236,6 +244,7 @@ export function sheetSwapFromRow(r: SafeSwapRowLike, nameFor: (id: string | null
     performedByName: nameFor(r.performed_by),
     approvedByName: nameFor(r.approved_by),
     notes: r.notes,
+    ...swapBillWords(r.in_denoms, r.out_denoms),
   };
 }
 
@@ -261,9 +270,16 @@ export function pacificTime(iso: string): string {
 
 /**
  * CSV / Excel: one Counts row per count (every denomination, total, target,
- * variance, mix vs standard; the first row is the D11 standard) and Swaps.
+ * variance, mix vs standard; the first row is the D11 standard), Swaps (with
+ * the bills both ways, Fix Phase 2.7b F-01-8) and Exchanges (master till <->
+ * little safe, Fix Phase 2.7b G-02, owner D3).
  */
-export function safeSheetWorkbook(range: { from: string; to: string }, counts: readonly SheetCount[], swaps: readonly SheetSwap[]): WorkbookSpec {
+export function safeSheetWorkbook(
+  range: { from: string; to: string },
+  counts: readonly SheetCount[],
+  swaps: readonly SheetSwap[],
+  exchanges: readonly SheetExchange[] = [],
+): WorkbookSpec {
   const denomCols = DENOM_FIELDS.map((d) => ({ key: d.key, header: d.label, type: "integer" as const }));
   const countRows: TableRow[] = counts.map((c) => {
     const m = mixCheck(c.denoms);
@@ -314,6 +330,8 @@ export function safeSheetWorkbook(range: { from: string; to: string }, counts: r
         columns: [
           { key: "time", header: "When (Pacific)" },
           { key: "amount", header: "Amount (one side)", type: "currency" },
+          { key: "in", header: "Big bills IN from till \u2192 master till" },
+          { key: "out", header: "Change OUT master till \u2192 till" },
           { key: "by", header: "Performed by" },
           { key: "approved", header: "Approved by" },
           { key: "notes", header: "Notes" },
@@ -321,17 +339,53 @@ export function safeSheetWorkbook(range: { from: string; to: string }, counts: r
         rows: swaps.map((s) => ({
           time: pacificTime(s.occurredAt),
           amount: s.amountMinor / 100,
+          in: s.inWords,
+          out: s.outWords,
           by: s.performedByName,
           approved: s.approvedByName,
           notes: s.notes ?? "",
         })),
         totals: { time: `${swaps.length} swaps`, amount: swaps.reduce((a, s) => a + s.amountMinor, 0) / 100 },
       },
+      exchangesSheet(exchanges),
     ],
   };
 }
 
 /* ── Self-tests (scripts/compliance/run-pure-selftests.ts) ── */
+
+/**
+ * Fix Phase 2.7b (G-02): the "Exchanges" sheet lives here, not in
+ * little-safe-core, because little-safe-core is bundled into the iPad register
+ * (till-core imports checkSwapDenoms) and the register build must never reach
+ * the workbook module (pos-register-app-guard).
+ */
+export function exchangesSheet(exchanges: readonly SheetExchange[]): WorkbookSpec["sheets"][number] {
+  const rows: TableRow[] = exchanges.map((e) => ({
+    day: e.businessDay,
+    time: pacificTime(e.occurredAt),
+    out: e.outWords,
+    in: e.inWords,
+    value: e.valueMinor / 100,
+    by: e.recordedByName,
+    notes: e.notes ?? "",
+  }));
+  return {
+    name: "Exchanges",
+    caption: "Master till \u2194 little safe exchanges (owner D3). Both sides are the same value. The little safe has no balance or target.",
+    columns: [
+      { key: "day", header: "Business day" },
+      { key: "time", header: "When (Pacific)" },
+      { key: "out", header: "OUT of master till \u2192 little safe" },
+      { key: "in", header: "IN from little safe \u2192 master till" },
+      { key: "value", header: "Value (each side)", type: "currency" },
+      { key: "by", header: "Recorded by" },
+      { key: "notes", header: "Notes" },
+    ],
+    rows,
+    totals: { day: `${exchanges.length} exchanges`, value: exchanges.reduce((a, e) => a + e.valueMinor, 0) / 100 },
+  };
+}
 
 export function __runMasterTillTests(): { passed: number; failed: number } {
   let passed = 0;
@@ -397,10 +451,11 @@ export function __runMasterTillTests(): { passed: number; failed: number } {
   ok(sorted.map((s) => s.id).join("") === "apyx", "sheet order AM, PM, extras oldest first");
 
   const wb = safeSheetWorkbook({ from: "2026-11-01", to: "2026-11-02" }, [{ ...c("a", "am", "2026-11-02T16:00:00Z"), denoms: offMix, reason: "r" }], [
-    { id: "s", occurredAt: "2026-11-02T19:00:00Z", amountMinor: 10_000, performedByName: "B", approvedByName: "C", notes: null },
+    { id: "s", occurredAt: "2026-11-02T19:00:00Z", amountMinor: 10_000, performedByName: "B", approvedByName: "C", notes: null, inWords: "5 \u00d7 $20", outWords: "20 \u00d7 $5" },
   ]);
   ok(wb.filename === "master-till-2026-11-01-to-2026-11-02", "export filename");
-  ok(wb.sheets.map((s) => s.name).join(",") === "Counts,Swaps", "export sheets");
+  ok(wb.sheets.map((s) => s.name).join(",") === "Counts,Swaps,Exchanges", "export sheets (Exchanges added in Phase 2.7b)");
+  ok(wb.sheets[1].rows[0].in === "5 \u00d7 $20" && wb.sheets[1].rows[0].out === "20 \u00d7 $5", "swaps sheet carries the bills both ways");
   ok(wb.sheets[0].rows[0].window === "Standard (D11)" && wb.sheets[0].rows[0].tens === 32, "first row is the D11 standard");
   ok(wb.sheets[0].rows[1].mix === "off: +10 \u00d7 $20, \u221220 \u00d7 $10" && wb.sheets[0].rows[1].twenties === 10, "count row has the mix and the denominations");
   ok(wb.sheets[0].rows[1].window === "AM" && wb.sheets[0].rows[1].reason === "r", "count row window and reason");
@@ -418,6 +473,11 @@ export function __runMasterTillTests(): { passed: number; failed: number } {
     ok(sc.countedByName === "Ann" && sc.denoms.tens === 32 && sc.denoms.twenties === 2 && sc.reason === null, "row mapping: name, denominations, missing reason \u2192 null");
     const sw = sheetSwapFromRow({ id: "s9", amount_minor: 2000, performed_by: "e1", approved_by: null, notes: null, occurred_at: "2026-11-02T20:00:00Z" }, names);
     ok(sw.performedByName === "Ann" && sw.approvedByName === "\u2014" && sw.amountMinor === 2000, "swap row mapping");
+    ok(sw.inWords === "not recorded (value only)", "a swap before 0317 says value only");
+    const ex = { id: "x1", businessDay: "2026-11-02", occurredAt: "2026-11-02T20:00:00Z", outWords: "5 \u00d7 $20", inWords: "20 \u00d7 $5", valueMinor: 10_000, recordedByName: "Ann", notes: null } as SheetExchange;
+    const sh = exchangesSheet([ex, { ...ex, id: "x2", valueMinor: 2_000 }]);
+    ok(sh.name === "Exchanges" && sh.rows.length === 2 && sh.rows[0].out === "5 \u00d7 $20", "exchanges sheet rows");
+    ok(sh.totals?.value === 120 && sh.totals?.day === "2 exchanges", "exchanges sheet total");
   }
   ok(mixSentence({ ...MASTER_TILL_STANDARD, twenties: 10, tens: 12 }) === "Mix off standard: +10 \u00d7 $20, \u221220 \u00d7 $10.", "banner: mix off standard lists the differences");
 

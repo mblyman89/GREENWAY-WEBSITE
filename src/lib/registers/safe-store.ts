@@ -58,7 +58,34 @@ export type SafeSwapRow = {
   approved_by: string | null;
   notes: string | null;
   occurred_at: string;
+  /** Fix Phase 2.7b (0317, F-01-8): big bills IN from the till; null before 0317. */
+  in_denoms?: Partial<DenomCounts> | null;
+  /** Fix Phase 2.7b (0317, F-01-8): change OUT to the till; null before 0317. */
+  out_denoms?: Partial<DenomCounts> | null;
 };
+
+/** Fix Phase 2.7b (0317, G-02, owner D3): one master till <-> little safe exchange. */
+export type LittleSafeExchangeRow = {
+  id: string;
+  business_day: string;
+  out_denoms: Partial<DenomCounts>;
+  in_denoms: Partial<DenomCounts>;
+  value_minor: number;
+  recorded_by: string | null;
+  notes: string | null;
+  occurred_at: string;
+};
+
+const EXCHANGE_MIGRATION_HINT =
+  "The little safe exchange log is not set up yet \u2014 run migration 0317_little_safe_exchanges.sql in the Supabase SQL editor. Nothing was saved; use paper form 8.2 (SOP-02 \u00a74.10) until then.";
+
+/** A missing 0317 column on safe_swaps (in_denoms / out_denoms). */
+function isMissingSwapDenoms(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  // Only when the error names one of the two new columns: any other error
+  // (a refused check, a lost connection) must fail the swap, not drop bills.
+  return /\b(in_denoms|out_denoms)\b/.test(err.message ?? "") && /column|schema cache/i.test(err.message ?? "");
+}
 
 /**
  * Record a manager count of the safe. Totals/variance are derived by the
@@ -143,23 +170,119 @@ export async function recordSwap(opts: {
   performedBy: string | null;
   approvedBy: string | null;
   notes?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+  /**
+   * Fix Phase 2.7b (F-01-8): the bills both ways, already checked equal to
+   * the amount (little-safe-core#checkSwapDenoms). Null from an iPad build
+   * made before 2.7b.
+   */
+  inDenoms?: Partial<DenomCounts> | null;
+  outDenoms?: Partial<DenomCounts> | null;
+}): Promise<{ ok: boolean; error?: string; billsSaved?: boolean }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   if (opts.amountMinor <= 0) return { ok: false, error: "Swap amount must be greater than zero." };
 
   const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("safe_swaps").insert({
+  const base: Record<string, unknown> = {
     session_id: opts.sessionId,
     device_id: opts.deviceId,
     amount_minor: opts.amountMinor,
     performed_by: opts.performedBy,
     approved_by: opts.approvedBy,
     notes: opts.notes ?? null,
-  });
+  };
+  const hasBills = !!opts.inDenoms && !!opts.outDenoms;
+  const { error } = await admin
+    .from("safe_swaps")
+    .insert(hasBills ? { ...base, in_denoms: opts.inDenoms, out_denoms: opts.outDenoms } : base);
   if (error) {
+    // Before 0317 the columns do not exist: the swap itself must still be
+    // recorded (its value and approver); the bills stay in the Security Log.
+    if (hasBills && isMissingSwapDenoms(error)) {
+      const retry = await admin.from("safe_swaps").insert(base);
+      if (retry.error) {
+        return { ok: false, error: isMissingTable(retry.error) ? MIGRATION_HINT : retry.error.message };
+      }
+      return { ok: true, billsSaved: false };
+    }
     return { ok: false, error: isMissingTable(error) ? MIGRATION_HINT : error.message };
   }
-  return { ok: true };
+  return { ok: true, billsSaved: hasBills };
+}
+
+/**
+ * Fix Phase 2.7b (G-02, owner D3): record one master till <-> little safe
+ * exchange. The caller has already checked the two sides are equal
+ * (little-safe-core#validateExchange); the database checks it again (0317
+ * little_safe_exchanges_sides_equal). NEVER best-effort: before 0317 it
+ * refuses and says so.
+ */
+export async function recordLittleSafeExchange(opts: {
+  outDenoms: Partial<DenomCounts>;
+  inDenoms: Partial<DenomCounts>;
+  valueMinor: number;
+  recordedBy: string;
+  notes: string | null;
+}): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("little_safe_exchanges")
+    .insert({
+      business_day: businessDayFor(now),
+      out_denoms: opts.outDenoms,
+      in_denoms: opts.inDenoms,
+      value_minor: opts.valueMinor,
+      recorded_by: opts.recordedBy,
+      notes: opts.notes,
+      occurred_at: now,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: EXCHANGE_MIGRATION_HINT };
+    if (/little_safe_exchanges_sides_equal/.test(error.message ?? "")) {
+      return { ok: false, error: "The database refused it: the two sides are not the same value. Recount both sides. Nothing was saved." };
+    }
+    return { ok: false, error: `${error.message} Nothing was saved.` };
+  }
+  return { ok: true, id: (data as { id: string } | null)?.id ?? null };
+}
+
+/**
+ * Fix Phase 2.7b (G-02 requirements 3 and 5): every exchange with a business
+ * day From..To (inclusive), newest first, read in full pages. Before 0317,
+ * ready is false (the page says so); a read that fails part-way is reported.
+ */
+export async function listLittleSafeExchangesRange(
+  from: string,
+  to: string,
+): Promise<{ ready: boolean; exchanges: LittleSafeExchangeRow[]; error: string | null }> {
+  if (!isSupabaseServiceConfigured) return { ready: false, exchanges: [], error: null };
+  const admin = createSupabaseAdminClient();
+  let missing = false;
+  let firstError: string | null = null;
+  const read = await pagedAllChecked<LittleSafeExchangeRow>(async (a, b) => {
+    const { data, error } = await admin
+      .from("little_safe_exchanges")
+      .select("*")
+      .gte("business_day", from)
+      .lte("business_day", to)
+      .order("occurred_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(a, b);
+    if (error) {
+      if (isMissingTable(error)) missing = true;
+      firstError ??= error.message;
+      return { rows: [], ok: false };
+    }
+    return { rows: (data as LittleSafeExchangeRow[] | null) ?? [], ok: true };
+  });
+  if (missing) return { ready: false, exchanges: [], error: null };
+  if (!read.verdict.complete) {
+    return { ready: true, exchanges: read.rows, error: firstError ?? read.verdict.message };
+  }
+  return { ready: true, exchanges: read.rows, error: null };
 }
 
 /** Recent safe counts, newest first. */

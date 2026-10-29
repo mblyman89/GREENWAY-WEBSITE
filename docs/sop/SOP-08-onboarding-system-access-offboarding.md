@@ -290,7 +290,7 @@ The sign-in is **not** linked to the employee file (§4.1). That is the owner's 
 
 ### 4.15 PINs: rules, changing, removing, lockout
 
-- **What a PIN does.** It identifies a person at the time clock, at register unlock, and for register approvals (a **manager or lead** PIN approves safe swaps and similar actions: `api/pos/till/route.ts` L55, L193–207).
+- **What a PIN does.** It identifies a person at the time clock, at register unlock, and for register approvals (a **manager or lead** PIN approves safe swaps and similar actions: `api/pos/till/route.ts` L56, L194–208).
 - **Format.** 4–6 digits (`staffing/actions.ts` L124). Two people cannot share a PIN: *"That PIN is already in use."* (L129, L169).
 - **Secrecy.** PINs are stored as salted hashes and never shown again (`store.ts` L21–24; `pin-hash.ts`). The field is write-only: blank keeps the current PIN (`staffing/actions.ts` L161–163). **Never write a PIN down, never share it, never let someone else type yours.**
 - **Changing.** In the employee file, open **Basics**, type the new PIN in **New clock PIN**, and press **Save basics**. Change it at once if anyone else may know it.
@@ -587,7 +587,7 @@ Print these. File the completed forms in the employee's paper file (five years).
 | PIN store | `src/lib/staffing/store.ts` L17–39, L117–146, L338–352 |
 | PIN hash and throttle | `src/lib/security/pin-hash.ts` L21–40; `src/lib/security/pin-throttle-core.ts` L29–31, L74–92 |
 | Handbook gates | `src/lib/staffing/handbook-ack-core.ts` L42–77; `src/lib/staffing/handbook-ack-store.ts` L77–155; `src/app/admin/layout.tsx` L67–83; `src/components/admin/HandbookGateScreen.tsx` L62; `src/lib/staffing/handbook-content.ts` L24 |
-| Register unlock and approvals | `src/app/api/pos/unlock/route.ts` L42–110; `src/app/api/pos/till/route.ts` L55, L193–207 |
+| Register unlock and approvals | `src/app/api/pos/unlock/route.ts` L42–110; `src/app/api/pos/till/route.ts` L56, L194–208 |
 | Phone clock | `src/app/admin/staffing/clock/page.tsx` L35 |
 | Database | `supabase/migrations/0037_staffing_timeclock.sql` L37, L125–132; `0117_employee_command_center.sql` L31–57; `0136_handbook_acknowledgments.sql` L23; `0210_separate_logins_from_employees.sql` L4–80 |
 | Pointers only (D69) | Payroll Setup `src/lib/payroll/payroll-onboarding-store.ts` L1046–1130; e-sign `src/app/admin/staffing/employees/[id]/esign/actions.ts` L71–201 |

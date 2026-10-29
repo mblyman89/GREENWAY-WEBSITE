@@ -9,7 +9,9 @@ import { CountGrid } from "@/components/admin/registers/CountGrid";
 import { formatCents } from "@/lib/registers/cash";
 import { SAFE_TARGET_MINOR } from "@/lib/registers/safe-core";
 import { isOverShortWarning } from "@/lib/registers/over-short-warning-core";
-import { listSafeCountsRange, listSwapsRange, safeStatus } from "@/lib/registers/safe-store";
+import { listLittleSafeExchangesRange, listSafeCountsRange, listSwapsRange, safeStatus } from "@/lib/registers/safe-store";
+import { LittleSafeExchangeForm } from "@/components/admin/registers/LittleSafeExchangeForm";
+import { sheetExchangeFromRow, swapBillWords } from "@/lib/registers/little-safe-core";
 import { listEmployees } from "@/lib/staffing/store";
 import { backHref } from "@/lib/admin/back-link-core";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -22,7 +24,7 @@ import {
   parseDayRange,
   sheetCountFromRow,
 } from "@/lib/registers/master-till-core";
-import { recordSafeCountAction } from "./actions";
+import { recordLittleSafeExchangeAction, recordSafeCountAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -104,10 +106,12 @@ export default async function SafePage({
   }
 
   const empty = { ready: true, counts: [], swaps: [], error: null };
-  const [status, countsRes, swapsRes, allEmployees] = await Promise.all([
+  const [status, countsRes, swapsRes, exchangesRes, allEmployees] = await Promise.all([
     safeStatus(),
     canManage && range.ok ? listSafeCountsRange(range.from, range.to) : Promise.resolve({ ...empty, counts: [] }),
     canManage && range.ok ? listSwapsRange(range.from, range.to) : Promise.resolve({ ...empty, swaps: [] }),
+    // Fix Phase 2.7b (G-02 requirements 3 and 5): the exchange log, same days.
+    canManage && range.ok ? listLittleSafeExchangesRange(range.from, range.to) : Promise.resolve({ ...empty, exchanges: [] }),
     canManage ? listEmployees({ includeInactive: true }) : Promise.resolve([]),
   ]);
 
@@ -117,6 +121,7 @@ export default async function SafePage({
   const readErrors = [
     countsRes.error ? `Counts could not all be read: ${countsRes.error}` : null,
     swapsRes.error ? `Change swaps could not all be read: ${swapsRes.error}` : null,
+    exchangesRes.error ? `Little safe exchanges could not all be read: ${exchangesRes.error}` : null,
   ].filter((x): x is string => x != null);
   const rangeQs = range.ok ? `from=${range.from}&to=${range.to}` : "";
   const startWindow = defaultCountWindow(status.todayAmDone, status.todayPmDone);
@@ -147,6 +152,12 @@ export default async function SafePage({
               standard and the difference under every box, and says &ldquo;Mix on standard&rdquo; or &ldquo;Mix off&rdquo; apart from the total: a
               count can be exactly {formatCents(SAFE_TARGET_MINOR)} and still be off the mix. Big bills
               ($20 and up) go to the little safe; rebuild the small bills and coin from it (SOP-02 §4.10).
+            </p>
+            <p>
+              <strong>Little safe exchange</strong> (owner decision D3): record every swap of big bills out of the
+              master till for small bills and coin from the little safe, by denomination on both sides, with your PIN.
+              The two sides must be the same value or it is not saved. The little safe has no balance or target, so
+              the app does not count it.
             </p>
             <p>
               Change swaps happen at the register: a cashier trades big bills for equal change with
@@ -254,6 +265,16 @@ export default async function SafePage({
                 <SaveButton label="Record safe count" busyLabel="Saving…" variant="primary" />
               </div>
             </form>
+          </section>
+
+          <section className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4">
+            <h2 className="text-sm font-semibold text-[var(--admin-text)]">Little safe exchange</h2>
+            <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+              Big bills out of the master till into the little safe, and the same value of small bills and coin from
+              the little safe into the master till (owner D3). Count both sides by denomination. Any employee, with
+              their own PIN. A saved exchange cannot be changed; to undo one, record the reverse with a note.
+            </p>
+            <LittleSafeExchangeForm action={recordLittleSafeExchangeAction} />
           </section>
 
           {!canManage ? (
@@ -414,21 +435,72 @@ export default async function SafePage({
                         <tr className="border-b border-[var(--admin-border)] text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                           <th className="py-2 pr-3">When</th>
                           <th className="py-2 pr-3 text-right">Amount</th>
+                          <th className="py-2 pr-3">Big bills in</th>
+                          <th className="py-2 pr-3">Change out</th>
                           <th className="py-2 pr-3">Performed by</th>
                           <th className="py-2 pr-3">Approved by</th>
                           <th className="py-2">Notes</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {swapsRes.swaps.map((s) => (
+                        {swapsRes.swaps.map((s) => {
+                          const bills = swapBillWords(s.in_denoms, s.out_denoms);
+                          return (
                           <tr key={s.id} className="border-b border-[var(--admin-border)]/50 text-[var(--admin-text)]">
                             <td className="py-2 pr-3 whitespace-nowrap">{fmtTime(s.occurred_at)}</td>
                             <td className="py-2 pr-3 text-right tabular-nums">{formatCents(s.amount_minor)}</td>
+                            <td className="py-2 pr-3 text-[var(--admin-text-muted)]">{bills.inWords}</td>
+                            <td className="py-2 pr-3 text-[var(--admin-text-muted)]">{bills.outWords}</td>
                             <td className="py-2 pr-3">{nameFor(s.performed_by)}</td>
                             <td className="py-2 pr-3">{nameFor(s.approved_by)}</td>
                             <td className="py-2 text-[var(--admin-text-muted)]">{s.notes ?? "—"}</td>
                           </tr>
-                        ))}
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4">
+                <h2 className="text-sm font-semibold text-[var(--admin-text)]">Little safe exchanges</h2>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  Master till ↔ little safe, both sides by denomination (owner D3). Same days as the count history.
+                </p>
+                {!range.ok ? null : !exchangesRes.ready ? (
+                  <p className="mt-2 text-sm text-[var(--admin-text-muted)]">
+                    Not set up yet: run migration 0317_little_safe_exchanges.sql. Until then use paper form 8.2 (SOP-02 §4.10).
+                  </p>
+                ) : exchangesRes.exchanges.length === 0 ? (
+                  <p className="mt-2 text-sm text-[var(--admin-text-muted)]">No little safe exchanges in these days.</p>
+                ) : (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--admin-border)] text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                          <th className="py-2 pr-3">When</th>
+                          <th className="py-2 pr-3">OUT of master till → little safe</th>
+                          <th className="py-2 pr-3">IN from little safe → master till</th>
+                          <th className="py-2 pr-3 text-right">Each side</th>
+                          <th className="py-2 pr-3">Recorded by</th>
+                          <th className="py-2">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {exchangesRes.exchanges.map((row) => {
+                          const e = sheetExchangeFromRow(row, nameFor);
+                          return (
+                            <tr key={e.id} className="border-b border-[var(--admin-border)]/50 align-top text-[var(--admin-text)]">
+                              <td className="py-2 pr-3 whitespace-nowrap">{fmtTime(e.occurredAt)}</td>
+                              <td className="py-2 pr-3">{e.outWords}</td>
+                              <td className="py-2 pr-3">{e.inWords}</td>
+                              <td className="py-2 pr-3 text-right tabular-nums">{formatCents(e.valueMinor)}</td>
+                              <td className="py-2 pr-3">{e.recordedByName}</td>
+                              <td className="py-2 text-[var(--admin-text-muted)]">{e.notes ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

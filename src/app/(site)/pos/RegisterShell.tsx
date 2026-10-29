@@ -5636,6 +5636,11 @@ function TillModal({
   const [tips, setTips] = useState("");
   // Safe swap (mode "swap" only): a manager/lead approves with their PIN.
   const [approverPin, setApproverPin] = useState("");
+  // Fix Phase 2.7b (F-01-8, owner D3): the bills both ways. Big bills from
+  // this till to the master till, and the change that comes back. The swap
+  // amount IS the big bills' total, and the change must equal it.
+  const [swapIn, setSwapIn] = useState<DenomCounts>({ ...EMPTY_DENOMS });
+  const [swapOut, setSwapOut] = useState<DenomCounts>({ ...EMPTY_DENOMS });
   // Second-person count (mode "close" only, G-01). The second grid starts
   // empty and the closer's count is hidden in step 2, so it stays blind.
   const [closeStep, setCloseStep] = useState<"first" | "second">("first");
@@ -5644,7 +5649,9 @@ function TillModal({
 
   const countedMinor = denomTotalMinor(denoms);
   const secondCountedMinor = denomTotalMinor(secondDenoms);
-  const amountMinor = dollarsToMinor(amount);
+  const swapInMinor = denomTotalMinor(swapIn);
+  const swapOutMinor = denomTotalMinor(swapOut);
+  const amountMinor = mode === "swap" ? (swapInMinor > 0 ? swapInMinor : null) : dollarsToMinor(amount);
   const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
 
   const ready =
@@ -5654,7 +5661,7 @@ function TillModal({
       : mode === "drop"
         ? amountMinor !== null
         : mode === "swap"
-          ? amountMinor !== null && approverPin.length >= 4
+          ? amountMinor !== null && swapOutMinor === swapInMinor && approverPin.length >= 4
           : tipsMinor !== null && closeStep === "second" && secondPin.length >= 4);
   // Step 1 of a close is done when the closer's PIN and tips are valid.
   const firstStepReady = mode === "close" && closeStep === "first" && pin.length >= 4 && tipsMinor !== null;
@@ -5691,6 +5698,8 @@ function TillModal({
                 pin,
                 amountMinor,
                 approverPin,
+                inDenoms: swapIn,
+                outDenoms: swapOut,
                 ...(notes.trim() ? { notes: notes.trim() } : {}),
               }
           : mode === "close"
@@ -5844,19 +5853,47 @@ function TillModal({
           </>
         ) : mode === "swap" ? (
           <>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Amount swapped
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
-              inputMode="decimal"
-              placeholder="$0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
-              Example: $100 in twenties goes to the safe, $100 in fives, ones and
-              coins comes back. Enter the value of one side.
+            {/* Fix Phase 2.7b (F-01-8, owner D3): the bills both ways. */}
+            {([
+              ["Big bills to the safe (from this till)", swapIn, setSwapIn, swapInMinor],
+              ["Change back (from the master till)", swapOut, setSwapOut, swapOutMinor],
+            ] as const).map(([title, value, setValue, total]) => (
+              <div key={title} className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">{title}</p>
+                <div className="mt-1 grid grid-cols-3 gap-1.5">
+                  {DENOM_FIELDS.map(({ key, label }) => (
+                    <label key={key} className="flex items-center justify-between gap-1 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-2 py-1.5">
+                      <span className="text-xs font-semibold text-[var(--pos-text)]">{label}</span>
+                      <input
+                        className="w-14 rounded-md border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-1.5 py-1 text-right text-sm"
+                        inputMode="numeric"
+                        value={value[key] === 0 ? "" : String(value[key])}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const n = Math.max(0, Math.min(99_999, Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0)));
+                          setValue((d) => ({ ...d, [key]: n }));
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-right text-sm font-bold">{formatCents(total)}</p>
+              </div>
+            ))}
+            <p
+              className={`mt-2 rounded-lg px-3 py-2 text-sm font-semibold ${
+                swapInMinor > 0 && swapInMinor === swapOutMinor
+                  ? "bg-[var(--pos-surface-2)] text-[var(--pos-text)]"
+                  : "bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+              }`}
+            >
+              {swapInMinor === 0
+                ? "Enter the big bills going to the safe, then the change coming back. The two must be the same value."
+                : swapInMinor === swapOutMinor
+                  ? `Both sides ${formatCents(swapInMinor)} \u2014 equal.`
+                  : `Not equal yet: big bills ${formatCents(swapInMinor)}, change ${formatCents(swapOutMinor)} (${
+                      swapOutMinor > swapInMinor ? "change is" : "change is short"
+                    } ${formatCents(Math.abs(swapOutMinor - swapInMinor))}${swapOutMinor > swapInMinor ? " more" : ""}).`}
             </p>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Manager or lead PIN (approval)

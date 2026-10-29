@@ -6,7 +6,8 @@ import { formatCents, overShortLabel, denomTotalMinor } from "@/lib/registers/ca
 import { pacificToday } from "@/lib/reports/timezone";
 import { parseBusinessDay } from "@/lib/registers/deposit-bag-flow-core";
 import { SAFE_TARGET_MINOR } from "@/lib/registers/safe-core";
-import { listSafeCountsRange, listSwapsRange } from "@/lib/registers/safe-store";
+import { listLittleSafeExchangesRange, listSafeCountsRange, listSwapsRange } from "@/lib/registers/safe-store";
+import { sheetExchangeFromRow } from "@/lib/registers/little-safe-core";
 import { listEmployees } from "@/lib/staffing/store";
 import {
   MASTER_TILL_STANDARD,
@@ -98,18 +99,22 @@ export default async function MasterTillSheetPage({ searchParams }: { searchPara
   }
   const day = dayRes.day;
 
-  const [countsRes, swapsRes, employees] = await Promise.all([
+  const [countsRes, swapsRes, exchangesRes, employees] = await Promise.all([
     listSafeCountsRange(day, day),
     listSwapsRange(day, day),
+    listLittleSafeExchangesRange(day, day),
     listEmployees({ includeInactive: true }),
   ]);
   const empName = new Map(employees.map((e) => [e.id, e.full_name]));
   const nameFor = (id: string | null): string => (id ? (empName.get(id) ?? "\u2014") : "\u2014");
   const counts = sortForSheet(countsRes.counts.map((r) => sheetCountFromRow(r, nameFor)));
   const swaps = [...swapsRes.swaps].reverse().map((r) => sheetSwapFromRow(r, nameFor));
+  // Fix Phase 2.7b (G-02): the day's master till <-> little safe exchanges, oldest first.
+  const exchanges = [...exchangesRes.exchanges].reverse().map((r) => sheetExchangeFromRow(r, nameFor));
   const problems = [
     countsRes.error ? `Counts could not all be read: ${countsRes.error}` : null,
     swapsRes.error ? `Change swaps could not all be read: ${swapsRes.error}` : null,
+    exchangesRes.error ? `Little safe exchanges could not all be read: ${exchangesRes.error}` : null,
   ].filter((x): x is string => x != null);
   const notReady = !countsRes.ready || !swapsRes.ready;
   const stdRows = mixRows(MASTER_TILL_STANDARD);
@@ -290,6 +295,8 @@ export default async function MasterTillSheetPage({ searchParams }: { searchPara
               <tr className="border-b-2 border-black text-left">
                 <th className="py-1 pr-2">When</th>
                 <th className="py-1 pr-2 text-right">Amount (one side)</th>
+                <th className="py-1 pr-2">Big bills IN from till</th>
+                <th className="py-1 pr-2">Change OUT to till</th>
                 <th className="py-1 pr-2">Performed by</th>
                 <th className="py-1 pr-2">Approved by</th>
                 <th className="py-1">Notes</th>
@@ -300,6 +307,8 @@ export default async function MasterTillSheetPage({ searchParams }: { searchPara
                 <tr key={s.id} className="border-b border-black/10">
                   <td className="py-0.5 pr-2">{pacificTime(s.occurredAt)}</td>
                   <td className="py-0.5 pr-2 text-right tabular-nums">{formatCents(s.amountMinor)}</td>
+                  <td className="py-0.5 pr-2">{s.inWords}</td>
+                  <td className="py-0.5 pr-2">{s.outWords}</td>
                   <td className="py-0.5 pr-2">{s.performedByName}</td>
                   <td className="py-0.5 pr-2">{s.approvedByName}</td>
                   <td className="py-0.5">{s.notes ?? "\u2014"}</td>
@@ -308,14 +317,52 @@ export default async function MasterTillSheetPage({ searchParams }: { searchPara
               <tr className="border-t-2 border-black font-black">
                 <td className="py-1 pr-2">{swaps.length} swaps</td>
                 <td className="py-1 pr-2 text-right tabular-nums">{formatCents(swaps.reduce((a, s) => a + s.amountMinor, 0))}</td>
-                <td colSpan={3} />
+                <td colSpan={5} />
               </tr>
             </tbody>
           </table>
         )}
 
         <h2 className="mt-6 text-xs font-black uppercase tracking-[0.18em]">Master till ↔ little safe exchanges</h2>
-        <p className="mt-1 text-xs">Not recorded in the app yet (gap G-02). Attach paper form 8.2 (SOP-02 §4.10) for this day.</p>
+        {!exchangesRes.ready ? (
+          <p className="mt-1 text-xs">
+            The exchange log is not set up yet: run migration 0317_little_safe_exchanges.sql. Attach paper form 8.2 (SOP-02 §4.10) for this day.
+          </p>
+        ) : exchanges.length === 0 ? (
+          <p className="mt-2 text-sm">No little safe exchanges recorded for this day.</p>
+        ) : (
+          <table className="mt-2 w-full border-collapse text-xs">
+            <thead>
+              <tr className="border-b-2 border-black text-left">
+                <th className="py-1 pr-2">When</th>
+                <th className="py-1 pr-2">OUT of master till → little safe</th>
+                <th className="py-1 pr-2">IN from little safe → master till</th>
+                <th className="py-1 pr-2 text-right">Each side</th>
+                <th className="py-1 pr-2">Recorded by</th>
+                <th className="py-1">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {exchanges.map((e) => (
+                <tr key={e.id} className="border-b border-black/10">
+                  <td className="py-0.5 pr-2">{pacificTime(e.occurredAt)}</td>
+                  <td className="py-0.5 pr-2">{e.outWords}</td>
+                  <td className="py-0.5 pr-2">{e.inWords}</td>
+                  <td className="py-0.5 pr-2 text-right tabular-nums">{formatCents(e.valueMinor)}</td>
+                  <td className="py-0.5 pr-2">{e.recordedByName}</td>
+                  <td className="py-0.5">{e.notes ?? "\u2014"}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-black font-black">
+                <td className="py-1 pr-2" colSpan={3}>
+                  {exchanges.length} exchanges
+                </td>
+                <td className="py-1 pr-2 text-right tabular-nums">{formatCents(exchanges.reduce((a, e) => a + e.valueMinor, 0))}</td>
+                <td colSpan={2} />
+              </tr>
+            </tbody>
+          </table>
+        )}
 
         <div className="mt-8 grid grid-cols-2 gap-6">
           <SignLine label="AM counter — signature" />

@@ -47,6 +47,7 @@ import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+import { compactDenoms, denomWords } from "@/lib/registers/little-safe-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -221,6 +222,10 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       performedBy: employee.id,
       approvedBy: approver.id,
       notes: till.notes ?? null,
+      // Fix Phase 2.7b (F-01-8): the bills both ways, checked equal to the
+      // amount by validateTillRequest (little-safe-core#checkSwapDenoms).
+      inDenoms: till.inDenoms ? compactDenoms(till.inDenoms) : null,
+      outDenoms: till.outDenoms ? compactDenoms(till.outDenoms) : null,
     });
     if (!result.ok) return NextResponse.json({ error: result.error ?? "Swap failed." }, { status: 409 });
 
@@ -235,9 +240,14 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         deviceId: auth.device.id,
         amountMinor: till.amountMinor,
         approvedBy: approver.id,
+        // Fix Phase 2.7b (F-01-8): kept here too, so the bills survive even
+        // before migration 0317 adds the columns (billsSaved false).
+        bills_in: till.inDenoms ? denomWords(till.inDenoms) : null,
+        bills_out: till.outDenoms ? denomWords(till.outDenoms) : null,
+        bills_saved: result.billsSaved ?? false,
       },
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, billsSaved: result.billsSaved ?? false });
   }
 
   // ── close: BLIND count-out + second-person count (G-01, owner D2) ──

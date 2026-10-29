@@ -26,6 +26,7 @@
 
 import { type DenomCounts, EMPTY_DENOMS, denomTotalMinor } from "@/lib/registers/cash";
 import { validateSwapAmount } from "@/lib/registers/safe-core";
+import { checkSwapDenoms } from "@/lib/registers/little-safe-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,6 +86,13 @@ export type TillSwapRequest = {
   /** Manager/lead approval PIN — verified and role-gated server-side. */
   approverPin: string;
   notes?: string;
+  /**
+   * Fix Phase 2.7b (F-01-8, owner D3): the bills both ways. inDenoms = big
+   * bills from the till to the master till; outDenoms = change back. Each
+   * must equal amountMinor. Both absent from an iPad build made before 2.7b.
+   */
+  inDenoms?: DenomCounts;
+  outDenoms?: DenomCounts;
 };
 
 export type TillRequest = TillOpenRequest | TillDropRequest | TillCloseRequest | TillSwapRequest;
@@ -244,6 +252,9 @@ export function validateTillRequest(body: unknown): TillValidation {
     if (notesRaw.length > MAX_NOTES_LEN) {
       return { ok: false, error: `Notes must be ${MAX_NOTES_LEN} characters or fewer.` };
     }
+    // Fix Phase 2.7b (F-01-8): bills both ways, each equal to the amount.
+    const bills = checkSwapDenoms(amount.amountMinor, b.inDenoms, b.outDenoms);
+    if (!bills.ok) return { ok: false, error: bills.error };
     return {
       ok: true,
       req: {
@@ -252,6 +263,7 @@ export function validateTillRequest(body: unknown): TillValidation {
         amountMinor: amount.amountMinor,
         approverPin,
         ...(notesRaw ? { notes: notesRaw } : {}),
+        ...(bills.inDenoms && bills.outDenoms ? { inDenoms: bills.inDenoms, outDenoms: bills.outDenoms } : {}),
       },
     };
   }
@@ -382,6 +394,17 @@ export function __runTillCoreTests(): void {
     "swap: non-integer cents rejected");
   ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 500, approverPin: "5678", notes: "x".repeat(501) }).ok,
     "swap: oversized notes rejected");
+  // Fix Phase 2.7b (F-01-8): bills both ways.
+  const swapBills = validateTillRequest({
+    action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678",
+    inDenoms: { twenties: 5 }, outDenoms: { fives: 10, ones: 50 },
+  });
+  ok(swapBills.ok && swapBills.req.action === "swap" && swapBills.req.inDenoms?.twenties === 5 && swapBills.req.outDenoms?.ones === 50,
+    "swap: bills both ways carried");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678", inDenoms: { twenties: 5 }, outDenoms: { fives: 19 } }).ok,
+    "swap: unequal change refused");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678", inDenoms: { twenties: 5 } }).ok,
+    "swap: one side only refused");
 
   // shape guards
   ok(!validateTillRequest(null).ok, "null body rejected");

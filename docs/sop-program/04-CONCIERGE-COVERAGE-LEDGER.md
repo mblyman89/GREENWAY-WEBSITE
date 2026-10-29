@@ -153,7 +153,7 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 | `register-messages` (addition) | §5.1 Store safe page messages, §5.2 swap messages | — → ✅ |
 | Petty cash / supply runs | §4.13, form §8.4 (no screen today, F-02-11 / G-11; screen approved D17) | 🔴 → 🟡 → ✅ once G-11 is built |
 
-**Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L31). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
+**Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L41). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
 
 **Must ship with caveats** until the findings are fixed:
 - ~~F-02-2~~ withdrawn in SOP-03 (D19): the Manager Till float **is** $300.00, and the system agrees. The concierge should say "sales tills $167.50, Manager Till $300.00".
@@ -187,6 +187,21 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 | Does the end-of-day report show the mix? | Yes: each AM / PM line ends with *"mix on standard: yes"* or *"no"* (SOP-02 §4.15) |
 
 The caveats *"F-02-3: the page does not compare the mix to the D11 standard, so use the §4.2 table."* and *"F-02-7: do **not** count drops or the little safe into the master till, whatever the page help text and placeholder say."* above are **retired** by Phase 2.7a (the rule stays: drops never go in the master till; the page now says so). The caveat *"F-02-5: only the newest AM/PM count shows on the EOD report, and the window defaults to AM, so pick the right one."* is **partly retired**: the window no longer defaults to AM, but the EOD still shows only the newest count. The role-filter note *"The concierge must not walk a `staff` user through submitting a count."* is **retired**: staff may record a count (D15); history, sheet and export stay manager-only. The answer *"The master till count says pick who counted"* (Phase 2.3) is replaced by the PIN answer above. `concierge-kb.ts` `registers` carries the Phase 2.7a fact.
+
+**Phase 2.7b (G-02 little safe exchange and register swap bills) answers:**
+
+| Question | Answer (built, Phase 2.7b) |
+|---|---|
+| How do I record a little safe exchange? | Register Activity → **Safe** → **Little safe exchange**: enter **OUT of master till → little safe** (the big bills) and **IN from little safe → master till** (the small bills and coin) by denomination, type your PIN in **Done by**, then **Record exchange** (SOP-02 §4.10) |
+| Record exchange is greyed out | The two sides are not the same value yet. The line above the button says which side is more. Recount both sides |
+| Who can record an exchange? | Any employee with a back-office login and their own PIN (D3, D15). Managers see the **Little safe exchanges** log |
+| Do we track how much is in the little safe? | No (D3). Only each exchange is recorded |
+| It says the exchange log is not set up yet | Migration 0317 has not been run. Use paper form 8.2 and tell the owner (SOP-02 §4.10) |
+| The register change swap asks for bills | From Phase 2.7b: **Big bills to the safe (from this till)** and **Change back (from the master till)**, each the same value as the swap (SOP-01 §4.26, SOP-02 §4.11) |
+| The register swap does not ask for bills | That iPad app was built before Phase 2.7b; the swap saves as value only. Fill in form 8.3 and ask the owner to rebuild the iPad app |
+| Where do exchanges show on the master till sheet? | The printable sheet has a **Master till ↔ little safe exchanges** section, and the CSV / Excel export an **Exchanges** sheet (SOP-02 §4.18) |
+
+The Phase 2.7a answers *"Balance with the little safe and log both sides on form 8.2 (SOP-02 §4.9–4.10)"* and *"sign the three lines; attach form 8.2 (SOP-02 §4.18)"* are **superseded**: record the exchange on the Store safe page; form 8.2 is only the paper backup when the page is down or migration 0317 has not been run. `concierge-kb.ts` `registers` carries the Phase 2.7b fact.
 
 ### SOP-03 End-of-Day Close & Deposit Bag (`docs/sop/SOP-03-eod-close-deposit.md`, verified at `3385bfa9`)
 
