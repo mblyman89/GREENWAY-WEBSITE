@@ -552,7 +552,7 @@ describe("S05 finalize integration - link runs after BOTH seeds", () => {
       { restockHints: 1 },
     );
     const kbErr = ops.find(
-      (o) => o.table === "manifest_events" && (o.payload as Record<string, unknown>).event_type === "kb_writeback_error",
+      (o) => o.table === "manifest_events" && o.kind === "insert" && (o.payload as Record<string, unknown>).event_type === "kb_writeback_error", // Fix 3.2b: finalize now also READS manifest_events (lot_insert_failed)
     );
     expect(kbErr).toBeTruthy();
     expect((kbErr!.payload as Record<string, unknown>).note).toContain("Knowledge base write-back FAILED: kb table locked.");
@@ -588,7 +588,7 @@ describe("S05 finalize integration - link runs after BOTH seeds", () => {
     expect(res.ok).toBe(true);
     expect(linkSpy).not.toHaveBeenCalled();
     const kbErr = ops.find(
-      (o) => o.table === "manifest_events" && (o.payload as Record<string, unknown>).event_type === "kb_writeback_error",
+      (o) => o.table === "manifest_events" && o.kind === "insert" && (o.payload as Record<string, unknown>).event_type === "kb_writeback_error", // Fix 3.2b: finalize now also READS manifest_events (lot_insert_failed)
     );
     expect((kbErr!.payload as Record<string, unknown>).note).toContain("FAILED: network down.");
     vi.resetModules();

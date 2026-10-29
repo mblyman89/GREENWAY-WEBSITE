@@ -144,7 +144,7 @@ describe("0. The R31 pure cores: embedded self-tests, exact counts", () => {
     const a = await import("@/lib/inventory/ai-extract-advice-core");
     const l = await import("@/lib/inventory/line-identity-chip-core");
     // Fix Phase 3.1 pin update (on purpose): 29 -> 31 (short-counted line makes it partial).
-    expect(f.__runFinalizeLabelCoreTests()).toEqual({ passed: 31, failed: 0 });
+    expect(f.__runFinalizeLabelCoreTests()).toEqual({ passed: 37, failed: 0 }); // Fix 3.2b pin update (on purpose): +6
     expect(a.__runAiExtractAdviceCoreTests()).toEqual({ passed: 26, failed: 0 });
     expect(l.__runLineIdentityChipCoreTests()).toEqual({ passed: 22, failed: 0 });
   });

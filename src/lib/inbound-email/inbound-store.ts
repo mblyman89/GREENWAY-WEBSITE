@@ -706,6 +706,8 @@ export async function stageManifestsFromEmail(
     if (staged.ok) {
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
+      // Fix Phase 3.2b (F-04-11): a line that did not save is said on the email row too.
+      if (staged.lineFailures) result.notes.push(`${staged.lineFailures.count} line(s) did not save; see the delivery's timeline before finalizing`);
       await recordInvoiceNumberDetected(staged.manifestId, invoicePick, actorId);
       // SLICE 69: archive EVERY document the email carried (manifest PDF,
       // invoice PDF, COA, transfer JSON, extras) into private storage linked
@@ -876,6 +878,8 @@ export async function stageManifestsFromEmail(
       if (staged.ok) {
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);
+        // Fix Phase 3.2b (F-04-11): a line that did not save is said on the email row too.
+        if (staged.lineFailures) result.notes.push(`${staged.lineFailures.count} line(s) did not save; see the delivery's timeline before finalizing`);
         await recordInvoiceNumberDetected(staged.manifestId, invoicePick, actorId);
         // PR-A: record which engine read this manifest (llama / FB) so the
         // intake table badge + detail statement can show it. Best-effort.

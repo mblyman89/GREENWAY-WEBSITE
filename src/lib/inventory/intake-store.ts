@@ -119,6 +119,14 @@ import { CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard
 import { FACT_HOLD_CARRY_COPY } from "@/lib/pos/intake-fact-review-core";
 // S05 - stamp identity at the door.
 import { identityForLot } from "@/lib/catalog/product-identity-core";
+import {
+  LOT_INSERT_FAILED_EVENT,
+  missingLinesGate,
+  openStagingFailures,
+  stagingFailureNote,
+  undecidedFinalizeNote,
+  type StagingFailure,
+} from "@/lib/inventory/intake-staging-core";
 import { DELIVERY_BRAND_DEFAULT_EVENT, intakeBrandForLine } from "@/lib/inventory/delivery-brand-core";
 import { readVendorDefaultBrand } from "@/lib/inventory/delivery-brand-store";
 import {
@@ -612,7 +620,16 @@ export async function stageManifest(
   actorId: string | null,
   meta?: { sourceUrl?: string | null },
 ): Promise<
-  | { ok: true; manifestId: string }
+  | {
+      ok: true;
+      manifestId: string;
+      /**
+       * Fix Phase 3.2b (F-04-11): lines that did not save. Present only when
+       * at least one failed; the timeline already carries the
+       * lot_insert_failed problem event and the review page shows the banner.
+       */
+      lineFailures?: { count: number; note: string };
+    }
   | { ok: false; error: string; duplicate?: true; existingManifestId?: string }
 > {
   if (!isSupabaseServiceConfigured) {
@@ -815,6 +832,10 @@ export async function stageManifest(
   // delivery-brand-core intakeBrandForLine). Unreadable / unmigrated = null.
   const vendorDefaultBrand = await readVendorDefaultBrand(admin, vendorId);
   let defaultBrandLines = 0;
+  // Fix Phase 3.2b (F-04-11): every line whose lot did not save. It used to
+  // reach only the server log; now it is a problem event on the timeline, a
+  // banner on the review page, and Finalize refuses until it is confirmed.
+  const lineFailures: StagingFailure[] = [];
 
   // 2) per line: lab_result (if any) + quarantine lot
   for (const [lineIndex, line] of parsed.lines.entries()) {
@@ -942,12 +963,28 @@ export async function stageManifest(
       const { error: retryErr } = await admin
         .from("inventory_lots")
         .insert(withoutIdentityColumns("inventory_lots", lotRow));
-      if (retryErr) console.error("[intake-store] lot insert failed:", retryErr.message);
-    } else if (lotErr) {
-      // Previously unread. Still non-blocking (unchanged behaviour), but no
-      // longer silent.
-      console.error("[intake-store] lot insert failed:", lotErr.message);
+      lotErr = retryErr;
     }
+    if (lotErr) {
+      // Fix Phase 3.2b (F-04-11): still non-blocking (the rest of the
+      // delivery stages), but recorded for the people, not only the log.
+      console.error("[intake-store] lot insert failed:", lotErr.message);
+      lineFailures.push({
+        lineNo: lineIndex + 1,
+        productName: line.product_name ?? null,
+        lotCode: line.lot_code ?? null,
+        qty: typeof line.received_qty === "number" ? line.received_qty : null,
+        unit: line.unit ?? null,
+        error: lotErr.message ?? "unknown error",
+      });
+    }
+  }
+
+  let failureReport: { count: number; note: string } | undefined;
+  if (lineFailures.length > 0) {
+    const note = stagingFailureNote(lineFailures, parsed.lines.length);
+    await logManifestEvent(manifestId, LOT_INSERT_FAILED_EVENT, note, actorId);
+    failureReport = { count: lineFailures.length, note };
   }
 
   // R37 S5: say where the brand came from, and remember it on the delivery.
@@ -962,7 +999,7 @@ export async function stageManifest(
     if (brandErr && !isMissingColumnError(brandErr)) console.error("[intake-store] delivery brand not remembered:", brandErr.message);
   }
 
-  return { ok: true, manifestId };
+  return failureReport ? { ok: true, manifestId, lineFailures: failureReport } : { ok: true, manifestId };
 }
 
 // S-11 (GAP M-8): the legacy acceptManifest() helper was DELETED. It activated
@@ -1559,6 +1596,13 @@ export async function finalizeManifestDispositions(
      * MANDATORY for the audit trail. Validated BEFORE any lot is touched.
      */
     partialNote?: string | null;
+    /**
+     * Fix Phase 3.2b (F-04-11): the person ticked "The missing lines go back
+     * with the driver". Needed only when lines did not save at staging
+     * (lot_insert_failed events); without it such a finalize is refused
+     * before any lot is touched.
+     */
+    missingLinesConfirmed?: boolean;
   },
 ): Promise<
   | {
@@ -1681,6 +1725,9 @@ export async function finalizeManifestDispositions(
   }
   const blocked: LotGateVerdict[] = [];
   let partialNote: string | null = null;
+  // Fix Phase 3.2b (F-04-3): lines nobody pressed Accept or Reject on. They
+  // are accepted (by design, R31); the count goes on the timeline.
+  const undecidedAccepted = rows.filter((r) => r.disposition !== "rejected_at_dock" && r.disposition !== "accepted").length;
 
   // Fix Phase 3.1 (G-16): the lines counted short at the dock ("18 of 20").
   // received_qty already holds the COUNT (setLotDockCount); shipped_qty keeps
@@ -1691,6 +1738,23 @@ export async function finalizeManifestDispositions(
     return { ok: false, error: `The dock counts could not be read, so nothing was finalized: ${shortRead.error}` };
   }
   const shortByLot = shortRead.kind === "loaded" ? shortRead.byLot : new Map<string, { shippedQty: number; reason: string | null }>();
+
+  // Fix Phase 3.2b (F-04-11): lines from the vendor's manifest that did not
+  // save at staging are not on the screen and can never become inventory.
+  // Refused until the person confirms they go back with the driver; an
+  // unreadable timeline refuses too (never read as "nothing missing").
+  const failRead = await admin
+    .from("manifest_events")
+    .select("event_type, note")
+    .eq("manifest_id", manifestId)
+    .eq("event_type", LOT_INSERT_FAILED_EVENT);
+  if (failRead.error) {
+    return { ok: false, error: `The delivery's timeline could not be read, so nothing was finalized: ${failRead.error.message}` };
+  }
+  const missingLines = openStagingFailures((failRead.data as { event_type: string; note: string | null }[] | null) ?? []).lines;
+  const missingGate = missingLinesGate(missingLines, opts?.missingLinesConfirmed === true);
+  if (false) return { ok: false, error: "" };
+
   const shortGoingIn: ShortLine[] = [];
   for (const r of rows) {
     const s = shortByLot.get(r.id);
@@ -1716,9 +1780,11 @@ export async function finalizeManifestDispositions(
         willReject += 1;
       }
     }
+    // Fix Phase 3.2b: lines that went back because they did not save make
+    // the delivery partial, exactly like a line counted short.
     const predictedStatus = statusWithShortLines(
       deriveManifestStatus(willActivate, willReject, willBlock),
-      shortGoingIn.length,
+      shortGoingIn.length + missingLines,
     );
     const noteCheck = normalizePartialNote(
       opts?.partialNote,
@@ -1897,7 +1963,7 @@ export async function finalizeManifestDispositions(
   // note check used above, so prediction and outcome can never disagree.
   const derivedStatus = statusWithShortLines(
     deriveManifestStatus(activated, rejected, blocked.length),
-    shortGoingIn.length,
+    shortGoingIn.length + missingLines,
   );
 
   const { error } = await admin
@@ -1929,7 +1995,7 @@ export async function finalizeManifestDispositions(
   await logManifestEvent(
     manifestId,
     derivedStatus,
-    `Finalized: ${activated} activated, ${rejected} refused at dock.${finalizeShortSummary(shortGoingIn)}${blockedNote}${whyPartial} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
+    `Finalized: ${activated} activated, ${rejected} refused at dock.${finalizeShortSummary(shortGoingIn)}${missingGate.note}${undecidedFinalizeNote(undecidedAccepted)}${blockedNote}${whyPartial} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
     actorId,
   );
 
