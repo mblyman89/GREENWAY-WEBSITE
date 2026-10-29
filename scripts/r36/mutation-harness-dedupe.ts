@@ -23,6 +23,8 @@ const VT = "npx vitest run tests/compliance/r36-inbound-dedupe.test.ts";
 const CORE = "src/lib/inventory/inbound-dedupe-core.ts";
 const DEDUPE = "src/lib/inventory/manifest-dedupe-core.ts";
 const ROUTE = "src/app/api/webhooks/inbound-email/route.ts";
+// Fix Phase 3.2a: the finish body now lives in inbound-ingest.ts (routeAndStage).
+const INGEST = "src/lib/inbound-email/inbound-ingest.ts";
 const STORE = "src/lib/inbound-email/inbound-store.ts";
 const TABLE = "src/lib/inventory/manifest-table-core.ts";
 const PIPE = "src/lib/inventory/manifest-pipeline-core.ts";
@@ -65,7 +67,7 @@ const MUTANTS: Mutant[] = [
   { name: "route: claim after the slow fetch", file: ROUTE, old: "    const claim = await claimInboundDelivery({ provider: \"resend\", key });\n    if (claim.kind === \"duplicate\") {\n      const res = claimResponse(claim.decision);\n      return NextResponse.json(res.body, { status: res.status });\n    }\n    const logId = claim.kind === \"claimed\" ? claim.logId : null;\n    try {\n      const enriched = await enrichResendInbound(raw);", neu: "    const enriched = await enrichResendInbound(raw);\n    const claim = await claimInboundDelivery({ provider: \"resend\", key });\n    if (claim.kind === \"duplicate\") {\n      const res = claimResponse(claim.decision);\n      return NextResponse.json(res.body, { status: res.status });\n    }\n    const logId = claim.kind === \"claimed\" ? claim.logId : null;\n    try {", cmd: VT },
   { name: "route: svix-id not used", file: ROUTE, old: "deliveryKey({ emailId: extractEmailIdFromWebhook(raw), svixId })", neu: "deliveryKey({ emailId: extractEmailIdFromWebhook(raw) })", cmd: VT },
   { name: "route: no release on crash", file: ROUTE, old: "      if (logId) await releaseInboundDelivery(logId);\n", neu: "", cmd: VT },
-  { name: "route: intake log not completing the claim", file: ROUTE, old: "    manifestId: staged.manifestIds[0] ?? null,\n    logId,", neu: "    manifestId: staged.manifestIds[0] ?? null,", cmd: VT },
+  { name: "ingest: intake log not completing the claim", file: INGEST, old: "    manifestId: staged.manifestIds[0] ?? null,\n    logId,", neu: "    manifestId: staged.manifestIds[0] ?? null,", cmd: VT },
   // --- store claim ---
   { name: "store: claim not insert-first", file: STORE, old: '        disposition: "received",\n        delivery_key: params.key,', neu: '        disposition: "staged",\n        delivery_key: params.key,', cmd: VT },
   { name: "store: missing column not tolerated", file: STORE, old: "    if (ins.error && isMissingColumnError(ins.error)) {", neu: "    if (false) {", cmd: VT },

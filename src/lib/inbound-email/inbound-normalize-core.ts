@@ -26,7 +26,10 @@
  * human to validate.
  */
 
-export type InboundProvider = "resend" | "sendgrid";
+// Fix Phase 3.2a (G-17): "gmail" = read straight from the vendor_intake@ Gmail
+// mailbox by the mailbox check / Find an email when the webhook path missed it
+// (migration 0320 widens inbound_email_log.provider to allow it).
+export type InboundProvider = "resend" | "sendgrid" | "gmail";
 
 export type NormalizedAttachment = {
   filename: string | null;
@@ -57,6 +60,14 @@ export type NormalizedInboundEmail = {
    * to parseable lines). Optional — older payload shapes simply omit it.
    */
   bodyHtml?: string | null;
+  /**
+   * Fix Phase 3.2a (G-17): the RFC 5322 Message-ID (lower case, no angle
+   * brackets) - the one identity an email keeps in Gmail AND in Resend, so the
+   * mailbox check can tell an email already on the table from a missed one.
+   */
+  messageId?: string | null;
+  /** Fix Phase 3.2a: the id at the source (Resend email id / Gmail message id), used by Try again. */
+  sourceRef?: string | null;
 };
 
 function lc(v: unknown): string {

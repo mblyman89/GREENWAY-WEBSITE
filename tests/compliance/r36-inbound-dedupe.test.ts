@@ -377,8 +377,13 @@ describe("wiring", () => {
     expect(route).toMatch(/deliveryKey\(\{ emailId: extractEmailIdFromWebhook\(raw\), svixId \}\)/);
     expect(route).toMatch(/claimResponse\(claim\.decision\)/);
     expect(route).toMatch(/releaseInboundDelivery\(logId\)/);
-    // every log write in finish() completes the claim row
-    const fin = route.slice(route.indexOf("async function finish("));
+    // every log write in finish() completes the claim row. Fix Phase 3.2a moved
+    // the finish body into inbound-ingest.ts (routeAndStage) so the mailbox
+    // reconcile + "Try again" use the exact same path; the route's finish is a
+    // thin wrapper that passes the claim row through.
+    expect(route).toMatch(/await routeAndStage\(email, signatureOk, fetchNote, logId, "webhook"\)/);
+    const ingest = read("src/lib/inbound-email/inbound-ingest.ts");
+    const fin = ingest.slice(ingest.indexOf("export async function routeAndStage("));
     const calls = fin.split("await logInboundEmail({").length - 1;
     const withId = (fin.match(/\n\s+logId,\n/g) ?? []).length;
     expect(calls).toBeGreaterThanOrEqual(5);
