@@ -89,6 +89,7 @@ const ALLOWED_COST_WRITERS = new Set([
   "src/lib/inventory/intake-store.ts", // manifest intake: line price / qty from the CCRS manifest
   "src/lib/accounting/receipt-service.ts", // manifest receipt: stamps the cost the ledger capitalised from the manifest
   "src/lib/pos/import-service.ts", // one-time Cultivera POS import: cost read from the export file
+  "src/lib/inventory/invoice-adjustments-store.ts", // Fix 3.4 re-read: price read from the vendor's emailed invoice PDF by lot id, NULL costs only (never typed)
 ]);
 
 describe("G-27 req. 1: Bulk fill never offers or writes a unit cost", () => {
