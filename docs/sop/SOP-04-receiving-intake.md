@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.3 (Phase 1.1 fix G-19 built: gated, audited activation from the lot page; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
+| **Version** | 1.4 (Phase 3.1a: emailed COAs are read certificate by certificate and attached to the delivery's lines; **Re-read COAs** and **Attach lab result** on the receiving page. Earlier: 1.3 Phase 1.1 G-19 gated activation; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Everyone who handles a vendor delivery: the manager who processes the manifest (D30), any trained employee who helps count at the dock, the person who onboards new products onto the menu, the **admin** who files the monthly CCRS public records request on the 10th (D32), and the owner, who reviews the books |
@@ -235,6 +235,7 @@ This is how most manifests arrive. You do nothing.
    - **staged** (a new row).
    - **duplicate** (the same manifest # and vendor is already live, so it is not staged again).
    - **parse failed** or **no manifest** (no row; see §4.3 step 4).
+   - **The lab PDFs are read too (Phase 3.1a).** Every lab document in the email (`QA_1.pdf`, `QA_2.pdf`, *Lab Results*, *COA Summary*, or any PDF that reads like a certificate even under another name) is split into its single certificates and each certificate is matched to a line: first by a lab id or batch id the line carries, then by a product name only that one certificate prints. A line that already has a lab result from the vendor's JSON is never changed. What happened is written in words as one sentence in the email result and as a timeline event on the delivery: **Lab results attached from the emailed COAs** (all done) or **Lab results · some lines still need a COA (or a name match to verify)** (look at it). Example sentence: *"COA: read 2 certificates from 2 lab documents; attached 2 of 17 lines without a lab result (…)"* (`inbound-store.ts` L581–640; `coa-bundle-core.ts` L537–573). A lab PDF that cannot be read is named in the same way (*"COA: no certificate could be read from 1 lab document: QA_broken.pdf …"*), never only in a server log. Each lab PDF is filed only under the lab results read from it (`coa-archive.ts` L174–231).
 4. **Two other mailboxes are not Receiving.**
    - **vendor_menu@** holds vendor menus (SOP-09).
    - **lcb-watch@** holds forwarded LCB bulletins (Regulatory Watch).
@@ -275,7 +276,13 @@ Open the manifest from the list. Before the truck comes, read the review screen 
    - Steps marked automatic are done by Finalize.
 4. **Review flags panel.** Per-line compliance flags (vendor license, lot codes, COAs, failed labs, samples, quantities). It shows nothing when the manifest is clean (`[id]/page.tsx` ~L905). **Read every flag before the truck comes.**
 5. **"Which order is this delivery for?"** (§4.16).
-6. **Lines table** (L936–1100). Columns: **Product / lot**, **Qty**, **COA** (✅ or —), **Catalog**, **Expires**, **Decision**.
+6. **Lines table** (L936–1100). Columns: **Product / lot**, **Qty**, **COA**, **Catalog**, **Expires**, **Decision**. The **COA** cell (`[id]/page.tsx` L1142–1180; `coa-bundle-core.ts` L671–677) shows:
+   - **✅ matched by lab id** — the certificate prints an id the line carries. Safe.
+   - **✅ matched by name — verify** (gold) — the certificate was matched by the product name only. **Open the certificate and check the name and lot before Finalize.** If it is wrong, tell the manager (a lab result once attached is changed on the lot page, SOP-05a).
+   - **✅ attached by hand** — a manager chose it on this page.
+   - **✅** — the lab result came with the vendor's transfer file.
+   - A **Choose its certificate… / Attach lab result** box — no lab result yet, and this delivery's lab documents hold certificates to choose from (§4.15).
+   - **—** — no lab result and nothing on file to choose from.
    - A **sample** chip marks free trade samples.
    - **Unmapped category** with **Map it →** means the product type is not mapped yet. Ask the manager to map it under Settings → Types & Categories before Finalize.
 7. **Certificates of analysis (N).** The COAs pulled from the transfer file (§4.15).
@@ -439,7 +446,13 @@ Each week Greenway, as the receiver, must report accepted inbound lots to CCRS i
   - *"Lab result is FAILED — failed cannabis may not be sold at retail (WAC 314-55-102); this lot cannot be activated."*
   - *"No lab result / COA on record — WA testing rules (WAC 314-55-102) require a passing COA before retail sale."*
   - A COA that is on record but still pending is allowed.
-- **A line with no COA (—)** before the truck: ask the vendor to send it now. Lines without a COA are **held in quarantine** at Finalize rather than going live (§4.19).
+- **Emailed COAs are attached automatically** when the email arrives (§4.4). Read the delivery's timeline and the **COA** column (§4.6 step 6).
+- **When lines still have no lab result (Phase 3.1a)**, a row above the lines table says *"N lines have no lab result yet."* and what the delivery's own lab documents hold (`[id]/page.tsx` L972–996). Two tools (manager, `inventory.manage`):
+  1. **Re-read COAs from this delivery's documents.** Reads every lab PDF on file again (with the document reader for hard layouts) and attaches what matches by lab id or by a unique name. Lines that already have a lab result are never changed. The result shows as a banner: **COAs re-read.** with the same sentence as the email, or **No COA could be read.** with the document named (`intake/actions.ts` L1344–1403). It writes the timeline event **COAs re-read from this delivery's documents** and an audit row `manifest.coa_reread`.
+  2. **Attach lab result** on the line. Pick the certificate in **Choose its certificate…** (each one reads *lab id · sample name · THC · PASS/FAIL*, e.g. *"WA-260902-019 · Bucked Flower - LA Kush Cake - (g) · THC 27% · PASS"*) and press **Attach lab result**. **Check the sample name against the line before pressing.** Banner **Lab result attached.** (`intake/actions.ts` L1413–1447). It writes the timeline event **Lab result attached by hand** and the audit row `inventory_lot.coa_linked` (the same as the lot page).
+  - Refusals you may see (banner **Lab result not attached.**): *"Choose a certificate for the line first."*; *"The documents read differently than when the page was opened. Reload the page and choose again."*; *"That certificate is no longer in this delivery's documents. Reload the page and choose again."*; *"That line already has a lab result (or changed meanwhile); nothing was replaced."*; *"That line is destroyed; a lab result is never attached to it."*; *"That certificate prints no lab test id; it cannot be attached safely."* (`coa-bundle-core.ts` L685–697; `coa-delivery-store.ts` L103–172).
+  - **The app never guesses.** A line two certificates could fit is left for you (*"matched more than one certificate - not attached, choose by hand"*); a word that only names a kind of product (flower, pre-roll, rosin, 10pk…) never counts as a match.
+- **A line still with no COA (—)** before the truck: ask the vendor to send it now. Lines without a COA are **held in quarantine** at Finalize rather than going live (§4.19).
 - **A FAILED result:** refuse that line at the dock with **Failed COA / quality** (§4.10).
 
 ### 4.16 Linking the purchase order
@@ -870,6 +883,11 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | "…held in quarantine until the missing paperwork is fixed — see the Issues tab." | A lot failed the go-live check | §4.19 |
 | "Vendor bill: not recorded yet — see the reason below." with *"…have no unit cost yet… Key the unit costs, then finalize again."* | A lot with no cost | §4.20: tell the owner; there is no screen to key it (F-04-10) |
 | "This manifest has been accepted. Lots are managed from the inventory list." | Already finalized | Corrections are SOP-05 or SOP-15 work |
+| **COAs re-read.** *"COA: read N certificates from N lab documents; attached …"* | You pressed **Re-read COAs** | Check every **matched by name — verify** cell; attach the rest by hand (§4.15) |
+| **No COA could be read.** *"COA: no certificate could be read from …"* or *"No lab (COA) documents are on file for this delivery."* | The lab PDF is a scan or missing | Ask the vendor for the COAs; attach on the lot page by lab test id once imported (§4.19) |
+| **Lab result attached.** *"Attached WA-… ("…")."* | **Attach lab result** worked | None |
+| **Lab result not attached.** + the reason | See the refusals in §4.15 | Reload and choose again, or leave it for the lot page |
+| Timeline: **Lab results · some lines still need a COA (or a name match to verify)** | The email's COAs did not cover every line, or a match was by name | §4.15 |
 
 ### 5.3 CCRS Benchmarks page and the zip drop
 
@@ -1079,6 +1097,8 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 │   Every vendor manifest email must have a row. No row? Manual tools → Transfer Data Link. │
 │ TRUCK: check driver + plate against the manifest. Mismatch → don't unload, call manager.  │
 │   Save transport details. Seal numbers → Route notes.                                     │
+│ COA column: "matched by name — verify" = open the certificate and check it before Final. │
+│   No lab result? Re-read COAs, or Choose its certificate → Attach lab result (manager).  │
 │ COUNT every line: name · lot · units · condition. Mark form 8.1.                          │
 │   2nd count strongly suggested — EXPECTED on a vendor's first delivery. Manager decides.  │
 │ GOOD line → touch nothing ("Will accept").                                                │
@@ -1150,7 +1170,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 4.9–4.12 count / refuse | `guided-accept-core.ts` L165–175; `ManifestLotDisposition.tsx` L59–151; `intake-disposition-core.ts` L24–84, L128–193; `intake-store.ts` L970–1068; `[id]/page.tsx` L1341–1424; `intake-parser.ts` L606 |
 | 4.13 samples | `intake-store.ts` L1070–1100, L1371–1388; `sample-intake-cap-core.ts` L116, L146–154; `samples/page.tsx` L103–121, L283–286; `intake/actions.ts` L1146–1185; `[id]/page.tsx` L682–726 |
 | 4.14 vendor ids | `ccrs-transfer-core.ts` L1–63; `[id]/page.tsx` L465–485, L1038–1072; `intake/actions.ts` L622–629 |
-| 4.15 COAs | `lot-activation-gate-core.ts` L76–107; `[id]/page.tsx` L1104+ |
+| 4.15 COAs | `lot-activation-gate-core.ts` L76–107; `[id]/page.tsx` L1104+; Phase 3.1a: `coa-bundle-core.ts` (split L120, ids L164, certificate test L205, match L366–442, fold L507, note L537, event L619, page helpers L648–703), `pdf-extract.ts` L272 `readCoaBundleFromBase64`, `inbound-store.ts` L465–640, L657–687, L812–872, `coa-delivery-store.ts` L55–190, `intake/actions.ts` L1344–1447, `[id]/page.tsx` L311–322, L674–693, L972–996, L1142–1180, `manifest-event-labels-core.ts` L72–75, `coa-archive.ts` L174–231, `cultivera-wcia-core.ts` L114–120 |
 | 4.16 PO | `ManifestPoLinkPanel.tsx`; `intake/actions.ts` L267 |
 | 4.17–4.18 finalize | `intake/actions.ts` L937–1133; `intake-store.ts` L1301–1840 (L1416 default-accept); `finalize-label-core.ts` L80–116; `finalize-banner-core.ts` L60–125; `[id]/page.tsx` L609–734, L1366–1391 |
 | 4.19 held lots | `[id]/page.tsx` L383–397, L770–790; `issues-core.ts` L548–572; `inventory/[id]/page.tsx` L130–136, L763, L1497–1512; `inventory/actions.ts` L142–155, L268–303; `inventory/store.ts` L849–864; `scripts/compliance/check-activation-gate.ts` L60–100 |
@@ -1168,7 +1188,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 4.34 redo / delete / off | `discovery/actions.ts` L84–112, L770–788, L847–874; `ccrs/page.tsx` L321–360, L422–425; `discovery/page.tsx` L85–87; `discovery/import/page.tsx` L59–61 |
 | In-app SOP sheets (stale) | `src/lib/catalog/sop-core.ts` L66–96 (truck-day; stale L79, L81, L83), L125–145 (order; stale L137), L148–170 (receive; stale L158, L162); `intake/page.tsx` HelpPanel L275–287 (stale L279–282) |
 | Help / concierge | `src/lib/admin/concierge-kb.ts` `product-intake` L132–148, `ccrs` L349–360; `src/lib/admin/help-content.ts` L1009–1011 |
-| Tests (all in `tests/compliance/`) | `intake-partial-accept`, `otherwise-taken-receiving`, `r31-manifest-review-walk` (.tsx), `r6-2-inventory-transfer`, `manifest-dedupe`, `r36-inbound-dedupe`, `intake-transport`, `intake-checklist-core`, `r23-finalize-banner`, `sample-intake-cap`, `sample-cap-notice`, `disposition-core`, `ccrs-monthly-rollups`, `intake-roadmap-decisions` |
+| Tests (all in `tests/compliance/`) | `fix-p3-1a-coa-bundle`, `fix-p3-1a-coa-archive` (mutation probe `scripts/compliance/mutate-fix-p3-1a.py`), `intake-partial-accept`, `otherwise-taken-receiving`, `r31-manifest-review-walk` (.tsx), `r6-2-inventory-transfer`, `manifest-dedupe`, `r36-inbound-dedupe`, `intake-transport`, `intake-checklist-core`, `r23-finalize-banner`, `sample-intake-cap`, `sample-cap-notice`, `disposition-core`, `ccrs-monthly-rollups`, `intake-roadmap-decisions` |
 
 ## Appendix B: Not built yet (interim procedures)
 
@@ -1178,7 +1198,7 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | See emails that failed to stage | Logged, shown nowhere | Daily email-vs-list comparison (§4.3) | G-17 · F-04-4 |
 | Monthly PRR reminder and tracking | No calendar task; no tracking # field | Form 8.4 (§4.26–§4.28) | G-18 · F-04-19 |
 | Activate a now-clear held lot safely — **BUILT** (Phase 1.1) | Built: go-live check, reason, audit row, Status history | None needed (§4.19) | G-19 · F-04-2, F-04-12 FIXED |
-| Key cost / COA for a CSV or PDF import | Banner says to; no field | Get the JSON or link; otherwise owner follow-up (§4.5, §4.20) | F-04-10 |
+| Key cost / COA for a CSV or PDF import | Banner says to; no cost field. **COA part BUILT (Phase 3.1a):** emailed COAs attach automatically; **Re-read COAs** and **Attach lab result** on the receiving page | Cost: get the JSON or link; otherwise owner follow-up (§4.5, §4.20). COA: §4.15 | F-04-10 (COA part FIXED) · F-04-21 FIXED |
 | Record who counted; mark a first delivery from a vendor | Not in the app | Form 8.1 signatures and the first-delivery box (§4.9) | G-21 · D30 · D31 |
 | Confirm before deleting a benchmark month; 18-month retention; hide dead buttons | Deletes on one press; no purge; dead buttons shown | Read-aloud check, owner approval, monthly retention check on form 8.4 (§4.33–§4.34) | G-20 (**APPROVED**, D33/D34) · F-04-15 · F-04-16 |
 | Month drop-down in the request text; reminder on the 10th; tracking-number field | Free-text dates; no reminder | Type the dates; admin's own calendar reminder; form 8.4 (§4.26–§4.28) | G-18 (**APPROVED** in part, D32) · F-04-19 |
@@ -1205,4 +1225,5 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `5299660b`, with the owner's rejection rulings (`ccrs-rejection-and-returns.md`), the R31 one-button design, the owner's CCRS transformer vision, and D28. Part 1 truck day (§4.1–§4.24); Part 2 monthly CCRS public records request (§4.25–§4.34). Adds findings F-04-1…F-04-20, gaps G-16…G-19, questions Q-04-1…Q-04-6, forms 8.1–8.5. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-05a. Owner answers D29–D34 applied: partial receive approved and S1 (§4.11; G-16); only managers process manifests (§2); second count strongly recommended, expected on a vendor's first delivery (§4.9, form 8.1; G-21); admin files on the 10th, standing request procedure with WAC 44-14-04004(4), built-in wording kept, one zip per month (§4.26–§4.31, form 8.4; G-18); 18-month retention with owner approval and backup purge (§4.34, form 8.4 part G; G-20); delete confirmation and working-buttons-only approved (§4.33; G-20). New questions Q-04-7…Q-04-9. No code was re-audited; pins still at `5299660b` (`ac251766` is docs-only). | SOP program |
 | 1.3 draft | Fix phase | Phase 1.1 (owner D76). G-19 BUILT: Lifecycle status runs the go-live check before Active, asks a reason, writes an audit row and shows Status history; the "now clear" Issues row points at that gated path; the held-lot row's stale "cannot attach one yet" text replaced (F-04-12). §4.19, §7 and Appendix B updated. F-04-2, F-04-12 FIXED. | Fix program |
+| 1.4 draft | Fix phase | Phase 3.1a (owner message 6: *"didn't or couldn't attach the coa lab results to the products in the receiving detail page. So I can't accept it nor move it to onboarding."*). Every emailed lab PDF is read certificate by certificate and matched by lab id, then by a unique product name (flagged verify); the outcome is said in the email result and on the timeline; each PDF is filed under its own lab results; the receiving page gains the COA cell wording, **Re-read COAs** and **Attach lab result**. §4.4, §4.6, §4.15, §5.2, §9, Appendix A, B updated. F-04-21 FIXED; F-04-10 COA part FIXED. | Fix program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

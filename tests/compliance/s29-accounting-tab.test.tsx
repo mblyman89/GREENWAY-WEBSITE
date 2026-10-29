@@ -115,7 +115,7 @@ beforeEach(() => {
 });
 
 describe("1. manifest-event-labels-core self-tests", () => {
-  it("pins the embedded self-test count (63) with zero failures", () => {
+  it("pins the embedded self-test count (64) with zero failures", () => {
     // R26 pin update (on purpose): 49 -> 50 — one assertion added for the new
     // invoice_number_detected event label (migration 0245 writer).
     // R27 pin update (on purpose): 50 -> 51 - one assertion added for the
@@ -125,7 +125,9 @@ describe("1. manifest-event-labels-core self-tests", () => {
     // R50 S2a pin update (on purpose): 52 -> 63 - eleven assertions for the
     // Cultivera migration-stock states (receipt_migration_stock /
     // vendor_bill_migration_stock, isMigrationStockResult, banner + step text).
-    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 63, failed: 0 });
+    // Fix Phase 3.1a pin update (on purpose): 63 -> 64 - one assertion for the
+    // coa_attach / coa_attach_incomplete labels (emailed COA bundle attach).
+    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 64, failed: 0 });
   });
   it("is registered in run-pure-selftests (import AND run)", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
@@ -199,6 +201,9 @@ describe("2. every event a writer logs has a human label (bible S29.5)", () => {
       constant("src/lib/inventory/identity-stamp-core.ts", "KB_LINK_EVENT"),
       constant("src/lib/inventory/identity-stamp-core.ts", "KB_WRITEBACK_ERROR_EVENT"),
       constant("src/lib/inventory/intake-checklist-core.ts", "KB_WRITEBACK_EVENT"),
+      // Fix Phase 3.1a: inbound-store logs coaAttachEventType(...) = one of these two.
+      constant("src/lib/inventory/coa-bundle-core.ts", "COA_ATTACH_EVENT"),
+      constant("src/lib/inventory/coa-bundle-core.ts", "COA_ATTACH_INCOMPLETE_EVENT"),
     ];
     for (const n of names) expect(isKnownEventType(n), n).toBe(true);
   });

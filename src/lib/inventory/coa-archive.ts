@@ -174,6 +174,12 @@ export async function archiveCoasForManifest(manifestId: string): Promise<number
 export async function archiveEmailedCoaForManifest(
   manifestId: string,
   base64: string,
+  /**
+   * Fix Phase 3.1a: when an email carries SEVERAL lab PDFs, each PDF is filed
+   * only under the lab results read from it (their exact lab test ids). Omit
+   * for the single COA Summary case (every emailed-only lab row).
+   */
+  onlyLabtestIds?: readonly string[],
 ): Promise<number> {
   if (!isSupabaseServiceConfigured) return 0;
   if (!base64 || typeof base64 !== "string") return 0;
@@ -218,8 +224,11 @@ export async function archiveEmailedCoaForManifest(
         }[]
       | null) ?? [];
 
+  const only = onlyLabtestIds ? new Set(onlyLabtestIds) : null;
+  if (only && only.size === 0) return 0;
   let archived = 0;
   for (const lab of rows) {
+    if (only && !(lab.labtest_external_identifier && only.has(lab.labtest_external_identifier))) continue;
     if (lab.coa_storage_path) continue; // already archived (this pass or a prior)
     // Only own the emailed-only case: a lab row that has a real coa_url is left
     // to archiveCoasForManifest so we keep the vendor's canonical certificate.

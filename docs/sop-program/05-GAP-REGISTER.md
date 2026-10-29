@@ -85,6 +85,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-56 | **Rehire** keeps the earlier termination (employment periods) and starts a fresh checklist | (procedure need) | F-08-6 | SOP-08 §4.24 (print status card first; uncheck everything) | PROPOSED |
 | G-57 | **Visitor log and badges** in the app; employee badge printing | Q-08-3 (WAC 314-55-083(1)) | F-08-8 | SOP-08 forms 8.2, 8.5 (§4.12, §4.19) | DEFERRED (D72: paper for now) |
 | G-58 | Housekeeping: invite default role the same on screen and server; full role descriptions; job-role changes audited with old and new values | (procedure need) | F-08-9, F-08-10 | SOP-08 form 8.4 (§4.16–§4.17) | PROPOSED |
+| G-60 | **Emailed COAs attach to the delivery's lines**: read every lab PDF certificate by certificate, match by lab id then a unique name (verify), say the outcome, file each PDF under its own lab results; re-read and attach by hand on the receiving page | Owner message 6 (*"didn't or couldn't attach the coa lab results to the products in the receiving detail page"*) | F-04-21 (**S1**), F-04-10 (COA part) | SOP-04 v1.4 §4.15 | **BUILT** (Phase 3.1a) |
 | G-59 | **Activate, Terminate and Rehire owner and admin only**: new permission (e.g. `staffing.lifecycle` = [owner, admin]); buttons hidden for managers; server actions refuse | D74 | F-08-1, F-08-3 (context) | SOP-08 v1.1 §2 rules 1–2 (managers never press them) | **BUILT** (Phase 0.3) |
 
 ---
@@ -731,3 +732,14 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   3. Managers keep everything else on the file (checklist, documents, training, hire info, PIN once Active).
   4. Tests: a manager's setStatus is refused for every transition; owner and admin succeed; the nav gate stays in step.
 - **Interim:** SOP-08 v1.1 §2 rules 1–2.
+
+## G-60 · Emailed COAs attach to the delivery's lines (BUILT, Phase 3.1a, SOP-04) — S1
+- **Owner basis:** owner message 6: *"The last one the system auto fetched had every detailed needed, but for some reason didn't or couldn't attach the coa lab results to the products in the receiving detail page. So I can't accept it nor move it to onboarding. We need a supremely robust table and fetcher, it needs to work every time for every invoice and manifest"*; *"The vendor_intake@ address will only receive manifests."*
+- **Was:** the first coa-role PDF only, read as a one-page summary; a GrowFlow certificate bundle gave 0 lots and a console line (F-04-21).
+- **Built:**
+  1. Every lab PDF (coa role, plus any other PDF that reads like a certificate and is not a manifest) is read in parallel and split on *"Page k of k"* into certificates (`coa-bundle-core.ts`, `pdf-extract.ts` `readCoaBundleFromBase64`).
+  2. Matching never guesses: a lab / batch id the line carries (one certificate only), else a product phrase that only one certificate prints (flagged *"verify"* on the line and in the COA cell); generic kind words never match; two candidates = ambiguous, left for a person; a line with a lab result is never changed.
+  3. Both paths (JSON and PDF-only) fold the certificates; the outcome is one sentence in the email result and a delivery timeline event (`coa_attach` / `coa_attach_incomplete`); an unreadable lab PDF is named.
+  4. Each PDF is archived only under the lab results read from it.
+  5. Receiving page: COA cell wording, **Re-read COAs from this delivery's documents** (audited `manifest.coa_reread`, timeline `coa_reread`), per-line **Choose its certificate… / Attach lab result** (stale pick refused; audited `inventory_lot.coa_linked`, timeline `coa_linked_by_hand`). Manager (`inventory.manage`). No migration.
+- **Tests:** `fix-p3-1a-coa-bundle` (real GrowFlow PDFs and text; truth = the vendor's own `lab_result_link`), `fix-p3-1a-coa-archive`; `r26`, `s29`, `pipeline-fix-links-connected` updated; mutation probe `scripts/compliance/mutate-fix-p3-1a.py`.

@@ -36,6 +36,7 @@ const st = vi.hoisted(() => ({
   /** SYNTHETIC vision text by PDF byte length (0 entries = LlamaParse unavailable). */
   vision: new Map<number, string>(),
   visionCalls: 0,
+  events: [] as { id: string; type: string; note: string | null }[],
 }));
 
 vi.mock("server-only", () => ({}));
@@ -51,6 +52,10 @@ vi.mock("@/lib/inventory/intake-store", () => ({
     return st.stageReply;
   },
   setManifestLifecycle: async () => undefined,
+  // Fix Phase 3.1a: inbound-store logs the COA outcome on the timeline.
+  logManifestEvent: async (id: string, type: string, note: string | null) => {
+    st.events.push({ id, type, note });
+  },
   backfillManifestTransport: async (id: string, transport: Record<string, unknown> | null, _a: unknown, note: string) => {
     st.backfills.push({ id, transport: transport ? { ...transport } : null, note });
     return 1;
@@ -130,6 +135,7 @@ beforeEach(() => {
   st.staged = [];
   st.picks = [];
   st.backfills = [];
+  st.events = [];
   st.stageReply = { ok: true, manifestId: "m-1" };
   st.vision = new Map();
   st.visionCalls = 0;

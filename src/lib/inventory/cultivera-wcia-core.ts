@@ -23,6 +23,7 @@
  * Pure: no I/O. Self-tests at the bottom (run-pure-selftests.ts).
  */
 import type { ParsedLab, ParsedManifest } from "@/lib/inventory/intake-parser";
+import { EMAILED_COA_SOURCE } from "@/lib/inventory/coa-bundle-core";
 
 // --- 1. Storage ----------------------------------------------------------------
 
@@ -109,6 +110,15 @@ export function labSourceFor(format: LabSourceFormat): string {
   return format === "wcia" ? "wcia-transfer" : format === "ccrs-csv" ? "ccrs-manifest-csv" : "vendor-json";
 }
 
+/** Fix Phase 3.1a: the source of ONE lab (an emailed certificate wins over the document format). */
+export function labSourceForLab(lab: Pick<ParsedLab, "raw">, format: LabSourceFormat): string {
+  const raw = lab.raw;
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && (raw as Record<string, unknown>).source === EMAILED_COA_SOURCE) {
+    return EMAILED_COA_SOURCE;
+  }
+  return labSourceFor(format);
+}
+
 /**
  * The lab_results insert row delivery intake has always written. `wcia_json_url`
  * (migration 0252) is included only when the document gave one and the caller
@@ -135,7 +145,9 @@ export function nativeLabRow(
     terpenes_json: lab.terpenes_json,
     analytes_json: lab.analytes_json,
     passed: lab.passed,
-    source: labSourceFor(format),
+    // Fix Phase 3.1a: a lab result read from an emailed certificate PDF says
+    // so (lab_results.source is free text, 0023) - never "vendor-json".
+    source: labSourceForLab(lab, format),
     coa_url: lab.coa_url,
     coa_release_date: lab.coa_release_date,
     coa_expire_date: lab.coa_expire_date,
