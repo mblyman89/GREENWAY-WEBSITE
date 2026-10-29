@@ -15,6 +15,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { businessDayFor } from "@/lib/staffing/time";
+import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { type DenomCounts } from "@/lib/registers/cash";
 import {
   type SafeCountWindow,
@@ -184,6 +186,79 @@ export async function listSwaps(limit = 30): Promise<{ ready: boolean; swaps: Sa
     .limit(limit);
   if (error) return { ready: !isMissingTable(error), swaps: [] };
   return { ready: true, swaps: (data as SafeSwapRow[] | null) ?? [] };
+}
+
+/**
+ * Fix Phase 2.7a (G-09 requirement 3, F-02-13): every count with a business
+ * day From..To (inclusive), newest first, read in full pages. A read that
+ * fails part-way is reported (`error`), never shown as a short list.
+ */
+export async function listSafeCountsRange(
+  from: string,
+  to: string,
+): Promise<{ ready: boolean; counts: SafeCountRow[]; error: string | null }> {
+  if (!isSupabaseServiceConfigured) return { ready: false, counts: [], error: null };
+  const admin = createSupabaseAdminClient();
+  let missing = false;
+  let firstError: string | null = null;
+  const read = await pagedAllChecked<SafeCountRow>(async (a, b) => {
+    const { data, error } = await admin
+      .from("safe_counts")
+      .select("*")
+      .gte("business_day", from)
+      .lte("business_day", to)
+      .order("counted_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(a, b);
+    if (error) {
+      if (isMissingTable(error)) missing = true;
+      firstError ??= error.message;
+      return { rows: [], ok: false };
+    }
+    return { rows: (data as SafeCountRow[] | null) ?? [], ok: true };
+  });
+  if (missing) return { ready: false, counts: [], error: null };
+  if (!read.verdict.complete) {
+    return { ready: true, counts: read.rows, error: firstError ?? read.verdict.message };
+  }
+  return { ready: true, counts: read.rows, error: null };
+}
+
+/**
+ * Fix Phase 2.7a (G-09, F-02-13): every register change swap between the
+ * start of From and the end of To (Pacific), newest first, read in full pages.
+ */
+export async function listSwapsRange(
+  from: string,
+  to: string,
+): Promise<{ ready: boolean; swaps: SafeSwapRow[]; error: string | null }> {
+  if (!isSupabaseServiceConfigured) return { ready: false, swaps: [], error: null };
+  const admin = createSupabaseAdminClient();
+  const start = pacificWallTimeToUtcISO(from, "start");
+  const end = pacificWallTimeToUtcISO(to, "end");
+  let missing = false;
+  let firstError: string | null = null;
+  const read = await pagedAllChecked<SafeSwapRow>(async (a, b) => {
+    const { data, error } = await admin
+      .from("safe_swaps")
+      .select("*")
+      .gte("occurred_at", start)
+      .lte("occurred_at", end)
+      .order("occurred_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(a, b);
+    if (error) {
+      if (isMissingTable(error)) missing = true;
+      firstError ??= error.message;
+      return { rows: [], ok: false };
+    }
+    return { rows: (data as SafeSwapRow[] | null) ?? [], ok: true };
+  });
+  if (missing) return { ready: false, swaps: [], error: null };
+  if (!read.verdict.complete) {
+    return { ready: true, swaps: read.rows, error: firstError ?? read.verdict.message };
+  }
+  return { ready: true, swaps: read.rows, error: null };
 }
 
 export type SafeStatus = {

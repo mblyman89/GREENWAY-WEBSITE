@@ -42,6 +42,11 @@ export type EodSafeCountInput = {
   window: string; // am | pm | other
   totalMinor: number;
   varianceMinor: number;
+  /**
+   * Fix Phase 2.7a (G-08 requirement 5, owner D11): is the mix on the
+   * standard? Undefined when the caller did not read the denominations.
+   */
+  mixOnStandard?: boolean;
 };
 
 export type EodSwapInput = { amountMinor: number };

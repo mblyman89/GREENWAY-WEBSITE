@@ -963,6 +963,7 @@ import { __runSecondCountCoreTests } from "../../src/lib/registers/second-count-
 import { __runOverShortWarningCoreTests } from "../../src/lib/registers/over-short-warning-core";
 import { __runDepositBagFlowTests } from "../../src/lib/registers/deposit-bag-flow-core";
 import { __runEodSheetTests } from "../../src/lib/registers/eod-sheet-core";
+import { __runMasterTillTests } from "../../src/lib/registers/master-till-core";
 import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
@@ -1916,6 +1917,7 @@ __runLiquidVolumeTests();
   assertRan("over-short-warning-core", __runOverShortWarningCoreTests(), 35); // Fix Phase 2.3: G-03 / owner D7, D16, D21 $5 over/short warnings
   assertRan("deposit-bag-flow-core", __runDepositBagFlowTests(), 69); // Fix Phase 2.6: G-04 / owner D21, D23-D27 night count, morning recount, seal, bank
   assertRan("eod-sheet-core", __runEodSheetTests(), 28); // Fix Phase 2.6b: G-15 end-of-day deposit sheet (deposit, refunds, bag, export)
+  assertRan("master-till-core", __runMasterTillTests(), 38); // Fix Phase 2.7a: G-08 / G-09 / G-13 master till mix standard (D11), printable sheet, any-employee count (D15)
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
   assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);
