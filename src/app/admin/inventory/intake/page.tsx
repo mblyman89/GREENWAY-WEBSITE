@@ -31,7 +31,13 @@ import {
   reprocessIntelligenceAction,
   setInvoiceNumberAction,
   dismissDuplicateManifestAction,
+  checkMailboxNowAction,
+  findInboundEmailAction,
+  retryInboundEmailAction,
+  resolveInboundEmailAction,
 } from "./actions";
+import { InboundAttentionPanel } from "@/components/admin/inventory/InboundAttentionPanel";
+import { loadAttention } from "@/lib/inbound-email/inbound-reconcile-store";
 import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
 import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
 import {
@@ -66,6 +72,12 @@ import { CultiveraManifestTable } from "@/components/admin/inventory/CultiveraMa
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
 export const dynamic = "force-dynamic";
+/**
+ * Fix Phase 3.2a: the mailbox actions (Check the mailbox now, Find an email,
+ * Try again) run in this page's function and can read several emails in full
+ * (RUN_BUDGET_MS 200 s), so the page gets the same 300 s ceiling as the cron.
+ */
+export const maxDuration = 300;
 
 export default async function IntakePage({
   searchParams,
@@ -86,6 +98,15 @@ export default async function IntakePage({
     /** R36: the Dismiss duplicate result (summary) or refusal (message). */
     dismissed?: string;
     dismisserr?: string;
+    /** Fix Phase 3.2a (G-17): mailbox check / Find / Try again / Resolved results. */
+    mailcheck?: string;
+    mailcheckerr?: string;
+    mailfind?: string;
+    mailfinderr?: string;
+    mailretry?: string;
+    mailretryerr?: string;
+    mailresolved?: string;
+    mailresolveerr?: string;
     /** R50 S10a: table filters + sorting (receiving-table-core). */
     q?: string;
     vendor?: string;
@@ -113,6 +134,14 @@ export default async function IntakePage({
     invoice,
     dismissed,
     dismisserr,
+    mailcheck,
+    mailcheckerr,
+    mailfind,
+    mailfinderr,
+    mailretry,
+    mailretryerr,
+    mailresolved,
+    mailresolveerr,
   } = sp;
 
   // SLICE 101 — the owner's table filter: default hides accepted + partially
@@ -158,11 +187,14 @@ export default async function IntakePage({
   // deliveries; the table still renders at most NATIVE_DISPLAY_CAP rows.
   const NATIVE_DISPLAY_CAP = 200;
   const nativeLimit = !isCultiveraView && hasActiveFilters(filters) ? 1000 : 200;
-  const [manifests, counts, inboundEmails, cultivera] = await Promise.all([
+  const nowMs = Date.now();
+  const [manifests, counts, inboundEmails, cultivera, attention] = await Promise.all([
     listManifests({ limit: nativeLimit }),
     countManifestsByStatus(),
     listInboundEmails(15),
     isCultiveraView ? loadReceivingCultiveraRows() : Promise.resolve(null),
+    // Fix Phase 3.2a (G-17): emails that did not make a manifest + the mailbox check's health.
+    loadAttention(nowMs),
   ]);
 
   // The rows the native table shows: view (open/all) -> filters -> sort -> cap.
@@ -362,6 +394,48 @@ export default async function IntakePage({
           </div>
         )}
 
+        {/* Fix Phase 3.2a (G-17): an email that did not make a manifest is never
+            silent - it is counted here on every tab and listed under Needs attention. */}
+        {attention.summary.total > 0 && (
+          <a
+            href="/admin/inventory/intake?tab=email#needs-attention"
+            data-testid="attention-banner"
+            className="block rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)] hover:brightness-105"
+          >
+            📭 {attention.summary.total} vendor email{attention.summary.total === 1 ? "" : "s"} did not make a manifest
+            {attention.summary.needPerson > 0
+              ? ` (${attention.summary.needPerson} need${attention.summary.needPerson === 1 ? "s" : ""} you)`
+              : " (the system is fetching again by itself)"}
+            . Open Needs attention &rarr;
+          </a>
+        )}
+        {(
+          [
+            [mailcheck, "ok", "Mailbox checked."],
+            [mailcheckerr, "err", "Mailbox check:"],
+            [mailfind, "ok", "Find an email:"],
+            [mailfinderr, "err", "Find an email:"],
+            [mailretry, "ok", "Try again:"],
+            [mailretryerr, "err", "Try again:"],
+            [mailresolved, "ok", "Resolved:"],
+            [mailresolveerr, "err", "Not resolved:"],
+          ] as const
+        ).map(([text, tone, title]) =>
+          text ? (
+            <div
+              key={title + tone}
+              data-testid={`mail-banner-${tone}`}
+              className={
+                tone === "ok"
+                  ? "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+                  : "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+              }
+            >
+              <strong>{title}</strong> {text}
+            </div>
+          ) : null,
+        )}
+
         {/* Result banners stay ABOVE the tabs so they can never be hidden
             behind the other tab; resolveReceivingTab additionally auto-opens
             Manual tools so the form that produced the error is on screen. */}
@@ -434,6 +508,17 @@ export default async function IntakePage({
         {/* H15c — the hero table: one row per real manifest, moving badge,
             invoice # + downloads. The strict H15b gate guarantees only real
             manifests appear here. */}
+        {/* Fix Phase 3.2a (G-17 / F-04-4): every email that did not make a
+            manifest, the mailbox check's health, Check now / Find / Try again /
+            Resolved. Above the table so a failure is the first thing seen. */}
+        <InboundAttentionPanel
+          view={attention}
+          nowMs={nowMs}
+          checkAction={checkMailboxNowAction}
+          findAction={findInboundEmailAction}
+          retryAction={retryInboundEmailAction}
+          resolveAction={resolveInboundEmailAction}
+        />
         {/* R50 S10a: one filter bar for all three views (GET form, so a
             filtered list can be bookmarked and Back works). */}
         <ReceivingFilterBar

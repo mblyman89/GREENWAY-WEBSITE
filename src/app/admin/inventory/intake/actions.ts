@@ -1472,3 +1472,127 @@ export async function attachDeliveryCoaAction(manifestId: string, formData: Form
   revalidatePath(base);
   redirect(`${base}?coa=linked&coamsg=${encodeURIComponent(`Attached ${label}.`)}#manifest-lines`);
 }
+
+/* ------------------------------------------------------------------ *
+ * Fix Phase 3.2a (G-17 / F-04-4): the vendor_intake@ mailbox check.
+ * Owner (verbatim): "If an invoice and manifest don't make it to the table
+ * and I know it's in the email account because I have it open and looking
+ * at it, I need a way to ask the system to grab the ones it missed or failed
+ * to get. ... I want this table to receive every manifest, no exceptions."
+ * Every action needs inventory.manage and writes an audit row.
+ * ------------------------------------------------------------------ */
+
+const EMAIL_TAB = "/admin/inventory/intake?tab=email";
+
+function backToEmailTab(params: URLSearchParams): never {
+  revalidatePath("/admin/inventory/intake");
+  redirect(`${EMAIL_TAB}&${params.toString()}#needs-attention`);
+}
+
+/** "Check the mailbox now": the 15-minute check, run at once (14 days back). */
+export async function checkMailboxNowAction() {
+  const session = await requirePermission("inventory.manage");
+  const { runReconcile } = await import("@/lib/inbound-email/inbound-reconcile-store");
+  const { describeRun } = await import("@/lib/inbound-email/inbound-reconcile-core");
+  const r = await runReconcile({ trigger: "manual" });
+  const { recordAudit } = await import("@/lib/auth/audit");
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inbound_email.check_mailbox",
+    entityType: "inbound_email_log",
+    entityId: null,
+    before: null,
+    after: { onTable: r.onTable, recovered: r.recovered, recoveredStaged: r.recoveredStaged, deferred: r.deferred, tooNew: r.tooNew, autoRetried: r.autoRetried, errors: r.errors.slice(0, 5) },
+  });
+  const params = new URLSearchParams();
+  params.set(r.configured && r.errors.length === 0 ? "mailcheck" : "mailcheckerr", describeRun(r).slice(0, 600));
+  backToEmailTab(params);
+}
+
+/** "Try again" on one email that failed / got stuck: fetch it again from where it came from. */
+export async function retryInboundEmailAction(logId: string) {
+  const session = await requirePermission("inventory.manage");
+  const { retryInboundEmail } = await import("@/lib/inbound-email/inbound-reconcile-store");
+  const r = await retryInboundEmail(logId, session.userId, "retry");
+  const params = new URLSearchParams();
+  if (r.ok) {
+    const { recordAudit } = await import("@/lib/auth/audit");
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inbound_email.retry",
+      entityType: "inbound_email_log",
+      entityId: logId,
+      before: null,
+      after: { disposition: r.disposition, staged: r.staged, manifestIds: r.manifestIds },
+    });
+    params.set(
+      r.staged > 0 ? "mailretry" : "mailretryerr",
+      r.staged > 0
+        ? `Fetched again: ${r.staged} manifest${r.staged === 1 ? "" : "s"} made. It is on the table now.`
+        : `Fetched again, but it still did not make a manifest (${r.disposition.replace("_", " ")}): ${r.note}`.slice(0, 600),
+    );
+  } else {
+    params.set("mailretryerr", r.error.slice(0, 600));
+  }
+  backToEmailTab(params);
+}
+
+/** "Resolved": close a failure on purpose, with a reason (audited). */
+export async function resolveInboundEmailAction(logId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { resolveInboundEmail } = await import("@/lib/inbound-email/inbound-reconcile-store");
+  const r = await resolveInboundEmail(logId, formData.get("reason"), formData.get("note"), session.userId);
+  const params = new URLSearchParams();
+  if (r.ok) {
+    const { recordAudit } = await import("@/lib/auth/audit");
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inbound_email.resolve",
+      entityType: "inbound_email_log",
+      entityId: logId,
+      before: r.before,
+      after: r.after,
+    });
+    params.set("mailresolved", "Marked Resolved. It is off the Needs attention list (the row and its reason stay on the email table).");
+  } else {
+    params.set("mailresolveerr", r.error.slice(0, 600));
+  }
+  backToEmailTab(params);
+}
+
+/** "Find an email": search the mailbox for the owner's words and pull in what the table does not have. */
+export async function findInboundEmailAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { findAndIngest } = await import("@/lib/inbound-email/inbound-reconcile-store");
+  const r = await findAndIngest(formData.get("q"), formData.get("days"), session.userId);
+  const params = new URLSearchParams();
+  if (r.ok) {
+    const { recordAudit } = await import("@/lib/auth/audit");
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inbound_email.find",
+      entityType: "inbound_email_log",
+      entityId: null,
+      before: null,
+      after: { query: r.shown, found: r.found, onTable: r.onTable, pulledIn: r.pulledIn, staged: r.staged, retried: r.retried },
+    });
+    const parts: string[] = [];
+    if (r.found === 0) parts.push(`No email in the mailbox matches "${r.shown}". Try the sender's address, a word from the subject, or more days.`);
+    else {
+      parts.push(`Found ${r.found} email${r.found === 1 ? "" : "s"} matching "${r.shown}".`);
+      if (r.pulledIn > 0) parts.push(`Pulled in ${r.pulledIn} the table did not have.`);
+      if (r.retried > 0) parts.push(`Fetched ${r.retried} failed one${r.retried === 1 ? "" : "s"} again.`);
+      if (r.pulledIn === 0 && r.retried === 0) parts.push("They are all on the table already.");
+      parts.push(`${r.staged} made a manifest.`);
+    }
+    if (r.notes.length > 0) parts.push(`Notes: ${r.notes.join("; ")}`);
+    params.set(r.found > 0 && r.notes.length === 0 ? "mailfind" : "mailfinderr", parts.join(" ").slice(0, 700));
+  } else {
+    params.set("mailfinderr", r.error.slice(0, 600));
+  }
+  backToEmailTab(params);
+}
