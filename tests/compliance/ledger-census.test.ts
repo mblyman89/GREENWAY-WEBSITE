@@ -997,8 +997,15 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // books-93 had a builder rendering an entry on a screen; books-95 has a
     // poster that writes to gl_journals with autoPost and 36/36 mutations
     // caught, including four that sever the door. Same ratio, different fact.
+    // Fix Phase 2.6 lowers it a sixth time, 0.62 -> 0.59, and again it is
+    // one row. The deposit bag screen (G-04) made the seal post, so
+    // cash_and_banking.seal_deposit_bag moved from unreachable to reachable
+    // and the ratio MEASURED 24/40 = 0.60. The seal has a poster, a
+    // button, an idempotent source ref and its own mutation probe
+    // (scripts/compliance/mutate-fix-p2-6.py).
+    // STATED per rule 89: unreachable 25 -> 24 of 40.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.62);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.59);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {
@@ -1394,7 +1401,12 @@ describe("evidence cannot be softened without a test failing", () => {
     // omitted, because a finished feature nobody can find is exactly the
     // shape of D-39, and the census is where that debt is supposed to show.
     // STATED per rule 89: backlog drivers 7 -> 9 of 39.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(9);
+    // Fix Phase 2.6 removes ONE: seal_deposit_bag now names
+    // seal-bag-posting-service.ts#postSealForBag as its poster and is called
+    // by sealBagAction on /admin/registers/deposit-bags, so it no longer
+    // qualifies. employee_supply_advance stays a driver (no screen yet).
+    // STATED per rule 89: backlog drivers 9 -> 8.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(8);
 
     for (const r of drivers) {
       expect(

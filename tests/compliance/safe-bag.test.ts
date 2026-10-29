@@ -22,12 +22,14 @@
  * proves the door opens; it does not prove the other twelve doors are shut.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   BAG_STATUSES,
   BAG_ACTIONS,
   applyBagAction,
-  blockCloseForUndeclaredBags,
+  undeclaredBagWarning,
   validateBagAmount,
   normaliseBagNo,
   checkDepositShape,
@@ -109,12 +111,17 @@ describe("books-98 · B — the bag lifecycle", () => {
   });
 });
 
-describe("books-98 · B — a register cannot close on an undeclared bag", () => {
+// Fix Phase 2.6 · owner D27 ("Q-03-7- warning only please",
+// 00-OWNER-REQUEST-VERBATIM.md L93). STATED: books-98 pinned a BLOCK here
+// (blockCloseForUndeclaredBags). The owner chose a warning, so the function
+// is now undeclaredBagWarning and these cases pin that it WARNS and never
+// refuses. The names-every-bag and accuses-no-one cases are kept as they were.
+describe("books-98 · B (D27) — an undeclared bag WARNS, it never blocks", () => {
   const bag = (bagNo: string, status: BagStatus) => ({ bagNo, status });
 
-  it("lets the shift close when every bag has been counted in", () => {
+  it("says nothing when every bag has been counted in", () => {
     expect(
-      blockCloseForUndeclaredBags([
+      undeclaredBagWarning([
         bag("GW-1", "counted"),
         bag("GW-2", "deposited"),
         bag("GW-3", "available"),
@@ -122,8 +129,8 @@ describe("books-98 · B — a register cannot close on an undeclared bag", () =>
     ).toBeNull();
   });
 
-  it("blocks the close and NAMES the bag that is still undeclared", () => {
-    const msg = blockCloseForUndeclaredBags([
+  it("warns and NAMES the bag that is still undeclared", () => {
+    const msg = undeclaredBagWarning([
       bag("GW-1", "counted"),
       bag("GW-2", "undeclared"),
     ]);
@@ -133,10 +140,15 @@ describe("books-98 · B — a register cannot close on an undeclared bag", () =>
     expect(msg).not.toContain("GW-1");
   });
 
+  it("is a warning, not a refusal (D27)", () => {
+    const msg = undeclaredBagWarning([bag("GW-2", "undeclared")]) ?? "";
+    expect(msg.startsWith("Warning:")).toBe(true);
+    expect(msg).toContain("nothing is blocked");
+    expect(msg).not.toMatch(/cannot close|closing now would/i);
+  });
+
   it("names EVERY undeclared bag, not just the first one found", () => {
-    // Stopping at the first would let the second bag of cash walk out the
-    // door while the message claimed the problem was already described.
-    const msg = blockCloseForUndeclaredBags([
+    const msg = undeclaredBagWarning([
       bag("GW-2", "undeclared"),
       bag("GW-7", "undeclared"),
     ]);
@@ -146,7 +158,12 @@ describe("books-98 · B — a register cannot close on an undeclared bag", () =>
 
   it("says nothing when there are no bags at all", () => {
     // Rule 135/136: no bags is a real answer (a quiet day), not a problem.
-    expect(blockCloseForUndeclaredBags([])).toBeNull();
+    expect(undeclaredBagWarning([])).toBeNull();
+  });
+
+  it("the old blocking function is gone, so nothing can wire a block", () => {
+    const src = readFileSync(join(process.cwd(), "src/lib/accounting/safe-bag-core.ts"), "utf8");
+    expect(src).not.toContain("export function blockCloseForUndeclaredBags");
   });
 });
 

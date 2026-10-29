@@ -1594,7 +1594,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["10400", "10100"],
     builder: "src/lib/accounting/register-cash-journal-core.ts#buildSealBagJournal",
-    poster: null,
+    poster: "src/lib/accounting/seal-bag-posting-service.ts#postSealForBag",
     layers: {
       exists: {
         status: "PRESENT",
@@ -1604,11 +1604,18 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "and the memo. safe-bag-core enforces the lifecycle around it.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "No screen seals a bag yet. The builder and the deposit_bags table " +
-          "in 0212_deposit_bags.sql exist; grep buildSealBagJournal under " +
-          "src/app finds nothing. Rule 50: a finished feature nobody can reach.",
+          "Fix Phase 2.6 (G-04, G-14): until then no screen sealed a bag. Now an " +
+          "employee presses Seal on /admin/registers/deposit-bags: " +
+          "src/app/admin/registers/deposit-bags/actions.ts sealBagAction " +
+          "(orders.manage, the sealer's PIN, checkSeal: morning recount by a " +
+          "different employee first, D24) saves the seal once, then calls " +
+          "src/lib/accounting/seal-bag-posting-service.ts postSealForBag, which " +
+          "re-reads the sealed bag, calls buildSealBagJournal dated on the bag's " +
+          "business day and calls submitJournal with autoPost. A failed post " +
+          "leaves the bag sealed and shows NOT POSTED with a retry button " +
+          "(retrySealPostAction).",
       },
       correct: {
         status: "PRESENT",
@@ -1626,17 +1633,23 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "eyes to the cash.",
       },
       idempotent: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "The source ref will be seal-bag:<bagId>, but there is no poster yet " +
-          "to key it on.",
+          "sourceRef seal-bag:<bagId> (deposit-bag-flow-core sealSourceRef), so " +
+          "a retry or a second press returns duplicate and writes nothing. The " +
+          "seal itself is a conditional update (status counted and sealed_at " +
+          "null), and migration 0316 lets seal_journal_id be filled once.",
       },
       married: {
         status: "MISSING",
         evidence:
           "This is the entry that will END the guesswork: the bag number is " +
           "also on the bank's deposit slip, so a Plaid credit can be matched " +
-          "to counted cash by evidence rather than by date. Not wired yet.",
+          "to counted cash by evidence rather than by date. Fix Phase 2.6 wired " +
+          "the seal and the owner's bank-run record (banked_on), but the bank " +
+          "clearing still matches by business day, oldest first " +
+          "(deposit-clearing-core), and nothing yet reads the bag number off the " +
+          "bank line or fills deposit_confirmed_on. Kept MISSING on purpose.",
       },
     },
     defectId: "D-77",

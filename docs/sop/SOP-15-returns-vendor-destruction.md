@@ -143,7 +143,7 @@ A login without the permission is sent back to the back-office home with a "deni
 | Screen | Where | What it is for |
 |---|---|---|
 | **Returns & Destruction** | Inventory menu → **Returns & Destruction** (`/admin/inventory/disposition`) | The command center: stat cards, the Sale correction banner, the **Customer return** wizard, **Log a vendor return**, **Schedule a destruction**, **Destruction events**, **Vendor returns & manifests**, **Recent customer returns**, the AI advisor, **Destruction hold policy**, **Sample-pricing rules** |
-| **Returns desk** | Register Activity → **Returns desk** (`/admin/registers/returns`; button on `registers/page.tsx` L122–124) | Receipt-first counter returns in the back office, with the store policy checks and the refund worked out for you |
+| **Returns desk** | Register Activity → **Returns desk** (`/admin/registers/returns`; button on `registers/page.tsx` L132–134) | Receipt-first counter returns in the back office, with the store policy checks and the refund worked out for you |
 | **Return an item** | Register → **MORE ▾ → Return an item** | The same receipt-first return on the register, approved by a manager or lead PIN (SOP-01 §4.23) |
 
 **The top of the Returns & Destruction page** shows five stat cards (`disposition/page.tsx` L211–225): **Customer returns (30d)**, **Vendor returns (30d)**, **CCRS corrections pending**, **Destructions pending**, **Destroyed (30d)**. When corrections are pending, a gold banner appears with **Download Sale correction CSV** (L151–166; §4.8). Below it, the help panel **How disposition works (the compliant way)** gives five steps (L168–178). Two of them need a note:
@@ -878,7 +878,7 @@ DESTRUCTION — CARD
 | Reasons | `src/lib/inventory/disposition-reasons.ts` L9–10, L16–54 |
 | Store | `src/lib/inventory/disposition.ts` L236–285, L292–336, L363, L517, L540–560, L613–620, L703–773, L780, L812–879, L882–907, L942–1050, L1060–1174, L1176–1192, L1202 |
 | Wizard | `src/components/admin/inventory/CustomerReturnWizard.tsx` L24–31, L48, L60, L148–158, L173–174, L185–188, L203 |
-| Returns desk | `src/app/admin/registers/returns/page.tsx` L29, L57–72; `registers/returns/actions.ts` L38, L69, L117; `src/components/admin/registers/CounterReturnDesk.tsx` L88, L114, L144, L344, L356–394; `src/app/admin/registers/page.tsx` L122–124 |
+| Returns desk | `src/app/admin/registers/returns/page.tsx` L29, L57–72; `registers/returns/actions.ts` L38, L69, L117; `src/components/admin/registers/CounterReturnDesk.tsx` L88, L114, L144, L344, L356–394; `src/app/admin/registers/page.tsx` L132–134 |
 | Register | `src/app/(site)/pos/RegisterShell.tsx` L3793, L4210; `src/app/api/pos/returns/route.ts` L50 |
 | Return policy | `src/lib/pos/returns-core.ts` L49, L68–71, L146–196, L231–250; `src/lib/pos/returns-store.ts` L252–360 |
 | Register lot draw | `src/lib/inventory/sale-lot-read.ts` L50–53 |

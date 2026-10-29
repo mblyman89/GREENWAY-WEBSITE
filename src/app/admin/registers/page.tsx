@@ -16,6 +16,9 @@ import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-co
 import { businessDayFor } from "@/lib/staffing/time";
 import { compareCounts, secondCountSentence } from "@/lib/registers/second-count-core";
 import { isOverShortWarning, OVER_SHORT_REASON_MAX_LEN } from "@/lib/registers/over-short-warning-core";
+import { undeclaredBagsBefore } from "@/lib/registers/deposit-bag-store";
+import { undeclaredBagWarning } from "@/lib/accounting/safe-bag-core";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +62,18 @@ export default async function RegisterActivityPage({
     );
   }
 
-  const [data, openExceptions, devicesResult] = await Promise.all([
+  const [data, openExceptions, devicesResult, undeclaredRes] = await Promise.all([
     getRegisterActivity(),
     listPosExceptions(200),
     listPosDevices(),
+    // Fix Phase 2.6 (G-04 requirement 6, owner D27 "warning only please"):
+    // bags counted on an EARLIER night and still not recounted. A warning on
+    // this page; it never blocks a close. Missing 0316 = no warning (the bag
+    // screen itself says the migration is needed).
+    undeclaredBagsBefore(pacificToday()),
   ]);
+  const undeclared = undeclaredRes.ok ? undeclaredRes.bags : [];
+  const undeclaredWarning = undeclaredBagWarning(undeclared.map((b) => ({ bagNo: b.bagNo, businessDay: b.businessDay, status: "undeclared" as const })));
   const { kpis, onClock, registers, attention, feed, employees } = data;
   // GW-027 — devices holding server-REJECTED rows (which exist ONLY on the
   // device). Surface them loudly here so a manager knows to walk over.
@@ -125,6 +135,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/safe`} variant="neutral" size="sm">
               Safe
             </Button>
+            <Button href={`${BASE}/deposit-bags`} variant="neutral" size="sm">
+              Deposit bags{undeclared.length > 0 ? ` (${undeclared.length} to recount)` : ""}
+            </Button>
             <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
               Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
             </Button>
@@ -168,6 +181,15 @@ export default async function RegisterActivityPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <Flash sp={sp} />
+
+        {undeclaredWarning ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
+            {undeclaredWarning}{" "}
+            <a href={`${BASE}/deposit-bags`} className="underline">
+              Open Deposit bags
+            </a>
+          </div>
+        ) : null}
 
         {/* Today at a glance */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
