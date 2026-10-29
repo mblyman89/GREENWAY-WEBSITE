@@ -608,6 +608,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       "/api/cron/ach-funding-8am": 2, //  15:00 and 16:00 UTC = 8 am Pacific in PDT / PST (R41 S9); the pure planner sends only from 8:00 am Pacific to the 9:00 am funding deadline on the settlement day, each file claimed once
       "/api/cron/cutover-watch": 288, //   every 5 minutes at :02, :07 ... (offset off content-schedule's minutes; R50 A4: harvest / import failure alerts; each alert claimed once, an idle tick sends nothing)
       "/api/cron/ccrs-mail": 288, //       every 5 minutes at :04, :09 ... (CCRS S-18a: reads CCRS's confirmation / error-CSV emails from the submitting mailbox; each Gmail id stored once, a quiet tick writes nothing)
+      "/api/cron/inbound-reconcile": 96, // every 15 minutes at :07, :22, :37, :52 (Fix Phase 3.2a G-17: the vendor_intake@ mailbox check; pulls in any email the webhook missed under the insert-first delivery claim, retries temporary failures by compare-and-set, each alert claimed once; a quiet tick writes nothing)
       "/api/cron/ach-notice-mail": 24, //  hourly at :50 (R41 S17: the Fed's encrypted ACH notice emails; OFF by default and an off tick is one settings read with no Google call; each Gmail id stored once, each owner email claimed once per stored email)
     };
     for (const c of crons) {
