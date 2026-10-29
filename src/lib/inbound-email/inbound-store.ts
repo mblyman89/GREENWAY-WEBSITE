@@ -210,6 +210,22 @@ export function parseAttachmentToManifest(att: NormalizedAttachment): ParsedMani
   return outcome.kind === "manifest" ? outcome.manifest : null;
 }
 
+/**
+ * Fix Phase 3.2a (G-17): the 0320 columns a log write carries - the RFC
+ * Message-ID and the source id (so the mailbox check matches this email and
+ * Try again can fetch it), and how the row got here. Only set keys are sent.
+ */
+export function reconcileColumns(
+  email: NormalizedInboundEmail,
+  ingestSource: "webhook" | "reconcile" | "retry" | "find" | null,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (email.messageId) out.message_id = email.messageId;
+  if (email.sourceRef) out.source_ref = email.sourceRef;
+  if (ingestSource) out.ingest_source = ingestSource;
+  return out;
+}
+
 /** Persist the inbound-email audit row. Best-effort; never throws. */
 export async function logInboundEmail(params: {
   email: NormalizedInboundEmail;
@@ -227,9 +243,15 @@ export async function logInboundEmail(params: {
    * update cannot be made, so the audit trail is never lost.
    */
   logId?: string | null;
+  /**
+   * Fix Phase 3.2a (G-17): how the row got here (webhook / reconcile / retry /
+   * find). Written with the email's message_id / source_ref only when
+   * migration 0320 is applied; before that the row is written without them.
+   */
+  ingestSource?: "webhook" | "reconcile" | "retry" | "find" | null;
 }): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
-  const row = {
+  const base = {
     provider: params.email.provider,
     from_address: params.email.from || null,
     to_addresses: params.email.to,
@@ -243,18 +265,28 @@ export async function logInboundEmail(params: {
     note: params.note,
     raw_headers: params.rawHeaders ?? null,
   };
+  const extras = reconcileColumns(params.email, params.ingestSource ?? null);
+  let row: Record<string, unknown> = { ...base, ...extras };
   try {
     const admin = createSupabaseAdminClient();
     if (params.logId) {
-      const { data, error } = await admin
+      let { data, error } = await admin
         .from("inbound_email_log")
         .update(row)
         .eq("id", params.logId)
         .select("id");
+      if (error && isMissingColumnError(error) && Object.keys(extras).length > 0) {
+        // 0320 not applied yet: write the row exactly as before it.
+        row = { ...base };
+        ({ data, error } = await admin.from("inbound_email_log").update(row).eq("id", params.logId).select("id"));
+      }
       if (!error && Array.isArray(data) && data.length === 1) return;
       console.error("[inbound-email] could not complete the delivery claim row; inserting instead:", error);
     }
-    await admin.from("inbound_email_log").insert(row);
+    const ins = await admin.from("inbound_email_log").insert(row);
+    if (ins.error && isMissingColumnError(ins.error) && Object.keys(extras).length > 0) {
+      await admin.from("inbound_email_log").insert({ ...base });
+    }
   } catch (err) {
     console.error("[inbound-email] failed to write inbound_email_log:", err);
   }
@@ -936,7 +968,7 @@ function safeJson(text: string): unknown {
 
 export type InboundEmailLogRow = {
   id: string;
-  provider: "resend" | "sendgrid";
+  provider: "resend" | "sendgrid" | "gmail";
   from_address: string | null;
   to_addresses: string[];
   subject: string | null;

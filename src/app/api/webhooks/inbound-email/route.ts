@@ -35,22 +35,17 @@ import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { timingSafeEqualStr } from "@/lib/security/constant-time";
 import {
   normalizeInboundEmail,
-  isForIntakeMailbox,
   type InboundProvider,
   type NormalizedInboundEmail,
 } from "@/lib/inbound-email/inbound-normalize-core";
 import {
   claimInboundDelivery,
-  logInboundEmail,
   releaseInboundDelivery,
-  stageManifestsFromEmail,
-  type InboundDisposition,
 } from "@/lib/inbound-email/inbound-store";
+import { routeAndStage } from "@/lib/inbound-email/inbound-ingest";
 import { extractEmailIdFromWebhook } from "@/lib/inbound-email/resend-receiving-core";
 import { claimResponse, deliveryKey } from "@/lib/inventory/inbound-dedupe-core";
 import { enrichResendInbound } from "@/lib/inbound-email/resend-receiving-fetch";
-import { ingestFromText } from "@/lib/regulatory/regulatory-ingest";
-import { processMenuEmail } from "@/lib/purchasing/emailed-menu-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,22 +58,6 @@ export const maxDuration = 300;
 function resolveProvider(): InboundProvider {
   const raw = (process.env.INBOUND_EMAIL_PROVIDER ?? "resend").trim().toLowerCase();
   return raw === "sendgrid" ? "sendgrid" : "resend";
-}
-
-function intakeMailbox(): string {
-  return (process.env.VENDOR_INTAKE_MAILBOX ?? "vendor_intake").trim();
-}
-
-// SLICE 37: second mailbox — forwarded LCB bulletins for Regulatory Watch.
-function regulatoryMailbox(): string {
-  return (process.env.REGULATORY_MAILBOX ?? "lcb-watch").trim();
-}
-
-// SLICE 83: third mailbox — emailed vendor menus. Only menus + spam land here;
-// the parser classifies junk, scrapes body/HTML/CSV/PDF sources, and saves a
-// browsable snapshot for /admin/purchasing/menus + the PO builder hand-off.
-function vendorMenuMailbox(): string {
-  return (process.env.VENDOR_MENU_MAILBOX ?? "vendor_menu").trim();
 }
 
 export async function POST(request: Request) {
@@ -235,6 +214,9 @@ async function handleSendgrid(request: Request) {
 }
 
 // ── Shared: route + stage + log ─────────────────────────────────────────────
+// Fix Phase 3.2a (G-17): the routing / staging / logging moved to
+// src/lib/inbound-email/inbound-ingest.ts (routeAndStage) so the mailbox
+// check, Try again and Find an email run the very same steps.
 async function finish(
   email: NormalizedInboundEmail | null,
   signatureOk: boolean | null,
@@ -242,117 +224,6 @@ async function finish(
   /** R36 #2: the delivery-claim row to complete (null = no claim taken). */
   logId: string | null = null,
 ) {
-  if (!email) {
-    if (logId) {
-      // Close the claim so a retry of this delivery is answered "done".
-      await logInboundEmail({
-        email: { provider: "resend", from: "", to: [], subject: "", receivedAt: new Date().toISOString(), attachments: [] },
-        signatureOk,
-        toIntake: false,
-        disposition: "ignored",
-        manifestId: null,
-        note: "not an email payload",
-        logId,
-      });
-    }
-    return NextResponse.json({ ok: true, ignored: "not-an-email" }, { status: 200 });
-  }
-
-  const toIntake = isForIntakeMailbox(email, intakeMailbox());
-  if (!toIntake) {
-    // SLICE 37: forwarded LCB bulletins route to Regulatory Watch instead.
-    if (isForIntakeMailbox(email, regulatoryMailbox())) {
-      const body = (email.bodyText ?? "").trim();
-      const res = await ingestFromText(email.subject || "Forwarded LCB bulletin", body);
-      await logInboundEmail({
-        email,
-        signatureOk,
-        toIntake: false,
-        disposition: "ignored",
-        manifestId: null,
-        logId,
-        note: res.ok
-          ? `regulatory watch: ingested (${res.created ? "new" : "duplicate"}${res.analyzed ? ", analyzed" : ""})`
-          : `regulatory watch: ${res.error}`,
-      });
-      return NextResponse.json(
-        { ok: true, regulatory: res.ok, created: res.ok ? res.created : false },
-        { status: 200 },
-      );
-    }
-    // SLICE 83: emailed vendor menus route to the menu parser instead. Every
-    // arrival is still logged; junk/spam is classified and recorded, a real
-    // menu becomes a browsable snapshot on /admin/purchasing/menus.
-    if (isForIntakeMailbox(email, vendorMenuMailbox())) {
-      const menu = await processMenuEmail(email);
-      await logInboundEmail({
-        email,
-        signatureOk,
-        toIntake: false,
-        disposition: "ignored",
-        manifestId: null,
-        logId,
-        note: `vendor menu: ${menu.outcome}${menu.snapshotId ? ` (snapshot ${menu.snapshotId})` : ""} — ${menu.note}${fetchNote ? ` — ${fetchNote}` : ""}`,
-      });
-      return NextResponse.json(
-        { ok: true, menu: menu.outcome, snapshotId: menu.snapshotId, items: menu.itemCount },
-        { status: 200 },
-      );
-    }
-    await logInboundEmail({
-      email,
-      signatureOk,
-      toIntake: false,
-      disposition: "ignored",
-      manifestId: null,
-      logId,
-      note: "not addressed to the intake mailbox",
-    });
-    return NextResponse.json({ ok: true, ignored: "not-intake-mailbox" }, { status: 200 });
-  }
-
-  // Stage any manifest attachments as DRAFTS (webhook has no signed-in user).
-  const staged = await stageManifestsFromEmail(email, null);
-
-  let disposition: InboundDisposition;
-  if (staged.staged > 0) disposition = "staged";
-  else if (staged.parseFailures > 0) disposition = "parse_failed";
-  else if (staged.duplicates > 0) disposition = "duplicate";
-  else disposition = "no_manifest";
-
-  const dupSuffix =
-    staged.duplicates > 0 ? ` (${staged.duplicates} duplicate manifest(s) already in intake \u2014 skipped)` : "";
-  // H18: a duplicate re-send can REPAIR empty transport fields on the existing
-  // manifest (fill-only-empty). Say so in the log note so the owner can see the
-  // re-forward actually did something.
-  const backfillSuffix =
-    staged.transportBackfills > 0
-      ? ` (${staged.transportBackfills} transport field(s) backfilled on the existing manifest)`
-      : "";
-  const baseNote =
-    (staged.staged > 0
-      ? `staged ${staged.staged} draft manifest(s)${dupSuffix}`
-      : staged.parseFailures > 0
-        ? `${staged.parseFailures} attachment(s) failed to parse${dupSuffix}`
-        : staged.duplicates > 0
-          ? `${staged.duplicates} duplicate manifest(s) already in intake \u2014 skipped`
-          : "no manifest attachment found") + backfillSuffix;
-
-  await logInboundEmail({
-    email,
-    signatureOk,
-    toIntake: true,
-    disposition,
-    manifestId: staged.manifestIds[0] ?? null,
-    logId,
-    // Append the fetch trail (what we pulled from Resend's receiving API + any
-    // invoice/manifest links) so a human reviewing the inbound panel can see
-    // exactly what arrived even when nothing parsed into a manifest.
-    note: [baseNote, ...staged.notes, fetchNote].filter(Boolean).join(" — "),
-  });
-
-  return NextResponse.json(
-    { ok: true, staged: staged.staged, manifestIds: staged.manifestIds },
-    { status: 200 },
-  );
+  const out = await routeAndStage(email, signatureOk, fetchNote, logId, "webhook");
+  return NextResponse.json(out.body, { status: 200 });
 }

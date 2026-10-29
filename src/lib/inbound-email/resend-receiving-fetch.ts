@@ -54,6 +54,7 @@ import {
   planSecondPassFetches,
   dedupeAttachments,
 } from "@/lib/inbound-email/email-harvest-core";
+import { normalizeMessageId } from "@/lib/inbound-email/inbound-reconcile-core";
 
 const RESEND_API = "https://api.resend.com";
 const FETCH_TIMEOUT_MS = 20_000;
@@ -223,6 +224,62 @@ export async function enrichResendInbound(
   for (const att of downloaded) {
     if (!att) continue;
     fetched += 1;
+    attachments.push(att);
+  }
+  if (attMetas.length > 0) {
+    notes.push(`downloaded ${fetched}/${attMetas.length} attachment(s)`);
+  }
+
+  // Fix Phase 3.2a (G-17): steps 3-7 (forwarded .eml, transfer links, linked
+  // PDFs, COA link, second-pass harvest, checklist) are shared with an email
+  // read straight from the vendor_intake@ Gmail mailbox (gmail-intake-fetch).
+  const createdAt = full && typeof full.created_at === "string" ? full.created_at : baseReceivedAt;
+  return completeInboundEmail({
+    provider: "resend",
+    from: from || "",
+    to: to.length > 0 ? to : baseTo,
+    subject: subject || baseSubject,
+    receivedAt: createdAt,
+    html,
+    text,
+    attachments,
+    notes,
+    messageId: normalizeMessageId(full?.message_id),
+    sourceRef: emailId,
+  });
+}
+
+/** What completeInboundEmail needs: the email as fetched, before the link harvest. */
+export type InboundDraft = {
+  provider: NormalizedInboundEmail["provider"];
+  from: string;
+  to: string[];
+  subject: string;
+  receivedAt: string;
+  html: string;
+  text: string;
+  /** The files the email carried (bytes already downloaded). */
+  attachments: NormalizedAttachment[];
+  /** The fetch trail so far. */
+  notes: string[];
+  messageId?: string | null;
+  sourceRef?: string | null;
+};
+
+/**
+ * Fix Phase 3.2a (G-17) - the provider-agnostic second half of the fetch:
+ * open forwarded .eml attachments, fetch every transfer JSON link, the linked
+ * manifest / invoice PDFs, the COA link, the second-pass harvest, de-dupe,
+ * and the checklist note. The Resend webhook and the Gmail mailbox read both
+ * end here, so an email pulled in by the mailbox check is read exactly as a
+ * webhook delivery is. NEVER throws (each fetch is fail-soft).
+ */
+export async function completeInboundEmail(draft: InboundDraft): Promise<EnrichResult> {
+  const notes = [...draft.notes];
+  let html = draft.html;
+  let text = draft.text;
+  const attachments: NormalizedAttachment[] = [];
+  for (const att of draft.attachments) {
     // A vendor email forwarded "as attachment" (.eml / message/rfc822): pull
     // its own files and body out so its PDFs / JSON / links are read too.
     const isEml =
@@ -249,9 +306,6 @@ export async function enrichResendInbound(
       }
     }
     attachments.push(att);
-  }
-  if (attMetas.length > 0) {
-    notes.push(`downloaded ${fetched}/${attMetas.length} attachment(s)`);
   }
 
   // 3) The WCIA Transfer Data Link(s) (.json / tokenized endpoint) + invoice /
@@ -437,24 +491,93 @@ export async function enrichResendInbound(
   notes.push(checklistNote(assessEmailDocs(finalAttachments, text)));
 
   const email: NormalizedInboundEmail = {
-    provider: "resend",
-    from: (from || "").trim(),
-    to: to.length > 0 ? to : baseTo,
-    subject: subject || baseSubject,
-    receivedAt: baseReceivedAt,
+    provider: draft.provider,
+    from: (draft.from || "").trim(),
+    to: draft.to,
+    subject: draft.subject,
+    receivedAt: draft.receivedAt,
     attachments: finalAttachments,
     // SLICE 37: carry the plain-text body so the Regulatory Watch funnel can
     // read forwarded LCB bulletins (they arrive as body text, not attachments).
     bodyText: text || null,
-    // SLICE 83: carry the HTML body too — emailed vendor menus are often HTML
+    // SLICE 83: carry the HTML body too \u2014 emailed vendor menus are often HTML
     // tables, which the vendor_menu@ parser converts to parseable lines.
     bodyHtml: html || null,
+    messageId: draft.messageId ?? null,
+    sourceRef: draft.sourceRef ?? null,
   };
 
   return {
     email,
     fetchNote: notes.length > 0 ? notes.join("; ") : "no attachments or transfer link found",
   };
+}
+
+/** A downloaded file -> NormalizedAttachment (text kept when it is JSON / CSV / text). Shared with the Gmail read. */
+export function bytesToAttachment(filename: string | null, contentType: string | null, buf: Buffer): NormalizedAttachment | null {
+  if (buf.byteLength > MAX_ATTACHMENT_BYTES) return null;
+  const asText = buf.byteLength <= 5 * 1024 * 1024 ? buf.toString("utf8") : "";
+  const text = looksTextualCt(contentType, filename) || looksLikeJsonText(asText.slice(0, 200)) ? asText || buf.toString("utf8") : null;
+  return { filename, contentType, text, base64: buf.toString("base64") };
+}
+
+/**
+ * Fix Phase 3.2a (G-17): fetch one received email again BY ID (Try again, the
+ * mailbox check, Find an email). The same fetch the webhook runs, from the
+ * same Resend receiving API. NEVER throws.
+ */
+export async function fetchResendInboundById(emailId: string): Promise<EnrichResult> {
+  return enrichResendInbound({ type: "email.received", data: { email_id: emailId } });
+}
+
+export type ResendListResult =
+  | { ok: true; items: Record<string, unknown>[]; truncated: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Fix Phase 3.2a (G-17): Resend's list of received emails, newest first,
+ * back to `sinceIso` (GET /emails/receiving?limit=100&after=<last id>; at most
+ * `maxPages` pages). Every email Resend received is here even when its
+ * webhook delivery failed for good, so this is one of the two sources of
+ * truth the mailbox check compares the table with. Never throws.
+ */
+export async function listResendReceived(sinceIso: string, maxPages = 5): Promise<ResendListResult> {
+  const apiKey = process.env.RESEND_API_KEY ?? "";
+  if (!apiKey) return { ok: false, error: "RESEND_API_KEY not set" };
+  const since = Date.parse(sinceIso);
+  const items: Record<string, unknown>[] = [];
+  let after: string | null = null;
+  try {
+    for (let page = 0; page < maxPages; page += 1) {
+      const u = new URL(`${RESEND_API}/emails/receiving`);
+      u.searchParams.set("limit", "100");
+      if (after) u.searchParams.set("after", after);
+      const res = await timedFetch(u.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+      });
+      if (!res.ok) return { ok: false, error: `Resend receiving list: HTTP ${res.status}` };
+      const body = (await res.json()) as { data?: unknown; has_more?: unknown };
+      const data = Array.isArray(body.data) ? (body.data as Record<string, unknown>[]) : [];
+      let reachedOld = false;
+      for (const it of data) {
+        const t = Date.parse(typeof it.created_at === "string" ? it.created_at : "");
+        if (Number.isFinite(t) && Number.isFinite(since) && t < since) {
+          reachedOld = true;
+          continue;
+        }
+        items.push(it);
+      }
+      const last = data.length > 0 ? data[data.length - 1] : null;
+      if (reachedOld || body.has_more !== true || !last || typeof last.id !== "string") {
+        return { ok: true, items, truncated: false };
+      }
+      after = last.id;
+    }
+    return { ok: true, items, truncated: true };
+  } catch (err) {
+    return { ok: false, error: `Resend receiving list failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 function filenameFromUrl(url: string): string | null {
