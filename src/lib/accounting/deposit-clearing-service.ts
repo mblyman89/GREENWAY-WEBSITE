@@ -9,8 +9,10 @@ import "server-only";
  *
  * WHY THIS EXISTS THE SLICE AFTER books-94
  * ----------------------------------------
- * books-94 wired the drawer close, which DEBITS `10400` on every reconcile.
- * Nothing credited it. That made `10400` an asset balance that could only ever
+ * books-94 wired the drawer close, which then DEBITED `10400` on every
+ * reconcile. (Since D-77 / books-98 the close debits `10100 Vault` instead, and
+ * only sealing a deposit bag debits `10400`; corrected in Fix Phase 2.5,
+ * F-03-1.) Nothing credited it. That made `10400` an asset balance that could only ever
  * grow — the balance sheet claiming cash is in transit that reached the bank
  * weeks ago, and the same dollars counted twice once the bank balance is read.
  * Shipping the close without this is the half-a-loop shape the census exists to
@@ -18,9 +20,11 @@ import "server-only";
  *
  * THE CHAIN, LINK BY LINK (rule 133b)
  * -----------------------------------
- *   a manager reconciles a drawer            (books-94)
- *     -> posted entry DEBITS 10400
+ *   a manager reconciles a drawer            (books-94; since D-77 -> 10100 Vault)
+ *   a deposit bag is sealed                  (buildSealBagJournal -> DEBITS 10400)
  *   Plaid shows a deposit credit at the bank
+ *   the owner presses "Clear against bags"   (Fix Phase 2.5, /admin/books/bank)
+ *     -> bank-deposit-door-service.ts#clearBankDepositLine
  *     -> clearDepositForBankRow(transactionId, eventKind)
  *     -> reads the REAL 10400 balance from POSTED journal lines
  *     -> buildDepositClearingJournal (pure) decides or refuses

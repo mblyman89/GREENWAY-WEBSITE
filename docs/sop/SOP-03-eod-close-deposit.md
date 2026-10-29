@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.4 (draft for owner review; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
+| **Version** | 1.5 (draft for owner review; Phase 2.5: the owner-only bank screen can now clear a store cash deposit, and the "Cash on its way to the bank" panel no longer claims a drawer close fills it; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
@@ -98,7 +98,7 @@ This SOP makes sure that:
 | Seal the bag, write the bag number, log it | **Any employee** (D25: *"anyone can seal the bag"*), after the morning recount | Not in the app (F-00-6). Paper (form 8.2). |
 | **Verify till** in the back office | Owner, admin, manager | `inventory.manage`. Records no recount (F-00-3); paper is the record. |
 | Take bags to the bank | **The owner only** (D25: *"I am the only one to take cash to the bank"*) | Not in the app. Paper bag log + bank receipt. |
-| Match the deposit in the books | Owner only | `requireBooksAccess()` (`src/app/admin/books/bank/page.tsx` L175). **No screen clears a deposit today** (F-03-3). |
+| Match the deposit in the books | Owner only | `requireBooksAccess()` (`src/app/admin/books/bank/page.tsx` L181; `books-view-core.ts` L73 `return role === "owner";`). **Built in Phase 2.5:** the **Clear against bags** button on that page (§4.13). The press itself is checked again on the server (`books/bank/actions.ts` L136) and written to the audit log (L147). |
 
 **Who may count the deposit?** The owner's request names *"one person"* at night and *"the morning employee"* in the morning. It does not restrict either to a manager. This SOP therefore lets **any employee** do either count, but they must be **two different people** (the whole point of the morning recount). **There is no second count at night** (D24: *"no second count at night, just the recount in the morning by any employee"*). The morning recount is the second count. *(This is only about the deposit count. The second-person sign-off at till close, SOP-01 / D2, is separate and still applies.)*
 
@@ -120,12 +120,12 @@ This SOP makes sure that:
 
 | Money | Where it goes tonight | In the bag? | Source |
 |---|---|---|---|
-| Each till's **float** ($167.50 / $167.50 / $300.00) | Stays in its drawer overnight | **No** | Owner quote (`safe-bag-core.ts` L17–22); the books assume it (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L189–193) |
+| Each till's **float** ($167.50 / $167.50 / $300.00) | Stays in its drawer overnight | **No** | Owner quote (`safe-bag-core.ts` L17–22); the books assume it (`floatStaysInDrawer: true`, `drawer-posting-service.ts` L190–194) |
 | Each till's **takings** = closing count − float | Out of the drawer → store safe → bag | **Yes** | Owner: *"167.50 is left in the register and the rest goes into the safe"* |
 | **Drops** made during the day (already in the store safe) | Bag | **Yes** | SOP-01 §4.25; owner: *"the safe money goes into the deposit bag"* |
 | **Master till** ($1,000) | Stays in the master till | **No** | SOP-02 §4.12 |
 | **Little safe** | Stays | **No** | SOP-02 §4.1 |
-| **Tips** | Per store tip policy, never in the drawer count | **No** | SOP-01 §4.27 step 3; tips are excluded from the books close (`drawer-posting-service.ts` L20–29) |
+| **Tips** | Per store tip policy, never in the drawer count | **No** | SOP-01 §4.27 step 3; tips are excluded from the books close (`drawer-posting-service.ts` L20–30) |
 
 **The deposit for the day is therefore:**
 
@@ -279,7 +279,7 @@ Done by the **morning employee**, who must **not** be the person who signed part
 
 **One bag per business day, whole** (§4.14). If one day's cash will not fit in one bag, use two bags with **consecutive numbers**, write both on the sheet and the log as one deposit ("Bag 1041 + 1042, one day"), and bank them together. Never split a day across two bank trips.
 
-> **What the system would do here, once built:** the bag table records the bag number, the business day, the status (*available → undeclared → counted → deposited*), who pulled the cash, who counted it, when it was sealed and when the bank confirmed it (`0212_deposit_bags.sql` L48–84). Sealing would post *Undeposited Funds ← Vault* with the bag number on both lines (`buildSealBagJournal`, `register-cash-journal-core.ts` L430–466), and would refuse a bag with no number: *"This bag has no id. The id is the only thing that ties a sealed bag to the deposit the bank confirms days later…"* (L413–418). None of this is reachable from any screen today (`grep deposit_bags src/app` → 0 hits; census `seal_deposit_bag` reachable **MISSING**, `ledger-census-data.ts` L1582–1605). The paper bag log is the record.
+> **What the system would do here, once built:** the bag table records the bag number, the business day, the status (*available → undeclared → counted → deposited*), who pulled the cash, who counted it, when it was sealed and when the bank confirmed it (`0212_deposit_bags.sql` L48–84). Sealing would post *Undeposited Funds ← Vault* with the bag number on both lines (`buildSealBagJournal`, `register-cash-journal-core.ts` L430–466), and would refuse a bag with no number: *"This bag has no id. The id is the only thing that ties a sealed bag to the deposit the bank confirms days later…"* (L413–418). None of this is reachable from any screen today (`grep deposit_bags src/app` → 0 hits; census `seal_deposit_bag` reachable **MISSING**, `ledger-census-data.ts` L1588–1611). The paper bag log is the record.
 
 ### 4.12 Morning: Verify till in the back office
 
@@ -308,7 +308,9 @@ Steps (owner):
 5. Back at the store, staple each receipt to the bag log line and write the date the bank confirmed it (form 8.2, **Bank confirmed**).
 6. The owner keeps the bag log with the books papers.
 
-**The books side (owner only, for awareness).** The bank later shows a deposit line on **/admin/books/bank**. The books were designed to clear that line against the day(s) it covered, oldest first, one credit line per day (`deposit-clearing-core.ts`; `docs/MICHAEL-books-96-one-bag-one-day.md` L14–20), and to warn if a deposit splits a day or holds cash older than 30 days (`deposit-clearing-core.ts` L460–488). **No screen calls that clearing today** (finding F-03-3), and even if one did, it would refuse every deposit with *"Nothing is sitting in Undeposited Funds…"* (L396–402) because nothing fills 10400 since D-77 (F-03-1). Until it is built, the bag log plus the bank receipts are the till-to-bank trail.
+**The books side (owner only, for awareness).** The bank later shows a deposit line on **/admin/books/bank**. The books were designed to clear that line against the day(s) it covered, oldest first, one credit line per day (`deposit-clearing-core.ts`; `docs/MICHAEL-books-96-one-bag-one-day.md` L14–20), and to warn if a deposit splits a day or holds cash older than 30 days (`deposit-clearing-core.ts` L461–489). **Phase 2.5 built the button** (finding F-03-3). On **/admin/books/bank**, the section **Clear store cash deposits against the sealed bags** (`books/bank/page.tsx` L268) lists money-in lines on the bank account marked **Main operating** from the last 60 days (`bank-deposit-door-core.ts` L41, L44). Each line has a **Clear against bags** button (`ClearBankDepositsPanel.tsx` L103); a line already cleared shows **cleared** (L94). The page's own words under the list: *"Only press the button on a line that is store cash from sealed deposit bags. A transfer between your own accounts, an ATM settlement or money you put in yourself is not till cash and must not be cleared here. … Pressing twice writes nothing twice."* (L120–126).
+
+**But today every press is refused, on purpose.** Cash only reaches 10400 when a bag is **sealed in the app**, and the bag screen is not built yet (gap G-04, Phase 2.6). So the button answers *"Nothing is sitting in Undeposited Funds, so there is no counted cash for this deposit to clear. Either the deposit bags have not been sealed in the system yet, or this money came from somewhere other than the tills."* (`deposit-clearing-core.ts` L398–402) and writes nothing. That is the correct answer: the books never saw the cash go into a bag, so they must not pretend it came out of one. The page says so above the list (`books/bank/page.tsx` L270–278). Other refusals: an account not marked Main operating (`bank-deposit-door-core.ts` L85–101), a bank line that cannot be read or is gone (`bank-deposit-door-service.ts` L170–183). Until the bag screen is built, the bag log plus the bank receipts are still the till-to-bank trail.
 
 ### 4.14 The $10,000 line: one day, one bag, whole
 
@@ -320,7 +322,7 @@ This is the rule that keeps a lawful deposit lawful. It comes from the owner's o
 So, on the floor:
 1. **Never** split a day's cash across two trips, and never hold part of a day back.
 2. **Never** choose which bags to take to the bank by adding them up against $10,000. Take **all** sealed bags (§4.13 step 1).
-3. If a bank run is missed and the safe holds a lot, take it all next time. A large deposit is *"perfectly lawful and completely routine for a cash business"* (`books/bank/page.tsx` L500–502).
+3. If a bank run is missed and the safe holds a lot, take it all next time. A large deposit is *"perfectly lawful and completely routine for a cash business"* (`books/bank/page.tsx` L547–549).
 4. If anything ever **must** stay behind (bank closed early, armoured-car limit, safety), write the reason on the bag log **at the time**. The owner memo: *"write down why the rest stayed behind, because an unexplained habit looks worse than a large deposit ever will"* (`safe-bag-core.ts` L319–327; `docs/MICHAEL-books-98-the-store-safe.md` L43–60).
 
 > The system has a "deposit shape" self-check that would show this question on screen (`checkDepositShape`, `safe-bag-core.ts` L305–328). It is **not called by any screen** (F-03-10). The bag log's **Note** column is the interim record. *Not legal advice*; the policy file itself says to mention the cadence to the CPA and counsel (`CASH_DEPOSIT_POLICY_DECISION.md` L122–124).
@@ -331,14 +333,14 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 
 | What you see | Exact text | Pin |
 |---|---|---|
-| Amber box | *"This figure could not be read from the books just now. That is not the same as there being nothing waiting — it means the question was not answered, so no conclusion should be drawn from this panel."* | L39–49 |
-| Big number | *"$X counted out of the tills and not yet confirmed at the bank"* | L66–71 |
-| Green box (when $0) | *"Every dollar counted out of a drawer has been matched to a deposit that reached the bank. This is what it should read most mornings."* | L74–78 |
-| Otherwise | *"This is account 10400 Undeposited Funds. A drawer close moves cash into it; a confirmed bank deposit moves cash out of it…"*, oldest day, list of days, *"Each line should be one sealed deposit bag…"* | L80–123 |
-| Rose box | *"More was banked than was counted, on …"* | L128–151 |
-| Footer | *"Showing this figure does not clear it…"* | L153–158 |
+| Amber box | *"This figure could not be read from the books just now. That is not the same as there being nothing waiting — it means the question was not answered, so no conclusion should be drawn from this panel."* | L45–51 |
+| Big number | *"$X sealed into deposit bags and not yet confirmed at the bank"* | L70–75 |
+| Green box (when $0) | *"Every sealed deposit bag recorded in the books has been matched to a deposit that reached the bank. Cash in the safe that has not been sealed into a bag is not counted here."* | L78–83 |
+| Otherwise | *"This is account 10400 Undeposited Funds. Sealing a deposit bag moves cash into it from the safe; a confirmed bank deposit, cleared by the owner on the bank screen, moves cash out of it…"*, oldest day, list of days, *"Each line should be one sealed deposit bag…"* | L86–128 |
+| Rose box | *"More was banked than was counted, on …"* | L133–157 |
+| Footer | *"Showing this figure does not clear it…"* | L159–164 |
 
-> ⚠ **Do not use this panel to check the safe today (finding F-03-1, S1).** Since the D-77 fix, a drawer close posts to **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L306–323), and only sealing a bag would move cash into 10400. Sealing has no screen. So 10400 stays at **$0.00** and the panel shows the **green "Every dollar … matched" message even while several days of bags sit in the safe**. Its sentence *"A drawer close moves cash into it"* (L82–84) is out of date. **Use the bag log (form 8.2) and the safe itself.** The owner may see a non-zero figure only if entries were posted before D-77 (books-94 to books-97).
+> ⚠ **This panel does not count the safe (finding F-03-1, wording fixed in Phase 2.5).** Since the D-77 fix, a drawer close posts to **10100 Vault**, not 10400 (`register-cash-journal-core.ts` L306–323); only sealing a bag moves cash into 10400, and the bag screen is not built yet (G-04, Phase 2.6). So the panel will usually read **$0.00** with the green box. Its words now say exactly what that means: matched **sealed bags**, and *"Cash in the safe that has not been sealed into a bag is not counted here"* (L81–83). It no longer claims a drawer close fills it. **To know what is in the safe, use the bag log (form 8.2) and the safe itself.** The owner may see a non-zero figure only if entries were posted before D-77 (books-94 to books-97).
 
 ### 4.16 Days with no sales, a missed bank run, a bag held over
 
@@ -368,8 +370,10 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Tills | **—** in **Over/short** | That drawer is not reconciled yet (`eod-core.ts` L139) | Reconcile (SOP-01 §4.30), then reprint. |
 | Safe | *"Safe tracking not set up yet — run migration 0135_safe_counts_swaps.sql to include safe counts and change swaps on this report."* | The master till tables are missing (L213–215) | Owner runs the migration (SOP-02 §5). The deposit is unaffected. |
 | Safe | **Not done** on AM or PM | No master till count of that kind that day, **or** the read failed for another reason (F-03-7) | SOP-02 §4.5–4.6. |
-| Panel | Amber *"This figure could not be read…"* | The books could not be read (`UndepositedFunds.tsx` L39–49) | Ignore the panel; use the bag log. |
-| Panel | Green *"Every dollar counted out of a drawer has been matched…"* | **Not reliable today** (F-03-1) | Use the bag log and the safe. |
+| Panel | Amber *"This figure could not be read…"* | The books could not be read (`UndepositedFunds.tsx` L43–53) | Ignore the panel; use the bag log. |
+| Panel | Green *"Every sealed deposit bag recorded in the books has been matched…"* | Means: no sealed bag is waiting in the books. It says nothing about unsealed cash in the safe (F-03-1, wording fixed Phase 2.5) | Use the bag log and the safe for the safe. |
+| Bank screen | *"Nothing is sitting in Undeposited Funds, so there is no counted cash for this deposit to clear…"* | No bag has been sealed in the app yet (expected until Phase 2.6), or the money did not come from the tills | Nothing was written. Keep the bank receipt with the bag log. |
+| Bank screen | **cleared** next to a deposit line | That deposit has already been cleared against the bags | Nothing to do; pressing again writes nothing twice. |
 | Panel | Rose *"More was banked than was counted, on …"* | The books say a day was cleared for more than it held (L128–151) | Owner/bookkeeper only. |
 | Books (when built) | *"This bag has no id…"* | A seal without a bag number would be refused (`register-cash-journal-core.ts` L438–443) | Not reachable today. Always write the bag # on paper. |
 | Books (when built) | *"Bag GW-7 was taken out of the drawer but never counted into the safe…"* | The code was designed to block the close while a bag is undeclared (`safe-bag-core.ts` L212–226; books-98 L29–35). **Owner decision D27: warning only, never block.** | Not reachable today (F-03-10). When built, it must warn, not block (G-04). |
@@ -411,7 +415,7 @@ The panel under the report (`UndepositedFunds.tsx`) reads account **10400 Undepo
 | Paper filed five years | WAC 314-55-087 records retention | Footer L260; policy L116–121 |
 | End-of-day report is manager-only | It shows closed counts and over/short, which the blind close hides from cashiers | `eod-core.ts` L14–16 |
 
-**Known weaknesses this SOP works around** (all recorded, none fixed): no bag screen (F-00-6), the panel's false all-clear (F-03-1), unwired cash-to-bank books (F-03-3), the verify that records $0 (F-00-3), ~~no second count in the app (F-00-5/F-01-9)~~ (fixed in Phase 2.2: the app records the second count at close), a single-signature EOD print without the deposit figure (F-03-5), refunds missing from the EOD (F-03-6), silent read failures (F-03-7), no export (F-00-8).
+**Known weaknesses this SOP works around** (all recorded, none fixed): no bag screen (F-00-6), ~~the panel's false all-clear (F-03-1)~~ (wording fixed in Phase 2.5; the seal itself comes with the bag screen), ~~unwired cash-to-bank books (F-03-3)~~ (Phase 2.5 built the owner's **Clear against bags** button; it refuses until bags are sealed in the app), the verify that records $0 (F-00-3), ~~no second count in the app (F-00-5/F-01-9)~~ (fixed in Phase 2.2: the app records the second count at close), a single-signature EOD print without the deposit figure (F-03-5), refunds missing from the EOD (F-03-6), silent read failures (F-03-7), no export (F-00-8).
 
 ---
 
@@ -541,7 +545,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | **Master till** | The $1,000 change fund; the app calls it "Store safe" / "Safe ($1,000 change fund)". Never in the deposit. |
 | **Bag # / bag id** | The number printed on a tamper-evident deposit bag. |
 | **Final / Preliminary** | EOD banner: all of the day's drawers closed / at least one still open. Not the same as reconciled. |
-| **10100 Vault / 10400 Undeposited Funds / 10200 Bank** | Books accounts: cash in the safe / cash sealed in a bag on its way to the bank / the operating bank account (`register-cash-journal-core.ts` L70–75; `UndepositedFunds.tsx` L153–158). |
+| **10100 Vault / 10400 Undeposited Funds / 10200 Bank** | Books accounts: cash in the safe / cash sealed in a bag on its way to the bank / the operating bank account (`register-cash-journal-core.ts` L70–75; `UndepositedFunds.tsx` L159–164). |
 | **CTR** | Currency Transaction Report: the bank's routine filing for cash over $10,000 in a business day. Nothing to avoid. |
 | **Structuring** | Shaping deposits *for the purpose of* avoiding a CTR. A crime regardless of the amounts (§4.14). |
 
@@ -552,15 +556,16 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 1 purpose | `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` L7; `src/lib/accounting/safe-bag-core.ts` L15–25; `docs/MICHAEL-books-96-one-bag-one-day.md` L1–20 |
-| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L107; `src/app/admin/registers/page.tsx` L139–141; `src/app/admin/books/bank/page.tsx` L175 |
-| 4.1 money | `drawer-posting-service.ts` L20–29, L170–194; `register-cash-journal-core.ts` L271–322; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
+| 2 roles | `src/app/admin/registers/eod/page.tsx` L45; `src/lib/auth/roles.ts` L107; `src/app/admin/registers/page.tsx` L139–141; `src/app/admin/books/bank/page.tsx` L181 |
+| 4.1 money | `drawer-posting-service.ts` L20–30, L171–195; `register-cash-journal-core.ts` L271–322; `0038` L178–184; `0077` L43–46; `sop03/calc.py`, `sop03/calc2.py` |
 | 4.3 / 4.7 / 4.12 | `docs/sop/SOP-01-register-operations.md` §4.27–4.30, forms 8.2, 8.5, 8.6; `registers/page.tsx` L245–278 |
 | 4.8 report | `eod/page.tsx` (268 lines) L15–19, L48–264; `src/lib/registers/eod-core.ts` (295) L80–201; `src/lib/registers/eod-store.ts` (234) L65–173; `src/lib/pos/day-report-core.ts` L40–70, L136–175 |
 | 4.9 / 4.17 print | `eod/page.tsx` L74, L248–261; `registers/history/[id]/page.tsx` L50, L81, L234–247 |
-| 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L389–466; `ledger-census-data.ts` L1582–1641; `factory-reset-core.ts` L427–428 |
-| 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–60, L160–260; `deposit-clearing-core.ts` L4–14, L128–130, L390–490; `ledger-census-data.ts` L1524–1580; `books/bank/BankMatchExplainer.tsx` L719–722 |
-| 4.14 $10,000 | `CASH_DEPOSIT_POLICY_DECISION.md` L9–73; `safe-bag-core.ts` L262–328; `books/bank/page.tsx` L495–515; `bank-match-core.ts` L1587, L1594; `docs/MICHAEL-books-98-the-store-safe.md` L43–60 |
-| 4.15 panel | `src/app/admin/registers/eod/UndepositedFunds.tsx` (161) L1–161; `deposit-clearing-service.ts` L166–228; `register-cash-journal-core.ts` L306–323, L830–838 |
+| 4.11 bag model | `supabase/migrations/0212_deposit_bags.sql` (163) L1–30, L48–163; `safe-bag-core.ts` (501) L79–123, L163–260; `register-cash-journal-core.ts` L389–466; `ledger-census-data.ts` L1588–1647; `factory-reset-core.ts` L427–428 |
+| 4.13 bank | `docs/CASH_DEPOSIT_POLICY_DECISION.md` (124) L109–124; `src/lib/accounting/deposit-clearing-service.ts` L1–64, L164–264; `deposit-clearing-core.ts` L4–15, L129–131, L391–491; `ledger-census-data.ts` L1524–1586; `books/bank/BankMatchExplainer.tsx` L719–722 |
+| 4.14 $10,000 | `CASH_DEPOSIT_POLICY_DECISION.md` L9–73; `safe-bag-core.ts` L262–328; `books/bank/page.tsx` L542–562; `bank-match-core.ts` L1587, L1594; `docs/MICHAEL-books-98-the-store-safe.md` L43–60 |
+| 4.13 bank door (Phase 2.5) | `src/lib/accounting/bank-deposit-door-core.ts` L41–101; `bank-deposit-door-service.ts` L150–201; `src/app/admin/books/bank/actions.ts` L133–161; `books/bank/page.tsx` L268–286; `src/components/admin/books/ClearBankDepositsPanel.tsx` (129) L60–126; `tests/compliance/fix-p2-5-cash-to-bank.test.ts`; `scripts/compliance/mutate-fix-p2-5.py` (25/25) |
+| 4.15 panel | `src/app/admin/registers/eod/UndepositedFunds.tsx` (167) L1–167; `deposit-clearing-service.ts` L170–232; `register-cash-journal-core.ts` L306–323, L830–838 |
 | 4.8 worked example | `src/app/admin/registers/eod/RegisterCashSpecimen.tsx` (190) L110–137; `src/lib/accounting/register-cash-specimen-core.ts` L30–60, L128–140 |
 | Payment methods | `src/lib/pos/sale-event-core.ts` L15–33 (cash-only launch) |
 | Help / concierge | `src/lib/admin/help-content.ts`, `src/lib/admin/concierge-kb.ts` (grep "eod\|end-of-day\|deposit" → payroll direct deposit only) |
@@ -573,7 +578,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | "End of day spreadsheet that one person completes before close" | EOD report prints the day; no deposit figure, no denomination count, one signature line | Night sheet form 8.1 part A (§4.5) | G-15 · F-03-5 |
 | "Morning employee recounts and verifies" | Verify till records $0, no denominations, free-text name | Form 8.1 part B (§4.10); Verify till per SOP-01 with paper as record | G-04 · F-00-3, F-00-4 |
 | "Before sealing the bag and putting it into the safe" | No bag screen; table + rules unreachable | §4.11, bag log form 8.2 | G-04 · F-00-6 |
-| "For depositing to the bank" | No bank-run record; bank clearing unreachable; 10400 never filled | §4.13, form 8.2, bank receipts | G-14 · F-03-1, F-03-3 |
+| "For depositing to the bank" | No bank-run record; 10400 is filled only by a seal, which has no screen yet (Phase 2.6). **Built (Phase 2.5):** owner-only **Clear against bags** on the bank screen; panel wording fixed | §4.13, form 8.2, bank receipts | G-14 · F-03-1 (wording FIXED), F-03-3 (FIXED: door built; refuses until G-04) |
 | Closing-day report "exported and printed" | Print only | §4.9, §4.17 | G-15 / G-09 · F-00-8 |
 | Second-person count at till close (D2) | ~~Paper only~~ **Built (Phase 2.2):** second PIN and blind count at close, both stored | SOP-01 §4.27 steps 8–12, form 8.2 | G-01 · F-01-9 (FIXED) |
 | $10,000 shape check | Built, no caller | Bag log **Note** column (§4.14) | G-14 · F-03-10 |
@@ -601,4 +606,5 @@ All seven questions were answered by the owner after v1.0 (recorded verbatim in 
 | 1.1 draft | 2026-10-27 | Slice SOP-04. Owner answers D21–D27 applied: reason only over $5 (D21); floats confirmed (D22); unsealed overnight in the safe (D23); no second night count (D24); anyone seals, owner-only banking (D25); tamper-evident pre-numbered bags (D26); undeclared bag = warning only (D27). Appendix C now records the answers. Docs only; pins still at `3385bfa9`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). No procedure changed. | SOP program (for owner review) |
 | 1.4 draft | Fix phase | Phase 2.3 (G-03, owner D7, D21). §4.7 reconcile paragraph: cash sales are the system figure (Phase 2.1), the reconciler is the signed-in manager, and a reason over $5.00 is written in the Reconcile card and shown on the owner's Over / short warnings screen (form 8.5 only before migration 0315); §4.9 staple list note. | Fix phase |
+| 1.5 draft | Fix phase | Phase 2.5 (G-14, owner D25). §2 roles row, §4.13 books paragraph, §4.15 panel table and warning, §5 rows, the known-weaknesses line, Appendix A and Appendix B: the owner-only **Clear against bags** button now exists on /admin/books/bank, refuses with *"Nothing is sitting in Undeposited Funds…"* until bags are sealed in the app (Phase 2.6), and the panel no longer says a drawer close fills 10400. | Fix phase |
 | 1.3 draft | Fix phase | Phase 2.2 (G-01, owner D2). §2 roles table, §4.3 step 2, the known-weaknesses line and the Appendix B row now say the second count at till close is recorded in the app (SOP-01 §4.27 steps 8–12); the paper close slip is still signed. | Fix phase |

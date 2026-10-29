@@ -39,7 +39,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-11 | Supply-run screen | **D17** ("id like the supply run screen built") | F-02-11 | SOP-02 §4.13, form 8.4 | **APPROVED** |
 | G-12 | Post cash drops to the books (10110 → 10100) | (books integrity; owner model till → safe → bank) | F-02-1 | None needed for staff; recorded for the build phase | **BUILT** (Phase 2.4) |
 | G-13 | Any employee can record the master till count (not only manager-level logins) | **D15** | F-02-10, F-02-4 | SOP-02 §2, §4.5: a manager login enters it and picks the counter | OPEN |
-| G-14 | Cash-to-bank books wiring (seal poster → 10400, bank-deposit clearing caller, census corrected, panel text) | (original request: "for depositing to the bank") | F-03-1, F-03-3, F-03-10, F-02-1 | SOP-03 §4.13 bag log + bank receipts; §4.15 ignore the panel | OPEN |
+| G-14 | Cash-to-bank books wiring (seal poster → 10400, bank-deposit clearing caller, census corrected, panel text) | (original request: "for depositing to the bank") | F-03-1, F-03-3, F-03-10, F-02-1 | SOP-03 §4.13 bag log + bank receipts; §4.15 the panel counts sealed bags only | **PARTLY BUILT** (Phase 2.5; seal poster → 2.6 with G-04) |
 | G-15 | EOD deposit sheet in the app + export (deposit figure, denominations, two signatures, refunds, date picker, CSV/XLSX) | (original request: "End of day spreadsheet" … "exported and printed") | F-03-5, F-03-6, F-03-7, F-03-8, F-00-8 | SOP-03 form 8.1 night sheet; §4.8 Z report for cash; §4.9 print | OPEN |
 | G-16 | Partial-quantity receive: record "N of M received", the rest refused, per line | **D29** (*"we need a way to accept less than what came in, please add this to the list of serious issues to fix"*) | F-04-1 (**S1**) | SOP-04 §4.11: refuse the whole short line; vendor re-sends | **APPROVED · SERIOUS** |
 | G-17 | Show emails that failed to stage (parse failed / no manifest) on the Receiving screen | (procedure need) | F-04-4 | SOP-04 §4.3 step 4: daily mailbox-vs-list check, form 8.1 | OPEN |
@@ -182,7 +182,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 
 ## G-10 · Manager Till float and register float setting
 
-- **CLOSED in slice SOP-03 (D19).** Owner: *"And I was wrong, it should be 300 in it."* The Manager Till is seeded at $300.00 (`0038` L184), which matches. Requirement 1 below is cancelled. Requirement 2 (an owner-only float setting) is kept as a nice-to-have idea, not an owner request. Requirement 4 (the `drawer-posting-service.ts` L190–191 comment) stays open under F-02-9. The text below is history.
+- **CLOSED in slice SOP-03 (D19).** Owner: *"And I was wrong, it should be 300 in it."* The Manager Till is seeded at $300.00 (`0038` L184), which matches. Requirement 1 below is cancelled. Requirement 2 (an owner-only float setting) is kept as a nice-to-have idea, not an owner request. Requirement 4 (the `drawer-posting-service.ts` L191–192 comment) stays open under F-02-9. The text below is history.
 
 - **Owner (D10):** all three tills hold $167.50.
 - **Today:** Manager Till seeded at $300.00 and never corrected (`0038` L184; `0077` L40–46). No screen edits `default_float_minor`. The register app does not compare count-in to any standard (F-01-13).
@@ -190,7 +190,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   1. Set the Manager Till `default_float_minor` to 16750 (migration; idempotent, like 0077).
   2. Optionally, an owner-only setting for each register's float, audited.
   3. With F-01-13: warn at count-in when the count is not the standard float.
-  4. Fix the `drawer-posting-service.ts` L190–191 comment.
+  4. Fix the `drawer-posting-service.ts` L191–192 comment.
 - **Interim:** SOP-02 §4.14.
 
 ## G-11 · Supply-run screen (APPROVED, D17)
@@ -243,6 +243,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. Fix the stale text and comments listed in F-03-1 (panel L82–84 and file headers).
   5. Drops posting (G-12 / F-02-1) must land first, or the 10100 pool the bags are drawn from is short by the day's drops.
 - **Interim:** SOP-03 §4.13 (bag log plus bank receipts is the trail); §4.15 (do not use the panel).
+- **Status: PARTLY BUILT (Phase 2.5, #P25; owner message 4: *"deposit-to-bank books"*).** Requirement 2 built: an owner-only **Clear against bags** button per money-in line on the **Main operating** account (60 days) on `/admin/books/bank`, gated by `requireBooksAccess()` on the page and again in `clearBankDepositAction`, audited as `books.bank_deposit.cleared`, idempotent by `deposit-clear:<transaction id>`; other account roles, unreadable lines and failed reads are refused or shown as failures (rule 46). Requirement 3 built: `cash_deposit_to_bank` evidence corrected; `seal_deposit_bag` kept MISSING. Requirement 4 built: panel text and the file comments named in F-03-1. Requirement 5 was met first (G-12, Phase 2.4). **Still OPEN → Phase 2.6:** requirement 1, the seal poster, which comes with the G-04 bag screen. Until then the button refuses every deposit with *"Nothing is sitting in Undeposited Funds…"*, which is correct: the books never saw the cash sealed. SOP-03 v1.5.
 
 ## G-15 · EOD deposit sheet in the app + export
 

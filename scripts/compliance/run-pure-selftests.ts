@@ -501,6 +501,7 @@ import { __runRegisterCashSpecimenTests } from "../../src/lib/accounting/registe
 import { __runDepositClearingTests } from "../../src/lib/accounting/deposit-clearing-core";
 import { __runDepositFifoTests } from "../../src/lib/accounting/deposit-fifo-core";
 import { __runSafeBagTests } from "../../src/lib/accounting/safe-bag-core";
+import { __runBankDepositDoorTests } from "../../src/lib/accounting/bank-deposit-door-core";
 import { __runCardPaymentTests } from "../../src/lib/accounting/card-payment-core";
 // Slice books-04: payroll and the employee-as-COGS question. Reseller vs
 // producer character, the narrow evidence-gated acquisition-labor door, the
@@ -2093,6 +2094,8 @@ __runLiquidVolumeTests();
   __runDepositClearingTests();
   __runDepositFifoTests();
   __runSafeBagTests();
+  __runBankDepositDoorTests(); // Fix Phase 2.5 (G-14): the bank-deposit clearing door
+  console.log("bank-deposit-door-core self-tests: all passed");
   __runCardPaymentTests();
   __runPayrollCogsCoreTests();
   __runBankMatchCoreTests();

@@ -136,7 +136,7 @@ The code models one "safe" only, not three places. That is finding **F-02-7**.
      ▼                                            & coin in   │   ▼ out
   STORE SAFE ──(SOP-03: count, bag, seal)──> BANK           LITTLE SAFE (no balance)
 ```
-- A till keeps its float ($167.50 sales, $300.00 Manager Till) overnight. Only the takings leave it (owner, quoted in `safe-bag-core.ts` L17–22; the close posting assumes this, `floatStaysInDrawer: true`, `drawer-posting-service.ts` L190–193).
+- A till keeps its float ($167.50 sales, $300.00 Manager Till) overnight. Only the takings leave it (owner, quoted in `safe-bag-core.ts` L17–22; the close posting assumes this, `floatStaysInDrawer: true`, `drawer-posting-service.ts` L191–194).
 - The master till never gains or loses value. It only changes its **mix**. Swaps are equal on both sides.
 - Supplies are bought on the shop card, not with master till cash (owner: *"I don't want to use the master till any more for petty cash"*, `card-payment-core.ts` L7–8). See §4.13.
 
@@ -336,7 +336,7 @@ Why this matters:
 1. The page's target is $1,000.00. Any takings in the count show as a false **Over**.
 2. The page's own help text and placeholder suggest the opposite (*"drops waiting to be banked are the usual reason"*; *"e.g. two drops waiting to be banked"*). That is finding **F-02-7**. Greenway's rule is the one in this section.
 
-> **For the owner and bookkeeper (finding F-02-1, S1) · FIXED in Phase 2.4 (G-12).** In the books, account 10100 "Cash on Hand — Vault" means *"the safe / master till"* (`register-cash-journal-core.ts` L71). Until Phase 2.4, mid-shift drops were never posted: the close relieved 10110 Tills only by *counted − float*, so every dollar dropped stayed in 10110 and 10100 was short by it. **Now the close entry books the drops too.** At Reconcile, the same entry (source ref `till-close:<session>`) debits 10100 with *takings at close + drops during the shift* (`toSafeMinor`, L301, L314–321) and relieves 10110 by that amount less any over/short (L329). The line reads *"Cash from Register 1 to safe (incl. $200.00 dropped during the shift)"* (L319). Worked example, checked by the builder self-test (L886–907): $167.50 float, $500.00 cash sales, a $200.00 drop, counted $467.50 → 10100 +$500.00, 10110 −$500.00, so 10110 nets to zero for the shift. A short dropped shift (counted $461.50) posts 10100 +$494.00, 50920 +$6.00, 10110 −$500.00 (L911–925). A shift whose takings were all dropped still posts the drops (L929–939). The poster already passes the drop total (`drawer-posting-service.ts` L173–193). **Back data:** drawers reconciled before this fix posted without their drops, and those entries are not changed (the source ref is idempotent, so they are never re-posted). Only drawers reconciled after this fix include drops. Staff need do nothing differently.
+> **For the owner and bookkeeper (finding F-02-1, S1) · FIXED in Phase 2.4 (G-12).** In the books, account 10100 "Cash on Hand — Vault" means *"the safe / master till"* (`register-cash-journal-core.ts` L71). Until Phase 2.4, mid-shift drops were never posted: the close relieved 10110 Tills only by *counted − float*, so every dollar dropped stayed in 10110 and 10100 was short by it. **Now the close entry books the drops too.** At Reconcile, the same entry (source ref `till-close:<session>`) debits 10100 with *takings at close + drops during the shift* (`toSafeMinor`, L301, L314–321) and relieves 10110 by that amount less any over/short (L329). The line reads *"Cash from Register 1 to safe (incl. $200.00 dropped during the shift)"* (L319). Worked example, checked by the builder self-test (L886–907): $167.50 float, $500.00 cash sales, a $200.00 drop, counted $467.50 → 10100 +$500.00, 10110 −$500.00, so 10110 nets to zero for the shift. A short dropped shift (counted $461.50) posts 10100 +$494.00, 50920 +$6.00, 10110 −$500.00 (L911–925). A shift whose takings were all dropped still posts the drops (L929–939). The poster already passes the drop total (`drawer-posting-service.ts` L174–194). **Back data:** drawers reconciled before this fix posted without their drops, and those entries are not changed (the source ref is idempotent, so they are never re-posted). Only drawers reconciled after this fix include drops. Staff need do nothing differently.
 
 ### 4.13 Supply runs and petty cash
 
@@ -350,7 +350,7 @@ Until the screen exists, when cash is taken for supplies:
 3. The receipt and the change go back **into the master till envelope, never into a drawer**. A receipt in a till *"is evidence, not cash"*, so the till really is short (books-98 L84–86).
 4. The next count will be **short** by the receipt amount. Write *"supply run, form 8.4"* in **Notes**, and give the form and receipt to the owner the same day.
 
-The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L526–671). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1665–1670). That is finding F-02-11 and gap G-11. The owner has **approved building the screen** (D17: *"id like the supply run screen built"*). It is queued for the build phase. Until it exists, use form 8.4.
+The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L526–671). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1671–1676). That is finding F-02-11 and gap G-11. The owner has **approved building the screen** (D17: *"id like the supply run screen built"*). It is queued for the build phase. Until it exists, use form 8.4.
 
 ### 4.14 The three till floats
 
@@ -657,15 +657,15 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | SOP section | Code / document (read for this SOP) |
 |---|---|
 | 2 roles | `src/lib/auth/roles.ts` L91, L107; `src/lib/auth/session.ts` L182–186; `src/components/admin/admin-nav-data.ts` L112; `supabase/migrations/0130_*.sql` L55–61; `0037_staffing_timeclock.sql` L43 (job roles) |
-| 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L183–194; `src/lib/accounting/card-payment-core.ts` L7–8 |
+| 4.1 layers | `src/lib/accounting/safe-bag-core.ts` L15–25 (owner quote); `docs/MICHAEL-books-98-the-store-safe.md`; `src/lib/registers/drawer-posting-service.ts` L184–195; `src/lib/accounting/card-payment-core.ts` L7–8 |
 | 4.2 standard | Owner D11; `src/lib/accounting/register-cash-specimen-core.ts` L37–48; `docs/MICHAEL-books-93-register-cash.md` L6–12; `docs/DEFECTS.md` (books-93 entry, "Arithmetic caught what eyes did not") |
 | 4.3–4.7 page and counts | `src/app/admin/registers/safe/page.tsx` (277 lines), `safe/actions.ts` (57), `src/lib/registers/safe-core.ts` (184), `safe-store.ts` (181), `src/components/admin/registers/CountGrid.tsx` (95), `src/lib/registers/cash.ts` L30–70, `src/lib/staffing/time.ts` L17 (Pacific business day), `src/app/admin/registers/page.tsx` L125–127 |
 | Data model | `supabase/migrations/0135_safe_counts_swaps.sql` (113 lines) |
 | 4.8 variance | `safe-core.ts` L59–96; `safe/actions.ts` L47–55 |
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L685–727 |
 | 4.11 swaps | `src/app/api/pos/till/route.ts` L54, L139–142, L190–241; `src/lib/pos/till-core.ts` L75–88, L233–255; `src/app/(site)/pos/RegisterShell.tsx` L5666, L5752, L5790, L5846–5879, L6015–6030 |
-| 4.12 drops / books | `register-cash-journal-core.ts` L71, L221–228, L241–386 (drops booked: L297–321, L329, L369–372), self-test L886–939; `src/lib/registers/store.ts` L189 (`recordDrop`); `drawer-posting-service.ts` L173–194; finding F-02-1 FIXED (Phase 2.4) |
-| 4.13 supply runs | `register-cash-journal-core.ts` L520–671; `src/lib/accounting/ledger-census-data.ts` L1644–1675; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
+| 4.12 drops / books | `register-cash-journal-core.ts` L71, L221–228, L241–386 (drops booked: L297–321, L329, L369–372), self-test L886–939; `src/lib/registers/store.ts` L189 (`recordDrop`); `drawer-posting-service.ts` L174–195; finding F-02-1 FIXED (Phase 2.4) |
+| 4.13 supply runs | `register-cash-journal-core.ts` L520–671; `src/lib/accounting/ledger-census-data.ts` L1650–1681; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
 | 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L316 |
 | 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L45, L74, L208–247; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L122–151 |
 | 4.17 immutability | `0135` L95–108; `grep safe_counts src` (insert and select only) |
