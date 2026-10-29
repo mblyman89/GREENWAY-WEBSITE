@@ -2942,3 +2942,44 @@ in Vercel.
   It drops the table (the stored files stay in `pos-raw`). So that a later
   harvest starts over from the oldest email, also run:
   `delete from public.site_settings where key = 'cultivera_mail_harvest_cursor';`
+
+## Fix 3.2a — 0320 — Every manifest email reaches the table (mailbox check, Try again, Resolved)
+
+- [ ] `0320_inbound_email_reconcile.sql` adds ten columns to `inbound_email_log`
+  (`message_id`, `source_ref`, `ingest_source`, `retry_count`, `last_retry_at`,
+  `last_retry_by`, `resolved_at`, `resolved_by`, `resolved_reason`,
+  `resolved_note`), lets `provider` be `gmail` (emails read straight from the
+  vendor_intake@ mailbox), adds three checks and two indexes.
+  - Owner, verbatim: *"I need a way to ask the system to grab the ones it
+    missed or failed to get. Make it enterprise grade … I want this table to
+    receive every manifest, no exceptions."*
+  - It turns on **Try again**, **Resolved**, the automatic retries, the
+    failure alerts and the health line on Receiving → Incoming (email) →
+    Needs attention (SOP-04 v1.6 §4.4a–c).
+  - Until it is applied, the 15-minute mailbox check still pulls missed
+    emails in (written without the new columns), and the panel says
+    "Apply database update 0320 …".
+
+  Safe to re-run (add column if not exists, guarded constraints). No data is
+  changed.
+
+  **Check:**
+
+  ```sql
+  select count(*) as cols from information_schema.columns
+  where table_schema = 'public' and table_name = 'inbound_email_log'
+    and column_name in ('message_id','source_ref','ingest_source','retry_count','last_retry_at',
+                        'last_retry_by','resolved_at','resolved_by','resolved_reason','resolved_note');
+  -- cols
+  -- 10
+  ```
+
+  **Then:** open Product Intake → Receiving → Incoming (email) and press
+  **Check the mailbox now**. The health line should turn green ("Mailbox
+  checked just now …"). If it says Gmail sign-in is not set up, the
+  `GMAIL_WIF_*` sign-in must be allowed to read vendor_intake@ (domain-wide
+  delegation, scope `gmail.readonly`).
+
+  **Rollback (only if needed):** `supabase/rollbacks/0320_inbound_email_reconcile.rollback.sql`.
+  Read its header first: rows with `provider = 'gmail'` must be deleted or
+  relabelled before the old provider check can return.

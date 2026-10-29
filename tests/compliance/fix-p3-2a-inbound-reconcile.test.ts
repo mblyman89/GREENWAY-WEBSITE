@@ -50,6 +50,10 @@ const st = vi.hoisted(() => ({
   staged: [] as string[],
   sends: [] as string[],
   pushes: [] as string[],
+  /** The provider hands back an email with no recipients / sender / subject (seen with forwarded Gmail and Resend retries). */
+  blankIdentity: false,
+  /** Resend fetches that throw (network cut mid-fetch). */
+  resendThrow: new Set<string>(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -98,9 +102,9 @@ vi.mock("@/lib/inbound-email/inbound-store", async (orig) => ({
 }));
 const toEmail = (provider: "resend" | "gmail", ref: string, subject: string): Email => ({
   provider,
-  from: "Lilac <orders@lilac.example>",
-  to: ["vendor_intake@greenwaymarijuana.com"],
-  subject,
+  from: st.blankIdentity ? "" : "Lilac <orders@lilac.example>",
+  to: st.blankIdentity ? [] : ["vendor_intake@greenwaymarijuana.com"],
+  subject: st.blankIdentity ? "" : subject,
   receivedAt: new Date(Date.now() - 3600_000).toISOString(),
   attachments: [],
   messageId: `${ref}@mail.example`,
@@ -111,6 +115,7 @@ vi.mock("@/lib/inbound-email/resend-receiving-fetch", async (orig) => ({
   listResendReceived: async () => (st.resendListOk ? { ok: true, items: st.resendList, truncated: false } : { ok: false, error: "Resend receiving list: HTTP 503" }),
   fetchResendInboundById: async (id: string) => {
     st.fetches.push(`resend:${id}`);
+    if (st.resendThrow.has(id)) throw new Error("socket hang up");
     const it = st.resendList.find((x) => x.id === id);
     return { email: toEmail("resend", id, String(it?.subject ?? "Resend mail")), fetchNote: "fetched from Resend" };
   },
@@ -202,6 +207,8 @@ beforeEach(() => {
   st.staged = [];
   st.sends = [];
   st.pushes = [];
+  st.blankIdentity = false;
+  st.resendThrow = new Set();
   process.env.RESEND_API_KEY = "re_test";
   process.env.ORDER_EMAIL_FROM = "alerts@greenwaymarijuana.com";
   process.env.ORDER_STAFF_EMAILS = "owner@greenwaymarijuana.com";
@@ -261,6 +268,41 @@ describe("2. the mailbox check pulls in what the webhook missed", () => {
     const r = await store.runReconcile({ trigger: "cron" });
     expect(r.recovered).toBe(0);
     expect(st.fetches).toEqual([]);
+  });
+});
+
+describe("2b. the intake identity survives a thin fetch", () => {
+  it("a pulled-in email whose fetch came back with no recipients keeps the intake mailbox, sender and subject", async () => {
+    st.resendList = [resendItem("e4", "Manifest 4", 60)];
+    st.gmailConfigured = false;
+    st.blankIdentity = true;
+    const r = await store.runReconcile({ trigger: "cron" });
+    expect(r.recovered).toBe(1);
+    const row = byKey("resend:email:e4")!;
+    expect(row.to_intake).toBe(true);
+    expect(row.disposition).not.toBe("ignored");
+    expect(row.subject).toBe("Manifest 4");
+    expect(st.staged).toEqual(["Manifest 4"]);
+  });
+  it("Try again on a thin fetch also stays an intake email (never 'not addressed to intake')", async () => {
+    const row = failedRow();
+    st.resendList = [resendItem("old1", "Manifest 0425")];
+    st.blankIdentity = true;
+    const r = await store.retryInboundEmail(String(row.id), ACTOR);
+    expect(r.ok).toBe(true);
+    expect(row.to_intake).toBe(true);
+    expect(row.disposition).toBe("staged");
+    expect(st.staged).toEqual(["Manifest 0425"]);
+  });
+  it("a fetch that throws releases the claim, so the next check can pull it in", async () => {
+    st.resendList = [resendItem("e6", "Manifest 6", 60)];
+    st.gmailConfigured = false;
+    st.resendThrow.add("e6");
+    const r = await store.runReconcile({ trigger: "cron" });
+    expect(r.errors.join(" ")).toMatch(/socket hang up/);
+    const row = byKey("resend:email:e6")!;
+    expect(row.claimed_at).toBeNull();
+    expect(String(row.note)).toMatch(/released/);
   });
 });
 
@@ -368,6 +410,21 @@ describe("6. Resolved", () => {
     const twice = await store.resolveInboundEmail(String(row.id), "other", "again", ACTOR);
     expect(twice.ok ? "" : twice.error).toMatch(/already marked Resolved/);
     expect((await store.loadAttention()).items).toHaveLength(0);
+  });
+  it("a racing Resolved loses (the update is guarded on resolved_at is null)", async () => {
+    const row = failedRow({ disposition: "no_manifest", note: "no manifest attachment found" });
+    st.db.before = (req) => {
+      if (req.method === "PATCH" && req.table === "inbound_email_log") {
+        row.resolved_at = new Date().toISOString(); // the other person got there first
+        row.resolved_reason = "duplicate";
+        st.db.before = null;
+      }
+    };
+    const r = await store.resolveInboundEmail(String(row.id), "not_a_manifest", "", ACTOR);
+    expect(r.ok ? "" : r.error).toMatch(/Someone else changed this email/);
+    expect(row.resolved_reason).toBe("duplicate");
+    const patch = st.db.log.find((q) => q.method === "PATCH" && q.table === "inbound_email_log")!;
+    expect(patch.url.searchParams.get("resolved_at")).toBe("is.null");
   });
 });
 
@@ -490,7 +547,7 @@ describe("11. wiring", () => {
   });
   it("the page shows the panel on the email tab, the count banner on every tab, and has the 300 s ceiling", () => {
     const p = read("src/app/admin/inventory/intake/page.tsx");
-    expect(p).toMatch(/<InboundAttentionPanel/);
+    expect(p).toMatch(/<InboundAttentionPanel\s/);
     expect(p).toMatch(/loadAttention\(nowMs\)/);
     expect(p).toMatch(/data-testid="attention-banner"/);
     expect(p).toMatch(/export const maxDuration = 300;/);
@@ -513,5 +570,31 @@ describe("11. wiring", () => {
     expect(m).toMatch(/add column if not exists retry_count\s+integer not null default 0/);
     expect(m).toMatch(/inbound_email_log_resolved_reason_chk/);
     expect(read("supabase/rollbacks/0320_inbound_email_reconcile.rollback.sql")).toMatch(/drop column if exists retry_count/);
+  });
+});
+
+describe("12. the SOP, the ledgers and the concierge say the same (standing rules)", () => {
+  it("SOP-04 v1.6: §4.3 step 4 rewritten, §4.4a–c and §5.1a, revision row", () => {
+    const sop = read("docs/sop/SOP-04-receiving-intake.md");
+    expect(sop).toContain("| **Version** | 1.6 (Phase 3.2a");
+    expect(sop).toMatch(/\| 1\.6 draft \| Fix phase \| Phase 3\.2a/);
+    expect(sop).toContain("### 4.4a The 15-minute mailbox check (automatic; Phase 3.2a)");
+    expect(sop).toContain("### 4.4b Needs attention: Try again and Resolved");
+    expect(sop).toContain("### 4.4c Check the mailbox now and Find an email");
+    expect(sop).toContain("### 5.1a Needs attention, the mailbox check and Find an email (Phase 3.2a)");
+    expect(sop).not.toContain("4. **Compare the vendor emails with the list** (finding F-04-4).");
+    expect(sop).toContain("G-17 BUILT · F-04-4 FIXED");
+  });
+  it("03 F-04-4 FIXED quoting the superseded step; 05 G-17 BUILT; 06 progress row; 04 superseded caveat", () => {
+    expect(read("docs/sop-program/03-FINDINGS-LEDGER.md")).toMatch(/### F-04-4 · [^\n]*\n- \*\*Status: FIXED \(Phase 3\.2a[\s\S]*?\*\*Superseded \(kept as history\):\*\*/);
+    expect(read("docs/sop-program/05-GAP-REGISTER.md")).toMatch(/## G-17 · Failed-email visibility in Receiving[\s\S]*?\*\*Status: BUILT \(Phase 3\.2a/);
+    expect(read("docs/sop-program/06-FIX-PHASE-PLAN.md")).toMatch(/\| 3\.2a \| G-17/);
+    expect(read("docs/sop-program/04-CONCIERGE-COVERAGE-LEDGER.md")).toContain("Fix Phase 3.2a update to the SOP-04 rows");
+    expect(read("docs/MIGRATIONS_TO_RUN.md")).toContain("## Fix 3.2a — 0320 —");
+  });
+  it("KB: the concierge knows Needs attention, Try again and Find an email", () => {
+    const kb = read("src/lib/admin/concierge-kb.ts");
+    expect(kb).toContain("Receiving \\u2192 Needs attention (Phase 3.2a");
+    expect(kb).toMatch(/Find an email \\u2192 type the sender/);
   });
 });
