@@ -704,7 +704,7 @@ export default async function ManifestReviewPage({
             }
           >
             <strong>
-              {coa === "reread" ? "COAs re-read." : coa === "linked" ? "Lab result attached." : coa === "nodocs" ? "No COA could be read." : "Lab result not attached."}
+              {coa === "reread" ? "Documents re-read." : coa === "linked" ? "Lab result attached." : coa === "nodocs" ? "No COA could be read." : "Lab result not attached."}
             </strong>{" "}
             {coamsg ?? ""}
           </div>
@@ -1034,14 +1034,19 @@ export default async function ManifestReviewPage({
         {/* Fix Phase 3.1a: re-read the delivery's own lab PDFs (every certificate).
             A neutral tool row, not a coloured banner (S28: the standing problem
             is the Issues row "N lines have no COA / lab result"). */}
-        {inProgress && missingCoa > 0 && (
+        {/* Fix Phase 3.4: the re-read reads EVERY document of the email (costs,
+            invoice #, credits, vendor name, lab results), so it is offered
+            whenever receiving is open, not only when a lab result is missing. */}
+        {inProgress && (
           <div
             data-testid="coa-reread"
             className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-2 text-sm text-[var(--admin-text)]"
           >
             <span>
-              {missingCoa} line{missingCoa === 1 ? " has" : "s have"} no lab result yet.{" "}
-              {deliveryCoas.certs.length > 0
+              {missingCoa === 0
+                ? "Every line has a lab result. Re-read every document in this delivery's email to fill missing costs, the invoice #, credits and the vendor name."
+                : `${missingCoa} line${missingCoa === 1 ? " has" : "s have"} no lab result yet. `}
+              {missingCoa === 0 ? null : deliveryCoas.certs.length > 0
                 ? `${certChoices.length} certificate${certChoices.length === 1 ? "" : "s"} can be read from this delivery's lab documents - attach one per line below, or re-read to match them automatically.`
                 : deliveryCoas.unread.length > 0
                   ? "This delivery's lab document could not be read as it is - re-read uses the document reader too."
@@ -1049,7 +1054,7 @@ export default async function ManifestReviewPage({
             </span>
             <form action={rereadCoasAction}>
               <button type="submit" className="font-semibold text-[var(--admin-accent)] underline hover:brightness-110">
-                Re-read COAs from this delivery&apos;s documents
+                Re-read every document in this delivery&apos;s email (COAs, costs, credits, vendor)
               </button>
             </form>
           </div>

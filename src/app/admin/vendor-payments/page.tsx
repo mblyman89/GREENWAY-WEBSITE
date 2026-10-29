@@ -20,6 +20,7 @@ import {
 import { VendorReconcileSection } from "@/components/admin/payments/VendorReconcileSection";
 import { VendorAchForm } from "./VendorAchForm";
 import { ManualPaymentForm } from "./ManualPaymentForm";
+import { InvoiceCreditForm } from "./InvoiceCreditForm";
 import { earliestEffectiveDate } from "@/lib/payments/timberland-deadline-core";
 
 export const dynamic = "force-dynamic";
@@ -165,6 +166,22 @@ export default async function VendorPaymentsPage({
                 nowIso={new Date().toISOString()}
               />
             )}
+          </Card>
+        </Section>
+
+        {/* Fix 3.4: a credit or discount the system did not read off the invoice. */}
+        <Section
+          title="Add a credit or discount to an invoice"
+          description="The invoice shows a credit, discount or price reduction the system didn't catch? Add it here before paying. What is owed (and the vendor bill) drops by that amount. Credits are never deleted - void one with a reason."
+        >
+          <Card>
+            <CardHeader
+              title="Credit / discount before paying"
+              subtitle="Type the amount as a positive number (299.70). It can't be more than what is still owed."
+            />
+            <div className="mt-4">
+              <InvoiceCreditForm />
+            </div>
           </Card>
         </Section>
 

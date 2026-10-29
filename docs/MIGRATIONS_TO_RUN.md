@@ -3022,3 +3022,52 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0321_inbound_sibling_dismiss.rollback.sql`.
   It restores the 0255 function and drops the sibling function.
+
+## Fix 3.4 — 0322 — Invoice credits and discounts are stored and taken off what is owed
+
+- [ ] `0322_invoice_adjustments.sql` adds five columns to
+  `public.inbound_manifests`: `invoice_total_minor` (the total the invoice
+  prints, cents), `invoice_adjustments` (credits read off the invoice, jsonb),
+  `invoice_adjustments_minor` (their sum, cents, never above zero — a check
+  constraint), `invoice_adjustments_note`, and `invoice_manual_adjustments`
+  (credits a manager adds on Vendor payments, jsonb; voided, never deleted).
+  (#P..)
+  - Owner, verbatim: *"this new manifest has a credit amount on it, and the
+    system did not see it or did and disregarded it … if the system isnt able
+    to work out if there is a credit or discount, i need a way to add a credit
+    or discount to the invoice before paying for it in the vendor payments
+    page."*
+  - It turns on storing the Bellevue Cannabis Co invoice #412692 credit
+    (*"- Discount: Credit 1 -299.70"*) and **Add a credit or discount to an
+    invoice** (SOP-04 v1.9 §4.7b).
+  - Precondition: `public.inbound_manifests` exists; the file checks it first.
+  - Until it is applied, everything else in Fix 3.4 works (Invoice amount
+    column without credits, re-read of every document, vendor name repair,
+    closable banners); credits are not stored and Add credit says *"Credits
+    can't be saved yet: migration 0322_invoice_adjustments.sql needs to be
+    applied in Supabase."*
+
+  Safe to re-run (add column if not exists; the constraint is guarded). No
+  existing data is changed by applying it.
+
+  **Check:**
+
+  ```sql
+  select column_name from information_schema.columns
+  where table_schema = 'public' and table_name = 'inbound_manifests'
+    and column_name like 'invoice\_%' escape '\'
+  order by column_name;
+  -- invoice_adjustments
+  -- invoice_adjustments_minor
+  -- invoice_adjustments_note
+  -- invoice_manual_adjustments
+  -- invoice_total_minor
+  -- (plus invoice_number_* columns from earlier migrations)
+  ```
+
+  **Then:** on Receiving open the Bellevue delivery (invoice #412692), the
+  GrowFlow delivery, and the row whose vendor reads *Manifest ID*, and press
+  **Re-read every document in this delivery's email** on each.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0322_invoice_adjustments.rollback.sql`.
+  It drops the constraint and the five columns (stored credits are lost).

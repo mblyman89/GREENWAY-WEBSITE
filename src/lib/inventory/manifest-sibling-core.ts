@@ -186,6 +186,38 @@ export function cleanVendorLabel(label: string | null | undefined): string | nul
   return t && !isLabelLikeVendor(t) ? t : null;
 }
 
+
+/**
+ * Fix Phase 3.4 (F-04-24): the vendor's name read from ANY document text, by
+ * the labels vendors print: "Sold By: NAME #license" (OpenTHC), "Invoice
+ * From: NAME <address>" (GrowFlow), "Licensee Name: NAME", "Vendor: NAME",
+ * "Seller: NAME". Owner, verbatim: "i want the system to keep trying to find
+ * the name of the vendor for that manifest. its in the email and in every one
+ * of the pdfs ... no exceptions." A label is never returned. PURE.
+ */
+export function vendorNameFromText(text: string | null | undefined): string | null {
+  const t = String(text ?? "").replace(/\*\*|\|/g, " ").replace(/\s+/g, " ");
+  const pats: RegExp[] = [
+    /Sold\s+By\s*:\s*([A-Za-z0-9][A-Za-z0-9&.,'()\- ]{2,80}?)\s*(?:#\s*\d{5,}|Address:|License|Ph(?:one)?:|\d{3,}\s)/i,
+    /Invoice\s+From\s*:\s*([A-Za-z][A-Za-z0-9&.,'()\- ]{2,80}?)\s+\d{2,6}\s/i,
+    /(?:Licensee|Business|Company|Vendor|Seller|Supplier|Shipper)\s+Name\s*:\s*([A-Za-z][A-Za-z0-9&.,'()\- ]{2,80}?)\s+(?:Licen[cs]e|UBI|Address|Phone|Ph:|Date|#|\d{4,})/i,
+    /\b(?:Vendor|Seller|Supplier)\s*:\s*([A-Za-z][A-Za-z0-9&.,'()\- ]{2,80}?)\s+(?:Licen[cs]e|UBI|Address|Phone|Ph:|Date|#|\d{4,})/i,
+  ];
+  for (const re of pats) {
+    const m = t.match(re);
+    const v = cleanVendorLabel(m?.[1]?.replace(/[\s,.-]+$/, ""));
+    if (v && !/greenway/i.test(v)) return v;
+  }
+  return null;
+}
+
+/** The display name in an email From header ("Canna Processing <x@y.com>"); never a bare address. PURE. */
+export function senderDisplayName(from: string | null | undefined): string | null {
+  const m = String(from ?? "").match(/^\s*"?([^"<]+?)"?\s*<[^>]+>\s*$/);
+  const v = cleanVendorLabel(m?.[1]);
+  return v && !/@/.test(v) && !/greenway|no-?reply|gmail|outlook|mailer/i.test(v) ? v : null;
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
@@ -223,5 +255,9 @@ export function __runManifestSiblingTests(): { passed: number; failed: number } 
   ok(isLabelLikeVendor("Manifest ID") && isLabelLikeVendor("Licensee Name:") && isLabelLikeVendor("") && isLabelLikeVendor("603353555"), "labels refused");
   ok(!isLabelLikeVendor("Canna Processing") && !isLabelLikeVendor("PASTIME BRANDS LLC") && !isLabelLikeVendor("Svin Garden"), "names kept");
   ok(cleanVendorLabel("  Manifest ID ") === null && cleanVendorLabel(" Canna  Processing ") === "Canna Processing", "cleanVendorLabel");
+  ok(vendorNameFromText("Invoice #01M6 24SC 4JCC B917 Sold By: BELLEVUE CANNABIS COMPANY #412692 Address: 13300 SE") === "BELLEVUE CANNABIS COMPANY", "Sold By (OpenTHC)");
+  ok(vendorNameFromText("Date: 06/09/2026 Invoice From: Canna Processing 2835 Ocean Ave Ste B Raymond") === "Canna Processing", "Invoice From (GrowFlow)");
+  ok(vendorNameFromText("Licensee Name: Manifest ID 1575241667413695") === null, "a label is never the vendor");
+  ok(senderDisplayName("Canna Processing <legit.invoice@gmail.com>") === "Canna Processing" && senderDisplayName("x@y.com") === null, "sender display name");
   return { passed, failed };
 }
