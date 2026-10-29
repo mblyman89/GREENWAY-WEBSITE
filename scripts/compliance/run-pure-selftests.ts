@@ -849,6 +849,7 @@ import { __runProductVisibilityCoreTests } from "../../src/lib/enrichment/produc
 import { __runMigrationLotFixCoreTests } from "../../src/lib/inventory/migration-lot-fix-core";
 import { __runManifestEventLabelsCoreTests } from "../../src/lib/inventory/manifest-event-labels-core";
 import { __runIntakeCountCoreTests } from "../../src/lib/inventory/intake-count-core";
+import { __runInboundReconcileCoreTests } from "../../src/lib/inbound-email/inbound-reconcile-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -2617,6 +2618,7 @@ __runLiquidVolumeTests();
   assertRan("refund-cogs-core", __runRefundCogsCoreTests(), 30); // Fix Phase 2.8b: cost of returned units back to inventory
   assertRan("tips-core", __runTipsCoreTests(), 30); // Fix Phase 2.1c: tip tracker - per-employee stats, not recorded vs $0, corrections
   assertRan("intake-count-core", __runIntakeCountCoreTests(), 36); // Fix Phase 3.1 (G-16): dock count "18 of 20" - overage refused, 0 = refuse, reason, partial
+  assertRan("inbound-reconcile-core", __runInboundReconcileCoreTests(), 111); // Fix Phase 3.2a (G-17 / F-04-4): mailbox check - match by key / Message-ID / fingerprint, temporary vs permanent, backoff, alerts once, heartbeat
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
