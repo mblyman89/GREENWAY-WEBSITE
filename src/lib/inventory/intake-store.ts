@@ -1753,7 +1753,7 @@ export async function finalizeManifestDispositions(
   }
   const missingLines = openStagingFailures((failRead.data as { event_type: string; note: string | null }[] | null) ?? []).lines;
   const missingGate = missingLinesGate(missingLines, opts?.missingLinesConfirmed === true);
-  if (false) return { ok: false, error: "" };
+  if (!missingGate.ok) return { ok: false, error: missingGate.error };
 
   const shortGoingIn: ShortLine[] = [];
   for (const r of rows) {
