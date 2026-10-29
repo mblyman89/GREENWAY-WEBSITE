@@ -151,7 +151,7 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 | *new* `little-safe` (D3 exchanges) | §4.10, form §8.2 | — → ✅ |
 | `registers` (addition) | §4.11 (register change swaps, master till side, $200 cap), §4.12 (drops are not in the master till), §4.14 (three till floats, D10 $167.50), §4.15 (safe section of the EOD report), §5.2 messages | 🔴 → ✅ (together with SOP-01) |
 | `register-messages` (addition) | §5.1 Store safe page messages, §5.2 swap messages | — → ✅ |
-| Petty cash / supply runs | §4.13, form §8.4 (no screen today, F-02-11 / G-11; screen approved D17) | 🔴 → 🟡 → ✅ once G-11 is built |
+| Petty cash / supply runs | §4.13 (screen built, Phase 2.7c; form §8.4 is the paper backup) | ✅ (G-11 BUILT) |
 
 **Role filter needed (strategy item 3):** recording safe counts and swaps needs `inventory.manage` (`safe/actions.ts` L41). The concierge must not walk a `staff` user through submitting a count. It should tell them "a manager records the count" and note that staff can see the Safe/EOD buttons but are refused (F-02-10).
 
@@ -202,6 +202,19 @@ The caveats *"F-02-3: the page does not compare the mix to the D11 standard, so 
 | Where do exchanges show on the master till sheet? | The printable sheet has a **Master till ↔ little safe exchanges** section, and the CSV / Excel export an **Exchanges** sheet (SOP-02 §4.18) |
 
 The Phase 2.7a answers *"Balance with the little safe and log both sides on form 8.2 (SOP-02 §4.9–4.10)"* and *"sign the three lines; attach form 8.2 (SOP-02 §4.18)"* are **superseded**: record the exchange on the Store safe page; form 8.2 is only the paper backup when the page is down or migration 0317 has not been run. `concierge-kb.ts` `registers` carries the Phase 2.7b fact.
+
+**Phase 2.7c (G-11 supply-run screen) answers:**
+
+| Question | Answer (built, Phase 2.7c) |
+|---|---|
+| Someone needs cash for supplies | Use the shop card first. If it cannot be used: Register Activity → **Supply runs** → **Cash out of the master till (two PINs)**: amount, **Why not the shop card**, the taker's PIN, then a manager or lead's PIN (not the taker). **Record cash out** (SOP-02 §4.13) |
+| They came back with a receipt and change | On **Supply runs**, find the open run: enter **Receipt total**, **Change handed back**, **What the receipt was for**, and the PIN of the employee who counted the change (not the taker). Receipt + change must equal the cash taken. Press **Settle**. Receipt to the owner the same day |
+| The receipt is more than the cash taken | The screen refuses: that is money owed TO the employee. Give the receipt to the owner to pay (SOP-02 §4.13) |
+| Receipt + change does not add up | The screen says how much is missing or too much. Recount; if money really is missing, give the receipt and change to the owner the same day and write it on form 8.4 |
+| The master till is short and a supply run is open | Expected: the Store safe page says how much is out with employees. It counts short until the run is settled |
+| It says NOT POSTED | The record is kept. Press **Post to the books** on that run (the cash out first, then the settle) |
+
+The SOP-02 answer *"Until the screen exists, use form 8.4"* (§4.13, v1.7) and the row *"§4.13, form §8.4 (no screen today, F-02-11 / G-11; screen approved D17)"* are **superseded**: record supply runs on the screen; form 8.4 is only for when the page is down or migration 0318 is not applied.
 
 ### SOP-03 End-of-Day Close & Deposit Bag (`docs/sop/SOP-03-eod-close-deposit.md`, verified at `3385bfa9`)
 

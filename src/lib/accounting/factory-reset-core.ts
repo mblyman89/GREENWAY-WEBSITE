@@ -442,6 +442,11 @@ export const TABLE_RULES: readonly TableRule[] = [
   // (who moved which bills between the master till and the little safe).
   // Its only link is recorded_by -> employees (KEEP), so no kept row points
   // at a wiped one. safe_swaps stays WIPE; its new bill columns change nothing.
+  // Fix Phase 2.7c (G-11, owner D17): supply runs (0318). KEEP like
+  // little_safe_exchanges: a cash-custody record (who took how much from the
+  // master till, who approved, what came back). Links only to employees
+  // (KEEP); the journal ids are plain uuids with no FK to gl_journals (WIPE).
+  { table: "supply_runs", disposition: "KEEP", because: "The supply-run log (Fix Phase 2.7c, G-11) \u2014 cash taken from the master till for supplies, who took it, who approved it, and the receipt and change that came back. A cash-custody record kept like the little safe log; it cannot be deleted." },
   { table: "little_safe_exchanges", disposition: "KEEP", because: "The little safe exchange log (Fix Phase 2.7b, G-02) \u2014 which bills moved between the master till and the little safe, who did it and when. An append-only cash-custody record kept like the audit log." },
   { table: "pos_cart_adjustments", disposition: "KEEP", because: "The register minus / remove / cancel trail (who reduced which cart, when) — an anti-abuse audit record kept like the audit log." },
   { table: "registers", disposition: "KEEP", because: "Your physical registers. Hardware you own; deleting them would stop the POS from opening." },

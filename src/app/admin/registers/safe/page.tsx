@@ -15,6 +15,8 @@ import { sheetExchangeFromRow, swapBillWords } from "@/lib/registers/little-safe
 import { listEmployees } from "@/lib/staffing/store";
 import { backHref } from "@/lib/admin/back-link-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import { listOpenSupplyRuns } from "@/lib/registers/supply-run-store";
+import { openRunsNotice } from "@/lib/registers/supply-run-core";
 import { SaveButton } from "@/components/admin/orders/SaveButton";
 import {
   MASTER_TILL_STANDARD,
@@ -106,14 +108,19 @@ export default async function SafePage({
   }
 
   const empty = { ready: true, counts: [], swaps: [], error: null };
-  const [status, countsRes, swapsRes, exchangesRes, allEmployees] = await Promise.all([
+  const [status, countsRes, swapsRes, exchangesRes, allEmployees, openRunsRes] = await Promise.all([
     safeStatus(),
     canManage && range.ok ? listSafeCountsRange(range.from, range.to) : Promise.resolve({ ...empty, counts: [] }),
     canManage && range.ok ? listSwapsRange(range.from, range.to) : Promise.resolve({ ...empty, swaps: [] }),
     // Fix Phase 2.7b (G-02 requirements 3 and 5): the exchange log, same days.
     canManage && range.ok ? listLittleSafeExchangesRange(range.from, range.to) : Promise.resolve({ ...empty, exchanges: [] }),
     canManage ? listEmployees({ includeInactive: true }) : Promise.resolve([]),
+    // Fix Phase 2.7c (G-11): cash out of the master till on open supply runs.
+    listOpenSupplyRuns(),
   ]);
+  // The master till counts short by every open supply run (books-98: a
+  // receipt is evidence, not cash). Missing 0318 = no notice.
+  const supplyNotice = openRunsRes.ok ? openRunsNotice(openRunsRes.runs) : null;
 
   // Employee id → full name resolver (counted_by / performed_by / approved_by are FKs).
   const empName = new Map(allEmployees.map((e) => [e.id, e.full_name]));
@@ -188,6 +195,15 @@ export default async function SafePage({
       ) : sp.counted ? (
         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
           {sp.counted}
+        </div>
+      ) : null}
+
+      {supplyNotice ? (
+        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
+          {supplyNotice}{" "}
+          <a href="/admin/registers/supply-runs" className="underline">
+            Supply runs
+          </a>
         </div>
       ) : null}
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.7 (draft for owner review; Phase 2.7b fixes G-02: every **master till ↔ little safe exchange** is recorded on the Store safe page by denomination on both sides, by any employee with their PIN, and the two sides must be equal; the register's **change swap** now takes the bills both ways instead of one amount; both appear on the count history, the printable sheet and the export; Phase 2.7a fixes G-08, G-09 and G-13: the page shows the owner's standard mix and the difference under every box and says whether the mix is on standard; **any employee** records the count, and the counter proves who they are with their **PIN**; the window starts on the next count due; managers see the count history for any days, a printable **master till sheet** and CSV / Excel export; the end-of-day report says whether each count's mix was on standard; Phase 2.4 fix G-12: cash drops booked to the safe on the close entry; Phase 2.3 fix G-03: $5 reason rule on master till counts, Counted by required, owner's warnings screen; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
+| **Version** | 1.8 (draft for owner review; Phase 2.7c fixes G-11: a **supply run** (cash taken from the master till for supplies) is recorded on the new **Supply runs** screen with two PINs, settled with the receipt and the change by a different employee, and posted to the books; form 8.4 becomes the paper backup; Phase 2.7b fixes G-02: every **master till ↔ little safe exchange** is recorded on the Store safe page by denomination on both sides, by any employee with their PIN, and the two sides must be equal; the register's **change swap** now takes the bills both ways instead of one amount; both appear on the count history, the printable sheet and the export; Phase 2.7a fixes G-08, G-09 and G-13: the page shows the owner's standard mix and the difference under every box and says whether the mix is on standard; **any employee** records the count, and the counter proves who they are with their **PIN**; the window starts on the next count due; managers see the count history for any days, a printable **master till sheet** and CSV / Excel export; the end-of-day report says whether each count's mix was on standard; Phase 2.4 fix G-12: cash drops booked to the safe on the close entry; Phase 2.3 fix G-03: $5 reason rule on master till counts, Counted by required, owner's warnings screen; owner answers D14–D19 and D21–D22 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The morning and night employees who count and balance the master till; the managers who record the counts and approve change swaps; the owner, who reviews variances |
@@ -271,7 +271,7 @@ The page works out **variance = counted total − $1,000.00** on the server. The
 |---|---|---|
 | **Balanced** | Total is exactly $1,000.00 | Still check the mix (§4.9). Done. |
 | **Over by $X** | More than $1,000.00 | 1) Recount (Extra count). 2) Check form 8.3: was a swap entered with the wrong value, or did a till give more than it took? 3) Check form 8.2: did more go into the master till from the little safe than came out? 4) Look for takings or drop cash mixed in (§4.12). Pull any that are found, put them in the store safe, and recount. |
-| **Short by $X** | Less than $1,000.00 | 1) Recount (Extra count). 2) Check forms 8.3 and 8.2 as above. 3) Ask whether any cash was taken for supplies (§4.13). 4) Check the area and the drop slot. 5) Escalate (§6). |
+| **Short by $X** | Less than $1,000.00 | 1) Recount (Extra count). 2) Check forms 8.3 and 8.2 as above. 3) Check **Supply runs** for open runs (§4.13); the Store safe page shows how much is out. 4) Check the area and the drop slot. 5) Escalate (§6). |
 
 **The $5 rule (D16; built in Phase 2.3, gap G-03).** The owner set a $5 threshold for over/short, with a required reason (D7), and confirmed it **applies to the master till as well** (*"Q02-3- yes, it applies to the master as well"*).
 - **Any** non-zero variance: write the amount on form 8.1. Recount first (Extra count, §4.7).
@@ -351,17 +351,39 @@ Why this matters:
 
 ### 4.13 Supply runs and petty cash
 
-**Store rule: no cash leaves the master till for supplies.** The owner moved supply buying to a low-limit shop card: *"I will go with the low limit credit card ... I don't want to use the master till any more for petty cash."* (`card-payment-core.ts` L7–8). In books-99 (L20–21): *"The master till stays at exactly $1,000, all day, every day."*
+**Store rule: supplies go on the shop card.** The owner moved supply buying to a low-limit shop card: *"I will go with the low limit credit card ... I don't want to use the master till any more for petty cash."* (`card-payment-core.ts` L7–8). In books-99 (L20–21): *"The master till stays at exactly $1,000, all day, every day."*
 
-> **D17 note.** The owner has asked for the supply-run screen to be built, so supply runs from the master till are an approved, recordable event, not just an emergency. The shop-card statement above is quoted from books-99 and is kept as history. When the screen is built, this section will be rewritten around it.
+> **D17.** The owner asked for the supply-run screen (*"Q-02-4- id like the supply run screen built"*). It is built (Phase 2.7c, G-11). Cash for supplies is still the exception: the screen asks why the shop card was not used.
 
-Until the screen exists, when cash is taken for supplies:
-1. **Form 8.4 (supply-run log)**: who took it, how much, when, why. That person signs.
-2. When they come back: the receipt amount, the change returned, both signatures.
-3. The receipt and the change go back **into the master till envelope, never into a drawer**. A receipt in a till *"is evidence, not cash"*, so the till really is short (books-98 L84–86).
-4. The next count will be **short** by the receipt amount. Write *"supply run, form 8.4"* in **Notes**, and give the form and receipt to the owner the same day.
+**Where:** Register Activity → **Supply runs** (the button shows *"(N open)"* when runs are open; `registers/page.tsx` L146–147). The page is `/admin/registers/supply-runs`; any back-office login can open it (`orders.manage`, `supply-runs/actions.ts` L71, L120, L182).
 
-The system can book a supply run correctly (12100 Employee Advances Receivable, `buildSupplyAdvanceJournal` / `buildSupplySettleJournal`, `register-cash-journal-core.ts` L526–671). But **no screen calls it** (ledger census: *"No screen records a supply run yet"*, `ledger-census-data.ts` L1684–1689). That is finding F-02-11 and gap G-11. The owner has **approved building the screen** (D17: *"id like the supply run screen built"*). It is queued for the build phase. Until it exists, use form 8.4.
+**Cash out (form 8.4 top half), in the panel *"Cash out of the master till (two PINs)"*** (`supply-runs/page.tsx` L164):
+1. **Cash taken ($, up to $1,000.00)**: the amount. More than the whole master till is refused (`supply-run-core.ts` L55, L135–139).
+2. **Why not the shop card (required)**: up to 500 characters. Blank is refused: *"Write why the shop card was not used. The store rule is the shop card (SOP-02 §4.13), so a cash run needs a reason. Nothing was saved."* (L142–146).
+3. **PIN of the person taking the cash**.
+4. **Manager or lead PIN (approves; not the taker)**. A sales PIN is refused (*"… is not a manager or lead. Cash out of the master till needs a manager or lead to approve it. Nothing was saved."*), and so is the taker approving their own run (L153–164). This is the same approver rule as a register safe swap (`till/route.ts` L56).
+5. Press **Record cash out**. Green: *"$X out of the master till with <name>, approved by <name>. Bring back the receipt and the change, and settle it here (SOP-02 §4.13)."* then the books result (`supply-runs/actions.ts` L110–114).
+
+The books: DR **12100 Employee Advances Receivable** / CR **10100 Vault**, dated on the business day (`postAdvanceForRun`, `supply-run-posting-service.ts` L73). It is **not** an expense yet, because nothing has been bought (books-98).
+
+**Settle (form 8.4 bottom half)**, under **Open supply runs**, on that run:
+1. Put the receipt and the change **into the master till envelope, never into a drawer**. A receipt is *"evidence, not cash"*, so the till really is short until then (books-98 L84–85).
+2. **Receipt total ($)** and **Change handed back ($)**. 0.00 if nothing was bought, or no change. **Receipt + change must equal the cash taken.** If not: *"Receipt $A + change $B = $C, but $D was taken ($E is missing). Recount the change and check the receipt. … Nothing was saved."* (`supply-run-core.ts` L208–217).
+3. A receipt bigger than the cash taken is refused: that is *"a reimbursement owed TO the employee, not a settlement; give the receipt to the owner to pay as a bill"* (L198–206).
+4. **What the receipt was for** (required when the receipt is more than $0.00): 76020 Packaging & Store Supplies, 76010 Office Supplies, 70060 Janitorial & Waste Removal, 70030 Repairs & Maintenance, 77010 Fuel, or 76030 Postage & Shipping (outbound). These are the chart's accounts, all 280E non-deductible (`supply-run-core.ts` L76–95; `0173_chart_of_accounts.sql` L671–723). The chart's own 76020 caution is shown under the form: packaging that becomes part of the product sold goes to inventory, not here.
+5. **Note (optional)**: store name, what was bought.
+6. **PIN of who counted the change (not the taker)**: a different employee (form 8.4 has two signatures, taker and receiver). The taker's PIN is refused (L225–230).
+7. Press **Settle $X**. Green: *"Settled: receipt $A (code name), change $B back in the master till, received by <name>. Give the receipt to the owner the same day."* then the books result (`supply-runs/actions.ts` L172–176). **Give the receipt to the owner the same day.**
+
+The books: DR the expense account (receipt, with its 280E cost class) / DR **10100** (change) / CR **12100** (the cash taken), dated on the settle day (`postSettleForRun`, `supply-run-posting-service.ts` L127). 12100 is back to zero for that run. The settle is never posted before the cash out is (*ADVANCE_NOT_POSTED*, L144).
+
+**NOT POSTED.** If the books entry fails, the record is still kept and the run shows **Cash out NOT POSTED** or **NOT POSTED** with a **Post to the books** button. Press it; it is safe to press again (`supply-advance:<id>` / `supply-settle:<id>`; nothing is booked twice).
+
+**The master till counts short by every open run.** That is correct. The Store safe page says so: *"N supply run(s) is/are open: $X is out of the master till with an employee/employees. The master till counts short by that until the receipt and change come back (SOP-02 §4.13)."* (`supply-run-core.ts` L299; `safe/page.tsx` L123, L201). At a count, write *"supply run open"* in **Notes** if the shortfall is the open run.
+
+**The log.** **Supply-run log** lists every open run and the last 30 days (who took it, who approved, out, why, receipt, change, what for, received by, books), with **Print** and an owner line *"Checked by (owner)"* (`supply-runs/page.tsx` L262–340). Runs cannot be deleted or changed after the fact; a settle is saved once (migration `0318_supply_runs.sql`).
+
+**Paper backup: form 8.4.** Use it only if the page is down or migration 0318 is not applied yet (the page then says *"Supply-run screen not set up yet"*). Enter the run on the screen when it is back.
 
 ### 4.14 The three till floats
 
@@ -510,12 +532,12 @@ Filing: print the day's sheet after the PM count, have it signed, and keep it wi
 
 | Situation | Immediate action | Escalate to |
 |---|---|---|
-| Master till short, still short after a recount | Stop all swaps. Recount with a second person. Check forms 8.2/8.3/8.4. Save as **Extra count** with notes. Fill in form 8.5. | Manager → owner, same day |
+| Master till short, still short after a recount | Stop all swaps. Recount with a second person. Check open **Supply runs** and the exchange / swap logs (forms 8.2/8.3/8.4 if paper was used). Save as **Extra count** with notes. Fill in form 8.5. | Manager → owner, same day |
 | Master till over, still over after a recount | Look for takings mixed in (§4.12). Check form 8.3 values. Form 8.5. | Manager → owner, same day |
 | Total right, mix wrong | Balance with the little safe (§4.10) | — (owner if the little safe is out of a denomination) |
 | AM or PM count missed | Count as soon as noticed. Save as **Extra count** with *"late AM/PM count"* in Notes, or as the window if it is still that day. | Manager |
 | Wrong count saved | §4.17 | Manager |
-| Cash taken for supplies | §4.13, form 8.4 | Owner, same day |
+| Cash taken for supplies | §4.13: **Supply runs** screen (two PINs); settle with the receipt and change. Form 8.4 only if the page is down | Owner gets the receipt, same day |
 | Register swap without a form 8.3 line | Reconstruct with the cashier and approver now | Manager |
 | Unequal "swap" | Stop. It is not a swap. Recount both sides. | Manager → owner |
 | Page down / database message | Paper only. Enter later as **Extra count**, with the real time in Notes. | Owner |
@@ -542,7 +564,7 @@ Filing: print the day's sheet after the PM count, have it signed, and keep it wi
 | Open (not blind) count | By design: *"the target is known policy"* (`safe-core.ts` L7–10, help text). Drawers are blind, the master till is not. | Design choice | Because the count is open, the counter's name (F-02-4) and a second counter matter more |
 | Register swap approval | Manager/lead PIN, different person, checked on the server, `safe.swap` audit tied to the drawer session (`till/route.ts` L193–250); the bills both ways, checked equal to the amount by the server and the database (Phase 2.7b) | Strong | F-01-8 FIXED (iPad rebuild needed) |
 | Little safe exchange | Recorded by denomination both sides, any employee with PIN and lockout, equal sides enforced on screen, server and database, append-only, managers read (Phase 2.7b; `0317`) | **Good** | F-00-7 FIXED, G-02 BUILT |
-| Supply runs | No screen (approved to build, D17). Form 8.4 meanwhile. | Missing | F-02-11, G-11 |
+| Supply runs | Screen (Phase 2.7c): two PINs out (manager/lead approver, not the taker), settle by a different employee, receipt + change = amount, both legs posted (12100), NOT POSTED + retry, no delete, settle once (`0318`) | **Good** | F-02-11 FIXED, G-11 BUILT |
 | Print / export | Printable master till sheet per day with signature lines; CSV / Excel for any range; refused rather than partial (Phase 2.7a) | **Good** | F-00-8 safe part FIXED, G-09 BUILT; exchanges and swap bills on it since Phase 2.7b |
 | Database access | RLS: managers read, no human writes | Strong | — |
 | Factory reset | Counts and swaps are wiped with test data (`factory-reset-core.ts` L429–430). The little safe exchange log is **kept** (L445): it is an append-only cash-custody record, like the audit log | As designed | — |
@@ -614,6 +636,8 @@ Time | Register | Big bills IN from till → master till | Small bills & coin OU
 
 ### 8.4 Supply-run log (exceptions only; the store rule is the shop card)
 
+> **Paper backup since Phase 2.7c.** Record supply runs on Register Activity → **Supply runs** (§4.13). Use this form only if the page is down or migration 0318 is not applied.
+
 ```
 GREENWAY — MASTER TILL SUPPLY RUN (exception)                Date: ____/____/______
 Taken by: ______________  Time out: ______  Amount out: $________  Approved by: ______________
@@ -646,7 +670,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 
 **During the day**
 - [ ] Every register swap: manager/lead PIN + the bills both ways on the register (form 8.3 only for an iPad not yet rebuilt)
-- [ ] No cash out for supplies (shop card). Exception → form 8.4.
+- [ ] No cash out for supplies (shop card). Exception → **Supply runs** screen (form 8.4 if it is down); no run left open overnight without the owner knowing.
 - [ ] No takings or drops in the master till
 
 **Night (after the last swap)**
@@ -700,7 +724,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | **Balance (the master till)** | Swapping big bills out of the master till for small bills and coin from the little safe |
 | **Drop** | Cash moved from a till to the store safe during a shift (SOP-01 §4.25) |
 | **Takings** | Cash above the float, removed from a till at close |
-| **Supply run** | Cash taken for supplies. Not allowed: use the shop card (§4.13). |
+| **Supply run** | Cash taken from the master till for supplies. The rule is the shop card; an exception is recorded on the **Supply runs** screen with two PINs and settled with the receipt and change (§4.13). |
 | **Open count** | A count where the target is shown while you count (the master till). The opposite of a blind count (drawers). |
 
 ---
@@ -718,7 +742,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | 4.10 little safe | Owner request + D3; `register-cash-journal-core.ts` L685–727; Phase 2.7b: `src/lib/registers/little-safe-core.ts` (278 lines), `src/components/admin/registers/LittleSafeExchangeForm.tsx` (129), `safe/actions.ts` L152–211, `safe-store.ts` L219–286, `supabase/migrations/0317_little_safe_exchanges.sql` (201) |
 | 4.11 swaps | Phase 2.7b bills: `little-safe-core.ts` L125–151 (`checkSwapDenoms`), `till-core.ts` L256, `safe-store.ts` L166–210, `till/route.ts` L218–250, `RegisterShell.tsx` L5642–5653, L5858–5896; `src/app/api/pos/till/route.ts` L54, L139–142, L190–241; `src/lib/pos/till-core.ts` L75–88, L233–255; `src/app/(site)/pos/RegisterShell.tsx` L5666, L5752, L5790, L5846–5879, L6015–6030 |
 | 4.12 drops / books | `register-cash-journal-core.ts` L71, L221–228, L241–386 (drops booked: L297–321, L329, L369–372), self-test L886–939; `src/lib/registers/store.ts` L189 (`recordDrop`); `drawer-posting-service.ts` L174–195; finding F-02-1 FIXED (Phase 2.4) |
-| 4.13 supply runs | `register-cash-journal-core.ts` L520–671; `src/lib/accounting/ledger-census-data.ts` L1663–1694; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
+| 4.13 supply runs | Phase 2.7c: `src/lib/registers/supply-run-core.ts` L46–55, L76–95, L130–164, L186–240, L243–250, L299; `src/lib/accounting/supply-run-posting-service.ts` L73, L127, L144; `src/app/admin/registers/supply-runs/actions.ts` L70–196; `supply-runs/page.tsx` L164, L187, L262–340; `registers/page.tsx` L146–147; `safe/page.tsx` L123, L201; `supabase/migrations/0318_supply_runs.sql`; `register-cash-journal-core.ts` L520–671; `src/lib/accounting/ledger-census-data.ts` L1663–1694; `docs/MICHAEL-books-98…` L82–108; `docs/MICHAEL-books-99-the-shop-card.md` L1–25 |
 | 4.14 floats | `supabase/migrations/0038_registers_drawers.sql` L1–14, L175–186; `0077_drawer_counts_extra_denoms.sql` L27–46; `src/components/admin/registers/RegisterControls.tsx` L55–80; `src/lib/registers/oversight.ts` L316 |
 | 4.9 mix | `master-till-core.ts` L54–116 (`mixRows`, `mixCheck`, `countResultWords`, `mixSentence`); `CountGrid.tsx` L89–142 |
 | 4.15 EOD | `src/app/admin/registers/eod/page.tsx` L59–62, L122–134, L432–475; `src/lib/registers/eod-core.ts` L80–88, L181–192; `eod-store.ts` L164–195 (mix: L173, L186) |
@@ -739,7 +763,7 @@ Counter signature: ______________   Manager signature: ______________   → owne
 | ~~Master till sheet printable and exportable~~ | **BUILT, Phase 2.7a**: printable sheet per day with signature lines; CSV / Excel for any range (§4.18). The little-safe exchanges and the swap bills are on it since Phase 2.7b. | — | G-09 BUILT · F-00-8 safe part FIXED |
 | ~~D7 for the master till ($5 / reason), confirmed D16~~ | **BUILT, Phase 2.3**: reason box, required over $5.00; **Over / short warnings** screen lists master till counts with window and Counted by (§4.8) | Form 8.5 only if migration 0315 is not applied | G-03 BUILT · F-02-6 threshold and reason FIXED (books posting open) |
 | D19: Manager Till float $300.00 | Seeded $300 ✅ | — (met) | G-10 closed · F-02-2 withdrawn |
-| Supply runs recorded (screen approved, D17) | Builders only, no screen | Store rule: shop card; form 8.4 (§4.13) | G-11 (approved) · F-02-11 |
+| ~~Supply runs recorded (screen approved, D17)~~ | **BUILT, Phase 2.7c**: Supply runs screen, two PINs out, settle with receipt and change, both legs posted (§4.13) | Form 8.4 only if the page is down or 0318 is not applied | G-11 BUILT · F-02-11 FIXED |
 | ~~D15: any employee records the master till count~~ | **BUILT, Phase 2.7a**: any back-office login opens the page and saves; the counter's PIN names them (§2, §4.5) | — (none needed) | G-13 BUILT · F-02-10 FIXED (safe page) |
 | ~~Drops posted to the books (10110 → 10100)~~ | **BUILT, Phase 2.4**: the close entry books takings + drops to 10100 and relieves 10110 by the same (§4.12 note) | — (none needed for staff) | G-12 built · F-02-1 FIXED |
 | ~~Named, verified counter~~ | **BUILT, Phase 2.7a**: the counter's own PIN, server-checked against active employees, with lockout (§4.5) | — | F-02-4 FIXED |
@@ -753,7 +777,7 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 | Q-02-1 | When a cashier does a **change swap** at the register, do the small bills come from the **master till**? | *"yes you have that correct"* | **D14** — till ↔ master till (form 8.3); master till ↔ little safe (form 8.2) |
 | Q-02-2 | May **any** employee count the master till, or managers only? | *"anyone can count and record the master count"* | **D15** — any employee counts **and records**. Built in Phase 2.7a (gap **G-13**): any login can record, and the counter's PIN names them (`safe/actions.ts` L52–71). |
 | Q-02-3 | Does the **$5** rule (D7) also apply to the **master till** counts? | *"yes, it applies to the master as well"* | **D16**. The carried half was answered in SOP-04 as **D21**: a reason is required **only over $5**. |
-| Q-02-4 | Should a supply run ever happen; is the supply-run screen needed? | *"id like the supply run screen built"* | **D17** — G-11 approved, queued for build |
+| Q-02-4 | Should a supply run ever happen; is the supply-run screen needed? | *"id like the supply run screen built"* | **D17** — G-11 **BUILT** (Phase 2.7c) |
 | Q-02-5 | Is the system's "Manager Till" the **manager register** of D10? | *"yes correct"* + *"it should be 300 in it"* | **D18** (yes) and **D19** (Manager Till float $300.00) |
 
 ## Appendix D: Revision history
@@ -766,5 +790,6 @@ All five SOP-02 questions were answered after v1.0 (owner reply recorded in `00-
 | 1.4 draft | Fix phase | Phase 2.3 (owner message 4: *"then over/short warnings"*; owner D7, D16, D21). G-03 BUILT for the master till: reason box under the variance, required (server-checked) when more than $5.00 off, optional at $5.00 or less; reason saved on the count (migration 0315) and shown in **Recent counts**; warnings audited and listed on the owner/admin **Over / short warnings** screen. **Counted by** is now required and must be active; the audit entry names the count row (F-02-4 partly FIXED). §2, §4.4, §4.5 steps 10–11, §4.8, §5.1, §7, Appendix B updated. | Fix program |
 | 1.5 draft | Fix phase | Phase 2.4 (owner message 4: *"post drops"*). G-12 BUILT: the till-close entry now books mid-shift drops to 10100 Vault together with the takings, and relieves 10110 Tills by takings + drops less over/short, so a dropped shift nets 10110 to zero (F-02-1 FIXED). No new screen, no migration, no staff change. Entries posted before the fix are not re-posted. §4.12 owner note, Appendix A pin row, Appendix B updated. | Fix program |
 | 1.3 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
-| 1.6 draft | Fix phase | Phase 2.7a (owner message 4: *"Master till items: denomination log, mix standard, printable sheet, supply run, any-employee count"*; owner D11, D15). **G-08 BUILT**: Standard and Diff under every box, a mix line apart from the total, the mix in the banner, Count history, sheet, export and end-of-day report (F-02-3 FIXED). **G-13 BUILT**: any login records; the counter types their PIN, server-checked, with lockout (F-02-4, F-02-10 FIXED). **G-09 BUILT**: Count history for any days (no 30-row cap), printable master till sheet with signature lines, CSV / Excel (F-00-8 safe part FIXED). The window starts on the next count due and Save cannot double-submit (F-02-5 partly FIXED). Page help and Notes placeholder no longer suggest drops in the master till (F-02-7 page wording FIXED). No migration. Header, §1, §2, §3, §4.2–4.9, §4.15–4.18, §5.1, §7, §8.6, §9, Appendix A–C updated. Still open: G-02 (little-safe log, swap denominations) and G-11 (supply-run screen). | Fix program |
-| 1.7 draft | Fix phase | Phase 2.7b (owner message 4: *"Master till items: denomination log, mix standard, printable sheet, supply run, any-employee count"*; owner request *"Either morning or night employee can balance the master till using small bills from the little safe in exchange for big bills from the master."*; D3; D14). **G-02 BUILT**: **Little safe exchange** on the Store safe page, both sides by denomination, equal sides enforced on screen, server and database, any employee with their PIN (own lockout scope), audited, append-only (F-00-7 FIXED). The register's **Change swap** takes **Big bills to the safe** and **Change back** instead of one amount; the bills are checked equal and saved (F-01-8 FIXED; iPad rebuild needed). Exchanges and swap bills on the count history, the printable sheet (replacing the paper-form note) and the export (new **Exchanges** sheet). Migration **0317_little_safe_exchanges.sql** (owner action). Forms 8.2 and 8.3 become paper backups. Header, §2, §4.1, §4.4, §4.10, §4.11, §4.16, §4.18, §5.2, new §5.3, §7, §8.2, §8.3, §8.6, §9, Appendix A, B updated. Still open: G-11 (supply-run screen); F-02-8 SOP-01 pointer. | Fix program |
+| 1.6 draft | Fix phase | Phase 2.7a (plan row 2.7: *"Master till items: denomination log, mix standard, printable sheet, supply run, any-employee count"*, `06-FIX-PHASE-PLAN.md` §3; owner D11, D15). **G-08 BUILT**: Standard and Diff under every box, a mix line apart from the total, the mix in the banner, Count history, sheet, export and end-of-day report (F-02-3 FIXED). **G-13 BUILT**: any login records; the counter types their PIN, server-checked, with lockout (F-02-4, F-02-10 FIXED). **G-09 BUILT**: Count history for any days (no 30-row cap), printable master till sheet with signature lines, CSV / Excel (F-00-8 safe part FIXED). The window starts on the next count due and Save cannot double-submit (F-02-5 partly FIXED). Page help and Notes placeholder no longer suggest drops in the master till (F-02-7 page wording FIXED). No migration. Header, §1, §2, §3, §4.2–4.9, §4.15–4.18, §5.1, §7, §8.6, §9, Appendix A–C updated. Still open: G-02 (little-safe log, swap denominations) and G-11 (supply-run screen). | Fix program |
+| 1.7 draft | Fix phase | Phase 2.7b (plan row 2.7: *"Master till items: denomination log, mix standard, printable sheet, supply run, any-employee count"*, `06-FIX-PHASE-PLAN.md` §3; owner request *"Either morning or night employee can balance the master till using small bills from the little safe in exchange for big bills from the master."*; D3; D14). **G-02 BUILT**: **Little safe exchange** on the Store safe page, both sides by denomination, equal sides enforced on screen, server and database, any employee with their PIN (own lockout scope), audited, append-only (F-00-7 FIXED). The register's **Change swap** takes **Big bills to the safe** and **Change back** instead of one amount; the bills are checked equal and saved (F-01-8 FIXED; iPad rebuild needed). Exchanges and swap bills on the count history, the printable sheet (replacing the paper-form note) and the export (new **Exchanges** sheet). Migration **0317_little_safe_exchanges.sql** (owner action). Forms 8.2 and 8.3 become paper backups. Header, §2, §4.1, §4.4, §4.10, §4.11, §4.16, §4.18, §5.2, new §5.3, §7, §8.2, §8.3, §8.6, §9, Appendix A, B updated. Still open: G-11 (supply-run screen); F-02-8 SOP-01 pointer. | Fix program |
+| 1.8 draft | Fix phase | Phase 2.7c (owner D17: *"Q-02-4- id like the supply run screen built"*; plan row 2.7 *"supply run"*; owner message 5: *"Please finish phase 2"*). **G-11 BUILT**, F-02-11 FIXED: §4.13 rewritten around the **Supply runs** screen: cash out with the taker's PIN and a manager or lead PIN (not the taker) and a required reason, books DR 12100 / CR 10100; settle by a different employee's PIN with receipt + change = the cash taken and one of six 280E expense accounts, books DR expense / DR 10100 / CR 12100; NOT POSTED + retry; open runs on the Store safe page; printable log. Migration **0318_supply_runs.sql** (owner action). Form 8.4 becomes the paper backup. Header, §4.4 short row, §4.13, §6, §7, §8.4, §9, glossary, Appendix A, B, C updated. The 1.6 and 1.7 rows now cite *plan row 2.7* for the *"Master till items"* words (they are the plan's, not the owner's). | Fix program |

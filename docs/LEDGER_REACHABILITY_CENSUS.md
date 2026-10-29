@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 40 money events that should reach the books. 24 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 40 money events that should reach the books. 23 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 4 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 40 |
-| Proven on all six layers | 3 |
-| Cannot reach the books at all | 24 |
+| Proven on all six layers | 4 |
+| Cannot reach the books at all | 23 |
 | Have nothing that even builds the entry | 16 |
 | Layers that could not be measured | 5 |
 
@@ -44,10 +44,10 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 15 of 40 |
-| `reachable` | 24 of 40 |
+| `reachable` | 23 of 40 |
 | `correct` | 12 of 40 |
-| `accepted` | 22 of 40 |
-| `idempotent` | 21 of 40 |
+| `accepted` | 21 of 40 |
+| `idempotent` | 20 of 40 |
 | `married` | 14 of 40 |
 
 ## Sales, and the tax you collect on someone else's behalf
@@ -456,7 +456,7 @@ A child-support or garnishment withholding is forwarded to the agency.
 | `till_close_to_safe` | yes | yes | yes | n/a | yes | NO | D-39 |
 | `cash_deposit_to_bank` | yes | yes | part | NO | yes | part | D-39 |
 | `seal_deposit_bag` | yes | yes | yes | n/a | yes | NO | D-77 |
-| `employee_supply_advance` | yes | NO | yes | NO | NO | n/a | D-77 |
+| `employee_supply_advance` | yes | yes | yes | n/a | yes | n/a | D-77 |
 | `till_over_short` | yes | yes | yes | n/a | yes | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
 | `atm_surcharge_income` | yes | yes | yes | part | yes | part | D-40 |
@@ -536,13 +536,13 @@ An employee takes cash from the master till for supplies and later returns a rec
 
 - Accounts: `12100`, `10100`
 - Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/supply-run-posting-service.ts#postAdvanceForRun`
 
 - **exists: PRESENT** -- books-98 built both halves. buildSupplyAdvanceJournal debits 12100 Employee Advances Receivable and credits 10100 - NOT an expense, because nothing has been bought yet. buildSupplySettleJournal books the expense at the receipt amount, returns the change to the safe, and clears 12100 to zero.
-- **reachable: MISSING** -- No screen records a supply run yet: grep buildSupplyAdvanceJournal under src/app finds nothing. Rule 50: finished, unreachable.
+- **reachable: PRESENT** -- Fix Phase 2.7c (G-11, owner D17): until then no screen recorded a supply run. Now /admin/registers/supply-runs: src/app/admin/registers/supply-runs/actions.ts cashOutAction (orders.manage, the taker's PIN and a manager or lead's PIN, checkCashOut) saves the run, then calls src/lib/accounting/supply-run-posting-service.ts postAdvanceForRun, which re-reads the run, calls buildSupplyAdvanceJournal dated on the run's business day and calls submitJournal with autoPost. settleAction (a different employee's PIN receives the receipt and change, checkSettle) saves the settle once, then calls postSettleForRun, which calls buildSupplySettleJournal and puts the cost class on the expense line (settleLinesWithCostClass). A failed post shows NOT POSTED with a retry button (retrySupplyPostAction).
 - **correct: PRESENT** -- An advance with no employee name is refused - the balance is a claim on a person, so an unnamed one is meaningless. A receipt larger than the advance is refused rather than sign-flipped, because that is a reimbursement owed TO the employee.
-- **accepted: MISSING** -- Never presented.
-- **idempotent: MISSING** -- No poster yet, so no source ref to key on.
+- **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _The two PINs at cash-out (taker plus a manager or lead) and the different employee's PIN at settle ARE the human acts, the same two signatures form 8.4 asks for. A third approval in the books queue would add no new pair of eyes on the cash._
+- **idempotent: PRESENT** -- sourceRef supply-advance:<runId> and supply-settle:<runId> (supply-run-core advanceSourceRef / settleSourceRef), so a retry or a second press returns duplicate and writes nothing. The settle is a conditional update (settled_at null), and migration 0318 lets advance_journal_id and settle_journal_id be filled once.
 - **married: NOT_APPLICABLE** -- The cash never touches the bank. _Money moves from the safe to a person and back. There is no bank record of either leg._
 
 **If this stays broken:** Expensing the cash as it leaves the till records a purchase that has not happened, against an account nobody chose, for an amount that changes when the change comes back - and nothing ever asks for the receipt, because no account is left carrying the employee's name.
@@ -830,7 +830,6 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cash_and_banking.till_open_from_vault` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal`
-- `cash_and_banking.employee_supply_advance` (D-77) -- `src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
 - `periodic_and_other.fixed_asset_acquired` (D-43) -- `src/lib/accounting/fixed-assets-core.ts#accountCodeForClass`
@@ -859,6 +858,7 @@ mistake later.
 - `cash_and_banking.till_open_from_vault` / `married`: There is no bank record of cash moving from a safe to a drawer.
 - `cash_and_banking.till_close_to_safe` / `accepted`: The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash.
 - `cash_and_banking.seal_deposit_bag` / `accepted`: Counting the bag IS the human act, and it is witnessed. A second approval would delay the bank run without adding a second pair of eyes to the cash.
+- `cash_and_banking.employee_supply_advance` / `accepted`: The two PINs at cash-out (taker plus a manager or lead) and the different employee's PIN at settle ARE the human acts, the same two signatures form 8.4 asks for. A third approval in the books queue would add no new pair of eyes on the cash.
 - `cash_and_banking.employee_supply_advance` / `married`: Money moves from the safe to a person and back. There is no bank record of either leg.
 - `cash_and_banking.till_over_short` / `accepted`: The manager's reconcile IS the acceptance. Asking the same person to approve the entry their own count produced adds a click, not a check.
 - `cash_and_banking.till_over_short` / `married`: There is no second arrival for money that went missing.

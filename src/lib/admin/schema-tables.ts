@@ -320,6 +320,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "special_discount_settings",
   "special_discount_uses",
   "staff_profiles",
+  "supply_runs",
   "syndication_logs",
   "syndication_sync_settings",
   "syndication_sync_state",
