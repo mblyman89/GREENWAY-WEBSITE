@@ -128,8 +128,8 @@ describe("Fix Phase 2.4: drops are booked to the safe on the close entry", () =>
 });
 
 describe("Fix Phase 2.4: living SOP and ledgers (D41)", () => {
-  it("SOP-02 is v1.5 with the §4.12 note marked FIXED", () => {
-    expect(SOP2).toMatch(/\| \*\*Version\*\* \| 1\.5 /);
+  it("SOP-02 is v1.5 or later with the §4.12 note marked FIXED", () => {
+    expect(SOP2).toMatch(/\| \*\*Version\*\* \| 1\.([5-9]|\d\d) /);
     expect(SOP2).toMatch(/finding F-02-1, S1\) · FIXED in Phase 2\.4 \(G-12\)/);
     expect(SOP2).toMatch(/\| 1\.5 draft \| Fix phase \| Phase 2\.4/);
     expect(SOP2).toMatch(/BUILT, Phase 2\.4\*\*: the close entry books takings \+ drops/);

@@ -173,6 +173,21 @@ Concierge code is **unchanged** (record-only). Today the concierge and `help-con
 
 **Running score:** topics with complete SOP source material: `pos`, `registers`, `master-till`, `little-safe`, plus the SOP-01 proposed topics. The concierge itself is still at the baseline until the integration phase.
 
+**Phase 2.7a (G-08 mix standard, G-13 any-employee count, G-09 printable sheet) answers:**
+
+| Question | Answer (built, Phase 2.7a) |
+|---|---|
+| Can I record the master till count with a staff login? | Yes (D15). Any back-office login opens Register Activity → **Safe** and saves the count; the counter types **their own PIN** in **Counted by: your PIN (required)** (SOP-02 §2, §4.5) |
+| It says "No active employee has that PIN" | Wrong PIN, or the employee is not active. Re-enter carefully; repeated wrong PINs lock the pad for a short time. Nothing was saved |
+| What is the standard mix? | 32 × $10, 64 × $5, 318 × $1, 95 × 25¢, 120 × 10¢, 100 × 5¢, 125 × 1¢ = $1,000.00 (D11). The grid shows **Standard** and **Diff** under every box (SOP-02 §4.2) |
+| It says Balanced but Mix off | The total is right but the denominations are not. Balance with the little safe and log both sides on form 8.2 (SOP-02 §4.9–4.10) |
+| The window says PM in the morning | It starts on the next count due: AM until today's AM is saved, then PM, then Extra. Check it before saving (SOP-02 §4.5–4.6) |
+| Where are older counts? | Managers: **Count history**, pick **From** / **To** (up to 366 days) (SOP-02 §4.16) |
+| How do I print the master till sheet? | Managers: **Printable sheet (to)** on the Store safe page, or **Master till sheet for this day** on the end-of-day report, then **Print**; sign the three lines; attach form 8.2 (SOP-02 §4.18) |
+| Does the end-of-day report show the mix? | Yes: each AM / PM line ends with *"mix on standard: yes"* or *"no"* (SOP-02 §4.15) |
+
+The caveats *"F-02-3: the page does not compare the mix to the D11 standard, so use the §4.2 table."* and *"F-02-7: do **not** count drops or the little safe into the master till, whatever the page help text and placeholder say."* above are **retired** by Phase 2.7a (the rule stays: drops never go in the master till; the page now says so). The caveat *"F-02-5: only the newest AM/PM count shows on the EOD report, and the window defaults to AM, so pick the right one."* is **partly retired**: the window no longer defaults to AM, but the EOD still shows only the newest count. The role-filter note *"The concierge must not walk a `staff` user through submitting a count."* is **retired**: staff may record a count (D15); history, sheet and export stay manager-only. The answer *"The master till count says pick who counted"* (Phase 2.3) is replaced by the PIN answer above. `concierge-kb.ts` `registers` carries the Phase 2.7a fact.
+
 ### SOP-03 End-of-Day Close & Deposit Bag (`docs/sop/SOP-03-eod-close-deposit.md`, verified at `3385bfa9`)
 
 Concierge code is **unchanged** (record-only). Today neither the concierge nor `help-content.ts` has **any** end-of-day or deposit-bag content. The only "deposit" hits are payroll direct deposit (`help-content.ts` L725–742; `concierge-kb.ts` L265–283), so a question like "how do I do the deposit?" risks a payroll ACH answer (finding **F-03-11**). The Registers page help (L117–120) still says sales shown are online pickup only (F-03-4). What SOP-03 now provides as source material for the integration phase:
@@ -241,7 +256,7 @@ The caveat *"The bag screen does not exist (F-00-6 / G-04), so never tell anyone
 | Who signs the report? | The night closer (**Night count, prepared by**) and, after the recount, a different morning employee (**Morning recount and verify**) |
 | It says "This report may be incomplete. Do not file it." | A record failed to read. Reload; still failing → tell the owner, use the close slips. Export is off until it reads |
 | Can I export the end-of-day report? | Yes: **Export: CSV · Excel**, six sheets (Deposit, Cash check, Refunds, Bag, Sales, Signatures) (SOP-03 §4.9) |
-| Can I export the master till sheet? | Not yet: Phase 2.7 (G-09) |
+| Can I export the master till sheet? | Yes, from Phase 2.7a: Store safe → **Count history** → **CSV** / **Excel**, or the printable sheet (see below) |
 
 The caveats F-03-6 (*"Use the Z report's net figure"*), F-03-5 (*"The night sheet is the record"*), F-03-7 (*"'No drawer sessions' may be a failed read"*) and F-03-8 (*"a typo silently shows today"*) above are **retired** by Phase 2.6b. `concierge-kb.ts` `registers` carries the Phase 2.6b fact.
 
