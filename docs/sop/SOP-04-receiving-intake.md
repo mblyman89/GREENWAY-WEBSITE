@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.5 (Phase 3.1: **Count short** receives part of a line ("18 of 20"); the rest is refused at the dock and goes back with the driver (G-16 BUILT, F-04-1 FIXED). 1.4 Phase 3.1a: emailed COAs are read certificate by certificate and attached to the delivery's lines; **Re-read COAs** and **Attach lab result** on the receiving page. Earlier: 1.3 Phase 1.1 G-19 gated activation; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
+| **Version** | 1.6 (Phase 3.2a: every manifest email reaches the table. The system checks the vendor_intake@ mailbox every 15 minutes and pulls in anything the instant delivery missed; emails that did not make a manifest are listed under **Needs attention** with **Try again**, **Resolved** and **Find an email**; **Check the mailbox now** runs the check at once; failures are retried by themselves and a person is alerted once (G-17 BUILT, F-04-4 FIXED). 1.5 (Phase 3.1: **Count short** receives part of a line ("18 of 20"); the rest is refused at the dock and goes back with the driver (G-16 BUILT, F-04-1 FIXED). 1.4 Phase 3.1a: emailed COAs are read certificate by certificate and attached to the delivery's lines; **Re-read COAs** and **Attach lab result** on the receiving page. Earlier: 1.3 Phase 1.1 G-19 gated activation; draft for owner review; owner answers D29–D34 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Everyone who handles a vendor delivery: the manager who processes the manifest (D30), any trained employee who helps count at the dock, the person who onboards new products onto the menu, the **admin** who files the monthly CCRS public records request on the 10th (D32), and the owner, who reviews the books |
@@ -29,6 +29,9 @@
    - 4.2 The screens you will use
    - 4.3 Every morning: check the Receiving list
    - 4.4 How a manifest gets in: the email path (automatic)
+   - 4.4a The 15-minute mailbox check (automatic)
+   - 4.4b Needs attention: Try again and Resolved
+   - 4.4c Check the mailbox now and Find an email
    - 4.5 How a manifest gets in: the manual tools
    - 4.6 Reading a staged manifest before the truck arrives
    - 4.7 Duplicates, invoice numbers and overdue trucks
@@ -215,10 +218,11 @@ Do this at opening, before any truck is due. The manager does it; it takes five 
 2. Read the status cards. **In transit** = trucks on the way; **Awaiting intake** = product that is here but not finalized.
    > **An "Awaiting intake" manifest from a previous day is a problem.** Its lots sit in quarantine and cannot be sold. Finish it today (§4.17).
 3. If the red **🚨 … past ETA** banner shows, call or email the transporter or vendor, and write the answer on form 8.1. ETA days use the store's Pacific calendar (`manifest-pipeline-core.ts` L190–206).
-4. **Compare the vendor emails with the list** (finding F-04-4). Open the vendor_intake@ mailbox and look at yesterday's manifest emails. **Every manifest email should have a row on the Incoming (email) tab.**
-   - **Why:** an email the system could not read (**parse failed**) or that carried no manifest (**no manifest**) is logged in the database but is **shown nowhere on screen** (`inbound-store.ts` L862–884; the only caller, `intake/page.tsx` L164, uses the log for download links only).
-   - **If an email has no row,** bring the manifest in by hand with a manual tool (§4.5). The Transfer Data Link is best.
-   - **Write it on form 8.1**, so the owner can see how often this happens.
+4. **Look at Needs attention** (Phase 3.2a; was the daily mailbox comparison, F-04-4 FIXED). On every Receiving tab a red line reads *"📭 N vendor email(s) did not make a manifest (N need(s) you)"* when something is open; it links to the **Needs attention** panel on the **Incoming (email)** tab (`intake/page.tsx` L402–408). No red line means every manifest email made its row.
+   - **Why it is safe to trust:** every manifest comes by email (owner: *"Every manifest comes via email. So there will never be a time when I have to enter the data manually."*). The system now checks the vendor_intake@ mailbox itself every 15 minutes (§4.4a) and pulls in anything the instant delivery missed. An email that still did not make a manifest stays on this list until it is fixed or marked **Resolved**.
+   - **Work each row** as §4.4b says: **Try again**, or **Resolved** with a reason.
+   - **If you can see a manifest email in the mailbox but not on the table,** open **Find an email you can see in the mailbox but not on the table**, type the sender, a subject word or the manifest number, and press **Find and pull in** (§4.4c).
+   - **Read the health line** under the panel title. Green = the check ran in the last 45 minutes and could read the mailbox. Gold or red = read it aloud to the owner (§5.1a).
 5. Glance at the **Invoice #** column. A blank or wrong invoice number can be corrected (§4.7).
 
 ### 4.4 How a manifest gets in: the email path (automatic)
@@ -234,12 +238,46 @@ This is how most manifests arrive. You do nothing.
 3. **Possible outcomes for each email** (route.ts L316–320):
    - **staged** (a new row).
    - **duplicate** (the same manifest # and vendor is already live, so it is not staged again).
-   - **parse failed** or **no manifest** (no row; see §4.3 step 4).
+   - **parse failed** or **no manifest** (no manifest row; the email is listed under **Needs attention**, §4.4b).
    - **The lab PDFs are read too (Phase 3.1a).** Every lab document in the email (`QA_1.pdf`, `QA_2.pdf`, *Lab Results*, *COA Summary*, or any PDF that reads like a certificate even under another name) is split into its single certificates and each certificate is matched to a line: first by a lab id or batch id the line carries, then by a product name only that one certificate prints. A line that already has a lab result from the vendor's JSON is never changed. What happened is written in words as one sentence in the email result and as a timeline event on the delivery: **Lab results attached from the emailed COAs** (all done) or **Lab results · some lines still need a COA (or a name match to verify)** (look at it). Example sentence: *"COA: read 2 certificates from 2 lab documents; attached 2 of 17 lines without a lab result (…)"* (`inbound-store.ts` L581–640; `coa-bundle-core.ts` L537–573). A lab PDF that cannot be read is named in the same way (*"COA: no certificate could be read from 1 lab document: QA_broken.pdf …"*), never only in a server log. Each lab PDF is filed only under the lab results read from it (`coa-archive.ts` L174–231).
 4. **Two other mailboxes are not Receiving.**
    - **vendor_menu@** holds vendor menus (SOP-09).
    - **lcb-watch@** holds forwarded LCB bulletins (Regulatory Watch).
    - Do not forward manifests there (route.ts L72–81).
+
+### 4.4a The 15-minute mailbox check (automatic; Phase 3.2a)
+
+The owner asked (verbatim): *"I need a way to ask the system to grab the ones it missed or failed to get. Make it enterprise grade … I want this table to receive every manifest, no exceptions."* This is how the system makes sure of it. You do nothing.
+
+1. **Every 15 minutes** (at :07, :22, :37 and :52) the system lists the last 3 days of mail in the vendor_intake@ mailbox. It reads two places: the Gmail mailbox itself (Spam and Trash included) and Resend's copy of every email it received (`vercel.json` `/api/cron/inbound-reconcile`; `inbound-reconcile-store.ts` `runReconcile` L463).
+2. **It compares that list with the table.** An email counts as on the table when its delivery id, its Message-ID, or its sender + subject + time (within 20 minutes) matches a row. The same email seen in both places is counted once (`inbound-reconcile-core.ts` `planReconcile` L232).
+3. **Anything missing is pulled in** and read exactly as if it had just arrived: up to 5 per run, oldest first. An email younger than 15 minutes is left alone, because the instant delivery is probably still working on it. Nothing is ever staged twice: each email is claimed by its delivery id first, so the instant delivery, the check and a person pressing a button at the same moment cannot double it (`pullSourceEmail` L272).
+4. **Temporary failures are fetched again by themselves**, 5 minutes, 30 minutes, 2 hours and 6 hours after the last try (up to 3 per run). After the fourth try, a person is needed (`autoRetryDue` L388).
+5. **A person is alerted once** (staff email and push) for each email that needs one: a permanent failure (*"No manifest found"*), or a temporary one the automatic retries did not fix. At most 5 alerts per run, only for emails from the last 7 days, never twice for the same email (`pickAlertItems` L506; `sendInboundAlert` claims the alert first, `inbound-reconcile-store.ts` L171).
+6. **If the check itself stops working for an hour** (it cannot read the mailbox), one alert says so. The health line on the panel says it too (§5.1a).
+
+> **Before database update 0320 is applied** the check still pulls in missed emails, but **Try again**, **Resolved**, the automatic retries and the alerts are off, and the health line says *"Apply database update 0320 …"*.
+
+### 4.4b Needs attention: Try again and Resolved
+
+The **Needs attention** panel (**Incoming (email)** tab, title *"Emails that did not make a manifest"*) lists every email to vendor_intake@ from the last 90 days that did not make a manifest and is not **Resolved** (`InboundAttentionPanel.tsx`). Each row shows the sender, subject, when it arrived, a badge, one sentence of advice and **What the fetch saw** (the system's own note).
+
+| Badge | What it means | What you do |
+|---|---|---|
+| **Could not read** | A manifest file arrived but could not be read | Wait for the automatic retries, or press **Try again**. Still failing after that: ask the vendor to resend it |
+| **Fetch failed** | The email's contents could not be downloaded | The system retries by itself; **Try again** does it now |
+| **Stuck** | A fetch started but never finished | **Try again** pulls it in from the start |
+| **No manifest found** | No manifest file or transfer link was in the email | Open it in the mailbox. A manifest: **Try again** (or ask the vendor to resend). Not a manifest (a reply, a sample note): **Resolved** |
+
+1. **Try again** fetches the email from the mailbox again and reads it from the start. A manifest that now reads appears as a new row on the table and the attention row goes away. Only one person can fetch an email at a time; a second press while it runs says *"Someone else is fetching this email right now (or it just changed). Reload the page."* (`retryInboundEmail` L318). Every press writes an audit row `inbound_email.retry`.
+2. **Resolved** closes a row that needs no manifest. Choose why: **Entered by hand under Manual tools**, **Not a manifest (reply, sample note, other mail)**, **The vendor sent it again (that email is on the table)**, **A copy of an email already on the table**, **Pulled in with Find an email**, or **Other (say why)** (a note of at least 3 characters is required for Other) (`RESOLVE_REASONS` `inbound-reconcile-core.ts` L449). Every Resolved writes an audit row `inbound_email.resolve` with who, when and why. Nothing is deleted.
+3. **A row with no Try again button** arrived before the mailbox check existed, so the system does not know where to fetch it from. Use **Find an email** with its sender or subject (§4.4c).
+
+### 4.4c Check the mailbox now and Find an email
+
+- **Check the mailbox now** (top of the panel) runs the 15-minute check at once and looks back 14 days. Emails younger than 2 minutes are left for the instant delivery. The green line at the top says what it did, for example *"Every email in the mailbox is on the table (12 checked)."* or *"Pulled in 1 email the system had missed (1 made a manifest); 11 were already on the table."* (`describeRun` `inbound-reconcile-core.ts` L858). Audit row `inbound_email.check_mailbox`.
+- **Find an email you can see in the mailbox but not on the table**: type part of the sender, a subject word or the manifest number (Gmail search words like `from:orders@vendor.com` work too) and how many days back (default 30, up to 365), then press **Find and pull in**. It searches vendor_intake@ including Spam and Trash. Each match not on the table is pulled in (up to 5); a match on the table that failed before is fetched again (up to 3). Nothing is staged twice. Audit row `inbound_email.find`.
+- **When to use which:** you know an email is in the mailbox and it is not on the table → **Find an email**. You just want to be sure nothing was missed (for example a truck is due and no manifest is staged) → **Check the mailbox now**.
 
 ### 4.5 How a manifest gets in: the manual tools
 
@@ -894,6 +932,28 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | "🚨 N in-transit manifest(s) past ETA — follow up with the transporter." | A truck is late (L359–363) | §4.3 step 3 |
 | "Duplicate manifest X from V is already in intake … not staged again." | The same manifest # and vendor is already live (`intake-store.ts` L639–665) | Use the existing row |
 
+### 5.1a Needs attention, the mailbox check and Find an email (Phase 3.2a)
+
+These appear in green or red at the top of **Receiving** after a mailbox button, and in the panel's health line (`intake/page.tsx` L420–432; `InboundAttentionPanel.tsx`).
+
+| Message | Cause | Do this |
+|---|---|---|
+| "Every email in the mailbox is on the table (N checked)." | Nothing was missed | Nothing |
+| "Pulled in N email(s) the system had missed (N made a manifest); N were already on the table." | The instant delivery had missed some; they are on the table now | Check the new rows; any that did not make a manifest are on the list |
+| "N more will be pulled in by the next check (press again to do it now)." | More than 5 were missing | Press **Check the mailbox now** again |
+| "N arrived in the last 15 minutes and are still being received." | Very new mail | Wait a few minutes |
+| "No source to read: set RESEND_API_KEY or the GMAIL_WIF_* sign-in for the vendor_intake@ mailbox." | Neither mailbox sign-in is set up | Owner or developer (§6) |
+| "Someone else is fetching this email right now (or it just changed). Reload the page." | Two people pressed at once | Reload; look at the row again |
+| "This email is being fetched right now. Wait a few minutes and look again." | A fetch started under 6 minutes ago | Wait, then reload |
+| "This row does not record where the email came from (it arrived before the mailbox check existed). Use Find an email …" | An old row | §4.4c Find an email |
+| "Choose why this email is resolved." / "Say why in a few words when the reason is Other." | Resolved without a reason or note | Choose a reason; write the note |
+| "Type part of the sender, the subject or the manifest number." | Find with fewer than 2 letters | Type more |
+| "Apply database update 0320 (supabase/migrations/0320_inbound_email_reconcile.sql) to turn on the mailbox check, Try again and Resolved." | The database update is not applied yet | Owner (`docs/MIGRATIONS_TO_RUN.md`) |
+| Health line "The mailbox check has not run yet …" | First deploy, or the cron is new | Press **Check the mailbox now** |
+| Health line "The 15-minute mailbox check last ran … It should run every 15 minutes: check the cron in Vercel." | The cron stopped | Owner or developer; meanwhile press **Check the mailbox now** each morning |
+| Health line "The mailbox check is failing (since …): …" | The mailbox could not be read (sign-in, Google or Resend down) | Owner or developer; an alert is sent after an hour |
+| Health line "… Gmail sign-in is not set up, so only Resend's copy is compared." | Gmail sign-in missing | Owner: set it up so the check reads the mailbox itself |
+
 ### 5.2 Manifest review screen
 
 | Message | Cause | Do this |
@@ -949,7 +1009,7 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **A seal is broken or the product looks tampered with** | Do not accept the affected lines. Photograph it, write the seal numbers in **Route notes**, refuse at the dock (**Damaged / broke in transit** or **Other (explain)**) | Manager, same day |
 | **A short count** | §4.11: recount, then **Count short** with a reason; the rest leaves with the driver (before 0319: refuse the whole line) | Vendor via form 8.3 (CCRS Update to the count) |
 | **More product than the manifest** | It cannot be received (Count short refuses a count above the manifest). Refuse the line with **Overage — more than ordered**, or call the manager | Manager |
-| **A product arrived with no manifest row** (the email did not stage) | §4.3 step 4: import by hand before you count | Owner (note on form 8.1) |
+| **A product arrived with no manifest row** (the email did not stage) | §4.4c: **Check the mailbox now**, then **Find an email** with the vendor name; a row on Needs attention → **Try again**. Still nothing: the vendor has not emailed it; ask them to send it to vendor_intake@ (a manual import, §4.5, is the last resort) | Owner (note on form 8.1) |
 | **A whole delivery arrived with no manifest at all** | Do not accept product with no manifest. Ask the driver for the transfer document; import it (§4.5). If there is none, refuse the delivery | Manager → owner |
 | **Refused a line too late** (already finalized and accepted) | The product is now Greenway inventory. **Do not** try to "un-accept" it. Returning accepted product needs a return manifest and is **SOP-15** work | Owner, same day |
 | **Accepted a line with a FAILED lab result** | It is held at Finalize and cannot be sold (§4.15). Never set it Active (§4.19). Return or destroy under SOP-15 | Owner |
@@ -986,7 +1046,7 @@ These appear in red at the top of **Receiving** after a manual import (`intake/p
 | **Transport details checked against the driver and vehicle** | WAC 314-55-085 transport manifest requirements | `concierge-kb.ts` L142; §4.8 |
 | **Vendor inventory ids confirmed** | The weekly InventoryTransfer "from" id must match the vendor exactly | `ccrs-transfer-core.ts` L1–43 |
 | **Manager login for every Receiving action** | `inventory.manage` on every action; staff cannot finalize | `intake/actions.ts`; `roles.ts` L107 |
-| **Every manifest email has a row** (daily comparison) | Failed or empty emails are logged but not shown (F-04-4, G-17) | §4.3 |
+| **Every manifest email has a row** (the 15-minute mailbox check; Needs attention until fixed or Resolved, with a reason and an audit row) | Every manifest comes by email; a missed email means a truck with nothing staged (F-04-4 FIXED, G-17 BUILT) | §4.3, §4.4a–c |
 | **Duplicate dismissal is audited and is not a rejection** | One transaction and an audit row; nothing is filed | `intake/actions.ts` L547–584 |
 | **Paper record of the count** (form 8.1, 8.2, 8.3) | The app does not record who physically counted | §2 |
 | **PRR data for internal buying and pricing only** | RCW 42.56.070(8) commercial-use limit | `ccrs/page.tsx` L278–280; roadmap L19–23 |
@@ -1038,7 +1098,7 @@ FINALIZE (manager, §4.17)
   Result banner: [ ] green  [ ] gold (partial)  [ ] held lots ____  [ ] nothing accepted
   Vendor bill: [ ] recorded  [ ] refused — no unit cost → owner told (time) ______
   Held lot set Active from a "now clear" Issues row (lot · time · manager) __________________
-  Email with NO row on the Incoming tab (§4.3) → imported by hand?  [ ] n/a  [ ] yes
+  Email on Needs attention for this delivery (§4.4b) → [ ] n/a  [ ] Try again worked  [ ] Resolved (reason) ______
   Labels printed [ ]   New products onboarded (§4.22) [ ]   Manager sign: ______________
 ```
 
@@ -1125,7 +1185,8 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 ```
 ┌──────────────────────────── GREENWAY — RECEIVING (TRUCK DAY) ────────────────────────────┐
 │ MORNING: Product Intake → Receiving. "Awaiting intake" from yesterday = finish it today.  │
-│   Every vendor manifest email must have a row. No row? Manual tools → Transfer Data Link. │
+│   Red "📭 … did not make a manifest"? Needs attention → Try again or Resolved (+ reason).  │
+│   Email in the mailbox but not on the table? Find an email → Find and pull in.           │
 │ TRUCK: check driver + plate against the manifest. Mismatch → don't unload, call manager.  │
 │   Save transport details. Seal numbers → Route notes.                                     │
 │ COA column: "matched by name — verify" = open the certificate and check it before Final. │
@@ -1194,7 +1255,8 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 2 roles | `src/app/admin/inventory/intake/actions.ts` (all actions `inventory.manage`); `intake/page.tsx` L99; `src/lib/auth/roles.ts` L100, L107, L150, L249; `drafts/page.tsx` L252; `discovery/ccrs/page.tsx` L59; `discovery/competitors/page.tsx` L66; `discovery/benchmarks/page.tsx` L131; `reports/benchmarks/page.tsx` L81; `discovery/actions.ts` L99 |
 | 3 / 4.2 screens | `src/components/admin/admin-nav-data.ts` L71–81; `intake/page.tsx` L264–357, L430–681; `EmailIntakeTable.tsx` L133–294; `receiving-tabs-core.ts` |
 | 4.1 pipeline | `src/lib/inventory/manifest-pipeline-core.ts` L28–104, L190–206; `inbound-store.ts` L803–814; `intake-store.ts` L912; `guided-accept-core.ts` L65, L84 |
-| 4.3 / 4.4 email | `src/app/api/webhooks/inbound-email/route.ts` L1–81, L135–160, L314–320; `inbound-store.ts` L862–884; `intake/page.tsx` L164, L213–220 (commit 7cb4702c removed the panel) |
+| 4.3 / 4.4 email | `src/app/api/webhooks/inbound-email/route.ts` L1–81, L135–160 (routing now in `inbound-ingest.ts` `routeAndStage` L63); `inbound-store.ts` L862–884; `intake/page.tsx` L164, L213–220 (commit 7cb4702c removed the old panel) |
+| 4.3 / 4.4a–c mailbox check, Needs attention (Phase 3.2a) | `inbound-reconcile-core.ts` (planReconcile L232, classifyAttention L338, autoRetryDue L388, retryEligibility L430, RESOLVE_REASONS L449, pickAlertItems L506, healthLine L639, describeRun L858); `inbound-reconcile-store.ts` (sendInboundAlert L171, pullSourceEmail L272, retryInboundEmail L318, resolveInboundEmail L403, runReconcile L463, findAndIngest L597, loadAttention L678); `gmail-intake-fetch.ts` L84, L119; `resend-receiving-fetch.ts`; `inbound-ingest.ts` L63; `api/cron/inbound-reconcile/route.ts`; `vercel.json` (schedule `7-59/15 * * * *`); `intake/actions.ts` L1493–1598; `InboundAttentionPanel.tsx`; `intake/page.tsx` L402–432, L514; `supabase/migrations/0320_inbound_email_reconcile.sql` (rollback `supabase/rollbacks/0320_inbound_email_reconcile.rollback.sql`) |
 | 4.5 manual tools | `intake/page.tsx` L228–257, L497–681; `intake/actions.ts` L35–199, L663–675 |
 | 4.6 review | `intake/[id]/page.tsx` L476–633, L954–973, L1028–1245; `intake-checklist-core.ts` L102–175 |
 | 4.7 duplicates | `manifest-dedupe-core.ts` L24–35, L84, L110–124; `intake-store.ts` L639–665; `intake/actions.ts` L489–507, L547–584; `DismissDuplicateForm.tsx`; `InvoiceNumberCell.tsx` |
@@ -1221,14 +1283,14 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 4.34 redo / delete / off | `discovery/actions.ts` L84–112, L770–788, L847–874; `ccrs/page.tsx` L321–360, L422–425; `discovery/page.tsx` L85–87; `discovery/import/page.tsx` L59–61 |
 | In-app SOP sheets (stale) | `src/lib/catalog/sop-core.ts` L66–96 (truck-day; stale L79, L81, L83), L125–145 (order; stale L137), L148–170 (receive; stale L158, L162); `intake/page.tsx` HelpPanel L275–287 (stale L279–282) |
 | Help / concierge | `src/lib/admin/concierge-kb.ts` `product-intake` L132–148, `ccrs` L349–360; `src/lib/admin/help-content.ts` L1009–1011 |
-| Tests (all in `tests/compliance/`) | `fix-p3-1-partial-receive` (mutation probe `scripts/compliance/mutate-fix-p3-1.py`), `fix-p3-1a-coa-bundle`, `fix-p3-1a-coa-archive` (mutation probe `scripts/compliance/mutate-fix-p3-1a.py`), `intake-partial-accept`, `otherwise-taken-receiving`, `r31-manifest-review-walk` (.tsx), `r6-2-inventory-transfer`, `manifest-dedupe`, `r36-inbound-dedupe`, `intake-transport`, `intake-checklist-core`, `r23-finalize-banner`, `sample-intake-cap`, `sample-cap-notice`, `disposition-core`, `ccrs-monthly-rollups`, `intake-roadmap-decisions` |
+| Tests (all in `tests/compliance/`) | `fix-p3-2a-inbound-reconcile` (mutation probe `scripts/compliance/mutate-fix-p3-2a.py`), `fix-p3-1-partial-receive` (mutation probe `scripts/compliance/mutate-fix-p3-1.py`), `fix-p3-1a-coa-bundle`, `fix-p3-1a-coa-archive` (mutation probe `scripts/compliance/mutate-fix-p3-1a.py`), `intake-partial-accept`, `otherwise-taken-receiving`, `r31-manifest-review-walk` (.tsx), `r6-2-inventory-transfer`, `manifest-dedupe`, `r36-inbound-dedupe`, `intake-transport`, `intake-checklist-core`, `r23-finalize-banner`, `sample-intake-cap`, `sample-cap-notice`, `disposition-core`, `ccrs-monthly-rollups`, `intake-roadmap-decisions` |
 
 ## Appendix B: Not built yet (interim procedures)
 
 | Need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
 | Receive part of a line ("18 of 20") — **BUILT** (Phase 3.1) | Built: **Count short** on the line; the lot goes in at the count; the rest is refused | None needed once migration 0319 is applied; before that, refuse the whole short line (§4.11 step 8) | G-16 BUILT · F-04-1 FIXED |
-| See emails that failed to stage | Logged, shown nowhere | Daily email-vs-list comparison (§4.3) | G-17 · F-04-4 |
+| See emails that failed to stage — **BUILT** (Phase 3.2a) | Built: the 15-minute mailbox check, **Needs attention** with **Try again** / **Resolved**, **Check the mailbox now**, **Find an email**, automatic retries and one alert | None needed once migration 0320 is applied; before that, missed emails are still pulled in, and a failed one is closed with a manual import (§4.5) | G-17 BUILT · F-04-4 FIXED |
 | Monthly PRR reminder and tracking | No calendar task; no tracking # field | Form 8.4 (§4.26–§4.28) | G-18 · F-04-19 |
 | Activate a now-clear held lot safely — **BUILT** (Phase 1.1) | Built: go-live check, reason, audit row, Status history | None needed (§4.19) | G-19 · F-04-2, F-04-12 FIXED |
 | Key cost / COA for a CSV or PDF import | Banner says to; no cost field. **COA part BUILT (Phase 3.1a):** emailed COAs attach automatically; **Re-read COAs** and **Attach lab result** on the receiving page | Cost: get the JSON or link; otherwise owner follow-up (§4.5, §4.20). COA: §4.15 | F-04-10 (COA part FIXED) · F-04-21 FIXED |
@@ -1260,4 +1322,5 @@ G  RETENTION (§4.34, D33 — 18 months from the END of the data month)
 | 1.3 draft | Fix phase | Phase 1.1 (owner D76). G-19 BUILT: Lifecycle status runs the go-live check before Active, asks a reason, writes an audit row and shows Status history; the "now clear" Issues row points at that gated path; the held-lot row's stale "cannot attach one yet" text replaced (F-04-12). §4.19, §7 and Appendix B updated. F-04-2, F-04-12 FIXED. | Fix program |
 | 1.4 draft | Fix phase | Phase 3.1a (owner message 6: *"didn't or couldn't attach the coa lab results to the products in the receiving detail page. So I can't accept it nor move it to onboarding."*). Every emailed lab PDF is read certificate by certificate and matched by lab id, then by a unique product name (flagged verify); the outcome is said in the email result and on the timeline; each PDF is filed under its own lab results; the receiving page gains the COA cell wording, **Re-read COAs** and **Attach lab result**. §4.4, §4.6, §4.15, §5.2, §9, Appendix A, B updated. F-04-21 FIXED; F-04-10 COA part FIXED. | Fix program |
 | 1.5 draft | Fix phase | Phase 3.1 (owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*; D29). G-16 BUILT, F-04-1 FIXED: **Count short** on a line records what was counted; the lot goes in at the count and the rest is refused at the dock with a reason; counted 0 refuses the line; overages are never received; Recount / the manifest quantity removes it; a refusal puts the manifest quantity back; a short count makes the delivery partial (note required) and the timeline names it; CCRS InventoryTransfer, Inventory.csv, the goods receipt and the vendor bill read the count. Migration 0319 (manual) with rollback. § top note, §4.6, §4.9, §4.11 (rewritten; was "Short counts (interim rule)"), §4.17, §5.2, §6, §7, forms 8.2, 8.3, 8.5, §9, Appendix A–C updated. Line pins in `intake-store.ts`, `[id]/page.tsx`, `intake/actions.ts`, `ManifestLotDisposition.tsx`, `finalize-label-core.ts` and `manifest-event-labels-core.ts` re-pinned (several `[id]/page.tsx` pins were already off after 3.1a). | Fix program |
+| 1.6 draft | Fix phase | Phase 3.2a (owner: *"In addition to a notice when an email fails, please add a refetch button, or some intelligent way to manually ask the fetcher to look again … I want this table to receive every manifest, no exceptions."*). G-17 BUILT, F-04-4 FIXED: the 15-minute mailbox check compares Gmail and Resend with the table and pulls in what was missed (claimed, never twice; 15-minute grace); **Needs attention** lists every email that did not make a manifest with **Try again** (one at a time) and **Resolved** (reason, audit row); **Check the mailbox now**; **Find an email** (Gmail search, Spam and Trash included); temporary failures retried at 5 min / 30 min / 2 h / 6 h; one alert per email that needs a person and one when the check fails for an hour; a health line; a red count on every Receiving tab. Migration 0320 (manual) with rollback. §4.3 step 4 rewritten (was *"Compare the vendor emails with the list"*, the daily mailbox comparison, with *"If an email has no row, bring the manifest in by hand with a manual tool"*); new §4.4a–c and §5.1a; §4.4, §6, §7, form 8.1, §9, Appendix A, B updated. | Fix program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |

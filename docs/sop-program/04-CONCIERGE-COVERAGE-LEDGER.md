@@ -338,7 +338,7 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 - F-04-2: the lot page's "Lifecycle status" skips the go-live check and writes no audit row. A manager may set a held lot Active **only** from an Issues row that says "now clear", logged on paper (SOP-04 §4.19). Never advise setting any other lot Active that way.
 - F-04-1: there is no partial-quantity receive. Follow the interim short-count rule (§4.11) and log it on form 8.2.
 - F-04-3: an undecided line is **accepted** on Finalize. Decide every line first (form 8.5).
-- F-04-4: a vendor email that failed to stage does not appear on the Receiving list. If a truck is expected and no manifest is staged, use the manual import (§4.5).
+- F-04-4: **FIXED (Phase 3.2a).** A vendor email that did not make a manifest is listed under Receiving → Incoming (email) → **Needs attention** with **Try again** and **Resolved**; an email in the mailbox but not on the table is pulled in with **Find an email** (SOP-04 v1.6 §4.4a–c).
 - F-04-13: the WSLCB public records phone on the CCRS page (…664-1769) is wrong. Use **(360) 664-1753**.
 - F-04-14 / F-04-17: ignore the page's per-file CSV steps and "a few minutes". Drop the single monthly zip and allow up to ~1.5 h.
 - F-04-15 / F-04-16: on monthly-zip datasets do **not** press Generate vendor leads, Enrich KB, Compute or Delete. Delete has no confirmation.
@@ -356,6 +356,16 @@ Concierge code is **unchanged** (record-only). Today the concierge's `product-in
 | Will it ever overwrite a lab result? | No. A line that has one is never changed; a pick made on an out-of-date page is refused (§4.15) |
 | Where do I see what happened with the COAs? | The delivery timeline: *"Lab results attached from the emailed COAs"* or *"Lab results · some lines still need a COA (or a name match to verify)"*, and the email's result sentence (§4.4) |
 | The COA PDF could not be read | The note names it. Ask the vendor for a text PDF; attach on the lot page by lab test id once imported (§5.2) |
+
+**Fix Phase 3.2a update to the SOP-04 rows (G-17 BUILT, F-04-4 FIXED; owner message 7: *"In addition to a notice when an email fails, please add a refetch button, or some intelligent way to manually ask the fetcher to look again … I need a way to ask the system to grab the ones it missed or failed to get. Make it enterprise grade … I want this table to receive every manifest, no exceptions."*).** `concierge-kb.ts` `product-intake` gains one fact (**Receiving → Needs attention**), grounded on SOP-04 v1.6 §4.3, §4.4a–c, §5.1a. Superseded caveat, kept as history: *"F-04-4: a vendor email that failed to stage does not appear on the Receiving list. If a truck is expected and no manifest is staged, use the manual import (§4.5)."* The manual import is now the last resort, after **Check the mailbox now**, **Find an email** and **Try again**.
+
+| Question | Answer (SOP-04 v1.6) |
+|---|---|
+| A vendor emailed a manifest but it is not on the table | **Find an email** on Incoming (email) → type the sender or manifest number → **Find and pull in** (§4.4c) |
+| What does the red "📭 … did not make a manifest" line mean? | An email to vendor_intake@ did not make a manifest. Open **Needs attention**: **Try again**, or **Resolved** with a reason (§4.4b) |
+| Do I need to check the mailbox every morning? | No. The system checks it every 15 minutes and pulls in anything missed; **Check the mailbox now** runs it at once (§4.4a) |
+| Will it stage a manifest twice? | No. Every email is claimed by its delivery id first (§4.4a step 3) |
+| The health line is red | Read it to the owner; the check cannot read the mailbox or has stopped (§5.1a) |
 
 **Fix Phase 3.1 update to the SOP-04 rows (G-16 BUILT, F-04-1 FIXED; owner message 6: *"please begin work on phase 3, receiving: accept "18 of 20""*).** `concierge-kb.ts` `product-intake` gains one fact (**Receiving → Count short**), grounded on SOP-04 v1.5 §4.11, §4.17, §5.2. Superseded answers, kept as history:
 - the caveat *"F-04-1: there is no partial-quantity receive. Follow the interim short-count rule (§4.11) and log it on form 8.2."* (above) now reads: press **Count short** (§4.11); the interim rule applies only while migration 0319 is not applied (no Count short button);

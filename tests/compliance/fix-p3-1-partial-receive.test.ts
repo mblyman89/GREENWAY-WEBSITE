@@ -431,7 +431,8 @@ describe("6. SOP-04 v1.5, ledgers and KB", () => {
   const sop = read("docs/sop/SOP-04-receiving-intake.md");
   it("SOP-04 is v1.5 and §4.11 is the built count-short procedure", () => {
     expect(sop).toMatch(/\| 1\.5 draft \| Fix phase \| Phase 3\.1 /);
-    expect(sop).toContain("| **Version** | 1.5 (Phase 3.1");
+    // Fix 3.2a bumped SOP-04 to v1.6; the version row keeps 1.5 as history.
+    expect(sop).toMatch(/\| \*\*Version\*\* \|[^\n]*1\.5 \(?Phase 3\.1:/);
     expect(sop).toContain("### 4.11 Short counts: receive part of a line (\"18 of 20\")");
     expect(sop).toContain("**Count short**");
     expect(sop).not.toContain("### 4.11 Short counts (interim rule)");
