@@ -576,7 +576,8 @@ describe("11. wiring", () => {
 describe("12. the SOP, the ledgers and the concierge say the same (standing rules)", () => {
   it("SOP-04 v1.6: §4.3 step 4 rewritten, §4.4a–c and §5.1a, revision row", () => {
     const sop = read("docs/sop/SOP-04-receiving-intake.md");
-    expect(sop).toContain("| **Version** | 1.6 (Phase 3.2a");
+    // Fix 3.2b bumped SOP-04 to v1.7; the version row keeps 1.6 as history.
+    expect(sop).toMatch(/\| \*\*Version\*\* \|[^\n]*1\.6 \(Phase 3\.2a:/);
     expect(sop).toMatch(/\| 1\.6 draft \| Fix phase \| Phase 3\.2a/);
     expect(sop).toContain("### 4.4a The 15-minute mailbox check (automatic; Phase 3.2a)");
     expect(sop).toContain("### 4.4b Needs attention: Try again and Resolved");
