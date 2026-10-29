@@ -77,6 +77,12 @@ export const HEARTBEAT_STALE_MS = 45 * 60 * 1000;
 /** A failing mailbox check alerts the owner once it has failed this long. */
 export const HEALTH_ALERT_AFTER_MS = 60 * 60 * 1000;
 /** compliance_reminder_log stages (send-once claims). */
+/** "Check the mailbox now": the owner is looking at the email, so a shorter wait (the claim + manifest dedupe still stop a double stage). */
+export const MANUAL_GRACE_MS = 2 * 60 * 1000;
+/** Failure alerts only for emails from the last 7 days (no flood of old rows the day 0320 is applied). */
+export const ALERT_MAX_AGE_MS = 7 * 86_400_000;
+/** At most this many failure alerts per run; the rest go on the next run. */
+export const MAX_ALERTS_PER_RUN = 5;
 export const FAIL_ALERT_STAGE = "inbound_email_failed";
 export const HEALTH_ALERT_STAGE = "inbound_mailbox_check_failing";
 
@@ -494,6 +500,18 @@ export function attentionSummary(items: readonly AttentionItem[], nowMs: number)
 
 export function failAlertKey(logId: string): string {
   return `inbound-fail:${logId}`;
+}
+
+/** Which open failures get their one alert this run: needs a person, recent, not alerted yet; oldest first, capped. */
+export function pickAlertItems(items: readonly AttentionItem[], alreadyAlerted: ReadonlySet<string>, nowMs: number, max = MAX_ALERTS_PER_RUN): AttentionItem[] {
+  return items
+    .filter((i) => i.person && !alreadyAlerted.has(failAlertKey(i.row.id)))
+    .filter((i) => {
+      const t = Date.parse(i.row.received_at ?? "");
+      return Number.isFinite(t) && nowMs - t <= ALERT_MAX_AGE_MS;
+    })
+    .sort((a, b) => Date.parse(a.row.received_at ?? "") - Date.parse(b.row.received_at ?? ""))
+    .slice(0, Math.max(0, max));
 }
 
 export type InboundAlert = { dedupeKey: string; stage: string; subject: string; text: string; html: string; linkPath: string };
@@ -1054,6 +1072,21 @@ export function __runInboundReconcileCoreTests(): { passed: number; failed: numb
   const rs = resendToSource({ id: "e1", to: ["vendor_intake@in.greenwaymarijuana.com"], from: "v@v.com", subject: "s", created_at: "2026-10-29T17:00:00Z", message_id: "<A@B>" });
   ok(!!rs && rs.messageId === "a@b" && addressedTo(rs, "vendor_intake"), "resend -> source, local-part match");
   ok(resendToSource({ id: "bad id" }) === null, "resend item needs a clean id");
+
+  // alert picking
+  {
+    const mk = (id: string, minsAgo: number, person: boolean): AttentionItem => ({
+      row: { id, provider: "resend", delivery_key: null, from_address: null, subject: null, received_at: new Date(NOW - minsAgo * 60_000).toISOString(), to_intake: true, disposition: "no_manifest", manifest_id: null, note: null },
+      attention: { kind: "no_manifest", category: "permanent", label: "x", advice: "y" },
+      person,
+      nextRetryAt: null,
+    });
+    const items = [mk("a", 30, true), mk("b", 60, true), mk("c", 20, false), mk("d", 8 * 24 * 60, true), mk("e", 10, true)];
+    const picked = pickAlertItems(items, new Set([failAlertKey("e")]), NOW);
+    ok(picked.map((i) => i.row.id).join(",") === "b,a", "alerts: person only, not alerted, recent, oldest first");
+    ok(pickAlertItems(items, new Set(), NOW, 1).length === 1, "alerts: capped per run");
+    ok(MANUAL_GRACE_MS < RECONCILE_GRACE_MS, "manual grace is shorter");
+  }
 
   // summary
   ok(describeRun({ configured: true, onTable: 9, recovered: 0, recoveredStaged: 0, deferred: 0, tooNew: 0, autoRetried: 0, errors: [] }).startsWith("Every email in the mailbox is on the table (9"), "describe clean");
