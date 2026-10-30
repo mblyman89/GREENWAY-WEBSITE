@@ -3141,3 +3141,34 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0324_employee_sign_in_link_unique.rollback.sql`.
   It drops the index; links stay.
+
+## CCRS C1 — 0325 — Correct a filed transfer with an Update
+
+- [ ] `0325_ccrs_transfer_last_told.sql` adds one read-only function,
+  `public.ccrs_transfer_last_told(p_env text, p_ids text[])`. It reads, for each
+  InventoryTransfer id CCRS holds, the row CCRS last ACCEPTED. No tables, no
+  columns, no data changes. Service role only. (CCRS C1, D-3)
+  - Why: the examiner (2026-10-29): *"Yes, the update path is the correct way
+    to make corrections."* [EXAM2 L0058]
+  - Preconditions: the CCRS outbox (0248) and `ccrs_inventory_last_told`
+    (0286). Apply it **after 0286**.
+  - Until it is applied, nothing changes for new transfers. A transfer CCRS
+    already holds is held back as before and is never re-sent. The CCRS hub
+    shows *"Transfer corrections are off: migration 0325 … is not applied
+    yet."* when it matters.
+
+  Safe to re-run (create or replace function).
+
+  **Check:**
+
+  ```sql
+  select to_regprocedure('public.ccrs_transfer_last_told(text,text[])');  -- not null
+  ```
+
+  **Then:** nothing to do. When a transfer CCRS already accepted later differs
+  (received quantity, date or vendor id), the CCRS hub lists it under
+  **Held back** with **Approve correction**. Approving sends it as an Update
+  with the same id in the next rebuild.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0325_ccrs_transfer_last_told.rollback.sql`.
+  It drops the function; corrections switch off again.

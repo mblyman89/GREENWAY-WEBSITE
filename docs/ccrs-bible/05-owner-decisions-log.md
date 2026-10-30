@@ -313,3 +313,15 @@ Recorded:
 5. **R6-2 is planned as InventoryTransfer from receiving intake** (S-05). It was already in the build plan (Part 09 S-05). Vendor returns (the owner wants them simple): the enterprise design is researched and recorded in Part 09 under R6-2, with its open questions in Part 12. What R6-2 actually shipped is recorded in Part 09, not here.
 6. **Standing rule 14 (AGENTS.md):** the root `/workspace` folder of the agent environment is free to use, all of its space; commit and push early and often.
 
+## D-24 — The examiner's 9b/9c answers built in: no transfer suffix, the vendor's id kept, corrections by Update (2026-10-30, slice C1)
+
+(Appended after D-23; this log is append-only. Report A-4 noted this entry was owed.)
+
+Owner, verbatim (2026-10-30, `/workspace/ccrs-work/00-owner-request-2026-10-30b-verbatim.md`): *"Thank you! Please push and merge the work now. Then proceed with another two slices. Working meticulously through the issues so you accurately and properly fix and enhance and harden the pipeline. Go above and beyond for me. Follow the standing rules. Thank you!"*
+
+Recorded:
+1. **Transfer ExternalIdentifier = our reported lot id, no suffix** [EXAM2 L0056]. Transfers already filed as `TR-<id>` stay valid history: they are recognised and never sent again.
+2. **A new lot keeps the vendor's own id** when it came from the WCIA JSON or a CCRS csv and no other lot has it, so returns and recalls trace back [EXAM2 L0056]. Ids read from a PDF keep the minted form until confirmed (U-76). A lot already filed is never renamed.
+3. **A transfer CCRS accepted is corrected only by an Update with the same id** [EXAM2 L0058], and only after the owner presses **Approve correction** for exactly the values shown. Nothing is corrected on a guess. This needs migration 0325, which the owner applies by hand.
+4. Still open from report A-4: whether to re-point strain names (Part 17 §E.3) remains the owner's decision. C1 does not change strains.
+

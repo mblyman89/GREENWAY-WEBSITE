@@ -157,6 +157,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/ccrs-reseed-pg-check.sql", mustPrint: "CCRS RESEED CHECK PASSED" },
   { file: "scripts/recon/ccrs-equalize-pg-check.sql", mustPrint: "CCRS EQUALIZE CHECK PASSED" },
   { file: "scripts/recon/ccrs-copy-verify-pg-check.sql", mustPrint: "CCRS COPY VERIFY CHECK PASSED" },
+  { file: "scripts/recon/ccrs-transfer-told-0325-pg-check.sql", mustPrint: "CCRS 0325 CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */

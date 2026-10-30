@@ -90,6 +90,7 @@ export const CCRS_ISSUE_CODES = [
   "E60_ROW_REFUSED_HELD",
   "E61_IN_FLIGHT_HELD",
   "E62_ADJUSTMENT_LEDGER",
+  "E63_TRANSFER_CORRECTION_PENDING",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -489,6 +490,14 @@ const PINS: Record<CcrsIssueCode, string> = {
   // W-3: InventoryAdjustment ADJ- ids routed against the ledger. Already held
   // -> advisory (not re-sent); unproven or unreadable -> held back (owed).
   E62_ADJUSTMENT_LEDGER: "[G L0219-L0221]",
+  // C1 (ccrs-transfer-core rule 7): a transfer CCRS holds whose facts changed
+  // since CCRS accepted it waits for the owner's approval, then goes as an
+  // Update with the same id: "the update path is the correct way to make
+  // corrections" (examiner). Held back (owed) until approved.
+  // C1: the LCB FAQ Q/A "how will they correct this? ... They would perform an
+  // \"Update\" operation" (the issue-code contract takes G/FAQ pins only); the
+  // examiner confirmed it for transfers [EXAM2 L0058].
+  E63_TRANSFER_CORRECTION_PENDING: "[FAQ L0058-L0059]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

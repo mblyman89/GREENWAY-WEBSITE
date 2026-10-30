@@ -1,0 +1,69 @@
+Hi Michael,
+
+Sorry for the delay, I needed to check on a few questions with IT.
+
+1. The handoff week:
+1a. Does this plan look right to you? Cultivera files through Saturday 10/31, and Greenway files every week from Sunday 11/1 onward. Cultivera's 11/1 upload will contain nothing dated 11/1 or later.
+Yes that is a sound plan.
+1b. If the same sale reaches CCRS from both systems, is the second copy simply rejected as a row error ("Duplicate Sale for Licensee"), or could it cause any other problem we should plan for?
+That is correct, if the same data is supplied it would result in a duplicate error
+1c. Is there anything you need from us, or from Cultivera, to record the handoff date?
+NO
+
+2. A fresh copy of our CCRS data after Cultivera's last filing:
+2a. May we request that copy during the week of 11/2?
+Yes that is fine
+2b. Can it be the same CSV export format as the 9/21 delivery (Inventory, Product, Strain and Area)?
+Yes, I can provide that same format
+2c. Should we send the request to you or to the Service Desk, and roughly how long does it take?
+Please send that request to the Examiner unit, and it will take 24-48 hours to provide.
+
+3. PREproduction under WA.gov:
+3a. After the WA.gov change, is PREproduction still available for our testing?
+Yes, PreProduction is always available.
+3b. ids we filed in Production do not exist in PREproduction, separate test ids there. Correct?
+That is correct
+
+4. Stale-lot cleanup:
+4a. Inventory Update (to zero) and Adjustment (Reconciliation) in the same weekly batch, Inventory first and adjustment after its success email?
+That is a fine path, I would at max give a 15 minutes between files, just in case you get an error that has to be addressed.
+4b. Lots CCRS already shows at quantity 0 never adjusted (~18,000): Reconciliation for them too?
+Ideally, we would like that old information cleaned up, since you are starting fresh, as your own uploader, focus on going forward.
+4c. TotalCost 0.00 unknown — nominal $0.01?
+Yes, a nominal 0.01 is an acceptable entry, since the original Total cost is unknown.
+4d. Strain "THC"/Other/Unknown — which strain on the zeroing Update?
+You will need to use the same strain name that was already provided for the product, and do not worry about changing it to the correct strain. Going forward you just need to make sure to use the accurate strain name for each product.
+4e. Inventory Delete vs Update+Reconciliation?
+I am confused by this question.
+
+5a. May an Area be Deleted while lots at zero still name it?
+NO, if you delete an area while still having it listed on the inventory, any update to that inventory will result in an error.
+
+6a. 1 million rows per file the only limit?
+That is the more for the system to process the file, you can upload several files at once of that size, it will just take a little longer and dependent on other upload traffic additional time to process and provide either a success or error message.
+
+7a. Transition period ended?
+Yes, the Transition period was in early 2022, we however do consider that to be the defined week, and if you plan on meeting just the minimum, we would expect to see the new data upload no later than each Sunday for the previous week. You can however report more often, and that is encouraged to minimize manifest complications.
+7b. Late upload?
+Nothing will happen if it is simply late, it may trigger a data check set up by the examiner unit to investigate after a certain time. The expectation is to keep the data up to date.
+
+8a. Production error file attached as CSV? Subject line?
+Yes, the file is attached and it is the same as what was provided from PREproduction.
+
+9a. InventoryTransfer only deliveries on/after Nov 1?
+Just what you are responsible for.
+9b. ExternalIdentifier "TR-" + our inventory id?
+The Inventory transfer file has to be the exact same as the inventory reported ID, you can not have a suffix on this file. While you can change the ID, that might cause issues for you doing a return, as the inventory Identifier listed on your manifest to the vendor would not match the inventory identifier that they provided you. Along with if a recall happens, if you change the ID in your system, will you easily be able to identify the impacted product?
+9c. Correct a filed transfer by Update with same ExternalIdentifier?
+Yes, the update path is the correct way to make corrections.
+
+10a. Return to vendor: Adjustment "Other" or Sale "Wholesale"?
+You can not report wholesale as you are not that license type, you will complete an inventory adjustment and provide the appropriate reason.
+10b. Return: we are origin filing Manifest.csv, TransportationType "Pick-up"?
+Yes, you would the be origin and the one who submits for the creation of the manifest.
+
+11a. Does CCRS lower quantity on hand from Sale/Adjustment rows?
+Data is not changed by CCRS, it is changed by you completing an update operation on that inventory along with reporting that sale.
+
+12a. LIQ1455 status?
+Yes, we received your request, integrators are 3rd parties ... M2M is to facilitate the exchange between CCRS and WA.gov ... We are aware of the interest by licensees to gain access to the M2M and are investigating this currently and will provide an update at the appropriate time.

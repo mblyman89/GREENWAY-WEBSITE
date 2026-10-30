@@ -37,9 +37,18 @@ type Props = {
    * bring the operator back to the same week and environment.
    */
   cleanup?: { action: (fd: FormData) => Promise<void>; weekKey: string };
+  /**
+   * C1 (D-3): when given, every E63 row (a transfer CCRS already holds whose
+   * values changed) gets "Approve correction". Approval is bound to the row's
+   * fingerprint, so a later change needs a new approval. The examiner: "the
+   * update path is the correct way to make corrections" [EXAM2 L0058].
+   */
+  transferCorrection?: { action: (fd: FormData) => Promise<void>; weekKey: string };
 };
 
-export function CcrsIssueList({ issues, env, tone, copyTitle, cleanup }: Props) {
+export const E63_CODE = "E63_TRANSFER_CORRECTION_PENDING";
+
+export function CcrsIssueList({ issues, env, tone, copyTitle, cleanup, transferCorrection }: Props) {
   if (issues.length === 0) return null;
   const text = tone === "error" ? "text-red-200" : tone === "held" ? "text-amber-100" : "text-white/50";
   const anyRows = issues.some((i) => (i.rows?.length ?? 0) > 0);
@@ -101,6 +110,17 @@ export function CcrsIssueList({ issues, env, tone, copyTitle, cleanup }: Props) 
                               <input type="hidden" name="env" value={env} />
                               <PendingSubmit className="font-sans text-[10px] text-amber-200 underline" testId="cleanup-button" busy="Working...">
                                 {e.code === "E58_PRODUCT_ON_CLEANUP_LIST" ? "Remove from clean-up list" : "Add to CCRS clean-up list"}
+                              </PendingSubmit>
+                            </form>
+                          ) : null}
+                          {transferCorrection && e.code === E63_CODE ? (
+                            <form action={transferCorrection.action} className="ml-2 inline">
+                              <input type="hidden" name="op" value="approve" />
+                              <input type="hidden" name="row_id" value={r.id} />
+                              <input type="hidden" name="week_key" value={transferCorrection.weekKey} />
+                              <input type="hidden" name="env" value={env} />
+                              <PendingSubmit className="font-sans text-[10px] text-amber-200 underline" testId="transfer-correction-button" busy="Approving...">
+                                Approve correction
                               </PendingSubmit>
                             </form>
                           ) : null}

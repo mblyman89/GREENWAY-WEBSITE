@@ -33,7 +33,11 @@
  *   3. One row per lot: From = vendor license, To = our license, From id = the
  *      vendor's id EXACTLY as captured, To id = our lot id, Quantity =
  *      received quantity, TransferDate = received day, ExternalIdentifier =
- *      "TR-" + our lot id, Operation Insert.
+ *      our lot id ITSELF, Operation Insert. C1 (examiner, 2026-10-29): "The
+ *      Inventory transfer file has to be the exact same as the inventory
+ *      reported ID, you can not have a suffix on this file." [EXAM2 L0056].
+ *      Until C1 the id was "TR-" + our lot id; a transfer CCRS already holds
+ *      under that legacy id is still recognised (never Inserted again).
  *   4. A vendor id is sent only when machine-read from the vendor's own data
  *      (WCIA JSON, CCRS manifest CSV) or typed by a person. A PDF guess may be
  *      a batch number: E14_TRANSFER_VENDOR_ID_UNKNOWN until confirmed.
@@ -41,13 +45,28 @@
  *      uncertain / unknown -> withheld, never guessed; not held -> sent.
  *   6. The To lot must be held by CCRS or reported in this emission's
  *      Inventory.csv [G L1207-L1209]; otherwise the row is withheld.
+ *   7. C1 correction path: "Yes, the update path is the correct way to make
+ *      corrections." [EXAM2 L0058]. A transfer CCRS holds whose facts changed
+ *      since CCRS last ACCEPTED it (0325 ccrs_transfer_last_told) becomes an
+ *      Update with the SAME ExternalIdentifier [G L0247], keeping the original
+ *      CreatedBy/CreatedDate and filling UpdatedBy/UpdatedDate [G L0234-L0242],
+ *      but only once the owner approved exactly these new values (like a sale
+ *      correction). Unapproved: E63_TRANSFER_CORRECTION_PENDING (held back,
+ *      owed). Never a second Insert. A legacy "TR-" transfer is never
+ *      corrected automatically: its id breaks the no-suffix rule.
  */
 import { CCRS_COLUMNS } from "./ccrs-batch-core";
 import { LEDGER_STATES, type LedgerEntry, type LedgerEnv, type LedgerState } from "./ccrs-ledger-core";
 import { isMissingDbFunctionError, type RpcErrorLike } from "@/lib/db/rpc-fallback-core";
 
 export const TRANSFER_SLICE_RPC = "ccrs_transfer_slice";
-export const TRANSFER_ID_PREFIX = "TR-";
+/**
+ * C1: the prefix R6-2 used before the examiner's answer [EXAM2 L0056]. Only
+ * READ now: a transfer CCRS holds under "TR-" + lot id is already reported and
+ * must never be Inserted again under the plain id. Never written.
+ */
+export const LEGACY_TRANSFER_ID_PREFIX = "TR-";
+export const TRANSFER_TOLD_RPC = "ccrs_transfer_last_told";
 
 export const VENDOR_ID_SOURCES = ["wcia_json", "ccrs_csv", "pdf_guess", "owner_entered", "unknown"] as const;
 export type VendorIdSource = (typeof VENDOR_ID_SOURCES)[number];
@@ -60,7 +79,8 @@ export type TransferIssueCode =
   | "E14_TRANSFER_SAME_LICENSE"
   | "E14_TRANSFER_QUANTITY"
   | "E14_TRANSFER_LEDGER_WITHHELD"
-  | "E14_TRANSFER_LOT_NOT_REPORTED";
+  | "E14_TRANSFER_LOT_NOT_REPORTED"
+  | "E63_TRANSFER_CORRECTION_PENDING";
 
 export const TRANSFER_PINS: Record<TransferIssueCode, string> = {
   E14_TRANSFER_FIELD_MISSING: "[G L1182-L1246]",
@@ -69,6 +89,10 @@ export const TRANSFER_PINS: Record<TransferIssueCode, string> = {
   E14_TRANSFER_QUANTITY: "[G L1238]",
   E14_TRANSFER_LEDGER_WITHHELD: "[G L1190]",
   E14_TRANSFER_LOT_NOT_REPORTED: "[G L1207-L1209]",
+  // C1: the LCB FAQ Q/A "how will they correct this? ... They would perform an
+  // \"Update\" operation" (the issue-code contract takes G/FAQ pins only); the
+  // examiner confirmed it for transfers [EXAM2 L0058].
+  E63_TRANSFER_CORRECTION_PENDING: "[FAQ L0058-L0059]",
 };
 
 /** Blocking codes: the row cannot be built correctly until a person fixes the lot. */
@@ -77,6 +101,8 @@ export const TRANSFER_BLOCKING: ReadonlySet<TransferIssueCode> = new Set([
   "E14_TRANSFER_VENDOR_ID_UNKNOWN",
   "E14_TRANSFER_SAME_LICENSE",
   "E14_TRANSFER_QUANTITY",
+  // C1: needs the owner's approval of the new values (rule 7).
+  "E63_TRANSFER_CORRECTION_PENDING",
 ]);
 
 export type TransferLot = {
@@ -104,11 +130,32 @@ export type TransferHeld = { state: LedgerState | null; inFlight: boolean };
 
 export type TransferIssue = { code: TransferIssueCode; lotId: string; manifestId: string | null; label: string; detail: string };
 
+/** What CCRS last ACCEPTED for one transfer id (0325). `told` null = unknown. */
+export type TransferTold = { state: LedgerState | null; told: Readonly<Record<string, string>> | null; inFlight: boolean };
+export type TransferToldOutcome = { kind: "absent" } | { kind: "loaded"; byId: Map<string, TransferTold> };
+
+/** A correction the owner approved: exactly these new values for this id. */
+export type TransferCorrectionApproval = { id: string; fingerprint: string; at: string; by: string | null };
+
+/** A held transfer whose facts differ from what CCRS last accepted (rule 7). */
+export type TransferCorrection = {
+  id: string;
+  lotId: string;
+  label: string;
+  fingerprint: string;
+  changed: { column: string; was: string; now: string }[];
+  approved: boolean;
+};
+
 export type TransferPlan = {
   rows: string[][];
   issues: TransferIssue[];
   /** Transfer ids CCRS already holds: not re-sent (rule 5). */
   alreadyHeld: string[];
+  /** C1: legacy "TR-" ids found held (subset of alreadyHeld). */
+  legacyHeld: string[];
+  /** C1 rule 7: corrections found (approved ones are rows; the rest E63). */
+  corrections: TransferCorrection[];
   /** Lots outside the rules (not accepted, Cultivera, out of window): counted, not errors. */
   skipped: { notAccepted: number; cultivera: number; outOfWindow: number };
 };
@@ -127,6 +174,12 @@ export type TransferInput = {
   held: ReadonlyMap<string, TransferHeld | null> | null;
   /** Our lot ids CCRS holds or this emission's Inventory.csv reports (rule 6). */
   reportable: ReadonlySet<string>;
+  /** C1 rule 7: what CCRS last accepted per transfer id; absent/omitted = no corrections. */
+  told?: TransferToldOutcome;
+  /** C1 rule 7: owner approvals (site_settings). */
+  approvals?: readonly TransferCorrectionApproval[];
+  /** C1 rule 7: the batch day MM/DD/YYYY (UpdatedDate); required for an Update. */
+  batchDay?: string;
 };
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -139,8 +192,80 @@ export function transferDate(day: string): string {
   return `${m}/${d}/${y}`;
 }
 
+/**
+ * C1: the transfer's ExternalIdentifier IS our lot id, byte for byte: "the
+ * exact same as the inventory reported ID, you can not have a suffix"
+ * [EXAM2 L0056]. Kept as a function so every caller names the rule.
+ */
 export function transferExternalId(ourId: string): string {
-  return `${TRANSFER_ID_PREFIX}${ourId}`;
+  return ourId;
+}
+
+/** C1: the id R6-2 would have filed for this lot (read-only alias). */
+export function legacyTransferExternalId(ourId: string): string {
+  return `${LEGACY_TRANSFER_ID_PREFIX}${ourId}`;
+}
+
+/** The ids the ledger must be asked about for a set of lots: plain + legacy. */
+export function transferLookupIds(ourIds: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const id of ourIds) {
+    if (!id) continue;
+    out.add(transferExternalId(id));
+    out.add(legacyTransferExternalId(id));
+  }
+  return [...out];
+}
+
+const TCOLS = CCRS_COLUMNS.InventoryTransfer;
+/** C1 rule 7: the cells that are facts of the transfer (the row's own bookkeeping excluded). */
+export const TRANSFER_COMPARED_COLUMNS: readonly string[] = [
+  "FromLicenseNumber",
+  "ToLicenseNumber",
+  "FromInventoryExternalIdentifier",
+  "ToInventoryExternalIdentifier",
+  "Quantity",
+  "TransferDate",
+];
+
+function sameTransferCell(column: string, ours: string, told: string | null | undefined): boolean {
+  if (told === null || told === undefined) return false;
+  if (column === "Quantity") {
+    const a = ours.trim();
+    const b = told.trim();
+    if (a === "" || b === "") return a === b;
+    const x = Number(a);
+    const y = Number(b);
+    return Number.isFinite(x) && Number.isFinite(y) && x === y;
+  }
+  return ours === told;
+}
+
+/** Compared columns whose cell differs from what CCRS last accepted ([] = unchanged). */
+export function transferChangedColumns(row: readonly string[], told: Readonly<Record<string, string>>): { column: string; was: string; now: string }[] {
+  return TRANSFER_COMPARED_COLUMNS.filter((c) => !sameTransferCell(c, row[TCOLS.indexOf(c)] ?? "", told[c])).map((c) => ({
+    column: c,
+    was: told[c] ?? "",
+    now: row[TCOLS.indexOf(c)] ?? "",
+  }));
+}
+
+/** The approval key: the id plus EXACTLY the new values (an older approval never covers a newer change). */
+export function transferCorrectionFingerprint(row: readonly string[]): string {
+  return [TCOLS.indexOf("ExternalIdentifier"), ...TRANSFER_COMPARED_COLUMNS.map((c) => TCOLS.indexOf(c))].map((i) => row[i] ?? "").join("|");
+}
+
+function dayNum(mmddyyyy: string): number | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(mmddyyyy);
+  return m ? Number(`${m[3]}${m[1]}${m[2]}`) : null;
+}
+
+/** "Updated Date cannot be prior to Created Date" [G L0242]: the batch day, clamped up. */
+export function transferUpdatedDate(createdDate: string, batchDay: string): string {
+  const b = dayNum(batchDay);
+  if (b === null) throw new Error(`C1: batch day "${batchDay}" is not MM/DD/YYYY`);
+  const c = dayNum(createdDate);
+  return c !== null && c > b ? createdDate : batchDay;
 }
 
 /**
@@ -158,6 +283,8 @@ export function buildTransferRows(input: TransferInput): TransferPlan {
   const rows: string[][] = [];
   const issues: TransferIssue[] = [];
   const alreadyHeld: string[] = [];
+  const legacyHeld: string[] = [];
+  const corrections: TransferCorrection[] = [];
   const skipped = { notAccepted: 0, cultivera: 0, outOfWindow: 0 };
   const ours = digits(input.licenseNumber);
   const lots = [...input.lots].sort((a, b) =>
@@ -230,20 +357,58 @@ export function buildTransferRows(input: TransferInput): TransferPlan {
       continue;
     }
     seen.add(ext);
+    const day = transferDate(l.receivedOn);
+    const fresh = [from, ours, vid, ourId, String(qty), day, ext, input.createdBy, day, "", "", "Insert"];
     if (input.held) {
-      const h = input.held.get(ext) ?? null;
-      if (h && h.state && PRESENT.has(h.state)) {
-        alreadyHeld.push(ext);
+      // C1: the plain id first, then the legacy "TR-" alias. A transfer CCRS
+      // holds under EITHER id is already reported (rule 5).
+      const legacy = legacyTransferExternalId(ourId);
+      const plain = input.held.get(ext) ?? null;
+      const old = input.held.get(legacy) ?? null;
+      const isPresent = (x: TransferHeld | null) => !!x && !!x.state && PRESENT.has(x.state);
+      if (isPresent(old)) {
+        // Filed before C1 under "TR-": reported. Never Inserted again, never
+        // auto-corrected (its id breaks the no-suffix rule [EXAM2 L0056]).
+        alreadyHeld.push(legacy);
+        legacyHeld.push(legacy);
+        continue;
+      }
+      const [hid, h] = plain || !old ? ([ext, plain] as const) : ([legacy, old] as const);
+      if (isPresent(h)) {
+        // C1 rule 7: compare with what CCRS last ACCEPTED for this id.
+        const t = input.told?.kind === "loaded" ? input.told.byId.get(ext) : undefined;
+        const changed = t && t.told && !t.inFlight ? transferChangedColumns(fresh, t.told) : [];
+        if (!t || !t.told || changed.length === 0) {
+          alreadyHeld.push(ext);
+          continue;
+        }
+        const fingerprint = transferCorrectionFingerprint(fresh);
+        const approved = (input.approvals ?? []).some((a) => a.id === ext && a.fingerprint === fingerprint);
+        corrections.push({ id: ext, lotId: l.lotId, label: l.label, fingerprint, changed, approved });
+        if (!approved) {
+          alreadyHeld.push(ext);
+          issue(
+            "E63_TRANSFER_CORRECTION_PENDING",
+            `CCRS holds transfer ${ext} with ${changed.map((c) => `${c.column} ${c.was || "(blank)"}`).join(", ")}; ours now says ${changed.map((c) => `${c.column} ${c.now || "(blank)"}`).join(", ")}. Approve the correction to send it as an Update`,
+          );
+          continue;
+        }
+        if (!input.batchDay) throw new Error("C1: an approved transfer correction needs the batch day (UpdatedDate)");
+        // Same ExternalIdentifier [G L0247]; the original CreatedBy/CreatedDate
+        // as CCRS accepted them; UpdatedBy/UpdatedDate filled [G L0234-L0242].
+        const createdBy = t.told.CreatedBy || input.createdBy;
+        const createdDate = t.told.CreatedDate || day;
+        rows.push([from, ours, vid, ourId, String(qty), day, ext, createdBy, createdDate, input.createdBy, transferUpdatedDate(createdDate, input.batchDay), "Update"]);
         continue;
       }
       if (h && (h.state === "uncertain" || h.state === "unknown")) {
-        issue("E14_TRANSFER_LEDGER_WITHHELD", `the ledger cannot say whether CCRS holds ${ext} (state ${h.state}); record that file's outcome first`);
+        issue("E14_TRANSFER_LEDGER_WITHHELD", `the ledger cannot say whether CCRS holds ${hid} (state ${h.state}); record that file's outcome first`);
         continue;
       }
       if (h && h.inFlight) {
         // A file already carrying this transfer is unanswered: a second Insert
         // would be "Duplicate InventoryTransfer for Licensee" [G L1190].
-        issue("E14_TRANSFER_LEDGER_WITHHELD", `${ext} is in a file that is uploaded or emitted but not answered yet; record that file's outcome first`);
+        issue("E14_TRANSFER_LEDGER_WITHHELD", `${hid} is in a file that is uploaded or emitted but not answered yet; record that file's outcome first`);
         continue;
       }
     }
@@ -251,10 +416,9 @@ export function buildTransferRows(input: TransferInput): TransferPlan {
       issue("E14_TRANSFER_LOT_NOT_REPORTED", `lot ${ourId} is neither held by CCRS nor in this Inventory.csv`);
       continue;
     }
-    const day = transferDate(l.receivedOn);
-    rows.push([from, ours, vid, ourId, String(qty), day, ext, input.createdBy, day, "", "", "Insert"]);
+    rows.push(fresh);
   }
-  return { rows, issues, alreadyHeld, skipped };
+  return { rows, issues, alreadyHeld, legacyHeld, corrections, skipped };
 }
 
 /* ------------------------------------------------------------------ *
@@ -290,6 +454,85 @@ export function decodeTransferSlice(env: LedgerEnv, data: unknown, error: RpcErr
   return { kind: "loaded", held };
 }
 
+/**
+ * C1: decode the 0325 ccrs_transfer_last_told answer, entries
+ * [id, state, told, in_flight]. `absent` = migration not applied (no
+ * corrections are proposed; nothing else changes). Anything malformed THROWS.
+ */
+export function decodeTransferTold(env: LedgerEnv, data: unknown, error: RpcErrorLike | null | undefined): TransferToldOutcome {
+  if (error) {
+    if (isMissingDbFunctionError(error)) return { kind: "absent" };
+    bad(`told: ${error.code ?? "?"} ${error.message ?? ""}`.trim());
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) bad("told: answer is not an object");
+  const d = data as Record<string, unknown>;
+  if (d.env !== env) bad(`told: answer is for env ${String(d.env)}, asked for ${env}`);
+  if (!Array.isArray(d.entries)) bad("told: `entries` is not an array");
+  const byId = new Map<string, TransferTold>();
+  (d.entries as unknown[]).forEach((x, i) => {
+    if (!Array.isArray(x) || x.length !== 4) bad(`told: entry ${i} is not [id,state,told,in_flight]`);
+    const [id, state, told, inFlight] = x as unknown[];
+    if (typeof id !== "string" || id === "") bad(`told: entry ${i}: id`);
+    if (state !== null && (typeof state !== "string" || !(LEDGER_STATES as readonly string[]).includes(state))) bad(`told: entry ${i}: state ${String(state)}`);
+    if (told !== null && (typeof told !== "object" || Array.isArray(told))) bad(`told: entry ${i}: told is not an object`);
+    if (told !== null && Object.values(told as Record<string, unknown>).some((v) => v !== null && typeof v !== "string")) bad(`told: entry ${i}: told cells are not text`);
+    if (typeof inFlight !== "boolean") bad(`told: entry ${i}: in_flight is not a boolean`);
+    if (byId.has(id as string)) bad(`told: entry ${i}: ${String(id)} appears twice`);
+    byId.set(id as string, { state: state as LedgerState | null, told: told as Record<string, string> | null, inFlight: inFlight as boolean });
+  });
+  return { kind: "loaded", byId };
+}
+
+/* ------------------------------------------------------------------ *
+ * C1 rule 7: owner approvals of transfer corrections (site_settings)
+ * ------------------------------------------------------------------ */
+
+export const TRANSFER_CORRECTION_SETTING_KEY = "ccrs.transfer_corrections";
+/** One list per environment: a PREprod approval never sends a production Update. */
+export function transferCorrectionSettingKey(env: LedgerEnv): string {
+  return `${TRANSFER_CORRECTION_SETTING_KEY}.${env}`;
+}
+export const TRANSFER_CORRECTION_MAX = 2000;
+
+export function normalizeTransferApprovals(v: unknown): TransferCorrectionApproval[] {
+  const arr = v && typeof v === "object" && Array.isArray((v as { items?: unknown }).items) ? (v as { items: unknown[] }).items : [];
+  const byId = new Map<string, TransferCorrectionApproval>();
+  for (const x of arr) {
+    if (!x || typeof x !== "object") continue;
+    const r = x as Record<string, unknown>;
+    const id = typeof r.id === "string" ? r.id.trim() : "";
+    const fingerprint = typeof r.fingerprint === "string" ? r.fingerprint : "";
+    if (!id || id.length > 100 || !fingerprint || fingerprint.length > 1000) continue;
+    byId.set(id, { id, fingerprint, at: typeof r.at === "string" ? r.at : "", by: typeof r.by === "string" ? r.by : null });
+  }
+  return [...byId.values()].slice(-TRANSFER_CORRECTION_MAX);
+}
+
+/** One approval per id: a newer approval replaces the older one. */
+export function approveTransferCorrection(list: readonly TransferCorrectionApproval[], a: TransferCorrectionApproval): TransferCorrectionApproval[] {
+  const id = a.id.trim();
+  if (!id || !a.fingerprint) return [...list];
+  return [...list.filter((x) => x.id !== id), { ...a, id }].slice(-TRANSFER_CORRECTION_MAX);
+}
+
+export function withdrawTransferCorrection(list: readonly TransferCorrectionApproval[], id: string): TransferCorrectionApproval[] {
+  return list.filter((x) => x.id !== id.trim());
+}
+
+/**
+ * The correction id + fingerprint a row of an E63 issue carries, so the hub
+ * button can approve EXACTLY what the owner was shown. Row id format:
+ * "<transfer id>#<fingerprint>".
+ */
+export function e63RowId(c: { id: string; fingerprint: string }): string {
+  return `${c.id}#${c.fingerprint}`;
+}
+export function parseE63RowId(rowId: string): { id: string; fingerprint: string } | null {
+  const i = rowId.indexOf("#");
+  if (i <= 0 || i === rowId.length - 1) return null;
+  return { id: rowId.slice(0, i), fingerprint: rowId.slice(i + 1) };
+}
+
 export function transferLedgerEntries(held: ReadonlyMap<string, TransferHeld | null>): LedgerEntry[] {
   const out: LedgerEntry[] = [];
   for (const [externalId, h] of held) if (h && h.state) out.push({ fileType: "InventoryTransfer", externalId, filedName: null, state: h.state, productExternalId: null });
@@ -321,9 +564,13 @@ export function normalizeOwnerVendorId(raw: unknown): { ok: true; value: string 
 
 /** Owner-facing summary line for the hub. */
 export function transferSummaryText(p: TransferPlan): string {
-  const blocking = p.issues.filter((i) => TRANSFER_BLOCKING.has(i.code)).length;
+  const blocking = p.issues.filter((i) => TRANSFER_BLOCKING.has(i.code) && i.code !== "E63_TRANSFER_CORRECTION_PENDING").length;
   const parts = [`${p.rows.length} transfer row(s)`];
   if (p.alreadyHeld.length) parts.push(`${p.alreadyHeld.length} already reported`);
+  if (p.legacyHeld.length) parts.push(`${p.legacyHeld.length} of them under the old "TR-" id`);
+  const sent = p.corrections.filter((c) => c.approved).length;
+  if (sent) parts.push(`${sent} approved correction(s) sent as Update`);
+  if (p.corrections.length - sent) parts.push(`${p.corrections.length - sent} correction(s) waiting for approval`);
   if (blocking) parts.push(`${blocking} lot(s) need fixing`);
   if (p.skipped.cultivera) parts.push(`${p.skipped.cultivera} Cultivera lot(s) skipped (Cultivera filed them)`);
   return parts.join(", ") + ".";
@@ -338,6 +585,14 @@ export function __runCcrsTransferTests(): { passed: number; failed: number } {
   const ok = (c: boolean, m: string) => {
     if (!c) throw new Error(`ccrs-transfer-core: ${m}`);
     passed += 1;
+  };
+  const throwsT = (f: () => unknown) => {
+    try {
+      f();
+      return false;
+    } catch {
+      return true;
+    }
   };
   const lot = (o: Partial<TransferLot> = {}): TransferLot => ({
     lotId: "L1",
@@ -369,7 +624,7 @@ export function __runCcrsTransferTests(): { passed: number; failed: number } {
   const p = buildTransferRows(base());
   ok(p.rows.length === 1, "one row");
   ok(
-    p.rows[0].join(",") === "417068,413541,WA417068-ABC,WA417068-ABC,24,11/03/2026,TR-WA417068-ABC,Greenway,11/03/2026,,,Insert",
+    p.rows[0].join(",") === "417068,413541,WA417068-ABC,WA417068-ABC,24,11/03/2026,WA417068-ABC,Greenway,11/03/2026,,,Insert",
     `row bytes ${p.rows[0].join(",")}`,
   );
   ok(buildTransferRows(base({ lots: [lot({ disposition: "rejected_at_dock" })] })).skipped.notAccepted === 1, "refused lot skipped");
@@ -384,18 +639,57 @@ export function __runCcrsTransferTests(): { passed: number; failed: number } {
   ok(buildTransferRows(base({ lots: [lot({ receivedOn: "2026-10-30" })] })).skipped.outOfWindow === 1, "before window");
   ok(buildTransferRows(base({ lots: [lot({ receivedOn: "2026-10-30" })], catchUp: true, notBefore: null })).rows.length === 1, "catch-up");
   ok(buildTransferRows(base({ lots: [lot({ receivedOn: "2026-10-30" })], catchUp: true })).skipped.outOfWindow === 1, "floor holds under catch-up");
-  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "filed", inFlight: false }]]) })).alreadyHeld.length === 1, "held not re-sent");
-  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "uncertain", inFlight: false }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "uncertain withheld");
-  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", null]]) })).rows.length === 1, "not held -> sent");
-  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: null, inFlight: true }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "in flight withheld");
-  const dIn = decodeTransferSlice("prod", { env: "prod", entries: [["TR-2", null, true]] }, null);
-  ok(dIn.kind === "loaded" && dIn.held.get("TR-2")?.inFlight === true && transferLedgerEntries(dIn.held).length === 0, "in-flight decoded, not a ledger entry");
+  ok(buildTransferRows(base({ held: new Map([["WA417068-ABC", { state: "filed", inFlight: false }]]) })).alreadyHeld.length === 1, "held not re-sent");
+  ok(buildTransferRows(base({ held: new Map([["WA417068-ABC", { state: "uncertain", inFlight: false }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "uncertain withheld");
+  ok(buildTransferRows(base({ held: new Map([["WA417068-ABC", null]]) })).rows.length === 1, "not held -> sent");
+  ok(buildTransferRows(base({ held: new Map([["WA417068-ABC", { state: null, inFlight: true }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "in flight withheld");
+  // C1 D-1: the ExternalIdentifier IS the To lot id [EXAM2 L0056]; the legacy TR- alias still holds it back.
+  const EXT = CCRS_COLUMNS.InventoryTransfer.indexOf("ExternalIdentifier");
+  const TO = CCRS_COLUMNS.InventoryTransfer.indexOf("ToInventoryExternalIdentifier");
+  ok(p.rows[0][EXT] === p.rows[0][TO] && !p.rows[0][EXT].startsWith("TR-"), "C1: ExternalIdentifier === ToInventoryExternalIdentifier, no prefix");
+  ok(transferExternalId("WA1.X") === "WA1.X", "C1: id passes through byte for byte");
+  ok(transferLookupIds(["A", "A", ""]).join(",") === "A,TR-A", "C1: lookup asks for plain + legacy, once each");
+  const leg = buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "filed", inFlight: false }]]) }));
+  ok(leg.rows.length === 0 && leg.legacyHeld.join() === "TR-WA417068-ABC" && leg.alreadyHeld.join() === "TR-WA417068-ABC", "C1: legacy TR- held -> never re-Inserted");
+  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "uncertain", inFlight: false }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "C1: legacy uncertain withheld");
+  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: null, inFlight: true }]]) })).issues[0]?.code === "E14_TRANSFER_LEDGER_WITHHELD", "C1: legacy in flight withheld");
+  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "deleted", inFlight: false }]]) })).rows.length === 1, "C1: legacy deleted -> sent under the plain id");
+  // C1 D-3: correction path [EXAM2 L0058].
+  const held1 = new Map([["WA417068-ABC", { state: "filed" as LedgerState, inFlight: false }]]);
+  const told = (cells: Record<string, string>, o: Partial<TransferTold> = {}): TransferToldOutcome => ({
+    kind: "loaded",
+    byId: new Map([["WA417068-ABC", { state: "filed", inFlight: false, told: { FromLicenseNumber: "417068", ToLicenseNumber: "413541", FromInventoryExternalIdentifier: "WA417068-ABC", ToInventoryExternalIdentifier: "WA417068-ABC", Quantity: "24", TransferDate: "11/03/2026", CreatedBy: "Greenway", CreatedDate: "11/03/2026", ...cells }, ...o }]]),
+  });
+  const same = buildTransferRows(base({ held: held1, told: told({ Quantity: "24.00" }), batchDay: "11/08/2026" }));
+  ok(same.rows.length === 0 && same.corrections.length === 0 && same.alreadyHeld.length === 1, "C1: unchanged (24 = 24.00) -> nothing");
+  const pend = buildTransferRows(base({ held: held1, told: told({ Quantity: "20" }), batchDay: "11/08/2026" }));
+  ok(pend.rows.length === 0 && pend.issues[0]?.code === "E63_TRANSFER_CORRECTION_PENDING" && pend.corrections[0]?.changed[0]?.column === "Quantity", "C1: changed + unapproved -> E63, no row");
+  const fp = pend.corrections[0].fingerprint;
+  const upd = buildTransferRows(base({ held: held1, told: told({ Quantity: "20", CreatedDate: "11/03/2026" }), approvals: [{ id: "WA417068-ABC", fingerprint: fp, at: "", by: null }], batchDay: "11/08/2026" }));
+  ok(upd.rows[0]?.join(",") === "417068,413541,WA417068-ABC,WA417068-ABC,24,11/03/2026,WA417068-ABC,Greenway,11/03/2026,Greenway,11/08/2026,Update", `C1: approved -> Update row ${upd.rows[0]?.join(",")}`);
+  ok(upd.alreadyHeld.length === 0 && upd.issues.length === 0, "C1: an Update is not counted as already held");
+  ok(buildTransferRows(base({ held: held1, told: told({ Quantity: "20" }), approvals: [{ id: "WA417068-ABC", fingerprint: fp.replace("|24|", "|25|"), at: "", by: null }], batchDay: "11/08/2026" })).issues[0]?.code === "E63_TRANSFER_CORRECTION_PENDING", "C1: stale approval does not cover new values");
+  ok(buildTransferRows(base({ held: held1, told: told({ Quantity: "20" }, { inFlight: true }), batchDay: "11/08/2026" })).corrections.length === 0, "C1: in flight -> no correction yet");
+  ok(buildTransferRows(base({ held: held1, told: told({ Quantity: "20" }) , approvals: [{ id: "WA417068-ABC", fingerprint: fp, at: "", by: null }], batchDay: "11/01/2026" })).rows[0]?.[10] === "11/03/2026", "C1: UpdatedDate never before CreatedDate");
+  ok(buildTransferRows(base({ held: new Map([["TR-WA417068-ABC", { state: "filed", inFlight: false }]]), told: told({ Quantity: "20" }) })).corrections.length === 0, "C1: legacy id never auto-corrected");
+  ok(transferChangedColumns(upd.rows[0], { FromLicenseNumber: "417068" }).length === 5, "C1: missing told cells count as changed");
+  ok(parseE63RowId(e63RowId({ id: "A.1", fingerprint: "A.1|x|y" }))?.fingerprint === "A.1|x|y" && parseE63RowId("nohash") === null, "C1: E63 row id round trip");
+  ok(normalizeTransferApprovals({ items: [{ id: "A", fingerprint: "f1" }, { id: "A", fingerprint: "f2" }, { id: "", fingerprint: "x" }] }).map((a) => a.fingerprint).join() === "f2", "C1: approvals normalized, one per id");
+  ok(withdrawTransferCorrection(approveTransferCorrection([], { id: "A", fingerprint: "f", at: "", by: null }), "A").length === 0, "C1: approve / withdraw");
+  ok(transferCorrectionSettingKey("prod") !== transferCorrectionSettingKey("preprod"), "C1: approvals are per environment");
+  const dt = decodeTransferTold("prod", { env: "prod", entries: [["A", "filed", { Quantity: "2" }, false]] }, null);
+  ok(dt.kind === "loaded" && dt.byId.get("A")?.told?.Quantity === "2", "C1: told decoded");
+  ok(decodeTransferTold("prod", null, { code: "42883", message: "" }).kind === "absent", "C1: told missing fn -> absent");
+  ok(throwsT(() => decodeTransferTold("prod", { env: "prod", entries: [["A", "filed", [], false]] }, null)), "C1: told array throws");
+  ok(throwsT(() => decodeTransferTold("prod", { env: "prod", entries: [["A", null, null, false], ["A", null, null, false]] }, null)), "C1: told duplicate throws");
+  const dIn = decodeTransferSlice("prod", { env: "prod", entries: [["T2", null, true]] }, null);
+  ok(dIn.kind === "loaded" && dIn.held.get("T2")?.inFlight === true && transferLedgerEntries(dIn.held).length === 0, "in-flight decoded, not a ledger entry");
   ok(buildTransferRows(base({ reportable: new Set() })).issues[0]?.code === "E14_TRANSFER_LOT_NOT_REPORTED", "To lot must be reported");
   ok(transferDate("2026-11-03") === "11/03/2026", "date has no tz shift");
   ok(vendorIdSourceFor("wcia") === "wcia_json" && vendorIdSourceFor("pdf-manifest") === "pdf_guess", "source stamp");
   ok(!normalizeOwnerVendorId("a,b").ok && normalizeOwnerVendorId(" X1 ").ok, "owner id normalize");
-  const dec = decodeTransferSlice("prod", { env: "prod", entries: [["TR-1", "filed", false]] }, null);
-  ok(dec.kind === "loaded" && dec.held.get("TR-1")?.state === "filed", "decode");
+  const dec = decodeTransferSlice("prod", { env: "prod", entries: [["T1", "filed", false]] }, null);
+  ok(dec.kind === "loaded" && dec.held.get("T1")?.state === "filed", "decode");
   ok(decodeTransferSlice("prod", null, { code: "42883", message: "" }).kind === "absent", "missing fn -> absent");
   let threw = false;
   try {
@@ -404,5 +698,6 @@ export function __runCcrsTransferTests(): { passed: number; failed: number } {
     threw = true;
   }
   ok(threw, "env mismatch throws");
+  ok(throwsT(() => decodeTransferTold("prod", { env: "preprod", entries: [] }, null)), "C1: told env mismatch throws");
   return { passed, failed: 0 };
 }

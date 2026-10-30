@@ -13,15 +13,17 @@ lines = {k: open(os.path.join(ROOT, v), encoding="utf-8", errors="replace").read
 # FAQ19  = LCB CCRS FAQ as fetched 2026-10-19 (NOT the 2026-09-15 [FAQ] text)
 # SIGNIN = CCRS User Sign-In Guide CIB154 8/26 (pdftotext)
 # BUL1006 = LCB bulletin 2026-10-06 "Oct. 12: CCRS Transition to WA.gov Login"
+# EXAM2  = examiner Brian's answers to our 12 questions (saved 2026-10-29), verbatim
 REPO_SRC = {"EXAM": "docs/ccrs-bible/evidence/2026-10-19-owner-request/owner-request-verbatim.txt",
             "FAQ19": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/faq.txt",
             "SIGNIN": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/signin.txt",
-            "BUL1006": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/bulletin-42e03cc.txt"}
+            "BUL1006": "docs/ccrs-bible/evidence/2026-10-19-owner-request/lcb-2026-10-19/bulletin-42e03cc.txt",
+            "EXAM2": "docs/ccrs-bible/evidence/2026-10-29-examiner-answers/brian-answers-verbatim.txt"}
 for k, v in REPO_SRC.items():
     fp = os.path.join(REPO, v)
     if os.path.exists(fp):
         lines[k] = open(fp, encoding="utf-8", errors="replace").read().split("\n")
-pin_re = re.compile(r"\[(G|FAQ19|FAQ|API|LOGIN|ADMIN|SAW|MANI|EXAM|SIGNIN|BUL1006) L(\d{4})(?:-L(\d{4}))?\]")
+pin_re = re.compile(r"\[(G|FAQ19|FAQ|API|LOGIN|ADMIN|SAW|MANI|EXAM2|EXAM|SIGNIN|BUL1006) L(\d{4})(?:-L(\d{4}))?\]")
 bad, checked, quote_miss = 0, 0, 0
 for f in sorted(glob.glob(os.path.join(REPO, "docs/ccrs-bible/*.md"))):
     if os.path.basename(f)[:2] in ("02", "03"):

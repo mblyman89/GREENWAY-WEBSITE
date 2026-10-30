@@ -51,6 +51,8 @@ import {
 } from "@/lib/compliance/obligation-waiver-store";
 import { HANDOVER_SETTING_KEY, getHandoverFacts, setHandoverFacts } from "@/lib/compliance/ccrs-handover-store";
 import { updateCcrsCleanup } from "@/lib/compliance/ccrs-cleanup-store";
+import { updateTransferCorrectionApprovals } from "@/lib/compliance/ccrs-transfer-correction-store";
+import { parseE63RowId } from "@/lib/compliance/ccrs-transfer-core";
 
 const BASE = "/admin/compliance/ccrs";
 
@@ -712,6 +714,40 @@ export async function ccrsCleanupAction(formData: FormData): Promise<void> {
       op === "add"
         ? `"${label || key}" is on the CCRS clean-up list: it and its lots are no longer reported or counted as owed.`
         : `"${label || key}" was removed from the CCRS clean-up list and will be reported again.`,
+    )}`,
+  );
+}
+
+/**
+ * CCRS slice C1 (D-3): approve (or withdraw) one InventoryTransfer correction.
+ * The examiner: "Yes, the update path is the correct way to make corrections."
+ * [EXAM2 L0058]. The approval names the transfer id AND the exact new values
+ * (fingerprint) the owner was shown; a later change needs a new approval. The
+ * next rebuild sends it as an Update with the same ExternalIdentifier.
+ */
+export async function transferCorrectionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const env = formEnv(formData);
+  const op = String(formData.get("op") ?? "") === "withdraw" ? "withdraw" : "approve";
+  const parsed = parseE63RowId(String(formData.get("row_id") ?? "").slice(0, 1200));
+  if (!parsed) backToWeek(formData, `error=${encodeURIComponent("No transfer correction was named.")}`);
+  const res = await updateTransferCorrectionApprovals(env, op, parsed, session.profile.id);
+  if (!res.ok) backToWeek(formData, `error=${encodeURIComponent(res.error ?? "Could not save the transfer correction.")}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: op === "approve" ? "ccrs.transfer_correction.approve" : "ccrs.transfer_correction.withdraw",
+    entityType: "ccrs_inventory_transfer",
+    entityId: `${env}:${parsed.id}`,
+    after: { env, fingerprint: parsed.fingerprint, listSize: res.items?.length ?? null },
+  });
+  revalidateNagSurfaces();
+  backToWeek(
+    formData,
+    `saved=1&note=${encodeURIComponent(
+      op === "approve"
+        ? `Correction of transfer ${parsed.id} approved. Rebuild this week: it is sent as an Update with the same id.`
+        : `Approval of the correction of transfer ${parsed.id} withdrawn. Nothing is sent for it.`,
     )}`,
   );
 }

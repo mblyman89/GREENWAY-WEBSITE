@@ -313,6 +313,18 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - The hub groups E61 rows under "already in a file waiting for its CCRS answer", with the answer/Abandon step.
 - See Part 09 W-3.
 
+### A.20 C1 Transfer id = lot id; vendor id kept; transfer corrections by Update — DONE in code (2026-10-30)
+
+- **Before:**
+  - Transfers were filed as `TR-<lot id>`, which the examiner says is wrong: "you can not have a suffix" [EXAM2 L0056].
+  - New lots got our hyphenated copy of the vendor's dotted id.
+  - A filed transfer could never be corrected.
+- **Now:**
+  - The transfer id is the lot id. Legacy `TR-` filings are recognised and never re-sent.
+  - Lots from WCIA JSON or CCRS csv keep the vendor's id byte for byte (no collision, never renamed after filing).
+  - A changed transfer CCRS accepted shows as E63 with **Approve correction**; once approved it is sent as an Update with the same id [EXAM2 L0058] [G L0247]. This needs migration 0325.
+- See Part 09 C1.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

@@ -943,6 +943,7 @@ import { __runCcrsEqualizeCoreTests } from "../../src/lib/compliance/ccrs-equali
 import { __runCcrsCopyVerifyCoreTests } from "../../src/lib/compliance/ccrs-copy-verify-core";
 import { __runReturnCorrectionsTests } from "../../src/lib/compliance/ccrs-return-corrections-core";
 import { __runCcrsTransferTests } from "../../src/lib/compliance/ccrs-transfer-core";
+import { __runCcrsIntakeIdTests } from "../../src/lib/compliance/ccrs-intake-id-core";
 import { __runInventoryDeltaTests } from "../../src/lib/compliance/ccrs-inventory-delta-core";
 import { __runIntegratorApiTests } from "../../src/lib/compliance/ccrs-integrator-api-core";
 import { __runResetProofTests } from "../../src/lib/accounting/reset-proof-core";
@@ -1904,7 +1905,8 @@ __runLiquidVolumeTests();
   assertRan("ccrs-equalize-core", __runCcrsEqualizeCoreTests(), 24); // S-14b: +5 (final-upload guard, audit-counted hold)
   assertRan("ccrs-copy-verify-core", __runCcrsCopyVerifyCoreTests(), 15);
   assertRan("ccrs-return-corrections-core", __runReturnCorrectionsTests(), 18); // R5-1: customer-return Sale corrections ride the batch Sale file
-  assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 27); // R6-2: InventoryTransfer rows for received deliveries
+  assertRan("ccrs-transfer-core", __runCcrsTransferTests(), 51); // R6-2: InventoryTransfer rows for received deliveries; C1: no TR- prefix, legacy alias, correction path
+  assertRan("ccrs-intake-id-core", __runCcrsIntakeIdTests(), 23); // C1 (D-2): new lots keep the vendor's own id (trusted source, no collision) [EXAM2 L0056]
   assertRan("ccrs-inventory-delta-core", __runInventoryDeltaTests(), 22); // R6-3: Inventory.csv sends only what changed
   assertRan("ccrs-integrator-api-core", __runIntegratorApiTests(), 20); // R6-4: integrator API client foundation (switched off)
   assertRan("reset-proof-core", __runResetProofTests(), 11); // R5-2: the factory reset is checked against its own per-table report

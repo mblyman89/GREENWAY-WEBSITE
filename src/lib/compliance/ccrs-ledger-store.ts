@@ -17,7 +17,7 @@ import { checkAssignResult, decodeLedgerSlice, LEDGER_SLICE_RPC, type AssignedPr
 import { checkEmitResult, sha256Utf8, type EmitIssue, type EmitPayloadFile, type EmitResultFile } from "./ccrs-outbox-core";
 import { LEDGER_STATES, type LedgerEnv, type LedgerState } from "./ccrs-ledger-core";
 import { decodeSaleSlice, SALE_SLICE_RPC, type SaleSliceOutcome } from "./ccrs-return-corrections-core";
-import { decodeTransferSlice, TRANSFER_SLICE_RPC, type TransferSliceOutcome } from "./ccrs-transfer-core";
+import { decodeTransferSlice, decodeTransferTold, TRANSFER_SLICE_RPC, TRANSFER_TOLD_RPC, type TransferSliceOutcome, type TransferToldOutcome } from "./ccrs-transfer-core";
 import { decodeInventoryTold, INVENTORY_TOLD_RPC, type InventoryToldOutcome } from "./ccrs-inventory-delta-core";
 import type { CcrsRetailerFileType } from "./ccrs-batch-core";
 import type { CcrsOutcomeKind, OurRow, RejectedRow } from "./ccrs-outcome-core";
@@ -71,6 +71,23 @@ export async function loadTransferSlice(admin: Admin, env: LedgerEnv, ids: reado
   if (uniq.length === 0) return { kind: "loaded", held: new Map() };
   const { data, error } = await admin.rpc(TRANSFER_SLICE_RPC, { p_env: env, p_ids: uniq });
   return decodeTransferSlice(env, data, error);
+}
+
+/**
+ * C1 (0325): per InventoryTransfer id, what CCRS last ACCEPTED and whether a
+ * file naming it is unanswered. "absent" before 0325 (no corrections proposed).
+ * Chunked like loadInventoryTold.
+ */
+export async function loadTransferTold(admin: Admin, env: LedgerEnv, ids: readonly string[]): Promise<TransferToldOutcome> {
+  const uniq = [...new Set(ids)].filter((x) => x !== "");
+  const byId: Extract<TransferToldOutcome, { kind: "loaded" }>["byId"] = new Map();
+  for (let i = 0; i < uniq.length; i += 1000) {
+    const { data, error } = await admin.rpc(TRANSFER_TOLD_RPC, { p_env: env, p_ids: uniq.slice(i, i + 1000) });
+    const part = decodeTransferTold(env, data, error);
+    if (part.kind === "absent") return { kind: "absent" };
+    for (const [k, v] of part.byId) byId.set(k, v);
+  }
+  return { kind: "loaded", byId };
 }
 
 /**
