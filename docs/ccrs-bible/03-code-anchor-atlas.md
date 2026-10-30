@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-10-30 09:08Z at commit `6f4f2a79358dd36e8b6facad96372891d0ca2188` by `build_atlas_part.py`.
+Generated 2026-10-30 15:07Z at commit `dddced438c8994d9a305e79ab1e37fccbab1be65` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 6f4f2a7 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff dddced4 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -411,37 +411,37 @@ Generated 2026-10-30 09:08Z at commit `6f4f2a79358dd36e8b6facad96372891d0ca2188`
 - L1032: `export async function cleanSlateTestData(): Promise<{`
 - L1080: `export async function backfillImportLots(`
 
-### `src/lib/pos/returns-core.ts` (396 L)
+### `src/lib/pos/returns-core.ts` (428 L)
 
-- L49: `export const RETURN_WINDOW_DAYS = 15;`
-- L65: `export function defaultReturnPolicyText(): string {`
-- L86: `export function normalizeReceiptNumber(raw: unknown): string | null {`
-- L97: `export function clientUuidMatchesReceipt(clientUuid: string, receiptNumber8: string): boolean {`
-- L108: `export function receiptLookupSuffix(raw: unknown): string | null {`
-- L122: `export function pacificDaysBetween(earlierIso: string, laterIso: string): number {`
-- L130: `export type ReturnWindowVerdict =`
-- L140: `export function returnWindowVerdict(purchasedAtIso: string, nowIso: string): ReturnWindowVerdict {`
-- L163: `export type ReturnEligibilityInput = {`
-- L174: `export type ReturnEligibilityVerdict =`
-- L184: `export function evaluateReturnEligibility(input: ReturnEligibilityInput): ReturnEligibilityVerdict {`
-- L212: `export type RefundLineInput = {`
-- L221: `export type RefundLineVerdict = { ok: true; refundMinor: number } | { ok: false; error: string };`
-- L229: `export function refundForLine(input: RefundLineInput): RefundLineVerdict {`
-- L249: `export function refundForLines(lines: RefundLineInput[]): RefundLineVerdict {`
-- L264: `export type PointsClawbackInput = {`
-- L280: `export function pointsClawback(input: PointsClawbackInput): number {`
-- L297: `export function __runPosReturnsCoreTests(): void {`
+- L63: `export const RETURN_WINDOW_DAYS = DEFAULT_RETURN_WINDOW_DAYS;`
+- L79: `export function defaultReturnPolicyText(policy?: PosReturnPolicyConfig | null): string {`
+- L96: `export function normalizeReceiptNumber(raw: unknown): string | null {`
+- L107: `export function clientUuidMatchesReceipt(clientUuid: string, receiptNumber8: string): boolean {`
+- L118: `export function receiptLookupSuffix(raw: unknown): string | null {`
+- L132: `export function pacificDaysBetween(earlierIso: string, laterIso: string): number {`
+- L140: `export type ReturnWindowVerdict =`
+- L151: `export function returnWindowVerdict(`
+- L178: `export type ReturnEligibilityInput = {`
+- L194: `export type ReturnEligibilityVerdict =`
+- L204: `export function evaluateReturnEligibility(input: ReturnEligibilityInput): ReturnEligibilityVerdict {`
+- L234: `export type RefundLineInput = {`
+- L243: `export type RefundLineVerdict = { ok: true; refundMinor: number } | { ok: false; error: string };`
+- L251: `export function refundForLine(input: RefundLineInput): RefundLineVerdict {`
+- L271: `export function refundForLines(lines: RefundLineInput[]): RefundLineVerdict {`
+- L286: `export type PointsClawbackInput = {`
+- L302: `export function pointsClawback(input: PointsClawbackInput): number {`
+- L319: `export function __runPosReturnsCoreTests(): void {`
 
-### `src/lib/pos/returns-store.ts` (395 L)
+### `src/lib/pos/returns-store.ts` (433 L)
 
-- L63: `export type CounterReturnLine = {`
-- L74: `export type CounterReturnSale = {`
-- L87: `export type CounterReturnLookup =`
-- L102: `export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterReturnLookup> {`
-- L225: `export type ProcessCounterReturnInput = {`
-- L236: `export type ProcessCounterReturnResult =`
-- L261: `export async function processCounterReturn(`
-- L394: `export { receiptNumber };`
+- L70: `export type CounterReturnLine = {`
+- L89: `export type CounterReturnSale = {`
+- L106: `export type CounterReturnLookup =`
+- L121: `export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterReturnLookup> {`
+- L261: `export type ProcessCounterReturnInput = {`
+- L272: `export type ProcessCounterReturnResult =`
+- L297: `export async function processCounterReturn(`
+- L432: `export { receiptNumber };`
 
 ### `src/lib/pos/variant-lot-core.ts` (145 L)
 
