@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (owner answers to Q-05b-1…5 applied; Phase 0.4 fix G-31 built; draft for owner review) |
+| **Version** | 1.3 (Phase 4 (plan rows 5.1/5.2; G-29/G-30/G-30A/G-32) built: Other Inventory is on the register; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every manager-level login (owner, admin, manager) who looks after non-cannabis goods (glass, papers, devices), the greenwaymerch.com apparel list, the menu that goes live on the website and the register, website categories and inventory types, the sales-limit classification worklist, and cannabis sell prices. Budtenders read §4.4 (ringing non-cannabis items) and §9. |
@@ -13,7 +13,7 @@
 
 > **How to use this document.** Part 1 (§4.1–§4.9) is **Other Inventory**: the non-cannabis catalog, SKU labels, adjustments, vendor paper invoices and costs, and how a non-cannabis item is sold today. Part 2 (§4.10–§4.11) is **Merch Inventory** (greenwaymerch.com). Part 3 (§4.12–§4.14) is **Publish Menu**. Part 4 (§4.15–§4.17) is **Types & Categories** and re-filing one product. Part 5 (§4.18–§4.19) is the **Sales-Limit Classification** worklist. Part 6 (§4.20–§4.21) is the **cannabis sell price**. Section 5 lists the messages. Section 8 holds the paper forms. Section 9 is a one-page card. Words in **bold** are the exact labels you will see on the screen.
 
-> **The one thing to know before anything else.** **Other Inventory is not connected to the register.** The SKU label it prints and the manufacturer barcode it stores **do not ring up** when scanned, and a sale at the register **does not lower** the count on the Other Inventory page (§4.4, finding F-05b-1, **S1**). Today every non-cannabis item is rung on the register **Keypad** under **merch** or **accessories**, and the shelf count is put right by the weekly reconciliation in §4.5 (form 8.1). Until gap G-29 is built, the **On hand**, **Reorder now**, **Retail value** and **Margin on hand** figures on that page are only as good as the last reconciliation.
+> **The one thing to know before anything else.** **Other Inventory is on the register (Phase 4, G-29 BUILT; finding F-05b-1 FIXED).** Every **active** item with a price is a product on the register, its SKU label and its manufacturer barcode **ring it up** when scanned, and a completed sale **lowers On hand** in the same database step that writes the ledger row (§4.4). A void puts the units back, and a counter return can put them back on the shelf (§4.4). The sale books the item's average unit cost as cost of goods sold (finding F-05b-15 FIXED). **Database update 0323 must be run first** (`docs/MIGRATIONS_TO_RUN.md`, "Fix 4"); until it is, items still show and scan on the register and sales still lower On hand by the older two-step write, but counter returns of these items are refused with a plain message. The **Keypad** stays for anything not in the catalog, and the Monday reconciliation (§4.5, form 8.1) now only has to catch keypad lines and shrink.
 
 ---
 
@@ -89,9 +89,11 @@ The owner asked for SOPs that cover how the back office is really used (`00-OWNE
 
 | Action | Who the app allows | Where the rule lives |
 |---|---|---|
-| Open **Other Inventory**, add a product, **Confirm**, **Archive**, **Post adjustment**, **Save settings**, **Save invoice**, print a SKU label | Owner, admin, manager (`inventory.manage`) | `noncannabis/page.tsx` L87; `noncannabis/actions.ts` L66, L87, L95, L108, L156, L284; `[id]/label/page.tsx` L28; `roles.ts` L107 |
-| **Save cost** (key a missing non-cannabis unit cost) | Owner, admin only (`inventory.cost.fill`) | `roles.ts` L149; `noncannabis/actions.ts` L337–368 |
-| Open **Merch Inventory**, **Hide from website**, **Put back on website**, **Remove**, **Copy Printful stock to the website**, **Download CSV** | Owner, admin, manager (`inventory.manage`) | `merch/page.tsx` L34; `merch/actions.ts` L23, L34, L51; `merch/export/route.ts` L14 |
+| Open **Other Inventory**, add a product, **Confirm**, **Archive**, **Restore**, **Post adjustment**, **Save settings**, **Save invoice**, print a SKU label | Owner, admin, manager (`inventory.manage`) | `noncannabis/page.tsx` L87; `noncannabis/actions.ts` L69, L98 (Confirm / Archive / Restore share one audited step, L96–124), L185, L237, L364; `[id]/label/page.tsx` L28; `roles.ts` L111 |
+| **Save change** (change a non-cannabis **shelf price** or **unit cost**; reason required) | Owner, admin, manager (`inventory.manage`; owner D46) | `noncannabis/actions.ts` L146–182; `MerchCatalog.tsx` `PriceCostForm` |
+| **Save cost** (key a missing non-cannabis unit cost) | Owner, admin only (`inventory.cost.fill`) | `roles.ts` L154; `noncannabis/actions.ts` L418–419 |
+| Open **Merch Inventory**, **Hide from website**, **Put back on website**, **Copy Printful stock to the website**, **Download CSV** | Owner, admin, manager (`inventory.manage`) | `merch/page.tsx` L35; `merch/actions.ts` L23, L51; `merch/export/route.ts` L14 |
+| Merch **Remove...** (permanently remove a product from greenwaymerch.com) | Owner, admin only (`merch.remove`; owner D47) | `roles.ts` L155–158; `merch/actions.ts` L35; `merch/page.tsx` L37, L131 (managers do not see the box) |
 | Open **Publish Menu** | Owner, admin, manager (`menu.import`) | `publish/page.tsx` L116; `roles.ts` L83 |
 | Press the row button that publishes, **Publish this menu live**, **Publish the ready products** | Owner, admin, manager (`menu.publish`) | `publish/page.tsx` L118, L395–412; `menu-imports/actions.ts` L179, L358; `roles.ts` L84 |
 | Publish with products still awaiting review (**Publish now and fix after**) | Owner, admin only (`menu.publish.open_reviews`) | `menu-imports/actions.ts` L245–250; `roles.ts` L89 |
@@ -100,9 +102,9 @@ The owner asked for SOPs that cover how the back office is really used (`00-OWNE
 
 **Store rules on top of the app (this SOP).**
 
-- **Non-cannabis sell price and cost changes:** **owner, admin or manager** (owner decision D46: *"Q-05b-2- owner, admin, manager."*), on form 8.2 (§4.9). The app has no way to change either after an item is created (finding F-05b-6), so until gap G-30 is built the change is made by archive and re-create. **The cost of a non-cannabis item may be changed** (D48: *"non cannabis should be allowed to have their cost modified."*). This is the opposite of cannabis, whose cost is never typed (D38).
+- **Non-cannabis sell price and cost changes:** **owner, admin or manager** (owner decision D46: *"Q-05b-2- owner, admin, manager."*). **The app now does this** with **Save change** (Phase 4, G-30 BUILT; finding F-05b-6 FIXED; §4.9): a reason is required, $0.00 is refused, the SKU never changes, and the Security Log keeps old → new. **The cost of a non-cannabis item may be changed** (D48: *"non cannabis should be allowed to have their cost modified."*). This is the opposite of cannabis, whose cost is never typed (D38).
 - **Moving or re-filing a product across the cannabis / non-cannabis line** (into or out of **Accessories**, **Greenway Merch** or **Paraphernalia**): **never, by anyone, in either direction. This is permanent** (owner decision D48: *"refused outright, non cannabis should also be refused outright moving them into a cannabis type."*). **The app now refuses it with no override** (Phase 0.4, G-31 **BUILT**; `cannabis-line-core.ts`; §4.15–§4.17; finding F-05b-9 FIXED).
-- **Removing a product from greenwaymerch.com:** **owner or admin only** (owner decision D47: *"Q05b-3- owner and admin."*). The app still lets a manager press **Remove** (finding F-05b-14), so this is a store rule until gap G-30A is built (§4.11).
+- **Removing a product from greenwaymerch.com:** **owner or admin only** (owner decision D47: *"Q05b-3- owner and admin."*). **The app now enforces it** (`merch.remove`; Phase 4, G-30A BUILT; finding F-05b-14 FIXED; §4.11).
 - **Cannabis sell price where the lot page says "Cost is unknown for this lot":** **nobody saves a price until the manifest cost is entered** (owner decision D49: *"blocked until the manifest cost is entered."*; §4.21, D38).
 
 ## 3. Before you start
@@ -130,20 +132,19 @@ The page header reads **Non-cannabis inventory** with the line *"Glass, accessor
 - records a vendor's paper invoice and turns it into a payable on Accounts Payable (§4.6);
 - shows a **Reorder now** list, **Retail value**, **Margin on hand** and an ABC ranking by retail value (`merch-intel-core.ts` L231–258).
 
-**What it does not do (finding F-05b-1, S1):**
+**On the register (Phase 4, G-29 BUILT; finding F-05b-1 FIXED):**
 
-- **It is not on the register.** The register's product list comes only from the published menu (`live-menu.ts` L158–160). The register's barcode list holds only cannabis lot codes and CCRS identifiers (`api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–75), and a scan matches only those (`scan-to-cart-core.ts` L101–144). No register or sale code reads the non-cannabis catalog at all; the only readers are this page, its store, the knowledge base and system tools.
-- **So the SKU label and the UPC do not ring up,** although the label page's own design note says it exists *"so staff can scan them at the register"* (`[id]/label/page.tsx` L7–8), and the page's help panel says *"staff scan the package itself"* (`noncannabis/page.tsx` L230–240).
-- **A register sale does not lower On hand.** Keypad lines are skipped by the sale decrement on purpose (`sale-decrement.ts` L107–110), and there is no other link.
-
-Until gap **G-29** is built, run Other Inventory as a **shelf catalog with a weekly count** (§4.4–§4.5). Its figures are true only as of the last reconciliation.
+- **Every active item with a price is a register product.** The register's menu download adds them as their own cards, keyed `nc-<item id>` so they can never be mistaken for a cannabis product (`api/pos/menu/route.ts` L449–464; `pos-catalog-core.ts` `toPosMenuProduct`). A draft, an archived item or an item priced $0.00 is not sold. An item at **On hand** 0 still shows, marked unavailable, so a scan says it is out instead of "not found".
+- **The SKU label and the UPC ring it up.** Both join the register's barcode list. If a code is also a cannabis lot code, **the cannabis product wins** and the Other Inventory code is left out (`mergeNcBarcodes`).
+- **Category, tax and limits.** Apparel goes on the register as **merch**, everything else as **accessories** (`ncRegisterCategory`). Those are the store's non-cannabis categories, so the line is taxed 9.3% only, with no excise and no purchase limit (§7).
+- **A completed sale lowers On hand** in one database step, with a ledger row **Sold at the register** that keeps the order line and the unit cost at that moment (`sale-decrement.ts` L126; `register-stock.ts` `moveNcStockForOrder`; 0323 `apply_noncannabis_delta`). The same line can never be taken off twice. If the shelf already reads 0, the count stays at 0 (the customer already has the item) and the Monday count finds the gap.
 
 **The owner approved G-29 and widened it** (decision D45): *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."* So G-29 now covers non-cannabis goods **everywhere they should appear**, not only the scan. Read in the code, these are the places where non-cannabis goods are not yet fully used, and each is part of G-29:
 
-1. **Register scan and sale:** the SKU and UPC do not ring up, and a sale does not lower **On hand** (above).
-2. **Cost of goods sold:** a keypad line carries no cost (`costMinorUnits: null`, `custom-sale-core.ts` L144), and the accounting post skips keypad lines when it gathers costs (`sale-posting-service.ts` L360, L369–371). So non-cannabis sales post **no cost of goods sold** to the books, and the margin on them is overstated (finding **F-05b-15**).
-3. **The website and register menu:** the menu is built only from the published menu version (`live-menu.ts` L158–160). The Other Inventory catalog is not a menu source, so its items, prices and stock never reach the shop or the register's product list. (The shop already has a place for them: it groups accessories and merch at the bottom of the grid, `InteractiveMenuBrowser.tsx` L1143–1146.)
-4. **Voids, returns and reports:** a void or return restores nothing, and reports know a keypad line only by its typed note.
+1. **Register scan and sale:** **BUILT** (above).
+2. **Cost of goods sold:** **BUILT.** A catalog line's cost is the item's average unit cost, read when the sale is posted to the books (`sale-posting-service.ts` L364–372). An item whose cost is $0.00 (**Cost missing**) makes the sale's cost entry refuse with the reason, never post a zero, so key the cost (§4.7). Keypad lines still carry no cost (`custom-sale-core.ts` L144), which is why catalog items should be scanned, not keyed (finding **F-05b-15** FIXED for catalog items).
+3. **The website:** **BUILT, display only.** The shop shows an **Also in store** list under the menu: name, brand and shelf price of active, in-stock items (`InStoreGoods.tsx`; `ShopPage.tsx` L210–214). There is no add-to-cart, because online pickup orders stay cannabis-only. Cost, count, SKU and barcode are never shown.
+4. **Voids, returns and reports:** **BUILT.** A void puts the units back (`void-store.ts` L233); a counter return puts them back or writes them off (§4.4); the page shows **Register sales — last 30 days** with revenue, cost and margin (§4.2). Sale.csv for the state never includes these lines (`ccrs-sales.ts` L329–337), and a return of one is never a CCRS Sale correction (`ccrs-batch.ts` L474–475).
 
 The full build list is in gap G-29 (gap register).
 
@@ -191,17 +192,24 @@ Every new item is a **draft** first. A draft does not appear in the catalog unti
 6. Under **Drafts awaiting confirmation**, press **Confirm**. The item moves to the catalog. **Confirm writes no audit row** (`noncannabis/actions.ts` L86–92; finding F-05b-2). Write the confirmation on form 8.1's catalog line.
 7. If the item has no manufacturer barcode, press **🖨 Print SKU** and stick the label on the item or its peg. The label carries the price and name for the customer and the shelf. **Do not try to scan it at the register** (§4.4).
 
-### 4.4 Selling a non-cannabis item today (the Keypad)
+### 4.4 Selling, voiding and returning a non-cannabis item
 
-Until gap G-29 is built, every non-cannabis item in the store is rung on the **Keypad** (SOP-01 §4.8):
+**Selling (Phase 4, G-29 BUILT).**
 
-1. On the register, open the **Keypad** tab.
-2. Pick the category. The keypad offers only **merch** and **accessories** (`custom-sale-core.ts` L48), with the line *"Non-cannabis only (merch & accessories) — cannabis must be rung from the menu so inventory, excise, and limits stay exact."* (`SaleFlow.tsx` L2541–2542). Glass, papers, lighters and devices are **accessories**; Greenway-branded goods sold in the store are **merch**.
-3. In *"What is it? (optional — prints on the receipt)"* (L2564), type **the SKU and a short name** (for example `PIPE-0001 blue spoon`). Store rule: always fill it in. It is up to 60 characters (`custom-sale-core.ts` L55), and it is the only record of what was sold.
-4. Key the price from the label and press **Add to check** (L2586). The keypad stops at $999.99 (`custom-sale-core.ts` L51–52).
-5. Never ring a cannabis product on the keypad, and never ring a non-cannabis item as cannabis. The keypad line is taxed at 9.3% only, with no excise and no purchase limit (§7).
+1. **Scan the SKU label or the package's UPC.** The item goes on the check at its shelf price. You can also find it by name in the register's product list (under **accessories** or **merch**).
+2. If the register says the item is out (On hand 0) but it is in your hand, use the usual **Sell anyway** override; the Monday count (§4.5) puts the count right.
+3. Complete the sale as normal. On hand drops by the units sold, and the ledger row reads **Sold at the register** (§4.5).
 
-The **On hand** figure on Other Inventory does **not** change. The weekly reconciliation (§4.5) brings it back in line.
+**The Keypad stays** for something that is not in the catalog (SOP-01 §4.8). The keypad offers only **merch** and **accessories** (`custom-sale-core.ts` L48), with the line *"Non-cannabis only (merch & accessories) — cannabis must be rung from the menu so inventory, excise, and limits stay exact."* (`SaleFlow.tsx` L2541–2542). Type the item and a short name in *"What is it? (optional — prints on the receipt)"* (L2564). A keypad line lowers no count and books no cost, and **a keypad line makes the whole sale's cost entry refuse** (the accounting rule refuses an unknown cost; `sale-posting-service.ts`). So: **if the item is in the catalog, scan it.** If it is not, add it to the catalog (§4.3 or §4.6) and print its label.
+
+**Voiding a sale.** A void of a sale with catalog items puts each unit back on the shelf, with a ledger row **Sale voided (put back)**. A line is only ever put back once (`void-store.ts` L233; 0323).
+
+**A counter return** (SOP-01 returns). Look up the receipt and pick the line as usual.
+
+- **Restock** puts the units back (**Customer return (put back)** in the ledger) and **Destroy** writes them off (the count does not change, and the result says *"Written off (not put back on the shelf)."*). Both are saved in one database step together with the return record (`returns-store.ts` L285–300; `noncannabis/returns.ts`; 0323 `record_noncannabis_return`).
+- The register still shows the two cannabis checkboxes (original packaging, lot ID legible). Tick both for a non-cannabis item; they are not used for it.
+- The refund, the loyalty clawback and the refund receipt work exactly as for cannabis. The return is **not** sent to the state (non-cannabis is never reported to CCRS).
+- If you see *"Database update 0323 is not applied yet, so Other Inventory returns can't be saved."*, nothing was changed. Tell the owner (the update is in `docs/MIGRATIONS_TO_RUN.md`, Fix 4).
 
 ### 4.5 Adjusting a count, and the weekly reconciliation
 
@@ -221,13 +229,15 @@ The **On hand** figure on Other Inventory does **not** change. The weekly reconc
 **To post an adjustment:**
 
 1. Open the item (**Adjust**).
-2. Pick the **Reason**. The **Direction** (**+ Add** / **− Remove**) follows the reason, but it can be changed afterwards and the app accepts any direction with any reason (`MerchCatalog.tsx` L90–110; `noncannabis/actions.ts` L119; finding F-05b-4). **Store rule: never change the direction away from what the reason means.** Theft is never an add.
+2. Pick the **Reason**. **The reason now sets the direction** (Phase 4, G-32 item 3; finding F-05b-4 FIXED): **Received stock** and **Customer return to stock** always add; **Damaged / broken**, **Theft / loss**, **Promo / giveaway** and **Sale not rung correctly** always remove, and the form shows *"(set by reason)"*. Only **Count correction** and **Other** let you choose **+ Add** or **− Remove**, and the server checks it again (`noncannabis/actions.ts` L184–200; `pos-catalog-core.ts` `signedDeltaForReason`).
 3. Enter **Units** (a whole number) and a **Note**.
 4. Press **Post adjustment**. The count cannot go below zero (*"That would take on-hand below zero (N on hand)."*). The change is audited (`noncannabis.adjust`, `noncannabis/actions.ts` L137–145).
 
-**Two people adjusting the same item at once can lose a change.** The save reads the count, writes the ledger row and then writes the new count as two separate steps, and a failure in the second step leaves a ledger row with no count change (`store.ts` L307–343; finding F-05b-3). Adjust one item at a time and check **On hand** after you post.
+**An adjustment is one database step** (Phase 4, G-32 item 2; finding F-05b-3 FIXED). The item's row is locked, the count is checked, and the ledger row and the new **On hand** are written together, so two people adjusting at once can no longer lose a change, and a refusal changes nothing (*"That would take On hand below zero (N on hand). Nothing was changed."*; `store.ts` `createNonCannabisAdjustment`; 0323 `apply_noncannabis_delta`). Before update 0323 is run, the older two-step write is used.
 
-**The weekly reconciliation (every Monday, before opening; form 8.1 part B).** This is the interim control for F-05b-1.
+**Recent adjustments** now shows **By** (who) and the time in Pacific time (G-32 item 4; finding F-05b-5 FIXED). Register rows (**Sold at the register**, **Sale voided (put back)**) show **Register**.
+
+**The weekly reconciliation (every Monday, before opening; form 8.1 part B).** Scanned sales now lower On hand by themselves, so this count catches **keypad lines** (part A) and **shrink**.
 
 1. Print or open form 8.1 part A for last week: every keypad line with a SKU in the note.
 2. Count every item on the shelf (start with **A** items, then **B**, then **C**).
@@ -250,11 +260,9 @@ The owner's requirement, quoted in the code: *"The glass vendor will come in wit
 6. Confirm each new draft (§4.3 steps 5–7), checking its price first.
 7. File the paper invoice in the vendor folder, marked with the date entered.
 
-**If the save fails part-way.** When a line fails, the app deletes the invoice header but **not** the drafts or restock adjustments that earlier lines already made (`invoice-store.ts` L124–128, L135–158; finding F-05b-7). Before you try again:
+**The whole invoice is saved in one database step** (Phase 4, G-32 item 5; finding F-05b-7 FIXED; 0323 `record_noncannabis_invoice`). The header, every line, every new draft and every restock are saved together, or nothing is: *"The invoice was not saved and nothing was changed: …"*. Fix the line and press **Save invoice** again. The Security Log entry is now checked, not skipped silently (G-32 item 6; finding F-05b-8 FIXED).
 
-- look under **Drafts awaiting confirmation** for drafts with the note *"From vendor invoice #…"* and **Archive** them;
-- look under **Recent adjustments** for **Received stock** lines with the note *"Vendor invoice #…"* and reverse each with a **Count correction**, **− Remove**, note `Reversing failed invoice save #<n>`;
-- then enter the invoice again.
+**Average cost.** A **Restock existing** line sets the item's unit cost to the moving average of what was on hand and what arrived: (old count × old cost + new units × new cost) ÷ (old count + new units), rounded to the cent. If the item's cost was $0.00 or it had none on hand, the new cost is used. This is the cost a sale then books (§4.1 item 2).
 
 The same vendor and invoice number can only be entered once: *"Invoice #… from … is already entered. Each paper invoice is entered once."* (`invoice-store.ts` L107–111).
 
@@ -266,7 +274,7 @@ A non-cannabis item with a $0.00 cost shows the **Cost missing** chip (`cost-fil
 2. Open the item. Type **Unit cost (what you paid per item)** from the vendor's invoice and press **Save cost** (`MerchCatalog.tsx` L148–173).
 3. The save works only while the cost is still $0.00: *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* (`cost-fill-core.ts` L46–47). It is audited (`noncannabis.cost_fill`).
 
-**How this fits the owner's newer answer.** Today **Save cost** is owner and admin only (`inventory.cost.fill`, `roles.ts` L149). The code cites an earlier owner decision for that, D-R3-1: *"owner and admin can add cost if missing. … It can only be used for non cannabis inventory."* (`roles.ts` L144–146). In this SOP program the owner answered that an owner, admin or manager may change a non-cannabis price or cost (D46), and that the cost may be modified (D48). This SOP does not guess whether D46 also widens **Save cost** to managers. That is question **Q-05b-6**. Until it is answered, **Save cost** stays owner and admin as the app enforces, and a manager changes a cost through the form 8.2 re-create (§4.9).
+**How this fits the owner's newer answer.** Today **Save cost** is owner and admin only (`inventory.cost.fill`, `roles.ts` L149). The code cites an earlier owner decision for that, D-R3-1: *"owner and admin can add cost if missing. … It can only be used for non cannabis inventory."* (`roles.ts` L144–146). In this SOP program the owner answered that an owner, admin or manager may change a non-cannabis price or cost (D46), and that the cost may be modified (D48). This SOP does not guess whether D46 also widens **Save cost** to managers. That is question **Q-05b-6**. Until it is answered, **Save cost** stays owner and admin as the app enforces. A manager can still set a cost with **Save change** (§4.9), which also works on a $0.00 cost and requires a reason.
 
 This is **non-cannabis** cost only. **A cannabis unit cost is never typed by anyone**; it comes only from the vendor's CCRS manifest (owner decision D38; SOP-05a §4.20).
 
@@ -276,21 +284,21 @@ In the open row: **Manufacturer barcode (UPC/EAN)** (*"Scan or type the code on 
 
 Set a reorder point on every **A** and **B** item, so the **Reorder now** list means something. Remember that the count it compares against is only as fresh as the last reconciliation (§4.5).
 
-### 4.9 Changing a price, and archiving an item
+### 4.9 Changing a price or cost, archiving and restoring an item
 
-**There is no way to change a non-cannabis price or a non-zero cost in the app** (finding F-05b-6). The price is set once, when the draft is created (`noncannabis/actions.ts` L51), and no screen or action edits it later. The cost can be filled once, only while it is $0.00 (§4.7).
+**Change a price or a cost (Phase 4, G-30 BUILT; finding F-05b-6 FIXED).** Owner, admin or manager (D46: *"Q-05b-2- owner, admin, manager."*); the cost may be changed (D48: *"non cannabis should be allowed to have their cost modified."*).
 
-**Who may change them:** owner, admin or manager (D46). **Both price and cost may be changed** for non-cannabis (D48).
+1. Open the item (**Adjust**). Under **Price / cost**, choose **Shelf price** or **Unit cost** (the current amount is shown).
+2. Type the **New amount ($)** and a **Reason** (for example *vendor raised the price*), then press **Save change** (`MerchCatalog.tsx` `PriceCostForm`; `noncannabis/actions.ts` L146–182).
+3. The app refuses $0.00 (*"A price of $0.00 is refused. Type the shelf price."* / *"A cost of $0.00 is refused. Type what one unit cost."*), the same amount, an amount over $100,000, and a missing reason (`pos-catalog-core.ts` `validatePriceCostChange`).
+4. If someone changed the same amount while you were typing, nothing is saved: *"The price of … changed while you were typing (or the item is archived). Nothing was saved; reload and try again."*
+5. On success: **Saved the new <SKU> price** (or cost). The Security Log keeps the old and new amounts and the reason (`noncannabis.price_change` / `noncannabis.cost_change`). **The SKU never changes**, so the printed label still scans; reprint it if the price on it is now wrong.
 
-**Interim procedure (owner, admin or manager; form 8.2), until gap G-30 is built:**
+The register picks up a new price on its next menu download.
 
-1. Write the change on form 8.2: item, SKU, old price, new price (or old and new cost, with the vendor invoice number), reason. The person making the change signs, and the owner reviews form 8.2 weekly.
-2. **Archive** the old item (§4.9 below), noting its **On hand**.
-3. Stage a new draft with the same details and the new price (§4.3). It gets a new SKU. If the old item had a manufacturer barcode, enter it on the new item.
-4. Confirm the new item and post its stock as **Count correction**, **+ Add**, note `Price change from <old SKU>, form 8.2`. For a cost change, the new draft carries the new cost. If the old item's cost was $0.00, use **Save cost** instead (§4.7): no re-create is needed, but only the owner or an admin can press it today (`inventory.cost.fill`).
-5. Print and apply new SKU labels and remove the old ones.
+**Archiving an item.** **Archive item** (or **Archive** on a draft) takes it out of the catalog and off the register. **Archive and Confirm are now audited** (old → new status, `noncannabis.archive` / `noncannabis.activate`; G-32 item 1; finding F-05b-2 FIXED).
 
-**Archiving an item.** **Archive item** (or **Archive** on a draft) hides it from the catalog. **There is no restore, and archiving writes no audit row** (`noncannabis/actions.ts` L94–100; `store.ts` L436–447; finding F-05b-2). Archive only an item that is gone for good, at **On hand** zero, or as part of the price-change procedure above. Write every archive on form 8.1's catalog line.
+**Restoring an item.** Open **Archived items** at the bottom of the page and press **Restore**. The item comes back as a **draft** (*"Item restored as a draft — confirm it to put it back on sale."*), so you check its price and **Confirm** it again (§4.3). Restore is audited (`noncannabis.restore`).
 
 ---
 
@@ -316,7 +324,7 @@ New products appear here only when they are published from Merch Studio. Designi
 
 **Put it back.** Press **Put back on website**. The banner reads *"<name> is live on greenwaymerch.com again (within about a minute)."* It is audited (`merch.product_shown`).
 
-**Remove a product (owner or admin only, D47).** The owner said: *"Q05b-3- owner and admin."* The app still allows any manager to do this (`inventory.manage`, `merch/actions.ts` L34; finding **F-05b-14**), so a manager must not press it. Prefer **Hide**, because Hide can be undone.
+**Remove a product (owner or admin only, D47).** The owner said: *"Q05b-3- owner and admin."* **The app enforces it** (Phase 4, G-30A BUILT; finding **F-05b-14** FIXED): **Remove...** is shown only to the owner and admins, and the action itself refuses anyone else (`merch.remove`; `merch/actions.ts` L35; `merch/page.tsx` L37, L131). Prefer **Hide**, because Hide can be undone.
 
 1. Open **Remove...** on the card (L129).
 2. Type the product's web name exactly as shown in grey in the box, then press **Remove** (L132–133).
@@ -508,10 +516,16 @@ If there is no price, the page says why (L508–512):
 | Message | What it means | What you do |
 |---|---|---|
 | **Staged draft PIPE-0001. Confirm it below to make it active.** | The draft was saved | Check the price, then **Confirm** (§4.3) |
-| *"That would take on-hand below zero (N on hand)."* | The adjustment would make the count negative | Recount. Post only what is really there (§4.5) |
+| *"That would take On hand below zero (N on hand). Nothing was changed."* | The adjustment would make the count negative | Recount. Post only what is really there (§4.5) |
+| *"For a count correction or other, choose Add or Remove."* | **Count correction** / **Other** needs a direction | Pick **+ Add** or **− Remove** (§4.5) |
+| *"A price of $0.00 is refused. Type the shelf price."* / *"A cost of $0.00 is refused. Type what one unit cost."* | **Save change** with $0.00 | Type the real amount (§4.9) |
+| *"Type a reason for the change (for example: vendor raised the price)."* | **Save change** with no reason | Write why (§4.9) |
+| *"The … of … changed while you were typing (or the item is archived). Nothing was saved; reload and try again."* | Someone else changed it first | Reload and check before saving again (§4.9) |
+| *"The invoice was not saved and nothing was changed: …"* | One invoice line failed, so nothing was saved | Fix the line and save again (§4.6) |
+| *"Database update 0323 is not applied yet, so Other Inventory returns can't be saved. …"* | Update 0323 has not been run | Tell the owner; nothing was changed (§4.4) |
 | *"A note is required for theft/other — say what happened."* | **Theft / loss** or **Other** needs a note | Write what happened (§4.5) |
 | *"Only the owner or an admin can key a missing cost."* | A manager tried **Save cost** | Give the invoice to the owner (§4.7) |
-| *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* | The cost is already set | Changing it is form 8.2: owner, admin or manager (§4.9, D46) |
+| *"Filling only works when the cost is $0.00, so a keyed cost is never overwritten."* | The cost is already set | Use **Save change** (owner, admin or manager; §4.9, D46) |
 | *"Invoice #… from … is already entered. Each paper invoice is entered once."* | A duplicate invoice | Check **Accounts Payable**. Do not enter it again (§4.6) |
 | *"Invoice #… from … saved ($…). … It now appears on the Accounts Payable page as a payable."* | Saved | Confirm the drafts and file the paper (§4.6) |
 | **Settings saved for <SKU>.** | Barcode, reorder point or shelf saved | None (§4.8) |
@@ -602,7 +616,8 @@ PART A - keypad lines (from register receipts / Keypad lines with SKU in note)
 PART B - Monday count (before opening)
  SKU          | Last On hand | - Part A | = Expected | Shelf | Diff | Reason posted
  _____________|______________|__________|____________|_______|______|______________
-CATALOG LINE - confirms / archives this week (no audit row: F-05b-2)
+PART A covers KEYPAD lines only (scanned catalog sales lower On hand by themselves)
+CATALOG LINE - confirms / archives / restores this week (also in the Security Log)
  SKU          | Confirmed or Archived | On hand at archive | By | Date
  Merch: "Copy Printful stock to the website" pressed  [ ]  changed: ____
  Any diff > 2 units or > $50 retail reported to owner [ ]   Initials: ______
@@ -615,8 +630,8 @@ FORM 8.2   PRICE / COST CHANGE                                   Date: _________
  Item / SKU or lot: ____________________   Old price: ______   New price: ______
  Old cost: ______   New cost: ______   Source (invoice # / CCRS manifest): ________
  Reason: _____________________________________________________________________
- Non-cannabis: old item archived [ ]  new SKU: __________  stock moved [ ]
-               labels replaced [ ]
+ Non-cannabis: changed with "Save change" (reason typed in the app) [ ]
+               new price on the shelf label (reprint) [ ]   SKU unchanged
  Cannabis, cost unknown: NO PRICE SAVED until the manifest cost is on the lot (D49)
    manifest cost entered on: ______  floor now shows: ______  price >= floor [ ]
  Changed by (owner / admin / manager): ______________  Owner review: ______
@@ -650,14 +665,15 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 ╔═════════════════════════════════════════════════════════════════════════════════╗
 ║ SOP-05b QUICK CARD - NON-CANNABIS, MERCH, PUBLISH, CATEGORIES, LIMITS, PRICE    ║
 ╠═════════════════════════════════════════════════════════════════════════════════╣
-║ OTHER INVENTORY IS NOT ON THE REGISTER (F-05b-1)                                ║
-║  - Ring glass/papers/devices on KEYPAD -> accessories; branded goods -> merch   ║
-║  - Note = SKU + name (e.g. "PIPE-0001 blue spoon"). Price from the label.       ║
-║  - The SKU label and the UPC do NOT scan. On hand does NOT drop on a sale.      ║
+║ OTHER INVENTORY IS ON THE REGISTER (Phase 4; run DB update 0323 first)          ║
+║  - SCAN the SKU label or the UPC. Sale lowers On hand; void puts it back.      ║
+║  - Return: Restock = back on shelf; Destroy = written off. Not sent to CCRS.    ║
+║  - Keypad only for items NOT in the catalog (no count, no cost). Add them.      ║
 ║  - Monday: count, post keypad sales, post shrink separately (form 8.1).         ║
-║ ADDING: Stage draft -> CHECK PRICE -> Confirm -> Print SKU. No price edit later ║
-║ PRICE/COST CHANGE: owner/admin/manager, form 8.2 (archive + re-create).         ║
-║ MERCH: Hide (undoable) > Remove (owner/admin). Copy Printful stock weekly.      ║
+║ ADDING: Stage draft -> CHECK PRICE -> Confirm -> Print SKU.                     ║
+║ PRICE/COST CHANGE: owner/admin/manager, "Save change" + reason. SKU stays.     ║
+║ ARCHIVE -> Archived items -> Restore (back as a draft). All audited.            ║
+║ MERCH: Hide (undoable) > Remove (owner/admin only, enforced). Printful weekly.  ║
 ║ PUBLISH: tick the removal box ONLY if every listed product should come off.     ║
 ║  - Never publish an old/small menu to "86" one product. 86 = SOP-05a 4.12.      ║
 ║ CATEGORIES: NEVER move cannabis into Accessories / Greenway Merch /             ║
@@ -697,7 +713,8 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 | Area | Files |
 |---|---|
 | Other Inventory | `src/app/admin/inventory/noncannabis/page.tsx`, `actions.ts`, `MerchCatalog.tsx`, `NonCannabisIntakeForm.tsx`, `InvoiceBuilderForm.tsx`, `[id]/label/page.tsx`; `src/lib/noncannabis/store.ts`, `invoice-store.ts`, `noncannabis-core.ts`, `cost-fill-core.ts`, `merch-intel-core.ts` |
-| Register disconnect | `src/lib/pos/live-menu.ts` L158–160; `src/app/api/pos/menu/route.ts` L188, L420–430; `scan-to-cart-core.ts` L55–144; `src/lib/inventory/sale-decrement.ts` L107–110; `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2541–2589 |
+| Other Inventory on the register (Phase 4) | `src/lib/noncannabis/pos-catalog-core.ts` (keys, cards, barcode merge, COGS by line, average cost, direction by reason, price/cost rules, sales summary, in-store cards); `register-stock.ts` (one-step stock moves, catalog read, sales report); `returns.ts`; `src/app/api/pos/menu/route.ts` L449–464; `src/lib/inventory/sale-decrement.ts` L126; `src/lib/pos/void-store.ts` L233; `src/lib/pos/returns-store.ts` L285–300; `src/lib/accounting/sale-posting-service.ts` L364–372; `refund-posting-service.ts` L117–147; `src/lib/pos/sync-store.ts` L1439–1452; `src/lib/compliance/ccrs-sales.ts` L329–337; `ccrs-batch.ts` L474–475; `src/components/menu/InStoreGoods.tsx`; `supabase/migrations/0323_noncannabis_register.sql` |
+| Keypad | `custom-sale-core.ts` L48–55; `SaleFlow.tsx` L2541–2589 |
 | Merch | `src/app/admin/inventory/merch/page.tsx`, `actions.ts`, `export/route.ts` |
 | Publish | `src/app/admin/publish/page.tsx`; `src/lib/pos/publish-guard-core.ts`, `publish-queue-core.ts`, `publish-now-core.ts`; `src/app/admin/menu-imports/actions.ts` L178–270; `menu-imports/version/[versionId]/page.tsx` L429–437; `src/lib/inventory/cutover-guard-core.ts` L64 |
 | Types & Categories | `src/app/admin/settings/types/page.tsx`, `actions.ts`; `category-registry-core.ts` L149–198; `category-registry.ts` L125–160 |
@@ -712,11 +729,11 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
-| **G-29** | Other Inventory on the register: the SKU and UPC scan to a priced non-cannabis line, the sale lowers **On hand**, a void or return restores it, and all of it is audited | F-05b-1 (**S1**) | Keypad with the SKU in the note, plus the Monday reconciliation (§4.4–§4.5, form 8.1) | §4.1–§4.5, §4.8, §9, form 8.1; reports and the books (F-05b-15) | **APPROVED** (D45), widened to every place non-cannabis goods should be used: register, menu, cost of goods, returns and reports |
-| **G-30** | Edit a non-cannabis price and cost, audited old → new, by **owner, admin or manager**; refuse a $0.00 price | F-05b-6 | Owner, admin or manager: archive and re-create (§4.9, form 8.2) | §2, §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** (D45, D46, D48) |
-| **G-30A** | Merch **Remove** limited to owner and admin (new permission), audited as today | F-05b-14 | Store rule: managers Hide, never Remove (§4.11) | §2, §4.11, §6, §9 | **APPROVED** (D47) |
+| **G-29** | Other Inventory on the register: the SKU and UPC scan to a priced non-cannabis line, the sale lowers **On hand**, a void or return restores it, and all of it is audited | F-05b-1 (**S1**) | None: scan it (§4.4). Keypad + Monday count only for items not in the catalog | §4.1–§4.5, §4.8, §9, form 8.1; reports and the books (F-05b-15) | **BUILT** (Phase 4, plan row 5.1): register cards, scan, one-step sale decrement, void restore, returns, cost of goods, sales report, display-only website list, Sale.csv exclusion |
+| **G-30** | Edit a non-cannabis price and cost, audited old → new, by **owner, admin or manager**; refuse a $0.00 price | F-05b-6 | None: **Save change** (§4.9) | §2, §4.3, §4.6, §4.7, §4.9, form 8.2 | **BUILT** (Phase 4, plan row 5.2) |
+| **G-30A** | Merch **Remove** limited to owner and admin (new permission), audited as today | F-05b-14 | None: enforced (§4.11) | §2, §4.11, §6, §9 | **BUILT** (Phase 4, plan row 5.2) |
 | **G-31** | Cannabis-line guard: **refuse outright, with no override, in both directions**, any lot override, **Move products** or inventory-type mapping that crosses into or out of a non-cannabis category | F-05b-9 (**S1**) | Never cross the line; owner only; form 8.3 (§4.15–§4.17) | §2, §4.15–§4.17, §4.21, §6, §9 | **BUILT** (Phase 0.4) |
-| **G-32** | Hardening bundle: audit Confirm and Archive, plus a Restore; an atomic adjustment; Direction locked to Reason; actor and Pacific time in Recent adjustments; a full invoice rollback; a checked invoice audit; publish refuses when the removal diff can't be read; **no price save at all while the cost is unknown (D49)**; before/after on category audits; a visible warning when the classification lot-row write fails | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | The store rules in §4.3–§4.9, §4.14, §4.15, §4.21 | Those sections, §5, §6 | **APPROVED** (D45, D49) |
+| **G-32** | Hardening bundle: audit Confirm and Archive, plus a Restore; an atomic adjustment; Direction locked to Reason; actor and Pacific time in Recent adjustments; a full invoice rollback; a checked invoice audit; publish refuses when the removal diff can't be read; **no price save at all while the cost is unknown (D49)**; before/after on category audits; a visible warning when the classification lot-row write fails | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | The store rules in §4.14, §4.15, §4.21 for items 7–10 | Those sections, §5, §6 | **Items 1–6 BUILT** (Phase 4, plan row 5.2: audited Confirm/Archive + Restore, one-step adjustment, direction by reason, actor + Pacific time, one-step invoice, checked invoice audit); items 7–10 **APPROVED** (D45, D49) |
 
 ## Appendix C: Open questions for the owner
 
@@ -735,4 +752,5 @@ FORM 8.4   WEEKLY MENU + CLASSIFICATION CHECK                    Week of: ______
 |---|---|---|---|
 | 1.0 | 2026-10-27 | First draft, verified against `main@827facb5`. Findings F-05b-1…13 and F-05b-C; gaps G-29…G-32; questions Q-05b-1…5. Owner decisions D35, D38, D40, D41, D42 and D43 applied | SOP program |
 | 1.2 | Fix phase | Phase 0.4 (owner D76). G-31 BUILT: one pure check (`src/lib/compliance/cannabis-line-core.ts`) refuses, in both directions and with no override, any crossing of the cannabis line from the lot-page Website category box, **Move products** and the inventory-type mapping (add, adopt, save). Every refusal is audited (`cannabis_line.refused`). Inventory → Issues lists any cannabis lot filed under a non-cannabis category as blocking. §2, §4.15–§4.17, §5, §6, §7, form 8.3 and Appendix B updated. F-05b-9 FIXED. | Fix program |
+| 1.3 | Fix phase | Phase 4 (plan rows 5.1/5.2; G-29/G-30/G-30A/G-32), migration 0323. **G-29 BUILT:** active priced Other Inventory items are register products (`nc-<id>`), their SKU and UPC scan (cannabis codes win a collision), a completed sale lowers On hand in one database step with a cost snapshot, a void puts it back once, a counter return restocks or writes off in one step and is never a CCRS correction, Sale.csv leaves these lines out, the sale books average cost as COGS, the refund cost-back uses the sale's cost, the price-drift check compares against the catalog, the page shows **Register sales — last 30 days**, and the shop shows a display-only **Also in store** list. **G-30 BUILT:** **Save change** for price/cost (owner, admin, manager; reason; $0 refused; SKU unchanged; old → new audited). **G-30A BUILT:** `merch.remove` (owner, admin). **G-32 items 1–6 BUILT:** audited Confirm/Archive + **Restore**, one-step adjustment with a zero floor, direction set by reason, **By** + Pacific time in Recent adjustments, one-step invoice with moving-average cost, checked invoice audit. Findings F-05b-1, 2, 3, 4, 5, 6, 7, 8, 14, 15 FIXED. The one-thing box, §2, §4.1, §4.4, §4.5, §4.6, §4.7, §4.9, §4.11, §5.1, forms 8.1–8.2, §9 and Appendices A–B updated. | Fix program |
 | 1.1 | 2026-10-28 | Owner answers to Q-05b-1–5 applied (decisions D45–D49). G-29 APPROVED and widened to every place non-cannabis goods should be used (register, menu, cost of goods, returns, reports); new finding F-05b-15 (keypad sales post no cost of goods). G-30 APPROVED: owner, admin or manager change price and cost; non-cannabis cost is changeable. New G-30A and finding F-05b-14: merch Remove is owner and admin only. G-31 APPROVED: crossings refused outright in both directions. G-32 APPROVED: no price save on a cost-unknown lot until the manifest cost is entered. §2, §4.1, §4.9, §4.11, §4.16, §4.17, §4.21, §6, §7, form 8.2, §9, Appendices B–C updated; new question Q-05b-6 (does D46 widen **Save cost** to managers; earlier decision D-R3-1 says owner and admin). Re-verified at `main@e1fe84eb`. | SOP program |

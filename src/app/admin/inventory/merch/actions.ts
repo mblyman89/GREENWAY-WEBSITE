@@ -31,7 +31,8 @@ export async function setMerchStatusAction(formData: FormData): Promise<void> {
 }
 
 export async function removeMerchAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("inventory.manage");
+  // Phase 4 (G-30A; D47 "Q05b-3- owner and admin."): removal is owner/admin.
+  const session = await requirePermission("merch.remove");
   const handle = String(formData.get("handle") ?? "");
   if (String(formData.get("confirm") ?? "") !== handle) back(`error=${encodeURIComponent("Type the product's web name exactly to confirm removal.")}`);
   const cur = await readMerchCatalog();

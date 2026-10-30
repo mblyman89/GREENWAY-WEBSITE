@@ -50,6 +50,9 @@ import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import { isMissingSizeLinkColumnError } from "@/lib/inventory/lot-size-link-store";
 import { receiptLookupSuffix, clientUuidMatchesReceipt } from "@/lib/pos/returns-core";
 import { receiptNumber } from "@/lib/pos/receipt-core";
+// Fix Phase 4 (G-29 item 3): a void puts Other Inventory units back on the catalog.
+import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
+import { moveNcStockForOrder } from "@/lib/noncannabis/register-stock";
 import { pacificToday, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
@@ -193,7 +196,7 @@ export async function lookupVoidableSale(rawReceipt: string): Promise<VoidLookup
 async function restockInventoryForVoid(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   orderId: string,
-  lines: VoidableSale["lines"],
+  allLines: VoidableSale["lines"],
 ): Promise<string> {
   // Idempotency fast path (mirrors decrementInventoryForOrder's marker).
   const { data: marker } = await admin
@@ -225,6 +228,11 @@ async function restockInventoryForVoid(
   const claimId = (claim as { id: string }).id;
 
   const notes: string[] = [];
+  // Fix Phase 4 (G-29 item 3): Other Inventory lines go back on the catalog
+  // (+qty, ledger row "void", once per line); the cannabis layers skip them.
+  const ncMove = await moveNcStockForOrder(admin, orderId, allLines, "void");
+  if (ncMove.summary) notes.push(ncMove.summary);
+  const lines = allLines.filter((l) => !isNonCannabisProductId(l.productId));
   const productKeys = [...new Set(lines.map((l) => l.productId).filter((k): k is string => !!k))];
 
   // ── Layer 1: published menu variants ──────────────────────────────────────

@@ -8,6 +8,8 @@ import {
   createNonCannabisProduct,
   activateNonCannabisProduct,
   archiveNonCannabisProduct,
+  restoreNonCannabisProduct,
+  changeNonCannabisPriceCost,
   createNonCannabisAdjustment,
   fillNonCannabisCost,
   getNonCannabisProduct,
@@ -26,6 +28,7 @@ import {
 } from "@/lib/noncannabis/invoice-core";
 import { createNonCannabisInvoice } from "@/lib/noncannabis/invoice-store";
 import { COST_FILL_COPY, planCostFill } from "@/lib/noncannabis/cost-fill-core";
+import { signedDeltaForReason, validatePriceCostChange } from "@/lib/noncannabis/pos-catalog-core";
 
 /** Parse a dollar string ("25", "25.00", "$25") into integer minor units. */
 function dollarsToMinor(raw: FormDataEntryValue | null): number {
@@ -83,20 +86,94 @@ export async function createNonCannabisDraftAction(formData: FormData) {
   redirect(`/admin/inventory/noncannabis?created=${encodeURIComponent(res.sku)}`);
 }
 
-export async function activateNonCannabisAction(formData: FormData) {
+/**
+ * Phase 4 (G-32 item 1): every status change (Confirm / Archive / Restore)
+ * writes a Security Log row with the old and new status. A refused change
+ * says why instead of pretending it worked.
+ */
+async function statusChange(
+  formData: FormData,
+  kind: "activate" | "archive" | "restore",
+): Promise<never> {
   const session = await requirePermission("inventory.manage");
   const id = String(formData.get("id") ?? "");
-  if (id) await activateNonCannabisProduct(id, session.userId);
+  if (!id) redirect("/admin/inventory/noncannabis?error=missing-product");
+  const fn =
+    kind === "activate"
+      ? activateNonCannabisProduct
+      : kind === "archive"
+        ? archiveNonCannabisProduct
+        : restoreNonCannabisProduct;
+  const res = await fn(id, session.userId);
+  if (!res.ok) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(res.error ?? "save-failed")}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: `noncannabis.${kind}`,
+    entityType: "noncannabis_products",
+    entityId: id,
+    before: { status: res.before ?? null },
+    after: { status: kind === "activate" ? "active" : kind === "archive" ? "archived" : "draft" },
+  });
   revalidatePath("/admin/inventory/noncannabis");
-  redirect("/admin/inventory/noncannabis?activated=1");
+  redirect(
+    `/admin/inventory/noncannabis?${kind === "activate" ? "activated" : kind === "archive" ? "archived" : "restored"}=1`,
+  );
+}
+
+export async function activateNonCannabisAction(formData: FormData) {
+  await statusChange(formData, "activate");
 }
 
 export async function archiveNonCannabisAction(formData: FormData) {
+  await statusChange(formData, "archive");
+}
+
+/** Phase 4 (G-32 item 1): bring an archived item back as a draft to re-confirm. */
+export async function restoreNonCannabisAction(formData: FormData) {
+  await statusChange(formData, "restore");
+}
+
+/**
+ * Phase 4 (G-30). D46, Michael verbatim: "Q-05b-2- owner, admin, manager."
+ * D48: "non cannabis should be allowed to have their cost modified."
+ * Change the shelf price or the unit cost of an Other Inventory item:
+ * owner/admin/manager (inventory.manage), a reason is required, $0 is
+ * refused, the SKU never changes, and the Security Log keeps old → new.
+ */
+export async function changeNonCannabisPriceCostAction(formData: FormData) {
   const session = await requirePermission("inventory.manage");
-  const id = String(formData.get("id") ?? "");
-  if (id) await archiveNonCannabisProduct(id, session.userId);
+  const productId = String(formData.get("product_id") ?? "");
+  const field = String(formData.get("field") ?? "") === "cost" ? "cost" : "price";
+  const reason = String(formData.get("reason") ?? "").trim();
+  const rawNew = String(formData.get("amount") ?? "").trim();
+  if (!productId) redirect("/admin/inventory/noncannabis?error=missing-product");
+  const product = await getNonCannabisProduct(productId);
+  if (!product) redirect("/admin/inventory/noncannabis?error=product-not-found");
+  const oldMinor = field === "price" ? product.price_minor_units : product.cost_minor_units;
+  const newMinor = rawNew ? dollarsToMinor(rawNew) : null;
+  const check = validatePriceCostChange({ field, oldMinor, newMinor, reason });
+  if (!check.ok) redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(check.error)}`);
+  const res = await changeNonCannabisPriceCost(productId, field, oldMinor, newMinor as number, session.userId);
+  if (!res.ok) redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(res.error ?? "save-failed")}`);
+  if (!res.changed) {
+    redirect(
+      `/admin/inventory/noncannabis?error=${encodeURIComponent(`The ${field} of ${product.sku} changed while you were typing (or the item is archived). Nothing was saved; reload and try again.`)}`,
+    );
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: field === "price" ? "noncannabis.price_change" : "noncannabis.cost_change",
+    entityType: "noncannabis_products",
+    entityId: productId,
+    before: { sku: product.sku, [`${field}_minor_units`]: oldMinor },
+    after: { sku: product.sku, [`${field}_minor_units`]: newMinor, reason },
+  });
   revalidatePath("/admin/inventory/noncannabis");
-  redirect("/admin/inventory/noncannabis?archived=1");
+  redirect(`/admin/inventory/noncannabis?changed=${encodeURIComponent(`${product.sku} ${field}`)}`);
 }
 
 /**
@@ -109,14 +186,18 @@ export async function adjustNonCannabisAction(formData: FormData) {
   const productId = String(formData.get("product_id") ?? "");
   const reason = String(formData.get("reason") ?? "");
   const note = String(formData.get("note") ?? "").trim() || null;
-  const direction = String(formData.get("direction") ?? "remove");
+  const direction = String(formData.get("direction") ?? "");
   const units = intVal(formData.get("units"));
   if (!productId) redirect("/admin/inventory/noncannabis?error=missing-product");
 
   const product = await getNonCannabisProduct(productId);
   if (!product) redirect("/admin/inventory/noncannabis?error=product-not-found");
 
-  const qtyDelta = direction === "add" ? units : -units;
+  // Phase 4 (G-32 item 3): the reason decides the direction (Damaged can
+  // never ADD units); only Count correction and Other let staff choose.
+  const signed = signedDeltaForReason(reason, units, direction === "add" ? "add" : direction === "remove" ? "remove" : null);
+  if (!signed.ok) redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(signed.error)}`);
+  const qtyDelta = signed.delta;
   const check = validateMerchAdjustment({
     reason,
     qtyDelta,
@@ -304,7 +385,7 @@ export async function submitNonCannabisInvoiceAction(
       stagedProducts: res.stagedProducts,
       restockedProducts: res.restockedProducts,
     },
-  }).catch(() => {});
+  });
 
   revalidatePath("/admin/inventory/noncannabis");
   revalidatePath("/admin/vendor-payments");

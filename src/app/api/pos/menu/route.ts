@@ -46,7 +46,9 @@ import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
-import { buildBarcodeIndex, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+import { buildBarcodeIndex, normalizeBarcode, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+import { mergeNcBarcodes, toPosMenuProduct } from "@/lib/noncannabis/pos-catalog-core";
+import { readNcCatalogForRegister } from "@/lib/noncannabis/register-stock";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 // SLICE 16 — reconcile the register's CACHED availability flag against LIVE
 // lot truth. See register-availability-core.ts for the full proof; in short,
@@ -442,6 +444,22 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         ccrsExternalId: (l as LiveLotFact & { ccrsExternalId: string | null }).ccrsExternalId,
       }));
     barcodes = buildBarcodeIndex(sources, sellableKeys);
+  }
+
+  // Phase 4 (G-29 items 1–2) — Other Inventory (non-cannabis goods) on the
+  // register. ACTIVE catalog items with a price ship as their own `nc-<id>`
+  // cards (taxed 9.3%, no excise, never counted toward cannabis limits) and
+  // their barcodes join the scan index. A cannabis barcode always wins a
+  // collision; a colliding Other Inventory code is left out. Best-effort.
+  try {
+    const ncRows = await readNcCatalogForRegister(createSupabaseAdminClient());
+    for (const row of ncRows) {
+      const card = toPosMenuProduct(row);
+      if (card) products.push(card);
+    }
+    barcodes = mergeNcBarcodes(barcodes, ncRows, normalizeBarcode).index;
+  } catch {
+    // never break the menu download over Other Inventory
   }
 
   const bundle: PosMenuBundle = {

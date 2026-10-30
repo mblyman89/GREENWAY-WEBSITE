@@ -21,7 +21,9 @@ import {
 import {
   createNonCannabisAdjustment,
   createNonCannabisProduct,
+  mintSkusForNewItems,
 } from "@/lib/noncannabis/store";
+import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
 import type { PaymentMethod } from "@/lib/payments/vendor-payables-store";
 
 /** A saved invoice header row (DB shape). */
@@ -86,6 +88,13 @@ export async function createNonCannabisInvoice(
     .limit(2);
   const vmatches = (vendorRows as { id: string; display_name: string }[] | null) ?? [];
   if (vmatches.length === 1) vendorId = vmatches[0].id;
+
+  // Phase 4 (G-32 item 5; G-29 4.4): the whole invoice in ONE database
+  // transaction (0323 record_noncannabis_invoice) — header, every line, new
+  // drafts and restocks with a moving-average unit cost — so a failure can
+  // never leave half an invoice. Falls back to the old path before 0323.
+  const viaRpc = await createInvoiceViaRpc(admin, draft, actorId, { vendorId, vendorName, invoiceNumber, total });
+  if (viaRpc !== "rpc-missing") return viaRpc;
 
   // 1) Header. The unique index (vendor_name, invoice_number) catches dupes.
   const { data: header, error: headErr } = await admin
@@ -175,6 +184,78 @@ export async function createNonCannabisInvoice(
   }
 
   return { ok: true, id: invoiceId, invoiceNumber, totalMinorUnits: total, stagedProducts, restockedProducts };
+}
+
+async function createInvoiceViaRpc(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  draft: NonCannabisInvoiceDraft,
+  actorId: string | null,
+  h: { vendorId: string | null; vendorName: string; invoiceNumber: string; total: number },
+): Promise<CreateInvoiceResult | "rpc-missing"> {
+  const newLines = draft.lines.filter((l) => l.kind === "new");
+  let minted: { sku: string; name: string }[] = [];
+  if (newLines.length > 0) {
+    const m = await mintSkusForNewItems(
+      newLines.map((l) => ({ type: (l.productType ?? "other").trim() || "other", nameOverride: l.description.trim() })),
+    );
+    if (!m.ok) return { ok: false, error: m.error };
+    minted = m.minted;
+  }
+  let k = 0;
+  const lines = draft.lines.map((l) => {
+    const base = {
+      kind: l.kind,
+      product_id: l.kind === "existing" ? (l.productId ?? "").trim() || null : null,
+      description: l.description.trim(),
+      qty: l.qty,
+      unit_cost_minor_units: l.unitCostMinorUnits,
+    };
+    if (l.kind !== "new") return base;
+    const mm = minted[k++];
+    return {
+      ...base,
+      new_product: {
+        sku: mm.sku,
+        name: mm.name,
+        type: (l.productType ?? "other").trim() || "other",
+        price_minor_units: Math.max(0, Math.round(l.priceMinorUnits ?? 0)),
+        notes: `From vendor invoice #${h.invoiceNumber} (${h.vendorName})`,
+      },
+    };
+  });
+  for (const [i, l] of lines.entries()) {
+    if (l.kind === "existing" && !l.product_id) return { ok: false, error: `Line ${i + 1}: missing the existing product to restock.` };
+  }
+  const { data, error } = await admin.rpc("record_noncannabis_invoice", {
+    p_header: {
+      invoice_number: h.invoiceNumber,
+      vendor_id: h.vendorId,
+      vendor_name: h.vendorName,
+      invoice_date: draft.invoiceDate,
+      total_minor_units: h.total,
+      note: (draft.note ?? "").trim() || null,
+    },
+    p_lines: lines,
+    p_actor: actorId,
+  });
+  if (error) {
+    if (isMissingDbFunctionError(error)) return "rpc-missing";
+    const msg = error.message ?? "save failed";
+    if (/duplicate key|unique/i.test(msg) && /invoice/i.test(msg)) {
+      return { ok: false, error: `Invoice #${h.invoiceNumber} from ${h.vendorName} is already entered. Each paper invoice is entered once. Nothing was saved.` };
+    }
+    return { ok: false, error: `The invoice was not saved and nothing was changed: ${msg}` };
+  }
+  const r = (data ?? {}) as { invoice_id?: string; staged?: number; restocked?: number };
+  if (!r.invoice_id) return { ok: false, error: "The invoice could not be saved (no id came back). Nothing was changed." };
+  return {
+    ok: true,
+    id: r.invoice_id,
+    invoiceNumber: h.invoiceNumber,
+    totalMinorUnits: h.total,
+    stagedProducts: Number(r.staged ?? 0),
+    restockedProducts: Number(r.restocked ?? 0),
+  };
 }
 
 /**

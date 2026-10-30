@@ -24,6 +24,7 @@
  * or bad key ⇒ 401; migration 0120 not applied ⇒ clear 503-style refusal.
  */
 import "server-only";
+import { ncIdFromKey, ncProductKey } from "@/lib/noncannabis/pos-catalog-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { verifyPin } from "@/lib/security/pin-hash";
@@ -1433,6 +1434,20 @@ async function detectSalePriceDrift(
       const productId = bySourceKey.get(v.menu_item_id);
       if (!productId) continue;
       priceRows.push({ productId, variantId: v.source_variant_id, priceMinor: v.price_minor_units });
+    }
+  }
+  // Phase 4 (G-29) — Other Inventory (`nc-<id>`) lines are never on the
+  // published cannabis menu. Compare them against the live catalog price
+  // instead, so they are not flagged "delisted" on every sale.
+  const ncIds = productKeys.map((k) => ncIdFromKey(k)).filter((v): v is string => !!v);
+  if (ncIds.length > 0) {
+    const { data: ncRows } = await admin
+      .from("noncannabis_products")
+      .select("id, price_minor_units")
+      .in("id", ncIds);
+    for (const r of (ncRows as { id: string; price_minor_units: number }[] | null) ?? []) {
+      const key = ncProductKey(r.id);
+      priceRows.push({ productId: key, variantId: key, priceMinor: Number(r.price_minor_units) || 0 });
     }
   }
   return checkPriceDrift(

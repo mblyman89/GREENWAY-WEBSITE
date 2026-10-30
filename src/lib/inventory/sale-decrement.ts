@@ -48,6 +48,10 @@ import { lotKeyForSaleLine, lotKeysForLines } from "@/lib/pos/variant-lot-core";
 // R74 S31: one lot read shared with the cost replan (sale-posting-service).
 import { readSaleLots } from "@/lib/inventory/sale-lot-read";
 import { sellableQty } from "@/lib/inventory/held-stock-core";
+// Fix Phase 4 (G-29 item 3; F-05b-1): Other Inventory lines ("nc-<uuid>")
+// lower the catalog On hand with a ledger row, never a cannabis lot.
+import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
+import { moveNcStockForOrder } from "@/lib/noncannabis/register-stock";
 
 const EVENT_TYPE = "inventory_decremented";
 
@@ -96,7 +100,7 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
       .from("order_lines")
       .select("id, product_id, variant_id, product_name, quantity")
       .eq("order_id", orderId);
-    const lines: SaleLineForDecrement[] = ((lineRows as
+    const allLines: SaleLineForDecrement[] = ((lineRows as
       | {
           id: string;
           product_id: string | null;
@@ -116,10 +120,15 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
         productName: r.product_name,
         quantity: r.quantity,
       }));
+    // Fix Phase 4 (G-29 item 3): Other Inventory lines move the catalog On
+    // hand (one statement each, idempotent per line) and never reach the
+    // cannabis menu / lot plans below.
+    const ncMove = await moveNcStockForOrder(admin, orderId, allLines, "sale");
+    const lines = allLines.filter((l) => !isNonCannabisProductId(l.productId));
     if (lines.length === 0) {
       await admin
         .from("order_events")
-        .update({ note: "Inventory decrement: no stock-tracked lines on this order." })
+        .update({ note: (ncMove.summary || "Inventory decrement: no stock-tracked lines on this order.").slice(0, 2000) })
         .eq("id", claimId);
       return;
     }
@@ -248,6 +257,7 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
       .update({
         note: (
           summarizeDecrement({ variantPlan, lotPlan, lineCount: lines.length }) +
+          (ncMove.summary ? ` ${ncMove.summary}` : "") +
           (sizeLinkPending ? " (Lot sizes not read: database update 0294 is not applied, so stock came from the oldest lots of the product.)" : "")
         ).slice(0, 2000),
       })
