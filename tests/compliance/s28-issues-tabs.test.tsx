@@ -64,7 +64,8 @@ describe("S28 issues-core pure self-tests", () => {
     const r = __runIssuesCoreTests();
     expect(r.failed).toBe(0);
     // R34: +2 (expiry gap links the expiration rules; only the expiry gap does).
-    expect(r.passed).toBe(102);
+    // G-39: +1 (overdue row: owner plans a count; others are told to tell the owner).
+    expect(r.passed).toBe(103);
   });
   it("is registered in run-pure-selftests", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
@@ -268,6 +269,8 @@ describe("S28 every fix button lands somewhere real", () => {
         today: "2026-07-01",
         lots: [{ id: "lot1", productName: "Old", status: "active", expiresOn: "2026-01-01" }],
         medicalEndorsement: true,
+        // G-39: the owner's view (others get the overdue row with no link, by design).
+        canPlanCount: true,
       },
     ),
     ...buildManifestIssues({

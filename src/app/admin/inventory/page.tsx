@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
@@ -209,7 +210,7 @@ export default async function InventoryPage({
     tab?: string;
   }>;
 }) {
-  await requirePermission("inventory.manage");
+  const staffSession = await requirePermission("inventory.manage");
   // R36 #3: a bare arrival opens on the Active tab. `sp` carries the
   // effective status explicitly from here on, so every tab, chip, pager,
   // filter form and bulk return link agrees with what the table shows
@@ -417,6 +418,7 @@ export default async function InventoryPage({
     today,
     lots: intel.lots,
     medicalEndorsement: taxSettings.medicalEndorsement,
+    canPlanCount: can(staffSession.profile.role, "inventory.audit"),
   });
   // Phase 0.4 (G-31 req. 4): any cannabis lot whose effective website category
   // is non-cannabis is a blocking Issue (it changes tax and purchase limits).

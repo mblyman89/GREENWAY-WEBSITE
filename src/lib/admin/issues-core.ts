@@ -428,7 +428,17 @@ export const EXPIRED_LOT_ROW_CAP = 50;
  */
 export function buildIntelIssues(
   center: IntelCenterLike,
-  opts: { today: string; lots: readonly IntelLotLike[]; medicalEndorsement: boolean },
+  opts: {
+    today: string;
+    lots: readonly IntelLotLike[];
+    medicalEndorsement: boolean;
+    /**
+     * G-39: may this viewer plan a count (`inventory.audit`, owner only)? The
+     * overdue row links the owner to Plan a count; anyone else is told to tell
+     * the owner, because Cycle Counts cannot start a count by design.
+     */
+    canPlanCount?: boolean;
+  },
 ): Issue[] {
   const out: Issue[] = [];
   if (center.supply.overCeiling) {
@@ -485,9 +495,17 @@ export function buildIntelIssues(
       severity: "warning",
       code: "intel_count_overdue",
       title: `${n} ${plural(n, "lot is", "lots are")} overdue for a cycle count`,
-      meaning: "Past their count cadence (A monthly, B quarterly, C twice a year). Counting catches shrink before it grows.",
-      fixText: "Start a cycle count.",
-      fix: { href: "/admin/inventory/cycle-counts", label: "Open cycle counts" },
+      meaning:
+        "Past their count schedule (A every 30 days, B every 60, C every 90, the same schedule Plan a count uses). Counting catches shrink before it grows.",
+      ...(opts.canPlanCount
+        ? {
+            fixText: "Plan a count for these lots, then release it to Cycle Counts.",
+            fix: { href: "/admin/inventory/audits/new", label: "Plan a count" },
+          }
+        : {
+            fixText: "Only the owner can plan a count. Tell the owner these lots are overdue.",
+            fix: null,
+          }),
     });
   }
   return sortIssues(out);
@@ -831,8 +849,10 @@ export function __runIssuesCoreTests(): { passed: number; failed: number } {
   const exMany = buildIntelIssues(healthy, { today: T, lots: lotsMany, medicalEndorsement: false });
   ok(exMany.length === 51 && exMany[50].code === "intel_expired_more" && exMany[50].title.includes("3 more"), "cap 50 + overflow row");
   ok(countExpiredLotRows(exMany) === 51, "overflow row counted");
-  const od = buildIntelIssues({ ...healthy, overdue: { total: 1 } }, { today: T, lots: [], medicalEndorsement: false });
-  ok(od.length === 1 && od[0].severity === "warning" && od[0].fix?.href === "/admin/inventory/cycle-counts", "overdue → warning cycle counts");
+  const od = buildIntelIssues({ ...healthy, overdue: { total: 1 } }, { today: T, lots: [], medicalEndorsement: false, canPlanCount: true });
+  ok(od.length === 1 && od[0].severity === "warning" && od[0].fix?.href === "/admin/inventory/audits/new", "overdue → owner plans a count");
+  const odStaff = buildIntelIssues({ ...healthy, overdue: { total: 1 } }, { today: T, lots: [], medicalEndorsement: false });
+  ok(odStaff.length === 1 && odStaff[0].fix === null && (odStaff[0].fixText ?? "").includes("Tell the owner"), "overdue → others tell the owner");
   ok(od[0].title.startsWith("1 lot is"), "overdue singular");
 
   // Manifest.

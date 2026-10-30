@@ -113,8 +113,12 @@ MUTATIONS = [
     (
         "B2 restore the dead Apply button",
         "src/app/admin/inventory/cycle-counts/[id]/page.tsx",
-        "        <form action={cancelCycleCountAction.bind(null, id)}>",
-        "        <form action={applyCycleCountAction.bind(null, id)}>",
+        # Fix Phase 4.4a (G-39) removed the Cancel form this used to anchor on;
+        # the page is read-only and imports no action. The mutant re-adds the
+        # import the Apply button would need.
+        "// No action is imported. This page is READ-ONLY (Fix Phase 4.4a, G-39): the",
+        "import { applyCycleCountAction } from \"../actions\";\n"
+        "// No action is imported. This page is READ-ONLY (Fix Phase 4.4a, G-39): the",
         [WIRING],
         "A revert, a bad merge, or a copy-paste from git history puts the "
         "shelf-moving button back on a page staff can reach.",

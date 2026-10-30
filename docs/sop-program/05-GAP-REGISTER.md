@@ -65,7 +65,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-36 | Count-sheet integrity: one counter per count (claim), +1 per scan, recount blocks, stage checks | **D56, D60** | F-06-5, F-06-5b (**S1**), F-06-6, F-06-13 (**S1**), F-06-15 | SOP-06 §2, §4.10, §4.12 | **BUILT** (Phase 4.1, #1573) |
 | G-37 | Reasons editable before approval, validated, owner decisions enforced | (procedure need) | F-06-14 | SOP-06 §4.15, form 8.3 | **BUILT** (Phase 4.1, #1573) |
 | G-38 | Daily checklists in the app with the full task catalog | **D57** | F-06-12, F-00-9, F-06-17 | SOP-06 §4.23, forms 8.5–8.8 | **APPROVED** |
-| G-39 | Counting housekeeping: one schedule, legacy sessions cancelled, Pacific times | **D58, D59** | F-06-8…F-06-11 | SOP-06 §4.20, §4.22 | **APPROVED** |
+| G-39 | Counting housekeeping: one schedule, legacy sessions cancelled, Pacific times | **D58, D59** | F-06-8…F-06-11 | SOP-06 §4.20, §4.22 | **BUILT** |
 | G-40 | Intelligent cycle counts: vendor of the day with chunking, ABC, exceptions, expiring, Cultivera, overdue | **D58** | F-06-8 | SOP-06 §4.24 | **APPROVED** |
 | G-41 | Annual year-end full count (no cap, sections, one review) | **D58** | — | SOP-06 §4.24 | **APPROVED** |
 | G-42 | State-exact vendor return: Greenway files the CCRS manifest as origin (outgoing Manifest.CSV builder); reserve at logging, reduce and post CCRS Other at departure; RMA, manifest, license, detail required; no 48–72 h / Mon-Wed-Fri text; server-checked steps with actor; Pacific times | D63 (compliance: WAC 314-55-079(11), -085; CCRS Manifest User Guide) | F-15-1 (**S1**), F-15-2, F-15-3, F-15-19 | SOP-15 §4.9–§4.13, form 8.2 | **BUILT** (Phase 1.5; packet Phase 1.7b) |
@@ -644,10 +644,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Requirements:** opening / mid-shift / closing / weekly / monthly checklists seeded from forms 8.5–8.8, owner-editable, each task linking to its SOP section; initials and time per task; a live "counts waiting on Cycle Counts" line; manager sign-off; history kept five years (WAC 314-55-087); visible to `inventory.count` roles.
 - **Interim:** SOP-06 forms 8.5–8.7.
 
-## G-39 · Counting housekeeping (APPROVED, D58, D59, SOP-06)
+## G-39 · Counting housekeeping (BUILT, D58, D59, SOP-06)
 - **Today:** F-06-8, F-06-9, F-06-10, F-06-11.
 - **Requirements:** one count schedule used by the planner and the Issues row (D58: daily vendor counts + annual; A/B/C stays the risk ranking); **cancel every legacy session (D59: *"be canceled, we are not live yet. It's all test data."*)**; the Issues fix opens **Plan a count** for the owner and tells others to tell the owner; legacy cycle-count write actions removed or refused (true read-only; Q-06-6); render `buildCountChecklist` on the count sheet (and fix its "add one" step to match G-36); Pacific time on the oversold and older lists and the default audit name; one colour for approved.
 - **Interim:** SOP-06 §4.20, §4.22.
+- **Built (Fix Phase 4.1–4.3 #1573 and 4.4a):** checklist on the count sheet, one approved colour, Pacific times on Cycle Counts and D59 cancellation of every open legacy session (migration 0326); one schedule A30/B60/C90 for planner, Issues row and intelligence panel; overdue row → **Plan a count** (owner) or "Tell the owner"; legacy writer actions deleted and library writers refuse (CYCLE_COUNT_READ_ONLY), detail page read-only with export kept; Pacific default audit name and hub dates. SOP-06 v1.3. Test `fix-p4-4a-count-housekeeping`.
 
 ## G-40 · Intelligent cycle counts: vendor of the day and other generators (APPROVED, D58, SOP-06)
 - **Owner requirement:** *"My plan for cycle counts is to issue small counts the employees can do everyday to keep inventory accurate. Something like a vendor per day, broken into chunks if a large vendor, or if small enough, to do on their own."* · *"I also want options for initiating intelligent cycle counts."*

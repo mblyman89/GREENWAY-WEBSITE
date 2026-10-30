@@ -98,7 +98,7 @@ export function InventoryIntelPanel({
         {/* ABC mix + count cadence */}
         <Card
           title="ABC mix & count cadence"
-          hint="Lots classed by on-hand value at cost: A = top 80% of value (count every 30 days), B = next 15% (90 days), C = tail (180 days)."
+          hint={`Lots classed by on-hand value at cost: A = top 80% of value (count every ${COUNT_CADENCE_DAYS.A} days), B = next 15% (${COUNT_CADENCE_DAYS.B} days), C = tail (${COUNT_CADENCE_DAYS.C} days). The same schedule Plan a count uses.`}
         >
           <div className="flex items-center gap-4 text-sm">
             {(["A", "B", "C"] as const).map((cls) => (

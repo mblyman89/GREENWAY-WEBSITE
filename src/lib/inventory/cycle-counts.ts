@@ -8,6 +8,10 @@
  * 'count') so on-hand is corrected and the change is CCRS-reportable.
  *
  * Staff-only via the service-role client behind RLS.
+ *
+ * READ-ONLY since Fix Phase 4.4a (G-39): create, apply, line entry, scan and
+ * cancel all refuse. The readers below remain so old sessions can be viewed and
+ * exported.
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -97,41 +101,27 @@ export async function getCycleCountLines(countId: string): Promise<CycleCountLin
   });
 }
 
-export type CycleCountScanLine = {
-  lineId: string;
-  lotId: string;
-  lotCode: string | null;
-  posProductKey: string | null;
-  productName: string | null;
-};
-
 /**
- * Lines for a session shaped for barcode matching (Slice 68). Includes the
- * lot_code + pos_product_key so a scanned code can be resolved client-side.
+ * The one refusal the three retired line writers share (Fix Phase 4.4a, G-39).
+ *
+ * Owner, D59: "be canceled, we are not live yet. It's all test data." and the
+ * gap register (G-39): "legacy cycle-count write actions removed or refused
+ * (true read-only; Q-06-6)". Migration 0194 made these tables read-only for
+ * ordinary sessions, but its own header admits the service role bypasses that
+ * grant, and every writer here used the service role. So the lock that counts is
+ * this one: the functions no longer open a database client at all.
+ *
+ * Counting now happens only on the audit count sheet (/admin/inventory/audits/
+ * {id}/count), through the checked database functions of migration 0326.
  */
-export async function getCycleCountScanLines(countId: string): Promise<CycleCountScanLine[]> {
-  if (!isSupabaseServiceConfigured) return [];
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("cycle_count_lines")
-    .select("id, lot_id, lot:inventory_lots(lot_code, pos_product_key, product_name)")
-    .eq("count_id", countId)
-    .order("created_at", { ascending: true });
-  const rows =
-    (data as unknown as { id: string; lot_id: string; lot: unknown }[] | null) ?? [];
-  return rows.map((r) => {
-    const lotRel = r.lot;
-    const lot = (Array.isArray(lotRel) ? lotRel[0] : lotRel) as
-      | { lot_code: string | null; pos_product_key: string | null; product_name: string | null }
-      | null;
-    return {
-      lineId: r.id,
-      lotId: r.lot_id,
-      lotCode: lot?.lot_code ?? null,
-      posProductKey: lot?.pos_product_key ?? null,
-      productName: lot?.product_name ?? null,
-    };
-  });
+export const CYCLE_COUNT_READ_ONLY_MESSAGE =
+  "CYCLE_COUNT_READ_ONLY: old cycle counts are kept for the record and can no longer " +
+  "be changed. Nothing has been written. Counting now happens in Inventory Auditing: " +
+  "the owner plans and releases a count, and it appears on Cycle Counts for you to " +
+  "press Start counting.";
+
+function cycleCountReadOnly(): { ok: false; error: string } {
+  return { ok: false, error: CYCLE_COUNT_READ_ONLY_MESSAGE };
 }
 
 /**
@@ -270,54 +260,16 @@ export async function getCycleCountSheetLines(countId: string): Promise<CycleCou
 }
 
 /**
- * Add scanned units to a line's counted quantity. Each scan of a unit bumps the
- * running physical count by `by` (default 1). Session must still be open and the
- * line not yet applied (hardening). Recomputes variance + caches the session's
- * variance count. Returns the new counted quantity.
+ * RETIRED (Fix Phase 4.4a, G-39). Scanning into an old cycle count used to add
+ * units to a line through the service role. It refuses now; scanning happens on
+ * the audit count sheet, where each scan adds one through
+ * inventory_audit_record_count (migration 0326).
  */
 export async function bumpLineCount(
   input: { lineId: string; by?: number },
 ): Promise<{ ok: true; countedQty: number; countId: string } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-  const by = Number.isFinite(input.by) ? Number(input.by) : 1;
-
-  const { data: line } = await admin
-    .from("cycle_count_lines")
-    .select("id, count_id, system_qty, counted_qty, applied")
-    .eq("id", input.lineId)
-    .maybeSingle();
-  if (!line) return { ok: false, error: "Count line not found." };
-  const l = line as {
-    count_id: string;
-    system_qty: number;
-    counted_qty: number | null;
-    applied: boolean;
-  };
-  if (l.applied) return { ok: false, error: "This line has already been applied." };
-
-  // Guard: the parent session must still be open.
-  const { data: parent } = await admin
-    .from("cycle_counts")
-    .select("status")
-    .eq("id", l.count_id)
-    .maybeSingle();
-  if (!parent || (parent as { status: string }).status !== "open") {
-    return { ok: false, error: "This count session is closed." };
-  }
-
-  const nextQty = Math.max(0, (l.counted_qty ?? 0) + by);
-  const variance = nextQty - (Number(l.system_qty) || 0);
-  const { error } = await admin
-    .from("cycle_count_lines")
-    .update({ counted_qty: nextQty, variance_qty: variance })
-    .eq("id", input.lineId);
-  if (error) return { ok: false, error: error.message };
-
-  await refreshVarianceCount(l.count_id);
-  return { ok: true, countedQty: nextQty, countId: l.count_id };
+  void input;
+  return cycleCountReadOnly();
 }
 
 /**
@@ -378,54 +330,15 @@ export async function createCycleCount(
   };
 }
 
-/** Record a blind physical count for one line; computes the variance. */
+/**
+ * RETIRED (Fix Phase 4.4a, G-39). Typing a count into an old cycle count line
+ * refuses now (it had no open-status check at all, F-06-9).
+ */
 export async function recordLineCount(
   input: { lineId: string; countedQty: number; note?: string | null },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-
-  const { data: line } = await admin
-    .from("cycle_count_lines")
-    .select("id, count_id, system_qty, applied")
-    .eq("id", input.lineId)
-    .maybeSingle();
-  if (!line) return { ok: false, error: "Count line not found." };
-  if ((line as { applied: boolean }).applied) {
-    return { ok: false, error: "This line has already been applied." };
-  }
-
-  const systemQty = Number((line as { system_qty: number }).system_qty) || 0;
-  const variance = input.countedQty - systemQty;
-
-  const { error } = await admin
-    .from("cycle_count_lines")
-    .update({
-      counted_qty: input.countedQty,
-      variance_qty: variance,
-      note: input.note ?? null,
-    })
-    .eq("id", input.lineId);
-  if (error) return { ok: false, error: error.message };
-
-  // Refresh the session's cached variance count.
-  await refreshVarianceCount((line as { count_id: string }).count_id);
-  return { ok: true };
-}
-
-/** Recompute and cache how many lines have a non-zero variance. */
-async function refreshVarianceCount(countId: string): Promise<void> {
-  if (!isSupabaseServiceConfigured) return;
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("cycle_count_lines")
-    .select("variance_qty")
-    .eq("count_id", countId);
-  const rows = (data as { variance_qty: number | null }[] | null) ?? [];
-  const variances = rows.filter((r) => (r.variance_qty ?? 0) !== 0).length;
-  await admin.from("cycle_counts").update({ variance_count: variances }).eq("id", countId);
+  void input;
+  return cycleCountReadOnly();
 }
 
 /**
@@ -522,22 +435,15 @@ export async function applyCycleCount(
   };
 }
 
-/** Cancel an open session (no adjustments posted). */
+/**
+ * RETIRED (Fix Phase 4.4a, G-39). Migration 0326 cancelled every open legacy
+ * session (D59), so there is nothing left to cancel by hand.
+ */
 export async function cancelCycleCount(
   countId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-  const session = await getCycleCount(countId);
-  if (!session) return { ok: false, error: "Session not found." };
-  if (session.status === "applied") {
-    return { ok: false, error: "Applied sessions cannot be cancelled." };
-  }
-  const { error } = await admin.from("cycle_counts").update({ status: "cancelled" }).eq("id", countId);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  void countId;
+  return cycleCountReadOnly();
 }
 
 export type CycleCountSummary = {

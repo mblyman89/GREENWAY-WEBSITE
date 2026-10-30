@@ -986,16 +986,28 @@ describe("K migration 0194 seals the retired cycle-count tables", () => {
      * counts stripped code: a number nobody recomputed is a number that drifts
      * the first time somebody adds a reader.
      */
-    const bodies = lib
+    /*
+     * Fix Phase 4.4a (G-39) retired the last three writers (bumpLineCount,
+     * recordLineCount, cancelCycleCount) and the scan-line reader only the
+     * retired scanner used. The migration's "nine" was true when 0194 was
+     * written and stays as history; the repository is now checked for the
+     * exact set of functions that still open a service-role client, with
+     * comments stripped so a trailing comment cannot move a function in or out.
+     */
+    const bodies = code(lib)
       .split(/(?=^(?:export )?(?:async )?function )/m)
       .filter((b) => /^(?:export )?(?:async )?function /.test(b));
-    const live = bodies.filter(
-      (b) => b.includes("createSupabaseAdminClient()") && !b.includes("RETIRED"),
-    );
-    expect(
-      live.length,
-      "the migration and the owner's report both say NINE service-role readers",
-    ).toBe(9);
+    const live = bodies
+      .filter((b) => b.includes("createSupabaseAdminClient()"))
+      .map((b) => (b.match(/function (\w+)/) ?? [])[1])
+      .sort();
+    expect(live, "only the five readers still open a service-role client").toEqual([
+      "cycleCountSummary",
+      "getCycleCount",
+      "getCycleCountLines",
+      "getCycleCountSheetLines",
+      "listCycleCounts",
+    ]);
     expect(prose).toMatch(/\bnine\b/);
   });
 

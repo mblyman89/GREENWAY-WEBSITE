@@ -104,6 +104,8 @@ function inventoryHrefs(): Map<string, string> {
         today: "2026-01-10",
         lots: [{ id: LOT, productName: "X", status: "active", expiresOn: "2026-01-01" }],
         medicalEndorsement: false,
+        // G-39: the owner's view carries the Plan a count link (others get no link).
+        canPlanCount: true,
       },
     ),
   )) add(h, "buildIntelIssues");
@@ -254,10 +256,12 @@ const RULES: readonly Rule[] = [
     },
   },
   {
-    name: "Cycle counts -> open a scoped count",
-    match: (h) => parseHref(h).path === "/admin/inventory/cycle-counts",
-    route: "src/app/admin/inventory/cycle-counts/page.tsx",
-    controls: { "src/app/admin/inventory/cycle-counts/page.tsx": ["href={`/admin/inventory/cycle-counts/${s.id}`}"] },
+    // G-39: the overdue row used to open Cycle Counts, which cannot start a
+    // count by design (F-06-8). It opens Plan a count, whose form creates one.
+    name: "Plan a count -> create the count (owner)",
+    match: (h) => parseHref(h).path === "/admin/inventory/audits/new",
+    route: "src/app/admin/inventory/audits/new/page.tsx",
+    controls: { "src/app/admin/inventory/audits/new/page.tsx": ['<form action={createAuditAction} className="space-y-5">'] },
   },
 ];
 

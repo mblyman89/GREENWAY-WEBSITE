@@ -177,6 +177,26 @@ export function movementNote(booksAtCount: number | null, movedQty: number): str
   );
 }
 
+/**
+ * The default name on Plan a count, in the STORE's month and year (G-39,
+ * F-06-11). It used the server clock, which runs on UTC: from 5 pm Pacific on
+ * the last day of a month the form proposed next month's name.
+ */
+export function defaultAuditLabel(now: Date): string {
+  const tz = "America/Los_Angeles";
+  const month = now.toLocaleString("en-US", { month: "long", timeZone: tz });
+  const year = now.toLocaleString("en-US", { year: "numeric", timeZone: tz });
+  return `${month} ${year} count`;
+}
+
+/** A date-only stamp in the store's time zone (the audit hub's Created column). */
+export function pacificShortDate(iso: string | null | undefined): string {
+  if (!iso) return "\u2014";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "\u2014";
+  return d.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "numeric", day: "numeric", year: "numeric" });
+}
+
 // ─── self-tests ─────────────────────────────────────────────────────────────
 export function __runAuditCountFlowTests(): number {
   let n = 0;
@@ -231,5 +251,10 @@ export function __runAuditCountFlowTests(): number {
   ok(movementNote(10, 0) === null, "no movement, no note");
   ok((movementNote(10, -2) ?? "").includes("2 sold"), "a sale mid-count is named");
   ok((movementNote(null, 0) ?? "").includes("before per-lot capture"), "legacy line is explained");
+
+  // G-39 Pacific: 2026-11-01T02:00Z is still 31 October in Port Orchard.
+  ok(defaultAuditLabel(new Date("2026-11-01T02:00:00Z")) === "October 2026 count", "default name uses the store month");
+  ok(defaultAuditLabel(new Date("2027-01-01T07:30:00Z")) === "December 2026 count", "default name uses the store year on New Year's Eve");
+  ok(pacificShortDate("2026-11-01T02:00:00Z") === "10/31/2026", "hub date is the store day");
   return n;
 }

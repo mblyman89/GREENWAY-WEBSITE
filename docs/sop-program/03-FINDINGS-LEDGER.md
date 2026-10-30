@@ -780,20 +780,22 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 ### F-06-8 · CONFIRMED · GAP · S3 — Two different count schedules; the Issues fix links to a page that cannot start a count
 - **Pin:** `CADENCE_DAYS` A30/B60/C90/U14 (`inventory-audit-core.ts` L324–329) vs `COUNT_CADENCE_DAYS` A30/B90/C180 (`inventory-intel-core.ts` L301). Issues row *"Start a cycle count."* → **Open cycle counts** (`issues-core.ts` L481–488), which has no create button by design.
 - **SOP impact:** §4.5 step 3, §4.22. **G-39**. Q-06-5.
+- **Status: FIXED (Fix Phase 4.4a, G-39).** `COUNT_CADENCE_DAYS` is A30/B60/C90, equal to the planner (checked by `fix-p4-4a-count-housekeeping.test.ts`); the overdue row opens **Plan a count** (`/admin/inventory/audits/new`) for `inventory.audit` and tells everyone else to tell the owner (`buildIntelIssues` `canPlanCount`).
 
 ### F-06-9 · CONFIRMED · GAP · S2 — "Read only" legacy cycle counts still write through the service role
 - **Pin:** `cycle-counts/actions.ts` (record L92, scan bump L113, apply L147, cancel L183, sheet preview/apply L227/L270, `inventory.manage`); `cycle-counts.ts` `bumpLineCount` L278–320, `recordLineCount` L382–415 (no open-status check), `cancelCycleCount` L526–545; open sessions render Cancel, scanner and **Enter count** (`cycle-counts/[id]/page.tsx` L161–172, L222, L317, L389). Migration 0194 admits the service role bypasses its read-only grant.
 - **SOP impact:** §4.20 store rule. **G-39**. Q-06-6.
+- **Status: FIXED (Fix Phase 4.4a, G-39).** The five writer actions are deleted (`cycle-counts/actions.ts`); `bumpLineCount`, `recordLineCount` and `cancelCycleCount` refuse with CYCLE_COUNT_READ_ONLY and open no client; the detail page has no form, scanner, import or Cancel (export kept). D59 cleanup cancelled open sessions (migration 0326).
 
 ### F-06-10 · CONFIRMED · DOC · S3 — The built-in counting checklist is never shown; the method text says it is
 - **Pin:** `buildCountChecklist` (`inventory-audit-core.ts` L1416–1493) has no caller in `src/app`. `AUDIT_METHOD` step 2 systemDoes *"Generates the count sheet with a step-by-step checklist"* (`audit-hub-guidance-core.ts` L80–180).
 - **SOP impact:** §4.10 (the SOP carries the steps). **G-39**.
-- **Status: PARTLY FIXED (Fix Phase 4.1–4.3, G-39, #1573, migration 0326).** The count sheet now renders the counting checklist (**How to count**, `buildCountChecklistFor`).
+- **Status: FIXED (Fix Phase 4.1–4.3 #1573 and 4.4a, G-39).** The count sheet renders the counting checklist (**How to count**, `buildCountChecklistFor`), and its "add one to that batch's count" step is now what a scan does (G-36, migration 0326), so the method text is true.
 
 ### F-06-11 · CONFIRMED · UX · S4 — Cosmetic: approved colour differs; browser times; server-time default name
 - **Pin:** approved = gold on the audit page (`audits/[id]/page.tsx` L71–75) vs green on the hub (`audits/page.tsx` L60–65); `toLocaleString` in the browser on the oversold and older lists (`cycle-counts/page.tsx` L186, L206, L282–305); `defaultLabel` uses server `new Date()` (`audits/new/page.tsx`).
 - **SOP impact:** §4.6, §4.21. **G-39**.
-- **Status: PARTLY FIXED (Fix Phase 4.1–4.3, G-39, #1573, migration 0326).** Approved is green on the audit page; Cycle Counts shows Pacific times (`formatDateTime`). The server-time default name remains (G-39).
+- **Status: PARTLY FIXED (Fix Phase 4.1–4.3, G-39, #1573, migration 0326).** Approved is green on the audit page; Cycle Counts shows Pacific times (`formatDateTime`). **Completed in Fix Phase 4.4a:** the default name uses the store's month and year (`defaultAuditLabel`) and the audit hub's Created column is a Pacific date (`pacificShortDate`). **FIXED.**
 
 ### F-06-12 · CONFIRMED · GAP · S3 — No daily checklist feature (re-verifies F-00-9)
 - **Pin:** no checklist model, page or nav entry outside HR lifecycle (`employee-lifecycle-core.ts`); re-checked at `c976c7e4`.
