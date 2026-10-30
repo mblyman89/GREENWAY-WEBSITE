@@ -438,3 +438,22 @@ Fix Phase 6 / Fix E (gaps G-61 to G-66): SOP-01 v1.10 and SOP-03 v1.6, the conci
 ### Numbering note
 
 Owner messages 6 and 7 are cited throughout the SOPs and ledgers (Phase 2.1b/2.8b/2.9 and the receiving work) but were never copied into this file. This message is therefore recorded as **owner message 8**, so that no existing citation changes meaning.
+
+## Owner message 9 (recorded verbatim, Fix Phase 6F: tip accountability and the return policy)
+
+> Thank you. Before we move on. I want to make sure the tip logic is what I'm expecting. The tips are pooled between the two cashiers, each register has a tip jar at it. So when a cashier closes out their till, I want them to record their share of the tips in that form like it was before. Is that still the case here? All the other logic regarding tips is probably correct, I haven't looked yet. I just want to make sure the cashier is accountable for their tips too. We are a cash only business, so pooled tips won't show up in the system until they are reported. The last thing I need your help with is changing the policy for allowing customer returns. Right now we require they be a loyalty member. But after discussing the matter with my team, it would be better if this were changed to allow anyone to return products so long as they have the original packaging and the receipt to go with it and it falls within the 7 day return period. But because we are an enterprise grade platform, we shouldn't just change the behavior in code, we should allow it to be a setting in the register activity page, so we can toggle it on and off if we want to. I also want to have a setting for choosing a return window as well as the types of products we allow to be returned. That way everything can be adjusted if needed. Please complete these tasks then return with a summary report please. Follow the standing rules. Thank you!
+
+### Decisions derived (each traced to the words above)
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D91 | **Each cashier records their own tip share on their own close (unchanged).** The iPad close form still offers "Crew tip pool" (type the whole jar and the number of people; the server stores this cashier's share, D89) and "My own tips". | *"when a cashier closes out their till, I want them to record their share of the tips in that form like it was before"* |
+| D92 | **The tips box is now required on the iPad close.** Blank blocks the close; a typed 0 is a real counted-zero jar. Before this, blank was allowed and saved as "not recorded". The back-office close keeps blank for the case where the cashier is not present to count their jar, and that close shows tips "not recorded". | *"I just want to make sure the cashier is accountable for their tips too. We are a cash only business, so pooled tips won't show up in the system until they are reported."* |
+| D93 | **Anyone may return by default; "Loyalty members only" is a toggle.** The setting is at Register Activity → Return policy. Off (the default) means anyone with the original receipt may return. On restores the old loyalty-member gate. | *"allow anyone to return products so long as they have the original packaging and the receipt … we should allow it to be a setting in the register activity page, so we can toggle it on and off"* |
+| D94 | **The return window is a setting:** whole days, 1 to 60, default 7. Purchase day = day 0, Pacific calendar days. It replaces the hard-coded 15 days. | *"it falls within the 7 day return period … a setting for choosing a return window"* |
+| D95 | **Returnable product types are a setting.** Every category is listed; unticked types are refused at the register and at the returns desk, and the reason is shown. Sales recorded before categories were stamped on each line are not blocked. | *"as well as the types of products we allow to be returned"* |
+| D96 | **The receipt and the original packaging stay mandatory and are not settings.** The receipt number is how the sale is found. WAC 314-55-079(12) requires the original packaging with the lot ID legible. A manager PIN still approves every return. | *"so long as they have the original packaging and the receipt to go with it"* |
+
+### Applied
+
+Fix Phase 6F (gaps G-67, G-68): a new settings page at `/admin/registers/return-policy` (a site_settings row; no migration). It feeds the returns desk, the iPad returns lookup, the printed receipt policy, the FAQ and the concierge KB. The iPad tips box is now required. Docs updated: SOP-01, SOP-15, and the ledgers 04/05/06.

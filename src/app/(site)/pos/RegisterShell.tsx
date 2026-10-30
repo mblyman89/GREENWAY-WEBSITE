@@ -150,6 +150,11 @@ import {
   HISTORY_SEARCH_DEBOUNCE_MS,
   type TransactionRow,
 } from "@/lib/pos/transaction-history-core";
+import {
+  normalizePosReturnPolicy,
+  returnPolicyShortLabel,
+  returnPolicySummary,
+} from "@/lib/pos/return-policy-core";
 import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary, type RefundSummary } from "@/lib/pos/day-report-core";
 import { medalFor } from "@/lib/pos/leaderboard-core";
@@ -1917,6 +1922,7 @@ export function RegisterShell({
         onDayReport={() => setDayReportOpen(true)}
         onVoidSale={online ? () => setVoidOpen(true) : undefined}
         onReturnSale={online ? () => setReturnsOpen(true) : undefined}
+        returnPolicyLabel={returnPolicyShortLabel(normalizePosReturnPolicy(menuBundle?.returnPolicy))}
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         onPrinterSetup={() => setPrinterSetupOpen(true)}
         printerMenuNote={printerNote}
@@ -2076,6 +2082,7 @@ export function RegisterShell({
       {returnsOpen && employee ? (
         <ReturnsModal
           creds={creds}
+          policyText={returnPolicySummary(normalizePosReturnPolicy(menuBundle?.returnPolicy))}
           employeeName={employee.fullName}
           onClose={() => setReturnsOpen(false)}
           onReturned={(receiptHtml, message) => {
@@ -2603,6 +2610,7 @@ function HomeScreen({
   onDayReport,
   onVoidSale,
   onReturnSale,
+  returnPolicyLabel,
   onLeaderboard,
   onPrinterSetup,
   printerMenuNote,
@@ -2655,6 +2663,8 @@ function HomeScreen({
   onVoidSale?: () => void;
   /** AM-C — open the manager-gated counter-return flow (undefined offline). */
   onReturnSale?: () => void;
+  /** Fix 6F — one-line return policy from Register Activity → Return policy. */
+  returnPolicyLabel?: string;
   /** B34 — open the budtender leaderboard (undefined offline — it reads the server ledger). */
   onLeaderboard?: () => void;
   /**
@@ -2800,7 +2810,9 @@ function HomeScreen({
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
                 >
                   📦 Return an item
-                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">Loyalty members, 15-day window — manager PIN</span>
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">
+                    {returnPolicyLabel ?? returnPolicyShortLabel(normalizePosReturnPolicy(null))}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -3597,7 +3609,11 @@ type ReturnableSale = {
     priceMinorUnits: number;
     alreadyReturned: number;
     remainingReturnable: number;
+    /** Fix 6F (G-68) — set when this product type is not returnable. */
+    notReturnableReason?: string | null;
   }[];
+  /** Fix 6F — the policy the server judged this lookup by. */
+  policySummary?: string;
 };
 
 /**
@@ -3611,11 +3627,14 @@ type ReturnableSale = {
  */
 function ReturnsModal({
   creds,
+  policyText,
   employeeName,
   onClose,
   onReturned,
 }: {
   creds: DeviceCreds;
+  /** Fix 6F — the cached policy summary; the server's lookup summary wins once a sale is found. */
+  policyText: string;
   employeeName: string;
   onClose: () => void;
   onReturned: (receiptHtml: string, message: string) => void;
@@ -3632,6 +3651,8 @@ function ReturnsModal({
   // True when the server stopped scanning before the end of the window, so
   // "nothing found" might mean "we stopped looking". Never hidden from staff.
   const [historyTruncated, setHistoryTruncated] = useState(false);
+  // Fix 6F — the server's lookup window (policy window + 2); null until loaded.
+  const [historyDays, setHistoryDays] = useState<number | null>(null);
   // Monotonic request id — the newest search always wins, so a slow earlier
   // response cannot overwrite it (classic out-of-order autocomplete bug).
   const historySeqRef = useRef(0);
@@ -3745,6 +3766,7 @@ function ReturnsModal({
       const parsed = readHistoryResponse(json);
       setHistory(parsed.transactions);
       setHistoryTruncated(parsed.scanTruncated);
+      setHistoryDays(parsed.windowDays);
     } catch {
       if (seq !== historySeqRef.current) return;
       setHistoryError("Could not reach the server - the receipt number still works.");
@@ -3790,7 +3812,7 @@ function ReturnsModal({
       }
       const found = json.sale as ReturnableSale;
       setSale(found);
-      const returnable = found.lines.filter((l) => l.remainingReturnable > 0);
+      const returnable = found.lines.filter((l) => l.remainingReturnable > 0 && !l.notReturnableReason);
       if (returnable.length === 1) {
         setLineId(returnable[0].lineId);
         setQuantity(1);
@@ -3847,7 +3869,7 @@ function ReturnsModal({
           </button>
         </div>
         <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
-          Loyalty members within the 15-day window. The refund is the exact price paid on the receipt —
+          {sale?.policySummary ?? policyText} The refund is the exact price paid on the receipt —
           nothing is typed by hand. Product must be in its original packaging with the lot ID fully legible
           (state law), or the return must be refused.
         </p>
@@ -3938,8 +3960,8 @@ function ReturnsModal({
                     return (
                       <p className="mt-3 text-xs text-[var(--pos-text-muted)]">
                         {q
-                          ? `Nothing matches “${q}” in the last ${HISTORY_WINDOW_DAYS} days.`
-                          : `No register sales in the last ${HISTORY_WINDOW_DAYS} days.`}
+                          ? `Nothing matches “${q}” in the last ${historyDays ?? HISTORY_WINDOW_DAYS} days.`
+                          : `No register sales in the last ${historyDays ?? HISTORY_WINDOW_DAYS} days.`}
                       </p>
                     );
                   }
@@ -4079,7 +4101,8 @@ function ReturnsModal({
             </label>
             <div className="mt-2 space-y-2">
               {sale.lines.map((l) => {
-                const selectable = l.remainingReturnable > 0;
+                const blocked = l.notReturnableReason ?? null;
+                const selectable = l.remainingReturnable > 0 && !blocked;
                 const selected = lineId === l.lineId;
                 return (
                   <button
@@ -4101,7 +4124,9 @@ function ReturnsModal({
                       <span className="font-mono">{formatCents(l.priceMinorUnits)}</span>
                     </span>
                     <span className={`mt-0.5 block text-xs ${selected ? "" : "text-[var(--pos-text-muted)]"}`}>
-                      {selectable
+                      {blocked
+                        ? blocked
+                        : selectable
                         ? `${l.remainingReturnable} of ${l.quantity} returnable${l.alreadyReturned > 0 ? ` (${l.alreadyReturned} already returned)` : ""}`
                         : "Fully returned"}
                     </span>
@@ -5703,7 +5728,13 @@ function TillModal({
   const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
   const tipPeopleN = Number(tipPeople);
   const poolSplit = tipMode === "pool" && tips.trim() && tipsMinor !== null ? splitTipPool(tipsMinor, tipPeopleN) : null;
-  const tipsValid = tipsMinor !== null && (tipMode === "own" || !tips.trim() || (poolSplit !== null && poolSplit.ok));
+  // Fix 6F (owner message 9: "I just want to make sure the cashier is
+  // accountable for their tips too. We are a cash only business, so pooled
+  // tips won't show up in the system until they are reported.") — the tips
+  // box is REQUIRED on the iPad close: blank blocks, a typed "0" is a real
+  // counted-zero jar. Every close now records the cashier's share.
+  const tipsBlank = tips.trim() === "";
+  const tipsValid = !tipsBlank && tipsMinor !== null && (tipMode === "own" || (poolSplit !== null && poolSplit.ok));
   // Fix Phase 6 (G-62, owner D85 "Warn please"): count-in vs the standard float.
   const floatWarn = mode === "open" && countedMinor > 0 ? floatCheck(countedMinor, standardFloatMinor) : null;
 
@@ -6100,7 +6131,12 @@ function TillModal({
                     readable in both. */}
                 {tips.trim() !== "" && tipsMinor === null && (
                   <p className="mt-1 text-xs text-[var(--pos-danger)]">
-                    Enter tips as dollars and cents (like 42.50) or leave it blank.
+                    Enter tips as dollars and cents (like 42.50), or 0 if there were none.
+                  </p>
+                )}
+                {tipsBlank && (
+                  <p className="mt-1 text-xs font-semibold text-[var(--pos-text-muted)]">
+                    Required — count the tip jar and enter it (type 0 if there were no tips).
                   </p>
                 )}
                 {tipMode === "pool" ? (
@@ -6124,7 +6160,7 @@ function TillModal({
                 <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
                   {tipMode === "pool"
                     ? "Count the crew's tip jar together and split it evenly. Your share goes on YOUR close and your till summary; your crew-mate records the same pool on theirs. Tips are NOT drawer cash, so keep them out of the count above."
-                    : "Count the tip jar by itself \u2014 tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."}
+                    : "Count the tip jar by itself \u2014 tips are your money, NOT drawer cash, so keep them out of the count above. Type 0 if there were no tips."}
                 </p>
               </>
             )}

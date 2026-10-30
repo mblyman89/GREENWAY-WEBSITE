@@ -20,11 +20,12 @@ import "server-only";
  * ─────────────────────────────────────────────────────────────────────────────
  * WHY THE WINDOW MATCHES THE RETURN WINDOW
  *
- * `lookupSaleByReceipt` scans back LOOKUP_WINDOW_DAYS (RETURN_WINDOW_DAYS + 2).
+ * `lookupSaleByReceipt` scans back the owner's return window + 2 days
+ * (lookupWindowDays of the saved Return policy, Fix 6F).
  * This panel uses the SAME window on purpose. A list that showed sales the
  * return path would then refuse as out-of-window would be a list that lies:
  * staff would tap a row and get a policy rejection they could not have
- * predicted. Sharing the constant makes the two agree by construction rather
+ * predicted. Sharing the helper makes the two agree by construction rather
  * than by memory.
  *
  * READ-ONLY. This module writes nothing. Acting on a row still goes through
@@ -34,7 +35,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { RETURN_WINDOW_DAYS } from "@/lib/pos/returns-core";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
+import { lookupWindowDays } from "@/lib/pos/return-policy-core";
 import {
   shapeTransaction,
   searchTransactions,
@@ -54,7 +56,8 @@ import {
  * quotes; the test suite asserts the two are equal, so a future change to the
  * return window cannot silently leave the on-screen number wrong.
  */
-const LOOKUP_WINDOW_DAYS = RETURN_WINDOW_DAYS + 2;
+// Fix Phase 6F: the window is the owner's setting now (Register Activity →
+// Return policy), read per request below via lookupWindowDays(policy).
 
 /**
  * How many recent sale events to consider before shaping. The panel shows
@@ -89,6 +92,8 @@ export type TransactionHistoryResult =
        * read as "this sale does not exist".
        */
       scanTruncated: boolean;
+      /** Fix Phase 6F: days this list covers (the owner's window + 2). */
+      windowDays: number;
     }
   | { ok: false; error: string };
 
@@ -136,7 +141,8 @@ export async function listRecentTransactions(
   const scanLimit = searching ? SEARCH_EVENT_SCAN_LIMIT : EVENT_SCAN_LIMIT;
 
   const admin = createSupabaseAdminClient();
-  const cutoff = new Date(Date.now() - LOOKUP_WINDOW_DAYS * 86_400_000).toISOString();
+  const windowDays = lookupWindowDays(await getPosReturnPolicy());
+  const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString();
 
   // ── The sale events, exactly as the receipt lookup selects them ───────────
   const { data: eventData, error: eventError } = await admin
@@ -156,7 +162,7 @@ export async function listRecentTransactions(
   // Hitting the ceiling exactly means there may be more we never looked at.
   const scanTruncated = events.length >= scanLimit;
   if (events.length === 0) {
-    return { ok: true, transactions: [], scanTruncated: false };
+    return { ok: true, transactions: [], scanTruncated: false, windowDays };
   }
 
   const orderIds = Array.from(
@@ -281,5 +287,6 @@ export async function listRecentTransactions(
     ok: true,
     transactions: matched.slice(0, TRANSACTION_HISTORY_LIMIT),
     scanTruncated,
+    windowDays,
   };
 }

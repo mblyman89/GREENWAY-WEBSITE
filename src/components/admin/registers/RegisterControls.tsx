@@ -164,8 +164,9 @@ export function RegisterControls({
           <p className="text-xs text-[var(--admin-text-muted)]">
             The tip jar is employee money; count it separately and keep it OUT of the drawer count
             above. For a crew pool, type the whole jar: the closer&apos;s share (pool ÷ people,
-            whole cents; odd cents stay in the jar) is recorded on their close. Leave blank if not
-            recorded.
+            whole cents; odd cents stay in the jar) is recorded on their close. Type 0 if there
+            were no tips. Leave blank ONLY when the cashier is not here to count their jar (the
+            close then shows tips &ldquo;not recorded&rdquo;). On the iPad the tips box is required.
           </p>
           <EmployeePicker name="employee_id" employees={employees} label="Counted by" required />
           {/* Fix Phase 2.2 (G-01, owner D2): any second employee counts the

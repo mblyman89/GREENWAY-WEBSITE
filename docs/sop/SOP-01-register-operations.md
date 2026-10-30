@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.10 (draft for owner review; Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
+| **Version** | 1.11 (draft for owner review; Fix Phase 6F (owner message 9, D91–D96): **anyone may return by default**, with the loyalty rule, the return window (default **7 days**) and the returnable product types as settings at Register Activity → Return policy (§4.23); the **tips box is required** on the iPad close, 0 allowed (§4.27). Earlier: Fix Phase 6 / Fix E (owner message 8, D81–D90): **clock-out is blocked while you still own an open drawer, and closing a drawer never clocks you out** (§4.2, D84); a count-in that is not the standard float **warns** (§4.3, D85); the **crew tip pool** is split evenly and your share goes on your own close (§4.27, D89); **shift change on your own insert** (§4.27a, D81/D90); **Verify till is retired**, the morning bag recount is the verify (§4.30, D83); reconcile by either manager before the bag is sealed (§4.30, D87). Earlier: Phase 2.1b fix G-05 completed: printable **Cashier shift report** per cashier and shift (§4.35); Phase 2.1c: **Tip Tracker** in the Employee menu (§4.36); Phase 2.9: the Register Activity buttons wrap so every one is on screen; Phase 2.7b fix G-02 / F-01-8: the change swap takes the bills both ways, by denomination; form 8.3 now points to SOP-02 (F-02-8); Phase 2.3 fix G-03: $5 over/short reason at reconcile and the owner's warnings screen; Phase 2.2 fix G-01: the register records the second-person count at close; Phase 2.1 fix G-05 / F-01-4: reconcile uses the system figure per drawer; Phase 1.4 fix G-44: a Destroy return is held by the app; D21 and F-03-4 correction applied; D41 living-SOP reminder; Phase 0.1 fix F-01-14) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | Every employee who works the register (budtenders), plus the leads and managers who approve, and the managers who reconcile |
@@ -630,10 +630,11 @@ Limits: whole sales only; completed sales only; only once; not after any part wa
 
 ### 4.23 Customer returns
 
-**Store policy, stricter than the state rule:**
-1. The sale must have had a **loyalty member** attached.
-2. The customer brings the **original receipt**, or you find the sale in the history list.
-3. Returns are accepted **within 15 days** of purchase. The purchase day is day 0, counted in Pacific time.
+**Store policy (Fix Phase 6F, owner message 9, D93–D96).** The owner sets it in the back office at **Register Activity → Return policy** (`/admin/registers/return-policy`). The window opening the return shows the saved policy in one sentence.
+1. **Who may return:** by default **anyone** with the receipt (D93). If the owner turns on **Loyalty members only**, the sale must have had a loyalty member attached.
+2. The customer brings the **original receipt**, or you find the sale in the history list. This is always required.
+3. Returns are accepted **within the return window**, by default **7 days** of purchase (D94; the owner can set 1 to 60). The purchase day is day 0, counted in Pacific time.
+3a. **Product types:** the owner can mark product types as not returnable (D95). Such a line shows *"… is not a returnable product type (store return policy, Register Activity → Return policy). Refuse the return of this item."* and cannot be picked.
 4. The product must be in its **original packaging** with the **lot / batch label fully legible** (WAC 314-55-079(12)).
 5. **Refunds are cash**, the original form of payment.
 
@@ -641,8 +642,8 @@ Steps:
 1. **MORE ▾ → Return an item** (online only).
 2. Find the sale. Either type the **receipt number** (8 characters), or search recent sales (**Search name, receipt, item or staff**) and tap the sale.
 3. If the sale fails policy, every reason is shown. For example:
-   - *"Outside the 15-day return window — this sale was N days ago (store policy). Refuse the return."*
-   - *"No loyalty member is attached to this sale — store policy requires … Refuse the return."*
+   - *"Outside the 7-day return window — this sale was N days ago (store policy). Refuse the return."* (the number is the owner's window)
+   - *"No loyalty member is attached to this sale — store policy requires … Refuse the return."* (only when **Loyalty members only** is on)
 4. Pick the **line** and the **quantity** (it shows "N of M returnable").
 5. Pick the **reason**: **Defective / Wrong item / Adverse reaction / Quality issue / Mislabeled / Other**. A detail note is optional, but give context for **Other**. An **adverse reaction** also needs a manager to follow the product-complaint process.
 6. Choose **Restock** (sellable) or **Destroy** (the product goes to the quarantine bin for destruction, SOP-15). Since Phase 1.4 (G-44) the app holds a Destroy unit: it is counted on hand but never sold or shown as stock until it is destroyed (SOP-15 §4.7).
@@ -724,7 +725,8 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
    - The window works out your share live, for example *"Crew tip pool $85.01 split evenly between 2: your share is $42.50. $0.01 cannot be split evenly; leave it in the jar for the next pool."* The split is in whole cents, rounding down; any leftover cents stay in the jar.
    - **Your share is what is saved as your tips** and printed on your own till summary (*"Tips at close: this cashier's own share …"*). Your crew-mate enters the same pool at their close and gets the same share. The server does the split again itself; it does not trust the screen.
    - **My own tips** (no pool, e.g. working alone on a register with your own jar): the old box below.
-   Old box, **My own tips**: enter the tip-jar total, or leave it blank if there is no tip jar. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Leave blank if there is no tip jar."* Blank means "not recorded". **0** means "counted, and there were none".
+   Old box, **My own tips**: enter the tip-jar total. *"Count the tip jar by itself — tips are your money, NOT drawer cash, so keep them out of the count above. Type 0 if there were no tips."*
+   - **The tips box is required (Fix Phase 6F, D92).** The owner said: *"I just want to make sure the cashier is accountable for their tips too. We are a cash only business, so pooled tips won't show up in the system until they are reported."* A blank box shows *"Required — count the tip jar and enter it (type 0 if there were no tips)."* and **Next: second count** stays off. **0** means "counted, and there were none". (The back-office close still allows blank for when the cashier is not there to count; that close shows "not recorded".)
 8. **Enter your PIN** and tap **Next: second count**. (The button stays off until your PIN is typed and the tips box is valid.)
 9. **Second-person count (owner rule D2, built in Phase 2.2, gap G-01).** The owner said: *"Q2- close only, and it can be any second employee. It doesn't need to be a lead or manager."* Hand the iPad to **any other employee**. The window now reads: *"Second count. Hand the iPad to another employee (any employee, not <you>). They count the drawer by themselves and enter their own PIN. <your> count stays hidden."*
    - Your count is **hidden** on this step and the second grid starts **empty**, so the second person counts blind, on their own.
@@ -755,7 +757,7 @@ You close the drawer at the end of your shift, or at end of day. **Do it before 
 
 **Why it is blind:** if you could see the expected amount, a short drawer could be "fixed" by fudging the count, and an honest miscount could not be told apart from theft. With a blind count your number stands on its own. A manager compares it to the system later. A blind count protects you.
 
-Messages: *"No open drawer on this register."* (already closed, or never opened) · *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* · *"The second employee's PIN must be 4–6 digits."* · *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* (tell the owner) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50) or leave it blank."*
+Messages: *"No open drawer on this register."* (already closed, or never opened) · *"A second employee must count the drawer and enter their PIN before it can close (owner rule D2). Any employee can do it, but not you."* · *"The second employee's PIN must be 4–6 digits."* · *"The second count cannot be saved yet: database migration 0314 has not been applied. Nothing was changed."* (tell the owner) · *"Tips must be zero or a positive whole number of cents."* · *"Tips amount is implausibly large — check the number."* · *"Enter tips as dollars and cents (like 42.50), or 0 if there were none."* · *"Required — count the tip jar and enter it (type 0 if there were no tips)."*
 
 **After closing:** the register shows **No drawer**. You cannot ring another sale on this register until someone counts in again.
 
@@ -1091,14 +1093,14 @@ Since Phase 2.9 (owner message 6: *"The register activity page also, the top but
 
 | Message (exact) | Type | Why | What to do | Call |
 |---|---|---|---|---|
-| *"Voids are same-day only (Pacific business day). For an earlier sale, use the returns desk — it handles the 15-day policy, restock/destroy, and CCRS corrections."* | BLOCK | Same-day control | Use **Return an item** | Manager |
+| *"Voids are same-day only (Pacific business day). For an earlier sale, use the returns desk — it handles the return policy, restock/destroy, and CCRS corrections."* | BLOCK | Same-day control | Use **Return an item** | Manager |
 | *"This sale has already been voided."* | BLOCK | Only once | — | — |
 | *"Only COMPLETED sales can be voided (this order is "…")."* / *"Only COMPLETED sales can be returned …"* | BLOCK | The sale is not finished (still syncing, or an exception) | Wait for sync, or check exceptions | Manager |
 | *"Part of this sale was already returned at the returns desk — voiding now would refund the same items twice. Process the rest as a return instead."* | BLOCK | Prevents a double refund | Use **Return an item** | Manager |
 | *"The sale has no completion timestamp — void it from the back office instead."* | BLOCK | Data problem | Back office | Manager |
 | *"Give a reason (at least 3 characters) — it is logged to the audit trail."* / *"Keep the reason under 500 characters."* | BLOCK | Audit | Write a reason | — |
 | *"A manager or lead must approve the void (PIN)."* | BLOCK | Control | Manager PIN | Lead / manager |
-| *"Outside the 15-day return window — this sale was N days ago (store policy). Refuse the return."* | BLOCK (policy) | Store policy | Refuse | Owner for exceptions |
+| *"Outside the N-day return window (the owner's setting, default 7) — this sale was N days ago (store policy). Refuse the return."* | BLOCK (policy) | Store policy | Refuse | Owner for exceptions |
 | *"No loyalty member is attached to this sale — store policy requires the product to have been purchased by a loyalty customer. Refuse the return."* | BLOCK (policy) | Store policy | Refuse | — |
 | *"This sale is timestamped in the future — check the register clock before processing a return."* | BLOCK | iPad clock problem | Check the iPad's date/time | Manager |
 | *"Nothing left to return on this line — it has already been fully returned."* / *"Return quantity (N) exceeds what is still returnable on this line (M)."* | BLOCK | Prevents a double refund | Fix the quantity | — |
@@ -1298,7 +1300,7 @@ Owner reviewed: ____________________   Date: ________
 │   Override / Void / Return / No sale / Swap / Day report = MANAGER or LEAD.            │
 │ CHANGED THE CART? Re-apply the loyalty/special discount.                               │
 │ HOLD = ⏸ (one at a time, ID re-checked on load). CANCEL = recorded under your name.    │
-│ VOID = same day only. RETURN = loyalty member, 15 days, original pkg, legible lot.     │
+│ VOID = same day only. RETURN = receipt, 7 days*, original pkg, legible lot. *setting   │
 │ REPRINT = MORE ▸ Reprint last receipt (drawer stays shut). Don't re-tap Print.         │
 │ DROP big bills (afternoon/night) + witness. SWAP = mgr PIN + bills BOTH WAYS on screen. │
 │ CLOSE: drop first → crew tip pool → blind count → 2nd person counts → Record. Clock out after.│
@@ -1383,6 +1385,7 @@ Owner reviewed: ____________________   Date: ________
 | 1.0 draft | 2026-10-27 | First issue. Written from the code at `d03fe15b`. Includes owner decisions D1–D9. Supersedes `docs/POS_OPERATIONS_GUIDE.md` §2 (F-00-11) on approval. | SOP program (for owner review) |
 | 1.1 draft | 2026-10-27 | Slice SOP-04, docs-only corrections. §4.29: the float stays in the drawer (fixes finding F-03-4; floats $167.50 / Manager Till $300.00 per D19/D22). §4.30 step 6: a written reason is required only for over/short **over $5.00** (owner decision D21). No code was re-audited; other pins still at `d03fe15b`. | SOP program |
 | 1.2 draft | 2026-10-27 | Slice SOP-05b. Living-SOP reminder added under the title (owner decision D41: update this SOP whenever a gap it names is built). Line references re-checked after the performance merge (`main@827facb5`; register files now under `src/app/(site)/pos/`). No procedure changed. | SOP program (for owner review) |
+| 1.11 draft | Fix phase | Fix Phase 6F (owner message 9, D91–D96; G-67, G-68 BUILT). §4.23 store policy: anyone with the receipt by default, Loyalty members only toggle, return window setting (default 7), non-returnable product types; receipt and packaging always required. §4.27 step 7: the tips box is required on the iPad close (0 allowed). §5 messages, quick card. No migration. The iPad app must be rebuilt. | Fix program |
 | 1.10 draft | Fix phase | Fix Phase 6 / Fix E (owner message 8, D81–D90; G-61, G-62, G-63, G-64, G-66 BUILT; F-01-13 FIXED; F-00-3, F-00-4 verify part, F-01-12 RETIRED). §4.2 clock-out guard (D84: blocked while you own an open drawer; closing never clocks out); §4.3 float warning (D85); §4.27 steps 3, 7, 12 crew tip pool (D89) and the still-clocked-in line; new §4.27a shift change on your own insert with the quick card (D81, D86, D88, D90); §4.29 notes; §4.30 reconcile by either manager before the seal (D87), Verify till retired (D83); §5.8 three rows; forms 8.1 and 8.6; quick card; Appendix A and B. No migration. The iPad app must be rebuilt for the register changes. | Fix program |
 | 1.9 draft | Fix phase | Phase 2.1b, 2.1c, 2.9 (owner message 6: *"please completely finish G-05 (2.1), the per cashier print out. I want to add to this an employee tip tracker with a new page in the employee drop down menu to track tips and give stats on them … The register activity page also, the top button bar, is cutoff."*). G-05 BUILT, F-01-10 FIXED: new §4.35 **Cashier shift report** (per cashier and shift; sales, voids, no-sales, discounts by kind, cart adjustments; sign-off line; print and CSV). New §4.36 **Tip Tracker** (Employee menu; own tips for everyone, all for managers; totals, averages, highest, weekday, per hour; manager correction with a reason, audited). New §4.37: the Register Activity buttons wrap so none is cut off. No migration. Appendix A and B updated. | Fix program |
 | 1.8 draft | Fix phase | Phase 2.7b (plan row 2.7: *"Master till items"*; owner D3, D14). G-02 BUILT, F-01-8 FIXED: §4.26 change swap now takes **Big bills to the safe** and **Change back** by denomination and refuses unequal sides; new messages listed; the D3 note says the iPad must be rebuilt. Form 8.3 retitled and pointed to SOP-02 form 8.3 (F-02-8 FIXED). Quick card and Appendix B updated. | Fix program |

@@ -148,6 +148,10 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/returns`} variant="neutral" size="sm">
               Returns desk
             </Button>
+            {/* Fix 6F (G-67/G-68) — owner message 9: return policy as settings. */}
+            <Button href={`${BASE}/return-policy`} variant="neutral" size="sm">
+              Return policy
+            </Button>
             <Button href={`${BASE}/safe`} variant="neutral" size="sm">
               Safe
             </Button>

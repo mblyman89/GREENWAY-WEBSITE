@@ -1304,7 +1304,7 @@ export const SEED_FAQS: SeedFaq[] = [
     slug: "returns",
     question: "Can I return or exchange a product?",
     answer:
-      "Yes, within limits set by WAC 314-55-079. Returns must be made within 15 days of purchase, and the item has to come back in its original packaging with the lot/batch/inventory ID fully legible, along with your receipt. That covers flower, joints, edibles, cartridges, syringes, and disposable vapes.",
+      "Yes, within limits set by WAC 314-55-079. Returns must be made within 7 days of purchase, and the item has to come back in its original packaging with the lot/batch/inventory ID fully legible, along with your original receipt. You don't need to be a loyalty member. That covers flower, joints, edibles, cartridges, syringes, and disposable vapes.",
     category: "buying",
     tags: ["return", "exchange", "refund", "defective"],
     sort_order: 120,

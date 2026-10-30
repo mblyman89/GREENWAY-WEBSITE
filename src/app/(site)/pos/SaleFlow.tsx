@@ -181,6 +181,8 @@ import {
   normalizePosReceiptConfig,
   receiptAddressLines,
 } from "@/lib/pos/receipt-config-core";
+import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
+import { normalizePosReturnPolicy } from "@/lib/pos/return-policy-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import { type CartAdjustAction, type CartAdjustPayload } from "@/lib/pos/cart-adjust-core";
 import { LOAN_ACK_TEXT } from "@/lib/pos/employee-loan-core";
@@ -1257,7 +1259,11 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             showLogo: rc.showLogo,
             logoWidth: rc.logoWidth,
             showReturnPolicy: rc.showReturnPolicy,
-            returnPolicyText: rc.returnPolicyText,
+            // Fix 6F — blank owner text prints the policy built from the
+            // Return policy settings (window, loyalty rule) frozen at sale time.
+            returnPolicyText:
+              rc.returnPolicyText.trim() ||
+              defaultReturnPolicyText(normalizePosReturnPolicy(bundle.returnPolicy)),
             showItemDetail: rc.showItemDetail,
             showBarcode: rc.showBarcode,
             showSaleSummary: rc.showSaleSummary,

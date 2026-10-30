@@ -3,9 +3,11 @@
  *
  * Receipt-first customer returns enforcing the owner's store policy on top
  * of the WAC/CCRS machinery that already exists (Task Q):
- *   • loyalty member attached to the original sale (B14),
+ *   • loyalty member attached to the original sale (B14) — ONLY when the
+ *     owner turns that on (Fix 6F, Register Activity → Return policy),
  *   • original receipt in hand (the printed 8-char number IS the lookup key),
- *   • within 15 Pacific calendar days of purchase,
+ *   • within the owner's return window (default 7 Pacific calendar days),
+ *   • the product type is returnable under the owner's settings,
  *   • WAC 314-55-079(12) attestations per line (original packaging + fully
  *     legible lot ID),
  *   • CCRS Sale Delete/Update correction queued + positive inventory
@@ -22,6 +24,9 @@ import { Card } from "@/components/admin/ui";
 import { CounterReturnDesk } from "@/components/admin/registers/CounterReturnDesk";
 import { drawersForDay } from "@/lib/registers/drawer-figure-store";
 import { pacificToday } from "@/lib/reports/timezone";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
+import { returnPolicySummary } from "@/lib/pos/return-policy-core";
+import { getCategoryLabeler } from "@/lib/pos/category-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +49,9 @@ export default async function CounterReturnsPage() {
   // drawers that are OPEN right now (a closed drawer's cash is already
   // counted). The store safe is always offered too.
   const openDrawers = (await drawersForDay(pacificToday())).filter((d) => d.status === "open");
+  // Fix 6F — the saved return policy, in plain English, for the help text.
+  const [policy, labelFor] = await Promise.all([getPosReturnPolicy(), getCategoryLabeler()]);
+  const policyText = returnPolicySummary(policy, labelFor);
 
   return (
     <div>
@@ -62,7 +70,7 @@ export default async function CounterReturnsPage() {
           id="pos-returns-desk"
           title="How counter returns work"
           steps={[
-            "Ask for the ORIGINAL receipt and type its 8-character receipt number. Store policy: loyalty members only, receipt in hand, within 15 days of purchase — the lookup verifies all three at once.",
+            `Ask for the ORIGINAL receipt and type its 8-character receipt number. ${policyText} The lookup verifies the window, the loyalty rule (if on) and the product types at once. Change these at Register Activity → Return policy.`,
             "Pick the exact item and quantity. The refund is computed from what they actually paid (tax included; medical prices already reflect their exemptions) — you never type an amount.",
             "Inspect the physical product: WAC 314-55-079(12) requires the ORIGINAL packaging and a FULLY LEGIBLE lot/batch ID. If either fails, refuse the return.",
             "Choose restock (sellable) or destroy (opens the destruction hold), then log it. Inventory is added back, the CCRS Sale correction (Delete or Update) is queued for your next upload, and loyalty points are clawed back proportionally.",
@@ -71,7 +79,7 @@ export default async function CounterReturnsPage() {
           ]}
         />
         <Card>
-          <CounterReturnDesk openDrawers={openDrawers.map((d) => ({ id: d.id, label: d.label }))} />
+          <CounterReturnDesk openDrawers={openDrawers.map((d) => ({ id: d.id, label: d.label }))} policyText={policyText} />
         </Card>
       </div>
     </div>

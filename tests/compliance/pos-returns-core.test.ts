@@ -4,8 +4,10 @@
  * Customer-return policy core. Pins:
  *  - the receipt-number lookup contract (last 8 hex of the sale client UUID,
  *    uppercase — identical to receiptNumber() in receipt-core),
- *  - the owner's 15-day Pacific-calendar-day return window (purchase day = 0),
- *  - the loyalty-member gate (orders.customer_id must be set — B14),
+ *  - the owner's return window in Pacific calendar days (purchase day = 0) —
+ *    default 7 since Fix 6F (owner message 9), any owner-set window honored,
+ *  - the loyalty-member gate (orders.customer_id) — applied ONLY when the
+ *    owner's Return policy setting turns it on (Fix 6F),
  *  - exact refund math on stored tax-inclusive minor-unit prices,
  *  - proportional, floored, clamped loyalty points clawback.
  *
@@ -44,20 +46,34 @@ describe("pos/returns-core (POS B15)", () => {
     expect(normalizeReceiptNumber("not-hex!")).toBeNull();
   });
 
-  it("counts the 15-day window in Pacific calendar days (purchase day = 0)", () => {
-    expect(RETURN_WINDOW_DAYS).toBe(15);
+  it("counts the default 7-day window in Pacific calendar days (purchase day = 0)", () => {
+    expect(RETURN_WINDOW_DAYS).toBe(7);
     // 11:30 PM Pacific July 1 → 00:30 AM Pacific July 2 is one Pacific day
     // even though only an hour elapsed.
     expect(pacificDaysBetween("2026-07-02T06:30:00.000Z", "2026-07-02T08:00:00.000Z")).toBe(1);
-    const lastDay = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-16T19:00:00.000Z");
+    const lastDay = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-08T19:00:00.000Z");
     expect(lastDay.ok).toBe(true);
-    const tooLate = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-17T19:00:00.000Z");
+    const tooLate = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-09T19:00:00.000Z");
     expect(tooLate.ok).toBe(false);
-    if (!tooLate.ok) expect(tooLate.error).toContain("15-day");
+    if (!tooLate.ok) expect(tooLate.error).toContain("7-day");
+    // An owner-set 15-day window still works.
+    expect(returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-16T19:00:00.000Z", 15).ok).toBe(true);
+    expect(returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-17T19:00:00.000Z", 15).ok).toBe(false);
   });
 
-  it("refuses anonymous (non-loyalty) sales and reports every failure at once", () => {
+  it("accepts anonymous sales by default (owner message 9)", () => {
     const verdict = evaluateReturnEligibility({
+      orderStatus: "completed",
+      orderCustomerId: null,
+      purchasedAtIso: "2026-07-01T19:00:00.000Z",
+      nowIso: "2026-07-03T19:00:00.000Z",
+    });
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("refuses anonymous sales when the loyalty toggle is on and reports every failure at once", () => {
+    const verdict = evaluateReturnEligibility({
+      policy: { loyaltyRequired: true, windowDays: 7, excludedCategories: [] },
       orderStatus: "pending",
       orderCustomerId: null,
       purchasedAtIso: "2026-06-01T19:00:00.000Z",

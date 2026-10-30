@@ -300,7 +300,14 @@ function Toggle({
   );
 }
 
-export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) {
+export function ReceiptConfigEditor({
+  initial,
+  defaultPolicyText,
+}: {
+  initial: PosReceiptConfig;
+  /** Fix 6F — what prints when the policy box is blank (from Return policy settings). */
+  defaultPolicyText?: string;
+}) {
   const { toast } = useToast();
   const [headerText, setHeaderText] = useState(initial.headerText);
   const [addressText, setAddressText] = useState(initial.addressText);
@@ -702,7 +709,7 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
                 value={returnPolicyText}
                 maxLength={RECEIPT_RETURN_POLICY_MAX}
                 onChange={(e) => setReturnPolicyText(e.target.value)}
-                placeholder={defaultReturnPolicyText()}
+                placeholder={defaultPolicyText ?? defaultReturnPolicyText()}
               />
             </Field>
           ) : null}

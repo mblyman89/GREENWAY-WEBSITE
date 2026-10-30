@@ -63,7 +63,7 @@ export const faqItems: readonly FaqItem[] = [
   {
     question: "Can I return or exchange products purchased at Greenway Marijuana?",
     answer:
-      "WAC 314-55-079 – (12) A marijuana retailer may accept returns of open marijuana products. Products must be returned in their original packaging with the lot, batch, or inventory ID number fully legible.\nReturns MUST be made within 15 days of purchase. The defective item MUST be accompanied by original packaging and receipt — this includes flower, joints, edibles, cartridges, syringes and disposable vapes.",
+      "WAC 314-55-079 – (12) A marijuana retailer may accept returns of open marijuana products. Products must be returned in their original packaging with the lot, batch, or inventory ID number fully legible.\nReturns MUST be made within 7 days of purchase. You do not need to be a loyalty member. The item MUST be accompanied by its original packaging and the original receipt — this includes flower, joints, edibles, cartridges, syringes and disposable vapes.",
   },
   {
     question: "Where can I smoke or consume marijuana products?",

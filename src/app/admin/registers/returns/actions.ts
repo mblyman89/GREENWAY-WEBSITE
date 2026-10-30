@@ -5,7 +5,8 @@
  *
  * Receipt-first counter returns. Two calls:
  *  1. lookupReceiptAction — find the sale by its printed receipt number and
- *     evaluate every store-policy gate (loyalty member, 15-day window,
+ *     evaluate every store-policy gate (return window, product type, and the
+ *     loyalty rule when the owner turns it on — Fix 6F settings,
  *     completed-only). All failures come back at once.
  *  2. processReturnAction — server-authoritative processing: policy re-check,
  *     exact refund from the stored paid price, Task Q compliant pipeline

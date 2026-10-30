@@ -96,6 +96,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         memberLabel: s.memberLabel,
         daysRemaining: s.daysRemaining,
         orderTotalMinor: s.orderTotalMinor,
+        // Fix 6F (G-67/G-68) — the policy the lookup was judged by.
+        policySummary: s.policySummary,
         lines: s.lines.map((l) => ({
           lineId: l.lineId,
           productName: l.productName,
@@ -103,6 +105,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
           priceMinorUnits: l.priceMinorUnits,
           alreadyReturned: l.alreadyReturned,
           remainingReturnable: l.remainingReturnable,
+          notReturnableReason: l.notReturnableReason,
         })),
       },
     });

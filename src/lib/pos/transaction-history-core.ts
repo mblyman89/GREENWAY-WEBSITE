@@ -88,7 +88,7 @@ export const HISTORY_SEARCH_DEBOUNCE_MS = 250;
  * path would refuse as out-of-window would be a list that lies to staff.
  * `transaction-history-store.ts` asserts this equals the returns constant.
  */
-export const HISTORY_WINDOW_DAYS = 17;
+export const HISTORY_WINDOW_DAYS = 9; // Fix Phase 6F: the DEFAULT 7-day window + 2. The live figure comes from the server (windowDays).
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -332,11 +332,15 @@ export function historyRequestPath(query: string): string {
 export function readHistoryResponse(json: unknown): {
   transactions: TransactionRow[];
   scanTruncated: boolean;
+  /** Fix Phase 6F: days the server scanned (the owner's window + 2), when sent. */
+  windowDays: number | null;
 } {
   const o = (json ?? {}) as Record<string, unknown>;
+  const w = Number(o.windowDays);
   return {
     transactions: Array.isArray(o.transactions) ? (o.transactions as TransactionRow[]) : [],
     scanTruncated: o.scanTruncated === true,
+    windowDays: Number.isInteger(w) && w > 0 ? w : null,
   };
 }
 

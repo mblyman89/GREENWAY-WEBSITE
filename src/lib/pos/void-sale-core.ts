@@ -92,7 +92,7 @@ export function evaluateVoidEligibility(input: VoidEligibilityInput): VoidEligib
     errors.push("The sale has no completion timestamp — void it from the back office instead.");
   } else if (pacificDay(input.completedAtIso) !== pacificDay(input.nowIso)) {
     errors.push(
-      "Voids are same-day only (Pacific business day). For an earlier sale, use the returns desk — it handles the 15-day policy, restock/destroy, and CCRS corrections.",
+      "Voids are same-day only (Pacific business day). For an earlier sale, use the returns desk — it handles the return policy, restock/destroy, and CCRS corrections.",
     );
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true };

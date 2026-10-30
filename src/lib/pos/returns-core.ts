@@ -18,14 +18,18 @@
  *    the sale identifier is DELETED (or Updated for a partial) from CCRS and
  *    the inventory identifier is reported on an InventoryAdjustment as a
  *    return, with details. Handled by the Task Q correction queue.
- *  • STORE POLICY (owner, Task AD — STRICTER than rule, which is allowed):
- *      1. The buyer must be a LOYALTY member — the original sale must carry
- *         orders.customer_id (B14 attaches the member at the register).
+ *  • STORE POLICY (owner; STRICTER than the rule, which is allowed). Since
+ *    Fix Phase 6F (owner message 9, G-67/G-68) the policy is a SETTING on
+ *    Register Activity → Return policy (return-policy-core.ts):
+ *      1. Loyalty members only — a TOGGLE, default OFF ("allow anyone to
+ *         return products"). When on, the sale must carry orders.customer_id.
  *      2. The customer must present the ORIGINAL RECEIPT — we look the sale
  *         up by its printed receipt number (last 8 hex of the durable sale
  *         client_uuid, uppercase — see receiptNumber() in receipt-core).
- *      3. Returns are accepted up to 15 days from the purchase date,
- *         counted in Pacific calendar days (purchase day = day 0).
+ *         Not a setting.
+ *      3. The return WINDOW — a setting, default 7 days ("the 7 day return
+ *         period"), counted in Pacific calendar days (purchase day = day 0).
+ *      4. Returnable PRODUCT TYPES — a setting (category values excluded).
  *
  * Money notes
  * -----------
@@ -40,13 +44,23 @@
  */
 
 import { pacificDayKey } from "@/lib/reports/timezone";
+import {
+  DEFAULT_POS_RETURN_POLICY,
+  DEFAULT_RETURN_WINDOW_DAYS,
+  returnPolicyReceiptText,
+  type PosReturnPolicyConfig,
+} from "@/lib/pos/return-policy-core";
 
 // ---------------------------------------------------------------------------
 // Store policy constants (owner-set, Task AD)
 // ---------------------------------------------------------------------------
 
-/** Days a customer has to request a return, counting the purchase day as 0. */
-export const RETURN_WINDOW_DAYS = 15;
+/**
+ * The DEFAULT return window (owner message 9: "the 7 day return period").
+ * The live window is the owner's setting (PosReturnPolicyConfig.windowDays);
+ * this constant is only the value used when no setting has been saved.
+ */
+export const RETURN_WINDOW_DAYS = DEFAULT_RETURN_WINDOW_DAYS;
 
 /**
  * The return policy as printed on the customer's receipt (Slice 22b).
@@ -62,14 +76,10 @@ export const RETURN_WINDOW_DAYS = 15;
  * limit (WAC 314-55-079(12)): product that has left the store can only come
  * back in its original packaging with the lot/batch identifier legible.
  */
-export function defaultReturnPolicyText(): string {
-  const days = RETURN_WINDOW_DAYS;
-  return [
-    `Returns accepted within ${days} days of purchase (purchase day counts as day 0).`,
-    "Bring this receipt and the loyalty account used for the sale.",
-    "Product must be in its original packaging with the lot/batch label legible.",
-    "Refunds are issued to the original form of payment.",
-  ].join(" ");
+export function defaultReturnPolicyText(policy?: PosReturnPolicyConfig | null): string {
+  // Fix Phase 6F: generated from the owner's saved return policy (window and
+  // the loyalty toggle), so the paper always matches the returns screen.
+  return returnPolicyReceiptText(policy ?? DEFAULT_POS_RETURN_POLICY);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +121,7 @@ export function receiptLookupSuffix(raw: unknown): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// 15-day window (Pacific calendar days — store policy)
+// Return window (Pacific calendar days — the owner's setting)
 // ---------------------------------------------------------------------------
 
 /**
@@ -132,12 +142,17 @@ export type ReturnWindowVerdict =
   | { ok: false; daysSincePurchase: number; error: string };
 
 /**
- * Is the sale still inside the 15-day return window? The purchase day counts
- * as day 0, so a sale completed any time on July 1 is returnable through the
- * end of July 16 Pacific. A sale timestamp in the future (device clock skew)
+ * Is the sale still inside the owner's return window (default 7 days, set at
+ * Register Activity → Return policy)? The purchase day counts as day 0, so
+ * with 7 days a sale completed any time on July 1 is returnable through the
+ * end of July 8 Pacific. A sale timestamp in the future (device clock skew)
  * is refused — never silently accepted.
  */
-export function returnWindowVerdict(purchasedAtIso: string, nowIso: string): ReturnWindowVerdict {
+export function returnWindowVerdict(
+  purchasedAtIso: string,
+  nowIso: string,
+  windowDays: number = RETURN_WINDOW_DAYS,
+): ReturnWindowVerdict {
   const days = pacificDaysBetween(purchasedAtIso, nowIso);
   if (days < 0) {
     return {
@@ -146,14 +161,14 @@ export function returnWindowVerdict(purchasedAtIso: string, nowIso: string): Ret
       error: "This sale is timestamped in the future — check the register clock before processing a return.",
     };
   }
-  if (days > RETURN_WINDOW_DAYS) {
+  if (days > windowDays) {
     return {
       ok: false,
       daysSincePurchase: days,
-      error: `Outside the ${RETURN_WINDOW_DAYS}-day return window — this sale was ${days} days ago (store policy). Refuse the return.`,
+      error: `Outside the ${windowDays}-day return window — this sale was ${days} days ago (store policy). Refuse the return.`,
     };
   }
-  return { ok: true, daysSincePurchase: days, daysRemaining: RETURN_WINDOW_DAYS - days };
+  return { ok: true, daysSincePurchase: days, daysRemaining: windowDays - days };
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +184,11 @@ export type ReturnEligibilityInput = {
   purchasedAtIso: string | null;
   /** Current instant (caller supplies for testability). */
   nowIso: string;
+  /**
+   * Fix Phase 6F: the owner's return policy (Register Activity → Return
+   * policy). Omitted = the saved default (anyone, 7 days, all types).
+   */
+  policy?: PosReturnPolicyConfig;
 };
 
 export type ReturnEligibilityVerdict =
@@ -187,7 +207,9 @@ export function evaluateReturnEligibility(input: ReturnEligibilityInput): Return
   if (input.orderStatus !== "completed") {
     errors.push(`Only COMPLETED sales can be returned (this sale is "${input.orderStatus}").`);
   }
-  if (!input.orderCustomerId || !input.orderCustomerId.trim()) {
+  const policy = input.policy ?? DEFAULT_POS_RETURN_POLICY;
+  // Fix Phase 6F (owner message 9): loyalty-only is a toggle, default OFF.
+  if (policy.loyaltyRequired && (!input.orderCustomerId || !input.orderCustomerId.trim())) {
     errors.push(
       "No loyalty member is attached to this sale — store policy requires the product to have been purchased by a loyalty customer. Refuse the return.",
     );
@@ -197,7 +219,7 @@ export function evaluateReturnEligibility(input: ReturnEligibilityInput): Return
     return { ok: false, errors };
   }
 
-  const window = returnWindowVerdict(input.purchasedAtIso, input.nowIso);
+  const window = returnWindowVerdict(input.purchasedAtIso, input.nowIso, policy.windowDays);
   if (!window.ok) errors.push(window.error);
 
   if (errors.length > 0) return { ok: false, errors };
@@ -321,13 +343,15 @@ export function __runPosReturnsCoreTests(): void {
   // DST fall-back (Nov 1 2026, 2am→1am): Oct 30 to Nov 14 is still 15 days.
   ok(pacificDaysBetween("2026-10-30T19:00:00.000Z", "2026-11-14T20:00:00.000Z") === 15, "DST fall-back day count stable");
 
-  // --- 15-day window --------------------------------------------------------
+  // --- return window (default 7 days, owner message 9; a setting) -------------
   const day0 = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-01T21:00:00.000Z");
-  ok(day0.ok && day0.daysSincePurchase === 0 && day0.daysRemaining === 15, "purchase day = day 0, 15 remaining");
-  const day15 = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-16T19:00:00.000Z");
-  ok(day15.ok && day15.daysRemaining === 0, "day 15 is the last allowed day");
-  const day16 = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-17T19:00:00.000Z");
-  ok(!day16.ok && day16.error.includes("15-day"), "day 16 refused with policy message");
+  ok(day0.ok && day0.daysSincePurchase === 0 && day0.daysRemaining === 7, "purchase day = day 0, 7 remaining");
+  const day7 = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-08T19:00:00.000Z");
+  ok(day7.ok && day7.daysRemaining === 0, "day 7 is the last allowed day");
+  const day8 = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-09T19:00:00.000Z");
+  ok(!day8.ok && day8.error.includes("7-day"), "day 8 refused with policy message");
+  const day15 = returnWindowVerdict("2026-07-01T19:00:00.000Z", "2026-07-16T19:00:00.000Z", 15);
+  ok(day15.ok && day15.daysRemaining === 0, "owner-set 15-day window: day 15 is the last allowed day");
   const future = returnWindowVerdict("2026-07-10T19:00:00.000Z", "2026-07-01T19:00:00.000Z");
   ok(!future.ok && future.error.includes("future"), "future-dated sale refused (clock skew)");
 
@@ -345,14 +369,22 @@ export function __runPosReturnsCoreTests(): void {
     purchasedAtIso: "2026-07-01T19:00:00.000Z",
     nowIso: "2026-07-05T19:00:00.000Z",
   });
-  ok(!anon.ok && anon.errors.some((e) => e.includes("loyalty")), "anonymous sale refused (loyalty gate)");
+  ok(anon.ok, "owner message 9: anonymous sale returnable by default (loyalty toggle off)");
+  const anonGated = evaluateReturnEligibility({
+    orderStatus: "completed",
+    orderCustomerId: null,
+    purchasedAtIso: "2026-07-01T19:00:00.000Z",
+    nowIso: "2026-07-05T19:00:00.000Z",
+    policy: { ...DEFAULT_POS_RETURN_POLICY, loyaltyRequired: true },
+  });
+  ok(!anonGated.ok && anonGated.errors.some((e) => e.includes("loyalty")), "loyalty toggle on: anonymous sale refused");
   const multi = evaluateReturnEligibility({
     orderStatus: "pending",
     orderCustomerId: "   ",
     purchasedAtIso: "2026-06-01T19:00:00.000Z",
     nowIso: "2026-07-05T19:00:00.000Z",
   });
-  ok(!multi.ok && multi.errors.length === 3, "all sale-level failures reported at once");
+  ok(!multi.ok && multi.errors.length === 2, "all sale-level failures reported at once (status + window)");
   const noStamp = evaluateReturnEligibility({
     orderStatus: "completed",
     orderCustomerId: "0f5d9e46-6bbd-4cbe-b7a5-1a2b3c4d5e6f",
