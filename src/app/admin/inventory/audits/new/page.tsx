@@ -35,6 +35,7 @@
  * says so out loud instead of quietly trimming.
  */
 import { requirePermission } from "@/lib/auth/session";
+import { defaultAuditLabel } from "@/lib/inventory/audit-count-flow-core";
 import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
@@ -61,10 +62,9 @@ const CARD = "rounded-2xl border border-white/10 bg-white/[0.02] p-5";
 const P = "text-sm leading-relaxed text-[var(--admin-text-muted)]";
 const H2 = "text-sm font-bold text-white";
 
+// G-39: the store's month and year, not the server's (UTC) clock.
 function defaultLabel(): string {
-  const d = new Date();
-  const month = d.toLocaleString("en-US", { month: "long" });
-  return `${month} ${d.getFullYear()} count`;
+  return defaultAuditLabel(new Date());
 }
 
 export default async function NewAuditPage({

@@ -44,7 +44,7 @@ describe("inventory-intel-core (Task L)", () => {
 
   it("constants match the documented policy", () => {
     expect(MAX_MONTHS_ON_HAND).toBe(4); // WAC 314-55-079(10)
-    expect(COUNT_CADENCE_DAYS).toEqual({ A: 30, B: 90, C: 180 });
+    expect(COUNT_CADENCE_DAYS).toEqual({ A: 30, B: 60, C: 90 }); // G-39: one schedule, same as the planner
   });
 
   it("ABC puts the top-value lot in class A", () => {

@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (Fix Phase 4.1–4.3 built: G-33, G-34, G-35, G-36, G-37; needs migration 0326) |
+| **Version** | 1.3 (Fix Phase 4.1–4.3 built: G-33, G-34, G-35, G-36, G-37; needs migration 0326. Fix Phase 4.4a built: G-39 housekeeping, no migration) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory Audits** (planning a count, approving its scope and pushing it to the floor, reviewing, approving, posting, the work paper): **the owner only** (D50). **Cycle Counts** (the blind count) and the **daily checklists** (§8): **every employee**: admin, manager and budtender ("sales") (D51). |
-| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. **v1.2** was written against branch `fix/p4-1-count-integrity` (Fix Phase 4.1–4.3) and migration `0326_audit_count_integrity.sql`. Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
+| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. **v1.2** was written against branch `fix/p4-1-count-integrity` (Fix Phase 4.1–4.3) and migration `0326_audit_count_integrity.sql`; **v1.3** against branch `fix/p4-4a-count-housekeeping` (G-39). Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
 | **Program records** | Findings `F-06-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-33`…`G-41` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D41 (living SOPs), D42 (concierge covers every feature), D50–D52 (this SOP), **D54–D61 (owner answers to Q-06-1…Q-06-8)** in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner source letter `docs/MICHAEL-books-23.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-06) |
 
 > **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap named here (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
@@ -15,7 +15,7 @@
 
 > **The one thing to know before anything else (v1.2).** **Migration 0326 must be applied first** (`supabase/migrations/0326_audit_count_integrity.sql`, in the Supabase SQL editor, after 0325). Until it is, every counting button answers *"Apply migration 0326"* and nothing is written. Once it is applied, the whole life of a count works on screen: **Create this count** (being planned) → **Release to Cycle Counts** (owner, signed) → an employee presses **Start counting** (one counter, D56) → each scan adds one package (D60) → **I'm done** (locks the count, sends it to the owner's review and puts a notice on the /admin cockpit, D55) → **Approve this result** → **Post**. The books quantity for each lot is captured **when that lot is first counted** (D58, D61), so counting during open hours is safe, and a sale between creating the audit and counting is no longer subtracted twice (F-06-7 FIXED). Two counts that disagree now **block** approval and posting until a third count settles them (F-06-13 FIXED). The owner can **Send back**, **Reassign** and **Cancel** (with a reason) on the audit page.
 
-> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). **Built in v1.2 (Fix Phase 4.1–4.3):** D54, D55, D56, D58 (per-lot capture), D60, D61, and the D59 cleanup of held audits and open legacy sessions (done by migration 0326). **Still to build:** the daily checklists in the app (G-38), the intelligent generators and vendor of the day (G-40), the year-end full count (G-41) and the housekeeping items (G-39). Until each is built, the interim rules for it in this SOP stay in force.
+> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). **Built in v1.2 (Fix Phase 4.1–4.3):** D54, D55, D56, D58 (per-lot capture), D60, D61, and the D59 cleanup of held audits and open legacy sessions (done by migration 0326). **Still to build:** the daily checklists in the app (G-38), the intelligent generators and vendor of the day (G-40), the year-end full count (G-41). **Built in v1.3 (Fix Phase 4.4a, G-39):** one count schedule, the Issues reminder opens **Plan a count** for the owner, old cycle counts truly read-only, Pacific default name. Until each is built, the interim rules for it in this SOP stay in force.
 
 ---
 
@@ -178,7 +178,7 @@ Open **Accounting → Inventory Auditing**. Title **Inventory audits**, button *
 
 1. Press **Plan a new audit**. The page is **Plan a count**: *"The system proposes what to count and says why. You decide, and you write down the reason -- before anyone sees a single number."*
 2. Read the stat cards: **Products proposed**, **Lots to count**, **Value in scope**, **Products with several open lots**.
-3. Read **How this list was chosen** and **Where the programme stands right now**. The proposal ranks lots by risk and by how overdue they are. The engine's count schedule is **A every 30 days, B every 60, C every 90, unclassified every 14** (`CADENCE_DAYS`, `inventory-audit-core.ts` L324–329). (The Issues reminder uses a different schedule, §4.22, F-06-8.)
+3. Read **How this list was chosen** and **Where the programme stands right now**. The proposal ranks lots by risk and by how overdue they are. The engine's count schedule is **A every 30 days, B every 60, C every 90, unclassified every 14** (`CADENCE_DAYS`, `inventory-audit-core.ts` L324–329). The Issues reminder and the Inventory intelligence panel use the same A/B/C numbers since v1.3 (`COUNT_CADENCE_DAYS`, `inventory-intel-core.ts`; F-06-8 FIXED).
 4. Choose the list:
    - **Only what is due** (the default; up to 40 lots).
    - **Show every active lot instead** (up to 400 lots; adds `?all=1`). Back with **Back to only what is due**.
@@ -191,7 +191,7 @@ Open **Accounting → Inventory Auditing**. Title **Inventory audits**, button *
 
 Under **Name it and say why**:
 
-1. **What to call this count**: the default is "{Month} {Year} count" (server time, F-06-11). Use a name you will recognise in six months, for example "Flower back stock, August".
+1. **What to call this count**: the default is "{Month} {Year} count" in the store's time zone (`defaultAuditLabel`, `audit-count-flow-core.ts`; F-06-11 FIXED in v1.3). Late on the last evening of a month it no longer proposes next month's name. Use a name you will recognise in six months, for example "Flower back stock, August".
 2. **Why these products**: at least 10 characters. One honest sentence. *"Highest value and longest since counted"* is enough. Too short and it refuses: *"Write one honest sentence about why THESE lots…"*
 3. Press **Create this count — N lots**. You land on the new audit's page, status **being planned**.
 
@@ -232,7 +232,7 @@ Press the count's name. The page title is the count's name, with: *"{stage} — 
 
 - The owner-only links (**Review and finish**, the **Auditing** breadcrumb) are shown **only to the owner**; everyone else sees a **Cycle Counts** breadcrumb (F-06-3 FIXED).
 - At the top, a banner says who is counting. If nobody has claimed the count, it offers **Start counting**: press it to claim the count (D56). If someone else is counting, the sheet is read only and names them; ask the owner to **Reassign** if they cannot finish. If the count is in review, approved or cancelled, the sheet is read only.
-- The section **How to count** at the bottom is the built-in counting checklist (G-39, partly).
+- The section **How to count** at the bottom is the built-in counting checklist (G-39; F-06-10 FIXED: each scan adds one, as the checklist says).
 - The panel at the bottom explains why the sheet hides the expected numbers.
 
 ### 4.10 Counting: scan, type, zero, never blank
@@ -369,23 +369,24 @@ When nothing blocks and you have checked §4.14 by eye (gross reviewed, reasons 
 
 ### 4.20 Older cycle counts (the retired sessions)
 
-Cycle Counts ends with **Older counts (read only)**: the sessions from the old cycle-count tool, before audits replaced it. Opening one needs owner, admin or manager. Its help says *"Corrections are made in Inventory Auditing…"*.
+Cycle Counts ends with **Older counts (read only)**: the sessions from the old cycle-count tool, before audits replaced it. Opening one needs owner, admin or manager.
 
-> **Caution (F-06-9).** "Read only" is only partly true. An old session still **open** still shows **Cancel**, a scanner and an **Enter count** column, and the server actions behind them still write (`cycle-counts/[id]/page.tsx` L161–172, L222, L317, L389; `cycle-counts.ts` L278–320, L382–415, L526–545). **Store rule:** never enter, scan, import or cancel on an old session. Read and export only. **Owner decision D59:** *"be canceled, we are not live yet. It's all test data."* Every old session is cancelled in the build (G-39), not posted.
+Since v1.3 (Fix Phase 4.4a, G-39) an old session is **truly read only**. The page says *"Read only. This is an old cycle count, kept for the record. Nothing on this page can change it."* and links back to **Cycle Counts**, where counting happens with **Start counting**. There is no **Cancel** button, no scanner, no import and no **Enter count** column; the server actions behind them were deleted, and the library functions refuse with *"CYCLE_COUNT_READ_ONLY: old cycle counts are kept for the record and can no longer be changed. Nothing has been written…"* (`cycle-counts.ts`). You can still filter the lines and use **Export to Excel** or **Export CSV**. **Owner decision D59:** *"be canceled, we are not live yet. It's all test data."* Migration 0326 cancelled every open old session (F-06-9 FIXED).
 
 ### 4.21 "Stock needing recount" (oversold products)
 
 The Cycle Counts page lists products the register sold past their tracked count, with **view sale** links and the badge **Recount**. It says: *"Nothing on this list can be corrected from here…plan it on the Inventory Auditing screen."*
 
 - **Counter:** if you see a product here, tell the manager. Do not adjust it.
-- **Owner:** include those products in the next audit (§4.5), or follow SOP-05a §4.22. Times on this list are in the browser's time zone (F-06-11).
+- **Owner:** include those products in the next audit (§4.5), or follow SOP-05a §4.22. Times on this list are in the store's time zone (Pacific).
 
 ### 4.22 The "overdue for a cycle count" Issues row
 
-Inventory → Issues may show *"{n} lots are overdue for a cycle count"*, meaning *"Past their count cadence (A monthly, B quarterly, C twice a year)…"*, fix text *"Start a cycle count."*, button **Open cycle counts** (`issues-core.ts` L481–488).
+Inventory → Issues may show *"{n} lots are overdue for a cycle count"*, meaning *"Past their count schedule (A every 30 days, B every 60, C every 90, the same schedule Plan a count uses)…"* (`issues-core.ts`, `intel_count_overdue`).
 
-- That schedule (A 30 / B 90 / C 180 days, `inventory-intel-core.ts` L301) **differs** from the audit planner's (A 30 / B 60 / C 90 / U 14) (F-06-8). **Owner decision D58** replaces both with the daily programme in §4.24 (about one vendor a day, plus a full count at year end); the A/B/C schedule stays as the risk ranking that the intelligent counts use (G-39, G-40).
-- **Open cycle counts** goes to a page that cannot start a count. **Counter or manager:** tell the owner. **Owner:** plan the count on **Plan a count** (§4.5).
+- **One schedule (v1.3, F-06-8 FIXED).** The reminder, the Inventory intelligence panel and **Plan a count** all use A 30 / B 60 / C 90 days. **Owner decision D58** sets the programme in §4.24 (about one vendor a day, plus a full count at year end); the A/B/C schedule is the risk ranking the intelligent counts use (G-40).
+- **Owner:** the row says *"Plan a count for these lots, then release it to Cycle Counts."* with the button **Plan a count** (§4.5).
+- **Everyone else:** the row says *"Only the owner can plan a count. Tell the owner these lots are overdue."* and has no button, because only the owner can start a count (D56).
 
 ### Part 6: Daily checklists (every employee)
 
@@ -763,7 +764,7 @@ YEAR END
 | **G-38** | Daily checklists in the app, for every employee (D51), with sign-off and a Cycle Counts line | F-06-12 (F-00-9) | Paper forms 8.5–8.8 (§4.23) | §4.23, §8, §9 | **APPROVED** (D57: task catalog) |
 | **G-40** | Intelligent cycle counts: **Vendor of the day** with chunking, ABC, exceptions, expiring soon, Cultivera flags, never counted; one open count per lot | F-06-8 | Plan by hand from **Show every active lot** (§4.24) | §4.5, §4.22, §4.24, §9 | **APPROVED** (D58) |
 | **G-41** | Annual year-end full count: every lot, no 400 cap, sections, one release, one review, one work paper | — | Several audits the same day, outside selling hours (§4.24) | §4.5, §4.24, §8.8 | **APPROVED** (D58) |
-| **G-39** | Housekeeping: one count schedule everywhere; Issues fix links to the planner (owner) or tells staff to tell the owner; legacy sessions truly read-only; render the built-in counting checklist on the sheet; Pacific times; one approved colour | F-06-8, F-06-9, F-06-10, F-06-11 | §4.20, §4.22 store rules | §4.5, §4.20, §4.22 | **APPROVED** (D59 cancel all legacy sessions; D58 schedule) |
+| **G-39** | Housekeeping: one count schedule everywhere; Issues fix links to the planner (owner) or tells staff to tell the owner; legacy sessions truly read-only; render the built-in counting checklist on the sheet; Pacific times; one approved colour | F-06-8, F-06-9, F-06-10, F-06-11 | — | §4.5, §4.20, §4.22 | **BUILT** (v1.2 checklist, colour, Cycle Counts times, D59 cleanup in 0326; v1.3 Fix Phase 4.4a: one schedule, Issues → Plan a count / tell the owner, old sessions read-only with the writers deleted, Pacific default name and hub dates) |
 
 ## Appendix C: Open questions for the owner
 
@@ -786,6 +787,7 @@ No new questions in v1.1.
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.3 | 2026-10-30 | Fix Phase 4.4a built (G-39): one count schedule A 30 / B 60 / C 90 for the planner, the Issues row and the intelligence panel; the overdue row opens **Plan a count** for the owner and tells everyone else to tell the owner; old cycle-count sessions truly read only (Cancel, scanner, import and Enter count removed, their server actions deleted, library writers refuse CYCLE_COUNT_READ_ONLY); Pacific default audit name and hub dates. Updated the one-thing-to-know, §4.5, §4.6, §4.20, §4.21, §4.22, Appendix B. Findings F-06-8, F-06-9, F-06-10, F-06-11 FIXED | SOP program |
 | 1.2 | 2026-10-30 | Fix Phase 4.1–4.3 built (G-33, G-34, G-35, G-36, G-37; migration 0326): **Release to Cycle Counts**, **Start counting** claim, +1 per scan with the already-counted question, third count, **I'm done** and the cockpit notice, **Send back**, **Reassign**, **Cancel** with a reason, per-lot books capture at first count, mid-count movement shown and refused, disagreeing counts block, reasons editable and validated. Rewrote the one-thing-to-know, §4.2, §4.3, §4.7–§4.13, §4.14 rule, §4.15–§4.17, Appendix B. Findings F-06-1–7, F-06-13–16 FIXED | SOP program |
 | 1.1 | 2026-10-28 | Owner answers Q-06-1…Q-06-8 applied as D54–D61: release button (§4.7), I'm done + cockpit notice (§4.8), one counter and the same-counter recount (§2, §4.12), +1 per scan (§4.10), counting in open hours once G-35 is built (§4.11), the counting programme (new §4.24), the full daily task catalog (§4.23, forms 8.5–8.8 including new 8.8), legacy sessions cancelled (§4.20). Gaps G-33…G-36, G-38, G-39 APPROVED; new G-40, G-41; new findings F-06-15…F-06-17. Research: Oracle NetSuite Inventory Count and Lightspeed R-Series inventory counts, quoted | SOP program |
 | 1.0 | 2026-10-28 | First draft, verified against `main@c976c7e4`. Owner decisions D41, D42, D50–D52 applied. Findings F-06-1…F-06-14 (with F-06-5b) and F-06-C; gaps G-33…G-39; questions Q-06-1…Q-06-8. Paper daily checklists (forms 8.5–8.7) | SOP program |

@@ -36,6 +36,7 @@
  * true without anyone noticing. Here it is stated on the front page.
  */
 import { requirePermission } from "@/lib/auth/session";
+import { pacificShortDate } from "@/lib/inventory/audit-count-flow-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
@@ -357,7 +358,7 @@ export default async function AuditHubPage() {
                       </span>
                     </td>
                     <td className="py-2.5 pr-3 text-white/50">
-                      {new Date(s.createdAt).toLocaleDateString()}
+                      {pacificShortDate(s.createdAt)}
                     </td>
                     <td className="py-2.5 text-right">
                       <Link

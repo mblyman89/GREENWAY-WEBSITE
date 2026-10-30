@@ -295,10 +295,18 @@ export function summarizeShrink(
 }
 
 // ---------------------------------------------------------------------------
-// Cycle-count cadence (A monthly / B quarterly / C semi-annual)
+// Cycle-count cadence (A 30 / B 60 / C 90 days)
 // ---------------------------------------------------------------------------
 
-export const COUNT_CADENCE_DAYS: Record<AbcClass, number> = { A: 30, B: 90, C: 180 };
+/**
+ * ONE count schedule (Fix Phase 4.4a, G-39; owner D58). This used to say
+ * A30/B90/C180 while the audit planner said A30/B60/C90 (CADENCE_DAYS,
+ * inventory-audit-core.ts), so the Issues row and Plan a count disagreed about
+ * which lots were overdue (F-06-8). The planner's numbers win; this file stays
+ * import-free, so tests/compliance/fix-p4-4a-count-housekeeping.test.ts checks
+ * the two tables are equal for A, B and C.
+ */
+export const COUNT_CADENCE_DAYS: Record<AbcClass, number> = { A: 30, B: 60, C: 90 };
 
 /** true when an ACTIVE lot is overdue for a physical count under its cadence.
  * A lot never counted is overdue once it is older than its cadence window. */
@@ -627,7 +635,7 @@ export function __runInventoryIntelTests(): void {
   ok(isOverdueForCount(staleA, "A", TODAY), "A counted 40d ago overdue");
   ok(!isOverdueForCount(staleA, "B", TODAY), "same lot as B not overdue");
   const neverCounted = makeLot({ id: "nc", lastCountedAt: null, receivedAt: "2025-10-01T00:00:00Z" });
-  ok(isOverdueForCount(neverCounted, "B", TODAY), "never-counted 101d-old B overdue");
+  ok(isOverdueForCount(neverCounted, "B", TODAY), "never-counted 101d-old B overdue (60d cadence)");
   const noHistory = makeLot({ id: "nh", lastCountedAt: null, receivedAt: null });
   ok(isOverdueForCount(noHistory, "C", TODAY), "no history → needs baseline count");
   const inactive = makeLot({ id: "in", status: "destroyed", lastCountedAt: null, receivedAt: null });

@@ -127,7 +127,7 @@ describe("the app wiring", () => {
   });
   it("docs: SOP-06 v1.2, gaps BUILT, findings FIXED, concierge taught", () => {
     const sop = read("docs/sop/SOP-06-cycle-counts-audits-daily-checklists.md");
-    expect(sop).toContain("| **Version** | 1.2");
+    expect(sop).toMatch(/\| \*\*Version\*\* \| 1\.[2-9]/); // 1.2 or later (4.4a made it 1.3)
     expect(sop).toContain("Release to Cycle Counts");
     expect(sop).not.toContain("Today there is no button that pushes a new audit");
     const gaps = read("docs/sop-program/05-GAP-REGISTER.md");
