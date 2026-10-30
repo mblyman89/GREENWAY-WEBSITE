@@ -389,3 +389,52 @@ The list in this message ends at *"deposit bag screen and end-of-day sheet"*. Th
 ### Correction (rule: quote the owner verbatim)
 
 Progress rows for Phase 2.7a and 2.7b quoted *"Master till items: …"* as **owner message 4**. Those are the plan's words (row 2.7), not the owner's. Fix Phase 2.7c corrected each one to cite *plan row 2.7* (`06-FIX-PHASE-PLAN.md` §7 rows 2.7a and 2.7b; `03-FINDINGS-LEDGER.md` F-00-7 and F-01-8; `05-GAP-REGISTER.md` G-02; SOP-01 revision 1.8; SOP-02 revisions 1.6 and 1.7).
+
+## Owner message 8 (recorded verbatim, Fix Phase 6 / Fix E: answers to the shift-end and end-of-day strategy paper)
+
+> Thank you. I didn't even have to tell you what I needed your help with fixing, incredible!! You nailed it exactly, this is the exact thing I was going to have you fix for me! Please read my answers, I posted them with the questions. Complete all tasks, then report back with a summary report. Follow the standing rules. Go above and beyond. Thank you!
+
+Answers, written under the questions in the strategy paper (verbatim):
+
+> **Q-E-1:** I have 2 cashiers on shift at all times. 2 in the morning, 2 at night. Sometimes I have a 3rd cashier on busier days. We will have 3 registers with 6 removable inserts. 8am to 4pm and 3pm to 11pm.
+>
+> **Q-E-2:** No solo closer or opener.
+>
+> **Q-E-3:** I have plenty of registers and inserts, so option b if not obvious at this point.
+>
+> **Q-E-4:** Please change it to assembled and verified at night, and blind counted in the morning.
+>
+> **Q-E-5:** Yes please do this.
+>
+> **Q-E-6:** Block. I don't want to clock out on the register change out step. A lot of times they count out early to let the new employee add their till ahead of their shift, so they can finish other tasks if needed before they clock out. Anyone can clock in and out on a locked register so we can use that for now.
+>
+> **Q-E-7:** Warn please
+>
+> **Q-E-8:** I think either is fine. I don't want to make it too difficult or time consuming to get out of there on time. So I think it can be done by either the night manager or morning manager. But don't build it this way just because I say to. I want your professional opinion on this one. I don't know what the enterprise grade solution to this one is. We are a small store, but this software could be used by someone much bigger that I, so I want to build it like dutchie, or AIQ, or any of the other massive players in the retail pos space. We are competing for the best pos ever built. So let's keep up with that strategy and build this one like the big boys would.
+>
+> **Q-E-9:** There is always a lead or manager at open and close.
+>
+> **Q-E-10:** The tip jar is pooled for the morning crew, and pooled for the night crew. At shift change the tips are counted and evenly distributed to the two employees. This is the amount to be reported on everyone's own close till summary report. I want everyone to be completely accountable for their register.
+
+### Decisions derived (each traced to the words above)
+
+| # | Decision | Source phrase |
+|---|---|---|
+| D81 | **Option B: cashier-accountable inserts.** Each cashier counts in their own insert at the start of their shift and closes it (blind, plus the D2 second count) at the end. One cashier, one insert, one session. Two shifts a day (8am–4pm, 3pm–11pm), 2 cashiers each and sometimes a 3rd; 3 registers, 6 inserts. | Q-E-1 *"We will have 3 registers with 6 removable inserts. 8am to 4pm and 3pm to 11pm."*; Q-E-3 *"option b if not obvious at this point."* |
+| D82 | **The night deposit is assembled and verified, not counted by denomination.** The closer pulls each till's takings and drops, checks each stack against its line on the Deposit bags screen and ticks it; the bag total is the expected deposit. The morning blind recount by a different employee (D24) is the independent count. Counting by denomination stays available when a stack does not match. | Q-E-4 *"Please change it to assembled and verified at night, and blind counted in the morning."* |
+| D83 | **Verify till is retired.** The morning blind recount of the bag is the verify. The old button is removed; a stale post is refused and audited (`till.verify_retired`). Past verified drawers keep their history. | Q-E-5 *"Yes please do this."* |
+| D84 | **Clock-out is blocked while the employee still owns an open drawer, and closing a drawer never clocks anyone out.** A cashier may close early so the next cashier can count in, then finish other work and clock out later. Clock in and out happens on the locked register screen. Manager edits of a punch are not blocked. | Q-E-6 *"Block. I don't want to clock out on the register change out step. A lot of times they count out early … Anyone can clock in and out on a locked register"* |
+| D85 | **Count-in float check warns, never blocks.** A count-in that differs from the register's standard float shows the difference, is saved, and is audited (`drawer.float_warning`). | Q-E-7 *"Warn please"* |
+| D86 | **No solo close or open.** The D2 second count at close stays required; no "awaiting second count" path is built. | Q-E-2 *"No solo closer or opener."* |
+| D87 | **Reconcile timing (professional call, as asked).** Either the night or the morning manager may reconcile. The window closes when the bag is sealed: sealing **warns** (never blocks) and audits `deposit_bag.sealed_unreconciled` when a drawer in the bag is still unreconciled. The EOD report reads *"Closed — N drawers awaiting manager reconcile"* until every drawer is reconciled, then *"Final"*. This is the pattern the large POS vendors use (blind close at the till, then an asynchronous manager review with a deadline), so the night crew is not held back and nothing is skipped. | Q-E-8 *"either the night manager or morning manager. But don't build it this way just because I say to. I want your professional opinion … build this one like the big boys would."* |
+| D88 | **A lead or manager is always present at open and close**, so the manager-only EOD report and reconcile always have someone to do them. No new permission is needed. | Q-E-9 *"There is always a lead or manager at open and close."* |
+| D89 | **Crew tip pool, split evenly.** Each crew (morning, night) pools tips. At close the cashier enters the crew pool and the number of people; the app splits it in whole cents (rounding down; any leftover cents stay in the jar for the next split) and stores **that cashier's share** as their own tips on their own close summary. "My own tips" stays available. | Q-E-10 *"evenly distributed to the two employees. This is the amount to be reported on everyone's own close till summary report. I want everyone to be completely accountable for their register."* |
+| D90 | **Shift change on Option B.** The outgoing cashier closes early (blind + second count, D2), the incoming cashier counts in a fresh insert on the same register. One open drawer per register is already enforced, so the two never overlap on one register. | Q-E-1, Q-E-3, Q-E-6 *"they count out early to let the new employee add their till ahead of their shift"* |
+
+### Applied
+
+Fix Phase 6 / Fix E (gaps G-61 to G-66): SOP-01 v1.10 and SOP-03 v1.6, the concierge KB, and the ledgers 03/04/05/06. No migration.
+
+### Numbering note
+
+Owner messages 6 and 7 are cited throughout the SOPs and ledgers (Phase 2.1b/2.8b/2.9 and the receiving work) but were never copied into this file. This message is therefore recorded as **owner message 8**, so that no existing citation changes meaning.

@@ -95,6 +95,11 @@ export type EodSafeSection = {
 export type EodModel = {
   /** FINAL once every session is closed (and at least one exists). */
   final: boolean;
+  /**
+   * Fix Phase 6 (D87): drawers closed (blind count saved) that no manager has
+   * reconciled yet. The report reads "awaiting reconcile" until this is 0.
+   */
+  awaitingReconcile: number;
   registers: EodRegisterRow[];
   totals: EodTotals;
   sales: DaySummary;
@@ -198,6 +203,7 @@ export function buildEodModel(input: {
 
   return {
     final: totals.sessionCount > 0 && totals.openRegisterCount === 0,
+    awaitingReconcile: input.sessions.filter((s) => s.status === "closed" && input.registers.some((r) => r.id === s.registerId)).length,
     registers: rows,
     totals,
     sales: input.sales,
@@ -259,6 +265,7 @@ export function __runEodCoreTests(): void {
     ],
   });
   ok(finalDay.final, "eod: all sessions closed = FINAL report");
+  ok(finalDay.awaitingReconcile === 1, "eod: closed-but-unreconciled drawer counted as awaiting reconcile (D87)");
   ok(finalDay.registers.length === 2, "eod: idle register omitted from the physical record");
   const r1 = finalDay.registers[0];
   ok(r1.registerName === "Register 1" && r1.openingMinor === 16_750, "eod: register row carries name + opening float");

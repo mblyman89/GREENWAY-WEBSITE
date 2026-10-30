@@ -42,7 +42,8 @@ import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } fr
 import { validateTillRequest } from "@/lib/pos/till-core";
 import { checkSecondCounter, compareCounts } from "@/lib/registers/second-count-core";
 import { denomTotalMinor } from "@/lib/registers/cash";
-import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession } from "@/lib/registers/store";
+import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession, getRegister } from "@/lib/registers/store";
+import { floatCheck, splitTipPool, tipPoolSentence } from "@/lib/registers/shift-end-core";
 import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
@@ -116,18 +117,44 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       // device link, nothing else.
     }
 
+    // Fix Phase 6 (G-62, owner D85 "Warn please"): a count-in that is not the
+    // standard float is saved anyway and flagged in the audit for a manager.
+    const reg = await getRegister(registerId);
+    const fc = floatCheck(denomTotalMinor(till.denoms), reg?.default_float_minor ?? null);
+
     await recordAudit({
       actorId: employee.staff_id,
       actorEmail: employee.full_name,
       action: "drawer.opened",
       entityType: "drawer_session",
       entityId: result.sessionId,
-      after: { via: "register", deviceId: auth.device.id, employeeId: employee.id },
+      after: {
+        via: "register",
+        deviceId: auth.device.id,
+        employeeId: employee.id,
+        openingMinor: denomTotalMinor(till.denoms),
+        standardFloatMinor: reg?.default_float_minor ?? null,
+        floatCheck: fc.state,
+        floatDiffMinor: fc.diffMinor,
+      },
     });
+    if (fc.state === "over" || fc.state === "short") {
+      await recordAudit({
+        actorId: employee.staff_id,
+        actorEmail: employee.full_name,
+        action: "drawer.float_warning",
+        entityType: "drawer_session",
+        entityId: result.sessionId,
+        after: { via: "register", employeeId: employee.id, standardFloatMinor: reg?.default_float_minor ?? null, diffMinor: fc.diffMinor },
+      });
+    }
 
     const session = await getSession(result.sessionId);
     return NextResponse.json({
       ok: true,
+      // Fix Phase 6 (G-61): who counted in, so the register keeps the clock-out guard current.
+      employeeId: employee.id,
+      floatWarning: fc.sentence || null,
       drawer: {
         sessionId: result.sessionId,
         openedAt: session?.opened_at ?? new Date().toISOString(),
@@ -287,6 +314,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       employeeId: employee.id,
       // Tips are NOT blind (they're the cashier's own money) — auditable here.
       ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
+      // Fix Phase 6 (G-64, owner D89): the crew pool this share came from.
+      ...(till.tipPool ? { tipPool: till.tipPool } : {}),
       // Fix Phase 2.2 (G-01): who counted second and whether the counts agree.
       secondCountedBy: second.id,
       secondCountedByName: second.full_name,
@@ -299,9 +328,12 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   // BLIND: no expected, no variance. The two people already know both of
   // their own counts, so whether they agree is not a secret; it is returned
   // so the register can warn them before they walk away.
+  // Fix Phase 6 (G-61, owner D84): closing does NOT clock anyone out.
+  const pooled = till.tipPool ? splitTipPool(till.tipPool.poolMinor, till.tipPool.people) : null;
   return NextResponse.json({
     ok: true,
     secondCount: { name: second.full_name, agree: cmp.state === "match", diffMinor: cmp.diffMinor },
+    ...(pooled && pooled.ok ? { tipPool: { ...till.tipPool, sentence: tipPoolSentence(pooled) } } : {}),
   });
 }
 

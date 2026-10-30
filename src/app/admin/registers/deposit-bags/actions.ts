@@ -51,8 +51,10 @@ import {
   sealedLeftBehind,
   RECOUNT_SAME_PERSON_ERROR,
 } from "@/lib/registers/deposit-bag-flow-core";
+import { checkAssembledDeposit, sealReconcileWarning } from "@/lib/registers/shift-end-core";
 import {
   bagForDay,
+  bagDrawers,
   drawersForDay,
   getBag,
   insertNightCount,
@@ -159,6 +161,84 @@ export async function nightCountAction(formData: FormData): Promise<void> {
   );
 }
 
+/* ── 1b. Night: assembled and verified (Fix Phase 6, G-65, owner D82) ───────
+ * The owner, Q-E-4: "Please change it to assembled and verified at night, and
+ * blind counted in the morning." The closer puts each till's takings and
+ * drops in the bag and ticks the till once its stack matches the screen's
+ * line. No denomination count at night. The bag's night figure is the sum of
+ * the ticked lines (the expected deposit); night_denoms stays empty, which
+ * is how the bag log and the EOD report know it was assembled. The morning
+ * blind recount by a different employee (D24) is the independent count.
+ */
+export async function nightAssembleAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const dayRes = parseBusinessDay(str(formData, "business_day"), pacificToday());
+  if (!dayRes.ok) fail(dayRes.error);
+  const day = dayRes.day;
+  const closer = await employeeFromPin(str(formData, "assemble_pin"), "the employee who assembled the deposit");
+
+  const existing = await bagForDay(day);
+  if (!existing.ok) fail(`The bags for ${day} could not be read: ${existing.error}. Nothing was saved.`);
+  const drawers = await drawersForDay(day);
+  if (!drawers.ok) fail(`${drawers.error} Nothing was saved.`);
+
+  // The server works the lines out again; the ticks only say which stacks
+  // the closer checked. A page that showed older figures cannot slip through.
+  const asm = checkAssembledDeposit({
+    expectedMinor: drawers.expected.expectedMinor,
+    problems: drawers.expected.problems,
+    lines: drawers.expected.lines,
+    confirmedIds: formData.getAll("confirm_session").map((v) => String(v)),
+  });
+  if (!asm.ok) fail(asm.error);
+
+  const chk = checkNightCount({
+    bagNo: str(formData, "bag_no"),
+    countMinor: asm.countMinor,
+    closerId: closer.id,
+    existingBagNoForDay: existing.bagNo,
+    note: str(formData, "night_note"),
+  });
+  if (!chk.ok) fail(chk.error);
+
+  const saved = await insertNightCount({
+    bagNo: chk.bagNo,
+    businessDay: day,
+    countMinor: asm.countMinor,
+    denoms: null,
+    closerId: closer.id,
+    expected: drawers.expected,
+    note: chk.note,
+  });
+  if (!saved.ok) fail(saved.error);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "deposit_bag.night_assembled",
+    entityType: "deposit_bag",
+    entityId: saved.id,
+    after: {
+      bagNo: chk.bagNo,
+      businessDay: day,
+      method: "assembled",
+      nightCountMinor: asm.countMinor,
+      nightCountedBy: closer.id,
+      nightCountedByName: closer.full_name,
+      expectedMinor: drawers.expected.expectedMinor,
+      confirmedSessions: asm.confirmed,
+      note: chk.note,
+      ...(saved.linkError ? { drawerLinkError: saved.linkError } : {}),
+    },
+  });
+  done(
+    `Bag ${chk.bagNo} assembled and verified at ${formatCents(asm.countMinor)} by ${closer.full_name} for ${day} ` +
+      `(${asm.confirmed.length} till stack${asm.confirmed.length === 1 ? "" : "s"} checked against the screen). ` +
+      "Put it in the store safe UNSEALED, with the night sheet; a different employee counts it blind in the morning (D23, D24, D82)." +
+      (saved.linkError ? ` The drawers could not be linked to the bag (${saved.linkError}); the bag itself is saved.` : ""),
+  );
+}
+
 /* ── 2. Morning recount (SOP-03 §4.10): a DIFFERENT employee ─────────────── */
 
 export async function morningRecountAction(formData: FormData): Promise<void> {
@@ -257,6 +337,13 @@ export async function sealBagAction(formData: FormData): Promise<void> {
   const saved = await saveSeal({ bagId: bag.id, bagNo: chk.bagNo, amountMinor: chk.amountMinor, sealerId: sealer.id });
   if (!saved.ok) fail(saved.error);
 
+  // Fix Phase 6 (G-66, owner D87): the reconcile window closes at the seal.
+  // Either manager may reconcile, night or morning; a drawer in this bag
+  // still unreconciled is a WARNING here (and in the audit), never a block,
+  // because the cash is already counted three times and must get to the safe.
+  const inBag = await bagDrawers(bag.id);
+  const reconcileWarn = inBag.ok ? sealReconcileWarning(inBag.drawers) : null;
+
   // The bag is sealed (a physical fact). Now the books.
   const post = await postSealForBag(bag.id);
 
@@ -281,12 +368,26 @@ export async function sealBagAction(formData: FormData): Promise<void> {
       books: post.kind,
       ...(post.kind === "posted" ? { journalId: post.journalId, journalNo: post.journalNo, duplicate: post.duplicate, sourceRef: post.sourceRef } : { code: post.code, message: post.message }),
       ...(shape ? { depositShapeNotice: shape.code } : {}),
+      ...(reconcileWarn && inBag.ok
+        ? { unreconciledDrawers: inBag.drawers.filter((d) => d.status === "open" || d.status === "closed").map((d) => d.sessionId) }
+        : {}),
     },
   });
+  if (reconcileWarn) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "deposit_bag.sealed_unreconciled",
+      entityType: "deposit_bag",
+      entityId: bag.id,
+      after: { bagNo: chk.bagNo, businessDay: bag.businessDay, warning: reconcileWarn },
+    });
+  }
   done(
     `Bag ${chk.bagNo} sealed at ${formatCents(chk.amountMinor)} by ${sealer.full_name}. Put it in the "SEALED — TO BANK" slot of the store safe. ` +
       describeSealPost(post) +
-      (shape ? ` ${shape.message}` : ""),
+      (shape ? ` ${shape.message}` : "") +
+      (reconcileWarn ? ` ${reconcileWarn}` : ""),
   );
 }
 

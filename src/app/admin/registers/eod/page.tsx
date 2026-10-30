@@ -7,6 +7,7 @@ import { pacificToday } from "@/lib/reports/timezone";
 import { eodData } from "@/lib/registers/eod-store";
 import { parseBusinessDay } from "@/lib/registers/deposit-bag-flow-core";
 import { denomGridRows } from "@/lib/registers/eod-sheet-core";
+import { eodStatus, nightMethod } from "@/lib/registers/shift-end-core";
 import { RegisterCashSpecimen } from "./RegisterCashSpecimen";
 import { UndepositedFunds } from "./UndepositedFunds";
 
@@ -104,6 +105,10 @@ export default async function EodReportPage({
   const dep = sheet.deposit;
   const bag = sheet.bag;
   const grid = denomGridRows(bag?.nightDenoms ?? null, bag?.morningDenoms ?? null);
+  // D87: closed is not final until a manager reconciles every drawer.
+  const status = eodStatus({ final: model.final, sessionCount: totals.sessionCount, awaitingReconcile: model.awaitingReconcile });
+  // D82: an assembled night bag has a total but no night denominations.
+  const assembled = bag ? nightMethod({ nightCountMinor: bag.nightCountMinor, nightDenoms: bag.nightDenoms }) === "assembled" : false;
   const exportBase = `${BASE}/eod/export?day=${businessDay}`;
 
   return (
@@ -160,10 +165,10 @@ export default async function EodReportPage({
           </div>
           <p
             className={`rounded border-2 px-3 py-1 text-sm font-black uppercase tracking-[0.1em] ${
-              model.final ? "border-black" : "border-black/40 text-black/60"
+              status.state === "final" ? "border-black" : "border-black/40 text-black/60"
             }`}
           >
-            {model.final ? "Final — all drawers closed" : "Preliminary — a drawer is still open"}
+            {status.label}
           </p>
         </div>
 
@@ -298,6 +303,12 @@ export default async function EodReportPage({
                 </tr>
               </tbody>
             </table>
+            {assembled ? (
+              <p className="mt-1 text-xs font-bold">
+                Night: assembled and verified against the till stacks (no night denominations, owner rule D82). The morning blind recount is the
+                independent count.
+              </p>
+            ) : null}
             <p className="mt-1 text-xs">
               {bag.againstExpectedMinor === null ? "" : `Bag against expected deposit: ${overShortLabel(bag.againstExpectedMinor)}. `}
               {bag.varianceReason ? `Reason: ${bag.varianceReason}. ` : ""}

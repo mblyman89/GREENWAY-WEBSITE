@@ -108,11 +108,11 @@ export type RegisterActivityRow = {
 /** A selectable active employee for count-in / count-out / drop attribution. */
 export type EmployeeOption = { id: string; name: string; role: Employee["job_role"] };
 
-/** A closed drawer awaiting a manager reconcile / verify action. */
+/** A closed drawer awaiting a manager reconcile (verify retired, owner D83). */
 export type AttentionItem = {
   sessionId: string;
   registerName: string;
-  kind: "reconcile" | "verify";
+  kind: "reconcile";
   businessDay: string;
   expectedCloseMinor: number | null;
   closingCountMinor: number | null;
@@ -336,7 +336,8 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
   });
 
   // --- Needs attention (manager-only oversight actions) ---------------------
-  // Closed drawers awaiting reconcile, and reconciled tills awaiting verify.
+  // Closed drawers awaiting reconcile. (Fix Phase 6, G-63, owner D83: the
+  // "verify till" item is retired; the bag's morning recount is the verify.)
   // Fix Phase 2.1 (G-05): the store-wide refund total that used to ride on
   // each card (AN-4) is gone. The registers page builds each closed drawer's
   // own figure (drawer-figure-store.ts loadDrawerFigure), refunds included.
@@ -347,19 +348,6 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         sessionId: s.id,
         registerName: s.register_name,
         kind: "reconcile",
-        businessDay: s.business_day,
-        expectedCloseMinor: s.expected_close_minor,
-        closingCountMinor: s.closing_count_minor,
-        tipsMinor: s.tips_minor ?? null,
-        closedByName: nameFor(s.closed_by),
-        secondCountedByName: nameFor(s.second_counted_by ?? null),
-        secondCountMinor: s.second_count_minor ?? null,
-      });
-    } else if (s.status === "reconciled") {
-      attention.push({
-        sessionId: s.id,
-        registerName: s.register_name,
-        kind: "verify",
         businessDay: s.business_day,
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,

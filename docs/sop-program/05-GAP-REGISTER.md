@@ -87,6 +87,12 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-58 | Housekeeping: invite default role the same on screen and server; full role descriptions; job-role changes audited with old and new values | (procedure need) | F-08-9, F-08-10 | SOP-08 form 8.4 (§4.16–§4.17) | PROPOSED |
 | G-60 | **Emailed COAs attach to the delivery's lines**: read every lab PDF certificate by certificate, match by lab id then a unique name (verify), say the outcome, file each PDF under its own lab results; re-read and attach by hand on the receiving page | Owner message 6 (*"didn't or couldn't attach the coa lab results to the products in the receiving detail page"*) | F-04-21 (**S1**), F-04-10 (COA part) | SOP-04 v1.4 §4.15 | **BUILT** (Phase 3.1a) |
 | G-59 | **Activate, Terminate and Rehire owner and admin only**: new permission (e.g. `staffing.lifecycle` = [owner, admin]); buttons hidden for managers; server actions refuse | D74 | F-08-1, F-08-3 (context) | SOP-08 v1.1 §2 rules 1–2 (managers never press them) | **BUILT** (Phase 0.3) |
+| G-61 | **Clock-out guard**: a register clock-out is refused while the employee owns an open drawer; closing a drawer never clocks out | D84 (Q-E-6) | — | SOP-01 §4.2 | **BUILT** (Fix Phase 6, #P6E) |
+| G-62 | **Float check at count-in**: compare with the register's standard float; warn, never block; audited | D85 (Q-E-7) | F-01-13 | SOP-01 §4.3 | **BUILT** (Fix Phase 6, #P6E) |
+| G-63 | **Retire Verify till**: the morning blind bag recount is the verify; stale posts refused and audited | D83 (Q-E-5) | F-00-3, F-00-4 (verify part), F-01-12 | SOP-01 §4.30, SOP-03 §4.12 | **BUILT** (Fix Phase 6, #P6E) |
+| G-64 | **Crew tip pool**: pool + people at close, even split in whole cents (floor, leftover stays), share saved as the cashier's own tips | D89 (Q-E-10) | — | SOP-01 §4.27 step 7 | **BUILT** (Fix Phase 6, #P6E) |
+| G-65 | **Night deposit assembled and verified**: tick each till's stack against the screen, server re-works the lines, no night denominations; denomination count is the fallback | D82 (Q-E-4) | — | SOP-03 §4.5 | **BUILT** (Fix Phase 6, #P6E) |
+| G-66 | **Reconcile timing**: either manager, before the seal; seal warns and audits unreconciled drawers; EOD "awaiting manager reconcile" | D87 (Q-E-8) | — | SOP-01 §4.30, SOP-03 §4.7, §4.11 | **BUILT** (Fix Phase 6, #P6E) |
 
 ---
 
@@ -480,6 +486,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   7. **(SOP-15 extension)** After a partial destruction the lot returns to its status before scheduling, not left in Quarantine (F-15-11).
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C); SOP-15 §4.19–§4.22, form 8.5.
 
+### Fix Phase 6 / Fix E (G-61..G-66; owner message 8, D81–D90): shift end and end-of-day cash
+
+- **Owner:** Q-E-6 *"Block. I don't want to clock out on the register change out step."*; Q-E-7 *"Warn please"*; Q-E-4 *"Please change it to assembled and verified at night, and blind counted in the morning."*; Q-E-5 *"Yes please do this."*; Q-E-10 *"The tip jar is pooled for the morning crew, and pooled for the night crew."*; Q-E-8 *"build this one like the big boys would."*
+- **Status: BUILT (Fix Phase 6, #P6E).** New `src/lib/registers/shift-end-core.ts` (pure, 46 self-tests). Clock-out guard in `staffing/store.ts` `toggleClock` (the single punch path: register, lock screen, back office, offline replay) via `openDrawersOwnedBy`; the register learns the owned drawers at unlock. Float warning on both count-in paths (`/api/pos/till`, `openDrawerAction`) with `drawer.float_warning`. Crew tip pool on both close paths; `till-core.ts` re-splits on the server. Verify till retired (`verifyTillAction` stub, `till.verify_retired`; `verifyTill()` removed; attention list reconcile only). Night `nightAssembleAction` (`deposit_bag.night_assembled`, `night_denoms` null). Seal warns (`deposit_bag.sealed_unreconciled`). EOD `awaitingReconcile` banner. **No migration.** Test `tests/compliance/fix-p6-shift-end.test.ts`.
+
 ### Fix Phase 5 (plan rows 6.1/6.2; G-53/G-54): sign-in link and one-step offboarding
 
 - **Owner:** D70 *"yes, built right, professionally and of enterprise grade standards."*; D71 *"yes."*; books-87 *"I want to create the employee in payroll/ W-4 setup, then I will give them access to the back office if they need access to it."*
@@ -821,3 +832,28 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   4. Each PDF is archived only under the lab results read from it.
   5. Receiving page: COA cell wording, **Re-read COAs from this delivery's documents** (audited `manifest.coa_reread`, timeline `coa_reread`), per-line **Choose its certificate… / Attach lab result** (stale pick refused; audited `inventory_lot.coa_linked`, timeline `coa_linked_by_hand`). Manager (`inventory.manage`). No migration.
 - **Tests:** `fix-p3-1a-coa-bundle` (real GrowFlow PDFs and text; truth = the vendor's own `lab_result_link`), `fix-p3-1a-coa-archive`; `r26`, `s29`, `pipeline-fix-links-connected` updated; mutation probe `scripts/compliance/mutate-fix-p3-1a.py`.
+
+## G-61 · Clock-out guard (BUILT, Fix Phase 6, D84, SOP-01) — S2
+- **Owner basis:** D84 (Q-E-6): *"Block. I don't want to clock out on the register change out step. A lot of times they count out early to let the new employee add their till ahead of their shift, so they can finish other tasks if needed before they clock out."*
+- **Built:** `clockOutBlocked` (`shift-end-core.ts`) checked in `toggleClock` before the clock-out write; `openDrawersOwnedBy` (opened_by = employee, status open). Manager timesheet edits exempt. Register lock-screen and home punch show the same words; an offline punch refused on replay becomes a Register exception. Closing never clocks out (the register says *"You are still clocked in"*).
+
+## G-62 · Float check at count-in (BUILT, Fix Phase 6, D85, SOP-01) — S3
+- **Owner basis:** D85 (Q-E-7): *"Warn please"*. Closes F-01-13.
+- **Built:** `floatCheck` against `registers.default_float_minor`; shown live on the register and the back office; saved in the `drawer.opened` audit plus `drawer.float_warning` when over or short. Never blocks.
+
+## G-63 · Retire Verify till (BUILT, Fix Phase 6, D83, SOP-01/SOP-03) — S2
+- **Owner basis:** D83 (Q-E-5): *"Yes please do this."* Retires F-00-3, F-00-4 (verify part), F-01-12.
+- **Built:** Verify card removed (`oversight.ts` attention items are reconcile only); `verifyTill()` removed from `registers/store.ts`; `verifyTillAction` kept as a refusing, audited stub (`till.verify_retired`). The morning blind bag recount (SOP-03 §4.10) is the verify. History of verified drawers kept.
+
+## G-64 · Crew tip pool (BUILT, Fix Phase 6, D89, SOP-01) — S3
+- **Owner basis:** D89 (Q-E-10): *"At shift change the tips are counted and evenly distributed to the two employees. This is the amount to be reported on everyone's own close till summary report. I want everyone to be completely accountable for their register."*
+- **Built:** `splitTipPool` (integer cents, floor, leftover stays in the jar, 1–10 people); register close (`tipPool` in the request, re-split by `validateTillRequest`) and back-office close (`tip_mode`, `tip_people`); the share is `tips_minor`; the pool is in the close audit. Till summary label says it is the cashier's own share.
+
+## G-65 · Night deposit assembled and verified (BUILT, Fix Phase 6, D82, SOP-03) — S2
+- **Owner basis:** D82 (Q-E-4): *"Please change it to assembled and verified at night, and blind counted in the morning."*
+- **Built:** `checkAssembledDeposit` (every till with money ticked, ticks match the server's lines, lines add up to expected, expected workable); `nightAssembleAction` (PIN → drawers re-read → check → `checkNightCount` → `insertNightCount` with `denoms: null` → `deposit_bag.night_assembled`). Bag log / EOD mark the night figure as assembled (`nightMethod`, list `nightAssembled`). The denomination form stays as the fallback. No migration (`night_denoms` was already nullable).
+
+## G-66 · Reconcile timing (BUILT, Fix Phase 6, D87, SOP-01/SOP-03) — S2
+- **Owner basis:** D87 (Q-E-8): *"I think it can be done by either the night manager or morning manager. But don't build it this way just because I say to. I want your professional opinion"*.
+- **Professional call:** blind close at the till, asynchronous manager review with a deadline (the large POS pattern). Either manager; deadline = the bag seal; never blocks.
+- **Built:** `sealBagAction` reads `bagDrawers`, appends `sealReconcileWarning` and audits `deposit_bag.sealed_unreconciled`; `eod-core.ts` `awaitingReconcile` + `eodStatus` banner *"Closed — N drawers awaiting manager reconcile"*.

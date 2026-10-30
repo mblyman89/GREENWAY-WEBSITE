@@ -973,6 +973,7 @@ import { __runOverShortWarningCoreTests } from "../../src/lib/registers/over-sho
 import { __runDepositBagFlowTests } from "../../src/lib/registers/deposit-bag-flow-core";
 import { __runEodSheetTests } from "../../src/lib/registers/eod-sheet-core";
 import { __runMasterTillTests } from "../../src/lib/registers/master-till-core";
+import { __runShiftEndCoreTests } from "../../src/lib/registers/shift-end-core";
 import { __runLittleSafeTests } from "../../src/lib/registers/little-safe-core";
 import { __runSupplyRunTests } from "../../src/lib/registers/supply-run-core";
 import { __runExpiredStockCoreTests } from "../../src/lib/inventory/expired-stock-core";
@@ -2631,6 +2632,7 @@ __runLiquidVolumeTests();
   assertRan("invoice-adjustments-core", __runInvoiceAdjustmentsTests(), 25); // Fix Phase 3.4 (F-04-24): credits / discounts / negative lines read off the invoice; manual credits validated; invoice amount = lines + credits
   assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
+  assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

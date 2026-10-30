@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.7 (draft for owner review; Phase 2.6b: the **End-of-day report** is now the owner's end-of-day sheet: it has a date picker, the deposit by till, a cash check with refunds taken off, the day's bag by denomination (night figure hidden until the morning recount), two signature lines, a warning when any record could not be read, and CSV / Excel export; Phase 2.6: the **Deposit bags** screen now records the night count, the blind morning recount by a different employee, the seal (which posts to the books) and the owner's bank run, and prints and exports the bag log; an undeclared bag only warns (D27); Phase 2.5: the owner-only bank screen can now clear a store cash deposit, and the "Cash on its way to the bank" panel no longer claims a drawer close fills it; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
+| **Version** | 1.8 (draft for owner review; Fix Phase 6 / Fix E (owner message 8, D81–D90): the night deposit is **assembled and verified** against the till stacks on **Deposit bags** (no night denomination count; §4.5, D82); the morning blind recount stays the independent count (§4.10); **Verify till is retired** (§4.12, D83); reconcile by the night or the morning manager **before the bag is sealed**, sealing warns about an unreconciled drawer (§4.7, §4.11, D87); the End-of-day report reads *"awaiting manager reconcile"* until every drawer is reconciled (§4.3, §4.8). Earlier: Phase 2.6b: the **End-of-day report** is now the owner's end-of-day sheet: it has a date picker, the deposit by till, a cash check with refunds taken off, the day's bag by denomination (night figure hidden until the morning recount), two signature lines, a warning when any record could not be read, and CSV / Excel export; Phase 2.6: the **Deposit bags** screen now records the night count, the blind morning recount by a different employee, the seal (which posts to the books) and the owner's bank run, and prints and exports the bag log; an undeclared bag only warns (D27); Phase 2.5: the owner-only bank screen can now clear a store cash deposit, and the "Cash on its way to the bank" panel no longer claims a drawer close fills it; Phase 2.3: the over/short reason over $5 is written in the app; Phase 2.2: the second count at till close is now in the app; owner answers D21–D27 applied; D41 living-SOP reminder) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | The night closer who completes the end-of-day sheet; the morning employee who recounts, verifies and seals the deposit bag; the manager who reconciles, verifies and prints the end-of-day report; the owner, who takes the bags to the bank and reviews the books |
@@ -157,10 +157,12 @@ After the bag is made, the building holds the $635.00 of floats plus the $1,000.
    (SOP-01 §4.27)                            UNSEALED bag + night sheet             oldest first, with the
  2 pull takings (count − float)          7 recount by denomination, alone          bag log
  3 gather the day's drops from safe      8 agree? sign part B → seal → write    11 bank receipt per bag →
- 4 count deposit → night sheet part A       bag # on sheet, slip, log 8.2          staple to bag log
+ 4 check each stack vs screen, tick it,     bag # on sheet, slip, log 8.2          staple to bag log
+   Save assembled bag (D82)
  5 cash + sheet in a bag, UNSEALED,      9 sealed bag back into the safe        12 owner files; books
-   into the store safe                      manager: Verify till (paper rules)     (later slice)
- manager: reconcile drawers, print EOD
+   into the store safe                      manager: reconcile any drawer left,    (later slice)
+                                            BEFORE the seal (D87)
+ manager: reconcile drawers (or leave for the morning manager), print EOD
 ```
 
 The owner's words fix steps 4 (*"one person completes before close"*) and 7–9 (*"the morning employee recounts and verifies the amount before sealing the bag and putting it into the safe"*). The owner confirmed that the counted cash sits **unsealed in the store safe** overnight until the morning recount (D23: *"Q-03-3- yes, that is correct"*).
@@ -174,7 +176,7 @@ Before the deposit can be counted, **every** drawer that was open today must be 
 3. If a register had two drawers today, the X report was printed before the first drawer closed (SOP-01 §4.27 step 9).
 4. A manager or lead prints the **Z report** when the last drawer of the day is closed (SOP-01 §4.28). Put it with tonight's paper.
 
-**Check:** the End-of-day report banner reads **Final — all drawers closed** (§4.8). If it reads **Preliminary — a drawer is still open**, a drawer was missed. Find it before you continue.
+**Check:** the End-of-day report banner no longer reads **Preliminary — a drawer is still open** (§4.8). If it does, a drawer was missed. Find it before you continue. Once every drawer is closed it reads **Closed — N drawers awaiting manager reconcile** until a manager reconciles them (D87), then **Final — all drawers closed and reconciled**.
 
 ### 4.4 Night: pull the takings and gather the drops
 
@@ -184,20 +186,32 @@ Before the deposit can be counted, **every** drawer that was open today must be 
 4. Open the store safe and take out **today's drop bags**. Check each one against the drops on the close slips (SOP-01 form 8.2, "Drops recorded today"). A drop that is on a slip but not in the safe, or in the safe but on no slip, is an exception (§6).
 5. Do **not** open the master till or the little safe for any of this.
 
-### 4.5 Night: count the deposit and complete the night sheet
+### 4.5 Night: assemble and verify the deposit, and complete the night sheet
+
+**Owner rule D82 (Fix Phase 6, gap G-65).** The owner said: *"Please change it to assembled and verified at night, and blind counted in the morning."* Each drawer has already been counted twice at close (the closer's blind count and the second employee's count, D2). At night the closer **assembles** the deposit and **verifies** each till's stack against the screen; there is no third count by denomination. The morning blind recount by a different employee (§4.10) is the independent count of the bag.
+
+**In the app (normal way).** Register Activity → **Deposit bags** → panel **Night: assemble and verify the deposit for <day>**. Under the drawer table, the box **Assemble and verify the deposit (the normal way, owner rule D82)**:
+1. For each till, pull its takings (closing count minus the float; the float stays in the drawer, §4.4) and its drops. Check the stack against the till's **To the bag** figure, then tick *"<Register>: $X is in my hand and goes in the bag"*.
+2. The **Bag total** is the expected deposit. Type the **Bag # (printed on the bag)**, an optional note, and **Your PIN (the closer)**, then tap **Save assembled bag**.
+3. The server works the lines out again from the drawers and refuses if any till is not ticked (*"Tick every till once its stack matches the screen. Not ticked: … If a stack does not match, do not change it: count the bag by denomination instead and write what you found. Nothing was saved."*), if a drawer changed while you were checking (*"The screen changed while you were checking … Reload the page and check again."*), or if the expected deposit cannot be worked out (*"… Fix that first, or count the bag by denomination instead."*). It is audited as `deposit_bag.night_assembled` with the ticked tills.
+4. The bag log, the End-of-day report and the CSV show the night figure as **assembled** (no night denominations). The EOD report adds *"Night: assembled and verified against the till stacks (no night denominations, owner rule D82). The morning blind recount is the independent count."*
+
+**When a stack does not match (or the expected deposit cannot be worked out):** do **not** tick it. Open **Count by denomination instead** under the box and count the whole deposit by denomination as below (the Phase 2.6 form; it opens by itself when there is nothing to assemble). Write what you found in the note and tell the manager before you leave.
+
+**Paper (backup, or when the screen is down):**
 
 1. Take a blank **night sheet** (form 8.1). Fill in the date, your name and the time.
 2. **Part A, section 1 (where the money came from):** for each till write the closing count from its slip, the float left behind, and the takings (count − float). Write each drop (time, register, amount).
 3. Add it up: **Expected deposit = total drops + total takings.**
-4. **Part A, section 2 (what is actually here):** put all of the takings and drops together and count **every bill and coin by denomination**. Count twice.
+4. **Part A, section 2 (what is actually here):** in the app, the assembled bag total. On paper, or when a stack did not match, put all of the takings and drops together and count **every bill and coin by denomination**. Count twice.
 5. Compare **Counted** with **Expected**:
    - **Equal:** good.
    - **Different:** recount. If it is still different, write the difference and what you checked on the sheet. Do not "fix" it (§4.1). Tell the manager before you leave.
 6. Sign part A: **Prepared by**, time.
 
-**In the app (Phase 2.6).** Open Register Activity → **Deposit bags**. The panel **Night: count the deposit for <day>** (`deposit-bags/page.tsx` L219) shows, for the chosen **Business day**, each closed drawer's **Float stays**, **Closing count**, **Takings**, **Drops** and **To the bag**, and the **Expected deposit** (L241–262), worked out by the same formula as §4.1 (`deposit-bag-flow-core.ts` L119–172). If a drawer is still open, has no count, or closed below its float, it says so and shows *"Cannot be worked out"* instead of a number (L262) — missing is a question, not zero. Enter the count by denomination, the **Bag # (printed on the bag)**, an optional note of what you checked, and **Your PIN (the closer)**, then tap **Save night count** (L279–299). The server refuses a second bag for the same day: *"Bag … is already recorded for this business day. One day, one bag (SOP-03 §4.14). If one day needs two bags, write both numbers in one record (for example 1041 + 1042). Nothing was saved."* (`deposit-bag-flow-core.ts` L194–201). A difference from expected is never blocked; the screen states it (`nightVsExpected`, L212–222). Then still fill and sign part A of the paper sheet.
+**Count by denomination instead (Phase 2.6 form, now the fallback).** Open Register Activity → **Deposit bags**. The panel **Night: assemble and verify the deposit for <day>** (`deposit-bags/page.tsx` L219) shows, for the chosen **Business day**, each closed drawer's **Float stays**, **Closing count**, **Takings**, **Drops** and **To the bag**, and the **Expected deposit** (L241–262), worked out by the same formula as §4.1 (`deposit-bag-flow-core.ts` L119–172). If a drawer is still open, has no count, or closed below its float, it says so and shows *"Cannot be worked out"* instead of a number (L262) — missing is a question, not zero. Enter the count by denomination, the **Bag # (printed on the bag)**, an optional note of what you checked, and **Your PIN (the closer)**, then tap **Save night count** (L279–299). The server refuses a second bag for the same day: *"Bag … is already recorded for this business day. One day, one bag (SOP-03 §4.14). If one day needs two bags, write both numbers in one record (for example 1041 + 1042). Nothing was saved."* (`deposit-bag-flow-core.ts` L194–201). A difference from expected is never blocked; the screen states it (`nightVsExpected`, L212–222). Then still fill and sign part A of the paper sheet.
 
-> **Why count by denomination?** The owner asked for a spreadsheet, and the morning recount must be able to say *which* bills disagree, not just that the total does. A total-only count cannot catch a $20 swapped for a $10 and a $10 note mislaid.
+> **Why the morning count is by denomination.** The morning recount must be able to say *which* bills disagree, not just that the total does. Since D82 the night side is assembled (two counts per drawer at close already), so the morning blind recount is the bag's denomination record.
 
 ### 4.6 Night: bag it (unsealed) and put it in the store safe
 
@@ -214,7 +228,10 @@ A manager reconciles each closed drawer on **Register Activity** exactly as in *
 
 What reconcile does to the books (owner and bookkeeper only): it posts the drawer's takings into **10100 Cash on Hand — Vault** (*"Cash from <register> to safe"*, `register-cash-journal-core.ts` L306–323) and the over/short to Cash Over/(Short). It does **not** touch **10400 Undeposited Funds**. That account was designed to fill only when a bag is sealed (L308–313, self-test L832–838), and the seal is not wired (§4.15, F-03-1).
 
-Reconcile can happen tonight or first thing in the morning. The End-of-day report shows over/short only for reconciled drawers (§4.8). **Print the report after reconcile** if you can.
+**Who and when (owner rule D87, Fix Phase 6, gap G-66).** The owner asked for the professional answer: *"I think it can be done by either the night manager or morning manager. But don't build it this way just because I say to. I want your professional opinion … build this one like the big boys would."* The large POS systems close blind at the till and leave the manager review for afterwards, with a deadline, so the night crew is not held back. Here:
+- **Either the night manager or the morning manager** reconciles each drawer.
+- **Deadline: before the bag is sealed** (§4.11). Sealing is never blocked by it, but it warns and is audited (`deposit_bag.sealed_unreconciled`).
+- The End-of-day report shows over/short only for reconciled drawers, and its banner reads *"Closed — N drawers awaiting manager reconcile"* until all are done (§4.8). **Print the report after reconcile** if you can; otherwise the morning manager reprints it after reconciling.
 
 ### 4.8 Opening and reading the End-of-day report
 
@@ -279,6 +296,8 @@ Done by the **morning employee**, who must **not** be the person who signed part
 
 ### 4.11 Morning: seal the bag, log it, back into the safe
 
+**Reconcile first (D87).** Before sealing, check Register Activity: every drawer in this bag should be reconciled. If one is not, sealing still works, but the green banner adds *"Warning: N drawer(s) in this bag have not been reconciled yet (<registers>). The bag is sealed; a manager reconciles it/them on Register Activity today (SOP-03 §4.11). The owner sees this on the audit log."*
+
 1. Fill in the **bank deposit slip** for the counted total (part B). One slip per bag.
 2. Put the cash, the slip and **a copy of the night sheet's totals** (or the tear-off strip on form 8.1) in a **new** tamper-evident bag if the old one was handled; otherwise use the bag from last night.
 3. **Seal** the bag. Write the **bag number** (the number printed on the bag) on:
@@ -292,14 +311,9 @@ Done by the **morning employee**, who must **not** be the person who signed part
 
 > **What the system does here (built in Phase 2.6, G-04 and G-14).** The panel **Seal the bag (anyone) and put it back in the safe** (`deposit-bags/page.tsx` L334) shows each recounted bag with both counts. Check the **Bag #** (change it only if you used a new bag, step 2), enter **Your PIN (who sealed)** and tap **Seal bag <#> for <amount>** (L349–359). The server refuses a seal before the recount (*"The morning recount comes first (SOP-03 §4.10). The bag cannot be sealed until a different employee has recounted it."*), a second seal, and a >$5.00 difference with no reason (`checkSeal`, `deposit-bag-flow-core.ts` L296–318). The bag is sealed for the **morning** amount. Then the seal posts to the books: **DEBIT 10400 Undeposited Funds / CREDIT 10100 Vault**, dated on the bag's **business day**, posted automatically, under source ref `seal-bag:<bag id>` so pressing twice writes nothing twice (`src/lib/accounting/seal-bag-posting-service.ts` L78–112). If the books cannot be reached, the bag **stays sealed** (it is a physical fact) and shows **NOT POSTED to the books** with a **Post to the books** button to retry (`page.tsx` L369–392). Migration 0316 locks a sealed bag's counts, people and amount: *"DEPOSIT_BAG_SEALED: bag % (%) is sealed. Its counts, people and amount cannot be changed."*, and no bag can be deleted (`0316_deposit_bag_custody.sql` L124–183). Keep writing the bag number on the paper sheet, the slip and the paper log as well.
 
-### 4.12 Morning: Verify till in the back office
+### 4.12 Morning: Verify till is retired (owner rule D83)
 
-After the recount, a manager does **Verify till** for each drawer on Register Activity, as in **SOP-01 §4.30 "Verify till (next morning)"**.
-
-Remember the known problems, which are not fixed yet:
-- **Verified by** is typed text going into an employee-ID column. **Leave it blank** (F-00-4, F-01-5).
-- The screen has **no denomination boxes**, and **Count agrees** is ticked by default (`registers/page.tsx` L293–294). The system records the recount as **$0** whatever you tick (F-00-3). **Part B of the night sheet, signed, is the real morning verify.**
-- Always reconcile before verify (F-01-12). Click once (F-01-2).
+**Fix Phase 6, gap G-63; findings F-00-3, F-00-4 (verify part), F-01-12 RETIRED.** The owner said: *"Yes please do this."* The morning **blind recount of the bag** (§4.10: by denomination, by a different employee, with their PIN, audited) **is the verify**. The old back-office **Verify till** card is gone from Register Activity. It recorded no recount ($0 whatever was ticked) and took a typed name into an employee-ID column. A stale page that still posts it is refused: *"Verify till is retired (owner rule D83). The morning recount on Deposit bags is the verify now. Nothing was saved."* (audited `till.verify_retired`). Drawers verified before Fix Phase 6 keep their **verified** history.
 
 ### 4.13 Bank day: taking the bags to the bank
 
@@ -516,11 +530,11 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 
 ### 8.3 Night closer checklist
 
-- [ ] Every drawer closed blind, each with a signed close slip and second count (SOP-01 §4.27, form 8.2)
+- [ ] Every drawer closed blind, each with a signed close slip, second count and crew tip pool (SOP-01 §4.27, form 8.2); closers still clocked in until their tasks are done (D84)
 - [ ] Z report printed (SOP-01 §4.28)
 - [ ] Floats left in drawers: $167.50 / $167.50 / $300.00
 - [ ] Takings pulled; every drop bag accounted for against the slips
-- [ ] Deposit counted by denomination, twice; night sheet part A signed
+- [ ] Each till's stack checked against **To the bag** and ticked; **Save assembled bag** (D82). A stack that does not match → count by denomination instead; night sheet part A signed
 - [ ] Cash + sheet in a bag, **unsealed**, in the store safe "TO VERIFY" slot; safe locked
 - [ ] Master till PM count done (SOP-02 §4.6)
 - [ ] Manager told about any difference before leaving
@@ -529,6 +543,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 
 - [ ] Unsealed bag + night sheet taken out; I did **not** prepare part A
 - [ ] Recounted by denomination, twice, without looking first; part B filled
+- [ ] Every drawer in the bag reconciled (or the morning manager reconciles now, D87)
 - [ ] Agrees → slip filled → sealed → bag # on sheet, slip and bag log
 - [ ] Sealed bag in "SEALED — TO BANK"; safe locked
 - [ ] Doesn't agree → not sealed, part C, manager and owner told
@@ -537,11 +552,11 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 ### 8.5 Manager end-of-day checklist (adds to SOP-01 form 8.6)
 
 - [ ] Every drawer reconciled (Over/short shows a figure on the EOD report)
-- [ ] EOD report banner **Final — all drawers closed**; no **⚠ Unresolved** line
+- [ ] EOD report banner **Final — all drawers closed and reconciled** (not *awaiting manager reconcile*); no **⚠ Unresolved** line
 - [ ] Cross-check: Σ(Closed count − float) + Drops total = night sheet (c)
 - [ ] EOD shows no **⚠ This report may be incomplete** warning; **Expected deposit − net cash** matches the drawers' over/short
 - [ ] EOD printed, signed by the night closer and (after the recount) the morning employee, stapled with night sheet, Z, close slips, forms 8.5, master till sheet; filed; CSV/Excel saved if wanted
-- [ ] Morning: Verify till done (paper part B is the record; leave **Verified by** blank)
+- [ ] Every drawer reconciled by the night or morning manager **before the seal** (D87); EOD banner **Final — all drawers closed and reconciled**. (Verify till is retired, D83: the morning bag recount is the verify)
 - [ ] Bag log up to date; days with no bag explained
 
 ### 8.6 Bank-run checklist (owner)
@@ -557,7 +572,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 ```
 ┌──────────────────────────── GREENWAY — END OF DAY & DEPOSIT BAG ────────────────────────────┐
 │ NIGHT: close every drawer (blind + 2nd count) → Z report → leave floats 167.50/167.50/300   │
-│   → pull takings + all drops → count by denomination TWICE → night sheet part A, sign       │
+│   → pull takings + all drops → check each stack vs screen, tick → Save assembled bag (D82) │
 │   → cash + sheet in bag, UNSEALED → safe "TO VERIFY" → lock                                  │
 │ DEPOSIT = all drops + Σ(closing count − float).  Master till, little safe, tips: NEVER.     │
 │ MORNING (different person): recount BEFORE looking → agrees? sign B → slip → SEAL           │
@@ -565,7 +580,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 │ BANK: take ALL sealed bags. ONE DAY = ONE BAG, banked WHOLE. $10,000 never decides a split. │
 │ EOD REPORT: /admin/registers/eod  (old day: Business day → Show day). Print, 2 signatures. │
 │ ⚠ "Cash on its way to the bank" green box is NOT reliable — use the bag log.               │
-│ ⚠ Verify till: leave "Verified by" blank; paper part B is the real verify.                 │
+│ RECONCILE: night OR morning manager, BEFORE the seal (D87). Verify till RETIRED (D83).    │
 │ Missing money / broken seal / missing bag → OWNER, same day.                                 │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -611,6 +626,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | 4.8 worked example | `src/app/admin/registers/eod/RegisterCashSpecimen.tsx` (190) L110–137; `src/lib/accounting/register-cash-specimen-core.ts` L32–62, L130–142 |
 | Payment methods | `src/lib/pos/sale-event-core.ts` L15–33 (cash-only launch) |
 | Help / concierge | `src/lib/admin/help-content.ts`, `src/lib/admin/concierge-kb.ts` (grep "eod\|end-of-day\|deposit" → payroll direct deposit only) |
+| 4.5 assembled, 4.7/4.11 reconcile window, 4.12 verify retired (Fix Phase 6) | `src/lib/registers/shift-end-core.ts` (`checkAssembledDeposit`, `nightMethod`, `sealReconcileWarning`, `eodStatus`; 46 self-tests); `deposit-bags/actions.ts` (`nightAssembleAction`; `sealBagAction` warning); `deposit-bag-store.ts` (`insertNightCount` with `denoms: null`, `bagDrawers`, list `nightAssembled`); `deposit-bags/page.tsx` (assemble form, *Count by denomination instead*); `eod-core.ts` (`awaitingReconcile`); `eod/page.tsx` (banner, assembled note); `registers/actions.ts` (`verifyTillAction` retired stub); `oversight.ts` (reconcile only); `tests/compliance/fix-p6-shift-end.test.ts` |
 | Tests | `tests/compliance/eod-core.test.ts` (4 cases), `safe-bag.test.ts` (18), `deposit-clearing.test.ts` (77), `journal-specimen.test.ts`; self-tests `eod-core.ts` L212–300 |
 
 ## Appendix B: Not built yet (interim paper procedures)
@@ -618,7 +634,7 @@ Business day | Bag # | Amount  | Sealed by | Sealed (time) | To bank (date · na
 | Owner requirement / need | Today | Interim procedure in this SOP | Gap · finding |
 |---|---|---|---|
 | "End of day spreadsheet that one person completes before close" | **Built (Phase 2.6b):** the End-of-day report shows the deposit by till, the bag by denomination, refunds and two signature lines, with a date picker | §4.8; form 8.1 still signed (or the printed report) | G-15 (BUILT) · F-03-5, F-03-8 (FIXED) |
-| "Morning employee recounts and verifies" | **Built (Phase 2.6):** blind morning recount by a different employee on **Deposit bags**, by denomination, PIN, audited. Verify till itself still records $0 (F-00-3) | §4.10 in the app; form 8.1 part B still signed; Verify till per SOP-01 | G-04 (BUILT) · F-00-3, F-00-4 open |
+| "Morning employee recounts and verifies" | **Built (Phase 2.6):** blind morning recount by a different employee on **Deposit bags**, by denomination, PIN, audited. **Fix Phase 6:** this recount is the verify; Verify till retired (D83) | §4.10 in the app; form 8.1 part B still signed | G-04 (BUILT) · G-63 (BUILT) · F-00-3, F-00-4 verify part RETIRED |
 | "Before sealing the bag and putting it into the safe" | ~~No bag screen~~ **Built (Phase 2.6):** seal on **Deposit bags** (anyone, PIN), posts DR 10400 / CR 10100; log prints and exports | §4.11 in the app; paper log only if the screen is down | G-04 (BUILT) · F-00-6 (FIXED), F-03-9 (FIXED) |
 | "For depositing to the bank" | **Built (Phase 2.6):** the seal fills 10400 and the owner records the bank run on **Deposit bags**. **Built (Phase 2.5):** owner-only **Clear against bags** on the bank screen; panel wording fixed | §4.13, bank receipts stapled to the printed log | G-14 (BUILT) · F-03-1 (wording FIXED), F-03-3 (FIXED) |
 | Closing-day report "exported and printed" | **Built (Phase 2.6b):** End-of-day report prints and exports CSV / Excel. Master till sheet export: Phase 2.7 | §4.9, §4.17 | G-15 (BUILT) / G-09 · F-00-8 (EOD part FIXED) |
@@ -651,4 +667,5 @@ All seven questions were answered by the owner after v1.0 (recorded verbatim in 
 | 1.5 draft | Fix phase | Phase 2.5 (G-14, owner D25). §2 roles row, §4.13 books paragraph, §4.15 panel table and warning, §5 rows, the known-weaknesses line, Appendix A and Appendix B: the owner-only **Clear against bags** button now exists on /admin/books/bank, refuses with *"Nothing is sitting in Undeposited Funds…"* until bags are sealed in the app (Phase 2.6), and the panel no longer says a drawer close fills 10400. | Fix phase |
 | 1.6 draft | Fix phase | Phase 2.6a (G-04, G-14; F-00-6, F-03-9, F-03-10 FIXED; owner D23–D27). The **Deposit bags** screen: header note, §1 scope, §2 roles (night, morning, seal, bank rows), §4.5 night count in the app with the expected deposit, §4.6 the D27 warning, §4.10 blind recount by a different employee and the $5 reason, §4.11 the seal and its books entry (box rewritten from "would" to "does"), §4.13 the bank door now has sealed bags to clear and the owner's bank run, §4.14 shape check shown, §4.15 panel note, §4.16 and §4.17 additions, §5 new rows, §7 weaknesses, forms 8.1/8.2 notes, Appendix A/B/C. Needs migration 0316. | Fix phase |
 | 1.7 draft | Fix phase | Phase 2.6b (G-15; F-03-5, F-03-6, F-03-7, F-03-8 FIXED, F-00-8 EOD part FIXED; owner request *"end of day spreadsheet … exported and printed"*). Header; §2 pin; §4.8 rewritten (date picker, read warning, deposit, cash check with refunds, blind bag grid, two signatures; the "does NOT show" list removed); §4.9 steps 3–3b (two signatures, CSV/Excel export, do-not-file); §4.16–4.17; §5 new rows; §6 two rows; §7 two controls and weaknesses struck; form 8.1 note; 8.5; quick card; Appendix A/B. | Fix phase |
+| 1.8 draft | Fix phase | Fix Phase 6 / Fix E (owner message 8, D81–D90; G-63, G-65, G-66 BUILT; F-00-3, F-00-4 verify part, F-01-12 RETIRED). §4.2 timeline; §4.3 check (awaiting reconcile); §4.5 night deposit assembled and verified, with the denomination count as the fallback (D82); §4.7 reconcile by either manager before the seal (D87); §4.11 seal warning; §4.12 Verify till retired (D83); forms 8.3, 8.4, 8.5; quick card; Appendix A and B. No migration. | Fix phase |
 | 1.3 draft | Fix phase | Phase 2.2 (G-01, owner D2). §2 roles table, §4.3 step 2, the known-weaknesses line and the Appendix B row now say the second count at till close is recorded in the app (SOP-01 §4.27 steps 8–12); the paper close slip is still signed. | Fix phase |

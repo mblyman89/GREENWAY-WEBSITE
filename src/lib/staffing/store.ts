@@ -13,6 +13,7 @@ import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { type Hm, shiftDurationMinutes } from "@/lib/staffing/schedule-core";
 import { hashPin, isPinHash, verifyPin } from "@/lib/security/pin-hash";
 import { decryptSecret } from "@/lib/security/at-rest-crypto";
+import { clockOutBlocked, type OwnedDrawer } from "@/lib/registers/shift-end-core";
 
 export type Employee = {
   id: string;
@@ -212,6 +213,29 @@ export async function onTheClock(): Promise<
     .filter((x): x is { employee: Employee; punch: TimePunch } => Boolean(x.employee));
 }
 
+/**
+ * Fix Phase 6 (G-61, owner D84): the OPEN drawers this employee counted in
+ * (drawer_sessions.opened_by). A read error returns an empty list on
+ * purpose: the guard must never trap someone on the clock because the
+ * database hiccupped (they would be paid for time they did not work, and the
+ * drawer is still caught by the close and reconcile steps).
+ */
+export async function openDrawersOwnedBy(employeeId: string): Promise<OwnedDrawer[]> {
+  if (!isSupabaseServiceConfigured || !employeeId) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("drawer_sessions")
+    .select("id, register_id")
+    .eq("opened_by", employeeId)
+    .eq("status", "open")
+    .limit(10);
+  if (error || !data || data.length === 0) return [];
+  const rows = data as { id: string; register_id: string }[];
+  const { data: regs } = await admin.from("registers").select("id, name").in("id", [...new Set(rows.map((r) => r.register_id))]);
+  const names = new Map(((regs as { id: string; name: string }[] | null) ?? []).map((r) => [r.id, r.name]));
+  return rows.map((r) => ({ sessionId: r.id, registerName: names.get(r.register_id) ?? "a register" }));
+}
+
 export type ClockResult =
   | { ok: true; action: "in" | "out"; punch: TimePunch; shiftId: string }
   | { ok: false; error: string };
@@ -234,6 +258,13 @@ export async function toggleClock(
   const nowISO = new Date().toISOString();
 
   if (open) {
+    // Fix Phase 6 (G-61, owner D84, Q-E-6: "Block. I don't want to clock out
+    // on the register change out step."): a clock-out is refused while this
+    // employee still owns an open drawer. Every punch path (register sync,
+    // lock screen, station PIN pad, phone, back office) comes through here.
+    const guard = clockOutBlocked({ isClockOut: true, source, owned: await openDrawersOwnedBy(employeeId) });
+    if (guard.blocked) return { ok: false, error: guard.message };
+
     // Clock OUT.
     const minutes = punchMinutes(open.clock_in_at, nowISO);
     const { data, error } = await admin

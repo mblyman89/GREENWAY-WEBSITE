@@ -4,13 +4,13 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Input, Button, Badge, Card, Section } from "@/components/admin/ui";
+import { Button, Badge, Card, Section } from "@/components/admin/ui";
 import { RegisterControls } from "@/components/admin/registers/RegisterControls";
 import { getRegisterActivity, type ActivityKind } from "@/lib/registers/oversight";
 import { listPosExceptions } from "@/lib/pos/sync-store";
 import { listPosDevices } from "@/lib/pos/device-store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
-import { reconcileDrawerAction, verifyTillAction, assignRefundAction } from "./actions";
+import { reconcileDrawerAction, assignRefundAction } from "./actions";
 import { loadDrawerFigure, drawersForDay, type LoadedDrawerFigure } from "@/lib/registers/drawer-figure-store";
 import { figureReady, type FigureRefund } from "@/lib/registers/drawer-figure-core";
 import { businessDayFor } from "@/lib/staffing/time";
@@ -38,6 +38,9 @@ export default async function RegisterActivityPage({
     count_diff?: string;
     warn?: string;
     reason_unsaved?: string;
+    opened?: string;
+    float_warn?: string;
+    tip_pool?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
@@ -183,9 +186,11 @@ export default async function RegisterActivityPage({
               The hands-on cash steps &mdash; counting cash in, dropping to the safe, and blind-closing
               a drawer &mdash; normally happen on the front-end iPad POS at the register. This console
               also gives a manager the same <strong>cash controls</strong> so you can open, drop, or
-              close a drawer from here (for example, to close one that was left open), plus the two
-              oversight sign-offs: <strong>reconcile</strong> a closed drawer and <strong>verify</strong>
-              the manager till.
+              close a drawer from here (for example, to close one that was left open), plus the
+              oversight sign-off: <strong>reconcile</strong> a closed drawer. Either the night manager or
+              the morning manager may reconcile; do it before the day&apos;s deposit bag is sealed
+              (owner rule D87). The old &quot;verify till&quot; step is retired: the morning recount on
+              Deposit bags is the verify now (owner rule D83).
             </p>
             <p className="mt-2">
               Sales figures shown are <strong>online pickup order</strong> sales &mdash; the only
@@ -269,54 +274,25 @@ export default async function RegisterActivityPage({
         {attention.length > 0 && (
           <Section
             title="Needs attention"
-            description="Closed drawers awaiting a manager sign-off."
+            description="Closed drawers awaiting a manager reconcile. Night or morning manager; before the bag is sealed (D87)."
           >
             {!canManage ? (
               <Card padding="md">
                 <p className="text-sm text-[var(--admin-text-muted)]">
                   {attention.length} drawer{attention.length === 1 ? "" : "s"} awaiting a manager
-                  reconcile or verify. Ask a manager to sign off.
+                  reconcile. Ask a manager to sign off.
                 </p>
               </Card>
             ) : (
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {attention.map((a) =>
-                  a.kind === "reconcile" ? (
-                    <ReconcileCard
-                      key={a.sessionId}
-                      item={a}
-                      loaded={figures.get(a.sessionId) ?? null}
-                      drawerChoices={drawerChoices}
-                    />
-                  ) : (
-                    <Card key={a.sessionId} padding="md" accent="gold">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-semibold text-[var(--admin-text)]">
-                          {a.registerName}
-                        </span>
-                        <Badge tone="gold">Verify till</Badge>
-                      </div>
-                      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-                        {a.businessDay} · reconciled, awaiting manager verify
-                        {a.tipsMinor != null ? ` · ${formatCents(a.tipsMinor)} tips at close` : ""}
-                      </p>
-                      <form action={verifyTillAction} className="flex flex-wrap items-end gap-2">
-                        <input type="hidden" name="session_id" value={a.sessionId} />
-                        <label className="flex-1 text-xs text-[var(--admin-text-muted)]">
-                          Verified by
-                          <Input name="verified_by" placeholder="Manager name" />
-                        </label>
-                        <label className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
-                          <input type="checkbox" name="agrees" defaultChecked />
-                          Count agrees
-                        </label>
-                        <Button type="submit" variant="confirm" size="sm">
-                          Verify
-                        </Button>
-                      </form>
-                    </Card>
-                  ),
-                )}
+                {attention.map((a) => (
+                  <ReconcileCard
+                    key={a.sessionId}
+                    item={a}
+                    loaded={figures.get(a.sessionId) ?? null}
+                    drawerChoices={drawerChoices}
+                  />
+                ))}
               </div>
             )}
           </Section>
@@ -505,6 +481,9 @@ function Flash({
     count_diff?: string;
     warn?: string;
     reason_unsaved?: string;
+    opened?: string;
+    float_warn?: string;
+    tip_pool?: string;
   };
 }) {
   if (sp.error) {
@@ -554,6 +533,25 @@ function Flash({
         {differs
           ? `Drawer closed. Warning: ${secondCountSentence(compareCounts(0, diff))} Both counts are saved and shown at reconcile.`
           : "Drawer closed. Both counts agree. A manager reconciles it below."}
+        {/* Fix Phase 6 (G-64, owner D89): the crew tip pool split. */}
+        {sp.tip_pool ? <span className="mt-1 block text-xs">{sp.tip_pool}</span> : null}
+        {/* Fix Phase 6 (G-61, owner D84): closing does not clock out. */}
+        <span className="mt-1 block text-xs opacity-80">The closer is still clocked in; they clock out when they are done.</span>
+      </div>
+    );
+  }
+  if (sp.opened != null) {
+    // Fix Phase 6 (G-62, owner D85 "Warn please"): a count-in off the
+    // standard float is saved and warned, never blocked.
+    return (
+      <div
+        className={
+          sp.float_warn
+            ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
+            : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]"
+        }
+      >
+        {sp.float_warn ? `Drawer opened. Warning: ${sp.float_warn}` : "Drawer opened at the standard float."}
       </div>
     );
   }

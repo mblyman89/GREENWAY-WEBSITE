@@ -348,6 +348,8 @@ export type BagRow = {
   bankedBy: string | null;
   bankNote: string | null;
   depositConfirmedOn: string | null;
+  /** Fix Phase 6 (D82): night total saved as assembled and verified (no night denominations). Only set by the list reads. */
+  nightAssembled?: boolean;
 };
 
 export type BagStage = "night_counted" | "needs_reason" | "ready_to_seal" | "sealed_in_safe" | "banked" | "other";

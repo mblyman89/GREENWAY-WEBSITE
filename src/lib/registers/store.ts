@@ -3,7 +3,8 @@
  *
  * Server-side cash-drawer lifecycle (Slice 26). Blind counts: the closing
  * employee records a count WITHOUT seeing expected; the manager reveals the
- * variance at reconcile. The manager till adds a next-morning verify step.
+ * variance at reconcile. (The old next-morning "verify till" step was retired
+ * in Fix Phase 6, owner D83: the deposit bag's morning recount is the verify.)
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -395,49 +396,12 @@ export async function reconcileDrawer(opts: {
   return { ok: true, overShortMinor: os, expectedMinor: expected, reason, reasonSaved: reason ? reasonSaved : true, warning: isOverShortWarning(os) };
 }
 
-/**
- * Manager-till next-morning verify/validate: the morning manager independently
- * recounts and confirms (or flags) the prior night's close.
+/*
+ * verifyTill() was removed in Fix Phase 6 (G-63, owner D83). The morning
+ * blind recount of the deposit bag is the verify now (SOP-03 §4.10). Nothing
+ * in the app writes till_verifications any more; the table and the
+ * "verified" status stay readable as history.
  */
-export async function verifyTill(opts: {
-  sessionId: string;
-  verifiedBy: string | null;
-  denoms: DenomCounts;
-  agrees: boolean;
-  notes?: string | null;
-}): Promise<{ ok: boolean; error?: string; varianceMinor?: number }> {
-  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
-  const admin = createSupabaseAdminClient();
-  const session = await getSession(opts.sessionId);
-  if (!session) return { ok: false, error: "Session not found." };
-  if (session.status !== "closed" && session.status !== "reconciled") {
-    return { ok: false, error: "Till must be closed before it can be verified." };
-  }
-
-  const verifiedMinor = denomTotalMinor(opts.denoms);
-  const variance = verifiedMinor - (session.closing_count_minor ?? 0);
-
-  const { error: vErr } = await admin.from("till_verifications").insert({
-    session_id: opts.sessionId,
-    verified_by: opts.verifiedBy,
-    verified_count_minor: verifiedMinor,
-    agrees: opts.agrees,
-    variance_minor: variance,
-    notes: opts.notes ?? null,
-  });
-  if (vErr) return { ok: false, error: vErr.message };
-
-  await admin.from("drawer_counts").insert({
-    session_id: opts.sessionId,
-    count_type: "verify",
-    counted_by: opts.verifiedBy,
-    ...opts.denoms,
-    total_minor: verifiedMinor,
-  });
-
-  await admin.from("drawer_sessions").update({ status: "verified" }).eq("id", opts.sessionId);
-  return { ok: true, varianceMinor: variance };
-}
 
 // ---------------------------------------------------------------------------
 // Views
