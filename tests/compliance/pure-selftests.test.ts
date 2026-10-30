@@ -52,6 +52,7 @@ import { __runCcrsLotProductTests } from "@/lib/compliance/ccrs-lot-product-core
 import { __runCcrsSigninTests } from "@/lib/compliance/ccrs-signin-core";
 import { __runCcrsHandoverTests } from "@/lib/compliance/ccrs-handover-core";
 import { __runCcrsMailCoreTests } from "@/lib/compliance/ccrs-mail-core";
+import { __runCcrsHubFlowTests } from "@/lib/compliance/ccrs-hub-flow-core";
 import { __runCcrsStrategyCoreTests } from "@/lib/compliance/ccrs-strategy-core";
 import { __runCcrsWatchdogCoreTests } from "@/lib/compliance/ccrs-watchdog-core";
 import { __runCcrsReseedCoreTests } from "@/lib/compliance/ccrs-reseed-core";
@@ -644,6 +645,11 @@ describe("embedded pure self-test suites", () => {
     const r = __runOutboundHistoryTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(20);
+  });
+  it("ccrs-hub-flow-core (W-1: the CCRS hub never drops PREprod; email Apply scoped to the email's env)", () => {
+    const r = __runCcrsHubFlowTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(17);
   });
   it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {
     const r = __runCartPickerTests();
