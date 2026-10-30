@@ -434,6 +434,8 @@ Concierge code is **unchanged** (record-only). Today the concierge's `inventory`
 
 ### SOP-05b Non-Cannabis, Merch, Publish, Categories, Classification & Sell Price (`docs/sop/SOP-05b-noncannabis-menu-classification.md`, verified at `827facb5`)
 
+**Fix Phase 4 update to the SOP-05b rows (G-29, G-30, G-30A, G-32 items 1–6 BUILT; F-05b-1, 2, 3, 4, 5, 6, 7, 8, 14, 15 FIXED; owner D45: *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."*).** `concierge-kb.ts` `inventory` gains five facts (**Other Inventory on the register**, **Save change**, **controls**, **Merch → Remove**, **Website → Also in store**), grounded on SOP-05b v1.3 §4.4–§4.7, §4.9, §4.11. The L172 scan promise is now true. Superseded answer, kept as history: *"ring non-cannabis on the Keypad and count it Monday"* (SOP-05b v1.1 §4.4).
+
 The concierge code is **unchanged** (record-only). Today the `inventory` topic (`src/lib/admin/concierge-kb.ts` L163–181) has one line on Other Inventory (L172), which repeats the scan promise that F-05b-1 disproves, and one line on Types & Categories. There is nothing on merch, Publish Menu, the removal check, the cannabis line, classification or the sell price (finding **F-05b-C**). The owner wants the concierge to use every feature, including future ones (D42: *"I want to upgrade the concierge to use all features including future ones we will build after the sop is finished."*). What SOP-05b now provides:
 
 | Concierge topic | SOP-05b sections that ground it | Rating today → after integration (target) |

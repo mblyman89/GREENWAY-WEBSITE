@@ -23,6 +23,7 @@ import { withProductTags } from "@/lib/menu/product-tags-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
 import { ShopBannerSkeleton, ShopBrowserSkeleton } from "@/components/menu/MenuSkeleton";
+import { InStoreGoods } from "@/components/menu/InStoreGoods";
 
 /**
  * SLICE H — ONE SHOP RENDERER, TWO ROUTES.
@@ -204,6 +205,12 @@ export function ShopPage({ initialCategory, breadcrumbs, heading, subheading }: 
         }
       >
         <ShopContent initialCategory={initialCategory} />
+      </Suspense>
+
+      {/* Phase 4 (G-29 item 7): display-only "Also in store" Other Inventory
+          list, in its own boundary so it never delays the cannabis menu. */}
+      <Suspense fallback={null}>
+        <InStoreGoods />
       </Suspense>
 
       <Footer />

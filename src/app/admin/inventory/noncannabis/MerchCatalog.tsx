@@ -30,6 +30,7 @@ import {
 import {
   adjustNonCannabisAction,
   archiveNonCannabisAction,
+  changeNonCannabisPriceCostAction,
   fillNonCannabisCostAction,
   updateNonCannabisOpsAction,
 } from "./actions";
@@ -71,10 +72,39 @@ function reorderBadge(row: CatalogRow) {
   return <Badge tone={REORDER_TONE[status]}>{label}</Badge>;
 }
 
+/**
+ * Phase 4 (G-30; D46 "owner, admin, manager", D48 cost may be modified):
+ * change the shelf price or the unit cost. Reason required, $0 refused, SKU
+ * never changes; the Security Log keeps old → new.
+ */
+function PriceCostForm({ row }: { row: CatalogRow }) {
+  return (
+    <form action={changeNonCannabisPriceCostAction} className="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="product_id" value={row.id} />
+      <Field label="Change" htmlFor={`pc-field-${row.id}`}>
+        <Select id={`pc-field-${row.id}`} name="field" defaultValue="price">
+          <option value="price">Shelf price (now {money(row.priceMinorUnits)})</option>
+          <option value="cost">Unit cost (now {money(row.costMinorUnits)})</option>
+        </Select>
+      </Field>
+      <Field label="New amount ($)" htmlFor={`pc-amount-${row.id}`}>
+        <Input id={`pc-amount-${row.id}`} name="amount" inputMode="decimal" placeholder="0.00" className="w-28" required />
+      </Field>
+      <Field label="Reason (required)" htmlFor={`pc-reason-${row.id}`} className="min-w-[220px] flex-1">
+        <Input id={`pc-reason-${row.id}`} name="reason" placeholder="e.g. vendor raised the price" required minLength={3} />
+      </Field>
+      <Button type="submit" size="sm" variant="save">
+        Save change
+      </Button>
+    </form>
+  );
+}
+
 function AdjustForm({ row }: { row: CatalogRow }) {
   const [reason, setReason] = useState<string>("received");
   const [direction, setDirection] = useState<string>("add");
   const noteRequired = reason === "theft" || reason === "other";
+  const directionFixed = (MERCH_ADJUSTMENT_REASONS.find((r) => r.value === reason)?.sign ?? 0) !== 0;
   return (
     <form action={adjustNonCannabisAction} className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="product_id" value={row.id} />
@@ -98,16 +128,27 @@ function AdjustForm({ row }: { row: CatalogRow }) {
           ))}
         </Select>
       </Field>
+      {/* Phase 4 (G-32 item 3): the reason decides the direction; only
+          Count correction and Other let staff choose (the server re-checks). */}
       <Field label="Direction" htmlFor={`direction-${row.id}`}>
-        <Select
-          id={`direction-${row.id}`}
-          name="direction"
-          value={direction}
-          onChange={(e) => setDirection(e.target.value)}
-        >
-          <option value="add">+ Add</option>
-          <option value="remove">− Remove</option>
-        </Select>
+        {directionFixed ? (
+          <>
+            <input type="hidden" name="direction" value={direction} />
+            <span id={`direction-${row.id}`} className="inline-block py-2 text-sm text-[var(--admin-text-muted)]">
+              {direction === "add" ? "+ Add (set by reason)" : "− Remove (set by reason)"}
+            </span>
+          </>
+        ) : (
+          <Select
+            id={`direction-${row.id}`}
+            name="direction"
+            value={direction}
+            onChange={(e) => setDirection(e.target.value)}
+          >
+            <option value="add">+ Add</option>
+            <option value="remove">− Remove</option>
+          </Select>
+        )}
       </Field>
       <Field label="Units" htmlFor={`units-${row.id}`}>
         <Input
@@ -442,6 +483,12 @@ function FragmentRow({
                   Adjust quantity — every change is logged (who / why / when)
                 </p>
                 <AdjustForm row={row} />
+              </div>
+              <div className="border-t border-[var(--admin-border)] pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  Price / cost — reason required, logged old → new (the SKU never changes)
+                </p>
+                <PriceCostForm row={row} />
               </div>
               <div className="border-t border-[var(--admin-border)] pt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">

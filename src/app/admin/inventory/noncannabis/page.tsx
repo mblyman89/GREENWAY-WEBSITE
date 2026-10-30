@@ -40,7 +40,10 @@ import { listNonCannabisInvoicePayables } from "@/lib/noncannabis/invoice-store"
 import { NonCannabisIntakeForm } from "./NonCannabisIntakeForm";
 import { InvoiceBuilderForm, type InvoiceProductOption } from "./InvoiceBuilderForm";
 import { CostFillForm, MerchCatalog, type CatalogRow } from "./MerchCatalog";
-import { activateNonCannabisAction, archiveNonCannabisAction } from "./actions";
+import { activateNonCannabisAction, archiveNonCannabisAction, restoreNonCannabisAction } from "./actions";
+import { formatPacificDateTime } from "@/lib/inventory/lot-lifecycle-core";
+import { loadNcSalesReport } from "@/lib/noncannabis/register-stock";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
@@ -49,9 +52,14 @@ function money(minor: number): string {
   return `$${(Math.max(0, minor) / 100).toFixed(2)}`;
 }
 
-const REASON_LABELS = new Map<string, string>(
-  MERCH_ADJUSTMENT_REASONS.map((r) => [r.value, r.label]),
-);
+const REASON_LABELS = new Map<string, string>([
+  ...MERCH_ADJUSTMENT_REASONS.map((r) => [r.value, r.label] as [string, string]),
+  // Phase 4 system reasons (register + invoice), written by 0323.
+  ["sale", "Sold at the register"],
+  ["void", "Sale voided (put back)"],
+  ["return_restock", "Customer return (put back)"],
+  ["invoice_received", "Vendor invoice (new item)"],
+]);
 
 /** Map a DB row (0111 columns may be absent pre-migration) to the pure shape. */
 function toMerchItem(p: NonCannabisProduct): MerchItem {
@@ -79,6 +87,8 @@ export default async function NonCannabisInventoryPage({
     activated?: string;
     archived?: string;
     adjusted?: string;
+    restored?: string;
+    changed?: string;
     ops?: string;
     costFilled?: string;
     costMissing?: string;
@@ -89,10 +99,15 @@ export default async function NonCannabisInventoryPage({
   const canFillCost = can(session.profile.role, "inventory.cost.fill");
   const sp = await searchParams;
 
-  const [products, adjustments, invoices] = await Promise.all([
+  const [products, adjustments, invoices, ncSales] = await Promise.all([
     listNonCannabisProducts(),
     listNonCannabisAdjustments({ days: 30 }),
     listNonCannabisInvoicePayables({ includePaid: true, limit: 12 }),
+    // Phase 4 (G-29 item 8): register sales + margin, last 30 days.
+    loadNcSalesReport(createSupabaseAdminClient(), 30).catch((e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+    })),
   ]);
 
   const items = products.map(toMerchItem);
@@ -106,6 +121,7 @@ export default async function NonCannabisInventoryPage({
 
   const nameById = new Map(products.map((p) => [p.id, p.name]));
   const drafts = products.filter((p) => p.status === "draft");
+  const archivedItems = products.filter((p) => p.status === "archived");
   const active = products.filter((p) => p.status === "active");
 
   const catalogRows: CatalogRow[] = active.map((p) => ({
@@ -162,6 +178,16 @@ export default async function NonCannabisInventoryPage({
         {sp.adjusted ? (
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-green)]/40 bg-[var(--admin-green)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
             Adjustment posted for <span className="font-mono">{decodeURIComponent(sp.adjusted)}</span> — it&apos;s in the ledger below.
+          </div>
+        ) : null}
+        {sp.restored ? (
+          <div className="rounded-lg border border-[var(--admin-green)]/40 bg-[var(--admin-green)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+            Item restored as a draft — confirm it to put it back on sale. Recorded in the Security Log.
+          </div>
+        ) : null}
+        {sp.changed ? (
+          <div className="rounded-lg border border-[var(--admin-green)]/40 bg-[var(--admin-green)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+            Saved the new <span className="font-mono">{decodeURIComponent(sp.changed)}</span> — old and new amounts are in the Security Log.
           </div>
         ) : null}
         {sp.ops ? (
@@ -342,6 +368,51 @@ export default async function NonCannabisInventoryPage({
           <MerchCatalog key={sp.costMissing ?? ""} rows={catalogRows} canFillCost={canFillCost} initialCostMissingOnly={sp.costMissing === "1"} />
         </div>
 
+        {/* Phase 4 (G-29 item 8): register sales and margin, last 30 days. */}
+        <Card>
+          <div className="border-b border-[var(--admin-border)] px-5 py-4">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">Register sales — last 30 days</h2>
+            <p className="text-xs text-[var(--admin-text-faint)]">
+              Other Inventory sold at the register (voided sales left out). Revenue is before the 9.3% sales tax;
+              cost is the average unit cost at the moment of sale.
+            </p>
+          </div>
+          {!ncSales.ok ? (
+            <p className="px-5 py-4 text-sm text-[var(--admin-text-muted)]">
+              Sales can&apos;t be shown yet ({ncSales.error}). If database update 0323 has not been run, run it first.
+            </p>
+          ) : ncSales.rows.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-[var(--admin-text-muted)]">No Other Inventory sold at the register in the last 30 days.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                <tr>
+                  <th className="px-4 py-2">Item</th>
+                  <th className="px-4 py-2 text-center">Units</th>
+                  <th className="px-4 py-2 text-right">Revenue</th>
+                  <th className="px-4 py-2 text-right">Cost</th>
+                  <th className="px-4 py-2 text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ncSales.rows.map((r) => (
+                  <tr key={r.ncId} className="border-t border-[var(--admin-border)]">
+                    <td className="px-4 py-2 text-[var(--admin-text)]">{r.name}</td>
+                    <td className="px-4 py-2 text-center text-[var(--admin-text-muted)]">{r.units}</td>
+                    <td className="px-4 py-2 text-right text-[var(--admin-text-muted)]">{money(r.revenueMinor)}</td>
+                    <td className="px-4 py-2 text-right text-[var(--admin-text-muted)]">
+                      {r.costKnown ? money(r.costMinor) : "cost missing"}
+                    </td>
+                    <td className="px-4 py-2 text-right text-[var(--admin-text-muted)]">
+                      {r.costKnown ? (r.marginMinor < 0 ? `-${money(-r.marginMinor)}` : money(r.marginMinor)) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
         {/* Recent adjustments ledger */}
         {recentAdjustments.length > 0 ? (
           <Card>
@@ -360,13 +431,14 @@ export default async function NonCannabisInventoryPage({
                     <th className="px-4 py-2 text-center">Change</th>
                     <th className="px-4 py-2">Reason</th>
                     <th className="px-4 py-2">Note</th>
+                    <th className="px-4 py-2">By</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentAdjustments.map((a) => (
                     <tr key={a.id} className="border-t border-[var(--admin-border)]">
                       <td className="px-4 py-2 text-xs text-[var(--admin-text-faint)]">
-                        {new Date(a.created_at).toLocaleString()}
+                        {formatPacificDateTime(a.created_at)}
                       </td>
                       <td className="px-4 py-2 text-[var(--admin-text)]">
                         {nameById.get(a.product_id) ?? a.product_id.slice(0, 8)}
@@ -382,6 +454,9 @@ export default async function NonCannabisInventoryPage({
                         {REASON_LABELS.get(a.reason) ?? a.reason}
                       </td>
                       <td className="px-4 py-2 text-xs text-[var(--admin-text-faint)]">{a.note ?? "—"}</td>
+                      <td className="px-4 py-2 text-xs text-[var(--admin-text-muted)]">
+                        {a.actor_name ?? (a.reason === "sale" || a.reason === "void" ? "Register" : "—")}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -552,6 +627,30 @@ export default async function NonCannabisInventoryPage({
               </table>
             </div>
           </div>
+        ) : null}
+
+        {/* Phase 4 (G-32 item 1): archived items can be restored. */}
+        {archivedItems.length > 0 ? (
+          <details className="rounded-lg border border-[var(--admin-border)] px-4 py-3 text-sm">
+            <summary className="cursor-pointer font-bold text-[var(--admin-text)]">
+              Archived items ({archivedItems.length}) — restore one to bring it back as a draft
+            </summary>
+            <ul className="mt-3 space-y-2">
+              {archivedItems.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--admin-text-muted)]">
+                    <span className="font-mono">{p.sku}</span> — {p.name}
+                  </span>
+                  <form action={restoreNonCannabisAction}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <Button type="submit" size="sm" variant="neutral">
+                      Restore
+                    </Button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </details>
         ) : null}
       </div>
     </div>

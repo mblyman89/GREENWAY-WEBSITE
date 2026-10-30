@@ -11,6 +11,7 @@
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux/Breadcrumbs";
 import { StatCard } from "@/components/admin/StatCard";
@@ -31,7 +32,9 @@ const day = (iso: string) => (iso ? iso.slice(0, 10) : "-");
 const stockTone = (s: StockStatus) => (s === "in_stock" ? "green" : s === "stocked_on_demand" ? "gold" : s === "unknown" ? "neutral" : "danger") as "green" | "gold" | "neutral" | "danger";
 
 export default async function MerchInventoryPage({ searchParams }: { searchParams: Promise<{ done?: string; error?: string; q?: string; show?: string }> }) {
-  await requirePermission("inventory.manage");
+  const session = await requirePermission("inventory.manage");
+  // Phase 4 (G-30A): only owner/admin see "Remove..." (the action re-checks).
+  const canRemove = can(session.profile.role, "merch.remove");
   const sp = await searchParams;
   const { catalog, readError } = await withRenderBudget(readMerchCatalog(), { catalog: emptyCatalog(), readError: "The catalog read timed out." }, "merch-inventory catalog");
   const ids = catalog.items.map((i) => i.pkg.product.blank.printfulProductId);
@@ -125,6 +128,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
                       <input type="hidden" name="status" value={p.status === "live" ? "hidden" : "live"} />
                       <button type="submit" className={`${btn} ${p.status === "live" ? "bg-white/10 text-white" : "bg-[var(--admin-accent)] text-black"}`}>{p.status === "live" ? "Hide from website" : "Put back on website"}</button>
                     </form>
+                    {canRemove && (
                     <details className="text-xs text-white/70">
                       <summary className="cursor-pointer select-none">Remove...</summary>
                       <form action={removeMerchAction} className="mt-2 flex items-center gap-2">
@@ -133,6 +137,7 @@ export default async function MerchInventoryPage({ searchParams }: { searchParam
                         <button type="submit" className={`${btn} border border-[var(--admin-danger)]/60 text-white`}>Remove</button>
                       </form>
                     </details>
+                    )}
                   </div>
                 </div>
                 <details className="border-t border-[var(--admin-border)]">

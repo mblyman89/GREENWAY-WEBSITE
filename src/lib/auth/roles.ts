@@ -60,6 +60,7 @@ export type Permission =
   | "inventory.count"
   | "inventory.audit"
   | "inventory.cost.fill"
+  | "merch.remove"
   | "inventory.recall.release"
   | "inventory.destruction.cancel"
   | "inventory.vendor_return.cancel"
@@ -151,6 +152,10 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // Separate from inventory.manage on purpose: that one also grants manager,
   // and the owner named only owner and admin. Cannabis cost entry is NOT built.
   "inventory.cost.fill": ["owner", "admin"],
+  // Phase 4 (G-30A). D47, Michael verbatim: "Q05b-3- owner and admin."
+  // Removing a product from greenwaymerch.com (the merch page "Remove...")
+  // is owner/admin only; managers keep Hide / Put back (inventory.manage).
+  "merch.remove": ["owner", "admin"],
   // Fix Phase 1.1 (G-22 req 4): lifting a recall hold (Recalled -> anything
   // else). D37, Michael verbatim: "Q-05a-2- admin. No back up. Just my manager
   // and I." The admin is the recall coordinator, and releasing a hold is the
@@ -322,6 +327,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.count": "Count the shelf (blind physical counts)",
   "inventory.audit": "Approve & post inventory audits (owner only)",
   "inventory.cost.fill": "Key a missing non-cannabis unit cost (owner & admin)",
+  "merch.remove": "Remove a product from greenwaymerch.com (owner & admin)",
   "inventory.recall.release": "Release a recall hold on a lot (owner & admin, recall coordinator)",
   "inventory.destruction.cancel": "Cancel a scheduled destruction (owner only)",
   "inventory.vendor_return.cancel": "Cancel a vendor return and release its reserved units (owner only)",
@@ -356,6 +362,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.count",
   "inventory.audit",
   "inventory.cost.fill",
+  "merch.remove",
   "inventory.recall.release",
   "inventory.destruction.cancel",
   "inventory.vendor_return.cancel",

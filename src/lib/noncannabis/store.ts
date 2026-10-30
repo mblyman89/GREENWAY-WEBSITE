@@ -12,6 +12,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { escapeLikeWildcards } from "@/lib/supabase/postgrest-escape";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { applyNcDelta } from "@/lib/noncannabis/register-stock";
 import {
   buildNonCannabisName,
   buildSku,
@@ -65,6 +66,8 @@ export type NonCannabisAdjustment = {
   reason: string;
   note: string | null;
   actor_id: string | null;
+  /** Phase 4 (G-32 item 4): resolved display name (not a column). */
+  actor_name?: string | null;
   created_at: string;
 };
 
@@ -223,6 +226,37 @@ export async function previewSkuAndName(input: NonCannabisDraftInput): Promise<{
 }
 
 /**
+ * Phase 4 (G-32 item 5): mint SKUs + names for several NEW invoice lines at
+ * once, each one added to the taken set before the next is minted, so two
+ * new lines on one invoice can never get the same SKU. Refuses (fails
+ * closed) when the existing-SKU list could not be read completely.
+ */
+export async function mintSkusForNewItems(
+  items: { type: string; nameOverride: string }[],
+): Promise<{ ok: true; minted: { sku: string; name: string }[] } | { ok: false; error: string }> {
+  const { skus: existing, complete } = await listExistingSkusChecked();
+  if (!complete) {
+    return {
+      ok: false,
+      error:
+        "Could not confirm the full list of existing SKUs, so new SKUs cannot be issued safely right now. Please try again in a moment.",
+    };
+  }
+  const taken = new Set(existing);
+  const minted: { sku: string; name: string }[] = [];
+  for (const it of items) {
+    const parts = { type: it.type, size: null, color: null, gender: null };
+    const sku = nextAvailableSku(parts, taken, nextSeqForType(it.type, taken));
+    taken.add(sku);
+    const name = it.nameOverride.trim() || buildNonCannabisName({ brand: null, ...parts });
+    const v = validateNonCannabisName(name);
+    if (!v.ok) return { ok: false, error: `Name invalid ("${name}"): ${v.issues.join(" ")}` };
+    minted.push({ sku, name });
+  }
+  return { ok: true, minted };
+}
+
+/**
  * Create a non-cannabis product (draft by default). Generates a collision-free
  * SKU + convention name unless a valid override is provided. Returns the row id
  * or an error string.
@@ -299,10 +333,11 @@ export async function createNonCannabisProduct(
  * ------------------------------------------------------------------ */
 
 /**
- * Post a quantity adjustment: inserts an append-only ledger row AND updates
- * qty_on_hand. The caller validates reason/delta/note with
- * validateMerchAdjustment BEFORE calling (single source of truth in the pure
- * core). Re-reads the product server-side so stale forms can't oversubtract.
+ * Post a quantity adjustment. Phase 4 (G-32 item 2): ONE database
+ * transaction (0323 apply_noncannabis_delta) locks the row, refuses going
+ * below zero, writes the ledger row and the new On hand together. Before
+ * 0323 it falls back to the old two-step write. The caller validates
+ * reason/delta/note with validateMerchAdjustment BEFORE calling.
  */
 export async function createNonCannabisAdjustment(
   input: { productId: string; qtyDelta: number; reason: string; note?: string | null },
@@ -310,36 +345,16 @@ export async function createNonCannabisAdjustment(
 ): Promise<{ ok: true; newQty: number } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "supabase-not-configured" };
   const admin = createSupabaseAdminClient();
-
-  const { data: product } = await admin
-    .from("noncannabis_products")
-    .select("id, qty_on_hand")
-    .eq("id", input.productId)
-    .maybeSingle();
-  if (!product) return { ok: false, error: "Product not found." };
-
-  const current = (product as { qty_on_hand: number }).qty_on_hand ?? 0;
-  const next = current + input.qtyDelta;
-  if (next < 0) {
-    return { ok: false, error: `That would take on-hand below zero (${current} on hand).` };
-  }
-
-  const { error: insErr } = await admin.from("noncannabis_adjustments").insert({
-    product_id: input.productId,
-    qty_delta: input.qtyDelta,
+  const res = await applyNcDelta(admin, {
+    productId: input.productId,
+    delta: input.qtyDelta,
     reason: input.reason,
-    note: (input.note ?? "").trim() || null,
-    actor_id: actorId,
+    note: input.note ?? null,
+    actorId,
+    strict: true,
   });
-  if (insErr) return { ok: false, error: insErr.message };
-
-  const { error: updErr } = await admin
-    .from("noncannabis_products")
-    .update({ qty_on_hand: next, updated_by: actorId })
-    .eq("id", input.productId);
-  if (updErr) return { ok: false, error: updErr.message };
-
-  return { ok: true, newQty: next };
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, newQty: res.newQty };
 }
 
 /** Recent adjustments (default 30 days), newest first. */
@@ -360,7 +375,20 @@ export async function listNonCannabisAdjustments(opts?: {
     .limit(Math.max(1, Math.floor(opts?.limit ?? 200)));
   if (opts?.productId) query = query.eq("product_id", opts.productId);
   const { data } = await query;
-  return (data as NonCannabisAdjustment[] | null) ?? [];
+  const rows = (data as NonCannabisAdjustment[] | null) ?? [];
+  // Phase 4 (G-32 item 4): who made each change.
+  const ids = [...new Set(rows.map((r) => r.actor_id).filter((v): v is string => !!v))];
+  if (ids.length > 0) {
+    const { data: staff } = await admin.from("staff_profiles").select("id, full_name, email").in("id", ids);
+    const names = new Map(
+      ((staff as { id: string; full_name: string | null; email: string | null }[] | null) ?? []).map((s) => [
+        s.id,
+        (s.full_name ?? "").trim() || (s.email ?? "").trim() || "Staff",
+      ]),
+    );
+    for (const r of rows) r.actor_name = r.actor_id ? (names.get(r.actor_id) ?? "Staff") : null;
+  }
+  return rows;
 }
 
 /**
@@ -418,32 +446,75 @@ export async function fillNonCannabisCost(
   return { ok: true, filled: Array.isArray(data) && data.length === 1 };
 }
 
-/** Confirm a draft -> active (staff action). */
-export async function activateNonCannabisProduct(
+/**
+ * Phase 4 (G-32 item 1): change a product's status and hand back the status
+ * it had BEFORE, so the caller can write the audit row (old → new).
+ */
+async function setNonCannabisStatus(
   id: string,
+  to: "active" | "archived" | "draft",
+  allowedFrom: readonly string[],
   actorId: string | null,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; before?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "supabase-not-configured" };
   const admin = createSupabaseAdminClient();
+  const { data: row } = await admin.from("noncannabis_products").select("status").eq("id", id).maybeSingle();
+  if (!row) return { ok: false, error: "Product not found." };
+  const before = (row as { status: string }).status;
+  if (!allowedFrom.includes(before)) {
+    return { ok: false, error: `This item is ${before}, so it can't be changed to ${to}.`, before };
+  }
   const { error } = await admin
     .from("noncannabis_products")
-    .update({ status: "active", updated_by: actorId })
-    .eq("id", id);
-  return error ? { ok: false, error: error.message } : { ok: true };
+    .update({ status: to, updated_by: actorId })
+    .eq("id", id)
+    .eq("status", before);
+  return error ? { ok: false, error: error.message, before } : { ok: true, before };
 }
 
-/** Archive a product (soft delete). */
-export async function archiveNonCannabisProduct(
+/** Confirm a draft -> active (staff action). */
+export async function activateNonCannabisProduct(id: string, actorId: string | null) {
+  return setNonCannabisStatus(id, "active", ["draft"], actorId);
+}
+
+/** Archive a product (soft delete). Restore brings it back. */
+export async function archiveNonCannabisProduct(id: string, actorId: string | null) {
+  return setNonCannabisStatus(id, "archived", ["draft", "active"], actorId);
+}
+
+/** Phase 4 (G-32 item 1): bring an archived product back as a DRAFT to re-confirm. */
+export async function restoreNonCannabisProduct(id: string, actorId: string | null) {
+  return setNonCannabisStatus(id, "draft", ["archived"], actorId);
+}
+
+/**
+ * Phase 4 (G-30; owner D46 "owner, admin, manager", D48 "non cannabis should
+ * be allowed to have their cost modified"): change the shelf price or the
+ * unit cost. The SKU never changes. Writes only if the value is still what
+ * the form showed (`.eq(field, oldMinor)`), so a concurrent edit is never
+ * overwritten. The caller validates with validatePriceCostChange and writes
+ * the audit row (old → new + reason).
+ */
+export async function changeNonCannabisPriceCost(
   id: string,
+  field: "price" | "cost",
+  oldMinor: number,
+  newMinor: number,
   actorId: string | null,
-): Promise<{ ok: boolean; error?: string }> {
-  if (!isSupabaseServiceConfigured) return { ok: false, error: "supabase-not-configured" };
+): Promise<{ ok: boolean; changed: boolean; error?: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, changed: false, error: "supabase-not-configured" };
+  if (!Number.isSafeInteger(newMinor) || newMinor <= 0) return { ok: false, changed: false, error: "invalid-amount" };
+  const col = field === "price" ? "price_minor_units" : "cost_minor_units";
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
+  const { data, error } = await admin
     .from("noncannabis_products")
-    .update({ status: "archived", updated_by: actorId })
-    .eq("id", id);
-  return error ? { ok: false, error: error.message } : { ok: true };
+    .update({ [col]: newMinor, updated_by: actorId })
+    .eq("id", id)
+    .eq(col, oldMinor)
+    .neq("status", "archived")
+    .select("id");
+  if (error) return { ok: false, changed: false, error: error.message };
+  return { ok: true, changed: Array.isArray(data) && data.length === 1 };
 }
 
 export function summarizeNonCannabis(rows: NonCannabisProduct[]) {

@@ -42,6 +42,8 @@ import {
   RETURN_WINDOW_DAYS,
 } from "@/lib/pos/returns-core";
 import { createCustomerReturn } from "@/lib/inventory/disposition";
+import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
+import { createNonCannabisReturn } from "@/lib/noncannabis/returns";
 import { DESTROY_RETURN_HELD_NOTE } from "@/lib/inventory/held-stock-core";
 import type { CustomerReturnDisposition } from "@/lib/inventory/disposition-core";
 import { adjustPoints, getAccountByCustomer } from "@/lib/loyalty/loyalty-store";
@@ -280,7 +282,24 @@ export async function processCounterReturn(
   if (!refund.ok) return refund;
 
   // ── Task Q pipeline: attestations, add-back, correction queue, destroy ──
-  const created = await createCustomerReturn(
+  // Phase 4 (G-29 item 3): an Other Inventory (non-cannabis) line never goes
+  // through the cannabis lot / CCRS correction pipeline. It restocks the
+  // catalog row (or writes it off) in one database transaction (0323).
+  const isNc = isNonCannabisProductId(line.productId);
+  const created: { ok: true; id: string; notice?: string | null } | { ok: false; error: string } = isNc
+    ? await createNonCannabisReturn(
+        {
+          orderId: sale.orderId,
+          orderLineId: line.lineId,
+          quantity: input.quantity,
+          disposition: input.disposition,
+          reason: input.reason,
+          detail: input.detail ?? null,
+          refundMinor: refund.refundMinor,
+        },
+        actorId,
+      )
+    : await createCustomerReturn(
     {
       orderId: sale.orderId,
       orderLineId: line.lineId,
@@ -364,7 +383,10 @@ export async function processCounterReturn(
     pointsClawed,
     correctionOperation,
     receiptHtml,
-    stockNote: input.disposition === "destroy" ? (created.notice ?? DESTROY_RETURN_HELD_NOTE) : null,
+    // Phase 4: an Other Inventory unit is written off, never held on a lot.
+    ...(isNc
+      ? { stockNote: input.disposition === "destroy" ? "Written off (not put back on the shelf)." : null }
+      : { stockNote: input.disposition === "destroy" ? (created.notice ?? DESTROY_RETURN_HELD_NOTE) : null }),
   };
 }
 

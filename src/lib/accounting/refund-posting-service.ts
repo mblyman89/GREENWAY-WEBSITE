@@ -104,13 +104,47 @@ type ReturnRow = {
   lot_id?: string | null;
   quantity?: number | string | null;
   disposition?: string | null;
+  /** 0323 (Phase 4): set for an Other Inventory (non-cannabis) return. */
+  noncannabis_product_id?: string | null;
 };
+
+/**
+ * Phase 4 (G-29 item 6) — the cost of an Other Inventory return put back on
+ * the shelf: the unit cost the SALE snapshot recorded (0323
+ * noncannabis_adjustments.unit_cost_minor_units), else the catalog's current
+ * average cost. $0 / missing = unknown (refuses the cost entry), never zero.
+ */
+async function ncReturnCostLines(admin: Admin, ret: ReturnRow, categorySlug: string): Promise<{ costLines: RefundCostItem["costLines"]; note: string | null }> {
+  const productId = ret.noncannabis_product_id as string;
+  const qty = Number(ret.quantity);
+  let unit: number | null = null;
+  if (ret.order_line_id) {
+    const { data: snap } = await admin
+      .from("noncannabis_adjustments")
+      .select("unit_cost_minor_units")
+      .eq("order_line_id", ret.order_line_id)
+      .eq("reason", "sale")
+      .maybeSingle();
+    const v = (snap as { unit_cost_minor_units: number | null } | null)?.unit_cost_minor_units;
+    if (v !== null && v !== undefined && Number(v) > 0) unit = Number(v);
+  }
+  if (unit === null) {
+    const { data, error } = await admin.from("noncannabis_products").select("cost_minor_units").eq("id", productId).maybeSingle();
+    if (error) return { costLines: null, note: `the Other Inventory item ${productId} could not be read (${error.message})` };
+    const v = (data as { cost_minor_units: number | null } | null)?.cost_minor_units;
+    if (v !== null && v !== undefined && Number(v) > 0) unit = Number(v);
+  }
+  const c = returnCost(unit, qty);
+  if (!c.ok) return { costLines: null, note: c.problem };
+  return { costLines: [{ categorySlug, costCents: c.costCents }], note: null };
+}
 
 /**
  * Fix Phase 2.8b: the cost of a return, from the lot the units went back on.
  * null costLines = unknown (refuses the cost entry, with the reason).
  */
 async function returnCostLines(admin: Admin, ret: ReturnRow, categorySlug: string): Promise<{ costLines: RefundCostItem["costLines"]; note: string | null }> {
+  if (ret.noncannabis_product_id) return ncReturnCostLines(admin, ret, categorySlug);
   const lotId = ret.lot_id ?? null;
   if (!lotId) return { costLines: null, note: "the return has no lot recorded" };
   const qty = Number(ret.quantity);
@@ -176,11 +210,19 @@ async function linesForRefund(
   | { ok: false; message: string }
 > {
   if (source === "return") {
-    const { data: ret, error } = await admin
+    // Phase 4: 0323 adds noncannabis_product_id; before it, read without it.
+    let { data: ret, error } = await admin
       .from("customer_returns")
-      .select("id, order_line_id, lot_id, quantity, disposition")
+      .select("id, order_line_id, lot_id, quantity, disposition, noncannabis_product_id")
       .eq("id", sourceId)
       .maybeSingle();
+    if (error && /noncannabis_product_id/.test(error.message ?? "")) {
+      ({ data: ret, error } = await admin
+        .from("customer_returns")
+        .select("id, order_line_id, lot_id, quantity, disposition")
+        .eq("id", sourceId)
+        .maybeSingle());
+    }
     if (error) return { ok: false, message: `The return ${sourceId} could not be read: ${error.message}` };
     const r = (ret as ReturnRow | null) ?? null;
     // 0115: disposition is restock | destroy, default destroy. Anything else is not guessed.

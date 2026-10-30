@@ -356,8 +356,22 @@ async function gatherCosts(
   const { isCustomLineProductId } = await import("@/lib/pos/custom-sale-core");
   const { drawsFromLotUpdates } = await import("@/lib/accounting/sale-cogs-core");
 
+  // Fix Phase 4 (G-29 item 6; F-05b-15): an Other Inventory line ("nc-<uuid>")
+  // costs quantity x the catalog unit cost (weighted average). It never draws
+  // a cannabis lot. An unknown ($0) cost stays null, so the builder refuses
+  // with UNIT_COST_UNKNOWN until the cost is entered, never a silent zero.
+  const { splitNcLines, ncLineCosts } = await import("@/lib/noncannabis/pos-catalog-core");
+  const { readNcUnitCosts } = await import("@/lib/noncannabis/register-stock");
+  const ncSplit = splitNcLines(lines.map((l) => ({ lineId: l.id, productId: l.product_id, quantity: l.quantity })));
+  const ncCostByLine = new Map<string, number | null>();
+  if (ncSplit.nc.length > 0) {
+    const read = await readNcUnitCosts(admin, ncSplit.nc.map((l) => l.ncId));
+    if (!read.ok) return { kind: "failed", message: `Other Inventory costs could not be read: ${read.error}` };
+    for (const [k, v] of ncLineCosts(ncSplit.nc, read.costs).costByLineId) ncCostByLine.set(k, v);
+  }
+
   const forPlan = lines
-    .filter((l) => !isCustomLineProductId(l.product_id))
+    .filter((l) => !isCustomLineProductId(l.product_id) && !ncCostByLine.has(l.id))
     .map((l) => ({
       lineId: l.id,
       productId: l.product_id,
@@ -366,9 +380,9 @@ async function gatherCosts(
       quantity: l.quantity,
     }));
 
-  const costByLineId = new Map<string, number | null>();
+  const costByLineId = new Map<string, number | null>(ncCostByLine);
   if (forPlan.length === 0) {
-    for (const l of lines) costByLineId.set(l.id, null);
+    for (const l of lines) if (!costByLineId.has(l.id)) costByLineId.set(l.id, null);
     return { kind: "ok", costByLineId };
   }
 

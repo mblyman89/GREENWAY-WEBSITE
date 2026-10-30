@@ -54,11 +54,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-26 | Print-label link on the lot page, scannable fallback barcode, **the professional 86** (reason-driven clearing, one queue, audited manager restore) | **D40** | F-05a-9, F-05a-10 | SOP-05a §4.12, §4.19 | **APPROVED** (86 part, D40) · rest OPEN |
 | G-27 | No typed cannabis unit cost: remove **Unit cost** from Bulk fill for cannabis lots (cost only from the vendor's CCRS manifest) | **D38** | F-05a-11 (**S1**) | SOP-05a §4.20 | **BUILT** (Phase 0.5) |
 | G-28 | Returns & Destruction handles held lots: lists Quarantine and Recalled lots, keeps Recalled while pending (hold stays on), Cancel restores the earlier status **with a reason (owner only)**; a partial destruction restores the earlier status (SOP-15 extension) | **D39** (design: Q-05a-8, Q-15-3) | F-05a-17, F-05a-18 (**S1**), F-05a-19, F-15-9, F-15-11 | SOP-05a §4.9, §4.10, form 8.4; SOP-15 §4.19–§4.22, form 8.5 | **BUILT** (Phase 1.3) |
-| G-29 | Non-cannabis goods fully used everywhere: register scan to a priced line, sale decrements On hand, void / return restores, cost of goods posted, menu presence, reports; audited | **D45** | F-05b-1 (**S1**), F-05b-15 | SOP-05b §4.1–§4.5, §4.8, form 8.1 | **APPROVED** |
-| G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **APPROVED** |
-| G-30A | Merch **Remove** limited to owner and admin (a new permission) | **D47** | F-05b-14 | SOP-05b §2, §4.11, §6, §9 | **APPROVED** |
+| G-29 | Non-cannabis goods fully used everywhere: register scan to a priced line, sale decrements On hand, void / return restores, cost of goods posted, menu presence, reports; audited | **D45** | F-05b-1 (**S1**), F-05b-15 | SOP-05b §4.1–§4.5, §4.8, form 8.1 | **BUILT** (Phase 4) |
+| G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **BUILT** (Phase 4) |
+| G-30A | Merch **Remove** limited to owner and admin (a new permission) | **D47** | F-05b-14 | SOP-05b §2, §4.11, §6, §9 | **BUILT** (Phase 4) |
 | G-31 | Cannabis-line guard: **refused outright, both directions, no override**, for any lot override, Move products or type mapping | **D48** (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | **BUILT** (Phase 0.4) |
-| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, **no price save on a cost-unknown lot**, classification write warning | **D45, D49** (D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | **APPROVED** |
+| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, **no price save on a cost-unknown lot**, classification write warning | **D45, D49** (D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | Items 1–6 **BUILT** (Phase 4); 7–10 **APPROVED** |
 | G-33 | Audit stage controls: **Release to Cycle Counts** (separate owner button), send back, cancel | **D54** | F-06-1 (**S1**), F-06-2 | SOP-06 §4.7 (paper count, form 8.2) | **APPROVED** |
 | G-34 | Counter **I'm done** → back to the audit + **/admin cockpit** notice; staff-safe links; live progress | **D55** | F-06-3, F-06-4, F-06-16 | SOP-06 §4.8 (tell the owner) | **APPROVED** |
 | G-35 | Count cutoff: per-lot capture at first count; sales during the count reconciled; counting in open hours | **D58, D61** | F-06-7 (**S1**) | SOP-06 §4.11 (outside selling hours) | **APPROVED** |
@@ -474,6 +474,17 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. **(SOP-15 extension)** **Cancel** requires a written reason and the owner (or a permission the owner holds); a customer-return destruction cancel never touches the lot status (F-15-9).
   7. **(SOP-15 extension)** After a partial destruction the lot returns to its status before scheduling, not left in Quarantine (F-15-11).
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C); SOP-15 §4.19–§4.22, form 8.5.
+
+### Fix Phase 4 (plan rows 5.1/5.2; G-29/G-30/G-30A/G-32): Other Inventory on the register
+
+- **Owner (D45):** *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."* · D46 *"Q-05b-2- owner, admin, manager."* · D47 *"Q05b-3- owner and admin."* · D48 *"non cannabis should be allowed to have their cost modified."* · D49 *"Q-05b-5- yes, plan on the group of smaller fixes."*
+- **Status: BUILT (Phase 4, #P4).**
+  1. **G-29 (F-05b-1, F-05b-15 FIXED).** Register products `nc-<id>` with SKU/UPC scan (cannabis wins a clash); sale decrement in one step with a cost snapshot (`apply_noncannabis_delta`); void restore once (unique order line + reason); counter return restock / write-off (`record_noncannabis_return`, never a CCRS correction; `ccrs-batch.ts` skips `NonCannabis`); Sale.csv excludes these lines with a warning; COGS from the catalog average cost; refund cost-back from the sale snapshot; price drift vs the catalog; **Register sales — last 30 days**; display-only **Also in store** on the shop. Requirements 4 (offline replay uses the same idempotent sync path), 9 (PO draft) and 10 (concierge stock lookup) remain open.
+  2. **G-30 (F-05b-6 FIXED).** **Save change** price/cost, owner/admin/manager, reason, $0 refused, optimistic check, audit old → new. Q-05b-6 stays open (Bulk fill not widened).
+  3. **G-30A (F-05b-14 FIXED).** `merch.remove` = owner, admin.
+  4. **G-32 items 1–6 (F-05b-2, 3, 4, 5, 7, 8 FIXED).** Items 7–10 remain APPROVED.
+  Migration `0323_noncannabis_register.sql` (manual; rollback shipped). Test `fix-p4-noncannabis-register`, self-test `nc-pos-catalog-core` 40. SOP-05b v1.3.
+- **Was (interim, superseded):** SOP-05b v1.1 §4.4 (Keypad + Monday count), §4.9 (archive and re-create).
 
 ## G-29 · Non-cannabis goods fully used: register, menu, books (APPROVED, D45)
 

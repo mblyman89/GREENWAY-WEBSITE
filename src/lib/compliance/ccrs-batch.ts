@@ -469,7 +469,12 @@ async function readReturnsForCorrections(
   });
   if (failed) throw new Error(`R5-1: could not read the other returns of these sale lines: ${failed}`);
   const byId = new Map<string, CustomerReturnRowLike>();
-  for (const r of [...seeds, ...siblings]) byId.set(r.id, r);
+  for (const r of [...seeds, ...siblings]) {
+    // Phase 4 (G-29) — an Other Inventory (non-cannabis) return is never a
+    // CCRS Sale correction (0323 writes sale_type 'NonCannabis').
+    if ((r as { sale_type?: string | null }).sale_type === "NonCannabis") continue;
+    byId.set(r.id, r);
+  }
   return { records: [...byId.values()].map(returnRecordFromRow), tableMissing: false };
 }
 class MissingReturnsTable extends Error {}

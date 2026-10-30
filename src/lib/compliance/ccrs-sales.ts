@@ -37,6 +37,7 @@ import {
 } from "@/lib/compliance/ccrs-identifiers";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
+import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
 import {
   assembleCcrsFile,
   ccrsFileName,
@@ -325,8 +326,15 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   let skipped = 0;
   let medicalLines = 0;
   let exemptZeroedLines = 0;
+  let nonCannabisLines = 0;
 
   for (const l of lines) {
+    // Phase 4 (G-29) — Other Inventory (`nc-<id>`) goods are not cannabis and
+    // have no CCRS inventory record; they never go on Sale.csv.
+    if (isNonCannabisProductId(l.product_id)) {
+      nonCannabisLines++;
+      continue;
+    }
     const qty = l.quantity ?? 0;
     if (qty <= 0) {
       skipped++;
@@ -470,6 +478,11 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   }
   if (skipped > 0) {
     warnings.push(`${skipped} line(s) were skipped (zero quantity or no usable price).`);
+  }
+  if (nonCannabisLines > 0) {
+    warnings.push(
+      `${nonCannabisLines} Other Inventory (non-cannabis) line(s) were left out of Sale.csv — they are not cannabis and have no CCRS inventory record.`,
+    );
   }
   if (medicalLines > 0) {
     warnings.push(

@@ -3071,3 +3071,45 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0322_invoice_adjustments.rollback.sql`.
   It drops the constraint and the five columns (stored credits are lost).
+
+## Fix 4 — 0323 — Other Inventory on the register (sale, void, return, invoice in one step)
+
+- [ ] `0323_noncannabis_register.sql` adds `order_id`, `order_line_id` and
+  `unit_cost_minor_units` to `public.noncannabis_adjustments` (with a unique
+  order line + reason index for sale / void rows), adds
+  `noncannabis_product_id` to `public.customer_returns`, and creates three
+  functions: `apply_noncannabis_delta`, `record_noncannabis_invoice` and
+  `record_noncannabis_return`. No new tables. (#P4)
+  - Owner, verbatim (D45): *"Q-05b-1- yes, and any other upgrade, enhancement
+    and such needed to fully utilize non cannabis goods in the system and on
+    the register and on the menu."*
+  - Preconditions: `noncannabis_products` / `noncannabis_adjustments` (0111),
+    `noncannabis_invoices` (0112, 0115), `orders`, `order_lines`,
+    `customer_returns`. The file checks them first.
+  - Until it is applied, items still scan and sell at the register and On hand
+    still drops (the old two-step write); returns of Other Inventory and the
+    one-step invoice say *"Database update 0323 is not applied yet…"*.
+
+  Safe to re-run (add column if not exists, create index if not exists, create
+  or replace function). No existing data is changed.
+
+  **Check:**
+
+  ```sql
+  select proname from pg_proc
+  where proname in ('apply_noncannabis_delta','record_noncannabis_invoice','record_noncannabis_return')
+  order by proname;  -- 3 rows
+  select table_name, column_name from information_schema.columns
+  where table_schema = 'public'
+    and ((table_name = 'noncannabis_adjustments' and column_name in ('order_id','order_line_id','unit_cost_minor_units'))
+      or (table_name = 'customer_returns' and column_name = 'noncannabis_product_id'))
+  order by 1, 2;  -- 4 rows
+  ```
+
+  **Then:** at the register scan an Other Inventory SKU label, complete the
+  sale, and confirm **On hand** dropped by one on Inventory → Other
+  Inventory (Recent adjustments shows a *Register sale* row).
+
+  **Rollback (only if needed):** `supabase/rollbacks/0323_noncannabis_register.rollback.sql`.
+  It drops the three functions, the index and the four columns (sale links and
+  cost snapshots on adjustments are lost; On hand is not changed).
