@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { weekFromKey } from "@/lib/compliance/ccrs-week-core";
-import { ccrsFilesByName, fileRowsForEcho, listCcrsFiles, markUploaded, proveAfterOutcome, recordOutcome, type CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
+import { ccrsFilesByName, fileRowsForEcho, listCcrsFilesLite, markUploaded, proveAfterOutcome, recordOutcome, type CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
 import { lifecycleErrorText, matchSuccessNames, parseSuccessEmails } from "@/lib/compliance/ccrs-lifecycle-core";
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError } from "@/lib/compliance/ccrs-outcome-core";
@@ -31,44 +31,54 @@ import {
   type MailAnalysis,
 } from "@/lib/compliance/ccrs-mail-core";
 import { getCcrsMail, listOpenCcrsMail, markCcrsMailHandled, runCcrsMailTick, type StoredCcrsMail } from "@/lib/compliance/ccrs-mail-store";
-import { AUTO_UPLOAD_REASON, autoUploadTimeISO, couldAnswer, isUnansweredState } from "@/lib/compliance/ccrs-answer-core";
-import { isAnsweredState, planReuploadSetAside, type AnsweredFile } from "@/lib/compliance/ccrs-reupload-core";
+import { AUTO_UPLOAD_REASON, UNANSWERED_STATES, autoUploadTimeISO, couldAnswer, isUnansweredState } from "@/lib/compliance/ccrs-answer-core";
+import { ANSWERED_STATES, isAnsweredState, planReuploadSetAside, type AnsweredFile } from "@/lib/compliance/ccrs-reupload-core";
 import { NOT_PROCESSED_MESSAGE, parseNotProcessed } from "@/lib/compliance/ccrs-whole-file-core";
+import { echoEnvScope, hubEnv, hubHref, mapLimit, scopeEchoPool } from "@/lib/compliance/ccrs-hub-flow-core";
 
 const BASE = "/admin/compliance/ccrs";
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function backMail(weekKey: string, extra: string): never {
-  const w = weekFromKey(weekKey) ? `week=${encodeURIComponent(weekKey)}&` : "";
-  redirect(`${BASE}?${w}${extra}#ccrs-mail`);
+/**
+ * W-1 (2026-10-30): back to the SAME env the button was pressed in (hidden
+ * `env` input, read by every action through pageEnv), scrolled to the email
+ * panel, where the result is now shown (CcrsMailPanel flash). Before W-1 the
+ * env was dropped here and the page fell back to production after every press.
+ */
+function backMail(weekKey: string, extra: string, env: LedgerEnv): never {
+  const w = weekFromKey(weekKey) ? weekKey : null;
+  redirect(hubHref({ week: w, env, params: Object.fromEntries(new URLSearchParams(extra)), anchor: "ccrs-mail" }));
 }
+const pageEnv = (formData: FormData): LedgerEnv => hubEnv(String(formData.get("page_env") ?? formData.get("env") ?? ""));
 const errQ = (msg: string) => `error=${encodeURIComponent(msg)}`;
 const okQ = (msg: string) => `saved=1&note=${encodeURIComponent(msg)}`;
 const asText = (e: unknown) => lifecycleErrorText(e instanceof Error ? e.message : String(e));
 
 async function loadMail(formData: FormData) {
   const weekKey = String(formData.get("week_key") ?? "");
+  const env = pageEnv(formData);
   const mailId = String(formData.get("mail_id") ?? "");
-  if (!ID_RE.test(mailId)) backMail(weekKey, errQ("Invalid email."));
+  if (!ID_RE.test(mailId)) backMail(weekKey, errQ("Invalid email."), env);
   const admin = createSupabaseAdminClient();
   let mail: StoredCcrsMail;
   try {
     mail = await getCcrsMail(admin, mailId);
   } catch (e) {
-    backMail(weekKey, errQ(asText(e)));
+    backMail(weekKey, errQ(asText(e)), env);
   }
-  if (mail.state !== "new") backMail(weekKey, errQ(`This email was already ${mail.state}.`));
-  return { weekKey, admin, mail };
+  if (mail.state !== "new") backMail(weekKey, errQ(`This email was already ${mail.state}.`), env);
+  return { weekKey, env, admin, mail };
 }
 
 /** "Check the mailbox now" (the same tick the cron runs). */
 export async function pollCcrsMailNowAction(formData: FormData): Promise<void> {
   await requirePermission("settings.manage");
   const weekKey = String(formData.get("week_key") ?? "");
+  const env = pageEnv(formData);
   const r = await runCcrsMailTick();
   revalidatePath(BASE);
-  if (!r.ok) backMail(weekKey, errQ(`Mailbox check: ${r.error ?? "failed"}`));
-  backMail(weekKey, okQ(`Mailbox checked: ${r.listed} CCRS email(s) in the window, ${r.stored} new.${r.deferred ? ` ${r.deferred} more next check.` : ""}`));
+  if (!r.ok) backMail(weekKey, errQ(`Mailbox check: ${r.error ?? "failed"}`), env);
+  backMail(weekKey, okQ(`Mailbox checked: ${r.listed} CCRS email(s) in the window, ${r.stored} new.${r.deferred ? ` ${r.deferred} more next check.` : ""}`), env);
 }
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -108,10 +118,10 @@ async function ensureUploaded(
 /** Apply a stored CCRS confirmation: same matching and time rule as the success paste box. */
 export async function applyCcrsSuccessMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
-  const { weekKey, admin, mail } = await loadMail(formData);
+  const { weekKey, env: page, admin, mail } = await loadMail(formData);
   const r = await applySuccessMail(admin, session, mail, String(formData.get("env") ?? "") || null, formData.get("confirm_checked") === "on");
   revalidatePath(BASE);
-  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text));
+  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text), page);
 }
 
 async function applySuccessMail(admin: Admin, session: Session, mail: StoredCcrsMail, chosenEnv: string | null, confirmed: boolean): Promise<ApplyOutcome> {
@@ -174,44 +184,45 @@ async function applySuccessMail(admin: Admin, session: Session, mail: StoredCcrs
   return { ok: true, text: `From the CCRS email: ${done.join("; ")}. ${proof?.text ?? ""}`.trim() };
 }
 
-/** Every file of these types still waiting for an answer (uploaded, or emitted and never marked), both envs, with its rows. */
+/**
+ * Every file of these types still waiting for an answer (uploaded, or emitted
+ * and never marked), with its rows. W-1: scoped to the email's own env when
+ * its subject names one and that env has a waiting file of the type (a PRE
+ * email is no longer "ambiguous" because a production file looks alike); one
+ * query for both envs instead of two full listings with their issues; rows
+ * read four files at a time instead of one after another.
+ */
 async function candidatesFor(
   admin: Admin,
   types: readonly string[],
   emailAt: string | null,
+  scope: LedgerEnv | null,
 ): Promise<{ candidates: EchoCandidate[]; byId: Map<string, CcrsFileRecord> }> {
-  const candidates: EchoCandidate[] = [];
-  const byId = new Map<string, CcrsFileRecord>();
-  for (const env of ["prod", "preprod"] as const) {
-    const list = await listCcrsFiles(admin, env, 200);
-    if (list.error) throw new Error(list.error);
-    for (const f of list.files) {
-      if (!isUnansweredState(f.state) || !types.includes(f.fileType)) continue;
-      // R74 S48: a file made after the email arrived cannot be what it answers.
-      if (!couldAnswer(f.emittedAt, emailAt)) continue;
-      byId.set(f.id, f);
-      candidates.push({ fileId: f.id, fileName: f.fileName, env: f.env, fileType: f.fileType, state: f.state, rows: await fileRowsForEcho(admin, f.id, f.numberRecords) });
-    }
-  }
+  const waiting = (await listCcrsFilesLite(admin, ["prod", "preprod"], UNANSWERED_STATES, types))
+    .filter((f) => isUnansweredState(f.state) && couldAnswer(f.emittedAt, emailAt)); // R74 S48: a file made after the email arrived cannot be what it answers.
+  const pool = [...new Set(types)].flatMap((t) => scopeEchoPool(waiting, t, scope));
+  const byId = new Map<string, CcrsFileRecord>(pool.map((f) => [f.id, f]));
+  const candidates = await mapLimit(pool, 4, async (f): Promise<EchoCandidate> => ({
+    fileId: f.id, fileName: f.fileName, env: f.env, fileType: f.fileType, state: f.state, rows: await fileRowsForEcho(admin, f.id, f.numberRecords),
+  }));
   return { candidates, byId };
 }
 
-/** R74 S46: files CCRS already answered (newest first, at most 25 per type), with their rows, for the re-upload check. */
+/** R74 S46: files CCRS already answered (newest first, at most 25 per type and env), with their rows, for the re-upload check. */
 async function answeredFor(admin: Admin, types: readonly string[]): Promise<AnsweredFile[]> {
-  const out: AnsweredFile[] = [];
-  for (const env of ["prod", "preprod"] as const) {
-    const list = await listCcrsFiles(admin, env, 200);
-    if (list.error) throw new Error(list.error);
-    const perType = new Map<string, number>();
-    for (const f of list.files) {
-      if (!isAnsweredState(f.state) || !types.includes(f.fileType)) continue;
-      const n = perType.get(f.fileType) ?? 0;
-      if (n >= 25) continue;
-      perType.set(f.fileType, n + 1);
-      out.push({ fileId: f.id, fileName: f.fileName, env: f.env, fileType: f.fileType, state: f.state, answeredAt: f.successEmailAt ?? f.errorEmailAt, rows: await fileRowsForEcho(admin, f.id, f.numberRecords) });
-    }
-  }
-  return out;
+  const answered = await listCcrsFilesLite(admin, ["prod", "preprod"], ANSWERED_STATES, types, 1000);
+  const perKey = new Map<string, number>();
+  const keep = answered.filter((f) => {
+    if (!isAnsweredState(f.state)) return false;
+    const k = `${f.env}\u0000${f.fileType}`;
+    const n = perKey.get(k) ?? 0;
+    if (n >= 25) return false;
+    perKey.set(k, n + 1);
+    return true;
+  });
+  return mapLimit(keep, 4, async (f): Promise<AnsweredFile> => ({
+    fileId: f.id, fileName: f.fileName, env: f.env, fileType: f.fileType, state: f.state, answeredAt: f.successEmailAt ?? f.errorEmailAt, rows: await fileRowsForEcho(admin, f.id, f.numberRecords),
+  }));
 }
 
 /**
@@ -221,10 +232,10 @@ async function answeredFor(admin: Admin, types: readonly string[]): Promise<Answ
  */
 export async function applyCcrsErrorMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
-  const { weekKey, admin, mail } = await loadMail(formData);
+  const { weekKey, env: page, admin, mail } = await loadMail(formData);
   const r = await applyErrorMail(admin, session, mail, (i) => String(formData.get(`file_${i}`) ?? "") || null);
   revalidatePath(BASE);
-  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text));
+  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text), page);
 }
 
 async function applyErrorMail(admin: Admin, session: Session, mail: StoredCcrsMail, chosen: (i: number) => string | null): Promise<ApplyOutcome> {
@@ -234,7 +245,8 @@ async function applyErrorMail(admin: Admin, session: Session, mail: StoredCcrsMa
   let picks: { filename: string; pick: EchoPick }[];
   let byId: Map<string, CcrsFileRecord>;
   try {
-    const found = await candidatesFor(admin, errors.map((e) => e.fileType).filter((t): t is NonNullable<typeof t> => !!t), mail.received_at);
+    // W-1: the email's own env (subject) narrows the pool; the page the owner is on never does.
+    const found = await candidatesFor(admin, errors.map((e) => e.fileType).filter((t): t is NonNullable<typeof t> => !!t), mail.received_at, echoEnvScope(mail.env));
     byId = found.byId;
     picks = errors.map((e, i) => ({ filename: e.filename, pick: resolveEchoPick(e, found.candidates, chosen(i)) }));
   } catch (e) {
@@ -328,10 +340,10 @@ async function applyErrorMail(admin: Admin, session: Session, mail: StoredCcrsMa
  */
 export async function applyCcrsNotProcessedMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
-  const { weekKey, admin, mail } = await loadMail(formData);
+  const { weekKey, env: page, admin, mail } = await loadMail(formData);
   const r = await applyNotProcessedMail(admin, session, mail);
   revalidatePath(BASE);
-  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text));
+  backMail(weekKey, r.ok ? okQ(r.text) : errQ(r.text), page);
 }
 
 async function applyNotProcessedMail(admin: Admin, session: Session, mail: StoredCcrsMail): Promise<ApplyOutcome> {
@@ -396,14 +408,15 @@ async function applyNotProcessedMail(admin: Admin, session: Session, mail: Store
 export async function applyAllCcrsMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const weekKey = String(formData.get("week_key") ?? "");
+  const page = pageEnv(formData);
   const admin = createSupabaseAdminClient();
   let open: StoredCcrsMail[];
   try {
     open = await listOpenCcrsMail(admin);
   } catch (e) {
-    backMail(weekKey, errQ(asText(e)));
+    backMail(weekKey, errQ(asText(e)), page);
   }
-  if (open.length === 0) backMail(weekKey, okQ("No CCRS email is waiting to be applied."));
+  if (open.length === 0) backMail(weekKey, okQ("No CCRS email is waiting to be applied."), page);
   const done: string[] = [];
   const left: string[] = [];
   for (const mail of open) {
@@ -429,7 +442,7 @@ export async function applyAllCcrsMailAction(formData: FormData): Promise<void> 
   });
   revalidatePath(BASE);
   const text = `Answered ${done.length} of ${open.length} CCRS email(s).${left.length ? ` Still waiting (${left.length}), each needs your choice: ${left.join(" | ")}` : ""}${done.length ? ` Done: ${done.join(" | ")}` : ""}`;
-  backMail(weekKey, left.length && !done.length ? errQ(text) : okQ(text));
+  backMail(weekKey, left.length && !done.length ? errQ(text) : okQ(text), page);
 }
 
 /** Audit row for an automatic proof-by-reference after an email answer (R6-1, 0284). */
@@ -452,14 +465,14 @@ async function auditMailProof(
 /** Not about a file this system made (or already recorded by paste): set aside with a reason. */
 export async function dismissCcrsMailAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
-  const { weekKey, admin, mail } = await loadMail(formData);
+  const { weekKey, env: page, admin, mail } = await loadMail(formData);
   const reason = String(formData.get("reason") ?? "").trim();
-  if (reason.length < 5) backMail(weekKey, errQ("Say in a few words why this email is set aside."));
+  if (reason.length < 5) backMail(weekKey, errQ("Say in a few words why this email is set aside."), page);
   let changed = false;
   try {
     changed = await markCcrsMailHandled(admin, mail.id, "dismissed", session.profile.id, reason);
   } catch (e) {
-    backMail(weekKey, errQ(asText(e)));
+    backMail(weekKey, errQ(asText(e)), page);
   }
   await recordAudit({
     actorId: session.profile.id,
@@ -470,5 +483,5 @@ export async function dismissCcrsMailAction(formData: FormData): Promise<void> {
     after: { gmailId: mail.gmail_id, subject: mail.subject, kind: mail.kind, reason },
   });
   revalidatePath(BASE);
-  backMail(weekKey, changed ? okQ("Email set aside.") : errQ("This email was already handled."));
+  backMail(weekKey, changed ? okQ("Email set aside.") : errQ("This email was already handled."), page);
 }

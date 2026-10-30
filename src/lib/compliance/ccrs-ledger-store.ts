@@ -239,6 +239,32 @@ export async function listCcrsFiles(
   return { available: true, files, issues, error: null };
 }
 
+/**
+ * W-1: the files of the given envs in the given states and types, newest
+ * first, WITHOUT their issues (listCcrsFiles also pages up to 50,000 issue
+ * rows, which email matching never reads). One query for every env.
+ */
+export async function listCcrsFilesLite(
+  admin: Admin,
+  envs: readonly LedgerEnv[],
+  states: readonly string[],
+  types: readonly string[],
+  limit = 400,
+): Promise<CcrsFileRecord[]> {
+  if (envs.length === 0 || states.length === 0 || types.length === 0) return [];
+  const { data, error } = await admin
+    .from("ccrs_files")
+    .select(FILE_COLS)
+    .in("env", [...new Set(envs)])
+    .in("state", [...new Set(states)])
+    .in("file_type", [...new Set(types)])
+    .neq("purpose", "seed")
+    .order("stamp_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw new Error(`ccrs_files: ${error.message}`);
+  return ((data as FileRowDb[] | null) ?? []).map(toRecord);
+}
+
 /** The files of one env with exactly these names (success-email matching; never "the newest N"). */
 export async function ccrsFilesByName(admin: Admin, env: LedgerEnv, names: readonly string[]): Promise<CcrsFileRecord[]> {
   if (names.length === 0) return [];

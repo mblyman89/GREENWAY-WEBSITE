@@ -69,6 +69,7 @@ import { HandoverPlanCard } from "@/components/admin/compliance/HandoverPlanCard
 import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obligation-waiver-core";
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
 import { CcrsMailPanel, type CcrsMailPanelRow } from "@/components/admin/compliance/CcrsMailPanel";
+import { flashFrom, hubWeekLink } from "@/lib/compliance/ccrs-hub-flow-core";
 import { listRecentCcrsMail } from "@/lib/compliance/ccrs-mail-store";
 import { readCcrsScoreboard } from "@/lib/compliance/ccrs-scoreboard-store";
 import { CcrsScoreboardPanel } from "@/components/admin/compliance/CcrsScoreboardPanel";
@@ -94,18 +95,25 @@ import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
 import { isUnansweredState, unansweredWarningLines } from "@/lib/compliance/ccrs-answer-core";
 
 export const dynamic = "force-dynamic";
+// W-1 (2026-10-30): the page builds the week's batch, and its server actions
+// (email Apply, week sign-off) re-read files and rows. A page-level
+// maxDuration also covers every server action posted from this page
+// (Next docs: route-segment-config/maxDuration). Same ceiling as /records.
+export const maxDuration = 300;
 
 function Section({
   title,
   subtitle,
   children,
+  id,
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+    <section id={id} className="scroll-mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
       <div className="mb-4">
         <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/80">{title}</h2>
         {subtitle ? <p className="mt-1 text-xs text-white/40">{subtitle}</p> : null}
@@ -204,6 +212,8 @@ export default async function CcrsCommandCenterPage({
   // S-12c: which CCRS the page works against. Anything but "preprod" is prod.
   const env = parseLedgerEnv(sp.env);
   const envQ = env === "preprod" ? "&env=preprod" : "";
+  // W-1: one flash for the whole page (top, sticky) and the email panel.
+  const flash = flashFrom(sp);
 
   // ── Weekly deadline picture ────────────────────────────────────────────────
   // PERF2 round 4: this page used to make ~15 reads ONE AFTER ANOTHER, so its
@@ -419,10 +429,10 @@ export default async function CcrsCommandCenterPage({
       {/* S-12c: environment switch. PREprod is LCB's test site; nothing here touches production. */}
       <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2 text-xs ${env === "preprod" ? "border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.02] text-white/60"}`}>
         <span className="font-bold uppercase tracking-wide">CCRS:</span>
-        <Link href={`/admin/compliance/ccrs?week=${week.key}`} className={`rounded-lg px-3 py-1 font-semibold ${env === "prod" ? "bg-emerald-500/25 text-emerald-100" : "border border-white/15 hover:bg-white/5"}`}>
+        <Link href={hubWeekLink(week.key, "prod")} className={`rounded-lg px-3 py-1 font-semibold ${env === "prod" ? "bg-emerald-500/25 text-emerald-100" : "border border-white/15 hover:bg-white/5"}`}>
           Production
         </Link>
-        <Link href={`/admin/compliance/ccrs?week=${week.key}&env=preprod`} className={`rounded-lg px-3 py-1 font-semibold ${env === "preprod" ? "bg-fuchsia-500/30 text-fuchsia-50" : "border border-white/15 hover:bg-white/5"}`}>
+        <Link href={hubWeekLink(week.key, "preprod")} className={`rounded-lg px-3 py-1 font-semibold ${env === "preprod" ? "bg-fuchsia-500/30 text-fuchsia-50" : "border border-white/15 hover:bg-white/5"}`}>
           PREprod (test site)
         </Link>
         {env === "preprod" ? (
@@ -436,15 +446,18 @@ export default async function CcrsCommandCenterPage({
       {/* R74 S48: the CCRS test scoreboard. Full on PREprod; a one-line strip on Production. */}
       <CcrsScoreboardPanel read={scoreboard} compact={env !== "preprod"} />
 
-      {sp.saved ? (
-        <p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-200">
-          ✓ Saved.{sp.note ? ` ${sp.note}` : ""}
-        </p>
-      ) : null}
-      {sp.error ? (
-        <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-xs font-semibold text-red-200">
-          {sp.error}
-        </p>
+      {/* W-1: the result of the last action stays in view (sticky) wherever the redirect scrolled to. */}
+      {flash ? (
+        <div
+          role={flash.tone === "error" ? "alert" : "status"}
+          data-testid="ccrs-hub-flash"
+          className={`sticky top-2 z-30 flex items-start gap-3 whitespace-pre-wrap rounded-xl border px-4 py-2 text-xs font-semibold shadow-lg backdrop-blur ${flash.tone === "error" ? "border-red-400/40 bg-red-950/90 text-red-100" : "border-emerald-400/40 bg-emerald-950/90 text-emerald-100"}`}
+        >
+          <span className="flex-1">{flash.tone === "error" ? flash.text : `✓ ${flash.text}`}</span>
+          <Link href={hubWeekLink(week.key, env)} className="shrink-0 underline opacity-70 hover:opacity-100" aria-label="Dismiss this message">
+            Dismiss
+          </Link>
+        </div>
       ) : null}
 
       {/* 1) Deadline banner */}
@@ -467,7 +480,7 @@ export default async function CcrsCommandCenterPage({
             </div>
             {urgent.week.key !== week.key ? (
               <Link
-                href={`/admin/compliance/ccrs?week=${urgent.week.key}${envQ}`}
+                href={hubWeekLink(urgent.week.key, env)}
                 className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-xs font-bold text-black transition hover:opacity-90"
               >
                 Jump to that week →
@@ -555,7 +568,7 @@ export default async function CcrsCommandCenterPage({
             return (
               <Link
                 key={w.week.key}
-                href={`/admin/compliance/ccrs?week=${w.week.key}${envQ}`}
+                href={hubWeekLink(w.week.key, env)}
                 className={`rounded-xl border px-3 py-2 text-xs transition ${
                   selected
                     ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/10"
@@ -612,6 +625,7 @@ export default async function CcrsCommandCenterPage({
                 {canEdit ? (
                   <form action={assignProductIdsAction} className="mt-2">
                     <input type="hidden" name="week_key" value={week.key} />
+                    <input type="hidden" name="env" value={env} />
                     <Button type="submit" variant="confirm" size="sm">
                       Assign CCRS Product ids (GWP-) to these {batch.ledger.unassignedProductKeys.length}
                     </Button>
@@ -690,7 +704,7 @@ export default async function CcrsCommandCenterPage({
                       {w.byType.some((t) => t.rebuildWeek) ? (
                         <>
                           {" "}
-                          <Link className="underline" href={`/admin/compliance/ccrs?week=W-${w.weekStart}${envQ}`}>
+                          <Link className="underline" href={hubWeekLink(`W-${w.weekStart}`, env)}>
                             Open this week
                           </Link>
                         </>
@@ -783,6 +797,8 @@ export default async function CcrsCommandCenterPage({
           canEdit={canEdit}
           weekKey={week.key}
           nowISO={new Date().toISOString()}
+          env={env}
+          flash={flash}
           actions={{
             poll: pollCcrsMailNowAction,
             applySuccess: applyCcrsSuccessMailAction,
@@ -826,6 +842,7 @@ export default async function CcrsCommandCenterPage({
 
       {/* 5) Record the week */}
       <Section
+        id="ccrs-week"
         title="Step 3 — Record this week"
         subtitle="The ledger is your compliance evidence (who, when, on time or late) and it silences the reminders."
       >
@@ -849,6 +866,7 @@ export default async function CcrsCommandCenterPage({
                 {ledgerRow.resolution === "submitted" ? (
                   <form action={setWeekErrorStatusAction} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="week_key" value={week.key} />
+                    <input type="hidden" name="env" value={env} />
                     <label className="text-xs text-white/50">
                       CCRS error email status
                       <select
@@ -877,6 +895,7 @@ export default async function CcrsCommandCenterPage({
                 ) : null}
                 <form action={unresolveWeekAction}>
                   <input type="hidden" name="week_key" value={week.key} />
+                  <input type="hidden" name="env" value={env} />
                   <Button type="submit" variant="danger" size="sm">
                     Undo (recorded by mistake)
                   </Button>
@@ -911,6 +930,7 @@ export default async function CcrsCommandCenterPage({
           <div className="grid gap-3 md:grid-cols-2">
             <form action={resolveWeekAction} className="rounded-xl border border-white/10 bg-black/20 p-4">
               <input type="hidden" name="week_key" value={week.key} />
+              <input type="hidden" name="env" value={env} />
               <input type="hidden" name="resolution" value="submitted" />
               <p className="text-xs font-bold text-white/80">I uploaded the files to CCRS</p>
               <p className="mt-1 text-[11px] text-white/45">
@@ -939,6 +959,7 @@ export default async function CcrsCommandCenterPage({
 
             <form action={resolveWeekAction} className="rounded-xl border border-white/10 bg-black/20 p-4">
               <input type="hidden" name="week_key" value={week.key} />
+              <input type="hidden" name="env" value={env} />
               <input type="hidden" name="resolution" value="nothing_to_report" />
               <p className="text-xs font-bold text-white/80">Nothing to report this week</p>
               <p className="mt-1 text-[11px] text-white/45">
@@ -1146,7 +1167,7 @@ export default async function CcrsCommandCenterPage({
                 {ledger.map((r) => (
                   <tr key={r.id} className="border-t border-white/5">
                     <td className="py-1.5 pr-3">
-                      <Link href={`/admin/compliance/ccrs?week=${r.week_key}`} className="underline decoration-white/20 hover:text-white">
+                      <Link href={hubWeekLink(r.week_key, env)} className="underline decoration-white/20 hover:text-white">
                         {r.week_start} – {r.week_end}
                       </Link>
                     </td>

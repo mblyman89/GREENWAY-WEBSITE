@@ -8,7 +8,9 @@
 import type { MailAnalysis, MailHeartbeat } from "@/lib/compliance/ccrs-mail-core";
 import { AUTH_TEXT, heartbeatStale } from "@/lib/compliance/ccrs-mail-core";
 import type { CcrsFileRecord } from "@/lib/compliance/ccrs-ledger-store";
-import { Button } from "@/components/admin/ui";
+import { SaveButton } from "@/components/admin/orders/SaveButton";
+import { hubHref, type HubFlash } from "@/lib/compliance/ccrs-hub-flow-core";
+import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import type { CcrsStrategy } from "@/lib/compliance/ccrs-strategy-core";
 import { CcrsStrategyReport } from "./CcrsStrategyReport";
 
@@ -58,6 +60,8 @@ export function CcrsMailPanel({
   weekKey,
   nowISO,
   actions,
+  env = null,
+  flash = null,
 }: {
   available: boolean;
   loadError: string | null;
@@ -69,6 +73,13 @@ export function CcrsMailPanel({
   canEdit: boolean;
   weekKey: string;
   nowISO: string;
+  /**
+   * W-1: the env the page is showing. Every form posts it back as `page_env`
+   * so the action returns to the same env (it used to fall back to production).
+   */
+  env?: LedgerEnv | null;
+  /** W-1: the result of the last email action, shown HERE (the redirect scrolls to this panel). */
+  flash?: HubFlash;
   actions: {
     poll: (fd: FormData) => Promise<void>;
     applySuccess: (fd: FormData) => Promise<void>;
@@ -84,6 +95,16 @@ export function CcrsMailPanel({
   const done = rows.filter((r) => r.state !== "new");
   return (
     <div className="space-y-3 text-xs text-white/70" data-testid="ccrs-mail-panel" id="ccrs-mail">
+      {flash ? (
+        <div
+          role={flash.tone === "error" ? "alert" : "status"}
+          data-testid="ccrs-mail-flash"
+          className={`whitespace-pre-wrap rounded-lg border p-3 text-sm ${flash.tone === "error" ? "border-red-500/40 bg-red-500/10 text-red-100" : "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"}`}
+        >
+          {flash.tone === "error" ? "Not done: " : "Done: "}
+          {flash.text}
+        </div>
+      ) : null}
       {!setup.configured ? (
         <div className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-amber-100" data-testid="ccrs-mail-not-setup">
           <p className="font-bold">The mailbox monitor is not set up yet.</p>
@@ -115,9 +136,8 @@ export function CcrsMailPanel({
       {canEdit && setup.configured ? (
         <form action={actions.poll}>
           <input type="hidden" name="week_key" value={weekKey} />
-          <Button type="submit" size="sm" variant="neutral">
-            Check the mailbox now
-          </Button>
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
+          <SaveButton label="Check the mailbox now" busyLabel="Checking the mailbox…" variant="neutral" />
         </form>
       ) : null}
 
@@ -126,10 +146,9 @@ export function CcrsMailPanel({
       {canEdit && actions.applyAll && open.length > 0 ? (
         <form action={actions.applyAll} className="rounded-lg border border-emerald-400/30 bg-emerald-400/5 p-3" data-testid="ccrs-mail-answer-all">
           <input type="hidden" name="week_key" value={weekKey} />
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" size="sm" variant="save">
-              Answer every waiting CCRS email ({open.length})
-            </Button>
+            <SaveButton label={`Answer every waiting CCRS email (${open.length})`} busyLabel="Answering, oldest first…" />
             <span className="text-white/55">
               Oldest first. A file you never marked uploaded is marked from the email&apos;s time (logged). An email that needs your choice stays here with the reason.
             </span>
@@ -180,6 +199,16 @@ export function CcrsMailPanel({
                 ))
               : null}
             {r.kind === "error" && r.strategy ? <CcrsStrategyReport strategy={r.strategy} /> : null}
+            {env && r.env && r.env !== env ? (
+              <p className="mt-1 text-fuchsia-200" data-testid="ccrs-mail-other-env">
+                This email is about {r.env === "preprod" ? "PREprod" : "production"}; you are looking at {env === "preprod" ? "PREprod" : "production"}. Apply works from here, but the files it
+                changes are on the{" "}
+                <a className="underline" href={hubHref({ week: weekKey, env: r.env, anchor: "ccrs-mail" })}>
+                  {r.env === "preprod" ? "PREprod" : "production"} page
+                </a>
+                .
+              </p>
+            ) : null}
             {needs.length ? (
               <ul className="mt-2 list-disc pl-5 text-amber-100" data-testid="ccrs-mail-needs-human">
                 {needs.map((n) => (
@@ -193,9 +222,10 @@ export function CcrsMailPanel({
                 {r.kind === "success" ? (
                   <form action={actions.applySuccess} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="week_key" value={weekKey} />
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
                     <input type="hidden" name="mail_id" value={r.id} />
                     {!r.env ? (
-                      <select name="env" className="rounded bg-white/10 px-2 py-1" defaultValue="">
+                      <select name="env" required className="rounded bg-white/10 px-2 py-1" defaultValue="">
                         <option value="">PREprod or production?</option>
                         <option value="preprod">PREprod</option>
                         <option value="prod">Production</option>
@@ -203,20 +233,19 @@ export function CcrsMailPanel({
                     ) : null}
                     {!r.env || !r.env_verified ? (
                       <label className="flex items-center gap-1">
-                        <input type="checkbox" name="confirm_checked" /> I checked this file in the CCRS portal
+                        <input type="checkbox" name="confirm_checked" required /> I checked this file in the CCRS portal
                       </label>
                     ) : null}
-                    <Button type="submit" size="sm" variant="save">
-                      Apply confirmation
-                    </Button>
+                    <SaveButton label="Apply confirmation" busyLabel="Applying…" />
                   </form>
                 ) : null}
                 {r.kind === "error" ? (
                   <form action={actions.applyError} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="week_key" value={weekKey} />
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
                     <input type="hidden" name="mail_id" value={r.id} />
                     {(a.errors ?? []).map((e, i) => {
-                      const fits = uploadedFiles.filter((f) => f.fileType === e.fileType);
+                      const fits = uploadedFiles.filter((f) => f.fileType === e.fileType && (!r.env || f.env === r.env));
                       return fits.length > 1 ? (
                         <select key={e.filename} name={`file_${i}`} className="rounded bg-white/10 px-2 py-1" defaultValue="">
                           <option value="">{e.filename}: let the rows decide</option>
@@ -228,27 +257,23 @@ export function CcrsMailPanel({
                         </select>
                       ) : null;
                     })}
-                    <Button type="submit" size="sm" variant="save">
-                      Apply error file
-                    </Button>
+                    <SaveButton label="Apply error file" busyLabel="Matching rows…" />
                   </form>
                 ) : null}
                 {r.notProcessed?.length && actions.applyNotProcessed ? (
                   <form action={actions.applyNotProcessed} className="flex flex-wrap items-end gap-2" data-testid="ccrs-mail-not-processed">
                     <input type="hidden" name="week_key" value={weekKey} />
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
                     <input type="hidden" name="mail_id" value={r.id} />
-                    <Button type="submit" size="sm" variant="save">
-                      Record as not processed ({r.notProcessed.join(", ")})
-                    </Button>
+                    <SaveButton label={`Record as not processed (${r.notProcessed.join(", ")})`} busyLabel="Recording…" />
                   </form>
                 ) : null}
                 <form action={actions.dismiss} className="flex flex-wrap items-end gap-2">
                   <input type="hidden" name="week_key" value={weekKey} />
+          {env ? <input type="hidden" name="page_env" value={env} /> : null}
                   <input type="hidden" name="mail_id" value={r.id} />
-                  <input name="reason" placeholder="Why set aside (e.g. recorded by paste)" className="w-56 rounded bg-white/10 px-2 py-1" />
-                  <Button type="submit" size="sm" variant="neutral">
-                    Set aside
-                  </Button>
+                  <input name="reason" required minLength={5} placeholder="Why set aside (e.g. recorded by paste)" className="w-56 rounded bg-white/10 px-2 py-1" />
+                  <SaveButton label="Set aside" busyLabel="Setting aside…" variant="neutral" />
                 </form>
               </div>
             ) : null}
