@@ -326,6 +326,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   Migration `0321_inbound_sibling_dismiss.sql` (manual; rollback shipped). Tests `fix-p3-3-growflow-intake` (37), self-tests `pdf-growflow-invoice-core` 11, `manifest-sibling-core` 17, mutation probe `scripts/compliance/mutate-fix-p3-3.py`. SOP-04 v1.8.
 - **Was (interim, superseded):** SOP-04 v1.7 §4.4, *"duplicate (the same manifest # and vendor is already live, so it is not staged again)"*.
 
+### Fix Phase 3.5 (F-04-26): Receiving reads only vendor_intake@ mail (no new gap number)
+
+- **Owner:** *"It should only target vendor_intake@ and none of my other @greenwaymarijuana.com addresses. Right now it is trying to fetch emails from any of them."*
+- **Status: BUILT (Phase 3.5, #P35).** The Gmail search names vendor_intake@ (To, Cc, Delivered-To). Each message is checked against what the sender wrote: To/Cc vendor_intake@, or a Bcc to it with no other store address on To/Cc. Anything else is skipped (counted in the run banner), and on Try again it is closed as ignored. The mailbox setting can only name vendor_intake. No migration. Tests: `fix-p3-2a-inbound-reconcile` section 2a; self-test `inbound-reconcile-core` 126. SOP-04 v1.10.
+
 ### Fix Phase 3.4 (F-04-24, F-04-25): invoice credits, invoice amount, re-read everything, vendor name, closable banners (no new gap number)
 
 - **Owner:** *"this new manifest has a credit amount on it, and the system did not see it or did and disregarded it … i want the invoice amount to be shown on the receiving table … i want the system to keep trying to find the name of the vendor for that manifest … no exceptions … i need a way to add a credit or discount to the invoice before paying for it in the vendor payments page. finally, i want to be able to dismiss the warnings and other banners at the top of the page. the emails that did not make a manifest section should be collapsed when landing on the page."*

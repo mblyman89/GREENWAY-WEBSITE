@@ -44,6 +44,8 @@ const st = vi.hoisted(() => ({
   gmailListError: null as string | null,
   gmailConfigured: true,
   gmailFetchFail: new Set<string>(),
+  /** Fix 3.5: Gmail messages sent to another of our addresses. */
+  gmailNotIntake: new Set<string>(),
   /** What staging does with an email, by subject: "staged" | "parse_failed" | "none". */
   stageBy: new Map<string, string>(),
   fetches: [] as string[],
@@ -132,6 +134,13 @@ vi.mock("@/lib/inbound-email/gmail-intake-fetch", () => ({
   fetchGmailInboundById: async (id: string) => {
     st.fetches.push(`gmail:${id}`);
     if (st.gmailFetchFail.has(id)) return { ok: false, error: "could not fetch the Gmail message: HTTP 503" };
+    if (st.gmailNotIntake.has(id))
+      return {
+        ok: false,
+        notIntake: true,
+        error: "not read: sent to michael@greenwaymarijuana.com, not vendor_intake@ (Receiving only reads mail sent to vendor_intake@)",
+        email: { provider: "gmail", from: "x@y.example", to: ["michael@greenwaymarijuana.com"], subject: "Lunch", receivedAt: minsAgo(60), attachments: [], messageId: null, sourceRef: id },
+      };
     const it = (st.gmailList as Src[]).find((x) => x.ref === id);
     return { ok: true, result: { email: toEmail("gmail", id, it?.subject ?? "Gmail mail"), fetchNote: "read from Gmail" } };
   },
@@ -202,6 +211,7 @@ beforeEach(() => {
   st.gmailListError = null;
   st.gmailConfigured = true;
   st.gmailFetchFail = new Set();
+  st.gmailNotIntake = new Set();
   st.stageBy = new Map();
   st.fetches = [];
   st.staged = [];
@@ -216,7 +226,7 @@ beforeEach(() => {
 
 describe("1. pure core", () => {
   it("self-tests pass at the exact floor", () => {
-    expect(core.__runInboundReconcileCoreTests()).toEqual({ passed: 111, failed: 0 });
+    expect(core.__runInboundReconcileCoreTests()).toEqual({ passed: 126, failed: 0 });
   });
 });
 
@@ -268,6 +278,41 @@ describe("2. the mailbox check pulls in what the webhook missed", () => {
     const r = await store.runReconcile({ trigger: "cron" });
     expect(r.recovered).toBe(0);
     expect(st.fetches).toEqual([]);
+  });
+});
+
+describe("2a. Fix 3.5: only vendor_intake@ (never the owner's other addresses)", () => {
+  it("a Gmail message sent to michael@ is logged ignored: never staged, never retried, not on Needs attention", async () => {
+    st.gmailList = [gmailItem("gx", "Lunch", 60)];
+    st.gmailNotIntake.add("gx");
+    st.resendList = [];
+    await store.runReconcile({ trigger: "cron" });
+    const row = byKey("gmail:msg:gx")!;
+    expect(row.disposition).toBe("ignored");
+    expect(row.to_intake).toBe(false);
+    expect(String(row.note)).toMatch(/not vendor_intake@/);
+    expect(st.staged).toEqual([]);
+    const view = await store.loadAttention();
+    expect(view.items.find((i) => i.row.id === row.id)).toBeUndefined();
+  });
+  it("Try again on an old row that came from another address closes it as ignored", async () => {
+    const row = failedRow({ provider: "gmail", delivery_key: "gmail:msg:gy", source_ref: "gy", disposition: "no_manifest" });
+    st.gmailNotIntake.add("gy");
+    const r = await store.retryInboundEmail(String(row.id), ACTOR);
+    expect(r.ok).toBe(true);
+    expect(row.disposition).toBe("ignored");
+    expect(row.to_intake).toBe(false);
+    expect(st.staged).toEqual([]);
+  });
+});
+
+describe("2a-docs. Fix 3.5 is documented", () => {
+  it("SOP-04 v1.10 step 6, KB fact, 03 F-04-26, 06 row", () => {
+    expect(read("docs/sop/SOP-04-receiving-intake.md")).toMatch(/\| \*\*Version\*\* \| 1\.10 \(Phase 3\.5/);
+    expect(read("docs/sop/SOP-04-receiving-intake.md")).toContain("6. **Only vendor_intake@ mail (Phase 3.5).**");
+    expect(read("src/lib/admin/concierge-kb.ts")).toContain("Receiving \\u2192 only vendor_intake@ mail (Phase 3.5;");
+    expect(read("docs/sop-program/03-FINDINGS-LEDGER.md")).toContain("### F-04-26");
+    expect(read("docs/sop-program/06-FIX-PHASE-PLAN.md")).toMatch(/\| 3\.5 \| F-04-26/);
   });
 });
 

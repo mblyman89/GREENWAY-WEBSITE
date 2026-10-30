@@ -693,17 +693,90 @@ export function planHealthAlert(hb: ReconcileHeartbeat, nowMs: number, origin: s
  *  Gmail: query + message walk
  * ------------------------------------------------------------------ */
 
-/** The mailbox to read: INBOUND_RECONCILE_MAILBOX, else vendor_intake@greenwaymarijuana.com. */
+/**
+ * Fix 3.5 (owner: "It should only target vendor_intake@ and none of my other
+ * @greenwaymarijuana.com addresses."): the only local part Receiving reads.
+ */
+export const INTAKE_LOCAL_PART = "vendor_intake";
+/** Our own domain: a To/Cc naming one of OUR other addresses is not intake mail. */
+export const STORE_DOMAIN = "greenwaymarijuana.com";
+
+/**
+ * The mailbox to read: always vendor_intake@. INBOUND_RECONCILE_MAILBOX may
+ * only move it to another domain (its local part must stay vendor_intake);
+ * any other value (michael@, contact@ ...) is refused (null = not set up).
+ */
 export function reconcileMailbox(env: Readonly<Record<string, string | undefined>>): string | null {
   const v = ((env[RECONCILE_MAILBOX_ENV] ?? "").trim() || DEFAULT_RECONCILE_MAILBOX).toLowerCase();
-  return EMAIL_RE.test(v) ? v : null;
+  if (!EMAIL_RE.test(v)) return null;
+  return v.split("@")[0] === INTAKE_LOCAL_PART ? v : null;
+}
+
+function isStoreAddress(a: string): boolean {
+  const d = a.split("@")[1] ?? "";
+  return d === STORE_DOMAIN || d.endsWith(`.${STORE_DOMAIN}`);
+}
+
+export type IntakeVerdict = { ok: true; how: "to_cc" | "delivered_bcc" } | { ok: false; reason: string };
+
+/**
+ * Fix 3.5: was this email SENT to vendor_intake@? Read from the headers the
+ * sender wrote:
+ *   1. To or Cc names vendor_intake@                     -> yes;
+ *   2. To/Cc name none of our own addresses (a Bcc or an
+ *      "undisclosed recipients" send) and the Delivered-To
+ *      is vendor_intake@                                 -> yes;
+ *   3. anything else (To/Cc name michael@, contact@, ...;
+ *      or mail that only reached the box by an alias,
+ *      group, catch-all or auto-forward)                 -> no.
+ * Delivered-To / X-Forwarded-To alone never count when the sender addressed
+ * another of our mailboxes: Gmail stamps them on aliased and forwarded mail. PURE.
+ */
+export function intakeVerdict(headers: { to: readonly string[]; cc: readonly string[]; deliveredTo: readonly string[] }): IntakeVerdict {
+  const isIntake = (a: string) => a.split("@")[0] === INTAKE_LOCAL_PART;
+  const written = [...headers.to, ...headers.cc].map((a) => a.toLowerCase());
+  if (written.some(isIntake)) return { ok: true, how: "to_cc" };
+  const ours = written.filter(isStoreAddress);
+  if (ours.length > 0) return { ok: false, reason: `sent to ${ours.slice(0, 3).join(", ")}, not vendor_intake@` };
+  if (headers.deliveredTo.map((a) => a.toLowerCase()).some(isIntake)) return { ok: true, how: "delivered_bcc" };
+  return { ok: false, reason: "not addressed to vendor_intake@" };
+}
+
+function headerAddresses(payload: GmailPartLike | undefined, names: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const h of payload?.headers ?? []) {
+    if (!names.includes((h.name ?? "").toLowerCase())) continue;
+    for (const piece of (h.value ?? "").split(",")) {
+      const a = addressOf(piece.trim());
+      if (a) out.add(a);
+    }
+  }
+  return [...out];
+}
+
+/** Fix 3.5: the verdict straight from a Gmail message's headers. PURE. */
+export function gmailIntakeVerdict(payload: GmailPartLike | undefined): IntakeVerdict {
+  return intakeVerdict({
+    to: headerAddresses(payload, ["to"]),
+    cc: headerAddresses(payload, ["cc"]),
+    deliveredTo: headerAddresses(payload, ["delivered-to"]),
+  });
+}
+
+/** Fix 3.5: only the To/Cc addresses (what to record when a message is NOT intake mail). PURE. */
+export function gmailWrittenRecipients(payload: GmailPartLike | undefined): string[] {
+  return headerAddresses(payload, ["to", "cc"]);
 }
 
 /** Everything that arrived in the window (not sent mail, not drafts). Spam and Trash are included by the caller. */
-export function buildReconcileQuery(nowMs: number, days: number): string {
+export function buildReconcileQuery(nowMs: number, days: number, mailbox?: string | null): string {
   const d = Math.max(1, Math.min(MAX_FIND_DAYS, Math.floor(days)));
   const after = Math.floor((nowMs - d * 86_400_000) / 1000);
-  return `after:${after} -in:sent -in:drafts -in:chats`;
+  // Fix 3.5: only mail sent to vendor_intake@ (To/Cc/Bcc or delivered to it);
+  // intakeVerdict then drops anything that reached it through another of our addresses.
+  const mb = (mailbox ?? "").trim().toLowerCase();
+  const only = mb && EMAIL_RE.test(mb) ? ` {to:${mb} cc:${mb} deliveredto:${mb}}` : "";
+  return `after:${after} -in:sent -in:drafts -in:chats${only}`;
 }
 
 /**
@@ -712,13 +785,13 @@ export function buildReconcileQuery(nowMs: number, days: number): string {
  * subject:, has:attachment) still work; line breaks and quotes are tidied and
  * the text is capped.
  */
-export function buildFindQuery(text: unknown, nowMs: number, days: number): { ok: true; q: string; shown: string } | { ok: false; error: string } {
+export function buildFindQuery(text: unknown, nowMs: number, days: number, mailbox?: string | null): { ok: true; q: string; shown: string } | { ok: false; error: string } {
   const raw = typeof text === "string" ? text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim() : "";
   if (raw.length < 2) return { ok: false, error: "Type part of the sender, the subject or the manifest number." };
   const shown = raw.slice(0, 200);
   const quotes = (shown.match(/"/g) ?? []).length;
   const safe = quotes % 2 === 0 ? shown : shown.replace(/"/g, "");
-  return { ok: true, q: `${safe} ${buildReconcileQuery(nowMs, days)}`, shown };
+  return { ok: true, q: `${safe} ${buildReconcileQuery(nowMs, days, mailbox)}`, shown };
 }
 
 export type GmailPartLike = {
@@ -853,6 +926,8 @@ export type ReconcileRunSummary = {
   tooNew: number;
   autoRetried: number;
   errors: string[];
+  /** Fix 3.5: messages in the box sent to another of our addresses (skipped, never read). */
+  notIntake?: number;
 };
 
 export function describeRun(r: ReconcileRunSummary): string {
@@ -866,6 +941,7 @@ export function describeRun(r: ReconcileRunSummary): string {
   if (r.deferred > 0) parts.push(`${r.deferred} more will be pulled in by the next check (press again to do it now).`);
   if (r.tooNew > 0) parts.push(`${r.tooNew} arrived in the last 15 minutes and are still being received.`);
   if (r.autoRetried > 0) parts.push(`${r.autoRetried} failed email${r.autoRetried === 1 ? " was" : "s were"} fetched again.`);
+  if ((r.notIntake ?? 0) > 0) parts.push(`${r.notIntake} email${r.notIntake === 1 ? "" : "s"} sent to your other addresses (not vendor_intake@) ${r.notIntake === 1 ? "was" : "were"} skipped.`);
   if (r.errors.length > 0) parts.push(`Problems: ${r.errors.join("; ")}`);
   return parts.join(" ");
 }
@@ -1042,7 +1118,22 @@ export function __runInboundReconcileCoreTests(): { passed: number; failed: numb
 
   // gmail
   ok(reconcileMailbox({}) === DEFAULT_RECONCILE_MAILBOX, "mailbox default");
-  ok(reconcileMailbox({ INBOUND_RECONCILE_MAILBOX: "Other@greenwaymarijuana.com" }) === "other@greenwaymarijuana.com", "mailbox env");
+  ok(reconcileMailbox({ INBOUND_RECONCILE_MAILBOX: "Vendor_Intake@Other-Domain.com" }) === "vendor_intake@other-domain.com", "mailbox env (vendor_intake on another domain)");
+  // Fix 3.5: never any other of our addresses
+  ok(reconcileMailbox({ INBOUND_RECONCILE_MAILBOX: "Other@greenwaymarijuana.com" }) === null, "mailbox env: other@ refused");
+  ok(reconcileMailbox({ INBOUND_RECONCILE_MAILBOX: "michael@greenwaymarijuana.com" }) === null, "mailbox env: michael@ refused");
+  ok(buildReconcileQuery(NOW, 3, DEFAULT_RECONCILE_MAILBOX).endsWith(" {to:vendor_intake@greenwaymarijuana.com cc:vendor_intake@greenwaymarijuana.com deliveredto:vendor_intake@greenwaymarijuana.com}"), "query: vendor_intake@ only");
+  { const f = buildFindQuery("lilac", NOW, 30, DEFAULT_RECONCILE_MAILBOX); ok(f.ok && f.q.includes("{to:vendor_intake@greenwaymarijuana.com"), "find query: vendor_intake@ only"); }
+  ok(intakeVerdict({ to: ["vendor_intake@greenwaymarijuana.com"], cc: [], deliveredTo: [] }).ok, "verdict: To vendor_intake");
+  ok(intakeVerdict({ to: ["michael@greenwaymarijuana.com"], cc: ["vendor_intake@greenwaymarijuana.com"], deliveredTo: [] }).ok, "verdict: Cc vendor_intake");
+  { const v = intakeVerdict({ to: ["michael@greenwaymarijuana.com"], cc: [], deliveredTo: ["vendor_intake@greenwaymarijuana.com"] }); ok(!v.ok && v.reason.includes("michael@greenwaymarijuana.com"), "verdict: alias/forward of michael@ refused"); }
+  ok(!intakeVerdict({ to: ["contact@greenwaymarijuana.com"], cc: [], deliveredTo: ["vendor_intake@greenwaymarijuana.com"] }).ok, "verdict: contact@ refused");
+  ok(intakeVerdict({ to: [], cc: [], deliveredTo: ["vendor_intake@greenwaymarijuana.com"] }).ok, "verdict: Bcc to vendor_intake kept");
+  ok(intakeVerdict({ to: ["orders@vendor.com"], cc: [], deliveredTo: ["vendor_intake@greenwaymarijuana.com"] }).ok, "verdict: vendor list Bcc kept");
+  ok(!intakeVerdict({ to: [], cc: [], deliveredTo: ["michael@greenwaymarijuana.com"] }).ok, "verdict: nothing names vendor_intake");
+  ok(!intakeVerdict({ to: ["vendor_menu@greenwaymarijuana.com"], cc: [], deliveredTo: ["vendor_intake@greenwaymarijuana.com"] }).ok, "verdict: vendor_menu@ refused");
+  ok(gmailIntakeVerdict({ headers: [{ name: "To", value: "Michael <michael@greenwaymarijuana.com>" }, { name: "Delivered-To", value: "vendor_intake@greenwaymarijuana.com" }] }).ok === false, "gmail verdict from headers");
+  ok(gmailWrittenRecipients({ headers: [{ name: "To", value: "a@b.com" }, { name: "Cc", value: "C <c@d.com>" }, { name: "Delivered-To", value: "vendor_intake@greenwaymarijuana.com" }] }).join(",") === "a@b.com,c@d.com", "written recipients skip Delivered-To");
   ok(reconcileMailbox({ INBOUND_RECONCILE_MAILBOX: "nope" }) === null, "mailbox invalid");
   ok(buildReconcileQuery(NOW, 3) === `after:${Math.floor((NOW - 3 * 86_400_000) / 1000)} -in:sent -in:drafts -in:chats`, "reconcile query");
   ok(buildReconcileQuery(NOW, 9999).startsWith(`after:${Math.floor((NOW - MAX_FIND_DAYS * 86_400_000) / 1000)}`), "query window capped");
@@ -1091,6 +1182,7 @@ export function __runInboundReconcileCoreTests(): { passed: number; failed: numb
   // summary
   ok(describeRun({ configured: true, onTable: 9, recovered: 0, recoveredStaged: 0, deferred: 0, tooNew: 0, autoRetried: 0, errors: [] }).startsWith("Every email in the mailbox is on the table (9"), "describe clean");
   ok(describeRun({ configured: true, onTable: 9, recovered: 2, recoveredStaged: 1, deferred: 3, tooNew: 1, autoRetried: 1, errors: ["x"] }).includes("Pulled in 2 emails"), "describe recovery");
+  ok(describeRun({ configured: true, onTable: 1, recovered: 0, recoveredStaged: 0, deferred: 0, tooNew: 0, autoRetried: 0, errors: [], notIntake: 2 }).includes("2 emails sent to your other addresses (not vendor_intake@) were skipped"), "describe: other addresses skipped");
   ok(describeRun({ configured: false, onTable: 0, recovered: 0, recoveredStaged: 0, deferred: 0, tooNew: 0, autoRetried: 0, errors: [] }).includes("RESEND_API_KEY"), "describe not configured");
 
   return { passed, failed };

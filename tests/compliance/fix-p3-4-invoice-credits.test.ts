@@ -97,7 +97,7 @@ describe("3. wiring", () => {
 
 describe("4. SOP, ledgers, concierge, migrations list", () => {
   it("say the same thing", () => {
-    expect(read("docs/sop/SOP-04-receiving-intake.md")).toMatch(/\| \*\*Version\*\* \| 1\.9 \(Phase 3\.4/);
+    expect(read("docs/sop/SOP-04-receiving-intake.md")).toMatch(/\| \*\*Version\*\* \| 1\.(9|1\d) \(Phase 3\.[45]/);
     expect(read("docs/sop/SOP-04-receiving-intake.md")).toContain("### 4.7b Invoice amount, credits and the vendor name (Phase 3.4)");
     expect(read("src/lib/admin/concierge-kb.ts")).toContain("Receiving \\u2192 invoice credits, invoice amount and vendor name (Phase 3.4;");
     expect(read("docs/sop-program/03-FINDINGS-LEDGER.md")).toMatch(/### F-04-24[^\n]*\n- \*\*Status: FIXED \(Phase 3\.4/);
