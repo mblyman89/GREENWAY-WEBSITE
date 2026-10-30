@@ -81,6 +81,7 @@ describe("W-2 page: the shell never waits for the heavy reads", () => {
   it("Step 3 cannot record a week whose files failed to build", () => {
     expect(PAGE).toContain("const gate = recordGate({ built: !!batch, submittable, totalRecords, nothingToReport });");
     expect(PAGE).toContain("disabled={!gate.submitted}");
+    expect(PAGE).not.toContain("<Button ");
     expect(PAGE).toContain("disabled={!gate.nothing}");
   });
   it("a failed build is shown in place", () => {

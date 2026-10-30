@@ -1153,6 +1153,39 @@ Branch `ccrs-pipeline-w1` (not pushed).
 
 **Remaining.** Page speed (W-2). Duplicate hold-back for every file type (W-3).
 
+## W-2 — The hub shows at once; heavy panels stream in (DONE in code, 2026-10-30)
+
+Branch `ccrs-pipeline-w1` (not pushed).
+
+**Rule.** The CCRS hub never waits for its slowest read before showing anything. The env switch, deadline banner, week picker, CCRS emails and Step 3 facts come from small reads. The week's batch build, the test scoreboard, the files list (with issues), the clean-up scan and the medical scan stream into their own panels. A failed panel says so in place; the rest of the page keeps working. Every button shows it is working while its action runs.
+
+**Before.** One `await Promise.all` held thirteen reads, including the 36-query scoreboard, the issue paging of every file, and the migration clean-up scan. Then the full batch build plus the medical scan ran before the first byte. Any throw blanked the page.
+
+**Built.**
+- `ccrs-hub-view-core.ts` (pure, 17 self-tests):
+  - `settle` (never rejects) and `errorText`;
+  - `pickSelectedWeek`;
+  - `waitingFilesOfEnv`;
+  - `medicalSaleRowCount`;
+  - `recordGate`: a week whose files failed to build cannot be recorded either way.
+- `page.tsx`:
+  - the shell awaits only the small reads plus one light `listCcrsFilesLite` of the waiting files of both envs (no issues), which feeds the email picker and the "answer the earlier files" warning;
+  - the batch is built ONCE per render (`weekP`, settled) and shared by Step 2, the advisor, the walkthrough, the files panel, error triage, Step 3 and the medical panel;
+  - every heavy panel sits in `<Suspense>` with a "Loading ... the rest of the page already works" fallback.
+- `ccrs-scoreboard-store.ts`: `readCcrsScoreboard(..., { acceptedOnly })`. The Production page shows only the one-line strip, so it reads 18 queries instead of 36.
+- `PendingSubmit.tsx` (client, `useFormStatus`): every files-panel and clean-up button keeps its look, then disables and shows a busy label while its action runs. Hub forms use `SaveButton`.
+
+**Tests.** `tests/compliance/w2-ccrs-hub-speed.test.ts`:
+- source pins: no heavy await before the JSX, a single build, a Suspense around every heavy panel, the light read for the emails, the Step 3 gate, the half scoreboard;
+- `settle` behaviour.
+
+TS mutations **M484–M493** (10) are all killed.
+
+**Remaining.**
+- The batch build itself is unchanged (it still takes as long as before, but no longer blocks the page).
+- Scoreboard payload filters have no index; consider one if the PREprod row count grows.
+- `next build` was not run in this sandbox (3.9 GB RAM; Part 01 build note). Run it on CI or Vercel preview before merge.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

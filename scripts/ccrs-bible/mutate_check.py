@@ -159,6 +159,9 @@ HUBACT = "src/app/admin/compliance/ccrs/actions.ts"
 HUBMAIL = "src/app/admin/compliance/ccrs/mail-actions.ts"
 HUBPANEL = "src/components/admin/compliance/CcrsMailPanel.tsx"
 W1_TESTS = "tests/compliance/w1-ccrs-hub-env.test.ts"
+HUBVIEW = "src/lib/compliance/ccrs-hub-view-core.ts"
+SCORESTORE = "src/lib/compliance/ccrs-scoreboard-store.ts"
+W2_TESTS = "tests/compliance/w2-ccrs-hub-speed.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -3920,6 +3923,86 @@ MUTATIONS = [
         W1_TESTS,
         'The picker offers only files of the email env.',
     ),
+    (
+        'M484-w2-settle-rejects',
+        HUBVIEW,
+        '(e: unknown) => ({ ok: false as const, error: errorText(e) }),',
+        '(e: unknown) => { throw e; },',
+        W2_TESTS,
+        'A failed heavy read never rejects (it would blank the page).',
+    ),
+    (
+        'M485-w2-requested-week-ignored',
+        HUBVIEW,
+        'if (hit) return hit;',
+        'if (hit && false) return hit;',
+        W2_TESTS,
+        'An explicit ?week= is honoured.',
+    ),
+    (
+        'M486-w2-waiting-any-env',
+        HUBVIEW,
+        'files.filter((f) => f.env === env && WAITING_STATES.includes(f.state))',
+        'files.filter((f) => WAITING_STATES.includes(f.state))',
+        W2_TESTS,
+        "The warning shows only this env's waiting files.",
+    ),
+    (
+        'M487-w2-failed-build-recordable',
+        HUBVIEW,
+        'if (!v.built) return { submitted: false, nothing: false, submittedWhy: "build-failed", nothingWhy: "build-failed" };',
+        '',
+        W2_TESTS,
+        'A week whose files failed to build cannot be recorded.',
+    ),
+    (
+        'M488-w2-nothing-with-records',
+        HUBVIEW,
+        'const nothingWhy = v.totalRecords > 0 ? "has-records" : null;',
+        'const nothingWhy = null;',
+        W2_TESTS,
+        'A week with records cannot be recorded as nothing to report.',
+    ),
+    (
+        'M489-w2-medical-any-file',
+        HUBVIEW,
+        'const sale = (files ?? []).find((f) => String(f.type) === "Sale");',
+        'const sale = (files ?? [])[0];',
+        W2_TESTS,
+        'Medical rows are counted in the Sale file only.',
+    ),
+    (
+        'M490-w2-batch-awaited-up-front',
+        CCRS_PAGE,
+        'const weekP: Promise<WeekView> = settle(() =>',
+        'const weekP: Promise<WeekView> = await settle(() =>',
+        W2_TESTS,
+        'The shell never waits for the batch build.',
+    ),
+    (
+        'M491-w2-step3-gate',
+        CCRS_PAGE,
+        'disabled={!gate.nothing}',
+        'disabled={false}',
+        W2_TESTS,
+        'Step 3 honours the record gate.',
+    ),
+    (
+        'M492-w2-scoreboard-half',
+        SCORESTORE,
+        'opts.acceptedOnly ? Promise.resolve([] as ScoreRow[]) : readOne(admin, env, t, false)',
+        'readOne(admin, env, t, false)',
+        W2_TESTS,
+        'Production reads only the accepted half of the scoreboard.',
+    ),
+    (
+        'M493-w2-mail-heavy-list',
+        CCRS_PAGE,
+        'uploadedFiles={waitingAll.filter((f) => isUnansweredState(f.state))}',
+        'uploadedFiles={[]}',
+        W2_TESTS,
+        'The email picker gets the waiting files from the light read.',
+    ),
 ]
 
 
@@ -3980,6 +4063,7 @@ def main() -> int:
         R5R_TESTS,
         R5E_TESTS,
         W1_TESTS,
+        W2_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.

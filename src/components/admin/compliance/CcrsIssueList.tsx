@@ -13,6 +13,7 @@
  * so this renders with renderToStaticMarkup in the vitest harness.
  */
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
+import { PendingSubmit } from "./PendingSubmit";
 import {
   groupRowsByReason,
   isWithholdIssue,
@@ -98,9 +99,9 @@ export function CcrsIssueList({ issues, env, tone, copyTitle, cleanup }: Props) 
                               <input type="hidden" name="label" value={r.label} />
                               <input type="hidden" name="week_key" value={cleanup.weekKey} />
                               <input type="hidden" name="env" value={env} />
-                              <button type="submit" className="font-sans text-[10px] text-amber-200 underline" data-testid="cleanup-button">
+                              <PendingSubmit className="font-sans text-[10px] text-amber-200 underline" testId="cleanup-button" busy="Working...">
                                 {e.code === "E58_PRODUCT_ON_CLEANUP_LIST" ? "Remove from clean-up list" : "Add to CCRS clean-up list"}
-                              </button>
+                              </PendingSubmit>
                             </form>
                           ) : null}
                         </li>
