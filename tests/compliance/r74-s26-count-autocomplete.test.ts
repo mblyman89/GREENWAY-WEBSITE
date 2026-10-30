@@ -161,7 +161,7 @@ describe("R74 S26 count AutoComplete defence", () => {
   });
 
   it("wiring: the preview passes the risk set to the plan; the page explains the exception", () => {
-    expect(STORE).toContain("autocompleteRisk: merged.autocompleteRisk })");
+    expect(STORE).toContain("autocompleteRisk: merged.autocompleteRisk, listedBarcodes: merged.listed })");
     expect(PAGE).toMatch(/autocomplete_risk: "Excel AutoComplete could have turned a scan/);
   });
 });
