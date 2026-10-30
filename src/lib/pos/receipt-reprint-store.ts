@@ -25,7 +25,9 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { RETURN_WINDOW_DAYS } from "@/lib/pos/returns-core";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
+import { lookupWindowDays } from "@/lib/pos/return-policy-core";
+import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 import { receiptNumber } from "@/lib/pos/receipt-core";
 import {
   rebuildReceiptFromPayload,
@@ -35,8 +37,13 @@ import {
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { receiptAddressLines } from "@/lib/pos/receipt-config-core";
 
-/** Same window the history panel and the receipt lookup use. */
-const LOOKUP_WINDOW_DAYS = RETURN_WINDOW_DAYS + 2;
+/**
+ * How far back a reprint can reach. Fix Phase 6F: the return window is the
+ * owner's setting now (default 7). A reprint is not a return, so a shorter
+ * return window never shrinks the reprint reach below the 17 days it always
+ * had; a longer window widens it to match the history panel.
+ */
+const REPRINT_MIN_DAYS = 17;
 
 /** Same scan slice the history panel uses. */
 const EVENT_SCAN_LIMIT = 400;
@@ -70,6 +77,8 @@ export async function reprintReceiptByNumber(receiptCode: string): Promise<Repri
   }
 
   const admin = createSupabaseAdminClient();
+  const returnPolicy = await getPosReturnPolicy();
+  const LOOKUP_WINDOW_DAYS = Math.max(REPRINT_MIN_DAYS, lookupWindowDays(returnPolicy));
   const cutoff = new Date(Date.now() - LOOKUP_WINDOW_DAYS * 86_400_000).toISOString();
 
   const { data, error } = await admin
@@ -143,6 +152,8 @@ export async function reprintReceiptByNumber(receiptCode: string): Promise<Repri
     headerText: cfg.headerText,
     footerText: cfg.footerText,
     addressLines: receiptAddressLines(cfg),
-    config: cfg,
+    // Fix 6F — blank owner text falls back to the policy built from the
+    // Return policy settings, not a hard-coded window.
+    config: { ...cfg, returnPolicyText: cfg.returnPolicyText.trim() || defaultReturnPolicyText(returnPolicy) },
   });
 }

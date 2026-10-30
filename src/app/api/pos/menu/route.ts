@@ -31,6 +31,7 @@ import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
 import { trimDescription } from "@/lib/pos/product-info-core";
 import { isRatioLedCategory, resolvePackageMg } from "@/lib/menu/cannabinoid-profile-core";
 import { gramsFromVariantLabel } from "@/lib/pos/variant-grams-core";
@@ -100,7 +101,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired] =
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired, returnPolicy] =
     await Promise.all([
       loadLiveMenuAll(),
       loadActiveRules(),
@@ -113,6 +114,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
       getPosReceiptConfig(),
       getPosCashRoundingConfig(),
       getPosScanRequiredConfig(),
+      getPosReturnPolicy(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
   // SLICE 28 — ship ALL three program rows (enabled or not); the device
@@ -494,6 +496,10 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     // POS B41 — scan-required mode rides the bundle so OFFLINE registers
     // keep enforcing the cached policy.
     scanRequired,
+    // Fix 6F (G-67/G-68) — the owner's return-policy settings ride the
+    // bundle so the receipt's printed policy and the More-menu label match
+    // Register Activity → Return policy, even OFFLINE.
+    returnPolicy,
     // SLICE 28 — special-discount program settings (employee/industry/
     // veteran rates + switches) so the register offers them OFFLINE.
     specialDiscounts,

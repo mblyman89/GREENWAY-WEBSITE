@@ -46,6 +46,7 @@ import { classificationSearchText } from "@/lib/pos/classification-search-core";
 // from this module, so a VALUE import here would create a runtime cycle.
 import type { PosMedicalConfig } from "./medical-pos-core";
 import type { PosReceiptConfig } from "./receipt-config-core";
+import type { PosReturnPolicyConfig } from "./return-policy-core";
 import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
 // Type-only (erased at compile time) — no runtime cycle with scan-required-core.
 import type { PosScanRequiredConfig } from "./scan-required-core";
@@ -204,6 +205,13 @@ export type PosMenuBundle = {
    * the pure defaults in receipt-config-core.
    */
   receipt?: PosReceiptConfig;
+  /**
+   * Fix 6F (G-67/G-68) — the owner's return policy (loyalty-only toggle,
+   * window days, non-returnable product types). Optional so an older cached
+   * bundle still parses; the register normalizes a missing block to the
+   * defaults (anyone with the receipt, 7 days, all types).
+   */
+  returnPolicy?: PosReturnPolicyConfig;
   /**
    * Loyalty program facts the device needs OFFLINE (POS B14): the earn rate
    * for the receipt's points ESTIMATE (authoritative accrual happens

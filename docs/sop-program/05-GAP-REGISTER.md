@@ -93,6 +93,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-64 | **Crew tip pool**: pool + people at close, even split in whole cents (floor, leftover stays), share saved as the cashier's own tips | D89 (Q-E-10) | — | SOP-01 §4.27 step 7 | **BUILT** (Fix Phase 6, #1567) |
 | G-65 | **Night deposit assembled and verified**: tick each till's stack against the screen, server re-works the lines, no night denominations; denomination count is the fallback | D82 (Q-E-4) | — | SOP-03 §4.5 | **BUILT** (Fix Phase 6, #1567) |
 | G-66 | **Reconcile timing**: either manager, before the seal; seal warns and audits unreconciled drawers; EOD "awaiting manager reconcile" | D87 (Q-E-8) | — | SOP-01 §4.30, SOP-03 §4.7, §4.11 | **BUILT** (Fix Phase 6, #1567) |
+| G-67 | **Return policy: anyone may return by default, "Loyalty members only" toggle, return window setting (default 7 days, 1–60)**; receipt + original packaging stay mandatory | D93, D94, D96 (owner message 9) | — | SOP-15 §4.3, SOP-01 §4.23 | **BUILT** (Fix Phase 6F, #P6F) |
+| G-68 | **Returnable product types setting**: unticked categories refused at the register and the returns desk with the reason on screen | D95 (owner message 9) | — | SOP-15 §4.3 | **BUILT** (Fix Phase 6F, #P6F) |
 
 ---
 
@@ -486,6 +488,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   7. **(SOP-15 extension)** After a partial destruction the lot returns to its status before scheduling, not left in Quarantine (F-15-11).
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C); SOP-15 §4.19–§4.22, form 8.5.
 
+### Fix Phase 6F (G-67, G-68; owner message 9, D91–D96): return policy settings and tip accountability
+
+- **Owner:** *"we should allow it to be a setting in the register activity page, so we can toggle it on and off if we want to. I also want to have a setting for choosing a return window as well as the types of products we allow to be returned."*; *"I just want to make sure the cashier is accountable for their tips too."*
+- **Status: BUILT (Fix Phase 6F, #P6F).** New `src/lib/pos/return-policy-core.ts` (pure, 27 self-tests) + `return-policy-store.ts` (site_settings `pos_return_policy`). Settings page `/admin/registers/return-policy` (`settings.manage`, audit `pos.return_policy_saved`), "Return policy" button on Register Activity. `returns-core.ts` window is a parameter (default 7), loyalty gate only when on. `returns-store.ts` reads the policy, pages the receipt scan (`pagedAll`), blocks excluded categories (`order_lines.category`) on lookup and on process. iPad ReturnsModal + More menu, the returns desk, transaction-history and reprint windows, and the printed receipt default policy (register bundle `returnPolicy`, reprint, pickup printer) follow the setting. FAQ + concierge seed now say 7 days, receipt, no loyalty needed. iPad close: tips box required (0 allowed). **No migration.** Test `tests/compliance/fix-p6f-return-policy.test.ts`.
+
 ### Fix Phase 6 / Fix E (G-61..G-66; owner message 8, D81–D90): shift end and end-of-day cash
 
 - **Owner:** Q-E-6 *"Block. I don't want to clock out on the register change out step."*; Q-E-7 *"Warn please"*; Q-E-4 *"Please change it to assembled and verified at night, and blind counted in the morning."*; Q-E-5 *"Yes please do this."*; Q-E-10 *"The tip jar is pooled for the morning crew, and pooled for the night crew."*; Q-E-8 *"build this one like the big boys would."*
@@ -857,3 +864,11 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Owner basis:** D87 (Q-E-8): *"I think it can be done by either the night manager or morning manager. But don't build it this way just because I say to. I want your professional opinion"*.
 - **Professional call:** blind close at the till, asynchronous manager review with a deadline (the large POS pattern). Either manager; deadline = the bag seal; never blocks.
 - **Built:** `sealBagAction` reads `bagDrawers`, appends `sealReconcileWarning` and audits `deposit_bag.sealed_unreconciled`; `eod-core.ts` `awaitingReconcile` + `eodStatus` banner *"Closed — N drawers awaiting manager reconcile"*.
+
+## G-67 · Return policy settings: who may return and the window (BUILT, Fix Phase 6F, D93/D94/D96, SOP-15) — S2
+- **Owner basis:** owner message 9: *"it would be better if this were changed to allow anyone to return products so long as they have the original packaging and the receipt to go with it and it falls within the 7 day return period."*
+- **Built:** `PosReturnPolicyConfig` (`loyaltyRequired` default false, `windowDays` default 7, 1–60); `evaluateReturnEligibility` applies the loyalty gate only when on; every surface reads the saved policy. Receipt + packaging are not settings (D96).
+
+## G-68 · Returnable product types (BUILT, Fix Phase 6F, D95, SOP-15) — S2
+- **Owner basis:** owner message 9: *"as well as the types of products we allow to be returned."*
+- **Built:** `excludedCategories` (category slugs from the category registry); `lineNotReturnableReason` names the type; lookup lines carry the reason and are not selectable; `processCounterReturn` refuses server-side. Lines with no category on record are not blocked.

@@ -30,6 +30,8 @@ import {
   shouldWritePrinterHeartbeat,
 } from "@/lib/printing/printer-heartbeat-core";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
+import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 import { normalizeDiscountDisplayConfig } from "@/lib/pos/receipt-discount-core";
 import {
   MAX_FAILS_PER_CLAIM,
@@ -252,6 +254,13 @@ export async function queueOrderReceipt(input: ReceiptInput & {
   } catch {
     config = null;
   }
+  // Fix 6F — blank owner policy text prints the Return policy settings.
+  let policyFallback: string | null = null;
+  try {
+    policyFallback = defaultReturnPolicyText(await getPosReturnPolicy());
+  } catch {
+    policyFallback = null;
+  }
 
   const lines: EscposReceiptLine[] = input.lines.map((l, i) => {
     const extra = input.lineExtras?.[i] ?? null;
@@ -301,7 +310,7 @@ export async function queueOrderReceipt(input: ReceiptInput & {
       showItemDetail: config?.showItemDetail,
       showSaleSummary: config?.showSaleSummary,
       showReturnPolicy: config?.showReturnPolicy,
-      returnPolicyText: config?.returnPolicyText ?? null,
+      returnPolicyText: config?.returnPolicyText?.trim() || policyFallback,
       // The owner's "Online orders" discount-detail settings. Null config
       // (settings read failed) still explains discounts with the defaults.
       discountDisplay: config?.onlineDiscount ?? normalizeDiscountDisplayConfig(null),

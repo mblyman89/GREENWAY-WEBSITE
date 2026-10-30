@@ -477,11 +477,15 @@ describe("the return policy on the paper matches the policy we enforce", () => {
     expect(defaultReturnPolicyText()).toContain(String(RETURN_WINDOW_DAYS));
   });
 
-  it("states the loyalty and original-receipt conditions the code enforces", () => {
+  it("states the original-receipt condition, and loyalty only when the owner requires it", () => {
+    // Fix 6F (owner message 9): anyone may return by default; the loyalty
+    // line prints only when Register Activity -> Return policy turns it on.
     const policy = defaultReturnPolicyText();
     expect(policy.toLowerCase()).toContain("receipt");
-    expect(policy.toLowerCase()).toContain("loyalty");
+    expect(policy.toLowerCase()).not.toContain("loyalty");
     expect(policy.toLowerCase()).toContain("original packaging");
+    const loyal = defaultReturnPolicyText({ loyaltyRequired: true, windowDays: 7, excludedCategories: [] });
+    expect(loyal.toLowerCase()).toContain("loyalty");
   });
 
   it("honours custom owner wording", () => {

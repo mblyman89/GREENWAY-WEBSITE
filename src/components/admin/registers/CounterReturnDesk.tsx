@@ -6,7 +6,10 @@
  * Foolproof flow, in the order the counter conversation actually happens:
  *  1. Type the receipt number off the customer's ORIGINAL receipt (store
  *     policy — no receipt, no return). The server verifies every policy gate
- *     at once: loyalty member attached (B14), completed sale, 15-day window.
+ *     at once: completed sale, inside the owner's return window, and — only
+ *     when the owner turns it on — a loyalty member attached (Fix 6F: the
+ *     window, loyalty rule and returnable product types are settings at
+ *     Register Activity → Return policy).
  *  2. Pick the exact line + quantity. Refund is computed from the stored
  *     paid price — staff never type a refund amount, so it can't be wrong.
  *  3. Check the physical product (WAC 314-55-079(12) attestations), pick
@@ -47,7 +50,14 @@ type DoneState = {
   refundTieNote: string | null;
 };
 
-export function CounterReturnDesk({ openDrawers = [] }: { openDrawers?: { id: string; label: string }[] }) {
+export function CounterReturnDesk({
+  openDrawers = [],
+  policyText,
+}: {
+  openDrawers?: { id: string; label: string }[];
+  /** Fix 6F — the saved return policy in plain English. */
+  policyText?: string;
+}) {
   const { toast } = useToast();
   const [receipt, setReceipt] = useState("");
   const [errors, setErrors] = useState<string[] | null>(null);
@@ -101,7 +111,7 @@ export function CounterReturnDesk({ openDrawers = [] }: { openDrawers?: { id: st
       }
       setErrors(null);
       setSale(res.sale);
-      if (res.sale.lines.length === 1 && res.sale.lines[0].remainingReturnable > 0) {
+      if (res.sale.lines.length === 1 && res.sale.lines[0].remainingReturnable > 0 && !res.sale.lines[0].notReturnableReason) {
         setLineId(res.sale.lines[0].lineId);
         setQuantity(1);
       }
@@ -230,7 +240,7 @@ export function CounterReturnDesk({ openDrawers = [] }: { openDrawers?: { id: st
           </Button>
         </div>
         <p className="mt-1.5 text-xs text-white/40">
-          Store policy: loyalty members only, original receipt in hand, within 15 days of purchase.
+          {sale?.policySummary ?? policyText ?? "Store policy: original receipt in hand, original packaging, inside the return window."}
         </p>
       </div>
 
@@ -270,7 +280,8 @@ export function CounterReturnDesk({ openDrawers = [] }: { openDrawers?: { id: st
             <ul className="space-y-2">
               {sale.lines.map((l) => {
                 const isSel = lineId === l.lineId;
-                const out = l.remainingReturnable <= 0;
+                const blocked = l.notReturnableReason;
+                const out = l.remainingReturnable <= 0 || !!blocked;
                 return (
                   <li key={l.lineId}>
                     <button
@@ -293,8 +304,9 @@ export function CounterReturnDesk({ openDrawers = [] }: { openDrawers?: { id: st
                       <div className="mt-0.5 text-xs text-white/45">
                         bought {l.quantity}
                         {l.alreadyReturned > 0 ? ` · already returned ${l.alreadyReturned}` : ""}
-                        {out ? " · fully returned" : ` · up to ${l.remainingReturnable} returnable`}
+                        {blocked ? "" : out ? " · fully returned" : ` · up to ${l.remainingReturnable} returnable`}
                       </div>
+                      {blocked ? <div className="mt-0.5 text-xs text-[#ff6b6b]">{blocked}</div> : null}
                     </button>
                   </li>
                 );

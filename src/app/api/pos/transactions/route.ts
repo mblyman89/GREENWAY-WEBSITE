@@ -66,6 +66,8 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     // Told to the user verbatim when true: "no results" and "we stopped
     // looking" must never look the same at the counter.
     scanTruncated: result.scanTruncated,
+    // Fix Phase 6F: the days scanned (the owner's return window + 2).
+    windowDays: result.windowDays,
   });
 }
 

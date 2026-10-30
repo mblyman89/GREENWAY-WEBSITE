@@ -572,6 +572,7 @@ import { __runReceiptDiscountCoreTests } from "../../src/lib/pos/receipt-discoun
 import { __runReceiptTaxCoreTests } from "../../src/lib/pos/receipt-tax-core";
 import { __runReceiptLogoCoreTests } from "../../src/lib/pos/receipt-logo-core";
 import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
+import { __runReturnPolicyCoreTests } from "../../src/lib/pos/return-policy-core";
 import { __runSaleDecrementCoreTests, __runSaleSizeDrawTests } from "../../src/lib/inventory/sale-decrement-core";
 import { __runTillCoreTests } from "../../src/lib/pos/till-core";
 import { __runDayReportCoreTests } from "../../src/lib/pos/day-report-core";
@@ -2633,6 +2634,7 @@ __runLiquidVolumeTests();
   assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
   assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
   assertRan("shift-end-core", __runShiftEndCoreTests(), 46); // Fix Phase 6 (G-61..G-66, D81-D90): clock-out blocked while you own an open drawer, float warns, tip pool split evenly (floor, leftover stays), assembled night deposit, seal warns on unreconciled drawers, EOD awaiting reconcile
+  assertRan("return-policy-core", __runReturnPolicyCoreTests(), 27); // Fix Phase 6F (G-67/G-68, owner message 9): anyone may return by default, loyalty-only toggle, 1-60 day window (default 7), non-returnable product types, policy text on screen + receipt
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

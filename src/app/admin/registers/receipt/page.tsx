@@ -16,6 +16,8 @@ import { Breadcrumbs, EmptyState, HelpPanel } from "@/components/admin/ux";
 import { Card } from "@/components/admin/ui";
 import { ReceiptConfigEditor } from "@/components/admin/registers/ReceiptConfigEditor";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
+import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ export default async function ReceiptConfigPage() {
     );
   }
 
-  const config = await getPosReceiptConfig();
+  const [config, returnPolicy] = await Promise.all([getPosReceiptConfig(), getPosReturnPolicy()]);
 
   return (
     <div>
@@ -61,7 +63,7 @@ export default async function ReceiptConfigPage() {
           ]}
         />
         <Card>
-          <ReceiptConfigEditor initial={config} />
+          <ReceiptConfigEditor initial={config} defaultPolicyText={defaultReturnPolicyText(returnPolicy)} />
         </Card>
       </div>
     </div>

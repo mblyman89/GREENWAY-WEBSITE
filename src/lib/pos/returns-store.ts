@@ -14,11 +14,16 @@
  * The printed receipt number is the last 8 hex chars of the sale's
  * client_uuid (receiptNumber(), B10). PostgREST cannot LIKE-filter a uuid
  * column without a cast, and we do not add DB functions for this. But the
- * 15-day policy window means only recent sales are ever returnable — so we
- * scan `pos_sale_events` for processed sales in the last
- * RETURN_WINDOW_DAYS + 2 days (clock-skew buffer) and match the suffix in
- * memory. The policy bounds the scan; an older receipt correctly reads as
- * "outside the 15-day window".
+ * policy window means only recent sales are ever returnable — so we scan
+ * `pos_sale_events` for processed sales in the last window + 2 days
+ * (clock-skew buffer) and match the suffix in memory. The policy bounds the
+ * scan; an older receipt correctly reads as outside the window.
+ *
+ * Fix Phase 6F (owner message 9, G-67/G-68): the window, the loyalty-only
+ * toggle and the returnable product types are the owner's SETTING
+ * (Register Activity → Return policy, return-policy-store). The scan pages
+ * in 1,000-row pages (pagedAll), because PostgREST silently stops at 1,000
+ * rows and a longer window could otherwise miss a valid receipt.
  *
  * Loyalty clawback
  * ----------------
@@ -39,8 +44,11 @@ import {
   pointsClawback,
   receiptLookupSuffix,
   refundForLine,
-  RETURN_WINDOW_DAYS,
 } from "@/lib/pos/returns-core";
+import { getPosReturnPolicy } from "@/lib/pos/return-policy-store";
+import { lineNotReturnableReason, lookupWindowDays, returnPolicySummary, type PosReturnPolicyConfig } from "@/lib/pos/return-policy-core";
+import { getCategoryLabeler } from "@/lib/pos/category-registry";
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import { createCustomerReturn } from "@/lib/inventory/disposition";
 import { isNonCannabisProductId } from "@/lib/noncannabis/pos-catalog-core";
 import { createNonCannabisReturn } from "@/lib/noncannabis/returns";
@@ -51,10 +59,9 @@ import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { buildRefundReceiptHtml, receiptNumber } from "@/lib/pos/receipt-core";
 
-// How far back the receipt scan reaches: the policy window + 2 days of
-// clock-skew/timezone buffer. Sales past this are not returnable anyway.
-const LOOKUP_WINDOW_DAYS = RETURN_WINDOW_DAYS + 2;
-const LOOKUP_SCAN_LIMIT = 5000;
+// How far back the receipt scan reaches: the owner's policy window + 2 days
+// of clock-skew/timezone buffer (lookupWindowDays). Sales past this are not
+// returnable anyway.
 
 // ---------------------------------------------------------------------------
 // Lookup
@@ -69,6 +76,14 @@ export type CounterReturnLine = {
   priceMinorUnits: number;
   alreadyReturned: number;
   remainingReturnable: number;
+  /** order_lines.category snapshot (null on old sales). */
+  category: string | null;
+  /**
+   * Fix Phase 6F (G-68): why this line's product type may not be returned
+   * under the owner's policy, or null when it may. Shown on the screen; the
+   * server refuses the return regardless of what the screen sends.
+   */
+  notReturnableReason: string | null;
 };
 
 export type CounterReturnSale = {
@@ -82,6 +97,10 @@ export type CounterReturnSale = {
   daysRemaining: number;
   orderTotalMinor: number;
   lines: CounterReturnLine[];
+  /** Fix Phase 6F: the policy this lookup was judged by (shown on screen). */
+  policy: PosReturnPolicyConfig;
+  /** Plain-English summary of that policy (category labels resolved). */
+  policySummary: string;
 };
 
 export type CounterReturnLookup =
@@ -111,27 +130,32 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
     };
   }
   const admin = createSupabaseAdminClient();
+  const policy = await getPosReturnPolicy();
 
-  const cutoff = new Date(Date.now() - LOOKUP_WINDOW_DAYS * 86_400_000).toISOString();
-  const { data: events } = await admin
-    .from("pos_sale_events")
-    .select("client_uuid, order_id, occurred_at")
-    .eq("event_type", "sale")
-    .eq("status", "processed")
-    .not("order_id", "is", null)
-    .gte("occurred_at", cutoff)
-    .order("occurred_at", { ascending: false })
-    .limit(LOOKUP_SCAN_LIMIT);
-  const rows = (events as { client_uuid: string; order_id: string; occurred_at: string }[] | null) ?? [];
+  const cutoff = new Date(Date.now() - lookupWindowDays(policy) * 86_400_000).toISOString();
+  type EventRow = { client_uuid: string; order_id: string; occurred_at: string };
+  const rows = await pagedAll<EventRow>(async (from, to) => {
+    const { data } = await admin
+      .from("pos_sale_events")
+      .select("client_uuid, order_id, occurred_at")
+      .eq("event_type", "sale")
+      .eq("status", "processed")
+      .not("order_id", "is", null)
+      .gte("occurred_at", cutoff)
+      .order("occurred_at", { ascending: false })
+      .order("client_uuid", { ascending: true })
+      .range(from, to);
+    return (data as EventRow[] | null) ?? [];
+  });
   const wanted = suffix.toUpperCase();
   const match = rows.find((r) => clientUuidMatchesReceipt(r.client_uuid, wanted));
   if (!match) {
     return {
       ok: false,
       errors: [
-        `No processed register sale in the last ${RETURN_WINDOW_DAYS} days matches receipt ${wanted}. ` +
+        `No processed register sale in the last ${policy.windowDays} days matches receipt ${wanted}. ` +
           "Check the number on the paper — and remember the store policy: returns are only accepted within " +
-          `${RETURN_WINDOW_DAYS} days of purchase.`,
+          `${policy.windowDays} days of purchase.`,
       ],
     };
   }
@@ -158,24 +182,29 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
     orderCustomerId: order.customer_id,
     purchasedAtIso,
     nowIso: new Date().toISOString(),
+    policy,
   });
   if (!verdict.ok) return { ok: false, errors: verdict.errors };
 
-  // Member label (privacy-lean, same shape the register shows).
-  let memberLabel = "Loyalty member";
-  const { data: cust } = await admin
-    .from("customers")
-    .select("first_name, last_name")
-    .eq("id", order.customer_id as string)
-    .maybeSingle();
-  const c = cust as { first_name: string; last_name: string | null } | null;
-  if (c) memberLabel = privacyLabel(c.first_name, c.last_name);
+  // Member label (privacy-lean, same shape the register shows). Since Fix
+  // Phase 6F anyone may return (when the loyalty toggle is off), so a sale
+  // with no member reads "Not a loyalty member" instead of a lookup.
+  let memberLabel = order.customer_id ? "Loyalty member" : "Not a loyalty member";
+  if (order.customer_id) {
+    const { data: cust } = await admin
+      .from("customers")
+      .select("first_name, last_name")
+      .eq("id", order.customer_id)
+      .maybeSingle();
+    const c = cust as { first_name: string; last_name: string | null } | null;
+    if (c) memberLabel = privacyLabel(c.first_name, c.last_name);
+  }
 
   // Lines + prior returns (double-return guard, same source as Task Q).
   const [{ data: lines }, { data: prior }] = await Promise.all([
     admin
       .from("order_lines")
-      .select("id, product_id, product_name, quantity, price_minor_units")
+      .select("id, product_id, product_name, quantity, price_minor_units, category")
       .eq("order_id", order.id)
       .order("created_at", { ascending: true }),
     admin.from("customer_returns").select("order_line_id, quantity").eq("order_id", order.id),
@@ -185,11 +214,16 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
     if (!r.order_line_id) continue;
     returnedByLine.set(r.order_line_id, (returnedByLine.get(r.order_line_id) ?? 0) + Number(r.quantity || 0));
   }
+  // Fix Phase 6F (G-68): the owner's DB category labels name a blocked type.
+  const labelFor = policy.excludedCategories.length > 0 ? await getCategoryLabeler() : (v: string) => v;
   const saleLines: CounterReturnLine[] = (
-    (lines as { id: string; product_id: string | null; product_name: string; quantity: number; price_minor_units: number }[] | null) ?? []
+    (lines as { id: string; product_id: string | null; product_name: string; quantity: number; price_minor_units: number; category?: string | null }[] | null) ?? []
   ).map((l) => {
     const already = returnedByLine.get(l.id) ?? 0;
+    const category = l.category ?? null;
     return {
+      category,
+      notReturnableReason: lineNotReturnableReason(policy, category, category ? labelFor(category) : null),
       lineId: l.id,
       productId: l.product_id,
       productName: l.product_name,
@@ -214,6 +248,8 @@ export async function lookupSaleByReceipt(rawReceipt: string): Promise<CounterRe
       daysRemaining: verdict.daysRemaining,
       orderTotalMinor: order.total_minor_units,
       lines: saleLines,
+      policy,
+      policySummary: returnPolicySummary(policy, labelFor),
     },
   };
 }
@@ -272,6 +308,8 @@ export async function processCounterReturn(
 
   const line = sale.lines.find((l) => l.lineId === input.orderLineId);
   if (!line) return { ok: false, error: "That line item isn't on this receipt." };
+  // Fix Phase 6F (G-68): the owner's returnable product types, server-side.
+  if (line.notReturnableReason) return { ok: false, error: line.notReturnableReason };
 
   // ── Exact refund from the stored paid price (no manual entry) ───────────
   const refund = refundForLine({
