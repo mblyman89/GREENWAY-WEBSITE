@@ -336,21 +336,28 @@ export function decodeSaleSlice(env: LedgerEnv, data: unknown, error: RpcErrorLi
  * detail item for Licensee" [G L1412] means a line CCRS holds must not be
  * Inserted again (an overlapping range exported twice, or a line a return has
  * since Deleted). Held in a settled state -> skipped as already reported.
- * The ledger unsure (uncertain / unknown) -> withheld, never guessed. Not held
- * -> kept, INCLUDING a line whose own Insert file is still unanswered: a
- * re-download must produce the same bytes so the stored file is served again
- * ("the same file name will not be accepted twice, nor the same data" [BRIAN A29]).
+ * The ledger unsure (uncertain / unknown) -> withheld, never guessed.
+ * W-3 (2026-10-30): a line CCRS does not hold yet whose Insert sits in a file
+ * still waiting for its answer (`inFlightOnly`, from 0283) -> held in flight,
+ * NOT re-sent. Before W-3 it was kept so a byte-identical re-download would be
+ * served the stored file [BRIAN A29], but any rebuild with one more sale (or
+ * on another day: SubmittedDate) made NEW bytes that carried the line again,
+ * and CCRS answered "Duplicate Sale for Licensee" [G L1390] (2026-10-25
+ * evidence). A lost file is downloaded again from the CCRS file list.
  */
 export function routeSaleInserts(
   rows: readonly string[][],
   held: ReadonlyMap<string, SaleHeld | null>,
-): { rows: string[][]; alreadyHeld: string[]; uncertain: string[] } {
+  inFlightOnly: ReadonlySet<string> = new Set(),
+): { rows: string[][]; alreadyHeld: string[]; uncertain: string[]; inFlight: string[] } {
   const D = CCRS_COLUMNS.Sale.indexOf("SaleDetailExternalIdentifier");
-  const out = { rows: [] as string[][], alreadyHeld: [] as string[], uncertain: [] as string[] };
+  const out = { rows: [] as string[][], alreadyHeld: [] as string[], uncertain: [] as string[], inFlight: [] as string[] };
   for (const r of rows) {
     const h = held.get(r[D]) ?? null;
-    if (!h) out.rows.push(r);
-    else if (h.state === "uncertain" || h.state === "unknown") out.uncertain.push(r[D]);
+    if (!h) {
+      if (inFlightOnly.has(r[D])) out.inFlight.push(r[D]);
+      else out.rows.push(r);
+    } else if (h.state === "uncertain" || h.state === "unknown") out.uncertain.push(r[D]);
     else out.alreadyHeld.push(r[D]);
   }
   return out;
@@ -462,6 +469,8 @@ export function __runReturnCorrectionsTests(): { passed: number; failed: number 
   const mk = (id: string) => CCRS_COLUMNS.Sale.map((c, i) => (i === D ? id : c === "Operation" ? "Insert" : "x"));
   const ins = routeSaleInserts([mk("A"), mk("S-1")], held({ state: "filed", quantity: "2", inFlight: false }));
   ok(ins.rows.length === 1 && ins.alreadyHeld[0] === "S-1", "held sale line is not re-Inserted");
+  const inf = routeSaleInserts([mk("A"), mk("B")], new Map(), new Set(["B"]));
+  ok(inf.rows.length === 1 && inf.inFlight.join() === "B" && inf.alreadyHeld.length === 0, "W-3: a line whose Insert is in a waiting file is held, not re-sent");
 
   const exp = { rows: [], groups: [{ detailId: "A", operation: "Update" as const, cumulative: 1, original: 2, returnIds: ["r1"] }, { detailId: "B", operation: "Delete" as const, cumulative: 2, original: 2, returnIds: ["r2"] }], withheld: [], invalid: [], reflected: [{ detailId: "C", returnIds: ["r3"] }] };
   ok(JSON.stringify(correctionExportIds("prod", exp, new Set(["B"]))) === '["r1","r3"]', "prod marks emitted + reflected, not E38-withheld");

@@ -1186,6 +1186,50 @@ TS mutations **M484–M493** (10) are all killed.
 - Scoreboard payload filters have no index; consider one if the PREprod row count grows.
 - `next build` was not run in this sandbox (3.9 GB RAM; Part 01 build note). Run it on CI or Vercel preview before merge.
 
+## W-3 — A record already in a waiting file is never sent twice; adjustments routed (DONE in code, 2026-10-30)
+
+Branch `ccrs-pipeline-w3`.
+
+**Rule.** An Insert that an earlier file still waiting for its CCRS answer (state emitted or uploaded) already carries is not put in a new file, for every type. Each external identifier "must be unique" and an Insert creates "a new record with a unique external identifier" [G L0219-L0221, G L0246-L0248]. InventoryAdjustment rows are checked against the ledger like every other type.
+
+**Before.**
+- Strain and Area (R74 S48) and InventoryTransfer (R6-2) already waited for the answer.
+- Product and Inventory Inserts, sale lines and every InventoryAdjustment did not. The ledger records a row only when CCRS accepts it (0249 `ccrs_promote_rows`), so a rebuild before the answer routed the same ids as Insert again.
+- Adjustment rows were never checked against the ledger at all: every rebuild re-Inserted every ADJ- id of the range.
+- The 2026-10-25 re-upload evidence (`evidence/2026-10-25-reupload/README.md`) shows the cost: "Duplicate External Identifier" for Product, Inventory and the three ADJ- rows, and "Duplicate Sale" for every line [G L1390, G L1412].
+
+**Built.**
+- `ccrs-inflight-hold-core.ts` (pure, 24 self-tests):
+  - `indexInflightInserts`: the Insert ids of waiting Product, Inventory and InventoryAdjustment files. A null operation counts as Insert, exactly as 0249 does. The oldest file is named.
+  - `applyInflightHolds`: withholds a product or lot `emit`+`Insert` whose id is in flight, plus every lot that would name a held product by a name CCRS does not hold yet ("Invalid Product" [G L0579]). Updates and existing withholds are untouched.
+  - `routeAdjustmentRows`: an id CCRS already holds is skipped as already reported; an unproven id (uncertain or unknown) is held back; an id in a waiting file is held; a new id is sent.
+- `ccrs-return-corrections-core.ts`: `routeSaleInserts(rows, held, inFlightOnly)` holds a sale line whose Insert is only in a waiting file. Before, it was KEPT on the theory that a re-download serves the stored bytes, but any rebuilt file carried it again.
+- `ccrs-ledger-store.ts`:
+  - `readInflightIdRows`: ids and operations only, read completely, and it throws past 200 waiting files rather than capping silently.
+  - `loadAdjustmentLedger`: chunked; throws on a read error or an unknown state.
+- `ccrs-batch.ts`:
+  - The id read runs in parallel with the Strain/Area read. A failed id read only warns.
+  - The hold is applied after the fix holds, so a product held for a fix keeps its reason.
+  - Held lots are reported once, by E61 (not E41).
+  - The adjustment ledger merges into the self-check ledger (defence in depth).
+- Issue codes:
+  - `E61_IN_FLIGHT_HELD` is an advisory warning. These rows were sent, so they are not owed.
+  - `E62_ADJUSTMENT_LEDGER`: a warning when CCRS already holds the row; an error (a held-back code, owed) when its state is unproven or the ledger read failed.
+- Hub:
+  - New reason class `in-flight` with its next step: answer the file, or Abandon it if it was never uploaded.
+  - The "earlier files are waiting" warning now names products, lots, sale lines and adjustments.
+
+**Tests.**
+- `tests/compliance/w3-inflight-hold.test.ts`: behaviour and wiring pins.
+- `r5-return-corrections.test.ts`: the in-flight sale case.
+- Display self-tests: the new class.
+- TS mutations **M494–M505** (12) are all killed.
+
+**Remaining.**
+- If a waiting file was lost, download it again from the CCRS files list; do not re-export.
+- A row CCRS rejects, or a file that is Abandoned, goes out with the next rebuild by design.
+- `next build` runs on CI.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

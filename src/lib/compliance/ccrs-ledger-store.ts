@@ -15,7 +15,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { checkAssignResult, decodeLedgerSlice, LEDGER_SLICE_RPC, type AssignedProductId, type LedgerSliceOutcome } from "./ccrs-ledger-store-core";
 import { checkEmitResult, sha256Utf8, type EmitIssue, type EmitPayloadFile, type EmitResultFile } from "./ccrs-outbox-core";
-import type { LedgerEnv } from "./ccrs-ledger-core";
+import { LEDGER_STATES, type LedgerEnv, type LedgerState } from "./ccrs-ledger-core";
 import { decodeSaleSlice, SALE_SLICE_RPC, type SaleSliceOutcome } from "./ccrs-return-corrections-core";
 import { decodeTransferSlice, TRANSFER_SLICE_RPC, type TransferSliceOutcome } from "./ccrs-transfer-core";
 import { decodeInventoryTold, INVENTORY_TOLD_RPC, type InventoryToldOutcome } from "./ccrs-inventory-delta-core";
@@ -35,6 +35,7 @@ import {
 } from "./ccrs-lifecycle-core";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import type { InflightRow } from "./ccrs-answer-core";
+import { INFLIGHT_ID_TYPES, type InflightIdRow } from "./ccrs-inflight-hold-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -378,6 +379,71 @@ export async function proveAfterOutcome(admin: Admin, env: LedgerEnv): Promise<{
     const msg = e instanceof Error ? e.message : String(e);
     return { text: `Proof-by-sale check did not run (${msg}); it runs again after the next answer.`, proved: [], filesClosed: 0, error: msg };
   }
+}
+
+/**
+ * W-3: the Product / Inventory / InventoryAdjustment rows (id + operation) of
+ * files still waiting for a CCRS answer (emitted or uploaded), so the next
+ * export holds them instead of Inserting them a second time
+ * (ccrs-inflight-hold-core). Complete or it throws: a short read would
+ * re-send a row ("Duplicate External Identifier"). Light: no payloads.
+ */
+export async function readInflightIdRows(admin: Admin, env: LedgerEnv): Promise<InflightIdRow[]> {
+  const { data, error } = await admin
+    .from("ccrs_files")
+    .select("id, file_name, file_type, number_records")
+    .eq("env", env)
+    .in("state", ["emitted", "uploaded"])
+    .in("file_type", [...INFLIGHT_ID_TYPES])
+    .order("stamp_at", { ascending: true })
+    .limit(201);
+  if (error) throw new Error(`ccrs_files (in flight): ${error.message}`);
+  // Never a silent cap: past 200 waiting files a hold could be missed, so the
+  // read fails and the caller says so (answer or Abandon old files first).
+  if ((data?.length ?? 0) > 200) throw new Error("more than 200 Product/Inventory/InventoryAdjustment files are waiting for their CCRS answer; answer or Abandon the old ones");
+  const out: InflightIdRow[] = [];
+  for (const f of (data as { id: string; file_name: string; file_type: string; number_records: number | null }[] | null) ?? []) {
+    const { rows, verdict } = await pagedAllChecked<{ external_id: string | null; operation: string | null }>(
+      async (from, to) => {
+        const { data: r, error: e2 } = await admin
+          .from("ccrs_file_rows")
+          .select("external_id, operation")
+          .eq("file_id", f.id)
+          .order("row_no", { ascending: true })
+          .range(from, to);
+        return { rows: (r as { external_id: string | null; operation: string | null }[] | null) ?? [], ok: !e2 };
+      },
+      { expectedTotal: f.number_records },
+    );
+    if (!verdict.complete) throw new Error(`ccrs_file_rows ${f.file_name}: ${verdict.message}`);
+    for (const r of rows) out.push({ fileType: f.file_type, fileName: f.file_name, externalId: r.external_id ?? "", operation: r.operation });
+  }
+  return out;
+}
+
+/**
+ * W-3: what the ledger holds for this batch's InventoryAdjustment ids (ADJ-),
+ * filed by 0249 ccrs_promote_rows when CCRS accepted them. Chunked; any read
+ * error THROWS (the caller then holds every adjustment it cannot prove new).
+ */
+export async function loadAdjustmentLedger(admin: Admin, env: LedgerEnv, ids: readonly string[]): Promise<Map<string, LedgerState>> {
+  const uniq = [...new Set(ids)].filter((x) => x !== "");
+  const out = new Map<string, LedgerState>();
+  for (let i = 0; i < uniq.length; i += 200) {
+    const chunk = uniq.slice(i, i + 200);
+    const { data, error } = await admin
+      .from("ccrs_filed_entities")
+      .select("external_id, state")
+      .eq("env", env)
+      .eq("file_type", "InventoryAdjustment")
+      .in("external_id", chunk);
+    if (error) throw new Error(`ccrs_filed_entities (InventoryAdjustment): ${error.message}`);
+    for (const r of (data as { external_id: string; state: string }[] | null) ?? []) {
+      if (!(LEDGER_STATES as readonly string[]).includes(r.state)) throw new Error(`ccrs_filed_entities ${r.external_id}: unknown state "${r.state}"`);
+      out.set(r.external_id, r.state as LedgerState);
+    }
+  }
+  return out;
 }
 
 /**

@@ -31,6 +31,7 @@
 import { NO_PRODUCT_ID_REASON, type LedgerEnv } from "./ccrs-ledger-core";
 import { CULTIVERA_NOT_ON_RECORD_REASON } from "./ccrs-identity-guard-core";
 import { LEDGER_DUPLICATE_REASON, PRODUCT_FIX_HOLD_PREFIX, RESERVED_STRAIN_LOT_REASON, fixLinksFor } from "./ccrs-never-block-core";
+import { isInflightHoldReason } from "./ccrs-inflight-hold-core";
 
 /** One row of an issue (structurally identical to CcrsIssueRow in ccrs-preflight-core). */
 export type DisplayRow = { id: string; label: string; detail?: string };
@@ -60,6 +61,7 @@ export const WITHHOLD_CLASSES = [
   "product-needs-fix",
   "reserved-strain",
   "ledger-duplicate",
+  "in-flight",
   "unclassified",
 ] as const;
 export type WithholdClass = (typeof WITHHOLD_CLASSES)[number];
@@ -73,6 +75,9 @@ const PRODUCT_WITHHELD_PREFIX = "its product is withheld: ";
  */
 export function classifyWithholdReason(reason: string | null | undefined): WithholdClass {
   let r = (reason ?? "").trim();
+  // W-3: already in a file waiting for its CCRS answer (E61). Checked first:
+  // the row may also say "its product is ..." and the fix is the same.
+  if (isInflightHoldReason(r)) return "in-flight";
   if (r.startsWith(PRODUCT_WITHHELD_PREFIX)) r = r.slice(PRODUCT_WITHHELD_PREFIX.length).trim();
   if (r === NO_PRODUCT_ID_REASON) return "no-product-id";
   // S-17b enriches this reason with WHY in brackets (ccrs-lot-product-core
@@ -116,6 +121,7 @@ export const WITHHOLD_CLASS_LABEL: Record<WithholdClass, string> = {
   "product-needs-fix": "its product needs a fix (unit weight or inventory type)",
   "reserved-strain": "strain name reserved by CCRS",
   "ledger-duplicate": "id held twice in our CCRS record copy",
+  "in-flight": "already in a file waiting for its CCRS answer",
   unclassified: "other reason (read the row)",
 };
 
@@ -154,6 +160,8 @@ export function nextStepFor(cls: WithholdClass, env: LedgerEnv): string {
       return 'The product uses the strain name "Unknown", "THC" or "Other", which CCRS refuses [G L0358]. Open the product from the Strain group above, set the real strain (or leave it blank for a non-strain product), and rebuild.';
     case "ledger-duplicate":
       return "Our copy of the CCRS record lists this id twice. Upload the examiner's fresh CCRS data copy on Compliance \u2192 CCRS \u2192 CCRS Records and press Merge, then rebuild. Everything else uploads in the meantime.";
+    case "in-flight":
+      return 'This record is already in an earlier file that has no CCRS answer yet, so it is not sent twice (a second Insert is refused as a duplicate [G L0219-L0221]). Nothing is owed. In "CCRS files" below, record that file\'s success or error email; if the file was never uploaded, press Abandon on it. Then rebuild.';
     case "unclassified":
       return "No automatic advice for this reason. Read the reason on the row. The record is held back (not sent) until it is understood; the rest of the batch still uploads.";
   }
@@ -175,7 +183,7 @@ export function groupRowsByReason(rows: readonly DisplayRow[], env: LedgerEnv): 
 
 /** Issues whose rows are ledger withholds and get reason grouping + next steps. */
 export function isWithholdIssue(i: Pick<DisplayIssue, "code">): boolean {
-  return i.code === "E41_LEDGER_WITHHELD" || i.code === "E52_CULTIVERA_LOT_NOT_ON_RECORD" || i.code === "E59_LEDGER_DUPLICATE_HELD";
+  return i.code === "E41_LEDGER_WITHHELD" || i.code === "E52_CULTIVERA_LOT_NOT_ON_RECORD" || i.code === "E59_LEDGER_DUPLICATE_HELD" || i.code === "E61_IN_FLIGHT_HELD";
 }
 
 /** One row as one plain-text line. Never truncated. */
@@ -271,6 +279,11 @@ export function __runCcrsIssueDisplayTests(): { passed: number; failed: number }
   ok(classifyWithholdReason(CULTIVERA_NOT_ON_RECORD_REASON) === "cultivera-not-on-record", "R74 S25: held Cultivera lot classified");
   ok(isWithholdIssue({ code: "E52_CULTIVERA_LOT_NOT_ON_RECORD" }), "R74 S25: E52 rows get reason grouping");
   ok(nextStepFor("no-product-id", "preprod").includes("Assign PREprod ids"), "preprod hint names preprod button");
+  // W-3: in-flight holds get their own class (lot and product wording), grouping and an Abandon/answer step.
+  ok(classifyWithholdReason("GWI-1: already in a file still waiting for its CCRS answer (Inventory_1.csv); it is not sent twice") === "in-flight", "W-3: in-flight reason classified");
+  ok(classifyWithholdReason("its product is already in a file still waiting for its CCRS answer (Product_1.csv); the lot goes once CCRS holds the product") === "in-flight", "W-3: dependent lot classified in-flight");
+  ok(isWithholdIssue({ code: "E61_IN_FLIGHT_HELD" }), "W-3: E61 rows get reason grouping");
+  ok(nextStepFor("in-flight", "prod").includes("Abandon") && nextStepFor("in-flight", "prod").includes("Nothing is owed"), "W-3: in-flight step names Abandon and says nothing is owed");
 
   const rows: DisplayRow[] = [
     { id: "a", label: "LOT-A", detail: "its product is not in the published menu" },

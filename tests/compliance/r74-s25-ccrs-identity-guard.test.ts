@@ -82,7 +82,7 @@ describe("R74 S25 ccrs-identity-guard-core", () => {
     );
     expect(CORE).not.toContain("process" + ".env");
     expect(CORE).not.toMatch(/from "@\/lib\/supabase|createClient|server-only/);
-    expect(__runCcrsIssueDisplayTests()).toEqual({ passed: 17, failed: 0 });
+    expect(__runCcrsIssueDisplayTests()).toEqual({ passed: 21, failed: 0 }); // W-3: +4 (in-flight class)
   });
 
   it("GWP- id shape matches migration 0248", () => {

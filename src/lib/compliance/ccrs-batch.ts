@@ -84,10 +84,30 @@ import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/conven
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
-import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
+import { NO_PRODUCT_ID_REASON, applyProductPlan, buildLedgerView, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerState, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
 import { ccrsUnitWeightCell, fitUtf8Bytes, plainPunctuation } from "@/lib/compliance/ccrs-whole-file-core";
-import { loadInventoryTold, loadLedgerForBatch, loadSaleSlice, loadTransferSlice, readInflightMasterRows } from "@/lib/compliance/ccrs-ledger-store";
+import {
+  loadAdjustmentLedger,
+  loadInventoryTold,
+  loadLedgerForBatch,
+  loadSaleSlice,
+  loadTransferSlice,
+  readInflightIdRows,
+  readInflightMasterRows,
+} from "@/lib/compliance/ccrs-ledger-store";
+import {
+  adjustmentInsertIds,
+  adjustmentLedgerEntries,
+  applyInflightHolds,
+  indexInflightInserts,
+  IN_FLIGHT_HOLD_PREFIX,
+  inflightHeldMessage,
+  inflightProductLotReason,
+  inflightReason,
+  isInflightHoldReason,
+  routeAdjustmentRows,
+} from "@/lib/compliance/ccrs-inflight-hold-core";
 import { inflightNote, withInflight } from "@/lib/compliance/ccrs-answer-core";
 import { lotsNamedByEventRows, planInventoryDelta } from "@/lib/compliance/ccrs-inventory-delta-core";
 import {
@@ -990,6 +1010,9 @@ function buildInventoryFile(
       if (planned.reason === CULTIVERA_NOT_ON_RECORD_REASON) continue;
       // R74 S42: a clean-up-list product's lots are reported once, by E58.
       if (planned.reason === CLEANUP_LOT_REASON) continue;
+      // W-3: a lot an earlier waiting file already carries is reported once,
+      // by E61 (advisory: it was sent, it is not owed).
+      if (isInflightHoldReason(planned.reason)) continue;
       // S-17b: "its product is not in the published menu" says WHY (hidden
       // with its reason / staged only / no item / blank key).
       e41Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: enrichLotWithholdReason(planned.reason, key, menuPresence) });
@@ -1294,9 +1317,20 @@ export async function buildCcrsBatch(
   // Strain" x1,500, "Duplicate External Identifier" on the Sales Floor).
   // Planning only: nothing is written. Abandon that file and they go again.
   let ledger: LedgerView | null = ledgerBase;
+  // W-3: the Product / Inventory / InventoryAdjustment Inserts those waiting
+  // files carry (id + operation only). Read in parallel with the Strain/Area
+  // rows; each read failing alone only loses its own hold (never blocks).
+  let inflightIndex: Map<string, string> = new Map();
   if (ledgerBase) {
+    const [masterRead, idRead] = await Promise.allSettled([readInflightMasterRows(admin, env), readInflightIdRows(admin, env)]);
+    if (idRead.status === "fulfilled") inflightIndex = indexInflightInserts(idRead.value);
+    else {
+      const why = idRead.reason instanceof Error ? idRead.reason.message : String(idRead.reason);
+      syncIssues.push({ severity: "warning", file: "General", message: `Could not check which products, lots and adjustments earlier files still waiting for CCRS's answer carry (${why}), so some may be sent again (CCRS answers "Duplicate External Identifier" for those rows only; harmless). Rebuild once the hub loads cleanly.` });
+    }
     try {
-      const inflight = withInflight(ledgerBase, await readInflightMasterRows(admin, env));
+      if (masterRead.status === "rejected") throw masterRead.reason;
+      const inflight = withInflight(ledgerBase, masterRead.value);
       ledger = inflight.view;
       const note = inflightNote(inflight);
       if (note) syncIssues.push({ severity: "warning", file: "Strain", message: note });
@@ -1396,7 +1430,44 @@ export async function buildCcrsBatch(
     lots: dupLots,
     lotKeys: lots.map((l) => ({ lotId: l.id, productKey: (l.pos_product_key ?? "").trim() })),
   });
-  const plan = holdResult.plan;
+  // W-3: a Product / Inventory Insert an earlier file still waiting for its
+  // CCRS answer already carries is held (not sent twice: "Duplicate External
+  // Identifier" [G L0219-L0221]), with every lot that would name a held
+  // product by a name CCRS does not hold yet. Applied LAST, so a product held
+  // for a fix keeps that reason. Advisory E61: these rows were sent, not owed.
+  const inflightHold = applyInflightHolds({
+    plan: holdResult.plan,
+    view: ledger,
+    index: inflightIndex,
+    lots: lots.flatMap((l) => {
+      const ext = assignedInventoryExternalId(l);
+      return ext ? [{ lotId: l.id, productKey: (l.pos_product_key ?? "").trim(), ext }] : [];
+    }),
+  });
+  const plan = inflightHold.plan;
+  const lotLabelById = new Map(lots.map((l) => [l.id, l.lot_code ?? l.product_name ?? l.id]));
+  if (inflightHold.products.length > 0) {
+    syncIssues.push({
+      severity: "warning",
+      file: "Product",
+      code: "E61_IN_FLIGHT_HELD",
+      specPin: specPinFor("E61_IN_FLIGHT_HELD"),
+      count: inflightHold.products.length,
+      rows: inflightHold.products.map((p) => ({ id: p.key, label: productBuild.nameByProductKey.get(p.key) || p.ext, detail: `${p.ext}: ${inflightReason(p.file)}` })),
+      message: inflightHeldMessage("Product", inflightHold.products.length, inflightHold.products.map((p) => p.file)),
+    });
+  }
+  if (inflightHold.lots.length > 0) {
+    syncIssues.push({
+      severity: "warning",
+      file: "Inventory",
+      code: "E61_IN_FLIGHT_HELD",
+      specPin: specPinFor("E61_IN_FLIGHT_HELD"),
+      count: inflightHold.lots.length,
+      rows: inflightHold.lots.map((l) => ({ id: l.lotId, label: lotLabelById.get(l.lotId) ?? l.ext, detail: `${l.ext}: ${l.dependent ? inflightProductLotReason(l.file) : inflightReason(l.file)}` })),
+      message: inflightHeldMessage("Inventory", inflightHold.lots.length, inflightHold.lots.map((l) => l.file)),
+    });
+  }
   // E9 / E57 list only the products really left out (a product with no row of
   // its own, because every lot names a filed product, is not held).
   productBuild.issues = productBuild.issues.flatMap((i) => {
@@ -1450,7 +1521,9 @@ export async function buildCcrsBatch(
     keysNeedingMenuLookup(coverageLots, plannedKeys),
   );
   const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName, menuPresence);
-  const routingWithheld = product.withheld.filter((w) => !productHolds.has(w.key) || productHolds.get(w.key)!.reason === LEDGER_DUPLICATE_REASON);
+  const routingWithheld = product.withheld.filter(
+    (w) => !isInflightHoldReason(w.reason) && (!productHolds.has(w.key) || productHolds.get(w.key)!.reason === LEDGER_DUPLICATE_REASON),
+  );
   if (routingWithheld.length > 0) {
     syncIssues.push({
       severity: "error",
@@ -1632,8 +1705,22 @@ export async function buildCcrsBatch(
   let corrections: ReturnCorrectionPlan = { rows: [], groups: [], withheld: [], invalid: [], reflected: [] };
   const saleNotes: CorrectionNote[] = [];
   if (saleAwareLedger && saleSlice?.kind === "loaded") {
-    const routed = routeSaleInserts(sale.rows, saleSlice.held);
+    const routed = routeSaleInserts(sale.rows, saleSlice.held, saleSlice.inFlightOnly);
     insertRows = routed.rows;
+    // W-3: a line whose Insert sits in a file still waiting for its CCRS
+    // answer is held, not sent twice ("Duplicate Sale for Licensee" [G L1390],
+    // 2026-10-25 evidence). Advisory: it was sent, it is not owed.
+    if (routed.inFlight.length > 0) {
+      syncIssues.push({
+        severity: "warning",
+        file: "Sale",
+        code: "E61_IN_FLIGHT_HELD",
+        specPin: specPinFor("E61_IN_FLIGHT_HELD"),
+        count: routed.inFlight.length,
+        rows: routed.inFlight.map((d) => ({ id: d, label: d, detail: `${IN_FLIGHT_HOLD_PREFIX}; it is not sent twice` })),
+        message: inflightHeldMessage("Sale", routed.inFlight.length, ["the waiting Sale file"]),
+      });
+    }
     if (routed.alreadyHeld.length > 0) {
       syncIssues.push({
         severity: "warning",
@@ -1692,14 +1779,84 @@ export async function buildCcrsBatch(
     const pl = plan.lots.get(l.id);
     if (ext && pl?.action === "withhold") heldWhy.set(ext, pl.reason);
   }
+  // W-3: InventoryAdjustment rows are routed against the ledger and the
+  // waiting files like every other type. Before W-3 every adjustment of the
+  // range went out as an ADJ- Insert on every rebuild, and CCRS answered
+  // "Duplicate External Identifier" for the ones it already held
+  // (2026-10-25 evidence: "the 3 ADJ- rows already held"). Held by CCRS ->
+  // skipped as already reported; unproven (uncertain / unknown) or the ledger
+  // unreadable -> held back (E62, owed); in a waiting file -> held (E61).
+  let adjRows = csvDataRows(adj.csv);
+  if (ledger && adjRows.length > 0) {
+    let adjHeld: Map<string, LedgerState> | null = null;
+    try {
+      adjHeld = await loadAdjustmentLedger(admin, env, adjustmentInsertIds(adjRows));
+    } catch (e) {
+      const ids = adjustmentInsertIds(adjRows);
+      adjRows = adjRows.filter((r) => !ids.includes(r[CCRS_COLUMNS.InventoryAdjustment.indexOf("ExternalIdentifier")]));
+      syncIssues.push({
+        severity: "error",
+        file: "InventoryAdjustment",
+        code: "E62_ADJUSTMENT_LEDGER",
+        specPin: specPinFor("E62_ADJUSTMENT_LEDGER"),
+        count: ids.length,
+        rows: ids.map((id) => ({ id, label: id, detail: `the ${env} ledger could not be read (${e instanceof Error ? e.message : String(e)})` })),
+        message: `${ids.length} adjustment(s) were held back from InventoryAdjustment.csv because the ${env} ledger could not be read, so it cannot be proven CCRS does not already hold them (a second Insert is "Duplicate External Identifier" [G L0219-L0221]). HELD BACK, not blocking: rebuild once the hub loads cleanly.`,
+      });
+    }
+    if (adjHeld) {
+      const routedAdj = routeAdjustmentRows(adjRows, adjHeld, inflightIndex);
+      adjRows = routedAdj.rows;
+      if (adjHeld.size > 0) {
+        const merged = buildLedgerView(env, [...(saleAwareLedger ?? ledger).entries.values(), ...adjustmentLedgerEntries(adjHeld)], ledger.productIdByKey);
+        if (merged.duplicates.length > 0) throw new Error(`W-3: InventoryAdjustment ledger entries collide with the batch ledger: ${merged.duplicates.join(", ")}`);
+        saleAwareLedger = merged.view;
+      }
+      if (routedAdj.alreadyHeld.length > 0) {
+        syncIssues.push({
+          severity: "warning",
+          file: "InventoryAdjustment",
+          code: "E62_ADJUSTMENT_LEDGER",
+          specPin: specPinFor("E62_ADJUSTMENT_LEDGER"),
+          count: routedAdj.alreadyHeld.length,
+          rows: routedAdj.alreadyHeld.map((a) => ({ id: a.id, label: a.id, detail: `ledger state ${a.state}` })),
+          message: `${routedAdj.alreadyHeld.length} adjustment(s) in this range are already held by CCRS (${env}), so they were not Inserted again: a second Insert is rejected as "Duplicate External Identifier" [G L0219-L0221]. Nothing to do.`,
+        });
+      }
+      if (routedAdj.uncertain.length > 0) {
+        syncIssues.push({
+          severity: "error",
+          file: "InventoryAdjustment",
+          code: "E62_ADJUSTMENT_LEDGER",
+          specPin: specPinFor("E62_ADJUSTMENT_LEDGER"),
+          count: routedAdj.uncertain.length,
+          rows: routedAdj.uncertain.map((a) => ({ id: a.id, label: a.id, detail: `ledger state ${a.state}: record that file's outcome in the CCRS hub` })),
+          message: `${routedAdj.uncertain.length} adjustment(s) were held back from InventoryAdjustment.csv because the ${env} ledger cannot say whether CCRS holds them (an earlier file's outcome is not recorded). HELD BACK, not blocking: record that file's outcome in the CCRS hub, then rebuild.`,
+        });
+      }
+      if (routedAdj.inFlight.length > 0) {
+        syncIssues.push({
+          severity: "warning",
+          file: "InventoryAdjustment",
+          code: "E61_IN_FLIGHT_HELD",
+          specPin: specPinFor("E61_IN_FLIGHT_HELD"),
+          count: routedAdj.inFlight.length,
+          rows: routedAdj.inFlight.map((a) => ({ id: a.id, label: a.id, detail: inflightReason(a.file) })),
+          message: inflightHeldMessage("InventoryAdjustment", routedAdj.inFlight.length, routedAdj.inFlight.map((a) => a.file)),
+        });
+      }
+    }
+  }
+  const adjRouted = adjRows.length !== csvDataRows(adj.csv).length;
   const saleDrop = dropEventRowsForHeldLots("Sale", [...insertRows, ...correctionE38.rows], sendableLots, heldWhy);
-  const adjDrop = dropEventRowsForHeldLots("InventoryAdjustment", csvDataRows(adj.csv), sendableLots, heldWhy);
+  const adjDrop = dropEventRowsForHeldLots("InventoryAdjustment", adjRows, sendableLots, heldWhy);
   for (const d of saleDrop.dropped) e38WithheldLines.add(d.id);
   const saleRows = saleDrop.rows;
-  if (adjDrop.dropped.length > 0) {
+  if (adjDrop.dropped.length > 0 || adjRouted) {
+    const before = csvDataRows(adj.csv).length;
     adj.csv = assembleCcrsFile({ type: "InventoryAdjustment", submittedBy: license.submittedBy, rows: adjDrop.rows });
     adj.recordCount = adjDrop.rows.length;
-    adj.skipped += adjDrop.dropped.length;
+    adj.skipped += before - adjDrop.rows.length;
   }
   for (const d of [saleDrop, adjDrop]) {
     if (d.dropped.length === 0) continue;

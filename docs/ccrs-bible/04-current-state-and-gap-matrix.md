@@ -302,6 +302,17 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
   - Every hub button shows a busy state.
 - See Part 09 W-2.
 
+### A.19 W-3 Never send a record twice while its file waits; route adjustments — DONE in code (2026-10-30)
+
+- **Before:**
+  - Product and Inventory Inserts and sale lines in a file still waiting for its CCRS answer were sent again on any rebuild.
+  - Every InventoryAdjustment was re-Inserted on every rebuild, with no ledger check. This produced the 2026-10-25 "Duplicate External Identifier" and "Duplicate Sale" answers [G L0219-L0221, G L1412].
+- **Now:**
+  - Those rows are held with advisory E61: sent, not owed.
+  - Adjustments CCRS holds are skipped (E62 warning). Unproven ones are held back and owed (E62 error).
+  - The hub groups E61 rows under "already in a file waiting for its CCRS answer", with the answer/Abandon step.
+- See Part 09 W-3.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

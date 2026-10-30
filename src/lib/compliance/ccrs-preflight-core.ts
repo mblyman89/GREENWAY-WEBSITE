@@ -88,6 +88,8 @@ export const CCRS_ISSUE_CODES = [
   "E58_PRODUCT_ON_CLEANUP_LIST",
   "E59_LEDGER_DUPLICATE_HELD",
   "E60_ROW_REFUSED_HELD",
+  "E61_IN_FLIGHT_HELD",
+  "E62_ADJUSTMENT_LEDGER",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -480,6 +482,13 @@ const PINS: Record<CcrsIssueCode, string> = {
   E59_LEDGER_DUPLICATE_HELD: "[G L0246-L0248]",
   // E60: a row the offline check or the ledger self-check refuses.
   E60_ROW_REFUSED_HELD: "[G L0246-L0248]",
+  // W-3 (ccrs-inflight-hold-core): a row an earlier file still waiting for
+  // its CCRS answer already carries is not sent twice; the ExternalIdentifier
+  // "must be unique for each row". Advisory: it was sent, it is not owed.
+  E61_IN_FLIGHT_HELD: "[G L0219-L0221]",
+  // W-3: InventoryAdjustment ADJ- ids routed against the ledger. Already held
+  // -> advisory (not re-sent); unproven or unreadable -> held back (owed).
+  E62_ADJUSTMENT_LEDGER: "[G L0219-L0221]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

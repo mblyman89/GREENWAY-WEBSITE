@@ -1216,6 +1216,7 @@ import { __runCcrsWholeFileTests } from "../../src/lib/compliance/ccrs-whole-fil
 import { __runCcrsAnswerTests } from "../../src/lib/compliance/ccrs-answer-core";
 import { __runCcrsHubFlowTests } from "../../src/lib/compliance/ccrs-hub-flow-core";
 import { __runCcrsHubViewTests } from "../../src/lib/compliance/ccrs-hub-view-core";
+import { __runInflightHoldTests } from "../../src/lib/compliance/ccrs-inflight-hold-core";
 import { __runCcrsScoreboardTests } from "../../src/lib/compliance/ccrs-scoreboard-core";
 import { __runBatchUnstickTests } from "../../src/lib/ai/batch-unstick-core";
 import { __runCountRosterTests } from "../../src/lib/pos/count-roster-core";
@@ -2420,6 +2421,7 @@ __runLiquidVolumeTests();
   { const r = __runCcrsWholeFileTests(); if (r.failed > 0 || r.passed < 17) throw new Error(`ccrs-whole-file-core: ${r.failed} failed, ${r.passed} passed`); console.log(`ccrs-whole-file-core: ${r.passed} assertions passed`); } // R74 S47: Product weight never blank / 2 decimals; "has not been processed" email = whole file refused
   assertRan("ccrs-answer-core", __runCcrsAnswerTests(), 16); // R74 S48: answer files never marked uploaded; unanswered warning; in-flight strain/area
   assertRan("ccrs-hub-flow-core", __runCcrsHubFlowTests(), 17); // W-1 (2026-10-30): the hub never drops PREprod; an email Apply is scoped to the email's env
+  assertRan("ccrs-inflight-hold-core", __runInflightHoldTests(), 24); // W-3 (2026-10-30): a record already in a file waiting for its CCRS answer is not sent twice
   assertRan("ccrs-hub-view-core", __runCcrsHubViewTests(), 17); // W-2 (2026-10-30): the hub shell renders at once; heavy panels stream and never blank the page
   assertRan("ccrs-scoreboard-core", __runCcrsScoreboardTests(), 14); // R74 S48: CCRS PREprod test scoreboard
   assertRan("batch-unstick-core", __runBatchUnstickTests(), 9); // R74 S49: Unstick & re-ask (stuck / failed lookups)

@@ -72,7 +72,8 @@ export function unansweredWarningLines(files: readonly UnansweredFileLite[]): st
     `WARNING: ${open.length} earlier file(s) are still waiting for their CCRS answer:`,
     ...open.map((f) => `  ${f.fileName} (${f.state === "uploaded" ? "uploaded, waiting for the CCRS email" : "handed out, never marked uploaded"})`),
     "Answer them first: Compliance > CCRS > \"Answer every waiting CCRS email\". If one was never uploaded, Abandon it.",
-    "Until then the strains and the Area those files carry are NOT sent again (no \"Duplicate\" errors), and",
+    "Until then the new strains, Areas, products, lots, sale lines and adjustments those files carry are NOT sent again",
+    "(no \"Duplicate\" errors; they show as \"already in a file waiting for its CCRS answer\" and are not owed), and",
     "a new upload stays out of order (CCRS answers files in the order they arrive).",
   ];
 }
