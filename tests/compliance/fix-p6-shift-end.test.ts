@@ -114,8 +114,8 @@ describe("wiring", () => {
     expect(b).toContain("deposit_bag.sealed_unreconciled");
     expect(read("src/app/admin/registers/eod/page.tsx")).toContain("eodStatus(");
   });
-  it("no migration in this slice (latest stays 0324)", () => {
+  it("no migration in this slice (latest stays 0325, CCRS C1's)", () => {
     const latest = readdirSync(join(root, "supabase/migrations")).filter((f) => /^\d{4}_/.test(f)).sort().pop();
-    expect(latest?.startsWith("0324")).toBe(true);
+    expect(latest?.startsWith("0325")).toBe(true);
   });
 });

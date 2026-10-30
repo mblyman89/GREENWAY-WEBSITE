@@ -45,7 +45,7 @@ import { COA_EXTRACT_EVENT, coaExtractRunNote, isMissingColumnError } from "@/li
 import { attachLabFactsToManifestDrafts } from "@/lib/catalog/lab-facts-attach";
 import { LAB_FACTS_ATTACH_EVENT, labFactsAttachNote } from "@/lib/catalog/lab-facts-attach-core";
 import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
-import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { intakeIdCandidates, intakeInventoryExternalId } from "@/lib/compliance/ccrs-intake-id-core";
 import {
   normalizeLicense,
   pickVendorByNormalizedName,
@@ -234,6 +234,36 @@ function vendorIdColumnsFor(lotCode: string | null | undefined, sourceFormat: st
   const v = typeof lotCode === "string" ? lotCode.trim() : "";
   if (v === "" || v.length > 100) return {};
   return { vendor_inventory_external_id: v, vendor_inventory_external_id_source: vendorIdSourceFor(sourceFormat) };
+}
+
+/**
+ * C1 (D-2): which of these vendor ids some lot already carries as its CCRS id.
+ * null = the read failed: the caller then mints every id (never a guess).
+ */
+async function readTakenIntakeIds(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  ids: readonly string[],
+): Promise<ReadonlySet<string> | null> {
+  const taken = new Set<string>();
+  if (ids.length === 0) return taken;
+  try {
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const { data, error } = await admin.from("inventory_lots").select("ccrs_inventory_external_id").in("ccrs_inventory_external_id", chunk);
+      if (error) {
+        console.error("[intake-store] C1 vendor-id collision check failed (minting instead):", error.message);
+        return null;
+      }
+      for (const r of (data as { ccrs_inventory_external_id: string | null }[] | null) ?? []) {
+        const v = (r.ccrs_inventory_external_id ?? "").trim();
+        if (v) taken.add(v);
+      }
+    }
+    return taken;
+  } catch (err) {
+    console.error("[intake-store] C1 vendor-id collision check threw (minting instead):", err);
+    return null;
+  }
 }
 
 function payloadKindOf(m: { raw_payload?: unknown }): unknown {
@@ -991,6 +1021,13 @@ export async function stageManifest(
   // banner on the review page, and Finalize refuses until it is confirmed.
   const lineFailures: StagingFailure[] = [];
 
+  // C1 (D-2): the vendor ids (trusted source only) that some lot ALREADY
+  // carries. Such an id keeps today's minted id instead, so C1 never creates
+  // a collision. Unreadable = null = every line keeps its minted id
+  // (ccrs-intake-id-core rule 3).
+  const takenIntakeIds = await readTakenIntakeIds(admin, intakeIdCandidates(parsed.lines, parsed.source_format));
+  let vendorIdLots = 0;
+
   // 2) per line: lab_result (if any) + quarantine lot
   for (const [lineIndex, line] of parsed.lines.entries()) {
     let labId: string | null = null;
@@ -1039,6 +1076,13 @@ export async function stageManifest(
           )
         : undefined;
 
+    const intakeId = intakeInventoryExternalId({
+      pos_product_key: line.pos_product_key,
+      lot_code: line.lot_code,
+      source_format: parsed.source_format,
+      takenIds: takenIntakeIds,
+    });
+    if (intakeId.basis === "vendor-id") vendorIdLots += 1;
     const lotRow = {
       lot_code: line.lot_code,
       vendor_id: vendorId,
@@ -1048,10 +1092,10 @@ export async function stageManifest(
       pos_product_key: line.pos_product_key,
       // Canonical CCRS InventoryExternalIdentifier, assigned once and reused
       // across Inventory/LabTest/Sale/Transfer/Adjustment files (CCRS spec).
-      ccrs_inventory_external_id: deriveInventoryExternalId({
-        pos_product_key: line.pos_product_key,
-        lot_code: line.lot_code,
-      }),
+      // C1 (D-2): the vendor's own id, byte for byte, when the source is
+      // trusted (WCIA JSON / CCRS csv) and no other lot has it; else minted
+      // as before [EXAM2 L0056] [G L0224-L0225].
+      ccrs_inventory_external_id: intakeId.externalId,
       product_name: line.product_name,
       strain_name: line.strain_name,
       // Rule 1.4 (docs/data-governance.md): strain TYPE lives in its own box,
@@ -1139,6 +1183,10 @@ export async function stageManifest(
     const note = stagingFailureNote(lineFailures, parsed.lines.length);
     await logManifestEvent(manifestId, LOT_INSERT_FAILED_EVENT, note, actorId);
     failureReport = { count: lineFailures.length, note };
+  }
+
+  if (vendorIdLots > 0) {
+    console.info(`[intake-store] C1: ${vendorIdLots} lot(s) on manifest ${manifestId} keep the vendor's own CCRS id.`);
   }
 
   // R37 S5: say where the brand came from, and remember it on the delivery.

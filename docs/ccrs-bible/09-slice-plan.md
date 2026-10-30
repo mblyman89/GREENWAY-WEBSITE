@@ -1230,6 +1230,52 @@ Branch `ccrs-pipeline-w3`.
 - A row CCRS rejects, or a file that is Abandoned, goes out with the next rebuild by design.
 - `next build` runs on CI.
 
+## C1 — Transfer id = lot id; new lots keep the vendor's id; transfers corrected by Update (DONE in code, 2026-10-30)
+
+Branch `ccrs-pipeline-c1`. Grounded on the examiner's 2026-10-29 answers, saved verbatim as `evidence/2026-10-29-examiner-answers/brian-answers-verbatim.txt` (pin source `EXAM2`).
+
+**Rules.**
+- 9b: "The Inventory transfer file has to be the exact same as the inventory reported ID, you can not have a suffix on this file". Keeping the vendor's id is what lets returns and recalls trace back [EXAM2 L0056].
+- 9c: "Yes, the update path is the correct way to make corrections." [EXAM2 L0058]. This matches the FAQ ("They would perform an \"Update\" operation" [FAQ L0058-L0059]) and Update = "alter an existing record indicated by external identifier" [G L0247].
+
+**D-1, the transfer id (before: `TR-<lot id>`).**
+- `ccrs-transfer-core.ts` `transferExternalId(ourId)` returns the lot id itself. A guard test pins ExternalIdentifier === ToInventoryExternalIdentifier.
+- `TRANSFER_ID_PREFIX` is gone. `LEGACY_TRANSFER_ID_PREFIX` is read only.
+- `transferLookupIds` asks the ledger about the plain id AND the legacy `TR-` alias. A transfer filed before C1 under `TR-` counts as reported (`legacyHeld`): it is never re-Inserted and never auto-corrected.
+- A legacy id in an unanswered file still withholds.
+- The production ledger could not be queried from the sandbox, so the alias makes the change safe whether or not prod `TR-` rows exist (report A-2).
+
+**D-2, new lots keep the vendor's id (before: `WA413287.INE6AQ` was filed as `WA413287-INE6AQ`).**
+- New pure `ccrs-intake-id-core.ts` (23 self-tests). `intakeInventoryExternalId` passes the vendor's raw id through only when:
+  - the source is trusted (`wcia_json` / `ccrs_csv`);
+  - the id passes `validatePassThroughExternalId` (Text 100, no CR/LF/comma/quote [G L0224-L0225]);
+  - no other lot already carries it.
+- Otherwise it keeps today's minted id. A PDF read stays minted (OCR may misread, U-76). An unreadable collision check also mints, never guesses.
+- `intake-store.ts` reads the taken ids once per manifest (`readTakenIntakeIds`, chunked) and uses the decision on lot creation only.
+- Lots already filed are never renamed (report A-1).
+
+**D-3, the correction path (before: Insert once, then nothing).**
+- Migration **0325** `ccrs_transfer_last_told(env, ids)`: read only, service role only. It is the InventoryTransfer twin of 0286 and returns what CCRS last ACCEPTED, plus an in-flight flag. Real-postgres check: `scripts/recon/ccrs-transfer-told-0325-pg-check.sql`, in POST_APPLY_CHECKS.
+- `buildTransferRows` handles a held plain id as follows:
+  - Facts unchanged, told unknown, or a file naming it still waiting: stays held.
+  - Facts changed (From license/id, To license/id, Quantity compared numerically, TransferDate) and not approved: new **E63_TRANSFER_CORRECTION_PENDING**. It is a held-back code: owed, never blocks the other rows, and nothing is sent.
+  - Approved for exactly these values (fingerprint = id plus the compared cells): one **Update** row. It keeps the same id and the CreatedBy/CreatedDate CCRS accepted, and fills UpdatedBy/UpdatedDate. UpdatedDate is clamped so it is never before CreatedDate [G L0234-L0242].
+- Approvals are stored per environment in `site_settings` (`ccrs.transfer_corrections.<env>`, `ccrs-transfer-correction-store.ts`).
+- Hub: the held list shows **Approve correction** on each E63 row (`CcrsIssueList` prop `transferCorrection`). `transferCorrectionAction` requires `settings.manage` and writes the audit entry `ccrs.transfer_correction.approve|withdraw`.
+- Before 0325 is applied, corrections are off and nothing changes. The hub warns in prod.
+
+**Tests.**
+- `tests/compliance/c1-transfer-id-and-corrections.test.tsx` (30): EXAM2 pins against the evidence file, D-1/D-2/D-3 behaviour, the 0325 shape and gate entry, and the wiring.
+- `r6-2` was updated to the no-prefix id.
+- Transfer self-tests: 52. Intake-id self-tests: 23.
+- All 325 migrations were applied to a real postgres 15 and 0325 re-applied cleanly; "CCRS 0325 CHECK PASSED".
+- TS mutations **M506–M517** (12) target the new rules. M413/M417/M418/M445/M502 were re-anchored to the new code.
+
+**Remaining.**
+- The owner applies 0325 (docs/MIGRATIONS_TO_RUN.md).
+- C1-6: the PREprod rehearsal (dotted vendor id → Inventory Insert → no-prefix Transfer → Sale → Inventory Update) is a hand upload by the owner.
+- `next build` runs on CI.
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

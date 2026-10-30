@@ -93,6 +93,7 @@ import {
   loadLedgerForBatch,
   loadSaleSlice,
   loadTransferSlice,
+  loadTransferTold,
   readInflightIdRows,
   readInflightMasterRows,
 } from "@/lib/compliance/ccrs-ledger-store";
@@ -113,9 +114,14 @@ import { lotsNamedByEventRows, planInventoryDelta } from "@/lib/compliance/ccrs-
 import {
   TRANSFER_BLOCKING,
   buildTransferRows,
+  e63RowId,
+  normalizeTransferApprovals,
+  transferCorrectionSettingKey,
   transferExternalId,
   transferLedgerEntries,
+  transferLookupIds,
   transferSummaryText,
+  type TransferCorrectionApproval,
   type TransferIssueCode,
   type TransferLot,
 } from "@/lib/compliance/ccrs-transfer-core";
@@ -395,7 +401,20 @@ const TRANSFER_ISSUE_TEXT: Record<TransferIssueCode, (n: number) => string> = {
   E14_TRANSFER_LEDGER_WITHHELD: (n) => `${n} transfer(s) were left out because an earlier file naming them is not answered yet. Record that file's CCRS result, then rebuild.`,
   E14_TRANSFER_LOT_NOT_REPORTED: (n) =>
     `${n} transfer(s) were left out because their lot is not in Inventory.csv and CCRS does not hold it yet ("ensure the inventory has been reported through the inventory.CSV" [G L1207-L1209]). Fix the Inventory errors first.`,
+  E63_TRANSFER_CORRECTION_PENDING: (n) =>
+    `${n} transfer(s) CCRS already holds now differ from what CCRS accepted (received quantity, date or vendor id changed). The examiner: "the update path is the correct way to make corrections" [EXAM2 L0058]. Check each row; if our new values are right, press "Approve correction" and rebuild: it is sent as an Update with the same id. Nothing is sent until you approve.`,
 };
+
+/** C1: the owner's approved transfer corrections (site_settings). Unreadable = none approved (nothing is sent on a guess). */
+async function readTransferApprovals(admin: Admin, env: LedgerEnv): Promise<TransferCorrectionApproval[]> {
+  try {
+    const { data, error } = await admin.from("site_settings").select("value_json").eq("key", transferCorrectionSettingKey(env)).maybeSingle();
+    if (error) return [];
+    return normalizeTransferApprovals((data as { value_json?: unknown } | null)?.value_json ?? null);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * R5-1: the DESTROYED lots that this batch's event rows name (by CCRS id).
@@ -1649,14 +1668,22 @@ export async function buildCcrsBatch(
   } else {
     const obligation = env === "prod" ? await getObligationContext() : null;
     const notBefore = obligation?.startDate ?? null;
-    const transferIds = transferRead.lots.map((l) => l.ourId).filter((x): x is string => !!x).map(transferExternalId);
-    const transferSlice = ledger ? await loadTransferSlice(admin, env, transferIds) : null;
+    // C1: the transfer id IS the lot id [EXAM2 L0056]; the ledger is also
+    // asked about the legacy "TR-" id so a transfer filed before C1 is never
+    // Inserted a second time under the plain id.
+    const ourIds = transferRead.lots.map((l) => l.ourId).filter((x): x is string => !!x);
+    const transferSlice = ledger ? await loadTransferSlice(admin, env, transferLookupIds(ourIds)) : null;
     const held = transferSlice?.kind === "loaded" ? transferSlice.held : null;
     if (held) {
       const merged = buildLedgerView(env, [...(saleAwareLedger ?? ledger!).entries.values(), ...transferLedgerEntries(held)], ledger!.productIdByKey);
       if (merged.duplicates.length > 0) throw new Error(`R6-2: InventoryTransfer ledger entries collide with the batch ledger: ${merged.duplicates.join(", ")}`);
       saleAwareLedger = merged.view;
     }
+    // C1 rule 7 (0325): what CCRS last accepted per held plain id, and the
+    // owner's approvals, so a changed transfer is corrected by an Update.
+    const heldPlain = held ? ourIds.map(transferExternalId).filter((id) => held.get(id)?.state) : [];
+    const transferTold = heldPlain.length > 0 ? await loadTransferTold(admin, env, heldPlain) : ({ kind: "absent" } as const);
+    const transferApprovals = heldPlain.length > 0 ? await readTransferApprovals(admin, env) : [];
     const reportable = new Set<string>();
     const invExt = CCRS_COLUMNS.Inventory.indexOf("ExternalIdentifier");
     for (const r of inventory.rows) if (r[invExt]) reportable.add(r[invExt]);
@@ -1677,6 +1704,9 @@ export async function buildCcrsBatch(
       catchUp: env === "prod" && held !== null && notBefore !== null,
       held,
       reportable,
+      told: transferTold,
+      approvals: transferApprovals,
+      batchDay: createdDate,
     });
     transferRows = tplan.rows;
     if (env === "prod" && notBefore === null) {
@@ -1685,15 +1715,24 @@ export async function buildCcrsBatch(
     const byCode = new Map<TransferIssueCode, typeof tplan.issues>();
     for (const i of tplan.issues) byCode.set(i.code, [...(byCode.get(i.code) ?? []), i]);
     for (const [code, list] of byCode) {
+      // C1: an E63 row carries "<transfer id>#<fingerprint>" so the hub's
+      // Approve button approves EXACTLY the values the owner was shown.
+      const pending = new Map(tplan.corrections.filter((c) => !c.approved).map((c) => [c.lotId, c]));
       syncIssues.push({
         severity: TRANSFER_BLOCKING.has(code) ? "error" : "warning",
         file: "InventoryTransfer",
         code,
         specPin: specPinFor(code),
         count: list.length,
-        rows: list.map((i) => ({ id: i.manifestId ?? i.lotId, label: i.label, detail: i.detail })),
+        rows: list.map((i) => {
+          const c = code === "E63_TRANSFER_CORRECTION_PENDING" ? pending.get(i.lotId) : undefined;
+          return { id: c ? e63RowId(c) : i.manifestId ?? i.lotId, label: i.label, detail: i.detail };
+        }),
         message: TRANSFER_ISSUE_TEXT[code](list.length),
       });
+    }
+    if (transferTold.kind === "absent" && heldPlain.length > 0 && env === "prod") {
+      transferWarnings.push("Transfer corrections are off: migration 0325 (ccrs_transfer_last_told) is not applied yet. Nothing changes for new transfers.");
     }
     if (tplan.rows.length > 0 || tplan.alreadyHeld.length > 0) transferWarnings.push(transferSummaryText(tplan));
   }

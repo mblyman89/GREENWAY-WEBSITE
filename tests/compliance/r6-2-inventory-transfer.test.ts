@@ -123,7 +123,7 @@ describe("R6-2 spec pins (verbatim in Part 02)", () => {
       expect(specPinFor(code as never)).toBe(pin);
     }
     expect([...TRANSFER_BLOCKING].sort()).toEqual(
-      ["E14_TRANSFER_FIELD_MISSING", "E14_TRANSFER_QUANTITY", "E14_TRANSFER_SAME_LICENSE", "E14_TRANSFER_VENDOR_ID_UNKNOWN"].sort(),
+      ["E14_TRANSFER_FIELD_MISSING", "E14_TRANSFER_QUANTITY", "E14_TRANSFER_SAME_LICENSE", "E14_TRANSFER_VENDOR_ID_UNKNOWN", "E63_TRANSFER_CORRECTION_PENDING"].sort(),
     );
   });
 });
@@ -140,7 +140,9 @@ describe("buildTransferRows: one row per accepted lot of a real delivery", () =>
     expect(col(r, "ToInventoryExternalIdentifier")).toBe("WA417068.IN1");
     expect(col(r, "Quantity")).toBe("24");
     expect(col(r, "TransferDate")).toBe("11/03/2026");
-    expect(col(r, "ExternalIdentifier")).toBe("TR-WA417068.IN1");
+    // C1: "the exact same as the inventory reported ID, you can not have a suffix" [EXAM2 L0056].
+    expect(col(r, "ExternalIdentifier")).toBe("WA417068.IN1");
+    expect(col(r, "ExternalIdentifier")).toBe(col(r, "ToInventoryExternalIdentifier"));
     expect(col(r, "CreatedDate")).toBe("11/03/2026");
     expect(col(r, "Operation")).toBe("Insert");
   });
@@ -241,7 +243,7 @@ describe("the 0285 slice answer and the vendor-id helpers", () => {
     for (const bad of ["", "a,b", 'a"b', "a\nb", "x".repeat(101), null]) expect(normalizeOwnerVendorId(bad).ok).toBe(false);
   });
   it("embedded self-tests pass", () => {
-    expect(__runCcrsTransferTests().passed).toBeGreaterThanOrEqual(27);
+    expect(__runCcrsTransferTests().passed).toBeGreaterThanOrEqual(51);
   });
 });
 
@@ -249,7 +251,8 @@ describe("the outbox self-check covers InventoryTransfer", () => {
   const HDR = "SubmittedBy,G\r\nSubmittedDate,11/08/2026\r\n";
   const mk = (t: CcrsRetailerFileType, rows: string[]) =>
     `${HDR}NumberRecords,${rows.length}\r\n${CCRS_COLUMNS[t].join(",")}\r\n${rows.map((r) => r + "\r\n").join("")}`;
-  const tr = (to: string, ext = `TR-${to}`) => `417068,413541,V-${to},${to},5,11/03/2026,${ext},G,11/03/2026,,,Insert`;
+  // C1: the transfer id is the lot id itself (no "TR-").
+  const tr = (to: string, ext = to) => `417068,413541,V-${to},${to},5,11/03/2026,${ext},G,11/03/2026,,,Insert`;
   const view = buildLedgerView(
     "prod",
     [

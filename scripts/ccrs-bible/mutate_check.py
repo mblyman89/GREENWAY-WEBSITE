@@ -164,6 +164,9 @@ SCORESTORE = "src/lib/compliance/ccrs-scoreboard-store.ts"
 W2_TESTS = "tests/compliance/w2-ccrs-hub-speed.test.ts"
 INFLIGHT_CORE = "src/lib/compliance/ccrs-inflight-hold-core.ts"
 W3_TESTS = "tests/compliance/w3-inflight-hold.test.ts"
+C1_TESTS = "tests/compliance/c1-transfer-id-and-corrections.test.tsx"
+INTAKE_ID_CORE = "src/lib/compliance/ccrs-intake-id-core.ts"
+ISSUE_LIST = "src/components/admin/compliance/CcrsIssueList.tsx"
 RETCORR_CORE = "src/lib/compliance/ccrs-return-corrections-core.ts"
 R5RET_TESTS = "tests/compliance/r5-return-corrections.test.ts"
 DISPLAY_CORE = "src/lib/compliance/ccrs-issue-display-core.ts"
@@ -3366,8 +3369,8 @@ MUTATIONS = [
     (
         "M413-r62-held-not-resent",
         TCORE,
-        '      if (h && h.state && PRESENT.has(h.state)) {',
-        '      if (h && h.state === "filed") {',
+        '      const isPresent = (x: TransferHeld | null) => !!x && !!x.state && PRESENT.has(x.state);',
+        '      const isPresent = (x: TransferHeld | null) => !!x && x.state === "filed";',
         R62_TESTS,
         "Every present state (seed/filed/confirmed/closed) means CCRS holds it [G L1190].",
     ),
@@ -3398,16 +3401,16 @@ MUTATIONS = [
     (
         "M417-r62-row-order",
         TCORE,
-        '    rows.push([from, ours, vid, ourId, String(qty), day, ext, input.createdBy, day, "", "", "Insert"]);',
-        '    rows.push([ours, from, vid, ourId, String(qty), day, ext, input.createdBy, day, "", "", "Insert"]);',
+        '    const fresh = [from, ours, vid, ourId, String(qty), day, ext, input.createdBy, day, "", "", "Insert"];',
+        '    const fresh = [ours, from, vid, ourId, String(qty), day, ext, input.createdBy, day, "", "", "Insert"];',
         R62_TESTS,
         "From is the vendor, To is us.",
     ),
     (
         "M418-r62-date-format",
         TCORE,
-        '  return `${m}/${d}/${y}`;\n}\n\nexport function transferExternalId',
-        '  return `${d}/${m}/${y}`;\n}\n\nexport function transferExternalId',
+        '  const [y, m, d] = day.split("-");\n  return `${m}/${d}/${y}`;',
+        '  const [y, m, d] = day.split("-");\n  return `${d}/${m}/${y}`;',
         R62_TESTS,
         "TransferDate is MM/DD/YYYY [G L1243].",
     ),
@@ -4080,8 +4083,8 @@ MUTATIONS = [
     (
         'M502-w3-e62-held-back',
         GATE_CORE,
-        '  "E62_ADJUSTMENT_LEDGER",\n]);',
-        ']);',
+        '  "E62_ADJUSTMENT_LEDGER",\n  // C1:',
+        '  // C1:',
         W3_TESTS,
         'An unproven adjustment is listed as owed.',
     ),
@@ -4108,6 +4111,102 @@ MUTATIONS = [
         'routeAdjustmentRows(adjRows, adjHeld, new Map())',
         W3_TESTS,
         'The builder routes adjustments against the waiting files.',
+    ),
+    (
+        'M506-c1-no-prefix',
+        TCORE,
+        'export function transferExternalId(ourId: string): string {\n  return ourId;',
+        'export function transferExternalId(ourId: string): string {\n  return `TR-${ourId}`;',
+        C1_TESTS,
+        'The transfer ExternalIdentifier is the lot id itself, no suffix [EXAM2 L0056].',
+    ),
+    (
+        'M507-c1-legacy-alias-held',
+        TCORE,
+        '      if (isPresent(old)) {',
+        '      if (false && isPresent(old)) {',
+        C1_TESTS,
+        'A transfer filed before C1 as TR-<id> is still reported: never re-Inserted.',
+    ),
+    (
+        'M508-c1-lookup-both-ids',
+        TCORE,
+        '    out.add(legacyTransferExternalId(id));',
+        '',
+        C1_TESTS,
+        'The ledger is asked about the legacy alias too.',
+    ),
+    (
+        'M509-c1-approval-fingerprint',
+        TCORE,
+        '(input.approvals ?? []).some((a) => a.id === ext && a.fingerprint === fingerprint)',
+        '(input.approvals ?? []).some((a) => a.id === ext)',
+        C1_TESTS,
+        'An approval covers exactly the values the owner saw; changed again = approve again.',
+    ),
+    (
+        'M510-c1-unapproved-not-sent',
+        TCORE,
+        '        if (!approved) {\n          alreadyHeld.push(ext);',
+        '        if (false) {\n          alreadyHeld.push(ext);',
+        C1_TESTS,
+        'Nothing is corrected until the owner approves (E63).',
+    ),
+    (
+        'M511-c1-told-in-flight',
+        TCORE,
+        'const changed = t && t.told && !t.inFlight ? transferChangedColumns(fresh, t.told) : [];',
+        'const changed = t && t.told ? transferChangedColumns(fresh, t.told) : [];',
+        C1_TESTS,
+        'No correction is proposed while a file naming the transfer awaits its answer.',
+    ),
+    (
+        'M512-c1-updated-date-clamp',
+        TCORE,
+        '  const b = dayNum(batchDay);',
+        '  const b = dayNum(batchDay);\n  return batchDay;',
+        C1_TESTS,
+        'UpdatedDate cannot be prior to CreatedDate [G L0242].',
+    ),
+    (
+        'M513-c1-update-operation',
+        TCORE,
+        'transferUpdatedDate(createdDate, input.batchDay), "Update"]);',
+        'transferUpdatedDate(createdDate, input.batchDay), "Insert"]);',
+        C1_TESTS,
+        'A correction is an Update with the same id, never a second Insert [EXAM2 L0058].',
+    ),
+    (
+        'M514-c1-e63-held-back',
+        GATE_CORE,
+        '  "E63_TRANSFER_CORRECTION_PENDING",\n]);',
+        ']);',
+        C1_TESTS,
+        'A pending correction is owed and never blocks the other rows.',
+    ),
+    (
+        'M515-c1-intake-trusted-only',
+        INTAKE_ID_CORE,
+        '  if (!TRUSTED_INTAKE_ID_SOURCES.has(source)) {',
+        '  if (false) {',
+        C1_TESTS,
+        'A PDF read keeps the minted id (OCR may misread the vendor id).',
+    ),
+    (
+        'M516-c1-intake-collision',
+        INTAKE_ID_CORE,
+        '  if (input.takenIds.has(raw)) {',
+        '  if (false) {',
+        C1_TESTS,
+        'A vendor id another lot already has keeps the minted id (no new collision).',
+    ),
+    (
+        'M517-c1-approve-button',
+        ISSUE_LIST,
+        '{transferCorrection && e.code === E63_CODE ? (',
+        '{false ? (',
+        C1_TESTS,
+        'Every E63 row offers Approve correction.',
     ),
 ]
 

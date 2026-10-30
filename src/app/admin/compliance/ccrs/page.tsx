@@ -63,6 +63,7 @@ import {
   dismissPeriodAction,
   undoDismissalAction,
   ccrsCleanupAction,
+  transferCorrectionAction,
 } from "./actions";
 import { getObligationContext, listRecentWaivers } from "@/lib/compliance/obligation-waiver-store";
 import { getHandoverFacts } from "@/lib/compliance/ccrs-handover-store";
@@ -751,6 +752,7 @@ export default async function CcrsCommandCenterPage({
                         tone="held"
                         copyTitle={`CCRS held back (still owed) — ${env} — week ${week.start} to ${week.end}`}
                         cleanup={canEdit ? { action: ccrsCleanupAction, weekKey: week.key } : undefined}
+                        transferCorrection={canEdit ? { action: transferCorrectionAction, weekKey: week.key } : undefined}
                       />
                     </div>
                   </div>

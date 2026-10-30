@@ -126,9 +126,11 @@ const ID_COLUMN: Partial<Record<CcrsRetailerFileType, string>> = {
   // SaleDetailExternalIdentifier [G L1411-L1415]; an Insert of a line CCRS
   // holds is a duplicate, an Update/Delete of one it lacks is "not found".
   Sale: "SaleDetailExternalIdentifier",
-  // R6-2: a transfer is identified by its own ExternalIdentifier ("TR-" + our
-  // lot id). Re-Inserting one CCRS holds is "Duplicate InventoryTransfer for
-  // Licensee" [G L1190].
+  // R6-2: a transfer is identified by its own ExternalIdentifier, which since
+  // C1 IS our lot id ("you can not have a suffix" [EXAM2 L0056]; the ledger
+  // keys by file type, so it never collides with the Inventory row of the same
+  // id). Re-Inserting one CCRS holds is "Duplicate InventoryTransfer for
+  // Licensee" [G L1190]; a correction is an Update of the same id [EXAM2 L0058].
   InventoryTransfer: "ExternalIdentifier",
 };
 

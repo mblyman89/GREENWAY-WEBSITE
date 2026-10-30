@@ -115,6 +115,9 @@ export const HELD_BACK_CODES: ReadonlySet<string> = new Set([
   // be read) is left out of InventoryAdjustment.csv and owed. (E61 in-flight
   // holds are advisory warnings: those rows were sent, they are not owed.)
   "E62_ADJUSTMENT_LEDGER",
+  // C1: a transfer correction waiting for the owner's approval is left out of
+  // InventoryTransfer.csv (CCRS keeps the accepted values) and owed.
+  "E63_TRANSFER_CORRECTION_PENDING",
 ]);
 
 /** True when an error-severity issue only describes rows left out of the files. */
