@@ -17,6 +17,7 @@
  * so this renders with renderToStaticMarkup in the vitest harness.
  */
 import type { LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
+import { PendingSubmit } from "./PendingSubmit";
 import { fileActions, noEmailAllowedAt } from "@/lib/compliance/ccrs-outcome-core";
 import { ANSWERED_DOWNLOAD_WARNING, isAnsweredState } from "@/lib/compliance/ccrs-reupload-core";
 import { FILE_STATE_TEXT, ccrsPortalUrl, pacificLocalInputValue, pendingDuplicateCount } from "@/lib/compliance/ccrs-lifecycle-core";
@@ -131,7 +132,7 @@ export function CcrsFilesPanel(p: Props) {
                     <form action={a!.startPreprod} className="inline">
                       <Hidden env={p.env} weekKey={p.weekKey} />
                       <span>Start the PREprod ledger (empty: nothing is assumed about what PREprod holds). </span>
-                      <button type="submit" className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`}>Start PREprod ledger</button>
+                      <PendingSubmit className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`} busy="Starting...">Start PREprod ledger</PendingSubmit>
                     </form>
                   ) : (
                     <span>PREprod ledger not started.</span>
@@ -147,7 +148,7 @@ export function CcrsFilesPanel(p: Props) {
                       <Hidden env={p.env} weekKey={p.weekKey} />
                       <span>{p.unassignedProductCount} product(s) need a PREprod id. Run id:</span>
                       <input name="run" defaultValue={p.suggestedRun ?? ""} pattern="P[0-9]{8}[A-Z]" required className={`${INPUT} w-28 uppercase`} aria-label="PREprod run id" />
-                      <button type="submit" className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`}>Assign PREprod ids</button>
+                      <PendingSubmit className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`} busy="Assigning...">Assign PREprod ids</PendingSubmit>
                       <span className="w-full text-white/50">PREprod only. Ids look like P20261008A-GWP-000123 and never touch production.</span>
                     </form>
                   ) : (
@@ -163,7 +164,7 @@ export function CcrsFilesPanel(p: Props) {
                           CCRS answered &ldquo;Duplicate External Identifier&rdquo; to {dupes} row(s): PREprod already had them from an earlier test.
                           PREprod cannot be reset, so treat them as on file (they go out as Update next time).
                         </span>
-                        <button type="submit" className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`}>Settle PREprod duplicates</button>
+                        <PendingSubmit className={`${BTN} bg-fuchsia-500/30 text-fuchsia-50 hover:bg-fuchsia-500/40`} busy="Settling...">Settle PREprod duplicates</PendingSubmit>
                         <span className="w-full text-white/50">PREprod only. Production never does this: a Service Desk copy settles production.</span>
                       </form>
                     ) : (
@@ -187,7 +188,7 @@ export function CcrsFilesPanel(p: Props) {
                 Got &quot;CCRS Processing Successful&quot;? Paste the email(s) here (any number at once):
               </label>
               <textarea name="email_text" rows={3} required className={`${INPUT} mt-1 w-full`} placeholder="The file Strain_413541_20261007120000_2026107T1252497.csv you submitted has been processed. Date Submitted: ..." />
-              <button type="submit" className={`${BTN} mt-1 bg-emerald-500/30 text-emerald-50 hover:bg-emerald-500/40`}>Record success</button>
+              <PendingSubmit className={`${BTN} mt-1 bg-emerald-500/30 text-emerald-50 hover:bg-emerald-500/40`} busy="Recording...">Record success</PendingSubmit>
               <span className="ml-2 text-[10px] text-white/45">Waiting: {waiting.map((w) => w.fileName).join(", ")}</span>
             </form>
           ) : null}
@@ -227,7 +228,7 @@ export function CcrsFilesPanel(p: Props) {
                         <Hidden env={p.env} weekKey={p.weekKey} fileId={f.id} />
                         <label className="text-white/60">Uploaded at (Pacific):</label>
                         <input type="datetime-local" name="uploaded_at" defaultValue={nowLocal} max={nowLocal} required className={INPUT} />
-                        <button type="submit" className={`${BTN} bg-sky-500/30 text-sky-50 hover:bg-sky-500/40`}>Mark uploaded</button>
+                        <PendingSubmit className={`${BTN} bg-sky-500/30 text-sky-50 hover:bg-sky-500/40`} busy="Marking...">Mark uploaded</PendingSubmit>
                         <details className="w-full text-white/45">
                           <summary className="cursor-pointer">Upload out of order anyway (logged)…</summary>
                           <input name="override" minLength={10} placeholder="Reason, 10+ characters (saved on the file)" className={`${INPUT} mt-1 w-full`} />
@@ -243,7 +244,7 @@ export function CcrsFilesPanel(p: Props) {
                         <div className="flex flex-wrap items-center gap-2">
                           <label className="text-white/60">Email arrived (Pacific):</label>
                           <input type="datetime-local" name="email_at" defaultValue={nowLocal} max={nowLocal} required className={INPUT} />
-                          <button type="submit" className={`${BTN} bg-orange-500/30 text-orange-50 hover:bg-orange-500/40`}>Record error file</button>
+                          <PendingSubmit className={`${BTN} bg-orange-500/30 text-orange-50 hover:bg-orange-500/40`} busy="Reading the error file...">Record error file</PendingSubmit>
                         </div>
                       </form>
                     ) : null}
@@ -252,7 +253,7 @@ export function CcrsFilesPanel(p: Props) {
                       acts.includes("record-no-email") ? (
                         <form action={a!.recordNoEmail} className="mt-2">
                           <Hidden env={p.env} weekKey={p.weekKey} fileId={f.id} />
-                          <button type="submit" className={`${BTN} bg-red-500/25 text-red-100 hover:bg-red-500/35`}>No email after 60 minutes (checked spam)</button>
+                          <PendingSubmit className={`${BTN} bg-red-500/25 text-red-100 hover:bg-red-500/35`} busy="Recording...">No email after 60 minutes (checked spam)</PendingSubmit>
                         </form>
                       ) : (
                         <p className="mt-2 text-[10px] text-white/40">&quot;No email&quot; unlocks at {fmt(noEmailAt ? noEmailAt.toISOString() : null)}.</p>
@@ -265,7 +266,7 @@ export function CcrsFilesPanel(p: Props) {
                         <form action={a!.abandon} className="mt-1 flex flex-wrap items-center gap-2">
                           <Hidden env={p.env} weekKey={p.weekKey} fileId={f.id} />
                           <input name="reason" minLength={10} required placeholder="Reason, 10+ characters" className={`${INPUT} flex-1`} />
-                          <button type="submit" className={`${BTN} bg-red-500/25 text-red-100 hover:bg-red-500/35`}>Abandon</button>
+                          <PendingSubmit className={`${BTN} bg-red-500/25 text-red-100 hover:bg-red-500/35`} busy="Abandoning...">Abandon</PendingSubmit>
                         </form>
                       </details>
                     ) : null}

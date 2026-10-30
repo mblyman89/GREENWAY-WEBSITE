@@ -291,6 +291,17 @@ The gate now keeps `rows`/`code`/`specPin`; the hub, the compliance report and t
 - **Now:** every link, form and redirect carries the env (`hubHref`). Apply is scoped to the email's env, reads candidates in one light query, shows the result in the email panel, and buttons show a busy state.
 - See Part 09 W-1.
 
+### A.18 W-2 Hub shell renders at once; heavy panels stream — DONE in code (2026-10-30)
+
+- **Before:** the hub awaited every read (batch build, 36 scoreboard queries, every file's issues, the clean-up scan, the medical scan) before the first byte. One throw blanked the page, and the buttons gave no sign they were working.
+- **Now:**
+  - The shell awaits only small reads.
+  - The heavy panels stream behind `<Suspense>` from settled promises, and the batch is built once per render.
+  - Production reads half the scoreboard.
+  - A failed build blocks both Step 3 buttons and is shown in Step 2.
+  - Every hub button shows a busy state.
+- See Part 09 W-2.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

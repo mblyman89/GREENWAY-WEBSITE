@@ -27,7 +27,8 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button } from "@/components/admin/ui";
+import { SaveButton } from "@/components/admin/orders/SaveButton";
+import { PendingSubmit } from "@/components/admin/compliance/PendingSubmit";
 import { pacificToday } from "@/lib/reports/timezone";
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
@@ -184,9 +185,7 @@ function DismissForm({
           className="mt-1 block w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
         />
       </label>
-      <Button type="submit" variant="neutral" size="sm">
-        {label}
-      </Button>
+      <SaveButton variant="neutral" size="sm" label={label} busyLabel="Saving..." />
     </form>
   );
 }
@@ -197,9 +196,7 @@ function UndoDismissForm({ waiverId, weekKey, env }: { waiverId: string; weekKey
       <input type="hidden" name="waiver_id" value={waiverId} />
       <input type="hidden" name="week_key" value={weekKey} />
       <input type="hidden" name="env" value={env} />
-      <Button type="submit" variant="danger" size="sm">
-        Undo dismissal
-      </Button>
+      <SaveButton variant="danger" size="sm" label="Undo dismissal" busyLabel="Undoing..." />
     </form>
   );
 }
@@ -591,9 +588,7 @@ export default async function CcrsCommandCenterPage({
                   className="mt-1 block rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
                 />
               </label>
-              <Button type="submit" variant="save" size="sm">
-                Save first day of sales
-              </Button>
+              <SaveButton variant="save" size="sm" label="Save first day of sales" busyLabel="Saving..." />
               {obligationCtx.startDate ? (
                 <span className="text-[11px] text-white/35">Clear the box and save to remove it.</span>
               ) : null}
@@ -698,9 +693,7 @@ export default async function CcrsCommandCenterPage({
                       <form action={assignProductIdsAction} className="mt-2">
                         <input type="hidden" name="week_key" value={week.key} />
                         <input type="hidden" name="env" value={env} />
-                        <Button type="submit" variant="confirm" size="sm">
-                          Assign CCRS Product ids (GWP-) to these {batch.ledger.unassignedProductKeys.length}
-                        </Button>
+                        <SaveButton variant="confirm" size="sm" label={`Assign CCRS Product ids (GWP-) to these ${batch.ledger.unassignedProductKeys.length}`} busyLabel="Assigning ids..." />
                         <p className="mt-1 text-white/50">Permanent: an assigned id is never changed or reused. Production only.</p>
                       </form>
                     ) : null}
@@ -998,17 +991,13 @@ export default async function CcrsCommandCenterPage({
                         className="mt-1 block w-64 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
                       />
                     </label>
-                    <Button type="submit" variant="neutral" size="sm">
-                      Save error status
-                    </Button>
+                    <SaveButton variant="neutral" size="sm" label="Save error status" busyLabel="Saving..." />
                   </form>
                 ) : null}
                 <form action={unresolveWeekAction}>
                   <input type="hidden" name="week_key" value={week.key} />
                   <input type="hidden" name="env" value={env} />
-                  <Button type="submit" variant="danger" size="sm">
-                    Undo (recorded by mistake)
-                  </Button>
+                  <SaveButton variant="danger" size="sm" label="Undo (recorded by mistake)" busyLabel="Undoing..." />
                 </form>
               </div>
             ) : null}
@@ -1057,9 +1046,9 @@ export default async function CcrsCommandCenterPage({
                       placeholder="Optional note (e.g. re-uploaded Sale.csv after fix)"
                       className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
                     />
-                    <Button type="submit" variant="confirm" size="sm" className="mt-3" disabled={!gate.submitted}>
+                    <PendingSubmit className="mt-3 admin-focus inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-black uppercase tracking-[0.1em] transition px-3.5 py-1.5 text-[0.7rem] bg-[var(--admin-accent)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110" disabled={!gate.submitted} busy="Recording...">
                       Record as SUBMITTED
-                    </Button>
+                    </PendingSubmit>
                     {gate.submittedWhy === "build-failed" ? (
                       <p className="mt-2 text-[11px] text-red-300/80">
                         Blocked: this week&apos;s files could not be built (see Step 2). Reload once it builds.
@@ -1091,9 +1080,9 @@ export default async function CcrsCommandCenterPage({
                       placeholder="Optional note (e.g. store closed, no deliveries)"
                       className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
                     />
-                    <Button type="submit" variant="neutral" size="sm" className="mt-3" disabled={!gate.nothing}>
+                    <PendingSubmit className="mt-3 admin-focus inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-black uppercase tracking-[0.1em] transition px-3.5 py-1.5 text-[0.7rem] bg-[var(--admin-orange-soft)] text-[var(--admin-orange)] ring-1 ring-[var(--admin-orange)]/40 shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-orange)] hover:text-black" disabled={!gate.nothing} busy="Recording...">
                       Record as NOTHING TO REPORT
-                    </Button>
+                    </PendingSubmit>
                     {gate.nothingWhy === "build-failed" ? (
                       <p className="mt-2 text-[11px] text-red-300/80">
                         Blocked: this week&apos;s files could not be built, so it is not known to be empty.
