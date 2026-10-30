@@ -222,7 +222,7 @@ export function CcrsMailPanel({
                 {r.kind === "success" ? (
                   <form action={actions.applySuccess} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="week_key" value={weekKey} />
-          {env ? <input type="hidden" name="page_env" value={env} /> : null}
+                    {env ? <input type="hidden" name="page_env" value={env} /> : null}
                     <input type="hidden" name="mail_id" value={r.id} />
                     {!r.env ? (
                       <select name="env" required className="rounded bg-white/10 px-2 py-1" defaultValue="">
@@ -242,7 +242,7 @@ export function CcrsMailPanel({
                 {r.kind === "error" ? (
                   <form action={actions.applyError} className="flex flex-wrap items-end gap-2">
                     <input type="hidden" name="week_key" value={weekKey} />
-          {env ? <input type="hidden" name="page_env" value={env} /> : null}
+                    {env ? <input type="hidden" name="page_env" value={env} /> : null}
                     <input type="hidden" name="mail_id" value={r.id} />
                     {(a.errors ?? []).map((e, i) => {
                       const fits = uploadedFiles.filter((f) => f.fileType === e.fileType && (!r.env || f.env === r.env));
@@ -263,14 +263,14 @@ export function CcrsMailPanel({
                 {r.notProcessed?.length && actions.applyNotProcessed ? (
                   <form action={actions.applyNotProcessed} className="flex flex-wrap items-end gap-2" data-testid="ccrs-mail-not-processed">
                     <input type="hidden" name="week_key" value={weekKey} />
-          {env ? <input type="hidden" name="page_env" value={env} /> : null}
+                    {env ? <input type="hidden" name="page_env" value={env} /> : null}
                     <input type="hidden" name="mail_id" value={r.id} />
                     <SaveButton label={`Record as not processed (${r.notProcessed.join(", ")})`} busyLabel="Recording…" />
                   </form>
                 ) : null}
                 <form action={actions.dismiss} className="flex flex-wrap items-end gap-2">
                   <input type="hidden" name="week_key" value={weekKey} />
-          {env ? <input type="hidden" name="page_env" value={env} /> : null}
+                  {env ? <input type="hidden" name="page_env" value={env} /> : null}
                   <input type="hidden" name="mail_id" value={r.id} />
                   <input name="reason" required minLength={5} placeholder="Why set aside (e.g. recorded by paste)" className="w-56 rounded bg-white/10 px-2 py-1" />
                   <SaveButton label="Set aside" busyLabel="Setting aside…" variant="neutral" />

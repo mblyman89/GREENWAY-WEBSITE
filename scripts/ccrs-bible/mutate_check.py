@@ -153,6 +153,12 @@ INTAKE = "src/lib/inventory/intake-store.ts"
 M0285 = "supabase/migrations/0285_ccrs_inventory_transfer.sql"
 CALCORE = "src/lib/compliance/compliance-calendar-core.ts"
 REMINDERS = "src/lib/notifications/compliance-reminders.ts"
+# W-1 (2026-10-30): the hub keeps the env; email Apply scoped to the email's env.
+HUBFLOW = "src/lib/compliance/ccrs-hub-flow-core.ts"
+HUBACT = "src/app/admin/compliance/ccrs/actions.ts"
+HUBMAIL = "src/app/admin/compliance/ccrs/mail-actions.ts"
+HUBPANEL = "src/components/admin/compliance/CcrsMailPanel.tsx"
+W1_TESTS = "tests/compliance/w1-ccrs-hub-env.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -3842,6 +3848,78 @@ MUTATIONS = [
         R65_TESTS,
         'The heartbeat keeps the keyless mode.',
     ),
+    (
+        'M475-w1-env-kept',
+        HUBFLOW,
+        '  q.set("env", o.env === "preprod" ? "preprod" : "prod");',
+        '  if (o.env === "preprod") q.set("env", "preprod");',
+        W1_TESTS,
+        'Production is written explicitly too (the URL always says its mode).',
+    ),
+    (
+        'M476-w1-params-cannot-override-env',
+        HUBFLOW,
+        '    if (k === "week" || k === "env") continue;',
+        '    if (k === "week") continue;',
+        W1_TESTS,
+        'A message parameter can never flip the env.',
+    ),
+    (
+        'M477-w1-scope-falls-back',
+        HUBFLOW,
+        '  return inScope.length > 0 ? inScope : ofType;',
+        '  return inScope;',
+        W1_TESTS,
+        'An env with no waiting file of the type falls back to the pre-W-1 pool.',
+    ),
+    (
+        'M478-w1-scope-narrows',
+        HUBFLOW,
+        '  return inScope.length > 0 ? inScope : ofType;',
+        '  return ofType;',
+        W1_TESTS,
+        'A PRE email sees only PREprod files when PREprod has one.',
+    ),
+    (
+        'M479-w1-week-back-env',
+        HUBACT,
+        '  back(week.key, "saved=1", env);\n}\n\n/** Undo a mistaken week sign-off. */',
+        '  back(week.key, "saved=1", "prod");\n}\n\n/** Undo a mistaken week sign-off. */',
+        W1_TESTS,
+        'Recording the week returns to the env it was pressed in.',
+    ),
+    (
+        'M480-w1-resolve-batch-env',
+        HUBACT,
+        'const batch = await buildCcrsBatch(range.fromISO, range.toISO, { env });',
+        'const batch = await buildCcrsBatch(range.fromISO, range.toISO);',
+        W1_TESTS,
+        'The evidence snapshot is built for the env being worked in.',
+    ),
+    (
+        'M481-w1-mail-scope-from-email',
+        HUBMAIL,
+        'mail.received_at, echoEnvScope(mail.env));',
+        'mail.received_at, null);',
+        W1_TESTS,
+        'The error Apply is scoped by the email env.',
+    ),
+    (
+        'M482-w1-panel-posts-env',
+        HUBPANEL,
+        '                    {env ? <input type="hidden" name="page_env" value={env} /> : null}\n                    <input type="hidden" name="mail_id" value={r.id} />\n                    {!r.env ? (',
+        '                    <input type="hidden" name="mail_id" value={r.id} />\n                    {!r.env ? (',
+        W1_TESTS,
+        'Every email form posts the page env back.',
+    ),
+    (
+        'M483-w1-picker-env',
+        HUBPANEL,
+        'f.fileType === e.fileType && (!r.env || f.env === r.env)',
+        'f.fileType === e.fileType',
+        W1_TESTS,
+        'The picker offers only files of the email env.',
+    ),
 ]
 
 
@@ -3901,6 +3979,7 @@ def main() -> int:
         R5_TESTS,
         R5R_TESTS,
         R5E_TESTS,
+        W1_TESTS,
     )
     # Opt-in (low-memory machines): MUTATE_ONLY=M347,M350 or a prefix "M3[4-7]"
     # runs only the matching mutations and only the baseline files they use.
