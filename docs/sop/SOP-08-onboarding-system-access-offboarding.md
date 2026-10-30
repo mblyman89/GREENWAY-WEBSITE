@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.2 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; Phase 0.3 fix G-52 + G-59 built; draft for owner review) |
+| **Version** | 1.3 (Phase 5: G-53 sign-in link and G-54 one-step offboarding BUILT; migration 0324. Before: 1.2 (owner answers to Q-08-1...Q-08-5 applied, D70-D74; Phase 0.3 fix G-52 + G-59 built; draft for owner review) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Employees** (`/admin/staffing/employees` and each employee file): owner, admin and manager (`staffing.manage`). **Users** (`/admin/users`): owner and admin (`users.manage`). **Time Clock** (`/admin/staffing`, `/admin/staffing/clock`): every role with `timeclock.use` (owner, admin, manager, budtender). The new hire takes part in onboarding (I-9 Section 1, handbook, training, badge photo). |
@@ -132,10 +132,23 @@ Greenway's system keeps **two separate records** for people, and the owner decid
 | Used for | Clocking in, unlocking a register, register approvals (manager or lead PIN), samples hub, the five-year employee record | Every back-office page the role allows |
 | Ends with | **Terminate** (status Terminated, PIN cleared) | **Deactivate** (access cut off, sign-in banned) |
 
-**How they link.** An employee file has a `staff_id` field that can point to a user. **No screen sets it** (F-08-2). Only files that were copied from users by the original 2023 set-up (migration 0037 L125–132) have one. Those show a **login** badge on the roster (`employees/page.tsx` L230). For everyone added since, the two records are unconnected, so:
+**How they link (Phase 5, G-53).** An employee file has a `staff_id` field that points to a user. The owner or an admin sets it on the employee file: **Back-office sign-in** card → pick the sign-in → tick *This sign-in belongs to {name}* → **Link sign-in** (`src/app/admin/staffing/employees/[id]/page.tsx` L638–725; `src/app/admin/staffing/employees/[id]/actions.ts` `linkSignInAction` L390). Owner basis (D70): *"yes, built right, professionally and of enterprise grade standards."* Linking never creates or changes an employee or a sign-in (books-87: *"I want to create the employee in payroll/ W-4 setup, then I will give them access to the back office if they need access to it."*); the one write is `employee-login-link-store.ts` `setEmployeeSignInLink` L136.
 
-- the register's handbook check uses only the **paper** route for them (§4.10);
-- terminating them does not touch their sign-in, and deactivating their sign-in does not touch their PIN (§4.21).
+Rules (`offboarding-core.ts` `linkVerdict` L78):
+
+- one sign-in belongs to one employee: a sign-in already on another file is refused and the message names that file (the database refuses it too once migration **0324** runs);
+- only **active** sign-ins, and never on a **terminated** file;
+- you can link only a sign-in ranked at or below you, and only an **Owner** can link an Owner sign-in (an Owner link exempts that employee from the register handbook check, `handbook-ack-core.ts` L62–77);
+- if the names look different the picker says *"— different name"* and the page notes it after you confirm.
+
+**Unlink sign-in** on the same card removes the pointer (the sign-in is not changed). Both are owner/admin only and written to the audit log as `employee.login_linked` / `employee.login_unlinked` with before and after (refusals as `employee.login_link.blocked`). Admin → **Users** shows *Employee: {name}* under each linked sign-in, with a link to the file.
+
+Once linked:
+
+- the register's handbook check accepts that sign-in's acknowledgment (§4.10);
+- **Terminate** offers to deactivate that sign-in in the same step (§4.21).
+
+Files that were copied from users by the original 2023 set-up (migration 0037 L125–132) are already linked. Those and every new link show a **login** badge on the roster (`employees/page.tsx` L231).
 
 ### 4.2 Where everything lives
 
@@ -233,7 +246,7 @@ The handbook is read and acknowledged **before the first shift**. There are two 
 | **Back-office gate** | Every back-office page, for every role except Owner | The person's **sign-in** acknowledged the **current** version (2.0) on the handbook screen | `admin/layout.tsx` L67–83; `handbook-ack-core.ts` L42–55 |
 | **Register gate** | Register unlock by PIN | The **Document tracker** row **Employee handbook acknowledgment** is **Read & signed**, **or** a linked sign-in acknowledged the current version, **or** a linked Owner | `api/pos/unlock/route.ts` L79–96; `handbook-ack-store.ts` L99–155; `handbook-ack-core.ts` L62–77 |
 
-Because new files are not linked to a sign-in (§4.1), **the register only accepts the paper route** for them. So, for every new hire:
+**Phase 5 (G-53):** once the owner or an admin links the person's sign-in to their file (§4.1), the register also accepts that sign-in's digital acknowledgment. Until it is linked, **the register only accepts the paper route**. Keep the paper route for every new hire anyway (it is the five-year record):
 
 1. Give them the printed handbook (Employees → **Handbook & Policies** → print). They read it and sign the acknowledgment page.
 2. If they have a sign-in, the first time they sign in they see the handbook screen and type their full name to acknowledge it (`HandbookGateScreen.tsx` L62). That satisfies the **back-office** gate only.
@@ -284,7 +297,9 @@ Owner or admin only (`users.manage`):
 3. The first time they sign in, they acknowledge the handbook (§4.10 step 2).
 4. Write the role and invite date on form 8.1.
 
-The sign-in is **not** linked to the employee file (§4.1). That is the owner's design. Whether a link should be added for the gates and offboarding is **open question Q-08-1** (G-53).
+5. **Link it (Phase 5, G-53):** open their employee file → **Back-office sign-in** → pick the sign-in → tick the confirmation → **Link sign-in** (§4.1). The page says *"Linked to sign-in {email}. The register now accepts that sign-in's handbook acknowledgment, and Terminate offers to deactivate it."* (`src/app/admin/staffing/employees/[id]/actions.ts` L437–441). Write "linked" on form 8.1.
+
+The two records stay separate (books-87); the link is only a pointer the owner or an admin sets.
 
 # Part 3: System management while employed
 
@@ -335,20 +350,29 @@ WAC 314-55-083(1)(a)–(c): every **non-employee visitor** (other than retail cu
 2. Owner: plan the final paycheck. *"RCW 49.48.010: final wages are due at the END of the established pay period — pay them with the normal payroll run, don't skip them."* (`employee-lifecycle-core.ts` L229). Pay and sick leave are Accounting (D69).
 3. If they hold a register drawer, the safe or keys, plan the hand-back with SOP-02.
 
-### 4.21 Terminating: both halves, same day
+### 4.21 Terminating: one step when the sign-in is linked (Phase 5, G-54)
 
-**Half 1: the employee file** (owner, admin or manager):
+Owner or admin (`staffing.lifecycle`). Owner basis (D71): *"yes."*
 
-1. Open the file → **Terminate employment** (right rail, `[id]/page.tsx` L656–680).
+1. Open the file → **Terminate employment** (right rail, `src/app/admin/staffing/employees/[id]/page.tsx` L788–860).
 2. **Last day** (required) and **Reason (kept on file)** (required). Write facts, for example *"Resigned with two weeks' notice"*.
-3. Press **Terminate**. The app sets the status to Terminated, makes the file inactive and **clears the PIN at once** (`employee-lifecycle-store.ts` L517–527). The page shows: *"Employee terminated. PIN cleared. Work the offboarding checklist below — and deactivate any back-office login on Admin → Users."* (`[id]/actions.ts` L225–226).
+3. Check the boxes the box shows:
+   - **Deactivate their sign-in too ({email})**, ticked by default when a sign-in is linked. Untick it only if they keep back-office access (rare). If no sign-in is linked, the box says so in gold: deactivate it on Users (step 6) or link it first (§4.1).
+   - **Delete scheduled shifts after the last day**, ticked by default when shifts exist from today on; it lists the dates. A shift **on** the last day stays.
+   - A gold note if they are **clocked in right now**: Terminate leaves that punch open on purpose (the real clock-out time is a fact only a person knows).
+4. Press **Terminate** and confirm the pop-up, which repeats what will happen to the sign-in and the shifts (`TerminateSubmitButton.tsx`).
+5. The app, in this order (`src/app/admin/staffing/employees/[id]/actions.ts` `terminateWithOffboarding` L262):
+   - checks the date and reason first, so nothing is written on a typo;
+   - deactivates the sign-in **first**, with the same rules as Users (not yourself, not someone ranked above you, never the last active owner) and the sign-in ban (`sign-in-deactivate.ts`);
+   - sets the status to Terminated, makes the file inactive and **clears the PIN** (`employee-lifecycle-store.ts` L517–527);
+   - deletes the scheduled shifts after the last day;
+   - flags an open punch;
+   - ticks only the checklist boxes it really did (§4.22).
+   Every step is in the audit log: `user.deactivate` (with *via terminate*), `shift.deleted_on_termination`, `employee.offboarding_open_punch`, `employee.status_terminated` (before and after).
+6. Read the message. A green message means every automatic step worked. A red one names what did **not** happen, for example *"Their sign-in … was NOT deactivated: …"*, *"…but the sign-in ban failed: check Supabase Auth."*, *"They are still clocked in since … A manager closes that punch on Time Clock → Hours with the real time and a reason."* Do that step by hand the same day.
+7. **No linked sign-in?** Admin → **Users** → their row → **Deactivate**, the same day (`users/actions.ts` setUserActive). The Users message now names the linked file when there is one.
 
-**Half 2: the sign-in** (owner or admin, **the same day**):
-
-4. Admin → **Users** → their row → **Deactivate**. Their access ends on their very next request, and the sign-in is banned at the sign-in service (`users/actions.ts` L143–153; the session check refuses inactive profiles, `session.ts` L169). The message is *"{email} deactivated — access is cut off and sign-in is banned. If you're letting them go, run the offboarding checklist on their employee file too."* (L176). If it says *"…the auth ban failed; check Supabase Auth."* (L177), the back office is still locked for them. Tell the owner the same day.
-5. A **manager** who did Half 1 calls or texts the owner or an admin to do Half 2, and writes who and when on form 8.3.
-
-**For immediate dismissals,** do Half 2 **first**, then Half 1, before telling the person.
+**For immediate dismissals:** the app already deactivates the sign-in before it terminates. If no sign-in is linked, deactivate on Users **first**, then Terminate, before telling the person.
 
 ### 4.22 The offboarding checklist
 
@@ -356,11 +380,11 @@ After Terminate, the file shows the **Offboarding checklist** (seven steps, `emp
 
 | Step (as on screen) | What to do | App helps? |
 |---|---|---|
-| **Termination date + reason recorded** | Done by Terminate | Yes |
+| **Termination date + reason recorded** | Done by Terminate (ticked for you) | Yes |
 | **ID badge retrieved or voided** | Collect the badge; mark it returned or void on form 8.2 | No |
-| **Time-clock PIN cleared & open punch closed** | The PIN is already cleared. Open Time Clock → **Hours** for their last day; if a punch is still open, close it with the real time and a reason (SOP-02 / Hours) | PIN yes; punch **no** (F-08-3) |
-| **Back-office login deactivated (Users page)** | §4.21 Half 2 | **No** (F-08-3) |
-| **Removed from future schedules** | Employees → **Schedule**: delete every shift after the last day | **No** (F-08-3) |
+| **Time-clock PIN cleared & open punch closed** | The PIN is already cleared. Ticked for you when no punch is open. If Terminate said they are still clocked in, a manager opens Time Clock → **Hours**, closes the punch with the real time and a reason, then ticks it | Yes (Phase 5); an open punch is flagged, never closed by the app |
+| **Back-office login deactivated (Users page)** | Ticked for you when Terminate deactivated the linked sign-in (or it was already inactive). Otherwise deactivate on Users (§4.21 step 7) and tick it | Yes when linked (Phase 5) |
+| **Removed from future schedules** | Ticked for you when every scheduled shift after the last day was deleted and none is left on the last day. Otherwise remove the rest on Employees → **Schedule** and tick it | Yes (Phase 5) |
 | **Final paycheck scheduled** | Owner confirms (Accounting) | Pointer only |
 | **Employee file retained (do NOT delete)** | Nothing to delete; the app has no delete | Yes |
 
@@ -397,7 +421,14 @@ The app never deletes an employee. Terminated people move to **Former employees*
 | *"Apply migration 0117 first (see the banner above)."* | Database update missing | Owner |
 | *"Onboarding started — work through the checklist below."* | Status is Onboarding (rehire) | §4.24 |
 | *"Employee is ACTIVE — welcome aboard!"* | Activated | Set the PIN (§4.13) |
-| *"Employee terminated. PIN cleared. …"* | Half 1 done | Do Half 2 the same day (§4.21) |
+| *"Employee terminated. PIN cleared. … Finish the rest of the offboarding checklist below."* (Phase 5) | Terminate done; green = every automatic step worked | Read every sentence; do any step it says did NOT happen (§4.21 step 6) |
+| *"No sign-in is linked to this file, so check Admin → Users for one in their name."* | Terminate found no linked sign-in | Deactivate on Users the same day (§4.21 step 7) |
+| *"They are still clocked in since …"* | Open punch flagged | Manager closes it on Hours with a reason |
+| *"Linked to sign-in {email}. …"* / *"Sign-in {email} unlinked. …"* | Link set or removed (§4.1) | None |
+| *"{email} is already linked to {name}. One sign-in belongs to one employee …"* | That sign-in is on another file | Unlink it on that file first, if it was wrong |
+| *"… is ranked above you …"* / *"Only an Owner can link an Owner sign-in."* | Rank rule (§4.1) | Ask the owner |
+| *"Tick “This sign-in belongs to this person” to confirm."* | Confirmation box not ticked | Tick it if it is the same person |
+| *"Someone else changed this file's sign-in a moment ago. …"* | Two people pressed at once | Reload and check |
 | *"No active employee for that PIN."* | Wrong PIN, no PIN, or not Active | Retry once; then a manager checks the file |
 | *"Too many wrong PINs — the PIN pad is locked for N more seconds."* | Five wrong PINs in a minute | Wait; report repeats to the owner |
 | *"Handbook acknowledgment required before using the register. …"* | Register gate: no **Read & signed** row and no linked acknowledgment | §4.10 step 4 |
@@ -486,11 +517,11 @@ Print these. File the completed forms in the employee's paper file (five years).
 |---|---|---|
 | Employee full legal name; last day | | |
 | Reason (facts) | | |
-| Half 1: Terminate pressed (PIN cleared) | By / time: | |
-| Half 2: sign-in deactivated on Users (or "none") | By / time: | |
+| Terminate pressed (PIN cleared); message read (green / red) | By / time: | |
+| Sign-in deactivated: by Terminate (linked) / on Users / "none" | By / time: | |
 | If Half 1 was a manager: owner/admin told | Who / time: | |
-| Open punch checked on Hours (closed if open) | | |
-| Future shifts deleted | | |
+| Open punch: none / closed on Hours with reason | | |
+| Future shifts: deleted by Terminate / removed on Schedule / none | | |
 | Badge returned or voided (form 8.2) | | |
 | Keys, drawer, safe access, uniforms returned | | |
 | Group chats and shared accounts removed | | |
@@ -536,13 +567,12 @@ Print these. File the completed forms in the employee's paper file (five years).
 9. Form 8.1 signed → owner or admin presses **Activate** → **then** the employee sets their PIN.
 10. Schedule. W-4 and direct deposit to the owner. Test the register unlock.
 
-### 9.2 Card: someone is leaving (manager / admin / owner)
+### 9.2 Card: someone is leaving (owner / admin)
 
-1. File → **Terminate**: last day and reason. (The PIN is cleared.)
-2. **Same day:** owner or admin → Users → **Deactivate**.
-3. Offboarding checklist: badge, open punch (Hours), future shifts (Schedule), final pay (owner), keep the file.
-4. Form 8.3 complete.
-5. Dismissal for cause: deactivate first, then terminate.
+1. File → **Terminate**: last day, reason; keep **Deactivate their sign-in too** and **Delete scheduled shifts** ticked; confirm.
+2. Read the message: do anything it says did **not** happen (sign-in, shifts, open punch on Hours).
+3. No linked sign-in? Users → **Deactivate** the same day (dismissal: first).
+4. Checklist: badge, final pay (owner), keep the file. Form 8.3 complete.
 
 ### 9.3 Card: PINs (everyone)
 
@@ -590,6 +620,7 @@ Print these. File the completed forms in the employee's paper file (five years).
 | Register unlock and approvals | `src/app/api/pos/unlock/route.ts` L42–110; `src/app/api/pos/till/route.ts` L56, L194–208 |
 | Phone clock | `src/app/admin/staffing/clock/page.tsx` L35 |
 | Database | `supabase/migrations/0037_staffing_timeclock.sql` L37, L125–132; `0117_employee_command_center.sql` L31–57; `0136_handbook_acknowledgments.sql` L23; `0210_separate_logins_from_employees.sql` L4–80 |
+| Sign-in link and one-step offboarding (Phase 5) | `src/lib/staffing/offboarding-core.ts` (linkVerdict L78, unlinkVerdict L135, shiftsToDelete L169, validateTermination L186, offboardingTasksDone L217, offboardingMessage L238); `src/lib/staffing/employee-login-link-store.ts` (setEmployeeSignInLink L136, the only staff_id writer); `src/lib/auth/sign-in-deactivate.ts` L26; `src/app/admin/staffing/employees/[id]/actions.ts` setStatusAction L211, terminateWithOffboarding L262, linkSignInAction L390, unlinkSignInAction L446; `src/app/admin/staffing/employees/[id]/page.tsx` L111–127, L638–725, L788–860; `src/app/admin/users/page.tsx` L200–245, L294–303; `users/actions.ts` L174–184; `supabase/migrations/0324_employee_sign_in_link_unique.sql` |
 | Pointers only (D69) | Payroll Setup `src/lib/payroll/payroll-onboarding-store.ts` L1046–1130; e-sign `src/app/admin/staffing/employees/[id]/esign/actions.ts` L71–201 |
 | State texts (2026-10-28) | RCW 69.50.357 (2), (3)(a)–(b); WAC 314-55-083(1), (1)(a)–(d); WAC 314-55-087(1)(e) (app.leg.wa.gov) |
 | Related SOPs | SOP-01 (register), SOP-02 (safe and Hours), SOP-06 (Cycle Counts, every employee), SOP-19 (ID and limits, to be written), SOP-20 (incidents, to be written) |
@@ -601,8 +632,8 @@ Print these. File the completed forms in the employee's paper file (five years).
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
 | **G-52** | New people start as **Candidate** (Add to roster and Payroll Setup); the PIN field is locked until **Activate**; Activate runs the gate; the help text matches | F-08-1 (**S1**) | No PIN until form 8.1 is signed (§4.6, §4.13) | One thing to know, §4.3, §4.6, §4.13, §5, §9.1 | **BUILT** (Phase 0.3) |
-| **G-53** | An owner-set **link** between a user and an employee file (on Users or the file); never creates an employee (books-87); the register then accepts the digital acknowledgment | F-08-2 | Paper handbook route for everyone (§4.10) | §4.1, §4.10, §4.14, §4.21 | APPROVED (D70) |
-| **G-54** | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | F-08-3 | Both halves by hand, form 8.3 (§4.21–§4.22) | §4.21, §4.22, §9.2 | APPROVED (D71) |
+| **G-53** | An owner-set **link** between a user and an employee file (on Users or the file); never creates an employee (books-87); the register then accepts the digital acknowledgment | F-08-2 | Paper handbook route for everyone (§4.10) | §4.1, §4.10, §4.14, §4.21 | **BUILT** (Phase 5; run 0324) |
+| **G-54** | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | F-08-3 | Both halves by hand, form 8.3 (§4.21–§4.22) | §4.21, §4.22, §9.2 | **BUILT** (Phase 5) |
 | **G-55** | Checklist ↔ Document tracker kept in step (checking the handbook step sets Read & signed, and so on); Activate also needs the hire date, badge number and a training-log line per required topic; the paper handbook row carries the version | F-08-4, F-08-5 | §4.10 step 4, §4.11 step 3, §4.18 | §4.9–§4.11, §4.18 | PROPOSED |
 | **G-56** | **Rehire** keeps the earlier termination (a history of employment periods) and starts a fresh checklist | F-08-6 | Print the status card first; uncheck everything (§4.24) | §4.24 | PROPOSED |
 | **G-57** | **Visitor log and badges** in the app (WAC 314-55-083(1)(a)–(c)); badge printing for employees | F-08-8 | Forms 8.2, 8.5 (§4.12, §4.19) | §4.12, §4.19 | DEFERRED (D72: paper for now) |
@@ -626,5 +657,6 @@ Each has an interim rule in this SOP until the owner answers.
 | Version | Date | Change | By |
 |---|---|---|---|
 | 1.0 | 2026-10-28 | First draft, verified against `main@bad718b4`, after the owner asked for this SOP (D69). State texts read: RCW 69.50.357, WAC 314-55-083, WAC 314-55-087. Findings F-08-1…F-08-10 and F-08-C; gaps G-52…G-58 proposed; questions Q-08-1…Q-08-5. Forms 8.1–8.6, cards 9.1–9.3. Payroll, direct deposit and the Lyman menu are pointers only (D69). No code changed | SOP program |
+| 1.3 | Fix phase | Phase 5 (owner D70: *"yes, built right, professionally and of enterprise grade standards."*; D71: *"yes."*). G-53 BUILT: owner/admin link and unlink an existing sign-in on the employee file (one per employee, rank rule, confirmation, audited before/after; never creates or edits either record, books-87); Users shows the linked employee. G-54 BUILT: Terminate deactivates the linked sign-in first (Users guard rails and ban), deletes scheduled shifts after the last day, flags an open punch, ticks the boxes it did, one message naming anything not done; confirmation pop-up. Migration 0324 (one sign-in, one employee). §4.1, §4.10, §4.14, §4.21, §4.22, §5, form 8.3, card 9.2, Appendix A, B. F-08-2, F-08-3 FIXED. | Fix program |
 | 1.2 | Fix phase | Phase 0.3 (owner D76). G-52 BUILT: Add a person and Payroll Setup create a **Candidate** (`active = false`, no PIN); a PIN can be set only once Active (server check); roster PIN field removed. G-59 BUILT: new permission `staffing.lifecycle` (owner, admin) on Start onboarding, Activate, Terminate and Rehire; buttons hidden for managers. Payroll roster still lists candidates and onboarding people (migration 0306). "One thing to know", §2, §4.3, §4.6, §4.13, §5, §7, card 9.1 and Appendix B updated. F-08-1 FIXED. | Fix program |
 | 1.1 | 2026-10-28 | Owner answers Q-08-1...Q-08-5 applied (D70-D74): G-53 and G-54 APPROVED; visitor log stays on paper (G-57 DEFERRED); every employee gets a sign-in; Activate, Terminate and Rehire are owner and admin only (§2, §6; new G-59). The SOP Library page (Employee -> SOP Library) now shows every SOP. | SOP program |

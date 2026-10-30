@@ -3113,3 +3113,31 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0323_noncannabis_register.rollback.sql`.
   It drops the three functions, the index and the four columns (sale links and
   cost snapshots on adjustments are lost; On hand is not changed).
+
+## Fix 5 — 0324 — One sign-in, one employee (sign-in link)
+
+- [ ] `0324_employee_sign_in_link_unique.sql` adds one partial unique index,
+  `employees_staff_id_unique` on `public.employees (staff_id) where staff_id is not null`.
+  No columns, no tables, no data changes. (#P5)
+  - Owner, verbatim (D70): *"yes, built right, professionally and of enterprise grade standards."*
+  - Preconditions: `public.employees` (0037). If two employee files already
+    point at the same sign-in, the file stops with
+    *DUPLICATE_SIGN_IN_LINKS: …* and lists them: unlink the extra on the
+    employee file (Admin → Users flags it in red) and run it again.
+  - Until it is applied, the app still refuses a second link; only two
+    clicks at the same instant could both win.
+
+  Safe to re-run (create unique index if not exists).
+
+  **Check:**
+
+  ```sql
+  select indexname from pg_indexes
+  where schemaname = 'public' and indexname = 'employees_staff_id_unique';  -- 1 row
+  ```
+
+  **Then:** open an employee file → **Back-office sign-in** → link a sign-in,
+  and confirm Admin → Users shows *Employee: {name}* under it.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0324_employee_sign_in_link_unique.rollback.sql`.
+  It drops the index; links stay.

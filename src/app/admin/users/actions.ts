@@ -16,6 +16,7 @@ import {
   BAN_LIFT,
 } from "@/lib/auth/user-guards-core";
 import type { StaffRole } from "@/lib/supabase/types";
+import { employeeForSignIn } from "@/lib/staffing/employee-login-link-store";
 
 const BASE = "/admin/users";
 
@@ -170,10 +171,17 @@ export async function setUserActive(formData: FormData): Promise<void> {
         : `${target.email ?? "User"} reactivated, but lifting the sign-in ban failed — check Supabase Auth.`,
     );
   }
+  // Phase 5 (G-54): name the linked employee file so the other half is one click away.
+  const linkedEmp = await employeeForSignIn(userId);
+  const fileHint = linkedEmp
+    ? linkedEmp.status === "terminated"
+      ? ` Their employee file (${linkedEmp.fullName}) is already terminated.`
+      : ` If you're letting them go, press Terminate on ${linkedEmp.fullName}'s employee file (Employees → ${linkedEmp.fullName}).`
+    : " If you're letting them go, run the offboarding checklist on their employee file too.";
   bounce(
     "ok",
     banApplied
-      ? `${target.email ?? "User"} deactivated — access is cut off and sign-in is banned. If you're letting them go, run the offboarding checklist on their employee file too.`
+      ? `${target.email ?? "User"} deactivated — access is cut off and sign-in is banned.${fileHint}`
       : `${target.email ?? "User"} deactivated — the back office is locked for them, but the auth ban failed; check Supabase Auth.`,
   );
 }

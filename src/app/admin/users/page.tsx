@@ -9,6 +9,7 @@ import { Button, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { PermissionMatrix } from "@/components/admin/users/PermissionMatrix";
 import type { StaffProfile, StaffRole } from "@/lib/supabase/types";
 import { updateUserRole, setUserActive, inviteUser } from "./actions";
+import { linkedEmployeesBySignIn } from "@/lib/staffing/employee-login-link-store";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,8 @@ const ACCESS_LOG_LABELS: Record<string, { label: string; tone: "green" | "orange
   "user.deactivate": { label: "Deactivated", tone: "orange" },
   "user.deactivate.blocked": { label: "Deactivate BLOCKED", tone: "red" },
 };
+// Phase 5 (G-54): a deactivation done by Terminate on the employee file is
+// recorded as user.deactivate with after.via = "terminate:<employeeId>".
 
 const TONE_CLASS: Record<"green" | "orange" | "red", string> = {
   green: "bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
@@ -69,7 +72,7 @@ export default async function UsersPage({
 }) {
   const session = await requirePermission("users.manage");
   const sp = await searchParams;
-  const [users, accessLog] = await Promise.all([loadUsers(), loadAccessLog()]);
+  const [users, accessLog, links] = await Promise.all([loadUsers(), loadAccessLog(), linkedEmployeesBySignIn()]);
 
   const myRank = ROLE_RANK[session.profile.role];
   const activeOwnerCount = users.filter((u) => u.role === "owner" && u.active).length;
@@ -89,7 +92,7 @@ export default async function UsersPage({
               "Enter a teammate's email and choose their role.",
               "Send the invite — they get an email to set a password.",
               "Roles control what each person can see and change.",
-              "Letting someone go? Hit Deactivate — access is cut off and their sign-in is banned immediately — then run the offboarding checklist on their employee file.",
+              "Letting someone go? Press Terminate on their employee file: when the sign-in is linked it is deactivated and banned in the same step, future shifts are removed and an open punch is flagged. Deactivate here is for access-only changes.",
             ]}
           >
             <p>
@@ -194,6 +197,47 @@ export default async function UsersPage({
                       )}
                     </p>
                     <p className="text-xs text-white/40">{u.email}</p>
+                    {/* Phase 5 (G-53): the employee file this sign-in is linked to. */}
+                    {(() => {
+                      const emp = links.bySignIn.get(u.id);
+                      if (!emp) {
+                        return (
+                          <p className="mt-0.5 text-[11px] text-white/35">
+                            No employee file linked (link it on the employee file)
+                          </p>
+                        );
+                      }
+                      return (
+                        <p className="mt-0.5 text-[11px] text-white/60">
+                          Employee:{" "}
+                          <Link
+                            href={`/admin/staffing/employees/${emp.id}`}
+                            className="text-[var(--admin-accent)] underline"
+                          >
+                            {emp.fullName}
+                          </Link>
+                          {emp.status === "terminated" ? (
+                            <span className="ml-1 text-white/40">(terminated)</span>
+                          ) : (
+                            u.active && (
+                              <span className="ml-1 text-white/40">
+                                · letting them go?{" "}
+                                <Link
+                                  href={`/admin/staffing/employees/${emp.id}`}
+                                  className="text-[var(--admin-orange)] underline"
+                                >
+                                  Terminate on their file
+                                </Link>{" "}
+                                (deactivates this sign-in in the same step)
+                              </span>
+                            )
+                          )}
+                          {links.doubled.includes(u.id) && (
+                            <span className="ml-1 text-red-300">· linked to more than one file — unlink the extra</span>
+                          )}
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   <form action={updateUserRole} className="flex items-center gap-2">
@@ -249,7 +293,13 @@ export default async function UsersPage({
 
         {/* Letting someone go */}
         <section className="rounded-xl border border-[var(--admin-orange)]/25 bg-[var(--admin-orange)]/5 p-5">
-          <h2 className="text-sm font-semibold text-white">Letting someone go? Do both halves.</h2>
+          <h2 className="text-sm font-semibold text-white">Letting someone go? Start on their employee file.</h2>
+          <p className="mt-2 text-xs leading-relaxed text-white/55">
+            When their sign-in is linked (the row above says <strong className="text-white/80">Employee:</strong>),
+            pressing <strong className="text-white/80">Terminate</strong> on the file also deactivates and bans this
+            sign-in, deletes their future shifts and flags an open punch — one step. If the row says no employee
+            file is linked, do both halves below by hand.
+          </p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-white/55">
             <li>
               <strong className="text-white/80">Cut off access here:</strong> hit Deactivate on

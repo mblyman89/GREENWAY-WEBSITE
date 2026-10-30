@@ -851,6 +851,7 @@ import { __runMigrationLotFixCoreTests } from "../../src/lib/inventory/migration
 import { __runManifestEventLabelsCoreTests } from "../../src/lib/inventory/manifest-event-labels-core";
 import { __runIntakeCountCoreTests } from "../../src/lib/inventory/intake-count-core";
 import { __runInboundReconcileCoreTests } from "../../src/lib/inbound-email/inbound-reconcile-core";
+import { __runOffboardingCoreTests } from "../../src/lib/staffing/offboarding-core";
 import { __runGrowFlowInvoiceTests } from "../../src/lib/inventory/pdf-growflow-invoice-core";
 import { __runManifestSiblingTests } from "../../src/lib/inventory/manifest-sibling-core";
 import { __runNcPosCatalogTests } from "../../src/lib/noncannabis/pos-catalog-core";
@@ -2629,6 +2630,7 @@ __runLiquidVolumeTests();
   assertRan("nc-pos-catalog-core", { passed: __runNcPosCatalogTests(), failed: 0 }, 40); // Phase 4 (G-29/G-30/G-32): Other Inventory on the register - nc- keys, menu cards, barcode merge (cannabis wins), COGS by line, moving-average cost, direction by reason, price/cost edit rules, sales summary, website in-store cards
   assertRan("invoice-adjustments-core", __runInvoiceAdjustmentsTests(), 25); // Fix Phase 3.4 (F-04-24): credits / discounts / negative lines read off the invoice; manual credits validated; invoice amount = lines + credits
   assertRan("manifest-sibling-core", __runManifestSiblingTests(), 21); // Fix Phase 3.3 (F-04-23): same delivery under another number (same vendor + invoice/lots) -> duplicate, dismissable; label-like vendor names refused
+  assertRan("offboarding-core", __runOffboardingCoreTests(), 49); // Fix Phase 5 (G-53/G-54): sign-in link rules (one per employee, rank, owner-only owner links, confirm), shifts after the last day, checklist boxes the app did, offboarding message
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

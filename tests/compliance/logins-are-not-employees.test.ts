@@ -419,6 +419,8 @@ describe("THE TRAP: nothing may recreate the coupling", () => {
     // eight write sites in the tree are written that way.
     const offenders: string[] = [];
     let writeSites = 0;
+    let sanctionedWrites = 0;
+    const LINK_STORE_REL = path.join("src", "lib", "staffing", "employee-login-link-store.ts");
 
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -439,7 +441,13 @@ describe("THE TRAP: nothing may recreate the coupling", () => {
         if (verb) {
           writeSites += 1;
           const payload = verb[2];
-          if (/staff_id/.test(payload)) offenders.push(`${rel} (inline)`);
+          // Phase 5 (G-53, owner D70 "yes, built right, professionally and of
+          // enterprise grade standards."): exactly ONE sanctioned writer - the
+          // owner/admin link button - and only as an UPDATE of a row that
+          // already exists. Never an insert, never anywhere else.
+          const sanctioned = rel === LINK_STORE_REL && verb[1] === "update";
+          if (sanctioned && /staff_id/.test(payload)) sanctionedWrites += 1;
+          else if (/staff_id/.test(payload)) offenders.push(`${rel} (inline)`);
           // `.update(someVar)` - go and read someVar.
           const varName = /^\s*([A-Za-z_$][\w$]*)\s*\)/.exec(payload)?.[1];
           if (varName) {
@@ -461,7 +469,10 @@ describe("THE TRAP: nothing may recreate the coupling", () => {
     // Asserting the count is what stops this becoming a test that passes because
     // it found nothing to look at (standing rule 13c). If a legitimate ninth
     // write site is added, update this number AFTER reading the new code.
-    expect(writeSites, "the employees-write scan found nothing; it has gone blind").toBe(8);
+    // Phase 5 added the ninth: employee-login-link-store.ts setEmployeeSignInLink
+    // (update only, owner/admin, audited). It is the sanctioned link writer.
+    expect(writeSites, "the employees-write scan found nothing; it has gone blind").toBe(9);
+    expect(sanctionedWrites, "the one sanctioned link writer was not found").toBe(1);
     expect(
       offenders,
       `these write employees.staff_id, which is D-69 returning: ${offenders.join(", ")}`,
@@ -506,5 +517,19 @@ describe("the screen does what Michael asked for", () => {
     expect(action).toContain('revalidatePath("/admin/staffing/employees")');
     // The gate comes before the write.
     expect(action.indexOf("requireBooksAccess")).toBeLessThan(action.indexOf("addPersonToPayroll("));
+  });
+});
+
+// ===========================================================================
+describe("Phase 5 (G-53): the link writer keeps books-87", () => {
+  const STORE = codeOnly(read("src/lib/staffing/employee-login-link-store.ts"));
+  it("never inserts or upserts an employee, and never writes staff_profiles", () => {
+    expect(STORE).not.toMatch(/\.from\("employees"\)[^;]*\.(insert|upsert)\(/);
+    expect(STORE).not.toMatch(/\.from\("staff_profiles"\)[^;]*\.(insert|upsert|update|delete)\(/);
+  });
+  it("writes staff_id in exactly one place, guarded against a race", () => {
+    expect((STORE.match(/staff_id: next/g) ?? []).length).toBe(1);
+    expect(STORE).toContain('base.is("staff_id", null)');
+    expect(STORE).toContain('base.eq("staff_id", expected)');
   });
 });

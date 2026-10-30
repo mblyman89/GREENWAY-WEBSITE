@@ -667,3 +667,6 @@ The concierge must answer **both** "how does it work today" (interim) and "how w
 **Future features (D41/D42):** when G-52…G-58 is built, the topics above and this table are updated in the same slice as SOP-08, and `concierge-kb.ts` `users` (L415–425) and `time-clock` (L248–258) are rewritten from SOP-08.
 
 **Running score:** topics with complete SOP source material add `users` (fix), `two-identity-systems`, `employee-onboarding`, `clock-pin`, `handbook-gate`, `employee-training-records`, `badges-and-visitors`, `employee-offboarding`, `employee-rehire`.
+
+**Fix Phase 5 update to the SOP-08 rows (G-53, G-54 BUILT; F-08-2, F-08-3 FIXED; owner D70: *"yes, built right, professionally and of enterprise grade standards."*; D71: *"yes."*).** `concierge-kb.ts` `time-clock` gains two facts (**Linking a sign-in to an employee file**, **Letting someone go**), grounded on SOP-08 v1.3 §4.1, §4.21, card 9.2. Caveats F-08-2 and F-08-3 above are superseded: the concierge may now say "link their sign-in on the employee file" (owner or admin), and "Terminate deactivates a linked sign-in, deletes future shifts and flags an open punch". Kept as history: *"never say 'link their login to their employee file': no screen does it."*
+
