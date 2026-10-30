@@ -30,6 +30,7 @@ import {
 } from "@/lib/inventory/audit-hub-guidance-core";
 import { saveReasonAction } from "./actions";
 import { expiryStatus } from "@/lib/inventory/expiry-rules-core";
+import { movementNote } from "@/lib/inventory/audit-count-flow-core";
 
 const CARD = "rounded-2xl border border-white/10 bg-white/[0.02] p-5";
 const P = "text-sm leading-relaxed text-[var(--admin-text-muted)]";
@@ -171,6 +172,21 @@ export function AuditVarianceReview({
                 </span>
               </p>
 
+              {/* G-35 (D61 "anytime during open hours"): stock that moved while
+                  this lot was being counted, in plain words. Posting refuses
+                  until it is recounted. */}
+              {(() => {
+                const note = movementNote(l.booksAtCount, l.movedQty);
+                return note ? (
+                  <p
+                    className={`mt-2 text-xs ${l.movedQty !== 0 ? "text-[var(--admin-orange)]" : "text-[var(--admin-text-muted)]"}`}
+                    data-testid="audit-movement"
+                  >
+                    {note}
+                  </p>
+                ) : null;
+              })()}
+
               {/* The engine's own words, unedited. */}
               {a.messages.length > 0 ? (
                 <ul className="mt-3 space-y-1">
@@ -196,6 +212,16 @@ export function AuditVarianceReview({
                     <p className="mt-1 text-xs text-[var(--admin-orange)]">
                       This answer is likely to be taxed as if the product were sold.
                     </p>
+                  ) : null}
+                  {/* G-37: a reason can be corrected until approval. The old
+                      reason is kept in the security log. */}
+                  {editable ? (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-[var(--admin-text-muted)] underline decoration-dotted">
+                        Change the reason
+                      </summary>
+                      <ReasonForm sessionId={sessionId} lotId={l.lotId} />
+                    </details>
                   ) : null}
                 </div>
               ) : needsReason && editable ? (

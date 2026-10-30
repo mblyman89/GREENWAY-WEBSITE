@@ -36,6 +36,16 @@
  * self-tests. An ambiguous scan REFUSES and asks -- it never guesses which of
  * two candidate lots was meant, because a confident wrong answer on a
  * traceability record is worse than a question.
+ *
+ * ---------------------------------------------------------------------------
+ * FIX PHASE 4.1 (migration 0326): ONE COUNTER, EACH SCAN ADDS ONE
+ * ---------------------------------------------------------------------------
+ *   D56 "Only one employee per scoped count."  -> Start counting claims it.
+ *   D60 each scan adds one.                    -> no number to type on a scan.
+ *   F-06-5b a re-scan never silently becomes a second count -> the sheet asks.
+ *   D55 I'm done                                -> locks the counts, to Michael.
+ * The decisions are in audit-count-flow-core.ts (pure, self-tested); the
+ * database refuses the same things in the 0326 RPCs.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -45,8 +55,17 @@ import {
   normalizeScan,
   type ScanLine,
 } from "@/lib/inventory/cycle-count-scan-core";
-import { saveCountAction } from "./actions";
+import { saveCountAction, claimCountAction, finishCountAction } from "./actions";
 import { expiryStatus } from "@/lib/inventory/expiry-rules-core";
+import {
+  ALREADY_COUNTED_CHOICES,
+  doneState,
+  liveProgress,
+  planScan,
+  type CountAccess,
+  type CountMode,
+} from "@/lib/inventory/audit-count-flow-core";
+import { buildCountChecklistFor } from "@/lib/inventory/inventory-audit-core";
 
 export type SheetLine = {
   lotId: string;
@@ -63,6 +82,9 @@ export type SheetLine = {
 
 type Feedback = { tone: "good" | "warn" | "bad"; text: string } | null;
 
+/** What the typed-entry box is doing for the focused lot. */
+type Entry = { target: "count" | "recount"; mode: CountMode; title: string };
+
 const CARD = "rounded-2xl border border-white/10 bg-white/[0.02] p-5";
 const P = "text-sm leading-relaxed text-[var(--admin-text-muted)]";
 
@@ -71,12 +93,15 @@ export function AuditCountSheet({
   lines,
   readOnly,
   today,
+  access,
 }: {
   sessionId: string;
   lines: readonly SheetLine[];
   readOnly: boolean;
   /** R34: Pacific today (YYYY-MM-DD) from the server, for the expiry badge. */
   today?: string;
+  /** Fix Phase 4.1 (D56): claim / count / locked, from countAccess on the server. */
+  access?: CountAccess;
 }) {
   const [focusLotId, setFocusLotId] = useState<string | null>(null);
   // HOW the number arrived is part of the evidence, not decoration. A count
@@ -85,17 +110,24 @@ export function AuditCountSheet({
   // path. Recording every entry as "scan" because the scan box is on screen
   // would put a false quality stamp on the weakest records in the audit.
   const [captureMethod, setCaptureMethod] = useState<"scan" | "manual">("scan");
+  const [entry, setEntry] = useState<Entry | null>(null);
+  const [askLotId, setAskLotId] = useState<string | null>(null);
+  // Lots whose second count this person has started on this screen: further
+  // scans keep adding to it instead of asking again.
+  const [secondStarted, setSecondStarted] = useState<ReadonlySet<string>>(new Set());
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [scanValue, setScanValue] = useState("");
   const scanRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
 
-  // A lot counts as done when a number exists. `0` is done -- somebody looked
-  // and found nothing. Only `null` is outstanding.
-  const done = lines.filter((l) => l.countedQty !== null).length;
+  // G-34: live progress from the lines themselves.
+  const progress = liveProgress(lines);
+  const done = progress.counted;
   const recountsOutstanding = lines.filter((l) => l.needsRecount && l.recountQty === null).length;
   const pct = lines.length === 0 ? 100 : Math.round((done / lines.length) * 100);
+  const finish = doneState(lines);
+  const canCount = !readOnly && (access === undefined || access.mode === "count");
 
   const scanLines: ScanLine[] = useMemo(
     () =>
@@ -112,20 +144,55 @@ export function AuditCountSheet({
     [lines],
   );
 
+  // G-39: the counting checklist, on the sheet itself. Batches per product
+  // drives the loud "these look identical" step.
+  const checklist = useMemo(() => {
+    const byName = new Map<string, number>();
+    for (const l of lines) {
+      const k = l.productName ?? "this product";
+      byName.set(k, (byName.get(k) ?? 0) + 1);
+    }
+    const multi = [...byName.entries()].filter(([, n]) => n > 1);
+    return buildCountChecklistFor({
+      name: multi.length === 1 ? multi[0]![0] : "each product on this sheet",
+      batches: multi.length > 0 ? Math.max(...multi.map(([, n]) => n)) : 1,
+    });
+  }, [lines]);
+
   const focused = focusLotId ? lines.find((l) => l.lotId === focusLotId) ?? null : null;
+  const asking = askLotId ? lines.find((l) => l.lotId === askLotId) ?? null : null;
 
   // The scan box holds focus so a wedge scanner's keystrokes always land
   // somewhere useful. A counter holding a handheld should never have to click.
   useEffect(() => {
-    if (readOnly) return;
+    if (!canCount) return;
     const t = setInterval(() => {
       const el = document.activeElement;
       const typingElsewhere =
-        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement;
       if (!typingElsewhere) scanRef.current?.focus();
     }, 1200);
     return () => clearInterval(t);
-  }, [readOnly]);
+  }, [canCount]);
+
+  /** Send one entry to the server (D60: a scan is qty 1, mode add). */
+  const record = useCallback(
+    (lotId: string, qty: number, target: "count" | "recount", mode: CountMode, method: "scan" | "manual", label: string) => {
+      const form = new FormData();
+      form.set("sessionId", sessionId);
+      form.set("lotId", lotId);
+      form.set("qty", String(qty));
+      form.set("target", target);
+      form.set("mode", mode);
+      form.set("captureMethod", method);
+      startTransition(async () => {
+        await saveCountAction(form);
+        setFeedback({ tone: "good", text: `${label} Scan the next package.` });
+        window.setTimeout(() => scanRef.current?.focus(), 30);
+      });
+    },
+    [sessionId],
+  );
 
   const handleScan = useCallback(
     (raw: string) => {
@@ -150,30 +217,71 @@ export function AuditCountSheet({
           text:
             `"${code}" matches ${m.candidates.length} different lots in this count, so the ` +
             `system will not guess which one you are holding. Pick it from the list below ` +
-            `instead — a confident wrong answer on a traceability record is worse than a question.`,
+            `instead \u2014 a confident wrong answer on a traceability record is worse than a question.`,
         });
         setFocusLotId(null);
         return;
       }
+      if (m.status !== "exact") {
+        // A close match is never counted automatically: confirm by hand.
+        setFocusLotId(m.line.lotId);
+        setCaptureMethod("manual");
+        setEntry({ target: "count", mode: "replace", title: "Close match \u2014 check the label, then type the total" });
+        setFeedback({ tone: "warn", text: `Close match on ${m.line.lotCode ?? "this lot"}. Nothing was added.` });
+        window.setTimeout(() => qtyRef.current?.focus(), 30);
+        return;
+      }
 
-      setFocusLotId(m.line.lotId);
+      const line = lines.find((l) => l.lotId === m.line.lotId);
+      if (!line) return;
       setCaptureMethod("scan");
-      setFeedback({
-        tone: m.status === "exact" ? "good" : "warn",
-        text:
-          m.status === "exact"
-            ? `${m.line.productName ?? "Lot"} — ${m.line.lotCode ?? "no lot code"}. Enter what you counted.`
-            : `Close match on ${m.line.lotCode ?? "this lot"}. Check the label agrees before entering a number.`,
-      });
-      window.setTimeout(() => qtyRef.current?.focus(), 30);
+      setFocusLotId(line.lotId);
+      const plan = planScan(line, secondStarted.has(line.lotId));
+      const name = `${line.productName ?? "Lot"} \u2014 ${line.lotCode ?? "no lot code"}`;
+      if (plan.kind === "add") {
+        if (plan.target === "recount") setSecondStarted((s) => new Set(s).add(line.lotId));
+        setEntry(null);
+        record(line.lotId, 1, plan.target, "add", "scan", `${name}: +1${plan.target === "recount" ? " (second count)" : ""}.`);
+        return;
+      }
+      if (plan.kind === "third") {
+        setCaptureMethod("manual");
+        setEntry({ target: "recount", mode: "third", title: "The two counts disagree \u2014 count once more and type the total" });
+        setFeedback({ tone: "warn", text: `${name}: the first and second counts disagree. Count it a third time and type what you find.` });
+        window.setTimeout(() => qtyRef.current?.focus(), 30);
+        return;
+      }
+      setEntry(null);
+      setAskLotId(line.lotId);
+      setFeedback({ tone: "warn", text: `${name} already has a number. What should this scan do?` });
     },
-    [scanLines],
+    [scanLines, lines, secondStarted, record],
   );
 
-  function submitCount(form: FormData) {
+  function chooseAlreadyCounted(mode: "add" | "replace" | "restart") {
+    if (!asking) return;
+    const lotId = asking.lotId;
+    const name = `${asking.productName ?? "Lot"} \u2014 ${asking.lotCode ?? "no lot code"}`;
+    const target: "count" | "recount" = asking.recountQty !== null || asking.needsRecount ? "recount" : "count";
+    setAskLotId(null);
+    if (mode === "add") {
+      record(lotId, 1, target, "add", "scan", `${name}: +1.`);
+    } else if (mode === "restart") {
+      // Count again from zero: this scan is the first package of the fresh count.
+      record(lotId, 1, "count", "restart", "scan", `${name}: started again from zero, 1 so far.`);
+    } else {
+      setFocusLotId(lotId);
+      setCaptureMethod("manual");
+      setEntry({ target, mode: "replace", title: "Type the right total" });
+      window.setTimeout(() => qtyRef.current?.focus(), 30);
+    }
+  }
+
+  function submitTyped(form: FormData) {
     startTransition(async () => {
       await saveCountAction(form);
       setFocusLotId(null);
+      setEntry(null);
       setFeedback({ tone: "good", text: "Recorded. Scan the next package." });
       window.setTimeout(() => scanRef.current?.focus(), 30);
     });
@@ -181,14 +289,32 @@ export function AuditCountSheet({
 
   return (
     <div className="space-y-5">
-      {/* ── PROGRESS ───────────────────────────────────────────────────── */}
+      {/* ── WHO IS COUNTING (D56) ─────────────────────────────────────── */}
+      {access ? (
+        <section
+          className={`${CARD} ${access.mode === "count" ? "border-[var(--admin-accent)]/40" : "border-[var(--admin-gold)]/40"}`}
+          data-testid="count-access"
+        >
+          <p className="text-sm text-white/90">{access.banner}</p>
+          {access.mode === "claim" ? (
+            <form action={claimCountAction} className="mt-3">
+              <input type="hidden" name="sessionId" value={sessionId} />
+              <Button type="submit" variant="confirm" size="md">
+                Start counting
+              </Button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* ── PROGRESS ─────────────────────────────────────────────────── */}
       <section className={CARD}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-bold text-white">
             {done} of {lines.length} lots counted
           </h2>
           <span className="text-xs text-[var(--admin-text-muted)]">
-            {lines.length - done} still blank
+            {progress.blank} still blank
           </span>
         </div>
         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -206,24 +332,35 @@ export function AuditCountSheet({
               ? "1 lot needs a second count. "
               : `${recountsOutstanding} lots need a second count. `}
             You are told THAT they disagreed, never by how much &mdash; a second count that knows
-            the target is not a second count. Ideally a different person does it.
+            the target is not a second count. Scan each package of that lot again; each scan adds
+            one to the second count.
           </p>
+        ) : null}
+        {canCount ? (
+          <form action={finishCountAction} className="mt-4 flex flex-wrap items-center gap-3">
+            <input type="hidden" name="sessionId" value={sessionId} />
+            <Button type="submit" variant="confirm" size="md" disabled={!finish.enabled || pending}>
+              I&apos;m done
+            </Button>
+            <span className="text-xs text-[var(--admin-text-muted)]">{finish.why}</span>
+          </form>
         ) : null}
       </section>
 
-      {/* ── SCAN ───────────────────────────────────────────────────────── */}
-      {!readOnly ? (
+      {/* ── SCAN ─────────────────────────────────────────────────────── */}
+      {canCount ? (
         <section className={CARD}>
           <h2 className="text-sm font-bold text-white">Scan a package</h2>
           <p className={`mt-1 ${P}`}>
-            A Bluetooth or USB scanner types into this box and presses Enter for you &mdash;
-            nothing to install, nothing to import afterwards. You can also type a lot code and
-            press Enter.
+            Each scan adds one to that batch. Scan every package, one at a time. A Bluetooth or
+            USB scanner types into this box and presses Enter for you. You can also type a lot
+            code and press Enter.
           </p>
           <input
             ref={scanRef}
             value={scanValue}
             autoFocus
+            disabled={pending}
             onChange={(e) => setScanValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -249,21 +386,61 @@ export function AuditCountSheet({
             </p>
           ) : null}
 
+          {/* F-06-5b: a lot that already has a number never silently becomes a
+              second count. The counter picks what the scan means. */}
+          {asking ? (
+            <div className="mt-4 rounded-xl border border-[var(--admin-gold)]/40 bg-black/25 p-4" data-testid="already-counted">
+              <p className="text-sm font-semibold text-white">
+                {asking.productName ?? "Unnamed product"} already has a number
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {ALREADY_COUNTED_CHOICES.map((c) => (
+                  <button
+                    key={c.mode}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => chooseAlreadyCounted(c.mode)}
+                    className="rounded-lg border border-white/15 px-3 py-2 text-left text-sm text-white hover:border-[var(--admin-accent)]/60"
+                  >
+                    <span className="block font-semibold">{c.label}</span>
+                    <span className="block text-xs text-[var(--admin-text-muted)]">{c.hint}</span>
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="neutral"
+                size="sm"
+                className="mt-3"
+                onClick={() => {
+                  setAskLotId(null);
+                  setFeedback({ tone: "warn", text: "Cancelled. Nothing was recorded." });
+                  scanRef.current?.focus();
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : null}
+
           {/* The entry box appears only once a specific lot is identified, so a
               number can never be typed against "whatever was selected last". */}
-          {focused ? (
-            <form action={submitCount} className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
+          {focused && entry ? (
+            <form action={submitTyped} className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
               <input type="hidden" name="sessionId" value={sessionId} />
               <input type="hidden" name="lotId" value={focused.lotId} />
               <input type="hidden" name="captureMethod" value={captureMethod} />
+              <input type="hidden" name="target" value={entry.target} />
+              <input type="hidden" name="mode" value={entry.mode} />
               <p className="text-sm font-semibold text-white">
                 {focused.productName ?? "Unnamed product"}
               </p>
               <p className="font-mono text-xs text-[var(--admin-text-muted)]">
                 {focused.lotCode ?? "NO LOT CODE"}
               </p>
+              <p className="mt-2 text-xs font-semibold text-[var(--admin-gold)]">{entry.title}</p>
               <div className="mt-3 flex flex-wrap items-end gap-3">
-                <Field label="How many did you count" htmlFor="count-qty" required>
+                <Field label="How many are there in total" htmlFor="count-qty" required>
                   <input
                     ref={qtyRef}
                     id="count-qty"
@@ -276,7 +453,7 @@ export function AuditCountSheet({
                   />
                 </Field>
                 <Button type="submit" variant="confirm" size="md" disabled={pending}>
-                  {pending ? "Saving..." : "Record this count"}
+                  {pending ? "Saving..." : "Record this total"}
                 </Button>
                 <Button
                   type="button"
@@ -284,6 +461,7 @@ export function AuditCountSheet({
                   size="sm"
                   onClick={() => {
                     setFocusLotId(null);
+                    setEntry(null);
                     setFeedback(null);
                     scanRef.current?.focus();
                   }}
@@ -303,7 +481,7 @@ export function AuditCountSheet({
         </section>
       ) : null}
 
-      {/* ── THE SHEET ──────────────────────────────────────────────────── */}
+      {/* ── THE SHEET ────────────────────────────────────────────────── */}
       <section className={CARD}>
         <h2 className="text-sm font-bold text-white">The count sheet</h2>
         <p className={`mt-1 ${P}`}>
@@ -325,6 +503,8 @@ export function AuditCountSheet({
             <tbody>
               {lines.map((l) => {
                 const outstanding = l.countedQty === null;
+                const disagree = l.recountQty !== null && l.countedQty !== null && l.recountQty !== l.countedQty;
+                const secondOpen = l.needsRecount && l.recountQty === null && !outstanding;
                 return (
                   <tr
                     key={l.lotId}
@@ -354,25 +534,38 @@ export function AuditCountSheet({
                       )}
                     </td>
                     <td className="py-2">
-                      {l.needsRecount && l.recountQty === null ? (
+                      {disagree ? (
+                        <Badge tone="danger">Counts disagree</Badge>
+                      ) : secondOpen ? (
                         <Badge tone="gold">Count again</Badge>
                       ) : outstanding ? (
                         <Badge tone="outline">Outstanding</Badge>
                       ) : (
                         <Badge tone="green">Done</Badge>
                       )}
-                      {!readOnly && outstanding ? (
+                      {canCount ? (
                         <button
                           type="button"
                           onClick={() => {
+                            // A label that will not scan: type the total by hand.
                             setFocusLotId(l.lotId);
+                            setAskLotId(null);
                             setCaptureMethod("manual");
+                            setEntry(
+                              outstanding
+                                ? { target: "count", mode: "replace", title: "Type how many you counted" }
+                                : disagree
+                                  ? { target: "recount", mode: "third", title: "Third count \u2014 type the total" }
+                                  : secondOpen || l.recountQty !== null
+                                    ? { target: "recount", mode: "replace", title: "Second count \u2014 type the total" }
+                                    : { target: "count", mode: "replace", title: "Type the right total" },
+                            );
                             setFeedback(null);
                             window.setTimeout(() => qtyRef.current?.focus(), 30);
                           }}
                           className="ml-2 text-xs text-[var(--admin-text-muted)] underline decoration-dotted underline-offset-2 hover:text-white"
                         >
-                          enter by hand
+                          {outstanding ? "enter by hand" : disagree ? "third count" : "type a total"}
                         </button>
                       ) : null}
                     </td>
@@ -382,6 +575,21 @@ export function AuditCountSheet({
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* ── HOW TO COUNT (G-39: the checklist on the sheet) ──────────── */}
+      <section className={CARD} data-testid="count-checklist">
+        <h2 className="text-sm font-bold text-white">How to count</h2>
+        <ol className="mt-3 space-y-2">
+          {checklist.map((step) => (
+            <li key={step.n} className="text-sm text-white/85">
+              <span className={`font-semibold ${step.critical ? "text-[var(--admin-gold)]" : "text-white"}`}>
+                {step.n}. {step.title}
+              </span>
+              <span className={`block ${P}`}>{step.detail}</span>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );

@@ -235,6 +235,8 @@ type LotRow = AuditLotRow;
 type LineRow = {
   lot_id: string;
   system_qty: number | null;
+  /** 0326 (G-35): the books quantity captured when THIS lot was first counted. */
+  books_qty_at_count?: number | null;
   counted_qty: number | null;
   recount_qty: number | null;
   reason_code: string | null;
@@ -250,6 +252,7 @@ type LineRow = {
 export const AUDIT_LINE_COLUMNS = [
   "lot_id",
   "system_qty",
+  "books_qty_at_count",
   "counted_qty",
   "recount_qty",
   "reason_code",
@@ -270,7 +273,10 @@ function toSession(r: SessionRow): SessionForPosting {
 function toLine(r: LineRow): AuditCountLine {
   return {
     lotId: r.lot_id,
-    systemQty: r.system_qty ?? 0,
+    // Fix Phase 4.2 (G-35, migration 0326): the comparison is against the books
+    // AT THE MOMENT THIS LOT WAS COUNTED, the same number the posting RPC uses.
+    // Lines counted before 0326 have none and fall back to the creation freeze.
+    systemQty: Number(r.books_qty_at_count ?? r.system_qty ?? 0),
     // NULL SURVIVES. Nobody looked is not the same as somebody looked and found
     // nothing, and collapsing the two writes off stock that is on the shelf.
     countedQty: r.counted_qty,
@@ -407,6 +413,22 @@ export async function postAuditSession(
   if (!preview.ok) return preview;
 
   const { plan, session } = preview.data;
+
+  // Fix Phase 4.4 (G-37): an undocumented shortage is a deemed sale under
+  // WAC 314-55-089(4)(c). The preview has always said "not ready"; posting now
+  // refuses instead of moving the shelf anyway.
+  if (!preview.data.readyToPost) {
+    return {
+      ok: false,
+      refusal: {
+        code: "NEEDS_OWNER_DECISION",
+        message:
+          "Nothing was posted. " +
+          plan.needsOwnerDecision.join(" ") +
+          " Send the audit back to review, record a reason on each line, then approve and post again.",
+      },
+    };
+  }
 
   const supabase = await createBooksClient();
   const { data, error } = await supabase.rpc("inventory_audit_post_session", {
@@ -689,7 +711,13 @@ export function __runInventoryAuditStoreTests(): void {
   // Every column requested must be one the mapper actually reads. A column in
   // the list that toLine ignores is dead weight; a column toLine reads that is
   // NOT in the list arrives as undefined and silently becomes null.
-  eq(AUDIT_LINE_COLUMNS.length, 6, "the line select asks for exactly the six columns toLine reads");
+  eq(AUDIT_LINE_COLUMNS.length, 7, "the line select asks for exactly the seven columns toLine reads");
+  // G-35: the books at count wins over the creation freeze when present.
+  eq(
+    toLine({ lot_id: "l1", system_qty: 100, books_qty_at_count: 96, counted_qty: 95, recount_qty: null, reason_code: null, reason_note: null }).systemQty,
+    96,
+    "the comparison uses the books captured when the lot was counted (G-35)",
+  );
   eq(uncounted.recountQty, null, "and so does an absent recount");
   const uncountedAssessed = assessLine(
     {

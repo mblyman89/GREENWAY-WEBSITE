@@ -114,8 +114,9 @@ describe("wiring", () => {
     expect(b).toContain("deposit_bag.sealed_unreconciled");
     expect(read("src/app/admin/registers/eod/page.tsx")).toContain("eodStatus(");
   });
-  it("no migration in this slice (latest stays 0325, CCRS C1's)", () => {
-    const latest = readdirSync(join(root, "supabase/migrations")).filter((f) => /^\d{4}_/.test(f)).sort().pop();
-    expect(latest?.startsWith("0325")).toBe(true);
+  it("no migration in this slice (0325 was CCRS C1's; later phases add more)", () => {
+    const all = readdirSync(join(root, "supabase/migrations")).filter((f) => /^\d{4}_/.test(f)).sort();
+    expect(all.some((f) => f.startsWith("0325_"))).toBe(true);
+    expect(all.filter((f) => f.startsWith("0325")).length).toBe(1);
   });
 });

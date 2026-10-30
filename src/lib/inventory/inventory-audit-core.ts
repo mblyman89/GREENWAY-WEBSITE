@@ -1181,6 +1181,19 @@ export function readinessOf(
       `${needingRecount} line${needingRecount === 1 ? " needs" : "s need"} a second blind recount before posting.`,
     );
   }
+  // Phase 4 (G-36, F-06-13): two counts that disagree are a BLOCKER. Before
+  // this, the line was flagged "blocks posting" but no blocker was raised, so
+  // the session still read "ready for you to approve" over a known-wrong count.
+  const disagreeing = lines.filter((line) => {
+    const lot = lotById.get(line.lotId);
+    return lot !== undefined && assessLine(lot, line, policy).status === "recount_disagrees";
+  }).length;
+  if (disagreeing > 0) {
+    blockers.push(
+      `${disagreeing} line${disagreeing === 1 ? " has" : "s have"} two counts that disagree. ` +
+        `One of them is wrong — send it back to counting for a third count before approving.`,
+    );
+  }
   if (merges.length > 0) {
     blockers.push(
       `${merges.length} product${merges.length === 1 ? " shows" : "s show"} the lot-consolidation pattern. ` +
@@ -1414,9 +1427,21 @@ export type ChecklistStep = {
 };
 
 export function buildCountChecklist(group: AuditPlanGroup): ChecklistStep[] {
+  return buildCountChecklistFor({
+    name: group.productName ?? group.productKey,
+    batches: group.isMultiLot ? group.lots.length : 1,
+  });
+}
+
+/**
+ * The same steps, from just a name and a batch count -- so the count sheet can
+ * show them without a plan group (G-39: the checklist renders on the sheet).
+ */
+export function buildCountChecklistFor(input: { name: string; batches: number }): ChecklistStep[] {
   const steps: ChecklistStep[] = [];
   let n = 1;
-  const name = group.productName ?? group.productKey;
+  const name = input.name;
+  const group = { isMultiLot: input.batches > 1, lots: { length: input.batches } };
 
   steps.push({
     n: n++,
@@ -1471,17 +1496,17 @@ export function buildCountChecklist(group: AuditPlanGroup): ChecklistStep[] {
 
   steps.push({
     n: n++,
-    title: "If something looks wrong, say so in the box",
+    title: "If something looks wrong, tell Michael",
     detail:
-      "Broken jar, water damage, something in the wrong place, a package you cannot find — write it down " +
-      "in plain words. One sentence is enough. This is not you getting in trouble; an explanation written " +
-      "down at the time is worth real money to the shop later.",
+      "Broken jar, water damage, something in the wrong place, a package you cannot find — tell Michael " +
+      "in plain words. One sentence is enough. This is not you getting in trouble; an explanation given " +
+      "at the time is worth real money to the shop later.",
     critical: true,
   });
 
   steps.push({
     n: n++,
-    title: "Press Done and walk away",
+    title: "Press I'm done and walk away",
     detail:
       "You are finished. You do not decide anything about the numbers and nothing you enter changes the " +
       "books on its own. Michael reviews it and approves it.",
@@ -2190,6 +2215,17 @@ export function __runInventoryAuditCoreTests(): void {
 
     // An empty session is not "ready".
     ok(!readinessOf(lots, []).canPost, "an empty session cannot post");
+
+    // Phase 4 (G-36): two counts that disagree block the session.
+    const disagree = readinessOf(lots, [
+      line({ lotId: "A", systemQty: 10, countedQty: 4, recountQty: 6, reason: "damage", note: "x" }),
+    ]);
+    ok(!disagree.canPost, "two counts that disagree block approval");
+    ok(disagree.blockers.some((b) => b.includes("disagree")), "the blocker names the disagreement");
+    const agree = readinessOf(lots, [
+      line({ lotId: "A", systemQty: 10, countedQty: 4, recountQty: 4, reason: "damage", note: "x" }),
+    ]);
+    ok(agree.canPost, "NEGATIVE CONTROL: two agreeing counts do not block");
 
     // The merge signature must surface as a session blocker, not just a note.
     const mLots = [

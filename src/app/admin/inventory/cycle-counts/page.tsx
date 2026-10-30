@@ -68,6 +68,7 @@ import {
 import { LABELS } from "@/lib/inventory/inventory-audit-post-core";
 import { listCycleCounts } from "@/lib/inventory/cycle-counts";
 import { loadOversoldReport } from "@/lib/inventory/oversold-report-store";
+import { formatDateTime } from "@/lib/pos/format";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,9 @@ export default async function CycleCountsPage({
       ) : null}
       {sp.ok ? (
         <div className="rounded-xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
-          Saved.
+          {sp.ok === "1"
+            ? "Thank you. The count is locked and has gone to the owner for review."
+            : "Saved."}
         </div>
       ) : null}
 
@@ -134,8 +137,10 @@ export default async function CycleCountsPage({
         steps={[
           "The owner decides what gets counted and why. You will only ever see counts he has already approved, so anything in the list below is real work.",
           "Open a count and enter what you physically find, lot by lot. You will not be shown what the system expects — that is deliberate. A count that knows the answer is not a count.",
+          "Press Start counting. The count is then yours alone — only one person counts a count, so nobody else can enter numbers on it.",
+          "Scan every package, one at a time. Each scan adds one to that batch. If you scan a batch that already has a number, the sheet asks whether to add one, type the right total, or count that batch again from zero.",
           "If a number needs a second look the sheet will ask you to count that lot again. It still will not show you the first number.",
-          "When every lot has a number, the count leaves this page and goes to the owner to review. You are done at that point — you are never asked to explain a difference or to approve anything.",
+          "When every lot has a number, press I'm done. The numbers lock and the count goes to the owner to review. You are done at that point — you are never asked to explain a difference or to approve anything.",
         ]}
       />
 
@@ -183,7 +188,7 @@ export default async function CycleCountsPage({
                       <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
                         Count is off by {f.totalShortfall} unit{f.totalShortfall === 1 ? "" : "s"} across{" "}
                         {f.occurrences} sale{f.occurrences === 1 ? "" : "s"}
-                        {f.lastSeenAt ? ` · last on ${new Date(f.lastSeenAt).toLocaleString()}` : ""}
+                        {f.lastSeenAt ? ` · last on ${formatDateTime(f.lastSeenAt)}` : ""}
                       </p>
                     </div>
                     <Badge tone="gold">Recount</Badge>
@@ -203,7 +208,7 @@ export default async function CycleCountsPage({
                             reached through the sale itself, which is what the
                             "view sale" link is for. Any other label is shown. */}
                         {r.actorLabel && r.actorLabel !== "system" ? ` · ${r.actorLabel}` : ""}
-                        {r.occurredAt ? ` · ${new Date(r.occurredAt).toLocaleString()}` : ""}{" "}
+                        {r.occurredAt ? ` · ${formatDateTime(r.occurredAt)}` : ""}{" "}
                         <Link
                           href={`/admin/orders/${r.orderId}`}
                           className="font-semibold text-[var(--admin-accent)] hover:underline"
@@ -251,6 +256,9 @@ export default async function CycleCountsPage({
                       {s.countedLotCount > 0
                         ? ` · ${s.countedLotCount} done, ${remaining} to go`
                         : ""}
+                      {/* D56: who is counting it, so nobody walks to a shelf
+                          someone else already has. */}
+                      {s.claimedByName ? ` · ${s.claimedByName} is counting` : " · nobody has started"}
                     </p>
                     {/* The owner's reason for the count, shown to the counter.
                         Somebody who knows WHY they are counting a shelf counts
@@ -296,7 +304,7 @@ export default async function CycleCountsPage({
                     {s.label}
                   </Link>
                   <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
-                    {s.line_count} lots · {new Date(s.created_at).toLocaleString()}
+                    {s.line_count} lots · {formatDateTime(s.created_at)}
                   </p>
                 </div>
                 <Badge tone="neutral">{s.status}</Badge>

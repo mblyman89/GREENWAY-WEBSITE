@@ -2,20 +2,20 @@
 
 | | |
 |---|---|
-| **Version** | 1.1 (draft for owner review; owner answers Q-06-1…Q-06-8 applied) |
+| **Version** | 1.2 (Fix Phase 4.1–4.3 built: G-33, G-34, G-35, G-36, G-37; needs migration 0326) |
 | **Effective** | On owner approval |
 | **Owner** | Michael Lyman |
 | **Applies to** | **Inventory Audits** (planning a count, approving its scope and pushing it to the floor, reviewing, approving, posting, the work paper): **the owner only** (D50). **Cycle Counts** (the blind count) and the **daily checklists** (§8): **every employee**: admin, manager and budtender ("sales") (D51). |
-| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
+| **Verified against** | `main@c976c7e4` (2026-10-28) for v1.0; the v1.1 additions (owner answers, cockpit, claim, checklist catalog) were checked at `main@b8101abb` (2026-10-28), and no SOP-06 code changed between the two. **v1.2** was written against branch `fix/p4-1-count-integrity` (Fix Phase 4.1–4.3) and migration `0326_audit_count_integrity.sql`. Every label, button, message, number and rule below was read from the code or quoted from the owner. Nothing was written from memory. Where the code and a help panel or explainer disagree, this SOP follows the code and records a finding. Where the code cannot do what the owner asked, this SOP says so plainly and gives the safe interim. |
 | **Program records** | Findings `F-06-*` in `docs/sop-program/03-FINDINGS-LEDGER.md` · Gaps `G-33`…`G-41` in `docs/sop-program/05-GAP-REGISTER.md` · Owner decisions D41 (living SOPs), D42 (concierge covers every feature), D50–D52 (this SOP), **D54–D61 (owner answers to Q-06-1…Q-06-8)** in `docs/sop-program/00-OWNER-REQUEST-VERBATIM.md` · Owner source letter `docs/MICHAEL-books-23.md` · Scope in `docs/sop-program/02-SOP-CATALOG-AND-ROADMAP.md` (SOP-06) |
 
 > **This SOP is a living document (owner decision D41).** The owner said: *"We will eventually build and fix everything, so leave a reminder that I want to update the sop when necessary."* When any gap named here (Appendix B) is built, this SOP is updated in the same piece of work: the sections the gap names, Appendix B, Appendix D (a new revision row), the finding marked FIXED, and the concierge entry (charter §3 rules 9–10). Until then, the interim procedures in this SOP are the rule.
 
 > **How to use this document.** Part 1 (§4.1–§4.3) explains the two screens and the life of one count. Part 2 (§4.4–§4.7) is the **owner's set-up**: planning the count and pushing it to the Cycle Counts page. Part 3 (§4.8–§4.12) is the **blind count** that every employee does. Part 4 (§4.13–§4.18) is the **owner's review, approval, posting and journal approval**. Part 5 (§4.19–§4.22) covers the work paper, the old cycle-count sessions, the "Stock needing recount" list and the Issues reminder. Part 6 (§4.23) is the **daily checklists**. Section 5 lists every message. Section 8 holds the paper forms. Section 9 is two one-page cards (owner and counter). Words in **bold** are the exact labels you will see on the screen.
 
-> **The one thing to know before anything else.** **Today there is no button that pushes a new audit to the Cycle Counts page.** Pressing **Create this count** saves the audit as **being planned** (status `draft`, `audit-hub-store.ts` L586). The Cycle Counts page lists only audits that are **ready to count** or **being counted** (`COUNT_QUEUE_STATUSES`, `audit-hub-store.ts` L379–382). The audit page offers a status button only while counting (**Finish counting and review the differences**) and while in review (**Approve this result**) (`audits/[id]/page.tsx` L209–238). Nothing on any screen moves an audit from **being planned** to **ready to count** to **being counted** (finding **F-06-1, S1**; gap **G-33**). So the owner's workflow (*"I approve the scope and push it to the cycle counts page"*) cannot be completed in the app today. **Do not try to work around it with database edits.** §4.7 gives the interim: count on paper (form 8.2) and hold the result until G-33 is built. Two other faults matter just as much once G-33 is built, and §4.11 and §4.15 give the rules: a sale between creating the audit and counting it is **subtracted twice** when the audit is posted (F-06-7, **S1**), and a recount that **disagrees** with the first count does **not** stop the approval (F-06-13, **S1**).
+> **The one thing to know before anything else (v1.2).** **Migration 0326 must be applied first** (`supabase/migrations/0326_audit_count_integrity.sql`, in the Supabase SQL editor, after 0325). Until it is, every counting button answers *"Apply migration 0326"* and nothing is written. Once it is applied, the whole life of a count works on screen: **Create this count** (being planned) → **Release to Cycle Counts** (owner, signed) → an employee presses **Start counting** (one counter, D56) → each scan adds one package (D60) → **I'm done** (locks the count, sends it to the owner's review and puts a notice on the /admin cockpit, D55) → **Approve this result** → **Post**. The books quantity for each lot is captured **when that lot is first counted** (D58, D61), so counting during open hours is safe, and a sale between creating the audit and counting is no longer subtracted twice (F-06-7 FIXED). Two counts that disagree now **block** approval and posting until a third count settles them (F-06-13 FIXED). The owner can **Send back**, **Reassign** and **Cancel** (with a reason) on the audit page.
 
-> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). All of these are **approved for the build** (G-33…G-41) and **none is built yet**: until each one is, the interim rules in this SOP stay in force, above all the timing rule in §4.11.
+> **What the owner decided (v1.1, D54–D61).** The owner answered every open question. **Release** is a separate owner button after creating the audit, the way NetSuite and Lightspeed do it (D54). **I'm done** sends the count back to the audit and puts a notice on the /admin cockpit (D55). **One employee per count; the owner alone initiates** (D56). **Each scan adds one package** (D60). **Counting during open hours**, with the shelf quantity captured per lot when that lot is first counted, so sales in between are reconciled and never subtracted twice (D58, D61). **One full count a year at year end, plus a small count every day, about one vendor per day**, with intelligent generators to propose them (D58; §4.24). Old test sessions are cancelled (D59). **Built in v1.2 (Fix Phase 4.1–4.3):** D54, D55, D56, D58 (per-lot capture), D60, D61, and the D59 cleanup of held audits and open legacy sessions (done by migration 0326). **Still to build:** the daily checklists in the app (G-38), the intelligent generators and vendor of the day (G-40), the year-end full count (G-41) and the housekeeping items (G-39). Until each is built, the interim rules for it in this SOP stay in force.
 
 ---
 
@@ -143,23 +143,23 @@ There is **no Create button on the Cycle Counts page**, by the owner's order (*"
 
 The app allows only these moves (`inventory-audit-post-core.ts` L113–119). The words in the middle column are what the screens show (L168–174).
 
-| Stage (database) | Screen label | Where it appears | Allowed next | Button that does it today |
+| Stage (database) | Screen label | Where it appears | Allowed next | Button that does it (v1.2) |
 |---|---|---|---|---|
-| `draft` | **being planned** | Hub only | ready to count, cancelled | **None** (F-06-1, F-06-2) |
-| `scope_approved` | **ready to count** | Hub and Cycle Counts | being counted, cancelled | **None** (F-06-1, F-06-2) |
-| `counting` | **being counted** | Hub and Cycle Counts; the count sheet accepts numbers | waiting for your review, cancelled | **Finish counting and review the differences** (owner, audit page) |
-| `review` | **waiting for your review** | Hub ("Waiting for you") | approved, back to being counted, cancelled | **Approve this result** (owner, only when nothing blocks) |
+| `draft` | **being planned** | Hub only | ready to count, cancelled | **Release to Cycle Counts** (owner, signed) · **Cancel this audit** (owner, reason required) |
+| `scope_approved` | **ready to count** | Hub and Cycle Counts | being counted, cancelled | The counter's **Start counting** claims it; recording the first lot makes it **being counted** · owner **Reassign**, **Cancel this audit** |
+| `counting` | **being counted** | Hub and Cycle Counts; the count sheet accepts numbers from the counter who claimed it | waiting for your review, cancelled | The counter's **I'm done** (count sheet) · owner **Reassign**, **Cancel this audit** |
+| `review` | **waiting for your review** | Hub ("Waiting for you") and the /admin cockpit notice | approved, back to being counted, cancelled | **Approve this result** (owner, only when nothing blocks) · **Send back for more counting** · **Cancel this audit** |
 | `approved` | **approved** | Hub ("Waiting for you" until posted) | none (final) | **Post this audit — correct the shelf and draft the entry** (once) |
-| `cancelled` | **cancelled** | Hub | none (final) | **None** (F-06-2) |
+| `cancelled` | **cancelled** | Hub, with *"Cancelled because: {reason}"* | none (final) | — |
 
-An approval cannot be taken back: *"This audit has already been approved, and an approval cannot be taken back. If the result was wrong, the fix is a new audit and a correcting entry…"* (`canMoveStatus`, L128–165). The way back from review to counting exists in the rules but has **no button** (F-06-1).
+An approval cannot be taken back: *"This audit has already been approved, and an approval cannot be taken back. If the result was wrong, the fix is a new audit and a correcting entry…"* (`canMoveStatus`, L128–165). The way back from review to counting is the owner's **Send back for more counting** button (v1.2).
 
 ### 4.3 What is frozen, what is blind, and what moves the shelf
 
-1. **Frozen at creation.** Pressing **Create this count** writes one line per lot, with the books' quantity and the unit cost **as they are at that moment** (`audit-hub-store.ts` L596–602). The page says so: *"Creating it freezes today's quantities and costs onto the sheet. Nothing moves on the shelf and nothing reaches the ledger."*
+1. **Written at creation, captured at count.** Pressing **Create this count** writes one line per lot, with the books' quantity and the unit cost **as they are at that moment** (the difference is no longer measured against this figure; see point 4) (`audit-hub-store.ts` L596–602). The page says so: *"Creating it freezes today's quantities and costs onto the sheet. Nothing moves on the shelf and nothing reaches the ledger."*
 2. **Blind.** The count sheet never receives the expected quantity. The server sends only whether a lot needs a second count (`getCountSheet`, L671–750).
 3. **Nothing moves until posting.** Counting, reasons and approval change no inventory. **Posting** (§4.17) changes the shelf quantity, writes an adjustment with reason **count** (reported to CCRS as **Reconciliation**, `ccrs-inventory-adjustment-core.ts` L66–67) and drafts a journal entry.
-4. **How posting computes the change.** For each counted lot: *difference = (second count if there is one, otherwise first count) − frozen books quantity*, and that difference is **added to whatever the shelf says at posting time** (migration 0192 L292, L318, L353). That is why a sale after the freeze is subtracted twice (§4.11, F-06-7).
+4. **How posting computes the change (v1.2, migration 0326).** When a lot is **first counted**, the books quantity for that lot is captured (`books_qty_at_count`). For each counted lot: *difference = (second count if there is one, otherwise first count) − the books quantity captured at first count*, and that difference is added to whatever the shelf says at posting time. A sale after the capture lowers the shelf and the books together, so it does not change the difference and is no longer subtracted twice (F-06-7 FIXED). If stock moved on a lot **while it was being counted** (between its first and last entry), posting is refused: *"INVENTORY_AUDIT_CUTOFF_MOVED: stock moved on {lot} while it was being counted. Count it again from zero; nothing was posted."* Lines counted before 0326 fall back to the quantity frozen at creation.
 
 ### Part 2: Setting up an audit and pushing it to Cycle Counts (owner)
 
@@ -172,7 +172,7 @@ Open **Accounting → Inventory Auditing**. Title **Inventory audits**, button *
 - **Waiting for you**: audits in review, and approved audits not yet posted. Columns **Audit / What it needs / Counted / Difference**, links **Review** / **Post**.
 - **Audits**: every audit. Columns **Audit / Stage / Counted / Difference / Started**. Empty: **No audits yet.** with **Plan your first audit**.
 
-> **Caution (F-06-4).** **Counted** and **Difference** on the hub (and the progress on Cycle Counts) read totals that the database writes **only when an audit is posted** (`audit-hub-store.ts` L203–205, L291–293; migration 0192 L394–400). Before posting they show **0** and **$0.00** even when every lot is counted. Open the audit itself (§4.14) for the true figures.
+> **Caution (F-06-4, partly fixed in v1.2).** Since migration 0326, **Counted** on the hub and the done / to-go figures on Cycle Counts update with every entry (`inventory_audit_record_count`). **Difference** still reads a total that the database writes **only when an audit is posted** (`audit-hub-store.ts` L203–205, L291–293; migration 0192 L394–400). Before posting it shows **$0.00**. Open the audit itself (§4.14) for the true figures.
 
 ### 4.5 Planning a count: Plan a count
 
@@ -197,102 +197,100 @@ Under **Name it and say why**:
 
 **Why the reason comes first.** The reason is written before any number is known, so nobody can later choose the scope to fit the result. The audit page shows it under *"Why these products were chosen — written before the numbers were known"*.
 
-### 4.7 Approving the scope and pushing it to Cycle Counts (blocked: interim)
+### 4.7 Approving the scope and pushing it to Cycle Counts: Release to Cycle Counts
 
-**What the owner asked for.** *"You approve the scope, and approving it is what pushes the count out to the floor."* (`MICHAEL-books-23.md` L55–59)
+**What the owner asked for.** *"You approve the scope, and approving it is what pushes the count out to the floor."* (`MICHAEL-books-23.md` L55–59). The owner chose the enterprise pattern (D54: *"Please do what the pros would do."*): create first, release as a separate signed act, as NetSuite does (a count is created and then **started** by a separate action).
 
-**What the app does today.** The app has the stage (**ready to count**), the signature fields (who approved the scope and when, `moveSessionStatus` L983–1063), and the Cycle Counts queue that lists **ready to count** and **being counted**. It has **no button** that approves the scope, none that starts counting, and none that cancels (F-06-1, F-06-2). A new audit stays **being planned**, invisible to the floor, forever. The count sheet would refuse numbers anyway: it accepts entries only while **being counted** (`audits/[id]/count/page.tsx` L100).
+**Procedure (owner, v1.2):**
+1. **Create** the audit (§4.5–§4.6). It is **being planned**, visible only to you.
+2. Open it. Check the scope. Under **What happens next**, press **Release to Cycle Counts**. The app records your name and the time as the scope approval. The audit is now **ready to count** and appears on the Cycle Counts page.
+3. The first employee to press **Start counting** on the sheet **claims** it (one counter, D56). Their name shows on the queue (*"{name} is counting"*) and on your audit page (*"{name} is counting this one (started {time})."*). Until then the page says *"Released to Cycle Counts. Nobody has pressed Start counting yet."*
+4. The audit becomes **being counted** when the counter records the first lot. Each lot's books quantity is captured at that lot's first count (§4.3, §4.11).
+5. The counter presses **I'm done** (§4.8). The audit comes back to you as **waiting for your review**, with a notice on the /admin cockpit (D55).
 
-**Do not** ask anyone to change the stage in the database. That bypasses the signature the owner's design depends on and is exactly the kind of untraceable edit an audit is meant to catch.
+**Reassign.** While the count is on the floor (**ready to count** or **being counted**), the audit page has a **Reassign** list. Pick a person to hand the count to them, or *nobody* to free it for whoever presses **Start counting** next. It is recorded in the audit log.
 
-**Interim procedure until G-33 is built (owner):**
-1. Plan the scope on screen (§4.5–§4.6) so the proposal, the reason and the frozen quantities are recorded. **Create it at the planned count time**, not the day before (§4.11).
-2. Print **form 8.2** (paper blind count sheet) listing product and lot code only, **no quantities**. Copy them from the audit page's line list without the figures, or from the lot list.
-3. Hand the sheet to the counter. The counter follows §4.10–§4.12 on paper.
-4. Compare the paper result with the books yourself. For any lot that is off, follow SOP-05a §4.6–§4.7 (**Record adjustment**, reason **Cycle-count correction**, note naming this audit and form 8.2). File forms 8.1, 8.2 and 8.3 together.
-5. Leave the on-screen audit in **being planned**. Write "Counted on paper, form 8.2, {date}" on form 8.1. When G-33 adds **Cancel**, cancel these held audits with that note (Q-06-6).
+**Cancel.** Before approval, the audit page has **Cancel this audit** with a box *"Why is this audit being cancelled?"*. A reason of at least five characters is required (*"AUDIT_CANCEL_REASON: write why this audit is being cancelled."*). The reason shows on the audit as *"Cancelled because: {reason}"* and is in the audit log. An approved audit cannot be cancelled.
 
-**When G-33 is built (APPROVED, D54)** this section becomes the enterprise pattern the owner chose (*"Please do what the pros would do."*):
-1. **Create** the audit (§4.5–§4.6). It stays **being planned**, visible only to you. Nothing is frozen yet.
-2. Review the scope. When it is right, press **Release to Cycle Counts**. The app records your name and the time. The audit appears on the Cycle Counts page as **ready to count**.
-3. The first employee to open it **claims** it (one counter, D56). Their name shows on the queue. The audit becomes **being counted** when they record the first lot.
-4. The shelf quantity for each lot is captured **when that lot is first counted**, not when you created or released the audit (D58; Lightspeed: *"Once at least one unit of an item has been counted, the QOH for the item will be recorded."*).
-5. The counter presses **I'm done** (§4.8). The audit returns to you in **in review**, with a notice on the /admin cockpit (D55).
+**Do not** change a stage in the database. Every move now has a signed button.
 
-Why two steps and not automatic: in NetSuite a count is created first and **started** by a separate action (Oracle NetSuite Help, Inventory Count). A separate release lets you check the scope, and a released count can still be **Cancelled** with a reason (G-33).
+**Old held audits (D59).** Migration 0326 cancelled every audit that was still being planned, ready or being counted, and every open legacy cycle count, with a recorded reason, because they were test data (*"be canceled, we are not live yet. It's all test data."*).
 
 ### Part 3: The blind count (every employee)
 
 ### 4.8 Finding your count on the Cycle Counts page
 
 1. Open **Inventory → Cycle Counts**. Read the panel **How counting works**.
-2. Under **Counts waiting for you**, each count shows its name, **{n} lots to count**, the owner's reason and its stage badge.
-3. **Ignore the done / remaining figures for now:** they stay at 0 until the audit is posted (F-06-4). The sheet itself shows the real progress.
-4. **Help-panel correction (F-06-3).** Step 4 of **How counting works** says: *"When every lot has a number, the count leaves this page and goes to the owner to review. You are done at that point…"* That is **not** what happens. The count stays on the page until the owner presses **Finish counting** (§4.13). **When every lot has a number, tell the owner (or the manager on duty, who tells the owner) in person or by message, and write the finish time on form 8.2 / 8.4.**
-5. **When G-34 is built (APPROVED, D55):** the sheet gets an **I'm done** button, live only when no lot is blank. Pressing it locks the counts, takes the count off Cycle Counts, returns it to the audit that started it (**in review**), and puts a **Needs your attention** item on the /admin cockpit that links to that audit's review page. The cockpit's attention list already exists (`src/app/admin/page.tsx` L249–251, built by `buildAttentionFlags`, `src/lib/admin/cockpit-core.ts` L138); a count item is not in it yet (F-06-16).
+2. Under **Counts waiting for you**, each count shows its name, **{n} lots to count**, the owner's reason, its stage badge and who is counting it (*"· {name} is counting"* or *"· nobody has started"*).
+3. The done / to-go figures update as lots are counted (migration 0326). The sheet itself shows the live progress.
+4. **When every lot has a number, press I'm done** on the sheet (D55). It is live only when no lot is blank; next to it the sheet says why (for example *"2 lots are still blank. Blank is not zero: count them, or type 0 if the shelf is empty."* or *"Every lot has a number. Press I'm done and the count goes to the owner."*). Pressing it **locks the counts**, takes the count off the Cycle Counts page, sends it to the owner as **waiting for your review**, and puts *"Count finished and waiting for your review: {name}."* on the owner's /admin cockpit, linked to that audit. You land back on Cycle Counts with *"Thank you. The count is locked and has gone to the owner for review."* You are done.
+5. Only the person who pressed **Start counting** (or the owner) can press **I'm done**.
 
 ### 4.9 Opening the count sheet
 
 Press the count's name. The page title is the count's name, with: *"{stage} — count what is on the shelf and enter what you find. You will not be shown what the system expected."*
 
-- **Do not press "Review and finish"** (top right) or the **Auditing** breadcrumb. They lead to owner-only pages; anyone else is turned away (F-06-3).
-- If the stage is not **being counted**, the sheet is read only: no scan box and no buttons. Stop and tell the owner.
+- The owner-only links (**Review and finish**, the **Auditing** breadcrumb) are shown **only to the owner**; everyone else sees a **Cycle Counts** breadcrumb (F-06-3 FIXED).
+- At the top, a banner says who is counting. If nobody has claimed the count, it offers **Start counting**: press it to claim the count (D56). If someone else is counting, the sheet is read only and names them; ask the owner to **Reassign** if they cannot finish. If the count is in review, approved or cancelled, the sheet is read only.
+- The section **How to count** at the bottom is the built-in counting checklist (G-39, partly).
 - The panel at the bottom explains why the sheet hides the expected numbers.
 
 ### 4.10 Counting: scan, type, zero, never blank
 
-1. **Gather every package** of each product in scope: shelf, back stock, display case, anywhere a package could be.
-2. **Count the packages of one lot, then enter the total for that lot once.** Under **Scan a package**, scan one package of the lot (the box reads *"Scan or type a lot code, then press Enter"* and re-focuses itself). The screen answers with the match, for example *"{product} — {lot}. Enter what you counted."*
-3. In **How many did you count**, type the **total** for that lot and press **Record this count**. The screen says *"Recorded. Scan the next package."*
-4. **Do not scan a second package of a lot you have already recorded** (F-06-5b). The sheet does **not** add one per scan. A scan of an already-counted lot opens the entry again, and whatever you type is saved as the lot's **second count**, silently replacing nothing in the first count but overriding it at posting. (The built-in checklist says *"add one to that batch's count"*, `inventory-audit-core.ts` L1416+; the sheet does not do that.) If you made a mistake on a lot already recorded, **stop and tell the owner**; write it on form 8.4. **When G-36 is built (APPROVED, D60: *"A-06-7- yes."*)**, each scan adds one package to the lot's count, the way Lightspeed works (*"Scan the same item multiple times to increase the counted quantity."*): you scan every package and the sheet counts them. Typing a total stays available for a label that will not scan. Until then, follow steps 2–4 as written.
-5. **If the scanner will not read** a label, press **enter by hand** on that lot's row in **The count sheet** table (it is offered only for lots not yet counted). The record notes *"Recorded as a hand-typed count — the label was not read by the scanner."* Tell a manager so the label can be fixed.
-6. **Found none? Type 0.** Zero is a real count. **Blank means nobody looked**, and the sheet will not let the count finish while anything is blank.
-7. **Several open lots of one product** (orange badge in planning; the sheet may answer *"…so the system will not guess which one you are holding. Pick it from the list below instead…"*): read the lot code on each package, sort the packages into a pile per lot, count each pile, and enter each total on its own row using **enter by hand**.
+1. **Gather every package** of each product in scope: shelf, back stock, display case, anywhere a package could be. **Count each lot in one go** once you start it.
+2. **Scan every package.** Under **Scan a package** (*"Scan or type a lot code, then press Enter"*; the box re-focuses itself), scan each package of the lot. **Each scan adds one** to that lot's count (D60, Lightspeed: *"Scan the same item multiple times to increase the counted quantity."*). The screen answers *"Recorded. Scan the next package."*
+3. **A lot that already has a number.** If a scan would add to a lot you have already counted earlier, the sheet stops and asks **"{product} already has a number"**, with three answers: **Add this one to the count** (*"You found another package of the same batch."*), **Type the right total** (*"The number on screen is wrong; enter what you have now."*), **Count this lot again from zero** (*"Start this batch over. Your first number is cleared."*), and **Cancel** (*"Cancelled. Nothing was recorded."*). A scan never silently becomes a second count (F-06-5b FIXED).
+4. **A close match** (the code read is near but not exact) never counts on its own: the sheet opens **"Close match — check the label, then type the total"**.
+5. **If the scanner will not read** a label, press **enter by hand** on that lot's row in **The count sheet** table and type the total (**How many are there in total**, **Record this total**). The record notes *"Recorded as a hand-typed count — the label was not read by the scanner."* Tell a manager so the label can be fixed. A counted lot offers **type a total** to correct it.
+6. **Found none? Type 0.** Zero is a real count. **Blank means nobody looked**, and **I'm done** stays off while anything is blank.
+7. **Several open lots of one product:** read the lot code on each package, sort the packages into a pile per lot, and scan or type each pile on its own row.
 8. **Damaged, wrong place, missing:** the sheet has no note box. Write it on form 8.4 with the lot code.
-9. Watch the progress line: *"{done} of {n} lots counted"* / *"{n} still blank"*. When nothing is blank, follow §4.8 step 4.
+9. Watch the progress line: *"{done} of {n} lots counted"* / *"{n} still blank"*. When nothing is blank, press **I'm done** (§4.8).
 
-### 4.11 The timing rule: count before anything sells
+**Every entry is checked by the database (migration 0326):** only owner, admin, manager or staff sign-ins can count; only the person who claimed the count; only while it is ready or being counted (*"AUDIT_LINE_STAGE: this count is {stage}, so numbers can no longer be entered."*, F-06-6 FIXED); a count cannot be negative.
 
-**Why.** The audit freezes the books' quantity when it is created. Posting later adds *(count − frozen quantity)* to the **live** shelf (migration 0192 L318, L353). If a lot sells between creation and the count, the shelf has already dropped by that sale, and posting drops it again.
+### 4.11 Counting during open hours: the per-lot cutoff
 
-*Example:* the audit is created with 100 on the books. Five sell. The shelf and the books now say 95. The counter counts 95. Posting computes 95 − 100 = −5 and applies it to 95, leaving **90**. Five units that are on the shelf have been written off as a count shortage (F-06-7, **S1**). The comment in the database (*"a sale that landed mid-count is preserved"*, 0192 L350–352) and the work paper's line *"a sale rung up mid-count cannot change the figure being measured"* (`export/page.tsx` L194–196) are true only when nothing sells after the freeze.
+**What the owner decided.** Counting *"anytime during open hours"* (D61), with the system *"smart enough to know that when they start the count and finish it, the sales in between should be reconciled"* (D58).
 
-**Rule until G-35 is built:**
-1. The owner creates the audit **immediately before** the count, **outside selling hours** (before opening or after closing). Write both times on form 8.1.
-2. The count is finished before the first sale of any product in scope.
-3. If anything in scope sells after the audit was created and before its lot was counted, **do not approve or post that audit.** Note it on form 8.1, leave it unposted (cancel when G-33 adds Cancel) and plan a new one.
-4. The hub's ISA 501.A5 explainer says the hub *"warns you when sales landed in the middle of it"* (`audit-hub-authorities.ts` L215–235). **There is no such warning** (F-06-7). Do not rely on it.
+**How it works (v1.2, migration 0326, G-35 built).** The books quantity for each lot is captured **when that lot is first counted**, not when the audit was created or released (Lightspeed: *"Once at least one unit of an item has been counted, the QOH for the item will be recorded."*). The difference is *count − that captured quantity*. A sale after the capture lowers both the shelf and the books, so it does not change the difference (Lightspeed: *"Sales or added inventory don't change a discrepancy."*).
 
-**What the owner decided, and why the rule above still applies today.** The owner wants counting *"anytime during open hours"* (D61) and wants the system to be *"smart enough to know that when they start the count and finish it, the sales in between should be reconciled"* (D58). The approved design (G-35) does what Lightspeed does: each lot's books quantity is captured **when that lot is first counted**, and the difference is *count − that captured quantity*. A sale after that moment lowers both the shelf and the books, so it does not change the difference (Lightspeed: *"Sales or added inventory don't change a discrepancy."*). The review page will list, per lot, every sale and receipt between the capture and **I'm done**, so the owner can see them. Two counter rules come with it, from the same source: **count each lot in one go** once you start it, and *"If an item is partially counted, don't sell any uncounted units."*
+*Example:* the audit is created with 100 on the books. Five sell before anyone counts. The counter scans the lot: the books now say 95 and that is captured. The counter counts 95. The difference is 95 − 95 = 0, and posting changes nothing. (Before 0326 this posted −5 and left 90; F-06-7 FIXED.)
 
-**Until G-35 is built, counting during open hours is not safe** and the four rules above stay in force: today the quantity freezes at **Create this count** and a mid-count sale is subtracted twice (F-06-7, S1).
+**The one thing that is still refused.** If stock on a lot moves **while that lot is being counted** (between its first and its last entry), the review page shows it on that line and posting is refused for the whole audit (*"INVENTORY_AUDIT_CUTOFF_MOVED: … Count it again from zero; nothing was posted."*). Send the audit back and have the counter use **Count this lot again from zero**, which captures the books again.
+
+**Counter rules (from the same source):**
+1. **Count each lot in one go** once you start it.
+2. *"If an item is partially counted, don't sell any uncounted units."* If a customer wants a package from a lot you are in the middle of, finish that lot first.
+
+**Work paper and explainer.** The work paper's method line and the hub's ISA 501.A5 explainer were corrected in v1.2 to describe the per-lot capture.
 
 ### 4.12 A second count ("Count again")
 
 **What it is.** The owner asked: *"what second count? I am not sure I understand."* The "second count" is the app's own check, not a second employee. When a lot's first count is off from the books by **$50 or more at cost** (`DEFAULT_MATERIALITY` recountAtCents 5000, `inventory-audit-core.ts` L767–771), the sheet asks for the lot to be **counted again from scratch**, without being told the expected number. Counting twice catches the most common error: a package missed in a second location.
 
-**What the owner decided (D56).** *"I am the only one who will initiate a cycle count. Any employee may count inventory. Only one employee per scoped count."* So the recount is done by **the same counter**, before they finish. The sheet's *"Ideally a different person does it"* no longer applies. If the owner wants a different person to count, the owner sends the lot back or plans a new audit (an **owner-initiated re-count**).
+**What the owner decided (D56).** *"I am the only one who will initiate a cycle count. Any employee may count inventory. Only one employee per scoped count."* So the recount is done by **the same counter**, before they finish. The sheet's old line *"Ideally a different person does it"* was removed in v1.2. If the owner wants a different person to count, the owner sends the lot back or plans a new audit (an **owner-initiated re-count**).
 
 What you see:
-- The notice reads: *"N lots need a second count. You are told THAT they disagreed, never by how much — … Ideally a different person does it."* (Ignore the last sentence, D56.)
+- The notice reads: *"N lots need a second count. You are told THAT they disagreed, never by how much — a second count that knows the target is not a second count. Scan each package of that lot again; each scan adds one to the second count."*
 - The lot's row shows the badge **Count again**.
 
-**Procedure (the counter, today):**
+**Procedure (the counter, v1.2):**
 1. Recount the lot fresh, from scratch, all locations. Do not look up the first number.
-2. **Scan** one package of the lot. The entry opens; type the total; **Record this count**. There is **no "enter by hand" for a lot already counted** (F-06-5). If the label will not scan, stop and tell the owner; write the count on form 8.4.
-3. Enter the second count **once**. Each further entry replaces the second count; there is no third count (F-06-5).
-4. If the second count does not match the first, say so to the owner. The review page will call it out, but **the app does not stop the approval** (§4.16, F-06-13).
-
-**When G-36 is built (APPROVED):** a scan of an already-counted lot asks whether to add, replace or cancel; recounts can be typed by hand; a recount that still disagrees **blocks** approval until the owner decides (accept one count, send the lot back, or cancel); only the employee who claimed the count can enter numbers.
+2. **Scan** each package of the lot again. While a second count is asked for, each scan adds one to the **second count**. If a label will not scan, press **type a total** on the row and type the second count.
+3. If the two counts still disagree, the row shows **Counts disagree**. Count once more and press **third count** on the row (or scan, which opens it): the third count settles the count it agrees with.
+4. Two counts that disagree **block approval and posting** until settled (F-06-13 FIXED). **I'm done** stays available and says *"…still need another count. The owner will send it back if it must be counted again."*
 
 ### Part 4: Review, approve, post (owner)
 
-### 4.13 Closing the count: Finish counting and review the differences
+### 4.13 Closing the count: the counter's I'm done
 
-1. Open the audit from the hub (or **Review and finish** on the count sheet).
-2. Check the stat card **Lots in scope**: *"{counted} counted, {uncounted} still blank"*. All must be counted.
-3. Under **What happens next**, press **Finish counting and review the differences**. The audit moves to **waiting for your review** and leaves the Cycle Counts page.
-4. Tell the counters the sheet is closed. **Until F-06-6 is fixed, the database still accepts line entries after this point**, so nobody touches the sheet again (store rule 4).
+1. The counter presses **I'm done** (§4.8). The count is locked and comes to you as **waiting for your review**. The /admin cockpit shows *"Count finished and waiting for your review: {name}."*; press it to open the audit.
+2. The audit page says *"Counted by {name}, finished {time}."*
+3. Nobody can enter numbers any more (the database refuses them, F-06-6 FIXED).
+4. If something must be counted again, press **Send back for more counting**. The count returns to the same counter on the Cycle Counts page. Use **Reassign** first if someone else should count it.
+
+The owner's old button **Finish counting and review the differences** was removed (D55: the counter finishes).
 
 ### 4.14 Reading the review page
 
@@ -311,7 +309,9 @@ What you see:
 
 The blockers that stop **Approve this result** (`readinessOf`, `inventory-audit-core.ts` L1109–1210): lines not counted; lines needing a second count; a merge pattern (*"…must be re-counted package by package…"*); *"N lines cannot post yet — either a shrink has no explanation, or a lot has no cost on file."*
 
-**What is NOT a blocker (F-06-13, S1):** a lot whose **second count disagrees with the first**. The line says *"Do not average them. Go and look again."*, but the audit can still be approved, and posting uses the **second** count. **Owner rule:** never approve while any line shows that message. Have the lot counted again on paper (form 8.2), and treat the audit as in §4.11 step 3 if the paper count does not settle it.
+**Disagreeing counts now block (F-06-13 FIXED, v1.2).** A lot whose second count disagrees with the first is a blocker, and posting refuses it as well (*"INVENTORY_AUDIT_RECOUNT_DISAGREES: the two counts disagree on {lot}. One of them is wrong; nothing was posted."*). Press **Send back for more counting**; the counter takes a third count. Or cancel the audit with a reason.
+
+**Stock that moved while a lot was counted** is shown on that line (*"Stock moved while this lot was being counted ({n} sold or removed). … Posting is refused until then."*) and blocks posting until the lot is counted again from zero (§4.11). Lines counted before migration 0326 say *"Counted before per-lot capture existed; compared with the books when the audit was created."*
 
 ### 4.15 Reasons for each difference
 
@@ -330,13 +330,13 @@ A line that needs documentation shows **Why did this differ?** (editable only wh
 2. **Always write the note** in the same step (placeholder: *"One sentence of detail. 'Jar cracked in transit' is enough."*). A **material shortage needs both a reason and a note**.
 3. Press **Record this reason**.
 
-> **Warning (F-06-14).** Once a reason is saved, **the form disappears**. There is no way on screen to add a forgotten note or change a wrong reason. A material shortage saved **without a note** stays blocked (*"cannot post yet"*) forever. **Interim:** write the reason and note on form 8.3 first, then type them in together. If one was saved wrong or without a note, the audit cannot be fixed: leave it unapproved, record it on form 8.3, and re-count the affected lots in a new audit.
+**Changing a reason (v1.2, F-06-14 FIXED).** Until you approve, a line that already has a reason shows **Change the reason**: open it, pick the reason, write the note, and save. The old and new reason are both kept in the audit log. A reason that is not on the list is refused (*"AUDIT_BAD_REASON: pick one of the reasons on the list."*), by the app and by the database. Approval and posting still require every material shortage to have a reason and a note.
 
 **A lot with no cost on file** and any difference blocks approval until the cost is entered by the owner or an admin (`inventory.cost.fill`; SOP-05a and SOP-05b §4.7 for non-cannabis). Enter the cost from the CCRS manifest (D49: *"blocked until the manifest cost is entered."*), then reopen the audit.
 
 ### 4.16 Approving the result
 
-When nothing blocks and you have checked §4.14 by eye (no "Do not average them" lines, gross reviewed, reasons right):
+When nothing blocks and you have checked §4.14 by eye (gross reviewed, reasons right):
 
 1. Read: *"Everything the system checks for is satisfied. Approving records YOUR NAME and the time against this result — it is a signature, not a formality. It does not move any inventory by itself."*
 2. Press **Approve this result**. The stage becomes **approved**. **This cannot be undone.**
@@ -344,7 +344,7 @@ When nothing blocks and you have checked §4.14 by eye (no "Do not average them"
 
 ### 4.17 Posting: correct the shelf and draft the entry
 
-1. Confirm again that nothing in scope sold after the audit was created (§4.11). If anything did, **do not post**.
+1. Sales after a lot was counted are reconciled automatically (§4.11). Posting refuses an audit with disagreeing counts or stock that moved mid-count, and changes nothing.
 2. Press **Post this audit — correct the shelf and draft the entry**. Read the note: *"You can only do this once…"*
 3. What posting does (migration 0192; `postAuditSession`, `inventory-audit-store.ts` L396–520):
    - For each counted lot with a difference, adjusts the shelf by the difference, with reason **count** and the note *"Inventory audit "{label}": counted X, books said Y."* CCRS receives it as **Reconciliation**.
@@ -755,11 +755,11 @@ YEAR END
 
 | Gap | What is missing | Findings | Interim procedure | Sections to update when built | Status |
 |---|---|---|---|---|---|
-| **G-33** | Owner controls for every stage: **Approve scope and send to Cycle Counts** (signed), start counting, **Send back to counting**, **Cancel** (with a reason) | F-06-1 (**S1**), F-06-2 | Paper count, form 8.2 (§4.7) | §2, §4.2, §4.7, §4.13, §6, §9 | **APPROVED** (D54: separate **Release to Cycle Counts**) |
-| **G-34** | Counter's **I'm done** on the sheet that notifies the owner; correct help step 4; staff-safe links on the count sheet; live counted/difference figures on the hub and queue | F-06-3, F-06-4 | Tell the owner in person (§4.8) | §4.4, §4.8, §4.9, §4.13 | **APPROVED** (D55: back to the audit + cockpit notice; F-06-16) |
-| **G-35** | Cutoff: post the difference against the **live** quantity at count time (or freeze at count, not at creation) and warn when sales landed between freeze and count; correct the work paper and explainer | F-06-7 (**S1**) | Create right before counting, outside selling hours; never post if anything sold (§4.11) | §4.3, §4.11, §4.17, §4.19, §7 | **APPROVED** (D58, D61: per-lot capture at first count; counting in open hours) |
-| **G-36** | Count-sheet integrity: per-package scans add up; a scan of a counted lot warns instead of becoming the second count; hand entry for second counts; a disagreeing second count **blocks** approval and posting; status check on every line write (code and database) | F-06-5, F-06-5b, F-06-6, F-06-13 (**S1**) | §4.10 step 4, §4.12, §4.14 owner rule, store rule 4 | §2, §4.10, §4.12, §4.14, §4.16, §5.2 | **APPROVED** (D56 one counter + claim, F-06-15; D60 +1 per scan) |
-| **G-37** | Reasons: edit reason and note until approval (audited); validate the reason against the list; enforce `readyToPost` at posting | F-06-14 | Form 8.3 first; new audit if saved wrong (§4.15) | §4.15, §5.3 | PROPOSED (no owner question; part of building G-33…G-36) |
+| **G-33** | Owner controls for every stage: **Approve scope and send to Cycle Counts** (signed), start counting, **Send back to counting**, **Cancel** (with a reason) | F-06-1 (**S1**), F-06-2 | Paper count, form 8.2 (§4.7) | §2, §4.2, §4.7, §4.13, §6, §9 | **BUILT** (v1.2, Fix Phase 4.3, migration 0326): Release, Send back, Reassign, Cancel with reason |
+| **G-34** | Counter's **I'm done** on the sheet that notifies the owner; correct help step 4; staff-safe links on the count sheet; live counted/difference figures on the hub and queue | F-06-3, F-06-4 | Tell the owner in person (§4.8) | §4.4, §4.8, §4.9, §4.13 | **BUILT** (v1.2, Fix Phase 4.1): I'm done, cockpit notice, help step, owner links hidden, live progress on the sheet, hub and queue, claimer on the queue. The hub's Difference still fills at posting |
+| **G-35** | Cutoff: post the difference against the **live** quantity at count time (or freeze at count, not at creation) and warn when sales landed between freeze and count; correct the work paper and explainer | F-06-7 (**S1**) | Create right before counting, outside selling hours; never post if anything sold (§4.11) | §4.3, §4.11, §4.17, §4.19, §7 | **BUILT** (v1.2, Fix Phase 4.2, migration 0326): per-lot capture, movement shown and refused, work paper and explainer corrected |
+| **G-36** | Count-sheet integrity: per-package scans add up; a scan of a counted lot warns instead of becoming the second count; hand entry for second counts; a disagreeing second count **blocks** approval and posting; status check on every line write (code and database) | F-06-5, F-06-5b, F-06-6, F-06-13 (**S1**) | §4.10 step 4, §4.12, §4.14 owner rule, store rule 4 | §2, §4.10, §4.12, §4.14, §4.16, §5.2 | **BUILT** (v1.2, Fix Phase 4.1, migration 0326): +1 per scan, ask on a re-scan, third count, disagreement blocks, Start counting claim, database stage and claimer checks |
+| **G-37** | Reasons: edit reason and note until approval (audited); validate the reason against the list; enforce `readyToPost` at posting | F-06-14 | Form 8.3 first; new audit if saved wrong (§4.15) | §4.15, §5.3 | **BUILT** (v1.2, Fix Phase 4.1): Change the reason (audited), reason validated in app and database, posting refuses disagreeing counts |
 | **G-38** | Daily checklists in the app, for every employee (D51), with sign-off and a Cycle Counts line | F-06-12 (F-00-9) | Paper forms 8.5–8.8 (§4.23) | §4.23, §8, §9 | **APPROVED** (D57: task catalog) |
 | **G-40** | Intelligent cycle counts: **Vendor of the day** with chunking, ABC, exceptions, expiring soon, Cultivera flags, never counted; one open count per lot | F-06-8 | Plan by hand from **Show every active lot** (§4.24) | §4.5, §4.22, §4.24, §9 | **APPROVED** (D58) |
 | **G-41** | Annual year-end full count: every lot, no 400 cap, sections, one release, one review, one work paper | — | Several audits the same day, outside selling hours (§4.24) | §4.5, §4.24, §8.8 | **APPROVED** (D58) |
@@ -786,5 +786,6 @@ No new questions in v1.1.
 
 | Version | Date | Change | By |
 |---|---|---|---|
+| 1.2 | 2026-10-30 | Fix Phase 4.1–4.3 built (G-33, G-34, G-35, G-36, G-37; migration 0326): **Release to Cycle Counts**, **Start counting** claim, +1 per scan with the already-counted question, third count, **I'm done** and the cockpit notice, **Send back**, **Reassign**, **Cancel** with a reason, per-lot books capture at first count, mid-count movement shown and refused, disagreeing counts block, reasons editable and validated. Rewrote the one-thing-to-know, §4.2, §4.3, §4.7–§4.13, §4.14 rule, §4.15–§4.17, Appendix B. Findings F-06-1–7, F-06-13–16 FIXED | SOP program |
 | 1.1 | 2026-10-28 | Owner answers Q-06-1…Q-06-8 applied as D54–D61: release button (§4.7), I'm done + cockpit notice (§4.8), one counter and the same-counter recount (§2, §4.12), +1 per scan (§4.10), counting in open hours once G-35 is built (§4.11), the counting programme (new §4.24), the full daily task catalog (§4.23, forms 8.5–8.8 including new 8.8), legacy sessions cancelled (§4.20). Gaps G-33…G-36, G-38, G-39 APPROVED; new G-40, G-41; new findings F-06-15…F-06-17. Research: Oracle NetSuite Inventory Count and Lightspeed R-Series inventory counts, quoted | SOP program |
 | 1.0 | 2026-10-28 | First draft, verified against `main@c976c7e4`. Owner decisions D41, D42, D50–D52 applied. Findings F-06-1…F-06-14 (with F-06-5b) and F-06-C; gaps G-33…G-39; questions Q-06-1…Q-06-8. Paper daily checklists (forms 8.5–8.7) | SOP program |

@@ -228,8 +228,10 @@ export const AUDIT_HUB_AUTHORITIES_NEW: readonly GuidanceAuthority[] = [
       "customer buys two of that item at 2:20pm, the count and the system now disagree by two — and " +
       "nothing is wrong. That is not shrinkage, that is timing. A count that ignores this manufactures " +
       "fake variances, and fake variances are worse than no count at all because they train you to " +
-      "ignore real ones. This is why the hub tells you to count a product group in one sitting and warns " +
-      "you when sales landed in the middle of it.",
+      "ignore real ones. So the hub records what the books said for each lot at the moment that lot is " +
+      "first counted (not when the audit was created), compares the count with that, and shows you, per " +
+      "lot, any sale or receipt that landed while the lot was still being counted. Posting is refused " +
+      "while any lot shows movement; send it back and count that lot again from zero.",
     source:
       "ISA 501, Audit Evidence—Specific Considerations for Selected Items, paragraph A5. " +
       "https://www.iaasb.org/_flysystem/azure-private/publications/files/A023+2013+IAASB+Handbook+ISA+501.pdf",

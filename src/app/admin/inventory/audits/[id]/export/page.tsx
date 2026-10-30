@@ -192,8 +192,10 @@ export default async function WorkPaperPage({
               counter could have been influenced by it.
             </li>
             <li>
-              Quantities and unit costs were frozen onto the sheet when the count was created, so
-              a sale rung up mid-count cannot change the figure being measured.
+              The books quantity for each lot was recorded the moment that lot was first counted
+              (lots counted before this capture existed use the quantity frozen when the audit was
+              created). Any sale or receipt on a lot while it was being counted is shown on the
+              review and blocks posting until the lot is counted again.
             </li>
             <li>
               {scannedCount} of {lines.length} entries were captured by barcode scan; the remainder

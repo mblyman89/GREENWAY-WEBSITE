@@ -448,7 +448,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I do a cycle count?",
-        a: "Cycle Counts is the counting floor: open a job the owner has approved and enter what you physically count, without seeing the system figure. Recording a count changes nothing on its own. The owner reviews every difference in Inventory Auditing and approves the correction, which is what posts to inventory and to the books.",
+        a: "Cycle Counts is the counting floor. Open a count the owner has released and press Start counting (one person per count). Scan every package: each scan adds one. If a lot already has a number, the sheet asks whether to add, type the right total, or count it again from zero. You never see the system figure. When nothing is blank, press I'm done: the count locks and goes to the owner, who reviews every difference in Inventory Auditing and approves the correction, which is what posts to inventory and to the books.",
         href: "/admin/inventory/cycle-counts",
       },
       {

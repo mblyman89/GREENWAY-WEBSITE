@@ -150,6 +150,12 @@ export function buildAttentionFlags(input: {
     refundMinor: number;
     ratePct: string;
   };
+  /**
+   * Fix Phase 4.1 (D55): counts a counter finished ("I'm done") that wait for
+   * the owner. OPTIONAL: only the owner's cockpit passes it.
+   *   "It should notify me in the main /admin cockpit command center."
+   */
+  auditsAwaitingReview?: ReadonlyArray<{ id: string; label: string }>;
 }): AttentionFlag[] {
   const flags: AttentionFlag[] = [];
   if (input.drawers.needsAttention > 0) {
@@ -157,6 +163,13 @@ export function buildAttentionFlags(input: {
       severity: "critical",
       text: `${input.drawers.needsAttention} drawer${input.drawers.needsAttention === 1 ? "" : "s"} need${input.drawers.needsAttention === 1 ? "s" : ""} review (closed blind or over/short).`,
       href: "/admin/registers",
+    });
+  }
+  for (const a of input.auditsAwaitingReview ?? []) {
+    flags.push({
+      severity: "warning",
+      text: `Count finished and waiting for your review: ${a.label}.`,
+      href: `/admin/inventory/audits/${a.id}`,
     });
   }
   if (input.activeOrders > 0) {
@@ -308,5 +321,18 @@ export function __runCockpitTests(): { passed: number } {
   assert(highFlags[0].text.includes("9.0%"), "the flag states the actual rate");
   assert(buildAttentionFlags(clear).length === 0, "omitting refunds entirely keeps old behaviour");
 
+  // D55: a finished count links straight to the audit that started it.
+  const auditFlags = buildAttentionFlags({
+    activeOrders: 0,
+    lowStockCount: 0,
+    drawers: rollupDrawers([]),
+    publishedItems: 3,
+    auditsAwaitingReview: [{ id: "a1", label: "Flower spot check" }],
+  });
+  assert(auditFlags.length === 1 && auditFlags[0].href === "/admin/inventory/audits/a1", "finished count flags the owner");
+  assert(
+    buildAttentionFlags({ activeOrders: 0, lowStockCount: 0, drawers: rollupDrawers([]), publishedItems: 3 }).length === 0,
+    "no audit input, no audit flag",
+  );
   return { passed };
 }

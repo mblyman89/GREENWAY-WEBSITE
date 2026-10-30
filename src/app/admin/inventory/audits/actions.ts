@@ -46,7 +46,12 @@ import {
   saveCountLine,
   saveLineReason,
   moveSessionStatus,
+  claimCount,
+  submitCount,
+  cancelAudit,
+  reassignCount,
 } from "@/lib/inventory/audit-hub-store";
+import { VARIANCE_REASONS } from "@/lib/inventory/audit-hub-guidance-core";
 import { postAuditSession } from "@/lib/inventory/inventory-audit-store";
 import { inventoryAccountByCategory } from "@/lib/inventory/audit-posting-accounts";
 import type { AuditSessionStatus } from "@/lib/inventory/inventory-audit-post-core";
@@ -182,12 +187,21 @@ export async function saveCountAction(form: FormData): Promise<void> {
     );
   }
 
+  // Fix Phase 4.1 (G-36, D60): which count and how. A re-scan never silently
+  // becomes a second count -- the sheet asks first, and sends the answer here.
+  const rawTarget = requiredField(form, "target");
+  const target: "count" | "recount" = rawTarget === "recount" ? "recount" : "count";
+  const rawMode = requiredField(form, "mode");
+  const mode: "add" | "replace" | "restart" | "third" =
+    rawMode === "replace" || rawMode === "restart" || rawMode === "third" ? rawMode : "add";
+
   const result = await saveCountLine({
     sessionId,
     lotId,
     qty,
-    countedBy: session.profile.id,
     captureMethod,
+    target,
+    mode,
   });
   if (!result.ok) {
     refuse(back, result.refusal.code, result.refusal.message);
@@ -203,7 +217,7 @@ export async function saveCountAction(form: FormData): Promise<void> {
     action: "inventory_audit.count",
     entityType: "inventory_audit_lines",
     entityId: `${sessionId}:${lotId}`,
-    after: { recorded: result.data.recorded, captureMethod },
+    after: { recorded: result.data.recorded, captureMethod, target, mode },
   });
 
   revalidatePath(back);
@@ -240,6 +254,11 @@ export async function saveReasonAction(form: FormData): Promise<void> {
     );
   }
 
+  // G-37: only the six reasons the database accepts (0326 reason_code_ck).
+  if (!VARIANCE_REASONS.some((r) => r.code === reasonCode)) {
+    refuse(back, "AUDIT_BAD_REASON", `"${reasonCode}" is not one of the reasons on the list. Pick one of the listed reasons.`);
+  }
+
   const result = await saveLineReason({
     sessionId,
     lotId,
@@ -256,10 +275,115 @@ export async function saveReasonAction(form: FormData): Promise<void> {
     action: "inventory_audit.reason",
     entityType: "inventory_audit_lines",
     entityId: `${sessionId}:${lotId}`,
-    after: { reasonCode },
+    // G-37: a reason can be corrected until approval, so the old one is kept.
+    before: result.data.before,
+    after: { reasonCode, reasonNote: rawNote === "" ? null : rawNote },
   });
 
   revalidatePath(back);
+}
+
+/**
+ * D56 "Only one employee per scoped count." Start counting claims the count.
+ * Floor work: inventory.count. The database refuses a second claimer.
+ */
+export async function claimCountAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.count");
+  const sessionId = requiredField(form, "sessionId");
+  const back = `${HUB}/${sessionId}/count`;
+  const result = await claimCount(sessionId);
+  if (!result.ok) {
+    refuse(back, result.refusal.code, result.refusal.message);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.claim",
+    entityType: "inventory_audit_sessions",
+    entityId: sessionId,
+    after: { claimedByName: result.data.claimedByName },
+  });
+  revalidatePath(back);
+  revalidatePath("/admin/inventory/cycle-counts");
+}
+
+/**
+ * D55 "pressing I'm done should sent the cycle count back to the inventory
+ * audit page linking back to the one that initiated the count. It should
+ * notify me in the main /admin cockpit command center."
+ * The database refuses while any lot is blank (AUDIT_BLANK_LINES) and refuses
+ * anyone but the claimer. After this the counts are locked.
+ */
+export async function finishCountAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.count");
+  const sessionId = requiredField(form, "sessionId");
+  const back = `${HUB}/${sessionId}/count`;
+  const result = await submitCount(sessionId);
+  if (!result.ok) {
+    refuse(back, result.refusal.code, result.refusal.message);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.submit",
+    entityType: "inventory_audit_sessions",
+    entityId: sessionId,
+    after: { status: result.data.status },
+  });
+  revalidatePath(HUB);
+  revalidatePath(`${HUB}/${sessionId}`);
+  revalidatePath("/admin");
+  revalidatePath("/admin/inventory/cycle-counts");
+  redirect("/admin/inventory/cycle-counts?ok=1");
+}
+
+/** G-33 req 4: cancel needs a written reason. Owner only. */
+export async function cancelAuditAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.audit");
+  const sessionId = requiredField(form, "sessionId");
+  const reason = requiredField(form, "reason");
+  const back = `${HUB}/${sessionId}`;
+  if (reason.length < 5) {
+    refuse(back, "AUDIT_CANCEL_REASON", "Write why this audit is being cancelled. The reason stays with the record.");
+  }
+  const result = await cancelAudit(sessionId, reason);
+  if (!result.ok) {
+    refuse(back, result.refusal.code, result.refusal.message);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.cancel",
+    entityType: "inventory_audit_sessions",
+    entityId: sessionId,
+    before: { status: result.data.from },
+    after: { status: "cancelled", reason },
+  });
+  revalidatePath(HUB);
+  revalidatePath(back);
+  revalidatePath("/admin/inventory/cycle-counts");
+}
+
+/** D56: the owner moves a count to another person, or frees it. */
+export async function reassignAction(form: FormData): Promise<void> {
+  const session = await requirePermission("inventory.audit");
+  const sessionId = requiredField(form, "sessionId");
+  const staffRaw = requiredField(form, "staffId");
+  const back = `${HUB}/${sessionId}`;
+  const result = await reassignCount(sessionId, staffRaw === "" ? null : staffRaw);
+  if (!result.ok) {
+    refuse(back, result.refusal.code, result.refusal.message);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.reassign",
+    entityType: "inventory_audit_sessions",
+    entityId: sessionId,
+    after: { staffId: staffRaw === "" ? null : staffRaw, claimedByName: result.data.claimedByName },
+  });
+  revalidatePath(back);
+  revalidatePath("/admin/inventory/cycle-counts");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -26,6 +26,7 @@ import { emptyWorkQueueInputs, workQueueAttentionFlags } from "@/lib/catalog/wor
 import { missingWebhookSecrets } from "@/lib/security/fail-closed";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import { getOverdueComplianceCount } from "@/lib/compliance/compliance-calendar-store";
+import { listAuditSessions } from "@/lib/inventory/audit-hub-store";
 
 export const dynamic = "force-dynamic";
 
@@ -86,11 +87,15 @@ export default async function AdminDashboardPage({
    * this page instead of two.
    */
   const canSeeCompliance = can(session.profile.role, "compliance.calendar");
-  const [snap, setup, overdueCompliance, intakeInputs] = await Promise.all([
+  // Fix Phase 4.1 (D55): finished counts waiting for the owner. Fetched only
+  // for the owner (inventory.audit), the same idiom as canSeeCompliance.
+  const canReviewAudits = can(session.profile.role, "inventory.audit");
+  const [snap, setup, overdueCompliance, intakeInputs, auditsInReview] = await Promise.all([
     getCockpitSnapshot(sp.basis),
     getSetupStatus(),
     canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
     canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
+    canReviewAudits ? listAuditSessions({ statuses: ["review"], limit: 20 }) : Promise.resolve(null),
   ]);
   const setupComplete = setup.completed >= setup.total;
 
@@ -117,6 +122,10 @@ export default async function AdminDashboardPage({
         refundMinor: snap.netToday.refundMinor,
         ratePct: formatRate(snap.netToday.refundRate),
       },
+      auditsAwaitingReview:
+        auditsInReview && auditsInReview.ok
+          ? auditsInReview.data.map((a) => ({ id: a.id, label: a.label }))
+          : [],
     }),
     ...workQueueAttentionFlags(intakeInputs),
   ];

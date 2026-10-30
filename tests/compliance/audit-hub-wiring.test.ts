@@ -169,6 +169,12 @@ describe("the write path re-gates", () => {
       // books-23: the action that closes the gap. Correcting the shelf and
       // drafting the journal entry is the most consequential thing in this file.
       postAuditAction: "inventory.audit",
+      // Fix Phase 4.1 (D55/D56): Start counting and I'm done are floor work;
+      // cancel and reassign are owner decisions.
+      claimCountAction: "inventory.count",
+      finishCountAction: "inventory.count",
+      cancelAuditAction: "inventory.audit",
+      reassignAction: "inventory.audit",
     };
 
     const names = [...actions.matchAll(/export async function (\w+)/g)].map((m) => m[1]);
@@ -195,9 +201,9 @@ describe("the write path re-gates", () => {
       );
     }
 
-    // Exactly one action is reachable by staff, and it is the counting one.
+    // Only the counting actions are reachable by staff (count, claim, I'm done).
     const staffReachable = names.filter((n) => can("staff", ACTION_GATE[n] as "inventory.count"));
-    expect(staffReachable).toEqual(["saveCountAction"]);
+    expect(staffReachable).toEqual(["saveCountAction", "claimCountAction", "finishCountAction"]);
   });
 
   it("the approver is taken from the session, never from the form", () => {

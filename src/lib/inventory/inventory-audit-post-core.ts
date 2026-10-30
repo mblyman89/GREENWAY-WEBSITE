@@ -243,6 +243,7 @@ export type PostGateVerdict = {
     | "ALREADY_POSTED"
     | "APPROVAL_NOT_EVIDENCED"
     | "NO_LINES"
+    | "LINE_BLOCKED"
     | "NOTHING_TO_POST";
   /** Written for Michael. */
   reason: string;
@@ -297,6 +298,25 @@ export function gateSessionForPosting(
       reason:
         `"${session.label}" has no count lines at all. An audit with nothing in it is not ` +
         "evidence that everything is fine — it is evidence that nothing was looked at.",
+    };
+  }
+  // Phase 4 (G-36, F-06-13): a line still waiting for its second count, or
+  // whose second count disagrees with the first, is re-checked HERE at posting
+  // time and refused. readinessOf blocks it at approval; this is the backstop,
+  // so an audit approved before the blocker existed still cannot move stock.
+  // (Undocumented shrink is not refused here: buildPostPlan surfaces it as
+  // needsOwnerDecision and the store refuses to post until it is empty, G-37.)
+  const blockedLines = assessments.filter(
+    (a) => a.status === "needs_recount" || a.status === "recount_disagrees",
+  );
+  if (blockedLines.length > 0) {
+    return {
+      mayPost: false,
+      code: "LINE_BLOCKED",
+      reason:
+        `${blockedLines.length} line(s) in "${session.label}" still need a second count, or ` +
+        "have two counts that disagree. One of the two counts is wrong and the system will " +
+        "not guess which, so nothing was posted. Send the audit back to counting.",
     };
   }
   const movable = assessments.filter((a) => isMovable(a));
@@ -769,11 +789,14 @@ function tLot(over: Partial<AuditLot> = {}): AuditLot {
   };
 }
 function tLine(over: Partial<AuditCountLine> = {}): AuditCountLine {
+  // Phase 4 (G-36): a line needing a second count now blocks posting, so the
+  // plan-arithmetic fixtures model a CONFIRMED count (second count = first).
+  const confirmed = over.countedQty === undefined ? 100 : over.countedQty;
   return {
     lotId: "lot-1",
     systemQty: 100,
     countedQty: 100,
-    recountQty: null,
+    recountQty: confirmed,
     reason: null,
     note: null,
     ...over,
@@ -842,6 +865,17 @@ export function __runInventoryAuditPostCoreTests(): void {
   // negative control: something that SHOULD pass the gate
   const varied = [assessLine(tLot(), tLine({ countedQty: 90 }))];
   eq(gateSessionForPosting(tSession(), varied).code, "OK", "NEGATIVE CONTROL: a real variance passes the gate");
+  // Phase 4 (G-36): a missing or disagreeing second count is refused at posting.
+  eq(
+    gateSessionForPosting(tSession(), [assessLine(tLot(), tLine({ countedQty: 90, recountQty: null }))]).code,
+    "LINE_BLOCKED",
+    "a $50 shortage with no second count cannot post",
+  );
+  eq(
+    gateSessionForPosting(tSession(), [assessLine(tLot(), tLine({ countedQty: 90, recountQty: 85 }))]).code,
+    "LINE_BLOCKED",
+    "two counts that disagree cannot post",
+  );
 
   // ---- NULL IS NOT ZERO ----
   const uncounted = assessLine(tLot(), tLine({ countedQty: null }));

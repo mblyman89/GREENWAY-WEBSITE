@@ -40,7 +40,9 @@ import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge, Button } from "@/components/admin/ui";
 import { formatCents } from "@/lib/accounting/books-view-core";
-import { getAuditReview } from "@/lib/inventory/audit-hub-store";
+import { getAuditReview, listCounters } from "@/lib/inventory/audit-hub-store";
+import { ownerStageControls } from "@/lib/inventory/audit-count-flow-core";
+import { formatDateTime } from "@/lib/pos/format";
 import { pacificToday } from "@/lib/reports/timezone";
 import {
   LABELS,
@@ -50,7 +52,12 @@ import { AuditVarianceReview } from "../AuditVarianceReview";
 import { WhyBlockedPanel } from "../WhyBlockedPanel";
 import { HubRefusal } from "../HubRefusal";
 import { MaterialityPanel, ProvesPanel } from "../AuditHubExplainer";
-import { moveStatusAction, postAuditAction } from "../actions";
+import {
+  moveStatusAction,
+  postAuditAction,
+  cancelAuditAction,
+  reassignAction,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +76,8 @@ const P = "text-sm leading-relaxed text-[var(--admin-text-muted)]";
  * were still awaiting action.
  */
 function statusTone(s: AuditSessionStatus): "neutral" | "green" | "gold" | "orange" {
-  if (s === "approved") return "gold";
+  // G-39: one approved colour across the hub -- green, as on the audits list.
+  if (s === "approved") return "green";
   if (s === "cancelled") return "neutral";
   return "orange";
 }
@@ -106,6 +114,9 @@ export default async function AuditDetailPage({
   }
 
   const { session, lines, readiness } = review.data;
+  // Fix Phase 4.3 (D54/D56): the owner's stage buttons, and who can be assigned.
+  const controls = ownerStageControls(session.status, session.postedAt !== null);
+  const counters = controls.includes("reassign") ? await listCounters() : null;
   const isCounting = session.status === "counting";
   const isReview = session.status === "review";
   const isApproved = session.status === "approved";
@@ -206,21 +217,31 @@ export default async function AuditDetailPage({
       <section className={CARD}>
         <h2 className="text-sm font-bold text-white">What happens next</h2>
 
-        {isCounting ? (
+        {session.status === "draft" ? (
           <>
+            {/* D54: release is its own signed act. Until then the count does not
+                appear on Cycle Counts and nobody can claim it. */}
             <p className={`mt-1 ${P}`}>
-              Counting is still open. When every lot has a number against it, close the counting
-              stage and the differences become reviewable. Nothing you do here touches the shelf or
-              the ledger.
+              This count is planned but not released. Releasing it puts it on Cycle Counts, where
+              one person presses Start counting and it becomes theirs. Your name and the time are
+              recorded as the release.
             </p>
             <form action={moveStatusAction} className="mt-4">
               <input type="hidden" name="sessionId" value={id} />
-              <input type="hidden" name="to" value="review" />
-              <Button type="submit" variant="save" size="md">
-                Finish counting and review the differences
+              <input type="hidden" name="to" value="scope_approved" />
+              <Button type="submit" variant="confirm" size="md">
+                Release to Cycle Counts
               </Button>
             </form>
           </>
+        ) : session.status === "scope_approved" || isCounting ? (
+          <p className={`mt-1 ${P}`}>
+            {session.claimedByName
+              ? `${session.claimedByName} is counting this one${session.claimedAt ? ` (started ${formatDateTime(session.claimedAt)})` : ""}. `
+              : "Released to Cycle Counts. Nobody has pressed Start counting yet. "}
+            When they press I&apos;m done the counts lock and it comes back here for your review, with
+            a flag on the cockpit. Nothing that happens here touches the shelf or the ledger.
+          </p>
         ) : isReview ? (
           readiness.canPost ? (
             <>
@@ -229,6 +250,12 @@ export default async function AuditDetailPage({
                 time against this result &mdash; it is a signature, not a formality. It does not
                 move any inventory by itself.
               </p>
+              {session.claimedByName || session.submittedAt ? (
+                <p className={`mt-2 ${P}`}>
+                  Counted by {session.claimedByName ?? "the counter"}
+                  {session.submittedAt ? `, finished ${formatDateTime(session.submittedAt)}` : ""}.
+                </p>
+              ) : null}
               <form action={moveStatusAction} className="mt-4">
                 <input type="hidden" name="sessionId" value={id} />
                 <input type="hidden" name="to" value="approved" />
@@ -278,6 +305,67 @@ export default async function AuditDetailPage({
             NEW count so the trail shows both.
           </p>
         )}
+
+        {session.status === "cancelled" && session.cancelReason ? (
+          <p className={`mt-2 ${P}`}>Cancelled because: {session.cancelReason}</p>
+        ) : null}
+
+        {/* ── OWNER STAGE CONTROLS (G-33, D54/D56) ── */}
+        {controls.includes("send_back") ? (
+          <form action={moveStatusAction} className="mt-4">
+            <input type="hidden" name="sessionId" value={id} />
+            <input type="hidden" name="to" value="counting" />
+            <Button type="submit" variant="neutral" size="sm">
+              Send back for more counting
+            </Button>
+            <span className={`ml-2 ${P}`}>
+              The same counter picks it up again. Use this when a lot needs another count or stock
+              moved while it was counted.
+            </span>
+          </form>
+        ) : null}
+
+        {controls.includes("reassign") && counters && counters.ok ? (
+          <form action={reassignAction} className="mt-4 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="sessionId" value={id} />
+            <label htmlFor="reassign-staff" className="text-xs text-[var(--admin-text-muted)]">
+              Counter
+            </label>
+            <select
+              id="reassign-staff"
+              name="staffId"
+              defaultValue={session.claimedBy ?? ""}
+              className="rounded-lg border border-white/15 bg-black/30 px-2 py-1 text-sm text-white"
+            >
+              <option value="">Nobody (free for anyone to start)</option>
+              {counters.data.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" variant="neutral" size="sm">
+              Reassign
+            </Button>
+          </form>
+        ) : null}
+
+        {controls.includes("cancel") ? (
+          <form action={cancelAuditAction} className="mt-4 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="sessionId" value={id} />
+            <input
+              name="reason"
+              required
+              minLength={5}
+              placeholder="Why is this audit being cancelled?"
+              aria-label="Why is this audit being cancelled"
+              className="min-w-[18rem] flex-1 rounded-lg border border-white/15 bg-black/30 px-2 py-1 text-sm text-white"
+            />
+            <Button type="submit" variant="danger" size="sm">
+              Cancel this audit
+            </Button>
+          </form>
+        ) : null}
 
         {session.scopeRationale ? (
           <div className="mt-4 rounded-lg border border-white/10 bg-black/25 px-3 py-2">
