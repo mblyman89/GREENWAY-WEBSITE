@@ -39,7 +39,19 @@ import {
   addTrainingAction,
   updateHireInfoAction,
   setStatusAction,
+  linkSignInAction,
+  unlinkSignInAction,
 } from "./actions";
+import { TerminateSubmitButton } from "@/components/admin/staffing/TerminateSubmitButton";
+import {
+  getSignIn,
+  listSignIns,
+  linkedEmployeesBySignIn,
+  scheduledShiftsFrom,
+} from "@/lib/staffing/employee-login-link-store";
+import { openWorkPunch } from "@/lib/staffing/store";
+import { ROLE_LABELS, ROLE_RANK } from "@/lib/auth/roles";
+import { namesLookDifferent } from "@/lib/staffing/offboarding-core";
 import { pinAllowedForStatus } from "@/lib/staffing/candidate-start-core";
 import { updateEmployeeAction } from "../../actions";
 import { backHref } from "@/lib/admin/back-link-core";
@@ -95,6 +107,23 @@ export default async function EmployeeFilePage({
   const docByKey = new Map(file.documents.map((d) => [d.doc_key, d]));
   const deadlines = employee.hire_date ? complianceDeadlines(employee.hire_date) : [];
   const todayYmd = new Date().toISOString().slice(0, 10);
+
+  // Phase 5 (G-53 / G-54, owner D70 / D71): the linked back-office sign-in,
+  // the sign-ins that could be linked, and what Terminate would clean up.
+  const canLink = canLifecycle && can(session.profile.role, "users.manage");
+  const linkedSignIn = await getSignIn(employee.staff_id);
+  const myRank = ROLE_RANK[session.profile.role];
+  const linkable = canLink && !employee.staff_id && status !== "terminated"
+    ? await (async () => {
+        const [all, linked] = await Promise.all([listSignIns(), linkedEmployeesBySignIn()]);
+        return all
+          .filter((u) => u.active && !linked.bySignIn.has(u.id))
+          .filter((u) => ROLE_RANK[u.role] <= myRank && (u.role !== "owner" || session.profile.role === "owner"))
+          .sort((a, b) => Number(namesLookDifferent(employee.full_name, a)) - Number(namesLookDifferent(employee.full_name, b)));
+      })()
+    : [];
+  const upcomingShifts = canLifecycle && status !== "terminated" ? await scheduledShiftsFrom(employee.id, todayYmd) : [];
+  const openPunch = canLifecycle && status !== "terminated" ? await openWorkPunch(employee.id) : null;
 
   // SLICE 94: vault lookup for the badge. listEmployeeBanking() is the ONLY
   // employee banking read path (decrypts server-side); we keep just the masked
@@ -606,6 +635,91 @@ export default async function EmployeeFilePage({
               </form>
             </div>
 
+            {/* Phase 5 (G-53): back-office sign-in link */}
+            <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+              <h3 className="text-sm font-semibold text-white">Back-office sign-in</h3>
+              {employee.staff_id ? (
+                <>
+                  <p className="mt-2 text-sm text-white/85">
+                    {linkedSignIn ? (
+                      <>
+                        {linkedSignIn.fullName || linkedSignIn.email}{" "}
+                        <span className="text-white/50">({linkedSignIn.email})</span>
+                        <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase text-white/60">
+                          {ROLE_LABELS[linkedSignIn.role]}
+                        </span>
+                        {!linkedSignIn.active && (
+                          <span className="ml-2 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] uppercase text-red-300">
+                            Deactivated
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-red-300">Linked to a sign-in that no longer exists. Unlink it.</span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-white/50">
+                    The register accepts this sign-in&apos;s handbook acknowledgment, and Terminate offers to
+                    deactivate it in the same step.
+                  </p>
+                  {canLink && (
+                    <form action={unlinkSignInAction} className="mt-3">
+                      <input type="hidden" name="employee_id" value={employee.id} />
+                      <Button type="submit" size="sm" variant="neutral">
+                        Unlink sign-in
+                      </Button>
+                    </form>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs text-white/50">
+                    No sign-in is linked. Linking never creates a sign-in or changes this file: invite the
+                    person on{" "}
+                    <Link href="/admin/users" className="underline">
+                      Admin → Users
+                    </Link>{" "}
+                    first, then pick them here. One sign-in belongs to one employee.
+                  </p>
+                  {canLink && status !== "terminated" && (
+                    linkable.length > 0 ? (
+                      <form action={linkSignInAction} className="mt-3 space-y-3">
+                        <input type="hidden" name="employee_id" value={employee.id} />
+                        <Field label="Sign-in">
+                          <Select name="staff_id" defaultValue="">
+                            <option value="" disabled>
+                              Pick a sign-in…
+                            </option>
+                            {linkable.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {(u.fullName ? `${u.fullName} · ` : "") + u.email} ({ROLE_LABELS[u.role]})
+                                {namesLookDifferent(employee.full_name, u) ? " — different name" : ""}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <label className="flex items-start gap-2 text-sm text-white/70">
+                          <input type="checkbox" name="confirm_same_person" className="mt-0.5 h-4 w-4" />
+                          This sign-in belongs to {employee.full_name}
+                        </label>
+                        <Button type="submit" size="sm" variant="save">
+                          Link sign-in
+                        </Button>
+                      </form>
+                    ) : (
+                      <p className="mt-3 text-xs text-white/40">
+                        No active, unlinked sign-in you can link. Sign-ins already on another file, deactivated
+                        ones and ones ranked above you are not listed.
+                      </p>
+                    )
+                  )}
+                  {!canLink && (
+                    <p className="mt-2 text-xs text-white/40">Linking a sign-in: owner or admin only.</p>
+                  )}
+                </>
+              )}
+            </div>
+
             {/* Hire info */}
             <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
               <h3 className="text-sm font-semibold text-white">Hire info</h3>
@@ -677,11 +791,7 @@ export default async function EmployeeFilePage({
                 <h3 className="text-sm font-semibold text-red-300">Terminate employment</h3>
                 <p className="mt-1 text-xs text-white/50">
                   Clears their time-clock PIN immediately and opens the offboarding checklist. Their
-                  file is kept 5 years — nothing is deleted. Also deactivate any back-office login on{" "}
-                  <Link href="/admin/users" className="underline">
-                    Admin → Users
-                  </Link>
-                  .
+                  file is kept 5 years — nothing is deleted. Boxes the app completes are ticked for you.
                 </p>
                 <form action={setStatusAction} className="mt-3 space-y-3">
                   <input type="hidden" name="employee_id" value={employee.id} />
@@ -692,9 +802,58 @@ export default async function EmployeeFilePage({
                   <Field label="Reason (kept on file)" required>
                     <Textarea name="termination_reason" required placeholder="e.g. Resigned with two weeks' notice" />
                   </Field>
-                  <Button type="submit" size="sm" variant="danger">
-                    Terminate
-                  </Button>
+                  {linkedSignIn && linkedSignIn.active ? (
+                    <label className="flex items-start gap-2 text-sm text-white/80">
+                      <input type="checkbox" name="deactivate_sign_in" defaultChecked className="mt-0.5 h-4 w-4" />
+                      <span>
+                        Deactivate their sign-in too ({linkedSignIn.email}) — access ends on their next click and
+                        the sign-in is banned.
+                      </span>
+                    </label>
+                  ) : linkedSignIn ? (
+                    <p className="text-xs text-white/50">Their sign-in {linkedSignIn.email} is already deactivated.</p>
+                  ) : (
+                    <p className="text-xs text-[var(--admin-gold)]">
+                      No sign-in is linked to this file. If they have one, deactivate it on{" "}
+                      <Link href="/admin/users" className="underline">
+                        Admin → Users
+                      </Link>{" "}
+                      (or link it above first so this does it for you).
+                    </p>
+                  )}
+                  {upcomingShifts.length > 0 ? (
+                    <label className="flex items-start gap-2 text-sm text-white/80">
+                      <input type="checkbox" name="delete_shifts" defaultChecked className="mt-0.5 h-4 w-4" />
+                      <span>
+                        Delete scheduled shifts after the last day ({upcomingShifts.length} scheduled from today:{" "}
+                        {upcomingShifts
+                          .slice(0, 6)
+                          .map((s) => s.business_day)
+                          .join(", ")}
+                        {upcomingShifts.length > 6 ? ", …" : ""}). A shift on the last day itself stays.
+                      </span>
+                    </label>
+                  ) : (
+                    <p className="text-xs text-white/50">No scheduled shifts from today on.</p>
+                  )}
+                  {openPunch && (
+                    <p className="rounded-md border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]">
+                      They are clocked in right now (since{" "}
+                      {new Date(openPunch.clock_in_at).toLocaleString("en-US", {
+                        timeZone: "America/Los_Angeles",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                      ). Terminate leaves that punch open: a manager closes it on{" "}
+                      <Link href="/admin/staffing/hours" className="underline">
+                        Time Clock → Hours
+                      </Link>{" "}
+                      with the real time and a reason.
+                    </p>
+                  )}
+                  <TerminateSubmitButton name={employee.full_name} signInEmail={linkedSignIn?.active ? linkedSignIn.email : null} />
                 </form>
               </div>
             )}
