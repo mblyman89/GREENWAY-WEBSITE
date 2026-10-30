@@ -111,6 +111,10 @@ export const HELD_BACK_CODES: ReadonlySet<string> = new Set([
   "E46_AREA_LEDGER",
   "E59_LEDGER_DUPLICATE_HELD",
   "E60_ROW_REFUSED_HELD",
+  // W-3: an adjustment whose CCRS state is unproven (or the ledger could not
+  // be read) is left out of InventoryAdjustment.csv and owed. (E61 in-flight
+  // holds are advisory warnings: those rows were sent, they are not owed.)
+  "E62_ADJUSTMENT_LEDGER",
 ]);
 
 /** True when an error-severity issue only describes rows left out of the files. */

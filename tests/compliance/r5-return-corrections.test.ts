@@ -245,10 +245,20 @@ describe("routeSaleInserts: a sale line CCRS already holds is never Inserted aga
     expect(r.alreadyHeld).toEqual(["B", "C"]);
     expect(r.uncertain).toEqual(["D", "E"]);
   });
-  it("a line whose own Insert file is unanswered (not held yet) is KEPT, so a re-download serves the same stored bytes [BRIAN A29]", () => {
+  it("a line not held and in no waiting file is KEPT; a held line with a file in flight is still 'already held'", () => {
     const r = routeSaleInserts(rows.slice(0, 1), ledgerMap({ A: null }));
     expect(r.rows).toHaveLength(1);
+    expect(r.inFlight).toEqual([]);
     expect(routeSaleInserts(rows.slice(1, 2), ledgerMap({ B: held({ inFlight: true }) })).alreadyHeld).toEqual(["B"]);
+  });
+  it("W-3: a line whose own Insert is only in a file still waiting for its CCRS answer is HELD, not re-sent (\"Duplicate Sale\" [G L1390], [G L1412])", () => {
+    // Before W-3 this line was KEPT on the theory that a re-download serves
+    // the stored bytes; any rebuilt file then carried it a second time.
+    const r = routeSaleInserts(rows.slice(0, 2), ledgerMap({ A: null, B: null }), new Set(["A"]));
+    expect(r.rows.map((x) => col(x, "SaleDetailExternalIdentifier"))).toEqual(["B"]);
+    expect(r.inFlight).toEqual(["A"]);
+    expect(r.alreadyHeld).toEqual([]);
+    expect(r.uncertain).toEqual([]);
   });
 });
 

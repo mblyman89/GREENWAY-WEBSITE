@@ -162,6 +162,14 @@ W1_TESTS = "tests/compliance/w1-ccrs-hub-env.test.ts"
 HUBVIEW = "src/lib/compliance/ccrs-hub-view-core.ts"
 SCORESTORE = "src/lib/compliance/ccrs-scoreboard-store.ts"
 W2_TESTS = "tests/compliance/w2-ccrs-hub-speed.test.ts"
+INFLIGHT_CORE = "src/lib/compliance/ccrs-inflight-hold-core.ts"
+W3_TESTS = "tests/compliance/w3-inflight-hold.test.ts"
+RETCORR_CORE = "src/lib/compliance/ccrs-return-corrections-core.ts"
+R5RET_TESTS = "tests/compliance/r5-return-corrections.test.ts"
+DISPLAY_CORE = "src/lib/compliance/ccrs-issue-display-core.ts"
+GATE_CORE = "src/lib/compliance/ccrs-submit-gate-core.ts"
+LEDGER_STORE = "src/lib/compliance/ccrs-ledger-store.ts"
+BATCH_TS = "src/lib/compliance/ccrs-batch.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -4002,6 +4010,104 @@ MUTATIONS = [
         'uploadedFiles={[]}',
         W2_TESTS,
         'The email picker gets the waiting files from the light read.',
+    ),
+    # W-3 (2026-10-30): a record in a file still waiting for its CCRS answer
+    # is never sent twice; adjustments are routed against the ledger.
+    (
+        'M494-w3-null-op-is-insert',
+        INFLIGHT_CORE,
+        'if ((r.operation ?? "Insert") !== "Insert") continue;',
+        'if ((r.operation ?? "Update") !== "Insert") continue;',
+        W3_TESTS,
+        'A null operation counts as Insert, as 0249 ccrs_promote_rows does.',
+    ),
+    (
+        'M495-w3-oldest-file-wins',
+        INFLIGHT_CORE,
+        'if (!out.has(k(r.fileType, id))) out.set(k(r.fileType, id), r.fileName);',
+        'out.set(k(r.fileType, id), r.fileName);',
+        W3_TESTS,
+        'The oldest waiting file is the one named.',
+    ),
+    (
+        'M496-w3-product-update-not-held',
+        INFLIGHT_CORE,
+        'if (pp.action !== "emit" || pp.op !== "Insert") continue;',
+        'if (pp.action !== "emit") continue;',
+        W3_TESTS,
+        'A product Update is never held in flight.',
+    ),
+    (
+        'M497-w3-dependent-lot-filed-name',
+        INFLIGHT_CORE,
+        'if (pf && !nameHeld(pl.productName)) {',
+        'if (pf) {',
+        W3_TESTS,
+        'A lot naming the filed product name is not held with its product.',
+    ),
+    (
+        'M498-w3-adj-uncertain-held-back',
+        INFLIGHT_CORE,
+        'if (s === "uncertain" || s === "unknown") out.uncertain.push({ id, state: s });',
+        'if (s === "unknown") out.uncertain.push({ id, state: s });',
+        W3_TESTS,
+        'An adjustment in an unproven state is held back, never skipped as held.',
+    ),
+    (
+        'M499-w3-adj-in-flight',
+        INFLIGHT_CORE,
+        '      if (file) out.inFlight.push({ id, file });\n      else out.rows.push(r);',
+        '      out.rows.push(r);',
+        W3_TESTS,
+        'An adjustment in a waiting file is held, not re-sent.',
+    ),
+    (
+        'M500-w3-sale-in-flight',
+        RETCORR_CORE,
+        'if (inFlightOnly.has(r[D])) out.inFlight.push(r[D]);',
+        'if (false) out.inFlight.push(r[D]);',
+        R5RET_TESTS,
+        'A sale line whose Insert is in a waiting file is held, not re-sent.',
+    ),
+    (
+        'M501-w3-display-class',
+        DISPLAY_CORE,
+        'if (isInflightHoldReason(r)) return "in-flight";',
+        '',
+        W3_TESTS,
+        'In-flight rows get their own class and next step.',
+    ),
+    (
+        'M502-w3-e62-held-back',
+        GATE_CORE,
+        '  "E62_ADJUSTMENT_LEDGER",\n]);',
+        ']);',
+        W3_TESTS,
+        'An unproven adjustment is listed as owed.',
+    ),
+    (
+        'M503-w3-no-silent-cap',
+        LEDGER_STORE,
+        'if ((data?.length ?? 0) > 200) throw new Error(',
+        'if (false) throw new Error(',
+        W3_TESTS,
+        'The waiting-file read never caps silently.',
+    ),
+    (
+        'M504-w3-batch-sale-wired',
+        BATCH_TS,
+        'routeSaleInserts(sale.rows, saleSlice.held, saleSlice.inFlightOnly)',
+        'routeSaleInserts(sale.rows, saleSlice.held)',
+        W3_TESTS,
+        'The builder passes the in-flight sale lines to the router.',
+    ),
+    (
+        'M505-w3-batch-adj-wired',
+        BATCH_TS,
+        'routeAdjustmentRows(adjRows, adjHeld, inflightIndex)',
+        'routeAdjustmentRows(adjRows, adjHeld, new Map())',
+        W3_TESTS,
+        'The builder routes adjustments against the waiting files.',
     ),
 ]
 
