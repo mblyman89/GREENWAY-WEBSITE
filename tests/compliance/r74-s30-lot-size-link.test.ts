@@ -22,9 +22,9 @@ const read = (p: string) => readFileSync(p, "utf8");
 const runner = read("scripts/compliance/run-pure-selftests.ts");
 
 describe("R74 S30 A — pure self-tests, pinned", () => {
-  it("lot-size-link-core runs exactly 22, pinned in the runner", () => {
-    expect(sizeCore.__runLotSizeLinkCoreTests()).toEqual({ passed: 22, failed: 0 });
-    expect(runner).toMatch(/__runLotSizeLinkCoreTests\(\);\s*if \(r\.failed > 0 \|\| r\.passed < 22\)/);
+  it("lot-size-link-core runs exactly 23, pinned in the runner", () => {
+    expect(sizeCore.__runLotSizeLinkCoreTests()).toEqual({ passed: 23, failed: 0 });
+    expect(runner).toMatch(/__runLotSizeLinkCoreTests\(\);\s*if \(r\.failed > 0 \|\| r\.passed < 23\)/);
   });
   it("import-lot-core size-link runs exactly 21, pinned in the runner", () => {
     expect(importCore.__runImportLotSizeLinkTests()).toEqual({ passed: 21, failed: 0 });

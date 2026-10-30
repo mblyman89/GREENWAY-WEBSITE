@@ -95,6 +95,10 @@ export type PriceCorrectionResult =
     }
   | { ok: false; error: string };
 
+/** Phase 4b (G-32 item 9, D49): the refusal when the lot's cost is unknown. */
+export const COST_UNKNOWN_PRICE_REFUSAL =
+  "Blocked: this lot's cost is unknown, so the legal minimum price (cost + tax) can't be checked. Enter the cost from the vendor's CCRS manifest first, then set the price. Nobody can save a price on a lot with no cost (owner rule).";
+
 /**
  * Parse + validate an after-tax price correction. HARD-BLOCKS (ok:false with a
  * plain-English reason) on: empty/non-numeric input, non-positive price, and —
@@ -119,6 +123,13 @@ export function parsePriceCorrection(input: PriceCorrectionInput): PriceCorrecti
 
   const divisor = divisorForCategory(input.category);
   const floorMinor = afterTaxFloorMinor(input.costMinor, input.category);
+
+  // Phase 4b (G-32 item 9, F-05b-12; owner D49: "blocked until the manifest
+  // cost is entered."): no floor can be computed without a cost, so NO price
+  // is saved for anyone until the cost is on file.
+  if (floorMinor == null) {
+    return { ok: false, error: COST_UNKNOWN_PRICE_REFUSAL };
+  }
 
   // HYPER-CRITICAL FLOOR (CCRS/LCB): never below acquisition cost + tax.
   if (floorMinor != null && afterTaxMinor < floorMinor) {
@@ -202,7 +213,7 @@ export function __runPriceCorrectionCoreTests(): void {
   }
 
   // parsePriceCorrection — strips "$" and commas.
-  const withSign = parsePriceCorrection({ afterTaxDollars: "$1,500.00", costMinor: null, category: "flower" });
+  const withSign = parsePriceCorrection({ afterTaxDollars: "$1,500.00", costMinor: 1000, category: "flower" });
   ok(withSign.ok === true && withSign.afterTaxMinor === 150000, "strips $ and commas ($1,500.00)");
 
   // parsePriceCorrection — HARD BLOCK below the cost+tax floor.
@@ -217,9 +228,10 @@ export function __runPriceCorrectionCoreTests(): void {
   const atFloor = parsePriceCorrection({ afterTaxDollars: "14.63", costMinor: 1000, category: "flower" });
   ok(atFloor.ok === true, "exactly at floor is allowed");
 
-  // No cost => no floor => any positive price allowed.
+  // Phase 4b (D49): no cost => refused for everyone (was: allowed with no floor).
   const noCost = parsePriceCorrection({ afterTaxDollars: "1.00", costMinor: null, category: "flower" });
-  ok(noCost.ok === true, "no cost known => positive price allowed (no floor to enforce)");
+  ok(noCost.ok === false && !noCost.ok && noCost.error === COST_UNKNOWN_PRICE_REFUSAL, "no cost known => refused (D49)");
+  ok(parsePriceCorrection({ afterTaxDollars: "99.00", costMinor: 0, category: "merch" }).ok === false, "$0 cost => refused (D49)");
 
   // Invalid / non-positive input.
   ok(parsePriceCorrection({ afterTaxDollars: "", costMinor: 1000, category: "flower" }).ok === false, "empty blocked");

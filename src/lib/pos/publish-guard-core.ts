@@ -108,6 +108,14 @@ export function removalRefusedCopy(n: number): string {
   return `Not published yet: ${products(n)} would come off the live menu. Tick the box if that's what you want. Otherwise nothing changes and the live menu stays as it is.`;
 }
 
+/**
+ * Phase 4b (G-32 item 7, F-05b-10): the message when the removal check itself
+ * could not run. Publish fails CLOSED: nothing changes on the live menu.
+ */
+export function removalCheckFailedCopy(): string {
+  return "Not published yet: the check for products that would come off the live menu couldn't run, so nothing was changed. The live menu stays as it is. Try Publish again in a minute; if it keeps happening, tell the owner.";
+}
+
 export type PublishVerdictLevel = "safe" | "caution" | "danger";
 
 export type PublishVerdict = {
@@ -717,6 +725,7 @@ export function __runPublishGuardTests(): { passed: number } {
   ok(removalConfirmCopy(1) === "I understand 1 product will come off the live menu (listed above), and that's what I want.", "confirm singular");
   ok(removalConfirmCopy(3).startsWith("I understand 3 products will come off"), "confirm plural");
   ok(removalRefusedCopy(2).startsWith("Not published yet: 2 products would come off the live menu."), "refusal copy");
+  ok(removalCheckFailedCopy().startsWith("Not published yet:") && /nothing was changed/.test(removalCheckFailedCopy()), "check-failed copy fails closed");
 
   // S16.6: no capitalised REMOVE, no "replaces the WHOLE menu", anywhere in the copy.
   const allCopy = [

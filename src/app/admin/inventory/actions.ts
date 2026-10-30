@@ -1267,7 +1267,11 @@ export async function updateLotComplianceClassificationAction(
   // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
   // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
   revalidatePublicMenuSurfaces();
-  redirect(`/admin/inventory/${lotId}?saved=1`);
+  // Phase 4b (G-32 item 10, F-05b-13): a failed lot-row copy is shown, not hidden behind "saved".
+  redirect(
+    `/admin/inventory/${lotId}?` +
+      (lotWriteError ? `class_warn=${encodeURIComponent(lotWriteError.slice(0, 300))}` : "saved=1"),
+  );
 }
 
 /**

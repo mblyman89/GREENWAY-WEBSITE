@@ -142,14 +142,14 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; fact_warn?: string; lot_msg?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; fact_warn?: string; lot_msg?: string; class_warn?: string }>;
 }) {
   const session = await requirePermission("inventory.manage");
   // Fix Phase 1.1 (G-22 req 4): only the owner / admin (recall coordinator,
   // D37) may lift a recall hold. The server action enforces it; the page says it.
   const canReleaseRecall = can(session.profile.role, "inventory.recall.release");
   const { id } = await params;
-  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, fact_warn, lot_msg } = await searchParams;
+  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, fact_warn, lot_msg, class_warn } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
   // Validated with the same guard the media actions use (in-app /admin paths
   // only), so a crafted link can never make this an open redirect.
@@ -391,7 +391,17 @@ export default async function LotDetailPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        {saved && (
+        {class_warn ? (
+          /* Phase 4b (G-32 item 10, F-05b-13): the register IS enforcing the new
+             classification, but the lot row did not take the copy, so the
+             worklist may still show it unclassified. Said out loud, not "Saved." */
+          <div className="rounded-[var(--admin-radius)] border border-amber-500/50 bg-amber-50 px-4 py-2 text-sm text-amber-900" data-testid="lot-class-warn-banner" role="alert">
+            <strong>Partly saved.</strong> The register is enforcing the new purchase-limit classification, but the
+            copy on this lot didn&apos;t save ({class_warn.slice(0, 300)}), so the classification worklist may still list
+            this product as unclassified. Save the classification again; if this keeps showing, tell the owner.
+          </div>
+        ) : null}
+        {saved && !class_warn && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]" data-testid="lot-saved-banner">
             {lot_msg ? `Saved. ${lot_msg.slice(0, 600)}` : "Saved."}
           </div>
@@ -1087,7 +1097,7 @@ export default async function LotDetailPage({
                   help={
                     priceFloorMinor != null
                       ? `The out-the-door price the customer pays. Minimum allowed for this lot is ${fmtUsd(priceFloorMinor)} (cost + tax).`
-                      : "The out-the-door price the customer pays. Cost is unknown for this lot, so no floor can be enforced."
+                      : "Cost is unknown for this lot, so no price can be saved. Enter the cost from the vendor\u2019s CCRS manifest first (owner rule)."
                   }
                   htmlFor="after_tax_price"
                   required
@@ -1109,7 +1119,13 @@ export default async function LotDetailPage({
                   to get the pre-tax base. Example — {priceFormula}. The new base
                   updates automatically from whatever you enter.
                 </p>
-                <Button type="submit" variant="save" size="sm">
+                {priceFloorMinor == null ? (
+                  <p className="text-xs font-semibold text-[var(--admin-danger,#b91c1c)]" data-testid="lot-price-cost-unknown">
+                    Blocked until the cost is entered: this lot has no cost on file, so the legal minimum (cost + tax)
+                    can&apos;t be checked. Nobody can save a price here until the manifest cost is entered.
+                  </p>
+                ) : null}
+                <Button type="submit" variant="save" size="sm" disabled={priceFloorMinor == null}>
                   Save sell price
                 </Button>
               </form>

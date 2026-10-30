@@ -58,7 +58,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-30 | Edit non-cannabis price and cost by owner, admin or manager, audited old → new; refuse a $0.00 price | **D46, D48** (Q-05b-6 open: Save cost for managers) | F-05b-6 | SOP-05b §4.3, §4.6, §4.7, §4.9, form 8.2 | **BUILT** (Phase 4) |
 | G-30A | Merch **Remove** limited to owner and admin (a new permission) | **D47** | F-05b-14 | SOP-05b §2, §4.11, §6, §9 | **BUILT** (Phase 4) |
 | G-31 | Cannabis-line guard: **refused outright, both directions, no override**, for any lot override, Move products or type mapping | **D48** (compliance: RCW 69.50.535 excise, WAC 314-55-095 limits) | F-05b-9 (**S1**) | SOP-05b §4.15–§4.17, §4.21, form 8.3 | **BUILT** (Phase 0.4) |
-| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, **no price save on a cost-unknown lot**, classification write warning | **D45, D49** (D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | Items 1–6 **BUILT** (Phase 4); 7–10 **APPROVED** |
+| G-32 | Hardening bundle: audit Confirm / Archive + Restore, atomic adjustment, Direction locked to Reason, full invoice rollback, checked audits, publish fails closed, **no price save on a cost-unknown lot**, classification write warning | **D45, D49** (D38 for the price) | F-05b-2, 3, 4, 5, 7, 8, 10, 11, 12, 13 | SOP-05b §4.3–§4.9, §4.14, §4.15, §4.19, §4.21 | **BUILT** (Phase 4 items 1–6; Phase 4b items 7–10) |
 | G-33 | Audit stage controls: **Release to Cycle Counts** (separate owner button), send back, cancel | **D54** | F-06-1 (**S1**), F-06-2 | SOP-06 §4.7 (paper count, form 8.2) | **APPROVED** |
 | G-34 | Counter **I'm done** → back to the audit + **/admin cockpit** notice; staff-safe links; live progress | **D55** | F-06-3, F-06-4, F-06-16 | SOP-06 §4.8 (tell the owner) | **APPROVED** |
 | G-35 | Count cutoff: per-lot capture at first count; sales during the count reconciled; counting in open hours | **D58, D61** | F-06-7 (**S1**) | SOP-06 §4.11 (outside selling hours) | **APPROVED** |
@@ -474,6 +474,17 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
   6. **(SOP-15 extension)** **Cancel** requires a written reason and the owner (or a permission the owner holds); a customer-return destruction cancel never touches the lot status (F-15-9).
   7. **(SOP-15 extension)** After a partial destruction the lot returns to its status before scheduling, not left in Quarantine (F-15-11).
 - **Interim:** SOP-05a §4.9 (points 1–3), §4.10 step 9, form 8.4 (C); SOP-15 §4.19–§4.22, form 8.5.
+
+### Fix Phase 4b (G-32 items 7–10): publish fails closed, before/after audits, no price on a cost-unknown lot, Partly saved
+
+- **Owner (D49):** *"Q-05b-5- yes, plan on the group of smaller fixes. blocked until the manifest cost is entered."*
+- **Status: BUILT (Phase 4b, #P4B).**
+  7. **F-05b-10 FIXED.** `menu-version.ts` `getPublishedVersion({ strict: true })` + `diffVersions(…, { strict: true })` (throws on an incomplete read) + `publish-guard-core.ts` `removalCheckFailedCopy`; audit `menu.publish_refused_check_failed`.
+  8. **F-05b-11 FIXED.** Website-category and inventory-type update / deactivate / delete audits carry before / after.
+  9. **F-05b-12 FIXED (D49, D38).** `COST_UNKNOWN_PRICE_REFUSAL` in `parsePriceCorrection`; `sharedFloorRefusal` refuses while any sharing lot has no cost; Save greyed out on the lot page.
+  10. **F-05b-13 FIXED.** `?class_warn=` → **Partly saved.** banner.
+  No migration. Test `fix-p4b-g32-items-7-10`; self-tests `price-correction-core`, `lot-size-link-core` (23), `publish-guard-core`. SOP-05b v1.4.
+- **Was (interim, superseded):** SOP-05b v1.3 §4.14 (*"it publishes anyway"*), §4.15 (form 8.3 for before/after), §4.19 step 6, §4.21 (*"Nobody … presses Save sell price"* by hand).
 
 ### Fix Phase 4 (plan rows 5.1/5.2; G-29/G-30/G-30A/G-32): Other Inventory on the register
 

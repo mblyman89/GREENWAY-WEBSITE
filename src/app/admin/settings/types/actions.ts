@@ -124,6 +124,8 @@ export async function updateWebsiteCategory(formData: FormData): Promise<void> {
   const value = str(formData, "value");
   if (!value) redirect(`${BASE}?error=` + encodeURIComponent("Missing category value."));
 
+  // Phase 4b (G-32 item 8, F-05b-11): read the row first so the audit carries before / after.
+  const before = await getWebsiteCategoryType(value);
   const update: Record<string, unknown> = {
     label: str(formData, "label"),
     helper: str(formData, "helper"),
@@ -143,6 +145,10 @@ export async function updateWebsiteCategory(formData: FormData): Promise<void> {
     action: "website_category.updated",
     entityType: "website_category_type",
     entityId: value,
+    before: before
+      ? { label: before.label, helper: before.helper ?? null, sort_order: before.sort_order, is_active: before.is_active }
+      : null,
+    after: update,
   });
   revalidatePath(BASE);
   redirect(`${BASE}?saved=category`);
@@ -183,6 +189,8 @@ export async function deleteWebsiteCategory(formData: FormData): Promise<void> {
       action: "website_category.deactivated",
       entityType: "website_category_type",
       entityId: value,
+      before: { label: existing.label, is_active: existing.is_active, is_system: existing.is_system },
+      after: { is_active: false, usage: detailed },
     });
     revalidatePath(BASE);
     const reason = existing.is_system ? "system" : `in-use-${usage}`;
@@ -199,6 +207,8 @@ export async function deleteWebsiteCategory(formData: FormData): Promise<void> {
     action: "website_category.deleted",
     entityType: "website_category_type",
     entityId: value,
+    before: { label: existing.label, helper: existing.helper ?? null, sort_order: existing.sort_order, is_active: existing.is_active },
+    after: null,
   });
   revalidatePath(BASE);
   redirect(`${BASE}?saved=deleted`);
@@ -321,6 +331,8 @@ export async function updateInventoryType(formData: FormData): Promise<void> {
     action: "inventory_type.updated",
     entityType: "inventory_type",
     entityId: id,
+    before: { key: current.key, label: current.label, notes: current.notes ?? null, website_category: current.website_category, is_active: current.is_active },
+    after: update,
   });
   revalidatePath(BASE);
   redirect(`${BASE}?saved=inventory&tab=inventory`);
@@ -363,6 +375,8 @@ export async function deleteInventoryType(formData: FormData): Promise<void> {
       action: "inventory_type.deactivated",
       entityType: "inventory_type",
       entityId: preset.key,
+      before: { key: preset.key, label: preset.label, website_category: preset.website_category, is_active: true },
+      after: { is_active: false },
     });
     revalidatePath(BASE);
     redirect(`${BASE}?saved=deactivated&reason=system&tab=inventory`);
@@ -383,6 +397,8 @@ export async function deleteInventoryType(formData: FormData): Promise<void> {
       action: "inventory_type.deactivated",
       entityType: "inventory_type",
       entityId: id,
+      before: { key: existing.key, label: existing.label, website_category: existing.website_category, is_active: existing.is_active, is_system: existing.is_system },
+      after: { is_active: false, usage },
     });
     revalidatePath(BASE);
     const reason = existing.is_system ? "system" : `in-use-${usage}`;
@@ -398,6 +414,8 @@ export async function deleteInventoryType(formData: FormData): Promise<void> {
     action: "inventory_type.deleted",
     entityType: "inventory_type",
     entityId: id,
+    before: { key: existing.key, label: existing.label, website_category: existing.website_category, is_active: existing.is_active },
+    after: null,
   });
   revalidatePath(BASE);
   redirect(`${BASE}?saved=deleted&tab=inventory`);
