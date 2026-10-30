@@ -3079,7 +3079,7 @@ in Vercel.
   order line + reason index for sale / void rows), adds
   `noncannabis_product_id` to `public.customer_returns`, and creates three
   functions: `apply_noncannabis_delta`, `record_noncannabis_invoice` and
-  `record_noncannabis_return`. No new tables. (#P4)
+  `record_noncannabis_return`. No new tables. (#1563)
   - Owner, verbatim (D45): *"Q-05b-1- yes, and any other upgrade, enhancement
     and such needed to fully utilize non cannabis goods in the system and on
     the register and on the menu."*
