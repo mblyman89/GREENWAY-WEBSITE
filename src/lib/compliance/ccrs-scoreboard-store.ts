@@ -50,11 +50,24 @@ async function readOne(admin: Admin, env: LedgerEnv, t: ScoreTest, acceptedOnly:
   }));
 }
 
-export async function readCcrsScoreboard(admin: Admin, env: LedgerEnv = "preprod"): Promise<ScoreboardRead> {
+/**
+ * W-2: `acceptedOnly` skips the second read of every test (waiting / refused
+ * rows). The Production page shows only the one-line "N of M passed" strip,
+ * which needs nothing else, so it makes half the queries. The full PREprod
+ * board still reads both.
+ */
+export async function readCcrsScoreboard(
+  admin: Admin,
+  env: LedgerEnv = "preprod",
+  opts: { acceptedOnly?: boolean } = {},
+): Promise<ScoreboardRead> {
   try {
     const pairs = await Promise.all(
       SCORE_TESTS.map(async (t) => {
-        const [ok, any] = await Promise.all([readOne(admin, env, t, true), readOne(admin, env, t, false)]);
+        const [ok, any] = await Promise.all([
+          readOne(admin, env, t, true),
+          opts.acceptedOnly ? Promise.resolve([] as ScoreRow[]) : readOne(admin, env, t, false),
+        ]);
         return [t.id, [...ok, ...any]] as const;
       }),
     );

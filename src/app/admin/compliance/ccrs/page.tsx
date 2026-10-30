@@ -20,6 +20,7 @@
  * Everything mutating is permission-gated + audited; AI is drafts-only.
  */
 import Link from "next/link";
+import { Suspense } from "react";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -87,7 +88,10 @@ import {
 import { MigrationGarbagePanel } from "@/components/admin/compliance/MigrationGarbagePanel";
 import { CcrsIdentityProofPanel } from "@/components/admin/compliance/CcrsIdentityProofPanel";
 import { loadMigrationGarbage } from "@/lib/compliance/ccrs-migration-garbage-store";
-import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
+import { listCcrsFiles, listCcrsFilesLite } from "@/lib/compliance/ccrs-ledger-store";
+import { medicalSaleRowCount, pickSelectedWeek, recordGate, settle, waitingFilesOfEnv, WAITING_STATES } from "@/lib/compliance/ccrs-hub-view-core";
+import { CCRS_UPLOAD_ORDER } from "@/lib/compliance/ccrs-batch-core";
+import type { CcrsBatch } from "@/lib/compliance/ccrs-batch";
 import { readOwed } from "@/lib/compliance/ccrs-held-store";
 import { owedByWeek, owedSentence } from "@/lib/compliance/ccrs-held-back-core";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
@@ -200,6 +204,87 @@ function UndoDismissForm({ waiverId, weekKey, env }: { waiverId: string; weekKey
   );
 }
 
+/**
+ * W-2: an async server component that waits for ONE promise and renders its
+ * children with the value. Wrapped in <Suspense>, it lets the page shell show
+ * at once while the heavy panels (the week's batch build, the scoreboard, the
+ * files list, the clean-up scan) stream in. Every promise handed to it is
+ * settled first (ccrs-hub-view-core `settle`), so it never throws.
+ */
+async function Await<T>({ p, children }: { p: Promise<T>; children: (v: T) => React.ReactNode }) {
+  return <>{children(await p)}</>;
+}
+
+/** W-2: what a streamed panel shows while it loads. */
+function Pending({ label, tall = false }: { label: string; tall?: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 text-xs text-white/40 ${tall ? "py-8" : "py-3"}`}
+      data-testid="ccrs-pending"
+      aria-busy="true"
+    >
+      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+      Loading {label}... the rest of the page already works.
+    </div>
+  );
+}
+
+/** W-2: a streamed panel whose read failed. The page around it keeps working. */
+function PanelFailed({ what, error }: { what: string; error: string }) {
+  return (
+    <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs text-red-100" data-testid="ccrs-panel-failed">
+      Could not load {what}: {error}. Everything else on this page still works; reload to try again.
+    </p>
+  );
+}
+
+/** W-2: everything Step 2, Step 3 and the upload panels need from the week's build. */
+type WeekView = {
+  batch: CcrsBatch | null;
+  buildError: string | null;
+  verdict: ReturnType<typeof assertCcrsBatchSubmittable> | null;
+  submittable: boolean;
+  errors: ReturnType<typeof assertCcrsBatchSubmittable>["errors"];
+  warnings: ReturnType<typeof assertCcrsBatchSubmittable>["warnings"];
+  held: ReturnType<typeof assertCcrsBatchSubmittable>["held"];
+  totalRecords: number;
+  nothingToReport: boolean;
+  medicalSaleRows: number;
+};
+
+function weekViewOf(batch: CcrsBatch | null, buildError: string | null): WeekView {
+  const verification = batch
+    ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
+    : null;
+  const verdict = batch
+    ? assertCcrsBatchSubmittable({
+        syncIssues: batch.syncIssues.map(toGateInput),
+        verifierProblems: (verification?.problems ?? []).map((p) => ({
+          severity: p.severity,
+          file: String(p.file),
+          message: p.message,
+        })),
+        files: batch.files.map((f) => ({ type: f.type, warnings: f.warnings, empty: f.empty })),
+        classifyWarning,
+      })
+    : null;
+  const errors = verdict?.errors ?? [];
+  const totalRecords = batch?.totalRecords ?? 0;
+  return {
+    batch,
+    buildError,
+    verdict,
+    submittable: verdict?.submittable ?? false,
+    errors,
+    warnings: verdict?.warnings ?? [],
+    // R74 S39: records left out of the files (still owed) never block the good rows.
+    held: verdict?.held ?? [],
+    totalRecords,
+    nothingToReport: totalRecords === 0 && errors.length === 0,
+    medicalSaleRows: medicalSaleRowCount(batch?.files ?? null),
+  };
+}
+
 export default async function CcrsCommandCenterPage({
   searchParams,
 }: {
@@ -216,11 +301,12 @@ export default async function CcrsCommandCenterPage({
   const flash = flashFrom(sp);
 
   // ── Weekly deadline picture ────────────────────────────────────────────────
-  // PERF2 round 4: this page used to make ~15 reads ONE AFTER ANOTHER, so its
-  // load time was the SUM of all of them. Every read that does not depend on
-  // the selected week now starts at once (one wave); the week-dependent batch
-  // build and the medical evidence scan then run side by side. Same reads, same
-  // answers, same failure behaviour (any throw still fails the page as before).
+  // W-2 (2026-10-30): the page used to wait for EVERYTHING (the full batch
+  // build, the 36-query scoreboard, every file's issues, the clean-up scan)
+  // before it showed a single button. Now only the small reads below are
+  // awaited (one wave); the heavy ones START here and stream into their own
+  // <Suspense> panels. Each heavy promise is settled, so a failed panel says
+  // so in place and never blanks the page.
   // S-12d: first day of sales + dismissals (fails safe: empty = nags as before).
   const obligationCtxP = getObligationContext();
   const admin0 = isSupabaseServiceConfigured ? createSupabaseAdminClient() : null;
@@ -231,11 +317,8 @@ export default async function CcrsCommandCenterPage({
     waiverHistory,
     ledger,
     license,
-    ccrsFiles,
-    owed,
+    waitingFiles,
     ccrsMail,
-    scoreboard,
-    migrationGarbage,
     endorsement,
     filing,
   ] = await Promise.all([
@@ -246,45 +329,56 @@ export default async function CcrsCommandCenterPage({
     isSupabaseServiceConfigured ? listRecentWaivers(20) : Promise.resolve([]),
     isSupabaseServiceConfigured ? listWeekSubmissions(12) : Promise.resolve([]),
     getCcrsLicenseSettings(),
+    // W-2: the files still waiting for CCRS's answer, BOTH envs, one light query
+    // (no issues). The email picker filters per email; the warning shows this env's.
     admin0
-      ? listCcrsFiles(admin0, env)
-      : Promise.resolve({ available: false, files: [], issues: [], error: null }),
-    // R74 S39: every record an earlier upload held back and still owes CCRS.
-    admin0 ? readOwed(admin0, env) : Promise.resolve({ available: false, rows: [], error: null }),
+      ? settle(listCcrsFilesLite(admin0, ["prod", "preprod"], WAITING_STATES, CCRS_UPLOAD_ORDER, 200))
+      : Promise.resolve({ ok: true as const, value: [] }),
     // S-18a: CCRS emails read from the submitting mailbox (drafts until the owner applies them).
     listRecentCcrsMail(25),
-    // R74 S48: the PREprod test scoreboard (what was tested, what passed, what remains).
-    admin0
-      ? readCcrsScoreboard(admin0, "preprod")
-      : Promise.resolve({ available: false as const, message: "database not configured" }),
-    // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
-    (async () => (isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null))(),
     getEndorsementConfig(),
     // Monthly LIQ-1295 strip.
     obligationCtxP.then((ctx) => getCcrsFilingOverview(todayIso, { lookbackMonths: 2, ctx })),
   ]);
   const handoverPlan = planHandover({ greenwayFirstSaleDate: obligationCtx.startDate, facts: handoverFacts, todayIso });
+  const waitingAll = waitingFiles.ok ? waitingFiles.value : [];
+  const waitingHere = waitingFilesOfEnv(waitingAll, env);
 
   // Selected week: explicit ?week= → most urgent unresolved → last completed.
   const requested = sp.week ? weekFromKey(sp.week) : null;
-  const selectedDeadline: WeekDeadline =
-    (requested
-      ? [...overview.weeks, overview.current].find((w) => w.week.key === requested.key)
-      : null) ??
-    overview.mostUrgent ??
-    overview.weeks[0] ??
-    overview.current;
+  const selectedDeadline: WeekDeadline = pickSelectedWeek(overview, requested?.key ?? null);
   const week = selectedDeadline.week;
   const weekCompleted = todayIso > week.end;
   const ledgerRow = ledger.find((r) => r.week_key === week.key) ?? null;
 
-  // ── Batch + authoritative gate for the selected week ──────────────────────
+  // ── Heavy reads: started now, streamed into their panels ──────────────────
+  // Batch + authoritative gate for the selected week (built ONCE per render;
+  // every panel that needs it awaits the same promise).
   const range = resolveRange({ from: week.start, to: week.end });
-  const batchP = isSupabaseServiceConfigured
-    ? buildCcrsBatch(range.fromISO, range.toISO, { env })
-    : Promise.resolve(null);
+  const weekP: Promise<WeekView> = settle(() =>
+    isSupabaseServiceConfigured
+      ? buildCcrsBatch(range.fromISO, range.toISO, { env })
+      : Promise.resolve(null),
+  ).then((r) => (r.ok ? weekViewOf(r.value, null) : weekViewOf(null, r.error)));
+  // S-12c: every file of this env with its issues (only the files panel needs the issues).
+  const filesP = settle(() =>
+    admin0
+      ? listCcrsFiles(admin0, env)
+      : Promise.resolve({ available: false, files: [], issues: [], error: null }),
+  );
+  // R74 S39: every record an earlier upload held back and still owes CCRS.
+  const owedP = settle(() =>
+    admin0 ? readOwed(admin0, env) : Promise.resolve({ available: false, rows: [], error: null }),
+  );
+  // R74 S48: the PREprod test scoreboard. On Production only the one-line
+  // strip shows, which needs only the ACCEPTED reads (W-2: half the queries).
+  const scoreboardP = admin0
+    ? readCcrsScoreboard(admin0, "preprod", { acceptedOnly: env !== "preprod" })
+    : Promise.resolve({ available: false as const, message: "database not configured" });
+  // R50 S10c (D-15): dead records the Cultivera migration brought in. Read-only.
+  const migrationGarbageP = settle(async () => (isSupabaseServiceConfigured ? await loadMigrationGarbage(env) : null));
 
-  // ── DOH / medical evidence for the week (runs alongside the batch build) ──
+  // ── DOH / medical evidence for the week (streams with the medical panel) ──
   const EXEMPT_SCAN_MAX_ROWS = 100_000;
   // SLICE 5B: this is the WAC 314-55-090(2) excise-exemption evidence (5-year
   // retention duty), and it sat EXACTLY on PostgREST's 1,000-row cap — the one
@@ -330,34 +424,9 @@ export default async function CcrsCommandCenterPage({
       return { count: 0, minor: 0, complete: medicalExemptComplete };
     }
   })();
-  const [batch, medical] = await Promise.all([batchP, medicalP]);
-  const medicalExemptCount = medical.count;
-  const medicalExemptMinor = medical.minor;
-  const medicalExemptComplete = medical.complete;
-  const verification = batch
-    ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
-    : null;
-  const verdict = batch
-    ? assertCcrsBatchSubmittable({
-        syncIssues: batch.syncIssues.map(toGateInput),
-        verifierProblems: (verification?.problems ?? []).map((p) => ({
-          severity: p.severity,
-          file: String(p.file),
-          message: p.message,
-        })),
-        files: batch.files.map((f) => ({ type: f.type, warnings: f.warnings, empty: f.empty })),
-        classifyWarning,
-      })
-    : null;
-  const submittable = verdict?.submittable ?? false;
-  const errors = verdict?.errors ?? [];
-  const warnings = verdict?.warnings ?? [];
-  // R74 S39: records left out of the files (still owed) never block the good rows.
-  const held = verdict?.held ?? [];
-  const totalRecords = batch?.totalRecords ?? 0;
-  const nothingToReport = totalRecords === 0 && errors.length === 0;
+  const medicalViewP = Promise.all([medicalP, weekP]);
+
   const qs = `from=${week.start}&to=${week.end}${envQ}`;
-  const owedWeeks = owedByWeek(owed.rows);
   const mailCfg = mailConfigFromEnv(process.env);
   const mailSetup = mailCfg.configured
     ? { configured: true as const, mode: mailCfg.mode, mailbox: mailCfg.mailbox }
@@ -377,16 +446,6 @@ export default async function CcrsCommandCenterPage({
           })
         : null,
   }));
-
-  const medicalSaleRows = batch
-    ? (() => {
-        const sale = batch.files.find((f) => f.type === "Sale");
-        if (!sale) return 0;
-        // Count RecreationalMedical rows without re-parsing the whole CSV schema:
-        // the enum literal only ever appears in the SaleType column.
-        return (sale.csv.match(/RecreationalMedical/g) ?? []).length;
-      })()
-    : 0;
 
   // ── Banner tone ────────────────────────────────────────────────────────────
   const urgent = overview.mostUrgent;
@@ -444,7 +503,11 @@ export default async function CcrsCommandCenterPage({
       </div>
 
       {/* R74 S48: the CCRS test scoreboard. Full on PREprod; a one-line strip on Production. */}
-      <CcrsScoreboardPanel read={scoreboard} compact={env !== "preprod"} />
+      <Suspense fallback={<Pending label="the PREprod test scoreboard" />}>
+        <Await p={scoreboardP}>
+          {(scoreboard) => <CcrsScoreboardPanel read={scoreboard} compact={env !== "preprod"} />}
+        </Await>
+      </Suspense>
 
       {/* W-1: the result of the last action stays in view (sticky) wherever the redirect scrolled to. */}
       {flash ? (
@@ -592,169 +655,187 @@ export default async function CcrsCommandCenterPage({
         title={`Step 2 — Review week ${week.start} – ${week.end}`}
         subtitle={`Due Sunday ${week.due}. ${weekCompleted ? "" : "This week is still in progress — you can preview, but record it after Saturday."}`}
       >
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard label="Total records" value={totalRecords.toLocaleString()} accent="green" />
-          <StatCard
-            label="Blocking errors"
-            value={String(errors.length)}
-            accent={errors.length > 0 ? "orange" : "muted"}
-          />
-          <StatCard label="Warnings" value={String(warnings.length)} accent="muted" />
-          <StatCard
-            label="Medical sale rows"
-            value={String(medicalSaleRows)}
-            accent={medicalSaleRows > 0 ? "gold" : "muted"}
-          />
-        </div>
-
-        {batch ? (
-          <div className="mt-4 space-y-3">
-            {/* S-12b: ledger status + GWP- id assignment (D-01a) */}
-            {!batch.ledger.view ? (
-              <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-[11px] text-amber-100">
-                {env === "preprod"
-                  ? `PREprod ledger not started (${batch.ledger.absentReason}). Start it in the CCRS files section below so PREprod exports are recorded.`
-                  : `CCRS ledger not loaded (${batch.ledger.absentReason}). Files are built the old way (every row Insert) and are NOT recorded. Do not upload to production until migration 0248 is applied and the seed is finalized.`}
-              </p>
-            ) : env === "prod" && batch.ledger.unassignedProductKeys.length > 0 ? (
-              <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-[11px] text-sky-100">
-                <p className="font-semibold">
-                  {batch.ledger.unassignedProductKeys.length} product(s) have no CCRS Product id yet, so they (and their lots)
-                  are withheld.
-                </p>
-                {canEdit ? (
-                  <form action={assignProductIdsAction} className="mt-2">
-                    <input type="hidden" name="week_key" value={week.key} />
-                    <input type="hidden" name="env" value={env} />
-                    <Button type="submit" variant="confirm" size="sm">
-                      Assign CCRS Product ids (GWP-) to these {batch.ledger.unassignedProductKeys.length}
-                    </Button>
-                    <p className="mt-1 text-white/50">Permanent: an assigned id is never changed or reused. Production only.</p>
-                  </form>
+        <Suspense fallback={<Pending label={`week ${week.start} to ${week.end}: building the CCRS files and checking every row`} tall />}>
+          <Await p={Promise.all([weekP, owedP])}>
+            {([wv, owedRead]) => {
+              const { batch, verdict, submittable, errors, warnings, held, totalRecords, nothingToReport, medicalSaleRows } = wv;
+              const owed = owedRead.ok ? owedRead.value : { available: true, rows: [], error: owedRead.error };
+              const owedWeeks = owedByWeek(owed.rows);
+              return (
+                <>
+                  {wv.buildError ? <PanelFailed what={`the CCRS files for week ${week.start} to ${week.end}`} error={wv.buildError} /> : null}
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard label="Total records" value={totalRecords.toLocaleString()} accent="green" />
+              <StatCard
+                label="Blocking errors"
+                value={String(errors.length)}
+                accent={errors.length > 0 ? "orange" : "muted"}
+              />
+              <StatCard label="Warnings" value={String(warnings.length)} accent="muted" />
+              <StatCard
+                label="Medical sale rows"
+                value={String(medicalSaleRows)}
+                accent={medicalSaleRows > 0 ? "gold" : "muted"}
+              />
+            </div>
+    
+            {batch ? (
+              <div className="mt-4 space-y-3">
+                {/* S-12b: ledger status + GWP- id assignment (D-01a) */}
+                {!batch.ledger.view ? (
+                  <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-[11px] text-amber-100">
+                    {env === "preprod"
+                      ? `PREprod ledger not started (${batch.ledger.absentReason}). Start it in the CCRS files section below so PREprod exports are recorded.`
+                      : `CCRS ledger not loaded (${batch.ledger.absentReason}). Files are built the old way (every row Insert) and are NOT recorded. Do not upload to production until migration 0248 is applied and the seed is finalized.`}
+                  </p>
+                ) : env === "prod" && batch.ledger.unassignedProductKeys.length > 0 ? (
+                  <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-[11px] text-sky-100">
+                    <p className="font-semibold">
+                      {batch.ledger.unassignedProductKeys.length} product(s) have no CCRS Product id yet, so they (and their lots)
+                      are withheld.
+                    </p>
+                    {canEdit ? (
+                      <form action={assignProductIdsAction} className="mt-2">
+                        <input type="hidden" name="week_key" value={week.key} />
+                        <input type="hidden" name="env" value={env} />
+                        <Button type="submit" variant="confirm" size="sm">
+                          Assign CCRS Product ids (GWP-) to these {batch.ledger.unassignedProductKeys.length}
+                        </Button>
+                        <p className="mt-1 text-white/50">Permanent: an assigned id is never changed or reused. Production only.</p>
+                      </form>
+                    ) : null}
+                  </div>
+                ) : null}
+                {/* R74 S25: which CCRS ids this file uses (Cultivera's filed ids vs ours) */}
+                {batch.identity ? (
+                  <details className="rounded-xl border border-white/10 bg-white/5 px-4 py-3" open={batch.identity.rows.held.length > 0}>
+                    <summary className="cursor-pointer text-xs font-semibold text-white/80">
+                      CCRS ids in this file: Cultivera&apos;s filed ids vs ours
+                    </summary>
+                    <div className="mt-3">
+                      <CcrsIdentityProofPanel proof={batch.identity} />
+                    </div>
+                  </details>
+                ) : null}
+                <div
+                  className={`rounded-xl border px-4 py-3 text-xs font-semibold ${
+                    submittable
+                      ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                      : "border-red-400/30 bg-red-400/10 text-red-200"
+                  }`}
+                >
+                  {submittable
+                    ? nothingToReport
+                      ? "✓ Validation passed — but this week has ZERO records. If there was truly no activity, no upload is needed: record it as “nothing to report” below."
+                      : held.length > 0
+                        ? `✓ Validation passed for the records in these files — upload them. ${verdict?.heldCount ?? 0} record(s) in ${held.length} group(s) are HELD BACK (not in the files) and listed below as still owed to CCRS; fix them and rebuild to send them.`
+                        : "✓ Validation passed — the batch is cleared for upload. This is the same hard gate the zip download enforces."
+                    : "✕ Validation FAILED — the zip download is blocked until these errors are fixed:"}
+                </div>
+                {/* S-17a: every row of every issue, with the next step per reason (Part 17 §C.4 defect 1). */}
+                <CcrsIssueList
+                  issues={errors}
+                  env={env}
+                  tone="error"
+                  copyTitle={`CCRS blocking errors — ${env} — week ${week.start} to ${week.end}`}
+                />
+                {held.length > 0 ? (
+                  <div
+                    className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3"
+                    data-testid="ccrs-held-back"
+                  >
+                    <p className="text-xs font-semibold text-amber-200">
+                      Held back — not in these files, still owed to CCRS ({verdict?.heldCount ?? 0} record(s))
+                    </p>
+                    <p className="mt-1 text-[11px] text-amber-100/70">
+                      These rows were left out so the good records can upload now. Nothing is sent on a guess. Fix each
+                      group with its next step, rebuild this week, and upload again: the rebuilt files carry them.
+                    </p>
+                    <div className="mt-2">
+                      <CcrsIssueList
+                        issues={held}
+                        env={env}
+                        tone="held"
+                        copyTitle={`CCRS held back (still owed) — ${env} — week ${week.start} to ${week.end}`}
+                        cleanup={canEdit ? { action: ccrsCleanupAction, weekKey: week.key } : undefined}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {owed && owed.available && (owedWeeks.length > 0 || owed.error) ? (
+                  <details className="rounded-xl border border-amber-400/20 bg-white/5 px-4 py-3" data-testid="ccrs-still-owed">
+                    <summary className="cursor-pointer text-xs font-semibold text-amber-200">
+                      Still owed to CCRS from earlier uploads — {owedSentence(owedWeeks)}
+                    </summary>
+                    {owed.error ? <p className="mt-2 text-xs text-red-200">Could not read the full list: {owed.error}</p> : null}
+                    <ul className="mt-2 space-y-2 text-xs text-white/70">
+                      {owedWeeks.map((w) => (
+                        <li key={w.weekStart}>
+                          <span className="font-semibold">Week of {w.weekStart}</span> — {w.total} record(s):{" "}
+                          {w.byType.map((t) => `${t.count} ${t.type}${t.rebuildWeek ? " (rebuild this week after fixing)" : ""}`).join(", ")}
+                          {w.byType.some((t) => t.rebuildWeek) ? (
+                            <>
+                              {" "}
+                              <Link className="underline" href={hubWeekLink(`W-${w.weekStart}`, env)}>
+                                Open this week
+                              </Link>
+                            </>
+                          ) : null}
+                          <details className="mt-1 pl-4">
+                            <summary className="cursor-pointer opacity-80">Show all {w.rows.length}</summary>
+                            <ol className="mt-1 list-decimal space-y-0.5 pl-5 font-mono text-[11px]">
+                              {w.rows.map((r) => (
+                                <li key={`${r.record_type}-${r.record_id}`}>
+                                  {r.record_type} {r.label ?? r.record_id} [{r.code}] {r.reason ?? ""} (held since {r.first_held_at.slice(0, 10)})
+                                </li>
+                              ))}
+                            </ol>
+                          </details>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+                {warnings.length > 0 ? (
+                  <details className="text-xs text-white/50">
+                    <summary className="cursor-pointer font-semibold text-white/60">
+                      {warnings.length} warning(s) — non-blocking, worth a skim
+                    </summary>
+                    <div className="mt-2">
+                      <CcrsIssueList
+                        issues={warnings}
+                        env={env}
+                        tone="warning"
+                        copyTitle={`CCRS warnings — ${env} — week ${week.start} to ${week.end}`}
+                        cleanup={canEdit ? { action: ccrsCleanupAction, weekKey: week.key } : undefined}
+                      />
+                    </div>
+                  </details>
                 ) : null}
               </div>
-            ) : null}
-            {/* R74 S25: which CCRS ids this file uses (Cultivera's filed ids vs ours) */}
-            {batch.identity ? (
-              <details className="rounded-xl border border-white/10 bg-white/5 px-4 py-3" open={batch.identity.rows.held.length > 0}>
-                <summary className="cursor-pointer text-xs font-semibold text-white/80">
-                  CCRS ids in this file: Cultivera&apos;s filed ids vs ours
-                </summary>
-                <div className="mt-3">
-                  <CcrsIdentityProofPanel proof={batch.identity} />
-                </div>
-              </details>
-            ) : null}
-            <div
-              className={`rounded-xl border px-4 py-3 text-xs font-semibold ${
-                submittable
-                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
-                  : "border-red-400/30 bg-red-400/10 text-red-200"
-              }`}
-            >
-              {submittable
-                ? nothingToReport
-                  ? "✓ Validation passed — but this week has ZERO records. If there was truly no activity, no upload is needed: record it as “nothing to report” below."
-                  : held.length > 0
-                    ? `✓ Validation passed for the records in these files — upload them. ${verdict?.heldCount ?? 0} record(s) in ${held.length} group(s) are HELD BACK (not in the files) and listed below as still owed to CCRS; fix them and rebuild to send them.`
-                    : "✓ Validation passed — the batch is cleared for upload. This is the same hard gate the zip download enforces."
-                : "✕ Validation FAILED — the zip download is blocked until these errors are fixed:"}
-            </div>
-            {/* S-17a: every row of every issue, with the next step per reason (Part 17 §C.4 defect 1). */}
-            <CcrsIssueList
-              issues={errors}
-              env={env}
-              tone="error"
-              copyTitle={`CCRS blocking errors — ${env} — week ${week.start} to ${week.end}`}
-            />
-            {held.length > 0 ? (
-              <div
-                className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3"
-                data-testid="ccrs-held-back"
-              >
-                <p className="text-xs font-semibold text-amber-200">
-                  Held back — not in these files, still owed to CCRS ({verdict?.heldCount ?? 0} record(s))
-                </p>
-                <p className="mt-1 text-[11px] text-amber-100/70">
-                  These rows were left out so the good records can upload now. Nothing is sent on a guess. Fix each
-                  group with its next step, rebuild this week, and upload again: the rebuilt files carry them.
-                </p>
-                <div className="mt-2">
-                  <CcrsIssueList
-                    issues={held}
-                    env={env}
-                    tone="held"
-                    copyTitle={`CCRS held back (still owed) — ${env} — week ${week.start} to ${week.end}`}
-                    cleanup={canEdit ? { action: ccrsCleanupAction, weekKey: week.key } : undefined}
-                  />
-                </div>
-              </div>
-            ) : null}
-            {owed.available && (owedWeeks.length > 0 || owed.error) ? (
-              <details className="rounded-xl border border-amber-400/20 bg-white/5 px-4 py-3" data-testid="ccrs-still-owed">
-                <summary className="cursor-pointer text-xs font-semibold text-amber-200">
-                  Still owed to CCRS from earlier uploads — {owedSentence(owedWeeks)}
-                </summary>
-                {owed.error ? <p className="mt-2 text-xs text-red-200">Could not read the full list: {owed.error}</p> : null}
-                <ul className="mt-2 space-y-2 text-xs text-white/70">
-                  {owedWeeks.map((w) => (
-                    <li key={w.weekStart}>
-                      <span className="font-semibold">Week of {w.weekStart}</span> — {w.total} record(s):{" "}
-                      {w.byType.map((t) => `${t.count} ${t.type}${t.rebuildWeek ? " (rebuild this week after fixing)" : ""}`).join(", ")}
-                      {w.byType.some((t) => t.rebuildWeek) ? (
-                        <>
-                          {" "}
-                          <Link className="underline" href={hubWeekLink(`W-${w.weekStart}`, env)}>
-                            Open this week
-                          </Link>
-                        </>
-                      ) : null}
-                      <details className="mt-1 pl-4">
-                        <summary className="cursor-pointer opacity-80">Show all {w.rows.length}</summary>
-                        <ol className="mt-1 list-decimal space-y-0.5 pl-5 font-mono text-[11px]">
-                          {w.rows.map((r) => (
-                            <li key={`${r.record_type}-${r.record_id}`}>
-                              {r.record_type} {r.label ?? r.record_id} [{r.code}] {r.reason ?? ""} (held since {r.first_held_at.slice(0, 10)})
-                            </li>
-                          ))}
-                        </ol>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-            {warnings.length > 0 ? (
-              <details className="text-xs text-white/50">
-                <summary className="cursor-pointer font-semibold text-white/60">
-                  {warnings.length} warning(s) — non-blocking, worth a skim
-                </summary>
-                <div className="mt-2">
-                  <CcrsIssueList
-                    issues={warnings}
-                    env={env}
-                    tone="warning"
-                    copyTitle={`CCRS warnings — ${env} — week ${week.start} to ${week.end}`}
-                    cleanup={canEdit ? { action: ccrsCleanupAction, weekKey: week.key } : undefined}
-                  />
-                </div>
-              </details>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-4 text-xs text-white/40">Connect Supabase to generate the CCRS batch.</p>
-        )}
+            ) : (
+              <p className="mt-4 text-xs text-white/40">Connect Supabase to generate the CCRS batch.</p>
+            )}
+                </>
+              );
+            }}
+          </Await>
+        </Suspense>
       </Section>
 
       {/* AI helper — drafts-only briefing grounded in this week's batch */}
-      {batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null}
+      <Suspense fallback={null}>
+        <Await p={weekP}>
+          {({ batch }) => (batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={{ from: week.start, to: week.end }} /> : null)}
+        </Await>
+      </Suspense>
 
       {/* R74 S48 (Round 28, item 2): earlier files still waiting for their CCRS answer */}
-      {unansweredWarningLines(ccrsFiles.files).length > 0 ? (
+      {unansweredWarningLines(waitingHere).length > 0 ? (
         <div className="rounded-2xl border-2 border-amber-400/60 bg-amber-400/10 p-4 text-sm text-amber-100" data-testid="ccrs-unanswered-warning">
           <p className="font-black uppercase tracking-wide">Before you export again: answer the earlier files</p>
           <ul className="mt-2 space-y-0.5 text-xs">
-            {unansweredWarningLines(ccrsFiles.files).map((l, i) => (
+            {unansweredWarningLines(waitingHere).map((l, i) => (
               <li key={i} className={i === 0 ? "font-bold" : ""}>
                 {l}
               </li>
@@ -767,20 +848,28 @@ export default async function CcrsCommandCenterPage({
       ) : null}
 
       {/* 4) Guided upload walkthrough */}
-      {batch && !nothingToReport ? (
-        <UploadWalkthrough
-          weekKey={week.key}
-          files={batch.files.map((f) => ({
-            type: String(f.type),
-            fileName: f.fileName,
-            recordCount: f.recordCount,
-            empty: f.empty,
-          }))}
-          batchZipHref={`/admin/reports/compliance/batch-export?${qs}`}
-          submittable={submittable}
-          portalUrl={ccrsPortalUrl(env)}
-        />
-      ) : null}
+      <Suspense fallback={<Pending label="the upload walkthrough" />}>
+        <Await p={weekP}>
+          {({ batch, nothingToReport, submittable }) => (
+            <>
+            {batch && !nothingToReport ? (
+            <UploadWalkthrough
+              weekKey={week.key}
+              files={batch.files.map((f) => ({
+                type: String(f.type),
+                fileName: f.fileName,
+                recordCount: f.recordCount,
+                empty: f.empty,
+              }))}
+              batchZipHref={`/admin/reports/compliance/batch-export?${qs}`}
+              submittable={submittable}
+              portalUrl={ccrsPortalUrl(env)}
+            />
+          ) : null}
+            </>
+          )}
+        </Await>
+      </Suspense>
 
       {/* S-18a: CCRS's answers, read from the submitting mailbox */}
       <Section
@@ -789,11 +878,11 @@ export default async function CcrsCommandCenterPage({
       >
         <CcrsMailPanel
           available={ccrsMail.available}
-          loadError={ccrsMail.error}
+          loadError={ccrsMail.error ?? (waitingFiles.ok ? null : `waiting files: ${waitingFiles.error}`)}
           setup={mailSetup}
           heartbeat={ccrsMail.heartbeat}
           rows={ccrsMailRows as unknown as CcrsMailPanelRow[]}
-          uploadedFiles={ccrsFiles.files.filter((f) => isUnansweredState(f.state))}
+          uploadedFiles={waitingAll.filter((f) => isUnansweredState(f.state))}
           canEdit={canEdit}
           weekKey={week.key}
           nowISO={new Date().toISOString()}
@@ -811,34 +900,55 @@ export default async function CcrsCommandCenterPage({
       </Section>
 
       {/* S-12c: every emitted file, its state, and what to do next */}
-      {batch ? (
-        <CcrsFilesPanel
-          env={env}
-          weekKey={week.key}
-          canEdit={canEdit}
-          available={ccrsFiles.available}
-          loadError={ccrsFiles.error}
-          files={ccrsFiles.files}
-          issues={ccrsFiles.issues}
-          ledgerLoaded={!!batch.ledger.view}
-          unassignedProductCount={batch.ledger.unassignedProductKeys.length}
-          nowISO={new Date().toISOString()}
-          suggestedRun={`P${todayIso.replaceAll("-", "")}A`}
-          actions={{
-            markUploaded: markUploadedAction,
-            recordSuccess: recordSuccessAction,
-            recordError: recordErrorAction,
-            recordNoEmail: recordNoEmailAction,
-            abandon: abandonFileAction,
-            startPreprod: startPreprodLedgerAction,
-            assignPreprodIds: assignPreprodProductIdsAction,
-            settlePreprodDuplicates: settlePreprodDuplicatesAction,
+      <Suspense fallback={<Pending label="the CCRS files list" tall />}>
+        <Await p={Promise.all([weekP, filesP])}>
+          {([{ batch }, filesRead]) => {
+            const ccrsFiles = filesRead.ok
+              ? filesRead.value
+              : { available: true, files: [], issues: [], error: filesRead.error };
+            return (
+              <>
+              {batch ? (
+            <CcrsFilesPanel
+              env={env}
+              weekKey={week.key}
+              canEdit={canEdit}
+              available={ccrsFiles.available}
+              loadError={ccrsFiles.error}
+              files={ccrsFiles.files}
+              issues={ccrsFiles.issues}
+              ledgerLoaded={!!batch.ledger.view}
+              unassignedProductCount={batch.ledger.unassignedProductKeys.length}
+              nowISO={new Date().toISOString()}
+              suggestedRun={`P${todayIso.replaceAll("-", "")}A`}
+              actions={{
+                markUploaded: markUploadedAction,
+                recordSuccess: recordSuccessAction,
+                recordError: recordErrorAction,
+                recordNoEmail: recordNoEmailAction,
+                abandon: abandonFileAction,
+                startPreprod: startPreprodLedgerAction,
+                assignPreprodIds: assignPreprodProductIdsAction,
+                settlePreprodDuplicates: settlePreprodDuplicatesAction,
+              }}
+            />
+          ) : null}
+              </>
+            );
           }}
-        />
-      ) : null}
+        </Await>
+      </Suspense>
 
       {/* R50 S10c: migration clean-up (D-15) */}
-      {migrationGarbage ? <MigrationGarbagePanel load={migrationGarbage} /> : null}
+      <Suspense fallback={<Pending label="the migration clean-up list" />}>
+        <Await p={migrationGarbageP}>
+          {(g) => {
+            if (!g.ok) return <PanelFailed what="the migration clean-up list" error={g.error} />;
+            const migrationGarbage = g.value;
+            return migrationGarbage ? <MigrationGarbagePanel load={migrationGarbage} /> : null;
+          }}
+        </Await>
+      </Suspense>
 
       {/* 5) Record the week */}
       <Section
@@ -927,72 +1037,89 @@ export default async function CcrsCommandCenterPage({
             This week is still in progress — it can be recorded after it closes Saturday night.
           </p>
         ) : canEdit ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            <form action={resolveWeekAction} className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <input type="hidden" name="week_key" value={week.key} />
-              <input type="hidden" name="env" value={env} />
-              <input type="hidden" name="resolution" value="submitted" />
-              <p className="text-xs font-bold text-white/80">I uploaded the files to CCRS</p>
-              <p className="mt-1 text-[11px] text-white/45">
-                Records the submission with the file manifest ({totalRecords.toLocaleString()}{" "}
-                record(s)) as evidence and stops the reminders for this week.
-              </p>
-              <input
-                name="notes"
-                placeholder="Optional note (e.g. re-uploaded Sale.csv after fix)"
-                className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
-              />
-              <Button type="submit" variant="confirm" size="sm" className="mt-3" disabled={!submittable || nothingToReport}>
-                Record as SUBMITTED
-              </Button>
-              {!submittable ? (
-                <p className="mt-2 text-[11px] text-red-300/80">
-                  Blocked: fix the validation errors above first — you shouldn&apos;t have been able
-                  to upload a failing batch.
-                </p>
-              ) : nothingToReport ? (
-                <p className="mt-2 text-[11px] text-white/40">
-                  Zero records this week — use &ldquo;nothing to report&rdquo; instead.
-                </p>
-              ) : null}
-            </form>
-
-            <form action={resolveWeekAction} className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <input type="hidden" name="week_key" value={week.key} />
-              <input type="hidden" name="env" value={env} />
-              <input type="hidden" name="resolution" value="nothing_to_report" />
-              <p className="text-xs font-bold text-white/80">Nothing to report this week</p>
-              <p className="mt-1 text-[11px] text-white/45">
-                Per the LCB FAQ there is no &ldquo;no change&rdquo; report — a week with no new
-                activity simply isn&apos;t uploaded. Recording it here logs WHY no upload exists and
-                stops the reminders.
-              </p>
-              <input
-                name="notes"
-                placeholder="Optional note (e.g. store closed, no deliveries)"
-                className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
-              />
-              <Button type="submit" variant="neutral" size="sm" className="mt-3" disabled={totalRecords > 0}>
-                Record as NOTHING TO REPORT
-              </Button>
-              {totalRecords > 0 ? (
-                <p className="mt-2 text-[11px] text-amber-300/80">
-                  Blocked: this week has {totalRecords.toLocaleString()} record(s) — it must be
-                  uploaded, not skipped.
-                </p>
-              ) : null}
-            </form>
-
-            {/* S-12d: check it off with a reason (for example the integrator filed it) */}
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
-              <p className="text-xs font-bold text-white/80">Someone else handled this week (dismiss with a reason)</p>
-              <p className="mt-1 text-[11px] text-white/45">
-                Use this when the week was filed outside this system, for example by Cultivera. It does NOT tell the
-                State anything; it only stops the reminders here and keeps your reason, name and time as evidence.
-              </p>
-              <DismissForm obligation="ccrs_weekly" periodKey={week.key} weekKey={week.key} env={env} label="Dismiss this week" />
-            </div>
-          </div>
+          <Suspense fallback={<Pending label="the week's record count and validation" />}>
+            <Await p={weekP}>
+              {({ batch, submittable, totalRecords, nothingToReport }) => {
+                const gate = recordGate({ built: !!batch, submittable, totalRecords, nothingToReport });
+                return (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <form action={resolveWeekAction} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <input type="hidden" name="week_key" value={week.key} />
+                    <input type="hidden" name="env" value={env} />
+                    <input type="hidden" name="resolution" value="submitted" />
+                    <p className="text-xs font-bold text-white/80">I uploaded the files to CCRS</p>
+                    <p className="mt-1 text-[11px] text-white/45">
+                      Records the submission with the file manifest ({totalRecords.toLocaleString()}{" "}
+                      record(s)) as evidence and stops the reminders for this week.
+                    </p>
+                    <input
+                      name="notes"
+                      placeholder="Optional note (e.g. re-uploaded Sale.csv after fix)"
+                      className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
+                    />
+                    <Button type="submit" variant="confirm" size="sm" className="mt-3" disabled={!gate.submitted}>
+                      Record as SUBMITTED
+                    </Button>
+                    {gate.submittedWhy === "build-failed" ? (
+                      <p className="mt-2 text-[11px] text-red-300/80">
+                        Blocked: this week&apos;s files could not be built (see Step 2). Reload once it builds.
+                      </p>
+                    ) : !submittable ? (
+                      <p className="mt-2 text-[11px] text-red-300/80">
+                        Blocked: fix the validation errors above first — you shouldn&apos;t have been able
+                        to upload a failing batch.
+                      </p>
+                    ) : nothingToReport ? (
+                      <p className="mt-2 text-[11px] text-white/40">
+                        Zero records this week — use &ldquo;nothing to report&rdquo; instead.
+                      </p>
+                    ) : null}
+                  </form>
+      
+                  <form action={resolveWeekAction} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <input type="hidden" name="week_key" value={week.key} />
+                    <input type="hidden" name="env" value={env} />
+                    <input type="hidden" name="resolution" value="nothing_to_report" />
+                    <p className="text-xs font-bold text-white/80">Nothing to report this week</p>
+                    <p className="mt-1 text-[11px] text-white/45">
+                      Per the LCB FAQ there is no &ldquo;no change&rdquo; report — a week with no new
+                      activity simply isn&apos;t uploaded. Recording it here logs WHY no upload exists and
+                      stops the reminders.
+                    </p>
+                    <input
+                      name="notes"
+                      placeholder="Optional note (e.g. store closed, no deliveries)"
+                      className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
+                    />
+                    <Button type="submit" variant="neutral" size="sm" className="mt-3" disabled={!gate.nothing}>
+                      Record as NOTHING TO REPORT
+                    </Button>
+                    {gate.nothingWhy === "build-failed" ? (
+                      <p className="mt-2 text-[11px] text-red-300/80">
+                        Blocked: this week&apos;s files could not be built, so it is not known to be empty.
+                      </p>
+                    ) : totalRecords > 0 ? (
+                      <p className="mt-2 text-[11px] text-amber-300/80">
+                        Blocked: this week has {totalRecords.toLocaleString()} record(s) — it must be
+                        uploaded, not skipped.
+                      </p>
+                    ) : null}
+                  </form>
+      
+                  {/* S-12d: check it off with a reason (for example the integrator filed it) */}
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
+                    <p className="text-xs font-bold text-white/80">Someone else handled this week (dismiss with a reason)</p>
+                    <p className="mt-1 text-[11px] text-white/45">
+                      Use this when the week was filed outside this system, for example by Cultivera. It does NOT tell the
+                      State anything; it only stops the reminders here and keeps your reason, name and time as evidence.
+                    </p>
+                    <DismissForm obligation="ccrs_weekly" periodKey={week.key} weekKey={week.key} env={env} label="Dismiss this week" />
+                  </div>
+                </div>
+                );
+              }}
+            </Await>
+          </Suspense>
         ) : (
           <p className="text-xs text-white/40">
             Recording a week requires the &ldquo;Change settings&rdquo; permission.
@@ -1001,60 +1128,77 @@ export default async function CcrsCommandCenterPage({
       </Section>
 
       {/* 6) Error triage */}
-      <ErrorTriagePanel
-        licenseNumber={license.licenseNumber || "(license not set)"}
-        licenseeName={license.submittedBy || "Greenway Marijuana"}
-        weekStart={week.start}
-        weekEnd={week.end}
-        fileTypes={(batch?.files ?? []).filter((f) => !f.empty).map((f) => String(f.type))}
-      />
+      <Suspense fallback={<Pending label="the error triage helper" />}>
+        <Await p={weekP}>
+          {({ batch }) => (
+            <ErrorTriagePanel
+              licenseNumber={license.licenseNumber || "(license not set)"}
+              licenseeName={license.submittedBy || "Greenway Marijuana"}
+              weekStart={week.start}
+              weekEnd={week.end}
+              fileTypes={(batch?.files ?? []).filter((f) => !f.empty).map((f) => String(f.type))}
+            />
+          )}
+        </Await>
+      </Suspense>
 
       {/* 7) DOH / medical panel */}
       <Section
         title="DOH / Medical sales"
         subtitle="There is no separate DOH report upload — the obligations live inside CCRS + the LIQ-1295. These are the four legs of the tax exemption, checked for this week."
       >
-        <div className="grid gap-2 text-xs md:grid-cols-2">
-          <div className={`rounded-xl border p-3 ${endorsement?.isMedicallyEndorsed ? "border-emerald-400/25 bg-emerald-400/5" : "border-red-400/25 bg-red-400/5"}`}>
-            <p className="font-bold text-white/80">1. Medical endorsement</p>
-            <p className="mt-1 text-white/55">
-              {endorsement?.isMedicallyEndorsed
-                ? `✓ Store holds an LCB medical endorsement${endorsement.endorsementNumber ? ` (#${endorsement.endorsementNumber})` : ""}. Excise exemption sunsets ${endorsement.exciseExemptionUntil}.`
-                : "✕ No medical endorsement on record — medical tax exemptions are NOT lawful without it."}
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <p className="font-bold text-white/80">2. DOH database check — every transaction</p>
-            <p className="mt-1 text-white/55">
-              Patient/designated-provider status must be verified in the DOH Medical Cannabis
-              Authorization Database at EVERY sale — a valid-looking card is not enough (status can
-              change). {medicalExemptCount} exempt sale line(s) recorded this week
-              {medicalExemptMinor > 0 ? ` ($${(medicalExemptMinor / 100).toFixed(2)} excise exempted)` : ""}.
-            </p>
-            {!medicalExemptComplete ? (
-              <p className="mt-1 font-semibold text-amber-300">
-                ⚠ This count could not be read completely, so it is a MINIMUM — the real figure may
-                be higher. Do not rely on it as WAC 314-55-090(2) evidence until it reads clean.
-              </p>
-            ) : null}
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <p className="font-bold text-white/80">3. IsMedical=TRUE inventory</p>
-            <p className="mt-1 text-white/55">
-              Only DOH medically-compliant lots (passing WAC 246-70-050 tests) may be reported
-              IsMedical=TRUE in Inventory.csv — that flag is one leg of the exemption, not a label
-              choice.
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <p className="font-bold text-white/80">4. RecreationalMedical in Sale.csv</p>
-            <p className="mt-1 text-white/55">
-              {medicalSaleRows > 0
-                ? `${medicalSaleRows} sale row(s) this week are SaleType=RecreationalMedical — both tax columns must be $0.00 on those rows (the validator enforces the 37% excise on all others).`
-                : "No RecreationalMedical rows this week. If a DOH patient purchase happened, verify it was rung up as a medical sale — the exemption is mandatory when the four legs are met, not a discount."}
-            </p>
-          </div>
-        </div>
+        <Suspense fallback={<Pending label="this week's medical evidence" />}>
+          <Await p={medicalViewP}>
+            {([medical, { medicalSaleRows }]) => {
+              const medicalExemptCount = medical.count;
+              const medicalExemptMinor = medical.minor;
+              const medicalExemptComplete = medical.complete;
+              return (
+                  <div className="grid gap-2 text-xs md:grid-cols-2">
+                <div className={`rounded-xl border p-3 ${endorsement?.isMedicallyEndorsed ? "border-emerald-400/25 bg-emerald-400/5" : "border-red-400/25 bg-red-400/5"}`}>
+                  <p className="font-bold text-white/80">1. Medical endorsement</p>
+                  <p className="mt-1 text-white/55">
+                    {endorsement?.isMedicallyEndorsed
+                      ? `✓ Store holds an LCB medical endorsement${endorsement.endorsementNumber ? ` (#${endorsement.endorsementNumber})` : ""}. Excise exemption sunsets ${endorsement.exciseExemptionUntil}.`
+                      : "✕ No medical endorsement on record — medical tax exemptions are NOT lawful without it."}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="font-bold text-white/80">2. DOH database check — every transaction</p>
+                  <p className="mt-1 text-white/55">
+                    Patient/designated-provider status must be verified in the DOH Medical Cannabis
+                    Authorization Database at EVERY sale — a valid-looking card is not enough (status can
+                    change). {medicalExemptCount} exempt sale line(s) recorded this week
+                    {medicalExemptMinor > 0 ? ` ($${(medicalExemptMinor / 100).toFixed(2)} excise exempted)` : ""}.
+                  </p>
+                  {!medicalExemptComplete ? (
+                    <p className="mt-1 font-semibold text-amber-300">
+                      ⚠ This count could not be read completely, so it is a MINIMUM — the real figure may
+                      be higher. Do not rely on it as WAC 314-55-090(2) evidence until it reads clean.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="font-bold text-white/80">3. IsMedical=TRUE inventory</p>
+                  <p className="mt-1 text-white/55">
+                    Only DOH medically-compliant lots (passing WAC 246-70-050 tests) may be reported
+                    IsMedical=TRUE in Inventory.csv — that flag is one leg of the exemption, not a label
+                    choice.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="font-bold text-white/80">4. RecreationalMedical in Sale.csv</p>
+                  <p className="mt-1 text-white/55">
+                    {medicalSaleRows > 0
+                      ? `${medicalSaleRows} sale row(s) this week are SaleType=RecreationalMedical — both tax columns must be $0.00 on those rows (the validator enforces the 37% excise on all others).`
+                      : "No RecreationalMedical rows this week. If a DOH patient purchase happened, verify it was rung up as a medical sale — the exemption is mandatory when the four legs are met, not a discount."}
+                  </p>
+                </div>
+              </div>
+              );
+            }}
+          </Await>
+        </Suspense>
         <p className="mt-3 text-[11px] leading-relaxed text-white/35">
           Also exempt: CHABA products (sales + excise) and DOH high-CBD compliant products
           (sales tax, to any customer). Endorsement duties: certified medical cannabis consultant

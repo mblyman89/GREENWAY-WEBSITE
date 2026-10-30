@@ -53,6 +53,7 @@ import { __runCcrsSigninTests } from "@/lib/compliance/ccrs-signin-core";
 import { __runCcrsHandoverTests } from "@/lib/compliance/ccrs-handover-core";
 import { __runCcrsMailCoreTests } from "@/lib/compliance/ccrs-mail-core";
 import { __runCcrsHubFlowTests } from "@/lib/compliance/ccrs-hub-flow-core";
+import { __runCcrsHubViewTests } from "@/lib/compliance/ccrs-hub-view-core";
 import { __runCcrsStrategyCoreTests } from "@/lib/compliance/ccrs-strategy-core";
 import { __runCcrsWatchdogCoreTests } from "@/lib/compliance/ccrs-watchdog-core";
 import { __runCcrsReseedCoreTests } from "@/lib/compliance/ccrs-reseed-core";
@@ -648,6 +649,11 @@ describe("embedded pure self-test suites", () => {
   });
   it("ccrs-hub-flow-core (W-1: the CCRS hub never drops PREprod; email Apply scoped to the email's env)", () => {
     const r = __runCcrsHubFlowTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(17);
+  });
+  it("ccrs-hub-view-core (W-2: the CCRS hub shell renders at once; heavy panels stream and never blank the page)", () => {
+    const r = __runCcrsHubViewTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(17);
   });
