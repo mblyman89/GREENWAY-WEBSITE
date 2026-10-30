@@ -329,7 +329,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ### Fix Phase 3.5 (F-04-26): Receiving reads only vendor_intake@ mail (no new gap number)
 
 - **Owner:** *"It should only target vendor_intake@ and none of my other @greenwaymarijuana.com addresses. Right now it is trying to fetch emails from any of them."*
-- **Status: BUILT (Phase 3.5, #P35).** The Gmail search names vendor_intake@ (To, Cc, Delivered-To). Each message is checked against what the sender wrote: To/Cc vendor_intake@, or a Bcc to it with no other store address on To/Cc. Anything else is skipped (counted in the run banner), and on Try again it is closed as ignored. The mailbox setting can only name vendor_intake. No migration. Tests: `fix-p3-2a-inbound-reconcile` section 2a; self-test `inbound-reconcile-core` 126. SOP-04 v1.10.
+- **Status: BUILT (Phase 3.5, #1565).** The Gmail search names vendor_intake@ (To, Cc, Delivered-To). Each message is checked against what the sender wrote: To/Cc vendor_intake@, or a Bcc to it with no other store address on To/Cc. Anything else is skipped (counted in the run banner), and on Try again it is closed as ignored. The mailbox setting can only name vendor_intake. No migration. Tests: `fix-p3-2a-inbound-reconcile` section 2a; self-test `inbound-reconcile-core` 126. SOP-04 v1.10.
 
 ### Fix Phase 3.4 (F-04-24, F-04-25): invoice credits, invoice amount, re-read everything, vendor name, closable banners (no new gap number)
 
