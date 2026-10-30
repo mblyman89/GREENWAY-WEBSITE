@@ -31,6 +31,7 @@ import {
   startPreprodLedger,
 } from "@/lib/compliance/ccrs-ledger-store";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+import { flashParams, hubEnv, hubHref } from "@/lib/compliance/ccrs-hub-flow-core";
 import { PREPROD_RUN_RE, type LedgerEnv } from "@/lib/compliance/ccrs-ledger-core";
 import { CcrsEchoError, classifyEcho, noEmailAllowedAt } from "@/lib/compliance/ccrs-outcome-core";
 import {
@@ -53,9 +54,17 @@ import { updateCcrsCleanup } from "@/lib/compliance/ccrs-cleanup-store";
 
 const BASE = "/admin/compliance/ccrs";
 
-function back(weekKey: string, extra?: string): never {
-  redirect(`${BASE}?week=${encodeURIComponent(weekKey)}${extra ? `&${extra}` : ""}`);
+/**
+ * W-1 (2026-10-30): every week action returns to the SAME env the form was
+ * posted from (hidden `env` input) and scrolls to the week panel. Before W-1
+ * this dropped env, and the page reads a missing env as production: the
+ * owner testing PREprod was thrown back to production after every press.
+ */
+function back(weekKey: string, extra: string | undefined, env: LedgerEnv): never {
+  const params = Object.fromEntries(new URLSearchParams(extra ?? ""));
+  redirect(hubHref({ week: weekKey, env, params, anchor: "ccrs-week" }));
 }
+const formEnv = (formData: FormData): LedgerEnv => hubEnv(String(formData.get("env") ?? ""));
 
 /** Record a completed week as submitted or nothing-to-report. */
 export async function resolveWeekAction(formData: FormData): Promise<void> {
@@ -63,10 +72,11 @@ export async function resolveWeekAction(formData: FormData): Promise<void> {
   const weekKey = String(formData.get("week_key") ?? "");
   const resolution = String(formData.get("resolution") ?? "");
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const env = formEnv(formData);
 
   const week = weekFromKey(weekKey);
   if (!week || (resolution !== "submitted" && resolution !== "nothing_to_report")) {
-    redirect(`${BASE}?error=${encodeURIComponent("Invalid week or resolution.")}`);
+    redirect(hubHref({ env, params: flashParams(false, "Invalid week or resolution.") }));
   }
 
   // For a SUBMITTED week, snapshot the batch summary as ledger evidence
@@ -76,7 +86,8 @@ export async function resolveWeekAction(formData: FormData): Promise<void> {
   if (resolution === "submitted") {
     try {
       const range = resolveRange({ from: week.start, to: week.end });
-      const batch = await buildCcrsBatch(range.fromISO, range.toISO);
+      // W-1: the evidence snapshot is built for the env the owner is working in.
+      const batch = await buildCcrsBatch(range.fromISO, range.toISO, { env });
       files = batch.files.map((f) => ({
         type: String(f.type),
         fileName: f.fileName,
@@ -97,7 +108,7 @@ export async function resolveWeekAction(formData: FormData): Promise<void> {
     totalRecords,
     notes,
   });
-  if (!res.ok) back(week.key, `error=${encodeURIComponent(res.error ?? "Could not save.")}`);
+  if (!res.ok) back(week.key, `error=${encodeURIComponent(res.error ?? "Could not save.")}`, env);
 
   await recordAudit({
     actorId: session.profile.id,
@@ -109,17 +120,18 @@ export async function resolveWeekAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath(BASE);
-  back(week.key, "saved=1");
+  back(week.key, "saved=1", env);
 }
 
 /** Undo a mistaken week sign-off. */
 export async function unresolveWeekAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const weekKey = String(formData.get("week_key") ?? "");
-  if (!weekFromKey(weekKey)) redirect(`${BASE}?error=${encodeURIComponent("Invalid week.")}`);
+  const env = formEnv(formData);
+  if (!weekFromKey(weekKey)) redirect(hubHref({ env, params: flashParams(false, "Invalid week.") }));
 
   const res = await unresolveWeek(weekKey);
-  if (!res.ok) back(weekKey, `error=${encodeURIComponent(res.error ?? "Could not undo.")}`);
+  if (!res.ok) back(weekKey, `error=${encodeURIComponent(res.error ?? "Could not undo.")}`, env);
 
   await recordAudit({
     actorId: session.profile.id,
@@ -131,7 +143,7 @@ export async function unresolveWeekAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath(BASE);
-  back(weekKey, "saved=1");
+  back(weekKey, "saved=1", env);
 }
 
 /** Flag or clear the error-email status on a submitted week. */
@@ -140,12 +152,13 @@ export async function setWeekErrorStatusAction(formData: FormData): Promise<void
   const weekKey = String(formData.get("week_key") ?? "");
   const errorStatus = String(formData.get("error_status") ?? "");
   const errorNotes = String(formData.get("error_notes") ?? "").trim() || null;
+  const env = formEnv(formData);
 
   if (
     !weekFromKey(weekKey) ||
     (errorStatus !== "clean" && errorStatus !== "errors_reported" && errorStatus !== "resolved")
   ) {
-    redirect(`${BASE}?error=${encodeURIComponent("Invalid week or error status.")}`);
+    redirect(hubHref({ env, params: flashParams(false, "Invalid week or error status.") }));
   }
 
   const res = await setWeekErrorStatus({
@@ -153,7 +166,7 @@ export async function setWeekErrorStatusAction(formData: FormData): Promise<void
     errorStatus: errorStatus as "clean" | "errors_reported" | "resolved",
     errorNotes,
   });
-  if (!res.ok) back(weekKey, `error=${encodeURIComponent(res.error ?? "Could not save.")}`);
+  if (!res.ok) back(weekKey, `error=${encodeURIComponent(res.error ?? "Could not save.")}`, env);
 
   await recordAudit({
     actorId: session.profile.id,
@@ -165,7 +178,7 @@ export async function setWeekErrorStatusAction(formData: FormData): Promise<void
   });
 
   revalidatePath(BASE);
-  back(weekKey, "saved=1");
+  back(weekKey, "saved=1", env);
 }
 
 /**
@@ -180,21 +193,23 @@ export async function assignProductIdsAction(formData: FormData): Promise<void> 
   const session = await requirePermission("settings.manage");
   const weekKey = String(formData.get("week_key") ?? "");
   const week = weekFromKey(weekKey);
-  if (!week) redirect(`${BASE}?error=${encodeURIComponent("Invalid week.")}`);
+  // Production only (S-12b): PREprod ids go through assignPreprodProductIdsAction.
+  const env: LedgerEnv = "prod";
+  if (!week) redirect(hubHref({ env, params: flashParams(false, "Invalid week.") }));
 
   const range = resolveRange({ from: week.start, to: week.end });
   const batch = await buildCcrsBatch(range.fromISO, range.toISO, { env: "prod" });
   if (!batch.ledger.view) {
-    back(week.key, `error=${encodeURIComponent(`No CCRS ledger yet (${batch.ledger.absentReason ?? "unknown"}): apply migration 0248 and finalize the seed first.`)}`);
+    back(week.key, `error=${encodeURIComponent(`No CCRS ledger yet (${batch.ledger.absentReason ?? "unknown"}): apply migration 0248 and finalize the seed first.`)}`, env);
   }
   const keys = batch.ledger.unassignedProductKeys;
-  if (keys.length === 0) back(week.key, "saved=1");
+  if (keys.length === 0) back(week.key, "saved=1", env);
 
   let assigned: Awaited<ReturnType<typeof assignProductIds>>;
   try {
     assigned = await assignProductIds(createSupabaseAdminClient(), "prod", keys, session.email ?? session.profile.id);
   } catch (e) {
-    back(week.key, `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not assign CCRS Product ids.")}`);
+    back(week.key, `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not assign CCRS Product ids.")}`, env);
   }
 
   await recordAudit({
@@ -212,7 +227,7 @@ export async function assignProductIdsAction(formData: FormData): Promise<void> 
   });
 
   revalidatePath(BASE);
-  back(week.key, "saved=1");
+  back(week.key, "saved=1", env);
 }
 
 /* ================================================================== *
@@ -226,8 +241,7 @@ const FILE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const MAX_PASTE_CHARS = 2_000_000;
 
 function backTo(weekKey: string, env: LedgerEnv, extra: string): never {
-  const w = weekFromKey(weekKey) ? `week=${encodeURIComponent(weekKey)}&` : "";
-  redirect(`${BASE}?${w}env=${env}&${extra}#ccrs-files`);
+  redirect(hubHref({ week: weekKey, env, params: Object.fromEntries(new URLSearchParams(extra)), anchor: "ccrs-files" }));
 }
 const errQ = (msg: string) => `error=${encodeURIComponent(msg)}`;
 const okQ = (msg: string) => `saved=1&note=${encodeURIComponent(msg)}`;
@@ -568,8 +582,7 @@ export async function assignPreprodProductIdsAction(formData: FormData): Promise
 
 function backToWeek(formData: FormData, extra: string): never {
   const weekKey = String(formData.get("week_key") ?? "");
-  const envQ = String(formData.get("env") ?? "") === "preprod" ? "&env=preprod" : "";
-  redirect(`${BASE}?${weekKey ? `week=${encodeURIComponent(weekKey)}&` : ""}${extra}${envQ}`);
+  redirect(hubHref({ week: weekKey, env: formEnv(formData), params: Object.fromEntries(new URLSearchParams(extra)) }));
 }
 
 function revalidateNagSurfaces(): void {
