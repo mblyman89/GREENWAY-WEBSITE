@@ -79,8 +79,8 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 | G-50 | Destruction hold default 0 h and panel text "the law sets no hold" | D67 (WAC 314-55-097) | F-15-17 | SOP-15 §4.27 | **APPROVED** |
 | G-51 | Samples never reach the menu or the register: no draft for a sample lot; register menu, barcode index and lot draw skip sample lots; website never lists them | D68 (WAC 314-55-096(1)(i)) | F-15-20 (**S1**) | SOP-15 §4.26 interim check | **BUILT** (Phase 0.2) |
 | G-52 | New people start as **Candidate** (Add to roster and Payroll Setup); PIN locked until **Activate**; Activate runs the gate; help text matches | (procedure need; RCW 69.50.357(2)–(3)) | F-08-1 (**S1**), F-08-7 | SOP-08 §4.6, §4.13 (no PIN until form 8.1 is signed) | **BUILT** (Phase 0.3) |
-| G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | **BUILT** (Phase 5, #P5) |
-| G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | **BUILT** (Phase 5, #P5) |
+| G-53 | Owner-set **link** between a user and an employee file; never creates an employee (books-87); register then accepts the digital acknowledgment | Q-08-1 | F-08-2 | SOP-08 §4.10 (paper handbook route for everyone) | **BUILT** (Phase 5, #1566) |
+| G-54 | **One-step offboarding**: Terminate offers to deactivate the linked sign-in, deletes future shifts, flags an open punch; Deactivate points to the file | Q-08-2 | F-08-3 | SOP-08 §4.21–§4.22, form 8.3 (both halves by hand, same day) | **BUILT** (Phase 5, #1566) |
 | G-55 | Checklist ↔ Document tracker kept in step; Activate also needs hire date, badge number and a training-log line per required topic; paper handbook row carries the version | (procedure need; WAC 314-55-087(1)(e)) | F-08-4, F-08-5 | SOP-08 §4.10 step 4, §4.11 step 3, §4.18 | PROPOSED |
 | G-56 | **Rehire** keeps the earlier termination (employment periods) and starts a fresh checklist | (procedure need) | F-08-6 | SOP-08 §4.24 (print status card first; uncheck everything) | PROPOSED |
 | G-57 | **Visitor log and badges** in the app; employee badge printing | Q-08-3 (WAC 314-55-083(1)) | F-08-8 | SOP-08 forms 8.2, 8.5 (§4.12, §4.19) | DEFERRED (D72: paper for now) |
@@ -483,7 +483,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ### Fix Phase 5 (plan rows 6.1/6.2; G-53/G-54): sign-in link and one-step offboarding
 
 - **Owner:** D70 *"yes, built right, professionally and of enterprise grade standards."*; D71 *"yes."*; books-87 *"I want to create the employee in payroll/ W-4 setup, then I will give them access to the back office if they need access to it."*
-- **Status: BUILT (Phase 5, #P5).** New `offboarding-core.ts` (pure, 49 self-tests), `employee-login-link-store.ts` (the only `employees.staff_id` writer, update only, race-guarded), `sign-in-deactivate.ts` (Users guard rails + ban, shared). Employee file: Back-office sign-in card (link/unlink) and the new Terminate box. Users: linked employee per row, "Terminate on their file", Deactivate message names the file. Migration 0324 `employees_staff_id_unique` (refuses to run over duplicate links). Trap test `logins-are-not-employees` now allows exactly that one write site (9 sites, 1 sanctioned). Tests: `fix-p5-people-link-offboarding`. SOP-08 v1.3.
+- **Status: BUILT (Phase 5, #1566).** New `offboarding-core.ts` (pure, 49 self-tests), `employee-login-link-store.ts` (the only `employees.staff_id` writer, update only, race-guarded), `sign-in-deactivate.ts` (Users guard rails + ban, shared). Employee file: Back-office sign-in card (link/unlink) and the new Terminate box. Users: linked employee per row, "Terminate on their file", Deactivate message names the file. Migration 0324 `employees_staff_id_unique` (refuses to run over duplicate links). Trap test `logins-are-not-employees` now allows exactly that one write site (9 sites, 1 sanctioned). Tests: `fix-p5-people-link-offboarding`. SOP-08 v1.3.
 
 ### Fix Phase 4b (G-32 items 7–10): publish fails closed, before/after audits, no price on a cost-unknown lot, Partly saved
 
@@ -748,7 +748,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Interim:** SOP-08 §4.6, §4.13: no PIN until form 8.1 is signed.
 
 ## G-53 · Owner-set user ↔ employee link (BUILT, Phase 5, D70, SOP-08) — S2
-- **Status: BUILT (Phase 5, #P5).** Requirements 1–4 met: link/unlink on the file (owner/admin, one sign-in per employee, rank rule, confirmation, audited before/after); no employee or sign-in created or edited (one update-only writer); the register gate already reads the linked sign-in; Users shows the employee, the file shows the sign-in. Migration 0324 (unique partial index). See "Fix Phase 5" below.
+- **Status: BUILT (Phase 5, #1566).** Requirements 1–4 met: link/unlink on the file (owner/admin, one sign-in per employee, rank rule, confirmation, audited before/after); no employee or sign-in created or edited (one update-only writer); the register gate already reads the linked sign-in; Users shows the employee, the file shows the sign-in. Migration 0324 (unique partial index). See "Fix Phase 5" below.
 - **Owner basis:** books-87 (*"I want to create the employee in payroll/ W-4 setup, then I will give them access to the back office if they need access to it."*). A link set by the owner keeps that order; it never creates an employee.
 - **Today:** F-08-2: only the 2023 seed set `staff_id`.
 - **Requirements:**
@@ -759,7 +759,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 - **Interim:** SOP-08 §4.10 paper handbook route for everyone.
 
 ## G-54 · One-step offboarding (BUILT, Phase 5, D71, SOP-08) — S2
-- **Status: BUILT (Phase 5, #P5).** Requirements 1–4 met: Terminate shows the linked sign-in and "Deactivate their sign-in too" (default on, confirmation pop-up); lists future shifts and deletes scheduled ones after the last day; flags an open punch for Hours; Users names the linked file with "Terminate on their file"; every step audited.
+- **Status: BUILT (Phase 5, #1566).** Requirements 1–4 met: Terminate shows the linked sign-in and "Deactivate their sign-in too" (default on, confirmation pop-up); lists future shifts and deletes scheduled ones after the last day; flags an open punch for Hours; Users names the linked file with "Terminate on their file"; every step audited.
 - **Today:** F-08-3: two separate pages, nothing connected.
 - **Requirements:**
   1. Terminate shows the linked sign-in (needs G-53) and offers "Deactivate their sign-in too" (default on, with a confirmation).
