@@ -104,7 +104,7 @@ export type AuditStats = {
   };
 };
 
-const EXCLUDED = new Set(["moved_since_import", "ambiguous_barcode", "autocomplete_risk", "unknown_order_status"]);
+const EXCLUDED = new Set(["moved_since_import", "ambiguous_barcode", "autocomplete_risk", "unknown_order_status", "arrived_after_count"]);
 
 export function gradeFor(lotAccuracyPct: number | null, compared: number): AuditStats["overview"]["grade"] {
   if (lotAccuracyPct == null || compared === 0) return { label: "No data yet", tone: "none", why: "Nothing counted has been compared with the system yet." };
