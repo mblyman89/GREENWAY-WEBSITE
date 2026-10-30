@@ -478,7 +478,7 @@ Findings (bugs, weaknesses) live in `03-FINDINGS-LEDGER.md`. Gaps cite the findi
 ### Fix Phase 4 (plan rows 5.1/5.2; G-29/G-30/G-30A/G-32): Other Inventory on the register
 
 - **Owner (D45):** *"Q-05b-1- yes, and any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system and on the register and on the menu."* · D46 *"Q-05b-2- owner, admin, manager."* · D47 *"Q05b-3- owner and admin."* · D48 *"non cannabis should be allowed to have their cost modified."* · D49 *"Q-05b-5- yes, plan on the group of smaller fixes."*
-- **Status: BUILT (Phase 4, #P4).**
+- **Status: BUILT (Phase 4, #1563).**
   1. **G-29 (F-05b-1, F-05b-15 FIXED).** Register products `nc-<id>` with SKU/UPC scan (cannabis wins a clash); sale decrement in one step with a cost snapshot (`apply_noncannabis_delta`); void restore once (unique order line + reason); counter return restock / write-off (`record_noncannabis_return`, never a CCRS correction; `ccrs-batch.ts` skips `NonCannabis`); Sale.csv excludes these lines with a warning; COGS from the catalog average cost; refund cost-back from the sale snapshot; price drift vs the catalog; **Register sales — last 30 days**; display-only **Also in store** on the shop. Requirements 4 (offline replay uses the same idempotent sync path), 9 (PO draft) and 10 (concierge stock lookup) remain open.
   2. **G-30 (F-05b-6 FIXED).** **Save change** price/cost, owner/admin/manager, reason, $0 refused, optimistic check, audit old → new. Q-05b-6 stays open (Bulk fill not widened).
   3. **G-30A (F-05b-14 FIXED).** `merch.remove` = owner, admin.

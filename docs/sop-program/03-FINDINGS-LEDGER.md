@@ -629,48 +629,48 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 **Verdict: PARTLY MET, with two S1 gaps.** Publish Menu, the Merch page, sales-limit classification and the cannabis sell-price floor are careful and audited. Other Inventory is a good catalog, but it is **not connected to the register**. And nothing stops a category change from turning cannabis into non-cannabis for tax, limits and scan.
 
 ### F-05b-1 · CONFIRMED · GAP · S1 — Other Inventory is not connected to the register
-- **Status: FIXED (Phase 4, G-29, #P4).** Active priced items are register products `nc-<id>` (`api/pos/menu/route.ts`, `pos-catalog-core.ts` `toPosMenuProduct` / `mergeNcBarcodes`); a sale lowers On hand atomically (`register-stock.ts` `moveNcStockForOrder`, RPC `apply_noncannabis_delta`, migration 0323); void restores (`void-store.ts`); returns via `record_noncannabis_return`. Test `fix-p4-noncannabis-register`.
+- **Status: FIXED (Phase 4, G-29, #1563).** Active priced items are register products `nc-<id>` (`api/pos/menu/route.ts`, `pos-catalog-core.ts` `toPosMenuProduct` / `mergeNcBarcodes`); a sale lowers On hand atomically (`register-stock.ts` `moveNcStockForOrder`, RPC `apply_noncannabis_delta`, migration 0323); void restores (`void-store.ts`); returns via `record_noncannabis_return`. Test `fix-p4-noncannabis-register`.
 - **Pin:** the register menu is built from `menu_items` only (`src/lib/pos/live-menu.ts` L158–160; `src/app/api/pos/menu/route.ts` L188, L420–430). Scan-to-cart matches only menu barcodes and lot codes (`scan-to-cart-core.ts` L55–75, L101–144). The sale decrement touches cannabis lots only (`src/lib/inventory/sale-decrement.ts` L107–110). Yet the intake form promises the barcode *"becomes the register code"* (`NonCannabisIntakeForm.tsx` L122–124), and the label page, help panel, `help-content.ts` L470–472 and `concierge-kb.ts` L172 imply scanning works (label page L7–8; `noncannabis/page.tsx` L230–240).
 - **Effect:** non-cannabis goods are rung on the Keypad as free text. **On hand**, **Reorder now**, retail value and margin never move with sales, and shrink is invisible between counts.
 - **SOP impact:** SOP-05b header box, §4.1, §4.4, §4.5 (Monday reconciliation, form 8.1), §9. Fixed by **G-29**.
 
 ### F-05b-2 · CONFIRMED · HARDEN · S2 — Confirm and Archive write no audit row, and Archive has no restore
-- **Status: FIXED (Phase 4, G-32 item 1, #P4).** Confirm/Archive audited; **Restore** (`restoreNonCannabisAction`).
+- **Status: FIXED (Phase 4, G-32 item 1, #1563).** Confirm/Archive audited; **Restore** (`restoreNonCannabisAction`).
 - **Pin:** `noncannabis/actions.ts` L86–100 → `store.ts` L422–447: status updates with no `recordAudit`. No action sets an archived item back to active.
 - **Effect:** who activated or retired an item cannot be shown; a mistaken archive needs a re-create with a new SKU.
 - **SOP impact:** §4.3 step 6, §4.9, form 8.1 catalog line. **G-32**.
 
 ### F-05b-3 · CONFIRMED · HARDEN · S2 — A non-cannabis adjustment is read-then-write and not atomic
-- **Status: FIXED (Phase 4, G-32 item 2, #P4).** `apply_noncannabis_delta` (one statement, strict zero floor).
+- **Status: FIXED (Phase 4, G-32 item 2, #1563).** `apply_noncannabis_delta` (one statement, strict zero floor).
 - **Pin:** `store.ts` L307–343 reads `on_hand`, inserts the ledger row, then writes the new count as a separate step.
 - **Effect:** two adjustments at once can lose one. A failure between the steps leaves a ledger row with no count change.
 - **SOP impact:** §4.5. **G-32**.
 
 ### F-05b-4 · CONFIRMED · HARDEN · S3 — Direction can contradict Reason
-- **Status: FIXED (Phase 4, G-32 item 3, #P4).** `signedDeltaForReason`; the form shows "(set by reason)".
+- **Status: FIXED (Phase 4, G-32 item 3, #1563).** `signedDeltaForReason`; the form shows "(set by reason)".
 - **Pin:** `MerchCatalog.tsx` L90–110 defaults the direction from the reason but lets it be changed; `noncannabis/actions.ts` L119 accepts any pair.
 - **Effect:** "Theft / loss" can be posted as **+ Add**, which hides shrink.
 - **SOP impact:** §4.5 step 2. **G-32**.
 
 ### F-05b-5 · CONFIRMED · UX · S4 — Recent adjustments shows browser-local time and no actor
-- **Status: FIXED (Phase 4, G-32 item 4, #P4).** **By** column + Pacific time.
+- **Status: FIXED (Phase 4, G-32 item 4, #1563).** **By** column + Pacific time.
 - **Pin:** `noncannabis/page.tsx` L369.
 - **SOP impact:** §4.5. **G-32**.
 
 ### F-05b-6 · CONFIRMED · GAP · S2 — No way to edit a non-cannabis price or a non-zero cost, and a $0.00 price is accepted
-- **Status: FIXED (Phase 4, G-30, #P4).** **Save change** (`changeNonCannabisPriceCostAction`; `validatePriceCostChange` refuses $0.00; optimistic old-value check; audit old → new).
+- **Status: FIXED (Phase 4, G-30, #1563).** **Save change** (`changeNonCannabisPriceCostAction`; `validatePriceCostChange` refuses $0.00; optimistic old-value check; audit old → new).
 - **Pin:** the price is set only at draft (`noncannabis/actions.ts` L51; `store.ts` L261). The invoice builder creates $0.00 drafts when retail is blank (`invoice-store.ts` L142). Cost fill works only at $0.00 (`cost-fill-core.ts` L46–47).
 - **Effect:** a typo'd price is permanent. The only workaround is archive and re-create, which changes the SKU.
 - **SOP impact:** §2, §4.3 step 5, §4.6, §4.9 (form 8.2; owner, admin or manager per D46). Fixed by **G-30** (APPROVED, D46, D48).
 
 ### F-05b-7 · CONFIRMED · BUG · S2 — A failed invoice save rolls back only the header
-- **Status: FIXED (Phase 4, G-32 item 5, #P4).** `record_noncannabis_invoice` (one transaction, weighted-average cost).
+- **Status: FIXED (Phase 4, G-32 item 5, #1563).** `record_noncannabis_invoice` (one transaction, weighted-average cost).
 - **Pin:** `invoice-store.ts` L124–128 (header delete on failure), L135–158 (drafts and restock adjustments already written, not undone).
 - **Effect:** after a failed save, there are orphan drafts and extra stock on file; a retry doubles them.
 - **SOP impact:** §4.6 "If the save fails part-way". **G-32**.
 
 ### F-05b-8 · CONFIRMED · HARDEN · S3 — The invoice audit row is fire-and-forget
-- **Status: FIXED (Phase 4, G-32 item 6, #P4).** The invoice audit is awaited.
+- **Status: FIXED (Phase 4, G-32 item 6, #1563).** The invoice audit is awaited.
 - **Pin:** `noncannabis/actions.ts` L296–307: `recordAudit(...).catch(() => {})`.
 - **Effect:** a saved invoice (a payable source document) can have no audit row, and nobody is told.
 - **SOP impact:** §6. **G-32**.
@@ -701,13 +701,13 @@ Owner sources: D35 (the 05a / 05b split) and D43 (*"Please finish the inventory 
 - **SOP impact:** §4.19 step 6. **G-32**.
 
 ### F-05b-14 · CONFIRMED · GAP · S3 — A manager can permanently Remove a merch product; the owner limited it to owner and admin (fix slice, D47)
-- **Status: FIXED (Phase 4, G-30A, #P4).** `merch.remove` = owner, admin (`roles.ts`); Remove... hidden otherwise.
+- **Status: FIXED (Phase 4, G-30A, #1563).** `merch.remove` = owner, admin (`roles.ts`); Remove... hidden otherwise.
 - **Pin:** `removeMerchAction` checks only `requirePermission("inventory.manage")` (`merch/actions.ts` L33–34), and `inventory.manage` includes manager (`roles.ts` L107).
 - **Effect:** the owner said *"Q05b-3- owner and admin."* The removal can't be undone except by republishing from Merch Studio.
 - **SOP impact:** SOP-05b v1.1 §2, §4.11, §6 (store rule). **G-30A**.
 
 ### F-05b-15 · CONFIRMED · GAP · S2 — Non-cannabis keypad sales post no cost of goods sold (fix slice, D45)
-- **Status: FIXED (Phase 4, G-29 item 6, #P4).** Catalog lines carry the unit cost (`gatherCosts` reads `readNcUnitCosts`); keypad lines unchanged.
+- **Status: FIXED (Phase 4, G-29 item 6, #1563).** Catalog lines carry the unit cost (`gatherCosts` reads `readNcUnitCosts`); keypad lines unchanged.
 - **Pin:** a keypad line is built with `costMinorUnits: null` (`custom-sale-core.ts` L144). The daily accounting post drops keypad lines before gathering costs (`sale-posting-service.ts` L360) and, with no other lines, sets every line's cost to null (L369–371).
 - **Effect:** non-cannabis revenue posts with no matching cost, so the books overstate margin on glass, papers and devices. The Other Inventory catalog holds the unit cost, but nothing links the sale to it (F-05b-1).
 - **SOP impact:** SOP-05b v1.1 §4.1 (the widened G-29 list). **G-29** item 6 (owner D45: *"any other upgrade, enhancement and such needed to fully utilize non cannabis goods in the system"*).
